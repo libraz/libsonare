@@ -38,6 +38,7 @@ import {
   assertAudioInput,
   assertSampleRate,
   assertString,
+  optionalBoolean,
   optionsBag,
   requestObject,
 } from './validation.js';
@@ -226,7 +227,7 @@ export function mastering(
     request.ceilingDb ?? -1.0,
     request.truePeakOversample ?? 4,
     request.releaseMs ?? 0, // 0 => library default (50 ms)
-    request.applyGainAtInputRate ?? false,
+    optionalBoolean('mastering', request.applyGainAtInputRate, 'applyGainAtInputRate', false),
   );
 }
 

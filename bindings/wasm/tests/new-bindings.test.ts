@@ -204,6 +204,13 @@ describe('newly exposed WASM functions', () => {
     expect(pairs[3]).toBeLessThanOrEqual(x.length);
   });
 
+  it('remix and remixAlignedIntervals refuse an odd-length interval list as RangeError', () => {
+    const x = makeSine(0.5, 440);
+    const odd = new Int32Array([0, 1000, 2000]);
+    expect(() => remix({ samples: x, intervals: odd })).toThrow(RangeError);
+    expect(() => remixAlignedIntervals({ samples: x, intervals: odd })).toThrow(RangeError);
+  });
+
   it('remixAlignedIntervals leaves a signal with no sign change unsnapped', () => {
     const flat = new Float32Array(4096).fill(0.25);
     const pairs = remixAlignedIntervals({ samples: flat, intervals: new Int32Array([100, 200]) });

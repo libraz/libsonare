@@ -1502,7 +1502,10 @@ describe('SonareRealtimeEngineNode', () => {
             }),
           ]),
         );
-        for (const mode of [true, false, 0.5, -1, 3, 'PFL', 'post-fader']) {
+        for (const mode of [true, false]) {
+          expect(() => engine.setTrackMonitorMode(5, mode as never)).toThrow(TypeError);
+        }
+        for (const mode of [0.5, -1, 3, 'PFL', 'post-fader']) {
           expect(() => engine.setTrackMonitorMode(5, mode as never)).toThrow(RangeError);
         }
         // Appending keeps existing lanes; entries without sends keep prior sends.

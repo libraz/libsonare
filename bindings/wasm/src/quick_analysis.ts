@@ -51,6 +51,9 @@ import {
   assertAudioInput,
   assertFiniteScalar,
   assertNonNegativeInteger,
+  assertU32,
+  optionalBoolean,
+  optionalString,
   optionsBag,
   requestObject,
 } from './validation.js';
@@ -67,11 +70,18 @@ type NamedSelectors<T> = Omit<T, 'materialPreset' | 'mode'> & {
 /**
  * Replaces a `materialPreset` / `mode` name with its integer value for the
  * module; a number is refused. The names are the core's, read from the module
- * so no second table exists here.
+ * so no second table exists here. A present `seed` that is not a uint32 is
+ * refused here too, since the module would otherwise fall back to its default.
  */
-function resolveAcousticSelectors<T extends { materialPreset?: unknown; mode?: unknown }>(
-  options: T,
-): NamedSelectors<T> {
+function resolveAcousticSelectors<
+  T extends { materialPreset?: unknown; mode?: unknown; seed?: unknown },
+>(options: T): NamedSelectors<T> {
+  if (options.seed !== undefined && options.seed !== null) {
+    if (typeof options.seed !== 'number') {
+      throw new TypeError('seed must be a number');
+    }
+    assertU32('acoustic', options.seed, 'seed');
+  }
   if (options.materialPreset === undefined && options.mode === undefined) {
     return options as NamedSelectors<T>;
   }
@@ -263,12 +273,12 @@ export function detectKey(
     request.sampleRate ?? 22050,
     request.nFft ?? 4096,
     request.hopLength ?? 512,
-    request.useHpss ?? false,
-    request.loudnessWeighted ?? false,
+    optionalBoolean('detectKey', request.useHpss, 'useHpss', false),
+    optionalBoolean('detectKey', request.loudnessWeighted, 'loudnessWeighted', false),
     request.highPassHz ?? 0,
     keyModeValues(request.modes),
     keyProfileValue(request.profile),
-    request.genreHint ?? '',
+    optionalString('detectKey', request.genreHint, 'genreHint', ''),
     request.tuning ?? 0,
   );
   return {
@@ -307,12 +317,12 @@ export function detectKeyCandidates(
     request.sampleRate ?? 22050,
     request.nFft ?? 4096,
     request.hopLength ?? 512,
-    request.useHpss ?? false,
-    request.loudnessWeighted ?? false,
+    optionalBoolean('detectKeyCandidates', request.useHpss, 'useHpss', false),
+    optionalBoolean('detectKeyCandidates', request.loudnessWeighted, 'loudnessWeighted', false),
     request.highPassHz ?? 0,
     keyModeValues(request.modes),
     keyProfileValue(request.profile),
-    request.genreHint ?? '',
+    optionalString('detectKeyCandidates', request.genreHint, 'genreHint', ''),
   );
   return Array.from(candidates, convertKeyCandidate);
 }
@@ -425,16 +435,16 @@ export function detectChords(
     request.minDuration ?? 0.3,
     request.smoothingWindow ?? 2.0,
     request.threshold ?? 0.5,
-    request.useTriadsOnly ?? false,
+    optionalBoolean('detectChords', request.useTriadsOnly, 'useTriadsOnly', false),
     request.nFft ?? 2048,
     request.hopLength ?? 512,
-    request.useBeatSync ?? true,
-    request.useHmm ?? false,
+    optionalBoolean('detectChords', request.useBeatSync, 'useBeatSync', true),
+    optionalBoolean('detectChords', request.useHmm, 'useHmm', false),
     request.hmmBeamWidth ?? 24,
-    request.useKeyContext ?? false,
+    optionalBoolean('detectChords', request.useKeyContext, 'useKeyContext', false),
     pitchClassOrdinal(request.keyRoot ?? PitchClass.C, 'keyRoot'),
     keyModeOrdinal(request.keyMode ?? Mode.Major, 'keyMode'),
-    request.detectInversions ?? false,
+    optionalBoolean('detectChords', request.detectInversions, 'detectInversions', false),
     chordChromaMethodValue(request.chromaMethod ?? 'stft'),
     request.tuning ?? 0,
   );
@@ -517,14 +527,14 @@ export function chordFunctionalAnalysis(
     request.minDuration ?? 0.3,
     request.smoothingWindow ?? 2.0,
     request.threshold ?? 0.5,
-    request.useTriadsOnly ?? false,
+    optionalBoolean('chordFunctionalAnalysis', request.useTriadsOnly, 'useTriadsOnly', false),
     request.nFft ?? 2048,
     request.hopLength ?? 512,
-    request.useBeatSync ?? true,
-    request.useHmm ?? false,
+    optionalBoolean('chordFunctionalAnalysis', request.useBeatSync, 'useBeatSync', true),
+    optionalBoolean('chordFunctionalAnalysis', request.useHmm, 'useHmm', false),
     request.hmmBeamWidth ?? 24,
-    request.useKeyContext ?? false,
-    request.detectInversions ?? false,
+    optionalBoolean('chordFunctionalAnalysis', request.useKeyContext, 'useKeyContext', false),
+    optionalBoolean('chordFunctionalAnalysis', request.detectInversions, 'detectInversions', false),
     chordChromaMethodValue(request.chromaMethod ?? 'stft'),
     request.tuning ?? 0,
   );
@@ -754,9 +764,6 @@ export function analyzeImpulseResponse(
   // error class than the check three lines down.
   const resolvedMinDecayDb = request.minDecayDb === undefined ? 30.0 : request.minDecayDb;
   assertFiniteScalar('analyzeImpulseResponse', resolvedMinDecayDb, 'minDecayDb');
-  if (resolvedMinDecayDb <= 0) {
-    throw new RangeError('analyzeImpulseResponse: minDecayDb must be greater than zero');
-  }
   assertAudioInput('analyzeImpulseResponse', request.samples, request.sampleRate ?? 48000, request);
   const result: WasmAcousticResult = requireModule().analyzeImpulseResponseEx(
     request.samples,

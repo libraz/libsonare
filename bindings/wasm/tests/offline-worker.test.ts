@@ -320,6 +320,21 @@ describe('OfflineWorkerClient', () => {
     client.dispose();
   });
 
+  it('refuses a function-valued request field with a TypeError naming it, before dispatch', () => {
+    const worker = new ThrowingWorker(() => undefined);
+    const client = clientWith(worker as unknown as LoopbackWorker);
+    const samples = new Float32Array([0, 0]);
+    expect(() =>
+      client.masterAudio({ samples, cancel: () => false } as never, { copy: false }),
+    ).toThrow(/cancel/);
+    expect(() =>
+      client.masterAudio({ samples, cancel: () => false } as never, { copy: false }),
+    ).toThrow(TypeError);
+    expect(worker.calls).toHaveLength(0);
+    expect(samples.buffer.byteLength).toBe(8);
+    client.dispose();
+  });
+
   it('keeps a reentrant response when the same dispatch then throws', async () => {
     const result = 123.5;
     let worker!: ThrowingWorker;

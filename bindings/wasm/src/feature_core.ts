@@ -11,7 +11,9 @@ import {
   assertNumber,
   assertPositiveInteger,
   assertString,
+  optionalBoolean,
   requestObject,
+  requireBoolean,
   resolveOptionalNonNegative,
 } from './validation.js';
 
@@ -71,7 +73,7 @@ export function chirp(
     request.fmax ?? 880,
     request.sampleRate ?? 22050,
     request.duration ?? 1,
-    request.linear ?? true,
+    optionalBoolean('chirp', request.linear, 'linear', true),
   );
 }
 
@@ -748,7 +750,7 @@ export function fixFrames(
     frames,
     xMin,
     resolveOptionalNonNegative('fixFrames', xMax, 'xMax'),
-    pad,
+    requireBoolean('fixFrames', pad, 'pad'),
   );
 }
 

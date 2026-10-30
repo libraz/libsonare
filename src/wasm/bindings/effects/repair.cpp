@@ -15,13 +15,16 @@
 
 namespace {
 
-// Missing, null and undefined read as absent. Numeric and boolean fields go through the typed
-// readers in common.h, which refuse a wrong-typed value by name; this one serves the string
-// fields, whose parsers name the bad value themselves.
-bool repairOptionValue(const val& options, const char* key, val* value) {
+// The one enum-string reader: missing, null and undefined read as absent, any other JS type is
+// a TypeError naming the field, and the parsers name an unknown spelling themselves. Numeric and
+// boolean fields go through the typed readers in common.h.
+bool repairEnumOption(const val& options, const char* key, std::string* name) {
   if (!hasProperty(options, key)) return false;
-  *value = options[key];
-  return !value->isUndefined() && !value->isNull();
+  const val value = options[key];
+  if (!value.isString()) throw WasmTypeError(std::string(key) + " must be a string");
+  *name = value.as<std::string>();
+  wasmRefuseEmbeddedNul(*name, key);
+  return true;
 }
 
 // Read a dereverb options bag over `config`, leaving absent keys alone.
@@ -217,11 +220,9 @@ mastering::repair::DehumConfig readMasteringRepairDehum(const val& options) {
   cfg.adaptation = floatProperty(options, "adaptation", cfg.adaptation);
   cfg.frame_size = intProperty(options, "frameSize", cfg.frame_size);
   cfg.pll_bandwidth = floatProperty(options, "pllBandwidth", cfg.pll_bandwidth);
-  if (hasProperty(options, "mode")) {
-    val value = val::undefined();
-    if (repairOptionValue(options, "mode", &value)) {
-      cfg.mode = parseDehumMode(value.as<std::string>());
-    }
+  std::string mode_name;
+  if (repairEnumOption(options, "mode", &mode_name)) {
+    cfg.mode = parseDehumMode(mode_name);
   }
   return cfg;
 }
@@ -230,17 +231,13 @@ mastering::repair::DehumConfig readMasteringRepairDehum(const val& options) {
 // and hopLength checks stay with each entry point, whose name they quote.
 mastering::repair::DenoiseClassicalConfig readDenoiseConfig(
     const val& options, mastering::repair::DenoiseClassicalConfig config) {
-  if (hasProperty(options, "mode")) {
-    val value = val::undefined();
-    if (repairOptionValue(options, "mode", &value)) {
-      config.mode = parseDenoiseMode(value.as<std::string>());
-    }
+  std::string mode_name;
+  if (repairEnumOption(options, "mode", &mode_name)) {
+    config.mode = parseDenoiseMode(mode_name);
   }
-  if (hasProperty(options, "noiseEstimator")) {
-    val value = val::undefined();
-    if (repairOptionValue(options, "noiseEstimator", &value)) {
-      config.noise_estimator = parseDenoiseNoiseEstimator(value.as<std::string>());
-    }
+  std::string noise_estimator_name;
+  if (repairEnumOption(options, "noiseEstimator", &noise_estimator_name)) {
+    config.noise_estimator = parseDenoiseNoiseEstimator(noise_estimator_name);
   }
   config.n_fft = intProperty(options, "nFft", config.n_fft);
   config.hop_length = intProperty(options, "hopLength", config.hop_length);
@@ -494,11 +491,9 @@ mastering::repair::DecrackleConfig readMasteringRepairDecrackle(const val& optio
   mastering::repair::DecrackleConfig cfg;
   if (options.isUndefined() || options.isNull()) return cfg;
   cfg.threshold = floatProperty(options, "threshold", cfg.threshold);
-  if (hasProperty(options, "mode")) {
-    val value = val::undefined();
-    if (repairOptionValue(options, "mode", &value)) {
-      cfg.mode = parseDecrackleMode(value.as<std::string>());
-    }
+  std::string mode_name;
+  if (repairEnumOption(options, "mode", &mode_name)) {
+    cfg.mode = parseDecrackleMode(mode_name);
   }
   cfg.levels = intProperty(options, "levels", cfg.levels);
   return cfg;
@@ -531,11 +526,9 @@ mastering::repair::TrimSilenceConfig readTrimSilenceConfig(
     }
     config.padding_samples = static_cast<size_t>(v);
   }
-  if (hasProperty(options, "mode")) {
-    val value = val::undefined();
-    if (repairOptionValue(options, "mode", &value)) {
-      config.mode = parseTrimSilenceMode(value.as<std::string>());
-    }
+  std::string mode_name;
+  if (repairEnumOption(options, "mode", &mode_name)) {
+    config.mode = parseTrimSilenceMode(mode_name);
   }
   config.gate_lufs = floatProperty(options, "gateLufs", config.gate_lufs);
   config.window_ms = floatProperty(options, "windowMs", config.window_ms);

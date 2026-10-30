@@ -76,7 +76,10 @@ export function convertKeyCandidate(wasm: WasmKeyCandidateResult): KeyCandidate 
 // layer as a mistyped argument) or passing an unvalidated raw number through.
 const KEY_MODE_VALUES: Readonly<Record<string, number>> = {
   major: Mode.Major,
+  maj: Mode.Major,
   minor: Mode.Minor,
+  min: Mode.Minor,
+  m: Mode.Minor,
   dorian: Mode.Dorian,
   phrygian: Mode.Phrygian,
   lydian: Mode.Lydian,
@@ -87,6 +90,7 @@ const KEY_MODE_VALUES: Readonly<Record<string, number>> = {
 const KEY_PROFILE_VALUES: Readonly<Record<KeyProfileName, number>> = {
   ks: KeyProfileValues.KrumhanslSchmuckler,
   krumhansl: KeyProfileValues.KrumhanslSchmuckler,
+  'krumhansl-schmuckler': KeyProfileValues.KrumhanslSchmuckler,
   temperley: KeyProfileValues.Temperley,
   shaath: KeyProfileValues.Shaath,
   keyfinder: KeyProfileValues.Shaath,
@@ -110,10 +114,15 @@ function assertNameOrOrdinal(value: unknown, field: string, what: string): void 
   }
 }
 
+/** Mode and profile spellings are matched case-insensitively, as on Node and Python. */
+function foldCase(value: unknown): unknown {
+  return typeof value === 'string' ? value.toLowerCase() : value;
+}
+
 /** Ordinal of a key mode given by name or ordinal; anything else is refused. */
 export function keyModeOrdinal(mode: unknown, field = 'key mode'): number {
   assertNameOrOrdinal(mode, field, 'a mode');
-  return resolveEnumOrdinal(mode, KEY_MODE_VALUES, field);
+  return resolveEnumOrdinal(foldCase(mode), KEY_MODE_VALUES, field);
 }
 
 /** Ordinal of a pitch class given by name (`'C'`, `'C#'`, ...) or ordinal; anything else is refused. */
@@ -123,31 +132,39 @@ export function pitchClassOrdinal(root: unknown, field = 'pitch class'): number 
 }
 
 export function keyModeValues(modes: KeyDetectionOptions['modes'] | undefined): number[] {
-  if (!modes) {
+  if (modes === undefined || modes === null) {
     return [];
   }
-  if (modes === 'major-minor') {
-    return [Mode.Major, Mode.Minor];
+  if (typeof modes === 'string') {
+    const key = modes.toLowerCase();
+    if (key === 'major-minor' || key === 'majmin' || key === 'diatonic') {
+      return [Mode.Major, Mode.Minor];
+    }
+    if (key === 'all' || key === 'modal') {
+      return [
+        Mode.Major,
+        Mode.Minor,
+        Mode.Dorian,
+        Mode.Phrygian,
+        Mode.Lydian,
+        Mode.Mixolydian,
+        Mode.Locrian,
+      ];
+    }
+    return [keyModeOrdinal(key, 'key mode')];
   }
-  if (modes === 'all' || modes === 'modal') {
-    return [
-      Mode.Major,
-      Mode.Minor,
-      Mode.Dorian,
-      Mode.Phrygian,
-      Mode.Lydian,
-      Mode.Mixolydian,
-      Mode.Locrian,
-    ];
+  if (!Array.isArray(modes)) {
+    throw new TypeError('modes must be an array or mode-set string');
   }
-  return modes.map((mode) => resolveEnumOrdinal(mode, KEY_MODE_VALUES, 'key mode'));
+  return modes.map((mode) => keyModeOrdinal(mode, 'key mode'));
 }
 
 export function keyProfileValue(profile: KeyDetectionOptions['profile'] | undefined): number {
-  if (profile === undefined) {
+  if (profile === undefined || profile === null) {
     return -1;
   }
-  return resolveEnumOrdinal(profile, KEY_PROFILE_VALUES, 'key profile');
+  assertNameOrOrdinal(profile, 'key profile', 'a profile');
+  return resolveEnumOrdinal(foldCase(profile), KEY_PROFILE_VALUES, 'key profile');
 }
 
 export function convertChordAnalysisResult(wasm: WasmChordAnalysisResult): ChordAnalysisResult {

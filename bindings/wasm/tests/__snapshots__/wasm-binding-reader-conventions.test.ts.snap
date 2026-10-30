@@ -16,8 +16,6 @@ exports[`WASM binding sources budget every caller-supplied array length > has no
 
 exports[`WASM binding sources stay on the shared common.h field readers > has no new bare literal-key field reads beyond the tracked baseline (snapshot ratchet) 1`] = `
 [
-  "project/project_arrange.cpp desc["name"].as<std::string>() #1",
-  "project/project_arrange.cpp desc["sourceUri"].as<std::string>() #1",
   "project/project_edit.cpp entry["name"].as<std::string>() #1",
   "project/project_external_stems.cpp stem["name"].as<std::string>() #1",
 ]

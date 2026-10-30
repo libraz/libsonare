@@ -37,7 +37,7 @@ uint32_t ProjectWasm::addTrack(val desc) {
       }
     }
     if (hasProperty(desc, "name")) {
-      name = desc["name"].as<std::string>();
+      name = stringFromVal(desc["name"], "name");
       d.name = wasmCString(name, "name");
     }
   }
@@ -75,7 +75,7 @@ uint32_t ProjectWasm::addClip(val desc) {
     d.audio_frames = static_cast<int64_t>(audio.size()) / d.audio_channels;
   }
   if (hasProperty(desc, "sourceUri")) {
-    source_uri = desc["sourceUri"].as<std::string>();
+    source_uri = stringFromVal(desc["sourceUri"], "sourceUri");
     d.source_uri = wasmCString(source_uri, "sourceUri");
   }
   uint32_t out = 0;
@@ -340,7 +340,7 @@ void ProjectWasm::setPartRig(const val& destination_id_val, const val& part_val,
                                      sonare_wasm_synth::kPartRigModeCount, "part rig mode");
   std::string inserts_json;
   const bool has_inserts = !inserts_json_val.isUndefined() && !inserts_json_val.isNull();
-  if (has_inserts) inserts_json = inserts_json_val.as<std::string>();
+  if (has_inserts) inserts_json = stringFromVal(inserts_json_val, "insertsJson");
   checkCError(
       sonare_project_set_part_rig(project_.get(), destination_id, part, mode,
                                   has_inserts ? wasmCString(inserts_json, "insertsJson") : nullptr),

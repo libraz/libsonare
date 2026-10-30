@@ -205,12 +205,17 @@ editing::voice_changer::RealtimeVoiceChangerConfig realtimeVoiceChangerConfigFro
   return parsed;
 }
 
+// A refused preset id or nested document is InvalidFormat; the flat POD (recognised by its
+// `retuneSemitones` key) is a per-call parameter bag and stays InvalidParameter.
 editing::voice_changer::RealtimeVoiceChangerConfig realtimeVoiceChangerConfigFromVal(val config) {
   editing::voice_changer::RealtimeVoiceChangerConfig parsed;
   std::string error;
   if (!editing::voice_changer::realtime_voice_changer_config_from_input(
           realtimeVoiceChangerConfigTextFromVal(config), &parsed, &error)) {
-    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter, error);
+    const bool flat_pod = config.typeOf().as<std::string>() == "object" && !config.isNull() &&
+                          !config["retuneSemitones"].isUndefined();
+    throw sonare::SonareException(
+        flat_pod ? sonare::ErrorCode::InvalidParameter : sonare::ErrorCode::InvalidFormat, error);
   }
   return parsed;
 }
@@ -288,7 +293,7 @@ class RealtimeVoiceChangerWrapper {
 
   void noteOn(const val& note_val, const val& velocity_val) {
     const int note = checkedMidiNoteFromVal(note_val, "RealtimeVoiceChanger");
-    if (velocity_val.typeOf().as<std::string>() != "number") {
+    if (!velocity_val.isNumber()) {
       throw WasmTypeError("RealtimeVoiceChanger.noteOn: velocity must be a number");
     }
     const double velocity = velocity_val.as<double>();
@@ -554,16 +559,17 @@ class RealtimeVoiceChangerWrapper {
 
   void process_prepared_interleaved(const val& num_frames_val, const val& num_channels_val,
                                     bool with_carrier) {
-    const std::string method =
+    const char* method =
         with_carrier ? "processPreparedInterleavedWithCarrier" : "processPreparedInterleaved";
     const int num_frames = checkedIntFromVal(num_frames_val, "numFrames");
     const int num_channels = checkedIntFromVal(num_channels_val, "numChannels");
     require_prepared();
     if (num_frames <= 0 || num_channels <= 0) {
-      throw WasmRangeError("RealtimeVoiceChanger." + method + ": bad dims");
+      throw WasmRangeError(std::string("RealtimeVoiceChanger.") + method + ": bad dims");
     }
     if (num_frames > max_block_size_) {
-      throw WasmRangeError("RealtimeVoiceChanger." + method + ": frames exceed max block size");
+      throw WasmRangeError(std::string("RealtimeVoiceChanger.") + method +
+                           ": frames exceed max block size");
     }
     require_prepared_channels(num_channels);
     const size_t frames = static_cast<size_t>(num_frames);
@@ -573,7 +579,7 @@ class RealtimeVoiceChangerWrapper {
         planar_.size() < channel_count || carrier_.size() < frames) {
       throw sonare::SonareException(
           sonare::ErrorCode::InvalidParameter,
-          "RealtimeVoiceChanger." + method +
+          std::string("RealtimeVoiceChanger.") + method +
               ": getInterleavedInputBuffer/getInterleavedOutputBuffer must be called first with "
               "matching dims");
     }
@@ -596,26 +602,27 @@ class RealtimeVoiceChangerWrapper {
   }
 
   void process_prepared_planar(const val& num_frames_val, bool with_carrier) {
-    const std::string method =
+    const char* method =
         with_carrier ? "processPreparedPlanarWithCarrier" : "processPreparedPlanar";
     const int num_frames = checkedIntFromVal(num_frames_val, "numFrames");
     require_prepared();
     if (num_frames <= 0) {
-      throw WasmRangeError("RealtimeVoiceChanger." + method + ": bad frames");
+      throw WasmRangeError(std::string("RealtimeVoiceChanger.") + method + ": bad frames");
     }
     if (num_frames > max_block_size_) {
-      throw WasmRangeError("RealtimeVoiceChanger." + method + ": frames exceed max block size");
+      throw WasmRangeError(std::string("RealtimeVoiceChanger.") + method +
+                           ": frames exceed max block size");
     }
     const size_t channel_count = static_cast<size_t>(prepared_channels_);
     if (planar_.size() < channel_count || carrier_.size() < static_cast<size_t>(num_frames)) {
       throw sonare::SonareException(
           sonare::ErrorCode::InvalidParameter,
-          "RealtimeVoiceChanger." + method +
+          std::string("RealtimeVoiceChanger.") + method +
               ": getPlanarChannelBuffer must be called for each channel before processing");
     }
     for (size_t ch = 0; ch < channel_count; ++ch) {
       if (planar_[ch].size() < static_cast<size_t>(num_frames)) {
-        throw WasmRangeError("RealtimeVoiceChanger." + method +
+        throw WasmRangeError(std::string("RealtimeVoiceChanger.") + method +
                              ": planar buffer too small for requested frames");
       }
     }

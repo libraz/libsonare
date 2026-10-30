@@ -5,10 +5,7 @@
 
 import type { SpectralFrameRequest } from './feature_spectral.js';
 import type { GuardedOptions } from './internal/feature_validation.js';
-import {
-  validateMelFrequencyRange,
-  validatePositiveIntegers,
-} from './internal/feature_validation.js';
+import { validatePositiveIntegers } from './internal/feature_validation.js';
 import { resolveFftOptions } from './internal/fft_options.js';
 import { getSonareModule } from './module_state.js';
 import type {
@@ -358,7 +355,6 @@ export function melToStft(
   // transform, so `nFft` only sizes the output to `nFft / 2 + 1` bins and an odd
   // size is accepted by the core and by the Node surface alike.
   validatePositiveIntegers('melToStft', { nFft });
-  validateMelFrequencyRange('melToStft', fmin, fmax, sampleRate);
   return requireModule().melToStft(power, nMels, nFrames, sampleRate, nFft, fmin, fmax, htk);
 }
 
@@ -428,7 +424,6 @@ export function melToAudio(
   validateMatrix('melToAudio', power, nMels, nFrames, 'power', 'nMels', options);
   const fft = resolveFftOptions('melToAudio', nFft, hopLength);
   validatePositiveIntegers('melToAudio', { nIter });
-  validateMelFrequencyRange('melToAudio', fmin, fmax, sampleRate);
   return requireModule().melToAudio(
     power,
     nMels,
@@ -618,7 +613,6 @@ export function mfccToAudio(
   validateMatrix('mfccToAudio', coefficients, nMfcc, nFrames, 'coefficients', 'nMfcc', options);
   const fft = resolveFftOptions('mfccToAudio', nFft, hopLength);
   validatePositiveIntegers('mfccToAudio', { nMels, nIter });
-  validateMelFrequencyRange('mfccToAudio', fmin, fmax, sampleRate);
   return requireModule().mfccToAudio(
     coefficients,
     nMfcc,

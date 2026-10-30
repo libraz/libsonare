@@ -80,7 +80,7 @@ void MixerWasm::addVcaGroup(std::string id, const val& gain_db_val, val members)
     member_storage.reserve(static_cast<size_t>(count));
     member_ptrs.reserve(static_cast<size_t>(count));
     for (int i = 0; i < count; ++i) {
-      member_storage.push_back(members[i].as<std::string>());
+      member_storage.push_back(stringFromVal(members[i], "members"));
     }
     for (const auto& member : member_storage) {
       member_ptrs.push_back(wasmCString(member, "members"));
@@ -121,7 +121,7 @@ void MixerWasm::setVcaGroupMembers(std::string id, val members) {
   const int count = static_cast<int>(wasmArrayLikeLength(members, "members"));
   member_storage.reserve(static_cast<size_t>(count));
   member_ptrs.reserve(static_cast<size_t>(count));
-  for (int i = 0; i < count; ++i) member_storage.push_back(members[i].as<std::string>());
+  for (int i = 0; i < count; ++i) member_storage.push_back(stringFromVal(members[i], "members"));
   for (const auto& member : member_storage) member_ptrs.push_back(wasmCString(member, "members"));
   const SonareError err = sonare_mixer_set_vca_group_members(
       mixer_, wasmCString(id, "id"), member_ptrs.empty() ? nullptr : member_ptrs.data(),

@@ -42,11 +42,12 @@ export function resolveEnumOrdinal(
     }
     return ordinal;
   }
-  if (typeof value === 'string') {
-    const ordinal = values[value];
-    if (ordinal !== undefined) {
-      return ordinal;
-    }
+  if (typeof value !== 'string') {
+    throw new TypeError(`${enumName} must be a string or a number`);
+  }
+  // biome-ignore lint/suspicious/noPrototypeBuiltins: Object.hasOwn is newer than the ES2020 target.
+  if (Object.prototype.hasOwnProperty.call(values, value)) {
+    return values[value];
   }
   throw new RangeError(`Invalid ${enumName}: ${String(value)}`);
 }

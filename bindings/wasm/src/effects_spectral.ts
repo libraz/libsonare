@@ -81,12 +81,17 @@ export function spectralEdit(
       : requestObject('spectralEdit', samples);
   assertAudioInput('spectralEdit', request.samples, request.sampleRate, request);
   const requestOps = request.ops ?? [];
+  if (requestOps === null || typeof requestOps !== 'object') {
+    throw new TypeError('spectralEdit: ops must be an array');
+  }
+  // A non-Array array-like goes to the native reader, which bounds its length.
   const nativeOps = Array.isArray(requestOps)
-    ? requestOps.map((op, index) =>
-        op === null || typeof op !== 'object'
-          ? op
-          : resolveRegionTimes(op, index, request.sampleRate),
-      )
+    ? requestOps.map((op, index) => {
+        if (op === null || typeof op !== 'object') {
+          throw new TypeError(`spectralEdit: ops[${index}] must be an object`);
+        }
+        return resolveRegionTimes(op, index, request.sampleRate);
+      })
     : requestOps;
   return requireModule().spectralEdit(
     request.samples,

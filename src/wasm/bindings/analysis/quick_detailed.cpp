@@ -3,7 +3,6 @@
 
 #ifdef __EMSCRIPTEN__
 
-#include "util/numeric_validation.h"
 #include "wasm/bindings/common/common.h"
 
 // ============================================================================
@@ -23,21 +22,15 @@ val js_analyze_bpm(val samples, const val& sample_rate, const val& bpm_min_val,
   const int hop_length = checkedIntFromVal(hop_length_val, "hopLength");
   const int max_candidates = checkedIntFromVal(max_candidates_val, "maxCandidates");
   Audio audio = loadValidatedAudio(samples, checkedIntFromVal(sample_rate, "sampleRate"));
-  // Mirror the flat C ABI config contract (sonare_analyze_bpm): reject inverted
-  // BPM ranges and non-positive sizing instead of letting the analyzer silently
-  // clamp them, so WASM rejects identically to the C ABI / Node.
-  if (!numeric::finite_positive(bpm_min) || !numeric::finite_ordered_range(bpm_min, bpm_max) ||
-      n_fft <= 0 || hop_length <= 0 || max_candidates < 0) {
-    throw WasmRangeError(
-        "analyzeBpm: require bpmMin > 0, bpmMax > bpmMin, nFft > 0, "
-        "hopLength > 0, maxCandidates >= 0");
-  }
   BpmConfig config;
   config.bpm_min = bpm_min;
   config.bpm_max = bpm_max;
   config.start_bpm = start_bpm;
   config.n_fft = n_fft;
   config.hop_length = hop_length;
+  // The analyzer clamps what these refuse; the rule is the one the C ABI applies.
+  validate_bpm_config(config);
+  validate_bpm_candidate_count(max_candidates);
   BpmAnalyzer analyzer(audio, config);
 
   val out = val::object();
@@ -70,18 +63,13 @@ val js_analyze_rhythm(val samples, const val& sample_rate, const val& bpm_min_va
   const int n_fft = checkedIntFromVal(n_fft_val, "nFft");
   const int hop_length = checkedIntFromVal(hop_length_val, "hopLength");
   Audio audio = loadValidatedAudio(samples, checkedIntFromVal(sample_rate, "sampleRate"));
-  // Mirror the flat C ABI config contract (sonare_analyze_rhythm).
-  if (!numeric::finite_positive(bpm_min) || !numeric::finite_ordered_range(bpm_min, bpm_max) ||
-      n_fft <= 0 || hop_length <= 0) {
-    throw WasmRangeError(
-        "analyzeRhythm: require bpmMin > 0, bpmMax > bpmMin, nFft > 0, hopLength > 0");
-  }
   RhythmConfig config;
   config.bpm_min = bpm_min;
   config.bpm_max = bpm_max;
   config.start_bpm = start_bpm;
   config.n_fft = n_fft;
   config.hop_length = hop_length;
+  validate_rhythm_config(config);
   RhythmAnalyzer analyzer(audio, config);
 
   const auto& features = analyzer.features();
@@ -110,17 +98,11 @@ val js_analyze_dynamics(val samples, const val& sample_rate, const val& window_s
   const float compression_threshold =
       checkedFloatFromVal(compression_threshold_val, "compressionThreshold");
   Audio audio = loadValidatedAudio(samples, checkedIntFromVal(sample_rate, "sampleRate"));
-  // Mirror the flat C ABI config contract (sonare_analyze_dynamics): reject a
-  // non-positive window or hop and a negative threshold instead of clamping.
-  if (!numeric::finite_positive(window_sec) || hop_length <= 0 ||
-      !numeric::finite_non_negative(compression_threshold)) {
-    throw WasmRangeError(
-        "analyzeDynamics: require windowSec > 0, hopLength > 0, compressionThreshold >= 0");
-  }
   DynamicsConfig config;
   config.window_sec = window_sec;
   config.hop_length = hop_length;
   config.compression_threshold = compression_threshold;
+  validate_dynamics_config(config);
   DynamicsAnalyzer analyzer(audio, config);
 
   const auto& dyn = analyzer.dynamics();
@@ -147,18 +129,13 @@ val js_analyze_timbre(val samples, const val& sample_rate, const val& n_fft_val,
   const int n_mfcc = checkedIntFromVal(n_mfcc_val, "nMfcc");
   const float window_sec = checkedFloatFromVal(window_sec_val, "windowSec");
   Audio audio = loadValidatedAudio(samples, checkedIntFromVal(sample_rate, "sampleRate"));
-  // Mirror the flat C ABI config contract (sonare_analyze_timbre).
-  if (n_fft <= 0 || hop_length <= 0 || n_mels <= 0 || n_mfcc <= 0 ||
-      !numeric::finite_positive(window_sec)) {
-    throw WasmRangeError(
-        "analyzeTimbre: require nFft > 0, hopLength > 0, nMels > 0, nMfcc > 0, windowSec > 0");
-  }
   TimbreConfig config;
   config.n_fft = n_fft;
   config.hop_length = hop_length;
   config.n_mels = n_mels;
   config.n_mfcc = n_mfcc;
   config.window_sec = window_sec;
+  validate_timbre_config(config);
   TimbreAnalyzer analyzer(audio, config);
 
   const auto& t = analyzer.timbre();

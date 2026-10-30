@@ -285,6 +285,7 @@ describe('embedded NUL refusal, std::string entry points', () => {
     const json = Project.create().toJson();
     expect(() => Project.fromJson(json)).not.toThrow();
     expectNulRefusal(() => Project.fromJson(`${json}${NUL}junk`), 'json');
+    expectNulRefusal(() => Project.fromJsonWithDiagnostics(`${json}${NUL}junk`), 'json');
     expectNulRefusal(() => validateRealtimeVoiceChangerPresetJson(`{}${NUL}junk`), 'json');
   });
 
@@ -301,6 +302,7 @@ describe('embedded NUL refusal, scan', () => {
     { file: 'mixing/mixing.cpp', head: 'std::string js_mixing_scene_preset_json(' },
     { file: 'features/core.cpp', head: 'float js_note_to_hz(' },
     { file: 'project/project.cpp', head: 'ProjectWasm ProjectWasm::fromJson(' },
+    { file: 'project/project.cpp', head: 'val ProjectWasm::fromJsonWithDiagnostics(' },
     {
       file: 'effects/realtime_voice_changer.cpp',
       head: 'std::string realtimeVoiceChangerPresetJson(',

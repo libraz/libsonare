@@ -3,11 +3,7 @@
 
 #ifdef __EMSCRIPTEN__
 
-#include <cmath>
-#include <limits>
-
 #include "util/constants.h"
-#include "util/numeric_validation.h"
 #include "wasm/bindings/common/common.h"
 
 // ============================================================================
@@ -64,15 +60,10 @@ val js_chroma_cens(val samples, const val& sample_rate, const val& hop_length, c
                    const val& bins_per_octave_val) {
   const int bins_per_octave = checkedIntFromVal(bins_per_octave_val, "binsPerOctave");
   Audio audio = loadValidatedAudio(samples, checkedIntFromVal(sample_rate, "sampleRate"));
-  if (bins_per_octave <= 0 || bins_per_octave > std::numeric_limits<int>::max() / 7) {
-    throw WasmRangeError("binsPerOctave is out of range");
-  }
 
   ChromaCensConfig config;
-  config.base.cqt.hop_length = checkedIntFromVal(hop_length, "hopLength");
-  config.base.cqt.bins_per_octave = bins_per_octave;
-  config.base.cqt.n_bins = 7 * bins_per_octave;
-  config.base.n_chroma = checkedIntFromVal(n_chroma, "nChroma");
+  config.base = make_chroma_cqt_config(checkedIntFromVal(hop_length, "hopLength"),
+                                       checkedIntFromVal(n_chroma, "nChroma"), bins_per_octave);
   return chromaToVal(chroma_cens(audio, config));
 }
 
@@ -80,15 +71,10 @@ val js_chroma_cqt(val samples, const val& sample_rate, const val& hop_length, co
                   const val& bins_per_octave_val) {
   const int bins_per_octave = checkedIntFromVal(bins_per_octave_val, "binsPerOctave");
   Audio audio = loadValidatedAudio(samples, checkedIntFromVal(sample_rate, "sampleRate"));
-  if (bins_per_octave <= 0 || bins_per_octave > std::numeric_limits<int>::max() / 7) {
-    throw WasmRangeError("binsPerOctave is out of range");
-  }
 
-  ChromaCqtConfig config;
-  config.cqt.hop_length = checkedIntFromVal(hop_length, "hopLength");
-  config.cqt.bins_per_octave = bins_per_octave;
-  config.cqt.n_bins = 7 * bins_per_octave;
-  config.n_chroma = checkedIntFromVal(n_chroma, "nChroma");
+  const ChromaCqtConfig config =
+      make_chroma_cqt_config(checkedIntFromVal(hop_length, "hopLength"),
+                             checkedIntFromVal(n_chroma, "nChroma"), bins_per_octave);
   return chromaToVal(chroma_cqt(audio, config));
 }
 
@@ -112,6 +98,7 @@ val js_nnls_chroma_ex(val samples, const val& sample_rate, bool enable_stft_blen
   config.enable_stft_blend = enable_stft_blend;
   config.stft_blend_weight = stft_blend_weight;
   config.stft_blend_n_fft = checkedIntFromVal(stft_blend_n_fft, "stftBlendNFft");
+  validate_nnls_chroma_config(config);
   Chroma chroma = nnls_chroma(audio, config);
 
   val out = val::object();
@@ -142,18 +129,12 @@ val js_analyze_sections(val samples, const val& sample_rate, const val& n_fft_va
   const int hop_length = checkedIntFromVal(hop_length_val, "hopLength");
   const float min_section_sec = checkedFloatFromVal(min_section_sec_val, "minSectionSec");
   Audio audio = loadValidatedAudio(samples, checkedIntFromVal(sample_rate, "sampleRate"));
-  // Mirror the flat C ABI config contract (sonare_analyze_sections): reject
-  // non-positive sizing instead of silently substituting struct defaults, so
-  // WASM rejects identically to the C ABI / Node. The TS layer (which always
-  // passes explicit values) carries the matching guards.
-  if (n_fft <= 0 || hop_length <= 0 || !numeric::finite_non_negative(min_section_sec)) {
-    throw WasmRangeError("analyzeSections: require nFft > 0, hopLength > 0, minSectionSec >= 0");
-  }
 
   SectionConfig config;
   config.n_fft = n_fft;
   config.hop_length = hop_length;
   config.min_section_sec = min_section_sec;
+  validate_section_config(config);
 
   SectionAnalyzer analyzer(audio, config);
 
@@ -194,31 +175,8 @@ val js_detect_boundaries(val samples, const val& sample_rate, val options) {
     config.use_mfcc = boolProperty(options, "useMfcc", config.use_mfcc);
     config.use_chroma = boolProperty(options, "useChroma", config.use_chroma);
   }
-  // This facade calls the detector directly, so it carries the C ABI's guards
-  // (sonare_detect_boundaries) itself; nothing below would refuse these. They
-  // run before the audio is loaded, in the order the C ABI applies them.
-  if (config.n_fft <= 0 || config.hop_length <= 0 || config.kernel_size <= 0 ||
-      config.n_mfcc <= 0 || config.n_chroma <= 0) {
-    throw WasmRangeError(
-        "detectBoundaries: require nFft > 0, hopLength > 0, kernelSize > 0, "
-        "nMfcc > 0, nChroma > 0");
-  }
-  // Both thresholds, the peak spacing and the reference span are compared against
-  // measured values, so a non-finite one silently accepts or rejects every peak
-  // instead of failing.
-  if (!numeric::finite_non_negative(config.threshold) ||
-      !numeric::finite_non_negative(config.absolute_threshold) ||
-      !numeric::finite_non_negative(config.peak_distance) ||
-      !numeric::finite_non_negative(config.reference_window)) {
-    throw WasmRangeError(
-        "detectBoundaries: threshold, absoluteThreshold, peakDistance and "
-        "referenceWindow must be finite and non-negative");
-  }
-  // The detector combines the two feature streams frame-for-frame; with neither
-  // enabled there is nothing to combine and the novelty curve is undefined.
-  if (!config.use_mfcc && !config.use_chroma) {
-    throw WasmRangeError("detectBoundaries: require useMfcc or useChroma");
-  }
+  // The detector does not refuse these itself; checked before the audio is loaded.
+  validate_boundary_config(config);
 
   Audio audio = loadValidatedAudio(samples, sr);
   BoundaryDetector detector(audio, config);
@@ -259,16 +217,6 @@ val js_analyze_melody(val samples, const val& sample_rate, const val& fmin_val, 
   const float fmax = checkedFloatFromVal(fmax_val, "fmax");
   const float threshold = checkedFloatFromVal(threshold_val, "threshold");
   Audio audio = loadValidatedAudio(samples, checkedIntFromVal(sample_rate, "sampleRate"));
-  // Mirror the flat C ABI config contract (sonare_analyze_melody_ex): reject an
-  // inverted/zero frequency range, non-positive sizing and a non-positive
-  // threshold instead of silently substituting struct defaults. use_pyin/center
-  // are plain bools selecting the pYIN tracker and frame centering.
-  if (!numeric::finite_positive(fmin) || !numeric::finite_ordered_range(fmin, fmax) ||
-      frame_length <= 0 || hop_length <= 0 || !numeric::finite_positive(threshold)) {
-    throw WasmRangeError(
-        "analyzeMelody: require fmin > 0, fmax > fmin, frameLength > 0, "
-        "hopLength > 0, threshold > 0");
-  }
 
   MelodyConfig config;
   config.fmin = fmin;
@@ -278,6 +226,7 @@ val js_analyze_melody(val samples, const val& sample_rate, const val& fmin_val, 
   config.threshold = threshold;
   config.use_pyin = use_pyin;
   config.center = center;
+  validate_melody_config(config);
 
   MelodyAnalyzer analyzer(audio, config);
   const MelodyContour& contour = analyzer.contour();
@@ -322,9 +271,6 @@ val js_cqt(val samples, const val& sample_rate, const val& hop_length, const val
            const val& n_bins, const val& bins_per_octave) {
   const float fmin = checkedFloatFromVal(fmin_val, "fmin");
   Audio audio = loadValidatedAudio(samples, checkedIntFromVal(sample_rate, "sampleRate"));
-  if (!numeric::finite_positive(fmin)) {
-    throw WasmRangeError("cqt: require fmin > 0");
-  }
 
   CqtConfig config;
   config.hop_length = checkedIntFromVal(hop_length, "hopLength");
@@ -367,10 +313,6 @@ val js_vqt(val samples, const val& sample_rate, const val& hop_length, const val
            const val& n_bins, const val& bins_per_octave, float gamma) {
   const float fmin = checkedFloatFromVal(fmin_val, "fmin");
   Audio audio = loadValidatedAudio(samples, checkedIntFromVal(sample_rate, "sampleRate"));
-  // Mirror sonare_vqt: a NaN gamma selects automatic bandwidth, an infinity does not.
-  if (!numeric::finite_positive(fmin) || std::isinf(gamma)) {
-    throw WasmRangeError("vqt: require fmin > 0 and a non-infinite gamma");
-  }
 
   VqtConfig config;
   config.hop_length = checkedIntFromVal(hop_length, "hopLength");
@@ -378,6 +320,7 @@ val js_vqt(val samples, const val& sample_rate, const val& hop_length, const val
   config.n_bins = checkedIntFromVal(n_bins, "nBins");
   config.bins_per_octave = checkedIntFromVal(bins_per_octave, "binsPerOctave");
   config.gamma = gamma;
+  validate_vqt_gamma(config.gamma);
 
   return cqtResultToVal(vqt(audio, config));
 }

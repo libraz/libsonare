@@ -62,7 +62,13 @@ import type {
   WasmExternalMidiEvent,
   WasmRealtimeEngine,
 } from './sonare.js';
-import { resolveSampleBound, resolveRenderFrame as resolveWireRenderFrame } from './validation.js';
+import {
+  assertSurroundPan,
+  optionalBoolean,
+  requireBoolean,
+  resolveSampleBound,
+  resolveRenderFrame as resolveWireRenderFrame,
+} from './validation.js';
 
 /** The native layer takes an absent frame as `undefined`; the shared resolver spells it -1. */
 function resolveRenderFrame(
@@ -297,7 +303,7 @@ function normalizeRenderOfflineRequest(
   return {
     channels: request.channels,
     blockSize: request.blockSize ?? 128,
-    finalize: request.finalize ?? true,
+    finalize: optionalBoolean('renderOffline', request.finalize, 'finalize', true),
   };
 }
 
@@ -459,7 +465,12 @@ export class RealtimeEngine {
    * `WithMonitor` variants; offline renders, bounces and freezes never include it.
    */
   setSoloMute(laneIndex: number, solo: boolean, mute: boolean, renderFrame?: number): void {
-    this.native.setSoloMute(laneIndex, solo, mute, resolveRenderFrame('setSoloMute', renderFrame));
+    this.native.setSoloMute(
+      laneIndex,
+      requireBoolean('setSoloMute', solo, 'solo'),
+      requireBoolean('setSoloMute', mute, 'mute'),
+      resolveRenderFrame('setSoloMute', renderFrame),
+    );
   }
 
   /**
@@ -630,7 +641,10 @@ export class RealtimeEngine {
    * every note at full scale and the bound axes carry the dynamics alone.
    */
   setControllerVelocityMeaningful(destinationId: number, meaningful: boolean): void {
-    this.native.setControllerVelocityMeaningful(destinationId, meaningful);
+    this.native.setControllerVelocityMeaningful(
+      destinationId,
+      requireBoolean('setControllerVelocityMeaningful', meaningful, 'meaningful'),
+    );
   }
 
   controllerVelocityMeaningful(destinationId: number): boolean {
@@ -779,7 +793,10 @@ export class RealtimeEngine {
    * through the old route, and drops its pending MIDI-FX events. Single writer.
    */
   setMidiDestinationExternal(destinationId: number, external: boolean): void {
-    this.native.setMidiDestinationExternal(destinationId, external);
+    this.native.setMidiDestinationExternal(
+      destinationId,
+      requireBoolean('setMidiDestinationExternal', external, 'external'),
+    );
   }
 
   /**
@@ -787,7 +804,9 @@ export class RealtimeEngine {
    * the external output queue so external gear tracks the transport tempo.
    */
   setExternalMidiClockEnabled(enabled: boolean): void {
-    this.native.setExternalMidiClockEnabled(enabled);
+    this.native.setExternalMidiClockEnabled(
+      requireBoolean('setExternalMidiClockEnabled', enabled, 'enabled'),
+    );
   }
 
   /** Count of external-MIDI events dropped because the output queue was full. */
@@ -1349,7 +1368,7 @@ export class RealtimeEngine {
 
   /** Sets the loop region between two quarter-note positions and enables or disables it. */
   setLoop(startPpq: number, endPpq: number, enabled = true): void {
-    this.native.setLoop(startPpq, endPpq, enabled);
+    this.native.setLoop(startPpq, endPpq, requireBoolean('setLoop', enabled, 'enabled'));
   }
 
   addParameter(info: EngineParameterInfo): void {
@@ -1683,7 +1702,12 @@ export class RealtimeEngine {
     bypassed: boolean,
     resetOnBypass = false,
   ): void {
-    this.native.setTrackStripInsertBypassed(trackId, insertIndex, bypassed, resetOnBypass);
+    this.native.setTrackStripInsertBypassed(
+      trackId,
+      insertIndex,
+      requireBoolean('setTrackStripInsertBypassed', bypassed, 'bypassed'),
+      requireBoolean('setTrackStripInsertBypassed', resetOnBypass, 'resetOnBypass'),
+    );
   }
 
   /** Bus-strip counterpart of {@link setTrackStripEqBand}. */
@@ -1725,7 +1749,11 @@ export class RealtimeEngine {
     bypassed: boolean,
     resetOnBypass = false,
   ): void {
-    this.native.setMasterStripInsertBypassed(insertIndex, bypassed, resetOnBypass);
+    this.native.setMasterStripInsertBypassed(
+      insertIndex,
+      requireBoolean('setMasterStripInsertBypassed', bypassed, 'bypassed'),
+      requireBoolean('setMasterStripInsertBypassed', resetOnBypass, 'resetOnBypass'),
+    );
   }
 
   /**
@@ -1836,7 +1864,12 @@ export class RealtimeEngine {
     bypassed: boolean,
     resetOnBypass = false,
   ): void {
-    this.native.setBusStripInsertBypassed(busId, insertIndex, bypassed, resetOnBypass);
+    this.native.setBusStripInsertBypassed(
+      busId,
+      insertIndex,
+      requireBoolean('setBusStripInsertBypassed', bypassed, 'bypassed'),
+      requireBoolean('setBusStripInsertBypassed', resetOnBypass, 'resetOnBypass'),
+    );
   }
 
   /**
@@ -1971,10 +2004,12 @@ export class RealtimeEngine {
    * Sets a track lane strip's surround placement in realtime (glitch-free; a
    * constant-power 5 ms one-pole glide). Used when the destination has more than
    * two channels. Omitted fields default to a centered point source
-   * (`distance` 1); a `distance` of 0 or less is treated as 1. Throws for an
+   * (`distance` 1); a `distance` of 0 or less is treated as 1. Throws a RangeError
+   * for `azimuth` outside [-180, 180] or `divergence`/`lfe` outside [0, 1], and for an
    * unknown track, a track without a lane strip, or a non-finite field.
    */
   setTrackStripSurroundPan(trackId: number, pan: SurroundPan): void {
+    assertSurroundPan('setTrackStripSurroundPan', pan);
     this.native.setTrackStripSurroundPan(trackId, pan);
   }
 
@@ -2112,7 +2147,7 @@ export class RealtimeEngine {
   }
 
   armCapture(armed = true): void {
-    this.native.armCapture(armed);
+    this.native.armCapture(requireBoolean('armCapture', armed, 'armed'));
   }
 
   /**
@@ -2154,7 +2189,11 @@ export class RealtimeEngine {
         'setCapturePunch: both bounds are required (startSample or startSec, endSample or endSec)',
       );
     }
-    this.native.setCapturePunch(start, end, request.enabled ?? true);
+    this.native.setCapturePunch(
+      start,
+      end,
+      optionalBoolean('setCapturePunch', request.enabled, 'enabled', true),
+    );
   }
 
   setCaptureSource(source: EngineCaptureSource): void {
@@ -2171,7 +2210,7 @@ export class RealtimeEngine {
   }
 
   setInputMonitor(enabled: boolean, gain = 1): void {
-    this.native.setInputMonitor(enabled, gain);
+    this.native.setInputMonitor(requireBoolean('setInputMonitor', enabled, 'enabled'), gain);
   }
 
   resetCapture(): void {

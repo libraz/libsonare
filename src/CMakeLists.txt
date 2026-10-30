@@ -1736,7 +1736,10 @@ if(BUILD_WASM)
   # about 529 kB raw / 98 kB gzip in the full module and 89 kB / 15 kB in analysis.
   set(_sonare_wasm_glue_sources "${SONARE_WASM_BINDING_SOURCES}")
   list(FILTER _sonare_wasm_glue_sources INCLUDE REGEX "^wasm/")
-  list(FILTER _sonare_wasm_glue_sources EXCLUDE REGEX "^wasm/bindings/realtime/processing\\.cpp$")
+  # The per-block entry points (engine, voice changer, playback renderer, mixer) hold the
+  # realtime loops, so they stay with the compute core.
+  list(FILTER _sonare_wasm_glue_sources EXCLUDE REGEX
+    "^wasm/bindings/(realtime/processing|effects/realtime_voice_changer|playback/playback|mixing/mixing_processing)\\.cpp$")
   set_property(SOURCE ${_sonare_wasm_glue_sources}
     TARGET_DIRECTORY sonare APPEND PROPERTY COMPILE_OPTIONS
     "$<$<CONFIG:Release>:-Oz>")

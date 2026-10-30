@@ -73,6 +73,7 @@ export type {
   SonareRealtimeEngineWorkletProcessorOptions,
   SonareRealtimeVoiceChangerAllNotesOffMessage,
   SonareRealtimeVoiceChangerDestroyMessage,
+  SonareRealtimeVoiceChangerErrorMessage,
   SonareRealtimeVoiceChangerMessage,
   SonareRealtimeVoiceChangerNoteOffMessage,
   SonareRealtimeVoiceChangerNoteOnMessage,

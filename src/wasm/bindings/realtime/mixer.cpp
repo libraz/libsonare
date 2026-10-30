@@ -916,7 +916,7 @@ void RealtimeEngineWasm::setTrackStripDualPan(const val& track_id_val, const val
 
 // Sets a lane strip's surround pan from {azimuth, elevation, divergence, lfe,
 // distance}; absent fields take the centered point-source defaults, a present
-// non-number is refused by name, and the core refuses non-finite values.
+// non-number is refused by name, and an out-of-range or non-finite field is refused.
 void RealtimeEngineWasm::setTrackStripSurroundPan(const val& track_id_val, const val& pan_val) {
   const uint32_t track_id = checkedUintFromVal(track_id_val, "trackId");
   if (pan_val.isNull() || pan_val.typeOf().as<std::string>() != "object") {
@@ -932,6 +932,12 @@ void RealtimeEngineWasm::setTrackStripSurroundPan(const val& track_id_val, const
   params.divergence = field("divergence", 0.0f);
   params.lfe = field("lfe", 0.0f);
   params.distance = field("distance", 1.0f);
+  if (!(params.azimuth >= -180.0f && params.azimuth <= 180.0f) ||
+      !(params.divergence >= 0.0f && params.divergence <= 1.0f) ||
+      !(params.lfe >= 0.0f && params.lfe <= 1.0f)) {
+    throw WasmRangeError(
+        "surround pan: azimuth must be in [-180, 180]; divergence and lfe in [0, 1]");
+  }
   requireMixingTarget(engine_.set_track_surround_pan(track_id, params),
                       "invalid track strip surround-pan target");
 #else

@@ -10,7 +10,7 @@ import type {
 } from './quick_analysis.js';
 import type { OfflineWorkerOperation, OfflineWorkerResponseMessage } from './worker_protocol.js';
 
-type WorkerRequest<T> = Omit<T, 'onProgress'>;
+type WorkerRequest<T> = Omit<T, 'onProgress' | 'cancel'>;
 
 /** Progress relayed from the Worker at the core's native progress boundaries. */
 export interface OfflineWorkerProgress {
@@ -104,7 +104,13 @@ function cloneForWorker(
   copy: boolean,
   transfers: Transferable[],
   transferred = new Set<ArrayBuffer>(),
+  path = 'request',
 ): unknown {
+  if (typeof value === 'function') {
+    throw new TypeError(
+      `OfflineWorkerClient: ${path} is a function and cannot be sent to a Worker`,
+    );
+  }
   if (value instanceof Float32Array) {
     const samples = copy ? value.slice() : value;
     const buffer = samples.buffer;
@@ -120,13 +126,21 @@ function cloneForWorker(
     return samples;
   }
   if (Array.isArray(value)) {
-    return value.map((item) => cloneForWorker(item, copy, transfers, transferred));
+    return value.map((item, index) =>
+      cloneForWorker(item, copy, transfers, transferred, `${path}[${index}]`),
+    );
   }
   if (value !== null && typeof value === 'object') {
     return Object.fromEntries(
       Object.entries(value).map(([key, item]) => [
         key,
-        cloneForWorker(item, copy, transfers, transferred),
+        cloneForWorker(
+          item,
+          copy,
+          transfers,
+          transferred,
+          path === 'request' ? key : `${path}.${key}`,
+        ),
       ]),
     );
   }

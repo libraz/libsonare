@@ -382,14 +382,8 @@ val js_voice_change_realtime(val samples, const val& sample_rate, std::string pr
                                    channel_count, &output, &output_length);
   if (err != SONARE_OK) {
     sonare_free_floats(output);
-    // Map the C code back rather than collapsing every failure onto
-    // InvalidParameter: a host that branches on `err.code` (NotSupported ->
-    // hide the control, OutOfMemory -> retry smaller) mis-branched on WASM
-    // only, and an analysis-only build reported "feature not compiled in" as
-    // "invalid parameter". Same inverse table `throwCError` uses one directory
-    // over, so the two cannot drift.
-    throw SonareException(sonare_c_detail::error_code_from_c_error(err),
-                          std::string("voiceChangeRealtime failed: ") + sonare_error_message(err));
+    // The C code and its recorded detail, as on Node, so a host can branch on `err.code`.
+    throwCodedCError(err, "voiceChangeRealtime failed");
   }
   std::vector<float> result(output, output + output_length);
   sonare_free_floats(output);

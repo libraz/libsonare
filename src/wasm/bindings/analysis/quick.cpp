@@ -77,18 +77,6 @@ void validateKey(int key_root, int key_mode) {
   }
 }
 
-// Rejects a non-positive smoothingWindow or a negative hmmBeamWidth, mirroring
-// the C ABI's sonare_detect_chords_ex / sonare_chord_functional_analysis range
-// checks instead of passing either through to the DSP layer unchecked.
-void validateChordConfig(float smoothing_window, int hmm_beam_width) {
-  if (smoothing_window <= 0.0f) {
-    throw WasmRangeError("smoothingWindow must be positive");
-  }
-  if (hmm_beam_width < 0) {
-    throw WasmRangeError("hmmBeamWidth must not be negative");
-  }
-}
-
 // Module-local mono/stereo runners. They delegate to the shared latency-
 // compensating helpers in `mastering::api::internal` so the WASM bridge,
 // `MasteringChain`, and `apply_named_processor` all go through the same
@@ -354,7 +342,7 @@ struct TuningArg {
 TuningArg tuningFromVal(const val& value, const char* key) {
   TuningArg out;
   if (value.isString()) {
-    if (value.as<std::string>() != "auto") {
+    if (stringFromVal(value, key) != "auto") {
       throw WasmTypeError(std::string(key) + " must be a number or 'auto'");
     }
     out.measure = true;
@@ -382,6 +370,7 @@ KeyConfig makeKeyConfig(int n_fft, int hop_length, bool use_hpss, bool loudness_
   if (!genre_hint.empty()) {
     config.genre_hint = genre_hint;
   }
+  validate_key_config(config);
   return config;
 }
 
@@ -445,21 +434,6 @@ val js_detect_key_candidates(val samples, const val& sample_rate_val, const val&
   return out;
 }
 
-// The field's own domain, asked at the field rather than in the shared reader:
-// the reader guarantees the value survived the conversion unchanged, and -1
-// survives it. Nothing downstream asks whether a negative frame count means
-// anything, so the peak picker returned a normal onset list for one.
-// intProperty refuses a wrong-typed value: these are peak-picking window widths
-// with no "unspecified" spelling, matching threshold/delta's floatProperty on
-// the same call and the addon's IntProperty on the same six keys.
-int onsetWindowFrames(val options, const char* key, int default_value) {
-  const int frames = intProperty(options, key, default_value);
-  if (frames < 0) {
-    throw WasmRangeError(std::string(key) + " must be a non-negative frame count");
-  }
-  return frames;
-}
-
 val js_detect_onsets(val samples, const val& sample_rate_val, val options) {
   const int sample_rate = checkedIntFromVal(sample_rate_val, "sampleRate");
   Audio audio = loadValidatedAudio(samples, sample_rate);
@@ -470,14 +444,17 @@ val js_detect_onsets(val samples, const val& sample_rate_val, val options) {
   // are peak-picking quantities with no "unspecified" spelling, so a wrong-typed
   // value is a caller error rather than a request for the default.
   config.threshold = floatProperty(options, "threshold", config.threshold);
-  config.pre_max = onsetWindowFrames(options, "preMax", config.pre_max);
-  config.post_max = onsetWindowFrames(options, "postMax", config.post_max);
-  config.pre_avg = onsetWindowFrames(options, "preAvg", config.pre_avg);
-  config.post_avg = onsetWindowFrames(options, "postAvg", config.post_avg);
+  // intProperty refuses a wrong-typed value: the peak-picking windows have no "unspecified"
+  // spelling, matching the addon's IntProperty on the same six keys.
+  config.pre_max = intProperty(options, "preMax", config.pre_max);
+  config.post_max = intProperty(options, "postMax", config.post_max);
+  config.pre_avg = intProperty(options, "preAvg", config.pre_avg);
+  config.post_avg = intProperty(options, "postAvg", config.post_avg);
   config.delta = floatProperty(options, "delta", config.delta);
-  config.wait = onsetWindowFrames(options, "wait", config.wait);
+  config.wait = intProperty(options, "wait", config.wait);
   config.backtrack = boolProperty(options, "backtrack", config.backtrack);
-  config.backtrack_range = onsetWindowFrames(options, "backtrackRange", config.backtrack_range);
+  config.backtrack_range = intProperty(options, "backtrackRange", config.backtrack_range);
+  validate_onset_detect_config(config, kOnsetDetectJsFieldNames);
   // Through quick:: for the same reason the C ABI does: the peak-picking fields
   // are frame counts, and a frame is hop_length over the rate in force.
   std::vector<float> onsets =
@@ -525,6 +502,7 @@ static ChordConfig makeChordConfig(float min_duration, float smoothing_window, f
   config.chroma_method = chroma_method == 1 ? ChromaMethod::NNLS : ChromaMethod::STFT;
   config.tuning = tuning.tuning;
   config.auto_tuning = tuning.measure;
+  validate_chord_config(config);
   return config;
 }
 
@@ -552,7 +530,6 @@ val js_detect_chords(val samples, const val& sample_rate_val, const val& min_dur
   if (use_key_context) {
     validateKey(key_root, key_mode);
   }
-  validateChordConfig(smoothing_window, hmm_beam_width);
 
   Audio audio = loadValidatedAudio(samples, sample_rate);
 
@@ -593,7 +570,6 @@ val js_chord_functional_analysis(val samples, const val& key_root_val, const val
   // the chord-detection key context, which share the same parameters here.
   validateChromaMethod(chroma_method);
   validateKey(key_root, key_mode);
-  validateChordConfig(smoothing_window, hmm_beam_width);
 
   Audio audio = loadValidatedAudio(samples, sample_rate);
 
@@ -828,13 +804,11 @@ val js_analyze_impulse_response_ex(val samples, const val& sample_rate_val,
   const int sample_rate = checkedIntFromVal(sample_rate_val, "sampleRate");
   const int n_octave_bands = checkedIntFromVal(n_octave_bands_val, "nOctaveBands");
   const float min_decay_db = checkedFloatFromVal(min_decay_db_val, "minDecayDb");
-  if (min_decay_db <= 0.0f) {
-    throw WasmRangeError("analyzeImpulseResponse: minDecayDb must be > 0");
-  }
-  Audio audio = loadValidatedAudio(samples, sample_rate);
   AcousticConfig config;
   config.n_octave_bands = n_octave_bands;
   config.min_decay_db = min_decay_db;
+  validate_acoustic_config(config);
+  Audio audio = loadValidatedAudio(samples, sample_rate);
   return acousticParametersToVal(analyze_impulse_response(audio, config));
 }
 
@@ -852,20 +826,14 @@ val js_detect_acoustic(val samples, const val& sample_rate_val, const val& n_oct
   const float min_decay_db = checkedFloatFromVal(min_decay_db_val, "minDecayDb");
   const float noise_floor_margin_db =
       checkedFloatFromVal(noise_floor_margin_db_val, "noiseFloorMarginDb");
-  // Mirror the C ABI's sonare_detect_acoustic guard so a negative band/subband
-  // count or non-positive decay window is rejected here too, instead of silently
-  // producing an empty-subband result (the C++ core treats them as benign).
-  if (n_octave_bands < 0 || n_third_octave_subbands < 0 || min_decay_db <= 0.0f ||
-      noise_floor_margin_db < 0.0f) {
-    throw WasmRangeError("detectAcoustic parameters out of range");
-  }
-  Audio audio = loadValidatedAudio(samples, sample_rate);
   AcousticConfig config;
   config.mode = AcousticConfig::Mode::Blind;
   config.n_octave_bands = n_octave_bands;
   config.n_third_octave_subbands = n_third_octave_subbands;
   config.min_decay_db = min_decay_db;
   config.noise_floor_margin_db = noise_floor_margin_db;
+  validate_acoustic_config(config);
+  Audio audio = loadValidatedAudio(samples, sample_rate);
   return acousticParametersToVal(detect_acoustic(audio, config));
 }
 
@@ -886,9 +854,6 @@ sonare::acoustic::ShoeboxRoom roomFromVal(val opts, float def_absorption) {
   const RoomDimensions dims{floatProperty(opts, "lengthM", 7.0f),
                             floatProperty(opts, "widthM", 5.0f),
                             floatProperty(opts, "heightM", 3.0f)};
-  if (!std::isfinite(dims.length) || !std::isfinite(dims.width) || !std::isfinite(dims.height)) {
-    throw WasmRangeError("room dimensions must be finite");
-  }
 
   // The precedence, the [0, 1] coefficient rejection and the band-wise
   // scattering all come from the core builder the C ABI calls, so the same
@@ -910,28 +875,12 @@ sonare::acoustic::ShoeboxRoom roomFromVal(val opts, float def_absorption) {
   return make_uniform_room(dims, request);
 }
 
-// Reads a deterministic late-tail seed, keeping @p fallback when the option is
-// absent, not a number, or exactly 0 (the C ABI's "seed == 0 keeps the library
-// default", so seed: 0 yields the same RIR on every surface instead of seeding
-// the PRNG with 0). The value is read as a double because the C ABI's seed is a
-// uint32: intProperty narrows through ToInt32, which turned every seed above
-// 2^31-1 negative and silently substituted the default, leaving half the seed
-// space unreachable. Anything outside the uint32 range -- below it as much as
-// above it, NaN included -- is rejected rather than substituted, since a silent
-// default is what made the gap invisible.
+// Reads a deterministic late-tail seed over the C ABI's full uint32 domain, keeping @p fallback
+// when the option is absent or exactly 0 (the C ABI's "seed == 0 keeps the library default").
+// A non-number is a TypeError and a value outside [0, 2^32 - 1] or fractional a RangeError.
 unsigned seedFromVal(val opts, unsigned fallback) {
-  const val seed_val = objectProperty(opts, "seed");
-  if (seed_val.typeOf().as<std::string>() != "number") return fallback;
-  const double seed_in = seed_val.as<double>();
-  if (!sonare::numeric::finite_in_closed_range(
-          seed_in, 0.0, static_cast<double>(std::numeric_limits<uint32_t>::max()))) {
-    throw WasmRangeError("seed must be within [0, 4294967295]");
-  }
-  // The range check above says nothing about a fraction, and 1.5 truncating onto
-  // seed 1 is the same silent fold as a wrap: two seeds, one RIR.
-  requireIntegral(seed_in, "seed");
-  if (seed_in == 0.0) return fallback;
-  return static_cast<unsigned>(seed_in);
+  const uint32_t seed = uintProperty(opts, "seed", 0);
+  return seed == 0 ? fallback : seed;
 }
 
 sonare::acoustic::SourceListener placementFromVal(val opts) {
@@ -955,24 +904,20 @@ void validateAcousticSampleRate(int sample_rate) {
   }
 }
 
-// Validates the RIR shape/timing config against the same bounds the C ABI checks
-// before building a room, so WASM rejects (rather than silently accepts) the
-// NaN/out-of-range inputs the C ABI/Python already refuse.
-void validateRirShapeAndTiming(const sonare::acoustic::SourceListener& placement,
-                               const sonare::acoustic::RirSynthConfig& config) {
+// The core's geometry and synthesis rules, run ahead of the synthesis so a refusal names the
+// key the JS caller wrote.
+void requireRirRequest(const sonare::acoustic::ShoeboxRoom& room,
+                       const sonare::acoustic::SourceListener& placement,
+                       const sonare::acoustic::RirSynthConfig& config) {
   using namespace sonare::acoustic;
-  const auto finite3 = [](const Vec3& v) {
-    return std::isfinite(v.x) && std::isfinite(v.y) && std::isfinite(v.z);
-  };
-  if (!finite3(placement.source) || !finite3(placement.listener)) {
-    throw WasmRangeError("source/listener position must be finite");
-  }
-  if (!std::isfinite(config.max_seconds) || config.max_seconds < 0.0f ||
-      config.max_seconds > kMaxRirSeconds || !std::isfinite(config.mixing_time_ms) ||
-      config.mixing_time_ms < 0.0f || config.mixing_time_ms > kMaxRirMixingTimeMs ||
-      !std::isfinite(config.crossfade_ms) || config.crossfade_ms < 0.0f ||
-      config.crossfade_ms > kMaxRirCrossfadeMs) {
-    throw WasmRangeError("RIR timing parameters out of range");
+  std::vector<sonare::Diagnostic> diagnostics =
+      validate_shoebox(room, placement, kShoeboxJsFieldNames);
+  const std::vector<sonare::Diagnostic> synthesis =
+      validate_rir_synth_config(config, kRirSynthJsFieldNames);
+  diagnostics.insert(diagnostics.end(), synthesis.begin(), synthesis.end());
+  if (sonare::has_error(diagnostics)) {
+    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
+                                  first_error_text(diagnostics));
   }
 }
 
@@ -1020,24 +965,16 @@ val js_synthesize_rir(val opts) {
   const int sample_rate = intProperty(opts, "sampleRate", 48000);
   validateAcousticSampleRate(sample_rate);
   sonare::acoustic::RirSynthConfig config;
-  // Match the C ABI: reject a negative ISM order instead of clamping it to 0.
   config.ism_order = intProperty(opts, "ismOrder", config.ism_order);
-  if (config.ism_order < 0) {
-    throw WasmRangeError("ismOrder must be non-negative");
-  }
   config.late_model = boolProperty(opts, "preferEyring", true)
                           ? sonare::acoustic::ReverbModel::Eyring
                           : sonare::acoustic::ReverbModel::Sabine;
   config.seed = seedFromVal(opts, config.seed);
   config.max_seconds = floatProperty(opts, "maxSeconds", config.max_seconds);
   config.mixing_time_ms = floatProperty(opts, "mixingTimeMs", config.mixing_time_ms);
-  // crossfadeMs == 0 keeps the library default; every other value is the
-  // caller's request, checked here rather than after the substitution, so a
-  // negative or non-finite crossfade is rejected instead of silently becoming
-  // the default (the C ABI refuses the same values).
-  config.crossfade_ms =
-      sonare::ZeroIsDefault(floatProperty(opts, "crossfadeMs", 0.0f))
-          .checked(config.crossfade_ms, 0.0f, sonare::acoustic::kMaxRirCrossfadeMs, "crossfadeMs");
+  // crossfadeMs == 0 keeps the library default; any other value reaches the core's rule as given.
+  config.crossfade_ms = sonare::ZeroIsDefault(floatProperty(opts, "crossfadeMs", 0.0f))
+                            .or_default(config.crossfade_ms);
   config.air_absorption_enabled =
       boolProperty(opts, "airAbsorptionEnabled", config.air_absorption_enabled);
   // airTemperatureC / airHumidityPercent == 0 keep the ISO reference climate
@@ -1051,9 +988,9 @@ val js_synthesize_rir(val opts) {
           .or_default(config.air.humidity_percent);
 
   const auto placement = placementFromVal(opts);
-  validateRirShapeAndTiming(placement, config);
-  const auto result =
-      sonare::acoustic::synthesize_rir(roomFromVal(opts, 0.2f), placement, sample_rate, config);
+  const auto room = roomFromVal(opts, 0.2f);
+  requireRirRequest(room, placement, config);
+  const auto result = sonare::acoustic::synthesize_rir(room, placement, sample_rate, config);
   if (sonare::has_error(result.diagnostics)) {
     throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
                                   sonare::acoustic::first_error_text(result.diagnostics));
@@ -1134,9 +1071,8 @@ static sonare::effects::acoustic::RoomMorphConfig roomMorphConfigFromVal(val opt
                           : sonare::acoustic::ReverbModel::Sabine;
   config.mixing_time_ms = floatProperty(opts, "mixingTimeMs", config.mixing_time_ms);
   // Same crossfade sentinel rule as synthesizeRir above.
-  config.crossfade_ms =
-      sonare::ZeroIsDefault(floatProperty(opts, "crossfadeMs", 0.0f))
-          .checked(config.crossfade_ms, 0.0f, sonare::acoustic::kMaxRirCrossfadeMs, "crossfadeMs");
+  config.crossfade_ms = sonare::ZeroIsDefault(floatProperty(opts, "crossfadeMs", 0.0f))
+                            .or_default(config.crossfade_ms);
   // Air absorption on the target room; the zero-means-ISO-reference rule is the
   // same as synthesizeRir above. An implausible climate throws here (the morph
   // core validates rather than diagnosing), matching the C ABI.
@@ -1147,7 +1083,8 @@ static sonare::effects::acoustic::RoomMorphConfig roomMorphConfigFromVal(val opt
   config.air.humidity_percent =
       sonare::ZeroIsDefault(floatProperty(opts, "airHumidityPercent", 0.0f))
           .or_default(config.air.humidity_percent);
-
+  sonare::effects::acoustic::validate_room_morph_config(
+      config, sonare::acoustic::kShoeboxJsFieldNames, sonare::acoustic::kRirSynthJsFieldNames);
   return config;
 }
 

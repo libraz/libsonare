@@ -114,8 +114,7 @@ class EqualizerWrapper {
   }
 
   void setBand(const val& index, val band) {
-    processor_.set_band(static_cast<size_t>(checkedIntFromVal(index, "index")),
-                        eqBandFromVal(band));
+    processor_.set_band(checkedUintFromVal(index, "index"), eqBandFromVal(band));
   }
 
   void clear() { processor_.clear(); }

@@ -4,10 +4,7 @@
  */
 
 import type { GuardedOptions } from './internal/feature_validation.js';
-import {
-  validateMelFrequencyRange,
-  validatePositiveIntegers,
-} from './internal/feature_validation.js';
+import { validatePositiveIntegers } from './internal/feature_validation.js';
 import { resolveFftOptions } from './internal/fft_options.js';
 import { getSonareModule } from './module_state.js';
 import type {
@@ -456,7 +453,6 @@ export function melSpectrogram(
   assertAudioInput('melSpectrogram', samples, sampleRate, options);
   const fft = resolveFftOptions('melSpectrogram', nFft, hopLength);
   validatePositiveIntegers('melSpectrogram', { nMels });
-  validateMelFrequencyRange('melSpectrogram', fmin, fmax, sampleRate);
   return requireModule().melSpectrogram(
     samples,
     sampleRate,
@@ -532,7 +528,6 @@ export function mfcc(
   assertAudioInput('mfcc', samples, sampleRate, options);
   const fft = resolveFftOptions('mfcc', nFft, hopLength);
   validatePositiveIntegers('mfcc', { nMels, nMfcc });
-  validateMelFrequencyRange('mfcc', fmin, fmax, sampleRate);
   return requireModule().mfcc(
     samples,
     sampleRate,

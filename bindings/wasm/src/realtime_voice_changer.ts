@@ -146,7 +146,7 @@ export class RealtimeVoiceChanger {
   }
 
   /**
-   * Channel-blocks in which the chain discarded its own state because a
+   * Blocks in which the chain discarded its own state because a
    * non-finite value had reached it.
    *
    * Advisory telemetry, and the only thing that separates a degraded stream
@@ -239,7 +239,7 @@ export class RealtimeVoiceChanger {
    * voices' pitch targets, the newest leading, up to `1 + harmonyVoices` of them.
    *
    * @param note MIDI note number, integer in [0, 127].
-   * @param velocity In (0, 1]; default 1.
+   * @param velocity In (0, 1]; default 1. Validated only: it does not change the sound.
    * @throws SonareError with code `InvalidState` on a grain-engine changer or a full event queue.
    */
   noteOn(note: number, velocity = 1.0): void {

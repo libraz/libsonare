@@ -162,7 +162,7 @@ const NARROWED_SLOTS: NarrowedSlot[] = [
     entry: 'RealtimeEngine/4',
     field: 'maxBlockSize',
     legal: 256,
-    domainRefusal: 'max_block_size must be positive',
+    domainRefusal: 'max_block_size must be within 1..',
     construct: (maxBlockSize) => newEngine4({ maxBlockSize }),
   },
   {
@@ -183,7 +183,7 @@ const NARROWED_SLOTS: NarrowedSlot[] = [
     entry: 'RealtimeEngine/5',
     field: 'maxBlockSize',
     legal: 256,
-    domainRefusal: 'max_block_size must be positive',
+    domainRefusal: 'max_block_size must be within 1..',
     construct: (maxBlockSize) => newEngine5({ maxBlockSize }),
   },
   {
@@ -211,7 +211,7 @@ const NARROWED_SLOTS: NarrowedSlot[] = [
     entry: 'StreamAnalyzer',
     field: 'sampleRate',
     legal: 44100,
-    domainRefusal: 'sample_rate must be positive',
+    domainRefusal: 'sample_rate must be within the supported range',
     construct: (sampleRate) => newAnalyzer({ sampleRate }),
   },
   {
@@ -416,17 +416,18 @@ describe('the untouched neighbours of the narrowed positions are unchanged', () 
   /**
    * What each shape does at `fmin`, a `float` position. The magnitudes every
    * narrowed integer position refuses are ACCEPTED into the float and fail
-   * later, unnamed, in the mel filterbank; a fractional value is simply a legal
+   * later, in the mel filterbank's own rule; a fractional value is simply a legal
    * frequency. A float carries neither a NaN nor an infinity into a frequency,
    * so those two the reader answers by name; everything else a float can hold
    * it passes on, and the domain guard behind it decides.
    */
   const FMIN_OUTCOME: ReadonlyArray<readonly [string, string]> = [
-    // A float holds these, so the refusal comes from deep in the build and
-    // names no field -- the contrast that shows what the narrowed positions buy.
-    ['2**32 + 5', 'Invalid parameter'],
-    ['2**32', 'Invalid parameter'],
-    ['2**53 + 1', 'Invalid parameter'],
+    // A float holds these, so the refusal comes from the filterbank's band-order
+    // rule rather than the reader -- the contrast that shows what the narrowed
+    // positions buy.
+    ['2**32 + 5', 'must be greater than fmin'],
+    ['2**32', 'must be greater than fmin'],
+    ['2**53 + 1', 'must be greater than fmin'],
     ['NaN', 'fmin must be a finite number'],
     ['Infinity', 'fmin must be a finite number'],
     ['1.5', 'constructs'],

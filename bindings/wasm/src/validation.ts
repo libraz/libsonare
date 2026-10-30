@@ -190,11 +190,43 @@ export function assertAudioChannels(
   });
 }
 
+/** A boolean argument the native layer reads positionally; anything else is a `TypeError`, never a truthy coercion. */
+export function requireBoolean(fnName: string, value: unknown, argName: string): boolean {
+  if (typeof value !== 'boolean') {
+    throw new TypeError(`${fnName}: ${argName} must be a boolean`);
+  }
+  return value;
+}
+
+/** An optional boolean: `undefined` takes the fallback, any other non-boolean is a `TypeError`. */
+export function optionalBoolean(
+  fnName: string,
+  value: unknown,
+  argName: string,
+  fallback: boolean,
+): boolean {
+  return value === undefined ? fallback : requireBoolean(fnName, value, argName);
+}
+
 /** A string argument the native layer reads through embind; anything else is a `TypeError`, never a raw `BindingError`. */
 export function assertString(fnName: string, value: unknown, argName: string): void {
   if (typeof value !== 'string') {
     throw new TypeError(`${fnName}: ${argName} must be a string`);
   }
+}
+
+/** An optional string: `undefined` takes the fallback, any other non-string is a `TypeError`. */
+export function optionalString(
+  fnName: string,
+  value: unknown,
+  argName: string,
+  fallback: string,
+): string {
+  if (value === undefined) {
+    return fallback;
+  }
+  assertString(fnName, value, argName);
+  return value as string;
 }
 
 /** Validate and retain the public Audio.fromBuffer construction contract. */
@@ -401,6 +433,14 @@ export function toInt32Array(
 ): Int32Array {
   if (values instanceof Int32Array) {
     return values;
+  }
+  if (
+    values === null ||
+    typeof values !== 'object' ||
+    !Number.isInteger((values as ArrayLike<number>).length) ||
+    (values as ArrayLike<number>).length < 0
+  ) {
+    throw new TypeError(`${fnName}: ${argName} must be an Int32Array or number[]`);
   }
   const out = new Int32Array(values.length);
   for (let i = 0; i < values.length; i++) {
@@ -629,4 +669,26 @@ export function requestObject<T>(
   }
   assertKnownRequestKeys(fnName, value);
   return value;
+}
+
+/** Refuse a surround pan field outside its range; the engine and mixer never clamp it. */
+export function assertSurroundPan(
+  fnName: string,
+  pan: { azimuth?: number; divergence?: number; lfe?: number },
+): void {
+  const check = (name: 'azimuth' | 'divergence' | 'lfe', min: number, max: number): void => {
+    const value = pan[name];
+    if (value === undefined || value === null) {
+      return;
+    }
+    if (typeof value !== 'number') {
+      throw new TypeError(`${fnName}: ${name} must be a number`);
+    }
+    if (!(value >= min && value <= max)) {
+      throw new RangeError(`${fnName}: ${name} must be in [${min}, ${max}]`);
+    }
+  };
+  check('azimuth', -180, 180);
+  check('divergence', 0, 1);
+  check('lfe', 0, 1);
 }

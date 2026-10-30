@@ -433,10 +433,6 @@ const NOT_SENTINEL_FILTERS: ReadonlyMap<string, string> = new Map([
     'A loop index deciding whether a separator precedes the next warning line.',
   ],
   [
-    'src/c_api/mixing_strip.cpp:distance',
-    'UNSETTLED. A surround-pan distance whose non-positive values are treated as "keep the core default (1.0)" ON PURPOSE, so a C host that zero-initialises SonareSurroundPan matches the Node and Python facades, which inject 1.0. That makes 0 a real sentinel and the site a deliberate <= 0 contract rather than a mis-spelled == 0 one -- but a NaN distance also lands on 1.0 here, and whether that should be refused instead has not been decided. Recorded as unsettled rather than cleared.',
-  ],
-  [
     'src/c_api/project_bounce.cpp:block_size',
     'The project bounce documents this one as "<= 0 => 128", so a non-positive value is a documented default request rather than a mis-spelled sentinel.',
   ],

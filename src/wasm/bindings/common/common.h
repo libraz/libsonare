@@ -507,6 +507,9 @@ int gsEfxRealizationProperty(val object, const char* key);
 ///        present one must be a JS string.
 /// @throws WasmArgumentError naming @p key.
 std::string stringProperty(val object, const char* key, const std::string& default_value);
+/// @brief String reader for a value already in hand: it must be a JS string without a NUL.
+/// @throws WasmTypeError naming @p key for a non-string; WasmRangeError for an embedded NUL.
+std::string stringFromVal(const val& value, const char* key);
 /// @brief Optional number reader: std::nullopt only when @p v is undefined or
 ///        null, so the caller skips the assignment.
 /// @details A present number narrows through @ref checkedFloatFromVal.

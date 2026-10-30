@@ -5,7 +5,7 @@
 
 import { getSonareModule } from './module_state.js';
 import type { WasmMatrix2dResult } from './sonare.js';
-import { assertAudioInput, requestObject } from './validation.js';
+import { assertAudioInput, requestObject, requireBoolean } from './validation.js';
 
 function requireModule() {
   return getSonareModule();
@@ -191,7 +191,13 @@ export function zeroCrossings(
     const r = samples;
     return zeroCrossings(r.samples, r.threshold, r.refMagnitude, r.pad, r.zeroPos);
   }
-  return requireModule().zeroCrossings(samples, threshold, refMagnitude, pad, zeroPos);
+  return requireModule().zeroCrossings(
+    samples,
+    threshold,
+    requireBoolean('zeroCrossings', refMagnitude, 'refMagnitude'),
+    requireBoolean('zeroCrossings', pad, 'pad'),
+    requireBoolean('zeroCrossings', zeroPos, 'zeroPos'),
+  );
 }
 
 /**

@@ -7,6 +7,7 @@
 #include <string>
 
 #include "realtime_engine_wasm.h"
+#include "streaming/realtime_limits.h"
 
 #if defined(SONARE_WITH_ARRANGEMENT)
 #include "c_api/project_timeline_internal.h"
@@ -14,10 +15,11 @@
 #endif
 
 void RealtimeEngineWasm::validatePrepare(double sample_rate, int max_block_size) {
-  if (!sonare::is_supported_sample_rate(sample_rate) || max_block_size <= 0) {
+  if (!sonare::is_supported_sample_rate(sample_rate) ||
+      !sonare::is_valid_realtime_block_size(max_block_size)) {
     throw WasmRangeError(
         "prepare: sample_rate must be a whole number of hertz within 8000..384000; "
-        "max_block_size must be positive");
+        "max_block_size must be within 1..1048576");
   }
 }
 

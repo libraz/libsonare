@@ -354,6 +354,12 @@ val RealtimeEngineWasm::renderOffline(val channels_val, const val& block_size_va
     throw WasmRangeError("renderOffline block size must be positive");
   }
   ChannelBlock block = readChannels(channels_val);
+  // More channels or a larger block than the engine was prepared for would write zeros past the
+  // bound, as the C ABI refuses.
+  if (static_cast<int>(block.storage.size()) > engine_.prepared_channels() ||
+      block_size > engine_.max_block_size()) {
+    throw WasmRangeError("renderOffline channel count or block size exceeds the prepared engine");
+  }
   engine_.render_offline(block.pointers.data(), static_cast<int>(block.storage.size()),
                          block.frames, block_size, finalize);
   return channelsToJs(block);
@@ -409,11 +415,30 @@ val RealtimeEngineWasm::bounceOffline(val options_val) {
   if (engine_.max_block_size() <= 0) {
     throw sonare::SonareException(sonare::ErrorCode::InvalidState, "engine not prepared");
   }
+  // Bouncing more channels than the engine was prepared for would write zeros for every plane
+  // past the bound.
+  if (num_channels > engine_.prepared_channels() || block_size > engine_.max_block_size()) {
+    throw WasmRangeError("bounce channel count or block size exceeds the prepared engine");
+  }
   // The render runs at the prepared rate, which an explicit sourceSampleRate must name exactly.
   if (requested_source_rate > 0 &&
       engine_.sample_rate() != static_cast<double>(requested_source_rate)) {
     throw WasmRangeError("bounce source sample rate must match the prepared rate");
   }
+  if (dither != 0 && dither_bits != 0 &&
+      (dither_bits < mastering::final::kMinDitherTargetBits ||
+       dither_bits > mastering::final::kMaxDitherTargetBits)) {
+    throw WasmRangeError("ditherBits out of range");
+  }
+  // Every option is read before the render, which consumes engine state.
+  const bool normalize_lufs = boolProperty(options_val, "normalizeLufs", false);
+  // A non-finite target is refused (as on Node and Python); 0 is the C ABI's "use the default"
+  // sentinel and stays here.
+  float target_lufs = floatProperty(options_val, "targetLufs", SONARE_DEFAULT_BOUNCE_TARGET_LUFS);
+  if (target_lufs == 0.0f) {
+    target_lufs = SONARE_DEFAULT_BOUNCE_TARGET_LUFS;
+  }
+  const auto requested_seed = uintProperty(options_val, "ditherSeed", 0);
 
   // Offline pre-roll, as in the C-ABI oracle (sonare_engine_bounce_offline): a
   // bounce is a one-shot render, so the first audible block must open at the
@@ -430,17 +455,7 @@ val RealtimeEngineWasm::bounceOffline(val options_val) {
 
   std::vector<float> interleaved = interleave(channels);
   const size_t frames = channels.empty() ? 0 : channels[0].size();
-  if (boolProperty(options_val, "normalizeLufs", false)) {
-    // Pull the canonical fallback target from the C API so the WASM facade
-    // never drifts away from the C/Node/Python bounce normalization target.
-    // See SONARE_DEFAULT_BOUNCE_TARGET_LUFS in src/sonare_c_types.h and the
-    // sentinel handling in sonare_engine_bounce_offline.
-    // A non-finite target is refused (as on Node and Python); 0 is the C ABI's
-    // "use the default" sentinel and stays here.
-    float target_lufs = floatProperty(options_val, "targetLufs", SONARE_DEFAULT_BOUNCE_TARGET_LUFS);
-    if (target_lufs == 0.0f) {
-      target_lufs = SONARE_DEFAULT_BOUNCE_TARGET_LUFS;
-    }
+  if (normalize_lufs) {
     metering::normalize_interleaved_to_lufs(interleaved, frames, num_channels, target_sample_rate,
                                             target_lufs);
   }
@@ -453,7 +468,6 @@ val RealtimeEngineWasm::bounceOffline(val options_val) {
     config.target_bits = dither_bits;
     if (config.target_bits <= 0) config.target_bits = 16;
     // Match the C API: seed == 0 means "keep the library default seed".
-    const auto requested_seed = uintProperty(options_val, "ditherSeed", 0);
     if (requested_seed != 0) config.seed = requested_seed;
     Audio dithered = mastering::final::dither_interleaved(
         Audio::from_buffer(interleaved.data(), interleaved.size(), target_sample_rate),
@@ -484,6 +498,11 @@ val RealtimeEngineWasm::freezeOffline(val options_val) {
   // never-prepared engine would capture pure silence with no error channel.
   if (engine_.max_block_size() <= 0) {
     throw sonare::SonareException(sonare::ErrorCode::InvalidState, "engine not prepared");
+  }
+  // Freezing more channels than the engine was prepared for would write zeros for every plane
+  // past the bound.
+  if (num_channels > engine_.prepared_channels() || block_size > engine_.max_block_size()) {
+    throw WasmRangeError("freeze channel count or block size exceeds the prepared engine");
   }
 
   uint32_t clip_id = uintProperty(options_val, "clipId", 1);

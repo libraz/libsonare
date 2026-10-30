@@ -7,20 +7,16 @@ import { resolveEffectFftOptions } from './internal/fft_options.js';
 import { getSonareModule } from './module_state.js';
 import type { HpssResult } from './public_types.js';
 import type { ValidateOptions } from './validation.js';
-import { assertAudioInput, assertHpssKernels, optionsBag, requestObject } from './validation.js';
+import {
+  assertAudioInput,
+  assertHpssKernels,
+  optionalBoolean,
+  optionsBag,
+  requestObject,
+} from './validation.js';
 
 function requireModule() {
   return getSonareModule();
-}
-
-function resolveHardMask(value: unknown, fnName: string): boolean {
-  if (value === undefined) {
-    return false;
-  }
-  if (typeof value !== 'boolean') {
-    throw new TypeError(`${fnName}: hardMask must be a boolean`);
-  }
-  return value;
 }
 
 /** Canonical request form for HPSS. */
@@ -89,7 +85,7 @@ export function hpss(
       : requestObject('hpss', samples);
   assertAudioInput('hpss', request.samples, request.sampleRate ?? 22050);
   const fftOptions = resolveEffectFftOptions('hpss', request.nFft, request.hopLength);
-  const resolvedHardMask = resolveHardMask(request.hardMask, 'hpss');
+  const resolvedHardMask = optionalBoolean('hpss', request.hardMask, 'hardMask', false);
   const resolvedKernelHarmonic = request.kernelHarmonic ?? 31;
   const resolvedKernelPercussive = request.kernelPercussive ?? 31;
   assertHpssKernels('hpss', resolvedKernelHarmonic, resolvedKernelPercussive);

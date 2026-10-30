@@ -171,7 +171,7 @@ describe('analyzeMelody reports invalid params as a RangeError (WASM)', () => {
       caught = error;
     }
     expect(caught).toBeInstanceOf(RangeError);
-    expect((caught as Error).message).toBe('analyzeMelody: fmin must be positive');
+    expect((caught as Error).message).toMatch(/fmin must be finite and positive/);
   });
 });
 

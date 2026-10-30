@@ -18,22 +18,14 @@ import {
   assertNonNegativeInteger,
   assertPositiveInteger,
   assertSamples,
+  optionalBoolean,
   requestObject,
+  requireBoolean,
   toInt32Array,
 } from './validation.js';
 
 function requireModule() {
   return getSonareModule();
-}
-
-function resolveHardMask(fnName: string, value: unknown): boolean {
-  if (value === undefined) {
-    return false;
-  }
-  if (typeof value !== 'boolean') {
-    throw new TypeError(`${fnName}: hardMask must be a boolean`);
-  }
-  return value;
 }
 
 export interface DecomposeRequest {
@@ -416,6 +408,7 @@ export function remix(
     return remix(r.samples, r.intervals, r.sampleRate, r.alignZeros);
   }
   assertAudioInput('remix', samples, sampleRate);
+  requireBoolean('remix', alignZeros, 'alignZeros');
   // Sample indices must reach the native side as exact 32-bit integers, and a
   // boundary the conversion changed would cut the slice somewhere the caller
   // never named.
@@ -457,6 +450,7 @@ export function remixAlignedIntervals(
     return remixAlignedIntervals(r.samples, r.intervals, r.sampleRate, r.alignZeros ?? true);
   }
   assertAudioInput('remixAlignedIntervals', samples, sampleRate);
+  requireBoolean('remixAlignedIntervals', alignZeros, 'alignZeros');
   const intervalsI32 = toInt32Array(
     'remixAlignedIntervals',
     intervals as ArrayLike<number>,
@@ -521,7 +515,7 @@ export function hpssWithResidual(
   }
   assertAudioInput('hpssWithResidual', samples, sampleRate);
   const fftOptions = resolveEffectFftOptions('hpssWithResidual', nFft, hopLength);
-  const resolvedHardMask = resolveHardMask('hpssWithResidual', hardMask);
+  const resolvedHardMask = optionalBoolean('hpssWithResidual', hardMask, 'hardMask', false);
   assertHpssKernels('hpssWithResidual', kernelHarmonic, kernelPercussive);
   return requireModule().hpssWithResidualEx(
     samples,
@@ -574,7 +568,7 @@ export function segmentRecurrenceMatrix(request: SegmentRecurrenceMatrixRequest)
     request.cols,
     request.k ?? 0,
     request.width ?? 1,
-    request.sym ?? false,
+    optionalBoolean('segmentRecurrenceMatrix', request.sym, 'sym', false),
     request.metric ?? 'euclidean',
     request.mode ?? 'connectivity',
   );
@@ -590,7 +584,11 @@ export function segmentRecurrenceToLag(request: SegmentRecurrenceToLagRequest): 
     request.n,
     'recurrence',
   );
-  return requireModule().segmentRecurrenceToLag(request.recurrence, request.n, request.pad ?? true);
+  return requireModule().segmentRecurrenceToLag(
+    request.recurrence,
+    request.n,
+    optionalBoolean('segmentRecurrenceToLag', request.pad, 'pad', true),
+  );
 }
 
 /** Convert a `lags × rows` lag matrix (lags = rows, or 2 × rows padded) to a recurrence. */

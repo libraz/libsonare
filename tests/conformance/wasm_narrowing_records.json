@@ -16,11 +16,6 @@
   "readers": [
     {
       "file": "bindings/analysis/quick.cpp",
-      "symbol": "onsetWindowFrames",
-      "reason": "Not a conversion: the narrowing is delegated whole to the shared intProperty, and what is local is the field's own domain. The shared reader guarantees the value survived the conversion unchanged, which a negative frame count does, and nothing downstream asks whether one means anything -- the peak picker returned an ordinary onset list for -1. The six onset window fields are the only place that domain applies, so asking it at the field keeps it off every other integer option."
-    },
-    {
-      "file": "bindings/analysis/quick.cpp",
       "symbol": "seedFromVal",
       "reason": "A default seeder rather than an options-bag reader: it rejects a non-number, turns a non-positive value into a deterministic seed, and refuses anything past the type's maximum by name. Every value in the type's range is a legal seed, so truncating a fractional one cannot land outside the domain -- driving it, a seed moves the synthesized response, 4294967296 and Infinity are refused, and 0 / -1 / NaN all fall back to the documented default."
     },

@@ -23,19 +23,6 @@ void validate_sample_rate(const char* fn_name, int sample_rate) {
   }
 }
 
-void validate_mel_range(const char* fn_name, float fmin, float fmax, int sample_rate) {
-  if (!std::isfinite(fmin) || !std::isfinite(fmax)) {
-    throw WasmRangeError(std::string(fn_name) + ": fmin/fmax must be finite");
-  }
-  if (fmin < 0.0f || fmax < 0.0f) {
-    throw WasmRangeError(std::string(fn_name) + ": fmin/fmax must be non-negative");
-  }
-  const float effective_fmax = fmax == 0.0f ? static_cast<float>(sample_rate) * 0.5f : fmax;
-  if (effective_fmax <= fmin) {
-    throw WasmRangeError(std::string(fn_name) + ": fmax must be greater than fmin");
-  }
-}
-
 /// Validates a JS matrix argument's shape and copies it out. The non-finite
 /// element case is deliberately absent: the core transforms this helper feeds
 /// reject it themselves, so the rule has a single home shared with every other
@@ -124,6 +111,7 @@ val js_mel_spectrogram(val samples, const val& sample_rate_val, const val& n_fft
   const int n_mels = checkedIntFromVal(n_mels_val, "nMels");
   const float fmin = checkedFloatFromVal(fmin_val, "fmin");
   const float fmax = checkedFloatFromVal(fmax_val, "fmax");
+  validate_mel_bounds(fmin, fmax);
   Audio audio = loadValidatedAudio(samples, sample_rate);
 
   MelConfig config;
@@ -168,6 +156,7 @@ val js_mfcc(val samples, const val& sample_rate_val, const val& n_fft_val,
   const float fmin = checkedFloatFromVal(fmin_val, "fmin");
   const float fmax = checkedFloatFromVal(fmax_val, "fmax");
   const float lifter = checkedFloatFromVal(lifter_val, "lifter");
+  validate_mel_bounds(fmin, fmax);
   Audio audio = loadValidatedAudio(samples, sample_rate);
 
   MelConfig config;
@@ -254,7 +243,7 @@ val js_mel_to_stft(val mel_power, const val& n_mels_val, const val& n_frames_val
   std::vector<float> data =
       load_validated_matrix("melToStft", mel_power, n_mels, n_frames, "power", "n_mels");
   validate_positive("melToStft", n_fft, "n_fft");
-  validate_mel_range("melToStft", fmin, fmax, sample_rate);
+  validate_mel_bounds(fmin, fmax);
 
   MelConfig config;
   config.n_fft = n_fft;
@@ -291,7 +280,7 @@ val js_mel_to_audio(val mel_power, const val& n_mels_val, const val& n_frames_va
   validate_positive("melToAudio", n_fft, "n_fft");
   validate_positive("melToAudio", hop_length, "hop_length");
   validate_positive("melToAudio", n_iter, "n_iter");
-  validate_mel_range("melToAudio", fmin, fmax, sample_rate);
+  validate_mel_bounds(fmin, fmax);
 
   MelConfig config;
   config.n_fft = n_fft;
@@ -376,7 +365,7 @@ val js_mfcc_to_audio(val mfcc, const val& n_mfcc_val, const val& n_frames_val,
   validate_positive("mfccToAudio", n_fft, "n_fft");
   validate_positive("mfccToAudio", hop_length, "hop_length");
   validate_positive("mfccToAudio", n_iter, "n_iter");
-  validate_mel_range("mfccToAudio", fmin, fmax, sample_rate);
+  validate_mel_bounds(fmin, fmax);
 
   MelConfig config;
   config.n_fft = n_fft;
@@ -406,8 +395,10 @@ val js_cqt_to_audio(val magnitude, const val& n_bins_val, const val& n_frames_va
   validate_positive("cqtToAudio", hop_length, "hop_length");
   validate_positive("cqtToAudio", bins_per_octave, "bins_per_octave");
   validate_positive("cqtToAudio", n_iter, "n_iter");
-  if (fmin <= 0.0f || n_iter > sonare::resource::kMaxGriffinLimIterations) {
-    throw WasmRangeError("cqtToAudio: invalid fmin or n_iter");
+  validate_cqt_fmin(fmin);
+  if (n_iter > sonare::resource::kMaxGriffinLimIterations) {
+    throw WasmRangeError("cqtToAudio: nIter must be at most " +
+                         std::to_string(sonare::resource::kMaxGriffinLimIterations));
   }
   CqtConfig config;
   config.hop_length = hop_length;
@@ -434,8 +425,11 @@ val js_vqt_to_audio(val magnitude, const val& n_bins_val, const val& n_frames_va
   validate_positive("vqtToAudio", hop_length, "hop_length");
   validate_positive("vqtToAudio", bins_per_octave, "bins_per_octave");
   validate_positive("vqtToAudio", n_iter, "n_iter");
-  if (fmin <= 0.0f || std::isinf(gamma) || n_iter > sonare::resource::kMaxGriffinLimIterations) {
-    throw WasmRangeError("vqtToAudio: invalid fmin, gamma, or n_iter");
+  validate_cqt_fmin(fmin);
+  validate_vqt_gamma(gamma);
+  if (n_iter > sonare::resource::kMaxGriffinLimIterations) {
+    throw WasmRangeError("vqtToAudio: nIter must be at most " +
+                         std::to_string(sonare::resource::kMaxGriffinLimIterations));
   }
   VqtConfig config;
   config.hop_length = hop_length;

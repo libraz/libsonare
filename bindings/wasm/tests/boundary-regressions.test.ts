@@ -118,8 +118,10 @@ describe('boundary regressions (WASM)', () => {
         expected.processMono(sine(0.005)),
         expected.processMono(sine(0.005)),
       ];
+      withoutSidechain.processMono(sine(0.005));
       const dryOut = withoutSidechain.processMono(sine(0.005));
-      expect(rms(expectedOutputs[0])).toBeLessThan(rms(dryOut) * 0.8);
+      // Controls update on a fixed 64-sample grid, so the sidechain acts from the second block.
+      expect(rms(expectedOutputs[1])).toBeLessThan(rms(dryOut) * 0.8);
 
       actual.setSidechainStereo(key, key);
 

@@ -90,6 +90,8 @@ import {
   assertSampleRate,
   assertSamples,
   assertU7,
+  optionalBoolean,
+  requireBoolean,
   resolveOptionalNonNegative,
 } from './validation.js';
 import {
@@ -116,7 +118,12 @@ function normalizeMidiFxBakeRequest(
   return {
     clipId: clipIdOrRequest.clipId,
     configJson: clipIdOrRequest.configJson,
-    withSourceIndex: clipIdOrRequest.withSourceIndex ?? false,
+    withSourceIndex: optionalBoolean(
+      'bakeMidiFx',
+      clipIdOrRequest.withSourceIndex,
+      'withSourceIndex',
+      false,
+    ),
   };
 }
 
@@ -1031,12 +1038,12 @@ export class Project {
 
   /** Set a track's mute flag via an undoable edit (a muted track is silent). */
   setTrackMute(trackId: number, mute: boolean): void {
-    this.native.setTrackMute(trackId, mute);
+    this.native.setTrackMute(trackId, requireBoolean('setTrackMute', mute, 'mute'));
   }
 
   /** Set a track's solo flag via an undoable edit (when any track is soloed, only soloed tracks sound). */
   setTrackSolo(trackId: number, solo: boolean): void {
-    this.native.setTrackSolo(trackId, solo);
+    this.native.setTrackSolo(trackId, requireBoolean('setTrackSolo', solo, 'solo'));
   }
 
   /**

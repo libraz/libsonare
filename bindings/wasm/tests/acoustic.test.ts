@@ -57,6 +57,39 @@ describe('geometric room acoustics', () => {
     expect(Array.from(a.audio)).toEqual(Array.from(b.audio));
   });
 
+  it('refuses an out-of-domain RIR field naming the key the caller wrote', () => {
+    const room = { lengthM: 7, widthM: 5, heightM: 3, maxSeconds: 0.2 };
+    const impulse = new Float32Array(4000);
+    impulse[0] = 1.0;
+    for (const [key, value] of [
+      ['ismOrder', -1],
+      ['maxSeconds', -1],
+      ['mixingTimeMs', -1],
+      ['crossfadeMs', -5],
+      ['lengthM', Number.NaN],
+      ['heightM', 0],
+    ] as const) {
+      const refusal = expect.objectContaining({
+        name: 'RangeError',
+        message: expect.stringContaining(key),
+      });
+      expect(() => synthesizeRir({ ...room, [key]: value })).toThrow(refusal);
+      expect(() => roomMorph(impulse, 48000, { ...room, [key]: value })).toThrow(refusal);
+    }
+    expect(() => synthesizeRir({ ...room, ismOrder: 'x' as never })).toThrow(TypeError);
+  });
+
+  it('refuses a seed that is not a uint32 instead of taking the default', () => {
+    const samples = new Float32Array(4000);
+    samples[0] = 1.0;
+    const opts = { lengthM: 12, widthM: 9, heightM: 5, maxSeconds: 0.2 };
+    expect(() => roomMorph(samples, 48000, { ...opts, seed: 'abc' as never })).toThrow(TypeError);
+    for (const seed of [-1, 2 ** 32, 0.5]) {
+      expect(() => roomMorph(samples, 48000, { ...opts, seed })).toThrow(RangeError);
+    }
+    expect(roomMorph(samples, 48000, { ...opts, seed: 2 ** 32 - 1 }).sampleRate).toBe(48000);
+  });
+
   it("publishes the target room synthesis's own diagnostics", () => {
     // The morph synthesizes its target RIR with the same code synthesizeRir
     // uses, so the same clamp fires — and it used to be dropped, leaving a morph

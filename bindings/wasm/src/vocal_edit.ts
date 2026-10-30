@@ -447,9 +447,12 @@ function copyRender(value: VocalRenderResult): VocalRenderResult {
   };
 }
 
-function validateSessionLimits(limits: VocalSessionLimits | undefined): void {
-  if (limits === undefined) {
+function validateSessionLimits(limits: VocalSessionLimits | null | undefined): void {
+  if (limits === undefined || limits === null) {
     return;
+  }
+  if (typeof limits !== 'object' || Array.isArray(limits)) {
+    throw new TypeError('limits must be an object');
   }
   if (limits.maxHistoryBytes !== undefined) {
     requireToken(limits.maxHistoryBytes, 'limits.maxHistoryBytes');
@@ -916,21 +919,28 @@ export class VocalRenderSnapshot {
 
   /**
    * Render one native work unit per macrotask so `request.signal` can stop the
-   * job between units. A cancelled job publishes no partial PCM.
+   * job between units. A cancelled job publishes no partial PCM. Every failure rejects:
+   * an already-aborted signal with an `AbortError`, an abort during the render with a
+   * `Cancelled` SonareError.
    */
   renderAsync(request: VocalRenderRequest): Promise<VocalRenderResult> {
-    this.native();
-    const signal = request.signal;
-    if (signal?.aborted) {
-      return Promise.reject(new DOMException('The render was aborted', 'AbortError'));
+    let job: VocalRenderJob;
+    try {
+      this.native();
+      if (request.signal?.aborted) {
+        throw new DOMException('The render was aborted', 'AbortError');
+      }
+      job = this.beginRenderJob(request);
+    } catch (error) {
+      return Promise.reject(error);
     }
-    const job = this.beginRenderJob(request);
+    const signal = request.signal;
     return (async () => {
       try {
         while (true) {
           if (signal?.aborted) {
             job.abort();
-            throw new DOMException('The render was aborted', 'AbortError');
+            throw new SonareError(ErrorCode.Cancelled, 'Cancelled', 'The render was cancelled');
           }
           if (job.next().complete) {
             return job.finalize();

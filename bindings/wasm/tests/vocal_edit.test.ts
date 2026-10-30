@@ -1,5 +1,5 @@
 import { beforeAll, describe, expect, it } from 'vitest';
-import { init } from '../src/index';
+import { ErrorCode, init } from '../src/index';
 import { getSonareModule } from '../src/module_state';
 import type { VocalEditOperation } from '../src/public_types_vocal_edit';
 import { createVocalEditSession, restoreVocalEditSession } from '../src/vocal_edit';
@@ -168,6 +168,12 @@ describe('WASM vocal edit facade', () => {
       expect(rendered.samples).toEqual(expected.samples);
       expect(rendered.token).toEqual(expected.token);
 
+      let invalid: Promise<unknown> | undefined;
+      expect(() => {
+        invalid = snapshot.renderAsync({ range: { startSample: -1 } });
+      }).not.toThrow();
+      await expect(invalid).rejects.toBeInstanceOf(RangeError);
+
       const aborted = new AbortController();
       aborted.abort();
       await expect(snapshot.renderAsync({ signal: aborted.signal })).rejects.toMatchObject({
@@ -177,7 +183,10 @@ describe('WASM vocal edit facade', () => {
       const midway = new AbortController();
       const pending = snapshot.renderAsync({ signal: midway.signal });
       midway.abort();
-      await expect(pending).rejects.toMatchObject({ name: 'AbortError' });
+      await expect(pending).rejects.toMatchObject({ code: ErrorCode.Cancelled });
+
+      snapshot.dispose();
+      await expect(snapshot.renderAsync({})).rejects.toThrow(/disposed/);
     } finally {
       snapshot.dispose();
       session.dispose();

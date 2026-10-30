@@ -20,6 +20,7 @@ import {
   assertPositiveInteger,
   assertSampleRate,
   assertSamples,
+  optionalBoolean,
   optionsBag,
   requestObject,
   resolveOptionalNonNegative,
@@ -119,19 +120,6 @@ export interface NnlsChromaRequest extends GuardedOptions {
   hopLength?: number;
 }
 
-function validateFrequencyBounds(fnName: string, fmin: number, fmax?: number): void {
-  assertFiniteScalar(fnName, fmin, 'fmin');
-  if (fmin < 0) {
-    throw new RangeError(`${fnName}: fmin must be non-negative`);
-  }
-  if (fmax !== undefined) {
-    assertFiniteScalar(fnName, fmax, 'fmax');
-    if (fmax <= fmin) {
-      throw new RangeError(`${fnName}: fmax must be greater than fmin`);
-    }
-  }
-}
-
 /**
  * Compute NNLS (non-negative least squares) chromagram.
  *
@@ -163,7 +151,7 @@ export function nnlsChroma(
   return requireModule().nnlsChromaEx(
     samples,
     sampleRate,
-    options.enableStftBlend ?? true,
+    optionalBoolean('nnlsChroma', options.enableStftBlend, 'enableStftBlend', true),
     options.stftBlendWeight ?? 0.55,
     options.stftBlendNFft ?? 4096,
     hopLength,
@@ -216,7 +204,6 @@ export function cqt(
   }
   assertAudioInput('cqt', samples, sampleRate, options);
   validatePositiveIntegers('cqt', { hopLength, nBins, binsPerOctave });
-  validateFrequencyBounds('cqt', fmin);
   return requireModule().cqt(samples, sampleRate, hopLength, fmin, nBins, binsPerOctave);
 }
 
@@ -266,7 +253,6 @@ export function pseudoCqt(
   }
   assertAudioInput('pseudoCqt', samples, sampleRate, options);
   validatePositiveIntegers('pseudoCqt', { hopLength, nBins, binsPerOctave });
-  validateFrequencyBounds('pseudoCqt', fmin);
   return requireModule().pseudoCqt(samples, sampleRate, hopLength, fmin, nBins, binsPerOctave);
 }
 
@@ -316,7 +302,6 @@ export function hybridCqt(
   }
   assertAudioInput('hybridCqt', samples, sampleRate, options);
   validatePositiveIntegers('hybridCqt', { hopLength, nBins, binsPerOctave });
-  validateFrequencyBounds('hybridCqt', fmin);
   return requireModule().hybridCqt(samples, sampleRate, hopLength, fmin, nBins, binsPerOctave);
 }
 
@@ -371,7 +356,6 @@ export function vqt(
   }
   assertAudioInput('vqt', samples, sampleRate, options);
   validatePositiveIntegers('vqt', { hopLength, nBins, binsPerOctave });
-  validateFrequencyBounds('vqt', fmin);
   return requireModule().vqt(
     samples,
     sampleRate,
@@ -390,7 +374,6 @@ function validateCqtInverse(
   nFrames: number,
   sampleRate: number,
   hopLength: number,
-  fmin: number,
   binsPerOctave: number,
   nIter: number,
   options: GuardedOptions,
@@ -399,10 +382,6 @@ function validateCqtInverse(
   validatePositiveIntegers(fnName, { nBins, nFrames, hopLength, binsPerOctave, nIter });
   if (nIter > 256) {
     throw new RangeError(`${fnName}: nIter must be at most 256`);
-  }
-  validateFrequencyBounds(fnName, fmin);
-  if (fmin === 0) {
-    throw new RangeError(`${fnName}: fmin must be positive`);
   }
   if (magnitude.length !== nBins * nFrames) {
     throw new RangeError(`${fnName}: magnitude length must equal nBins * nFrames`);
@@ -457,7 +436,6 @@ export function cqtToAudio(
     nFrames,
     sampleRate,
     hopLength,
-    fmin,
     binsPerOctave,
     nIter,
     options,
@@ -524,7 +502,6 @@ export function vqtToAudio(
     nFrames,
     sampleRate,
     hopLength,
-    fmin,
     binsPerOctave,
     nIter,
     options,
@@ -727,33 +704,22 @@ export function analyzeMelody(
   assertAudioInput('analyzeMelody', samples, sampleRate, options);
   const fmin = options.fmin ?? 65.0;
   const fmax = options.fmax ?? 2093.0;
-  validateFrequencyBounds('analyzeMelody', fmin, fmax);
-  // The melody tracker's fmin is a YIN pitch floor: 0 is meaningless, and the
-  // flat C ABI (sonare_analyze_melody) rejects it with InvalidParameter.
-  // validateFrequencyBounds only guards fmin >= 0, so enforce strict positivity
-  // here and report the same branded error the Node/Python surfaces raise.
-  if (fmin <= 0) {
-    throw new RangeError('analyzeMelody: fmin must be positive');
-  }
   validatePositiveIntegers('analyzeMelody', {
     frameLength: options.frameLength ?? 2048,
     hopLength: options.hopLength ?? 256,
   });
   const threshold = options.threshold ?? 0.1;
   assertFiniteScalar('analyzeMelody', threshold, 'threshold');
-  if (threshold <= 0) {
-    throw new RangeError('analyzeMelody: threshold must be positive');
-  }
   return requireModule().analyzeMelody(
     samples,
     sampleRate,
-    options.fmin ?? 65.0,
-    options.fmax ?? 2093.0,
+    fmin,
+    fmax,
     options.frameLength ?? 2048,
     options.hopLength ?? 256,
-    options.threshold ?? 0.1,
-    options.usePyin ?? false,
-    options.center ?? true,
+    threshold,
+    optionalBoolean('analyzeMelody', options.usePyin, 'usePyin', false),
+    optionalBoolean('analyzeMelody', options.center, 'center', true),
   );
 }
 

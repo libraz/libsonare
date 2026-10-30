@@ -157,9 +157,10 @@ describe('RealtimeEngine prepare/time-signature/loop guards', () => {
 describe('RealtimeEngine track monitor mode guard', () => {
   it('rejects non-canonical mode values before embind', () => {
     const engine = new RealtimeEngine(48000, 128);
+    for (const mode of [true, false]) {
+      expect(() => engine.setTrackMonitorMode(0, mode as never)).toThrow(TypeError);
+    }
     for (const mode of [
-      true,
-      false,
       0.5,
       Number.NaN,
       Number.POSITIVE_INFINITY,
@@ -303,6 +304,17 @@ describe('RealtimeVoiceChanger.setPodConfig rejects a partial POD instead of zer
   it('accepts a fully specified POD', () => {
     const vc = new RealtimeVoiceChanger('neutral-monitor');
     expect(() => vc.setPodConfig(fullPod())).not.toThrow();
+  });
+
+  it('reports a refused preset-or-config document as InvalidFormat on setConfig', () => {
+    const vc = new RealtimeVoiceChanger('neutral-monitor');
+    let caught: unknown;
+    try {
+      vc.setConfig({ schemaVersion: 1, dsp: { retune: { semitones: 3 } } } as never);
+    } catch (error) {
+      caught = error;
+    }
+    expect(caught).toMatchObject({ codeName: 'InvalidFormat' });
   });
 });
 

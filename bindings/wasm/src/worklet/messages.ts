@@ -125,6 +125,8 @@ export interface SonareRealtimeVoiceChangerWorkletProcessorOptions {
   sampleRate?: number;
   blockSize?: number;
   channelCount?: number;
+  /** Compiled module bytes, used when the worklet realm has not initialized the module. */
+  wasmBinary?: ArrayBuffer | Uint8Array;
 }
 
 export interface SonareRealtimeVoiceChangerSetConfigMessage {
@@ -164,6 +166,14 @@ export type SonareRealtimeVoiceChangerMessage =
   | SonareRealtimeVoiceChangerNoteOnMessage
   | SonareRealtimeVoiceChangerNoteOffMessage
   | SonareRealtimeVoiceChangerAllNotesOffMessage;
+
+/** Posted when a control message or the processor's construction is refused. */
+export interface SonareRealtimeVoiceChangerErrorMessage {
+  type: 'error';
+  request: SonareRealtimeVoiceChangerMessage['type'] | 'init' | 'invalid';
+  message: string;
+  failure: SonareFailurePayload;
+}
 
 export interface SonareStreamAnalyzerWorkletProcessorOptions {
   /** Mono samples per posted chunk. Integer of at least 128. Default 4096. */

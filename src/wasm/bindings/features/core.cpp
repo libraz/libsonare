@@ -381,6 +381,7 @@ TempogramMode tempogramModeFromValue(val mode) {
     if (mode_id == SONARE_TEMPOGRAM_COSINE) return TempogramMode::kCosine;
     throw WasmRangeError("tempogram mode must be 'autocorrelation' or 'cosine'");
   }
+  if (!mode.isString()) throw WasmTypeError("tempogram mode must be a string or a number");
   const std::string value = mode.as<std::string>();
   if (value == "autocorrelation" || value == "auto" || value == "ac") {
     return TempogramMode::kAutocorrelation;

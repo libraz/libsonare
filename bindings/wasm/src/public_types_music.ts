@@ -80,6 +80,7 @@ export type KeyProfile = (typeof KeyProfile)[keyof typeof KeyProfile];
 export type KeyProfileName =
   | 'ks'
   | 'krumhansl'
+  | 'krumhansl-schmuckler'
   | 'temperley'
   | 'shaath'
   | 'keyfinder'

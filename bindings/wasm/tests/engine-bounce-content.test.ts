@@ -46,6 +46,29 @@ describe('RealtimeEngine offline bounce content', () => {
     }
   });
 
+  it('refuses option-derived failures before consuming engine state', () => {
+    const engine = new RealtimeEngine(SAMPLE_RATE, BLOCK_SIZE);
+    try {
+      const before = engine.getTransportState();
+      const base = { totalFrames: FRAMES, blockSize: BLOCK_SIZE, numChannels: 2 };
+      expect(() => engine.bounceOffline({ ...base, dither: 1, ditherBits: 99 })).toThrow(
+        RangeError,
+      );
+      expect(() => engine.bounceOffline({ ...base, blockSize: BLOCK_SIZE * 32 })).toThrow(
+        RangeError,
+      );
+      expect(() =>
+        engine.bounceOffline({ ...base, normalizeLufs: true, targetLufs: Number.NaN }),
+      ).toThrow();
+      expect(() => engine.freezeOffline({ ...base, blockSize: BLOCK_SIZE * 32 })).toThrow(
+        RangeError,
+      );
+      expect(engine.getTransportState()).toEqual(before);
+    } finally {
+      engine.destroy();
+    }
+  });
+
   it('resamples from the matching prepared source rate', () => {
     const sourceSampleRate = 44100;
     const targetSampleRate = 48000;

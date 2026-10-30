@@ -18,7 +18,7 @@ import type {
   SendTiming,
   SurroundPan,
 } from './public_types.js';
-import { assertSampleRate } from './validation.js';
+import { assertSampleRate, assertSurroundPan, requireBoolean } from './validation.js';
 
 /**
  * One master-output meter reading. All dB fields are finite and floored at
@@ -285,7 +285,10 @@ export class Mixer {
    * @param truePeakOversample - `4` or `8`; any other value throws a RangeError.
    */
   configureMeter(enabled: boolean, truePeakOversample = 4): void {
-    this.mixer.configureMeter(enabled, truePeakOversample);
+    this.mixer.configureMeter(
+      requireBoolean('configureMeter', enabled, 'enabled'),
+      truePeakOversample,
+    );
   }
 
   /**
@@ -508,7 +511,7 @@ export class Mixer {
 
   /** Set the strip's mute state. */
   setMuted(stripIndex: number, muted: boolean): void {
-    this.mixer.setMuted(stripIndex, muted);
+    this.mixer.setMuted(stripIndex, requireBoolean('setMuted', muted, 'muted'));
   }
 
   /**
@@ -516,7 +519,7 @@ export class Mixer {
    * graph recompile.
    */
   setSoloed(stripIndex: number, soloed: boolean): void {
-    this.mixer.setSoloed(stripIndex, soloed);
+    this.mixer.setSoloed(stripIndex, requireBoolean('setSoloed', soloed, 'soloed'));
   }
 
   /**
@@ -524,12 +527,16 @@ export class Mixer {
    * solo. Takes effect on the next process without a graph recompile.
    */
   setSoloSafe(stripIndex: number, soloSafe: boolean): void {
-    this.mixer.setSoloSafe(stripIndex, soloSafe);
+    this.mixer.setSoloSafe(stripIndex, requireBoolean('setSoloSafe', soloSafe, 'soloSafe'));
   }
 
   /** Invert the polarity of the left and/or right channel of a strip. */
   setPolarityInvert(stripIndex: number, invertLeft: boolean, invertRight: boolean): void {
-    this.mixer.setPolarityInvert(stripIndex, invertLeft, invertRight);
+    this.mixer.setPolarityInvert(
+      stripIndex,
+      requireBoolean('setPolarityInvert', invertLeft, 'invertLeft'),
+      requireBoolean('setPolarityInvert', invertRight, 'invertRight'),
+    );
   }
 
   /** Set the strip's pan law (a {@link PanLawName} alias or raw C ABI ordinal). */
@@ -560,9 +567,11 @@ export class Mixer {
    *
    * Applied when the engine's track mixer renders this strip's lane into a
    * destination with more than two channels. This stereo-only mixer's own
-   * block entry points ignore it.
+   * block entry points ignore it. `azimuth` outside [-180, 180] or `divergence`/`lfe`
+   * outside [0, 1] throws a RangeError.
    */
   setSurroundPan(stripIndex: number, pan: SurroundPan): void {
+    assertSurroundPan('setSurroundPan', pan);
     this.mixer.setSurroundPan(stripIndex, pan);
   }
 

@@ -122,7 +122,7 @@ std::size_t wasmArrayLikeLength(const val& arr, const char* subject, const char*
     throw WasmTypeError(std::string(subject) + " must be an array-like object");
   }
   const val length_value = arr[length_key];
-  if (length_value.isUndefined() || length_value.typeOf().as<std::string>() != "number") {
+  if (!length_value.isNumber()) {
     throw WasmTypeError(std::string(subject) + " length must be a number");
   }
   const double length = length_value.as<double>();
@@ -392,7 +392,8 @@ val typedPropertyValue(const val& object, const char* key, const char* type) {
 }  // namespace
 
 double numberFromVal(const val& value, const char* key) {
-  if (value.typeOf().as<std::string>() != "number") {
+  // isNumber() compares the JS type in place; typeOf() would build a std::string per call.
+  if (!value.isNumber()) {
     throw WasmTypeError(std::string(key) + " must be a number");
   }
   return value.as<double>();
@@ -411,7 +412,7 @@ float floatOption(val object, const char* key, float default_value) {
   // and a wrong-typed value is not that. Answering both with the default made a
   // numeric string read as an omitted field on one surface and as the number on
   // the other.
-  if (value.typeOf().as<std::string>() != "number") {
+  if (!value.isNumber()) {
     throw WasmTypeError(std::string(key) + " must be a number");
   }
   // Read as double, because as<float>() turns a finite value the float cannot
@@ -472,7 +473,7 @@ int checkedIntFromVal(const val& value, const char* key) {
 }
 
 int checkedMidiNoteFromVal(const val& note, const char* subject) {
-  if (note.typeOf().as<std::string>() != "number") {
+  if (!note.isNumber()) {
     throw WasmTypeError(std::string(subject) + ": note must be a number");
   }
   const int note_number = checkedIntFromVal(note, "note");
@@ -659,6 +660,13 @@ int gsEfxRealizationProperty(val object, const char* key) {
   throw WasmRangeError(std::string(key) + " must be 'modern' or 'classic', got '" + name + "'");
 }
 
+std::string stringFromVal(const val& value, const char* key) {
+  if (!value.isString()) throw WasmTypeError(std::string(key) + " must be a string");
+  std::string text = value.as<std::string>();
+  wasmRefuseEmbeddedNul(text, key);
+  return text;
+}
+
 std::string stringProperty(val object, const char* key, const std::string& default_value) {
   val value = typedPropertyValue(object, key, "string");
   if (value.isUndefined()) return default_value;
@@ -669,7 +677,7 @@ std::string stringProperty(val object, const char* key, const std::string& defau
 
 std::optional<float> optionalNumber(const val& v, const char* key) {
   if (v.isUndefined() || v.isNull()) return std::nullopt;
-  if (v.typeOf().as<std::string>() != "number") {
+  if (!v.isNumber()) {
     throw WasmTypeError(std::string(key) + " must be a number");
   }
   return checkedFloatFromVal(v, key);
@@ -677,7 +685,7 @@ std::optional<float> optionalNumber(const val& v, const char* key) {
 
 std::optional<bool> optionalBool(const val& v, const char* key) {
   if (v.isUndefined() || v.isNull()) return std::nullopt;
-  if (v.typeOf().as<std::string>() != "boolean") {
+  if (!v.isTrue() && !v.isFalse()) {
     throw WasmTypeError(std::string(key) + " must be a boolean");
   }
   return v.as<bool>();
@@ -686,7 +694,7 @@ std::optional<bool> optionalBool(const val& v, const char* key) {
 bool cancelCallbackRequested(const val& callback) {
   if (callback.isNull() || callback.isUndefined()) return false;
   const val outcome = callback();
-  return outcome.typeOf().as<std::string>() == "boolean" && outcome.as<bool>();
+  return outcome.isTrue();
 }
 
 int requireMatchedLength(const val& a, const val& b, const char* subject, bool require_non_zero) {
