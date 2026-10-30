@@ -938,6 +938,8 @@ if(BUILD_ARRANGEMENT)
     midi/synth/filter_models.cpp
     midi/synth/mod_matrix.cpp
     midi/synth/patch_tuning.cpp
+    midi/synth/engine_field_units.cpp
+    midi/synth/engine_field_gates.cpp
     midi/synth/fm_voice.cpp
     midi/synth/ks_voice.cpp
     midi/synth/modal_voice.cpp
@@ -966,6 +968,8 @@ if(BUILD_ARRANGEMENT)
     midi/synth/native_synth_render.cpp
     midi/synth/native_synth_controllers.cpp
     midi/synth/gm_fallback_map.cpp
+    midi/synth/gm_fallback_tail_bounds.cpp
+    midi/synth/gm_fallback_drum_kits.cpp
     midi/synth/gm_fallback_families.cpp
     midi/synth/gm_fallback_programs.cpp
     midi/synth/gm_fallback_drums.cpp
