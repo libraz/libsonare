@@ -43,7 +43,7 @@ chords: libsonare.ChordAnalysisResult = libsonare.detect_chords(
 )
 cyclic_frames, cyclic_data = libsonare.cyclic_tempogram(samples)
 mastered: libsonare.MasteringChainResult = libsonare.master_audio(
-    samples, preset_name="aiMusic"
+    samples, preset="aiMusic"
 )
 catalog = libsonare.mastering_processor_catalog()
 param_info = libsonare.mastering_insert_param_info("saturation.softClipper")

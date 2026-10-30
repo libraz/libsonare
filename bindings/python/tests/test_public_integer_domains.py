@@ -132,7 +132,9 @@ SKIPS: dict[str, str] = {
         "no integer becomes a C integer here"
     ),
     "_to_c_float_array_owned": "as _to_c_float_array, over a fresh writable copy",
-    "_require_instance": "an isinstance check on a dataclass argument; no integer domain is involved",
+    "_require_instance": (
+        "an isinstance check on a dataclass argument; no integer domain is involved"
+    ),
 }
 
 
