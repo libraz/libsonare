@@ -67,32 +67,61 @@ bool ReadUmpWords(Napi::Env env, const Napi::Value& value, const char* name,
   return true;
 }
 
+// Arguments shared by the live voice pushes: [destinationId,] group, channel,
+// one or two data bytes, then the render frame (destination) or the in-block
+// offset (input source).
+struct LiveVoiceArgs {
+  uint32_t destination_id = 0;
+  uint8_t group = 0;
+  uint8_t channel = 0;
+  uint8_t first = 0;
+  uint8_t second = 0;
+  int64_t time = 0;
+};
+
+// Reads LiveVoiceArgs in wire order; a null second_name means no second data byte.
+// Leaves one pending exception on false.
+bool ReadLiveVoiceArgs(Napi::Env env, const Napi::CallbackInfo& info, bool with_destination,
+                       const char* first_name, const char* second_name, LiveVoiceArgs* args) {
+  size_t index = 0;
+  if (with_destination) {
+    if (!RequiredUint32Arg(env, info, index++, "destinationId", &args->destination_id)) {
+      return false;
+    }
+  }
+  if (!OptionalMidiByteArg(env, info, index++, "group", 0, &args->group) ||
+      !OptionalMidiByteArg(env, info, index++, "channel", 0, &args->channel) ||
+      !OptionalMidiByteArg(env, info, index++, first_name, 0, &args->first)) {
+    return false;
+  }
+  if (second_name != nullptr &&
+      !OptionalMidiByteArg(env, info, index++, second_name, 0, &args->second)) {
+    return false;
+  }
+  if (with_destination) {
+    if (!OptionalInt64Arg(env, info, index, "renderFrame", -1, &args->time)) return false;
+  } else {
+    if (!OptionalInt64Arg(env, info, index, "offsetInBlockSamples", 0, &args->time)) return false;
+  }
+  return true;
+}
+
 }  // namespace
 
 Napi::Value RealtimeEngineWrap::PushMidiNoteOn(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
   SONARE_NODE_REQUIRE_OPEN(env, engine_, "RealtimeEngine");
-  uint32_t destination_id = 0;
-  uint8_t group = 0;
-  uint8_t channel = 0;
-  uint8_t note = 0;
-  uint8_t velocity = 0;
-  int64_t deadline = -1;
-  if (!RequiredUint32Arg(env, info, 0, "destinationId", &destination_id) ||
-      !OptionalMidiByteArg(env, info, 1, "group", 0, &group) ||
-      !OptionalMidiByteArg(env, info, 2, "channel", 0, &channel) ||
-      !OptionalMidiByteArg(env, info, 3, "note", 0, &note) ||
-      !OptionalMidiByteArg(env, info, 4, "velocity", 0, &velocity) ||
-      !OptionalInt64Arg(env, info, 5, "renderFrame", -1, &deadline)) {
+  LiveVoiceArgs a;
+  a.time = -1;
+  if (!ReadLiveVoiceArgs(env, info, true, "note", "velocity", &a)) {
     return env.Undefined();
   }
   if (RefuseLivePushArg(env, "pushMidiNoteOn",
-                        sonare::midi::live_push_note_error(group, channel, note, velocity))) {
+                        sonare::midi::live_push_note_error(a.group, a.channel, a.first, a.second)))
     return env.Undefined();
-  }
-  ThrowIfError(env, sonare_engine_push_midi_note_on(engine_, destination_id, group, channel, note,
-                                                    velocity, deadline));
+  ThrowIfError(env, sonare_engine_push_midi_note_on(engine_, a.destination_id, a.group, a.channel,
+                                                    a.first, a.second, a.time));
   return env.Undefined();
   SONARE_NODE_CATCH(env)
 }
@@ -131,24 +160,16 @@ Napi::Value RealtimeEngineWrap::PushMidiInputNoteOn(const Napi::CallbackInfo& in
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
   SONARE_NODE_REQUIRE_OPEN(env, engine_, "RealtimeEngine");
-  uint8_t group = 0;
-  uint8_t channel = 0;
-  uint8_t note = 0;
-  uint8_t velocity = 0;
-  int64_t port_time = 0;
-  if (!OptionalMidiByteArg(env, info, 0, "group", 0, &group) ||
-      !OptionalMidiByteArg(env, info, 1, "channel", 0, &channel) ||
-      !OptionalMidiByteArg(env, info, 2, "note", 0, &note) ||
-      !OptionalMidiByteArg(env, info, 3, "velocity", 0, &velocity) ||
-      !OptionalInt64Arg(env, info, 4, "offsetInBlockSamples", 0, &port_time)) {
+  LiveVoiceArgs a;
+  a.time = 0;
+  if (!ReadLiveVoiceArgs(env, info, false, "note", "velocity", &a)) {
     return env.Undefined();
   }
   if (RefuseLivePushArg(env, "pushMidiInputNoteOn",
-                        sonare::midi::live_push_note_error(group, channel, note, velocity))) {
+                        sonare::midi::live_push_note_error(a.group, a.channel, a.first, a.second)))
     return env.Undefined();
-  }
-  ThrowIfError(env, sonare_engine_push_midi_input_note_on(engine_, group, channel, note, velocity,
-                                                          port_time));
+  ThrowIfError(env, sonare_engine_push_midi_input_note_on(engine_, a.group, a.channel, a.first,
+                                                          a.second, a.time));
   return env.Undefined();
   SONARE_NODE_CATCH(env)
 }
@@ -157,24 +178,16 @@ Napi::Value RealtimeEngineWrap::PushMidiInputNoteOff(const Napi::CallbackInfo& i
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
   SONARE_NODE_REQUIRE_OPEN(env, engine_, "RealtimeEngine");
-  uint8_t group = 0;
-  uint8_t channel = 0;
-  uint8_t note = 0;
-  uint8_t velocity = 0;
-  int64_t port_time = 0;
-  if (!OptionalMidiByteArg(env, info, 0, "group", 0, &group) ||
-      !OptionalMidiByteArg(env, info, 1, "channel", 0, &channel) ||
-      !OptionalMidiByteArg(env, info, 2, "note", 0, &note) ||
-      !OptionalMidiByteArg(env, info, 3, "velocity", 0, &velocity) ||
-      !OptionalInt64Arg(env, info, 4, "offsetInBlockSamples", 0, &port_time)) {
+  LiveVoiceArgs a;
+  a.time = 0;
+  if (!ReadLiveVoiceArgs(env, info, false, "note", "velocity", &a)) {
     return env.Undefined();
   }
   if (RefuseLivePushArg(env, "pushMidiInputNoteOff",
-                        sonare::midi::live_push_note_error(group, channel, note, velocity))) {
+                        sonare::midi::live_push_note_error(a.group, a.channel, a.first, a.second)))
     return env.Undefined();
-  }
-  ThrowIfError(env, sonare_engine_push_midi_input_note_off(engine_, group, channel, note, velocity,
-                                                           port_time));
+  ThrowIfError(env, sonare_engine_push_midi_input_note_off(engine_, a.group, a.channel, a.first,
+                                                           a.second, a.time));
   return env.Undefined();
   SONARE_NODE_CATCH(env)
 }
@@ -183,24 +196,16 @@ Napi::Value RealtimeEngineWrap::PushMidiInputCc(const Napi::CallbackInfo& info) 
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
   SONARE_NODE_REQUIRE_OPEN(env, engine_, "RealtimeEngine");
-  uint8_t group = 0;
-  uint8_t channel = 0;
-  uint8_t controller = 0;
-  uint8_t value = 0;
-  int64_t port_time = 0;
-  if (!OptionalMidiByteArg(env, info, 0, "group", 0, &group) ||
-      !OptionalMidiByteArg(env, info, 1, "channel", 0, &channel) ||
-      !OptionalMidiByteArg(env, info, 2, "controller", 0, &controller) ||
-      !OptionalMidiByteArg(env, info, 3, "value", 0, &value) ||
-      !OptionalInt64Arg(env, info, 4, "offsetInBlockSamples", 0, &port_time)) {
+  LiveVoiceArgs a;
+  a.time = 0;
+  if (!ReadLiveVoiceArgs(env, info, false, "controller", "value", &a)) {
     return env.Undefined();
   }
   if (RefuseLivePushArg(env, "pushMidiInputCc",
-                        sonare::midi::live_push_cc_error(group, channel, controller, value))) {
+                        sonare::midi::live_push_cc_error(a.group, a.channel, a.first, a.second)))
     return env.Undefined();
-  }
-  ThrowIfError(
-      env, sonare_engine_push_midi_input_cc(engine_, group, channel, controller, value, port_time));
+  ThrowIfError(env, sonare_engine_push_midi_input_cc(engine_, a.group, a.channel, a.first, a.second,
+                                                     a.time));
   return env.Undefined();
   SONARE_NODE_CATCH(env)
 }
@@ -233,22 +238,17 @@ Napi::Value RealtimeEngineWrap::PushMidiInputChannelPressure(const Napi::Callbac
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
   SONARE_NODE_REQUIRE_OPEN(env, engine_, "RealtimeEngine");
-  uint8_t group = 0;
-  uint8_t channel = 0;
-  uint8_t pressure = 0;
-  int64_t port_time = 0;
-  if (!OptionalMidiByteArg(env, info, 0, "group", 0, &group) ||
-      !OptionalMidiByteArg(env, info, 1, "channel", 0, &channel) ||
-      !OptionalMidiByteArg(env, info, 2, "pressure", 0, &pressure) ||
-      !OptionalInt64Arg(env, info, 3, "offsetInBlockSamples", 0, &port_time)) {
+  LiveVoiceArgs a;
+  a.time = 0;
+  if (!ReadLiveVoiceArgs(env, info, false, "pressure", nullptr, &a)) {
     return env.Undefined();
   }
-  if (RefuseLivePushArg(env, "pushMidiInputChannelPressure",
-                        sonare::midi::live_push_channel_pressure_error(group, channel, pressure))) {
+  if (RefuseLivePushArg(
+          env, "pushMidiInputChannelPressure",
+          sonare::midi::live_push_channel_pressure_error(a.group, a.channel, a.first)))
     return env.Undefined();
-  }
-  ThrowIfError(env, sonare_engine_push_midi_input_channel_pressure(engine_, group, channel,
-                                                                   pressure, port_time));
+  ThrowIfError(env, sonare_engine_push_midi_input_channel_pressure(engine_, a.group, a.channel,
+                                                                   a.first, a.time));
   return env.Undefined();
   SONARE_NODE_CATCH(env)
 }
@@ -257,25 +257,17 @@ Napi::Value RealtimeEngineWrap::PushMidiInputPolyPressure(const Napi::CallbackIn
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
   SONARE_NODE_REQUIRE_OPEN(env, engine_, "RealtimeEngine");
-  uint8_t group = 0;
-  uint8_t channel = 0;
-  uint8_t note = 0;
-  uint8_t pressure = 0;
-  int64_t port_time = 0;
-  if (!OptionalMidiByteArg(env, info, 0, "group", 0, &group) ||
-      !OptionalMidiByteArg(env, info, 1, "channel", 0, &channel) ||
-      !OptionalMidiByteArg(env, info, 2, "note", 0, &note) ||
-      !OptionalMidiByteArg(env, info, 3, "pressure", 0, &pressure) ||
-      !OptionalInt64Arg(env, info, 4, "offsetInBlockSamples", 0, &port_time)) {
+  LiveVoiceArgs a;
+  a.time = 0;
+  if (!ReadLiveVoiceArgs(env, info, false, "note", "pressure", &a)) {
     return env.Undefined();
   }
   if (RefuseLivePushArg(
           env, "pushMidiInputPolyPressure",
-          sonare::midi::live_push_poly_pressure_error(group, channel, note, pressure))) {
+          sonare::midi::live_push_poly_pressure_error(a.group, a.channel, a.first, a.second)))
     return env.Undefined();
-  }
-  ThrowIfError(env, sonare_engine_push_midi_input_poly_pressure(engine_, group, channel, note,
-                                                                pressure, port_time));
+  ThrowIfError(env, sonare_engine_push_midi_input_poly_pressure(engine_, a.group, a.channel,
+                                                                a.first, a.second, a.time));
   return env.Undefined();
   SONARE_NODE_CATCH(env)
 }
@@ -284,26 +276,16 @@ Napi::Value RealtimeEngineWrap::PushMidiNoteOff(const Napi::CallbackInfo& info) 
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
   SONARE_NODE_REQUIRE_OPEN(env, engine_, "RealtimeEngine");
-  uint32_t destination_id = 0;
-  uint8_t group = 0;
-  uint8_t channel = 0;
-  uint8_t note = 0;
-  uint8_t velocity = 0;
-  int64_t deadline = -1;
-  if (!RequiredUint32Arg(env, info, 0, "destinationId", &destination_id) ||
-      !OptionalMidiByteArg(env, info, 1, "group", 0, &group) ||
-      !OptionalMidiByteArg(env, info, 2, "channel", 0, &channel) ||
-      !OptionalMidiByteArg(env, info, 3, "note", 0, &note) ||
-      !OptionalMidiByteArg(env, info, 4, "velocity", 0, &velocity) ||
-      !OptionalInt64Arg(env, info, 5, "renderFrame", -1, &deadline)) {
+  LiveVoiceArgs a;
+  a.time = -1;
+  if (!ReadLiveVoiceArgs(env, info, true, "note", "velocity", &a)) {
     return env.Undefined();
   }
   if (RefuseLivePushArg(env, "pushMidiNoteOff",
-                        sonare::midi::live_push_note_error(group, channel, note, velocity))) {
+                        sonare::midi::live_push_note_error(a.group, a.channel, a.first, a.second)))
     return env.Undefined();
-  }
-  ThrowIfError(env, sonare_engine_push_midi_note_off(engine_, destination_id, group, channel, note,
-                                                     velocity, deadline));
+  ThrowIfError(env, sonare_engine_push_midi_note_off(engine_, a.destination_id, a.group, a.channel,
+                                                     a.first, a.second, a.time));
   return env.Undefined();
   SONARE_NODE_CATCH(env)
 }
@@ -312,26 +294,16 @@ Napi::Value RealtimeEngineWrap::PushMidiCc(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
   SONARE_NODE_REQUIRE_OPEN(env, engine_, "RealtimeEngine");
-  uint32_t destination_id = 0;
-  uint8_t group = 0;
-  uint8_t channel = 0;
-  uint8_t controller = 0;
-  uint8_t value = 0;
-  int64_t deadline = -1;
-  if (!RequiredUint32Arg(env, info, 0, "destinationId", &destination_id) ||
-      !OptionalMidiByteArg(env, info, 1, "group", 0, &group) ||
-      !OptionalMidiByteArg(env, info, 2, "channel", 0, &channel) ||
-      !OptionalMidiByteArg(env, info, 3, "controller", 0, &controller) ||
-      !OptionalMidiByteArg(env, info, 4, "value", 0, &value) ||
-      !OptionalInt64Arg(env, info, 5, "renderFrame", -1, &deadline)) {
+  LiveVoiceArgs a;
+  a.time = -1;
+  if (!ReadLiveVoiceArgs(env, info, true, "controller", "value", &a)) {
     return env.Undefined();
   }
   if (RefuseLivePushArg(env, "pushMidiCc",
-                        sonare::midi::live_push_cc_error(group, channel, controller, value))) {
+                        sonare::midi::live_push_cc_error(a.group, a.channel, a.first, a.second)))
     return env.Undefined();
-  }
-  ThrowIfError(env, sonare_engine_push_midi_cc(engine_, destination_id, group, channel, controller,
-                                               value, deadline));
+  ThrowIfError(env, sonare_engine_push_midi_cc(engine_, a.destination_id, a.group, a.channel,
+                                               a.first, a.second, a.time));
   return env.Undefined();
   SONARE_NODE_CATCH(env)
 }
@@ -366,24 +338,17 @@ Napi::Value RealtimeEngineWrap::PushMidiChannelPressure(const Napi::CallbackInfo
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
   SONARE_NODE_REQUIRE_OPEN(env, engine_, "RealtimeEngine");
-  uint32_t destination_id = 0;
-  uint8_t group = 0;
-  uint8_t channel = 0;
-  uint8_t pressure = 0;
-  int64_t deadline = -1;
-  if (!RequiredUint32Arg(env, info, 0, "destinationId", &destination_id) ||
-      !OptionalMidiByteArg(env, info, 1, "group", 0, &group) ||
-      !OptionalMidiByteArg(env, info, 2, "channel", 0, &channel) ||
-      !OptionalMidiByteArg(env, info, 3, "pressure", 0, &pressure) ||
-      !OptionalInt64Arg(env, info, 4, "renderFrame", -1, &deadline)) {
+  LiveVoiceArgs a;
+  a.time = -1;
+  if (!ReadLiveVoiceArgs(env, info, true, "pressure", nullptr, &a)) {
     return env.Undefined();
   }
-  if (RefuseLivePushArg(env, "pushMidiChannelPressure",
-                        sonare::midi::live_push_channel_pressure_error(group, channel, pressure))) {
+  if (RefuseLivePushArg(
+          env, "pushMidiChannelPressure",
+          sonare::midi::live_push_channel_pressure_error(a.group, a.channel, a.first)))
     return env.Undefined();
-  }
-  ThrowIfError(env, sonare_engine_push_midi_channel_pressure(engine_, destination_id, group,
-                                                             channel, pressure, deadline));
+  ThrowIfError(env, sonare_engine_push_midi_channel_pressure(engine_, a.destination_id, a.group,
+                                                             a.channel, a.first, a.time));
   return env.Undefined();
   SONARE_NODE_CATCH(env)
 }
@@ -392,27 +357,17 @@ Napi::Value RealtimeEngineWrap::PushMidiPolyPressure(const Napi::CallbackInfo& i
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
   SONARE_NODE_REQUIRE_OPEN(env, engine_, "RealtimeEngine");
-  uint32_t destination_id = 0;
-  uint8_t group = 0;
-  uint8_t channel = 0;
-  uint8_t note = 0;
-  uint8_t pressure = 0;
-  int64_t deadline = -1;
-  if (!RequiredUint32Arg(env, info, 0, "destinationId", &destination_id) ||
-      !OptionalMidiByteArg(env, info, 1, "group", 0, &group) ||
-      !OptionalMidiByteArg(env, info, 2, "channel", 0, &channel) ||
-      !OptionalMidiByteArg(env, info, 3, "note", 0, &note) ||
-      !OptionalMidiByteArg(env, info, 4, "pressure", 0, &pressure) ||
-      !OptionalInt64Arg(env, info, 5, "renderFrame", -1, &deadline)) {
+  LiveVoiceArgs a;
+  a.time = -1;
+  if (!ReadLiveVoiceArgs(env, info, true, "note", "pressure", &a)) {
     return env.Undefined();
   }
   if (RefuseLivePushArg(
           env, "pushMidiPolyPressure",
-          sonare::midi::live_push_poly_pressure_error(group, channel, note, pressure))) {
+          sonare::midi::live_push_poly_pressure_error(a.group, a.channel, a.first, a.second)))
     return env.Undefined();
-  }
-  ThrowIfError(env, sonare_engine_push_midi_poly_pressure(engine_, destination_id, group, channel,
-                                                          note, pressure, deadline));
+  ThrowIfError(env, sonare_engine_push_midi_poly_pressure(engine_, a.destination_id, a.group,
+                                                          a.channel, a.first, a.second, a.time));
   return env.Undefined();
   SONARE_NODE_CATCH(env)
 }

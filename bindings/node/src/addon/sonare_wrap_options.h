@@ -24,6 +24,9 @@
 
 namespace sonare_node {
 
+/// @brief Number.MAX_SAFE_INTEGER, the largest integer a JS number holds exactly.
+constexpr double kMaxSafeInteger = 9007199254740991.0;
+
 /// @brief The one narrowing every integer reader below performs.
 /// @details Int32Value(), Uint32Value() and Int64Value() are the ECMAScript
 ///   ToInt32 / ToUint32 / ToBigInt64 conversions, which WRAP: 2^32 arrives as 0
@@ -1267,7 +1270,6 @@ inline bool OptionalUint16Arg(Napi::Env env, const Napi::CallbackInfo& info, siz
 inline bool node_read_size_t_domain(Napi::Env env, const Napi::Value& value, const char* name,
                                     size_t* out) {
   const double number = value.As<Napi::Number>().DoubleValue();
-  constexpr double kMaxSafeInteger = 9007199254740991.0;  // Number.MAX_SAFE_INTEGER
   const double max_size_t = static_cast<double>(std::numeric_limits<size_t>::max());
   if (!std::isfinite(number) || std::trunc(number) != number || number < 0.0 ||
       number > kMaxSafeInteger || number > max_size_t) {

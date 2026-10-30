@@ -19,7 +19,6 @@ using namespace sonare_node::project;
 
 namespace {
 
-constexpr double kMaxSafeInteger = 9007199254740991.0;
 constexpr uint32_t kMaxProjectId = std::numeric_limits<uint32_t>::max() - 1u;
 constexpr uint64_t kMaxResultItems = 1ull << 28;
 
@@ -304,7 +303,7 @@ Napi::Object ApplyResultToObject(Napi::Env env, const SonareProjectVocalEditAppl
 
 Napi::Object DependencyToObject(Napi::Env env, const SonareProjectVocalEditDependency& dependency) {
   if (dependency.source_sample_count < 0 ||
-      static_cast<double>(dependency.source_sample_count) > kMaxSafeInteger) {
+      static_cast<double>(dependency.source_sample_count) > sonare_node::kMaxSafeInteger) {
     Napi::RangeError::New(env, "dependency.sourceSampleCount is outside the safe integer range")
         .ThrowAsJavaScriptException();
     return Napi::Object::New(env);
