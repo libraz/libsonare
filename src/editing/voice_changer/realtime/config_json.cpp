@@ -2,6 +2,7 @@
 #include <array>
 #include <cctype>
 #include <cmath>
+#include <cstddef>
 #include <limits>
 #include <string>
 #include <string_view>
@@ -14,6 +15,33 @@
 #include "util/number_format.h"
 
 namespace sonare::editing::voice_changer {
+
+namespace detail {
+
+bool enum_value_from_spelling(const EnumName* rows, std::size_t count, std::string_view name,
+                              int* out) noexcept {
+  for (std::size_t i = 0; i < count; ++i) {
+    if (rows[i].name == name) {
+      *out = rows[i].value;
+      return true;
+    }
+  }
+  return false;
+}
+
+std::string enum_spelling_list(const EnumName* rows, std::size_t count) {
+  std::string out;
+  for (std::size_t i = 0; i < count; ++i) {
+    if (i > 0) out += i + 1 == count ? " or " : ", ";
+    out += '\'';
+    out += rows[i].name;
+    out += '\'';
+  }
+  return out;
+}
+
+}  // namespace detail
+
 using namespace detail;
 
 namespace {
@@ -82,17 +110,24 @@ void object_steps(const sonare::util::json::Value& object, const char* section, 
   }
 }
 
-template <typename Enum>
-Enum object_enum(const sonare::util::json::Value& object, const char* section, const char* key,
-                 Enum fallback) {
+int object_enum_value(const sonare::util::json::Value& object, const char* section, const char* key,
+                      const EnumName* rows, std::size_t count, int fallback) {
   const auto* value = object.find(key);
   if (!value) return fallback;
   if (!value->is_string()) refuse_type(section, key, "a string");
-  Enum parsed = fallback;
-  if (!enum_from_spelling(value->as_string(), &parsed)) {
-    refuse_type(section, key, enum_spelling_list<Enum>().c_str());
+  int parsed = fallback;
+  if (!enum_value_from_spelling(rows, count, value->as_string(), &parsed)) {
+    refuse_type(section, key, enum_spelling_list(rows, count).c_str());
   }
   return parsed;
+}
+
+template <typename Enum>
+Enum object_enum(const sonare::util::json::Value& object, const char* section, const char* key,
+                 Enum fallback) {
+  const auto& names = EnumNames<Enum>::kNames;
+  return static_cast<Enum>(object_enum_value(object, section, key, names.data(), names.size(),
+                                             static_cast<int>(fallback)));
 }
 
 FormantMode object_formant_mode(const sonare::util::json::Value& object, const char* section,
@@ -311,18 +346,25 @@ inline bool is_valid_preset_id(std::string_view s) noexcept {
   return true;
 }
 
-template <typename Enum>
-bool require_enum(const sonare::util::json::Value& object, const char* key, const char* path,
-                  std::string* error) {
+bool require_enum_in(const sonare::util::json::Value& object, const char* key, const char* path,
+                     std::string* error, const EnumName* rows, std::size_t count) {
   const auto* value = object.find(key);
-  Enum parsed{};
-  if (value != nullptr && value->is_string() && enum_from_spelling(value->as_string(), &parsed)) {
+  int parsed = 0;
+  if (value != nullptr && value->is_string() &&
+      enum_value_from_spelling(rows, count, value->as_string(), &parsed)) {
     return true;
   }
   if (error) {
-    *error = "field must be " + enum_spelling_list<Enum>() + ": " + path + "." + key;
+    *error = "field must be " + enum_spelling_list(rows, count) + ": " + path + "." + key;
   }
   return false;
+}
+
+template <typename Enum>
+bool require_enum(const sonare::util::json::Value& object, const char* key, const char* path,
+                  std::string* error) {
+  const auto& names = EnumNames<Enum>::kNames;
+  return require_enum_in(object, key, path, error, names.data(), names.size());
 }
 
 bool require_bool(const sonare::util::json::Value& object, const char* key, const char* path,

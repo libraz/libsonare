@@ -3,6 +3,7 @@
 // Ranges, enum spellings and field visitors shared by the voice changer config translation units.
 
 #include <array>
+#include <cstddef>
 #include <string>
 #include <string_view>
 
@@ -78,29 +79,25 @@ const char* enum_spelling(Enum value) noexcept {
   return EnumNames<Enum>::kNames[0].name.data();
 }
 
+// Row-table forms of the two lookups below, defined once in config_json.cpp.
+bool enum_value_from_spelling(const EnumName* rows, std::size_t count, std::string_view name,
+                              int* out) noexcept;
+std::string enum_spelling_list(const EnumName* rows, std::size_t count);
+
 template <typename Enum>
 bool enum_from_spelling(std::string_view name, Enum* out) noexcept {
-  for (const EnumName& row : EnumNames<Enum>::kNames) {
-    if (row.name == name) {
-      *out = static_cast<Enum>(row.value);
-      return true;
-    }
-  }
-  return false;
+  const auto& names = EnumNames<Enum>::kNames;
+  int value = 0;
+  if (!enum_value_from_spelling(names.data(), names.size(), name, &value)) return false;
+  *out = static_cast<Enum>(value);
+  return true;
 }
 
 /// "'a', 'b' or 'c'" over every spelling of @p Enum.
 template <typename Enum>
 std::string enum_spelling_list() {
-  std::string out;
   const auto& names = EnumNames<Enum>::kNames;
-  for (std::size_t i = 0; i < names.size(); ++i) {
-    if (i > 0) out += i + 1 == names.size() ? " or " : ", ";
-    out += '\'';
-    out += names[i].name;
-    out += '\'';
-  }
-  return out;
+  return enum_spelling_list(names.data(), names.size());
 }
 
 struct Range {
