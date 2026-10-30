@@ -834,6 +834,8 @@ if(BUILD_VOICE_CHANGER)
     editing/voice_changer/psola_shifter.cpp
     editing/voice_changer/realtime_voice_changer.cpp
     editing/voice_changer/realtime/config.cpp
+    editing/voice_changer/realtime/config_json.cpp
+    editing/voice_changer/realtime/voice_presets.cpp
     editing/voice_changer/realtime/processing.cpp
     editing/voice_changer/space_stage.cpp
     editing/voice_changer/streaming_f0.cpp
@@ -1741,7 +1743,8 @@ if(BUILD_WASM)
   endif()
   if(TARGET sonare_voice_changer)
     set_source_files_properties(
-      editing/voice_changer/realtime/config.cpp
+      editing/voice_changer/realtime/config_json.cpp
+      editing/voice_changer/realtime/voice_presets.cpp
       TARGET_DIRECTORY sonare_voice_changer
       PROPERTIES COMPILE_OPTIONS -fexceptions)
   endif()
