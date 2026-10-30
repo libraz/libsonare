@@ -4,6 +4,7 @@
 #include <limits>
 
 #include "util/exception.h"
+#include "util/insertion_sort.h"
 
 namespace sonare::automation {
 namespace {
@@ -28,11 +29,11 @@ void AutomationLane::set_points(std::vector<Breakpoint> points) {
     SONARE_CHECK_MSG(valid_public_breakpoint(point), ErrorCode::InvalidParameter,
                      "automation breakpoint values must be finite and curve must be valid");
   }
-  // stable_sort so the duplicate-ppq policy below ("first occurrence in the
+  // A stable sort so the duplicate-ppq policy below ("first occurrence in the
   // supplied list wins") is deterministic; std::sort leaves the relative order
   // of equal-ppq points unspecified.
-  std::stable_sort(points.begin(), points.end(),
-                   [](const Breakpoint& a, const Breakpoint& b) { return a.ppq < b.ppq; });
+  insertion_sort(points.begin(), points.end(),
+                 [](const Breakpoint& a, const Breakpoint& b) { return a.ppq < b.ppq; });
   points.erase(std::unique(points.begin(), points.end(),
                            [](const Breakpoint& a, const Breakpoint& b) { return a.ppq == b.ppq; }),
                points.end());

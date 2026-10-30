@@ -7,6 +7,7 @@
 
 #include "rt/pan_law.h"
 #include "util/constants.h"
+#include "util/insertion_sort.h"
 #include "util/numeric_validation.h"
 
 namespace sonare::engine {
@@ -153,7 +154,7 @@ void ClipPlayer::set_clips(std::vector<ClipSchedule> clips,
       clip.start_sample = map->ppq_to_sample(clip.start_ppq);
     }
   }
-  std::stable_sort(clips.begin(), clips.end(), [](const ClipSchedule& a, const ClipSchedule& b) {
+  insertion_sort(clips.begin(), clips.end(), [](const ClipSchedule& a, const ClipSchedule& b) {
     if (a.start_sample != b.start_sample) return a.start_sample < b.start_sample;
     return a.id < b.id;
   });
@@ -165,8 +166,8 @@ void ClipPlayer::set_clips(std::vector<ClipSchedule> clips,
   auto set = std::make_shared<ClipSet>();
   set->by_track.resize(clips.size());
   for (size_t i = 0; i < clips.size(); ++i) set->by_track[i] = i;
-  std::stable_sort(set->by_track.begin(), set->by_track.end(),
-                   [&clips](size_t a, size_t b) { return clips[a].track_id < clips[b].track_id; });
+  insertion_sort(set->by_track.begin(), set->by_track.end(),
+                 [&clips](size_t a, size_t b) { return clips[a].track_id < clips[b].track_id; });
   set->clips = std::move(clips);
   set->starts_from_ppq = map != nullptr;
   const size_t count = set->clips.size();

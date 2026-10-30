@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cstring>
 
+#include "util/insertion_sort.h"
 #include "util/resource_limits.h"
 
 namespace sonare::midi::synth {
@@ -250,7 +251,7 @@ void Sf2File::index_presets() {
                                    static_cast<int>(i));
   }
   // Ordering by (address, index) puts the first record of a duplicated address first.
-  std::sort(preset_addresses_.begin(), preset_addresses_.end());
+  insertion_sort(preset_addresses_.begin(), preset_addresses_.end());
   preset_addresses_.erase(std::unique(preset_addresses_.begin(), preset_addresses_.end(),
                                       [](const PresetAddress& a, const PresetAddress& b) {
                                         return a.first == b.first;

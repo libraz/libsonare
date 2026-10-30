@@ -14,6 +14,7 @@
 #include "feature/spectral.h"
 #include "util/constants.h"
 #include "util/exception.h"
+#include "util/insertion_sort.h"
 #include "util/math_utils.h"
 
 namespace sonare {
@@ -86,7 +87,7 @@ int section_rms_frame_length(const SectionConfig& config, int sample_rate) {
 float low_energy_reference(const std::vector<float>& energies) {
   constexpr size_t kMinSectionsToSetAside = 4;
   std::vector<float> sorted = energies;
-  std::sort(sorted.begin(), sorted.end(), std::greater<float>());
+  insertion_sort(sorted.begin(), sorted.end(), std::greater<float>());
   if (sorted.empty()) return 0.0f;
   const bool set_aside = sorted.size() >= kMinSectionsToSetAside && has_evidence(sorted[1]);
   return set_aside ? sorted[1] : sorted[0];

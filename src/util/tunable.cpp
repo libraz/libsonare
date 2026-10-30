@@ -8,7 +8,6 @@
 // `tunable_value` at all.
 #if defined(SONARE_TUNING) && SONARE_TUNING
 
-#include <algorithm>
 #include <cstdio>
 #include <cstdlib>
 #include <fstream>
@@ -18,6 +17,8 @@
 #include <unordered_map>
 #include <utility>
 #include <vector>
+
+#include "util/insertion_sort.h"
 
 namespace sonare {
 namespace tuning {
@@ -136,15 +137,15 @@ class Recorder {
     }
     std::vector<std::pair<std::string, std::pair<float, float>>> bounds(bounds_.begin(),
                                                                         bounds_.end());
-    std::sort(bounds.begin(), bounds.end(),
-              [](const auto& a, const auto& b) { return a.first < b.first; });
+    insertion_sort(bounds.begin(), bounds.end(),
+                   [](const auto& a, const auto& b) { return a.first < b.first; });
     for (const auto& row : bounds) {
       out << "#bound\t" << row.first << '\t' << row.second.first << '\t' << row.second.second
           << '\n';
     }
     std::vector<std::pair<std::string, float>> rows(seen_.begin(), seen_.end());
-    std::sort(rows.begin(), rows.end(),
-              [](const auto& a, const auto& b) { return a.first < b.first; });
+    insertion_sort(rows.begin(), rows.end(),
+                   [](const auto& a, const auto& b) { return a.first < b.first; });
     for (const auto& row : rows) out << row.first << '\t' << row.second << '\n';
   }
 

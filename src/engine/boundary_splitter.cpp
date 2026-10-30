@@ -2,6 +2,7 @@
 
 #include <algorithm>
 
+#include "util/insertion_sort.h"
 #include "util/numeric_validation.h"
 
 namespace sonare::engine {
@@ -54,7 +55,7 @@ bool BoundaryList::add_point(BoundaryPoint point) noexcept { return append(point
 void BoundaryList::sort_unique() noexcept {
   forget_offset_indices();
   BoundaryPoint* storage = points();
-  std::sort(storage, storage + size_, [](const BoundaryPoint& a, const BoundaryPoint& b) {
+  insertion_sort(storage, storage + size_, [](const BoundaryPoint& a, const BoundaryPoint& b) {
     if (a.offset != b.offset) return a.offset < b.offset;
     return a.timeline_sample < b.timeline_sample;
   });

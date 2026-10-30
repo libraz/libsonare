@@ -12,6 +12,7 @@
 #include "midi/synth/engine_field_gates.h"
 #include "midi/synth/engine_field_units.h"
 #include "midi/synth/native_synth.h"
+#include "util/insertion_sort.h"
 #include "util/tunable.h"
 
 // The field table, the walker, the bounds probe and the key mapper compile in
@@ -969,8 +970,8 @@ ModeBounds probe_bounds(SynthEngineMode mode) {
     bound.hi_open = std::fabs(hi.value) >= open;
     bounds.push_back(std::move(bound));
   }
-  std::sort(bounds.begin(), bounds.end(),
-            [](const ProbedBound& a, const ProbedBound& b) { return a.path < b.path; });
+  insertion_sort(bounds.begin(), bounds.end(),
+                 [](const ProbedBound& a, const ProbedBound& b) { return a.path < b.path; });
   return bounds;
 }
 

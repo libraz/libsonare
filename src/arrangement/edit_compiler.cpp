@@ -24,6 +24,7 @@
 #include "util/constants.h"
 #include "util/db.h"
 #include "util/exception.h"
+#include "util/insertion_sort.h"
 #include "util/numeric_validation.h"
 #include "util/resource_limits.h"
 
@@ -1412,7 +1413,7 @@ CompileResult compile(const Project& project, const MidiContentStore& midi,
       // later-starting one iff its sorted successor starts before its own end.
       std::vector<size_t> order(on_track.size());
       for (size_t i = 0; i < order.size(); ++i) order[i] = i;
-      std::stable_sort(order.begin(), order.end(), [&](size_t l, size_t r) {
+      insertion_sort(order.begin(), order.end(), [&](size_t l, size_t r) {
         return on_track[l]->start_ppq < on_track[r]->start_ppq;
       });
       std::vector<bool> overlaps(on_track.size(), false);

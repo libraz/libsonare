@@ -8,6 +8,7 @@
 #include "editing/polyphony/multi_f0.h"
 #include "editing/polyphony/note_mask.h"
 #include "util/exception.h"
+#include "util/insertion_sort.h"
 #include "util/math_utils.h"
 
 namespace sonare::editing::polyphony::detail {
@@ -38,7 +39,7 @@ class ActiveMasks {
   explicit ActiveMasks(const std::vector<NoteMask>& notes)
       : notes_(notes), by_start_(notes.size()) {
     std::iota(by_start_.begin(), by_start_.end(), size_t{0});
-    std::stable_sort(by_start_.begin(), by_start_.end(), [&](size_t lhs, size_t rhs) {
+    sonare::insertion_sort(by_start_.begin(), by_start_.end(), [&](size_t lhs, size_t rhs) {
       return notes_[lhs].frame_start < notes_[rhs].frame_start;
     });
   }
