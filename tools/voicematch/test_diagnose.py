@@ -704,6 +704,68 @@ def test_a_capped_joint_context_cannot_fake_an_interaction():
     assert not diag.structural()
 
 
+def _clipped(capped: float, uncapped: float, *, absent: float = 0.0) -> dict[str, float]:
+    """An `init` reading whose four cells all sit at the cap, in declared units."""
+    out = terms(init=capped)
+    for key in TERM_COUNT_KEYS.values():
+        out[key] = 1.0
+    out["level_expected"] = 1.0
+    out.update(
+        init_cells=4.0,
+        init_capped=4.0,
+        init_absent=absent,
+        init_skipped=0.0,
+        init_uncapped=uncapped * TERM_UNITS["init"],
+    )
+    return out
+
+
+def _diagnose_clipped(base: dict, lo: dict, hi: dict) -> Diagnosis:
+    objective = LossWeights({"init": 1.0})
+    objective.anchor(base)
+    return diagnose(
+        base,
+        probes(("a.x", "lo", lo, "clamp"), ("a.x", "hi", hi, "clamp")),
+        objective.weights,
+        objective=objective,
+    )
+
+
+def test_a_term_capped_on_every_cell_is_connected_through_its_uncapped_distance():
+    diag = _diagnose_clipped(_clipped(8.0, 20.0), _clipped(8.0, 12.0), _clipped(8.0, 30.0))
+    init = row(diag, "init")
+    assert init.verdict not in (MEASUREMENT_LIMITED, "unreachable")
+    assert not init.measurement_limited
+    assert init.movers == 1
+    assert init.strongest.swing == pytest.approx(10.0 * TERM_UNITS["init"])
+    # The fit objective is flat at the cap, so nothing reads as improvement.
+    assert init.best.gain == 0.0
+    assert init.beyond_cap_cells == 4
+    assert init.beyond_cap_probes == 2
+    assert "past the comparison cap" in init.note
+
+
+def test_a_knob_that_leaves_the_uncapped_distance_alone_is_unreachable():
+    diag = _diagnose_clipped(_clipped(8.0, 20.0), _clipped(8.0, 20.0), _clipped(8.0, 20.0))
+    init = row(diag, "init")
+    assert init.verdict == "unreachable"
+    assert not init.measurement_limited
+    assert init.endpoint_complete
+    assert [t.term for t in diag.structural()] == ["init"]
+
+
+def test_a_term_whose_cells_the_candidate_did_not_measure_stays_measurement_limited():
+    diag = _diagnose_clipped(
+        _clipped(8.0, 8.0, absent=4.0),
+        _clipped(8.0, 8.0, absent=4.0),
+        _clipped(8.0, 8.0, absent=4.0),
+    )
+    init = row(diag, "init")
+    assert init.verdict == MEASUREMENT_LIMITED
+    assert init.beyond_cap_cells == init.beyond_cap_probes == 0
+    assert not diag.structural()
+
+
 @dataclass
 class _ProbeKnob:
     label: str

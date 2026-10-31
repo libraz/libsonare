@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import math
 import sys
 from pathlib import Path
 
@@ -222,7 +223,7 @@ def test_percussion_score_terms_reports_lf_and_kit_caps():
     )
 
 
-def test_capped_or_missing_sustain_slope_is_measurement_limited():
+def test_a_missing_sustain_slope_is_measurement_limited_and_a_clipped_one_is_read():
     oracle = [_pitched_row(sustain_slope_db_s=-3.0)]
     baseline = score_terms(oracle, oracle)
     objective = LossWeights({"env": 1.0})
@@ -235,5 +236,12 @@ def test_capped_or_missing_sustain_slope_is_measurement_limited():
         assert terms["env_capped"] == 1.0
         assert not quality_report(terms, objective)["terms"]["env"]["coverage_complete"]
         diag = _diagnose(terms, objective)
-        assert next(t for t in diag.terms if t.term == "env").verdict == MEASUREMENT_LIMITED
-        assert not diag.structural()
+        env = next(t for t in diag.terms if t.term == "env")
+        if math.isnan(slope):
+            assert env.verdict == MEASUREMENT_LIMITED
+            assert not diag.structural()
+        else:
+            # Both sides measured: the clip is read past the cap, so the null is a real one.
+            assert terms["env_uncapped"] == abs(slope + 3.0)
+            assert env.verdict == "unreachable"
+            assert env.beyond_cap_cells == 1 and env.beyond_cap_probes == 2

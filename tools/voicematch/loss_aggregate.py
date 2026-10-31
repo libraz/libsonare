@@ -62,6 +62,7 @@ def robust_score_terms(model_rows, oracle_rows, *, tail_fraction=DEFAULT_TAIL_FR
         if name in GRID_TERMS:
             continue
         observations = []
+        uncapped = []
         for index, (model, oracle, terms) in enumerate(zip(model_rows, oracle_rows, rows)):
             if name == "level":
                 value = _row_level(model, oracle, offset)
@@ -78,6 +79,7 @@ def robust_score_terms(model_rows, oracle_rows, *, tail_fraction=DEFAULT_TAIL_FR
                 value = _finite(terms.get(name))
             if value is not None:
                 observations.append((value, index))
+                uncapped.append(None if terms is None else _finite(terms.get(f"{name}_uncapped")))
         if not observations:
             continue
         tail = upper_tail_mean([value for value, _ in observations], tail_fraction)
@@ -91,5 +93,11 @@ def robust_score_terms(model_rows, oracle_rows, *, tail_fraction=DEFAULT_TAIL_FR
             if value is not None:
                 aggregate[f"{name}_worst_{axis}"] = value
         aggregate[name] = max(aggregate[name], tail)
+        # The uncapped reading takes the same tail, and only when every row carries one.
+        if f"{name}_uncapped" in aggregate and all(value is not None for value in uncapped):
+            aggregate[f"{name}_uncapped"] = max(
+                aggregate[f"{name}_uncapped"], upper_tail_mean(uncapped, tail_fraction)
+            )
+            aggregate[f"{name}_uncapped_worst"] = max(uncapped)
     aggregate["aggregation_tail_fraction"] = tail_fraction
     return aggregate

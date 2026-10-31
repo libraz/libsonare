@@ -753,12 +753,12 @@ def loss_terms(
                     _limited_cells(model_skeleton.get(key), 6),
                     _limited_cells(oracle_skeleton.get(key), 6),
                 ):
-                    totals["slope"] += _absent_or(a, b, 30.0, cells["slope"]) / 10.0
+                    totals["slope"] += _absent_or(a, b, 30.0, cells["slope"], 0.1) / 10.0
             for a, b in _reference_indexed_pairs(
                 _limited_cells(model_skeleton.get("tail_db_s"), 6),
                 _limited_cells(oracle_skeleton.get("tail_db_s"), 6),
             ):
-                totals["tail"] += _absent_or(a, b, TAIL_DELTA_CAP_DB_S, cells["tail"]) / 10.0
+                totals["tail"] += _absent_or(a, b, TAIL_DELTA_CAP_DB_S, cells["tail"], 0.1) / 10.0
         for a, b in _reference_indexed_pairs(m.get("attack_hf_db"), o.get("attack_hf_db")):
             totals["hf"] += _absent_or(a, b, HF_DELTA_CAP_DB, cells["hf"])
         # Averaged over the bands the reference offered, not summed over them,
@@ -767,8 +767,10 @@ def loss_terms(
         # times apart and no single unit could scale both. The denominator is
         # the ORACLE's band count, so a candidate cannot shrink it.
         lf_parts = []
-        for a, b in _reference_indexed_pairs(m.get("attack_lf_db"), o.get("attack_lf_db")):
-            value = _absent_or(a, b, LF_DELTA_CAP_DB, cells["lf"])
+        lf_pairs = list(_reference_indexed_pairs(m.get("attack_lf_db"), o.get("attack_lf_db")))
+        lf_bands = max(1, sum(_finite_or_none(b) is not None for _a, b in lf_pairs))
+        for a, b in lf_pairs:
+            value = _absent_or(a, b, LF_DELTA_CAP_DB, cells["lf"], 1.0 / lf_bands)
             if _finite_or_none(b) is not None:
                 lf_parts.append(value)
         if lf_parts:
@@ -837,8 +839,10 @@ def loss_terms(
     out["bright_hits"] = float(bright_hits)
     out["arrival_hits"] = float(arrival_hits)
     out["body_hits"] = float(body_hits)
+    denominators = {"mod": mod_notes, "modes": modes_notes}
     for term, tally in cells.items():
         out.update(tally.out(term))
+        out[f"{term}_uncapped"] = tally.uncapped(out[term], denominators.get(term, n))
     out.update(level_counts)
     out.update({f"dyn_{key}": value for key, value in dyn_counts.items()})
     out.update({f"hfdyn_{key}": value for key, value in hfdyn_counts.items()})
@@ -913,6 +917,8 @@ def percussion_terms(
     window_flatness_reference_unavailable = 0
     evolution_deltas: list[float] = []
     window_flatness_deltas: list[float] = []
+    # The same cells with a clip charged its full distance; an absence stays the cap.
+    uncapped_deltas: dict[str, list[float]] = {"evolve": [], "diffuse": []}
     for m, o in zip(model_rows, oracle_rows_):
         tilt_m, tilt_o = band_tilt_db(m.get("bands_db")), band_tilt_db(o.get("bands_db"))
         if tilt_m is not None and tilt_o is not None:
@@ -977,6 +983,7 @@ def percussion_terms(
                 totals[term] += min(delta, cap)
                 if delta >= cap:
                     cells[term].clipped += 1
+                    cells[term].excess += delta - cap
                 else:
                     cells[term].compared += 1
         # The reference's eligibility mask defines the temporal cells; a missing candidate cell is charged the cap.
@@ -1072,14 +1079,16 @@ def percussion_terms(
                     model_value = measured_value
                 model_ok = bool(model_valid_ok) or bool(model_measured_ok)
                 if not model_ok or _finite_or_none(model_value) is None:
-                    value = cap
+                    value = distance = cap
                     cells[term].absent += 1
                 else:
-                    value = min(abs(float(model_value) - float(oracle_value)), cap)
+                    distance = abs(float(model_value) - float(oracle_value))
+                    value = min(distance, cap)
                     if value >= cap:
                         cells[term].clipped += 1
                     else:
                         cells[term].compared += 1
+                uncapped_deltas[term].append(distance)
                 if term == "evolve":
                     evolution_deltas.append(value)
                 else:
@@ -1096,6 +1105,7 @@ def percussion_terms(
             band_bins += 1
             cells["band"].clipped += delta >= BAND_DELTA_CAP_DB
             cells["band"].compared += delta < BAND_DELTA_CAP_DB
+            cells["band"].excess += max(0.0, delta - BAND_DELTA_CAP_DB)
         for a, b in zip(m["band_decay_db_s"], o["band_decay_db_s"]):
             if b is None or abs(b) < BDECAY_MIN_RATE_DB_S:
                 cells["bdecay"].skipped += 1
@@ -1117,6 +1127,7 @@ def percussion_terms(
             totals["bdecay"] += min(octaves, BDECAY_OCTAVE_CAP)
             cells["bdecay"].clipped += octaves >= BDECAY_OCTAVE_CAP
             cells["bdecay"].compared += octaves < BDECAY_OCTAVE_CAP
+            cells["bdecay"].excess += max(0.0, octaves - BDECAY_OCTAVE_CAP)
         totals["env"] += abs(m["attack_ms"] - o["attack_ms"]) / 5.0
         totals["env"] += abs(m["decay_ms"] - o["decay_ms"]) / 100.0
         totals["env"] += abs(m["crest_db"] - o["crest_db"]) / 3.0
@@ -1181,6 +1192,12 @@ def percussion_terms(
     out["ring_hits"] = float(ring_hits)
     for term, tally in cells.items():
         out.update(tally.out(term))
+        if term in uncapped_deltas:
+            deltas = uncapped_deltas[term]
+            out[f"{term}_uncapped"] = max(_focal_cell_mean(deltas)) if deltas else 0.0
+        else:
+            denominator = modes_notes if term == "modes" else n
+            out[f"{term}_uncapped"] = tally.uncapped(out[term], denominator)
     out.update(level_counts)
     out.update({f"dyn_{key}": value for key, value in dyn_counts.items()})
     out.update(lf_counts)

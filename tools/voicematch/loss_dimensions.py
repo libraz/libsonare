@@ -661,6 +661,8 @@ def _modes_terms(
                 capped = cents >= MODE_CENTS_CAP or db >= MODE_DB_CAP
                 tally.clipped += capped
                 tally.compared += not capped
+                past = max(0.0, cents - MODE_CENTS_CAP) / MODE_CENTS_PER_DB
+                tally.excess += (past + max(0.0, db - MODE_DB_CAP)) / len(o_hz)
         # A mode present on one side only. It is not a comparison — there was
         # nothing to compare it with — so it counts as a cap the same way an
         # absent value does in `_absent_or`.
@@ -751,7 +753,7 @@ def _mod_terms(
             if ov is None:
                 continue
             scored = True
-            parts.append(_absent_or(mv, ov, cap, tally) / scale)
+            parts.append(_absent_or(mv, ov, cap, tally, 1.0 / scale) / scale)
         for depth, rate, floor in (
             ("vib_cents", "vib_rate_hz", MOD_RATE_MIN_CENTS),
             ("trem_db", "trem_rate_hz", MOD_RATE_MIN_DB),
@@ -778,6 +780,7 @@ def _mod_terms(
             if tally is not None:
                 tally.clipped += offset >= MOD_RATE_CAP_HZ
                 tally.compared += offset < MOD_RATE_CAP_HZ
+                tally.excess += max(0.0, offset - MOD_RATE_CAP_HZ)
         for field, scale, cap in (
             ("fm_slow_cents", MOD_FM_SLOW_CENTS_PER_UNIT, MOD_FM_SLOW_CAP_CENTS),
             ("fm_fast_cents", MOD_FM_FAST_CENTS_PER_UNIT, MOD_FM_FAST_CAP_CENTS),
@@ -792,6 +795,7 @@ def _mod_terms(
             if tally is not None:
                 tally.clipped += excess >= cap
                 tally.compared += excess < cap
+                tally.excess += max(0.0, excess - cap) / scale
         if scored:
             total += sum(parts)
             used += 1
@@ -885,19 +889,22 @@ class CellCount:
 
     Reported as `<term>_cells` (what the reference offered), `<term>_capped`,
     `<term>_absent` and `<term>_skipped`, read exactly as `harm_bins` is.
-    The cap is still charged and the skip is still free. `loss_weights` reads
-    `<term>_cells` as the coverage count of `init`, `slope`, `tail`, `hf` and
+    The cap is still charged and the skip is still free. `excess` sums what the
+    clipped cells lay past the cap, in the term's own accumulation units, so a
+    reducer can also report `<term>_uncapped`, the distance a clip hides.
+    `loss_weights` reads `<term>_cells` as the coverage count of `init`, `slope`, `tail`, `hf` and
     pitched `lf`, so a count below the anchored start's is charged the
     unmeasurable penalty on the missing fraction.
     """
 
-    __slots__ = ("absent", "clipped", "compared", "skipped")
+    __slots__ = ("absent", "clipped", "compared", "excess", "skipped")
 
     def __init__(self) -> None:
         self.compared = 0
         self.clipped = 0
         self.absent = 0
         self.skipped = 0
+        self.excess = 0.0
 
     @property
     def capped(self) -> int:
@@ -912,8 +919,14 @@ class CellCount:
             f"{term}_skipped": float(self.skipped),
         }
 
+    def uncapped(self, value: float, denominator: float) -> float:
+        """The reducer's `value` with every clipped cell charged its full distance."""
+        return value + self.excess / denominator if denominator else value
 
-def _absent_or(model, oracle, cap: float, tally: CellCount | None = None) -> float:
+
+def _absent_or(
+    model, oracle, cap: float, tally: CellCount | None = None, scale: float = 1.0
+) -> float:
     """Compare one measured value with its reference, charging for an absence.
 
     A band the *model* has nothing in, where the oracle has something, is the
@@ -929,6 +942,9 @@ def _absent_or(model, oracle, cap: float, tally: CellCount | None = None) -> flo
     to match, which on a short probe is most of the aftersound band and is a
     property of the probe rather than of the voice — and it is not a cell of
     this term at all, so `tally` does not count it either way.
+
+    `scale` is what the caller multiplies the returned value by before summing
+    it, so a clipped cell's `tally.excess` lands in the term's own units.
     """
     oracle = _finite_or_none(oracle)
     model = _finite_or_none(model)
@@ -944,6 +960,7 @@ def _absent_or(model, oracle, cap: float, tally: CellCount | None = None) -> flo
     if tally is not None:
         if delta >= cap:
             tally.clipped += 1
+            tally.excess += (delta - cap) * scale
         else:
             tally.compared += 1
     return min(delta, cap)

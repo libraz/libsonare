@@ -63,16 +63,16 @@ Level balance needs at least two distinct note or velocity conditions with finit
 
 ## Diagnosis
 
-`--diagnose` reads the current source and reference instead of fitting or writing. It starts with individual knob endpoints and can add bounded interior, all-low, and all-high joint conditions when active residuals and evidence justify them; the sampled budget is finite and the report records it. A null can reflect an inactive mechanism, a missing or capped cell, a range, or an untested interaction.
+`--diagnose` reads the current source and reference instead of fitting or writing. It starts with individual knob endpoints and can add bounded interior, all-low, and all-high joint conditions when active residuals and evidence justify them; the sampled budget is finite and the report records it. A null can reflect an inactive mechanism, a missing cell, a range, or an untested interaction.
 
-Diagnosis separates connectivity from improvement: connectivity is the largest valid measured movement a knob or joint condition produces, while improvement is the largest reduction in the active term. Read both after the fit has reached the source state being investigated.
+Diagnosis separates connectivity from improvement: connectivity is the largest valid measured movement a knob or joint condition produces, while improvement is the largest reduction in the active term on the capped objective the fit minimises. Connectivity reads a cell clipped at the comparison cap at its uncapped distance, so a term already past the cap still shows what moves it; such a term reports `beyond_cap_cells` (the base render's clipped cells) and `beyond_cap_probes`, and its residual is a lower bound rather than a distance near the target. A cell the candidate did not measure has no distance and still leaves the term measurement-limited. Read both after the fit has reached the source state being investigated.
 
 | verdict | interpretation |
 |---|---|
 | `unreachable` | no valid sampled individual or joint condition moved the term |
-| `measurement-limited` | caps, missing cells, or incomplete probe evidence prevent a conclusion |
+| `measurement-limited` | absent or skipped cells, a cap the render cannot read past, or incomplete probe evidence prevent a conclusion |
 | `interaction` | a joint condition moved a term that individual samples did not |
-| `spent` | sampled knobs move the term but none reduces it |
+| `spent` | sampled knobs move the term but none reduces it; with `beyond_cap_cells` or `beyond_cap_probes` the movement may lie past the cap, where the fit objective cannot see it |
 | `partial` / `reachable` | a sampled knob reduces part or most of the gap |
 | `unscored` | the term has no weight in this run |
 | `matched` | aggregate and reported worst note satisfy the declared numerical unit with known coverage |

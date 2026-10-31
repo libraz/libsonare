@@ -18,6 +18,8 @@ every measurement the metric set produces:
   either direction. Near zero means no independently varied knob exposed by
   this probe moved that measurement. That is scoped evidence for a structural
   gap; coupled context points are checked before the report makes the claim.
+  A clipped cell is read at its uncapped distance; a cell the candidate did
+  not measure has none, and still leaves the evidence incomplete.
 - **Improvement** — the largest *reduction* any single knob makes. A term that
   moves but does not improve is a term the fit has already spent, or one whose
   improvement costs another term. That is a trade-off, not a missing mechanism,
@@ -219,6 +221,11 @@ class TermVerdict:
     endpoint_complete: bool = True
     joint_movers: int = 0
     measurement_limited: bool = False
+    #: The base render's clipped cells, read past the cap for connectivity.
+    #: Non-zero means the capped residual understates the distance.
+    beyond_cap_cells: int = 0
+    #: Valid probes whose clipped cells connectivity read past the cap.
+    beyond_cap_probes: int = 0
 
     def to_dict(self) -> dict:
         out = {k: v for k, v in self.__dict__.items() if k not in ("best", "strongest")}
@@ -277,6 +284,7 @@ def _reach(
     probes: list[tuple[str, str, dict | None, str]],
     *,
     strict: bool = False,
+    base_uncapped: float | None = None,
 ) -> tuple[KnobReach | None, KnobReach | None, set[str], int, int, int, set[str]]:
     """Per-knob effect on one term: the best improver, the strongest mover, the count.
 
@@ -285,8 +293,13 @@ def _reach(
     optimum and nothing improves anything — reading only the improver then
     reports the whole model as structurally deficient, which is the single way
     this measurement can lie.
+
+    The swing is read uncapped against `base_uncapped`; the gain stays on the
+    capped objective the fit actually minimises.
     """
-    by_knob: dict[str, dict[str, float]] = {}
+    if base_uncapped is None:
+        base_uncapped = base
+    by_knob: dict[str, dict[str, tuple[float, float]]] = {}
     source: dict[str, str] = {}
     endpoint_labels: set[str] = set()
     valid_by_label: dict[str, int] = {}
@@ -307,15 +320,15 @@ def _reach(
         if end in endpoint_kinds:
             valid_endpoints += 1
             valid_by_label[label] = valid_by_label.get(label, 0) + 1
-        by_knob.setdefault(label, {})[end] = value
+        by_knob.setdefault(label, {})[end] = (value, _uncapped_value(term, terms, value))
 
     best: KnobReach | None = None
     strongest: KnobReach | None = None
     movers: set[str] = set()
     unit_size = TERM_UNITS[term]
     for label, ends in by_knob.items():
-        swing = max((abs(v - base) for v in ends.values()), default=0.0)
-        gains = {end: base - v for end, v in ends.items()}
+        swing = max((abs(u - base_uncapped) for _v, u in ends.values()), default=0.0)
+        gains = {end: base - v for end, (v, _u) in ends.items()}
         at, gain = max(gains.items(), key=lambda kv: kv[1], default=("", 0.0))
         gain = max(0.0, gain)
         reach = KnobReach(
@@ -349,8 +362,11 @@ def _joint_reach(
     probes: Iterable,
     *,
     strict: bool = False,
+    base_uncapped: float | None = None,
 ) -> tuple[float, int]:
     """Return movement from context points without counting a live knob."""
+    if base_uncapped is None:
+        base_uncapped = base
     swing = 0.0
     valid = 0
     for raw_probe in probes:
@@ -361,7 +377,7 @@ def _joint_reach(
         if value is None:
             continue
         valid += 1
-        swing = max(swing, abs(value - base))
+        swing = max(swing, abs(_uncapped_value(term, terms, value) - base_uncapped))
     return swing, valid
 
 
@@ -395,16 +411,52 @@ def _term_value(term: str, terms: dict | None, fallback: float, *, strict: bool)
     return max(abs(value), worst or 0.0)
 
 
+def _clipped_cells(terms: dict | None, term: str) -> float | None:
+    """Clipped cells this render can read past the cap, or None when it cannot.
+
+    A clip is both sides measured with the distance at or past the cap; its
+    uncapped distance is `<term>_uncapped`. Without that key, or without the
+    `<term>_absent` count that separates a clip from an absence, a capped cell
+    stays unreadable.
+    """
+    if not isinstance(terms, dict) or f"{term}_absent" not in terms:
+        return None
+    try:
+        uncapped = float(terms[f"{term}_uncapped"])
+        capped = float(terms.get(f"{term}_capped", 0.0))
+        absent = float(terms[f"{term}_absent"])
+    except (KeyError, TypeError, ValueError):
+        return None
+    if not all(math.isfinite(v) for v in (uncapped, capped, absent)):
+        return None
+    return max(0.0, capped - absent)
+
+
+def _uncapped_value(term: str, terms: dict | None, capped: float) -> float:
+    """The connectivity reading: uncapped where the render carries it, else `capped`."""
+    if _clipped_cells(terms, term) is None:
+        return capped
+    value = abs(float(terms[f"{term}_uncapped"]))
+    try:
+        worst = float(terms.get(f"{term}_uncapped_worst", 0.0))
+    except (TypeError, ValueError):
+        worst = 0.0
+    return max(value, abs(worst) if math.isfinite(worst) else 0.0, capped)
+
+
 def _bare_measurement_reasons(terms: dict | None, term: str) -> set[str]:
     """Find explicit coverage markers without changing legacy bare terms."""
     if not isinstance(terms, dict):
         return set()
     reasons: set[str] = set()
+    readable = _clipped_cells(terms, term) is not None
     for suffix, reason in (
         ("capped", "one or more cells reached the comparison cap"),
         ("absent", "the reference has cells the candidate did not measure"),
         ("skipped", "one or more reference cells were skipped"),
     ):
+        if suffix == "capped" and readable:
+            continue
         if _positive(terms.get(f"{term}_{suffix}")):
             reasons.add(reason)
     for suffix in ("cells", "notes", "groups", "hits", "bins"):
@@ -433,18 +485,34 @@ def _objective_measurement(
     if not row:
         return {"the objective did not produce a coverage record"}, None, None
     reasons: set[str] = set()
+    readable = _clipped_cells(terms, term) is not None
+    coverage = row.get("coverage")
     if row.get("unmeasured"):
         reasons.add("no valid comparison cells were recorded")
     if row.get("coverage_complete") is False:
-        reasons.add("the objective has incomplete reference coverage")
+        # A readable clip leaves coverage incomplete for the objective, not for connectivity.
+        try:
+            complete_but_clipped = (
+                readable
+                and bool(row.get("known"))
+                and not _positive(row.get("absent"))
+                and not _positive(row.get("skipped"))
+                and coverage is not None
+                and float(coverage) >= 1.0
+            )
+        except (TypeError, ValueError):
+            complete_but_clipped = False
+        if not complete_but_clipped:
+            reasons.add("the objective has incomplete reference coverage")
     for key, reason in (
         ("capped", "one or more cells reached the comparison cap"),
         ("absent", "the reference has cells the candidate did not measure"),
         ("skipped", "one or more reference cells were skipped"),
     ):
+        if key == "capped" and readable:
+            continue
         if _positive(row.get(key)):
             reasons.add(reason)
-    coverage = row.get("coverage")
     if coverage is not None:
         try:
             if float(coverage) < 1.0:
@@ -629,6 +697,9 @@ def diagnose(
         baseline_value = max(residual, (worst_units or 0.0) * TERM_UNITS[term])
         if worst_units is None:
             baseline_value = max(baseline_value, _worst_raw(base_terms, term) or 0.0)
+        baseline_uncapped = _uncapped_value(term, base_terms, baseline_value)
+        beyond_cap = int(_clipped_cells(base_terms, term) or 0.0)
+        beyond_cap_probes = 0
         if term in absent:
             out.terms.append(
                 TermVerdict(
@@ -683,6 +754,8 @@ def diagnose(
             )
             invalid_reasons |= objective_reasons
             endpoint_reasons |= invalid_reasons
+            if not invalid_reasons and scorable(endpoint_terms):
+                beyond_cap_probes += bool(_clipped_cells(endpoint_terms, term))
             term_probes.append(
                 (label, end, None if invalid_reasons else endpoint_terms, source, kind)
             )
@@ -695,6 +768,8 @@ def diagnose(
             )
             invalid_reasons |= objective_reasons
             endpoint_reasons |= invalid_reasons
+            if not invalid_reasons and scorable(context_terms):
+                beyond_cap_probes += bool(_clipped_cells(context_terms, term))
             term_context_probes.append(
                 (label, end, None if invalid_reasons else context_terms, source, kind)
             )
@@ -706,7 +781,9 @@ def diagnose(
             valid_endpoints,
             expected_endpoints,
             complete_labels,
-        ) = _reach(term, baseline_value, term_probes, strict=strict)
+        ) = _reach(
+            term, baseline_value, term_probes, strict=strict, base_uncapped=baseline_uncapped
+        )
         moved_something |= movers
         valid_knobs |= complete_labels
         endpoint_complete = expected_endpoints == 0 or valid_endpoints >= expected_endpoints
@@ -731,7 +808,11 @@ def diagnose(
                 f"only {valid_endpoints}/{expected_endpoints} knob endpoints produced a valid term"
             )
         joint_swing, joint_valid = _joint_reach(
-            term, baseline_value, term_context_probes, strict=strict
+            term,
+            baseline_value,
+            term_context_probes,
+            strict=strict,
+            base_uncapped=baseline_uncapped,
         )
         if strict and joint_valid == 0 and context_probes:
             endpoint_reasons.add("joint context samples were not scorable")
@@ -759,6 +840,12 @@ def diagnose(
             measurement_note="; ".join(sorted(endpoint_reasons)),
             joint_swing=joint_swing,
         )
+        if (beyond_cap or beyond_cap_probes) and verdict != MEASUREMENT_LIMITED:
+            note += (
+                f" Connectivity read {beyond_cap} clipped cells of the base and "
+                f"{beyond_cap_probes} probes past the comparison cap; the capped residual "
+                "understates them and the fit objective cannot see movement there."
+            )
         out.terms.append(
             TermVerdict(
                 term=term,
@@ -779,6 +866,8 @@ def diagnose(
                 endpoint_complete=endpoint_complete,
                 joint_movers=1 if joint_swing >= CONNECTED_UNITS * TERM_UNITS[term] else 0,
                 measurement_limited=measurement_limited,
+                beyond_cap_cells=beyond_cap,
+                beyond_cap_probes=beyond_cap_probes,
             )
         )
     all_knobs = {

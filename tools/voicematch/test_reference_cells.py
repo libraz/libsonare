@@ -11,6 +11,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from loss import LEVEL_DELTA_CAP_DB, TERM_UNITS, LossWeights, loss_terms, percussion_terms
+from loss_aggregate import robust_score_terms
+from loss_dimensions import BAND_DELTA_CAP_DB, HF_DELTA_CAP_DB, TAIL_DELTA_CAP_DB_S
 
 
 def _skeleton(values, *, tail=True):
@@ -193,3 +195,52 @@ def test_a_partially_missing_level_is_charged_its_cap_once():
     assert weights.coverage("level", partial) == pytest.approx(0.5)
     contribution = weights.term_contributions(partial)["level"]
     assert contribution == pytest.approx(raw / TERM_UNITS["level"])
+
+
+def test_a_clipped_cell_keeps_its_cap_and_reports_its_full_distance():
+    oracle = _pitched_row()
+    far = _pitched_row(
+        skeleton=_skeleton([98.0] * 6),
+        attack_hf_db=[101.0, 102.0, 103.0],
+        attack_lf_db=[101.0, 102.0, 103.0],
+    )
+    terms = loss_terms([far], [oracle])
+    assert terms["init"] == pytest.approx(6 * 12.0)
+    assert terms["init_uncapped"] == pytest.approx(6 * 100.0)
+    assert terms["slope"] == pytest.approx(12 * 30.0 / 10.0)
+    assert terms["slope_uncapped"] == pytest.approx(12 * 100.0 / 10.0)
+    assert terms["tail"] == pytest.approx(6 * TAIL_DELTA_CAP_DB_S / 10.0)
+    assert terms["tail_uncapped"] == pytest.approx(6 * 100.0 / 10.0)
+    assert terms["hf"] == pytest.approx(3 * HF_DELTA_CAP_DB)
+    assert terms["hf_uncapped"] == pytest.approx(3 * 100.0)
+    assert terms["lf_uncapped"] == pytest.approx(100.0)
+    for term in ("init", "slope", "tail", "hf", "lf"):
+        assert terms[f"{term}_capped"] == terms[f"{term}_cells"]
+        assert terms[f"{term}_absent"] == 0.0
+
+
+def test_an_absent_or_unclipped_cell_has_no_distance_past_the_cap():
+    oracle = _pitched_row()
+    same = loss_terms([_pitched_row()], [oracle])
+    missing = loss_terms([_pitched_row(skeleton=None, attack_hf_db=[])], [oracle])
+    for term in ("init", "slope", "tail", "hf", "lf"):
+        assert same[f"{term}_uncapped"] == pytest.approx(same[term])
+        assert missing[f"{term}_uncapped"] == pytest.approx(missing[term])
+
+
+def test_a_clipped_percussion_band_reports_its_full_distance():
+    oracle = _drum_row()
+    far = _drum_row(bands_db=[0.0, -6.0, -112.0])
+    terms = percussion_terms([far], [oracle])
+    assert terms["band"] == pytest.approx(BAND_DELTA_CAP_DB)
+    assert terms["band_uncapped"] == pytest.approx(100.0)
+
+
+def test_the_grid_reducer_carries_the_uncapped_reading_and_its_worst_row():
+    oracle = [_pitched_row(note=48 + i, velocity=80) for i in range(4)]
+    model = [_pitched_row(note=48 + i, velocity=80) for i in range(4)]
+    model[2]["attack_hf_db"] = [101.0, 2.0, 3.0]
+    terms = robust_score_terms(model, oracle)
+    assert terms["hf_worst"] == pytest.approx(HF_DELTA_CAP_DB)
+    assert terms["hf_uncapped_worst"] == pytest.approx(100.0)
+    assert terms["hf_uncapped"] > terms["hf"]
