@@ -5,6 +5,7 @@
 #include <climits>
 #include <cmath>
 #include <string>
+#include <utility>
 
 #include "analysis/analysis_rate.h"
 #include "core/spectrum.h"
@@ -157,6 +158,32 @@ BoundaryDetector::BoundaryDetector(const MelSpectrogram& mel, const Chroma& chro
   }
 
   combine_features(mfcc_features, mfcc_frames, chroma_features, chroma_frames);
+
+  compute_self_similarity();
+  compute_novelty_curve();
+  detect_boundaries();
+}
+
+BoundaryDetector::BoundaryDetector(const std::vector<float>& features, int n_dims,
+                                   std::vector<float> column_times, std::vector<uint8_t> eligible,
+                                   const BoundaryConfig& config)
+    : n_frames_(static_cast<int>(column_times.size())),
+      n_features_(n_dims),
+      truncate_edges_(true),
+      column_times_(std::move(column_times)),
+      eligible_(std::move(eligible)),
+      sr_(0),
+      hop_length_(0),
+      config_(config) {
+  SONARE_CHECK(n_dims > 0 && features.size() == column_times_.size() * static_cast<size_t>(n_dims),
+               ErrorCode::InvalidParameter);
+  SONARE_CHECK(eligible_.size() == column_times_.size(), ErrorCode::InvalidParameter);
+  features_ = features;
+  std::vector<float> spacing;
+  for (size_t i = 1; i < column_times_.size(); ++i) {
+    spacing.push_back(column_times_[i] - column_times_[i - 1]);
+  }
+  column_sec_ = spacing.empty() ? 0.0f : median(spacing.data(), spacing.size());
 
   compute_self_similarity();
   compute_novelty_curve();
@@ -346,10 +373,13 @@ void BoundaryDetector::compute_self_similarity() {
 }
 
 float BoundaryDetector::compute_checkerboard_kernel(int center) const {
-  int half_size = config_.kernel_size / 2;
-
-  // Check bounds
-  if (center < half_size || center >= n_frames_ - half_size) {
+  const int full_half = config_.kernel_size / 2;
+  int half_size = full_half;
+  if (truncate_edges_) {
+    // Shrink to the room left at either end, computed only while at least half the width.
+    half_size = std::min({full_half, center, n_frames_ - center});
+    if (half_size <= 0 || 2 * half_size < full_half) return 0.0f;
+  } else if (center < half_size || center >= n_frames_ - half_size) {
     return 0.0f;
   }
 
@@ -377,7 +407,8 @@ float BoundaryDetector::compute_checkerboard_kernel(int center) const {
   }
 
   // Normalize by kernel size
-  int kernel_area = config_.kernel_size * config_.kernel_size;
+  const int kernel_width = truncate_edges_ ? 2 * half_size : config_.kernel_size;
+  int kernel_area = kernel_width * kernel_width;
   return sum / static_cast<float>(kernel_area);
 }
 
@@ -408,15 +439,8 @@ void BoundaryDetector::compute_novelty_curve() {
 void BoundaryDetector::detect_boundaries() {
   if (novelty_curve_.empty()) return;
 
-  // Under long-form pooling each analysis frame spans frame_stride_ hops, so the
-  // effective hop duration scales accordingly; frame_stride_ is 1 for all
-  // normal-length inputs.
-  const float hop_duration =
-      static_cast<float>(hop_length_) * static_cast<float>(frame_stride_) / sr_;
-  const int min_peak_distance =
-      std::max(1, seconds_to_frames(config_.peak_distance, hop_duration, novelty_curve_.size()));
-  const int window_frames =
-      seconds_to_frames(config_.reference_window, hop_duration, novelty_curve_.size());
+  const int min_peak_distance = std::max(1, seconds_to_columns(config_.peak_distance));
+  const int window_frames = seconds_to_columns(config_.reference_window);
 
   // Gate on the raw response. novelty_peak_ is 0 exactly when the curve was left
   // unnormalized under the numerical floor, so that curve yields no candidates.
@@ -438,10 +462,13 @@ void BoundaryDetector::detect_boundaries() {
       raw.data(), raw.size(), static_cast<size_t>(window_frames), events, kLoneEventRatio);
 
   // The relative gate asks whether a peak stands out among its neighbours, a lone
-  // dominant event set aside; the absolute one asks whether the features changed at all.
+  // dominant event set aside; the absolute one (on a column grid, the caller's mask) asks
+  // whether the features changed at all.
   std::vector<int> candidates;
   for (int i : peaks) {
-    if (raw[i] >= config_.threshold * reference[i] && raw[i] >= config_.absolute_threshold) {
+    const bool changed = column_times_.empty() ? raw[i] >= config_.absolute_threshold
+                                               : eligible_[static_cast<size_t>(i)] != 0;
+    if (raw[i] >= config_.threshold * reference[i] && changed) {
       candidates.push_back(i);
     }
   }
@@ -449,10 +476,27 @@ void BoundaryDetector::detect_boundaries() {
   for (int i : select_peaks_min_distance(candidates, raw.data(), min_peak_distance)) {
     Boundary boundary;
     boundary.frame = i;
-    boundary.time = static_cast<float>(i) * hop_duration;
+    boundary.time = column_time(i);
     boundary.strength = novelty_curve_[i];
     boundaries_.push_back(boundary);
   }
+}
+
+float BoundaryDetector::column_duration() const {
+  if (!column_times_.empty()) return column_sec_;
+  // Under long-form pooling each analysis frame spans frame_stride_ hops, so the
+  // effective hop duration scales accordingly; frame_stride_ is 1 for all
+  // normal-length inputs.
+  return static_cast<float>(hop_length_) * static_cast<float>(frame_stride_) / sr_;
+}
+
+float BoundaryDetector::column_time(int index) const {
+  if (!column_times_.empty()) return column_times_[static_cast<size_t>(index)];
+  return static_cast<float>(index) * column_duration();
+}
+
+int BoundaryDetector::seconds_to_columns(float seconds) const {
+  return seconds_to_frames(seconds, column_duration(), novelty_curve_.size());
 }
 
 std::vector<float> BoundaryDetector::boundary_times() const {

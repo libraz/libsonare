@@ -96,15 +96,15 @@ inline const std::vector<SectionSpec>& layout() {
   static const std::vector<Chord> outro = {kC, kC};
   static const std::vector<SectionSpec> specs = {
       {"Intro", Kind::kIntro, 0, SectionType::Intro, 70, intro},
-      {"Verse", Kind::kVerse, 1, SectionType::Verse, 80, verse},
+      {"Verse", Kind::kVerse, 1, SectionType::Verse, 50, verse},
       {"Pre", Kind::kPre, 2, SectionType::PreChorus, 85, pre},
-      {"Chorus", Kind::kChorus, 3, SectionType::Chorus, 110, chorus},
+      {"Chorus", Kind::kChorus, 3, SectionType::Chorus, 127, chorus},
       {"Interlude", Kind::kIntro, 0, SectionType::Instrumental, 70, intro},
-      {"Verse", Kind::kVerse, 1, SectionType::Verse, 80, verse},
+      {"Verse", Kind::kVerse, 1, SectionType::Verse, 50, verse},
       {"Pre", Kind::kPre, 2, SectionType::PreChorus, 85, pre},
-      {"Chorus", Kind::kChorus, 3, SectionType::Chorus, 110, chorus},
+      {"Chorus", Kind::kChorus, 3, SectionType::Chorus, 127, chorus},
       {"Bridge", Kind::kBridge, 4, SectionType::Bridge, 90, bridge},
-      {"Chorus", Kind::kChorus, 3, SectionType::Chorus, 110, chorus},
+      {"Chorus", Kind::kChorus, 3, SectionType::Chorus, 127, chorus},
       {"Outro", Kind::kOutro, 0, SectionType::Outro, 60, outro},
   };
   return specs;

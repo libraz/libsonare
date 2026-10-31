@@ -699,9 +699,8 @@ std::vector<StructureSpan> read_structure_annotation(const std::filesystem::path
   return spans;
 }
 
-/// The group the old section analyzer reports for a section. It has no group of its own, so its
-/// label stands in; switch this to the section's group once the analyzer exposes one.
-int estimated_group(const Section& section) { return static_cast<int>(section.type); }
+/// The repetition group the section analyzer reports for a section.
+int estimated_group(const Section& section) { return section.group; }
 
 std::vector<StructureSpan> structure_spans(const SectionAnalyzer& analyzer) {
   std::vector<StructureSpan> spans;

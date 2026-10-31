@@ -168,6 +168,7 @@ set(SONARE_SOURCES
   analysis/timbre_analyzer.cpp
   analysis/melody_analyzer.cpp
   analysis/section_analyzer.cpp
+  analysis/section_structure.cpp
   analysis/music_analyzer.cpp
   analysis/analysis_json.cpp
   # Percussive events reach only for HPSS and the onset analyzer, both of which

@@ -563,25 +563,14 @@ TEST_CASE("BoundaryDetector tolerates a configuration with no feature dimensions
 
 TEST_CASE("Boundary detection runs at the analysis rate whatever the source rate",
           "[boundary_detector]") {
-  // boundaries() and sections() are two entry points onto one segmentation, and
-  // section analysis has always resampled to 22.05 kHz. A detector that adopted
-  // the source rate verbatim segmented the same material differently depending
-  // on how it was delivered, and disagreed with the sections built on top of it.
+  // A detector that adopted the source rate verbatim segmented the same material
+  // differently depending on how it was delivered.
   const Audio at_44100 = create_multi_sections(44100, 3.0f);
   const Audio at_48000 = create_multi_sections(48000, 3.0f);
 
-  SectionConfig section_config;
-  section_config.min_section_sec = 2.0f;
-  section_config.boundary_threshold = 0.2f;
-
-  // The configuration SectionAnalyzer derives for its own detector, so the two
-  // entry points are compared on identical settings.
   BoundaryConfig boundary_config;
-  boundary_config.n_fft = section_config.n_fft;
-  boundary_config.hop_length = section_config.hop_length;
-  boundary_config.threshold = section_config.boundary_threshold;
-  boundary_config.kernel_size = section_config.kernel_size;
-  boundary_config.peak_distance = section_config.min_section_sec;
+  boundary_config.threshold = 0.2f;
+  boundary_config.peak_distance = 2.0f;
 
   const BoundaryDetector detector_44100(at_44100, boundary_config);
   const BoundaryDetector detector_48000(at_48000, boundary_config);
@@ -592,26 +581,14 @@ TEST_CASE("Boundary detection runs at the analysis rate whatever the source rate
 
   const std::vector<float> boundaries_44100 = detector_44100.boundary_times();
   const std::vector<float> boundaries_48000 = detector_48000.boundary_times();
-  const std::vector<float> sections_44100 =
-      SectionAnalyzer(at_44100, section_config).boundary_times();
-  const std::vector<float> sections_48000 =
-      SectionAnalyzer(at_48000, section_config).boundary_times();
 
   // Anti-vacuity: the material really does change, so agreement on an empty set
   // would not be agreement on a segmentation.
   REQUIRE(!boundaries_44100.empty());
   REQUIRE(boundaries_44100.size() == boundaries_48000.size());
-  REQUIRE(boundaries_44100.size() == sections_44100.size());
-  REQUIRE(boundaries_44100.size() == sections_48000.size());
 
   INFO("44.1 vs 48 kHz: " << max_time_delta(boundaries_44100, boundaries_48000));
   REQUIRE(max_time_delta(boundaries_44100, boundaries_48000) <= kAnalysisHopSeconds);
-  REQUIRE(max_time_delta(sections_44100, sections_48000) <= kAnalysisHopSeconds);
-
-  // Both entry points read the same grid built from the same resampled signal,
-  // so at a matched configuration they agree exactly, not merely within the grid.
-  REQUIRE_THAT(max_time_delta(boundaries_44100, sections_44100), WithinAbs(0.0f, 0.0f));
-  REQUIRE_THAT(max_time_delta(boundaries_48000, sections_48000), WithinAbs(0.0f, 0.0f));
 }
 
 TEST_CASE("A repeated loop is not segmented", "[boundary_detector]") {

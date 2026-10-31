@@ -2,16 +2,17 @@
 /// @brief Pins the analyzers that share one STFT across their stages to the results of computing
 ///        each stage's STFT separately.
 
-#include <algorithm>
 #include <array>
 #include <catch2/catch_test_macros.hpp>
 #include <cmath>
 #include <utility>
 #include <vector>
 
+#include "analysis/beat_analyzer.h"
 #include "analysis/boundary_detector.h"
 #include "analysis/key_analyzer.h"
 #include "analysis/section_analyzer.h"
+#include "analysis/section_structure.h"
 #include "core/audio.h"
 #include "core/spectrum.h"
 #include "feature/chroma.h"
@@ -62,38 +63,40 @@ Audio make_triad_signal() {
 
 SectionConfig make_section_config() {
   SectionConfig config;
-  config.kernel_size = 16;
   config.min_section_sec = 0.3f;
   return config;
 }
 
-/// @brief The boundary configuration SectionAnalyzer derives from its own.
-BoundaryConfig boundary_config_for(const SectionConfig& config) {
+/// @brief A short-kernel detector configuration on the section framing.
+BoundaryConfig make_boundary_config() {
+  const SectionConfig section_config = make_section_config();
   BoundaryConfig boundary_config;
-  boundary_config.n_fft = config.n_fft;
-  boundary_config.hop_length = config.hop_length;
-  boundary_config.threshold = config.boundary_threshold;
-  boundary_config.kernel_size = config.kernel_size;
-  boundary_config.peak_distance =
-      std::min(std::max(0.0f, config.min_section_sec), BoundaryConfig{}.peak_distance);
+  boundary_config.n_fft = section_config.n_fft;
+  boundary_config.hop_length = section_config.hop_length;
+  boundary_config.threshold = section_config.boundary_threshold;
+  boundary_config.kernel_size = 16;
+  boundary_config.peak_distance = section_config.min_section_sec;
   return boundary_config;
 }
 
 }  // namespace
 
-TEST_CASE("SectionAnalyzer matches boundaries and an STFT computed separately",
+TEST_CASE("SectionAnalyzer matches a beat grid and an STFT computed separately",
           "[analysis][spectrogram_reuse]") {
   const Audio audio = make_segmented_signal();
   const SectionConfig config = make_section_config();
 
-  // The separate-STFT route: the detector computes its own mel and chroma, and the section
-  // analyzer is handed an STFT taken apart from both.
-  BoundaryDetector detector(audio, boundary_config_for(config));
+  // The separate route: the beats are tracked on their own, and the section analyzer is handed
+  // an STFT taken apart from them.
+  BeatConfig beat_config;
+  beat_config.n_fft = config.n_fft;
+  beat_config.hop_length = config.hop_length;
+  const SectionGrid grid = section_structure::make_section_grid(BeatAnalyzer(audio, beat_config));
   ChromaConfig chroma_config;
   chroma_config.n_fft = config.n_fft;
   chroma_config.hop_length = config.hop_length;
   const Spectrogram spec = Spectrogram::compute(audio, chroma_config.to_stft_config());
-  const SectionAnalyzer reference(audio, detector.boundaries(), spec, config);
+  const SectionAnalyzer reference(audio, grid, spec, config);
 
   const SectionAnalyzer actual(audio, config);
 
@@ -107,13 +110,15 @@ TEST_CASE("SectionAnalyzer matches boundaries and an STFT computed separately",
     CHECK(a.end == r.end);
     CHECK(a.energy_level == r.energy_level);
     CHECK(a.confidence == r.confidence);
+    CHECK(a.group == r.group);
   }
+  CHECK(actual.section_self_similarity() == reference.section_self_similarity());
 }
 
 TEST_CASE("BoundaryDetector from a shared STFT equals the audio constructor",
           "[analysis][spectrogram_reuse]") {
   const Audio audio = make_segmented_signal();
-  const BoundaryConfig config = boundary_config_for(make_section_config());
+  const BoundaryConfig config = make_boundary_config();
 
   const BoundaryDetector reference(audio, config);
 

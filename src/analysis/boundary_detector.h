@@ -4,6 +4,7 @@
 /// @brief Section boundary detection using self-similarity analysis.
 
 #include <cstddef>
+#include <cstdint>
 #include <vector>
 
 #include "core/audio.h"
@@ -169,6 +170,23 @@ class BoundaryDetector {
   BoundaryDetector(const MelSpectrogram& mel, const Chroma& chroma, int sr,
                    const BoundaryConfig& config = BoundaryConfig());
 
+  /// @brief Constructs boundary detector over caller-built feature columns on an uneven grid.
+  /// @details For section analysis's beat columns; not exposed through the C ABI. The vectors
+  /// are used as given (no normalization, no feature extraction), seconds convert to columns at
+  /// the median column spacing, and the checkerboard is truncated at the ends rather than
+  /// zeroed: within half a kernel of an end it shrinks to the room left, down to half its width.
+  /// The raw-novelty floor @ref BoundaryConfig::absolute_threshold does not apply: normalized
+  /// columns carry no absolute scale, so the caller decides which columns may hold a boundary.
+  /// @param features @p column_times.size() vectors of @p n_dims values, one after another.
+  /// @param n_dims Values per column.
+  /// @param column_times Start time of each column in seconds, ascending.
+  /// @param eligible One flag per column; a zero column is dropped from the candidates before
+  ///        the strongest-first spacing, so it cannot suppress a neighbour.
+  /// @param config Detection configuration; n_fft, hop_length, absolute_threshold, n_mfcc,
+  ///        n_chroma and the feature switches do not apply.
+  BoundaryDetector(const std::vector<float>& features, int n_dims, std::vector<float> column_times,
+                   std::vector<uint8_t> eligible, const BoundaryConfig& config);
+
   /// @brief Returns detected boundaries with timing.
   const std::vector<Boundary>& boundaries() const { return boundaries_; }
 
@@ -195,9 +213,10 @@ class BoundaryDetector {
   /// @brief Returns the rate the analysis ran at, not the input's rate.
   /// @details Equals the input rate at or below 22.05 kHz, and 22.05 kHz above
   /// it, since a higher-rate input is resampled before any feature is computed.
+  /// 0 for a detector built on feature columns, which has no rate.
   int sample_rate() const { return sr_; }
 
-  /// @brief Returns hop length.
+  /// @brief Returns hop length; 0 for a detector built on feature columns.
   int hop_length() const { return hop_length_; }
 
   /// @brief Returns the analysis frame count the similarity band was built on.
@@ -229,6 +248,12 @@ class BoundaryDetector {
   void compute_novelty_curve();
   void detect_boundaries();
   float compute_checkerboard_kernel(int center) const;
+  /// @brief Duration of one analysis frame, or the median column spacing on a column grid.
+  float column_duration() const;
+  /// @brief Start time of analysis frame (or column) @p index.
+  float column_time(int index) const;
+  /// @brief Whole frames (or columns) in @p seconds, saturated to the curve length.
+  int seconds_to_columns(float seconds) const;
 
   std::vector<Boundary> boundaries_;
   std::vector<float> novelty_curve_;
@@ -237,9 +262,13 @@ class BoundaryDetector {
                                  // n_frames_ rows of (2 * band_radius_ + 1) diagonals
   int n_frames_;
   int n_features_;
-  int band_radius_ = 0;        // stored half-bandwidth: only |row - col| <= this is kept
-  int frame_stride_ = 1;       // feature pooling factor (>1 only past the band budget)
-  float novelty_peak_ = 0.0f;  // raw novelty maximum the curve was divided by
+  int band_radius_ = 0;              // stored half-bandwidth: only |row - col| <= this is kept
+  int frame_stride_ = 1;             // feature pooling factor (>1 only past the band budget)
+  bool truncate_edges_ = false;      // shrink the kernel at the ends instead of zeroing
+  std::vector<float> column_times_;  // set only for a detector built on feature columns
+  std::vector<uint8_t> eligible_;    // per-column candidate mask of the column grid
+  float column_sec_ = 0.0f;          // median column spacing of column_times_
+  float novelty_peak_ = 0.0f;        // raw novelty maximum the curve was divided by
   // Declared before sr_ because sr_ is initialized from it: the audio the
   // detector analyses may have been resampled away from the caller's rate.
   Audio audio_;

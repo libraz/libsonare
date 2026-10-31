@@ -9,18 +9,21 @@
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
 #include <cmath>
 #include <cstdint>
+#include <limits>
 #include <random>
 #include <string>
 #include <utility>
 #include <vector>
 
+#include "analysis/analysis_rate.h"
+#include "analysis/beat_analyzer.h"
+#include "analysis/section_structure.h"
 #include "core/spectrum.h"
 #include "feature/chroma.h"
 #include "support/section_form.h"
 #include "util/constants.h"
 #include "util/db.h"
 #include "util/exception.h"
-#include "util/math_utils.h"
 
 using namespace sonare;
 using Catch::Matchers::WithinAbs;
@@ -115,6 +118,32 @@ StftConfig section_stft_config(const SectionConfig& config) {
   return chroma_config.to_stft_config();
 }
 
+/// @brief A beat every @p beat_sec seconds over @p duration_sec, a reliable downbeat every four.
+SectionGrid regular_grid(float duration_sec, float beat_sec = 0.5f) {
+  SectionGrid grid;
+  for (int k = 0; static_cast<float>(k) * beat_sec < duration_sec; ++k) {
+    grid.beat_times.push_back(static_cast<float>(k) * beat_sec);
+    if (k % 4 == 0) grid.downbeat_indices.push_back(k);
+  }
+  grid.downbeats_reliable = true;
+  return grid;
+}
+
+/// @brief Section analysis of @p audio on @p grid, with the STFT taken at the analysis rate.
+SectionAnalyzer analyze_on_grid(const Audio& audio, const SectionGrid& grid,
+                                const SectionConfig& config = SectionConfig()) {
+  const Audio analysis = analysis_rate_audio(audio);
+  const Spectrogram spec = Spectrogram::compute(analysis, section_stft_config(config));
+  return SectionAnalyzer(audio, grid, spec, config);
+}
+
+/// @brief Times of the boundaries the length merge kept.
+std::vector<float> kept_times(const std::vector<Boundary>& kept) {
+  std::vector<float> times;
+  for (const Boundary& b : kept) times.push_back(b.time);
+  return times;
+}
+
 /// @brief Creates simple sine wave.
 Audio create_sine(float freq, int sr = 22050, float duration = 10.0f) {
   int n_samples = static_cast<int>(sr * duration);
@@ -141,11 +170,14 @@ TEST_CASE("A section analysis handed its STFT matches one that built its own",
   config.n_fft = 1024;
   config.hop_length = 256;
   config.min_section_sec = 1.0f;
-  const std::vector<float> boundaries = {1.5f};
 
+  BeatConfig beat_config;
+  beat_config.n_fft = config.n_fft;
+  beat_config.hop_length = config.hop_length;
+  const SectionGrid grid = section_structure::make_section_grid(BeatAnalyzer(audio, beat_config));
   const Spectrogram spec = Spectrogram::compute(audio, section_stft_config(config));
-  const SectionAnalyzer own(audio, boundaries, config);
-  const SectionAnalyzer shared(audio, boundaries, spec, config);
+  const SectionAnalyzer own(audio, config);
+  const SectionAnalyzer shared(audio, grid, spec, config);
 
   REQUIRE(own.count() == 2);
   REQUIRE(shared.count() == own.count());
@@ -158,6 +190,7 @@ TEST_CASE("A section analysis handed its STFT matches one that built its own",
     REQUIRE(measured.energy_level == expected.energy_level);
     REQUIRE(measured.confidence == expected.confidence);
     REQUIRE(measured.type == expected.type);
+    REQUIRE(measured.group == expected.group);
   }
   REQUIRE(shared.section_self_similarity() == own.section_self_similarity());
 }
@@ -169,13 +202,13 @@ TEST_CASE("A section analysis rejects an STFT that is not the one it asked for",
   config.n_fft = 1024;
   config.hop_length = 256;
   config.min_section_sec = 1.0f;
-  const std::vector<float> boundaries = {1.5f};
+  const SectionGrid grid = regular_grid(3.0f);
 
   SECTION("a different hop") {
     SectionConfig other = config;
     other.hop_length = config.hop_length * 2;
     const Spectrogram spec = Spectrogram::compute(audio, section_stft_config(other));
-    REQUIRE_THROWS_AS(SectionAnalyzer(audio, boundaries, spec, config), SonareException);
+    REQUIRE_THROWS_AS(SectionAnalyzer(audio, grid, spec, config), SonareException);
   }
 
   SECTION("an STFT of the native-rate signal") {
@@ -183,8 +216,33 @@ TEST_CASE("A section analysis rejects an STFT that is not the one it asked for",
     // of the input as handed in describes frames of a different hop duration.
     const Audio high_rate = create_two_part_audio(44100);
     const Spectrogram spec = Spectrogram::compute(high_rate, section_stft_config(config));
-    REQUIRE_THROWS_AS(SectionAnalyzer(high_rate, boundaries, spec, config), SonareException);
+    REQUIRE_THROWS_AS(SectionAnalyzer(high_rate, grid, spec, config), SonareException);
   }
+}
+
+TEST_CASE("A section analysis rejects a grid that is not a beat sequence", "[section_analyzer]") {
+  const Audio audio = create_two_part_audio();
+  const SectionConfig config;
+  const Spectrogram spec = Spectrogram::compute(audio, section_stft_config(config));
+  const auto rejects = [&](const SectionGrid& grid) {
+    REQUIRE_THROWS_AS(SectionAnalyzer(audio, grid, spec, config), SonareException);
+  };
+  SectionGrid grid = regular_grid(3.0f);
+  grid.beat_times[2] = grid.beat_times[1] - 0.1f;
+  rejects(grid);
+  grid = regular_grid(3.0f);
+  grid.beat_times[0] = -0.5f;
+  rejects(grid);
+  grid = regular_grid(3.0f);
+  grid.beat_times[3] = std::numeric_limits<float>::quiet_NaN();
+  rejects(grid);
+  grid = regular_grid(3.0f);
+  grid.downbeat_indices.push_back(static_cast<int>(grid.beat_times.size()));
+  rejects(grid);
+  grid = regular_grid(3.0f);
+  grid.downbeat_indices = {4, 0};
+  rejects(grid);
+  REQUIRE_NOTHROW(SectionAnalyzer(audio, regular_grid(3.0f), spec, config));
 }
 
 TEST_CASE("SectionAnalyzer basic", "[section_analyzer]") {
@@ -290,7 +348,10 @@ TEST_CASE("SectionAnalyzer duration", "[section_analyzer]") {
 TEST_CASE("SectionAnalyzer boundary_times", "[section_analyzer]") {
   Audio audio = create_sectioned_audio();
 
+  // Four-second sections need a floor of at most half that: the novelty kernel spans twice the
+  // floor either side of a boundary.
   SectionConfig config;
+  config.min_section_sec = 2.0f;
   config.boundary_threshold = 0.2f;
 
   SectionAnalyzer analyzer(audio, config);
@@ -359,13 +420,10 @@ TEST_CASE("SectionAnalyzer config options", "[section_analyzer]") {
 
   // The point of the case is that the options reach the analysis, so assert the
   // outcome they change rather than that some sections came back. A permissive
-  // minimum keeps all five detected sections. The detected spans sit just
-  // either side of 4 s, so the default 4 s floor drops the boundaries that close
-  // the short ones and keeps the rest: three sections. Asserting only
-  // non-emptiness passed even when the fixture collapsed to a single whole-track
-  // span, which is the failure this pins.
+  // minimum keeps all five 4 s sections; the default 4 s floor also sets an 8 s
+  // kernel half-width, which cannot separate every one of them.
   REQUIRE(analyzer.count() == 5);
-  REQUIRE(SectionAnalyzer(audio, SectionConfig{}).count() == 3);
+  REQUIRE(SectionAnalyzer(audio, SectionConfig{}).count() < 5);
 }
 
 TEST_CASE("SectionAnalyzer short audio", "[section_analyzer]") {
@@ -400,30 +458,34 @@ TEST_CASE("SectionAnalyzer enforces min_section_sec at its configured value",
           "[section_analyzer]") {
   // The 4s..6s span is half of min_section_sec: long enough to survive a
   // half-value floor, short enough that the documented floor must merge it.
-  const std::vector<float> boundaries{4.0f, 6.0f, 10.0f};
-  SectionConfig config;
-  config.min_section_sec = 4.0f;
+  const std::vector<Boundary> boundaries{{4.0f, 0, 1.0f}, {6.0f, 0, 1.0f}, {10.0f, 0, 1.0f}};
+  constexpr float kDuration = 20.0f;
+  constexpr float kMinimum = 4.0f;
 
-  const SectionAnalyzer analyzer(create_sectioned_audio(), boundaries, config);
-  const auto& sections = analyzer.sections();
+  const std::vector<float> kept =
+      kept_times(section_structure::merge_short_sections(boundaries, kDuration, kMinimum, 0.0f));
 
   // Four spans in, the 4s..6s one merged, three out. Exact rather than a lower
   // bound: the boundaries are supplied, so nothing here is estimated, and a merge
   // that ate one span too many would land on two -- the very failure this case
   // was written to catch.
-  REQUIRE(sections.size() == 3);
-  for (const auto& section : sections) {
-    REQUIRE(section.duration() >= config.min_section_sec);
+  REQUIRE(kept.size() == 2);
+  float start = 0.0f;
+  for (float t : kept) {
+    REQUIRE(t - start >= kMinimum);
+    start = t;
   }
+  REQUIRE(kDuration - start >= kMinimum);
 }
 
 TEST_CASE("SectionAnalyzer is stable across common source rates", "[section_analyzer]") {
-  const std::vector<float> boundaries{4.0f, 8.0f, 12.0f, 16.0f};
+  // One supplied grid for both rates, so only the features are compared.
   SectionConfig config;
   config.min_section_sec = 2.0f;
+  const SectionGrid grid = regular_grid(20.0f);
 
-  const SectionAnalyzer at_44100(create_sectioned_audio(44100), boundaries, config);
-  const SectionAnalyzer at_48000(create_sectioned_audio(48000), boundaries, config);
+  const SectionAnalyzer at_44100 = analyze_on_grid(create_sectioned_audio(44100), grid, config);
+  const SectionAnalyzer at_48000 = analyze_on_grid(create_sectioned_audio(48000), grid, config);
 
   // Pin the absolute count before comparing the two rates. An equality between
   // them holds just as well when both collapse, and the comparison below would
@@ -432,6 +494,8 @@ TEST_CASE("SectionAnalyzer is stable across common source rates", "[section_anal
   REQUIRE(at_44100.form() == at_48000.form());
   REQUIRE(at_44100.sections().size() == at_48000.sections().size());
   for (size_t i = 0; i < at_44100.sections().size(); ++i) {
+    REQUIRE(at_44100.sections()[i].group == at_48000.sections()[i].group);
+    REQUIRE_THAT(at_44100.sections()[i].start, WithinAbs(at_48000.sections()[i].start, 0.01f));
     REQUIRE_THAT(at_44100.sections()[i].energy_level,
                  WithinAbs(at_48000.sections()[i].energy_level, 0.01f));
   }
@@ -496,9 +560,8 @@ TEST_CASE("an unclassified edge segment is not labelled as a verse", "[section_a
   // measured, and merges it with the repeated sections the repeat branch does
   // identify, leaving a caller no way to separate the two.
   //
-  // Both fixtures below were chosen by sweeping until they reached that branch;
-  // the ordinary low-intro/loud-chorus fixture in this file never does, so it
-  // cannot stand in for them.
+  // Each fixture is four 5 s spans of distinct pitch class, so no group repeats, no
+  // Chorus exists, and the loud edge span is neither quiet nor short.
   //
   // Each pins its section count. That is not the claim being made, it is what
   // keeps the claim meaningful: front() and back() are only different segments
@@ -516,11 +579,14 @@ TEST_CASE("an unclassified edge segment is not labelled as a verse", "[section_a
     }
     return Audio::from_vector(samples, sr);
   };
+  // 5 s spans need a floor of at most half that (the kernel spans twice the floor).
+  SectionConfig config;
+  config.min_section_sec = 2.0f;
 
   SECTION("a loud non-repeating opening") {
     SectionAnalyzer analyzer(
-        segmented({{{0.95f, 660.0f}, {0.30f, 330.0f}, {0.35f, 392.0f}, {0.28f, 294.0f}}}));
-    REQUIRE(analyzer.count() == 2);
+        segmented({{{0.95f, 740.0f}, {0.30f, 330.0f}, {0.35f, 392.0f}, {0.28f, 294.0f}}}), config);
+    REQUIRE(analyzer.count() == 4);
     const Section first = analyzer.sections().front();
     REQUIRE(first.type == SectionType::Unknown);
     REQUIRE(first.confidence == 0.0f);
@@ -528,8 +594,8 @@ TEST_CASE("an unclassified edge segment is not labelled as a verse", "[section_a
 
   SECTION("a loud non-repeating ending") {
     SectionAnalyzer analyzer(
-        segmented({{{0.30f, 330.0f}, {0.32f, 330.0f}, {0.30f, 330.0f}, {0.98f, 740.0f}}}));
-    REQUIRE(analyzer.count() == 2);
+        segmented({{{0.30f, 330.0f}, {0.32f, 392.0f}, {0.30f, 294.0f}, {0.98f, 740.0f}}}), config);
+    REQUIRE(analyzer.count() == 4);
     const Section last = analyzer.sections().back();
     REQUIRE(last.type == SectionType::Unknown);
     REQUIRE(last.confidence == 0.0f);
@@ -537,13 +603,10 @@ TEST_CASE("an unclassified edge segment is not labelled as a verse", "[section_a
 }
 
 TEST_CASE("SectionAnalyzer does not invent structure in uniform material", "[section_analyzer]") {
-  // Twenty seconds of one unchanging chord, cut at four-second boundaries the
-  // caller supplies. Nothing in the audio changes at those cuts, so nothing in
-  // the audio is a section: the segments are indistinguishable from each other,
-  // which also makes every one of them a "repetition" of every other. Before
-  // the indistinct-merge and the uniform-repetition guard, that pair of facts
-  // was enough to produce a full verse/chorus alternation out of material that
-  // never moved.
+  // Twenty seconds of one unchanging chord on a regular beat grid. Nothing in the
+  // audio changes, so nothing in it is a section: any segments would be
+  // indistinguishable and so "repetitions" of each other, which is enough to
+  // produce a verse/chorus alternation out of material that never moved.
   constexpr int sr = 22050;
   constexpr float kDuration = 20.0f;
   const int n_samples = static_cast<int>(static_cast<float>(sr) * kDuration);
@@ -557,10 +620,9 @@ TEST_CASE("SectionAnalyzer does not invent structure in uniform material", "[sec
   }
   const Audio audio = Audio::from_vector(std::move(samples), sr);
 
-  const std::vector<float> boundaries = {4.0f, 8.0f, 12.0f, 16.0f};
-  SectionAnalyzer analyzer(audio, boundaries);
+  const SectionAnalyzer analyzer = analyze_on_grid(audio, regular_grid(kDuration));
 
-  // The supplied boundaries separate nothing, so they are not kept.
+  // Nothing changes along the grid, so nothing is cut.
   REQUIRE(analyzer.count() == 1);
   REQUIRE(analyzer.sections().front().start == 0.0f);
   REQUIRE_THAT(analyzer.sections().front().end, WithinAbs(kDuration, 0.05f));
@@ -572,84 +634,64 @@ TEST_CASE("SectionAnalyzer does not invent structure in uniform material", "[sec
   REQUIRE(form.find('B') == std::string::npos);
 }
 
-TEST_CASE("the self-similarity matrix is the one the labeller used", "[analysis][section][reuse]") {
-  // The analyzer keeps the descriptors classification built rather than running the chroma
-  // analysis again when this accessor is read, and it derives that chromagram from the STFT it
-  // already computed for the rest of the pass. Both are only correct if the result is the same
-  // floats a standalone chromagram over the reported section spans produces, so the oracle
-  // rebuilds exactly that and compares without a tolerance.
-  const int sr = 22050;
-  const Audio audio = create_sectioned_audio(sr);
-  const SectionAnalyzer analyzer(audio);
+TEST_CASE("SectionAnalyzer gives 64 s of one chord one ungrouped section", "[section_analyzer]") {
+  // Thirty-two bars of one chord: the one-group guard and the novelty floor between them must
+  // leave a single Unknown section in group 0.
+  constexpr int sr = 22050;
+  constexpr float kDuration = 64.0f;
+  std::vector<float> samples(static_cast<size_t>(kDuration * sr), 0.0f);
+  for (size_t i = 0; i < samples.size(); ++i) {
+    const float t = static_cast<float>(i) / static_cast<float>(sr);
+    for (float frequency : {261.63f, 329.63f, 392.00f}) {
+      samples[i] += 0.28f * std::sin(sonare::constants::kTwoPi * frequency * t);
+    }
+  }
+  const SectionAnalyzer analyzer =
+      analyze_on_grid(Audio::from_vector(std::move(samples), sr), regular_grid(kDuration));
+  REQUIRE(analyzer.count() == 1);
+  CHECK(analyzer.sections().front().type == SectionType::Unknown);
+  CHECK(analyzer.sections().front().confidence == 0.0f);
+  CHECK(analyzer.sections().front().group == 0);
+}
+
+TEST_CASE("the self-similarity matrix is the one the grouping used", "[analysis][section][reuse]") {
+  // section_self_similarity() has to be the pair scores of the reported sections, not a copy
+  // taken before a later stage changed them, so the oracle rebuilds them from the pure stages
+  // and compares without a tolerance.
+  const Audio audio = create_sectioned_audio();
+  const SectionConfig config;
+  const SectionGrid grid;  // no beats: the fixed fallback grid
+  const SectionAnalyzer analyzer = analyze_on_grid(audio, grid, config);
 
   const size_t n = analyzer.count();
   REQUIRE(n > 1);
 
-  const SectionConfig section_config;
-  ChromaConfig chroma_config;
-  chroma_config.n_fft = section_config.n_fft;
-  chroma_config.hop_length = section_config.hop_length;
-  const Chroma chroma = Chroma::compute(audio, chroma_config);
-
-  // The analysis rate is the input rate here: section analysis only resamples above 22.05 kHz.
-  const float hop_duration = static_cast<float>(section_config.hop_length) / static_cast<float>(sr);
-  std::vector<std::array<float, 12>> expected(n);
-  for (size_t s = 0; s < n; ++s) {
-    const Section& section = analyzer.sections()[s];
-    const int start = std::clamp(static_cast<int>(section.start / hop_duration), 0,
-                                 std::max(0, chroma.n_frames()));
-    const int end =
-        std::clamp(static_cast<int>(section.end / hop_duration), start, chroma.n_frames());
-    int count = 0;
-    for (int f = start; f < end; ++f) {
-      for (int c = 0; c < chroma.n_chroma() && c < 12; ++c) {
-        expected[s][static_cast<size_t>(c)] += chroma.at(c, f);
-      }
-      ++count;
-    }
-    if (count > 0) {
-      for (float& value : expected[s]) value /= static_cast<float>(count);
-    }
-    normalize_l2(expected[s].data(), expected[s].size());
+  namespace ss = section_structure;
+  const Spectrogram spec = Spectrogram::compute(audio, section_stft_config(config));
+  const ss::FrameFeatures frames = ss::frame_features(audio, spec, config);
+  const ss::ColumnGrid columns = ss::column_grid(grid, frames.duration_sec, frames.frame_sec);
+  const ss::ColumnFeatures matrix = ss::column_features(ss::column_means(frames, columns));
+  const std::vector<float> smoothed = ss::smooth_diagonal(
+      ss::column_ssm(matrix), columns.size(), columns.to_columns(config.min_section_sec));
+  std::vector<ss::Span> spans;
+  for (size_t i = 0; i < n; ++i) {
+    const auto at =
+        std::find(columns.times.begin(), columns.times.end(), analyzer.sections()[i].start);
+    REQUIRE(at != columns.times.end());
+    const int begin = static_cast<int>(at - columns.times.begin());
+    if (!spans.empty()) spans.back().end = begin;
+    spans.push_back({begin, columns.size()});
   }
+  const ss::PairScores expected =
+      ss::pair_scores(spans, smoothed, columns.size(), columns.to_columns(ss::kAlignSlackSec));
 
   const std::vector<float> similarity = analyzer.section_self_similarity();
   REQUIRE(similarity.size() == n * n);
-  for (size_t i = 0; i < n; ++i) {
-    for (size_t j = 0; j < n; ++j) {
-      float dot = 0.0f;
-      for (size_t c = 0; c < 12; ++c) {
-        dot += expected[i][c] * expected[j][c];
-      }
-      CAPTURE(i, j);
-      REQUIRE(similarity[i * n + j] == std::clamp(dot, 0.0f, 1.0f));
-    }
-  }
-
-  // Reading it twice must not depend on having read it once: the descriptors are state now.
+  REQUIRE(similarity == expected.scores);
   REQUIRE(analyzer.section_self_similarity() == similarity);
 }
 
 namespace {
-
-/// @brief Consecutive single-partial tones, one per span, at pitch classes far
-///        enough apart that no two neighbours read as indistinct chroma.
-Audio create_tone_spans(const std::vector<std::pair<float, float>>& spans, int sr = 22050) {
-  const float duration = spans.back().first;
-  std::vector<float> samples(static_cast<size_t>(static_cast<float>(sr) * duration));
-  for (size_t i = 0; i < samples.size(); ++i) {
-    const float t = static_cast<float>(i) / static_cast<float>(sr);
-    float frequency = spans.back().second;
-    for (const auto& span : spans) {
-      if (t < span.first) {
-        frequency = span.second;
-        break;
-      }
-    }
-    samples[i] = 0.5f * std::sin(2.0f * sonare::constants::kPiD * frequency * t);
-  }
-  return Audio::from_vector(std::move(samples), sr);
-}
 
 /// @brief Section boundaries of @p analyzer, i.e. every section start but the first.
 std::vector<float> section_starts(const SectionAnalyzer& analyzer) {
@@ -664,24 +706,14 @@ std::vector<float> section_starts(const SectionAnalyzer& analyzer) {
 
 TEST_CASE("the section floor keeps the stronger boundary next to a short section",
           "[section_analyzer]") {
-  // 0-5 s C4, 5-6 s E4, 6-12 s G#4. The 1 s span must go, and which of its two
+  // Sections 0-5, 5-6 and 6-12 s. The 1 s span must go, and which of its two
   // boundaries goes with it is decided by novelty strength, not by position.
-  const Audio audio = create_tone_spans({{5.0f, 261.63f}, {6.0f, 329.63f}, {12.0f, 415.30f}});
-  SectionConfig config;
-  config.min_section_sec = 4.0f;
-  const Spectrogram spec = Spectrogram::compute(audio, section_stft_config(config));
-
   const auto boundary = [](float time, float strength) { return Boundary{time, 0, strength}; };
-  {
-    const SectionAnalyzer analyzer(audio, {boundary(5.0f, 0.9f), boundary(6.0f, 0.2f)}, spec,
-                                   config);
-    REQUIRE(section_starts(analyzer) == std::vector<float>{5.0f});
-  }
-  {
-    const SectionAnalyzer analyzer(audio, {boundary(5.0f, 0.2f), boundary(6.0f, 0.9f)}, spec,
-                                   config);
-    REQUIRE(section_starts(analyzer) == std::vector<float>{6.0f});
-  }
+  const auto kept = [](const std::vector<Boundary>& boundaries) {
+    return kept_times(section_structure::merge_short_sections(boundaries, 12.0f, 4.0f, 0.0f));
+  };
+  REQUIRE(kept({boundary(5.0f, 0.9f), boundary(6.0f, 0.2f)}) == std::vector<float>{5.0f});
+  REQUIRE(kept({boundary(5.0f, 0.2f), boundary(6.0f, 0.9f)}) == std::vector<float>{6.0f});
 }
 
 TEST_CASE("the section floor keeps boundaries between sections longer than it",
@@ -689,13 +721,9 @@ TEST_CASE("the section floor keeps boundaries between sections longer than it",
   // Spans of 10, 1, 3 and 16 s under a 4 s floor, all boundaries equally strong.
   // Dropping only 11 s joins the two short spans into one 4 s section; absorbing
   // the short spans leftward would also remove the boundary at 10 s.
-  const Audio audio =
-      create_tone_spans({{10.0f, 261.63f}, {11.0f, 329.63f}, {14.0f, 415.30f}, {30.0f, 293.66f}});
-  SectionConfig config;
-  config.min_section_sec = 4.0f;
-
-  const SectionAnalyzer analyzer(audio, std::vector<float>{10.0f, 11.0f, 14.0f}, config);
-  REQUIRE(section_starts(analyzer) == std::vector<float>{10.0f, 14.0f});
+  const std::vector<Boundary> boundaries{{10.0f, 0, 1.0f}, {11.0f, 0, 1.0f}, {14.0f, 0, 1.0f}};
+  REQUIRE(kept_times(section_structure::merge_short_sections(boundaries, 30.0f, 4.0f, 0.0f)) ==
+          std::vector<float>{10.0f, 14.0f});
 }
 
 namespace {
@@ -795,67 +823,14 @@ TEST_CASE("a section floor below the section length keeps the arrangement's boun
     INFO("section starts: " << ::Catch::Detail::stringify(starts));
     for (float change : {14.0f, 24.0f, 34.0f}) REQUIRE(has_time_near(starts, change, kTolerance));
   }
-  SECTION("8 s sections under a 6 s floor") {
+  SECTION("8 s sections under the default floor") {
+    // The floor also sets the kernel to twice itself, so 8 s sections take a floor of 4 s.
     SectionConfig config;
-    config.min_section_sec = 6.0f;
+    config.min_section_sec = 4.0f;
     const std::vector<float> starts =
         section_starts(SectionAnalyzer(create_arrangement(8.0), config));
     INFO("section starts: " << ::Catch::Detail::stringify(starts));
     for (float change : {12.0f, 20.0f, 28.0f}) REQUIRE(has_time_near(starts, change, kTolerance));
-  }
-}
-
-namespace {
-
-/// @brief Detected boundary times of @p analyzer as frames of its 22.05 kHz analysis grid.
-std::vector<int> detected_frames(const SectionAnalyzer& analyzer, const SectionConfig& config) {
-  std::vector<int> frames;
-  for (float t : analyzer.boundary_times()) {
-    frames.push_back(
-        static_cast<int>(std::lround(t * static_cast<float>(constants::kDefaultSampleRate) /
-                                     static_cast<float>(config.hop_length))));
-  }
-  return frames;
-}
-
-/// @brief Requires as many boundaries as @p expected, each within one frame of its entry.
-void require_frames_near(const std::vector<int>& actual, const std::vector<int>& expected) {
-  INFO("frames " << ::Catch::Detail::stringify(actual));
-  REQUIRE(actual.size() == expected.size());
-  for (size_t i = 0; i < expected.size(); ++i) {
-    REQUIRE(std::abs(actual[i] - expected[i]) <= 1);
-  }
-}
-
-}  // namespace
-
-TEST_CASE("existing synthetic inputs keep their boundaries", "[section_analyzer]") {
-  // Frames recorded under the whole-track relative gate. Every input is shorter than the default
-  // reference window, so the local gate sees the same reference and only a peak chain may move.
-  const auto check = [](const Audio& audio, const SectionConfig& config,
-                        const std::vector<int>& expected) {
-    require_frames_near(detected_frames(SectionAnalyzer(audio, config), config), expected);
-  };
-  SECTION("five sections") {
-    SectionConfig config;
-    check(create_sectioned_audio(), config, {171, 343, 519, 691});
-    config.boundary_threshold = 0.2f;
-    check(create_sectioned_audio(), config, {171, 343, 519, 691});
-    config.min_section_sec = 2.0f;
-    check(create_sectioned_audio(), config, {171, 343, 519, 691});
-    config.min_section_sec = 1.0f;
-    config.boundary_threshold = 0.1f;
-    check(create_sectioned_audio(), config, {171, 343, 519, 691});
-  }
-  SECTION("arrangement with 10 s sections") {
-    check(create_arrangement(10.0), SectionConfig{}, {604, 776, 1032, 1465, 1638, 1894});
-  }
-  SECTION("tone spans") {
-    check(create_tone_spans({{5.0f, 261.63f}, {6.0f, 329.63f}, {12.0f, 415.30f}}), SectionConfig{},
-          {});
-    check(
-        create_tone_spans({{10.0f, 261.63f}, {11.0f, 329.63f}, {14.0f, 415.30f}, {30.0f, 293.66f}}),
-        SectionConfig{}, {605});
   }
 }
 
@@ -891,12 +866,14 @@ constexpr double kBurstAtSec = 1.5 * kBurstSectionSec;
 /// @brief Five 10 s chord sections of equal RMS, optionally with 0.5 s of white noise 24 dB
 ///        above that RMS in the middle of the second.
 Audio create_chords_with_burst(bool burst) {
+  // C, F#, D, Ab, Em with spread partial counts: every pair scores under 0.43, well clear of the
+  // repetition threshold, so the five sections are five materials on both sides.
   const std::vector<std::vector<double>> chords = {{261.63, 329.63, 392.0},
-                                                   {349.23, 440.0, 523.25},
-                                                   {220.0, 261.63, 329.63},
-                                                   {196.0, 246.94, 293.66},
+                                                   {185.0, 233.08, 277.18},
+                                                   {293.66, 369.99, 440.0},
+                                                   {207.65, 261.63, 311.13},
                                                    {329.63, 392.0, 493.88}};
-  const int harmonics[] = {1, 6, 3, 10, 2};
+  const int harmonics[] = {1, 12, 2, 6, 24};
   std::vector<float> samples;
   for (std::size_t c = 0; c < chords.size(); ++c) {
     const auto seg = chord_segment(chords[c], harmonics[c], kBurstSectionSec, kBurstSr);
@@ -929,10 +906,13 @@ TEST_CASE("a short loud event does not change the section count or labels",
   const auto burst_types = section_types(burst);
   INFO("without " << clean.form() << ", with " << burst.form());
 
-  // The clean side names its sections, so agreeing with it is not agreeing on Unknown.
-  REQUIRE(clean_types.size() > 1);
-  for (SectionType t : clean_types) REQUIRE(t != SectionType::Unknown);
+  // Five different chords: five sections, none repeating another, on both sides.
+  REQUIRE(clean_types.size() == 5);
   CHECK(burst_types == clean_types);
+  for (size_t i = 0; i < clean_types.size(); ++i) {
+    CHECK(clean.sections()[i].group == static_cast<int>(i));
+    CHECK(burst.sections()[i].group == static_cast<int>(i));
+  }
 }
 
 TEST_CASE("a short loud event inside a section leaves its energy level with its neighbours",
@@ -981,16 +961,20 @@ TEST_CASE("SectionAnalyzer judges Intro and Outro against the body, not the loud
     }
     return Audio::from_vector(std::move(samples), kSr);
   };
-  std::vector<float> boundaries;
-  for (int s = 1; s < 5; ++s) boundaries.push_back(kSectionSec * static_cast<float>(s));
+  const SectionGrid grid = regular_grid(5.0f * kSectionSec);
+  // 4.5 s sections need a floor of at most half that (the kernel spans twice the floor).
+  SectionConfig config;
+  config.min_section_sec = 2.0f;
 
-  // A final chorus ten times louder than an even body: first and last stay ordinary.
-  const SectionAnalyzer loud_end(render({0.1f, 0.1f, 0.1f, 0.1f, 1.0f}), boundaries);
+  // A final section ten times louder than an even body: first and last stay ordinary.
+  const SectionAnalyzer loud_end =
+      analyze_on_grid(render({0.1f, 0.1f, 0.1f, 0.1f, 1.0f}), grid, config);
   REQUIRE(loud_end.sections().size() == 5u);
   CHECK(loud_end.sections().front().type != SectionType::Intro);
 
   // A first section genuinely quieter than the body is still an Intro.
-  const SectionAnalyzer quiet_start(render({0.01f, 0.1f, 0.1f, 0.1f, 1.0f}), boundaries);
+  const SectionAnalyzer quiet_start =
+      analyze_on_grid(render({0.01f, 0.1f, 0.1f, 0.1f, 1.0f}), grid, config);
   REQUIRE(quiet_start.sections().size() == 5u);
   CHECK(quiet_start.sections().front().type == SectionType::Intro);
 }

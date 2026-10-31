@@ -3,7 +3,7 @@
 /// @file section_analyzer.h
 /// @brief Section analysis for detecting song structure.
 
-#include <array>
+#include <cstddef>
 #include <string>
 #include <vector>
 
@@ -24,6 +24,9 @@ struct Section {
   float end;           ///< End time in seconds
   float energy_level;  ///< Median frame RMS in the section over the loudest section's, [0, 1]
   float confidence;    ///< Classification confidence [0, 1]
+  /// Repetition group: sections sharing a value are the same material. Numbered 0, 1, 2... in
+  /// order of first appearance; a section that repeats nothing has a group of its own.
+  int group = 0;
 
   /// @brief Returns section type as string.
   std::string type_string() const;
@@ -32,17 +35,22 @@ struct Section {
   float duration() const { return end - start; }
 };
 
+/// @brief Default relative boundary threshold of section analysis. The synthetic test song
+/// resolves all ten boundaries over 0.18-0.25; inside that, 0.22 is within 0.01 of the best mean
+/// boundary hit rate (HR3F 0.500 vs 0.504 at 0.23) over 14 Harmonix tracks, nearest the centre.
+inline constexpr float kSectionBoundaryThreshold = 0.22f;
+
 /// @brief Configuration for section analysis.
 struct SectionConfig {
   int n_fft = 2048;      ///< Window length in samples at 22050 Hz, rescaled to the analysis rate
   int hop_length = 512;  ///< Hop length in samples at the analysis rate
-  /// Minimum section duration in seconds. Of the detected boundaries, the
-  /// subset with the largest total novelty strength whose sections all reach
-  /// this floor is kept, so a boundary between two sections at or above it is
+  /// Minimum section duration in seconds. It also sets the analysis scale: the novelty kernel
+  /// spans twice this on each side of a boundary, and repetition is matched over runs this long.
+  /// Of the detected boundaries, the subset with the largest total novelty strength whose
+  /// sections all reach this floor is kept, so a boundary between two sections at or above it is
   /// never removed; only a lone whole-track section may fall below it.
   float min_section_sec = 4.0f;
-  float boundary_threshold = 0.3f;  ///< Boundary detection threshold
-  int kernel_size = 64;             ///< Checkerboard kernel size
+  float boundary_threshold = kSectionBoundaryThreshold;  ///< Boundary detection threshold
   /// Recording tuning offset in fractions of a semitone (estimate_tuning() unit) applied to the
   /// section chroma; 0 is concert A440.
   float tuning = 0.0f;
@@ -59,66 +67,71 @@ inline void validate_section_config(const SectionConfig& config) {
                    "SectionConfig: min_section_sec must be finite and non-negative");
 }
 
-/// @brief Section analyzer producing a heuristic song-structure estimate.
-/// @details Combines boundary detection with energy / chroma / vocal-band
-/// analysis to split the track and classify each segment into Intro, Verse,
-/// Chorus, Bridge, Instrumental and Outro. A segment that matches none of those
-/// is reported as Unknown rather than folded into one of them, so a caller can
-/// tell an identified section from an unidentified one.
+/// @brief Beat grid the section analysis is laid on.
+struct SectionGrid {
+  std::vector<float> beat_times;      ///< Beat times in seconds, ascending
+  std::vector<int> downbeat_indices;  ///< Indices into @ref beat_times, strictly ascending
+  /// Whether boundaries may be moved onto the downbeats; false leaves them where detected.
+  bool downbeats_reliable = false;
+};
+
+/// @brief Refuses a SectionGrid that cannot describe a beat sequence.
+/// @throws SonareException(InvalidParameter) when a beat time is non-finite, negative or below
+///         its predecessor, or a downbeat index is out of range or not strictly ascending.
+inline void validate_section_grid(const SectionGrid& grid) {
+  for (size_t i = 0; i < grid.beat_times.size(); ++i) {
+    SONARE_CHECK_MSG(numeric::finite_non_negative(grid.beat_times[i]) &&
+                         (i == 0 || grid.beat_times[i] >= grid.beat_times[i - 1]),
+                     ErrorCode::InvalidParameter,
+                     "SectionGrid: beat_times must be finite, non-negative and ascending");
+  }
+  for (size_t i = 0; i < grid.downbeat_indices.size(); ++i) {
+    const int index = grid.downbeat_indices[i];
+    SONARE_CHECK_MSG(index >= 0 && static_cast<size_t>(index) < grid.beat_times.size() &&
+                         (i == 0 || index > grid.downbeat_indices[i - 1]),
+                     ErrorCode::InvalidParameter,
+                     "SectionGrid: downbeat_indices must index beat_times in ascending order");
+  }
+}
+
+/// @brief Section analyzer producing a rule-based song-structure estimate.
+/// @details Features are averaged per beat (the grid's gaps and the stretches before the first
+/// and after the last beat are filled at the median beat spacing). Boundaries come from a
+/// checkerboard novelty over those beat columns, moved onto a nearby downbeat when the meter is
+/// trusted. Sections are then compared as sequences on a diagonally smoothed self-similarity
+/// matrix: sections that match form a repetition @ref Section::group, a section split in two is
+/// rejoined when its halves line up with one whole occurrence elsewhere, and a function label is
+/// read off the groups by a fixed rule table (the most repeated loud group is the Chorus, the
+/// group covering most time the Verse, a group always leading into the Chorus a Pre-Chorus, and
+/// so on). A segment no rule claims is Unknown.
 ///
-/// @warning This is a fixed-threshold heuristic, NOT a trained structure
-/// detector. The boundary positions are generally usable, but the *labels*
-/// (Verse vs Chorus vs Bridge, etc.) are best-effort and will be wrong on many
-/// real songs, especially material that does not follow a conventional
-/// pop/verse-chorus form; a track with no detected boundaries collapses to a
-/// single whole-track Unknown. Treat @ref form / per-section @ref Section::type
-/// as hints, not ground truth. For downstream algorithms prefer the raw signals
-/// — @ref boundary_times (segment boundaries) and @ref section_self_similarity
-/// (the chroma cosine self-similarity matrix) — and apply your own thresholds.
+/// @warning This is a fixed-rule heuristic, NOT a trained structure detector. The groups are
+/// the measured part; the *labels* are an interpretation of them and will be wrong on material
+/// that does not follow a conventional pop form. For downstream algorithms prefer
+/// @ref Section::group, @ref boundary_times and @ref section_self_similarity.
 ///
-/// Two guards keep it from inventing structure. Adjacent segments whose chroma
-/// is indistinguishable are merged before anything is labelled, so a novelty
-/// peak inside one continuous stretch of music does not split it. And when
-/// nearly every pair of sections counts as a repetition of every other — which
-/// is what uniform material looks like — repetition is treated as carrying no
-/// information rather than as evidence for a verse/chorus alternation. Both
-/// make the analyzer report Unknown where it previously named a section.
+/// Material that never changes is not given structure: when no boundary clears the novelty
+/// floor, or every section falls into one group, the track is one Unknown section.
 class SectionAnalyzer {
  public:
   /// @brief Constructs section analyzer from audio.
+  /// @details Tracks the beats itself, without the chord-informed downbeat refinement
+  /// @ref MusicAnalyzer applies, so its sections need not match that analyzer's.
   /// @param audio Input audio; rates above 22.05 kHz are analyzed at 22.05 kHz
   /// so section results are stable across common source rates.
   /// @param config Section analysis configuration
   explicit SectionAnalyzer(const Audio& audio, const SectionConfig& config = SectionConfig());
 
-  /// @brief Constructs section analyzer from pre-computed boundaries.
-  /// @param audio Input audio for energy analysis
-  /// @param boundaries Pre-computed boundary times in seconds
+  /// @brief Constructs section analyzer from a beat grid and a pre-computed STFT.
+  /// @param audio Input audio; resampled like the audio constructor's.
+  /// @param grid Beats and downbeats of @p audio.
+  /// @param spec STFT of the analysis-rate @p audio; its geometry is checked against @p config
+  ///        and a mismatch throws, because a framing the features did not ask for reads section
+  ///        spans off the wrong frames rather than failing.
   /// @param config Section analysis configuration
-  SectionAnalyzer(const Audio& audio, const std::vector<float>& boundaries,
+  /// @throws SonareException (InvalidParameter) if @p spec does not match or @p grid is invalid.
+  SectionAnalyzer(const Audio& audio, const SectionGrid& grid, const Spectrogram& spec,
                   const SectionConfig& config = SectionConfig());
-
-  /// @brief Constructs section analyzer from pre-computed boundaries and STFT.
-  /// @details For a caller that already holds the analyzer's STFT — one computed
-  /// over this same audio with @ref SectionConfig's framing. Nothing caches a
-  /// spectrogram, so letting the analyzer build its own costs a second full STFT
-  /// of a signal the caller already transformed.
-  /// @param audio Input audio for energy analysis
-  /// @param boundaries Pre-computed boundary times in seconds
-  /// @param spec STFT of @p audio; its geometry is checked against @p config and
-  ///        a mismatch throws, because a framing the descriptors did not ask for
-  ///        reads section spans off the wrong frames rather than failing.
-  /// @param config Section analysis configuration
-  /// @throws SonareException (InvalidParameter) if @p spec does not match.
-  SectionAnalyzer(const Audio& audio, const std::vector<float>& boundaries, const Spectrogram& spec,
-                  const SectionConfig& config = SectionConfig());
-
-  /// @brief Constructs section analyzer from detected boundaries and STFT.
-  /// @details As the time-only overload, but each boundary's novelty strength
-  /// decides which boundary the minimum-length merge dissolves first. The
-  /// time-only overloads treat every boundary as equally strong.
-  SectionAnalyzer(const Audio& audio, const std::vector<Boundary>& boundaries,
-                  const Spectrogram& spec, const SectionConfig& config = SectionConfig());
 
   /// @brief Returns detected sections.
   const std::vector<Section>& sections() const { return sections_; }
@@ -137,84 +150,26 @@ class SectionAnalyzer {
   /// @brief Returns total duration in seconds.
   float duration() const;
 
-  /// @brief Returns section boundaries in seconds.
-  std::vector<float> boundary_times() const;
+  /// @brief Returns detected boundaries in seconds, before the minimum-length merge.
+  std::vector<float> boundary_times() const { return boundaries_; }
 
-  /// @brief Returns the raw section-level self-similarity matrix.
-  /// @details Row-major @c count() x @c count() matrix of chroma cosine
-  /// similarities in [0, 1]; entry (i, j) is the similarity between section i and
-  /// section j (the diagonal is ~1). This is the unthresholded signal that the
-  /// built-in labeller consumes — exposed so callers can apply their own
-  /// repetition thresholds / clustering instead of the fixed heuristic. Returns
-  /// an empty vector when there are no sections.
-  /// @details Reuses the descriptors the labeller already built, so reading this
-  /// alongside @ref sections() costs one analysis rather than two.
-  std::vector<float> section_self_similarity() const;
+  /// @brief Returns the section-pair repetition scores.
+  /// @details Row-major @c count() x @c count() matrix; entry (i, j) is how well the shorter of
+  /// sections i and j matches the best-aligned stretch of the longer, as the mean of the
+  /// diagonally smoothed beat self-similarity along that alignment. 1 on the diagonal, 0 for a
+  /// pair whose lengths differ more than fourfold. This is the unthresholded signal the grouping
+  /// consumes, so a caller can apply its own repetition threshold. Empty when there are no
+  /// sections.
+  std::vector<float> section_self_similarity() const { return pair_scores_; }
 
  private:
-  void analyze();
-
-  /// @brief Cuts @ref boundaries_ into sections, merges them and labels them.
-  /// @param spec The analyzer's STFT, read by both merge passes and by
-  ///        classification. Every constructor funnels through here so the three
-  ///        of them cannot drift in what they do with a segmentation.
-  void build_sections(const Spectrogram& spec);
-
-  /// @brief Stores boundary times and their strengths side by side.
-  void set_boundaries(const std::vector<Boundary>& boundaries);
-
-  /// @brief Enforces @ref SectionConfig::min_section_sec, keeping the
-  ///        strongest boundary subset whose sections all reach it.
-  /// @param strength Strength of the boundary opening each section, parallel
-  ///        to @ref sections_ and kept so.
-  void merge_short_sections(std::vector<float>& strength);
-
-  /// @brief Merges adjacent sections whose chroma content is indistinguishable.
-  /// @details A novelty peak inside one continuous stretch of music splits it
-  /// into segments that no descriptor can tell apart, which then read as
-  /// repetitions of each other and drive a full song form out of material that
-  /// never changed. Collapsing them first means the labeller sees the structure
-  /// the audio has rather than the structure the peak picker found.
-  /// @param spec The analyzer's STFT, shared with @ref build_descriptors.
-  /// @param strength Opening-boundary strength per section, kept parallel.
-  void merge_indistinct_sections(const Spectrogram& spec, std::vector<float>& strength);
-
-  /// @brief L2-normalized mean chroma of each current section.
-  /// @details The harmonic half of @ref build_descriptors, computed on its own
-  /// so the merge pass does not also pay for the flatness curve and the band
-  /// energies that classification needs and it does not.
-  std::vector<std::array<float, 12>> section_mean_chromas(const Spectrogram& spec) const;
-
-  void classify_sections(const Spectrogram& spec);
-  float compute_section_energy(float start, float end) const;
-
-  /// @brief Per-section descriptor used for self-similarity classification.
-  struct SectionDescriptor {
-    std::array<float, 12> chroma{};  ///< Mean (L2-normalized) chroma vector
-    float energy = 0.0f;             ///< Mean RMS energy [0, 1] after normalization
-    float vocal_likelihood = 0.0f;   ///< Estimated vocal presence [0, 1]
-  };
-
-  /// @brief Builds per-section chroma / energy / vocal-likelihood descriptors.
-  /// @details Derives the chromagram and the per-frame flatness curve from @p spec,
-  /// then aggregates them inside each section's time span.
-  std::vector<SectionDescriptor> build_descriptors(const Spectrogram& spec) const;
-
-  /// @brief Computes the section-level self-similarity matrix (cosine of chroma).
-  std::vector<float> self_similarity(const std::vector<SectionDescriptor>& descriptors) const;
+  void analyze(const SectionGrid& grid, const Spectrogram& spec);
 
   std::vector<Section> sections_;
-  /// @brief Descriptors of the final sections, kept from classification so the
-  /// public self-similarity accessor does not rebuild them.
-  std::vector<SectionDescriptor> descriptors_;
-  std::vector<float> energy_curve_;
+  std::vector<float> pair_scores_;
   std::vector<float> boundaries_;
-  /// @brief Novelty strength of each entry of @ref boundaries_.
-  std::vector<float> boundary_strengths_;
   Audio audio_;
   SectionConfig config_;
-  int sr_;
-  int hop_length_;
 };
 
 /// @brief Converts section type to single character for form notation.

@@ -303,6 +303,32 @@ TEST_CASE("MusicAnalyzer form", "[music_analyzer]") {
   REQUIRE(!form.empty());
 }
 
+TEST_CASE("MusicAnalyzer sections do not depend on what was called first",
+          "[.][slow][music_analyzer]") {
+  // form() first and analyze() first must lay the sections on the same chord-refined beats.
+  const Audio audio = create_offset_chord_audio(120.0f, 4, 1, 22050, 12.0f);
+
+  MusicAnalyzer form_first(audio);
+  (void)form_first.form();
+  const AnalysisResult after_form = form_first.analyze();
+
+  MusicAnalyzer analyze_first(audio);
+  const AnalysisResult after_analyze = analyze_first.analyze();
+
+  const auto& a = after_form.sections;
+  const auto& b = after_analyze.sections;
+  REQUIRE(a.size() == b.size());
+  for (size_t i = 0; i < a.size(); ++i) {
+    CHECK(a[i].type == b[i].type);
+    CHECK(a[i].start == b[i].start);
+    CHECK(a[i].end == b[i].end);
+    CHECK(a[i].group == b[i].group);
+    CHECK(a[i].confidence == b[i].confidence);
+  }
+  CHECK(form_first.section_analyzer().section_self_similarity() ==
+        analyze_first.section_analyzer().section_self_similarity());
+}
+
 TEST_CASE("MusicAnalyzer native-rate section path", "[music_analyzer]") {
   // A source above the 22050 Hz analysis rate is downsampled internally; section
   // analysis must run on that shared analysis-rate signal (same rate the

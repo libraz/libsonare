@@ -2,6 +2,7 @@
 
 #include "analysis/analysis_rate.h"
 #include "analysis/downbeat_analyzer.h"
+#include "analysis/section_structure.h"
 #include "analysis/tempo_curve.h"
 #include "core/spectrum.h"
 #include "effects/hpss.h"
@@ -278,13 +279,13 @@ SectionAnalyzer& MusicAnalyzer::section_analyzer() {
     section_config.n_fft = config_->n_fft;
     section_config.hop_length = config_->hop_length;
     section_config.tuning = tuning_;
-    // Run section descriptors on the same analysis-rate signal the boundaries
-    // were detected on (analysis_audio_ at kAnalysisSampleRate), not the native
-    // input. This keeps the whole music-analysis pipeline on one sample rate, and
-    // the cached spectrogram is that signal's, so the descriptors read the STFT
-    // this analyzer already holds instead of an identical recompute.
+    // Chords first: they re-refine the downbeats, so sections read the same beat grid however
+    // they are reached, whether analyze() or a direct call came first.
+    chord_analyzer();
+    // The cached spectrogram is the analysis-rate signal's, the one the sections are read off.
     section_analyzer_ = std::make_unique<SectionAnalyzer>(
-        analysis_audio_, boundary_detector().boundaries(), spectrogram(), section_config);
+        analysis_audio_, section_structure::make_section_grid(beat_analyzer()), spectrogram(),
+        section_config);
   });
   return *section_analyzer_;
 }

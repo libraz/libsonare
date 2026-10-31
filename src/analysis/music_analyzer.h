@@ -252,6 +252,7 @@ class MusicAnalyzer {
   std::vector<Chord> chords();
 
   /// @brief Returns song form string.
+  /// @details Pays for chord analysis, which the sections' beat grid depends on.
   std::string form();
 
   // Analyzer access (lazy initialization)
@@ -288,9 +289,13 @@ class MusicAnalyzer {
   MelodyAnalyzer& melody_analyzer();
 
   /// @brief Returns section analyzer.
+  /// @details Runs chord analysis first, so the sections sit on the chord-refined downbeats
+  ///          analyze() publishes whichever is called first.
   SectionAnalyzer& section_analyzer();
 
   /// @brief Returns boundary detector.
+  /// @details The general-purpose detector at its default configuration; section analysis
+  ///          detects its own boundaries on a beat grid and does not read this one.
   BoundaryDetector& boundary_detector();
 
   /// @brief Performs complete analysis and returns result.

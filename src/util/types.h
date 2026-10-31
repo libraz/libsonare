@@ -182,14 +182,11 @@ enum class ChordQuality {
 inline constexpr int kChordQualityCount = 25;
 
 /// @brief Song section types.
-/// @note @c PreChorus is never produced by @ref SectionAnalyzer: it has no
-///       detection branch, so filtering sections on it always yields an empty
-///       result. Every other value is reachable. @c Unknown means the segment
-///       was not named: the segmenter found no structure at all, the segment
-///       matched none of the positive branches, or the evidence for a musical
-///       function was too weak to assert one. The first case is reported with
-///       @c confidence 0; the last keeps the sub-threshold score, so a caller
-///       can see how close the segment came to a label.
+/// @note Every value is produced by @ref SectionAnalyzer. @c PreChorus is a repeating group
+///       whose every occurrence leads straight into the Chorus and is shorter than it.
+///       @c Unknown means no labelling rule matched the segment, including the whole-track
+///       segment returned when the track shows no structure; it is always reported with
+///       @c confidence 0.
 enum class SectionType {
   Intro,
   Verse,
