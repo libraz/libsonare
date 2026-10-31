@@ -21,7 +21,9 @@
 #include "analysis/chord_analyzer.h"
 #include "analysis/key_analyzer.h"
 #include "analysis/section_analyzer.h"
+#include "analysis/section_structure.h"
 #include "core/audio.h"
+#include "core/spectrum.h"
 #include "quick.h"
 
 namespace sonare {
@@ -793,6 +795,41 @@ float structure_pairwise_f(const std::vector<StructureSpan>& estimated,
              : 0.0f;
 }
 
+/// Reports the single-block feature sets on the same grid and STFT the analyzer uses, so the
+/// timbre and harmony blocks can be compared against the combined result.
+void report_structure_feature_sets(const Audio& audio, const std::vector<StructureSpan>& reference,
+                                   const std::vector<std::string>& row) {
+  const SectionConfig config;
+  const Audio analysis_audio = analysis_rate_audio(audio);
+  BeatConfig beat_config;
+  beat_config.n_fft = config.n_fft;
+  beat_config.hop_length = config.hop_length;
+  const BeatAnalyzer beats(analysis_audio, beat_config);
+  const Spectrogram spec = Spectrogram::compute(
+      analysis_audio, section_structure::section_chroma_config(config, analysis_audio.sample_rate())
+                          .to_stft_config());
+  const auto frames = section_structure::frame_features(analysis_audio, spec, config);
+  const SectionGrid grid = section_structure::make_section_grid(beats);
+  const std::pair<section_structure::FeatureSet, const char*> sets[] = {
+      {section_structure::FeatureSet::kTimbreOnly, "timbre"},
+      {section_structure::FeatureSet::kHarmonyOnly, "harmony"}};
+  for (const auto& [set, name] : sets) {
+    const auto result = section_structure::analyze_structure(frames, grid, config, set);
+    std::vector<StructureSpan> estimated;
+    for (const Section& section : result.sections) {
+      estimated.push_back({section.start, section.end, section.group});
+    }
+    const auto estimated_boundaries = interior_boundaries(estimated);
+    const auto reference_boundaries = interior_boundaries(reference);
+    WARN("Report-only structure fixture "
+         << row[0] << "/" << row[1] << " features " << name << " HR.5F "
+         << boundary_hit_rate_f(estimated_boundaries, reference_boundaries, 0.5f) << "; HR3F "
+         << boundary_hit_rate_f(estimated_boundaries, reference_boundaries, 3.0f) << "; pairwise_f "
+         << structure_pairwise_f(estimated, reference) << "; min_hr3f " << row[3]
+         << "; min_pairwise_f " << row[4]);
+  }
+}
+
 }  // namespace
 
 TEST_CASE("Music optional BPM fixtures", "[music_dataset][bpm]") {
@@ -1147,6 +1184,7 @@ TEST_CASE("Music optional structure fixtures", "[music_dataset][structure]") {
            << row[0] << "/" << row[1] << " features both HR.5F " << hr05f << "; HR3F " << hr3f
            << "; pairwise_f " << pairwise_f << "; min_hr3f " << row[3] << "; min_pairwise_f "
            << row[4]);
+      report_structure_feature_sets(audio, reference, row);
     } else {
       REQUIRE(hr3f >= std::stof(row[3]));
       REQUIRE(pairwise_f >= std::stof(row[4]));
