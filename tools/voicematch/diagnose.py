@@ -49,6 +49,7 @@ from dataclasses import dataclass, field
 
 from fit_quality import aggregate_term_residuals
 from loss import LOSS_TERMS, TERM_UNITS, measured_terms, unmeasurable_terms
+from toneclass import default_weights
 
 # The numerical target uses the same declared scoring units as the quality
 # report. These units are a fixed ruler, not a calibrated listening threshold.
@@ -168,6 +169,20 @@ TERM_MEANS = {
     "evolve": "how band power moves from the stick contact through body and late hit",
     "diffuse": "whether each short hit window is a sparse set of lines or a diffuse field",
 }
+
+
+def inapplicable_terms(
+    program: int, *, drum_note: int | None = None, percussive: bool = False
+) -> frozenset[str]:
+    """Shared terms this voice's class does not carry.
+
+    `modes` pairs the strongest measured peaks, which on a harmonic voice are
+    just the first twelve harmonics on both sides: no knob moves the count of
+    absent cells and `harm` already prices the partials. A class carries it
+    exactly when its default weights do.
+    """
+    carried = default_weights(program, drum_note=drum_note, percussive=percussive)
+    return frozenset({"modes"} - carried.keys())
 
 
 def scorable(terms: dict[str, float] | None) -> bool:
@@ -652,6 +667,7 @@ def diagnose(
     objective=None,
     context_probes: Iterable = (),
     sampling: dict[str, object] | None = None,
+    not_applicable: Iterable[str] = (),
 ) -> Diagnosis:
     """Reduce a base render and its 2n probe renders to a verdict per term.
 
@@ -667,8 +683,11 @@ def diagnose(
     diagnosis use the same coverage, cap and worst-note evidence as the quality
     report. ``context_probes`` contains bounded all-low/all-high samples and
     can turn a one-at-a-time null into the explicit ``interaction`` verdict.
+    ``not_applicable`` names terms the voice's class does not carry; they are
+    left out unless a positive weight was given for them.
     """
     absent = dict(unmeasurable)
+    skipped = set(not_applicable)
     out = Diagnosis(axes=axes, sampling=dict(sampling or {}))
     strict = objective is not None
     context_probes = list(context_probes)
@@ -686,6 +705,8 @@ def diagnose(
         if term not in group:
             continue
         weight = float(weights.get(term, 0.0))
+        if term in skipped and weight <= 0.0:
+            continue
         residual = float(base_terms.get(term, 0.0))
         if not math.isfinite(residual):
             continue
@@ -1169,6 +1190,11 @@ def run_diagnosis(evaluator, knobs, args, catalogue=None, *, out_path: str = "")
         "percussive": bool(getattr(args, "percussive", False)),
         "axes": probe_axes(getattr(evaluator, "oracle", []), getattr(args, "pattern", "")),
         "unmeasurable": unmeasurable_terms(args),
+        "not_applicable": inapplicable_terms(
+            getattr(args, "program", 0),
+            drum_note=getattr(args, "drum_note", None),
+            percussive=bool(getattr(args, "percussive", False)),
+        ),
         "objective": objective,
     }
     initial_diag = diagnose(

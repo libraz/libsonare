@@ -25,6 +25,7 @@ from diagnose import (
     TERM_UNIT_NAMES,
     Diagnosis,
     diagnose,
+    inapplicable_terms,
     print_report,
     probe_axes,
     run_diagnosis,
@@ -231,6 +232,30 @@ def test_a_percussion_probe_does_not_report_the_harmonic_terms():
     reported = {t.term for t in diag.terms}
     assert "harm" not in reported and "cents" not in reported
     assert reported == set(measured_terms(percussive=True))
+
+
+def test_modes_is_carried_by_the_modal_classes_and_not_by_the_harmonic_ones():
+    """On a harmonic voice both sides saturate the peak list, so `modes` counts nothing real."""
+    assert "modes" in inapplicable_terms(52)  # choir aahs, sustained
+    assert "modes" in inapplicable_terms(0)  # piano, struck string
+    assert "modes" in inapplicable_terms(24)  # guitar, plucked string
+    assert "modes" not in inapplicable_terms(11)  # vibraphone, modal
+    assert "modes" not in inapplicable_terms(0, drum_note=38, percussive=True)
+
+
+def test_a_harmonic_probe_does_not_report_modes_unless_it_was_weighted():
+    skipped = inapplicable_terms(52)
+    for weights, expected in (({"harm": 1.0}, False), ({"harm": 1.0, "modes": 1.0}, True)):
+        diag = diagnose(
+            terms(modes=6.0),
+            probes(
+                ("a.x", "lo", terms(modes=6.0), "clamp"),
+                ("a.x", "hi", terms(modes=6.0), "clamp"),
+            ),
+            weights,
+            not_applicable=skipped,
+        )
+        assert ("modes" in {t.term for t in diag.terms}) is expected
 
 
 def test_a_term_the_probe_produced_no_cell_for_is_absent_rather_than_matched():

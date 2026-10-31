@@ -78,7 +78,7 @@ Diagnosis separates connectivity from improvement: connectivity is the largest v
 | `matched` | aggregate and reported worst note satisfy the declared numerical unit with known coverage |
 | `not computed` | this probe or retained audio cannot compute the term |
 
-`--diagnose` is exempt from the rigged-oracle fit refusal because it reports what the current model and reference contain. Existing unweighted terms can be reported as `unscored`; an unimplemented measurement axis is invisible to diagnosis. Check measurement coverage and weights before attributing a remaining deficiency to a model mechanism.
+`--diagnose` is exempt from the rigged-oracle fit refusal because it reports what the current model and reference contain. Existing unweighted terms can be reported as `unscored`, except `modes` on a class whose default weights do not carry it (every harmonic class): both sides saturate the peak list there, so it is left out of the report unless `--w-modes` names it; an unimplemented measurement axis is invisible to diagnosis. Check measurement coverage and weights before attributing a remaining deficiency to a model mechanism.
 
 ## Write-back
 
