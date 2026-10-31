@@ -528,6 +528,7 @@ def _parse_analysis_json(data: dict[str, Any]) -> AnalysisResult:
                 energy_level=float(s.get("energyLevel", 0.0)),
                 confidence=float(s.get("confidence", 0.0)),
                 canonical_name=str(s.get("name", "")),
+                group=int(s["group"]),
             )
         )
 

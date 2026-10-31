@@ -310,6 +310,7 @@ def cmd_sections(args: argparse.Namespace) -> int:
                             "end": section.end,
                             "energy": section.energy_level,
                             "confidence": section.confidence,
+                            "group": section.group,
                         }
                         for section in sections
                     ],
@@ -365,6 +366,7 @@ def cmd_analyze(args: argparse.Namespace) -> int:
                 "type": section.type.name.casefold().replace("_", "-"),
                 "start": section.start,
                 "end": section.end,
+                "group": section.group,
             }
             for section in r.sections
         ]

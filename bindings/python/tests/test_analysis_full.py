@@ -214,12 +214,14 @@ def test_analysis_json_uses_canonical_display_names() -> None:
                     "energyLevel": 0.5,
                     "confidence": 1,
                     "name": "canonical-section",
+                    "group": 3,
                 }
             ],
         }
     )
     assert result.chords[0].name == "canonical-chord"
     assert result.sections[0].name == "canonical-section"
+    assert result.sections[0].group == 3
 
 
 @requires_json
@@ -390,7 +392,7 @@ def test_parse_analysis_json_rejects_an_unmirrored_section_type() -> None:
     with pytest.raises(SonareValueError, match="missing its type"):
         parse({"start": 0.0, "end": 1.0})
 
-    result = parse({"type": int(SectionType.CHORUS), "start": 0.0, "end": 1.0})
+    result = parse({"type": int(SectionType.CHORUS), "start": 0.0, "end": 1.0, "group": 0})
     assert result.sections[0].type is SectionType.CHORUS  # type: ignore[attr-defined]
 
 

@@ -587,7 +587,10 @@ class Section:
     """A detected song-structure section.
 
     ``energy_level`` is the median frame RMS in the section over the loudest
-    section's, in [0, 1].
+    section's, in [0, 1]. ``group`` numbers the section's material: sections
+    sharing a value repeat the same material, numbered 0, 1, ... by first
+    appearance. ``SectionType.UNKNOWN`` means no labelling rule matched and
+    comes with ``confidence`` 0.
     """
 
     type: SectionType
@@ -596,6 +599,7 @@ class Section:
     energy_level: float
     confidence: float
     canonical_name: str = ""
+    group: int = 0
 
     @property
     def name(self) -> str:

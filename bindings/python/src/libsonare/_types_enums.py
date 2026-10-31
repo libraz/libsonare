@@ -149,11 +149,8 @@ class SidechainSourceKind(IntEnum):
 class SectionType(IntEnum):
     """Song-structure section type (mirrors sonare::SectionType ordinals).
 
-    ``PRE_CHORUS`` is never produced by the analyzer: it has no detection
-    branch, so filtering sections on it always yields an empty result. Every
-    other value is reachable. ``UNKNOWN`` means the analyzer did not identify
-    the segment -- no boundary was detected, or the segment matched none of the
-    positive branches -- and comes with ``confidence`` 0.
+    ``UNKNOWN`` means no labelling rule matched the section and comes with
+    ``confidence`` 0.
     """
 
     INTRO = 0

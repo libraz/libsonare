@@ -395,6 +395,7 @@ def analyze_sections(
                     end=float(out.sections[i].end),
                     energy_level=float(out.sections[i].energy_level),
                     confidence=float(out.sections[i].confidence),
+                    group=int(out.sections[i].group),
                 )
                 for i in range(out.section_count)
             ]

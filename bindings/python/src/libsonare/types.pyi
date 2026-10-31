@@ -348,12 +348,8 @@ class SidechainSourceKind(IntEnum):
     BUS = 1
 
 class SectionType(IntEnum):
-    """``PRE_CHORUS`` is never produced by the analyzer; every other value is
-    reachable. ``UNKNOWN`` marks a segment the analyzer did not name: no
-    boundary was detected, the segment matched none of the positive branches,
-    or the evidence for a musical function was too weak to assert one. The
-    first case carries ``confidence`` 0; the last keeps the sub-threshold
-    score, so a caller can see how close the segment came to a label."""
+    """``UNKNOWN`` marks a section no labelling rule matched; it carries
+    ``confidence`` 0."""
 
     INTRO = 0
     VERSE = 1
@@ -2692,6 +2688,7 @@ class Section:
     energy_level: float  # median frame RMS in the section over the loudest section's, [0, 1]
     confidence: float
     canonical_name: str
+    group: int  # sections sharing a value repeat the same material; 0, 1, ... by first appearance
     def __init__(
         self,
         type: SectionType,
@@ -2700,6 +2697,7 @@ class Section:
         energy_level: float,
         confidence: float,
         canonical_name: str = "",
+        group: int = 0,
     ) -> None: ...
     @property
     def name(self) -> str: ...

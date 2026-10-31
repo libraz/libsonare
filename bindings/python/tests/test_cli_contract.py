@@ -955,7 +955,7 @@ def test_analyze_json_section_type_is_lowercase_kebab(monkeypatch, capsys) -> No
     import libsonare
     from libsonare import SectionType, _cli_analysis, cli
 
-    section = SimpleNamespace(type=SectionType.PRE_CHORUS, start=0.0, end=1.0)
+    section = SimpleNamespace(type=SectionType.PRE_CHORUS, start=0.0, end=1.0, group=2)
     monkeypatch.setattr(
         libsonare, "analyze", lambda samples, **kwargs: _minimal_analysis_result(sections=[section])
     )
@@ -964,7 +964,7 @@ def test_analyze_json_section_type_is_lowercase_kebab(monkeypatch, capsys) -> No
     args = cli._build_parser().parse_args(["analyze", "--json", "input.wav"])
     assert cli.cmd_analyze(args) == 0
     payload = json.loads(capsys.readouterr().out)
-    assert payload["sections"] == [{"type": "pre-chorus", "start": 0.0, "end": 1.0}]
+    assert payload["sections"] == [{"type": "pre-chorus", "start": 0.0, "end": 1.0, "group": 2}]
 
 
 def test_spectral_json_has_closed_unrounded_feature_stats(monkeypatch, capsys) -> None:

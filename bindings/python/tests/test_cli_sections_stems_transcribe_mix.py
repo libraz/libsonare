@@ -133,16 +133,19 @@ def melody_wav() -> str:
         yield path
 
 
-def test_sections_reports_the_boundaries_it_found(melody_wav: str) -> None:
+def test_sections_reports_the_boundaries_it_found() -> None:
     """Sections come back in time order, covering the take without gaps."""
-    result = _run_cli(["sections", melody_wav, "--min-duration", "0.3", "--json"])
+    # Two 4 s tones of different pitch class: two materials, each longer than both the
+    # minimum and the analysis grid, so a single section would be a missed boundary.
+    with tempfile.TemporaryDirectory() as tmpdir:
+        path = os.path.join(tmpdir, "two_tones.wav")
+        _write_wav(path, _tone(220.0, duration=4.0) + _tone(311.127, duration=4.0))
+        result = _run_cli(["sections", path, "--min-duration", "1.0", "--json"])
     assert result.returncode == 0, result.stderr
     payload = json.loads(result.stdout)
 
     sections = payload["sections"]
     assert payload["count"] == len(sections)
-    # Two, because the boundary detector is given a minimum below the take's own
-    # length: a single section would also satisfy every invariant below.
     assert len(sections) >= 2
     assert sections[0]["start"] == 0.0
     for section in sections:
