@@ -158,6 +158,7 @@ add_executable(sonare_tests
   rt/rt_publisher_test.cpp
   rt/seqlock_cell_test.cpp
   rt/overflow_counter_test.cpp
+  rt/open_end_radiation_test.cpp
   automation/automation_test.cpp
   engine/boundary_splitter_test.cpp
   engine/capture_test.cpp
@@ -753,6 +754,8 @@ if(BUILD_ARRANGEMENT)
     midi/sample_voice_test.cpp
     midi/layered_instrument_test.cpp
     midi/string_loop_test.cpp
+    midi/acoustic_tube_test.cpp
+    midi/valve_coupling_test.cpp
     midi/loop_loss_law_test.cpp
     midi/wind_rate_law_test.cpp
     midi/modal_voice_test.cpp
