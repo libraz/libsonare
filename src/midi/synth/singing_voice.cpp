@@ -177,7 +177,8 @@ float SingingPhonation::process(float force, float abduction, float tension, flo
       junction_.solve(lung, tract_.source_incoming(), 0.0f, fold_.law());
   fold_.process(lung, lung - j.drop);
   const float unit_flow = j.flow / pitch_ratio_;
-  const float injected = j.injection + noise * junction_.flow_gain() * j.flow * std::fabs(unit_flow);
+  const float injected =
+      j.injection + noise * junction_.flow_gain() * j.flow * std::fabs(unit_flow);
   const rt::OpenEndRadiation::Output out = lips_.process(tract_.process(injected, lips_reflected_));
   lips_reflected_ = out.reflected;
   return out.radiated / s;

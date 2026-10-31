@@ -315,8 +315,7 @@ TEST_CASE("uncompensated singing F0 rises with the breath", "[midi][synth][singi
   REQUIRE(end - start > 100.0);
 }
 
-TEST_CASE("singing vowel sweeps move the tract resonances continuously",
-          "[midi][synth][singing]") {
+TEST_CASE("singing vowel sweeps move the tract resonances continuously", "[midi][synth][singing]") {
   // Each sweep has to move a resonance a long way in total, or steps too small
   // to see would pass for continuity; and no single step may jump.
   const auto sweep = [](auto shape) {
