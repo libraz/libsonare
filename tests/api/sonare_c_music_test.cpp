@@ -1,8 +1,14 @@
 /// @file sonare_c_music_test.cpp
 /// @brief Music and acoustic C API tests.
 
+#include <cmath>
+#include <cstring>
 #include <limits>
+#include <set>
+#include <vector>
 
+#include "analysis/section_analyzer.h"
+#include "core/audio.h"
 #include "sonare_c_test_helpers.h"
 
 TEST_CASE("sonare_analyze_impulse_response", "[c_api][acoustic]") {
@@ -673,6 +679,46 @@ TEST_CASE("sonare_analyze_sections rejects a non-finite min_section_sec", "[c_ap
     REQUIRE(result.sections[0].end > result.sections[0].start);
     sonare_free_section_result(&result);
   }
+}
+
+TEST_CASE("sonare_analyze_sections reports each section's material group", "[c_api][sections]") {
+  // A B A B with distinct pitch classes and partial counts, so the core finds two groups.
+  constexpr int kRate = 22050;
+  constexpr float kSpanSec = 8.0f;
+  const float freqs[] = {220.0f, 311.13f, 220.0f, 311.13f};
+  const int partials[] = {1, 6, 1, 6};
+  std::vector<float> samples;
+  for (int span = 0; span < 4; ++span) {
+    const int n = static_cast<int>(kSpanSec * kRate);
+    for (int i = 0; i < n; ++i) {
+      const float t = static_cast<float>(i) / kRate;
+      float v = 0.0f;
+      for (int h = 1; h <= partials[span]; ++h) {
+        v += std::sin(2.0f * static_cast<float>(M_PI) * freqs[span] * h * t) / h;
+      }
+      samples.push_back(0.2f * v);
+    }
+  }
+
+  sonare::SectionConfig config;
+  config.min_section_sec = 4.0f;
+  const sonare::SectionAnalyzer analyzer(
+      sonare::Audio::from_vector(std::vector<float>(samples), kRate), config);
+  const auto& expected = analyzer.sections();
+  std::set<int> distinct;
+  for (const auto& section : expected) distinct.insert(section.group);
+  REQUIRE(distinct.size() >= 2);
+
+  SonareSectionResult result;
+  std::memset(&result, 0xAA, sizeof(result));
+  REQUIRE(sonare_analyze_sections(samples.data(), samples.size(), kRate, config.n_fft,
+                                  config.hop_length, config.min_section_sec, &result) == SONARE_OK);
+  REQUIRE(result.section_count == expected.size());
+  for (size_t i = 0; i < result.section_count; ++i) {
+    CHECK(result.sections[i].group == expected[i].group);
+    CHECK(result.sections[i].type == static_cast<SonareSectionType>(expected[i].type));
+  }
+  sonare_free_section_result(&result);
 }
 
 TEST_CASE("sonare_detect_boundaries reference_window", "[c_api][boundaries]") {

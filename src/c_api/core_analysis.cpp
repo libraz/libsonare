@@ -540,6 +540,7 @@ SonareError sonare_analyze_sections(const float* samples, size_t length, int sam
         data[i].end = sections[i].end;
         data[i].energy_level = sections[i].energy_level;
         data[i].confidence = sections[i].confidence;
+        data[i].group = static_cast<int32_t>(sections[i].group);
       }
       out->sections = release_array(data);
       out->section_count = sections.size();

@@ -205,6 +205,7 @@ class SonareSection(CStruct):
         ("end", ctypes.c_float),
         ("energy_level", ctypes.c_float),
         ("confidence", ctypes.c_float),
+        ("group", ctypes.c_int32),
     ]
 
 

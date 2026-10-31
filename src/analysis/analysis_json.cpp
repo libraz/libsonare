@@ -81,6 +81,7 @@ const std::vector<std::string>& analysis_result_schema_paths() {
       "sections[].end",
       "sections[].energyLevel",
       "sections[].confidence",
+      "sections[].group",
       "sections[].name",
       "timbre",
       "timbre.brightness",
@@ -237,6 +238,7 @@ std::string analysis_result_to_json(const AnalysisResult& result) {
       s["end"] = Value(section.end);
       s["energyLevel"] = Value(section.energy_level);
       s["confidence"] = Value(section.confidence);
+      s["group"] = Value(section.group);
       s["name"] = Value(section.type_string());
       sections.push_back(Value(std::move(s)));
     }

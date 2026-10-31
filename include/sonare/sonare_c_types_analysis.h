@@ -283,15 +283,11 @@ typedef struct {
   size_t count;
 } SonareStringArray;
 
-/* Song-structure section types (mirrors sonare::SectionType ordinals).
- * SONARE_SECTION_PRE_CHORUS is never produced by sonare_analyze_sections: it
- * has no detection branch, so filtering sections on it always yields an empty
- * result. Every other value is reachable. SONARE_SECTION_UNKNOWN means the
- * analyzer did not name the segment: no boundary was detected at all, the
- * segment matched none of the positive branches, or the evidence for a musical
- * function was too weak to assert one. The first case is reported with
- * confidence 0; the last keeps the sub-threshold score, so a caller can see how
- * close the segment came to a label. */
+/* Song-structure section types (mirrors sonare::SectionType ordinals). Every
+ * value is reachable. SONARE_SECTION_PRE_CHORUS is a repeated group that always
+ * leads into the Chorus and is shorter than it. SONARE_SECTION_UNKNOWN means
+ * the segment matched no labelling rule, including a track with no structure at
+ * all; it is always reported with confidence 0. */
 typedef enum SONARE_ENUM_BASE {
   SONARE_SECTION_INTRO = 0,
   SONARE_SECTION_VERSE = 1,
@@ -308,7 +304,9 @@ typedef struct {
   float start;        /* seconds */
   float end;          /* seconds */
   float energy_level; /* median frame RMS in the section over the loudest section's, [0, 1] */
-  float confidence;   /* [0, 1] */
+  float confidence;   /* [0, 1]; 0 exactly when type is SONARE_SECTION_UNKNOWN */
+  int32_t group;      /* material group: sections sharing a value repeat the same material,
+                         numbered 0, 1, ... by first appearance */
 } SonareSection;
 
 typedef struct {

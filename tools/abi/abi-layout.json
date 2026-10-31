@@ -8707,9 +8707,15 @@
         "name": "confidence",
         "offset": 16,
         "size": 4
+      },
+      {
+        "kind": "signed",
+        "name": "group",
+        "offset": 20,
+        "size": 4
       }
     ],
-    "size": 20
+    "size": 24
   },
   "SonareSectionResult": {
     "align": 8,

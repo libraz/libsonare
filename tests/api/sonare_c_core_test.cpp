@@ -177,7 +177,7 @@ sonare::AnalysisResult make_analysis_schema_fixture() {
   result.beat_local_bpm = {118.5f, 121.5f};
   result.chords.push_back({sonare::PitchClass::C, sonare::ChordQuality::Major, 0.0f, 1.0f, 0.8f,
                            sonare::PitchClass::C});
-  result.sections.push_back({sonare::SectionType::Verse, 0.0f, 1.0f, 0.5f, 0.9f});
+  result.sections.push_back({sonare::SectionType::Verse, 0.0f, 1.0f, 0.5f, 0.9f, 2});
   result.timbre = {0.1f, 0.2f, 0.3f, 0.4f, 0.5f};
   result.dynamics = {12.0f, -1.0f, -14.0f, 13.0f, 3.0f, false};
   result.rhythm.time_signature = {4, 4, 0.75f};
@@ -1356,6 +1356,8 @@ TEST_CASE("sonare_analyze_json", "[.][slow][c_api]") {
     const auto& expected_paths = sonare::analysis_result_schema_paths();
     const std::set<std::string> expected(expected_paths.begin(), expected_paths.end());
     REQUIRE(actual == expected);
+    REQUIRE(root["sections"][static_cast<std::size_t>(0)]["group"].as_number() ==
+            static_cast<double>(fixture.sections.front().group));
 
     // Downbeats serialize as indices into the beat array plus the meter phase,
     // so a reader can resolve them without a second time series.
