@@ -677,6 +677,8 @@ bool is_dedicated_model_engine(SynthEngineMode mode) noexcept {
     case SynthEngineMode::kPluckedString:
     case SynthEngineMode::kFreeReed:
     case SynthEngineMode::kHarpsichord:
+    // Never assigned to a program; classified for the switch, as the model it is.
+    case SynthEngineMode::kSinging:
       return true;
     case SynthEngineMode::kSubtractive:
     case SynthEngineMode::kFm:

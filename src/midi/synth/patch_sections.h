@@ -2,11 +2,11 @@
 
 /// @file patch_sections.h
 /// @brief Blanks the engine sections a patch does not voice.
-/// @details A `NativeSynthPatch` carries all seventeen engines' parameters side
-/// by side and voices exactly one, chosen by `mode`. The other sixteen sit at
+/// @details A `NativeSynthPatch` carries all eighteen engines' parameters side
+/// by side and voices exactly one, chosen by `mode`. The other seventeen sit at
 /// defaults that are mostly non-zero, and `clamp_synth_patch` raises several of
 /// them to a non-zero lower bound, so every one of the bank's ~290
-/// constant-initialised patches writes sixteen unread sections into the
+/// constant-initialised patches writes seventeen unread sections into the
 /// WebAssembly data section. Blanking them where the table is stored deletes
 /// that: each section is read only under its own `mode`, so no rendered sample
 /// moves.
@@ -504,6 +504,28 @@ constexpr SamplePatchParams blank_sample() noexcept {
   return z;
 }
 
+constexpr SingingPatchParams blank_singing() noexcept {
+  SingingPatchParams z{};
+  z.tract_length = 0.0f;
+  z.fold_mass = 0.0f;
+  z.rounding = 0.0f;
+  z.position = 0.0f;
+  z.brightness = 0.0f;
+  z.morph = 0.0f;
+  z.breath_noise = 0.0f;
+  z.vibrato_rate_hz = 0.0f;
+  z.vibrato_depth = 0.0f;
+  z.pitch_compensation = 0.0f;
+  z.attack_ms = 0.0f;
+  z.release_ms = 0.0f;
+  z.tap_depth = 0.0f;
+  z.tap_ms = 0.0f;
+  z.tap_position = 0.0f;
+  z.velocity_to_force = 0.0f;
+  z.breath_onset_ms = 0.0f;
+  return z;
+}
+
 /// Returns @p patch with every engine section other than the one `mode` selects
 /// replaced by zeroes.
 constexpr NativeSynthPatch strip_unvoiced_sections(const NativeSynthPatch& patch) noexcept {
@@ -525,6 +547,7 @@ constexpr NativeSynthPatch strip_unvoiced_sections(const NativeSynthPatch& patch
   if (p.mode != SynthEngineMode::kFreeReed) p.free_reed = blank_free_reed();
   if (p.mode != SynthEngineMode::kHarpsichord) p.harpsichord = blank_harpsichord();
   if (p.mode != SynthEngineMode::kSample) p.sample = blank_sample();
+  if (p.mode != SynthEngineMode::kSinging) p.singing = blank_singing();
   return p;
 }
 

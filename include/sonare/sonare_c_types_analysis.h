@@ -563,15 +563,17 @@ typedef struct {
                       engine at an offset in its own normalized [0,1] axis
                       units (the same scale the live-control CCs drive), summed
                       and clamped to [-1,1]. 9-11 are the physical model's
-                      exciter — bow force / contact point, breath pressure,
-                      bore brightness — and reach differs per axis: 9 (force)
+                      exciter — its drive (bow force, breath pressure), its
+                      spatial excitation coordinate (a bow's contact point)
+                      and its brightness — and reach differs per axis: 9 (force)
                       reaches pipe organ, bowed string, reed, brass, flute, free
                       reed; 10 (position) reaches bowed string only; 11
                       (brightness) reaches pipe organ, reed, brass, flute, free
                       reed, vocal. An engine outside an axis's list ignores it
                       — its exciter is finished before the second sample
-                      renders, or it has none. 12 travels between the two
-                      spectral tables an additive patch carries; a patch needs
+                      renders, or it has none. 12 travels the engine's timbral
+                      continuum — between the two spectral tables an additive
+                      patch carries; a patch needs
                       an explicit drawbars_b distinct from drawbars to have a
                       second table to travel to, and no catalog preset ships
                       one, so 12 is currently unreachable from a preset name

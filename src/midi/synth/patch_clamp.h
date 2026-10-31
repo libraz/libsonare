@@ -797,6 +797,39 @@ constexpr NativeSynthPatch clamp_synth_patch(const NativeSynthPatch& patch) noex
   }
   p.sample.start_offset01 =
       std::clamp(patch_clamp_detail::sanitize(p.sample.start_offset01, 0.0f), 0.0f, 0.999f);
+  p.singing.tract_length =
+      std::clamp(patch_clamp_detail::sanitize(p.singing.tract_length, 1.0f), 0.5f, 2.0f);
+  p.singing.fold_mass =
+      std::clamp(patch_clamp_detail::sanitize(p.singing.fold_mass, 1.0f), 0.25f, 4.0f);
+  p.singing.rounding =
+      std::clamp(patch_clamp_detail::sanitize(p.singing.rounding, 0.0f), 0.0f, 1.0f);
+  p.singing.position =
+      std::clamp(patch_clamp_detail::sanitize(p.singing.position, 0.3f), 0.0f, 1.0f);
+  p.singing.brightness =
+      std::clamp(patch_clamp_detail::sanitize(p.singing.brightness, 0.97f), 0.0f, 1.0f);
+  p.singing.morph = std::clamp(patch_clamp_detail::sanitize(p.singing.morph, 0.6f), 0.0f, 1.0f);
+  p.singing.breath_noise =
+      std::clamp(patch_clamp_detail::sanitize(p.singing.breath_noise, 0.1f), 0.0f, 1.0f);
+  p.singing.vibrato_rate_hz =
+      std::clamp(patch_clamp_detail::sanitize(p.singing.vibrato_rate_hz, 5.5f), 0.1f, 12.0f);
+  p.singing.vibrato_depth =
+      std::clamp(patch_clamp_detail::sanitize(p.singing.vibrato_depth, 0.3f), 0.0f, 1.0f);
+  p.singing.pitch_compensation =
+      std::clamp(patch_clamp_detail::sanitize(p.singing.pitch_compensation, 1.0f), 0.0f, 1.0f);
+  p.singing.attack_ms =
+      std::clamp(patch_clamp_detail::sanitize(p.singing.attack_ms, 30.0f), 1.0f, 2000.0f);
+  p.singing.release_ms =
+      std::clamp(patch_clamp_detail::sanitize(p.singing.release_ms, 120.0f), 1.0f, 5000.0f);
+  p.singing.tap_depth =
+      std::clamp(patch_clamp_detail::sanitize(p.singing.tap_depth, 0.7f), 0.0f, 1.0f);
+  p.singing.tap_ms =
+      std::clamp(patch_clamp_detail::sanitize(p.singing.tap_ms, 25.0f), 1.0f, 100.0f);
+  p.singing.tap_position =
+      std::clamp(patch_clamp_detail::sanitize(p.singing.tap_position, 0.85f), 0.0f, 1.0f);
+  p.singing.velocity_to_force =
+      std::clamp(patch_clamp_detail::sanitize(p.singing.velocity_to_force, 0.6f), 0.0f, 1.0f);
+  p.singing.breath_onset_ms =
+      std::clamp(patch_clamp_detail::sanitize(p.singing.breath_onset_ms, 45.0f), 1.0f, 2000.0f);
   // Bound by the enum's last member, not a literal: the literal was 4 and
   // outlived kVocal being added at 5, so every vocal body was reset to none.
   if (static_cast<int>(p.body) < 0 ||

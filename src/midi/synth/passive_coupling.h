@@ -80,6 +80,14 @@ class PassiveCoupling {
     flow_gain_ = zeta_ * root_scale_;
   }
 
+  /// Moves the pressure scale, keeping zeta and the warm start: for a valve
+  /// whose stiffness follows the pitch, such as a fold carried through a slur.
+  void set_pressure_scale(float pressure_scale) noexcept {
+    pressure_scale_ = std::max(pressure_scale, std::numeric_limits<float>::min());
+    root_scale_ = std::sqrt(pressure_scale_);
+    flow_gain_ = zeta_ * root_scale_;
+  }
+
   float zeta() const noexcept { return zeta_; }
   /// The flow-to-pressure gain in physical units, `zeta * sqrt(pressure_scale)`.
   float flow_gain() const noexcept { return flow_gain_; }

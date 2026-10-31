@@ -47,12 +47,16 @@ class AcousticTube {
   /// case is a supported operating point, not a degenerate input.
   static constexpr float kMinArea = 1.0e-3f;
 
-  /// @param damping Wall loss in nepers per metre of travel; 0 = lossless. The
-  ///                per-section factor is built here from the section length, so
-  ///                a tube decays the same in seconds at every rate.
+  /// @param damping Wall loss in nepers per metre of travel at unit area; 0 =
+  ///                lossless. A section of area A loses damping / sqrt(A): the
+  ///                boundary layer's share grows as the radius falls, which is
+  ///                what damps the ringing of a near-closed constriction. The
+  ///                per-section factor is built from the section length, so a
+  ///                tube decays the same in seconds at every rate.
   void configure(double sample_rate, float damping) noexcept {
     section_m_ = ::sonare::constants::kSoundSpeedMps / static_cast<float>(2.0 * sample_rate);
-    section_loss_ = std::exp(-std::max(damping, 0.0f) * 2.0f * section_m_);
+    log_loss_ = -std::max(damping, 0.0f) * 2.0f * section_m_;
+    section_loss_ = std::exp(log_loss_);
     std::fill(profile_, profile_ + kSections, 1.0f);
     constriction_position_ = 0.0f;
     constriction_degree_ = 0.0f;
@@ -129,14 +133,14 @@ class AcousticTube {
       arriving += forward * end_mask_[i];
       const float gated = forward * gate_[i];
       const float backward = back_[i + 1];
-      back_[i] = section_loss_ * (k_[i] * gated + c_[i] * backward);
+      back_[i] = loss_[i] * (k_[i] * gated + c_[i] * backward);
       forward = c_[i] * gated - k_[i] * backward;
     }
     arriving += forward * end_mask_[kSections - 1];
     const int last = active_ - 1;
     const float entering = ::sonare::rt::lagrange3_fractional_delay(
         mouth_, kMouthTaps, mouth_write_, mouth_delay_q8_, mouth_reflection * root_area_[last]);
-    back_[last] = section_loss_ * entering;
+    back_[last] = loss_[last] * entering;
     return arriving / root_area_[last];
   }
 
@@ -204,6 +208,7 @@ class AcousticTube {
       }
       area_[i] = std::max(area, kMinArea);
       root_area_[i] = std::sqrt(area_[i]);
+      loss_[i] = std::exp(log_loss_ / root_area_[i]);
     }
     for (int i = 0; i < kSections; ++i) {
       const bool interior = i < active_ - 1;
@@ -218,6 +223,8 @@ class AcousticTube {
 
   float section_m_ = 1.0f;
   float section_loss_ = 1.0f;
+  float log_loss_ = 0.0f;
+  float loss_[kSections] = {};
   float length_m_ = 0.0f;
   int active_ = kSections;
   int mouth_delay_q8_ = 256;

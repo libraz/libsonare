@@ -72,6 +72,8 @@ constexpr EngineLegato engine_legato(SynthEngineMode mode) noexcept {
     case SynthEngineMode::kFm:
     case SynthEngineMode::kVocal:
     case SynthEngineMode::kFreeReed:
+    // A tract is a fixed member array and the fold follows the pitch factor.
+    case SynthEngineMode::kSinging:
       return {true, 0.0f};
     case SynthEngineMode::kPipeOrgan:
       return {true, kPipeMinFundamentalHz};

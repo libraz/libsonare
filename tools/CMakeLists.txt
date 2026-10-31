@@ -112,6 +112,19 @@ if(BUILD_ARRANGEMENT)
     sonare_arrangement sonare_serialize sonare_midi sonare_mir
   )
   target_compile_definitions(sonare PRIVATE SONARE_WITH_ARRANGEMENT=1)
+
+  # Fits the singing voice's compensation table on the assembly the engine
+  # renders; driven by tools/singing/fit_pitch_compensation.py.
+  add_executable(sonare_singing_sweep
+    singing/pitch_sweep_main.cpp
+    singing/pitch_fit.cpp
+  )
+  target_link_libraries(sonare_singing_sweep PRIVATE sonare_midi)
+  target_compile_options(sonare_singing_sweep PRIVATE ${SONARE_WARNING_FLAGS})
+  target_include_directories(sonare_singing_sweep PRIVATE
+    ${PROJECT_SOURCE_DIR}/src
+    ${PROJECT_SOURCE_DIR}/tools
+  )
   if(BUILD_MIXING)
     # project_bounce.cpp renders per-track channel strips through the mixer C ABI
     # (sonare_mixer_from_scene_json / _process_stereo), whose translation units

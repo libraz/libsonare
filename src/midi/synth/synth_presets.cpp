@@ -11,7 +11,7 @@ namespace sonare::midi::synth {
 namespace {
 
 /// Catalog size (§E preset table).
-constexpr size_t kPresetCount = 70;
+constexpr size_t kPresetCount = 71;
 
 NativeSynthConfig from_patch(const NativeSynthPatch& patch) noexcept {
   NativeSynthConfig cfg;
@@ -534,6 +534,22 @@ std::array<SynthPreset, kPresetCount> build_presets() noexcept {
     free_reed("reed-organ", 0.50f, 0.40f, 0.10f, 0.82f);
   }
 
+  // --- self-oscillating singing voice ---
+  // Reached by name only: the bank never assigns it a GM program. The wrapper
+  // envelope stays out of the way, since the breath is what shapes the note.
+  {
+    SynthPreset& v = t[i++];
+    v.name = "singing-voice";
+    NativeSynthPatch patch{};
+    patch.mode = SynthEngineMode::kSinging;
+    patch.amp_env.attack_ms = 0.0f;
+    patch.amp_env.sustain = 1.0f;
+    patch.amp_env.release_ms = 400.0f;
+    patch.cutoff_hz = 20000.0f;
+    patch.gain = 0.8f;
+    v.config = from_patch(clamp_synth_patch(patch));
+  }
+
   return t;
 }
 
@@ -595,6 +611,8 @@ const char* base_preset_name(SynthEngineMode mode) noexcept {
       return "saw";
     case SynthEngineMode::kSample:
       return nullptr;
+    case SynthEngineMode::kSinging:
+      return "singing-voice";
   }
   return nullptr;
 }

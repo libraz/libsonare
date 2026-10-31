@@ -41,10 +41,11 @@ enum class SynthEngineMode : int {
   kFreeReed = 14,       // driven free-reed accordion / harmonica (free_reed_voice.h)
   kHarpsichord = 15,    // jack-and-plectrum string choirs (harpsichord_voice.h)
   kSample = 16,         // host-supplied PCM through the subtractive chain (sample_voice.h)
+  kSinging = 17,        // self-oscillating two-mass fold + vocal tract (singing_voice.h)
 };
 
 /// Highest SynthEngineMode ordinal; the capability walk below runs to it.
-inline constexpr int kSynthEngineModeMax = static_cast<int>(SynthEngineMode::kSample);
+inline constexpr int kSynthEngineModeMax = static_cast<int>(SynthEngineMode::kSinging);
 
 /// One offset per engine-owned axis, in the normalized units of the patch field
 /// the axis moves. Used both for the base a patch or a CC sets and for the
@@ -53,12 +54,12 @@ inline constexpr int kSynthEngineModeMax = static_cast<int>(SynthEngineMode::kSa
 struct ExcitationAxes {
   /// Drive into the exciter: bow force, mouth pressure, bellows pressure.
   float force = 0.0f;
-  /// Where the exciter meets the resonator (bowed string only).
+  /// The engine's spatial excitation coordinate: where the bow meets the
+  /// string, where the tongue constricts the vocal tract.
   float position = 0.0f;
   /// Timbral opening of the radiating end, held apart from loudness.
   float brightness = 0.0f;
-  /// Registration morph, for an engine whose spectrum is drawn rather than
-  /// excited.
+  /// The engine's timbral continuum: a drawbar registration, a fold's register.
   float morph = 0.0f;
 };
 
@@ -125,6 +126,10 @@ constexpr EngineAxisCapability engine_axis_capability(SynthEngineMode mode) noex
     // pressure, which a note sounding at its note number cannot do.
     case SynthEngineMode::kVocal:
       return {true, kAxisBrightness};
+    // All four. Force is accepted because the fold is physical; the F0 rise it
+    // brings is answered by the compensation table (singing_voice.h).
+    case SynthEngineMode::kSinging:
+      return {true, kAxisForce | kAxisPosition | kAxisBrightness | kAxisMorph};
   }
   return {false, kAxisNone};
 }

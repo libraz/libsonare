@@ -638,6 +638,26 @@ void apply_vocal(NativeSynthPatch& p, const Fields& f) {
   F(vocal.section_rate_hz);
 }
 
+void apply_singing(NativeSynthPatch& p, const Fields& f) {
+  F(singing.tract_length);
+  F(singing.fold_mass);
+  F(singing.rounding);
+  F(singing.position);
+  F(singing.brightness);
+  F(singing.morph);
+  F(singing.breath_noise);
+  F(singing.vibrato_rate_hz);
+  F(singing.vibrato_depth);
+  F(singing.pitch_compensation);
+  F(singing.attack_ms);
+  F(singing.release_ms);
+  F(singing.tap_depth);
+  F(singing.tap_ms);
+  F(singing.tap_position);
+  F(singing.velocity_to_force);
+  F(singing.breath_onset_ms);
+}
+
 void apply_modal(NativeSynthPatch& p, const Fields& f) {
   I(modal.num_modes);
   F(modal.decay_s);
@@ -846,6 +866,9 @@ void walk_engine(NativeSynthPatch& p, const Fields& f) {
     case SynthEngineMode::kVocal:
       apply_vocal(p, f);
       break;
+    case SynthEngineMode::kSinging:
+      apply_singing(p, f);
+      break;
     case SynthEngineMode::kModal:
       apply_modal(p, f);
       break;
@@ -914,6 +937,8 @@ const char* mode_name(SynthEngineMode mode) {
       return "harpsichord";
     case SynthEngineMode::kSample:
       return "sample";
+    case SynthEngineMode::kSinging:
+      return "singing";
   }
   return "subtractive";
 }

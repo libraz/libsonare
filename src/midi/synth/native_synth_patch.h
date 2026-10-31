@@ -29,6 +29,7 @@
 #include "midi/synth/reed_voice.h"
 #include "midi/synth/sample_voice.h"
 #include "midi/synth/sf2_voice.h"
+#include "midi/synth/singing_voice.h"
 #include "midi/synth/vocal_voice.h"
 
 namespace sonare::midi::synth {
@@ -237,6 +238,9 @@ struct NativeSynthPatch {
 
   /// Keymap into the host's sample bank (used when mode == kSample).
   SamplePatchParams sample;
+
+  /// Self-oscillating fold and vocal tract (used when mode == kSinging).
+  SingingPatchParams singing;
 };
 
 /// MIDI note -> equal-tempered frequency (A4 = 440 Hz).

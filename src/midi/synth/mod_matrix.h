@@ -66,17 +66,18 @@ enum class ModDestination : int {
   /// wind bore. Offset in normalized axis units, the same [0,1] scale the
   /// live-control CCs drive; the engine sums it onto its own value and clamps.
   kExcitationForce = 9,
-  /// Where the exciter meets the resonator — bow contact point today. Same
-  /// normalized units; an engine whose exciter has no position declines it.
+  /// The engine's spatial excitation coordinate — a bow's contact point, a
+  /// vocal tract's constriction place. Same normalized units; an engine whose
+  /// exciter has no position declines it.
   kExcitationPosition = 10,
   /// Exciter-side brightness: the bore's radiating filter on a wind engine.
   /// Same normalized units. Distinct from kCutoffCents, which moves the
   /// wrapper filter downstream of the engine rather than the engine itself.
   kExcitationBrightness = 11,
-  /// Position along the two spectral tables a patch carries — the drawbar
-  /// organ's second registration today. Not an excitation axis: a tonewheel
-  /// has no exciter to move, and what this scans is the resonator's own
-  /// spectrum. Same normalized units; an engine carrying one table declines.
+  /// The engine's timbral continuum — the drawbar organ's second registration,
+  /// a singing fold's register. Not an exciter-strength axis: what it scans is
+  /// a continuum of the instrument's own timbre. Same normalized units; an
+  /// engine with no such continuum declines it.
   kSpectrumMorph = 12,
 };
 

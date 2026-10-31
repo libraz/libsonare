@@ -316,6 +316,9 @@ inline void copy_engine_section(const sonare::midi::synth::NativeSynthPatch& fro
     case SynthEngineMode::kHarpsichord:
       to->harpsichord = from.harpsichord;
       break;
+    case SynthEngineMode::kSinging:
+      to->singing = from.singing;
+      break;
     case SynthEngineMode::kSubtractive:
       to->va = from.va;
       break;

@@ -46,7 +46,7 @@ struct Phonation {
 
   Phonation() {
     const float omega = static_cast<float>(kTwoPiD * 130.0);
-    fold.configure(kSr, {1.0f / (omega * omega), 0.5f, 0.3f, 1.0f, 0.1f, 0.05f, 3.0f});
+    fold.configure(kSr, {1.0f / (omega * omega), 0.5f, 0.3f, 1.0f, 0.1f, 0.05f, 3.0f, 0.0f});
     junction.configure(1.0f, 0.3f);
     tract.configure(kSr, 0.5f);
     tract.set_length(0.175f);

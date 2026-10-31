@@ -127,7 +127,8 @@ class VocalVoiceCore {
   /// does not already own — loudness is the amp VCA and spectral flattening is
   /// this very brightness tilt — and the coupling it would have to model raises
   /// F0 with pressure, which a note obliged to sound at its note number cannot
-  /// do.
+  /// do. The singing engine accepts force because its fold is physical and its
+  /// compensation table answers that F0 rise (singing_voice.h).
   void set_excitation_base(const ExcitationAxes& base, uint32_t present) noexcept;
   void restore_excitation_base() noexcept;
   /// Mod-matrix offset on the same axis, in the same normalized units. Held

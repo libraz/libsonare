@@ -965,6 +965,7 @@ if(BUILD_ARRANGEMENT)
     midi/synth/harpsichord_voice.cpp
     midi/synth/plucked_string_voice.cpp
     midi/synth/vocal_voice.cpp
+    midi/synth/singing_voice.cpp
     midi/synth/free_reed_voice.cpp
     midi/synth/sample_bank.cpp
     midi/synth/sample_voice.cpp

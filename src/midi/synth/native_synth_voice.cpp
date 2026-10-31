@@ -72,6 +72,10 @@ void apply_excitation_base(NativeSynthVoice& v, const ExcitationAxes& base, uint
       v.free_reed.set_excitation_base(base, present);
       if (snap) v.free_reed.snap_excitation();
       break;
+    case SynthEngineMode::kSinging:
+      v.singing.set_excitation_base(base, present);
+      if (snap) v.singing.snap_excitation();
+      break;
   }
 }
 
@@ -125,11 +129,17 @@ SONARE_TUNABLE(kNoiseAmCornerHz, 12.0f);
 /// velocity response to spend, so the curve is not doubling a dynamic but
 /// inventing one.
 ///
+/// The singing voice opts out on the same ground: its loudness is the breath
+/// that velocity sets through `velocity_to_force`, not a VCA.
+///
 /// A per-patch exponent defaults to the curve's own 2, so a patch leaves the curve
 /// only once its level span has been measured against a reference corpus.
 float sampler_velocity_exponent(const NativeSynthPatch& p) noexcept {
   const SynthEngineMode mode = p.mode;
-  if (mode == SynthEngineMode::kPiano || mode == SynthEngineMode::kHarpsichord) return 0.0f;
+  if (mode == SynthEngineMode::kPiano || mode == SynthEngineMode::kHarpsichord ||
+      mode == SynthEngineMode::kSinging) {
+    return 0.0f;
+  }
   if (mode == SynthEngineMode::kBrass) return p.brass.velocity_exponent;
   if (mode == SynthEngineMode::kPercussion) return kPercussionVelocityExponent;
   if (mode == SynthEngineMode::kAdditive) return kAdditiveVelocityExponent;
@@ -379,6 +389,9 @@ void NativeSynthVoice::start(const NativeSynthPatch& p, double sample_rate, Velo
   if (p.mode == SynthEngineMode::kHarpsichord) {
     harpsichord.start(p.harpsichord, sample_rate, voiced_note, velocity, seed);
   }
+  if (p.mode == SynthEngineMode::kSinging) {
+    singing.start(p.singing, sample_rate, voiced_note, velocity, seed);
+  }
   for (int k = 0; k < unison; ++k) {
     // Symmetric detune positions across [-1, 1] plus a small seeded jitter so
     // the stack never phase-locks; oscillator 0 of a single-osc patch stays
@@ -586,6 +599,9 @@ void NativeSynthVoice::restore_excitation_base() noexcept {
     case SynthEngineMode::kFreeReed:
       free_reed.restore_excitation_base();
       break;
+    case SynthEngineMode::kSinging:
+      singing.restore_excitation_base();
+      break;
   }
 }
 
@@ -684,6 +700,9 @@ float NativeSynthVoice::render(const Sf2ChannelMod& mod, float wind_pitch,
         case SynthEngineMode::kFreeReed:
           free_reed.set_excitation_mod(axes);
           break;
+        case SynthEngineMode::kSinging:
+          singing.set_excitation_mod(axes);
+          break;
       }
     }
   }
@@ -779,6 +798,8 @@ float NativeSynthVoice::render(const Sf2ChannelMod& mod, float wind_pitch,
     sample = vocal.render(common);
   } else if (patch->mode == SynthEngineMode::kFreeReed) {
     sample = free_reed.render(common);
+  } else if (patch->mode == SynthEngineMode::kSinging) {
+    sample = singing.render(common);
   } else if (patch->mode == SynthEngineMode::kHarpsichord) {
     sample = harpsichord.render(common);
     if (harpsichord.finished()) {
@@ -1138,6 +1159,7 @@ void NativeSynthVoice::release() noexcept {
   if (patch != nullptr && patch->mode == SynthEngineMode::kPluckedString) plucked_string.release();
   if (patch != nullptr && patch->mode == SynthEngineMode::kVocal) vocal.release();
   if (patch != nullptr && patch->mode == SynthEngineMode::kFreeReed) free_reed.release();
+  if (patch != nullptr && patch->mode == SynthEngineMode::kSinging) singing.release();
   if (is_harpsichord && !harpsichord_tail_latched && harpsichord.tail_active()) {
     harpsichord_tail_level = release_level;
     harpsichord_tail_latched = true;
@@ -1162,6 +1184,7 @@ void NativeSynthVoice::kill() noexcept {
   vocal.kill();
   free_reed.kill();
   harpsichord.kill();
+  singing.kill();
   harpsichord_tail_latched = false;
   harpsichord_tail_level = 0.0f;
   side_sample = 0.0f;

@@ -50,7 +50,8 @@ bool only_voiced_section_present(const NativeSynthPatch& p) {
          (m == SynthEngineMode::kPluckedString || is_zero(p.plucked_string)) &&
          (m == SynthEngineMode::kVocal || is_zero(p.vocal)) &&
          (m == SynthEngineMode::kFreeReed || is_zero(p.free_reed)) &&
-         (m == SynthEngineMode::kHarpsichord || is_zero(p.harpsichord));
+         (m == SynthEngineMode::kHarpsichord || is_zero(p.harpsichord)) &&
+         (m == SynthEngineMode::kSinging || is_zero(p.singing));
 }
 
 }  // namespace

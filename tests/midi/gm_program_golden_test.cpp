@@ -212,6 +212,8 @@ const char* engine_label(SynthEngineMode mode) noexcept {
       return "harpsichord";
     case SynthEngineMode::kSample:
       return "sample";
+    case SynthEngineMode::kSinging:
+      return "singing";
   }
   return "";
 }
@@ -528,17 +530,19 @@ TEST_CASE("NativeSynth engine renders under a controller gesture stay bit-identi
   const auto engines = engine_representatives();
   // Un-reach is a failure rather than a clean run: a walk that stopped finding
   // engines reports exactly what a passing tree reports. Every mode but the
-  // sampler answers a program and every gated engine answers on both sides of
-  // its gate, so the count is stated from the selector table rather than
-  // written down, and the one absence is named rather than subtracted -- an
-  // engine dropping out of the bank moves the count, a gate whose two sides
-  // collapsed onto one program moves it too, and a program reaching the sampler
-  // trips the loop even where the count would still agree.
+  // sampler and the singing voice answers a program and every gated engine
+  // answers on both sides of its gate, so the count is stated from the selector
+  // table rather than written down, and the two absences are named rather than
+  // subtracted -- an engine dropping out of the bank moves the count, a gate
+  // whose two sides collapsed onto one program moves it too, and a program
+  // reaching either trips the loop even where the count would still agree.
   INFO("engines walked: " << engines.size());
-  REQUIRE(engines.size() == static_cast<size_t>(kSynthEngineModeMax) + std::size(kPathSelectors));
+  REQUIRE(engines.size() ==
+          static_cast<size_t>(kSynthEngineModeMax) - 1 + std::size(kPathSelectors));
   for (const EngineRow& engine : engines) {
     CAPTURE(engine.label, engine.program);
     REQUIRE(engine.mode != SynthEngineMode::kSample);
+    REQUIRE(engine.mode != SynthEngineMode::kSinging);
   }
   REQUIRE(rows.size() == engines.size() * std::size(kGestures));
   REQUIRE(expected.size() == rows.size());

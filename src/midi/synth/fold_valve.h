@@ -41,6 +41,10 @@ class FoldValve {
     float damping;          ///< Damping ratio of each mass on its spring.
     float rest_opening;     ///< Glottal opening at rest, the adduction.
     float collision_ratio;  ///< Extra stiffness, over a mass's own, once it is in contact.
+    /// Hardening of each spring: its stiffness grows as `1 + stiffening * x^2`
+    /// (Ishizaka & Flanagan's nonlinear tissue spring), which is what raises F0
+    /// with amplitude once the folds collide every cycle. 0 = linear.
+    float stiffening = 0.0f;
   };
 
   void configure(double sample_rate, const Config& config) noexcept {
@@ -50,6 +54,7 @@ class FoldValve {
     damping_ = std::max(config.damping, 0.0f);
     rest_ = config.rest_opening;
     collision_ = std::max(config.collision_ratio, 0.0f);
+    stiffening_ = std::max(config.stiffening, 0.0f);
     tension_ = std::max(config.tension, 0.0f);
     cover_ = std::clamp(config.cover_fraction, kMinCover, kMaxCover);
     rebuild();
@@ -66,6 +71,8 @@ class FoldValve {
     cover_ = std::clamp(fraction, kMinCover, kMaxCover);
     rebuild();
   }
+  /// Per-sample adduction: the opening at rest, which a singer moves with the breath.
+  void set_rest_opening(float rest_opening) noexcept { rest_ = rest_opening; }
 
   /// The opening law for the sample about to be solved: the narrower of the two
   /// gaps, fixed by the state for the sample.
@@ -95,7 +102,8 @@ class FoldValve {
     float force[2];
     for (int i = 0; i < 2; ++i) {
       const float shear = coupling_ * (x_[i] - x_[1 - i]);
-      force[i] = pressure[i] - stiffness_[i] * x_[i] - shear - resistance_[i] * v_[i];
+      const float spring = stiffness_[i] * x_[i] * (1.0f + stiffening_ * x_[i] * x_[i]);
+      force[i] = pressure[i] - spring - shear - resistance_[i] * v_[i];
       if (gaps[i] < 0.0f) force[i] -= stiffness_[i] * collision_ * gaps[i];
     }
     for (int i = 0; i < 2; ++i) {
@@ -105,14 +113,16 @@ class FoldValve {
     return flow;
   }
 
-  /// Kinetic, spring, shear and collision energy of the two masses.
+  /// Kinetic, spring (hardening included), shear and collision energy of the two masses.
   float stored_energy() const noexcept {
     const float shear = x_[0] - x_[1];
     float energy = coupling_ * shear * shear;
     for (int i = 0; i < 2; ++i) {
       const float gap = rest_ + x_[i];
       const float contact = gap < 0.0f ? stiffness_[i] * collision_ * gap * gap : 0.0f;
-      energy += masses_[i] * v_[i] * v_[i] + stiffness_[i] * x_[i] * x_[i] + contact;
+      const float spring =
+          stiffness_[i] * x_[i] * x_[i] * (1.0f + 0.5f * stiffening_ * x_[i] * x_[i]);
+      energy += masses_[i] * v_[i] * v_[i] + spring + contact;
     }
     return 0.5f * energy;
   }
@@ -148,6 +158,7 @@ class FoldValve {
   float damping_ = 0.0f;
   float rest_ = 0.0f;
   float collision_ = 0.0f;
+  float stiffening_ = 0.0f;
   float masses_[2] = {0.5f, 0.5f};
   float stiffness_[2] = {};
   float resistance_[2] = {};

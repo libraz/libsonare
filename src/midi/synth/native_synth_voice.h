@@ -204,6 +204,8 @@ struct NativeSynthVoice : VoiceState {
   HarpsichordVoiceCore harpsichord;
   /// Host PCM source; like KS, the host attach()es the bank before start().
   SampleVoiceCore sampler;
+  /// Self-oscillating singing core (no host slab; the tract is a fixed member array).
+  SingingVoiceCore singing;
   BodyResonator body;
   /// Body crossfade after a bodyMix change across 0; body_fade_in names the
   /// direction (true = dry to body). A finished fade-out stops the bank.

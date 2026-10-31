@@ -29,6 +29,8 @@
 ///
 /// The engines are addressed through their GM programs rather than through
 /// hand-built patches, so what is measured is the bank a host actually hears.
+/// An engine no program voices is addressed by its preset name instead, the
+/// only way a host reaches it; it is not excluded from the walk.
 
 #include <algorithm>
 #include <catch2/catch_test_macros.hpp>
@@ -38,6 +40,7 @@
 
 #include "midi/synth/excitation_axes.h"
 #include "midi/synth/native_synth.h"
+#include "midi/synth/synth_presets.h"
 #include "midi/ump.h"
 #include "support/audio_fixtures.h"
 #include "support/midi_render.h"
@@ -101,13 +104,16 @@ enum class ForceSpectrum {
   kElsewhere,
 };
 
-/// One engine and the GM program that voices it in the fallback bank.
+/// One engine and the GM program that voices it in the fallback bank, or the
+/// preset that reaches it when no program does.
 struct EngineProbe {
   SynthEngineMode mode;
   int program;
   const char* label;
   ForceLevel force_level;
   ForceSpectrum force_spectrum;
+  /// Catalog preset name; nullptr addresses the engine through `program`.
+  const char* preset = nullptr;
 };
 
 /// Every engine the capability table declares an axis for, at a program the
@@ -118,38 +124,44 @@ constexpr EngineProbe kProbes[] = {
     // No controller reaches the registration, so the morph axis is exercised by
     // the mod matrix alone and neither ramp below touches this row.
     {SynthEngineMode::kAdditive, 16, "additive (Drawbar Organ)", ForceLevel::kElsewhere,
-     ForceSpectrum::kElsewhere},
+     ForceSpectrum::kElsewhere, nullptr},
     // Wind pressure sets the pipe's speech and its speaking frequency; what it
     // moves here is the tuning and the onset rather than the loudness, and the
     // level side of an organ's wind is the shared supply's sag, a bus stage.
     {SynthEngineMode::kPipeOrgan, 19, "pipe organ (Church Organ)", ForceLevel::kElsewhere,
-     ForceSpectrum::kMoves},
+     ForceSpectrum::kMoves, nullptr},
     // The accordion voices the slot shaper, which the drive never reaches, so
     // force arrives as the output scale alone and a gain cannot tilt a spectrum.
     {SynthEngineMode::kFreeReed, 21, "free reed (Accordion)", ForceLevel::kRises,
-     ForceSpectrum::kElsewhere},
+     ForceSpectrum::kElsewhere, nullptr},
     {SynthEngineMode::kBowedString, 40, "bowed string (Violin)", ForceLevel::kRises,
-     ForceSpectrum::kMoves},
+     ForceSpectrum::kMoves, nullptr},
     {SynthEngineMode::kVocal, 52, "vocal (Choir Aahs)", ForceLevel::kElsewhere,
-     ForceSpectrum::kElsewhere},
-    {SynthEngineMode::kBrass, 56, "brass (Trumpet)", ForceLevel::kRises, ForceSpectrum::kMoves},
+     ForceSpectrum::kElsewhere, nullptr},
+    {SynthEngineMode::kBrass, 56, "brass (Trumpet)", ForceLevel::kRises, ForceSpectrum::kMoves,
+     nullptr},
     // A reed self-oscillates only inside a narrow pressure band and the exposed
     // range is calibrated to stay within it, so the breath colours the tone by
     // a small fraction of what the same travel does to the level.
-    {SynthEngineMode::kReed, 65, "reed (Alto Sax)", ForceLevel::kRises, ForceSpectrum::kElsewhere},
+    {SynthEngineMode::kReed, 65, "reed (Alto Sax)", ForceLevel::kRises, ForceSpectrum::kElsewhere,
+     nullptr},
     // The jet holds its own limit cycle, so the loop gain rather than the
     // breath decides the amplitude and the breath is heard as colour.
-    {SynthEngineMode::kFlute, 73, "flute (Flute)", ForceLevel::kElsewhere, ForceSpectrum::kMoves},
+    {SynthEngineMode::kFlute, 73, "flute (Flute)", ForceLevel::kElsewhere, ForceSpectrum::kMoves,
+     nullptr},
+    // The bank never assigns the singing voice a program; its preset is how a host reaches it.
+    {SynthEngineMode::kSinging, -1, "singing (singing-voice preset)", ForceLevel::kRises,
+     ForceSpectrum::kMoves, "singing-voice"},
 };
 
 /// A struck or plucked engine, to show the same ramp reaches nothing there.
 constexpr EngineProbe kDecliningProbes[] = {
     {SynthEngineMode::kPiano, 0, "piano (Acoustic Grand)", ForceLevel::kElsewhere,
-     ForceSpectrum::kElsewhere},
+     ForceSpectrum::kElsewhere, nullptr},
     {SynthEngineMode::kKarplusStrong, 24, "karplus-strong (Nylon Guitar)", ForceLevel::kElsewhere,
-     ForceSpectrum::kElsewhere},
+     ForceSpectrum::kElsewhere, nullptr},
     {SynthEngineMode::kModal, 11, "modal (Vibraphone)", ForceLevel::kElsewhere,
-     ForceSpectrum::kElsewhere},
+     ForceSpectrum::kElsewhere, nullptr},
 };
 
 /// An engine whose force axis lands in neither the level nor the spectrum has
@@ -170,17 +182,27 @@ constexpr bool every_force_axis_lands_somewhere() {
 static_assert(every_force_axis_lands_somewhere(),
               "an engine's force axis must be declared to reach the level or the spectrum");
 
-NativeSynth make_synth(int program) {
+NativeSynth make_synth(const EngineProbe& probe) {
   NativeSynthConfig cfg;
-  cfg.use_gm_programs = true;
+  if (probe.preset != nullptr) {
+    const sonare::midi::synth::SynthPreset* preset =
+        sonare::midi::synth::find_synth_preset(probe.preset);
+    REQUIRE(preset != nullptr);
+    REQUIRE(preset->config.patch.mode == probe.mode);
+    cfg = preset->config;
+  } else {
+    cfg.use_gm_programs = true;
+  }
   cfg.gain = 1.0f;
   cfg.polyphony = 4;
   cfg.bus_drive = 0.0f;
   cfg.dc_block = true;
   NativeSynth synth(cfg);
   synth.prepare(kRate, kBlock);
-  synth.on_event(
-      0, event(sonare::midi::make_midi1_program_change(0, 0, static_cast<uint8_t>(program))));
+  if (probe.preset == nullptr) {
+    synth.on_event(0, event(sonare::midi::make_midi1_program_change(
+                          0, 0, static_cast<uint8_t>(probe.program))));
+  }
   synth.on_event(0, event(sonare::midi::make_midi1_note_on(0, 0, kNote, kVelocity)));
   return synth;
 }
@@ -202,9 +224,9 @@ struct RampMeasurement {
 /// Renders one synth with @p controller stepped from silence to full across the
 /// segments, and an identical one that receives nothing, and reports the three
 /// per-segment measures above.
-RampMeasurement measure_ramp(int program, uint8_t controller) {
-  NativeSynth ramped = make_synth(program);
-  NativeSynth control = make_synth(program);
+RampMeasurement measure_ramp(const EngineProbe& probe, uint8_t controller) {
+  NativeSynth ramped = make_synth(probe);
+  NativeSynth control = make_synth(probe);
 
   render_left(ramped, kPrefillFrames);
   render_left(control, kPrefillFrames);
@@ -283,7 +305,7 @@ TEST_CASE("a breath ramp reaches every engine that declares the force axis",
   for (const EngineProbe& probe : kProbes) {
     if ((engine_axis_capability(probe.mode).mask & kAxisForce) == 0u) continue;
     CAPTURE(probe.label);
-    const RampMeasurement m = measure_ramp(probe.program, 2);
+    const RampMeasurement m = measure_ramp(probe, 2);
 
     // Wall 1: the difference signal carries energy. Two silent renders subtract
     // to an exact zero, which would satisfy every ratio below.
@@ -314,7 +336,7 @@ TEST_CASE("a brightness ramp reaches every engine that declares the brightness a
   for (const EngineProbe& probe : kProbes) {
     if ((engine_axis_capability(probe.mode).mask & kAxisBrightness) == 0u) continue;
     CAPTURE(probe.label);
-    const RampMeasurement m = measure_ramp(probe.program, 74);
+    const RampMeasurement m = measure_ramp(probe, 74);
     CAPTURE(series(m.difference_rms));
     REQUIRE(peak(m.difference_rms) > kReachFloor);
     // Unconditional here: brightness is the axis whose whole job is the
@@ -332,8 +354,8 @@ TEST_CASE("the same ramp reaches nothing in an engine that declares no axis",
     CAPTURE(probe.label);
     // Exactly zero rather than under a floor: the controller never reaches a
     // setter, so the two renders are the same arithmetic on the same state.
-    const RampMeasurement force = measure_ramp(probe.program, 2);
-    const RampMeasurement bright = measure_ramp(probe.program, 74);
+    const RampMeasurement force = measure_ramp(probe, 2);
+    const RampMeasurement bright = measure_ramp(probe, 74);
     for (int seg = 0; seg < kSegments; ++seg) {
       CAPTURE(seg);
       REQUIRE(force.difference_rms[static_cast<std::size_t>(seg)] == 0.0);

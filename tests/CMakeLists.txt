@@ -756,6 +756,10 @@ if(BUILD_ARRANGEMENT)
     midi/string_loop_test.cpp
     midi/acoustic_tube_test.cpp
     midi/valve_coupling_test.cpp
+    midi/singing_voice_test.cpp
+    midi/singing_passivity_test.cpp
+    midi/singing_pitch_compensation_test.cpp
+    ${PROJECT_SOURCE_DIR}/tools/singing/pitch_fit.cpp
     midi/loop_loss_law_test.cpp
     midi/wind_rate_law_test.cpp
     midi/modal_voice_test.cpp
