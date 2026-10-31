@@ -372,7 +372,51 @@ std::vector<float> render_vocal_core(const VocalPatchParams& params, double samp
   return output;
 }
 
+/// Level (dB) of @p x at @p hz in consecutive @p frame-sample windows from @p begin.
+std::vector<double> level_track_db(const std::vector<float>& x, double sample_rate, double hz,
+                                   size_t begin, size_t frame) {
+  std::vector<double> out;
+  const double w = sonare::constants::kTwoPiD * hz / sample_rate;
+  for (size_t at = begin; at + frame <= x.size(); at += frame) {
+    double re = 0.0;
+    double im = 0.0;
+    for (size_t i = at; i < at + frame; ++i) {
+      re += x[i] * std::cos(w * static_cast<double>(i));
+      im -= x[i] * std::sin(w * static_cast<double>(i));
+    }
+    out.push_back(10.0 * std::log10(re * re + im * im + 1e-30));
+  }
+  return out;
+}
+
+double track_range_db(const std::vector<double>& track) {
+  const auto [lo, hi] = std::minmax_element(track.begin(), track.end());
+  return *hi - *lo;
+}
+
 }  // namespace
+
+TEST_CASE("the vocal section singers' own detune makes the section beat",
+          "[midi][synth][new_engines]") {
+  // Fundamental travel over 0.5-4 s, measured: solo 0.00 dB, a 10-cent detune 18.9 dB.
+  VocalPatchParams solo;
+  solo.vibrato_depth = 0.0f;
+  solo.breath_noise = 0.0f;
+  VocalPatchParams detuned = solo;
+  detuned.section_detune_cents = 10.0f;
+  constexpr size_t kFrames = 192000;
+  const std::vector<float> solo_tone = render_vocal_core(solo, kRate, 57, kFrames);
+  const std::vector<float> detuned_tone = render_vocal_core(detuned, kRate, 57, kFrames);
+  REQUIRE(all_finite(detuned_tone));
+  REQUIRE(detuned_tone == render_vocal_core(detuned, kRate, 57, kFrames));
+
+  const double solo_range = track_range_db(level_track_db(solo_tone, kRate, 220.0, 24000, 2400));
+  const double detuned_range =
+      track_range_db(level_track_db(detuned_tone, kRate, 220.0, 24000, 2400));
+  INFO("fundamental travel solo " << solo_range << " dB, detuned " << detuned_range << " dB");
+  REQUIRE(solo_range < 0.5);
+  REQUIRE(detuned_range > 6.0);
+}
 
 TEST_CASE("the vocal section stage widens the partials", "[midi][synth][new_engines]") {
   VocalPatchParams solo;
@@ -402,6 +446,7 @@ TEST_CASE("the vocal section stage is bounded at its widest, slowest setting at 
   VocalPatchParams params = solo;
   params.section_spread_cents = 50.0f;
   params.section_rate_hz = 0.5f;
+  params.section_detune_cents = 20.0f;
   for (double sample_rate : {44100.0, 96000.0}) {
     const std::vector<float> solo_tone = render_vocal_core(solo, sample_rate, 57, 96000);
     const std::vector<float> tone = render_vocal_core(params, sample_rate, 57, 96000);

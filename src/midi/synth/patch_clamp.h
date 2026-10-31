@@ -677,6 +677,9 @@ constexpr NativeSynthPatch clamp_synth_patch(const NativeSynthPatch& patch) noex
       std::clamp(patch_clamp_detail::sanitize(p.vocal.section_spread_cents, 0.0f), 0.0f, 50.0f);
   p.vocal.section_rate_hz =
       std::clamp(patch_clamp_detail::sanitize(p.vocal.section_rate_hz, 5.0f), 0.5f, 12.0f);
+  p.vocal.section_detune_cents =
+      std::clamp(patch_clamp_detail::sanitize(p.vocal.section_detune_cents, 0.0f), 0.0f,
+                 SectionStage::kMaxDetuneCents);
   p.free_reed.brightness =
       std::clamp(patch_clamp_detail::sanitize(p.free_reed.brightness, 0.6f), 0.0f, 1.0f);
   p.free_reed.reed_stiffness =

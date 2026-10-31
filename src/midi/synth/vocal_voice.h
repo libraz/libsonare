@@ -39,10 +39,10 @@
 namespace sonare::midi::synth {
 
 /// Section history the host must allocate per voice slot (samples): the seat
-/// span plus the widest, slowest wander the clamp admits, at @p sample_rate.
+/// span plus the widest, slowest wander and drift the clamps admit, at @p sample_rate.
 inline int vocal_slab_capacity(double sample_rate) noexcept {
   const double sr = sample_rate > 0.0 ? sample_rate : ::sonare::constants::kDefaultDawSampleRate;
-  return static_cast<int>(sr * 0.03) + 8;
+  return static_cast<int>(sr * (0.03 + SectionStage::kDriftReachS)) + 8;
 }
 
 /// Formant bank size (F1..F5). Five poles cover a sung vowel's spectral
@@ -82,11 +82,16 @@ struct VocalPatchParams {
   /// listener through several singers on their own risers, each with an
   /// independent vibrato, which is what widens a choir's partials. Applied
   /// outside the source-filter chain as modulated delays, so the glottal source
-  /// never sees the pitch move. 0 = off -> the stage is skipped (bit-identical
-  /// render).
+  /// never sees the pitch move. 0 with section_detune_cents 0 = off -> the stage
+  /// is skipped (bit-identical render).
   float section_spread_cents = 0.0f;
   /// Section singers' vibrato rate (Hz); each singer draws their own around it.
   float section_rate_hz = 5.0f;
+  /// Section singers' own slow pitch offsets (cents, peak, at most 20): no two
+  /// singers hold exactly one pitch, and each drifts on its own over seconds,
+  /// independent of the vibrato, so the section beats at the differences. 0 adds
+  /// no drift and leaves a spread's render bit-identical.
+  float section_detune_cents = 0.0f;
 };
 
 /// Per-voice vocal state, embedded in NativeSynthVoice. The voice's amplitude
@@ -205,8 +210,8 @@ class VocalVoiceCore {
   /// Output trim bringing the raw vocal sample up to a musical voice level.
   float output_scale_ = 1.0f;
 
-  // Section stage (off unless params.section_spread_cents > 0) over the output;
-  // its history is the attached host span.
+  // Section stage (off unless params.section_spread_cents or section_detune_cents
+  // > 0) over the output; its history is the attached host span.
   SectionStage section_;
 };
 

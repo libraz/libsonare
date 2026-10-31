@@ -268,6 +268,7 @@ constexpr UnitRow kEngineUnits[] = {
     {"vocal.velocity_exponent", Unit::None},
     {"vocal.section_spread_cents", Unit::Cents},
     {"vocal.section_rate_hz", Unit::Hz},
+    {"vocal.section_detune_cents", Unit::Cents},
     {"singing.tract_length", Unit::None},
     {"singing.fold_mass", Unit::None},
     {"singing.rounding", Unit::None},

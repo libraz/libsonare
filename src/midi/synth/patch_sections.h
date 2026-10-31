@@ -425,6 +425,7 @@ constexpr VocalPatchParams blank_vocal() noexcept {
   z.velocity_exponent = 0.0f;
   z.section_spread_cents = 0.0f;
   z.section_rate_hz = 0.0f;
+  z.section_detune_cents = 0.0f;
   return z;
 }
 

@@ -636,6 +636,7 @@ void apply_vocal(NativeSynthPatch& p, const Fields& f) {
   F(vocal.velocity_exponent);
   F(vocal.section_spread_cents);
   F(vocal.section_rate_hz);
+  F(vocal.section_detune_cents);
 }
 
 void apply_singing(NativeSynthPatch& p, const Fields& f) {

@@ -92,7 +92,7 @@ SONARE_TUNABLE(kVelFloor, 0.4f);
 // continuously-excited engines.
 SONARE_TUNABLE(kControlSmoothMs, 8.0f);
 
-// --- section stage (only when params.section_spread_cents > 0) ---
+// --- section stage (only when params.section_spread_cents or section_detune_cents > 0) ---
 // Path differences across the risers (ms): three or four rows about a metre apart.
 SONARE_TUNABLE(kSectionSeatMs, 10.0f);
 // Each singer's vibrato rate lies within this fraction either side of the patch rate.
@@ -175,7 +175,7 @@ void VocalVoiceCore::start(const VocalPatchParams& params, double sample_rate, u
   excite_.remember_base();
 
   section_.start(params.section_spread_cents, params.section_rate_hz, kSectionSeatMs,
-                 kSectionRateSpread, sr, seed);
+                 kSectionRateSpread, sr, seed, params.section_detune_cents);
 }
 
 void VocalVoiceCore::set_excitation_base(const ExcitationAxes& base, uint32_t present) noexcept {
