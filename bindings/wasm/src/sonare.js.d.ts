@@ -177,6 +177,7 @@ export interface WasmSectionResult {
   /** Median frame RMS in the section over the loudest section's, in `[0, 1]`. */
   energyLevel: number;
   confidence: number;
+  group: number;
   name: string;
 }
 

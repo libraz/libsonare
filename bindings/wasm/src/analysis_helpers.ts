@@ -242,6 +242,7 @@ export function convertAnalysisResult(wasm: WasmAnalysisResult): AnalysisResult 
       end: s.end,
       energyLevel: s.energyLevel,
       confidence: s.confidence,
+      group: s.group,
       name: s.name,
     })),
     timbre: wasm.timbre,

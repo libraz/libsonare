@@ -129,13 +129,9 @@ export type ChordQuality = (typeof ChordQuality)[keyof typeof ChordQuality];
 /**
  * Section type.
  *
- * `PreChorus` is never produced by `analyze()`: it has no detection branch, so
- * filtering sections on it always yields an empty result. Every other value is
- * reachable. `Unknown` means the analyzer did not name the segment: no
- * boundary was detected, the segment matched none of the positive branches, or
- * the evidence for a musical function was too weak to assert one. The first
- * case comes with `confidence` 0; the last keeps the sub-threshold score, so a
- * caller can see how close the segment came to a label.
+ * `Unknown` means the analyzer did not name the segment: no boundary was
+ * detected, the segment matched none of the positive branches, or the evidence
+ * for a musical function was too weak to assert one. Its `confidence` is 0.
  */
 export const SectionType = {
   Intro: 0,
@@ -426,7 +422,13 @@ export interface Section {
   end: number;
   /** Median frame RMS in the section over the loudest section's, in `[0, 1]`. */
   energyLevel: number;
+  /** Confidence in `type`, in `[0, 1]`; always 0 for `Unknown`. */
   confidence: number;
+  /**
+   * Repetition group: sections sharing a value repeat the same material.
+   * Numbered 0, 1, ... by first appearance.
+   */
+  group: number;
   name: string;
 }
 

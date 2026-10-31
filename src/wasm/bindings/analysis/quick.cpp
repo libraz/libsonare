@@ -230,6 +230,7 @@ val analysisResultToVal(const AnalysisResult& result) {
     section.set("end", result.sections[i].end);
     section.set("energyLevel", result.sections[i].energy_level);
     section.set("confidence", result.sections[i].confidence);
+    section.set("group", result.sections[i].group);
     section.set("name", result.sections[i].type_string());
     sections.call<void>("push", section);
   }
@@ -747,7 +748,7 @@ val js_analysis_result_schema_fixture() {
   result.beat_local_bpm.push_back(118.5f);
   result.chords.push_back({PitchClass::C, ChordQuality::Major, 0.0f, 1.0f, 0.8f, PitchClass::C});
   result.chord_roman_numerals.push_back("I");
-  result.sections.push_back({SectionType::Verse, 0.0f, 1.0f, 0.5f, 0.9f});
+  result.sections.push_back({SectionType::Verse, 0.0f, 1.0f, 0.5f, 0.9f, 0});
   result.timbre = {0.1f, 0.2f, 0.3f, 0.4f, 0.5f};
   result.dynamics = {12.0f, -1.0f, -14.0f, 13.0f, 3.0f, false};
   result.rhythm.time_signature = {4, 4, 0.75f};

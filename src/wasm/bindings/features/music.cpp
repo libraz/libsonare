@@ -121,7 +121,7 @@ val js_nnls_chroma(val samples, const val& sample_rate, bool enable_stft_blend,
 
 // Mirrors sonare_analyze_sections / SonareSectionResult and the Node/Python
 // analyzeSections: detects song-structure sections and returns an array of
-// { type, name, start, end, energyLevel, confidence }.
+// { type, name, start, end, energyLevel, confidence, group }.
 // Embind passes every argument, so the narrowed sizes carry no C++ default.
 val js_analyze_sections(val samples, const val& sample_rate, const val& n_fft_val,
                         const val& hop_length_val, const val& min_section_sec_val) {
@@ -147,6 +147,7 @@ val js_analyze_sections(val samples, const val& sample_rate, const val& n_fft_va
     item.set("end", section.end);
     item.set("energyLevel", section.energy_level);
     item.set("confidence", section.confidence);
+    item.set("group", section.group);
     sections.call<void>("push", item);
   }
   return sections;
