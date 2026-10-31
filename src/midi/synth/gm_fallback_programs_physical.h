@@ -326,7 +326,7 @@ constexpr void configure_physical_programs(ProgramOverrides& o) noexcept {
     p.gain = gain;
     return p;
   };
-  // The beating reed goes only to the voices whose references it improves on
+  // The Bernoulli valve goes only to the voices whose references it improves on
   // every dimension at once: the low saxes and the bassoon, all of which the
   // linearised table left more than an octave dark. The double reeds and the
   // clarinet reach their brightness through it too, and pay for it in
@@ -366,7 +366,7 @@ constexpr void configure_physical_programs(ProgramOverrides& o) noexcept {
   // reed_voice.cpp states; the worst of 35 captured notes then holds within
   // 0.2 dB/s of its reference, and the gain centres the grid's level.
   o.alto_sax.reed.closing_pressure = 1.88816f;
-  o.alto_sax.reed.flow_gain = 1.05175f;
+  o.alto_sax.reed.zeta = 0.7654082f;
   o.alto_sax.cutoff_hz = 2773.85f;
   o.alto_sax.lfo_rate_hz = 3.01923f;
   o.alto_sax.lfo_to_pitch_cents = 20.3309f;
@@ -396,7 +396,7 @@ constexpr void configure_physical_programs(ProgramOverrides& o) noexcept {
   // put lines up to 34 dB under the fundamental, at 2.0 none closer than 49 dB; 2.2 leaves the
   // note arriving 425 ms late.
   o.tenor_sax.reed.closing_pressure = 2.0f;
-  o.tenor_sax.reed.flow_gain = 0.85809f;
+  o.tenor_sax.reed.zeta = 0.6119219f;
   o.tenor_sax.cutoff_hz = 4770.65f;
   // Depth fitted against the reference's 5 Hz vibrato; tone-to-noise reads its sidebands as tone.
   o.tenor_sax.lfo_rate_hz = 4.68214f;
@@ -434,7 +434,7 @@ constexpr void configure_physical_programs(ProgramOverrides& o) noexcept {
   // Fitted inside the valve's oscillating band; the worst of 35 captured notes
   // holds within 1.5 dB/s of its reference.
   o.baritone_sax.reed.closing_pressure = 2.04294f;
-  o.baritone_sax.reed.flow_gain = 0.85836f;
+  o.baritone_sax.reed.zeta = 0.6005396f;
   o.baritone_sax.cutoff_hz = 1039.85f;
   o.baritone_sax.lfo_rate_hz = 4.8f;
   o.baritone_sax.lfo_to_pitch_cents = 4.0f;
@@ -522,7 +522,7 @@ constexpr void configure_physical_programs(ProgramOverrides& o) noexcept {
   // Holds the fundamental through the top of the compass: from 0.78 up, D5 at 48 kHz ran
   // period-doubled 14 dB under its neighbours (half-integer lines 34 dB under h1), while the
   // same note at 44.1 and 96 kHz held, so the fitted 0.81 sat on the regime's edge.
-  o.bassoon.reed.flow_gain = 0.76f;
+  o.bassoon.reed.zeta = 0.60083276f;
   // Low because the drive ahead of it adds the upper partials; the centroid reads 32% under the
   // reference's.
   o.bassoon.cutoff_hz = 755.142f;

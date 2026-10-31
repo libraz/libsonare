@@ -438,7 +438,7 @@ void apply_reed(NativeSynthPatch& p, const Fields& f) {
   F(reed.cone_growth);
   F(reed.tonehole);
   F(reed.closing_pressure);
-  F(reed.flow_gain);
+  F(reed.zeta);
   F(reed.pressure_scale);
   F(reed.velocity_exponent);
 }

@@ -108,6 +108,9 @@ SONARE_TUNABLE(kHpCompScale, 0.75f);
 // compensation removes. Measured over the baritone's grid: at the table's 0.5
 // the valve sits 17.4 cents flat at the bottom of it and 6.3 at the top.
 SONARE_TUNABLE(kHpCompScaleValve, 0.1f);
+// Widest the Bernoulli valve's channel opens, as a fraction of its rest opening. Held at rest:
+// lifting it moves baritone and bassoon, whose openings pass rest on about a fifth of samples.
+constexpr float kValveOpeningCeiling = 1.0f;
 
 // Output trim: the raw bore pressure sits near unity already (the reed table is
 // bounded to [-1,1]), so only a gentle scale brings a forte note into the other
@@ -187,57 +190,6 @@ float reed_natural_hz(float resonance01, float srf) noexcept {
   return std::min(kReedResBaseHz + kReedResSpanHz * res01, 0.45f * srf);
 }
 
-/// The pressure drop across the reed channel when the wave the channel launches is part of the
-/// pressure it sees: the root of d + zc*o(d)*sgn(d)*sqrt|d| = c with the opening
-/// o(d) = clamp(alpha - beta*d, 0, 1), @p zc the flow-to-pressure gain and @p c the drop the
-/// mouth would see against twice the returning wave. Monotone in d while zc stays under the
-/// square root of the closing drop, which is where the root is unique.
-float solve_valve_drop(float c, float zc, float alpha, float beta) noexcept {
-  if (zc <= 0.0f || beta <= 0.0f) return c;
-  auto g = [&](float d) {
-    const float o = std::clamp(alpha - beta * d, 0.0f, 1.0f);
-    return d + zc * o * std::copysign(std::sqrt(std::fabs(d)), d) - c;
-  };
-  // Breakpoints: wide open below the first, shut above the last, linear with fixed sign between.
-  float b[3] = {(alpha - 1.0f) / beta, 0.0f, alpha / beta};
-  std::sort(b, b + 3);
-  if (g(b[2]) <= 0.0f) return c;
-  if (g(b[0]) > 0.0f) {
-    // d = -s^2 with o = 1: s^2 + zc*s + c = 0, and c < 0 here.
-    const float s = 0.5f * (-zc + std::sqrt(std::max(zc * zc - 4.0f * c, 0.0f)));
-    return -s * s;
-  }
-  float lo = b[0];
-  float hi = b[2];
-  if (g(b[1]) > 0.0f) {
-    hi = b[1];
-  } else {
-    lo = b[1];
-  }
-  // Newton in s = sqrt|d|, where the flow is regular, held inside the bracket.
-  const float sigma = hi <= 0.0f ? -1.0f : 1.0f;
-  float s_lo = std::sqrt(std::fabs(lo));
-  float s_hi = std::sqrt(std::fabs(hi));
-  if (s_lo > s_hi) std::swap(s_lo, s_hi);
-  float s = 0.5f * (s_lo + s_hi);
-  for (int it = 0; it < 12; ++it) {
-    const float o = alpha - beta * sigma * s * s;
-    const float gv = sigma * s * s + zc * sigma * s * o - c;
-    const float dg = 2.0f * sigma * s + zc * (sigma * alpha - 3.0f * beta * s * s);
-    if ((gv > 0.0f) == (sigma > 0.0f)) {
-      s_hi = s;
-    } else {
-      s_lo = s;
-    }
-    float next = dg != 0.0f ? s - gv / dg : 0.5f * (s_lo + s_hi);
-    if (!(next > s_lo && next < s_hi)) next = 0.5f * (s_lo + s_hi);
-    const bool settled = std::fabs(next - s) < 1.0e-7f;
-    s = next;
-    if (settled) break;
-  }
-  return sigma * s * s;
-}
-
 }  // namespace
 
 void ReedVoiceCore::start(const ReedPatchParams& params, double sample_rate, uint8_t note,
@@ -296,14 +248,15 @@ LoopBudget ReedVoiceCore::configure(const ReedPatchParams& params, double sr, ui
   reed_offset_ = kReedOffsetMin + kReedOffsetSpan * (1.0f - opening);
   reed_slope_ = -(kReedSlopeBase + kReedSlopeSpan * stiffness);
 
-  // Beating reed (gated): the channel's own physics in place of the table above.
+  // Bernoulli valve (gated): the channel's own physics in place of the table above.
   closing_pressure_ = std::max(params.closing_pressure, 0.0f);
-  flow_gain_ = std::max(params.flow_gain, 0.0f);
+  zeta_ = std::max(params.zeta, 0.0f);
   // 0 is what a blanked reed block carries, and it would divide by zero here;
   // it reads as the unscaled valve, which is what the table's scale gives.
   pressure_scale_ = params.pressure_scale > 0.0f ? params.pressure_scale : 1.0f;
+  if (closing_pressure_ > 0.0f) valve_.configure(pressure_scale_ * closing_pressure_, zeta_);
 
-  // Dynamic valve (gated, beating reed only): the opening becomes a STATE
+  // Dynamic valve (gated, Bernoulli valve only): the opening becomes a STATE
   // instead of a function of the current drop, so the reed carries its own
   // inertia and the tongue's release becomes an initial condition. Matched-Z
   // form of x" + qr*wr*x' + wr^2*x = wr^2*x_rest, normalised to DC gain 1 so the
@@ -443,7 +396,7 @@ LoopBudget ReedVoiceCore::configure(const ReedPatchParams& params, double sr, ui
 
   // 4a: dynamic (mass-spring) reed — a biquad bandpass resonator tuned to the
   // reed's natural frequency, driven by the pressure difference, biasing the
-  // table. Off -> render skips the resonator entirely. With the beating reed on
+  // table. Off -> render skips the resonator entirely. With the Bernoulli valve on
   // there is no table to bias, and the same reed is the valve instead (above).
   if (reed_dyn_ && closing_pressure_ == 0.0f) {
     const float f_reed = reed_natural_hz(params.reed_resonance, srf);
@@ -584,7 +537,7 @@ float ReedVoiceCore::render_internal(float pitch_ratio) noexcept {
   if (reed > 1.0f) reed = 1.0f;
   if (reed < -1.0f) reed = -1.0f;
   float inj = breath + dp * reed;
-  // Beating reed (gated): the channel's Bernoulli flow replaces the linearised
+  // Bernoulli valve (gated): the channel's Bernoulli flow replaces the linearised
   // table above. The opening closes toward zero as the mouth outruns the bore and
   // the flow follows the square root of that drop, so the drive saturates on a
   // curve instead of on a clamp. The flow peaks at drop = closing_pressure/3 and
@@ -608,22 +561,20 @@ float ReedVoiceCore::render_internal(float pitch_ratio) noexcept {
       // than tracked, so the note speaks without a settling rumble under it.
       // It stays the STATIC rest opening with the dynamic valve on: that is
       // exactly what makes the reed's swing toward it a forcing term.
-      const float rest = std::clamp(1.0f - mouth / pc, 0.0f, 1.0f);
-      const float steady = rest * std::sqrt(std::max(mouth, 0.0f));
+      ValveLaw law{1.0f, 1.0f, kValveOpeningCeiling};
+      const float steady =
+          PassiveCoupling::opening(mouth / pc, law) * std::sqrt(std::max(mouth, 0.0f));
       // The drop includes the wave the reed launches (McIntyre, Schumacher & Woodhouse 1983).
-      const float zc = breath_.gate() * flow_gain_;
-      float alpha = 1.0f;
-      float beta = 1.0f / pc;
+      valve_.set_zeta(breath_.gate() * zeta_);
       if (reed_dyn_) {
         // The valve's own opening is linear in the drop through its input gain, plus its history.
-        alpha = reed_b0_ + reed_a1_ * reed_z1_ + reed_a2_ * reed_z2_;
-        beta = reed_b0_ / pc;
+        law.alpha = reed_b0_ + reed_a1_ * reed_z1_ + reed_a2_ * reed_z2_;
+        law.beta = reed_b0_;
       }
-      const float drop = solve_valve_drop(mouth - 2.0f * refl + zc * steady, zc, alpha, beta);
-      const float open = std::clamp(alpha - beta * drop, 0.0f, 1.0f);
-      if (reed_dyn_) valve_opening(1.0f - drop / pc);
-      const float flow = open * std::copysign(std::sqrt(std::fabs(drop)), drop);
-      inj = WindBore::injection(refl, flow_gain_ * (flow - steady), breath_.gate());
+      const PassiveCoupling::Junction junction = valve_.solve(mouth, refl, steady, law);
+      if (reed_dyn_) valve_opening(1.0f - junction.drop / pc);
+      // The gate rides on zeta, so this is WindBore::injection(refl, active, gate) already.
+      inj = junction.injection;
     }
   }
 

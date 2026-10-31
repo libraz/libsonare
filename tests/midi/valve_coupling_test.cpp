@@ -248,6 +248,36 @@ TEST_CASE("passive coupling map keeps its minimum slope at the ends of the open 
   }
 }
 
+TEST_CASE("passive coupling moves zeta per sample without losing its warm start",
+          "[midi][synth][passive_coupling]") {
+  constexpr ValveLaw kReed{1.0f, 1.0f, 1.0f};
+  PassiveCoupling configured;
+  configured.configure(2.0f, 0.6f);
+  PassiveCoupling moved;
+  moved.configure(2.0f, 0.2f);
+  moved.set_zeta(0.6f);
+  REQUIRE(moved.zeta() == configured.zeta());
+  REQUIRE(moved.flow_gain() == configured.flow_gain());
+  moved.set_zeta(2.0f);
+  REQUIRE(moved.zeta() == PassiveCoupling::kMaxZeta);
+  moved.set_zeta(-1.0f);
+  REQUIRE(moved.zeta() == 0.0f);
+
+  // Settle on an open-branch root, then move zeta: a cleared warm start would
+  // restart from u = 0 and the gap would be the whole root.
+  PassiveCoupling c;
+  c.configure(1.0f, 0.5f);
+  for (int n = 0; n < 8; ++n) c.solve(0.6f, 0.0f, 0.0f, kReed);
+  const float settled = c.stats().max_accepted_u;
+  REQUIRE(settled > 0.5f);
+  c.reset_stats();
+  c.set_zeta(0.52f);
+  c.solve(0.6f, 0.0f, 0.0f, kReed);
+  INFO("settled |u| " << settled << ", warm-start gap after set_zeta "
+                      << c.stats().max_warm_start_gap);
+  REQUIRE(c.stats().max_warm_start_gap < 0.05f * settled);
+}
+
 TEST_CASE("passive coupling converges over the clamped domain", "[midi][synth][passive_coupling]") {
   // The convergence instrument on the solver alone, over the domain the
   // clamps allow (zeta <= 0.9, gamma < 1) and a swept X range, no voice needed.

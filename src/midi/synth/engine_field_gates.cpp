@@ -250,10 +250,10 @@ const GateRow kEngineGates[] = {
      [](const GateSite&) { return wrapper_is("body", "violin") & wrapper_above("bodyMix", 0); }},
     {"bowed_string.string_loss_per_octave",
      [](const GateSite&) { return above("stringLossHarmonic", 0); }},
-    // Reed: the mass-spring valve, the growth cone and the beating-reed channel.
+    // Reed: the mass-spring valve, the growth cone and the Bernoulli valve.
     {"reed.reed_resonance", [](const GateSite&) { return is("dynamicReed", true); }},
     {"reed.cone_growth", [](const GateSite&) { return is("conical", true); }},
-    {"reed.flow_gain", [](const GateSite&) { return above("closingPressure", 0); }},
+    {"reed.zeta", [](const GateSite&) { return above("closingPressure", 0); }},
     {"reed.pressure_scale", [](const GateSite&) { return above("closingPressure", 0); }},
     // Brass: a bell cutoff takes the radiation corner from the reflection pole.
     {"brass.bell_radiation_hz", [](const GateSite&) { return equals("bellCutoffHz", 0); }},

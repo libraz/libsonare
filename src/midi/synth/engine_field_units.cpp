@@ -97,7 +97,7 @@ constexpr UnitRow kEngineUnits[] = {
     {"reed.cone_growth", Unit::None},
     {"reed.tonehole", Unit::None},
     {"reed.closing_pressure", Unit::None},
-    {"reed.flow_gain", Unit::None},
+    {"reed.zeta", Unit::None},
     {"reed.pressure_scale", Unit::Ratio},
     {"reed.velocity_exponent", Unit::None},
     {"brass.conical", Unit::None},

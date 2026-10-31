@@ -8,6 +8,7 @@
 
 #include "midi/synth/envelope.h"
 #include "midi/synth/native_synth_patch.h"
+#include "midi/synth/passive_coupling.h"
 #include "util/constants.h"
 
 namespace sonare::midi::synth {
@@ -522,7 +523,8 @@ constexpr NativeSynthPatch clamp_synth_patch(const NativeSynthPatch& patch) noex
       std::clamp(patch_clamp_detail::sanitize(p.reed.closing_pressure, 0.0f), 0.0f, 8.0f);
   p.reed.pressure_scale =
       std::clamp(patch_clamp_detail::sanitize(p.reed.pressure_scale, 1.0f), 0.0f, 4.0f);
-  p.reed.flow_gain = std::clamp(patch_clamp_detail::sanitize(p.reed.flow_gain, 0.7f), 0.0f, 1.5f);
+  p.reed.zeta =
+      std::clamp(patch_clamp_detail::sanitize(p.reed.zeta, 0.7f), 0.0f, PassiveCoupling::kMaxZeta);
   p.reed.velocity_exponent =
       std::clamp(patch_clamp_detail::sanitize(p.reed.velocity_exponent, 2.0f), 0.0f, 4.0f);
   p.brass.breath_pressure =

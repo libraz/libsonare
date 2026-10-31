@@ -13,6 +13,7 @@
 #### Removed and renamed
 
 - The C `SonareRirSynthConfig` and `SonareRoomMorphConfig` field `air_absorption_enabled` is now `air_absorption`, a `SONARE_AIR_ABSORPTION_*` selector: `DEFAULT` (0) and `ON` (1) apply air absorption, `OFF` (2) leaves it out, and any other value is refused. A zero-initialized config therefore applies it. `SONARE_ACOUSTIC_ABI_VERSION` is 6.
+- The reed engine's `flowGain` engine parameter is now `zeta`, the dimensionless flow-to-pressure gain: the old value divided by the square root of `pressureScale` × `closingPressure`. It is clamped to [0, 0.9] where `flowGain` was clamped to [0, 1.5], since past 1 the valve has two states to choose between. The GM saxophone and bassoon voices carry the converted values.
 
 #### Now refused
 

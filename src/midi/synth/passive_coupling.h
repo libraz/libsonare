@@ -68,10 +68,16 @@ class PassiveCoupling {
   /// @param zeta           Dimensionless flow-to-pressure gain, clamped to [0, kMaxZeta].
   void configure(float pressure_scale, float zeta) noexcept {
     pressure_scale_ = std::max(pressure_scale, std::numeric_limits<float>::min());
-    zeta_ = std::clamp(zeta, 0.0f, kMaxZeta);
     root_scale_ = std::sqrt(pressure_scale_);
-    flow_gain_ = zeta_ * root_scale_;
+    set_zeta(zeta);
     reset();
+  }
+
+  /// Moves zeta under the same clamp, keeping the warm start: for a gain that
+  /// changes every sample, such as a breath gate scaling the valve's flow.
+  void set_zeta(float zeta) noexcept {
+    zeta_ = std::clamp(zeta, 0.0f, kMaxZeta);
+    flow_gain_ = zeta_ * root_scale_;
   }
 
   float zeta() const noexcept { return zeta_; }

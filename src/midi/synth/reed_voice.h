@@ -42,6 +42,7 @@
 
 #include "midi/control_value.h"
 #include "midi/synth/excitation_axes.h"
+#include "midi/synth/passive_coupling.h"
 #include "midi/synth/string_loop.h"
 #include "midi/synth/voice_random.h"
 #include "midi/synth/wind_bore.h"
@@ -133,7 +134,7 @@ struct ReedPatchParams {
   /// "reed formant" edge) and adding a live beating to the attack, the way a real
   /// cane reed does. Like the bowed string's elasto-plastic friction, the sharp
   /// table is KEPT (so the harmonic structure survives) and only biased. With
-  /// the beating reed below on there is no table to bias, and the same reed
+  /// the Bernoulli valve below on there is no table to bias, and the same reed
   /// becomes the VALVE: its opening turns from a function of the current
   /// pressure drop into a state, driven toward the static valve's opening at DC
   /// gain 1 — so the static valve is the dynamic one's fixed point and the
@@ -146,11 +147,11 @@ struct ReedPatchParams {
   bool dynamic_reed = false;
   /// Reed natural frequency in [0,1] (only when dynamic_reed): low = a soft, low
   /// reed resonance (a darker, rounder cane reed); high = a stiff, high reed
-  /// resonance (a brighter, edgier reed formant). With the beating reed on it is
+  /// resonance (a brighter, edgier reed formant). With the Bernoulli valve on it is
   /// the valve's own resonance, so it sets how fast the reed swings open.
   float reed_resonance = 0.5f;
 
-  /// Beating-reed closing pressure: the mouth-minus-bore drop at which the reed
+  /// Bernoulli-valve closing pressure: the mouth-minus-bore drop at which the reed
   /// channel shuts. The shipped valve is the linearised reed table (STK's
   /// `offset + slope*dp`, hard-clamped), whose only nonlinearity is a weak
   /// quadratic term, so the bore is driven by a near-sine and the radiated
@@ -164,13 +165,14 @@ struct ReedPatchParams {
   /// used and the render is bit-identical.
   float closing_pressure = 0.0f;
   /// How much of the reed's flow the bore receives (only when
-  /// closing_pressure > 0). Sets the oscillation amplitude and, with it, how far
-  /// the opening swings — so it reads as drive rather than as level, and the
-  /// patch's own gain is what holds the loudness. Clamped to 1.5. The drop's
-  /// solve has one root while this stays under the square root of
-  /// pressure_scale * closing_pressure; past that the valve has two states to
-  /// choose between and chatters.
-  float flow_gain = 0.7f;
+  /// closing_pressure > 0), dimensionless: the flow-to-pressure gain over the
+  /// square root of pressure_scale * closing_pressure. Sets the oscillation
+  /// amplitude and, with it, how far the opening swings — so it reads as drive
+  /// rather than as level, and the patch's own gain is what holds the loudness.
+  /// The drop's solve has one root while this stays under 1; past that the
+  /// valve has two states to choose between and chatters. Clamped to
+  /// PassiveCoupling::kMaxZeta.
+  float zeta = 0.7f;
   /// Pressure scale the valve works in (only when closing_pressure > 0). The
   /// flow follows a square root, so this is a LOOP GAIN and not a level:
   /// multiplying every pressure by it scales the injection by its square root
@@ -184,7 +186,7 @@ struct ReedPatchParams {
   /// Exponent of the voice-amplifier velocity curve, (velocity/127)^e; 2 is the
   /// SoundFont curve, bit-identical to it.
   float velocity_exponent = 2.0f;
-  /// @note With the beating reed on, reed_stiffness and reed_opening address
+  /// @note With the Bernoulli valve on, reed_stiffness and reed_opening address
   /// the table it replaces and stop reaching the sound. dynamic_reed does not:
   /// it turns the valve's own opening into a state (see its field above).
 
@@ -359,10 +361,12 @@ class ReedVoiceCore {
   float reed_offset_ = 0.7f;
   float reed_slope_ = -0.3f;
 
-  // Beating reed (gated): 0 closing pressure keeps the table above.
+  // Bernoulli valve (gated): 0 closing pressure keeps the table above. The
+  // breath gate scales zeta_ into the junction every sample.
   float closing_pressure_ = 0.0f;
   float pressure_scale_ = 1.0f;
-  float flow_gain_ = 0.0f;
+  float zeta_ = 0.0f;
+  PassiveCoupling valve_;
   // Tonguing (dynamic valve only): the reed is pinned shut until the mouth
   // pressure reaches tongue_release_, so it starts its swing from a closed
   // channel. Held false for the static valve, which has nothing to start.
@@ -411,7 +415,7 @@ class ReedVoiceCore {
   // difference, whose displacement biases the reed table. Returns the bias.
   float reed_resonator(float dp) noexcept;
 
-  // The same reed as the beating valve's own opening: driven toward @p x_rest
+  // The same reed as the Bernoulli valve's own opening: driven toward @p x_rest
   // (the static valve's opening) at DC gain 1. Returns the clamped displacement.
   float valve_opening(float x_rest) noexcept;
 

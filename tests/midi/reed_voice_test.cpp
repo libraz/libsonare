@@ -32,6 +32,7 @@ using sonare::midi::Velocity16;
 using sonare::midi::synth::NativeSynth;
 using sonare::midi::synth::NativeSynthConfig;
 using sonare::midi::synth::NativeSynthPatch;
+using sonare::midi::synth::PassiveCoupling;
 using sonare::midi::synth::ReedPatchParams;
 using sonare::midi::synth::ReedVoiceCore;
 using sonare::midi::synth::SynthEngineMode;
@@ -210,7 +211,7 @@ NativeSynthPatch reed_base_patch() {
 TEST_CASE("table-path dynamic reed keeps its radius and damping in hertz",
           "[midi][synth][reed][rate]") {
   // This is the table-path dynamic reed: closing_pressure must stay zero so
-  // the beating-valve branch is not selected. Probe the coefficients on the
+  // the Bernoulli-valve branch is not selected. Probe the coefficients on the
   // started core itself rather than recreating the filter design in the test.
   constexpr double kReedHz = 2500.0;
   constexpr double kVoicedRadius = 0.985;
@@ -783,13 +784,13 @@ TEST_CASE("advanced reed gates are off by default (bit-identical)", "[midi][synt
   same.reed.cone_growth = 0.0f;
   same.reed.tonehole = 0.0f;
   same.reed.closing_pressure = 0.0f;
-  same.reed.flow_gain = 1.4f;  // ignored while the closing pressure is zero
+  same.reed.zeta = 0.8f;  // ignored while the closing pressure is zero
   const std::vector<float> a = render_patch(base, 58, 110, 12000);
   const std::vector<float> b = render_patch(same, 58, 110, 12000);
   REQUIRE(a == b);
 }
 
-TEST_CASE("the beating reed fills the harmonic ladder", "[midi][synth][reed]") {
+TEST_CASE("the Bernoulli valve fills the harmonic ladder", "[midi][synth][reed]") {
   // The linearised table's only nonlinearity is a weak quadratic term, so it
   // drives the bore with a near-sine. Closing the channel toward beating and
   // taking the flow through the square root of the pressure drop is what puts a
@@ -797,11 +798,11 @@ TEST_CASE("the beating reed fills the harmonic ladder", "[midi][synth][reed]") {
   const double f0 = 146.8324;  // D3
   NativeSynthPatch table = reed_base_patch();
   table.reed.conical = true;
-  NativeSynthPatch beating = table;
-  beating.reed.closing_pressure = 2.0f;
-  beating.reed.flow_gain = 1.2f;
+  NativeSynthPatch valve = table;
+  valve.reed.closing_pressure = 2.0f;
+  valve.reed.zeta = 0.8485281f;
   const std::vector<double> flat = power_spectrum(render_patch(table, 50, 110, 24000), 8000);
-  const std::vector<double> rich = power_spectrum(render_patch(beating, 50, 110, 24000), 8000);
+  const std::vector<double> rich = power_spectrum(render_patch(valve, 50, 110, 24000), 8000);
   double flat_stack = 0.0;
   double rich_stack = 0.0;
   for (int k = 2; k <= 6; ++k) {
@@ -811,7 +812,7 @@ TEST_CASE("the beating reed fills the harmonic ladder", "[midi][synth][reed]") {
   REQUIRE(rich_stack > 1.8 * flat_stack);
 }
 
-TEST_CASE("the beating reed leaves no steady flow under the note", "[midi][synth][reed]") {
+TEST_CASE("the Bernoulli valve leaves no steady flow under the note", "[midi][synth][reed]") {
   // The channel's flow carries a large standing component that holds the
   // mouthpiece open and radiates nothing; injected into the bore it reads as a
   // rumble below the fundamental. Subtracting it keeps the band under the note
@@ -821,7 +822,7 @@ TEST_CASE("the beating reed leaves no steady flow under the note", "[midi][synth
     NativeSynthPatch patch = reed_base_patch();
     patch.reed.conical = true;
     patch.reed.closing_pressure = 2.0f;
-    patch.reed.flow_gain = 1.2f;
+    patch.reed.zeta = 0.8485281f;
     const std::vector<double> ps = power_spectrum(render_patch(patch, note, 110, 24000), 8000);
     double under = 0.0;
     const int top = static_cast<int>(0.8 * f0 / kRate * kFft);
@@ -832,7 +833,7 @@ TEST_CASE("the beating reed leaves no steady flow under the note", "[midi][synth
   }
 }
 
-TEST_CASE("the beating reed holds one period at the bassoon's operating point",
+TEST_CASE("the Bernoulli valve holds one period at the bassoon's operating point",
           "[midi][synth][reed]") {
   // A double reed closes once per cycle and the tone stays periodic. The GM bassoon is the voice
   // that sits deepest in the beating band, so its own patch is the subject: with the valve's drop
@@ -905,7 +906,7 @@ TEST_CASE("the dynamic valve speaks the note from the tongue's release", "[midi]
       statics.reed.conical = conical;
       statics.reed.chiff = 0.0f;
       statics.reed.closing_pressure = 2.0f;
-      statics.reed.flow_gain = 1.0f;
+      statics.reed.zeta = 0.7071068f;
       NativeSynthPatch dynamic = statics;
       dynamic.reed.dynamic_reed = true;
       const std::vector<float> a = render_patch(statics, note, 110, 48000);
@@ -974,7 +975,7 @@ TEST_CASE("the dynamic valve does not detune the note it speaks", "[midi][synth]
       NativeSynthPatch statics = reed_base_patch();
       statics.reed.conical = conical;
       statics.reed.closing_pressure = 2.0f;
-      statics.reed.flow_gain = 1.0f;
+      statics.reed.zeta = 0.7071068f;
       NativeSynthPatch dynamic = statics;
       dynamic.reed.dynamic_reed = true;
       const double c_static =
@@ -1013,7 +1014,7 @@ TEST_CASE("the dynamic valve lets the bore, not the reed, choose the pitch",
         patch.reed.conical = conical;
         patch.reed.brightness = brightness;
         patch.reed.closing_pressure = 2.0f;
-        patch.reed.flow_gain = 1.0f;
+        patch.reed.zeta = 0.7071068f;
         patch.reed.dynamic_reed = true;
         patch.reed.reed_resonance = 0.5f;
         const std::vector<double> ps = power_spectrum(render_patch(patch, note, 110, 48000), 24000);
@@ -1032,25 +1033,22 @@ TEST_CASE("the dynamic valve lets the bore, not the reed, choose the pitch",
   }
 }
 
-TEST_CASE("the beating reed stays bounded across the keyboard", "[midi][synth][reed]") {
+TEST_CASE("the Bernoulli valve stays bounded across the keyboard", "[midi][synth][reed]") {
   for (bool conical : {false, true}) {
     for (uint8_t note : {28, 46, 64, 82}) {
       for (float pressure : {1.0f, 2.0f, 4.0f}) {
         NativeSynthPatch patch = reed_base_patch();
         patch.reed.conical = conical;
         patch.reed.closing_pressure = pressure;
-        // The whole clamped flow-gain range, top included: the make-up scales
+        // The whole clamped zeta range, top included: the make-up scales
         // whatever column the drive produces, so the bound has to be read off
-        // the drive the clamp allows and not off the one the bank uses. It is
-        // looser than the table path's because the column is not a smooth
-        // function of the drive: the ceiling over this grid climbs from 1.2 at
-        // a tenth of the clamp to 9.3 at the clamp, and neighbouring cells
-        // differ tenfold. That is why the bank fits a gain per voice rather
-        // than trusting one output trim.
-        for (float fg : {0.3f, 0.7f, 1.0f, 1.5f}) {
-          patch.reed.flow_gain = fg;
+        // the drive the clamp allows and not off the one the bank uses. With
+        // zeta held under 1 the column peaks at 0.64 over this grid, at the
+        // clamp, so the table path's bound holds here too.
+        for (float zeta : {0.2f, 0.5f, 0.7f, PassiveCoupling::kMaxZeta}) {
+          patch.reed.zeta = zeta;
           const std::vector<float> tone = render_patch(patch, note, 127, 24000);
-          REQUIRE(peak(tone) < 12.0f);
+          REQUIRE(peak(tone) < 4.0f);
           REQUIRE(std::isfinite(tone.back()));
         }
       }
@@ -1072,7 +1070,7 @@ TEST_CASE("advanced reed gates compose stably", "[midi][synth][reed]") {
       patch.reed.cone_growth = 0.8f;
       patch.reed.tonehole = 0.7f;
       patch.reed.closing_pressure = 2.0f;
-      patch.reed.flow_gain = 1.6f;
+      patch.reed.zeta = PassiveCoupling::kMaxZeta;
       const std::vector<float> tone = render_patch(patch, note, 110, 24000);
       REQUIRE(peak(tone) < 4.0f);
       REQUIRE(std::isfinite(tone.back()));
