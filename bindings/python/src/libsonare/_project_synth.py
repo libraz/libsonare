@@ -66,6 +66,7 @@ _SYNTH_ENGINE_MODES = {
     "free-reed": 15,
     "harpsichord": 16,
     "sample": 17,
+    "singing": 18,
 }
 # Sample-engine overrides (SonareSampleLoopMode / SonareSampleKeyTrack). Both
 # reserve "default" = 0, which keeps whatever the bank recorded for the sample.

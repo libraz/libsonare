@@ -167,6 +167,7 @@ export const SYNTH_ENGINE_MODES = [
   'free-reed',
   'harpsichord',
   'sample',
+  'singing',
 ] as const;
 
 export const SAMPLE_LOOP_MODES = ['default', 'none', 'continuous', 'key-down'] as const;

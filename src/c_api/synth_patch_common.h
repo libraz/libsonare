@@ -131,6 +131,8 @@ static_assert(static_cast<int>(sonare::midi::synth::SynthEngineMode::kHarpsichor
               SONARE_SYNTH_ENGINE_HARPSICHORD);
 static_assert(static_cast<int>(sonare::midi::synth::SynthEngineMode::kSample) + 1 ==
               SONARE_SYNTH_ENGINE_SAMPLE);
+static_assert(static_cast<int>(sonare::midi::synth::SynthEngineMode::kSinging) + 1 ==
+              SONARE_SYNTH_ENGINE_SINGING);
 
 static_assert(static_cast<int>(sonare::midi::synth::VaWaveform::kSine) + 1 ==
               SONARE_SYNTH_OSC_SINE);

@@ -75,9 +75,8 @@ describe('the sample engine joins the patch enum tables', () => {
   it('lists the sample engine, in step with the native oracle', () => {
     expect(SYNTH_ENGINE_MODES).toContain('sample');
     expect(synthEnumTables().engineModes).toEqual([...SYNTH_ENGINE_MODES]);
-    // The engine is the last mode, so a table that dropped it would still pass
-    // a `toContain` on any earlier name.
-    expect(SYNTH_ENGINE_MODES[SYNTH_ENGINE_MODES.length - 1]).toBe('sample');
+    // Pinned at its C ordinal, which a `toContain` would not notice moving.
+    expect(SYNTH_ENGINE_MODES[17]).toBe('sample');
   });
 });
 

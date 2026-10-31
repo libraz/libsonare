@@ -41,6 +41,12 @@
 
 - Writing 16- or 24-bit WAV (`save_wav`, the command lines, bounce output) applies deterministic TPDF dither, independent per channel, to a stream that is not already on the target grid, so a fading reverb tail ends in noise instead of truncation distortion and a cut to silence. A stream already at that word length (a decoded file, a mastering-dithered master) is written code for code, and exact zeros stay digital silence. The same input still writes the same bytes on every platform and on both command lines.
 
+### New
+
+#### Synthesizer
+
+- A `singing` engine mode (`SONARE_SYNTH_ENGINE_SINGING`), reached through the `singing-voice` preset: a self-oscillating vocal-fold model sounding through a vocal tract. All four excitation axes apply — force is breath pressure, position and brightness move the vowel's constriction, morph leans the vocal register — and a measured compensation table keeps the written pitch as the breath rises. A non-slurred note opens with an alveolar tap. The pitch holds within 20 cents from D#2 to D4 at the default breath; above that the voice is drawn toward its first formant.
+
 ### Fixes
 
 #### Errors

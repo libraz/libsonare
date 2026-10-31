@@ -443,9 +443,10 @@ typedef enum SONARE_ENUM_BASE {
   SONARE_SYNTH_ENGINE_VOCAL = 14,
   SONARE_SYNTH_ENGINE_FREE_REED = 15,
   SONARE_SYNTH_ENGINE_HARPSICHORD = 16,
-  SONARE_SYNTH_ENGINE_SAMPLE = 17
+  SONARE_SYNTH_ENGINE_SAMPLE = 17,
+  SONARE_SYNTH_ENGINE_SINGING = 18
 } SonareSynthEngineMode;
-#define SONARE_SYNTH_ENGINE_MODE_COUNT 18
+#define SONARE_SYNTH_ENGINE_MODE_COUNT 19
 
 /* Loop behaviour override for the sample engine. 0 keeps what the bank
    recorded for the sample the zone names. */
@@ -882,7 +883,7 @@ static_assert(offsetof(SonareAnalysisResult, bpm_candidates) ==
                   offsetof(SonareAnalysisResult, beat_count) + sizeof(size_t),
               "SonareAnalysisResult candidate layout changed");
 
-static_assert(SONARE_SYNTH_ENGINE_SAMPLE + 1 == SONARE_SYNTH_ENGINE_MODE_COUNT,
+static_assert(SONARE_SYNTH_ENGINE_SINGING + 1 == SONARE_SYNTH_ENGINE_MODE_COUNT,
               "SonareSynthEngineMode count changed");
 static_assert(SONARE_SAMPLE_LOOP_KEY_DOWN + 1 == SONARE_SAMPLE_LOOP_MODE_COUNT,
               "SonareSampleLoopMode count changed");

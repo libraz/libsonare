@@ -84,7 +84,7 @@ def _is_silent(audio: np.ndarray) -> bool:
 
 
 def test_engine_mode_table_carries_the_sample_engine() -> None:
-    assert SYNTH_ENUM_TABLES["engine_modes"][-1] == "sample"
+    assert SYNTH_ENUM_TABLES["engine_modes"][17] == "sample"
     assert synth_enum_tables()["engine_modes"] == SYNTH_ENUM_TABLES["engine_modes"]
     assert SynthPatch(engine_mode="sample")._to_c().engine_mode == 17
     assert SynthPatch._from_c(SynthPatch(engine_mode=17)._to_c()).engine_mode == "sample"

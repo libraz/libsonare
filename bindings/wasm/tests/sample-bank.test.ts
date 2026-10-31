@@ -313,7 +313,7 @@ describe('Sonare WASM sample bank', () => {
 
   it('lists the sample engine among the engine modes', () => {
     expect(SYNTH_ENGINE_MODES).toContain('sample');
-    expect(SYNTH_ENGINE_MODES[SYNTH_ENGINE_MODES.length - 1]).toBe('sample');
+    expect(SYNTH_ENGINE_MODES[17]).toBe('sample');
     expect(synthEnumTables().engineModes).toEqual([...SYNTH_ENGINE_MODES]);
   });
 });

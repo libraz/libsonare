@@ -22,9 +22,10 @@
 namespace sonare::c_api::synth_names {
 
 inline constexpr const char* kEngineModes[] = {
-    "default",    "subtractive",    "fm",         "karplus-strong", "modal",       "additive",
-    "percussion", "piano",          "pipe-organ", "bowed-string",   "reed",        "brass",
-    "flute",      "plucked-string", "vocal",      "free-reed",      "harpsichord", "sample"};
+    "default",   "subtractive", "fm",     "karplus-strong", "modal",
+    "additive",  "percussion",  "piano",  "pipe-organ",     "bowed-string",
+    "reed",      "brass",       "flute",  "plucked-string", "vocal",
+    "free-reed", "harpsichord", "sample", "singing"};
 // SonareSampleLoopMode, the patch's per-voice override. Distinct from the
 // SoundFont sampleModes value a SonareSampleDesc carries.
 inline constexpr const char* kSampleLoopModes[] = {"default", "none", "continuous", "key-down"};
