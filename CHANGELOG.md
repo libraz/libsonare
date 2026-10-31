@@ -6,9 +6,15 @@
 
 #### Realtime voice changer
 
-- Voice changer C ABI 4: `SonareRealtimeVoiceChangerConfig` is `struct_version` 2 with the new fields appended, and `struct_version` 0 and 1 are refused. The aggregate ABI version is `0x06040207`; a binding built against the old one reports `AbiMismatch` at load.
+- Voice changer C ABI 4: `SonareRealtimeVoiceChangerConfig` is `struct_version` 2 with the new fields appended, and `struct_version` 0 and 1 are refused. The aggregate ABI version is `0x06040208` (with the feature ABI 8 of the section analysis note below); a binding built against an older one reports `AbiMismatch` at load.
 - The flat camelCase config (Node and WASM) now requires every field; an omitted key is refused. Fractional values for `retuneGrainSize` and `reverbSeed` are refused.
 - Preset schema version 2. Version 1 documents still load; documents are written as version 2, which an older library refuses.
+
+#### Section analysis
+
+- Feature C ABI 8: `SonareSection` gains a trailing `int32_t group`, 24 bytes instead of 20. A library or binding on feature ABI 7 is refused with `AbiMismatch`; C callers and native consumers rebuild.
+- Breaking (C++): `SectionConfig::kernel_size` is removed; the novelty window is now twice `min_section_sec` on each side of a boundary. Delete the line that sets it.
+- Breaking (C++): the three `SectionAnalyzer` constructors that took boundaries from outside are removed. Call `SectionAnalyzer(audio, config)`, which tracks the beats itself, or `SectionAnalyzer(audio, SectionGrid, spec, config)` with the beats and downbeats and the STFT you already have; a `SectionGrid` that is not ascending, or whose downbeat index is out of range, is refused as `InvalidParameter`. `detect_boundaries` and `BoundaryDetector` are unchanged.
 
 #### Removed and renamed
 
@@ -31,6 +37,17 @@
 - The default engine is now `psola`, so the same preset sounds different. Latency drops from 2263 to 717 samples at 48 kHz. `voiceEngine.engine = grain` (`voice_engine_engine="grain"` in Python) keeps the previous processing.
 - Six new presets: `hard-tune`, `robot-monotone`, `choir-harmony`, `vocoder-strings`, `megaphone` and `radio-voice`. The voice changer gains auto pitch and robot, scale harmony, MIDI note input (`noteOn` / `noteOff` / `allNotesOff`, Python `note_on` / `note_off` / `all_notes_off`), a channel vocoder with an internal or external carrier (`process*WithCarrier`, Python `process_*_with_carrier`), megaphone, radio, chorus and strobe character, and echo, tempo delay and dub echo.
 
+#### Section analysis
+
+- Section analysis is rebuilt on a beat grid. MFCC (c1 to c13) and chroma are averaged per beat; boundaries are checkerboard-novelty peaks, kept only where the harmony measurably changes and moved onto a nearby downbeat when the meter is trusted; sections are then compared as sequences along the diagonals of a smoothed self-similarity matrix instead of by their mean chroma. A verse and a chorus in the same key are no longer merged into one span, a chorus that the novelty split in two is rejoined, and sections that repeat the same material share a `group`.
+- Labels come from a fixed rule table over the groups: the most repeated loud group is the Chorus, the group covering the most time the Verse, a repeated group that always leads into the Chorus and is shorter than it the Pre-Chorus (`PreChorus` and `P` in `form` now occur), then Intro and Outro at the edges, Instrumental, Bridge between two Chorus occurrences, and Unknown for what no rule claims.
+- The number of sections, their boundaries, labels, `form` and `confidence` differ from earlier releases on real music. A labelled section's `confidence` is in [0.5, 1], and an Unknown section always has `confidence` 0; the demotion of a low-confidence label to Unknown is gone.
+- Instrumental tracks with repetition now get Chorus and Verse; a repeated section without vocals used to be kept from Chorus.
+- Material that never changes, or whose sections all fall into one group, is still one Unknown section with `confidence` 0. A section shorter than one beat column (0.5 s on the fallback grid used for fewer than 8 beats) is not separated.
+- `SectionConfig::boundary_threshold` defaults to 0.22 for section analysis; the public boundary detector's default stays 0.3.
+- `SectionAnalyzer::section_self_similarity()` returns the sequence-match score of every pair of sections (1 on the diagonal, 0 for a pair whose lengths differ more than fourfold) instead of the similarity of their mean chroma, and `boundary_times()` returns the boundaries found on the beat grid, before the minimum-length merge.
+- `analyze()` and `MusicAnalyzer::section_analyzer()` use the chord-refined beats and downbeats, so `MusicAnalyzer::form()` now also pays for chord analysis. `analyze_sections` and the other entry points that take only audio run beat tracking themselves and can return different sections from `analyze()` on the same track.
+
 #### Room acoustics
 
 - Synthesized room impulse responses, the room reverb and the room morph apply ISO 9613-1 air absorption at the reference climate (20 °C, 50 % RH) by default, which shortens the high-band decay of large rooms. Pass `airAbsorptionEnabled: false` (Python `air_absorption_enabled=False`) for the geometry-only decay.
@@ -42,6 +59,10 @@
 - Writing 16- or 24-bit WAV (`save_wav`, the command lines, bounce output) applies deterministic TPDF dither, independent per channel, to a stream that is not already on the target grid, so a fading reverb tail ends in noise instead of truncation distortion and a cut to silence. A stream already at that word length (a decoded file, a mastering-dithered master) is written code for code, and exact zeros stay digital silence. The same input still writes the same bytes on every platform and on both command lines.
 
 ### New
+
+#### Section analysis
+
+- Every section carries a `group`: sections that share a value repeat the same material, numbered 0, 1, 2... in order of first appearance, and a section that repeats nothing has a group of its own. It is `SonareSection.group` in C, `sections[].group` in the analyze JSON, `Section.group` in C++ and Python, `AnalysisSection.group` and `Section.group` in Node, `Section.group` in WASM, and the `group` key of each section in the `sections` and `analyze` output of both command lines. `form` keeps its meaning, one label character per section.
 
 #### Synthesizer
 
