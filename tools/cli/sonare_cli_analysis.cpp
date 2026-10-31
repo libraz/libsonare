@@ -281,6 +281,7 @@ int cmd_sections(const CliArgs& args, const Audio& audio) {
           .kv("end", s.end)
           .kv("energy", s.energy_level)
           .kv("confidence", s.confidence)
+          .kv("group", s.group)
           .end_object();
     }
     json.end_array().end_object().print();
@@ -623,6 +624,7 @@ int cmd_analyze(const CliArgs& args, const Audio& audio) {
           .kv("type", canonical_section_type(s.type))
           .kv("start", s.start)
           .kv("end", s.end)
+          .kv("group", s.group)
           .end_object();
     }
     json.end_array()

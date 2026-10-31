@@ -323,6 +323,23 @@ TEST_CASE("CLI chords command", "[.][slow][cli]") {
   }
 }
 
+namespace {
+
+// Each section carries an integer group, numbered by first appearance from 0.
+void require_groups_by_first_appearance(const sonare::util::json::Value& sections) {
+  int next_new = 0;
+  for (const auto& section : sections.as_array()) {
+    REQUIRE(section["group"].is_number());
+    const double group = section["group"].as_number();
+    REQUIRE(group == static_cast<int>(group));
+    REQUIRE(group >= 0);
+    REQUIRE(group <= next_new);
+    if (static_cast<int>(group) == next_new) ++next_new;
+  }
+}
+
+}  // namespace
+
 TEST_CASE("CLI sections command", "[cli]") {
   create_test_wav(TEST_WAV);
 
@@ -350,6 +367,8 @@ TEST_CASE("CLI sections command", "[cli]") {
     REQUIRE(sections_code == 0);
     const auto sections_json = sonare::util::json::parse_strict(sections_output);
     REQUIRE_FALSE(sections_json["sections"].as_array().empty());
+    require_groups_by_first_appearance(sections_json["sections"]);
+    REQUIRE(sections_json["sections"].as_array()[0]["group"].as_number() == 0);
 
     std::set<std::string> spellings;
     for (const auto& section : sections_json["sections"].as_array()) {
@@ -767,6 +786,8 @@ TEST_CASE("CLI analyze command", "[.][slow][cli]") {
     const auto& sections = payload["sections"];
     REQUIRE(sections.is_array());
     REQUIRE_FALSE(sections.as_array().empty());
+    require_groups_by_first_appearance(sections);
+    REQUIRE(sections.as_array()[0]["group"].as_number() == 0);
     for (const auto& section : sections.as_array()) {
       const auto type = section["type"].as_string();
       bool canonical = false;

@@ -85,7 +85,7 @@ _ANALYZE_KEY_KEYS = {"root", "mode", "confidence", "name"}
 _ANALYZE_TIME_SIGNATURE_KEYS = {"numerator", "denominator", "confidence"}
 _ANALYZE_BEAT_KEYS = {"time", "strength"}
 _ANALYZE_CHORD_KEYS = {"name", "start", "end", "confidence"}
-_ANALYZE_SECTION_KEYS = {"type", "start", "end"}
+_ANALYZE_SECTION_KEYS = {"type", "start", "end", "group"}
 _ANALYZE_TIMBRE_KEYS = {
     "brightness",
     "warmth",
