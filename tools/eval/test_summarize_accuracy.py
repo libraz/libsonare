@@ -50,6 +50,7 @@ def test_empty_report_reports_every_dimension_unmeasured() -> None:
         "downbeat",
         "meter",
         "chord",
+        "structure",
     }
     for name, entry in summary["dimensions"].items():
         assert entry["measured"] is False, name
@@ -200,6 +201,43 @@ def test_markdown_carries_the_fixture_count_with_every_figure() -> None:
     assert len(rows) == 2  # overall plus one dataset
     for row in rows:
         assert "| 2 |" in row
+
+
+def _structure(fixture: str, features: str, hr05f: float, hr3f: float, pairwise_f: float) -> dict:
+    return {
+        "metric": "structure",
+        "fixture": fixture,
+        "features": features,
+        "hr05f": hr05f,
+        "hr3f": hr3f,
+        "pairwise_f": pairwise_f,
+        "min_hr3f": 0.0,
+        "min_pairwise_f": 0.0,
+    }
+
+
+def test_structure_means_each_feature_set_separately() -> None:
+    # Track a is perfect on `both` (1.0 / 1.0 / 1.0); track b finds half the
+    # boundaries at 0.5 s and merges the two groups (0.5 / 1.0 / 0.5). Means: 0.75 / 1.0 / 0.75.
+    summary = summarizer.summarize(
+        _report(
+            _structure("harmonix/a.m4a", "both", 1.0, 1.0, 1.0),
+            _structure("harmonix/b.m4a", "both", 0.5, 1.0, 0.5),
+            _structure("harmonix/a.m4a", "timbre", 0.0, 0.5, 0.25),
+        )
+    )
+    entry = summary["dimensions"]["structure"]
+    assert entry["measured"] is True
+    assert entry["fixtures"] == 2
+    overall = entry["overall"]
+    assert abs(overall["mean_hr05f"] - 0.75) < 1e-9
+    assert abs(overall["mean_hr3f"] - 1.0) < 1e-9
+    assert abs(overall["mean_pairwise_f"] - 0.75) < 1e-9
+    # A feature set must not be averaged into `both`: the timbre-only reading
+    # sits beside it under its own keys.
+    assert overall["timbre_mean_hr3f"] == 0.5
+    assert overall["timbre_mean_pairwise_f"] == 0.25
+    assert entry["by_dataset"]["harmonix"]["fixtures"] == 2
 
 
 def _run_all() -> int:

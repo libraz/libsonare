@@ -1,5 +1,5 @@
 /// @file music_dataset_test.cpp
-/// @brief Optional external BPM/key/meter/beat/downbeat/chord evaluation fixture checks.
+/// @brief Optional external BPM/key/meter/beat/downbeat/chord/structure evaluation fixture checks.
 
 #include <algorithm>
 #include <catch2/catch_test_macros.hpp>
@@ -10,6 +10,7 @@
 #include <filesystem>
 #include <fstream>
 #include <limits>
+#include <map>
 #include <sstream>
 #include <string>
 #include <vector>
@@ -19,6 +20,7 @@
 #include "analysis/bpm_analyzer.h"
 #include "analysis/chord_analyzer.h"
 #include "analysis/key_analyzer.h"
+#include "analysis/section_analyzer.h"
 #include "core/audio.h"
 #include "quick.h"
 
@@ -664,6 +666,134 @@ ExpectedKeyMatch best_expected_key_match(const Key& measured,
   return best;
 }
 
+/// One annotated or estimated section: a time span and the group it belongs to.
+struct StructureSpan {
+  float start = 0.0f;
+  float end = 0.0f;
+  int group = 0;
+};
+
+/// Reads `start_sec<TAB>label` lines; the last line is `end_sec<TAB>end`. Equal labels share a
+/// group.
+std::vector<StructureSpan> read_structure_annotation(const std::filesystem::path& path) {
+  std::ifstream in(path);
+  std::vector<float> starts;
+  std::vector<std::string> labels;
+  std::string line;
+  while (std::getline(in, line)) {
+    std::istringstream fields(line);
+    float time = 0.0f;
+    std::string label;
+    if (fields >> time >> label) {
+      starts.push_back(time);
+      labels.push_back(label);
+    }
+  }
+  std::vector<StructureSpan> spans;
+  if (starts.size() < 2) return spans;
+  std::map<std::string, int> group_of;
+  for (size_t i = 0; i + 1 < starts.size(); ++i) {
+    const int group = group_of.emplace(labels[i], static_cast<int>(group_of.size())).first->second;
+    spans.push_back({starts[i], starts[i + 1], group});
+  }
+  return spans;
+}
+
+/// The group the old section analyzer reports for a section. It has no group of its own, so its
+/// label stands in; switch this to the section's group once the analyzer exposes one.
+int estimated_group(const Section& section) { return static_cast<int>(section.type); }
+
+std::vector<StructureSpan> structure_spans(const SectionAnalyzer& analyzer) {
+  std::vector<StructureSpan> spans;
+  for (const Section& section : analyzer.sections()) {
+    spans.push_back({section.start, section.end, estimated_group(section)});
+  }
+  return spans;
+}
+
+/// Interior boundaries: every span start but the first (the track start and end are excluded).
+std::vector<float> interior_boundaries(const std::vector<StructureSpan>& spans) {
+  std::vector<float> boundaries;
+  for (size_t i = 1; i < spans.size(); ++i) boundaries.push_back(spans[i].start);
+  return boundaries;
+}
+
+bool augment_match(size_t reference, const std::vector<std::vector<size_t>>& edges,
+                   std::vector<bool>& visited, std::vector<size_t>& match_of_estimate) {
+  for (size_t estimate : edges[reference]) {
+    if (visited[estimate]) continue;
+    visited[estimate] = true;
+    if (match_of_estimate[estimate] == edges.size() ||
+        augment_match(match_of_estimate[estimate], edges, visited, match_of_estimate)) {
+      match_of_estimate[estimate] = reference;
+      return true;
+    }
+  }
+  return false;
+}
+
+/// Boundary hit-rate F-measure: a maximum one-to-one matching (augmenting paths) between
+/// estimated and reference boundaries that lie within @p window_sec of each other.
+float boundary_hit_rate_f(const std::vector<float>& estimated, const std::vector<float>& reference,
+                          float window_sec) {
+  if (estimated.empty() && reference.empty()) return 1.0f;
+  if (estimated.empty() || reference.empty()) return 0.0f;
+  std::vector<std::vector<size_t>> edges(reference.size());
+  for (size_t r = 0; r < reference.size(); ++r) {
+    for (size_t e = 0; e < estimated.size(); ++e) {
+      if (std::abs(estimated[e] - reference[r]) <= window_sec) edges[r].push_back(e);
+    }
+  }
+  std::vector<size_t> match_of_estimate(estimated.size(), reference.size());
+  size_t matched = 0;
+  for (size_t r = 0; r < reference.size(); ++r) {
+    std::vector<bool> visited(estimated.size(), false);
+    if (augment_match(r, edges, visited, match_of_estimate)) ++matched;
+  }
+  const float precision = static_cast<float>(matched) / static_cast<float>(estimated.size());
+  const float recall = static_cast<float>(matched) / static_cast<float>(reference.size());
+  return (precision + recall) > 0.0f ? 2.0f * precision * recall / (precision + recall) : 0.0f;
+}
+
+int group_at(const std::vector<StructureSpan>& spans, float time) {
+  for (const StructureSpan& span : spans) {
+    if (time < span.end) return span.group;
+  }
+  return spans.back().group;
+}
+
+double pair_count(long long n) { return 0.5 * static_cast<double>(n) * static_cast<double>(n - 1); }
+
+/// Pairwise F-measure on 0.1 s frames: over pairs of frames in the same group, precision against
+/// the reference pairs and recall of them.
+float structure_pairwise_f(const std::vector<StructureSpan>& estimated,
+                           const std::vector<StructureSpan>& reference) {
+  constexpr float kFrameSec = 0.1f;
+  const long long frames = static_cast<long long>(std::ceil(reference.back().end / kFrameSec));
+  std::map<int, long long> estimated_counts;
+  std::map<int, long long> reference_counts;
+  std::map<std::pair<int, int>, long long> joint_counts;
+  for (long long k = 0; k < frames; ++k) {
+    const float time = (static_cast<float>(k) + 0.5f) * kFrameSec;
+    const int e = group_at(estimated, time);
+    const int r = group_at(reference, time);
+    ++estimated_counts[e];
+    ++reference_counts[r];
+    ++joint_counts[{e, r}];
+  }
+  double estimated_pairs = 0.0;
+  double reference_pairs = 0.0;
+  double joint_pairs = 0.0;
+  for (const auto& [group, n] : estimated_counts) estimated_pairs += pair_count(n);
+  for (const auto& [group, n] : reference_counts) reference_pairs += pair_count(n);
+  for (const auto& [groups, n] : joint_counts) joint_pairs += pair_count(n);
+  const double precision = estimated_pairs > 0.0 ? joint_pairs / estimated_pairs : 0.0;
+  const double recall = reference_pairs > 0.0 ? joint_pairs / reference_pairs : 0.0;
+  return (precision + recall) > 0.0
+             ? static_cast<float>(2.0 * precision * recall / (precision + recall))
+             : 0.0f;
+}
+
 }  // namespace
 
 TEST_CASE("Music optional BPM fixtures", "[music_dataset][bpm]") {
@@ -984,6 +1114,47 @@ TEST_CASE("Music optional chord WCSR fixtures", "[music_dataset][chord]") {
     ++checked;
   }
   if (checked == 0) SKIP("No chord audio/annotation fixtures are present");
+}
+
+TEST_CASE("Music optional structure fixtures", "[music_dataset][structure]") {
+  const std::filesystem::path root = fixture_root();
+  const auto rows = read_rows(root / "structure_manifest.tsv");
+  if (rows.empty()) SKIP("No structure fixture rows are configured");
+
+  size_t checked = 0;
+  for (const auto& row : rows) {
+    if (row.size() < 5) continue;
+    const std::filesystem::path audio_path = root / row[1];
+    const std::filesystem::path annotation_path = root / row[2];
+    if (!std::filesystem::exists(audio_path) || !std::filesystem::exists(annotation_path)) {
+      continue;
+    }
+
+    INFO("Structure fixture: " << row[0] << " / " << row[1]);
+    const Audio audio = Audio::from_file(audio_path.string());
+    const auto reference = read_structure_annotation(annotation_path);
+    REQUIRE_FALSE(reference.empty());
+    const SectionAnalyzer analyzer(audio, SectionConfig());
+    const auto estimated = structure_spans(analyzer);
+    REQUIRE_FALSE(estimated.empty());
+
+    const auto estimated_boundaries = interior_boundaries(estimated);
+    const auto reference_boundaries = interior_boundaries(reference);
+    const float hr05f = boundary_hit_rate_f(estimated_boundaries, reference_boundaries, 0.5f);
+    const float hr3f = boundary_hit_rate_f(estimated_boundaries, reference_boundaries, 3.0f);
+    const float pairwise_f = structure_pairwise_f(estimated, reference);
+    if (is_report_only(row, 5)) {
+      WARN("Report-only structure fixture "
+           << row[0] << "/" << row[1] << " features both HR.5F " << hr05f << "; HR3F " << hr3f
+           << "; pairwise_f " << pairwise_f << "; min_hr3f " << row[3] << "; min_pairwise_f "
+           << row[4]);
+    } else {
+      REQUIRE(hr3f >= std::stof(row[3]));
+      REQUIRE(pairwise_f >= std::stof(row[4]));
+    }
+    ++checked;
+  }
+  if (checked == 0) SKIP("No structure audio/annotation fixtures are present");
 }
 
 }  // namespace sonare

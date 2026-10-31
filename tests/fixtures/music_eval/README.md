@@ -1,6 +1,6 @@
 # Music evaluation fixtures
 
-The six manifests in this directory gate the analyzers' accuracy against real recordings. The manifests are tracked; the audio and its annotations are not, because the corpora are licensed datasets that cannot be redistributed here. Every manifest therefore ships empty, and the tests that read them skip cleanly until you add rows and the audio they point at.
+The seven manifests in this directory gate the analyzers' accuracy against real recordings. The manifests are tracked; the audio and its annotations are not, because the corpora are licensed datasets that cannot be redistributed here. Every manifest therefore ships empty, and the tests that read them skip cleanly until you add rows and the audio they point at.
 
 Until a manifest has rows, the dimension it covers is unmeasured — not merely ungated. A change to key detection, beat tracking or chord recognition currently has nothing to fail against.
 
@@ -16,6 +16,7 @@ These manifests serve two different jobs, and a row does one or the other. A **g
 | `downbeat_manifest.tsv` | downbeat tracking | F-measure against a downbeat annotation |
 | `chord_manifest.tsv` | chord recognition | weighted chord symbol recall against an annotation |
 | `meter_manifest.tsv` | meter estimation | numerator, denominator and a confidence floor |
+| `structure_manifest.tsv` | section analysis | boundary hit-rate F (±3 s) and pairwise F against a section annotation |
 
 ## Where the audio goes
 
@@ -52,6 +53,8 @@ A minimal key row:
 ```
 mydataset	audio/track01.wav	C	major
 ```
+
+Structure rows take `dataset`, `file`, `annotation`, `min_hr3f`, `min_pairwise_f`, then optional `report_only` and notes. The annotation has one `start_sec<TAB>label` line per section and a final `end_sec<TAB>end` line; sections with the same label are the same material. A `report_only` row prints `Report-only structure fixture <dataset>/<file> features both HR.5F <x>; HR3F <y>; pairwise_f <z>; min_hr3f <a>; min_pairwise_f <b>`.
 
 ## Running it
 

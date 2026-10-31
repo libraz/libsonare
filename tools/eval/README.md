@@ -44,6 +44,7 @@ Each is obtained separately, under its own terms. The annotations are what matte
 | beat, downbeat | GTZAN rhythm annotations | annotations are open; the audio is not |
 | bpm | Ballroom, GTZAN | tempo annotations accompany the beat ones |
 | meter | Ballroom | one time signature per genre class |
+| structure | Harmonix Set, SALAMI | section boundaries and same-material labels; annotations are open, the audio is not |
 
 ## Running a measurement
 
@@ -74,6 +75,7 @@ python3 tools/eval/summarize_accuracy.py /tmp/accuracy-report.json --markdown
 - **bpm** — accuracy within 4% relative error (MIREX Acc1), plus the median relative error.
 - **beat**, **downbeat** — mean F-measure at the manifest's tolerance, plus the share of tracks above 0.5.
 - **meter** — numerator and denominator both correct.
+- **structure** — mean boundary hit-rate F at ±0.5 s (HR.5F) and ±3 s (HR3F), and pairwise F on 0.1 s frames, per `features` value (`both` carries the unprefixed keys). HR is a maximum one-to-one matching of interior boundaries; pairwise F scores whether frame pairs share a group. Until sections carry a group of their own, the estimate's group is its section label.
 - **chord** — weighted chord symbol recall over a major/minor vocabulary, the exact-quality WCSR beside it, and root, quality and bass accuracy separately. The gap between the maj/min and exact figures is the vocabulary's contribution.
 
 Every figure carries its fixture count and is broken down by dataset. A mean over a mixed corpus says nothing without knowing what went into it.

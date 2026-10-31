@@ -25,6 +25,7 @@ SUITES = {
             ("music:beat", "beat_manifest.tsv", 1, 2, 6),
             ("music:downbeat", "downbeat_manifest.tsv", 1, 2, 6),
             ("music:chord", "chord_manifest.tsv", 1, 2, 4),
+            ("music:structure", "structure_manifest.tsv", 1, 2, 5),
         ],
     },
     "acoustic": {
@@ -50,7 +51,9 @@ def default_root(name: str) -> Path:
 
 def suite_stats(name: str, root: Path) -> list[dict[str, Any]]:
     stats = []
-    for spec_name, manifest, audio_column, annotation_column, fixed_columns in SUITES[name]["specs"]:
+    for spec_name, manifest, audio_column, annotation_column, fixed_columns in SUITES[name][
+        "specs"
+    ]:
         spec = ManifestSpec(
             spec_name,
             root / manifest,
@@ -74,7 +77,9 @@ def provenance_violation_count(stats: list[dict[str, Any]]) -> int:
     return sum(int(item.get("provenance_violations", 0)) for item in stats)
 
 
-def run_suite(name: str, root: Path, sonare_tests: Path, timeout_seconds: float | None) -> dict[str, Any]:
+def run_suite(
+    name: str, root: Path, sonare_tests: Path, timeout_seconds: float | None
+) -> dict[str, Any]:
     env = os.environ.copy()
     env[str(SUITES[name]["env"])] = str(root)
     command = [str(sonare_tests), str(SUITES[name]["filter"])]
@@ -88,8 +93,16 @@ def run_suite(name: str, root: Path, sonare_tests: Path, timeout_seconds: float 
             timeout=timeout_seconds,
         )
     except subprocess.TimeoutExpired as exc:
-        stdout = exc.stdout if isinstance(exc.stdout, str) else (exc.stdout or b"").decode(errors="replace")
-        stderr = exc.stderr if isinstance(exc.stderr, str) else (exc.stderr or b"").decode(errors="replace")
+        stdout = (
+            exc.stdout
+            if isinstance(exc.stdout, str)
+            else (exc.stdout or b"").decode(errors="replace")
+        )
+        stderr = (
+            exc.stderr
+            if isinstance(exc.stderr, str)
+            else (exc.stderr or b"").decode(errors="replace")
+        )
         return {
             "suite": name,
             "command": command,
@@ -221,7 +234,9 @@ def extract_observations(stdout: str) -> list[dict[str, Any]]:
                 "expected_mode": expected_mode,
                 "expected_rank": int(match.group(6)) if match.group(6) is not None else None,
                 "best_correlation": float(match.group(7)) if match.group(7) is not None else None,
-                "expected_correlation": float(match.group(8)) if match.group(8) is not None else None,
+                "expected_correlation": float(match.group(8))
+                if match.group(8) is not None
+                else None,
                 "correlation_gap": float(match.group(9)) if match.group(9) is not None else None,
                 "mirex_category": match.group(10),
                 "mirex_score": float(match.group(11)) if match.group(11) is not None else None,
@@ -377,6 +392,25 @@ def extract_observations(stdout: str) -> list[dict[str, Any]]:
         )
 
     for match in re.finditer(
+        r"Report-only structure fixture (.+?) features (both|timbre|harmony) "
+        r"HR\.5F ([0-9.+\-eE]+); HR3F ([0-9.+\-eE]+); pairwise_f ([0-9.+\-eE]+); "
+        r"min_hr3f ([0-9.+\-eE]+); min_pairwise_f ([0-9.+\-eE]+)",
+        text,
+    ):
+        observations.append(
+            {
+                "metric": "structure",
+                "fixture": clean_fixture_name(match.group(1)),
+                "features": match.group(2),
+                "hr05f": float(match.group(3)),
+                "hr3f": float(match.group(4)),
+                "pairwise_f": float(match.group(5)),
+                "min_hr3f": float(match.group(6)),
+                "min_pairwise_f": float(match.group(7)),
+            }
+        )
+
+    for match in re.finditer(
         r"Report-only acoustic fixture ((?:(?! Report-only ).)+?) measured RT60 ([0-9.+\-eE]+)s; expected "
         r"([0-9.+\-eE]+)s \+/- ([0-9.+\-eE]+)s(?:; mode ([a-z]+))?",
         text,
@@ -512,7 +546,9 @@ def main() -> int:
         report["suites"][name]["provenance_violations"] == 0 for name in selected
     )
     if args.require_ready:
-        report["ok"] = report["ok"] and all(report["suites"][name]["ready"] > 0 for name in selected)
+        report["ok"] = report["ok"] and all(
+            report["suites"][name]["ready"] > 0 for name in selected
+        )
     if args.require_complete:
         report["ok"] = report["ok"] and all(
             report["suites"][name]["missing_fixtures"] == 0 for name in selected

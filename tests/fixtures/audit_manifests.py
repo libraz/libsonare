@@ -184,8 +184,13 @@ def main() -> int:
         ManifestSpec("music:key", args.music_root / "key_manifest.tsv", 1, fixed_columns=4),
         ManifestSpec("music:meter", args.music_root / "meter_manifest.tsv", 1, fixed_columns=5),
         ManifestSpec("music:beat", args.music_root / "beat_manifest.tsv", 1, 2, fixed_columns=6),
-        ManifestSpec("music:downbeat", args.music_root / "downbeat_manifest.tsv", 1, 2, fixed_columns=6),
+        ManifestSpec(
+            "music:downbeat", args.music_root / "downbeat_manifest.tsv", 1, 2, fixed_columns=6
+        ),
         ManifestSpec("music:chord", args.music_root / "chord_manifest.tsv", 1, 2, fixed_columns=4),
+        ManifestSpec(
+            "music:structure", args.music_root / "structure_manifest.tsv", 1, 2, fixed_columns=5
+        ),
     ]
     acoustic_specs = [
         ManifestSpec("acoustic:rt60", args.acoustic_root / "manifest.tsv", 1, fixed_columns=6)

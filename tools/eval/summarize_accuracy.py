@@ -135,6 +135,23 @@ def summarize_chord(observations: list[dict[str, Any]]) -> dict[str, Any]:
     }
 
 
+def summarize_structure(observations: list[dict[str, Any]]) -> dict[str, Any]:
+    """Mean HR.5F, HR3F and pairwise F per `features` value.
+
+    `both` is the primary reading and carries the unprefixed keys; any other
+    feature set (timbre, harmony) is reported beside it under a prefix.
+    """
+    result: dict[str, Any] = {}
+    for features in sorted({str(item["features"]) for item in observations}):
+        subset = [item for item in observations if item["features"] == features]
+        prefix = "" if features == "both" else f"{features}_"
+        result[f"{prefix}mean_hr05f"] = mean(float(item["hr05f"]) for item in subset)
+        result[f"{prefix}mean_hr3f"] = mean(float(item["hr3f"]) for item in subset)
+        result[f"{prefix}mean_pairwise_f"] = mean(float(item["pairwise_f"]) for item in subset)
+    result.setdefault("mean_hr3f", None)
+    return result
+
+
 DIMENSIONS = (
     Dimension("key", ("key",), summarize_key, "accuracy"),
     Dimension("bpm", ("bpm",), summarize_bpm, "accuracy"),
@@ -147,6 +164,7 @@ DIMENSIONS = (
         summarize_chord,
         "wcsr_maj_min",
     ),
+    Dimension("structure", ("structure",), summarize_structure, "mean_hr3f"),
 )
 
 

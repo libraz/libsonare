@@ -1,0 +1,6 @@
+# dataset	file	annotation	min_hr3f	min_pairwise_f
+# Optional extra columns after min_pairwise_f: report_only	notes
+# Annotation: one "start_sec<TAB>label" line per section, then a final "end_sec<TAB>end" line.
+# Sections with the same label are the same material (same group).
+# Add local fixture rows here. The optional test skips cleanly when no rows
+# with present audio and annotation files are available.
