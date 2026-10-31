@@ -173,6 +173,7 @@ Napi::Value SonareWrap::AnalyzeSections(const Napi::CallbackInfo& info) {
     obj.Set("end", Napi::Number::New(env, section.end));
     obj.Set("energyLevel", Napi::Number::New(env, section.energy_level));
     obj.Set("confidence", Napi::Number::New(env, section.confidence));
+    obj.Set("group", Napi::Number::New(env, section.group));
     sections.Set(static_cast<uint32_t>(i), obj);
   }
   sonare_free_section_result(&result);

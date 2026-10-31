@@ -178,6 +178,8 @@ export interface AnalysisSection {
   confidence: number;
   /** Human-readable section name (e.g. `'Chorus'`). */
   name: string;
+  /** Sections sharing a value repeat the same material, numbered 0, 1, ... by first appearance. */
+  group: number;
 }
 
 /** Aggregate timbre summary in {@link AnalysisResult.timbre}. */
@@ -530,13 +532,8 @@ export interface BoundaryResult {
 /**
  * Song-structure section type ordinal (mirrors the C `SonareSectionType`).
  *
- * Ordinal 2 (PreChorus) is never produced by the analyzer: it has no detection
- * branch, so filtering sections on it always yields an empty result. Every
- * other ordinal is reachable. 7 (Unknown) means the analyzer did not name the
- * segment: no boundary was detected, the segment matched none of the positive
- * branches, or the evidence for a musical function was too weak to assert one.
- * The first case comes with `confidence` 0; the last keeps the sub-threshold
- * score, so a caller can see how close the segment came to a label.
+ * 7 (Unknown) means no labelling rule matched the segment; it always comes
+ * with `confidence` 0.
  */
 export type SectionTypeOrdinal = 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7;
 
@@ -551,8 +548,10 @@ export interface Section {
   end: number;
   /** Median frame RMS in the section over the loudest section's, in `[0, 1]`. */
   energyLevel: number;
-  /** Detection confidence in `[0, 1]`. */
+  /** Detection confidence in `[0, 1]`; 0 for Unknown (no labelling rule matched). */
   confidence: number;
+  /** Sections sharing a value repeat the same material, numbered 0, 1, ... by first appearance. */
+  group: number;
 }
 
 export interface MelodyPoint {
