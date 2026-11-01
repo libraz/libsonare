@@ -6,7 +6,7 @@ import argparse
 import json
 import math
 from pathlib import Path
-from statistics import mean
+from statistics import mean, median
 from typing import Any
 
 from json_safe import dumps_strict, write_json_strict
@@ -50,6 +50,16 @@ DEFAULT_TARGETS = {
 }
 
 
+# Tolerance for comparing a mean against a baseline mean minus an allowed drop.
+DROP_EPSILON = 1e-9
+
+
+def dataset_of(fixture: str) -> str:
+    """Return the dataset of a `<dataset>/<path>` fixture name."""
+    head, separator, _ = fixture.partition("/")
+    return head if separator else "(unnamed)"
+
+
 def all_observations(report: dict[str, Any]) -> list[dict[str, Any]]:
     observations: list[dict[str, Any]] = []
     for run in report.get("runs", []):
@@ -78,6 +88,12 @@ def metric_value(item: dict[str, Any]) -> float | None:
         return float(item["improvement"])
     if metric in ("beat", "downbeat") or str(metric).startswith("downbeat_"):
         return float(item["f_measure"])
+    if metric == "beat_offset":
+        return float(item["median_offset_ms"])
+    if metric == "structure_hr3f":
+        return float(item["hr3f"])
+    if metric == "structure_pairwise_f":
+        return float(item["pairwise_f"])
     if metric in ("chord_wcsr", "chord_extended_wcsr"):
         return float(item["wcsr"])
     if metric == "chord_exact_wcsr":
@@ -123,6 +139,8 @@ def metric_pass(item: dict[str, Any]) -> bool | None:
         return float(item["improvement"]) >= float(threshold) if threshold is not None else None
     if metric in ("beat", "downbeat") or str(metric).startswith("downbeat_"):
         return float(item["f_measure"]) >= float(item["threshold"])
+    if metric in ("beat_offset", "structure_hr3f", "structure_pairwise_f"):
+        return None
     if metric in ("chord_wcsr", "chord_extended_wcsr"):
         threshold = item.get("threshold")
         return float(item["wcsr"]) >= float(threshold) if threshold is not None else None
@@ -290,6 +308,10 @@ def summarize_metric(metric: str, items: list[dict[str, Any]], target: dict[str,
         ok = bool(values) and summary["mean"] >= target["mean_min"]
     if "mean_max" in target:
         ok = bool(values) and summary["mean"] <= target["mean_max"]
+    if metric == "beat_offset" and values:
+        summary["median"] = median(values)
+    if "abs_max" in target:
+        ok = ok and bool(values) and abs(summary["median"]) <= target["abs_max"]
     if "pass_rate_min" in target:
         ok = ok and bool(passes) and summary["pass_rate"] >= target["pass_rate_min"]
     if "octave_error_rate_max" in target:
@@ -316,44 +338,86 @@ def select_targets(
     return {metric: targets[metric] for metric in metrics}
 
 
-def evaluate(report: dict[str, Any], targets: dict[str, dict[str, float]], require_metrics: bool) -> dict[str, Any]:
-    grouped: dict[str, list[dict[str, Any]]] = {metric: [] for metric in targets}
+def expand_observation(item: dict[str, Any]) -> list[tuple[str, dict[str, Any]]]:
+    """Return the (metric name, observation) pairs an observation contributes to."""
+    metric = str(item.get("metric", ""))
+    pairs = [(metric, item)]
+    if metric == "key":
+        for derived in ("key_mirex", "key_top3", "key_top5"):
+            pairs.append((derived, {**item, "metric": derived}))
+    if metric == "chord_detail":
+        for derived in ("chord_exact_wcsr", "chord_root_acc", "chord_quality_acc"):
+            pairs.append((derived, {**item, "metric": derived}))
+    if metric == "meter":
+        expected_numerator = item.get("expected_numerator")
+        expected_denominator = item.get("expected_denominator")
+        if expected_numerator is not None and expected_denominator is not None:
+            derived = f"meter_{expected_numerator}_{expected_denominator}"
+            pairs.append((derived, {**item, "metric": derived}))
+    if metric == "beat":
+        if item.get("median_offset_ms") is not None and float(item["f_measure"]) > 0.5:
+            pairs.append(("beat_offset", {**item, "metric": "beat_offset"}))
+    if metric == "downbeat":
+        time_signature = item.get("time_signature")
+        if time_signature:
+            pairs.append(("downbeat_" + str(time_signature).replace("/", "_"), item))
+    if metric == "rt60":
+        mode = item.get("mode")
+        if mode:
+            pairs.append(("rt60_" + str(mode), item))
+    if metric == "structure" and item.get("features") == "both":
+        for derived in ("structure_hr3f", "structure_pairwise_f"):
+            pairs.append((derived, {**item, "metric": derived}))
+    return pairs
+
+
+def group_observations(
+    report: dict[str, Any], targets: dict[str, dict[str, float]]
+) -> dict[str, list[dict[str, Any]]]:
+    """Group observations by target key; `metric@dataset` keys select one dataset."""
+    grouped: dict[str, list[dict[str, Any]]] = {key: [] for key in targets}
+    keys_by_metric: dict[str, list[tuple[str, str | None]]] = {}
+    for key in targets:
+        base, separator, dataset = key.partition("@")
+        keys_by_metric.setdefault(base, []).append((key, dataset if separator else None))
     for item in all_observations(report):
-        metric = str(item.get("metric", ""))
-        if metric in grouped:
-            grouped[metric].append(item)
-        if metric == "key":
-            for derived in ("key_mirex", "key_top3", "key_top5"):
-                if derived in grouped:
-                    grouped[derived].append({**item, "metric": derived})
-        if metric == "chord_detail":
-            for derived in ("chord_exact_wcsr", "chord_root_acc", "chord_quality_acc"):
-                if derived in grouped:
-                    grouped[derived].append({**item, "metric": derived})
-        if metric == "meter":
-            expected_numerator = item.get("expected_numerator")
-            expected_denominator = item.get("expected_denominator")
-            if expected_numerator is not None and expected_denominator is not None:
-                derived = f"meter_{expected_numerator}_{expected_denominator}"
-                if derived in grouped:
-                    grouped[derived].append({**item, "metric": derived})
-        if metric == "downbeat":
-            time_signature = item.get("time_signature")
-            if time_signature:
-                derived = "downbeat_" + str(time_signature).replace("/", "_")
-                if derived in grouped:
-                    grouped[derived].append(item)
-        if metric == "rt60":
-            mode = item.get("mode")
-            if mode:
-                derived = "rt60_" + str(mode)
-                if derived in grouped:
-                    grouped[derived].append(item)
+        for name, observation in expand_observation(item):
+            for key, dataset in keys_by_metric.get(name, []):
+                if dataset is None or dataset_of(str(observation.get("fixture", ""))) == dataset:
+                    grouped[key].append(observation)
+    return grouped
+
+
+def evaluate(
+    report: dict[str, Any],
+    targets: dict[str, dict[str, float]],
+    require_metrics: bool,
+    baseline: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    grouped = group_observations(report, targets)
+    baseline_grouped = group_observations(baseline, targets) if baseline is not None else {}
 
     summaries = []
-    for metric, target in targets.items():
-        if grouped[metric] or require_metrics:
-            summaries.append(summarize_metric(metric, grouped[metric], target))
+    for key, target in targets.items():
+        if not (grouped[key] or require_metrics):
+            continue
+        summary = summarize_metric(key.partition("@")[0], grouped[key], target)
+        summary["metric"] = key
+        if "max_drop" in target:
+            baseline_values = [
+                value
+                for value in (metric_value(item) for item in baseline_grouped.get(key, []))
+                if value is not None and math.isfinite(value)
+            ]
+            if baseline_values:
+                summary["baseline_mean"] = mean(baseline_values)
+            summary["ok"] = (
+                summary["ok"]
+                and "mean" in summary
+                and "baseline_mean" in summary
+                and summary["mean"] >= summary["baseline_mean"] - target["max_drop"] - DROP_EPSILON
+            )
+        summaries.append(summary)
     return {
         "ok": all(item["ok"] for item in summaries),
         "summaries": summaries,
@@ -379,6 +443,11 @@ def parse_args() -> argparse.Namespace:
         help="Fail when a target metric has no observations.",
     )
     parser.add_argument(
+        "--baseline",
+        type=Path,
+        help="Baseline report that `max_drop` targets compare the dataset mean against.",
+    )
+    parser.add_argument(
         "--metrics",
         nargs="+",
         help="Evaluate only these target metrics, e.g. --metrics bpm key.",
@@ -390,7 +459,10 @@ def main() -> int:
     args = parse_args()
     report = json.loads(args.report.read_text(encoding="utf-8"))
     targets = select_targets(parse_targets(args.targets), args.metrics)
-    result = evaluate(report, targets, args.require_metrics)
+    baseline = (
+        json.loads(args.baseline.read_text(encoding="utf-8")) if args.baseline is not None else None
+    )
+    result = evaluate(report, targets, args.require_metrics, baseline)
     if args.output:
         write_json_strict(args.output, result, indent=2, sort_keys=True)
     else:

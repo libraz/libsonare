@@ -566,6 +566,39 @@ std::vector<float> beat_times_from_beats(const std::vector<Beat>& beats) {
   return times;
 }
 
+/// Median of `detected - nearest reference` (milliseconds, positive = late) over detected beats
+/// within a quarter of the median reference inter-beat interval; NaN when none qualify.
+float median_beat_offset_ms(const std::vector<float>& detected,
+                            const std::vector<float>& reference) {
+  const float none = std::numeric_limits<float>::quiet_NaN();
+  if (detected.empty() || reference.size() < 2) return none;
+  std::vector<float> intervals;
+  for (size_t i = 1; i < reference.size(); ++i) {
+    intervals.push_back(reference[i] - reference[i - 1]);
+  }
+  std::sort(intervals.begin(), intervals.end());
+  const size_t mid = intervals.size() / 2;
+  const float interval =
+      intervals.size() % 2 == 1 ? intervals[mid] : 0.5f * (intervals[mid - 1] + intervals[mid]);
+  const float window = 0.25f * interval;
+
+  std::vector<float> offsets;
+  for (float time : detected) {
+    const auto next = std::lower_bound(reference.begin(), reference.end(), time);
+    float nearest = *next;
+    if (next == reference.end()) {
+      nearest = reference.back();
+    } else if (next != reference.begin() && time - *(next - 1) < *next - time) {
+      nearest = *(next - 1);
+    }
+    if (std::abs(time - nearest) <= window) offsets.push_back((time - nearest) * 1000.0f);
+  }
+  if (offsets.empty()) return none;
+  std::sort(offsets.begin(), offsets.end());
+  const size_t half = offsets.size() / 2;
+  return offsets.size() % 2 == 1 ? offsets[half] : 0.5f * (offsets[half - 1] + offsets[half]);
+}
+
 float event_f_measure(const std::vector<float>& detected, const std::vector<float>& reference,
                       float tolerance_seconds) {
   if (detected.empty() || reference.empty() || tolerance_seconds < 0.0f) {
@@ -1004,8 +1037,12 @@ TEST_CASE("Music optional beat F-measure fixtures", "[music_dataset][beat]") {
     }
 
     if (is_report_only(row, 6)) {
+      const float offset_ms =
+          median_beat_offset_ms(beat_times_from_beats(analyzer.beats()), reference);
+      std::ostringstream offset_field;
+      if (std::isfinite(offset_ms)) offset_field << "; median_offset_ms " << offset_ms;
       WARN("Report-only beat fixture " << row[0] << "/" << row[1] << " F-measure " << f_measure
-                                       << "; threshold " << row[3]);
+                                       << "; threshold " << row[3] << offset_field.str());
       if (config.adaptive_tempo || has_improvement_threshold) {
         WARN("Report-only beat improvement fixture "
              << row[0] << "/" << row[1] << " improvement " << improvement << "; baseline_f_measure "

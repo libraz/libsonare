@@ -84,6 +84,23 @@ def test_escaped_characters_are_restored() -> None:
     assert [item["fixture"] for item in observations] == ["a&b/x.wav"], observations
 
 
+def test_filter_tag_is_appended_to_suite_tag() -> None:
+    assert runner.suite_filter("music", "[beat]") == "[music_dataset][beat]"
+    assert runner.suite_filter("music", None) == "[music_dataset]"
+
+
+def test_median_offset_is_parsed() -> None:
+    late = _BEAT + "; median_offset_ms 12.5"
+    early = _BEAT.replace("07_14", "07_15") + "; median_offset_ms -8.25"
+    plain = _BEAT.replace("07_14", "07_16")
+    observations = runner.extract_observations_from_report_output(
+        _document(_warning(late), _warning(early), _warning(plain))
+    )
+    offsets = [item.get("median_offset_ms") for item in observations]
+    assert offsets == [12.5, -8.25, None], observations
+    assert all(abs(item["f_measure"] - 0.142149) < 1e-9 for item in observations)
+
+
 def _run_all() -> int:
     tests = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     failed = 0

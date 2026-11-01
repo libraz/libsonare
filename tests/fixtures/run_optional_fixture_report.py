@@ -78,14 +78,23 @@ def provenance_violation_count(stats: list[dict[str, Any]]) -> int:
     return sum(int(item.get("provenance_violations", 0)) for item in stats)
 
 
+def suite_filter(name: str, tag: str | None) -> str:
+    """The Catch2 filter for a suite, narrowed by an optional extra tag such as `[beat]`."""
+    return str(SUITES[name]["filter"]) + (tag or "")
+
+
 def run_suite(
-    name: str, root: Path, sonare_tests: Path, timeout_seconds: float | None
+    name: str,
+    root: Path,
+    sonare_tests: Path,
+    timeout_seconds: float | None,
+    tag: str | None = None,
 ) -> dict[str, Any]:
     env = os.environ.copy()
     env[str(SUITES[name]["env"])] = str(root)
     # The XML reporter keeps each WARN message on one unwrapped line; the console
     # reporter wraps at 80 columns, which can split a token the patterns need.
-    command = [str(sonare_tests), str(SUITES[name]["filter"]), "-r", "xml"]
+    command = [str(sonare_tests), suite_filter(name, tag), "-r", "xml"]
     try:
         completed = subprocess.run(
             command,
@@ -269,6 +278,7 @@ def extract_observations(stdout: str) -> list[dict[str, Any]]:
     for metric in ("beat", "downbeat"):
         for match in re.finditer(
             rf"Report-only {metric} fixture (.+?) F-measure ([0-9.+\-eE]+); threshold ([0-9.+\-eE]+)"
+            rf"(?:; median_offset_ms ([0-9.+\-eE]+))?"
             rf"(?:; time_signature ([0-9]+/[0-9]+|unknown))?",
             text,
         ):
@@ -278,8 +288,10 @@ def extract_observations(stdout: str) -> list[dict[str, Any]]:
                 "f_measure": float(match.group(2)),
                 "threshold": float(match.group(3)),
             }
-            if match.group(4) and match.group(4) != "unknown":
-                item["time_signature"] = match.group(4)
+            if match.group(4) is not None:
+                item["median_offset_ms"] = float(match.group(4))
+            if match.group(5) and match.group(5) != "unknown":
+                item["time_signature"] = match.group(5)
             observations.append(item)
 
     for match in re.finditer(
@@ -494,6 +506,11 @@ def parse_args() -> argparse.Namespace:
         default="all",
         help="Fixture suite to run.",
     )
+    parser.add_argument(
+        "--filter",
+        metavar="TAG",
+        help='Tag appended to the suite filter, e.g. --filter "[beat]" runs [music_dataset][beat].',
+    )
     parser.add_argument("--music-root", type=Path, default=default_root("music"))
     parser.add_argument("--acoustic-root", type=Path, default=default_root("acoustic"))
     parser.add_argument("--ebu-root", type=Path, default=default_root("ebu"))
@@ -554,7 +571,9 @@ def main() -> int:
         if ready == 0 and not args.require_ready:
             report["runs"].append(skipped_suite(name, "no ready optional fixture rows"))
         else:
-            report["runs"].append(run_suite(name, roots[name], args.sonare_tests, timeout_seconds))
+            report["runs"].append(
+                run_suite(name, roots[name], args.sonare_tests, timeout_seconds, args.filter)
+            )
     if args.include_wasm_size:
         report["runs"].append(wasm_size_run(args.wasm_current, args.wasm_baseline))
 
