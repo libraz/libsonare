@@ -70,68 +70,101 @@ TEST_CASE("estimate_downbeats returns beats matching meter phase", "[downbeat_an
   REQUIRE(result.confidence == time_signature.confidence);
 }
 
-TEST_CASE("estimate_downbeats uses chord and low-frequency observations", "[downbeat_analyzer]") {
-  auto beats = make_beats(16);
-  for (auto& beat : beats) {
-    beat.strength = 0.4f;
-  }
+TEST_CASE("select_downbeat_phase follows low-frequency and harmonic-change evidence",
+          "[downbeat_analyzer]") {
+  const auto beats = make_beats(16);
 
   DownbeatObservations observations;
-  observations.low_frequency_energy.assign(beats.size(), 0.0f);
-  observations.chord_changes.assign(beats.size(), 0.0f);
+  observations.lf.assign(beats.size(), 0.0f);
+  observations.harmonic_change.assign(beats.size(), 0.0f);
   for (int index : {2, 6, 10, 14}) {
-    observations.low_frequency_energy[static_cast<size_t>(index)] = 1.0f;
-    observations.chord_changes[static_cast<size_t>(index)] = 1.0f;
+    observations.lf[static_cast<size_t>(index)] = 1.0f;
+    observations.harmonic_change[static_cast<size_t>(index)] = 1.0f;
   }
-  observations.phase_prior_weight = 0.0f;
 
   const TimeSignature time_signature{4, 4, 0.8f};
-  const DownbeatResult result = estimate_downbeats(beats, time_signature, 0, observations);
+  const DownbeatResult result = select_downbeat_phase(beats, time_signature, observations);
 
   REQUIRE(result.beat_indices == std::vector<int>{2, 6, 10, 14});
   REQUIRE(result.downbeats.size() == 4);
-  REQUIRE(result.confidence >= 0.4f);
+  REQUIRE(result.time_signature.numerator == 4);
+  // A clear margin of more than one z unit is full margin.
+  REQUIRE(result.confidence == 0.5f * time_signature.confidence + 0.5f);
 }
 
-TEST_CASE("estimate_downbeats observation model honors meter phase prior", "[downbeat_analyzer]") {
-  auto beats = make_beats(16);
-  for (auto& beat : beats) {
-    beat.strength = 0.0f;
-  }
+TEST_CASE("select_downbeat_phase ignores the beat strength the onset envelope carries",
+          "[downbeat_analyzer]") {
+  // make_beats accents position 1 in Beat::strength; with flat evidence nothing marks a bar
+  // start, so the tie goes to the earliest position.
+  const auto beats = make_beats(16);
 
   DownbeatObservations observations;
-  observations.beat_strength_weight = 0.0f;
-  observations.low_frequency_weight = 0.0f;
-  observations.chord_change_weight = 0.0f;
-  observations.phase_prior_weight = 1.0f;
+  observations.lf.assign(beats.size(), 0.5f);
+  observations.harmonic_change.assign(beats.size(), 0.0f);
 
   const TimeSignature time_signature{4, 4, 0.8f};
-  const DownbeatResult result = estimate_downbeats(beats, time_signature, 2, observations);
+  const DownbeatResult result = select_downbeat_phase(beats, time_signature, observations);
 
-  REQUIRE(result.beat_indices == std::vector<int>{2, 6, 10, 14});
+  REQUIRE(result.beat_indices == std::vector<int>{0, 4, 8, 12});
+  REQUIRE(result.confidence == 0.5f * time_signature.confidence);
 }
 
-TEST_CASE("estimate_downbeats tracks tempo-state HMM through gradual tempo change",
+TEST_CASE("select_downbeat_phase keeps one evidence answer through gradual tempo change",
           "[downbeat_analyzer]") {
   const auto beats = make_accelerating_beats(16);
 
   DownbeatObservations observations;
-  observations.low_frequency_energy.assign(beats.size(), 0.0f);
-  observations.chord_changes.assign(beats.size(), 0.0f);
+  observations.lf.assign(beats.size(), 0.0f);
+  observations.harmonic_change.assign(beats.size(), 0.0f);
   for (int index : {1, 5, 9, 13}) {
-    observations.low_frequency_energy[static_cast<size_t>(index)] = 1.0f;
-    observations.chord_changes[static_cast<size_t>(index)] = 1.0f;
+    observations.lf[static_cast<size_t>(index)] = 1.0f;
+    observations.harmonic_change[static_cast<size_t>(index)] = 1.0f;
   }
-  observations.phase_prior_weight = 0.0f;
-  observations.tempo_state_count = 7;
-  observations.tempo_observation_weight = 0.4f;
-  observations.tempo_transition_weight = 0.1f;
 
   const TimeSignature time_signature{4, 4, 0.7f};
-  const DownbeatResult result = estimate_downbeats(beats, time_signature, 0, observations);
+  const DownbeatResult result = select_downbeat_phase(beats, time_signature, observations);
 
   REQUIRE(result.beat_indices == std::vector<int>{1, 5, 9, 13});
   REQUIRE(result.confidence >= 0.4f);
+}
+
+TEST_CASE("select_downbeat_phase answers phase 0 when a position has no beat",
+          "[downbeat_analyzer]") {
+  // Three beats in 4/4: position 3 holds none.
+  const auto beats = make_beats(3);
+  DownbeatObservations observations;
+  observations.lf = {0.0f, 0.0f, 1.0f};
+
+  const DownbeatResult result =
+      select_downbeat_phase(beats, TimeSignature{4, 4, 0.5f}, observations);
+
+  REQUIRE(result.beat_indices == std::vector<int>{0});
+}
+
+TEST_CASE("select_downbeat_phase chooses among positions holding a single beat",
+          "[downbeat_analyzer]") {
+  // Seven beats in 4/4: position 3 holds only beat 3, and the evidence marks position 2.
+  const auto beats = make_beats(7);
+  DownbeatObservations observations;
+  observations.lf = {0.0f, 0.0f, 1.0f, 0.0f, 0.0f, 0.0f, 1.0f};
+
+  const DownbeatResult result =
+      select_downbeat_phase(beats, TimeSignature{4, 4, 0.5f}, observations);
+
+  REQUIRE(result.beat_indices == std::vector<int>{2, 6});
+}
+
+TEST_CASE("select_downbeat_phase reports only the first beat for a one-beat bar",
+          "[downbeat_analyzer]") {
+  const auto beats = make_beats(8);
+  DownbeatObservations observations;
+  observations.lf = {0.0f, 1.0f, 0.0f, 1.0f, 0.0f, 1.0f, 0.0f, 1.0f};
+
+  const DownbeatResult result =
+      select_downbeat_phase(beats, TimeSignature{1, 4, 0.5f}, observations);
+
+  REQUIRE(result.beat_indices == std::vector<int>{0});
+  REQUIRE(result.confidence == 0.5f);
 }
 
 TEST_CASE("chord_change_observations maps chord starts to nearest beats", "[downbeat_analyzer]") {

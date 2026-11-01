@@ -188,17 +188,35 @@ BeatAnalyzer::BeatAnalyzer(const Audio& audio, const BeatConfig& config)
       config_(config) {
   SONARE_CHECK(!audio.empty(), ErrorCode::InvalidParameter);
 
-  onset_strength_ = analysis_onset_strength(audio, config.n_fft, config.hop_length);
-  onset_shift_frames_ = onset_center_shift_frames(
-      stft_config_at_rate(config.n_fft, config.hop_length, audio.sample_rate()), true);
+  // One STFT feeds both the mel onset envelope and the bar-start evidence; the
+  // envelope matches analysis_onset_strength() for the same geometry.
+  const RateWindow window = window_at_rate(config.n_fft, audio.sample_rate());
+  MelConfig mel_config;
+  mel_config.n_fft = window.n_fft;
+  mel_config.win_length = window.win_length;
+  mel_config.hop_length = config.hop_length;
+  mel_config.n_mels = constants::kDefaultNMels;
+  OnsetConfig onset_config;
+  onset_config.lag = 1;
+  onset_config.detrend = true;
+  mel_config.center = onset_config.center;
+  const StftConfig stft_config = mel_config.to_stft_config();
+
+  const Spectrogram spectrogram = Spectrogram::compute(audio, stft_config);
+  const MelSpectrogram mel = MelSpectrogram::from_spectrogram(spectrogram, audio.sample_rate(),
+                                                              mel_config.to_mel_filter_config());
+  onset_strength_ = center_onset_strength(compute_onset_strength(mel, onset_config), stft_config,
+                                          onset_config.center);
+  onset_shift_frames_ = onset_center_shift_frames(stft_config, onset_config.center);
 
   track_beats();
-  const std::vector<float> low_frequency_energy = low_frequency_energy_observations(beats_, audio);
   // Onset strength is a log-spectral difference, so accents that differ only
   // in amplitude can disappear after dB normalization. Audio-backed analysis
   // can recover that evidence from beat-local low-frequency energy.
-  estimate_time_signature(low_frequency_energy);
-  refine_downbeats(low_frequency_energy);
+  estimate_time_signature(low_frequency_energy_observations(beats_, audio));
+  refine_downbeats(downbeat_phase_evidence(spectrogram.power(), spectrogram.n_bins(),
+                                           spectrogram.n_frames(), sr_, stft_config.n_fft,
+                                           hop_length_, beats_));
 }
 
 BeatAnalyzer::BeatAnalyzer(const std::vector<float>& onset_strength, int sr, int hop_length,
@@ -210,14 +228,9 @@ BeatAnalyzer::BeatAnalyzer(const std::vector<float>& onset_strength, int sr, int
       hop_length_(hop_length),
       onset_shift_frames_(shift_frames),
       config_(config) {
+  // No audio, so no bar-start evidence: the downbeats stay seeded at phase 0.
+  // Callers that have audio (e.g. MusicAnalyzer) refine afterwards.
   track_beats();
-  // No audio is available here, so the low-frequency-energy and chord-change
-  // observations the Audio ctor uses cannot be computed. Still run the base
-  // downbeat estimate (beat-strength + phase) with empty observations so this
-  // ctor populates downbeats() like the Audio ctor; callers that have audio
-  // (e.g. MusicAnalyzer) can refine afterwards by calling refine_downbeats()
-  // with the richer observations.
-  refine_downbeats();
 }
 
 float BeatAnalyzer::compute_transition_cost(int from_frame, int to_frame, float period) const {
@@ -233,31 +246,18 @@ float transition_cost_with_tightness(int from_frame, int to_frame, float period,
   return tightness * deviation * deviation;
 }
 
-void BeatAnalyzer::refine_downbeats(const std::vector<float>& low_frequency_energy,
-                                    const std::vector<float>& chord_changes) {
-  if (beats_.empty()) {
-    downbeat_indices_.clear();
-    downbeats_.clear();
-    onset_observations_.clear();
-    low_frequency_observations_.clear();
-    chord_change_observations_.clear();
+void BeatAnalyzer::refine_downbeats(const DownbeatObservations& evidence) {
+  if (beats_.empty() || (evidence.lf.empty() && evidence.harmonic_change.empty())) {
     return;
   }
-
-  DownbeatObservations observations;
-  observations.low_frequency_energy = low_frequency_energy;
-  observations.chord_changes = chord_changes;
-  observations.beat_strengths =
-      onset_strength_observations(beats_, onset_strength_, sr_, hop_length_);
-
-  onset_observations_ = observations.beat_strengths;
-  low_frequency_observations_ = low_frequency_energy;
-  chord_change_observations_ = chord_changes;
-
-  DownbeatResult downbeat_result =
-      estimate_downbeats(beats_, time_signature_, downbeat_phase_, observations);
+  DownbeatResult downbeat_result = select_downbeat_phase(beats_, time_signature_, evidence);
   downbeat_indices_ = std::move(downbeat_result.beat_indices);
   downbeats_ = std::move(downbeat_result.downbeats);
+  downbeat_phase_ = downbeat_indices_.empty() ? 0 : downbeat_indices_.front();
+}
+
+void BeatAnalyzer::set_chord_change_observations(std::vector<float> chord_changes) {
+  chord_change_observations_ = std::move(chord_changes);
 }
 
 void BeatAnalyzer::track_beats() {
@@ -534,7 +534,8 @@ void BeatAnalyzer::track_beats() {
     }
   }
 
-  // Estimate time signature
+  onset_observations_ = onset_strength_observations(beats_, onset_strength_, sr_, hop_length_);
+  // Estimate time signature; it seeds the downbeats at phase 0.
   estimate_time_signature();
 }
 
@@ -542,13 +543,14 @@ void BeatAnalyzer::estimate_time_signature(const std::vector<float>& beat_energy
   MeterConfig meter_config;
   meter_config.candidate_numerators = config_.meter_candidate_numerators;
   meter_config.denominator = config_.meter_denominator;
+  low_frequency_observations_ = beat_energy;
+  downbeat_phase_ = 0;
 
   if (beats_.size() < 8) {
     // Matches MeterAnalyzer's own too-few-beats guard, so the same condition
     // reports the same signature whichever estimator reaches it first.
     time_signature_ = {4, meter_config.denominator, 0.0f};  // Unmeasured default
     time_signature_candidates_ = {time_signature_};
-    downbeat_phase_ = 0;
     DownbeatResult downbeat_result = estimate_downbeats(beats_, time_signature_, 0);
     downbeat_indices_ = std::move(downbeat_result.beat_indices);
     downbeats_ = std::move(downbeat_result.downbeats);
@@ -566,8 +568,7 @@ void BeatAnalyzer::estimate_time_signature(const std::vector<float>& beat_energy
   MeterResult meter = estimate_meter(scoring_envelope, beats_, meter_config, beat_energy);
   time_signature_ = meter.time_signature;
   time_signature_candidates_ = std::move(meter.candidates);
-  downbeat_phase_ = meter.downbeat_phase;
-  DownbeatResult downbeat_result = estimate_downbeats(beats_, time_signature_, downbeat_phase_);
+  DownbeatResult downbeat_result = estimate_downbeats(beats_, time_signature_, 0);
   downbeat_indices_ = std::move(downbeat_result.beat_indices);
   downbeats_ = std::move(downbeat_result.downbeats);
 }

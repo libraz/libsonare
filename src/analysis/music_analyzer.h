@@ -58,10 +58,10 @@ struct BpmCandidateHypothesis {
   BpmCandidateRelation relation = BpmCandidateRelation::Other;
 };
 
-/// @brief Beat-level evidence the downbeat estimator scores.
+/// @brief Beat-level evidence published alongside the meter and downbeat decisions.
 /// @details Each vector holds one value per entry of AnalysisResult::beats, so
-///          they index in parallel with it. These are inputs to the meter and
-///          downbeat decision rather than outputs of it, exposed so callers
+///          they index in parallel with it. These are evidence rather than
+///          outputs of the decisions, exposed so callers
 ///          running their own meter work score the same evidence the library
 ///          does instead of reconstructing a weaker approximation from the
 ///          frame-level onset envelope. A stream is empty when the analysis
@@ -96,13 +96,10 @@ struct AnalysisResult {
   ///          than a time comparison against a separate downbeat time series.
   std::vector<int> downbeat_indices;
   /// @brief Beat index the first measure starts on, in [0, numerator).
-  /// @details The meter estimator's phase, so `downbeat_indices` normally
-  ///          begins at this value. It comes from the meter estimate and is not
-  ///          re-derived when downbeats are refined from chord and
-  ///          low-frequency-energy evidence, so the two can disagree when the
-  ///          refinement moves the first measure start.
+  /// @details The bar phase selected from low-frequency energy and harmonic
+  ///          change, so `downbeat_indices` begins at this value.
   int downbeat_phase = 0;
-  /// @brief Beat-level evidence behind the downbeat and meter decisions.
+  /// @brief Beat-level evidence published alongside the downbeat and meter decisions.
   BeatObservations beat_observations;
   /// @brief Smoothed local tempo at each beat, in BPM.
   /// @details One value per entry of @ref beats, so the two index in parallel.
@@ -205,21 +202,13 @@ void validate_config(const MusicAnalyzerConfig& config);
 /// @warning **One instance, one thread at a time.** The lazy accessors are not
 ///          merely uninitialized-until-first-use; they form a dependency graph
 ///          in which a later initializer revises what an earlier one already
-///          published. Specifically, chord_analyzer() calls
-///          BeatAnalyzer::refine_downbeats() a second time, with the chord
-///          changes it just derived, on the BeatAnalyzer that beat_analyzer()
-///          returned earlier. That call reassigns the analyzer's downbeat and
-///          observation vectors, so a caller holding a reference obtained from
-///          beat_analyzer() -- or iterating downbeat_indices() -- sees the
-///          storage reallocated underneath it. Calling the two accessors from
-///          different threads is a data race, not just a missed cache hit.
-///
-///          The revision itself is intended: chord-informed downbeats are
-///          better than onset-only ones. The consequence to be aware of is that
-///          results are call-order dependent. beat_analyzer().downbeats() read
-///          before chords() reflects the onset-only refine; read after chords()
-///          it reflects the chord-informed one. analyze() drives the modules in
-///          a fixed order, so a caller that uses it sees the settled values.
+///          published. Specifically, chord_analyzer() publishes the chord-change
+///          observations on the BeatAnalyzer that beat_analyzer() returned
+///          earlier, reassigning its beat_chord_change_observations() vector.
+///          Calling the two accessors from different threads is a data race,
+///          not just a missed cache hit. The downbeats themselves are settled
+///          when beat_analyzer() first returns and chord analysis leaves them
+///          alone.
 class MusicAnalyzer {
  public:
   /// @brief Constructs music analyzer from audio.
@@ -252,7 +241,6 @@ class MusicAnalyzer {
   std::vector<Chord> chords();
 
   /// @brief Returns song form string.
-  /// @details Pays for chord analysis, which the sections' beat grid depends on.
   std::string form();
 
   // Analyzer access (lazy initialization)
@@ -263,11 +251,8 @@ class MusicAnalyzer {
   KeyAnalyzer& key_analyzer();
 
   /// @brief Returns beat analyzer.
-  /// @note The downbeats are preliminary on first access: they are refined from
-  ///       low-frequency-energy and beat-strength evidence only. Chord-change
-  ///       evidence is folded in lazily when chord_analyzer() is first invoked,
-  ///       which re-refines the same BeatAnalyzer. For chord-informed downbeats,
-  ///       call chord_analyzer() (or analyze()) before reading downbeats().
+  /// @note Its chord-change observations stay empty until chord_analyzer() is first invoked;
+  ///       its downbeats do not depend on chords.
   BeatAnalyzer& beat_analyzer();
 
   /// @brief Returns chord analyzer.
@@ -289,8 +274,6 @@ class MusicAnalyzer {
   MelodyAnalyzer& melody_analyzer();
 
   /// @brief Returns section analyzer.
-  /// @details Runs chord analysis first, so the sections sit on the chord-refined downbeats
-  ///          analyze() publishes whichever is called first.
   SectionAnalyzer& section_analyzer();
 
   /// @brief Returns boundary detector.

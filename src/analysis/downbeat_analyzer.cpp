@@ -1,132 +1,70 @@
 #include "analysis/downbeat_analyzer.h"
 
 #include <algorithm>
+#include <array>
 #include <cmath>
 #include <limits>
-#include <numeric>
 #include <utility>
 
 #include "analysis/chord_analyzer.h"
+#include "filters/chroma.h"
 #include "filters/iir.h"
 #include "util/constants.h"
 #include "util/exception.h"
-#include "util/peak.h"
+#include "util/vector_normalize.h"
 
 namespace sonare {
 
 using sonare::constants::kEpsilon;
 namespace {
 
-std::vector<float> normalize_to_unit(std::vector<float> values, size_t target_size) {
-  values.resize(target_size, 0.0f);
-  // The loudest few beats are set aside so one dominant beat cannot shrink every
-  // other value against the fixed-scale prior terms.
-  std::vector<float> finite;
-  finite.reserve(values.size());
+/// Upper edge of the low band whose energy marks a bar start, in Hz.
+constexpr double kLowBandHz = 150.0;
+/// Low-band window around a beat's attack, in seconds relative to the beat time.
+constexpr double kLowWindowStart = -0.02;
+constexpr double kLowWindowEnd = 0.10;
+constexpr int kChromaBins = 12;
+
+/// Median as the mean of the two middle values for an even count; 0 when empty.
+double median_of(std::vector<double> values) {
+  if (values.empty()) return 0.0;
+  const size_t mid = values.size() / 2;
+  std::nth_element(values.begin(), values.begin() + static_cast<long>(mid), values.end());
+  const double upper = values[mid];
+  if (values.size() % 2 == 1) return upper;
+  return 0.5 * (upper + *std::max_element(values.begin(), values.begin() + static_cast<long>(mid)));
+}
+
+/// Index of the first frame centred at or after @p seconds, in [0, n_frames].
+int first_frame_at(double seconds, int sr, int hop, int n_frames) {
+  // The tolerance keeps a beat that sits on a frame centre on that frame despite float rounding.
+  const double position = seconds * static_cast<double>(sr) / static_cast<double>(hop);
+  const double frame = std::ceil(position - 1e-4);
+  return static_cast<int>(std::clamp(frame, 0.0, static_cast<double>(n_frames)));
+}
+
+/// Population z-scores of @p values; all zero when empty or of zero variance.
+std::vector<double> z_scores(const std::vector<float>& values, size_t count) {
+  std::vector<double> z(count, 0.0);
+  if (values.empty()) return z;
+  double mean = 0.0;
+  double scale = 0.0;
   for (float value : values) {
-    if (std::isfinite(value)) {
-      finite.push_back(std::max(value, 0.0f));
-    }
+    mean += value;
+    scale = std::max(scale, std::abs(static_cast<double>(value)));
   }
-  const float max_value = max_excluding_top(std::move(finite), kReferenceIgnoredTopEvents);
-  if (max_value <= constants::kEpsilon) {
-    return std::vector<float>(target_size, 0.0f);
+  mean /= static_cast<double>(values.size());
+  double variance = 0.0;
+  for (float value : values) {
+    variance += (value - mean) * (value - mean);
   }
-  for (float& value : values) {
-    value = std::isfinite(value) ? std::clamp(value / max_value, 0.0f, 1.0f) : 0.0f;
+  const double stddev = std::sqrt(variance / static_cast<double>(values.size()));
+  // A spread at float rounding level is a constant feature.
+  if (!(stddev > 1e-6 * scale)) return z;
+  for (size_t i = 0; i < count; ++i) {
+    z[i] = (values[i] - mean) / stddev;
   }
-  return values;
-}
-
-/// @brief Scores one beat at one bar position, as that beat's share of its position's mean.
-/// @details Every phase puts the same beats together at a bar position, so dividing by the
-///          size of that group scores each phase by its per-position means. A plain sum lets a
-///          phase win by covering one more bar, and lets a per-beat phase prior outgrow a
-///          clear accent; here the prior totals phase_prior_weight whatever the clip length.
-float observation_score(size_t beat_index, size_t beat_count, int position, int downbeat_phase,
-                        int numerator, const DownbeatObservations& observations,
-                        const std::vector<float>& beat_strengths,
-                        const std::vector<float>& low_frequency,
-                        const std::vector<float>& chord_changes) {
-  const size_t stride = static_cast<size_t>(numerator);
-  const float group_size = static_cast<float>((beat_count - 1 - beat_index % stride) / stride + 1);
-  const bool is_downbeat = position == 0;
-  const bool is_secondary_strong = is_secondary_strong_position(numerator, position);
-  float score = 0.0f;
-  if (is_downbeat) {
-    score += observations.beat_strength_weight * beat_strengths[beat_index];
-    score += observations.low_frequency_weight * low_frequency[beat_index];
-    score += observations.chord_change_weight * chord_changes[beat_index];
-  } else if (is_secondary_strong) {
-    score += 0.35f * observations.beat_strength_weight * beat_strengths[beat_index];
-    score += 0.25f * observations.low_frequency_weight * low_frequency[beat_index];
-  } else {
-    score -= 0.15f * observations.chord_change_weight * chord_changes[beat_index];
-  }
-
-  const int expected_position =
-      (static_cast<int>(beat_index) - downbeat_phase + numerator) % numerator;
-  if (position == expected_position) {
-    score += observations.phase_prior_weight / static_cast<float>(numerator);
-  }
-  return score / group_size;
-}
-
-float median_beat_interval(const std::vector<Beat>& beats) {
-  std::vector<float> intervals;
-  intervals.reserve(beats.size() > 1 ? beats.size() - 1 : 0);
-  for (size_t i = 1; i < beats.size(); ++i) {
-    const float interval = beats[i].time - beats[i - 1].time;
-    if (std::isfinite(interval) && interval > 1e-4f) {
-      intervals.push_back(interval);
-    }
-  }
-  if (intervals.empty()) {
-    return 0.5f;
-  }
-
-  const size_t mid = intervals.size() / 2;
-  std::nth_element(intervals.begin(), intervals.begin() + static_cast<long>(mid), intervals.end());
-  return std::max(intervals[mid], 1e-4f);
-}
-
-std::vector<float> tempo_state_centers(const std::vector<Beat>& beats, int state_count) {
-  state_count = std::clamp(state_count, 1, 9);
-  const float median_interval = median_beat_interval(beats);
-  std::vector<float> centers(static_cast<size_t>(state_count), median_interval);
-  if (state_count == 1) {
-    return centers;
-  }
-
-  const float min_ratio = 0.70f;
-  const float max_ratio = 1.35f;
-  for (int i = 0; i < state_count; ++i) {
-    const float alpha = static_cast<float>(i) / static_cast<float>(state_count - 1);
-    centers[static_cast<size_t>(i)] =
-        median_interval * std::pow(max_ratio / min_ratio, alpha) * min_ratio;
-  }
-  return centers;
-}
-
-float tempo_observation_score(const std::vector<Beat>& beats, size_t beat_index, float tempo_center,
-                              float weight) {
-  if (beat_index == 0 || weight <= 0.0f || tempo_center <= 1e-4f) {
-    return 0.0f;
-  }
-  const float interval = beats[beat_index].time - beats[beat_index - 1].time;
-  if (!std::isfinite(interval) || interval <= 1e-4f) {
-    return -weight;
-  }
-
-  const float log_ratio = std::log(interval / tempo_center);
-  return -weight * std::min(std::abs(log_ratio) / std::log(1.20f), 3.0f);
-}
-
-float tempo_transition_score(int previous_tempo, int tempo, float weight) {
-  if (weight <= 0.0f) {
-    return 0.0f;
-  }
-  return -weight * static_cast<float>(std::abs(tempo - previous_tempo));
+  return z;
 }
 
 }  // namespace
@@ -153,136 +91,139 @@ DownbeatResult estimate_downbeats(const std::vector<Beat>& beats,
   return result;
 }
 
-DownbeatResult estimate_downbeats(const std::vector<Beat>& beats,
-                                  const TimeSignature& time_signature, int downbeat_phase,
-                                  const DownbeatObservations& observations) {
-  DownbeatResult result;
-  result.time_signature = time_signature;
+DownbeatObservations downbeat_phase_evidence(const std::vector<float>& power, int n_bins,
+                                             int n_frames, int sr, int n_fft, int hop,
+                                             const std::vector<Beat>& beats) {
+  SONARE_CHECK(sr > 0 && hop > 0 && n_fft > 0, ErrorCode::InvalidParameter);
+  SONARE_CHECK(n_frames >= 0 && n_bins == n_fft / 2 + 1, ErrorCode::InvalidParameter);
+  SONARE_CHECK(power.size() == static_cast<size_t>(n_bins) * static_cast<size_t>(n_frames),
+               ErrorCode::InvalidParameter);
+
+  DownbeatObservations observations;
+  if (beats.empty() || n_frames == 0) {
+    return observations;
+  }
+  const size_t frames = static_cast<size_t>(n_frames);
+
+  std::vector<double> low_band(frames, 0.0);
+  for (int bin = 0; bin < n_bins; ++bin) {
+    if (static_cast<double>(bin) * sr / n_fft >= kLowBandHz) break;
+    const float* row = power.data() + static_cast<size_t>(bin) * frames;
+    for (size_t frame = 0; frame < frames; ++frame) {
+      low_band[frame] += row[frame];
+    }
+  }
+
+  const auto filterbank = get_chroma_filterbank_cached(sr, n_fft, ChromaFilterConfig{});
+  const std::vector<float> raw_chroma =
+      apply_chroma_filterbank(power.data(), n_bins, n_frames, filterbank->data(), kChromaBins);
+  const std::vector<float> chroma =
+      normalize_matrix(raw_chroma.data(), kChromaBins, n_frames, 0, NormType::Inf);
+
+  std::vector<double> intervals;
+  for (size_t i = 1; i < beats.size(); ++i) {
+    intervals.push_back(static_cast<double>(beats[i].time) - beats[i - 1].time);
+  }
+  const double last_interval = intervals.empty() ? 0.5 : median_of(std::move(intervals));
+
+  observations.lf.resize(beats.size(), 0.0f);
+  observations.harmonic_change.resize(beats.size(), 0.0f);
+  std::array<double, kChromaBins> previous{};
+  for (size_t i = 0; i < beats.size(); ++i) {
+    const double time = beats[i].time;
+
+    const int lf_first =
+        std::min(first_frame_at(time + kLowWindowStart, sr, hop, n_frames), n_frames - 1);
+    const int lf_last =
+        std::max(first_frame_at(time + kLowWindowEnd, sr, hop, n_frames), lf_first + 1);
+    double lf_sum = 0.0;
+    for (int frame = lf_first; frame < lf_last; ++frame) {
+      lf_sum += low_band[static_cast<size_t>(frame)];
+    }
+    observations.lf[i] = static_cast<float>(lf_sum / (lf_last - lf_first));
+
+    const double span_end = i + 1 < beats.size() ? beats[i + 1].time : time + last_interval;
+    const int span_first = std::min(first_frame_at(time, sr, hop, n_frames), n_frames - 1);
+    const int span_last = std::max(first_frame_at(span_end, sr, hop, n_frames), span_first + 1);
+    std::array<double, kChromaBins> current{};
+    for (int pc = 0; pc < kChromaBins; ++pc) {
+      const float* row = chroma.data() + static_cast<size_t>(pc) * frames;
+      double sum = 0.0;
+      for (int frame = span_first; frame < span_last; ++frame) {
+        sum += row[frame];
+      }
+      current[static_cast<size_t>(pc)] = sum / (span_last - span_first);
+    }
+    if (i > 0) {
+      double dot = 0.0;
+      double norm_current = 0.0;
+      double norm_previous = 0.0;
+      for (size_t pc = 0; pc < current.size(); ++pc) {
+        dot += current[pc] * previous[pc];
+        norm_current += current[pc] * current[pc];
+        norm_previous += previous[pc] * previous[pc];
+      }
+      const double cosine = dot / (std::sqrt(norm_current) * std::sqrt(norm_previous) + 1e-9);
+      observations.harmonic_change[i] = static_cast<float>(1.0 - cosine);
+    }
+    previous = current;
+  }
+  return observations;
+}
+
+DownbeatResult select_downbeat_phase(const std::vector<Beat>& beats,
+                                     const TimeSignature& time_signature,
+                                     const DownbeatObservations& observations) {
+  SONARE_CHECK(observations.lf.empty() || observations.lf.size() == beats.size(),
+               ErrorCode::InvalidParameter);
+  SONARE_CHECK(
+      observations.harmonic_change.empty() || observations.harmonic_change.size() == beats.size(),
+      ErrorCode::InvalidParameter);
 
   const int numerator = std::max(1, time_signature.numerator);
   if (beats.empty()) {
-    result.confidence = time_signature.confidence;
-    return result;
+    return estimate_downbeats(beats, time_signature, 0);
   }
   if (numerator <= 1) {
+    DownbeatResult result;
+    result.time_signature = time_signature;
+    result.confidence = time_signature.confidence;
     result.beat_indices.push_back(0);
     result.downbeats.push_back(beats.front());
-    result.confidence = time_signature.confidence;
     return result;
   }
 
-  downbeat_phase = ((downbeat_phase % numerator) + numerator) % numerator;
-  std::vector<float> beat_strengths =
-      observations.beat_strengths.empty() ? std::vector<float>{} : observations.beat_strengths;
-  if (beat_strengths.empty()) {
-    beat_strengths.reserve(beats.size());
-    for (const auto& beat : beats) {
-      beat_strengths.push_back(beat.strength);
-    }
-  }
-
-  beat_strengths = normalize_to_unit(std::move(beat_strengths), beats.size());
-  std::vector<float> low_frequency =
-      normalize_to_unit(observations.low_frequency_energy, beats.size());
-  std::vector<float> chord_changes = normalize_to_unit(observations.chord_changes, beats.size());
-
-  const float neg_inf = -std::numeric_limits<float>::infinity();
-  const std::vector<float> tempo_centers =
-      tempo_state_centers(beats, observations.tempo_state_count);
-  const int tempo_state_count = static_cast<int>(tempo_centers.size());
-  const int state_count = numerator * tempo_state_count;
-  auto state_index = [tempo_state_count](int position, int tempo) {
-    return position * tempo_state_count + tempo;
-  };
-  auto state_position = [tempo_state_count](int state) { return state / tempo_state_count; };
-  auto state_tempo = [tempo_state_count](int state) { return state % tempo_state_count; };
-
-  std::vector<std::vector<float>> score(beats.size(), std::vector<float>(state_count, neg_inf));
-  std::vector<std::vector<int>> backpointer(beats.size(), std::vector<int>(state_count, -1));
-
-  for (int position = 0; position < numerator; ++position) {
-    const float base =
-        observation_score(0, beats.size(), position, downbeat_phase, numerator, observations,
-                          beat_strengths, low_frequency, chord_changes);
-    for (int tempo = 0; tempo < tempo_state_count; ++tempo) {
-      score[0][state_index(position, tempo)] = base;
-    }
-  }
-
-  for (size_t beat = 1; beat < beats.size(); ++beat) {
+  int phase = 0;
+  double margin = 0.0;
+  if (beats.size() >= static_cast<size_t>(numerator)) {
+    const std::vector<double> z_lf = z_scores(observations.lf, beats.size());
+    const std::vector<double> z_hc = z_scores(observations.harmonic_change, beats.size());
+    std::vector<double> position_scores;
     for (int position = 0; position < numerator; ++position) {
-      const int expected_previous = (position - 1 + numerator) % numerator;
-      const float base_observation =
-          observation_score(beat, beats.size(), position, downbeat_phase, numerator, observations,
-                            beat_strengths, low_frequency, chord_changes);
-      for (int tempo = 0; tempo < tempo_state_count; ++tempo) {
-        float best_previous_score = neg_inf;
-        int best_previous_state = -1;
-        for (int previous_tempo = 0; previous_tempo < tempo_state_count; ++previous_tempo) {
-          const int previous_state = state_index(expected_previous, previous_tempo);
-          const float transition =
-              tempo_transition_score(previous_tempo, tempo, observations.tempo_transition_weight);
-          const float candidate = score[beat - 1][previous_state] + transition;
-          if (candidate > best_previous_score) {
-            best_previous_score = candidate;
-            best_previous_state = previous_state;
-          }
-        }
-
-        const float tempo_observation =
-            tempo_observation_score(beats, beat, tempo_centers[static_cast<size_t>(tempo)],
-                                    observations.tempo_observation_weight);
-        const int state = state_index(position, tempo);
-        score[beat][state] = best_previous_score + base_observation + tempo_observation;
-        backpointer[beat][state] = best_previous_state;
+      std::vector<double> scores;
+      for (size_t i = static_cast<size_t>(position); i < beats.size();
+           i += static_cast<size_t>(numerator)) {
+        scores.push_back(z_lf[i] + z_hc[i]);
+      }
+      position_scores.push_back(median_of(std::move(scores)));
+    }
+    for (int position = 1; position < numerator; ++position) {
+      if (position_scores[static_cast<size_t>(position)] >
+          position_scores[static_cast<size_t>(phase)]) {
+        phase = position;
       }
     }
-  }
-
-  int best_state = 0;
-  float best_score = score.back()[0];
-  float second_score = neg_inf;
-  std::vector<float> best_score_by_position(static_cast<size_t>(numerator), neg_inf);
-  for (int state = 0; state < state_count; ++state) {
-    const int position = state_position(state);
-    best_score_by_position[static_cast<size_t>(position)] =
-        std::max(best_score_by_position[static_cast<size_t>(position)], score.back()[state]);
-    if (score.back()[state] > best_score) {
-      best_score = score.back()[state];
-      best_state = state;
+    double second = -std::numeric_limits<double>::infinity();
+    for (int position = 0; position < numerator; ++position) {
+      if (position != phase)
+        second = std::max(second, position_scores[static_cast<size_t>(position)]);
     }
-  }
-  for (int position = 0; position < numerator; ++position) {
-    const float position_score = best_score_by_position[static_cast<size_t>(position)];
-    if (position_score < best_score && position_score > second_score) {
-      second_score = position_score;
-    }
+    margin = std::clamp(position_scores[static_cast<size_t>(phase)] - second, 0.0, 1.0);
   }
 
-  std::vector<int> positions(beats.size(), 0);
-  int state = best_state;
-  for (size_t beat = beats.size(); beat-- > 0;) {
-    positions[beat] = state_position(state);
-    state =
-        backpointer[beat][state] >= 0
-            ? backpointer[beat][state]
-            : state_index((state_position(state) - 1 + numerator) % numerator, state_tempo(state));
-  }
-
-  for (size_t beat = 0; beat < beats.size(); ++beat) {
-    if (positions[beat] == 0) {
-      result.beat_indices.push_back(static_cast<int>(beat));
-      result.downbeats.push_back(beats[beat]);
-    }
-  }
-
-  const float margin =
-      std::isfinite(second_score)
-          ? std::clamp((best_score - second_score) / std::max(1.0f, std::abs(best_score)), 0.0f,
-                       1.0f)
-          : 0.0f;
+  DownbeatResult result = estimate_downbeats(beats, time_signature, phase);
   result.confidence =
-      std::clamp(0.5f * time_signature.confidence + 0.5f * (0.5f + margin), 0.0f, 1.0f);
+      std::clamp(0.5f * time_signature.confidence + 0.5f * static_cast<float>(margin), 0.0f, 1.0f);
   return result;
 }
 

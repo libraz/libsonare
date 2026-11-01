@@ -1,5 +1,5 @@
 /// @file downbeat_outlier_test.cpp
-/// @brief One dominant beat strength must not shrink every other strength against the phase prior.
+/// @brief One dominant off-beat observation must not move the bar phase.
 
 #include <catch2/catch_test_macros.hpp>
 #include <vector>
@@ -18,34 +18,33 @@ std::vector<Beat> bar_beats(int count) {
   return beats;
 }
 
-/// @brief Strengths [1, .3, .5, .3] per bar; beat @p loud_beat (if >= 0) is set to @p loud.
+/// @brief Low-frequency evidence [1, .3, .5, .3] per bar; beat @p loud_beat (if >= 0) is set to
+///        @p loud. Harmonic change is flat, so the low band alone carries the phase.
 DownbeatObservations observations_for(int count, int loud_beat, float loud) {
   const float pattern[4] = {1.0f, 0.3f, 0.5f, 0.3f};
   DownbeatObservations obs;
   for (int i = 0; i < count; ++i) {
-    obs.beat_strengths.push_back(i == loud_beat ? loud : pattern[i % 4]);
+    obs.lf.push_back(i == loud_beat ? loud : pattern[i % 4]);
   }
+  obs.harmonic_change.assign(static_cast<size_t>(count), 0.0f);
   return obs;
 }
 
-// The meter-phase prior points at phase 1, so only the strengths can carry phase 0.
-constexpr int kMisleadingPhase = 1;
-
 }  // namespace
 
-TEST_CASE("downbeat strengths outweigh a wrong phase prior", "[analysis][downbeat][outlier]") {
+TEST_CASE("downbeat evidence picks the bar start", "[analysis][downbeat][outlier]") {
   const std::vector<Beat> beats = bar_beats(16);
-  const DownbeatResult result = estimate_downbeats(beats, TimeSignature{4, 4, 1.0f},
-                                                   kMisleadingPhase, observations_for(16, -1, 0));
+  const DownbeatResult result =
+      select_downbeat_phase(beats, TimeSignature{4, 4, 1.0f}, observations_for(16, -1, 0));
 
   REQUIRE(result.beat_indices == std::vector<int>{0, 4, 8, 12});
 }
 
-TEST_CASE("downbeat phase survives one dominant off-beat strength",
+TEST_CASE("downbeat phase survives one dominant off-beat observation",
           "[analysis][downbeat][outlier]") {
   const std::vector<Beat> beats = bar_beats(16);
-  const DownbeatResult result = estimate_downbeats(
-      beats, TimeSignature{4, 4, 1.0f}, kMisleadingPhase, observations_for(16, 5, 20.0f));
+  const DownbeatResult result =
+      select_downbeat_phase(beats, TimeSignature{4, 4, 1.0f}, observations_for(16, 5, 20.0f));
 
   REQUIRE(result.beat_indices == std::vector<int>{0, 4, 8, 12});
 }

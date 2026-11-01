@@ -39,6 +39,7 @@ RhythmAnalyzer::RhythmAnalyzer(const Audio& audio, const RhythmConfig& config)
   bpm_ = beat_analyzer.bpm();
   onset_strength_ = beat_analyzer.onset_strength();
   beat_low_frequency_energy_ = beat_analyzer.beat_low_frequency_observations();
+  downbeat_phase_ = beat_analyzer.downbeat_phase();
 
   // Detect onsets from onset strength envelope
   detect_onsets(onset_strength_, beat_analyzer.onset_shift_frames());
@@ -54,6 +55,7 @@ RhythmAnalyzer::RhythmAnalyzer(const BeatAnalyzer& beat_analyzer, const RhythmCo
   beats_ = beat_analyzer.beats();
   onset_strength_ = beat_analyzer.onset_strength();
   beat_low_frequency_energy_ = beat_analyzer.beat_low_frequency_observations();
+  downbeat_phase_ = beat_analyzer.downbeat_phase();
 
   // Detect onsets from onset strength envelope
   detect_onsets(onset_strength_, beat_analyzer.onset_shift_frames());
@@ -188,15 +190,11 @@ void RhythmAnalyzer::detect_time_signature() {
   // Pass the beat-local energy envelope (the same one BeatAnalyzer scores) so
   // estimate_meter resolves simple-vs-compound meter from the audio instead of
   // being forced into the empty-envelope compound fallback, and so this estimate
-  // and BeatAnalyzer's cannot disagree over the same beats.
-  //
-  // Keep the full MeterResult so the downbeat phase (which beat index the first
-  // downbeat falls on) can offset the strong-beat classification in
-  // compute_syncopation(), matching how BeatAnalyzer aligns its downbeats.
+  // and BeatAnalyzer's cannot disagree over the same beats. The bar phase is the
+  // beat analyzer's, not this estimate's.
   MeterResult meter =
       estimate_meter(beat_energy_, beats_, meter_config, beat_low_frequency_energy_);
   features_.time_signature = meter.time_signature;
-  downbeat_phase_ = meter.downbeat_phase;
   unobserved_beats_ = std::move(meter.unobserved_beats);
 }
 

@@ -121,6 +121,7 @@ add_executable(sonare_tests
   analysis/meter_analyzer_test.cpp
   analysis/downbeat_analyzer_test.cpp
   analysis/downbeat_outlier_test.cpp
+  analysis/downbeat_phase_test.cpp
   analysis/chord_analyzer_test.cpp
   analysis/chord_synthetic_matrix_test.cpp
   analysis/progression_patterns_test.cpp

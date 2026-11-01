@@ -162,9 +162,13 @@ BeatAnalyzer& MusicAnalyzer::beat_analyzer() {
     beat_analyzer_ = std::make_unique<BeatAnalyzer>(
         onset_strength(), analysis_sr_, config_->hop_length, beat_config,
         onset_center_shift_frames(analysis_stft_, true));
-    // Same order as the Audio constructor: the meter reads the energy, then the downbeats.
+    // Same order as the Audio constructor: the meter reads the energy, then the bar phase is
+    // selected from the cached analysis spectrogram.
     beat_analyzer_->estimate_time_signature(beat_low_frequency_energy());
-    beat_analyzer_->refine_downbeats(beat_low_frequency_energy());
+    const Spectrogram& spec = spectrogram();
+    beat_analyzer_->refine_downbeats(downbeat_phase_evidence(
+        spec.power(), spec.n_bins(), spec.n_frames(), analysis_sr_, analysis_stft_.n_fft,
+        config_->hop_length, beat_analyzer_->beats()));
   });
   return *beat_analyzer_;
 }
@@ -215,8 +219,8 @@ ChordAnalyzer& MusicAnalyzer::chord_analyzer() {
       chord_analyzer_ = std::make_unique<ChordAnalyzer>(
           harmonic, beat_times, bass_chroma_ ? *bass_chroma_ : Chroma(), chord_config);
     }
-    const auto chord_changes = chord_change_observations(chord_beats, chord_analyzer_->chords());
-    beat_analyzer_->refine_downbeats(beat_low_frequency_energy(), chord_changes);
+    beat_analyzer_->set_chord_change_observations(
+        chord_change_observations(chord_beats, chord_analyzer_->chords()));
   });
   return *chord_analyzer_;
 }
@@ -288,9 +292,6 @@ SectionAnalyzer& MusicAnalyzer::section_analyzer() {
     section_config.n_fft = config_->n_fft;
     section_config.hop_length = config_->hop_length;
     section_config.tuning = tuning_;
-    // Chords first: they re-refine the downbeats, so sections read the same beat grid however
-    // they are reached, whether analyze() or a direct call came first.
-    chord_analyzer();
     // The cached spectrogram is the analysis-rate signal's, the one the sections are read off.
     section_analyzer_ = std::make_unique<SectionAnalyzer>(
         analysis_audio_, section_structure::make_section_grid(beat_analyzer()), spectrogram(),
@@ -545,6 +546,8 @@ std::optional<AnalysisResult> MusicAnalyzer::analyze_impl() {
   result.beats = beat_analyzer().beats();
   result.time_signature = beat_analyzer().time_signature();
   result.time_signature_candidates = beat_analyzer().time_signature_candidates();
+  result.downbeat_indices = beat_analyzer().downbeat_indices();
+  result.downbeat_phase = beat_analyzer().downbeat_phase();
 
   // Chords (40-55%)
   report_progress(0.40f, "chords");
@@ -553,15 +556,7 @@ std::optional<AnalysisResult> MusicAnalyzer::analyze_impl() {
   }
   result.chords = chord_analyzer().chords();
 
-  // Downbeats are read only now that chord_analyzer() has run: its lazy
-  // initialization re-refines the same BeatAnalyzer with chord-change evidence,
-  // so reading them alongside the beats above would publish the preliminary
-  // low-frequency-energy-only estimate.
-  result.downbeat_indices = beat_analyzer().downbeat_indices();
-  result.downbeat_phase = beat_analyzer().downbeat_phase();
-  // Read from the same post-chord refinement as the downbeats above, so the
-  // chord-change stream is the populated one rather than the empty vector the
-  // preliminary pass scored.
+  // Read after chord_analyzer(), which publishes the chord-change stream on the beat analyzer.
   result.beat_observations.onset_strength = beat_analyzer().beat_onset_observations();
   result.beat_observations.low_frequency_energy = beat_analyzer().beat_low_frequency_observations();
   result.beat_observations.chord_change = beat_analyzer().beat_chord_change_observations();

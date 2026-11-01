@@ -115,6 +115,10 @@ class RhythmAnalyzer {
   /// @brief Returns beat intervals in seconds.
   const std::vector<float>& beat_intervals() const { return beat_intervals_; }
 
+  /// @brief Returns the beat index the first measure starts on.
+  /// @details The beat analyzer's selected bar phase; bar positions count from it.
+  int downbeat_phase() const { return downbeat_phase_; }
+
  private:
   void analyze();
   void detect_time_signature();
@@ -137,7 +141,7 @@ class RhythmAnalyzer {
   std::vector<int> unobserved_beats_;
   std::vector<float> onset_times_;  ///< Detected onset times in seconds
   float bpm_;
-  int downbeat_phase_ = 0;  ///< Beat index of the first downbeat (from estimate_meter)
+  int downbeat_phase_ = 0;  ///< Beat index of the first downbeat (from the beat analyzer)
   RhythmConfig config_;
   int sr_;
   int hop_length_;

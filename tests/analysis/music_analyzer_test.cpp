@@ -262,34 +262,23 @@ TEST_CASE("MusicAnalyzer chords", "[.][slow][music_analyzer]") {
   }
 }
 
-TEST_CASE("MusicAnalyzer refines downbeats after chord analysis", "[.][slow][music_analyzer]") {
-  // Pins the documented SEQUENTIAL contract (see the MusicAnalyzer class
-  // warning). chord_analyzer()'s lazy initializer calls refine_downbeats() a
-  // second time on the BeatAnalyzer that beat_analyzer() already published, so:
-  //
-  //   - used sequentially, this is supported and the reference stays valid;
-  //   - used concurrently, it is a data race, because the revision reassigns
-  //     the analyzer's vectors while another thread may be reading them.
-  //
-  // The pointer check below is not incidental: it IS the mechanism. If a future
-  // change makes the second refine a no-op, this test fails and the class
-  // warning has to be revisited rather than silently going stale.
+TEST_CASE("MusicAnalyzer chord analysis leaves the downbeats alone", "[.][slow][music_analyzer]") {
+  // chord_analyzer() publishes chord changes on the BeatAnalyzer that beat_analyzer() already
+  // returned; the downbeats it published must stay put, storage included.
   Audio audio = create_test_audio();
 
   MusicAnalyzer analyzer(audio);
   auto& beat = analyzer.beat_analyzer();
-  const size_t initial_downbeats = beat.downbeat_indices().size();
-  REQUIRE(initial_downbeats > 0);
+  const std::vector<int> initial_downbeats = beat.downbeat_indices();
+  REQUIRE_FALSE(initial_downbeats.empty());
+  const int initial_phase = beat.downbeat_phase();
   const int* initial_storage = beat.downbeat_indices().data();
 
   (void)analyzer.chord_analyzer().count();
 
-  // Still a valid, populated result when the two are used in sequence.
-  REQUIRE(!beat.downbeat_indices().empty());
-  REQUIRE(beat.downbeat_indices().size() == initial_downbeats);
-  // ... and the storage a concurrent reader would have been holding is gone:
-  // the second refine move-assigned a freshly built vector over it.
-  REQUIRE(beat.downbeat_indices().data() != initial_storage);
+  REQUIRE(beat.downbeat_indices() == initial_downbeats);
+  REQUIRE(beat.downbeat_phase() == initial_phase);
+  REQUIRE(beat.downbeat_indices().data() == initial_storage);
 }
 
 TEST_CASE("MusicAnalyzer form", "[music_analyzer]") {
@@ -305,7 +294,7 @@ TEST_CASE("MusicAnalyzer form", "[music_analyzer]") {
 
 TEST_CASE("MusicAnalyzer sections do not depend on what was called first",
           "[.][slow][music_analyzer]") {
-  // form() first and analyze() first must lay the sections on the same chord-refined beats.
+  // form() first and analyze() first must lay the sections on the same beats and downbeats.
   const Audio audio = create_offset_chord_audio(120.0f, 4, 1, 22050, 12.0f);
 
   MusicAnalyzer form_first(audio);
@@ -665,31 +654,31 @@ TEST_CASE("MusicAnalyzer reports downbeats as ascending in-range beat indices",
   REQUIRE(result.downbeat_phase < result.time_signature.numerator);
 }
 
-TEST_CASE("MusicAnalyzer publishes the chord-refined downbeats", "[.][slow][music_analyzer]") {
-  // Clicks are uniform and the chord changes land one beat after the bar start,
-  // so the beat analyzer's own downbeat estimate and the chord-informed one
-  // disagree. Downbeat refinement runs a second time when the chord analyzer is
-  // first used, and the result has to carry that second pass.
+TEST_CASE("MusicAnalyzer publishes the same downbeats whether or not chords ran",
+          "[.][slow][music_analyzer]") {
+  // Clicks are uniform and the chord changes land one beat after the bar start; the
+  // harmonic-change evidence already sees those changes, and chord analysis adds nothing.
   Audio audio = create_offset_chord_audio(120.0f, 4, 1, 22050, 8.0f);
 
   MusicAnalyzerConfig config;
   config.start_bpm = 120.0f;
 
   MusicAnalyzer staged(audio, config);
-  const std::vector<int> preliminary = staged.beat_analyzer().downbeat_indices();
+  const std::vector<int> before_chords = staged.beat_analyzer().downbeat_indices();
+  const int phase_before_chords = staged.beat_analyzer().downbeat_phase();
   (void)staged.chord_analyzer().count();
-  const std::vector<int> refined = staged.beat_analyzer().downbeat_indices();
+  const std::vector<int> after_chords = staged.beat_analyzer().downbeat_indices();
 
   MusicAnalyzer full(audio, config);
   const AnalysisResult result = full.analyze();
 
-  CAPTURE(preliminary, refined, result.downbeat_indices);
-  REQUIRE_FALSE(refined.empty());
-  // Without this the comparison below would hold for either read order.
-  INFO("the fixture must keep the preliminary and chord-refined estimates apart");
-  REQUIRE(preliminary != refined);
-  REQUIRE(result.downbeat_indices == refined);
-  REQUIRE(result.downbeat_phase == full.beat_analyzer().downbeat_phase());
+  CAPTURE(before_chords, after_chords, result.downbeat_indices);
+  REQUIRE_FALSE(before_chords.empty());
+  REQUIRE(after_chords == before_chords);
+  REQUIRE(staged.beat_analyzer().downbeat_phase() == phase_before_chords);
+  REQUIRE(result.downbeat_indices == before_chords);
+  REQUIRE(result.downbeat_phase == phase_before_chords);
+  REQUIRE(result.downbeat_indices.front() == result.downbeat_phase);
 }
 
 TEST_CASE("MusicAnalyzer meter candidates change the detected numerator",
@@ -824,7 +813,7 @@ TEST_CASE("MusicAnalyzer publishes the beat observations behind the downbeat dec
 
   // Chord-change evidence exists only once the chord analyzer has run, and the
   // result reads the observations after it. Reading them next to the beats
-  // would publish the preliminary pass's empty vector instead.
+  // would publish an empty vector instead.
   REQUIRE_FALSE(result.chords.empty());
   const auto& chord_change = result.beat_observations.chord_change;
   REQUIRE(chord_change.size() == beat_count);
@@ -833,14 +822,14 @@ TEST_CASE("MusicAnalyzer publishes the beat observations behind the downbeat dec
 
   // Without this the assertions above would hold for either read order: the
   // stream is empty right up until the chord analyzer's lazy initialization
-  // re-refines the downbeats, so it is the ordering that fills it.
+  // publishes it, so it is the ordering that fills it.
   MusicAnalyzer staged(audio, config);
   (void)staged.beat_analyzer().beats();
   REQUIRE(staged.beat_analyzer().beat_chord_change_observations().empty());
   (void)staged.chord_analyzer().count();
   REQUIRE(staged.beat_analyzer().beat_chord_change_observations().size() == beat_count);
 
-  // What the result carries is what the analyzer holds after that refinement.
+  // What the result carries is what the analyzer holds after chord analysis.
   REQUIRE(result.beat_observations.onset_strength ==
           analyzer.beat_analyzer().beat_onset_observations());
   REQUIRE(result.beat_observations.low_frequency_energy ==

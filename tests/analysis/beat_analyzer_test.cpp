@@ -11,6 +11,7 @@
 #include <random>
 #include <vector>
 
+#include "analysis/downbeat_analyzer.h"
 #include "analysis/meter_analyzer.h"
 #include "quick.h"
 #include "support/rate_material.h"
@@ -306,24 +307,36 @@ TEST_CASE("BeatAnalyzer refines downbeats from beat-level observations", "[beat_
   config.trim = false;
 
   BeatAnalyzer analyzer(onset, 100, 10, config);
-  REQUIRE(analyzer.count() >= 8);
+  const int numerator = analyzer.time_signature().numerator;
+  REQUIRE(numerator >= 2);
+  REQUIRE(analyzer.count() >= 2 * static_cast<size_t>(numerator));
+  // Without audio the downbeats are seeded at phase 0.
+  REQUIRE(analyzer.downbeat_phase() == 0);
+  REQUIRE(analyzer.downbeat_indices().front() == 0);
 
-  const int numerator = std::max(2, analyzer.time_signature().numerator);
   const int observed_phase = std::min(2, numerator - 1);
-  std::vector<float> low_frequency(analyzer.count(), 0.0f);
-  for (size_t i = static_cast<size_t>(observed_phase); i < low_frequency.size();
+  DownbeatObservations evidence;
+  evidence.lf.assign(analyzer.count(), 0.0f);
+  for (size_t i = static_cast<size_t>(observed_phase); i < evidence.lf.size();
        i += static_cast<size_t>(numerator)) {
-    low_frequency[i] = 1.0f;
+    evidence.lf[i] = 1.0f;
   }
 
-  analyzer.refine_downbeats(low_frequency);
+  analyzer.refine_downbeats(evidence);
   const auto& downbeat_indices = analyzer.downbeat_indices();
 
+  REQUIRE(analyzer.downbeat_phase() == observed_phase);
   REQUIRE(!downbeat_indices.empty());
   REQUIRE(downbeat_indices.front() == observed_phase);
   for (int index : downbeat_indices) {
     REQUIRE(index % numerator == observed_phase);
   }
+
+  // Empty evidence leaves the selection in place.
+  const std::vector<int> selected = downbeat_indices;
+  analyzer.refine_downbeats(DownbeatObservations{});
+  REQUIRE(analyzer.downbeat_phase() == observed_phase);
+  REQUIRE(analyzer.downbeat_indices() == selected);
 }
 
 TEST_CASE("BeatAnalyzer beat strength", "[beat_analyzer]") {
@@ -590,32 +603,48 @@ TEST_CASE("BeatAnalyzer without audio scores onsets but has no low-frequency evi
   REQUIRE_FALSE(audio_backed.beat_low_frequency_observations().empty());
 }
 
-TEST_CASE("BeatAnalyzer republishes the observations of the latest refinement", "[beat_analyzer]") {
-  // MusicAnalyzer refines a second time once chords exist, so the accessors have
-  // to expose the evidence of the most recent pass and not the first one.
+TEST_CASE("BeatAnalyzer publishes chord changes without moving the downbeats", "[beat_analyzer]") {
+  // MusicAnalyzer publishes chord changes once chords exist; the bar phase must not follow them.
   Audio audio = create_drum_pattern(120.0f, 4, 22050, 4.0f);
   BeatAnalyzer analyzer(audio);
 
   const size_t beat_count = analyzer.beats().size();
   REQUIRE(beat_count >= 4);
   const std::vector<float> initial_low_frequency = analyzer.beat_low_frequency_observations();
+  const std::vector<float> initial_onset = analyzer.beat_onset_observations();
+  const std::vector<int> initial_indices = analyzer.downbeat_indices();
+  const int initial_phase = analyzer.downbeat_phase();
   REQUIRE(analyzer.beat_chord_change_observations().empty());
 
-  const std::vector<float> low_frequency(beat_count, 0.25f);
+  // Chord changes one beat after the bar start, where the old chord-informed pass would move it.
   std::vector<float> chord_changes(beat_count, 0.0f);
-  for (size_t i = 0; i < beat_count; i += 4) {
+  for (size_t i = static_cast<size_t>(initial_phase) + 1; i < beat_count; i += 4) {
     chord_changes[i] = 1.0f;
   }
-  // Otherwise the equality below could hold without the refinement replacing
-  // anything.
-  REQUIRE(initial_low_frequency != low_frequency);
+  analyzer.set_chord_change_observations(chord_changes);
 
-  analyzer.refine_downbeats(low_frequency, chord_changes);
+  REQUIRE(analyzer.beat_chord_change_observations() == chord_changes);
+  REQUIRE(analyzer.downbeat_indices() == initial_indices);
+  REQUIRE(analyzer.downbeat_phase() == initial_phase);
+  REQUIRE(analyzer.beat_low_frequency_observations() == initial_low_frequency);
+  REQUIRE(analyzer.beat_onset_observations() == initial_onset);
+}
+
+TEST_CASE("BeatAnalyzer re-estimating the meter publishes its energy and re-seeds phase 0",
+          "[beat_analyzer]") {
+  Audio audio = create_drum_pattern(120.0f, 4, 22050, 8.0f);
+  BeatAnalyzer analyzer(audio);
+
+  const size_t beat_count = analyzer.beats().size();
+  REQUIRE(beat_count >= 8);
+  const std::vector<float> low_frequency(beat_count, 0.25f);
+  REQUIRE(analyzer.beat_low_frequency_observations() != low_frequency);
+
+  analyzer.estimate_time_signature(low_frequency);
 
   REQUIRE(analyzer.beat_low_frequency_observations() == low_frequency);
-  REQUIRE(analyzer.beat_chord_change_observations() == chord_changes);
-  // The onset window is recomputed by the refinement and stays one per beat.
-  REQUIRE(analyzer.beat_onset_observations().size() == beat_count);
+  REQUIRE(analyzer.downbeat_phase() == 0);
+  REQUIRE(analyzer.downbeat_indices().front() == 0);
 }
 
 namespace {

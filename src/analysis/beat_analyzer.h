@@ -9,6 +9,8 @@
 
 namespace sonare {
 
+struct DownbeatObservations;
+
 /// @brief Fraction of the reference onset below which a beat carries no onset evidence.
 /// @details The reference is the 3rd-highest value so a single burst cannot set it: a +24 dB
 ///          burst puts 3.1-high edge beats at 0.17 of it (0.05 of the max); noise stays at 0.03.
@@ -21,10 +23,9 @@ struct Beat {
   /// @brief Onset-envelope value sampled at @ref frame.
   /// @details A single raw frame, neither windowed nor normalized, so it is
   ///          sensitive to beat-position jitter and its scale depends on the
-  ///          material. The downbeat refinement deliberately does not use this
-  ///          value — it scores a beat-local window instead, exposed as
-  ///          BeatAnalyzer::beat_onset_observations(). Prefer that for accent
-  ///          scoring, and keep this for cheap per-beat magnitude readouts.
+  ///          material. For accent scoring prefer the beat-local window exposed
+  ///          as BeatAnalyzer::beat_onset_observations(), and keep this for
+  ///          cheap per-beat magnitude readouts.
   float strength;
 };
 
@@ -71,6 +72,7 @@ class BeatAnalyzer {
   /// @param hop_length Hop length used
   /// @param config Beat configuration
   /// @param shift_frames Centering shift the envelope carries; beat times subtract it
+  /// @details Without audio there is no bar-start evidence, so downbeat_phase() is 0.
   BeatAnalyzer(const std::vector<float>& onset_strength, int sr, int hop_length,
                const BeatConfig& config = BeatConfig(), int shift_frames = 0);
 
@@ -89,38 +91,41 @@ class BeatAnalyzer {
   /// @brief Returns estimated downbeats.
   const std::vector<Beat>& downbeats() const { return downbeats_; }
 
-  /// @brief Returns the beat index the first measure starts on.
-  /// @details Set by the meter estimate and left alone by refine_downbeats(),
-  ///          so it can disagree with downbeat_indices().front() once the
-  ///          refinement has moved the first measure start.
+  /// @brief Returns the beat index the first measure starts on, in [0, numerator).
+  /// @details The bar phase selected from bar-start evidence; downbeat_indices()
+  ///          are the beats phase, phase + numerator, and so on. 0 when no
+  ///          evidence was measured, as for the onset-envelope constructor.
   int downbeat_phase() const { return downbeat_phase_; }
 
-  /// @brief Re-estimates the time signature and the downbeats it implies.
+  /// @brief Re-estimates the time signature and re-seeds the downbeats at phase 0.
   /// @param beat_energy Per-beat low-frequency energy, or empty. A beat whose onset evidence a
-  ///        louder event masked is identified from it and left out of the meter scoring.
+  ///        louder event masked is identified from it and left out of the meter scoring. It is
+  ///        published as beat_low_frequency_observations().
   void estimate_time_signature(const std::vector<float>& beat_energy = {});
 
-  /// @brief Refines downbeats using optional beat-level observations.
-  void refine_downbeats(const std::vector<float>& low_frequency_energy = {},
-                        const std::vector<float>& chord_changes = {});
+  /// @brief Selects the bar phase from per-beat bar-start evidence.
+  /// @details Overwrites downbeat_phase() and the downbeats; empty evidence leaves them as seeded.
+  void refine_downbeats(const DownbeatObservations& evidence);
 
-  /// @brief Returns the beat-local onset-strength window the refinement scored.
+  /// @brief Publishes per-beat chord-change evidence without touching the downbeats.
+  void set_chord_change_observations(std::vector<float> chord_changes);
+
+  /// @brief Returns the beat-local onset-strength window around each beat.
   /// @details One value per beat, aggregated over a window around the beat
-  ///          rather than sampled at a single frame like Beat::strength. Empty
-  ///          until refine_downbeats() has run.
+  ///          rather than sampled at a single frame like Beat::strength.
   const std::vector<float>& beat_onset_observations() const { return onset_observations_; }
 
   /// @brief Returns beat-local low-frequency energy, the accent evidence that
   ///        survives the log-spectral difference onset strength discards.
-  /// @details One value per beat, or empty when the analyzer was built without
-  ///          audio or refine_downbeats() has not run.
+  /// @details One value per beat, the meter estimate's masked-beat input, or empty when
+  ///          the analyzer was built without audio.
   const std::vector<float>& beat_low_frequency_observations() const {
     return low_frequency_observations_;
   }
 
   /// @brief Returns per-beat chord-change evidence.
-  /// @details One value per beat, or empty unless refine_downbeats() was called
-  ///          with chord changes — which only happens once chords are analyzed.
+  /// @details One value per beat, or empty unless set_chord_change_observations()
+  ///          was called — which only happens once chords are analyzed.
   const std::vector<float>& beat_chord_change_observations() const {
     return chord_change_observations_;
   }
@@ -159,10 +164,9 @@ class BeatAnalyzer {
   std::vector<int> downbeat_indices_;
   std::vector<Beat> downbeats_;
   std::vector<float> onset_strength_;
-  // Retained from the last refine_downbeats() call. These are the scored
-  // evidence rather than a derived result, kept so callers doing their own
-  // meter or downbeat work can reuse them instead of recomputing a weaker
-  // approximation from the frame-level envelope.
+  // Published per-beat evidence, kept so callers doing their own meter or
+  // downbeat work can reuse it instead of recomputing a weaker approximation
+  // from the frame-level envelope.
   std::vector<float> onset_observations_;
   std::vector<float> low_frequency_observations_;
   std::vector<float> chord_change_observations_;
