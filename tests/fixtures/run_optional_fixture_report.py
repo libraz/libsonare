@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import html
 import os
 import re
 import subprocess
@@ -82,7 +83,9 @@ def run_suite(
 ) -> dict[str, Any]:
     env = os.environ.copy()
     env[str(SUITES[name]["env"])] = str(root)
-    command = [str(sonare_tests), str(SUITES[name]["filter"])]
+    # The XML reporter keeps each WARN message on one unwrapped line; the console
+    # reporter wraps at 80 columns, which can split a token the patterns need.
+    command = [str(sonare_tests), str(SUITES[name]["filter"]), "-r", "xml"]
     try:
         completed = subprocess.run(
             command,
@@ -110,7 +113,7 @@ def run_suite(
             "accepted_return_code": False,
             "timed_out": True,
             "timeout_seconds": timeout_seconds,
-            "observations": extract_observations(stdout),
+            "observations": extract_observations_from_report_output(stdout),
             "stdout": stdout,
             "stderr": stderr,
         }
@@ -120,7 +123,7 @@ def run_suite(
         "return_code": completed.returncode,
         "accepted_return_code": completed.returncode in (0, 4),
         "timed_out": False,
-        "observations": extract_observations(completed.stdout),
+        "observations": extract_observations_from_report_output(completed.stdout),
         "stdout": completed.stdout,
         "stderr": completed.stderr,
     }
@@ -178,6 +181,20 @@ def wasm_size_run(current: Path, baseline: Path | None) -> dict[str, Any]:
         "stdout": "",
         "stderr": stderr,
     }
+
+
+def report_warning_text(report_output: str) -> str:
+    """Return the text of every complete `<Warning>` element in Catch2 XML output.
+
+    A regex rather than an XML parser, so output cut short by a timeout still
+    yields every warning that finished before the cut.
+    """
+    messages = re.findall(r"<Warning\b[^>]*>(.*?)</Warning>", report_output, flags=re.DOTALL)
+    return "\n".join(html.unescape(message.strip()) for message in messages)
+
+
+def extract_observations_from_report_output(report_output: str) -> list[dict[str, Any]]:
+    return extract_observations(report_warning_text(report_output))
 
 
 def normalized_output(text: str) -> str:

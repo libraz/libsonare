@@ -59,20 +59,22 @@ std::vector<std::vector<std::string>> read_rows(const std::filesystem::path& pat
   return rows;
 }
 
+/// Letter name plus any run of `#` / `b` accidentals, as written in Harte labels.
 bool parse_pitch_class(const std::string& text, PitchClass& out) {
-  static const std::pair<const char*, PitchClass> names[] = {
-      {"C", PitchClass::C},   {"C#", PitchClass::Cs}, {"D", PitchClass::D},
-      {"D#", PitchClass::Ds}, {"E", PitchClass::E},   {"F", PitchClass::F},
-      {"F#", PitchClass::Fs}, {"G", PitchClass::G},   {"G#", PitchClass::Gs},
-      {"A", PitchClass::A},   {"A#", PitchClass::As}, {"B", PitchClass::B},
-  };
-  for (const auto& [name, pitch] : names) {
-    if (text == name) {
-      out = pitch;
-      return true;
+  static constexpr int kNaturals[] = {9, 11, 0, 2, 4, 5, 7};  // A..G
+  if (text.empty() || text[0] < 'A' || text[0] > 'G') return false;
+  int semitone = kNaturals[text[0] - 'A'];
+  for (size_t i = 1; i < text.size(); ++i) {
+    if (text[i] == '#') {
+      ++semitone;
+    } else if (text[i] == 'b') {
+      --semitone;
+    } else {
+      return false;
     }
   }
-  return false;
+  out = static_cast<PitchClass>(((semitone % 12) + 12) % 12);
+  return true;
 }
 
 bool parse_mode(const std::string& text, Mode& out) {
@@ -371,41 +373,52 @@ std::vector<ReferenceChord> read_chord_annotation(const std::filesystem::path& p
   return chords;
 }
 
-bool maj_min_equal(const Chord& detected, const ReferenceChord& reference) {
-  auto collapse_quality = [](ChordQuality quality, ChordQuality& collapsed) {
-    switch (quality) {
-      case ChordQuality::Major:
-      case ChordQuality::Dominant7:
-      case ChordQuality::Major7:
-      case ChordQuality::Add9:
-      case ChordQuality::Major9:
-      case ChordQuality::Dominant9:
-        collapsed = ChordQuality::Major;
-        return true;
-      case ChordQuality::Minor:
-      case ChordQuality::Minor7:
-      case ChordQuality::MinorAdd9:
-        collapsed = ChordQuality::Minor;
-        return true;
-      default:
-        return false;
-    }
-  };
+/// MIREX majmin reduction: a quality with a major or minor triad reduces to it;
+/// anything else (dim, aug, sus, dim7, hdim7, 7sus4, unknown) reduces to nothing.
+bool majmin_reduction(ChordQuality quality, ChordQuality& reduced) {
+  switch (quality) {
+    case ChordQuality::Major:
+    case ChordQuality::Dominant7:
+    case ChordQuality::Major7:
+    case ChordQuality::Add9:
+    case ChordQuality::Major9:
+    case ChordQuality::Dominant9:
+    case ChordQuality::Major6:
+    case ChordQuality::Dominant11:
+    case ChordQuality::Dominant13:
+    case ChordQuality::Dominant7b9:
+    case ChordQuality::Dominant7s9:
+      reduced = ChordQuality::Major;
+      return true;
+    case ChordQuality::Minor:
+    case ChordQuality::Minor7:
+    case ChordQuality::MinorAdd9:
+    case ChordQuality::Minor6:
+    case ChordQuality::MinorMajor7:
+      reduced = ChordQuality::Minor;
+      return true;
+    default:
+      return false;
+  }
+}
 
+bool maj_min_equal(const Chord& detected, const ReferenceChord& reference) {
   ChordQuality detected_collapsed;
   ChordQuality reference_collapsed;
   return detected.root == reference.root &&
-         collapse_quality(detected.quality, detected_collapsed) &&
-         collapse_quality(reference.quality, reference_collapsed) &&
+         majmin_reduction(detected.quality, detected_collapsed) &&
+         majmin_reduction(reference.quality, reference_collapsed) &&
          detected_collapsed == reference_collapsed;
 }
 
+/// Majmin WCSR; a reference chord outside the maj/min vocabulary is not scored.
 float chord_wcsr(const std::vector<Chord>& detected, const std::vector<ReferenceChord>& reference) {
   float total = 0.0f;
   float correct = 0.0f;
   for (const auto& ref : reference) {
     const float duration = ref.end - ref.start;
-    if (duration <= 0.0f) continue;
+    ChordQuality reduced;
+    if (duration <= 0.0f || !majmin_reduction(ref.quality, reduced)) continue;
     total += duration;
     const float midpoint = 0.5f * (ref.start + ref.end);
     auto found = std::find_if(detected.begin(), detected.end(), [midpoint](const Chord& chord) {
@@ -1192,6 +1205,40 @@ TEST_CASE("Music optional structure fixtures", "[music_dataset][structure]") {
     ++checked;
   }
   if (checked == 0) SKIP("No structure audio/annotation fixtures are present");
+}
+
+TEST_CASE("Music dataset annotation parsing", "[music_dataset_parsing]") {
+  PitchClass pitch = PitchClass::C;
+  REQUIRE(parse_pitch_class("Eb", pitch));
+  CHECK(pitch == PitchClass::Ds);
+  REQUIRE(parse_pitch_class("Cb", pitch));
+  CHECK(pitch == PitchClass::B);
+  CHECK_FALSE(parse_pitch_class("H", pitch));
+  CHECK_FALSE(parse_pitch_class("Ex", pitch));
+
+  PitchClass root = PitchClass::C;
+  PitchClass bass = PitchClass::C;
+  ChordQuality quality = ChordQuality::Major;
+  bool has_bass = false;
+  REQUIRE(parse_chord_symbol("Bb:min", root, quality, bass, has_bass));
+  CHECK(root == PitchClass::As);
+  CHECK(quality == ChordQuality::Minor);
+  REQUIRE(parse_chord_symbol("C:maj/Ab", root, quality, bass, has_bass));
+  CHECK(has_bass);
+  CHECK(bass == PitchClass::Gs);
+
+  const std::vector<ReferenceChord> reference = {
+      {0.0f, 2.0f, PitchClass::A, ChordQuality::Major, PitchClass::A, false},
+      {2.0f, 4.0f, PitchClass::C, ChordQuality::Diminished, PitchClass::C, false},
+  };
+  const std::vector<Chord> detected = {
+      {PitchClass::A, ChordQuality::Dominant7s9, 0.0f, 2.0f, 1.0f},
+      {PitchClass::C, ChordQuality::Major, 2.0f, 4.0f, 1.0f},
+  };
+  // The 7#9 reduces to A major; the dim reference is outside majmin and not scored.
+  CHECK(chord_wcsr(detected, reference) == 1.0f);
+  // Root accuracy still scores the dim span.
+  CHECK(chord_root_accuracy(detected, reference) == 1.0f);
 }
 
 }  // namespace sonare
