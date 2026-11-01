@@ -40,6 +40,11 @@ std::vector<float> center_onset_strength(std::vector<float> onset_env, int n_fft
 std::vector<float> center_onset_strength(std::vector<float> onset_env, const StftConfig& geometry,
                                          bool center);
 
+/// @brief Frames by which center_onset_strength(@p geometry, @p center) right-shifts the envelope.
+/// @return 0 when not centered; otherwise floor(win / (2 hop)) for the default window and
+///         round(win / (2 hop)) for an explicit one.
+int onset_center_shift_frames(const StftConfig& geometry, bool center);
+
 /// @brief Computes onset strength envelope from audio.
 /// @param audio Input audio
 /// @param mel_config Mel spectrogram configuration

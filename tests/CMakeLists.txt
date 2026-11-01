@@ -89,6 +89,7 @@ add_executable(sonare_tests
   feature/nnls_chroma_test.cpp
   feature/spectral_test.cpp
   feature/onset_test.cpp
+  feature/onset_shift_test.cpp
   feature/pitch_test.cpp
   feature/pyin_voicing_contract_test.cpp
   feature/cqt_test.cpp

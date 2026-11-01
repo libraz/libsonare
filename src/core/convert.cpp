@@ -160,6 +160,10 @@ float frames_to_time(int frames, int sr, int hop_length) {
   return static_cast<float>(frames) * static_cast<float>(hop_length) / static_cast<float>(sr);
 }
 
+float envelope_frame_time(int frame, int shift_frames, int sr, int hop) {
+  return frames_to_time(std::max(0, frame - shift_frames), sr, hop);
+}
+
 int time_to_frames(float time, int sr, int hop_length) {
   if (sr <= 0 || hop_length <= 0) {
     throw SonareException(ErrorCode::InvalidParameter,

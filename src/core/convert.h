@@ -64,6 +64,12 @@ float note_to_hz(const std::string& note);
 /// @return Time in seconds
 float frames_to_time(int frames, int sr, int hop_length);
 
+/// @brief Converts an onset-envelope frame to the time of the event it carries.
+/// @param frame Envelope frame index
+/// @param shift_frames Centering shift applied to the envelope
+/// @return max(0, frame - shift_frames) * hop / sr in seconds
+float envelope_frame_time(int frame, int shift_frames, int sr, int hop);
+
 /// @brief Converts time in seconds to frame index.
 /// @param time Time in seconds
 /// @param sr Sample rate
