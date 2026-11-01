@@ -16,6 +16,13 @@
 - Breaking (C++): `SectionConfig::kernel_size` is removed; the novelty window is now twice `min_section_sec` on each side of a boundary. Delete the line that sets it.
 - Breaking (C++): the three `SectionAnalyzer` constructors that took boundaries from outside are removed. Call `SectionAnalyzer(audio, config)`, which tracks the beats itself, or `SectionAnalyzer(audio, SectionGrid, spec, config)` with the beats and downbeats and the STFT you already have; a `SectionGrid` that is not ascending, or whose downbeat index is out of range, is refused as `InvalidParameter`. `detect_boundaries` and `BoundaryDetector` are unchanged.
 
+#### Beat, downbeat and onset timing
+
+- Beat, downbeat and onset times mark the start of the evidence that produced them: they are 46.4 ms earlier than before on every public surface (all of which analyze at 22050 Hz; 16 kHz input moves 32 ms). Frame indices and the onset envelope are unchanged. Direct C++ `BeatAnalyzer` and `OnsetAnalyzer` calls at the input rate move by the envelope's centering shift at that rate (48.0 ms at 32 kHz, 46.4 ms at 44.1 kHz, 42.7 ms at 48 kHz).
+- Chord starts stay where they were, so a chord now starts about 46 ms after the beat it falls on. Percussive event slices keep their placement.
+- The downbeat phase comes from low-frequency energy and harmonic change at each beat instead of onset strength, which marked the backbeat. Downbeat positions and `downbeatPhase` change on most music, and `detectDownbeats`, `analyze` and rhythm analysis report the same phase for the same beats; chord analysis no longer moves the downbeats. `estimateMeter`, which has no audio, keeps its own phase.
+- `lowFrequencyEnergy` in the beat observations is read at the new beat times. Result shapes do not change.
+
 #### Removed and renamed
 
 - The C `SonareRirSynthConfig` and `SonareRoomMorphConfig` field `air_absorption_enabled` is now `air_absorption`, a `SONARE_AIR_ABSORPTION_*` selector: `DEFAULT` (0) and `ON` (1) apply air absorption, `OFF` (2) leaves it out, and any other value is refused. A zero-initialized config therefore applies it. `SONARE_ACOUSTIC_ABI_VERSION` is 6.
@@ -46,7 +53,7 @@
 - Material that never changes, or whose sections all fall into one group, is still one Unknown section with `confidence` 0. A section shorter than one beat column (0.5 s on the fallback grid used for fewer than 8 beats) is not separated.
 - `SectionConfig::boundary_threshold` defaults to 0.22 for section analysis; the public boundary detector's default stays 0.3.
 - `SectionAnalyzer::section_self_similarity()` returns the sequence-match score of every pair of sections (1 on the diagonal, 0 for a pair whose lengths differ more than fourfold) instead of the similarity of their mean chroma, and `boundary_times()` returns the boundaries found on the beat grid, before the minimum-length merge.
-- `analyze()` and `MusicAnalyzer::section_analyzer()` use the chord-refined beats and downbeats, so `MusicAnalyzer::form()` now also pays for chord analysis. `analyze_sections` and the other entry points that take only audio run beat tracking themselves and can return different sections from `analyze()` on the same track.
+- `analyze_sections` and the other entry points that take only audio run beat tracking themselves and can return different sections from `analyze()` on the same track.
 
 #### Room acoustics
 
