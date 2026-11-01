@@ -121,7 +121,7 @@ class RhythmAnalyzer {
   void detect_groove_type();
   void compute_syncopation();
   void compute_regularity();
-  void detect_onsets(const std::vector<float>& onset_strength);
+  void detect_onsets(const std::vector<float>& onset_strength, int shift_frames);
   float calculate_swing_ratio() const;
 
   RhythmFeatures features_;

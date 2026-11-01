@@ -11,6 +11,7 @@
 #include <vector>
 
 #include "analysis/beat_analyzer.h"
+#include "core/convert.h"
 #include "core/resample.h"
 #include "support/rate_material.h"
 #include "util/constants.h"
@@ -799,7 +800,12 @@ TEST_CASE("detect_chords from audio honours use_beat_sync", "[chord_analyzer]") 
     }
   }
   const Audio audio = Audio::from_vector(std::move(samples), sr);
-  const std::vector<float> beats = BeatAnalyzer(audio).beat_times();
+  // Beat-synchronous chord windows sit at the beats' envelope-frame times.
+  const BeatAnalyzer beat_analyzer(audio);
+  std::vector<float> beats;
+  for (const Beat& beat : beat_analyzer.beats()) {
+    beats.push_back(frames_to_time(beat.frame, sr, BeatConfig{}.hop_length));
+  }
   REQUIRE(beats.size() >= 8);
   const auto on_beat_grid = [&](float t) {
     for (float b : beats) {

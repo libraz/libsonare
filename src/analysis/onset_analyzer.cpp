@@ -1,9 +1,9 @@
 #include "analysis/onset_analyzer.h"
 
 #include <algorithm>
-#include <cmath>
 
 #include "analysis/analysis_rate.h"
+#include "core/convert.h"
 #include "feature/mel_spectrogram.h"
 #include "feature/onset.h"
 #include "util/constants.h"
@@ -19,10 +19,15 @@ OnsetAnalyzer::OnsetAnalyzer(const Audio& audio, const OnsetDetectConfig& config
   // The detection pipeline detrends the onset envelope (the public feature OnsetConfig default
   // is false, to match librosa.onset.onset_strength): removing the slow baseline sharpens peak
   // picking, consistent with the bpm / beat / music / audio-profile analyzers.
-  onset_strength_ =
-      framing == OnsetFraming::kAnalysisRate
-          ? analysis_onset_strength(audio, config.n_fft, config.hop_length)
-          : onset_strength_in_window(audio, RateWindow{0, config.n_fft}, config.hop_length);
+  const RateWindow window = framing == OnsetFraming::kAnalysisRate
+                                ? window_at_rate(config.n_fft, audio.sample_rate())
+                                : RateWindow{0, config.n_fft};
+  onset_strength_ = onset_strength_in_window(audio, window, config.hop_length);
+  StftConfig geometry;
+  geometry.n_fft = window.n_fft;
+  geometry.win_length = window.win_length;
+  geometry.hop_length = config.hop_length;
+  onset_shift_frames_ = onset_center_shift_frames(geometry, true);
 
   detect_onsets();
 
@@ -32,8 +37,12 @@ OnsetAnalyzer::OnsetAnalyzer(const Audio& audio, const OnsetDetectConfig& config
 }
 
 OnsetAnalyzer::OnsetAnalyzer(const std::vector<float>& onset_strength, int sr, int hop_length,
-                             const OnsetDetectConfig& config)
-    : onset_strength_(onset_strength), sr_(sr), hop_length_(hop_length), config_(config) {
+                             const OnsetDetectConfig& config, int shift_frames)
+    : onset_strength_(onset_strength),
+      sr_(sr),
+      hop_length_(hop_length),
+      onset_shift_frames_(shift_frames),
+      config_(config) {
   detect_onsets();
 
   if (config_.backtrack) {
@@ -113,37 +122,19 @@ void OnsetAnalyzer::detect_onsets() {
     float local_avg = (pre_avg + post_avg) / 2.0f;
     if (current <= local_avg + config_.delta) continue;
 
-    // Convert frame to time
-    float time = static_cast<float>(i * hop_length_) / static_cast<float>(sr_);
-
-    onsets_.push_back({time, current});
+    onsets_.push_back({envelope_frame_time(i, onset_shift_frames_, sr_, hop_length_), current, i});
     last_onset_frame = i;
   }
-}
-
-int OnsetAnalyzer::frame_for_time(float time) const {
-  // Round rather than truncate: an onset time is `frame * hop / sr` evaluated in
-  // float, and truncating that product back can land one frame early (the
-  // quotient comes out a hair below the integer). Rounding recovers the frame
-  // the onset was actually detected at, which is what both this accessor and
-  // the backtracking search need.
-  const double frame =
-      static_cast<double>(time) * static_cast<double>(sr_) / static_cast<double>(hop_length_);
-  return static_cast<int>(std::lround(frame));
 }
 
 void OnsetAnalyzer::backtrack_onsets() {
   if (onset_strength_.empty() || onsets_.empty()) {
     return;
   }
-  const int last_frame = static_cast<int>(onset_strength_.size()) - 1;
-
   std::vector<int> frames;
   frames.reserve(onsets_.size());
   for (const auto& onset : onsets_) {
-    // Clamp the derived frame into range: a time at the final onset can land on
-    // (or past) onset_strength_.size(), which would read out of bounds.
-    frames.push_back(std::clamp(frame_for_time(onset.time), 0, last_frame));
+    frames.push_back(onset.frame);
   }
 
   // One backtracking rule for the whole project. onset_backtrack() stops by
@@ -161,7 +152,8 @@ void OnsetAnalyzer::backtrack_onsets() {
     // backtrack_range bounds how far an onset may travel; it is a limit on the
     // search, not a stopping rule of its own.
     const int limited = std::max(backtracked[i], frames[i] - max_travel);
-    onsets_[i].time = static_cast<float>(limited * hop_length_) / static_cast<float>(sr_);
+    onsets_[i].frame = limited;
+    onsets_[i].time = envelope_frame_time(limited, onset_shift_frames_, sr_, hop_length_);
   }
 }
 
@@ -178,7 +170,7 @@ std::vector<int> OnsetAnalyzer::onset_frames() const {
   std::vector<int> frames;
   frames.reserve(onsets_.size());
   for (const auto& onset : onsets_) {
-    frames.push_back(frame_for_time(onset.time));
+    frames.push_back(onset.frame);
   }
   return frames;
 }

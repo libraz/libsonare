@@ -13,6 +13,7 @@
 #include "analysis/downbeat_analyzer.h"
 #include "analysis/meter_analyzer.h"
 #include "core/convert.h"
+#include "feature/onset.h"
 #include "util/constants.h"
 #include "util/exception.h"
 #include "util/peak.h"
@@ -188,6 +189,8 @@ BeatAnalyzer::BeatAnalyzer(const Audio& audio, const BeatConfig& config)
   SONARE_CHECK(!audio.empty(), ErrorCode::InvalidParameter);
 
   onset_strength_ = analysis_onset_strength(audio, config.n_fft, config.hop_length);
+  onset_shift_frames_ = onset_center_shift_frames(
+      stft_config_at_rate(config.n_fft, config.hop_length, audio.sample_rate()), true);
 
   track_beats();
   const std::vector<float> low_frequency_energy = low_frequency_energy_observations(beats_, audio);
@@ -199,12 +202,13 @@ BeatAnalyzer::BeatAnalyzer(const Audio& audio, const BeatConfig& config)
 }
 
 BeatAnalyzer::BeatAnalyzer(const std::vector<float>& onset_strength, int sr, int hop_length,
-                           const BeatConfig& config)
+                           const BeatConfig& config, int shift_frames)
     : onset_strength_(onset_strength),
       bpm_(config.start_bpm),
       time_signature_{4, 4, 0.0f},
       sr_(sr),
       hop_length_(hop_length),
+      onset_shift_frames_(shift_frames),
       config_(config) {
   track_beats();
   // No audio is available here, so the low-frequency-energy and chord-change
@@ -511,7 +515,7 @@ void BeatAnalyzer::track_beats() {
   for (int f : beat_frames_vec) {
     Beat beat;
     beat.frame = f;
-    beat.time = frames_to_time(f, sr_, hop_length_);
+    beat.time = envelope_frame_time(f, onset_shift_frames_, sr_, hop_length_);
     beat.strength =
         max_onset_index >= 0 ? onset_strength_[std::clamp(f, 0, max_onset_index)] : 0.0f;
     beats_.push_back(beat);
@@ -521,15 +525,12 @@ void BeatAnalyzer::track_beats() {
     beats_.front().strength = beats_[1].strength;
   }
 
-  // Refine BPM estimate from actual beat intervals
+  // Refine BPM from the frame span; event times clamp at 0 and would bias it.
   if (beats_.size() >= 2) {
-    float total_interval = 0.0f;
-    for (size_t i = 1; i < beats_.size(); ++i) {
-      total_interval += beats_[i].time - beats_[i - 1].time;
-    }
-    float avg_interval = total_interval / static_cast<float>(beats_.size() - 1);
-    if (avg_interval > 0.0f) {
-      bpm_ = 60.0f / avg_interval;
+    const int frame_span = beats_.back().frame - beats_.front().frame;
+    if (frame_span > 0) {
+      bpm_ = 60.0f * static_cast<float>(sr_) / static_cast<float>(hop_length_) *
+             static_cast<float>(beats_.size() - 1) / static_cast<float>(frame_span);
     }
   }
 

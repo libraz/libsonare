@@ -41,7 +41,7 @@ RhythmAnalyzer::RhythmAnalyzer(const Audio& audio, const RhythmConfig& config)
   beat_low_frequency_energy_ = beat_analyzer.beat_low_frequency_observations();
 
   // Detect onsets from onset strength envelope
-  detect_onsets(onset_strength_);
+  detect_onsets(onset_strength_, beat_analyzer.onset_shift_frames());
 
   analyze();
 }
@@ -56,12 +56,12 @@ RhythmAnalyzer::RhythmAnalyzer(const BeatAnalyzer& beat_analyzer, const RhythmCo
   beat_low_frequency_energy_ = beat_analyzer.beat_low_frequency_observations();
 
   // Detect onsets from onset strength envelope
-  detect_onsets(onset_strength_);
+  detect_onsets(onset_strength_, beat_analyzer.onset_shift_frames());
 
   analyze();
 }
 
-void RhythmAnalyzer::detect_onsets(const std::vector<float>& onset_strength) {
+void RhythmAnalyzer::detect_onsets(const std::vector<float>& onset_strength, int shift_frames) {
   // Reuse the library's canonical OnsetAnalyzer peak-picker (pre/post-max
   // windows, wait/refractory constraint, adaptive local-average gating) on the
   // beat-aligned onset-strength envelope instead of a divergent local heuristic,
@@ -75,7 +75,7 @@ void RhythmAnalyzer::detect_onsets(const std::vector<float>& onset_strength) {
   OnsetDetectConfig onset_config;
   onset_config.n_fft = config_.n_fft;
   onset_config.hop_length = hop_length_;
-  OnsetAnalyzer onset_analyzer(onset_strength, sr_, hop_length_, onset_config);
+  OnsetAnalyzer onset_analyzer(onset_strength, sr_, hop_length_, onset_config, shift_frames);
   onset_times_ = onset_analyzer.onset_times();
 }
 

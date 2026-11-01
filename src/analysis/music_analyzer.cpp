@@ -4,6 +4,7 @@
 #include "analysis/downbeat_analyzer.h"
 #include "analysis/section_structure.h"
 #include "analysis/tempo_curve.h"
+#include "core/convert.h"
 #include "core/spectrum.h"
 #include "effects/hpss.h"
 #include "feature/chroma.h"
@@ -158,8 +159,9 @@ BeatAnalyzer& MusicAnalyzer::beat_analyzer() {
     beat_config.meter_candidate_numerators = config_->meter_candidate_numerators;
     beat_config.meter_denominator = config_->meter_denominator;
     // Use cached onset strength to avoid recomputation
-    beat_analyzer_ = std::make_unique<BeatAnalyzer>(onset_strength(), analysis_sr_,
-                                                    config_->hop_length, beat_config);
+    beat_analyzer_ = std::make_unique<BeatAnalyzer>(
+        onset_strength(), analysis_sr_, config_->hop_length, beat_config,
+        onset_center_shift_frames(analysis_stft_, true));
     // Same order as the Audio constructor: the meter reads the energy, then the downbeats.
     beat_analyzer_->estimate_time_signature(beat_low_frequency_energy());
     beat_analyzer_->refine_downbeats(beat_low_frequency_energy());
@@ -186,7 +188,14 @@ ChordAnalyzer& MusicAnalyzer::chord_analyzer() {
     }
 
     // Use beat-synchronized chord detection with harmonic chroma for better accuracy
-    auto beat_times = beat_analyzer().beat_times();
+    // Chord beat windows and chord-change matching stay on envelope frame times.
+    std::vector<Beat> chord_beats = beat_analyzer().beats();
+    std::vector<float> beat_times;
+    beat_times.reserve(chord_beats.size());
+    for (Beat& beat : chord_beats) {
+      beat.time = frames_to_time(beat.frame, analysis_sr_, config_->hop_length);
+      beat_times.push_back(beat.time);
+    }
     // harmonic_chroma() caches the bass-band CQT chroma as a by-product when
     // use_bass_weighted is on, so ask for the harmonic chroma first and the
     // bass chroma comes with it.
@@ -206,8 +215,7 @@ ChordAnalyzer& MusicAnalyzer::chord_analyzer() {
       chord_analyzer_ = std::make_unique<ChordAnalyzer>(
           harmonic, beat_times, bass_chroma_ ? *bass_chroma_ : Chroma(), chord_config);
     }
-    const auto chord_changes =
-        chord_change_observations(beat_analyzer_->beats(), chord_analyzer_->chords());
+    const auto chord_changes = chord_change_observations(chord_beats, chord_analyzer_->chords());
     beat_analyzer_->refine_downbeats(beat_low_frequency_energy(), chord_changes);
   });
   return *chord_analyzer_;
@@ -219,8 +227,9 @@ OnsetAnalyzer& MusicAnalyzer::onset_analyzer() {
     onset_config.n_fft = config_->n_fft;
     onset_config.hop_length = config_->hop_length;
     // Use cached onset strength to avoid recomputation
-    onset_analyzer_ = std::make_unique<OnsetAnalyzer>(onset_strength(), analysis_sr_,
-                                                      config_->hop_length, onset_config);
+    onset_analyzer_ = std::make_unique<OnsetAnalyzer>(
+        onset_strength(), analysis_sr_, config_->hop_length, onset_config,
+        onset_center_shift_frames(analysis_stft_, true));
   });
   return *onset_analyzer_;
 }

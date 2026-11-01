@@ -6,6 +6,7 @@
 #include <cstdint>
 #include <vector>
 
+#include "core/convert.h"
 #include "core/spectrum.h"
 #include "util/exception.h"
 
@@ -86,7 +87,10 @@ std::vector<PercussiveEvent> extract_percussive_events(
 
   std::vector<int64_t> starts(onsets.size());
   for (size_t i = 0; i < onsets.size(); ++i) {
-    starts[i] = onset_to_sample(onsets[i].time, audio.sample_rate(), n_samples);
+    // Slice starts keep envelope-frame placement, not the shifted event time.
+    starts[i] = onset_to_sample(
+        frames_to_time(onsets[i].frame, audio.sample_rate(), onset_config.hop_length),
+        audio.sample_rate(), n_samples);
   }
 
   std::vector<PercussiveEvent> events;

@@ -9,11 +9,11 @@
 
 #include "analysis/beat_analyzer.h"
 #include "core/audio.h"
+#include "core/convert.h"
 #include "util/json_reader.h"
 
 using namespace sonare;
 using namespace sonare::test;
-using Catch::Matchers::WithinAbs;
 using Catch::Matchers::WithinRel;
 
 namespace {
@@ -49,16 +49,27 @@ TEST_CASE("beat tracking reference compatibility", "[beat][reference]") {
   config.hop_length = 512;
 
   BeatAnalyzer analyzer(audio, config);
-  std::vector<float> times = analyzer.beat_times();
+  const std::vector<int> frames = analyzer.beat_frames();
+  const std::vector<float> times = analyzer.beat_times();
 
-  CAPTURE(analyzer.bpm(), expected_tempo, times.size(), expected_n_beats);
+  CAPTURE(analyzer.bpm(), expected_tempo, frames.size(), expected_n_beats);
   REQUIRE_THAT(analyzer.bpm(), WithinRel(expected_tempo, 0.05f));
-  REQUIRE(std::abs(static_cast<int>(times.size()) - expected_n_beats) <= 1);
+  REQUIRE(std::abs(static_cast<int>(frames.size()) - expected_n_beats) <= 1);
 
-  size_t compare_count = std::min(times.size(), expected_times.size());
+  // librosa reports envelope frame times; compare in frames, where both conventions agree.
+  size_t compare_count = std::min(frames.size(), expected_times.size());
   REQUIRE(compare_count >= 4);
   for (size_t i = 0; i < compare_count; ++i) {
-    CAPTURE(i, times[i], expected_times[i].as_float());
-    REQUIRE_THAT(times[i], WithinAbs(expected_times[i].as_float(), 0.08f));
+    const int expected_frame = time_to_frames(expected_times[i].as_float(), sr, config.hop_length);
+    CAPTURE(i, frames[i], expected_frame);
+    REQUIRE(std::abs(frames[i] - expected_frame) <= 2);
+  }
+
+  // Beat times are the start of the evidence frame.
+  REQUIRE(times.size() == frames.size());
+  for (size_t i = 0; i < frames.size(); ++i) {
+    CAPTURE(i, frames[i], times[i]);
+    REQUIRE(times[i] ==
+            envelope_frame_time(frames[i], analyzer.onset_shift_frames(), sr, config.hop_length));
   }
 }

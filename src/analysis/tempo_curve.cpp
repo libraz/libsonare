@@ -18,6 +18,19 @@ using sonare::constants::kSecondsPerMinute;
 // unique solution: the prior carries across it instead of the system going singular.
 constexpr double kMinObservationWeight = 1.0e-6;
 
+/// @brief Envelope value at @p frame, 0 outside the envelope.
+double activation_at_frame(const std::vector<float>& onset_strength, long frame) {
+  if (frame < 0 || frame >= static_cast<long>(onset_strength.size())) return 0.0;
+  return static_cast<double>(onset_strength[static_cast<size_t>(frame)]);
+}
+
+/// @brief onset_activation_at for a beat, read at its envelope frame.
+double beat_activation(const std::vector<float>& onset_strength, int sample_rate, int hop_length,
+                       const Beat& beat) {
+  if (onset_strength.empty() || sample_rate <= 0 || hop_length <= 0) return 1.0;
+  return activation_at_frame(onset_strength, beat.frame);
+}
+
 }  // namespace
 
 double onset_activation_at(const std::vector<float>& onset_strength, int sample_rate,
@@ -26,9 +39,7 @@ double onset_activation_at(const std::vector<float>& onset_strength, int sample_
     return 1.0;
   }
   const double frames_per_sec = static_cast<double>(sample_rate) / static_cast<double>(hop_length);
-  const long frame = std::lround(time_s * frames_per_sec);
-  if (frame < 0 || frame >= static_cast<long>(onset_strength.size())) return 0.0;
-  return static_cast<double>(onset_strength[static_cast<size_t>(frame)]);
+  return activation_at_frame(onset_strength, std::lround(time_s * frames_per_sec));
 }
 
 std::vector<BeatIntervalObservation> build_beat_interval_observations(
@@ -44,15 +55,14 @@ std::vector<BeatIntervalObservation> build_beat_interval_observations(
   activations.reserve(n);
   for (const Beat& b : beats) {
     activations.push_back(
-        static_cast<float>(onset_activation_at(onset_strength, sample_rate, hop_length, b.time)));
+        static_cast<float>(beat_activation(onset_strength, sample_rate, hop_length, b)));
   }
   const double max_act = std::max(
       static_cast<double>(max_excluding_top(std::move(activations), kReferenceIgnoredTopEvents)),
       static_cast<double>(kEpsilon));
   for (size_t i = 1; i < n; ++i) {
     const double ibi = static_cast<double>(beats[i].time - beats[i - 1].time);
-    const double act =
-        onset_activation_at(onset_strength, sample_rate, hop_length, beats[i].time) / max_act;
+    const double act = beat_activation(onset_strength, sample_rate, hop_length, beats[i]) / max_act;
     obs.push_back({std::max(ibi, 1.0e-4), std::clamp(act, 0.0, 1.0)});
   }
   return obs;

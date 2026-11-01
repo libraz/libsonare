@@ -16,7 +16,7 @@ constexpr float kOnsetEvidenceRelativeThreshold = 0.1f;
 
 /// @brief Detected beat event.
 struct Beat {
-  float time;  ///< Beat time in seconds
+  float time;  ///< Beat time in seconds, at the start of the evidence frame
   int frame;   ///< Beat frame index
   /// @brief Onset-envelope value sampled at @ref frame.
   /// @details A single raw frame, neither windowed nor normalized, so it is
@@ -70,8 +70,9 @@ class BeatAnalyzer {
   /// @param sr Sample rate
   /// @param hop_length Hop length used
   /// @param config Beat configuration
+  /// @param shift_frames Centering shift the envelope carries; beat times subtract it
   BeatAnalyzer(const std::vector<float>& onset_strength, int sr, int hop_length,
-               const BeatConfig& config = BeatConfig());
+               const BeatConfig& config = BeatConfig(), int shift_frames = 0);
 
   /// @brief Returns detected beats.
   const std::vector<Beat>& beats() const { return beats_; }
@@ -147,6 +148,9 @@ class BeatAnalyzer {
   /// @brief Returns hop length.
   int hop_length() const { return hop_length_; }
 
+  /// @brief Returns the centering shift, in frames, subtracted from beat frames for times.
+  int onset_shift_frames() const { return onset_shift_frames_; }
+
  private:
   void track_beats();
   float compute_transition_cost(int from_frame, int to_frame, float period) const;
@@ -168,6 +172,7 @@ class BeatAnalyzer {
   int downbeat_phase_ = 0;
   int sr_;
   int hop_length_;
+  int onset_shift_frames_ = 0;
   BeatConfig config_;
 };
 

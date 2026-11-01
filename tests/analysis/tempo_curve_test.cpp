@@ -15,16 +15,25 @@ using namespace sonare;
 
 namespace {
 
+// Sample-resolution frames, so frame intervals carry the tempo to well under 1e-4.
+constexpr int kBeatSampleRate = 44100;
+constexpr int kBeatHopLength = 1;
+
+/// @brief A beat at @p time_s, on the nearest frame of the test framing.
+Beat beat_at(double time_s) {
+  Beat b;
+  b.time = static_cast<float>(time_s);
+  b.frame = static_cast<int>(std::lround(time_s * kBeatSampleRate / kBeatHopLength));
+  b.strength = 1.0f;
+  return b;
+}
+
 /// @brief Beats at a constant BPM, with no jitter.
 std::vector<Beat> constant_beats(double bpm, int count) {
   std::vector<Beat> beats;
   const double period = 60.0 / bpm;
   for (int i = 0; i < count; ++i) {
-    Beat b;
-    b.time = static_cast<float>(i * period);
-    b.frame = 0;
-    b.strength = 1.0f;
-    beats.push_back(b);
+    beats.push_back(beat_at(i * period));
   }
   return beats;
 }
@@ -34,11 +43,7 @@ std::vector<Beat> ramp_beats(double bpm0, double bpm1, int count) {
   std::vector<Beat> beats;
   double t = 0.0;
   for (int i = 0; i < count; ++i) {
-    Beat b;
-    b.time = static_cast<float>(t);
-    b.frame = 0;
-    b.strength = 1.0f;
-    beats.push_back(b);
+    beats.push_back(beat_at(t));
     const double frac = static_cast<double>(i) / std::max(1, count - 1);
     t += 60.0 / (bpm0 + (bpm1 - bpm0) * frac);
   }
@@ -67,7 +72,8 @@ Audio sweeping_clicks(double bpm0, double bpm1, float duration, int sr = 22050) 
 
 TEST_CASE("tempo curve reports one tempo per beat", "[analysis][tempo_curve]") {
   const std::vector<Beat> beats = constant_beats(120.0, 24);
-  const std::vector<float> curve = estimate_beat_local_bpm(beats, {}, 22050, 512);
+  const std::vector<float> curve =
+      estimate_beat_local_bpm(beats, {}, kBeatSampleRate, kBeatHopLength);
   REQUIRE(curve.size() == beats.size());
   for (float bpm : curve) {
     REQUIRE(std::isfinite(bpm));
@@ -79,14 +85,16 @@ TEST_CASE("tempo curve needs an interval to describe", "[analysis][tempo_curve]"
   // A tempo is a property of the span between two beats, so a lone beat -- or
   // none -- has no tempo to report. Returning an empty curve rather than a
   // one-entry guess keeps a caller from plotting a number nothing measured.
-  REQUIRE(estimate_beat_local_bpm({}, {}, 22050, 512).empty());
-  REQUIRE(estimate_beat_local_bpm(constant_beats(120.0, 1), {}, 22050, 512).empty());
-  REQUIRE(estimate_beat_local_bpm(constant_beats(120.0, 2), {}, 22050, 512).size() == 2);
+  REQUIRE(estimate_beat_local_bpm({}, {}, kBeatSampleRate, kBeatHopLength).empty());
+  REQUIRE(estimate_beat_local_bpm(constant_beats(120.0, 1), {}, kBeatSampleRate, kBeatHopLength)
+              .empty());
+  REQUIRE(estimate_beat_local_bpm(constant_beats(120.0, 2), {}, kBeatSampleRate, kBeatHopLength)
+              .size() == 2);
 }
 
 TEST_CASE("tempo curve holds flat on a constant tempo", "[analysis][tempo_curve]") {
   const std::vector<float> curve =
-      estimate_beat_local_bpm(constant_beats(132.0, 40), {}, 22050, 512);
+      estimate_beat_local_bpm(constant_beats(132.0, 40), {}, kBeatSampleRate, kBeatHopLength);
   REQUIRE(!curve.empty());
   const auto bounds = std::minmax_element(curve.begin(), curve.end());
   // Jitter-free intervals: every value is the tempo itself, to float precision.
@@ -100,7 +108,7 @@ TEST_CASE("tempo curve resolves a tempo between coarse grid steps", "[analysis][
   // misses these by over 1%.
   for (double bpm : {120.0, 123.0}) {
     const std::vector<float> curve =
-        estimate_beat_local_bpm(constant_beats(bpm, 32), {}, 22050, 512);
+        estimate_beat_local_bpm(constant_beats(bpm, 32), {}, kBeatSampleRate, kBeatHopLength);
     for (float value : curve) {
       REQUIRE(static_cast<double>(value) == Catch::Approx(bpm).epsilon(0.002));
     }
@@ -109,7 +117,7 @@ TEST_CASE("tempo curve resolves a tempo between coarse grid steps", "[analysis][
 
 TEST_CASE("tempo curve follows a tempo that moves", "[analysis][tempo_curve]") {
   const std::vector<float> curve =
-      estimate_beat_local_bpm(ramp_beats(90.0, 150.0, 64), {}, 22050, 512);
+      estimate_beat_local_bpm(ramp_beats(90.0, 150.0, 64), {}, kBeatSampleRate, kBeatHopLength);
   REQUIRE(curve.size() == 64);
   REQUIRE(static_cast<double>(curve.front()) == Catch::Approx(90.0).epsilon(0.05));
   REQUIRE(static_cast<double>(curve.back()) == Catch::Approx(150.0).epsilon(0.05));
@@ -127,21 +135,20 @@ TEST_CASE("tempo curve down-weights beats landing on silence", "[analysis][tempo
   // point of the activation weight, so it is worth pinning rather than assuming.
   std::vector<Beat> beats = constant_beats(120.0, 32);
   for (size_t i = 16; i < beats.size(); ++i) {
-    beats[i].time += 0.5f;
+    beats[i] = beat_at(beats[i].time + 0.5);
   }
 
-  const std::vector<float> unweighted = estimate_beat_local_bpm(beats, {}, 22050, 512);
+  const std::vector<float> unweighted =
+      estimate_beat_local_bpm(beats, {}, kBeatSampleRate, kBeatHopLength);
 
-  const int sr = 22050;
-  const int hop = 512;
-  const double frames_per_sec = static_cast<double>(sr) / static_cast<double>(hop);
-  std::vector<float> envelope(static_cast<size_t>(beats.back().time * frames_per_sec) + 4, 0.0f);
+  std::vector<float> envelope(static_cast<size_t>(beats.back().frame) + 4, 0.0f);
   for (size_t i = 0; i < beats.size(); ++i) {
     // Every beat is struck except the one closing the stretched interval.
     if (i == 16) continue;
-    envelope[static_cast<size_t>(std::lround(beats[i].time * frames_per_sec))] = 1.0f;
+    envelope[static_cast<size_t>(beats[i].frame)] = 1.0f;
   }
-  const std::vector<float> weighted = estimate_beat_local_bpm(beats, envelope, sr, hop);
+  const std::vector<float> weighted =
+      estimate_beat_local_bpm(beats, envelope, kBeatSampleRate, kBeatHopLength);
 
   REQUIRE(unweighted.size() == weighted.size());
   const float base = unweighted[0];

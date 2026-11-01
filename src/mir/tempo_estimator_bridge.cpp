@@ -37,8 +37,11 @@ std::vector<BeatIntervalObservation> build_observations(const BeatAnalysisInput&
                                           input.hop_length);
 }
 
-double activation_at(const BeatAnalysisInput& input, double time_s) {
-  return onset_activation_at(input.onset_strength, input.sample_rate, input.hop_length, time_s);
+// Envelope value at a (possibly half-integer) envelope frame position.
+double activation_at(const BeatAnalysisInput& input, double frame) {
+  const double envelope_s =
+      frame * static_cast<double>(input.hop_length) / static_cast<double>(input.sample_rate);
+  return onset_activation_at(input.onset_strength, input.sample_rate, input.hop_length, envelope_s);
 }
 
 double downbeat_origin_ppq(const BeatAnalysisInput& input, const TempoEstimatorConfig& config,
@@ -222,13 +225,13 @@ float estimate_confidence(const std::vector<BeatIntervalObservation>& obs,
   return clamp01(1.0 / (1.0 + mean));
 }
 
-double normalized_activation_at(const BeatAnalysisInput& input, double time_s,
+double normalized_activation_at(const BeatAnalysisInput& input, double frame,
                                 double max_activation) {
   if (input.onset_strength.empty() || max_activation <= kEpsilon || input.sample_rate <= 0 ||
       input.hop_length <= 0) {
     return 0.0;
   }
-  return std::clamp(activation_at(input, time_s) / max_activation, 0.0, 1.0);
+  return std::clamp(activation_at(input, frame) / max_activation, 0.0, 1.0);
 }
 
 double max_activation(const BeatAnalysisInput& input) {
@@ -247,8 +250,8 @@ float octave_evidence(const BeatAnalysisInput& input, double bpm_scale) {
     double midpoint_sum = 0.0;
     size_t midpoint_count = 0;
     for (size_t i = 1; i < input.beats.size(); ++i) {
-      const double a = input.beats[i - 1].time;
-      const double b = input.beats[i].time;
+      const double a = input.beats[i - 1].frame;
+      const double b = input.beats[i].frame;
       if (b <= a) continue;
       midpoint_sum += normalized_activation_at(input, 0.5 * (a + b), max_act);
       ++midpoint_count;
@@ -264,7 +267,7 @@ float octave_evidence(const BeatAnalysisInput& input, double bpm_scale) {
     size_t phase_count[2] = {0, 0};
     for (size_t i = 0; i < input.beats.size(); ++i) {
       const size_t phase = i & 1u;
-      phase_sum[phase] += normalized_activation_at(input, input.beats[i].time, max_act);
+      phase_sum[phase] += normalized_activation_at(input, input.beats[i].frame, max_act);
       ++phase_count[phase];
     }
     if (phase_count[0] == 0 || phase_count[1] == 0) return 0.5f;

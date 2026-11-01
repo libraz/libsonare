@@ -371,12 +371,7 @@ std::vector<float> onset_strength_observations(const std::vector<Beat>& beats,
       1, static_cast<int>(std::round(0.5f * window_seconds * sr / static_cast<float>(hop_length))));
   const int n_frames = static_cast<int>(onset_strength.size());
   for (size_t beat_index = 0; beat_index < beats.size(); ++beat_index) {
-    int center = beats[beat_index].frame;
-    if (center < 0 || center >= n_frames) {
-      center = static_cast<int>(std::round(beats[beat_index].time * static_cast<float>(sr) /
-                                           static_cast<float>(hop_length)));
-    }
-    center = std::clamp(center, 0, n_frames - 1);
+    const int center = std::clamp(beats[beat_index].frame, 0, n_frames - 1);
 
     const int first = std::max(0, center - half_window);
     const int last = std::min(n_frames, center + half_window + 1);

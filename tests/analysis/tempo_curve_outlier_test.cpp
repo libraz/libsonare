@@ -14,12 +14,14 @@ namespace {
 constexpr int kSampleRate = 22050;
 constexpr int kHopLength = 512;
 
-/// @brief 16 beats at 0.5 s then 16 at 0.4 s.
+/// @brief 16 beats at 0.5 s then 16 at 0.4 s, each on its nearest frame.
 std::vector<Beat> tempo_step_beats() {
+  const double frames_per_sec = static_cast<double>(kSampleRate) / kHopLength;
   std::vector<Beat> beats;
   double t = 0.0;
   for (int i = 0; i < 32; ++i) {
-    beats.push_back({static_cast<float>(t), 0, 1.0f});
+    beats.push_back(
+        {static_cast<float>(t), static_cast<int>(std::lround(t * frames_per_sec)), 1.0f});
     t += i < 16 ? 0.5 : 0.4;
   }
   return beats;
@@ -27,11 +29,9 @@ std::vector<Beat> tempo_step_beats() {
 
 /// @brief Envelope of 1.0 at every beat frame; beat @p loud_beat (if >= 0) is raised to @p loud.
 std::vector<float> envelope_for(const std::vector<Beat>& beats, int loud_beat, float loud) {
-  const double frames_per_sec = static_cast<double>(kSampleRate) / kHopLength;
-  std::vector<float> env(static_cast<size_t>(beats.back().time * frames_per_sec) + 8, 0.0f);
+  std::vector<float> env(static_cast<size_t>(beats.back().frame) + 8, 0.0f);
   for (size_t i = 0; i < beats.size(); ++i) {
-    env[static_cast<size_t>(std::lround(beats[i].time * frames_per_sec))] =
-        static_cast<int>(i) == loud_beat ? loud : 1.0f;
+    env[static_cast<size_t>(beats[i].frame)] = static_cast<int>(i) == loud_beat ? loud : 1.0f;
   }
   return env;
 }

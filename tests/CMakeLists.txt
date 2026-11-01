@@ -115,6 +115,7 @@ add_executable(sonare_tests
   analysis/onset_analyzer_test.cpp
   analysis/dynamics_analyzer_test.cpp
   analysis/beat_analyzer_test.cpp
+  analysis/beat_event_time_test.cpp
   analysis/tempo_curve_test.cpp
   analysis/tempo_curve_outlier_test.cpp
   analysis/meter_analyzer_test.cpp

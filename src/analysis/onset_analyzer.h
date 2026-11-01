@@ -14,8 +14,9 @@ namespace sonare {
 
 /// @brief Detected onset event.
 struct Onset {
-  float time;      ///< Onset time in seconds
+  float time;      ///< Onset time in seconds, at the start of the evidence frame
   float strength;  ///< Onset strength
+  int frame = 0;   ///< Envelope frame index (after backtracking, the backtracked frame)
 };
 
 /// @brief Configuration for onset detection.
@@ -110,8 +111,9 @@ class OnsetAnalyzer {
   /// @param sr Sample rate
   /// @param hop_length Hop length used
   /// @param config Onset configuration
+  /// @param shift_frames Centering shift the envelope carries; onset times subtract it
   OnsetAnalyzer(const std::vector<float>& onset_strength, int sr, int hop_length,
-                const OnsetDetectConfig& config = OnsetDetectConfig());
+                const OnsetDetectConfig& config = OnsetDetectConfig(), int shift_frames = 0);
 
   /// @brief Returns detected onsets.
   const std::vector<Onset>& onsets() const { return onsets_; }
@@ -134,16 +136,18 @@ class OnsetAnalyzer {
   /// @brief Returns hop length.
   int hop_length() const { return hop_length_; }
 
+  /// @brief Returns the centering shift, in frames, subtracted from envelope frames for times.
+  int onset_shift_frames() const { return onset_shift_frames_; }
+
  private:
   void detect_onsets();
   void backtrack_onsets();
-  /// @brief Frame index an onset time refers to, rounded to the nearest frame.
-  int frame_for_time(float time) const;
 
   std::vector<Onset> onsets_;
   std::vector<float> onset_strength_;
   int sr_;
   int hop_length_;
+  int onset_shift_frames_ = 0;
   OnsetDetectConfig config_;
 };
 

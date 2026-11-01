@@ -39,7 +39,7 @@ BeatAnalysisInput make_constant_fixture(double bpm, int n_beats, double jitter_s
     const double j = jitter_s * (2.0 * std::abs(phase - 0.5) - 0.5) * 2.0;
     Beat b;
     b.time = static_cast<float>(i * period + j);
-    b.frame = static_cast<int>(b.time * in.sample_rate / in.hop_length);
+    b.frame = static_cast<int>(std::lround(b.time * in.sample_rate / in.hop_length));
     b.strength = 1.0f;
     in.beats.push_back(b);
   }
@@ -69,7 +69,7 @@ BeatAnalysisInput make_ramp_fixture(double bpm0, double bpm1, int n_beats) {
   for (int i = 0; i < n_beats; ++i) {
     Beat b;
     b.time = static_cast<float>(t);
-    b.frame = static_cast<int>(b.time * in.sample_rate / in.hop_length);
+    b.frame = static_cast<int>(std::lround(b.time * in.sample_rate / in.hop_length));
     b.strength = 1.0f;
     in.beats.push_back(b);
     const double frac = static_cast<double>(i) / std::max(1, n_beats - 1);
@@ -262,7 +262,9 @@ TEST_CASE("mir octave tempo confidence uses onset evidence", "[mir]") {
       set_onset_strength(&in, beat.time, 1.0f);
     }
     for (size_t i = 1; i < in.beats.size(); ++i) {
-      set_onset_strength(&in, 0.5 * (in.beats[i - 1].time + in.beats[i].time), 0.8f);
+      // The midpoint is read at the mean of the two beat frames.
+      const double mid_frame = 0.5 * (in.beats[i - 1].frame + in.beats[i].frame);
+      set_onset_strength(&in, mid_frame * in.hop_length / in.sample_rate, 0.8f);
     }
 
     TempoEstimatorConfig cfg;

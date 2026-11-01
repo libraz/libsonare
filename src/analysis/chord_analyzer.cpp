@@ -82,7 +82,10 @@ ChordAnalyzer::ChordAnalyzer(const Audio& audio, const ChordConfig& requested)
   if (config.use_beat_sync) {
     BeatConfig beat_config;
     beat_config.hop_length = config.hop_length;
-    beat_times = BeatAnalyzer(audio, beat_config).beat_times();
+    // The beat window stays centred on the envelope frame, not the shifted event time.
+    for (int frame : BeatAnalyzer(audio, beat_config).beat_frames()) {
+      beat_times.push_back(frames_to_time(frame, audio.sample_rate(), config.hop_length));
+    }
   }
   if (!beat_times.empty()) {
     analyze_chords_beat_sync(beat_times);
