@@ -106,27 +106,26 @@ void ChordAnalyzer::init_templates() {
 ChordAnalyzer::ChordAnalyzer(const Audio& audio, const ChordConfig& requested)
     : config_(requested) {
   SONARE_CHECK(!audio.empty(), ErrorCode::InvalidParameter);
-  if (config_.auto_tuning) {
-    config_.tuning = measure_tuning(audio);
-    config_.auto_tuning = false;
-  }
   const ChordConfig& config = config_;
   init_templates();
   signal_duration_ = static_cast<float>(audio.size()) / static_cast<float>(audio.sample_rate());
-  SONARE_CHECK_MSG(is_valid_chroma_tuning(config_.tuning), ErrorCode::InvalidParameter,
+  SONARE_CHECK_MSG(!config_.tuning || is_valid_chroma_tuning(*config_.tuning),
+                   ErrorCode::InvalidParameter,
                    "ChordConfig: tuning must be finite and in [-0.5, 0.5)");
+  if (!config_.tuning) config_.tuning = measure_tuning(audio);
+  const float tuning = *config_.tuning;
 
   if (config.chroma_method == ChromaMethod::CQT) {
     SONARE_CHECK(config.hop_length <= INT_MAX / chord_constants::kChordChromaHopMultiplier,
                  ErrorCode::InvalidParameter);
     ChordChromaConfig chroma_config;
     chroma_config.hop_length = config.hop_length * chord_constants::kChordChromaHopMultiplier;
-    chroma_config.tuning = config.tuning;
+    chroma_config.tuning = tuning;
     chroma_ = chord_chroma(audio, chroma_config);
   } else if (config.chroma_method == ChromaMethod::NNLS) {
     // The reduced profile keeps the semitone salience the template matcher needs.
     NnlsChromaConfig nnls_config = NnlsChromaConfig::fast(config.hop_length);
-    nnls_config.tuning = config.tuning;
+    nnls_config.tuning = tuning;
     chroma_ = nnls_chroma(audio, nnls_config);
   } else {
     // n_fft names the window at the 22050 Hz analysis rate: a fixed sample count would narrow
@@ -136,7 +135,7 @@ ChordAnalyzer::ChordAnalyzer(const Audio& audio, const ChordConfig& requested)
     chroma_config.win_length = window.win_length;
     chroma_config.n_fft = window.n_fft;
     chroma_config.hop_length = config.hop_length;
-    chroma_config.tuning = config.tuning;
+    chroma_config.tuning = tuning;
     chroma_ = Chroma::compute(audio, chroma_config);
   }
 
@@ -145,7 +144,7 @@ ChordAnalyzer::ChordAnalyzer(const Audio& audio, const ChordConfig& requested)
   if (config.detect_inversions || (config.use_bass_chroma && config.bass_root_weight != 0.0f)) {
     BassChromaConfig bass_config;
     bass_config.cqt.hop_length = config.hop_length;
-    bass_config.cqt.fmin = tune_cqt_fmin(bass_config.cqt.fmin, config.tuning);
+    bass_config.cqt.fmin = tune_cqt_fmin(bass_config.cqt.fmin, tuning);
     bass_chroma_ = bass_chroma(audio, bass_config);
   }
 

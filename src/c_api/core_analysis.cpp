@@ -54,8 +54,8 @@ ChordConfig chord_config_from_options(const SonareChordDetectionOptions& options
       config.chroma_method = ChromaMethod::STFT;
       break;
   }
-  config.tuning = options.tuning;
-  config.auto_tuning = options.tuning_auto != 0;
+  // A non-zero tuning_auto leaves the tuning unset, which measures it.
+  if (options.tuning_auto == 0) config.tuning = options.tuning;
   return config;
 }
 
@@ -370,8 +370,8 @@ SonareError sonare_detect_chords(const float* samples, size_t length, int sample
   }
 
   return run_offline(samples, length, sample_rate, [&](const Audio& audio) -> SonareError {
-    std::vector<Chord> chords = detect_chords(audio, config);
-    fill_chord_result(chords, config.tuning, out);
+    ChordAnalyzer analyzer(audio, config);
+    fill_chord_result(analyzer.chords(), analyzer.tuning(), out);
     return SONARE_OK;
   });
 }

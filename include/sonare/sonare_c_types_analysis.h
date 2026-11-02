@@ -267,8 +267,8 @@ typedef struct {
   /* SONARE_CHORD_ANALYSIS_RESULT_VERSION, written by the filling function. */
   int struct_version;
   /* Tuning the chroma was built with, in fractions of a semitone: the options'
-     value, or the measured one when tuning_auto was set. 0 from the entry
-     points that take no tuning. */
+     value, or the measured one when tuning_auto was set. The entry points that
+     take no tuning measure it. */
   float tuning;
   SonareChord* chords;
   size_t chord_count;
@@ -410,8 +410,9 @@ typedef struct {
      reference pitch to this unit, and sonare_estimate_tuning at 12 bins per
      octave returns it. */
   float tuning;
-  /* Non-zero measures the tuning from the audio instead of reading @c tuning.
-     The value used, given or measured, is SonareChordAnalysisResult.tuning. */
+  /* Non-zero measures the tuning from the audio instead of reading @c tuning;
+     a zeroed struct reads @c tuning. The value used, given or measured, is
+     SonareChordAnalysisResult.tuning. */
   int tuning_auto;
 } SonareChordDetectionOptions;
 

@@ -2,7 +2,6 @@
 /// @brief Pins the analyzers that share one STFT across their stages to the results of computing
 ///        each stage's STFT separately.
 
-#include <array>
 #include <catch2/catch_test_macros.hpp>
 #include <cmath>
 #include <utility>
@@ -10,7 +9,6 @@
 
 #include "analysis/beat_analyzer.h"
 #include "analysis/boundary_detector.h"
-#include "analysis/key_analyzer.h"
 #include "analysis/section_analyzer.h"
 #include "analysis/section_structure.h"
 #include "core/audio.h"
@@ -41,22 +39,6 @@ Audio make_segmented_signal() {
     }
     samples[i] = 0.3f * v;
     if (i % (kSampleRate / 2) < 64) samples[i] += 0.5f;
-  }
-  return Audio::from_vector(std::move(samples), kSampleRate);
-}
-
-/// @brief Two seconds of a C major triad with a percussive click train.
-Audio make_triad_signal() {
-  const float freqs[3] = {261.63f, 329.63f, 392.0f};
-  std::vector<float> samples(2 * kSampleRate, 0.0f);
-  for (size_t i = 0; i < samples.size(); ++i) {
-    const float t = static_cast<float>(i) / kSampleRate;
-    float v = 0.0f;
-    for (float f : freqs) {
-      v += std::sin(constants::kTwoPi * f * t) + 0.4f * std::sin(constants::kTwoPi * 2.0f * f * t);
-    }
-    samples[i] = 0.15f * v;
-    if (i % (kSampleRate / 4) < 32) samples[i] += 0.4f;
   }
   return Audio::from_vector(std::move(samples), kSampleRate);
 }
@@ -142,37 +124,4 @@ TEST_CASE("BoundaryDetector from a shared STFT equals the audio constructor",
     CHECK(actual.boundaries()[i].strength == reference.boundaries()[i].strength);
   }
   CHECK(actual.novelty_curve() == reference.novelty_curve());
-}
-
-TEST_CASE("KeyAnalyzer auto path matches the per-candidate chroma means",
-          "[analysis][spectrogram_reuse]") {
-  const Audio audio = make_triad_signal();
-
-  // Each candidate through the non-auto path computes its own STFTs from the audio.
-  struct Candidate {
-    bool use_hpss;
-    bool loudness_weighted;
-    float high_pass_hz;
-  };
-  const Candidate candidates[] = {
-      {false, false, 0.0f}, {true, false, 0.0f},  {false, true, 0.0f},
-      {true, true, 0.0f},   {true, false, 60.0f},
-  };
-  std::vector<std::array<float, 12>> reference_means;
-  for (const Candidate& c : candidates) {
-    KeyConfig config;
-    config.genre_hint = "";
-    config.use_hpss = c.use_hpss;
-    config.loudness_weighted = c.loudness_weighted;
-    config.high_pass_hz = c.high_pass_hz;
-    reference_means.push_back(KeyAnalyzer(audio, config).mean_chroma());
-  }
-
-  const KeyAnalyzer actual(audio, KeyConfig());
-
-  bool matched = false;
-  for (const auto& mean : reference_means) {
-    matched = matched || mean == actual.mean_chroma();
-  }
-  CHECK(matched);
 }

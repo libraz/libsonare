@@ -111,6 +111,7 @@ add_executable(sonare_tests
   analysis/bpm_analyzer_test.cpp
   analysis/key_analyzer_test.cpp
   analysis/key_auto_sweep_golden_test.cpp
+  analysis/key_front_end_test.cpp
   analysis/key_synthetic_matrix_test.cpp
   analysis/onset_analyzer_test.cpp
   analysis/dynamics_analyzer_test.cpp

@@ -38,7 +38,8 @@ void validate_config(const MusicAnalyzerConfig& config) {
                    "MusicAnalyzerConfig: chromaHighpassHz must be finite and non-negative");
   SONARE_CHECK_MSG(config.chroma_hop_multiplier > 0, ErrorCode::InvalidParameter,
                    "MusicAnalyzerConfig: chromaHopMultiplier must be positive");
-  SONARE_CHECK_MSG(is_valid_chroma_tuning(config.tuning), ErrorCode::InvalidParameter,
+  SONARE_CHECK_MSG(!config.tuning || is_valid_chroma_tuning(*config.tuning),
+                   ErrorCode::InvalidParameter,
                    "MusicAnalyzerConfig: tuning must be finite and in [-0.5, 0.5)");
   // A non-positive beam width disables the HMM beam cut instead of erroring,
   // which turns chord smoothing into an order-of-magnitude slower full search.
@@ -83,7 +84,8 @@ MusicAnalyzer::MusicAnalyzer(const Audio& audio, const MusicAnalyzerConfig& conf
   analysis_sr_ = analysis_audio_.sample_rate();
   // A lower input keeps its rate, so the window is rescaled to it.
   analysis_stft_ = stft_config_at_rate(config_->n_fft, config_->hop_length, analysis_sr_);
-  tuning_ = config_->auto_tuning ? measure_tuning(analysis_audio_) : config_->tuning;
+  // Resolved before any prefetch, so the chord inputs and the key read one value.
+  tuning_ = config_->tuning ? *config_->tuning : measure_tuning(analysis_audio_);
 }
 
 void MusicAnalyzer::set_progress_callback(ProgressCallback callback) {
@@ -130,13 +132,13 @@ BpmAnalyzer& MusicAnalyzer::bpm_analyzer() {
 
 KeyAnalyzer& MusicAnalyzer::key_analyzer() {
   std::call_once(key_analyzer_once_, [this]() {
+    // The key reads the chord front end without its bass blend, as detect_key does.
     KeyConfig key_config;
+    key_config.n_fft = config_->n_fft;
     key_config.hop_length = config_->hop_length;
+    key_config.use_hpss = config_->use_hpss;
+    key_config.high_pass_hz = config_->chroma_highpass_hz;
     key_config.tuning = tuning_;
-    // Build the key analyzer from the analysis audio (not a pre-computed chroma)
-    // so the full refinement runs: the auto candidate search, the 60 Hz harmonic
-    // high-pass fallback, and the loudness-weighted chroma refinement. Feeding a
-    // bare chroma bypasses all of that and degrades key accuracy on dense mixes.
     key_analyzer_ = std::make_unique<KeyAnalyzer>(analysis_audio_, key_config);
   });
   return *key_analyzer_;

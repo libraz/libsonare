@@ -135,9 +135,9 @@ SonareError sonare_audio_analyze(const SonareAudio* audio, SonareAnalysisResult*
 
 // Quick detection functions
 SonareError sonare_detect_bpm(const float* samples, size_t length, int sample_rate, float* out_bpm);
-/// @brief Detects the key at concert A440. A tuning offset is applied through
-///   @ref sonare_detect_key_with_tuning or SonareMusicAnalyzeOptions.tuning in
-///   @ref sonare_analyze_json_ex.
+/// @brief Detects the key, measuring the recording's tuning first. The key entry points that take
+///   no tuning all measure it; @ref sonare_detect_key_with_tuning and
+///   @ref sonare_detect_key_candidates_with_tuning take a given one (0 is concert A440).
 SonareError sonare_detect_key(const float* samples, size_t length, int sample_rate,
                               SonareKey* out_key);
 SonareError sonare_detect_key_with_options(const float* samples, size_t length, int sample_rate,
@@ -181,6 +181,18 @@ SonareError sonare_detect_key_candidates_with_extended_options(
     int loudness_weighted, float high_pass_hz, const SonareMode* modes, size_t mode_count,
     SonareKeyProfileType profile_type, const char* genre_hint, SonareKeyCandidate** out_candidates,
     size_t* out_count);
+/// @brief Extended key candidates with a recording tuning.
+/// @details Same as @ref sonare_detect_key_candidates_with_extended_options, with the tuning
+///   taken as @ref sonare_detect_key_with_tuning takes it: @p tuning, a fraction of a semitone in
+///   [-0.5, 0.5) where 0 is concert A440, or measured from the audio when @p tuning_auto is
+///   non-zero.
+/// @param out_tuning Optional; receives the tuning used, given or measured, in the same unit.
+/// @note Free @p out_candidates with @ref sonare_free_key_candidates.
+SonareError sonare_detect_key_candidates_with_tuning(
+    const float* samples, size_t length, int sample_rate, int n_fft, int hop_length, int use_hpss,
+    int loudness_weighted, float high_pass_hz, const SonareMode* modes, size_t mode_count,
+    SonareKeyProfileType profile_type, const char* genre_hint, float tuning, int tuning_auto,
+    SonareKeyCandidate** out_candidates, size_t* out_count, float* out_tuning);
 /// @note Free @p out_times with @ref sonare_free_floats.
 SonareError sonare_detect_beats(const float* samples, size_t length, int sample_rate,
                                 float** out_times, size_t* out_count);
@@ -324,7 +336,8 @@ typedef struct {
      octave returns it. */
   float tuning;
   /* Non-zero measures the tuning from the audio instead of reading @c tuning.
-     The value used, given or measured, is the result's "tuning". */
+     sonare_music_analyze_options_default sets it to 1; a zeroed struct reads
+     @c tuning. The value used, given or measured, is the result's "tuning". */
   int tuning_auto;
 } SonareMusicAnalyzeOptions;
 

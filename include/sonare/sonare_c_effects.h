@@ -195,8 +195,9 @@ SonareError sonare_pitch_correct_timevarying(const float* samples, size_t length
 ///          pYIN pitch tracking (2048-sample frames, 512-sample hop, the hop
 ///          @ref sonare_pitch_correct_timevarying defaults to) and the
 ///          time-varying scale corrector. The output has the input's length.
-///          Key detection reads the recording at concert A440 with the default
-///          major/minor candidates, exactly as @ref sonare_detect_key does.
+///          Key detection measures the recording's tuning and uses the default
+///          major/minor candidates, exactly as @ref sonare_detect_key does; the
+///          correction grid stays at concert A440.
 /// @param key    The key to tune to, or NULL to detect it. A named key is taken
 ///               as certain: @p out_key reports confidence 1.
 /// @param config Correction knobs, or NULL for the library defaults. Only

@@ -3,25 +3,19 @@
 #include <algorithm>
 #include <array>
 #include <cctype>
+#include <climits>
 #include <cmath>
-#include <iterator>
 #include <limits>
 
-#include "analysis/analysis_rate.h"
 #include "analysis/chord_analyzer.h"
-#include "effects/hpss.h"
 #include "feature/pitch.h"
 #include "feature/spectral.h"
-#include "filters/iir.h"
 #include "util/exception.h"
 #include "util/insertion_sort.h"
 
 namespace sonare {
 
 namespace {
-
-constexpr float kHighpassFallbackCurrentConfidenceMax = 0.75f;
-constexpr float kHighpassFallbackConfidenceMin = 0.50f;
 
 /// Chroma posterior, as a share of the chroma winner's, a chord-derived key needs before the chords
 /// may choose it: within a factor of four, a correlation margin of about 0.11.
@@ -162,94 +156,16 @@ KeyProfileType resolve_profile_type(const KeyConfig& config) {
   return KeyProfileType::KrumhanslSchmuckler;
 }
 
-bool uses_auto_audio_candidates(const KeyConfig& config) {
-  return lowercase_ascii(config.genre_hint) == "auto" && !config.use_hpss &&
-         !config.loudness_weighted;
-}
-
 void validate_chroma_config(const Audio& audio, const KeyConfig& config) {
-  SONARE_CHECK_MSG(is_valid_chroma_tuning(config.tuning), ErrorCode::InvalidParameter,
+  SONARE_CHECK_MSG(!config.tuning || is_valid_chroma_tuning(*config.tuning),
+                   ErrorCode::InvalidParameter,
                    "KeyConfig: tuning must be finite and in [-0.5, 0.5)");
   SONARE_CHECK(config.high_pass_hz >= 0.0f, ErrorCode::InvalidParameter);
   SONARE_CHECK(config.high_pass_hz < static_cast<float>(audio.sample_rate()) * 0.5f,
                ErrorCode::InvalidParameter);
-}
-
-ChromaConfig chroma_config_for(const KeyConfig& config, int sample_rate) {
-  const RateWindow window = window_at_rate(config.n_fft, sample_rate);
-  ChromaConfig chroma_config;
-  chroma_config.n_fft = window.n_fft;
-  chroma_config.win_length = window.win_length;
-  chroma_config.hop_length = config.hop_length;
-  chroma_config.tuning = config.tuning;
-  return chroma_config;
-}
-
-/// @brief True when two configs drive the chroma analysis of one input identically.
-/// @details Exactly the fields that reach high_passed_audio() and chroma_config_for(), which
-///          together decide the analysis signal and its chromagram. A KeyConfig field added
-///          to either of those belongs here too.
-bool same_chroma_analysis(const KeyConfig& a, const KeyConfig& b) {
-  return a.high_pass_hz == b.high_pass_hz && a.n_fft == b.n_fft && a.hop_length == b.hop_length &&
-         a.tuning == b.tuning;
-}
-
-/// @brief Returns the analysis input, high-passed when the config asks for it.
-Audio high_passed_audio(const Audio& audio, const KeyConfig& config) {
-  if (config.high_pass_hz <= 0.0f) return audio;
-  const auto cascade = highpass_coeffs_4th(config.high_pass_hz, audio.sample_rate());
-  return Audio::from_vector(apply_cascade_filtfilt(audio.data(), audio.size(), cascade),
-                            audio.sample_rate());
-}
-
-/// @brief Reduces one chromagram to a mean, loudness-weighting its frames when asked.
-/// @details Split from the computation so a signal's weighted and unweighted means can
-///          both be taken from a single chromagram.
-std::array<float, 12> chroma_mean(const Chroma& chroma, const Audio& analysis_audio,
-                                  const KeyConfig& config, bool loudness_weighted) {
-  if (loudness_weighted) {
-    const RateWindow window = window_at_rate(config.n_fft, analysis_audio.sample_rate());
-    const int frame_length = window.win_length > 0 ? window.win_length : window.n_fft;
-    return chroma.weighted_mean_energy(rms_energy(analysis_audio, frame_length, config.hop_length));
-  }
-  return chroma.mean_energy();
-}
-
-/// @brief Mean chroma of one analysis signal, optionally loudness-weighted.
-std::array<float, 12> mean_chroma_of(const Audio& analysis_audio, const KeyConfig& config,
-                                     bool loudness_weighted) {
-  const Chroma chroma =
-      Chroma::compute(analysis_audio, chroma_config_for(config, analysis_audio.sample_rate()));
-  return chroma_mean(chroma, analysis_audio, config, loudness_weighted);
-}
-
-std::array<float, 12> compute_mean_chroma_for_audio(const Audio& audio, const KeyConfig& config,
-                                                    bool use_hpss, bool loudness_weighted) {
-  validate_chroma_config(audio, config);
-
-  const Audio filtered_audio = high_passed_audio(audio, config);
-  const Audio analysis_audio =
-      use_hpss ? harmonic(filtered_audio, HpssConfig(),
-                          chroma_config_for(config, audio.sample_rate()).to_stft_config())
-               : filtered_audio;
-  return mean_chroma_of(analysis_audio, config, loudness_weighted);
-}
-
-// Front-end selection and the high-pass fallback compare the evidence score,
-// not the reported confidence. The confidence is a distribution over whatever
-// candidate set was scored, so it shrinks when a modal search widens that set
-// even though the audio did not change; the thresholds below are about how
-// strong the chroma evidence is and have to be independent of that.
-float candidate_selection_score(const KeyAnalyzer& analyzer) { return analyzer.evidence_score(); }
-
-bool should_use_harmonic_highpass_fallback(const KeyAnalyzer& current,
-                                           const KeyAnalyzer& fallback) {
-  if (current.key().root == fallback.key().root && current.key().mode == fallback.key().mode) {
-    return false;
-  }
-
-  return current.evidence_score() <= kHighpassFallbackCurrentConfidenceMax &&
-         fallback.evidence_score() >= kHighpassFallbackConfidenceMin;
+  SONARE_CHECK(config.hop_length > 0 &&
+                   config.hop_length <= INT_MAX / (2 * chord_constants::kChordChromaHopMultiplier),
+               ErrorCode::InvalidParameter);
 }
 
 }  // namespace
@@ -280,107 +196,25 @@ std::string key_name(int root, bool minor, bool short_form) {
 
 KeyAnalyzer::KeyAnalyzer(const Audio& audio, const KeyConfig& requested) : config_(requested) {
   SONARE_CHECK(!audio.empty(), ErrorCode::InvalidParameter);
-  if (config_.auto_tuning) {
-    config_.tuning = measure_tuning(audio);
-    config_.auto_tuning = false;
-  }
-  const KeyConfig& config = config_;
+  validate_chroma_config(audio, config_);
+  if (!config_.tuning) config_.tuning = measure_tuning(audio);
 
-  if (uses_auto_audio_candidates(config)) {
-    struct AudioCandidate {
-      bool use_hpss;
-      bool loudness_weighted;
-      float selection_bias;
-    };
-    const AudioCandidate audio_candidates[] = {
-        {false, false, 0.0f},
-        {true, false, 0.0f},
-        {false, true, 0.0f},
-        // Harmonic loudness-weighted chroma is less overconfident on dense mixes,
-        // so let it win close auto-profile decisions without forcing it globally.
-        {true, true, 0.17f},
-    };
+  ChordChromaConfig chroma_config;
+  chroma_config.hop_length = config_.hop_length * chord_constants::kChordChromaHopMultiplier;
+  chroma_config.tuning = *config_.tuning;
+  chroma_config.use_hpss = config_.use_hpss;
+  chroma_config.hpss_n_fft = config_.n_fft;
+  chroma_config.hpss_hop_length = config_.hop_length;
+  chroma_config.highpass_hz = config_.high_pass_hz;
+  // The bass blend weighs every chord root alike and pulls the key towards the subdominant.
+  chroma_config.bass_weighted = false;
+  const Chroma chroma = chord_chroma(audio, chroma_config);
 
-    // The four candidates draw on only two analysis signals -- the (optionally
-    // high-passed) input and its harmonic component -- and differ after that
-    // only in whether the chroma is loudness-weighted. Deriving all four means
-    // from those two signals costs one harmonic separation rather than two, and
-    // two chroma passes rather than four, over the whole track. Each candidate
-    // still sees exactly the signal it saw before, so the means, the scores and
-    // the selection are unchanged.
-    validate_chroma_config(audio, config);
-    std::array<std::array<float, 12>, 4> candidate_means{};
-    {
-      const Audio filtered_audio = high_passed_audio(audio, config);
-      const ChromaConfig chroma_config = chroma_config_for(config, audio.sample_rate());
-      const StftConfig stft_config = chroma_config.to_stft_config();
-      // One STFT of the filtered signal feeds both its chromagram and the harmonic separation.
-      validate_cola_geometry(stft_config.n_fft, stft_config.hop_length, stft_config.window,
-                             stft_config.actual_win_length());
-      const Spectrogram filtered_spec = Spectrogram::compute(filtered_audio, stft_config);
-      const Chroma filtered_chroma = Chroma::from_spectrogram(
-          filtered_spec, filtered_audio.sample_rate(), chroma_config.to_chroma_filter_config());
-      candidate_means[0] =
-          chroma_mean(filtered_chroma, filtered_audio, config, /*loudness_weighted=*/false);
-      candidate_means[2] =
-          chroma_mean(filtered_chroma, filtered_audio, config, /*loudness_weighted=*/true);
-      const Audio harmonic_audio =
-          harmonic(filtered_spec, HpssConfig()).to_audio(static_cast<int>(filtered_audio.size()));
-      const Chroma harmonic_chroma = Chroma::compute(harmonic_audio, chroma_config);
-      candidate_means[1] =
-          chroma_mean(harmonic_chroma, harmonic_audio, config, /*loudness_weighted=*/false);
-      candidate_means[3] =
-          chroma_mean(harmonic_chroma, harmonic_audio, config, /*loudness_weighted=*/true);
-    }
-
-    bool has_best = false;
-    float best_score = -std::numeric_limits<float>::infinity();
-    KeyAnalyzer best_analyzer(std::array<float, 12>{}, config);
-
-    for (size_t i = 0; i < std::size(audio_candidates); ++i) {
-      const AudioCandidate& candidate = audio_candidates[i];
-      KeyConfig candidate_config = config;
-      candidate_config.genre_hint = "auto";
-      candidate_config.use_hpss = candidate.use_hpss;
-      candidate_config.loudness_weighted = candidate.loudness_weighted;
-
-      KeyAnalyzer analyzer(candidate_means[i], candidate_config);
-      const float score = candidate_selection_score(analyzer) + candidate.selection_bias;
-      if (!has_best || score > best_score) {
-        has_best = true;
-        best_score = score;
-        best_analyzer = analyzer;
-      }
-    }
-
-    if (best_analyzer.evidence_score() <= kHighpassFallbackCurrentConfidenceMax) {
-      KeyConfig fallback_config = config;
-      fallback_config.genre_hint = "";
-      fallback_config.use_hpss = true;
-      fallback_config.loudness_weighted = false;
-      fallback_config.high_pass_hz =
-          fallback_config.high_pass_hz > 0.0f ? fallback_config.high_pass_hz : 60.0f;
-      fallback_config.profile_type = KeyProfileType::KrumhanslSchmuckler;
-      // Same high-pass, same harmonic signal: candidate 1's mean is this one bit for bit.
-      const auto fallback_mean =
-          same_chroma_analysis(fallback_config, config)
-              ? candidate_means[1]
-              : compute_mean_chroma_for_audio(audio, fallback_config, true, false);
-      KeyAnalyzer fallback_analyzer(fallback_mean, fallback_config);
-      if (should_use_harmonic_highpass_fallback(best_analyzer, fallback_analyzer)) {
-        best_analyzer = fallback_analyzer;
-      }
-    }
-
-    mean_chroma_ = best_analyzer.mean_chroma_;
-    candidates_ = best_analyzer.candidates_;
-    key_ = best_analyzer.key_;
-    evidence_score_ = best_analyzer.evidence_score_;
-    return;
-  }
-
-  mean_chroma_ =
-      compute_mean_chroma_for_audio(audio, config, config.use_hpss, config.loudness_weighted);
+  // Frames of twice the chroma hop on the raw input; the pooling reads the shorter frame count.
+  mean_chroma_ = config_.loudness_weighted
+                     ? chroma.weighted_mean_energy(rms_energy(audio, 2 * chroma_config.hop_length,
+                                                              chroma_config.hop_length))
+                     : chroma.mean_energy();
   analyze();
 }
 
@@ -419,8 +253,7 @@ void KeyAnalyzer::analyze() {
   }
 
   // Evidence score: how strong the winning correlation is, blended with its
-  // margin over the runner-up. This is the quantity the analyzer's own
-  // front-end selection compares, so it must not depend on how many candidates
+  // margin over the runner-up. It must not depend on how many candidates
   // were scored — a modal search over 84 candidates would otherwise look less
   // certain than a major/minor one over 24 on the very same audio.
   const float best_corr = candidates_[0].correlation;

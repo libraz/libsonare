@@ -4,6 +4,7 @@
 
 #include <sonare/sonare_c.h>
 
+#include <array>
 #include <catch2/catch_approx.hpp>
 #include <catch2/catch_test_macros.hpp>
 #include <cmath>
@@ -68,6 +69,19 @@ Audio detuned_pop_loop(float detune, int loops = 3) {
 
 bool is_c_major(const Key& key) { return key.root == PitchClass::C && key.mode == Mode::Major; }
 
+/// L1 distance between two key mean chromas, each scaled to unit sum.
+float mean_chroma_distance(const std::array<float, 12>& a, const std::array<float, 12>& b) {
+  float sum_a = 0.0f;
+  float sum_b = 0.0f;
+  for (int i = 0; i < 12; ++i) {
+    sum_a += a[i];
+    sum_b += b[i];
+  }
+  float distance = 0.0f;
+  for (int i = 0; i < 12; ++i) distance += std::abs(a[i] / sum_a - b[i] / sum_b);
+  return distance;
+}
+
 /// Roots of the chords that are not N.C., in order, with consecutive repeats collapsed.
 std::vector<PitchClass> root_sequence(const std::vector<Chord>& chords) {
   std::vector<PitchClass> roots;
@@ -106,16 +120,28 @@ TEST_CASE("MusicAnalyzer tuning re-centres a detuned recording", "[analysis][tun
   const Audio audio = detuned_pop_loop(kDetuneSemitones);
   const float estimate = estimate_tuning(audio);
 
+  // The constant-Q chroma folds +-0.5 semitone into each pitch class, so -45 cents still reads
+  // as C; the given tuning shows in how close the key chroma comes to the in-tune recording's.
   MusicAnalyzerConfig untuned;
-  const AnalysisResult off = MusicAnalyzer(audio, untuned).analyze();
-  CHECK_FALSE(is_c_major(off.key));
+  untuned.tuning = 0.0f;
+  MusicAnalyzer off_analyzer(audio, untuned);
+  const AnalysisResult off = off_analyzer.analyze();
+  CHECK(off.tuning == 0.0f);
 
   MusicAnalyzerConfig tuned;
   tuned.tuning = estimate;
-  const AnalysisResult on = MusicAnalyzer(audio, tuned).analyze();
+  MusicAnalyzer on_analyzer(audio, tuned);
+  const AnalysisResult on = on_analyzer.analyze();
+  CHECK(on.tuning == estimate);
   CHECK(is_c_major(on.key));
   CHECK(in_key_root_share(on.chords) > 0.75f);
-  CHECK(in_key_root_share(off.chords) < 0.5f);
+
+  MusicAnalyzerConfig reference_config;
+  reference_config.tuning = 0.0f;
+  MusicAnalyzer reference(detuned_pop_loop(0.0f), reference_config);
+  const auto& in_tune = reference.key_analyzer().mean_chroma();
+  CHECK(mean_chroma_distance(on_analyzer.key_analyzer().mean_chroma(), in_tune) <
+        mean_chroma_distance(off_analyzer.key_analyzer().mean_chroma(), in_tune));
 
   SECTION("roman numerals follow the tuned key and match functional analysis") {
     REQUIRE(on.chord_roman_numerals.size() == on.chords.size());
@@ -157,14 +183,30 @@ TEST_CASE("KeyAnalyzer and ChordAnalyzer take the tuning offset", "[analysis][tu
   const float estimate = estimate_tuning(audio);
 
   KeyConfig key_config;
-  CHECK_FALSE(is_c_major(KeyAnalyzer(audio, key_config).key()));
+  key_config.tuning = 0.0f;
+  const KeyAnalyzer off_key(audio, key_config);
+  CHECK(off_key.tuning() == 0.0f);
   key_config.tuning = estimate;
-  CHECK(is_c_major(KeyAnalyzer(audio, key_config).key()));
+  const KeyAnalyzer on_key(audio, key_config);
+  CHECK(on_key.tuning() == estimate);
+  CHECK(is_c_major(on_key.key()));
+  KeyConfig reference_config;
+  reference_config.tuning = 0.0f;
+  const std::array<float, 12> in_tune =
+      KeyAnalyzer(detuned_pop_loop(0.0f, 2), reference_config).mean_chroma();
+  CHECK(mean_chroma_distance(on_key.mean_chroma(), in_tune) <
+        mean_chroma_distance(off_key.mean_chroma(), in_tune));
+  // Unset, the tuning is measured.
+  CHECK(is_c_major(KeyAnalyzer(audio, KeyConfig{}).key()));
+  CHECK(is_c_major(detect_key(audio)));
 
   ChordConfig chord_config;
   chord_config.chroma_method = ChromaMethod::STFT;
   chord_config.use_triads_only = false;
+  ChordConfig measured_config = chord_config;
+  chord_config.tuning = 0.0f;
   const std::vector<Chord> off = detect_chords(audio, chord_config);
+  const std::vector<Chord> measured = detect_chords(audio, measured_config);
   chord_config.tuning = estimate;
   const std::vector<Chord> on = detect_chords(audio, chord_config);
   // At -45 cents the STFT chroma still finds each root, but the flat partials leak into the
@@ -173,11 +215,14 @@ TEST_CASE("KeyAnalyzer and ChordAnalyzer take the tuning offset", "[analysis][tu
   const std::set<std::string> triads = {"C", "G", "Am", "F"};
   std::set<std::string> off_names;
   std::set<std::string> on_names;
+  std::set<std::string> measured_names;
   for (const Chord& chord : off) off_names.insert(chord.to_string());
   for (const Chord& chord : on) on_names.insert(chord.to_string());
+  for (const Chord& chord : measured) measured_names.insert(chord.to_string());
   for (const std::string& triad : triads) {
     CHECK(on_names.count(triad) == 1);
     CHECK(off_names.count(triad) == 0);
+    CHECK(measured_names.count(triad) == 1);
   }
   const std::vector<PitchClass> roots = root_sequence(on);
   REQUIRE(roots.size() >= 4);
@@ -213,13 +258,15 @@ TEST_CASE("tuning outside [-0.5, 0.5) is rejected", "[analysis][tuning]") {
 TEST_CASE("C ABI maps tuning and analyzes with options and progress", "[c_api][analysis][tuning]") {
   const Audio audio = detuned_pop_loop(kDetuneSemitones, 1);
 
-  SECTION("defaults carry a zero tuning") {
+  SECTION("defaults measure the tuning") {
     CHECK(sonare_music_analyze_options_default().tuning == 0.0f);
+    CHECK(sonare_music_analyze_options_default().tuning_auto == 1);
   }
 
   SECTION("out-of-range tuning is an invalid parameter on every entry point") {
     SonareMusicAnalyzeOptions options = sonare_music_analyze_options_default();
     options.tuning = 0.5f;
+    options.tuning_auto = 0;
     char* json = nullptr;
     CHECK(sonare_analyze_json_ex(audio.data(), audio.size(), kSampleRate, &options, &json) ==
           SONARE_ERROR_INVALID_PARAMETER);
@@ -251,6 +298,7 @@ TEST_CASE("C ABI maps tuning and analyzes with options and progress", "[c_api][a
   SECTION("the progress variant matches the plain one under the same options") {
     SonareMusicAnalyzeOptions options = sonare_music_analyze_options_default();
     options.tuning = -0.45f;
+    options.tuning_auto = 0;
     options.compute_tempo_curve = 1;
     char* plain = nullptr;
     REQUIRE(sonare_analyze_json_ex(audio.data(), audio.size(), kSampleRate, &options, &plain) ==
@@ -330,59 +378,60 @@ TEST_CASE("measure_tuning reports a semitone fraction at every input rate", "[fe
   CHECK(measure_tuning(Audio()) == 0.0f);
 }
 
-TEST_CASE("auto tuning is measured by the key and chord analyzers and reported back",
+TEST_CASE("an unset tuning is measured by the key and chord analyzers and reported back",
           "[analysis][tuning]") {
   const Audio audio = detuned_pop_loop(kDetuneSemitones, 1);
   const float measured = measure_tuning(audio);
   REQUIRE(measured < -0.40f);
 
-  KeyConfig key_config;
-  key_config.auto_tuning = true;
-  const KeyAnalyzer key(audio, key_config);
+  const KeyAnalyzer key(audio, KeyConfig{});
   CHECK(key.tuning() == measured);
+  CHECK(key.tuning() == Catch::Approx(kDetuneSemitones).margin(0.05));
   KeyConfig explicit_key;
   explicit_key.tuning = measured;
   CHECK(key.key().root == KeyAnalyzer(audio, explicit_key).key().root);
   CHECK(key.key().mode == KeyAnalyzer(audio, explicit_key).key().mode);
 
-  // A given tuning is reported as given when auto is off.
+  // A given tuning, zero included, is used and reported as given.
   explicit_key.tuning = 0.1f;
   CHECK(KeyAnalyzer(audio, explicit_key).tuning() == 0.1f);
+  explicit_key.tuning = 0.0f;
+  CHECK(KeyAnalyzer(audio, explicit_key).tuning() == 0.0f);
 
   ChordConfig chord_config;
-  chord_config.auto_tuning = true;
   chord_config.use_beat_sync = false;
   const ChordAnalyzer chords(audio, chord_config);
   CHECK(chords.tuning() == measured);
   ChordConfig explicit_chord = chord_config;
-  explicit_chord.auto_tuning = false;
   explicit_chord.tuning = measured;
   const ChordAnalyzer expected(audio, explicit_chord);
   REQUIRE(chords.chords().size() == expected.chords().size());
   for (size_t i = 0; i < chords.chords().size(); ++i) {
     CHECK(chords.chords()[i].to_string() == expected.chords()[i].to_string());
   }
+  explicit_chord.tuning = 0.0f;
+  CHECK(ChordAnalyzer(audio, explicit_chord).tuning() == 0.0f);
 }
 
-TEST_CASE("MusicAnalyzer auto tuning reports the value it used", "[analysis][tuning]") {
+TEST_CASE("MusicAnalyzer measures an unset tuning and reports the value it used",
+          "[analysis][tuning]") {
   const Audio audio = detuned_pop_loop(kDetuneSemitones, 1);
-  MusicAnalyzerConfig config;
-  config.auto_tuning = true;
-  const MusicAnalyzer analyzer(audio, config);
+  const MusicAnalyzer analyzer(audio);
   CHECK(analyzer.tuning() == measure_tuning(audio));
 
   MusicAnalyzerConfig given;
   given.tuning = -0.3f;
   CHECK(MusicAnalyzer(audio, given).tuning() == -0.3f);
+  given.tuning = 0.0f;
+  CHECK(MusicAnalyzer(audio, given).tuning() == 0.0f);
 }
 
-TEST_CASE("MusicAnalyzer auto tuning re-centres a detuned recording and lands in the JSON",
+TEST_CASE("MusicAnalyzer by default re-centres a detuned recording and lands in the JSON",
           "[analysis][tuning][.][slow]") {
   const Audio audio = detuned_pop_loop(kDetuneSemitones);
-  MusicAnalyzerConfig config;
-  config.auto_tuning = true;
-  const AnalysisResult result = MusicAnalyzer(audio, config).analyze();
+  const AnalysisResult result = MusicAnalyzer(audio).analyze();
   CHECK(result.tuning == measure_tuning(audio));
+  CHECK(result.tuning == Catch::Approx(kDetuneSemitones).margin(0.05));
   CHECK(is_c_major(result.key));
   CHECK(analysis_result_to_json(result).find("\"tuning\":-0.4") != std::string::npos);
 }
@@ -395,7 +444,7 @@ TEST_CASE("C ABI auto tuning, tuning converters and the key tuning entry",
   SECTION("analysis options carry a version and an auto flag") {
     SonareMusicAnalyzeOptions options = sonare_music_analyze_options_default();
     CHECK(options.struct_version == SONARE_MUSIC_ANALYZE_OPTIONS_VERSION);
-    CHECK(options.tuning_auto == 0);
+    CHECK(options.tuning_auto == 1);
     options.struct_version = 1;
     char* json = nullptr;
     CHECK(sonare_analyze_json_ex(audio.data(), audio.size(), kSampleRate, &options, &json) ==
@@ -453,6 +502,48 @@ TEST_CASE("C ABI auto tuning, tuning converters and the key tuning entry",
                                         nullptr, 0.7f, 0, &key,
                                         &used) == SONARE_ERROR_INVALID_PARAMETER);
     CHECK(used == 0.0f);
+  }
+
+  SECTION("key candidates take a tuning and report the one they used") {
+    SonareKeyCandidate* candidates = nullptr;
+    size_t count = 0;
+    float used = 99.0f;
+    REQUIRE(sonare_detect_key_candidates_with_tuning(
+                audio.data(), audio.size(), kSampleRate, 4096, 512, 0, 0, 0.0f, nullptr, 0,
+                SONARE_KEY_PROFILE_KRUMHANSL_SCHMUCKLER, nullptr, 0.0f, 1, &candidates, &count,
+                &used) == SONARE_OK);
+    CHECK(used == measured);
+    REQUIRE(count == 24);
+    CHECK(candidates[0].key.root == SONARE_PITCH_C);
+    CHECK(candidates[0].key.mode == SONARE_MODE_MAJOR);
+    sonare_free_key_candidates(candidates);
+
+    // An explicit 0 is honoured and agrees with the key entry under the same tuning.
+    candidates = nullptr;
+    count = 0;
+    REQUIRE(sonare_detect_key_candidates_with_tuning(
+                audio.data(), audio.size(), kSampleRate, 4096, 512, 0, 0, 0.0f, nullptr, 0,
+                SONARE_KEY_PROFILE_KRUMHANSL_SCHMUCKLER, nullptr, 0.0f, 0, &candidates, &count,
+                &used) == SONARE_OK);
+    CHECK(used == 0.0f);
+    REQUIRE(count == 24);
+    SonareKey key{};
+    REQUIRE(sonare_detect_key_with_tuning(audio.data(), audio.size(), kSampleRate, 4096, 512, 0, 0,
+                                          0.0f, nullptr, 0, SONARE_KEY_PROFILE_KRUMHANSL_SCHMUCKLER,
+                                          nullptr, 0.0f, 0, &key, nullptr) == SONARE_OK);
+    CHECK(candidates[0].key.root == key.root);
+    CHECK(candidates[0].key.mode == key.mode);
+    sonare_free_key_candidates(candidates);
+
+    candidates = nullptr;
+    count = 0;
+    CHECK(sonare_detect_key_candidates_with_tuning(
+              audio.data(), audio.size(), kSampleRate, 4096, 512, 0, 0, 0.0f, nullptr, 0,
+              SONARE_KEY_PROFILE_KRUMHANSL_SCHMUCKLER, nullptr, 0.7f, 0, &candidates, &count,
+              &used) == SONARE_ERROR_INVALID_PARAMETER);
+    CHECK(used == 0.0f);
+    CHECK(candidates == nullptr);
+    CHECK(count == 0);
   }
 
   SECTION("converters validate and round-trip") {

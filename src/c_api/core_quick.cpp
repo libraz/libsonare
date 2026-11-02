@@ -1,5 +1,6 @@
 #include <algorithm>
 #include <memory>
+#include <optional>
 
 #include "analysis/analysis_json.h"
 #include "analysis/meter_analyzer.h"
@@ -23,6 +24,11 @@ bool make_key_config(int n_fft, int hop_length, int use_hpss, int loudness_weigh
     out_config->genre_hint = genre_hint;
   }
   return true;
+}
+
+// A C tuning pair as the core's optional: a non-zero tuning_auto leaves it unset, which measures.
+std::optional<float> tuning_from_c(float tuning, int tuning_auto) {
+  return tuning_auto != 0 ? std::nullopt : std::optional<float>(tuning);
 }
 
 // The fields of KeyConfig the entry takes as scalars, through the core's rule for them.
@@ -94,7 +100,7 @@ SonareError sonare_detect_key_with_extended_options(
   SONARE_C_API_ENTRY;
   return sonare_detect_key_with_tuning(samples, length, sample_rate, n_fft, hop_length, use_hpss,
                                        loudness_weighted, high_pass_hz, modes, mode_count,
-                                       profile_type, genre_hint, 0.0f, 0, out_key, nullptr);
+                                       profile_type, genre_hint, 0.0f, 1, out_key, nullptr);
 }
 
 SonareError sonare_detect_key_with_tuning(const float* samples, size_t length, int sample_rate,
@@ -119,8 +125,7 @@ SonareError sonare_detect_key_with_tuning(const float* samples, size_t length, i
                          mode_count, profile_type, genre_hint, &config)) {
       return SONARE_ERROR_INVALID_PARAMETER;
     }
-    config.tuning = tuning;
-    config.auto_tuning = tuning_auto != 0;
+    config.tuning = tuning_from_c(tuning, tuning_auto);
     float used = 0.0f;
     Key key = quick::detect_key(audio.data(), audio.size(), audio.sample_rate(), config, &used);
     out_key->root = static_cast<SonarePitchClass>(key.root);
@@ -157,6 +162,18 @@ SonareError sonare_detect_key_candidates_with_extended_options(
     SonareKeyProfileType profile_type, const char* genre_hint, SonareKeyCandidate** out_candidates,
     size_t* out_count) {
   SONARE_C_API_ENTRY;
+  return sonare_detect_key_candidates_with_tuning(
+      samples, length, sample_rate, n_fft, hop_length, use_hpss, loudness_weighted, high_pass_hz,
+      modes, mode_count, profile_type, genre_hint, 0.0f, 1, out_candidates, out_count, nullptr);
+}
+
+SonareError sonare_detect_key_candidates_with_tuning(
+    const float* samples, size_t length, int sample_rate, int n_fft, int hop_length, int use_hpss,
+    int loudness_weighted, float high_pass_hz, const SonareMode* modes, size_t mode_count,
+    SonareKeyProfileType profile_type, const char* genre_hint, float tuning, int tuning_auto,
+    SonareKeyCandidate** out_candidates, size_t* out_count, float* out_tuning) {
+  SONARE_C_API_ENTRY;
+  if (out_tuning != nullptr) *out_tuning = 0.0f;
   if (out_candidates == nullptr || out_count == nullptr) return SONARE_ERROR_INVALID_PARAMETER;
   *out_candidates = nullptr;
   *out_count = 0;
@@ -171,9 +188,12 @@ SonareError sonare_detect_key_candidates_with_extended_options(
                          mode_count, profile_type, genre_hint, &config)) {
       return SONARE_ERROR_INVALID_PARAMETER;
     }
+    // Resolved here so the value used can be reported; measure_tuning reads the analysis rate.
+    config.tuning = tuning_auto != 0 ? measure_tuning(audio) : tuning;
 
     const auto candidates =
         quick::detect_key_candidates(audio.data(), audio.size(), audio.sample_rate(), config);
+    if (out_tuning != nullptr) *out_tuning = *config.tuning;
     if (candidates.empty()) {
       return SONARE_OK;
     }
@@ -326,8 +346,8 @@ SonareMusicAnalyzeOptions sonare_music_analyze_options_default(void) {
                                        {},
                                        0,
                                        config.meter_denominator,
-                                       config.tuning,
-                                       config.auto_tuning ? 1 : 0};
+                                       config.tuning.value_or(0.0f),
+                                       config.tuning ? 0 : 1};
   const size_t count = std::min(config.meter_candidate_numerators.size(),
                                 static_cast<size_t>(SONARE_MAX_METER_CANDIDATE_NUMERATORS));
   for (size_t i = 0; i < count; ++i) {
@@ -364,8 +384,7 @@ MusicAnalyzerConfig music_analyzer_config_from_options(const SonareMusicAnalyzeO
       options.meter_candidate_numerators,
       options.meter_candidate_numerators + options.meter_candidate_numerator_count);
   config.meter_denominator = options.meter_denominator;
-  config.tuning = options.tuning;
-  config.auto_tuning = options.tuning_auto != 0;
+  config.tuning = tuning_from_c(options.tuning, options.tuning_auto);
   return config;
 }
 

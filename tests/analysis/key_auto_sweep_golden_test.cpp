@@ -1,5 +1,5 @@
 /// @file key_auto_sweep_golden_test.cpp
-/// @brief Golden decisions for the automatic key-detection candidate sweep.
+/// @brief Golden decisions for automatic key detection.
 ///
 /// The corpus is rendered in code rather than loaded from disk, so this guards
 /// the `genre_hint = "auto"` path without any audio in the repository. Each row
@@ -22,9 +22,9 @@
 /// are outside it too: the auto path scores major and minor unless a caller
 /// names `KeyConfig::modes`.
 ///
-/// Runs for roughly 70 s, so it sits in the hidden `[golden]` tier rather than
-/// the default ctest run — 96 tracks each costing one harmonic separation and
-/// two chroma passes, which is coverage rather than harness overhead.
+/// It sits in the hidden `[golden]` tier rather than the default ctest run: 96
+/// tracks each costing a tuning measurement and a constant-Q chromagram, which
+/// is coverage rather than harness overhead.
 ///
 /// Regenerate with `SONARE_UPDATE_KEY_GOLDEN=1`.
 
@@ -74,8 +74,7 @@ double midi_hz(int midi) { return 440.0 * std::pow(2.0, (midi - 69) / 12.0); }
 /// @param variant Selects the progression and the voicing octave
 /// @param sr Sample rate
 /// @details Decaying harmonic triads over a bass line, plus a percussive layer
-///          on a fixed grid so the harmonic separation the sweep runs has
-///          something to remove.
+///          on a fixed grid.
 Audio render_track(int root, bool major, int variant, int sr) {
   // Two full turns of the four-chord progression, at one chord per second. The
   // progression rather than the duration is what the detector needs, so this is
@@ -232,11 +231,10 @@ void write_manifest(const std::filesystem::path& path, const std::vector<Row>& r
 
 }  // namespace
 
-TEST_CASE("automatic key sweep decisions stay stable", "[.][key][golden]") {
+TEST_CASE("automatic key decisions stay stable", "[.][key][golden]") {
   INFO(sonare::test::kGoldenDigestProvenance);
   const std::filesystem::path manifest = "tests/analysis/golden/key_auto_sweep.tsv";
-  // The sweep runs a harmonic separation per track, so the corpus is computed
-  // once and reused for both the regeneration and the comparison.
+  // The corpus is computed once and reused for both the regeneration and the comparison.
   const auto rows = compute_rows();
   if (std::getenv("SONARE_UPDATE_KEY_GOLDEN") != nullptr) {
     write_manifest(manifest, rows);

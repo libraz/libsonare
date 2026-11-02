@@ -5,6 +5,7 @@
 
 #include <algorithm>
 #include <limits>
+#include <optional>
 #include <string>
 #include <type_traits>
 
@@ -320,7 +321,12 @@ namespace {
 // A `tuning` value: a semitone fraction, or the string "auto" to measure it from the audio.
 struct TuningArg {
   float tuning = 0.0f;
-  bool measure = false;
+  bool measure = true;
+
+  // The core's form: unset measures.
+  std::optional<float> value() const {
+    return measure ? std::nullopt : std::optional<float>(tuning);
+  }
 };
 
 TuningArg tuningFromVal(const val& value, const char* key) {
@@ -329,10 +335,10 @@ TuningArg tuningFromVal(const val& value, const char* key) {
     if (stringFromVal(value, key) != "auto") {
       throw WasmTypeError(std::string(key) + " must be a number or 'auto'");
     }
-    out.measure = true;
     return out;
   }
   out.tuning = checkedFloatFromVal(value, key);
+  out.measure = false;
   return out;
 }
 
@@ -370,9 +376,7 @@ val js_detect_key_with_options(val samples, const val& sample_rate_val, const va
   Audio audio = loadValidatedAudio(samples, sample_rate);
   KeyConfig config = makeKeyConfig(n_fft, hop_length, use_hpss, loudness_weighted, high_pass_hz,
                                    modes, profile_type, genre_hint);
-  const TuningArg tuning = tuningFromVal(tuning_val, "tuning");
-  config.tuning = tuning.tuning;
-  config.auto_tuning = tuning.measure;
+  config.tuning = tuningFromVal(tuning_val, "tuning").value();
   float tuning_used = 0.0f;
   Key key = quick::detect_key(audio.data(), audio.size(), sample_rate, config, &tuning_used);
 
@@ -389,15 +393,16 @@ val js_detect_key_with_options(val samples, const val& sample_rate_val, const va
 val js_detect_key_candidates(val samples, const val& sample_rate_val, const val& n_fft_val,
                              const val& hop_length_val, bool use_hpss, bool loudness_weighted,
                              const val& high_pass_hz_val, val modes, const val& profile_type_val,
-                             std::string genre_hint) {
+                             std::string genre_hint, const val& tuning_val) {
   const int sample_rate = checkedIntFromVal(sample_rate_val, "sampleRate");
   const int n_fft = checkedIntFromVal(n_fft_val, "nFft");
   const int hop_length = checkedIntFromVal(hop_length_val, "hopLength");
   const int profile_type = checkedIntFromVal(profile_type_val, "profileType");
   const float high_pass_hz = checkedFloatFromVal(high_pass_hz_val, "highPassHz");
   Audio audio = loadValidatedAudio(samples, sample_rate);
-  const KeyConfig config = makeKeyConfig(n_fft, hop_length, use_hpss, loudness_weighted,
-                                         high_pass_hz, modes, profile_type, genre_hint);
+  KeyConfig config = makeKeyConfig(n_fft, hop_length, use_hpss, loudness_weighted, high_pass_hz,
+                                   modes, profile_type, genre_hint);
+  config.tuning = tuningFromVal(tuning_val, "tuning").value();
   const auto candidates =
       quick::detect_key_candidates(audio.data(), audio.size(), sample_rate, config);
   val out = val::array();
@@ -492,8 +497,7 @@ static ChordConfig makeChordConfig(float min_duration, float smoothing_window, f
       config.chroma_method = ChromaMethod::STFT;
       break;
   }
-  config.tuning = tuning.tuning;
-  config.auto_tuning = tuning.measure;
+  config.tuning = tuning.value();
   validate_chord_config(config);
   return config;
 }
@@ -664,9 +668,7 @@ MusicAnalyzerConfig musicAnalyzerConfigFromVal(const val& options) {
   set_number("meterDenominator", config.meter_denominator);
   const val tuning = options["tuning"];
   if (!tuning.isUndefined() && !tuning.isNull()) {
-    const TuningArg parsed = tuningFromVal(tuning, "analyze: tuning");
-    config.tuning = parsed.tuning;
-    config.auto_tuning = parsed.measure;
+    config.tuning = tuningFromVal(tuning, "analyze: tuning").value();
   }
   // meterCandidateNumerators is an array, so set_number (a scalar reader) does
   // not apply. An undefined/null value leaves the core default {3, 4, 6} in

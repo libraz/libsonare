@@ -93,9 +93,9 @@ python = [
 #     Node and WASM pass it to the core directly; Python calls the C `_ex` entry.
 #   detect_key_with_options / _and_modes / _with_extended_options /
 #     _with_tuning and the detect_key_candidates_with_modes /
-#     _with_extended_options family: folded into the facade `detect_key` /
-#     `detect_key_candidates` extended params (modes / profile / genre_hint, and
-#     tuning for detect_key, whose result reports the tuning used).
+#     _with_extended_options / _with_tuning family: folded into the facade
+#     `detect_key` / `detect_key_candidates` extended params (modes / profile /
+#     genre_hint, and tuning; detect_key's result reports the tuning used).
 #   tempogram_with_mode: folded into `tempogram`'s `mode` selector.
 #   (mel_spectrogram_ex / mfcc_ex are credited by _ALIAS_COVERAGE in compare.py,
 #    anchored to the base mel_spectrogram / mfcc facade which now exposes the
@@ -205,6 +205,7 @@ node = [
   "detect_key_with_tuning",
   "detect_key_candidates_with_modes",
   "detect_key_candidates_with_extended_options",
+  "detect_key_candidates_with_tuning",
   "tempogram_with_mode",
   "onset_strength",
   "project_auto_tempo_ex",
@@ -352,6 +353,7 @@ wasm = [
   "detect_key_with_tuning",
   "detect_key_candidates_with_modes",
   "detect_key_candidates_with_extended_options",
+  "detect_key_candidates_with_tuning",
   "tempogram_with_mode",
   "onset_strength",
   "project_auto_tempo_ex",
@@ -478,6 +480,7 @@ python = [
   "detect_key_with_tuning",
   "detect_key_candidates_with_modes",
   "detect_key_candidates_with_extended_options",
+  "detect_key_candidates_with_tuning",
   "tempogram_with_mode",
   "onset_strength",
   "project_auto_tempo_ex",

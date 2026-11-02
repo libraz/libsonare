@@ -64,27 +64,29 @@ struct KeyCandidate {
 };
 
 /// @brief Configuration for key analysis.
+/// @details The audio constructor reads @ref chord_chroma without its bass blend, so the fields up
+///          to @ref high_pass_hz map onto @ref ChordChromaConfig.
 struct KeyConfig {
-  int n_fft = 4096;       ///< Window length in samples at 22050 Hz, rescaled to the input rate
-  int hop_length = 512;   ///< Hop length in samples of the input buffer
-  bool use_hpss = false;  ///< Use HPSS to extract harmonic component
-  bool loudness_weighted = false;  ///< Weight chroma frames by RMS loudness
-  float high_pass_hz = 0.0f;       ///< High-pass filter cutoff (0 = disabled)
+  int n_fft = 2048;  ///< HPSS window in samples at 22050 Hz, rescaled to the input rate
+  /// HPSS hop in samples of the input buffer; the chroma hop is
+  /// @ref chord_constants::kChordChromaHopMultiplier times it.
+  int hop_length = 512;
+  bool use_hpss = false;           ///< HPSS (margin 3) before the chroma
+  bool loudness_weighted = false;  ///< Weight chroma frames by the RMS of the input
+  float high_pass_hz = 80.0f;      ///< High-pass filter cutoff (0 = disabled)
   /// Profile family; unset lets @ref genre_hint choose it, or the chroma when the hint is "auto".
   std::optional<KeyProfileType> profile_type;
   std::string genre_hint = "auto";  ///< "auto" | "edm" | "pop" | "classical" | "jazz"
   std::vector<Mode> modes = {Mode::Major, Mode::Minor};  ///< Candidate modes; default compatible
-  /// Recording tuning offset in fractions of a semitone; must be in [-0.5, 0.5). 0 is concert
-  /// A440. @ref reference_hz_to_tuning converts a reference pitch to this unit.
-  float tuning = 0.0f;
-  /// Measure the tuning from the audio (@ref measure_tuning) instead of reading @ref tuning.
-  /// Read only by the audio constructor; @ref KeyAnalyzer::tuning reports the value used.
-  bool auto_tuning = false;
+  /// Recording tuning offset in fractions of a semitone, in [-0.5, 0.5); 0 is concert A440.
+  /// Unset measures it from the audio (@ref measure_tuning); tuning() reports the value used.
+  /// @ref reference_hz_to_tuning converts a reference pitch to this unit.
+  std::optional<float> tuning;
 };
 
 /// @brief Smallest hop length the HPSS front end of key analysis accepts.
 /// @details The separation needs enough frame overlap to resynthesize, which the STFT geometry
-///          check alone does not ensure: at the 4096-point default a hop of 8 passes it.
+///          check alone does not ensure: at the 2048-point default a hop of 8 passes it.
 constexpr int kMinKeyHpssHopLength = 16;
 
 /// @brief Refuses a KeyConfig outside the argument domain every public surface shares.
@@ -111,11 +113,13 @@ class KeyAnalyzer {
   explicit KeyAnalyzer(const Audio& audio, const KeyConfig& config = KeyConfig());
 
   /// @brief Constructs key analyzer from pre-computed chroma.
+  /// @details Never measures the tuning: @ref tuning reports @ref KeyConfig::tuning, unset as 0.
   /// @param chroma Chromagram
   /// @param config Key configuration
   explicit KeyAnalyzer(const Chroma& chroma, const KeyConfig& config = KeyConfig());
 
   /// @brief Constructs key analyzer from mean chroma vector.
+  /// @details Never measures the tuning: @ref tuning reports @ref KeyConfig::tuning, unset as 0.
   /// @param mean_chroma Mean chroma [12]
   /// @param config Key configuration
   KeyAnalyzer(const std::array<float, 12>& mean_chroma, const KeyConfig& config = KeyConfig());
@@ -124,8 +128,9 @@ class KeyAnalyzer {
   Key key() const { return key_; }
 
   /// @brief Returns the tuning the analysis used, in fractions of a semitone.
-  /// @details The measured value when @ref KeyConfig::auto_tuning was set, else the configured one.
-  float tuning() const { return config_.tuning; }
+  /// @details The configured value, or the measured one when the audio constructor was given
+  ///          none; 0 for an unset tuning on the chroma constructors.
+  float tuning() const { return config_.tuning.value_or(0.0f); }
 
   /// @brief Returns the root pitch class.
   PitchClass root() const { return key_.root; }
@@ -142,9 +147,7 @@ class KeyAnalyzer {
   ///          distribution, so it stays on one scale across analyses that
   ///          scored different numbers of candidates — a posterior mechanically
   ///          shrinks when the search widens, whether or not the evidence
-  ///          changed. That is what makes this, not the confidence, the
-  ///          quantity the analyzer compares when choosing between chroma
-  ///          front-ends. Still not a probability, and not calibrated against
+  ///          changed. Still not a probability, and not calibrated against
   ///          annotated material.
   float evidence_score() const { return evidence_score_; }
 

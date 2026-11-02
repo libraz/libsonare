@@ -40,8 +40,8 @@ Key detect_key(const float* samples, size_t size, int sample_rate);
 Key detect_key(const float* samples, size_t size, int sample_rate, const KeyConfig& config);
 
 /// @brief Detects musical key and reports the tuning the chroma was built with.
-/// @param out_tuning Receives the tuning used, in fractions of a semitone: the measured value
-///        when @p config asks for @ref KeyConfig::auto_tuning, else @ref KeyConfig::tuning.
+/// @param out_tuning Receives the tuning used, in fractions of a semitone: @ref KeyConfig::tuning,
+///        or the measured value when it is unset.
 Key detect_key(const float* samples, size_t size, int sample_rate, const KeyConfig& config,
                float* out_tuning);
 
