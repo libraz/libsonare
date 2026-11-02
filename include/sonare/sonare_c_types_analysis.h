@@ -404,7 +404,7 @@ typedef struct {
   SonarePitchClass key_root;
   SonareMode key_mode;
   int detect_inversions;
-  int chroma_method;  // 0 = STFT, 1 = NNLS
+  int chroma_method;  // 0 = STFT, 1 = NNLS, 2 = CQT (the library default)
   /* Tuning offset of the recording in fractions of a semitone; 0 is concert
      A440. Must be in [-0.5, 0.5). sonare_reference_hz_to_tuning converts a
      reference pitch to this unit, and sonare_estimate_tuning at 12 bins per

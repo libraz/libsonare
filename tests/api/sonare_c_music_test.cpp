@@ -330,6 +330,39 @@ TEST_CASE("sonare_detect_chords", "[.][slow][c_api]") {
   }
 }
 
+TEST_CASE("sonare_detect_chords_ex chroma_method range", "[c_api]") {
+  auto samples = generate_chord({261.63f, 329.63f, 392.00f}, 22050, 2.0f);
+  SonareChordDetectionOptions options{};
+  options.min_duration = 0.3f;
+  options.smoothing_window = 2.0f;
+  options.threshold = 0.5f;
+  options.use_triads_only = 1;
+  options.n_fft = 2048;
+  options.hop_length = 512;
+  options.use_beat_sync = 0;
+  options.hmm_beam_width = 8;
+  options.key_root = SONARE_PITCH_C;
+  options.key_mode = SONARE_MODE_MAJOR;
+
+  SECTION("CQT is accepted and returns chords") {
+    options.chroma_method = 2;
+    SonareChordAnalysisResult result = {};
+    REQUIRE(sonare_detect_chords_ex(samples.data(), samples.size(), 22050, &options, &result) ==
+            SONARE_OK);
+    REQUIRE(result.chord_count > 0);
+    sonare_free_chord_analysis_result(&result);
+  }
+
+  SECTION("values outside 0..2 are rejected") {
+    for (int method : {3, -1}) {
+      options.chroma_method = method;
+      SonareChordAnalysisResult result = {};
+      REQUIRE(sonare_detect_chords_ex(samples.data(), samples.size(), 22050, &options, &result) ==
+              SONARE_ERROR_INVALID_PARAMETER);
+    }
+  }
+}
+
 TEST_CASE("sonare_chord_functional_analysis", "[c_api]") {
   SonareChordDetectionOptions options{};
   options.min_duration = 0.3f;

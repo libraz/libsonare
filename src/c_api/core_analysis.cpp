@@ -12,9 +12,9 @@ bool valid_chord_options_version(int version) {
 bool valid_chord_detection_options(const SonareChordDetectionOptions& options) {
   if (!valid_chord_options_version(options.struct_version)) return false;
   // Reject out-of-range enum-like fields instead of silently mapping them to a
-  // default (chroma_method only documents 0 = STFT, 1 = NNLS). When key context
+  // default (chroma_method only documents 0 = STFT, 1 = NNLS, 2 = CQT). When key context
   // is enabled, also require an in-range key_root / key_mode.
-  if (options.chroma_method != 0 && options.chroma_method != 1) return false;
+  if (options.chroma_method < 0 || options.chroma_method > 2) return false;
   if (options.use_key_context != 0) {
     PitchClass root = PitchClass::C;
     Mode mode = Mode::Major;
@@ -43,7 +43,17 @@ ChordConfig chord_config_from_options(const SonareChordDetectionOptions& options
     throw SonareException(ErrorCode::InvalidParameter, "chord key context is out of range");
   }
   config.detect_inversions = options.detect_inversions != 0;
-  config.chroma_method = options.chroma_method == 1 ? ChromaMethod::NNLS : ChromaMethod::STFT;
+  switch (options.chroma_method) {
+    case 1:
+      config.chroma_method = ChromaMethod::NNLS;
+      break;
+    case 2:
+      config.chroma_method = ChromaMethod::CQT;
+      break;
+    default:
+      config.chroma_method = ChromaMethod::STFT;
+      break;
+  }
   config.tuning = options.tuning;
   config.auto_tuning = options.tuning_auto != 0;
   return config;

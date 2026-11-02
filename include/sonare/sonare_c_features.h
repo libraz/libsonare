@@ -67,6 +67,7 @@ SonareError sonare_analyze_timbre(const float* samples, size_t length, int sampl
 /// @brief Detects a continuous chord/N.C. timeline.
 /// @details Final correlations below @p threshold (which must be in [0, 1])
 ///   produce @c SONARE_CHORD_UNKNOWN segments instead of a guessed chord.
+///   Settings not listed here take the ChordConfig defaults: CQT chroma and HMM smoothing.
 /// @param n_fft STFT chroma window in samples at 22050 Hz, rescaled to the
 ///   input rate so its duration is the same at every rate.
 /// @param out Receives heap-owned arrays; free with sonare_free_chord_analysis_result.
