@@ -11,7 +11,6 @@
 #include <vector>
 
 #include "analysis/beat_analyzer.h"
-#include "core/convert.h"
 #include "core/resample.h"
 #include "support/rate_material.h"
 #include "util/constants.h"
@@ -755,6 +754,7 @@ TEST_CASE("ChordAnalyzer STFT chroma keeps a triad turnaround across sample rate
     config.use_triads_only = true;
     config.min_duration = 0.3f;
     config.use_beat_sync = false;  // the frame-level STFT chroma path is the subject
+    config.chroma_method = ChromaMethod::STFT;
     const auto chords = detect_chords(audio, config);
 
     std::vector<std::string> names;
@@ -800,12 +800,8 @@ TEST_CASE("detect_chords from audio honours use_beat_sync", "[chord_analyzer]") 
     }
   }
   const Audio audio = Audio::from_vector(std::move(samples), sr);
-  // Beat-synchronous chord windows sit at the beats' envelope-frame times.
-  const BeatAnalyzer beat_analyzer(audio);
-  std::vector<float> beats;
-  for (const Beat& beat : beat_analyzer.beats()) {
-    beats.push_back(frames_to_time(beat.frame, sr, BeatConfig{}.hop_length));
-  }
+  // Beat-synchronous chord windows start at the reported beat times.
+  const std::vector<float> beats = BeatAnalyzer(audio).beat_times();
   REQUIRE(beats.size() >= 8);
   const auto on_beat_grid = [&](float t) {
     for (float b : beats) {
@@ -966,6 +962,7 @@ TEST_CASE("Chord HMM smoothing keeps a clean I-V-vi-IV progression", "[chord_ana
         ChordConfig config;
         config.use_beat_sync = beat_sync;
         config.use_triads_only = triads_only;
+        config.use_hmm = false;
         const ChordAnalyzer plain_analyzer(chroma, beats, bass, config);
         const std::vector<Chord>& plain = plain_analyzer.chords();
 

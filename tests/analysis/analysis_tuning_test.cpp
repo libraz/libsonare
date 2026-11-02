@@ -162,6 +162,8 @@ TEST_CASE("KeyAnalyzer and ChordAnalyzer take the tuning offset", "[analysis][tu
   CHECK(is_c_major(KeyAnalyzer(audio, key_config).key()));
 
   ChordConfig chord_config;
+  chord_config.chroma_method = ChromaMethod::STFT;
+  chord_config.use_triads_only = false;
   const std::vector<Chord> off = detect_chords(audio, chord_config);
   chord_config.tuning = estimate;
   const std::vector<Chord> on = detect_chords(audio, chord_config);

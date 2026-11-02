@@ -53,13 +53,48 @@ constexpr float kExtendedQualityThreshold = 0.09f;
 /// decision would relabel every inversion after its own bass note. Zero
 /// disables the term.
 constexpr float kBassRootWeight = 0.15f;
+
+/// @brief Ratio of the constant-Q chord chroma hop to @ref ChordConfig::hop_length.
+constexpr int kChordChromaHopMultiplier = 4;
+
+/// @brief HMM emission weight on the beat path.
+/// @details Puts a keyless chord change at (2.1 - 0.05) / 17 = 0.12 score units, inside the
+/// measured plateau (0.08-0.16); the frame path keeps the decoder's default weight.
+constexpr float kBeatChordEmissionWeight = 17.0f;
+
+/// @brief Frames this far below the loudest chord-chroma frame are treated as silence.
+/// @details Constant-Q leakage into a rest sits near -45 dB; frame normalisation would
+/// otherwise lift it to the level of a sounding chord.
+constexpr float kChordChromaFloorDb = -40.0f;
+
 }  // namespace chord_constants
 
 /// @brief Chroma front-end used for chord recognition.
 enum class ChromaMethod {
   STFT,
   NNLS,
+  CQT,  ///< @ref chord_chroma at @ref chord_constants::kChordChromaHopMultiplier times the hop
 };
+
+/// @brief Front-end settings of @ref chord_chroma.
+struct ChordChromaConfig {
+  int hop_length = 2048;      ///< Samples at the input rate
+  float tuning = 0.0f;        ///< Fractions of a semitone, in [-0.5, 0.5)
+  bool use_hpss = false;      ///< HPSS (margin 3) before everything else
+  int hpss_n_fft = 2048;      ///< HPSS STFT window at 22050 Hz, rescaled to the input rate
+  int hpss_hop_length = 512;  ///< HPSS STFT hop, samples at the input rate
+  float highpass_hz = 80.0f;  ///< 4th-order Butterworth high-pass, zero-phase; 0 disables
+  bool bass_weighted = true;  ///< 50 % blend with a pre-emphasised 4-octave chroma
+};
+
+/// @brief Constant-Q chromagram used for chord recognition.
+/// @details Optional HPSS, then the high-pass, then `chroma_cqt` at 36 bins per octave over
+/// 7 octaves from C1 (tuning applied to fmin), optionally averaged frame by frame with the
+/// same transform of the pre-emphasised signal over the lowest 4 octaves. Frames below
+/// @ref chord_constants::kChordChromaFloorDb of the loudest frame are zero.
+/// @throws SonareException(InvalidParameter) on empty audio, a non-positive hop, a tuning
+///         outside [-0.5, 0.5) or a negative or non-finite high-pass cutoff.
+Chroma chord_chroma(const Audio& audio, const ChordChromaConfig& config = ChordChromaConfig());
 
 /// @brief Detected chord with timing information.
 struct Chord {
@@ -90,18 +125,20 @@ struct ChordConfig {
   float smoothing_window =
       chord_constants::kSmoothingWindowSec;                  ///< Smoothing window (2.0s default)
   float threshold = chord_constants::kCorrelationThreshold;  ///< Minimum correlation [0, 1]
-  bool use_triads_only = false;                              ///< Use only triads (no 7th chords)
+  bool use_triads_only = true;                               ///< Use only triads (no 7th chords)
   /// @brief STFT window length in samples at 22050 Hz, rescaled to the input rate.
   /// @details The audio constructor's STFT chroma keeps the window's duration (and so its
   /// frequency resolution) fixed across sample rates, zero-padding to a power-of-two FFT.
   int n_fft = 2048;
-  int hop_length = 512;                             ///< Hop length for STFT
-  ChromaMethod chroma_method = ChromaMethod::STFT;  ///< Chroma extraction method
+  /// @brief Hop length in samples; the CQT front end runs at
+  /// @ref chord_constants::kChordChromaHopMultiplier times it.
+  int hop_length = 512;
+  ChromaMethod chroma_method = ChromaMethod::CQT;  ///< Chroma extraction method
   /// @brief Use beat-synchronized chord detection.
   /// @details The audio constructor tracks beats itself (one extra onset/beat pass) and
   /// falls back to frame-level detection when none are found.
   bool use_beat_sync = true;
-  bool use_hmm = false;          ///< Use Viterbi HMM smoothing over chord candidates
+  bool use_hmm = true;           ///< Use Viterbi HMM smoothing over chord candidates
   int hmm_beam_width = 24;       ///< Candidate beam width for HMM smoothing
   bool use_key_context = false;  ///< Bias HMM transitions by key context
   PitchClass key_root = PitchClass::C;
@@ -259,7 +296,8 @@ class ChordAnalyzer {
   /// @brief Selection score for one template: chroma correlation plus the bass cue.
   float template_score(const ChordTemplate& chord_template, const float* chroma,
                        const std::array<float, 12>* bass) const;
-  ChordHmmConfig hmm_config() const;
+  /// @param beat_path Selects @ref chord_constants::kBeatChordEmissionWeight over the default.
+  ChordHmmConfig hmm_config(bool beat_path) const;
   PitchClass estimate_bass_pitch_class(int start_frame, int end_frame,
                                        const ChordTemplate& chord) const;
 

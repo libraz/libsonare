@@ -9,14 +9,80 @@
 
 #include "analysis/analysis_rate.h"
 #include "analysis/beat_analyzer.h"
-#include "core/convert.h"
+#include "effects/hpss.h"
 #include "feature/nnls_chroma.h"
 #include "feature/pitch.h"
+#include "filters/iir.h"
 #include "util/constants.h"
 #include "util/exception.h"
 #include "util/math_utils.h"
 
 namespace sonare {
+
+Chroma chord_chroma(const Audio& audio, const ChordChromaConfig& config) {
+  SONARE_CHECK(!audio.empty(), ErrorCode::InvalidParameter);
+  SONARE_CHECK_MSG(is_valid_chroma_tuning(config.tuning), ErrorCode::InvalidParameter,
+                   "ChordChromaConfig: tuning must be finite and in [-0.5, 0.5)");
+  SONARE_CHECK_MSG(std::isfinite(config.highpass_hz) && config.highpass_hz >= 0.0f,
+                   ErrorCode::InvalidParameter,
+                   "ChordChromaConfig: highpass_hz must be finite and non-negative");
+  const int sr = audio.sample_rate();
+
+  Audio source = audio;
+  if (config.use_hpss) {
+    HpssConfig hpss_config;
+    hpss_config.margin_harmonic = 3.0f;
+    hpss_config.margin_percussive = 3.0f;
+    source = harmonic(audio, hpss_config,
+                      stft_config_at_rate(config.hpss_n_fft, config.hpss_hop_length, sr));
+  }
+  if (config.highpass_hz > 0.0f) {
+    const CascadedBiquad cascade = highpass_coeffs_4th(config.highpass_hz, sr);
+    source = Audio::from_vector(apply_cascade_filtfilt(source.data(), source.size(), cascade), sr);
+  }
+
+  // The tuning moves fmin by whole semitone fractions; ChromaCqtConfig::tuning counts CQT bins.
+  ChromaCqtConfig cqt_config = make_chroma_cqt_config(config.hop_length, 12, 36);
+  cqt_config.cqt.fmin = tune_cqt_fmin(cqt_config.cqt.fmin, config.tuning);
+  cqt_config.normalize_frames = false;
+  const Chroma full = chroma_cqt(source, cqt_config);
+  if (full.empty()) {
+    return full;
+  }
+
+  Chroma low;
+  if (config.bass_weighted) {
+    ChromaCqtConfig low_config = make_chroma_cqt_config(config.hop_length, 12, 36);
+    low_config.cqt.fmin = cqt_config.cqt.fmin;
+    low_config.cqt.n_bins = 4 * low_config.cqt.bins_per_octave;
+    const Audio emphasised =
+        Audio::from_vector(preemphasis_zero_initial_state(source.data(), source.size(), 0.97f), sr);
+    low = chroma_cqt(emphasised, low_config);
+  }
+
+  const int n_frames = low.empty() ? full.n_frames() : std::min(full.n_frames(), low.n_frames());
+  std::vector<float> peaks(static_cast<size_t>(n_frames), 0.0f);
+  for (int t = 0; t < n_frames; ++t) {
+    for (int c = 0; c < 12; ++c) {
+      peaks[static_cast<size_t>(t)] = std::max(peaks[static_cast<size_t>(t)], full.at(c, t));
+    }
+  }
+  const float loudest = *std::max_element(peaks.begin(), peaks.end());
+  const float floor = loudest * std::pow(10.0f, chord_constants::kChordChromaFloorDb / 20.0f);
+
+  // L-inf frame normalisation, an equal blend with the bass chroma, and silence below the floor.
+  std::vector<float> features(static_cast<size_t>(12) * n_frames, 0.0f);
+  for (int t = 0; t < n_frames; ++t) {
+    const float peak = peaks[static_cast<size_t>(t)];
+    if (!(peak > floor)) continue;
+    for (int c = 0; c < 12; ++c) {
+      const float value = full.at(c, t) / peak;
+      features[static_cast<size_t>(c) * n_frames + t] =
+          low.empty() ? value : 0.5f * value + 0.5f * low.at(c, t);
+    }
+  }
+  return Chroma(std::move(features), 12, n_frames, sr, config.hop_length);
+}
 
 float ChordAnalyzer::analysis_end() const {
   const float grid_end = chroma_.duration();
@@ -50,7 +116,14 @@ ChordAnalyzer::ChordAnalyzer(const Audio& audio, const ChordConfig& requested)
   SONARE_CHECK_MSG(is_valid_chroma_tuning(config_.tuning), ErrorCode::InvalidParameter,
                    "ChordConfig: tuning must be finite and in [-0.5, 0.5)");
 
-  if (config.chroma_method == ChromaMethod::NNLS) {
+  if (config.chroma_method == ChromaMethod::CQT) {
+    SONARE_CHECK(config.hop_length <= INT_MAX / chord_constants::kChordChromaHopMultiplier,
+                 ErrorCode::InvalidParameter);
+    ChordChromaConfig chroma_config;
+    chroma_config.hop_length = config.hop_length * chord_constants::kChordChromaHopMultiplier;
+    chroma_config.tuning = config.tuning;
+    chroma_ = chord_chroma(audio, chroma_config);
+  } else if (config.chroma_method == ChromaMethod::NNLS) {
     // The reduced profile keeps the semitone salience the template matcher needs.
     NnlsChromaConfig nnls_config = NnlsChromaConfig::fast(config.hop_length);
     nnls_config.tuning = config.tuning;
@@ -82,10 +155,7 @@ ChordAnalyzer::ChordAnalyzer(const Audio& audio, const ChordConfig& requested)
   if (config.use_beat_sync) {
     BeatConfig beat_config;
     beat_config.hop_length = config.hop_length;
-    // The beat window stays centred on the envelope frame, not the shifted event time.
-    for (int frame : BeatAnalyzer(audio, beat_config).beat_frames()) {
-      beat_times.push_back(frames_to_time(frame, audio.sample_rate(), config.hop_length));
-    }
+    beat_times = BeatAnalyzer(audio, beat_config).beat_times();
   }
   if (!beat_times.empty()) {
     analyze_chords_beat_sync(beat_times);
@@ -322,8 +392,11 @@ ChordHmmObservation ChordAnalyzer::chord_observation(const float* chroma,
   return observation;
 }
 
-ChordHmmConfig ChordAnalyzer::hmm_config() const {
+ChordHmmConfig ChordAnalyzer::hmm_config(bool beat_path) const {
   ChordHmmConfig config;
+  if (beat_path) {
+    config.emission_weight = chord_constants::kBeatChordEmissionWeight;
+  }
   config.beam_width = config_.hmm_beam_width;
   config.use_key_context = config_.use_key_context;
   config.key_root = config_.key_root;
@@ -477,7 +550,7 @@ void ChordAnalyzer::analyze_chords() {
   }
 
   if (config_.use_hmm) {
-    auto smoothed_sequence = viterbi_chord_sequence(observations, templates_, hmm_config());
+    auto smoothed_sequence = viterbi_chord_sequence(observations, templates_, hmm_config(false));
     if (smoothed_sequence.size() == frame_chords_.size()) {
       frame_chords_ = std::move(smoothed_sequence);
       // Recompute against the same smoothed chroma used for the decision, not the
@@ -604,15 +677,16 @@ void ChordAnalyzer::analyze_chords_beat_sync(const std::vector<float>& tracked_b
     observations.reserve(beat_times.size());
   }
 
-  for (float beat_time : beat_times) {
-    // Find the frame closest to this beat
-    int frame = static_cast<int>(beat_time / hop_duration);
-    frame = std::max(0, std::min(frame, chroma_.n_frames() - 1));
-
-    // Average chroma over a small window around the beat (typically 1-2 frames)
-    int window = 2;  // frames before and after
-    int start_frame = std::max(0, frame - window);
-    int end_frame = std::min(chroma_.n_frames(), frame + window + 1);
+  const int n_frames = chroma_.n_frames();
+  const auto beat_frame = [&](float time) {
+    return std::clamp(static_cast<int>(std::floor(time / hop_duration)), 0, n_frames - 1);
+  };
+  for (size_t i = 0; i < beat_times.size(); ++i) {
+    // Mean over the frames from this beat up to the next; the last beat closes at the signal end.
+    const float span_end = i + 1 < beat_times.size() ? beat_times[i + 1] : analysis_end();
+    const int start_frame = beat_frame(beat_times[i]);
+    const int span_frames = static_cast<int>(std::floor(span_end / hop_duration));
+    const int end_frame = std::max(start_frame + 1, std::min(n_frames, span_frames));
 
     std::array<float, 12> beat_chroma = {};
     int count = end_frame - start_frame;
@@ -646,7 +720,7 @@ void ChordAnalyzer::analyze_chords_beat_sync(const std::vector<float>& tracked_b
   if (beat_chords.empty()) return;
 
   if (config_.use_hmm) {
-    auto smoothed_sequence = viterbi_chord_sequence(observations, templates_, hmm_config());
+    auto smoothed_sequence = viterbi_chord_sequence(observations, templates_, hmm_config(true));
     if (smoothed_sequence.size() == beat_chords.size()) {
       beat_chords = std::move(smoothed_sequence);
       // Viterbi may replace a beat's chord with one that the per-beat argmax did

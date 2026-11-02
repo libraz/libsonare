@@ -124,6 +124,7 @@ add_executable(sonare_tests
   analysis/downbeat_phase_test.cpp
   analysis/chord_analyzer_test.cpp
   analysis/chord_synthetic_matrix_test.cpp
+  analysis/chord_beat_span_test.cpp
   analysis/progression_patterns_test.cpp
   analysis/boundary_detector_test.cpp
   metering/meter_basic_test.cpp
