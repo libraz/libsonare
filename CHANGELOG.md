@@ -19,9 +19,19 @@
 #### Beat, downbeat and onset timing
 
 - Beat, downbeat and onset times mark the start of the evidence that produced them: they are 46.4 ms earlier than before on every public surface (all of which analyze at 22050 Hz; 16 kHz input moves 32 ms). Frame indices and the onset envelope are unchanged. Direct C++ `BeatAnalyzer` and `OnsetAnalyzer` calls at the input rate move by the envelope's centering shift at that rate (48.0 ms at 32 kHz, 46.4 ms at 44.1 kHz, 42.7 ms at 48 kHz).
-- Chord starts stay where they were, so a chord now starts about 46 ms after the beat it falls on. Percussive event slices keep their placement.
+- Beat-synchronous chord windows start at the reported beat times, so a chord starts on its beat. Percussive event slices keep their placement.
 - The downbeat phase comes from low-frequency energy and harmonic change at each beat instead of onset strength, which marked the backbeat. Downbeat positions and `downbeatPhase` change on most music, and `detectDownbeats`, `analyze` and rhythm analysis report the same phase for the same beats; chord analysis no longer moves the downbeats. `estimateMeter`, which has no audio, keeps its own phase.
 - `lowFrequencyEnergy` in the beat observations is read at the new beat times. Result shapes do not change.
+
+#### Chord detection
+
+- Every chord label from `detect_chords`, `chord_functional_analysis` and `analyze` can change: chords are read from a constant-Q chroma averaged over each whole beat, then smoothed with an HMM.
+- `detect_chords` and `chord_functional_analysis` default to triads only, HMM smoothing and the constant-Q chroma on every surface: C++ `ChordConfig` (`use_triads_only`, `use_hmm`, `ChromaMethod::CQT`), Python `use_triads_only=True, use_hmm=True, chroma_method="cqt"`, Node and WASM `useTriadsOnly: true, useHmm: true, chromaMethod: 'cqt'`. Pass `use_triads_only=False` (`useTriadsOnly: false`) for seventh and extended chords, and `chroma_method="stft"` with `use_hmm=False` for the previous front end.
+- `analyze` defaults to no HPSS and HMM chord smoothing (`use_hpss` false, `use_chord_hmm` true), and reads its chords through the same front end as `detect_chords`, so the two report the same chords for the same input.
+- C `SonareChordDetectionOptions.chroma_method` accepts 2 for the constant-Q chroma; 0 (STFT) and 1 (NNLS) are unchanged and other values are refused. A zero-initialized options struct still selects STFT without HMM. The legacy `sonare_detect_chords`, which takes no options, follows the new defaults.
+- Command lines: `chords --triads-only`, `--nnls` and `--use-hmm` are replaced by `--with-seventh`, `--chroma-method cqt|stft|nnls` and `--no-hmm`, and `analyze --no-hpss` by `--hpss`. The old flags fail as unknown options.
+- With key context on (`use_key_context`, `use_chord_key_context`), the beat-synchronous decoder changes chord more readily than before.
+- Streaming chord analysis is unchanged and keeps the full vocabulary.
 
 #### Removed and renamed
 
