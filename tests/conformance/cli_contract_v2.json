@@ -100,6 +100,15 @@
           }
         },
         {
+          "name": "hpss",
+          "type": "boolean",
+          "default": false,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        },
+        {
           "name": "json",
           "type": "boolean",
           "default": false,
@@ -134,15 +143,6 @@
           }
         },
         {
-          "name": "no-hpss",
-          "type": "boolean",
-          "default": false,
-          "aliases": [],
-          "repeatable": false,
-          "required": false,
-          "domain": null
-        },
-        {
           "name": "with-seventh",
           "type": "boolean",
           "default": false,
@@ -175,6 +175,26 @@
         }
       ],
       "chords": [
+        {
+          "name": "chroma-method",
+          "type": "string",
+          "default": "cqt",
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": {
+            "choices": [
+              "cqt",
+              "stft",
+              "nnls"
+            ],
+            "minimum": null,
+            "exclusiveMinimum": false,
+            "maximum": null,
+            "exclusiveMaximum": false,
+            "rejectExit": "invalid_parameter"
+          }
+        },
         {
           "name": "detect-inversions",
           "type": "boolean",
@@ -264,7 +284,7 @@
           "domain": null
         },
         {
-          "name": "nnls",
+          "name": "no-beat-sync",
           "type": "boolean",
           "default": false,
           "aliases": [],
@@ -273,7 +293,7 @@
           "domain": null
         },
         {
-          "name": "no-beat-sync",
+          "name": "no-hmm",
           "type": "boolean",
           "default": false,
           "aliases": [],
@@ -307,16 +327,7 @@
           "domain": null
         },
         {
-          "name": "triads-only",
-          "type": "boolean",
-          "default": false,
-          "aliases": [],
-          "repeatable": false,
-          "required": false,
-          "domain": null
-        },
-        {
-          "name": "use-hmm",
+          "name": "with-seventh",
           "type": "boolean",
           "default": false,
           "aliases": [],
@@ -5818,6 +5829,15 @@
           }
         },
         {
+          "name": "hpss",
+          "type": "boolean",
+          "default": false,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        },
+        {
           "name": "json",
           "type": "boolean",
           "default": false,
@@ -5850,15 +5870,6 @@
             "exclusiveMaximum": false,
             "rejectExit": "usage"
           }
-        },
-        {
-          "name": "no-hpss",
-          "type": "boolean",
-          "default": false,
-          "aliases": [],
-          "repeatable": false,
-          "required": false,
-          "domain": null
         },
         {
           "name": "with-seventh",
@@ -5979,7 +5990,7 @@
           "id": "with_seventh",
           "argv": [
             "analyze",
-            "{audio}",
+            "{audio_chord}",
             "--with-seventh",
             "--json"
           ],
@@ -5990,11 +6001,11 @@
           "stdout": "json"
         },
         {
-          "id": "no_hpss",
+          "id": "hpss",
           "argv": [
             "analyze",
             "{audio}",
-            "--no-hpss",
+            "--hpss",
             "--json"
           ],
           "exit": 0,
@@ -10133,6 +10144,26 @@
       "path": "chords",
       "options": [
         {
+          "name": "chroma-method",
+          "type": "string",
+          "default": "cqt",
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": {
+            "choices": [
+              "cqt",
+              "stft",
+              "nnls"
+            ],
+            "minimum": null,
+            "exclusiveMinimum": false,
+            "maximum": null,
+            "exclusiveMaximum": false,
+            "rejectExit": "invalid_parameter"
+          }
+        },
+        {
           "name": "detect-inversions",
           "type": "boolean",
           "default": false,
@@ -10221,7 +10252,7 @@
           "domain": null
         },
         {
-          "name": "nnls",
+          "name": "no-beat-sync",
           "type": "boolean",
           "default": false,
           "aliases": [],
@@ -10230,7 +10261,7 @@
           "domain": null
         },
         {
-          "name": "no-beat-sync",
+          "name": "no-hmm",
           "type": "boolean",
           "default": false,
           "aliases": [],
@@ -10264,16 +10295,7 @@
           "domain": null
         },
         {
-          "name": "triads-only",
-          "type": "boolean",
-          "default": false,
-          "aliases": [],
-          "repeatable": false,
-          "required": false,
-          "domain": null
-        },
-        {
-          "name": "use-hmm",
+          "name": "with-seventh",
           "type": "boolean",
           "default": false,
           "aliases": [],
@@ -10326,11 +10348,11 @@
           "stdout": "json"
         },
         {
-          "id": "triads_only",
+          "id": "with_seventh",
           "argv": [
             "chords",
-            "{audio}",
-            "--triads-only",
+            "{audio_chord}",
+            "--with-seventh",
             "--json"
           ],
           "exit": 0,
@@ -10344,7 +10366,8 @@
           "argv": [
             "chords",
             "{audio}",
-            "--nnls",
+            "--chroma-method",
+            "nnls",
             "--json"
           ],
           "exit": 0,
@@ -10368,11 +10391,11 @@
           "stdout": "json"
         },
         {
-          "id": "hmm_smoothing",
+          "id": "no_hmm",
           "argv": [
             "chords",
             "{audio}",
-            "--use-hmm",
+            "--no-hmm",
             "--json"
           ],
           "exit": 0,
@@ -17438,6 +17461,12 @@
       "frames": 13230,
       "frequency_hz": 220.0,
       "amplitude": 0.5,
+      "chord_frequencies_hz": [
+        98.0,
+        246.94,
+        293.66,
+        349.23
+      ],
       "take_frames": 9922,
       "other_rate_take": {
         "sample_rate": 32000,

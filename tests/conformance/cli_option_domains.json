@@ -117,6 +117,20 @@
     },
     {
       "command": "chords",
+      "option": "chroma-method",
+      "rejectExit": "invalid_parameter",
+      "choices": [
+        "cqt",
+        "stft",
+        "nnls"
+      ],
+      "minimum": null,
+      "exclusiveMinimum": false,
+      "maximum": null,
+      "exclusiveMaximum": false
+    },
+    {
+      "command": "chords",
       "option": "hmm-beam-width",
       "rejectExit": "invalid_parameter",
       "choices": [],

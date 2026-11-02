@@ -366,7 +366,7 @@ def test_analyze_options_forward_existing_api_keywords(monkeypatch, capsys) -> N
     parser = _parser()
     defaults = parser.parse_args(["analyze", "input.wav"])
     assert defaults.with_seventh is False
-    assert defaults.no_hpss is False
+    assert defaults.hpss is False
     assert defaults.chroma_highpass == 80.0
 
     captured: dict[str, object] = {}
@@ -400,7 +400,7 @@ def test_analyze_options_forward_existing_api_keywords(monkeypatch, capsys) -> N
         [
             "analyze",
             "--with-seventh",
-            "--no-hpss",
+            "--hpss",
             "--chroma-highpass",
             "123.5",
             "--json",
@@ -412,7 +412,7 @@ def test_analyze_options_forward_existing_api_keywords(monkeypatch, capsys) -> N
     assert captured == {
         "sample_rate": 22050,
         "use_triads_only": False,
-        "use_hpss": False,
+        "use_hpss": True,
         "chroma_highpass_hz": 123.5,
         # Not given, so the core seeds its own candidate set rather than being
         # handed an empty one.

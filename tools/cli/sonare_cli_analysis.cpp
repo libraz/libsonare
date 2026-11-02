@@ -197,12 +197,20 @@ int cmd_chords(const CliArgs& args, const Audio& audio) {
   config.min_duration = args.get_float("min-duration", 0.3f);
   config.smoothing_window = args.get_float("smoothing-window", 2.0f);
   config.threshold = args.get_float("threshold", 0.5f);
-  config.use_triads_only = args.has("triads-only");
+  config.use_triads_only = !args.has("with-seventh");
   config.n_fft = args.n_fft;
   config.hop_length = args.hop_length;
   config.use_beat_sync = !args.has("no-beat-sync");
-  config.chroma_method = args.has("nnls") ? ChromaMethod::NNLS : ChromaMethod::STFT;
-  config.use_hmm = args.has("use-hmm");
+  // The registry has already refused any value outside cqt, stft and nnls.
+  const std::string chroma_method = args.get_string("chroma-method", "cqt");
+  if (chroma_method == "stft") {
+    config.chroma_method = ChromaMethod::STFT;
+  } else if (chroma_method == "nnls") {
+    config.chroma_method = ChromaMethod::NNLS;
+  } else {
+    config.chroma_method = ChromaMethod::CQT;
+  }
+  config.use_hmm = !args.has("no-hmm");
   config.hmm_beam_width = args.get_int("hmm-beam-width", config.hmm_beam_width);
   config.detect_inversions = args.has("detect-inversions");
   config.use_key_context = args.has("key-context");
@@ -532,7 +540,7 @@ int cmd_boundaries(const CliArgs& args, const Audio& audio) {
 int cmd_analyze(const CliArgs& args, const Audio& audio) {
   MusicAnalyzerConfig config;
   config.use_triads_only = !args.has("with-seventh");
-  config.use_hpss = !args.has("no-hpss");
+  config.use_hpss = args.has("hpss");
   config.chroma_highpass_hz = args.get_float("chroma-highpass", config.chroma_highpass_hz);
   // Only the shape is parsed here; which numerators are acceptable and how many
   // is validated by the core, so a CLI list is rejected for the same reason a

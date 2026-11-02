@@ -10,6 +10,10 @@ from typing import Any, cast
 import pytest
 
 
+class _StopError(Exception):
+    """Raised by a stub to end a handler once its forwarded keywords are captured."""
+
+
 def _parser() -> argparse.ArgumentParser:
     from libsonare import cli
 
@@ -213,19 +217,77 @@ def test_chords_forwards_smoothing_window_and_beat_sync_flag(
             "min_duration": 0.3,
             "smoothing_window": 1.25,
             "threshold": 0.5,
-            "use_triads_only": False,
+            "use_triads_only": True,
             "n_fft": 2048,
             "hop_length": 512,
             "use_beat_sync": False,
-            "use_hmm": False,
+            "use_hmm": True,
             "hmm_beam_width": 24,
             "use_key_context": False,
             "key_root": 0,
             "key_mode": 0,
             "detect_inversions": False,
-            "chroma_method": "stft",
+            "chroma_method": "cqt",
         }
     ]
+
+
+def test_chords_option_flags_override_the_defaults(monkeypatch: pytest.MonkeyPatch) -> None:
+    import libsonare
+    from libsonare import _cli_analysis
+
+    args = _parser().parse_args(
+        [
+            "chords",
+            "input.wav",
+            "--with-seventh",
+            "--no-hmm",
+            "--chroma-method",
+            "nnls",
+            "--json",
+        ]
+    )
+    monkeypatch.setattr(_cli_analysis, "_load_audio", lambda path: ([0.0], 22050))
+    calls: list[dict[str, object]] = []
+
+    def fake_detect_chords(samples: Any, **kwargs: object) -> SimpleNamespace:
+        calls.append(kwargs)
+        return SimpleNamespace(chords=[])
+
+    monkeypatch.setattr(libsonare, "detect_chords", fake_detect_chords)
+
+    assert _cli_analysis.cmd_chords(args) == 0
+    assert calls[0]["use_triads_only"] is False
+    assert calls[0]["use_hmm"] is False
+    assert calls[0]["chroma_method"] == "nnls"
+
+
+@pytest.mark.parametrize(
+    ("argv", "use_hpss"),
+    [
+        (["analyze", "input.wav", "--json"], False),
+        (["analyze", "input.wav", "--hpss", "--json"], True),
+    ],
+)
+def test_analyze_hpss_is_opt_in(
+    monkeypatch: pytest.MonkeyPatch, argv: list[str], use_hpss: bool
+) -> None:
+    import libsonare
+    from libsonare import _cli_analysis
+
+    monkeypatch.setattr(_cli_analysis, "_load_audio", lambda path: ([0.0], 22050))
+    calls: list[dict[str, object]] = []
+
+    def fake_analyze(samples: Any, **kwargs: object) -> SimpleNamespace:
+        calls.append(kwargs)
+        raise _StopError
+
+    monkeypatch.setattr(libsonare, "analyze", fake_analyze)
+
+    with pytest.raises(_StopError):
+        _cli_analysis.cmd_analyze(_parser().parse_args(argv))
+    assert calls[0]["use_hpss"] is use_hpss
+    assert calls[0]["use_triads_only"] is True
 
 
 def test_mel_forwards_htk_flag(monkeypatch: pytest.MonkeyPatch) -> None:

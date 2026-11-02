@@ -235,17 +235,17 @@ def cmd_chords(args: argparse.Namespace) -> int:
         min_duration=args.min_duration,
         smoothing_window=args.smoothing_window,
         threshold=args.threshold,
-        use_triads_only=args.triads_only,
+        use_triads_only=not args.with_seventh,
         n_fft=args.n_fft,
         hop_length=args.hop_length,
         use_beat_sync=not args.no_beat_sync,
-        use_hmm=args.use_hmm,
+        use_hmm=not args.no_hmm,
         hmm_beam_width=args.hmm_beam_width,
         use_key_context=args.key_context,
         key_root=_parse_pitch_class(args.key_root),
         key_mode=_parse_mode(args.key_mode),
         detect_inversions=args.detect_inversions,
-        chroma_method="nnls" if args.nnls else "stft",
+        chroma_method=args.chroma_method,
     )
     if args.json:
         print(
@@ -338,7 +338,7 @@ def cmd_analyze(args: argparse.Namespace) -> int:
         samples,
         sample_rate=sr,
         use_triads_only=not args.with_seventh,
-        use_hpss=not args.no_hpss,
+        use_hpss=args.hpss,
         chroma_highpass_hz=args.chroma_highpass,
         # An empty list means the option was not given: pass None so the core
         # seeds its own default rather than being handed a set it rejects.
@@ -716,16 +716,22 @@ def register_analysis_parsers(
         "--threshold", type=_finite_float, default=0.5, help="Chord detection confidence threshold"
     )
     chords_p.add_argument(
-        "--triads-only", action="store_true", help="Restrict output to triad qualities"
+        "--with-seventh", action="store_true", help="Include seventh chords in the output"
     )
-    chords_p.add_argument(
-        "--nnls", action="store_true", help="Use NNLS chroma instead of the STFT chroma"
+    _cli_domain(
+        chords_p.add_argument(
+            "--chroma-method",
+            default="cqt",
+            help="Chroma extraction: cqt, stft or nnls (default: cqt)",
+        ),
+        choices=("cqt", "stft", "nnls"),
+        reject_exit="invalid_parameter",
     )
     chords_p.add_argument(
         "--no-beat-sync", action="store_true", help="Disable beat-synchronous chroma pooling"
     )
     chords_p.add_argument(
-        "--use-hmm", action="store_true", help="Decode the chord sequence with an HMM"
+        "--no-hmm", action="store_true", help="Pick each chord independently instead of an HMM"
     )
     # 0 keeps the full search rather than disabling the decoder, so the range is
     # closed at the bottom and only a negative width is refused.
@@ -762,7 +768,7 @@ def register_analysis_parsers(
         "--with-seventh", action="store_true", help="Include seventh chords in the analysis"
     )
     analyze_p.add_argument(
-        "--no-hpss", action="store_true", help="Disable harmonic-percussive separation"
+        "--hpss", action="store_true", help="Apply harmonic-percussive separation to the chroma"
     )
     analyze_p.add_argument(
         "--chroma-highpass",

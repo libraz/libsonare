@@ -487,6 +487,7 @@ def _validate_fixtures(fixtures: Any, errors: list[str]) -> None:
                 "frames",
                 "frequency_hz",
                 "amplitude",
+                "chord_frequencies_hz",
                 "take_frames",
                 "other_rate_take",
             },
@@ -512,6 +513,16 @@ def _validate_fixtures(fixtures: Any, errors: list[str]) -> None:
             for key in ("frequency_hz", "amplitude"):
                 if not _is_number(audio[key]):
                     errors.append(f"manifest.fixtures.audio.{key}: expected a finite number")
+            chord = audio["chord_frequencies_hz"]
+            if (
+                not isinstance(chord, list)
+                or len(chord) < 4
+                or not all(_is_number(value) and value > 0 for value in chord)
+            ):
+                errors.append(
+                    "manifest.fixtures.audio.chord_frequencies_hz: expected at least four "
+                    "positive finite numbers"
+                )
             # A take at another rate than the reference; an equal rate would leave
             # the two-rate alignment path unexercised.
             other_rate = audio["other_rate_take"]

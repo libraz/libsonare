@@ -14,20 +14,18 @@ from typing import Any
 def _write_wav(path: Path, fixture: dict[str, Any]) -> None:
     sample_rate = int(fixture["sample_rate"])
     frames = int(fixture["frames"])
-    frequency = float(fixture["frequency_hz"])
-    amplitude = float(fixture["amplitude"])
+    frequencies = [
+        float(value) for value in fixture.get("frequencies_hz", [fixture["frequency_hz"]])
+    ]
+    # Each partial takes an equal share of the amplitude, so a chord peaks where the tone does.
+    amplitude = float(fixture["amplitude"]) / len(frequencies)
     samples = bytearray()
     for index in range(frames):
-        sample = round(
-            max(
-                -1.0,
-                min(
-                    1.0,
-                    amplitude * math.sin(2.0 * math.pi * frequency * index / sample_rate),
-                ),
-            )
-            * 32767.0
+        value = sum(
+            amplitude * math.sin(2.0 * math.pi * frequency * index / sample_rate)
+            for frequency in frequencies
         )
+        sample = round(max(-1.0, min(1.0, value)) * 32767.0)
         samples.extend(struct.pack("<h", sample))
     with wave.open(str(path), "wb") as output:
         output.setnchannels(1)
@@ -107,6 +105,14 @@ def _write_fixtures(directory: Path, manifest: dict[str, Any]) -> dict[str, str]
         },
     )
     paths["audio_take_other_rate"] = str(other_rate_path)
+    # A dominant seventh at the tone's rate and length, for the cases whose flag
+    # only shows on a chord with more than three pitch classes.
+    chord_path = directory / "contract-chord.wav"
+    _write_wav(
+        chord_path,
+        {**fixtures["audio"], "frequencies_hz": fixtures["audio"]["chord_frequencies_hz"]},
+    )
+    paths["audio_chord"] = str(chord_path)
     for name, text in fixtures["projects"].items():
         project_path = directory / f"project_{name}.json"
         project_path.write_text(text, encoding="utf-8")

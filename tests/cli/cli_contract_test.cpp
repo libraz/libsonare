@@ -495,6 +495,21 @@ TEST_CASE("CLI registry exposes immutable leaf contracts", "[cli][registry]") {
   REQUIRE(no_beat_sync->scalar_type == CliOptionScalarType::Boolean);
   REQUIRE(no_beat_sync->default_value.kind == CliOptionDefaultKind::Boolean);
   REQUIRE_FALSE(no_beat_sync->default_value.boolean_value);
+  const auto* chroma_method = cli_option_spec_for_command("chords", "chroma-method");
+  REQUIRE(chroma_method != nullptr);
+  REQUIRE(chroma_method->scalar_type == CliOptionScalarType::String);
+  REQUIRE(chroma_method->default_value.kind == CliOptionDefaultKind::String);
+  REQUIRE(chroma_method->default_value.string_value == "cqt");
+  REQUIRE(chroma_method->domain.choices == std::vector<std::string>{"cqt", "stft", "nnls"});
+  REQUIRE(cli_option_spec_for_command("chords", "no-hmm") != nullptr);
+  REQUIRE(cli_option_spec_for_command("chords", "with-seventh") != nullptr);
+  REQUIRE(cli_option_spec_for_command("chords", "triads-only") == nullptr);
+  REQUIRE(cli_option_spec_for_command("chords", "nnls") == nullptr);
+  REQUIRE(cli_option_spec_for_command("chords", "use-hmm") == nullptr);
+  const auto* analyze_hpss = cli_option_spec_for_command("analyze", "hpss");
+  REQUIRE(analyze_hpss != nullptr);
+  REQUIRE_FALSE(analyze_hpss->default_value.boolean_value);
+  REQUIRE(cli_option_spec_for_command("analyze", "no-hpss") == nullptr);
 
   for (const std::string command : {"onset-env", "onset-envelope", "tempogram", "plp"}) {
     const auto* n_mels = cli_option_spec_for_command(command, "n-mels");

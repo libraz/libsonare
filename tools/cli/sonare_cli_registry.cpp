@@ -481,7 +481,7 @@ const std::vector<CliCommandSpec>& build_cli_registry() {
 
     // Analysis leaves.
     add_command(commands, "analyze", true,
-                {flag("with-seventh"), flag("no-hpss"),
+                {flag("with-seventh"), flag("hpss"),
                  // The Python CLI parses this through a non-negative finite
                  // checker, so the native contract declares the same domain and
                  // the same (parse-time) class.
@@ -511,14 +511,16 @@ const std::vector<CliCommandSpec>& build_cli_registry() {
     // `min-duration` and `threshold` are checked by ChordAnalyzer itself and so
     // need none. A zero smoothing window is the one the analyzer accepts and the
     // C entry refuses, and a negative beam width is never truncated against, so
-    // `--use-hmm --hmm-beam-width -1` silently ran an unbeamed search.
+    // `--hmm-beam-width -1` silently ran an unbeamed search.
     add_command(commands, "chords", true,
                 {global_int("n-fft", 2048), global_int("hop-length", 512),
                  number_value("min-duration", 0.3),
                  with_domain(number_value("smoothing-window", 2.0),
                              greater_than(0.0, CliOptionDomainStage::Parameter)),
-                 number_value("threshold", 0.5), flag("triads-only"), flag("nnls"),
-                 flag("no-beat-sync"), flag("use-hmm"),
+                 number_value("threshold", 0.5), flag("with-seventh"),
+                 with_domain(string_value("chroma-method", "cqt"),
+                             choices_of({"cqt", "stft", "nnls"}, CliOptionDomainStage::Parameter)),
+                 flag("no-beat-sync"), flag("no-hmm"),
                  with_domain(int_value("hmm-beam-width", 24),
                              at_least(0.0, CliOptionDomainStage::Parameter)),
                  flag("key-context"), string_value("key-root", "C"),

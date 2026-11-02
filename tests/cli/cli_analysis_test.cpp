@@ -308,16 +308,17 @@ TEST_CASE("CLI chords command", "[.][slow][cli]") {
   }
 
   SECTION("json output with advanced chord options") {
-    auto [code, output] = exec_command(CLI + " chords " + TEST_WAV +
-                                       " --json --nnls --use-hmm --detect-inversions --key-context "
-                                       "--key-root C --key-mode major --hmm-beam-width 12 -q");
+    auto [code, output] =
+        exec_command(CLI + " chords " + TEST_WAV +
+                     " --json --chroma-method nnls --detect-inversions --key-context "
+                     "--key-root C --key-mode major --hmm-beam-width 12 -q");
     REQUIRE(code == 0);
     REQUIRE_THAT(output, ContainsSubstring("\"chords\""));
     REQUIRE_THAT(output, ContainsSubstring("\"bass\""));
   }
 
   SECTION("boolean flag before positional input is not swallowed") {
-    auto [code, output] = exec_command(CLI + " chords --nnls " + TEST_WAV + " --json -q");
+    auto [code, output] = exec_command(CLI + " chords --no-hmm " + TEST_WAV + " --json -q");
     REQUIRE(code == 0);
     REQUIRE_THAT(output, ContainsSubstring("\"chords\""));
   }

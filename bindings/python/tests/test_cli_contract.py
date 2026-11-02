@@ -898,7 +898,7 @@ def test_analyze_flags_are_accepted_and_forwarded(monkeypatch, capsys) -> None:
     parser = cli._build_parser()
     defaults = parser.parse_args(["analyze", "input.wav"])
     assert defaults.with_seventh is False
-    assert defaults.no_hpss is False
+    assert defaults.hpss is False
     assert defaults.chroma_highpass == 80.0
     assert defaults.meter_candidates == ""
     assert defaults.meter_denominator == 4
@@ -916,7 +916,7 @@ def test_analyze_flags_are_accepted_and_forwarded(monkeypatch, capsys) -> None:
         [
             "analyze",
             "--with-seventh",
-            "--no-hpss",
+            "--hpss",
             "--chroma-highpass",
             "123.5",
             "--json",
@@ -928,7 +928,7 @@ def test_analyze_flags_are_accepted_and_forwarded(monkeypatch, capsys) -> None:
     assert captured == {
         "sample_rate": 22050,
         "use_triads_only": False,
-        "use_hpss": False,
+        "use_hpss": True,
         "chroma_highpass_hz": 123.5,
         # Omitted on the command line, so the core keeps its own default set
         # rather than receiving an empty one, which it rejects.

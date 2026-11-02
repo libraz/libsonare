@@ -154,10 +154,10 @@ class CliContractSelfTest(unittest.TestCase):
             [option["name"] for option in contract["options"]],
             [
                 "chroma-highpass",
+                "hpss",
                 "json",
                 "meter-candidates",
                 "meter-denominator",
-                "no-hpss",
                 "with-seventh",
             ],
         )

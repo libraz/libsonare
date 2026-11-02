@@ -418,14 +418,11 @@ def _validate_case_payload(
                         ),
                     )
                 )
-    if path == "analyze" and case_id == "with_seventh":
-        # What the flag promises is that the template set is not restricted
-        # to the four triads, so that is what this asserts. It used to look
-        # for a name ending in "7", which was a proxy rather than the
-        # contract: the fixture is a single sine with one pitch class, so
-        # whichever non-triad wins is arbitrary, and pinning one spelling
-        # made the check fail whenever the vocabulary changed even though
-        # the flag went on working.
+    if path in ("analyze", "chords") and case_id == "with_seventh":
+        # What the flag promises is that the template set is not restricted to
+        # the four triads. The case runs on a dominant-seventh fixture, where the
+        # default answers with the triad, so any extended name shows the flag took
+        # effect without pinning one spelling.
         chords = payload.get("chords")
         has_extended = isinstance(chords, list) and any(
             isinstance(chord, dict)
@@ -764,12 +761,12 @@ def _validate_analyze_case_relationships(
                 )
             )
 
-    no_hpss = payloads.get(("analyze", "no_hpss"))
-    if default is not None and no_hpss is not None:
+    hpss = payloads.get(("analyze", "hpss"))
+    if default is not None and hpss is not None:
         mismatch = _compare_values(
             default,
-            no_hpss,
-            f"{surface}.analyze.default-vs-no-hpss",
+            hpss,
+            f"{surface}.analyze.default-vs-hpss",
             float(manifest["comparison"]["absolute"]),
             float(manifest["comparison"]["relative"]),
         )
@@ -777,7 +774,7 @@ def _validate_analyze_case_relationships(
             report.append(
                 (
                     "fail",
-                    f"{surface}.analyze.no_hpss: --no-hpss did not change the canonical fixture result",
+                    f"{surface}.analyze.hpss: --hpss did not change the canonical fixture result",
                 )
             )
 
