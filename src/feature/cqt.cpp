@@ -65,8 +65,10 @@ struct CachedCqtKernel {
   std::shared_ptr<CqtKernel> kernel;
 };
 
-/// @brief Maximum number of cached CQT kernels
-constexpr size_t kMaxCqtCacheSize = 2;
+/// @brief Maximum number of cached CQT kernels.
+/// @details Chord detection alone runs three constant-Q configurations per call (full range,
+/// bass blend, bass cue); fewer slots rebuild every kernel on every call.
+constexpr size_t kMaxCqtCacheSize = 4;
 // The public NNLS-chroma default uses 36 bins/octave over seven octaves. At
 // 44.1 kHz its longest kernel requires 252 * 131072 elements, so the resource
 // ceiling must admit that shipped configuration while still rejecting hostile
