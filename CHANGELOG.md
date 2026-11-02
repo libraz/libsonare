@@ -33,6 +33,19 @@
 - With key context on (`use_key_context`, `use_chord_key_context`), the beat-synchronous decoder changes chord more readily than before.
 - Streaming chord analysis is unchanged and keeps the full vocabulary.
 
+#### Key detection and tuning
+
+- Every key from `detect_key`, `detect_key_candidates` and `analyze` can change, with its confidence and evidence score: the key is read from the constant-Q chroma the chord detector uses, without its bass blend, after an 80 Hz high-pass.
+- `detect_key`, `detect_key_candidates`, `detect_chords`, `chord_functional_analysis` and `analyze` measure the recording's tuning unless they are given one, on every surface. Pass `tuning=0` (Node and WASM `tuning: 0`) to read the audio at concert A440. The reported tuning is the value used. On 180 s of 22050 Hz audio this adds about 0.5 s to `detect_key` and 1.1 s to `detect_chords` and `analyze`, mostly the constant-Q kernels rebuilt for each new tuning value.
+- C++ `KeyConfig::tuning`, `ChordConfig::tuning` and `MusicAnalyzerConfig::tuning` are `std::optional<float>`, and `auto_tuning` is gone: leave `tuning` unset to measure it, set it to use a given value.
+- `detect_key` and `detect_key_candidates` default to `n_fft` 2048 and `high_pass_hz` 80 (`nFft`, `highPassHz` on Node and WASM). `n_fft` now only sets the window of the optional HPSS, which is margin 3 on that window; `loudness_weighted` weights the frames by the RMS of the input at the chroma hop.
+- The automatic search over HPSS and loudness-weighted chroma, and the harmonic high-pass retry, are removed. `use_hpss` and `loudness_weighted` stay as explicit options.
+- C ABI: struct layouts and versions are unchanged. `sonare_detect_key`, the `sonare_detect_key_with_options` family, `sonare_detect_key_candidates*`, the legacy `sonare_detect_chords` and `sonare_music_analyze_options_default()` measure the tuning. A zero-initialized `SonareChordDetectionOptions` or `SonareMusicAnalyzeOptions` still reads tuning 0.
+- `analyze` sections and downbeats can change on detuned recordings, because the sections read the measured tuning and the downbeats take observations from the tuned chords.
+- Auto-tune detects its key with measured tuning when it is given none, and pays that cost; the correction grid stays at A440.
+- Command lines: `key` defaults to `--n-fft 2048` and `--high-pass-hz 80`, and the Python command line no longer warns about an `--n-fft` below 4096. `key`, `chords` and `analyze` measure the tuning; there is no tuning flag.
+- Streaming key analysis is unchanged and keeps its fixed reference tuning.
+
 #### Removed and renamed
 
 - The C `SonareRirSynthConfig` and `SonareRoomMorphConfig` field `air_absorption_enabled` is now `air_absorption`, a `SONARE_AIR_ABSORPTION_*` selector: `DEFAULT` (0) and `ON` (1) apply air absorption, `OFF` (2) leaves it out, and any other value is refused. A zero-initialized config therefore applies it. `SONARE_ACOUSTIC_ABI_VERSION` is 6.
@@ -76,6 +89,10 @@
 - Writing 16- or 24-bit WAV (`save_wav`, the command lines, bounce output) applies deterministic TPDF dither, independent per channel, to a stream that is not already on the target grid, so a fading reverb tail ends in noise instead of truncation distortion and a cut to silence. A stream already at that word length (a decoded file, a mastering-dithered master) is written code for code, and exact zeros stay digital silence. The same input still writes the same bytes on every platform and on both command lines.
 
 ### New
+
+#### Key detection
+
+- `detect_key_candidates` takes a `tuning` on every surface (a number, or `"auto"` to measure it), so the candidates of a call can be computed under the same tuning as its key. C adds `sonare_detect_key_candidates_with_tuning`, which reports the tuning used through an optional `out_tuning`.
 
 #### Section analysis
 
