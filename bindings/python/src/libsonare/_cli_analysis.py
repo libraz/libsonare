@@ -5,7 +5,6 @@ from __future__ import annotations
 import argparse
 import math
 import statistics
-import sys
 
 import numpy as np
 
@@ -102,18 +101,6 @@ def cmd_key(args: argparse.Namespace) -> int:
     from . import detect_key, detect_key_candidates
 
     samples, sr = _load_audio(args.file)
-    # Key detection keeps the historical 4096-sample default (better low-
-    # frequency resolution) when --n-fft is left unset, matching the native CLI
-    # and detect_key(). An explicit value (including 2048) is respected but a
-    # warning is printed when it is below the recommended 4096.
-    n_fft = args.n_fft
-    if n_fft is None:
-        n_fft = 4096
-    elif n_fft < 4096:
-        print(
-            "Warning: key detection prefers --n-fft >= 4096 for better resolution",
-            file=sys.stderr,
-        )
     # ``--hpss`` was the historical spelling.  Keep accepting it in handler
     # namespaces while the parser exposes the canonical ``--use-hpss`` flag.
     # A parser alias may bind both spellings to ``use_hpss``; reading both
@@ -122,7 +109,7 @@ def cmd_key(args: argparse.Namespace) -> int:
     use_hpss = bool(getattr(args, "use_hpss", False) or getattr(args, "hpss", False))
     key_options = {
         "sample_rate": sr,
-        "n_fft": n_fft,
+        "n_fft": args.n_fft,
         "hop_length": args.hop_length,
         "use_hpss": use_hpss,
         "loudness_weighted": args.loudness_weighted,
@@ -640,16 +627,9 @@ def register_analysis_parsers(
     sub.add_parser("info", parents=[stdout_options], help="Show audio file information")
     sub.add_parser("bpm", parents=[stdout_options], help="Detect BPM")
     key_p = sub.add_parser("key", parents=[stdout_options], help="Detect musical key")
-    # Key detection keeps a 4096-sample analysis default (better low-frequency
-    # resolution) rather than the shared 2048. A None sentinel distinguishes
-    # "left at the default" from an explicit value, matching the native CLI and
-    # the detect_key() library default. These FFT options are declared here
-    # instead of inherited from fft_options: parents= shares the actual argument
-    # objects, so a set_defaults override would mutate the shared --n-fft used by
-    # the other analysis commands.
-    key_p.add_argument(
-        "--n-fft", type=_c_int, default=4096, help="FFT size (default: 4096 for key analysis)"
-    )
+    # Declared here rather than inherited from fft_options: key takes no
+    # --win-length or --window options.
+    key_p.add_argument("--n-fft", type=_c_int, default=2048, help="FFT size (default: 2048)")
     key_p.add_argument("--hop-length", type=_c_int, default=512, help="Hop length (default: 512)")
     key_p.add_argument(
         "--candidates",
@@ -671,8 +651,8 @@ def register_analysis_parsers(
     key_p.add_argument(
         "--high-pass-hz",
         type=_finite_float,
-        default=0.0,
-        help="High-pass cutoff before key analysis",
+        default=80.0,
+        help="High-pass cutoff before key analysis (default: 80)",
     )
     key_p.add_argument(
         "--modes",

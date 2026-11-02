@@ -528,7 +528,6 @@ bool ArgParser::try_parse_global_option(CliArgs& args, const std::string& arg, c
         const int parsed = parse_int_strict(spec->name, value);
         if (spec->name == "n-fft") {
           args.n_fft = parsed;
-          args.n_fft_explicit = true;
         } else if (spec->name == "hop-length") {
           args.hop_length = parsed;
         } else if (spec->name == "n-mels") {

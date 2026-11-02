@@ -23,12 +23,12 @@ def _parser() -> argparse.ArgumentParser:
 def _key_args(**overrides: object) -> argparse.Namespace:
     values: dict[str, object] = {
         "file": "input.wav",
-        "n_fft": 4096,
+        "n_fft": 2048,
         "hop_length": 512,
         "use_hpss": False,
         "hpss": False,
         "loudness_weighted": False,
-        "high_pass_hz": 0.0,
+        "high_pass_hz": 80.0,
         "modes": "",
         "profile": "",
         "genre_hint": "",

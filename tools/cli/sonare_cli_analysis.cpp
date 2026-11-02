@@ -58,13 +58,11 @@ int cmd_bpm(const CliArgs& args, const Audio& audio) {
 
 int cmd_key(const CliArgs& args, const Audio& audio) {
   KeyConfig config;
-  // Keep the historical 4096-sample key-analysis default, but never rewrite
-  // an explicitly requested global --n-fft value (including 2048).
-  config.n_fft = args.n_fft_explicit ? args.n_fft : 4096;
+  config.n_fft = args.n_fft;
   config.hop_length = args.hop_length;
   config.use_hpss = args.has("use-hpss") || args.has("hpss");
   config.loudness_weighted = args.has("loudness-weighted");
-  config.high_pass_hz = args.get_float("high-pass-hz", 0.0f);
+  config.high_pass_hz = args.get_float("high-pass-hz", 80.0f);
   if (args.has("genre-hint")) {
     config.genre_hint = args.get_string("genre-hint");
   }

@@ -745,13 +745,8 @@ def test_trim_silence_output_is_optional(tmp_path) -> None:
     assert result.returncode == 0, result.stderr
 
 
-def test_key_default_n_fft_resolves_to_4096(tmp_path) -> None:
-    """``key`` keeps the 4096 analysis default when ``--n-fft`` is omitted.
-
-    The command warns only when an explicit sub-4096 value is supplied, so the
-    absence/presence of the warning is an observable proxy for the sentinel
-    (``default=None`` -> 4096) resolution and matches the native CLI.
-    """
+def test_key_n_fft_emits_no_resolution_warning(tmp_path) -> None:
+    """``key`` prints no ``--n-fft`` warning, whether omitted or set below 4096."""
     source = tmp_path / "tone.wav"
     _write_tone_wav(source)
 
@@ -761,11 +756,11 @@ def test_key_default_n_fft_resolves_to_4096(tmp_path) -> None:
 
     explicit_run = _run_console("key", "--n-fft", "2048", "--json", str(source))
     assert explicit_run.returncode == 0, explicit_run.stderr
-    assert "prefers --n-fft >= 4096" in explicit_run.stderr
+    assert "prefers --n-fft >= 4096" not in explicit_run.stderr
 
 
 def test_key_default_matches_library_detect_key(tmp_path) -> None:
-    """The default ``key`` CLI result matches ``detect_key`` (library default 4096)."""
+    """The default ``key`` CLI result matches ``detect_key`` (library defaults)."""
     from libsonare import cli, detect_key
 
     source = tmp_path / "tone.wav"

@@ -1038,7 +1038,7 @@
         {
           "name": "high-pass-hz",
           "type": "number",
-          "default": 0,
+          "default": 80,
           "aliases": [],
           "repeatable": false,
           "required": false,
@@ -1083,7 +1083,7 @@
         {
           "name": "n-fft",
           "type": "integer",
-          "default": 4096,
+          "default": 2048,
           "aliases": [],
           "repeatable": false,
           "required": false,
@@ -9999,7 +9999,7 @@
         {
           "name": "high-pass-hz",
           "type": "number",
-          "default": 0,
+          "default": 80,
           "aliases": [],
           "repeatable": false,
           "required": false,
@@ -10044,7 +10044,7 @@
         {
           "name": "n-fft",
           "type": "integer",
-          "default": 4096,
+          "default": 2048,
           "aliases": [],
           "repeatable": false,
           "required": false,

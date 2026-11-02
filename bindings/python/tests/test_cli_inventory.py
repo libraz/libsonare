@@ -89,7 +89,8 @@ def test_inventory_preserves_required_repeatable_and_none_defaults() -> None:
     commands = {record["path"]: record for record in build_cli_contract(_parser())["commands"]}
 
     key_n_fft = _option(commands["key"], "n-fft")
-    assert key_n_fft["default"] == 4096
+    assert key_n_fft["default"] == 2048
+    assert _option(commands["key"], "high-pass-hz")["default"] == 80
     bounce_rate = _option(commands["project.bounce"], "sample-rate")
     assert bounce_rate["default"] is None
     assert bounce_rate["required"] is False

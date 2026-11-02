@@ -64,7 +64,6 @@ struct CliArgs {
   bool help = false;
 
   int n_fft = sonare::constants::kDefaultNFft;
-  bool n_fft_explicit = false;
   int hop_length = sonare::constants::kDefaultHopLength;
   int n_mels = sonare::constants::kDefaultNMels;
   float fmin = 0.0f;

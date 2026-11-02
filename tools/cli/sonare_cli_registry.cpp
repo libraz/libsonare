@@ -502,9 +502,9 @@ const std::vector<CliCommandSpec>& build_cli_registry() {
         commands, "timbre", true,
         {global_int("n-fft", 2048), global_int("hop-length", 512), global_int("n-mels", 128)});
     add_command(commands, "key", true,
-                {global_int("n-fft", 4096), global_int("hop-length", 512), int_value("candidates"),
+                {global_int("n-fft", 2048), global_int("hop-length", 512), int_value("candidates"),
                  flag("use-hpss", false, true, {"hpss"}), flag("loudness-weighted"),
-                 number_value("high-pass-hz", 0.0), string_value("modes"), string_value("profile"),
+                 number_value("high-pass-hz", 80.0), string_value("modes"), string_value("profile"),
                  string_value("genre-hint")},
                 {}, validate_key_hpss_hop);
     // `smoothing-window` and `hmm-beam-width` carry the C entry point's domains;
