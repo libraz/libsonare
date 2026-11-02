@@ -1079,7 +1079,8 @@ export interface ChordAnalysisResult {
   tuning: number;
 }
 
-export type ChordChromaMethod = 'stft' | 'nnls';
+/** Chroma front end for chord detection; `'cqt'` is the default. */
+export type ChordChromaMethod = 'stft' | 'nnls' | 'cqt';
 
 /**
  * Options-object form of the chord-detection parameters, mirroring the WASM

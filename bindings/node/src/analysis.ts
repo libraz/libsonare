@@ -1002,17 +1002,17 @@ function resolveChordOptions(options: ChordDetectionOptions): ResolvedChordParam
     minDuration: options.minDuration ?? 0.3,
     smoothingWindow: options.smoothingWindow ?? 2.0,
     threshold: options.threshold ?? 0.5,
-    useTriadsOnly: options.useTriadsOnly ?? false,
+    useTriadsOnly: options.useTriadsOnly ?? true,
     nFft: options.nFft ?? 2048,
     hopLength: options.hopLength ?? 512,
     useBeatSync: options.useBeatSync ?? true,
-    useHmm: options.useHmm ?? false,
+    useHmm: options.useHmm ?? true,
     hmmBeamWidth: options.hmmBeamWidth ?? 24,
     useKeyContext: options.useKeyContext ?? false,
     keyRoot: options.keyRoot ?? 0,
     keyMode: options.keyMode ?? 0,
     detectInversions: options.detectInversions ?? false,
-    chromaMethod: options.chromaMethod ?? 'stft',
+    chromaMethod: options.chromaMethod ?? 'cqt',
     tuning: options.tuning ?? 0,
   };
 }
@@ -1128,17 +1128,17 @@ export function detectChords(
   minDurationOrOptions: number | ChordDetectionOptions = 0.3,
   smoothingWindow = 2.0,
   threshold = 0.5,
-  useTriadsOnly = false,
+  useTriadsOnly = true,
   nFft = 2048,
   hopLength = 512,
   useBeatSync = true,
-  useHmm = false,
+  useHmm = true,
   hmmBeamWidth = 24,
   useKeyContext = false,
   keyRoot: ChordFunctionsKey['root'] = 0,
   keyMode: ChordFunctionsKey['mode'] = 0,
   detectInversions = false,
-  chromaMethod: ChordChromaMethod = 'stft',
+  chromaMethod: ChordChromaMethod = 'cqt',
 ): ChordAnalysisResult {
   if (!(samples instanceof Float32Array)) {
     requestObject('detectChords', samples);
@@ -1228,15 +1228,15 @@ export function chordFunctionalAnalysis(
   minDurationOrOptions: number | ChordDetectionOptions = 0.3,
   smoothingWindow = 2.0,
   threshold = 0.5,
-  useTriadsOnly = false,
+  useTriadsOnly = true,
   nFft = 2048,
   hopLength = 512,
   useBeatSync = true,
-  useHmm = false,
+  useHmm = true,
   hmmBeamWidth = 24,
   useKeyContext = false,
   detectInversions = false,
-  chromaMethod: ChordChromaMethod = 'stft',
+  chromaMethod: ChordChromaMethod = 'cqt',
 ): FunctionalChord[] {
   if (!(samples instanceof Float32Array)) {
     requestObject('chordFunctionalAnalysis', samples);
@@ -1342,6 +1342,9 @@ function chordChromaMethodValue(method: ChordChromaMethod): number {
   }
   if (method === 'nnls') {
     return 1;
+  }
+  if (method === 'cqt') {
+    return 2;
   }
   throw new RangeError(`Invalid chord chroma method: ${method}`);
 }

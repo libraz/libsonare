@@ -227,7 +227,8 @@ export interface ChordDetectionOptions extends ValidateOptions {
   /** Mode ordinal or name, e.g. `detectKey`'s `mode`. */
   keyMode?: Mode | KeyMode;
   detectInversions?: boolean;
-  chromaMethod?: 'stft' | 'nnls';
+  /** Chroma front end; default `'cqt'`. */
+  chromaMethod?: 'stft' | 'nnls' | 'cqt';
   /**
    * Tuning offset of the recording in fractions of a semitone; must be in
    * `[-0.5, 0.5)`. `'auto'` measures it from the audio; the value used is

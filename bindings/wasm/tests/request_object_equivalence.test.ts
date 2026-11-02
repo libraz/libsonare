@@ -1964,7 +1964,8 @@ const ROWS: Row[] = [
     params: 'samples keyRoot keyMode? sampleRate? ...options?',
     values: {
       samples: SIG,
-      keyRoot: 8,
+      // G, where the detected chord's numeral differs between major and minor.
+      keyRoot: 7,
       keyMode: 1,
       sampleRate: ALT_SR,
       options: { minDuration: 0.6 },

@@ -51,9 +51,11 @@ describe('tuning on batch analysis', () => {
   });
 
   it('recovers plain triads in detectChords, positional and request forms alike', () => {
-    const off = new Set(detectChords(detuned, sampleRate).chords.map((c) => c.name));
-    const on = detectChords({ samples: detuned, sampleRate, tuning: estimate });
-    expect(on).toEqual(detectChords(detuned, sampleRate, { tuning: estimate }));
+    // The STFT front end with the full vocabulary is the one a detuned triad misleads.
+    const front = { chromaMethod: 'stft', useTriadsOnly: false } as const;
+    const off = new Set(detectChords(detuned, sampleRate, front).chords.map((c) => c.name));
+    const on = detectChords({ samples: detuned, sampleRate, ...front, tuning: estimate });
+    expect(on).toEqual(detectChords(detuned, sampleRate, { ...front, tuning: estimate }));
     const onNames = new Set(on.chords.map((c) => c.name));
     for (const triad of ['C', 'G', 'Am', 'F']) {
       expect(onNames.has(triad)).toBe(true);

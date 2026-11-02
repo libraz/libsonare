@@ -159,7 +159,7 @@ describe('WASM wave3 analysis parity', () => {
     it('throws on an out-of-range chromaMethod (raw module path)', () => {
       const module = getSonareModule();
       // The TS wrapper only accepts 'stft' | 'nnls', so exercise the WASM
-      // enum-range guard directly with an out-of-range integer (only 0 and 1
+      // enum-range guard directly with an out-of-range integer (only 0, 1 and 2
       // are defined).
       expect(() =>
         module.detectChords(
@@ -178,7 +178,7 @@ describe('WASM wave3 analysis parity', () => {
           PitchClass.C,
           Mode.Major,
           false,
-          2,
+          3,
           0,
         ),
       ).toThrow();
@@ -237,7 +237,7 @@ describe('WASM wave3 analysis parity', () => {
           24,
           false,
           false,
-          2,
+          3,
           0,
         ),
       ).toThrow();

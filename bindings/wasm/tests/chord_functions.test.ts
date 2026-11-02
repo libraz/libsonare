@@ -109,3 +109,26 @@ describe('chordFunctions', () => {
     );
   });
 });
+
+describe('detectChords chromaMethod', () => {
+  beforeAll(async () => {
+    await init();
+  });
+
+  const samples = progression();
+  const base = { samples, sampleRate: SAMPLE_RATE, useBeatSync: false };
+
+  it('defaults to the triads-only, HMM, CQT configuration', () => {
+    expect(detectChords(base)).toEqual(
+      detectChords({ ...base, useTriadsOnly: true, useHmm: true, chromaMethod: 'cqt' }),
+    );
+  });
+
+  it('accepts cqt', () => {
+    expect(() => detectChords({ ...base, chromaMethod: 'cqt' })).not.toThrow();
+  });
+
+  it('rejects an unknown chromaMethod', () => {
+    expect(() => detectChords({ ...base, chromaMethod: 'x' as 'cqt' })).toThrow();
+  });
+});

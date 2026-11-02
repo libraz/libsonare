@@ -192,6 +192,9 @@ export function chordChromaMethodValue(method: ChordDetectionOptions['chromaMeth
   if (method === 'nnls') {
     return 1;
   }
+  if (method === 'cqt') {
+    return 2;
+  }
   throw new RangeError(`Invalid chord chroma method: ${method}`);
 }
 

@@ -58,11 +58,11 @@ KeyProfileType keyProfileFromInt(int profile_type) {
   }
 }
 
-// Rejects an out-of-range chroma_method, mirroring the C ABI (only 0 = STFT and
-// 1 = NNLS are defined) instead of silently treating any non-1 value as STFT.
+// Rejects an out-of-range chroma_method, mirroring the C ABI (only 0 = STFT,
+// 1 = NNLS and 2 = CQT are defined) instead of silently mapping other values.
 void validateChromaMethod(int chroma_method) {
-  if (chroma_method != 0 && chroma_method != 1) {
-    throw WasmRangeError("invalid chromaMethod (expected 0 = STFT or 1 = NNLS)");
+  if (chroma_method < 0 || chroma_method > 2) {
+    throw WasmRangeError("invalid chromaMethod (expected 0 = STFT, 1 = NNLS or 2 = CQT)");
   }
 }
 
@@ -481,7 +481,17 @@ static ChordConfig makeChordConfig(float min_duration, float smoothing_window, f
   config.key_root = static_cast<PitchClass>(key_root);
   config.key_mode = static_cast<Mode>(key_mode);
   config.detect_inversions = detect_inversions;
-  config.chroma_method = chroma_method == 1 ? ChromaMethod::NNLS : ChromaMethod::STFT;
+  switch (chroma_method) {
+    case 1:
+      config.chroma_method = ChromaMethod::NNLS;
+      break;
+    case 2:
+      config.chroma_method = ChromaMethod::CQT;
+      break;
+    default:
+      config.chroma_method = ChromaMethod::STFT;
+      break;
+  }
   config.tuning = tuning.tuning;
   config.auto_tuning = tuning.measure;
   validate_chord_config(config);
