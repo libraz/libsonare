@@ -49,8 +49,10 @@ def test_estimate_tuning_reads_flat_as_negative(detuned: list[float]) -> None:
 
 def test_detect_chords_tuning_recovers_plain_triads(detuned: list[float]) -> None:
     estimate = libsonare.estimate_tuning(detuned, _SR)
-    off = {c.name for c in libsonare.detect_chords(detuned, _SR).chords}
-    on = {c.name for c in libsonare.detect_chords(detuned, _SR, tuning=estimate).chords}
+    # The STFT front end with the full vocabulary is the one a detuned triad misleads.
+    front = {"chroma_method": "stft", "use_triads_only": False}
+    off = {c.name for c in libsonare.detect_chords(detuned, _SR, **front).chords}
+    on = {c.name for c in libsonare.detect_chords(detuned, _SR, tuning=estimate, **front).chords}
     for triad in ("C", "G", "Am", "F"):
         assert triad in on
         assert triad not in off

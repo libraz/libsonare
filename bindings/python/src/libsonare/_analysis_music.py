@@ -105,17 +105,17 @@ def detect_chords(
     min_duration: float = 0.3,
     smoothing_window: float = 2.0,
     threshold: float = 0.5,
-    use_triads_only: bool = False,
+    use_triads_only: bool = True,
     n_fft: int = 2048,
     hop_length: int = 512,
     use_beat_sync: bool = True,
-    use_hmm: bool = False,
+    use_hmm: bool = True,
     hmm_beam_width: int = 24,
     use_key_context: bool = False,
     key_root: PitchClass = PitchClass.C,
     key_mode: Mode = Mode.MAJOR,
     detect_inversions: bool = False,
-    chroma_method: str = "stft",
+    chroma_method: str = "cqt",
     tuning: float | str = 0.0,
 ) -> ChordAnalysisResult:
     """Detect a continuous chord/N.C. timeline.
@@ -128,10 +128,12 @@ def detect_chords(
     this unit. The value used, given or measured, is the result's ``tuning``.
     ``n_fft`` is the STFT chroma window in samples at 22050 Hz,
     rescaled to the input rate so its duration is the same at every rate.
+    ``chroma_method`` is ``"cqt"`` (default), ``"stft"`` or ``"nnls"``; the
+    defaults decode triads only, with the HMM on.
     """
-    chroma_method_value = {"stft": 0, "nnls": 1}.get(chroma_method.lower())
+    chroma_method_value = {"stft": 0, "nnls": 1, "cqt": 2}.get(chroma_method.lower())
     if chroma_method_value is None:
-        raise SonareValueError("chroma_method must be 'stft' or 'nnls'")
+        raise SonareValueError("chroma_method must be 'stft', 'nnls' or 'cqt'")
     lib = _get_lib()
     c_array, length = _to_c_float_array(samples)
     out = SonareChordAnalysisResult()
@@ -180,15 +182,15 @@ def chord_functional_analysis(
     min_duration: float = 0.3,
     smoothing_window: float = 2.0,
     threshold: float = 0.5,
-    use_triads_only: bool = False,
+    use_triads_only: bool = True,
     n_fft: int = 2048,
     hop_length: int = 512,
     use_beat_sync: bool = True,
-    use_hmm: bool = False,
+    use_hmm: bool = True,
     hmm_beam_width: int = 24,
     use_key_context: bool = False,
     detect_inversions: bool = False,
-    chroma_method: str = "stft",
+    chroma_method: str = "cqt",
     tuning: float | str = 0.0,
 ) -> list[FunctionalChord]:
     """Detect chords and label them relative to a key.
@@ -198,9 +200,9 @@ def chord_functional_analysis(
     :class:`Chord` field plus ``roman`` and ``function``. ``tuning`` is as for
     :func:`detect_chords`.
     """
-    chroma_method_value = {"stft": 0, "nnls": 1}.get(chroma_method.lower())
+    chroma_method_value = {"stft": 0, "nnls": 1, "cqt": 2}.get(chroma_method.lower())
     if chroma_method_value is None:
-        raise SonareValueError("chroma_method must be 'stft' or 'nnls'")
+        raise SonareValueError("chroma_method must be 'stft', 'nnls' or 'cqt'")
     lib = _get_lib()
     c_array, length = _to_c_float_array(samples)
     detected = SonareChordAnalysisResult()

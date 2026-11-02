@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import inspect
 import math
 
 import pytest
@@ -97,3 +98,24 @@ def test_empty_input_and_refusals() -> None:
         libsonare.chord_functions([Chord(PitchClass.C, "bogus", 0.0, 1.0, 0.9)], key=C_MAJOR)
     with pytest.raises(ValueError):
         libsonare.chord_functions([], key={"root": PitchClass.C})
+
+
+def test_chord_detection_defaults_and_cqt_front_end() -> None:
+    for fn in (libsonare.detect_chords, libsonare.chord_functional_analysis):
+        params = inspect.signature(fn).parameters
+        assert params["use_triads_only"].default is True
+        assert params["use_hmm"].default is True
+        assert params["chroma_method"].default == "cqt"
+
+    audio = _progression_audio()
+    assert libsonare.detect_chords(audio, SR, chroma_method="cqt").chords
+    assert libsonare.chord_functional_analysis(audio, PitchClass.C, chroma_method="cqt")
+    with pytest.raises(ValueError):
+        libsonare.detect_chords(audio, SR, chroma_method="bogus")
+
+
+def test_analyze_defaults_skip_hpss_and_decode_chords_with_the_hmm() -> None:
+    for fn in (libsonare.analyze, libsonare.analyze_with_progress):
+        params = inspect.signature(fn).parameters
+        assert params["use_hpss"].default is False
+        assert params["use_chord_hmm"].default is True
