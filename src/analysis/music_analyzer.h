@@ -141,12 +141,12 @@ struct MusicAnalyzerConfig {
   float bpm_max = 200.0f;            ///< Maximum BPM
   float start_bpm = 120.0f;          ///< Prior BPM estimate
   bool use_triads_only = true;       ///< Use only triads for chord detection (no 7th chords)
-  bool use_hpss = true;              ///< Use HPSS for harmonic-only chroma in chord/key detection
+  bool use_hpss = false;             ///< HPSS (margin 3) before the chord chroma
   float chroma_highpass_hz = 80.0f;  ///< High-pass filter cutoff for chroma (0 = disabled)
   bool use_bass_weighted =
       true;  ///< Use bass-weighted chroma combination (bpm-detector compatible)
   int chroma_hop_multiplier = 4;         ///< Hop length multiplier for chroma (larger = faster)
-  bool use_chord_hmm = false;            ///< Enable Viterbi HMM chord smoothing in unified analysis
+  bool use_chord_hmm = true;             ///< Enable Viterbi HMM chord smoothing in unified analysis
   bool use_chord_key_context = false;    ///< Bias chord HMM transitions using the detected key
   int chord_hmm_beam_width = 24;         ///< Candidate beam width for chord HMM smoothing
   bool detect_chord_inversions = false;  ///< Estimate slash-chord bass notes in unified analysis
@@ -351,14 +351,8 @@ class MusicAnalyzer {
   // Cached features
   std::unique_ptr<Spectrogram> spectrogram_;
   std::unique_ptr<Chroma> chroma_;
-  std::unique_ptr<Chroma> harmonic_chroma_;  ///< Chroma from harmonic-only audio (HPSS)
-  /// @brief Low-register chromagram, in harmonic_chroma_'s frame space.
-  /// @details A by-product of @ref harmonic_chroma: with
-  ///          MusicAnalyzerConfig::use_bass_weighted set, the bass-band CQT is
-  ///          computed there anyway and was previously blended in and thrown
-  ///          away. Keeping it lets chord recognition weigh which pitch class
-  ///          the bass names at no extra cost. Empty when the option is off.
-  std::unique_ptr<Chroma> bass_chroma_;
+  std::unique_ptr<Chroma> chord_chroma_;       ///< @ref sonare::chord_chroma of the analysis audio
+  std::unique_ptr<Chroma> chord_bass_chroma_;  ///< Bass chroma for the root cue and inversions
   std::unique_ptr<MelSpectrogram> mel_spectrogram_;
   std::vector<float> onset_strength_;
   std::vector<float> beat_low_frequency_energy_;
@@ -383,7 +377,7 @@ class MusicAnalyzer {
   std::once_flag boundary_detector_once_;
   std::once_flag spectrogram_once_;
   std::once_flag chroma_once_;
-  std::once_flag harmonic_chroma_once_;
+  std::once_flag chord_inputs_once_;
   std::once_flag mel_spectrogram_once_;
   std::once_flag onset_strength_once_;
   std::once_flag beat_low_frequency_energy_once_;
@@ -397,8 +391,9 @@ class MusicAnalyzer {
   ///          same audio, so the observations are computed once and reused.
   const std::vector<float>& beat_low_frequency_energy();
 
-  /// @brief Returns harmonic-only chroma for chord/key detection.
-  const Chroma& harmonic_chroma();
+  /// @brief Computes @ref chord_chroma_ and @ref chord_bass_chroma_ once.
+  /// @details The same front end and bass cue the audio constructor of ChordAnalyzer builds.
+  void chord_inputs();
 };
 
 }  // namespace sonare

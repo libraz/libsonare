@@ -4,15 +4,11 @@
 #include "analysis/downbeat_analyzer.h"
 #include "analysis/section_structure.h"
 #include "analysis/tempo_curve.h"
-#include "core/convert.h"
 #include "core/spectrum.h"
-#include "effects/hpss.h"
 #include "feature/chroma.h"
-#include "feature/cqt.h"
 #include "feature/mel_spectrogram.h"
 #include "feature/onset.h"
 #include "feature/pitch.h"
-#include "filters/iir.h"
 #include "util/constants.h"
 #include "util/exception.h"
 #include "util/numeric_validation.h"
@@ -191,36 +187,13 @@ ChordAnalyzer& MusicAnalyzer::chord_analyzer() {
       chord_config.key_mode = key.mode;
     }
 
-    // Use beat-synchronized chord detection with harmonic chroma for better accuracy
-    // Chord beat windows and chord-change matching stay on envelope frame times.
-    std::vector<Beat> chord_beats = beat_analyzer().beats();
-    std::vector<float> beat_times;
-    beat_times.reserve(chord_beats.size());
-    for (Beat& beat : chord_beats) {
-      beat.time = frames_to_time(beat.frame, analysis_sr_, config_->hop_length);
-      beat_times.push_back(beat.time);
-    }
-    // harmonic_chroma() caches the bass-band CQT chroma as a by-product when
-    // use_bass_weighted is on, so ask for the harmonic chroma first and the
-    // bass chroma comes with it.
-    const Chroma& harmonic = harmonic_chroma();
-    if (chord_config.detect_inversions) {
-      // Inversion detection wants the dedicated bass front-end: three bins per
-      // semitone from E1, against the by-product's one bin per semitone.
-      BassChromaConfig bass_config;
-      // Match harmonic_chroma()'s hop so both chromagrams share one frame
-      // space: the chord segments are expressed in harmonic-chroma frames and
-      // are used directly to slice the bass chromagram.
-      bass_config.cqt.hop_length = config_->hop_length * config_->chroma_hop_multiplier;
-      bass_config.cqt.fmin = tune_cqt_fmin(bass_config.cqt.fmin, tuning_);
-      chord_analyzer_ = std::make_unique<ChordAnalyzer>(
-          harmonic, beat_times, bass_chroma(analysis_audio_, bass_config), chord_config);
-    } else {
-      chord_analyzer_ = std::make_unique<ChordAnalyzer>(
-          harmonic, beat_times, bass_chroma_ ? *bass_chroma_ : Chroma(), chord_config);
-    }
-    beat_analyzer_->set_chord_change_observations(
-        chord_change_observations(chord_beats, chord_analyzer_->chords()));
+    // Chord windows and chord-change matching both read the reported beat times.
+    BeatAnalyzer& beats = beat_analyzer();
+    chord_inputs();
+    chord_analyzer_ = std::make_unique<ChordAnalyzer>(*chord_chroma_, beats.beat_times(),
+                                                      *chord_bass_chroma_, chord_config);
+    beats.set_chord_change_observations(
+        chord_change_observations(beats.beats(), chord_analyzer_->chords()));
   });
   return *chord_analyzer_;
 }
@@ -330,117 +303,23 @@ const Chroma& MusicAnalyzer::chroma() {
   return *chroma_;
 }
 
-const Chroma& MusicAnalyzer::harmonic_chroma() {
-  std::call_once(harmonic_chroma_once_, [this]() {
-    // Optimized implementation following bpm-detector's key detection algorithm:
-    // 1. HPSS to extract harmonic content (margin=3.0)
-    // 2. High-pass filter (80Hz, 4th order Butterworth)
-    // 3. CQT-based chroma extraction
-    // 4. Bass-weighted chroma combination (50% full + 50% bass)
-    //
-    // WASM optimizations:
-    // - Larger hop_length for CQT (chroma_hop_multiplier)
-    // - Optional bass-weighted computation (use_bass_weighted)
-    // - Reduced CQT bins for bass (36 bins = 3 octaves)
+void MusicAnalyzer::chord_inputs() {
+  std::call_once(chord_inputs_once_, [this]() {
+    ChordChromaConfig chroma_config;
+    chroma_config.hop_length = config_->hop_length * config_->chroma_hop_multiplier;
+    chroma_config.tuning = tuning_;
+    chroma_config.use_hpss = config_->use_hpss;
+    chroma_config.hpss_n_fft = config_->n_fft;
+    chroma_config.hpss_hop_length = config_->hop_length;
+    chroma_config.highpass_hz = config_->chroma_highpass_hz;
+    chroma_config.bass_weighted = config_->use_bass_weighted;
+    chord_chroma_ = std::make_unique<Chroma>(chord_chroma(analysis_audio_, chroma_config));
 
-    int chroma_hop = config_->hop_length * config_->chroma_hop_multiplier;
-    const Audio& analysis_audio = analysis_audio_;
-    int analysis_sr = analysis_sr_;
-
-    // Step 1: Apply HPSS once with margin=3.0 to extract harmonic content
-    Audio harmonic_audio = analysis_audio;
-    if (config_->use_hpss) {
-      HpssConfig hpss_config;
-      hpss_config.margin_harmonic = 3.0f;
-      hpss_config.margin_percussive = 3.0f;
-
-      // Separated on the cached analysis STFT (same audio, n_fft and hop) rather
-      // than a second one.
-      harmonic_audio =
-          harmonic(spectrogram(), hpss_config).to_audio(static_cast<int>(analysis_audio.size()));
-    }
-
-    // Step 2: Apply 4th order Butterworth high-pass filter
-    Audio filtered_audio = harmonic_audio;
-    if (config_->chroma_highpass_hz > 0) {
-      auto cascade = highpass_coeffs_4th(config_->chroma_highpass_hz, analysis_sr);
-      auto filtered = apply_cascade_filtfilt(harmonic_audio.data(), harmonic_audio.size(), cascade);
-      filtered_audio = Audio::from_vector(std::move(filtered), analysis_sr);
-    }
-
-    // Step 3: Compute CQT-based chroma with larger hop for speed
-    CqtConfig cqt_config;
-    cqt_config.hop_length = chroma_hop;
-    // Shifted by the tuning offset so bin % 12 still names the pitch class below.
-    cqt_config.fmin = tune_cqt_fmin(constants::kC1Hz, tuning_);
-    cqt_config.n_bins = 84;  // 7 octaves * 12 bins
-    cqt_config.bins_per_octave = 12;
-
-    CqtResult cqt_result = cqt(filtered_audio, cqt_config);
-    std::vector<float> chroma_features = cqt_to_chroma(cqt_result, 12);
-    int n_frames = cqt_result.n_frames();
-
-    // Step 4: Bass-weighted chroma (optional, controlled by use_bass_weighted)
-    if (config_->use_bass_weighted && n_frames > 0) {
-      // Apply preemphasis to filtered audio (already harmonic)
-      auto preemph_samples =
-          preemphasis_zero_initial_state(filtered_audio.data(), filtered_audio.size(), 0.97f);
-
-      // Use reduced CQT for bass (lower 4 octaves = 48 bins)
-      CqtConfig bass_cqt_config;
-      bass_cqt_config.hop_length = chroma_hop;
-      bass_cqt_config.fmin = tune_cqt_fmin(constants::kC1Hz, tuning_);
-      bass_cqt_config.n_bins = 48;  // 4 octaves (bass-focused)
-      bass_cqt_config.bins_per_octave = 12;
-
-      Audio preemph_audio = Audio::from_vector(std::move(preemph_samples), analysis_sr);
-      CqtResult bass_cqt = cqt(preemph_audio, bass_cqt_config);
-      std::vector<float> bass_chroma = cqt_to_chroma(bass_cqt, 12);
-
-      // Combine: 50% full-range + 50% bass-weighted
-      int bass_frames = bass_cqt.n_frames();
-      int min_frames = std::min(n_frames, bass_frames);
-
-      for (int c = 0; c < 12; ++c) {
-        for (int t = 0; t < min_frames; ++t) {
-          int idx = c * n_frames + t;
-          int bass_idx = c * bass_frames + t;
-          chroma_features[idx] = 0.5f * chroma_features[idx] + 0.5f * bass_chroma[bass_idx];
-        }
-      }
-
-      // Keep a bass chroma for chord recognition, which needs to know which
-      // pitch class the bass names -- a chord and its relative differ by little
-      // else once 12 pitch classes are folded together. This is the same CQT it
-      // would otherwise have to run a second time.
-      //
-      // Only the bottom two octaves are folded in, not all four the blend above
-      // uses. The point of the cue is what the bass instrument is playing, and
-      // C3 upward is where the chord voicing lives: including it turns the cue
-      // into a second copy of the harmonic chroma, which on a mix with no real
-      // bass part answers with whichever chord tone happens to be lowest and
-      // drags a chord change late.
-      constexpr int kRootCueOctaves = 2;  // C1 - B2
-      const int cue_bins = std::min(bass_cqt.n_bins(), 12 * kRootCueOctaves);
-      std::vector<float> root_cue(12 * static_cast<size_t>(bass_frames), 0.0f);
-      const std::vector<float>& bass_mag = bass_cqt.magnitude();
-      for (int bin = 0; bin < cue_bins; ++bin) {
-        // fmin is C1 and there are 12 bins per octave, so bin index modulo 12
-        // is the pitch class directly.
-        float* row = root_cue.data() + static_cast<size_t>(bin % 12) * bass_frames;
-        const float* source = bass_mag.data() + static_cast<size_t>(bin) * bass_frames;
-        for (int t = 0; t < bass_frames; ++t) {
-          row[t] += source[t];
-        }
-      }
-      bass_chroma_ = std::make_unique<Chroma>(
-          Chroma(std::move(root_cue), 12, bass_frames, analysis_sr, chroma_hop));
-    }
-
-    harmonic_chroma_ = std::make_unique<Chroma>(
-        Chroma(std::move(chroma_features), 12, n_frames, analysis_sr, chroma_hop));
+    BassChromaConfig bass_config;
+    bass_config.cqt.hop_length = config_->hop_length;
+    bass_config.cqt.fmin = tune_cqt_fmin(bass_config.cqt.fmin, tuning_);
+    chord_bass_chroma_ = std::make_unique<Chroma>(bass_chroma(analysis_audio_, bass_config));
   });
-  return *harmonic_chroma_;
 }
 
 const MelSpectrogram& MusicAnalyzer::mel_spectrogram() {
@@ -483,8 +362,8 @@ void MusicAnalyzer::precompute_features() {
     onset_strength();
   });
 
-  // Group B: harmonic_chroma (HPSS + CQT)
-  auto future_b = std::async(std::launch::async, [this]() { harmonic_chroma(); });
+  // Group B: chord chroma and bass chroma (constant-Q)
+  auto future_b = std::async(std::launch::async, [this]() { chord_inputs(); });
 
   future_a.get();
   future_b.get();
@@ -493,7 +372,7 @@ void MusicAnalyzer::precompute_features() {
   spectrogram();
   mel_spectrogram();
   onset_strength();
-  harmonic_chroma();
+  chord_inputs();
 #endif
 }
 
