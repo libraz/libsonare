@@ -67,26 +67,27 @@ class Audio:
     def detect_bpm(self) -> float: ...
     def detect_key(
         self,
-        n_fft: int = 4096,
+        n_fft: int = 2048,
         hop_length: int = 512,
         use_hpss: bool = False,
         loudness_weighted: bool = False,
-        high_pass_hz: float = 0.0,
+        high_pass_hz: float = 80.0,
         modes: Sequence[Mode | str] | str | None = None,
         profile: KeyProfile | str | None = None,
         genre_hint: str | None = None,
-        tuning: float | str = 0.0,
+        tuning: float | str = "auto",
     ) -> KeyDetection: ...
     def detect_key_candidates(
         self,
-        n_fft: int = 4096,
+        n_fft: int = 2048,
         hop_length: int = 512,
         use_hpss: bool = False,
         loudness_weighted: bool = False,
-        high_pass_hz: float = 0.0,
+        high_pass_hz: float = 80.0,
         modes: Sequence[Mode | str] | str | None = None,
         profile: KeyProfile | str | None = None,
         genre_hint: str | None = None,
+        tuning: float | str = "auto",
     ) -> list[KeyCandidate]: ...
     def detect_beats(self) -> list[float]: ...
     def detect_downbeats(self) -> list[float]: ...
@@ -144,7 +145,7 @@ class Audio:
         key_mode: Mode = Mode.MAJOR,
         detect_inversions: bool = False,
         chroma_method: str = "cqt",
-        tuning: float | str = 0.0,
+        tuning: float | str = "auto",
     ) -> ChordAnalysisResult: ...
     def hpss(self, kernel_harmonic: int = 31, kernel_percussive: int = 31) -> HpssResult: ...
     def harmonic(self) -> list[float]: ...

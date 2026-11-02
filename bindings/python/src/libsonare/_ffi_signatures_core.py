@@ -351,6 +351,27 @@ def configure_core_signatures(lib: ctypes.CDLL) -> None:
         ctypes.POINTER(ctypes.POINTER(SonareKeyCandidate)),
         ctypes.POINTER(ctypes.c_size_t),
     ]
+
+    lib.sonare_detect_key_candidates_with_tuning.restype = ctypes.c_int32
+    lib.sonare_detect_key_candidates_with_tuning.argtypes = [
+        ctypes.POINTER(ctypes.c_float),
+        ctypes.c_size_t,
+        ctypes.c_int,
+        ctypes.c_int,
+        ctypes.c_int,
+        ctypes.c_int,
+        ctypes.c_int,
+        ctypes.c_float,
+        ctypes.POINTER(ctypes.c_int32),
+        ctypes.c_size_t,
+        ctypes.c_int32,
+        ctypes.c_char_p,
+        ctypes.c_float,
+        ctypes.c_int,
+        ctypes.POINTER(ctypes.POINTER(SonareKeyCandidate)),
+        ctypes.POINTER(ctypes.c_size_t),
+        ctypes.POINTER(ctypes.c_float),
+    ]
     lib.sonare_free_key_candidates.restype = None
     lib.sonare_free_key_candidates.argtypes = [ctypes.POINTER(SonareKeyCandidate)]
 

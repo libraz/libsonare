@@ -564,17 +564,20 @@ class Audio:
 
     def detect_key(
         self,
-        n_fft: int = 4096,
+        n_fft: int = 2048,
         hop_length: int = 512,
         use_hpss: bool = False,
         loudness_weighted: bool = False,
-        high_pass_hz: float = 0.0,
+        high_pass_hz: float = 80.0,
         modes: Sequence[Mode | str] | str | None = None,
         profile: KeyProfile | str | None = None,
         genre_hint: str | None = None,
-        tuning: float | str = 0.0,
+        tuning: float | str = "auto",
     ) -> KeyDetection:
-        """Detect musical key and the tuning its chroma was built with."""
+        """Detect musical key and the tuning its chroma was built with.
+
+        ``tuning`` defaults to ``"auto"`` (measured from the audio); pass 0 for A440.
+        """
         from .analyzer import detect_key
 
         return detect_key(
@@ -593,16 +596,17 @@ class Audio:
 
     def detect_key_candidates(
         self,
-        n_fft: int = 4096,
+        n_fft: int = 2048,
         hop_length: int = 512,
         use_hpss: bool = False,
         loudness_weighted: bool = False,
-        high_pass_hz: float = 0.0,
+        high_pass_hz: float = 80.0,
         modes: Sequence[Mode | str] | str | None = None,
         profile: KeyProfile | str | None = None,
         genre_hint: str | None = None,
+        tuning: float | str = "auto",
     ) -> list[KeyCandidate]:
-        """Return ranked musical key candidates."""
+        """Return ranked musical key candidates; ``tuning`` is as for :meth:`detect_key`."""
         return _detect_key_candidates(
             self.data,
             self.sample_rate,
@@ -614,6 +618,7 @@ class Audio:
             modes=modes,
             profile=profile,
             genre_hint=genre_hint,
+            tuning=tuning,
         )
 
     def detect_beats(self) -> list[float]:
@@ -815,7 +820,7 @@ class Audio:
         key_mode: Mode = Mode.MAJOR,
         detect_inversions: bool = False,
         chroma_method: str = "cqt",
-        tuning: float | str = 0.0,
+        tuning: float | str = "auto",
     ) -> ChordAnalysisResult:
         """Detect chord segments."""
         return _detect_chords(

@@ -116,15 +116,15 @@ def detect_chords(
     key_mode: Mode = Mode.MAJOR,
     detect_inversions: bool = False,
     chroma_method: str = "cqt",
-    tuning: float | str = 0.0,
+    tuning: float | str = "auto",
 ) -> ChordAnalysisResult:
     """Detect a continuous chord/N.C. timeline.
 
     ``threshold`` is a final-template correlation cutoff in ``[0, 1]``;
     rejected intervals use quality ``"unknown"`` and ``Chord.name == "N.C."``.
     ``tuning`` is the recording's tuning offset in fractions of a semitone; it
-    must be in ``[-0.5, 0.5)`` and 0 is concert A440. ``"auto"`` measures it from
-    the audio, and :func:`reference_hz_to_tuning` converts a reference pitch to
+    must be in ``[-0.5, 0.5)`` and 0 is concert A440. ``"auto"`` (default)
+    measures it from the audio, and :func:`reference_hz_to_tuning` converts a reference pitch to
     this unit. The value used, given or measured, is the result's ``tuning``.
     ``n_fft`` is the STFT chroma window in samples at 22050 Hz,
     rescaled to the input rate so its duration is the same at every rate.
@@ -191,7 +191,7 @@ def chord_functional_analysis(
     use_key_context: bool = False,
     detect_inversions: bool = False,
     chroma_method: str = "cqt",
-    tuning: float | str = 0.0,
+    tuning: float | str = "auto",
 ) -> list[FunctionalChord]:
     """Detect chords and label them relative to a key.
 

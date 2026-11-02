@@ -59,12 +59,45 @@ def test_auto_tuning_is_measured_on_every_entry_point(loop: list[float], measure
         assert audio.detect_key(tuning="auto").tuning == key.tuning
 
 
+def test_default_tuning_is_measured_on_every_entry_point(loop: list[float]) -> None:
+    assert libsonare.detect_chords(loop, _SR).tuning == pytest.approx(_DETUNE, abs=0.05)
+    key = libsonare.detect_key(loop, _SR)
+    assert key.tuning == pytest.approx(_DETUNE, abs=0.05)
+    assert (key.root, key.mode) == (libsonare.PitchClass.C, libsonare.Mode.MAJOR)
+    assert libsonare.analyze(loop, _SR).tuning == pytest.approx(_DETUNE, abs=0.05)
+    assert libsonare.analyze_with_progress(loop, _SR).tuning == pytest.approx(_DETUNE, abs=0.05)
+    names = {c.name for c in libsonare.detect_chords(loop, _SR).chords}
+    assert {"C", "G", "Am", "F"} <= names
+    functional = libsonare.chord_functional_analysis(
+        loop, libsonare.PitchClass.C, libsonare.Mode.MAJOR, _SR
+    )
+    assert {"C", "G", "Am", "F"} <= {c.name for c in functional}
+
+
 def test_given_tuning_is_reported_as_given(loop: list[float]) -> None:
     assert libsonare.detect_chords(loop, _SR, tuning=0.1).tuning == pytest.approx(0.1, abs=1e-6)
-    assert libsonare.detect_chords(loop, _SR).tuning == 0.0
+    assert libsonare.detect_chords(loop, _SR, tuning=0).tuning == 0.0
     assert libsonare.detect_key(loop, _SR, tuning=0.2).tuning == pytest.approx(0.2, abs=1e-6)
-    assert libsonare.detect_key(loop, _SR).tuning == 0.0
+    assert libsonare.detect_key(loop, _SR, tuning=0).tuning == 0.0
     assert libsonare.analyze(loop, _SR, tuning=-0.3).tuning == pytest.approx(-0.3, abs=1e-6)
+    assert libsonare.analyze(loop, _SR, tuning=0).tuning == 0.0
+
+
+def test_key_candidates_accept_a_number_and_auto(loop: list[float], measured: float) -> None:
+    c_major = (libsonare.PitchClass.C, libsonare.Mode.MAJOR)
+    for tuning in ("auto", measured, 0):
+        ranked = libsonare.detect_key_candidates(loop, _SR, tuning=tuning)
+        assert ranked
+        assert (ranked[0].key.root, ranked[0].key.mode) == c_major
+    auto = libsonare.detect_key_candidates(loop, _SR, tuning="auto")
+    explicit = libsonare.detect_key_candidates(loop, _SR, tuning=measured)
+    assert [c.correlation for c in auto] == pytest.approx(
+        [c.correlation for c in explicit], abs=1e-4
+    )
+    with pytest.raises(SonareValueError, match="tuning must be a number or 'auto'"):
+        libsonare.detect_key_candidates(loop, _SR, tuning="other")
+    with pytest.raises(SonareError):
+        libsonare.detect_key_candidates(loop, _SR, tuning=0.7)
 
 
 def test_auto_equals_the_measured_value_applied_explicitly(
@@ -73,6 +106,7 @@ def test_auto_equals_the_measured_value_applied_explicitly(
     auto = libsonare.detect_key(loop, _SR, tuning="auto")
     explicit = libsonare.detect_key(loop, _SR, tuning=measured)
     assert (auto.root, auto.mode) == (explicit.root, explicit.mode)
+    assert auto.tuning == pytest.approx(explicit.tuning, abs=1e-6)
 
 
 def test_a_tuning_that_is_neither_a_number_nor_auto_is_refused(loop: list[float]) -> None:

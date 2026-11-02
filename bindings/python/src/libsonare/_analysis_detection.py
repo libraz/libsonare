@@ -91,19 +91,20 @@ def detect_bpm(
 def detect_key(
     samples: Sequence[float] | list[float],
     sample_rate: int = 22050,
-    n_fft: int = 4096,
+    n_fft: int = 2048,
     hop_length: int = 512,
     use_hpss: bool = False,
     loudness_weighted: bool = False,
-    high_pass_hz: float = 0.0,
+    high_pass_hz: float = 80.0,
     modes: Sequence[Mode | str] | str | None = None,
     profile: KeyProfile | str | None = None,
     genre_hint: str | None = None,
-    tuning: float | str = 0.0,
+    tuning: float | str = "auto",
 ) -> KeyDetection:
     """Detect the musical key of audio samples.
 
-    The chroma is read at concert A440 unless ``tuning`` says otherwise.
+    The chroma is shifted by the tuning measured from the audio unless
+    ``tuning`` says otherwise; pass 0 to read it at concert A440.
 
     Args:
         samples: Mono audio samples (1D float). See :func:`detect_bpm` for
@@ -120,8 +121,8 @@ def detect_key(
         genre_hint: Optional genre hint (``"auto"``, ``"edm"``, ``"pop"``,
             ``"classical"``, or ``"jazz"``).
         tuning: Tuning offset of the recording in fractions of a semitone, in
-            ``[-0.5, 0.5)``; 0 is concert A440. ``"auto"`` measures it from the
-            audio, and :func:`reference_hz_to_tuning` converts a reference pitch
+            ``[-0.5, 0.5)``; 0 is concert A440. ``"auto"`` (default) measures it
+            from the audio, and :func:`reference_hz_to_tuning` converts a reference pitch
             to this unit.
 
     Returns:
@@ -171,23 +172,29 @@ def detect_key(
 def detect_key_candidates(
     samples: Sequence[float] | list[float],
     sample_rate: int = 22050,
-    n_fft: int = 4096,
+    n_fft: int = 2048,
     hop_length: int = 512,
     use_hpss: bool = False,
     loudness_weighted: bool = False,
-    high_pass_hz: float = 0.0,
+    high_pass_hz: float = 80.0,
     modes: Sequence[Mode | str] | str | None = None,
     profile: KeyProfile | str | None = None,
     genre_hint: str | None = None,
+    tuning: float | str = "auto",
 ) -> list[KeyCandidate]:
-    """Return ranked musical key candidates for ambiguous material."""
+    """Return ranked musical key candidates for ambiguous material.
+
+    ``tuning`` is as for :func:`detect_key`: a semitone fraction in
+    ``[-0.5, 0.5)`` (0 is concert A440) or ``"auto"`` to measure it.
+    """
     lib = _get_lib()
     c_array, length = _to_c_float_array(samples)
     mode_values = _mode_values(modes)
     mode_array, mode_count = _to_c_int_array(mode_values, "modes") if mode_values else (None, 0)
     out_candidates = ctypes.POINTER(SonareKeyCandidate)()
     out_count = ctypes.c_size_t()
-    rc = lib.sonare_detect_key_candidates_with_extended_options(
+    tuning_value, tuning_auto = _tuning_arg("detect_key_candidates", tuning)
+    rc = lib.sonare_detect_key_candidates_with_tuning(
         c_array,
         _to_c_size_t(length, "length"),
         _to_c_int(sample_rate, "sample_rate"),
@@ -200,8 +207,11 @@ def detect_key_candidates(
         _to_c_size_t(mode_count, "mode_count"),
         ctypes.c_int32(_profile_value(profile)),
         _utf8_arg(genre_hint, "genre_hint") if genre_hint else None,
+        _to_c_float(tuning_value, "tuning"),
+        _to_c_int(tuning_auto, "tuning_auto"),
         ctypes.byref(out_candidates),
         ctypes.byref(out_count),
+        None,
     )
     _check(rc)
     try:

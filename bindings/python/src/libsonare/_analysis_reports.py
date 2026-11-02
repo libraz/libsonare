@@ -181,7 +181,7 @@ def analyze(
     compute_tempo_curve: bool = False,
     meter_candidate_numerators: Sequence[int] | None = None,
     meter_denominator: int = 4,
-    tuning: float | str = 0.0,
+    tuning: float | str = "auto",
 ) -> AnalysisResult:
     """Run full audio analysis on samples.
 
@@ -210,7 +210,7 @@ def analyze(
             of two in ``[1, 32]``. The estimator still reports 8 on its own
             when it resolves a compound meter.
         tuning: Tuning offset of the recording in fractions of a semitone; must
-            be in ``[-0.5, 0.5)``. ``"auto"`` measures it from the audio, and
+            be in ``[-0.5, 0.5)``. ``"auto"`` (default) measures it from the audio, and
             :func:`reference_hz_to_tuning` converts a reference pitch to this unit.
             The value used, given or measured, is ``AnalysisResult.tuning``.
             Every chroma the analysis builds (key, chords, sections) is shifted
@@ -395,7 +395,7 @@ def analyze_with_progress(
     compute_tempo_curve: bool = False,
     meter_candidate_numerators: Sequence[int] | None = None,
     meter_denominator: int = 4,
-    tuning: float | str = 0.0,
+    tuning: float | str = "auto",
 ) -> AnalysisResult:
     """Run full audio analysis with optional progress callbacks.
 

@@ -279,27 +279,28 @@ def detect_bpm(samples: FloatSamples, sample_rate: int = 22050) -> float: ...
 def detect_key(
     samples: FloatSamples,
     sample_rate: int = 22050,
-    n_fft: int = 4096,
+    n_fft: int = 2048,
     hop_length: int = 512,
     use_hpss: bool = False,
     loudness_weighted: bool = False,
-    high_pass_hz: float = 0.0,
+    high_pass_hz: float = 80.0,
     modes: Sequence[Mode | str] | str | None = None,
     profile: KeyProfile | str | None = None,
     genre_hint: str | None = None,
-    tuning: float | str = 0.0,
+    tuning: float | str = "auto",
 ) -> KeyDetection: ...
 def detect_key_candidates(
     samples: FloatSamples,
     sample_rate: int = 22050,
-    n_fft: int = 4096,
+    n_fft: int = 2048,
     hop_length: int = 512,
     use_hpss: bool = False,
     loudness_weighted: bool = False,
-    high_pass_hz: float = 0.0,
+    high_pass_hz: float = 80.0,
     modes: Sequence[Mode | str] | str | None = None,
     profile: KeyProfile | str | None = None,
     genre_hint: str | None = None,
+    tuning: float | str = "auto",
 ) -> list[KeyCandidate]: ...
 def detect_beats(samples: FloatSamples, sample_rate: int = 22050) -> list[float]: ...
 def detect_downbeats(samples: FloatSamples, sample_rate: int = 22050) -> list[float]: ...
@@ -342,7 +343,7 @@ def analyze(
     compute_tempo_curve: bool = False,
     meter_candidate_numerators: Sequence[int] | None = None,
     meter_denominator: int = 4,
-    tuning: float | str = 0.0,
+    tuning: float | str = "auto",
 ) -> AnalysisResult: ...
 def analyze_with_progress(
     samples: FloatSamples,
@@ -369,7 +370,7 @@ def analyze_with_progress(
     compute_tempo_curve: bool = False,
     meter_candidate_numerators: Sequence[int] | None = None,
     meter_denominator: int = 4,
-    tuning: float | str = 0.0,
+    tuning: float | str = "auto",
 ) -> AnalysisResult: ...
 def estimate_meter(
     beat_times: Sequence[float],
@@ -550,7 +551,7 @@ def detect_chords(
     key_mode: Mode = Mode.MAJOR,
     detect_inversions: bool = False,
     chroma_method: str = "cqt",
-    tuning: float | str = 0.0,
+    tuning: float | str = "auto",
 ) -> ChordAnalysisResult: ...
 def chord_functional_analysis(
     samples: FloatSamples,
@@ -569,7 +570,7 @@ def chord_functional_analysis(
     use_key_context: bool = False,
     detect_inversions: bool = False,
     chroma_method: str = "cqt",
-    tuning: float | str = 0.0,
+    tuning: float | str = "auto",
 ) -> list[FunctionalChord]: ...
 def chord_functions(
     chords: ChordAnalysisResult | Sequence[Chord],
