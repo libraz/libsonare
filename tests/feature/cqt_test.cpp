@@ -22,6 +22,7 @@
 #include "filters/wavelet.h"
 #include "support/audio_fixtures.h"
 #include "util/constants.h"
+#include "util/math_utils.h"
 
 using namespace sonare;
 using Catch::Matchers::WithinAbs;
@@ -1269,5 +1270,77 @@ TEST_CASE("kernel sparsification keeps the columns a full ascending sort keeps",
         CHECK(kernel.values[i] == rows[r][static_cast<size_t>(kernel.column_indices[i])]);
       }
     }
+  }
+}
+
+namespace {
+
+// Builds the kernel from a dense n_bins x n_fft padded basis, every row transformed
+// and sparsified the way the kernel stores it.
+SparseComplexKernel dense_basis_kernel(int sr, const CqtConfig& config) {
+  const std::vector<float> freqs =
+      cqt_frequencies(config.fmin, config.n_bins, config.bins_per_octave);
+  const std::vector<float> raw = wavelet_lengths(freqs, sr, config.filter_scale);
+  int n_fft = 0;
+  std::vector<std::complex<float>> basis = detail::wavelet_with_window(
+      freqs, sr, config.filter_scale, true, true, 0.0f, config.window, &n_fft);
+  const int min_n_fft = 2 * next_power_of_2(config.hop_length);
+  if (n_fft < min_n_fft) {
+    std::vector<std::complex<float>> wider(static_cast<size_t>(config.n_bins) * min_n_fft);
+    const int pad = (min_n_fft - n_fft) / 2;
+    for (int k = 0; k < config.n_bins; ++k) {
+      std::copy_n(basis.begin() + static_cast<std::ptrdiff_t>(k) * n_fft, n_fft,
+                  wider.begin() + static_cast<std::ptrdiff_t>(k) * min_n_fft + pad);
+    }
+    basis.swap(wider);
+    n_fft = min_n_fft;
+  }
+  SparseComplexKernel out;
+  out.rows = config.n_bins;
+  out.cols = n_fft;
+  out.row_offsets.push_back(0);
+  FFT fft(n_fft);
+  std::vector<std::complex<float>> spectrum(static_cast<size_t>(n_fft));
+  for (int k = 0; k < config.n_bins; ++k) {
+    auto* row = basis.data() + static_cast<size_t>(k) * n_fft;
+    for (int i = 0; i < n_fft; ++i)
+      row[i] *= raw[static_cast<size_t>(k)] / static_cast<float>(n_fft);
+    fft.forward_complex(row, spectrum.data());
+    for (auto& v : spectrum) v = std::conj(v);
+    detail::append_sparsified_kernel_row(out, spectrum.data(), n_fft);
+  }
+  return out;
+}
+
+}  // namespace
+
+TEST_CASE("a CQT kernel built row by row equals one built from the dense padded basis",
+          "[cqt][sparse_kernel]") {
+  struct Case {
+    int sr;
+    float fmin;
+    int n_bins;
+    int bins_per_octave;
+    int hop_length;
+    WindowType window;
+  };
+  for (const Case& c : {Case{22050, 32.703f, 84, 12, 512, WindowType::Hann},
+                        Case{22050, 32.703f, 252, 36, 2048, WindowType::Hann},
+                        Case{44100, 41.203f, 108, 36, 512, WindowType::Hann},
+                        Case{22050, 1000.0f, 12, 12, 8192, WindowType::Hann},
+                        Case{16000, 55.0f, 48, 12, 256, WindowType::Hamming}}) {
+    CqtConfig config;
+    config.fmin = c.fmin;
+    config.n_bins = c.n_bins;
+    config.bins_per_octave = c.bins_per_octave;
+    config.hop_length = c.hop_length;
+    config.window = c.window;
+    const auto kernel = CqtKernel::create(c.sr, config);
+    const SparseComplexKernel want = dense_basis_kernel(c.sr, config);
+    INFO("sr " << c.sr << " fmin " << c.fmin << " bins " << c.n_bins << " hop " << c.hop_length);
+    CHECK(kernel->fft_length() == want.cols);
+    CHECK(kernel->kernel().row_offsets == want.row_offsets);
+    CHECK(kernel->kernel().column_indices == want.column_indices);
+    CHECK(kernel->kernel().values == want.values);
   }
 }

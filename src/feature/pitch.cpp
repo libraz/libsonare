@@ -873,8 +873,11 @@ float estimate_tuning(const Audio& audio, int n_fft, int hop_length, float resol
   // (across every frame), then keeps the pitches whose magnitude meets it. A
   // per-frame median would admit low-energy peaks from quiet frames that the
   // global threshold suppresses.
+  // Peaks are a small fraction of the bins, so size the buffers by them rather than by the grid.
+  const std::size_t n_peaks = static_cast<std::size_t>(
+      std::count_if(pp.pitches.begin(), pp.pitches.end(), [](float p) { return p > 0.0f; }));
   std::vector<float> pitch_mags;
-  pitch_mags.reserve(pp.pitches.size());
+  pitch_mags.reserve(n_peaks);
   for (int k = 0; k < pp.n_bins; ++k) {
     for (int t = 0; t < pp.n_frames; ++t) {
       const std::size_t idx = static_cast<std::size_t>(k) * pp.n_frames + t;
@@ -897,7 +900,7 @@ float estimate_tuning(const Audio& audio, int n_fft, int hop_length, float resol
   }
 
   std::vector<float> freqs;
-  freqs.reserve(pp.pitches.size());
+  freqs.reserve(n_peaks);
   for (int k = 0; k < pp.n_bins; ++k) {
     for (int t = 0; t < pp.n_frames; ++t) {
       const std::size_t idx = static_cast<std::size_t>(k) * pp.n_frames + t;

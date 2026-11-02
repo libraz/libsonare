@@ -188,60 +188,52 @@ std::unique_ptr<CqtKernel> CqtKernel::create(int sr, const CqtConfig& config) {
                                                  kMaxCqtKernelElements, &predicted_elements),
                ErrorCode::InvalidParameter);
 
-  // Build the time-domain wavelet basis (selected periodic window * complex sinusoid,
-  // L1-normalised, pad-centred to a common length n_fft = next_pow2(ceil(max))).
-  int n_fft_basis = 0;
-  std::vector<std::complex<float>> basis = detail::wavelet_with_window(
-      kernel->frequencies_, sr, config.filter_scale,
-      /*is_cqt=*/true, /*pad_fft=*/true, /*Q=*/0.0f, config.window, &n_fft_basis);
-  int n_fft = n_fft_basis;
+  // Time-domain wavelets (selected periodic window * complex sinusoid, L1-normalised),
+  // packed back to back. Each is centred in its own n_fft row only while that row is
+  // transformed: a dense n_bins x n_fft basis is hundreds of MB at 44.1 kHz.
+  const std::vector<std::complex<float>> packed =
+      detail::wavelet_with_window(kernel->frequencies_, sr, config.filter_scale,
+                                  /*is_cqt=*/true, /*pad_fft=*/false, /*Q=*/0.0f, config.window);
 
-  // librosa widens n_fft when it is shorter than 2 * next_pow2(hop_length).
-  if (config.hop_length > 0) {
-    int min_n_fft = 2 * next_power_of_2(config.hop_length);
-    if (n_fft < min_n_fft) {
-      // Re-pad each kernel into a wider slot.
-      const int new_nfft = min_n_fft;
-      std::vector<std::complex<float>> wider(static_cast<size_t>(config.n_bins) * new_nfft,
-                                             std::complex<float>(0.0f, 0.0f));
-      const int pad = (new_nfft - n_fft) / 2;
-      for (int k = 0; k < config.n_bins; ++k) {
-        for (int i = 0; i < n_fft; ++i) {
-          wider[k * new_nfft + (pad + i)] = basis[k * n_fft + i];
-        }
-      }
-      basis.swap(wider);
-      n_fft = new_nfft;
-    }
-  }
-
-  // Effective integer lengths (for backward-compatible reporting).
+  // Effective integer lengths, librosa's index range n in [floor(-ilen/2), floor(ilen/2)).
   kernel->lengths_.resize(config.n_bins);
+  size_t packed_total = 0;
   for (int k = 0; k < config.n_bins; ++k) {
     const float ilen = raw_lengths[k];
     const int s = static_cast<int>(std::floor(-ilen * 0.5f));
     const int e = static_cast<int>(std::floor(ilen * 0.5f));
     kernel->lengths_[k] = e - s;
+    packed_total += static_cast<size_t>(kernel->lengths_[k]);
   }
+  SONARE_CHECK(packed_total == packed.size(), ErrorCode::InvalidState);
+
+  // librosa pads every wavelet to next_pow2(ceil(longest)), then widens n_fft when it
+  // is shorter than 2 * next_pow2(hop_length), centring each padded row again.
+  const int n_fft_basis = next_power_of_2(std::max(1, static_cast<int>(longest_ceil)));
+  int n_fft = n_fft_basis;
+  if (config.hop_length > 0) n_fft = std::max(n_fft, 2 * next_power_of_2(config.hop_length));
+  const int widen_pad = (n_fft - n_fft_basis) / 2;
   kernel->fft_length_ = n_fft;
 
-  // Scale each row by raw_length / n_fft (librosa.__vqt_filter_fft step).
-  for (int k = 0; k < config.n_bins; ++k) {
-    const float scale = raw_lengths[k] / static_cast<float>(n_fft);
-    auto* row = basis.data() + static_cast<size_t>(k) * n_fft;
-    for (int i = 0; i < n_fft; ++i) row[i] *= scale;
-  }
-  kernel->raw_lengths_ = std::move(raw_lengths);
-
-  // FFT each kernel into frequency domain.
+  // Scale each row by raw_length / n_fft (librosa.__vqt_filter_fft step), then FFT it.
   FFT fft(n_fft);
   kernel->kernel_.rows = config.n_bins;
   kernel->kernel_.cols = n_fft;
   kernel->kernel_.row_offsets.reserve(static_cast<size_t>(config.n_bins) + 1);
   kernel->kernel_.row_offsets.push_back(0);
-  std::vector<std::complex<float>> freq_kernel(n_fft);
+  std::vector<std::complex<float>> row(static_cast<size_t>(n_fft));
+  std::vector<std::complex<float>> freq_kernel(static_cast<size_t>(n_fft));
+  size_t cursor = 0;
   for (int k = 0; k < config.n_bins; ++k) {
-    fft.forward_complex(basis.data() + static_cast<size_t>(k) * n_fft, freq_kernel.data());
+    const int length = kernel->lengths_[k];
+    const int offset = (n_fft_basis - length) / 2 + widen_pad;
+    const float scale = raw_lengths[k] / static_cast<float>(n_fft);
+    std::fill(row.begin(), row.end(), std::complex<float>(0.0f, 0.0f));
+    for (int i = 0; i < length; ++i) {
+      row[static_cast<size_t>(offset + i)] = packed[cursor + static_cast<size_t>(i)] * scale;
+    }
+    cursor += static_cast<size_t>(length);
+    fft.forward_complex(row.data(), freq_kernel.data());
     // We use the conjugate so that `result = stored_basis * FFT(signal)` evaluates
     // to a true cross-correlation at zero lag (i.e., the standard CQT inner
     // product `<kernel, signal>`). librosa's pipeline uses the convention
@@ -251,6 +243,7 @@ std::unique_ptr<CqtKernel> CqtKernel::create(int sr, const CqtConfig& config) {
     for (auto& value : freq_kernel) value = std::conj(value);
     detail::append_sparsified_kernel_row(kernel->kernel_, freq_kernel.data(), n_fft);
   }
+  kernel->raw_lengths_ = std::move(raw_lengths);
 
   return kernel;
 }
