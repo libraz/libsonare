@@ -1958,6 +1958,7 @@ export interface SonareModule {
     modes: number[],
     profileType: number,
     genreHint: string,
+    tuning: number | 'auto',
   ) => WasmKeyCandidateResult[];
   detectOnsets: (samples: Float32Array, sampleRate: number, options: object) => Float32Array;
   detectBeats: (samples: Float32Array, sampleRate: number) => Float32Array;

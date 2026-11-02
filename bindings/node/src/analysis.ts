@@ -186,9 +186,9 @@ export interface MusicAnalyzeOptions {
    * Tuning offset of the recording in fractions of a semitone; must be in
    * `[-0.5, 0.5)`. Every chroma the analysis builds (key, chords, sections) is
    * shifted by it, so a recording that is not at A440 reads its key and chords
-   * on its own pitch grid. `'auto'` measures it from the audio. The value used,
-   * given or measured, is the result's `tuning`; {@link referenceHzToTuning}
-   * converts a reference pitch to this unit. Default 0 (concert A440).
+   * on its own pitch grid. Omitted or `'auto'` measures it from the audio; pass 0
+   * for concert A440. The value used, given or measured, is the result's
+   * `tuning`; {@link referenceHzToTuning} converts a reference pitch to this unit.
    */
   tuning?: number | 'auto';
 }
@@ -297,9 +297,9 @@ export function detectBpm(samples: Float32Array | SamplesRequest, sampleRate = 2
 }
 
 /**
- * Detect the musical key. The chroma is read at concert A440 unless `tuning`
- * says otherwise: a semitone fraction in `[-0.5, 0.5)`, or `'auto'` to measure
- * it from the audio. The result reports the tuning used.
+ * Detect the musical key. The tuning is measured from the audio unless `tuning`
+ * says otherwise: a semitone fraction in `[-0.5, 0.5)` (0 reads concert A440),
+ * or `'auto'`. The result reports the tuning used.
  */
 export function detectKey(request: DetectKeyRequest): KeyDetection;
 export function detectKey(
@@ -1013,7 +1013,7 @@ function resolveChordOptions(options: ChordDetectionOptions): ResolvedChordParam
     keyMode: options.keyMode ?? 0,
     detectInversions: options.detectInversions ?? false,
     chromaMethod: options.chromaMethod ?? 'cqt',
-    tuning: options.tuning ?? 0,
+    tuning: options.tuning ?? 'auto',
   };
 }
 
@@ -1075,7 +1075,7 @@ function resolveChordCall(
             keyMode,
             detectInversions,
             chromaMethod,
-            tuning: 0,
+            tuning: 'auto',
           }
         : resolveChordOptions(samples);
   const resolvedSampleRate =

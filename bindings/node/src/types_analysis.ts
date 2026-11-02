@@ -71,18 +71,17 @@ export interface KeyDetectionOptions {
    */
   profile?: KeyProfile;
   genreHint?: 'auto' | 'edm' | 'electronic' | 'dance' | 'pop' | 'classical' | 'jazz' | string;
-}
-
-/** Options of {@link detectKey}: {@link KeyDetectionOptions} plus the recording's tuning. */
-export interface DetectKeyOptions extends KeyDetectionOptions {
   /**
    * Tuning offset of the recording in fractions of a semitone, in `[-0.5, 0.5)`;
-   * 0 is concert A440. `'auto'` measures it from the audio. The value used is
-   * reported as {@link KeyDetection.tuning}. {@link referenceHzToTuning}
-   * converts a reference pitch to this unit. Default 0.
+   * 0 is concert A440. Omitted or `'auto'` measures it from the audio. The value
+   * used is reported as {@link KeyDetection.tuning}. {@link referenceHzToTuning}
+   * converts a reference pitch to this unit. Pass 0 to read the chroma at A440.
    */
   tuning?: number | 'auto';
 }
+
+/** Options of {@link detectKey}; the same set {@link detectKeyCandidates} takes. */
+export type DetectKeyOptions = KeyDetectionOptions;
 
 /** Result of {@link detectKey}: the key, and the tuning its chroma was built with. */
 export interface KeyDetection extends Key {
@@ -1109,9 +1108,9 @@ export interface ChordDetectionOptions {
   chromaMethod?: ChordChromaMethod;
   /**
    * Tuning offset of the recording in fractions of a semitone; must be in
-   * `[-0.5, 0.5)`. `'auto'` measures it from the audio; the value used is
-   * reported as {@link ChordAnalysisResult.tuning}. {@link referenceHzToTuning}
-   * converts a reference pitch to this unit. Default 0 (concert A440).
+   * `[-0.5, 0.5)`. Omitted or `'auto'` measures it from the audio; the value used
+   * is reported as {@link ChordAnalysisResult.tuning}. {@link referenceHzToTuning}
+   * converts a reference pitch to this unit. Pass 0 for concert A440.
    */
   tuning?: number | 'auto';
 }

@@ -40,6 +40,7 @@ const DETECT_KEY_REQUEST_KEYS = keySet(
   'sampleRate',
 );
 const DETECT_KEY_CANDIDATES_REQUEST_KEYS = keySet(
+  'tuning',
   'nFft',
   'hopLength',
   'useHpss',

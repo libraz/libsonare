@@ -3,6 +3,7 @@ import {
   analyze,
   detectChords,
   detectKey,
+  detectKeyCandidates,
   estimateTuning,
   init,
   referenceHzToTuning,
@@ -64,12 +65,30 @@ describe("tuning: 'auto'", () => {
     expect(analyze({ samples: loop, sampleRate, tuning: 'auto' }).tuning).toBeCloseTo(measured, 5);
   });
 
-  it('reports a given tuning as given, and 0 by default', () => {
+  it('reports a given tuning as given, 0 included, and the measured one by default', () => {
     expect(detectChords(loop, sampleRate, { tuning: 0.1 }).tuning).toBeCloseTo(0.1, 6);
-    expect(detectChords(loop, sampleRate).tuning).toBe(0);
+    expect(detectChords(loop, sampleRate, { tuning: 0 }).tuning).toBe(0);
+    expect(detectChords(loop, sampleRate).tuning).toBeCloseTo(detune, 1);
     expect(detectKey(loop, sampleRate, { tuning: 0.2 }).tuning).toBeCloseTo(0.2, 6);
-    expect(detectKey(loop, sampleRate).tuning).toBe(0);
+    expect(detectKey(loop, sampleRate, { tuning: 0 }).tuning).toBe(0);
+    const byDefault = detectKey(loop, sampleRate);
+    expect(byDefault.tuning).toBeCloseTo(detune, 1);
+    expect(byDefault.tuning).toBeCloseTo(measured, 5);
+    expect([byDefault.root, byDefault.mode]).toEqual([0, 'major']);
     expect(analyze(loop, sampleRate, { tuning: -0.3 }).tuning).toBeCloseTo(-0.3, 6);
+    expect(analyze(loop, sampleRate, { tuning: 0 }).tuning).toBe(0);
+    expect(analyze(loop, sampleRate).tuning).toBeCloseTo(detune, 1);
+  });
+
+  it('lets the key candidates take a tuning, measured by default', () => {
+    const byDefault = detectKeyCandidates(loop, sampleRate);
+    expect(byDefault[0].key.root).toBe(0);
+    expect(byDefault[0].key.mode).toBe('major');
+    expect(detectKeyCandidates({ samples: loop, sampleRate, tuning: 'auto' })).toEqual(byDefault);
+    expect(detectKeyCandidates({ samples: loop, sampleRate, tuning: measured })).toEqual(byDefault);
+    const off = detectKeyCandidates({ samples: loop, sampleRate, tuning: 0 });
+    expect(off).not.toEqual(byDefault);
+    expect(() => detectKeyCandidates({ samples: loop, sampleRate, tuning: 0.7 })).toThrow();
   });
 
   it('gives the result a measured tuning applied explicitly would give', () => {

@@ -244,8 +244,8 @@ export function detectBpm(
 /**
  * Detect musical key from audio samples.
  *
- * The chroma is read at concert A440 unless `tuning` says otherwise: a semitone
- * fraction in `[-0.5, 0.5)`, or `'auto'` to measure it from the audio. The
+ * The tuning is measured from the audio unless `tuning` says otherwise: a
+ * semitone fraction in `[-0.5, 0.5)` (0 reads concert A440), or `'auto'`. The
  * result reports the tuning used.
  *
  * @param samples - Audio samples (mono, float32)
@@ -271,15 +271,15 @@ export function detectKey(
   const result = requireModule()._detectKeyWithOptions(
     request.samples,
     request.sampleRate ?? 22050,
-    request.nFft ?? 4096,
+    request.nFft ?? 2048,
     request.hopLength ?? 512,
     optionalBoolean('detectKey', request.useHpss, 'useHpss', false),
     optionalBoolean('detectKey', request.loudnessWeighted, 'loudnessWeighted', false),
-    request.highPassHz ?? 0,
+    request.highPassHz ?? 80,
     keyModeValues(request.modes),
     keyProfileValue(request.profile),
     optionalString('detectKey', request.genreHint, 'genreHint', ''),
-    request.tuning ?? 0,
+    request.tuning ?? 'auto',
   );
   return {
     root: result.root as PitchClass,
@@ -295,12 +295,12 @@ export function detectKeyCandidates(request: DetectKeyCandidatesRequest): KeyCan
 export function detectKeyCandidates(
   samples: Float32Array,
   sampleRate?: number,
-  options?: KeyDetectionOptions,
+  options?: DetectKeyOptions,
 ): KeyCandidate[];
 export function detectKeyCandidates(
   samples: Float32Array | DetectKeyCandidatesRequest,
   sampleRate = 22050,
-  options: KeyDetectionOptions = {},
+  options: DetectKeyOptions = {},
 ): KeyCandidate[] {
   const request =
     samples instanceof Float32Array
@@ -315,14 +315,15 @@ export function detectKeyCandidates(
   const candidates = requireModule()._detectKeyCandidates(
     request.samples,
     request.sampleRate ?? 22050,
-    request.nFft ?? 4096,
+    request.nFft ?? 2048,
     request.hopLength ?? 512,
     optionalBoolean('detectKeyCandidates', request.useHpss, 'useHpss', false),
     optionalBoolean('detectKeyCandidates', request.loudnessWeighted, 'loudnessWeighted', false),
-    request.highPassHz ?? 0,
+    request.highPassHz ?? 80,
     keyModeValues(request.modes),
     keyProfileValue(request.profile),
     optionalString('detectKeyCandidates', request.genreHint, 'genreHint', ''),
+    request.tuning ?? 'auto',
   );
   return Array.from(candidates, convertKeyCandidate);
 }
@@ -446,7 +447,7 @@ export function detectChords(
     keyModeOrdinal(request.keyMode ?? Mode.Major, 'keyMode'),
     optionalBoolean('detectChords', request.detectInversions, 'detectInversions', false),
     chordChromaMethodValue(request.chromaMethod ?? 'cqt'),
-    request.tuning ?? 0,
+    request.tuning ?? 'auto',
   );
   return convertChordAnalysisResult(result);
 }
@@ -536,7 +537,7 @@ export function chordFunctionalAnalysis(
     optionalBoolean('chordFunctionalAnalysis', request.useKeyContext, 'useKeyContext', false),
     optionalBoolean('chordFunctionalAnalysis', request.detectInversions, 'detectInversions', false),
     chordChromaMethodValue(request.chromaMethod ?? 'cqt'),
-    request.tuning ?? 0,
+    request.tuning ?? 'auto',
   );
   return convertChordAnalysisResult(analysed).chords.map((chord, i) => ({
     ...chord,
@@ -604,9 +605,9 @@ export interface MusicAnalyzeOptions {
    * Tuning offset of the recording in fractions of a semitone; must be in
    * `[-0.5, 0.5)`. Every chroma the analysis builds (key, chords, sections) is
    * shifted by it, so a recording that is not at A440 reads its key and chords
-   * on its own pitch grid. `'auto'` measures it from the audio. The value used,
-   * given or measured, is the result's `tuning`; {@link referenceHzToTuning}
-   * converts a reference pitch to this unit. Default 0 (concert A440).
+   * on its own pitch grid. Omitted or `'auto'` measures it from the audio; pass 0
+   * for concert A440. The value used, given or measured, is the result's
+   * `tuning`; {@link referenceHzToTuning} converts a reference pitch to this unit.
    */
   tuning?: number | 'auto';
 }

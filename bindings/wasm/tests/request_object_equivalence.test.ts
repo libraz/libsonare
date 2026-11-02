@@ -1968,7 +1968,9 @@ const ROWS: Row[] = [
       keyRoot: 7,
       keyMode: 1,
       sampleRate: ALT_SR,
-      options: { minDuration: 0.6 },
+      // At the measured tuning the signal reads as one chord, which leaves minDuration nothing
+      // to merge; at A440 it reads as two.
+      options: { minDuration: 0.6, tuning: 0 },
     },
     invalid: { sampleRate: 0 },
   },

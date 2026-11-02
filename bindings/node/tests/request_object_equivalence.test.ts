@@ -355,7 +355,9 @@ const ROWS: Row[] = [
       keyRoot: 7,
       keyMode: 1,
       sampleRate: ALT_SR,
-      options: { minDuration: 0.6 },
+      // At the measured tuning the signal reads as one chord, which leaves minDuration nothing
+      // to merge; at A440 it reads as two.
+      options: { minDuration: 0.6, tuning: 0 },
     },
     invalid: { sampleRate: 0 },
   },
@@ -1929,6 +1931,7 @@ describe('request-object equivalence', () => {
       );
     });
 
+    // One call per field; a row that measures its tuning rebuilds the constant-Q kernels once.
     it('moves the result for every field it passes', async () => {
       const full = await run(row, specs, row.values, 'positional');
       const unmoved: string[] = [];
@@ -1948,7 +1951,7 @@ describe('request-object equivalence', () => {
         }
       }
       expect(unmoved.join(', ')).toBe('');
-    });
+    }, 20_000);
 
     it('refuses an invalid value identically in both forms', async () => {
       const bad = { ...row.values, ...row.invalid };

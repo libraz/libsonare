@@ -1016,11 +1016,11 @@ Napi::Value SonareWrap::DetectKeyInstance(const Napi::CallbackInfo& info) {
   }
   SONARE_NODE_TRY
 
-  int n_fft = 4096;
+  int n_fft = 2048;
   int hop_length = 512;
   bool use_hpss = false;
   bool loudness_weighted = false;
-  float high_pass_hz = 0.0f;
+  float high_pass_hz = 80.0f;
   std::vector<SonareMode> modes;
   SonareKeyProfileType profile = SONARE_KEY_PROFILE_AUTO;
   std::string genre_hint;
@@ -1067,14 +1067,15 @@ Napi::Value SonareWrap::DetectKeyCandidatesInstance(const Napi::CallbackInfo& in
   }
   SONARE_NODE_TRY
 
-  int n_fft = 4096;
+  int n_fft = 2048;
   int hop_length = 512;
   bool use_hpss = false;
   bool loudness_weighted = false;
-  float high_pass_hz = 0.0f;
+  float high_pass_hz = 80.0f;
   std::vector<SonareMode> modes;
   SonareKeyProfileType profile = SONARE_KEY_PROFILE_AUTO;
   std::string genre_hint;
+  KeyTuningOption tuning;
   if (info.Length() >= 1 && info[0].IsObject()) {
     Napi::Object options = info[0].As<Napi::Object>();
     n_fft = IntProperty(options, "nFft", n_fft);
@@ -1085,18 +1086,20 @@ Napi::Value SonareWrap::DetectKeyCandidatesInstance(const Napi::CallbackInfo& in
     modes = node_modes_option(options);
     profile = node_profile_from_value(options.Get("profile"));
     genre_hint = StringProperty(options, "genreHint", "");
+    tuning = node_key_tuning_option(options);
   }
 
-  // Forward modes/profile/genreHint through the extended entry point so the
+  // Forward modes/profile/genreHint/tuning through the tuning-aware entry point so the
   // instance method matches the standalone SonareWrap::DetectKeyCandidates
   // (binding-node#1).
   SonareKeyCandidate* candidates = nullptr;
   size_t count = 0;
-  SonareError err = sonare_detect_key_candidates_with_extended_options(
+  SonareError err = sonare_detect_key_candidates_with_tuning(
       sonare_audio_data(audio_), sonare_audio_length(audio_), sonare_audio_sample_rate(audio_),
       n_fft, hop_length, use_hpss ? 1 : 0, loudness_weighted ? 1 : 0, high_pass_hz,
       modes.empty() ? nullptr : modes.data(), modes.size(), profile,
-      genre_hint.empty() ? nullptr : genre_hint.c_str(), &candidates, &count);
+      genre_hint.empty() ? nullptr : genre_hint.c_str(), tuning.tuning, tuning.measure ? 1 : 0,
+      &candidates, &count, nullptr);
   if (err != SONARE_OK) {
     sonare_node::ThrowSonareError(env, err);
     return env.Undefined();

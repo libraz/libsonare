@@ -4,6 +4,8 @@ import {
   analyzeWithProgress,
   chordFunctionalAnalysis,
   detectChords,
+  detectKey,
+  detectKeyCandidates,
   estimateTuning,
 } from '../src/index.js';
 
@@ -53,7 +55,9 @@ describe('tuning on batch analysis', () => {
   it('recovers plain triads in detectChords, positional and request forms alike', () => {
     // The STFT front end with the full vocabulary is the one a detuned triad misleads.
     const front = { chromaMethod: 'stft', useTriadsOnly: false } as const;
-    const off = new Set(detectChords(detuned, sampleRate, front).chords.map((c) => c.name));
+    const off = new Set(
+      detectChords(detuned, sampleRate, { ...front, tuning: 0 }).chords.map((c) => c.name),
+    );
     const on = detectChords({ samples: detuned, sampleRate, ...front, tuning: estimate });
     expect(on).toEqual(detectChords(detuned, sampleRate, { ...front, tuning: estimate }));
     const onNames = new Set(on.chords.map((c) => c.name));
@@ -63,10 +67,35 @@ describe('tuning on batch analysis', () => {
     }
   });
 
+  it('measures the tuning by default and reads the triads and key from it', () => {
+    const front = { chromaMethod: 'stft', useTriadsOnly: false } as const;
+    const byDefault = detectChords(detuned, sampleRate, front);
+    expect(byDefault.tuning).toBeCloseTo(-0.45, 1);
+    const names = new Set(byDefault.chords.map((c) => c.name));
+    for (const triad of ['C', 'G', 'Am', 'F']) {
+      expect(names.has(triad)).toBe(true);
+    }
+    const key = detectKey(detuned, sampleRate);
+    expect(key.tuning).toBeCloseTo(-0.45, 1);
+    expect([key.root, key.mode]).toEqual([0, 'major']);
+    const candidates = detectKeyCandidates(detuned, sampleRate);
+    expect([candidates[0].key.root, candidates[0].key.mode]).toEqual([0, 'major']);
+    const labels = chordFunctionalAnalysis(detuned, 0, 0, sampleRate);
+    expect(labels.map((c) => c.name)).toEqual(
+      detectChords(detuned, sampleRate).chords.map((c) => c.name),
+    );
+  });
+
   it('re-centres analyze on C major and numbers its chords like chordFunctionalAnalysis', () => {
-    const off = analyze(detuned, sampleRate);
+    // On the constant-Q front end the off key can still read C major; what is
+    // pinned is that the given tuning is the one reported.
+    const off = analyze(detuned, sampleRate, { tuning: 0 });
     const on = analyze({ samples: detuned, sampleRate, tuning: estimate });
-    expect([off.key.root, off.key.mode]).not.toEqual([0, 'major']);
+    const byDefault = analyze(detuned, sampleRate);
+    expect(off.tuning).toBe(0);
+    expect(on.tuning).toBeCloseTo(estimate, 6);
+    expect(byDefault.tuning).toBeCloseTo(-0.45, 1);
+    expect([byDefault.key.root, byDefault.key.mode]).toEqual([0, 'major']);
     expect([on.key.root, on.key.mode]).toEqual([0, 'major']);
     const numerals = new Set(on.chords.filter((c) => c.name !== 'N.C.').map((c) => c.romanNumeral));
     for (const numeral of ['I', 'V', 'vi', 'IV']) {

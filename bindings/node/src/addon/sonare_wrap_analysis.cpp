@@ -71,11 +71,11 @@ Napi::Value SonareWrap::DetectKey(const Napi::CallbackInfo& info) {
   size_t length = input.length;
   int sample_rate = input.sample_rate;
 
-  int n_fft = 4096;
+  int n_fft = 2048;
   int hop_length = 512;
   bool use_hpss = false;
   bool loudness_weighted = false;
-  float high_pass_hz = 0.0f;
+  float high_pass_hz = 80.0f;
   std::vector<SonareMode> modes;
   SonareKeyProfileType profile = SONARE_KEY_PROFILE_AUTO;
   std::string genre_hint;
@@ -121,14 +121,15 @@ Napi::Value SonareWrap::DetectKeyCandidates(const Napi::CallbackInfo& info) {
   size_t length = input.length;
   int sample_rate = input.sample_rate;
 
-  int n_fft = 4096;
+  int n_fft = 2048;
   int hop_length = 512;
   bool use_hpss = false;
   bool loudness_weighted = false;
-  float high_pass_hz = 0.0f;
+  float high_pass_hz = 80.0f;
   std::vector<SonareMode> modes;
   SonareKeyProfileType profile = SONARE_KEY_PROFILE_AUTO;
   std::string genre_hint;
+  KeyTuningOption tuning;
   if (info.Length() >= 3 && info[2].IsObject()) {
     Napi::Object options = info[2].As<Napi::Object>();
     n_fft = IntProperty(options, "nFft", n_fft);
@@ -139,14 +140,16 @@ Napi::Value SonareWrap::DetectKeyCandidates(const Napi::CallbackInfo& info) {
     modes = node_modes_option(options);
     profile = node_profile_from_value(options.Get("profile"));
     genre_hint = StringProperty(options, "genreHint", "");
+    tuning = node_key_tuning_option(options);
   }
 
   SonareKeyCandidate* candidates = nullptr;
   size_t count = 0;
-  SonareError err = sonare_detect_key_candidates_with_extended_options(
+  SonareError err = sonare_detect_key_candidates_with_tuning(
       data, length, sample_rate, n_fft, hop_length, use_hpss ? 1 : 0, loudness_weighted ? 1 : 0,
       high_pass_hz, modes.empty() ? nullptr : modes.data(), modes.size(), profile,
-      genre_hint.empty() ? nullptr : genre_hint.c_str(), &candidates, &count);
+      genre_hint.empty() ? nullptr : genre_hint.c_str(), tuning.tuning, tuning.measure ? 1 : 0,
+      &candidates, &count, nullptr);
   if (err != SONARE_OK) {
     sonare_node::ThrowSonareError(env, err);
     return env.Undefined();
@@ -980,7 +983,7 @@ Napi::Value SonareWrap::DetectChords(const Napi::CallbackInfo& info) {
   float tuning{};
   if (!OptionalFloatArg(env, info, 16, "tuning", 0.0f, &tuning)) return env.Undefined();
   bool tuning_auto{};
-  if (!OptionalBoolArg(env, info, 17, "tuningAuto", false, &tuning_auto)) return env.Undefined();
+  if (!OptionalBoolArg(env, info, 17, "tuningAuto", true, &tuning_auto)) return env.Undefined();
 
   SonareChordAnalysisResult analysis{};
   SonareChordDetectionOptions options{};
@@ -1066,7 +1069,7 @@ Napi::Value SonareWrap::FunctionalAnalysis(const Napi::CallbackInfo& info) {
   float tuning{};
   if (!OptionalFloatArg(env, info, 16, "tuning", 0.0f, &tuning)) return env.Undefined();
   bool tuning_auto{};
-  if (!OptionalBoolArg(env, info, 17, "tuningAuto", false, &tuning_auto)) return env.Undefined();
+  if (!OptionalBoolArg(env, info, 17, "tuningAuto", true, &tuning_auto)) return env.Undefined();
 
   SonareChordDetectionOptions options{};
   options.min_duration = min_duration;

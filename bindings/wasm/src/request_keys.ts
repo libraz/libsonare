@@ -747,6 +747,7 @@ const DetectKeyRequestKeys = keysOf<DetectKeyRequest>()([
   'sampleRate',
 ]);
 const DetectKeyCandidatesRequestKeys = keysOf<DetectKeyCandidatesRequest>()([
+  'tuning',
   'nFft',
   'hopLength',
   'useHpss',

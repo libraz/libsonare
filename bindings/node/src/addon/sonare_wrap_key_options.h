@@ -103,15 +103,19 @@ inline SonareKeyProfileType node_profile_from_value(const Napi::Value& value) {
 }
 
 /// @brief The `tuning` option of a key request: a semitone fraction, or `"auto"` to measure it.
+/// @details Absent means measure; a given number is used as given, 0 included.
 struct KeyTuningOption {
   float tuning = 0.0f;
-  bool measure = false;
+  bool measure = true;
 };
 
 /// @brief Read the `tuning` option from a key-detection options object.
 inline KeyTuningOption node_key_tuning_option(const Napi::Object& object) {
   KeyTuningOption out;
-  out.tuning = AutoFiniteFloatProperty(object, "tuning", out.tuning, &out.measure);
+  const Napi::Value given = object.Get("tuning");
+  bool is_auto = false;
+  out.tuning = AutoFiniteFloatProperty(object, "tuning", out.tuning, &is_auto);
+  if (!given.IsUndefined() && !given.IsNull()) out.measure = is_auto;
   return out;
 }
 

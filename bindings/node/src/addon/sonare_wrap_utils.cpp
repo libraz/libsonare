@@ -242,9 +242,13 @@ bool ReadMusicAnalyzeOptions(const Napi::Value& value, SonareMusicAnalyzeOptions
   options->compute_tempo_curve =
       BoolProperty(object, "computeTempoCurve", options->compute_tempo_curve != 0) ? 1 : 0;
   options->meter_denominator = IntProperty(object, "meterDenominator", options->meter_denominator);
+  // Absent keeps the defaults' measured tuning; a given number is used as given.
   bool tuning_auto = false;
   options->tuning = AutoFiniteFloatProperty(object, "tuning", options->tuning, &tuning_auto);
-  options->tuning_auto = tuning_auto ? 1 : 0;
+  const Napi::Value tuning_value = object.Get("tuning");
+  if (!tuning_value.IsUndefined() && !tuning_value.IsNull()) {
+    options->tuning_auto = tuning_auto ? 1 : 0;
+  }
   return ReadMeterCandidateNumerators(object, "meterCandidateNumerators",
                                       options->meter_candidate_numerators,
                                       &options->meter_candidate_numerator_count);
