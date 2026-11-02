@@ -492,17 +492,6 @@ float chord_exact_wcsr(const std::vector<Chord>& detected,
   return total > 0.0f ? correct / total : 0.0f;
 }
 
-bool reference_has_extended_chords(const std::vector<ReferenceChord>& reference) {
-  return std::any_of(reference.begin(), reference.end(), [](const ReferenceChord& chord) {
-    return chord.quality != ChordQuality::Major && chord.quality != ChordQuality::Minor;
-  });
-}
-
-bool reference_has_bass_labels(const std::vector<ReferenceChord>& reference) {
-  return std::any_of(reference.begin(), reference.end(),
-                     [](const ReferenceChord& chord) { return chord.has_bass; });
-}
-
 float chord_bass_accuracy(const std::vector<Chord>& detected,
                           const std::vector<ReferenceChord>& reference) {
   float total = 0.0f;
@@ -1127,16 +1116,18 @@ TEST_CASE("Music optional chord WCSR fixtures", "[music_dataset][chord]") {
     float min_change_reduction = 0.0f;
     const bool has_change_reduction_threshold =
         parse_optional_float_token(row, 4, "min_change_reduction=", min_change_reduction);
-    const bool evaluate_bass = has_bass_threshold || reference_has_bass_labels(reference);
-    const bool evaluate_extended =
-        has_extended_threshold || reference_has_extended_chords(reference);
+    // The majmin row measures the library default; the extended vocabulary, NNLS and inversions
+    // run only when the manifest row asks for them.
+    const bool evaluate_bass = has_bass_threshold;
+    const bool evaluate_extended = has_extended_threshold;
     ChordConfig config;
-    config.use_triads_only = !evaluate_extended;
+    if (evaluate_extended) {
+      config.use_triads_only = false;
+    }
     if (evaluate_extended || evaluate_bass) {
       config.chroma_method = ChromaMethod::NNLS;
+      config.detect_inversions = evaluate_bass;
     }
-    config.use_hmm = true;
-    config.detect_inversions = evaluate_bass;
     const ChordAnalyzer analyzer(audio, config);
     const auto detected = analyzer.chords();
     ChordConfig baseline_config = config;
