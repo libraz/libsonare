@@ -10,6 +10,7 @@
 #include <cmath>
 #include <cstdint>
 #include <iterator>
+#include <tuple>
 #include <utility>
 #include <vector>
 
@@ -1180,5 +1181,93 @@ TEST_CASE("the CQT kernel dot reads a real frame's half spectrum as the full one
     const std::complex<float> got = detail::sparse_kernel_row_dot(m, k, half.data(), n_fft);
     INFO("bin " << k);
     CHECK(std::abs(got - want) <= 1.0e-4f * std::max(1.0f, std::abs(want)));
+  }
+}
+
+namespace {
+
+// Sorts every nonzero column by (magnitude, column) and discards the ascending
+// prefix whose running sum fits the budget.
+std::vector<int> reference_sparsified_columns(const std::vector<std::complex<float>>& row,
+                                              float sparsity) {
+  std::vector<std::pair<float, int>> order;
+  double total = 0.0;
+  for (int c = 0; c < static_cast<int>(row.size()); ++c) {
+    const float magnitude = std::abs(row[static_cast<size_t>(c)]);
+    total += magnitude;
+    if (row[static_cast<size_t>(c)] != std::complex<float>{}) order.emplace_back(magnitude, c);
+  }
+  std::sort(order.begin(), order.end());
+  const double budget = total * std::clamp(sparsity, 0.0f, 1.0f);
+  double discarded = 0.0;
+  std::vector<unsigned char> keep(row.size(), 1);
+  for (const auto& [magnitude, column] : order) {
+    if (discarded + magnitude > budget) break;
+    keep[static_cast<size_t>(column)] = 0;
+    discarded += magnitude;
+  }
+  std::vector<int> columns;
+  for (int c = 0; c < static_cast<int>(row.size()); ++c) {
+    if (keep[static_cast<size_t>(c)] != 0 && row[static_cast<size_t>(c)] != std::complex<float>{}) {
+      columns.push_back(c);
+    }
+  }
+  return columns;
+}
+
+std::vector<std::complex<float>> windowed_tone_spectrum(int n_fft, int length, double cycles) {
+  std::vector<std::complex<float>> frame(static_cast<size_t>(n_fft));
+  const int start = (n_fft - length) / 2;
+  for (int i = 0; i < length; ++i) {
+    const double w = 0.5 - 0.5 * std::cos(2.0 * M_PI * i / length);
+    const double phase = 2.0 * M_PI * cycles * i / length;
+    frame[static_cast<size_t>(start + i)] =
+        std::complex<float>(static_cast<float>(w * std::cos(phase) / length),
+                            static_cast<float>(w * std::sin(phase) / length));
+  }
+  std::vector<std::complex<float>> spectrum(static_cast<size_t>(n_fft));
+  FFT(n_fft).forward_complex(frame.data(), spectrum.data());
+  return spectrum;
+}
+
+}  // namespace
+
+TEST_CASE("kernel sparsification keeps the columns a full ascending sort keeps",
+          "[cqt][sparse_kernel]") {
+  std::vector<std::vector<std::complex<float>>> rows;
+  // Windowed tones from a few cycles (wide spectrum) to long low-bin kernels.
+  for (const auto& [n_fft, length, cycles] :
+       {std::tuple{65536, 34660, 1180.3}, std::tuple{65536, 280, 51.7}, std::tuple{65536, 64, 9.2},
+        std::tuple{4096, 4000, 13.0}, std::tuple{4096, 2048, 700.5}}) {
+    rows.push_back(windowed_tone_spectrum(n_fft, length, cycles));
+  }
+  // Heavy-tailed magnitudes, so the kept head is larger than the first guess.
+  std::vector<std::complex<float>> heavy(8192);
+  uint32_t state = 0x9e3779b9u;
+  for (auto& v : heavy) {
+    state = state * 1664525u + 1013904223u;
+    const float u = static_cast<float>((state >> 8) + 1) / static_cast<float>(1u << 24);
+    v = std::complex<float>(1.0f / u, 0.0f);
+  }
+  rows.push_back(heavy);
+  // Ties in magnitude across the boundary, zeros, a single column and an empty row.
+  std::vector<std::complex<float>> ties(64, std::complex<float>(1.0f, 0.0f));
+  ties[3] = ties[40] = std::complex<float>{};
+  rows.push_back(ties);
+  rows.push_back({std::complex<float>(0.0f, 2.0f)});
+  rows.push_back(std::vector<std::complex<float>>(16));
+
+  for (const float sparsity : {0.0f, 0.01f, 0.5f, 1.0f}) {
+    for (size_t r = 0; r < rows.size(); ++r) {
+      SparseComplexKernel kernel;
+      kernel.row_offsets.push_back(0);
+      detail::append_sparsified_kernel_row(kernel, rows[r].data(), static_cast<int>(rows[r].size()),
+                                           sparsity);
+      INFO("row " << r << " sparsity " << sparsity);
+      CHECK(kernel.column_indices == reference_sparsified_columns(rows[r], sparsity));
+      for (size_t i = 0; i < kernel.column_indices.size(); ++i) {
+        CHECK(kernel.values[i] == rows[r][static_cast<size_t>(kernel.column_indices[i])]);
+      }
+    }
   }
 }

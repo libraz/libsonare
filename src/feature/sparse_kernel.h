@@ -14,7 +14,7 @@ namespace sonare::detail {
 inline void append_sparsified_kernel_row(SparseComplexKernel& out, const std::complex<float>* row,
                                          int columns, float sparsity = 0.01f) {
   // Zero columns are never kept and spend none of the budget, so only the
-  // nonzero ones are ordered; ties fall back to the column index.
+  // nonzero ones are ranked, by (magnitude, column).
   std::vector<std::pair<float, int>> order;
   order.reserve(static_cast<size_t>(columns));
   double total = 0.0;
@@ -23,18 +23,39 @@ inline void append_sparsified_kernel_row(SparseComplexKernel& out, const std::co
     total += magnitude;
     if (row[column] != std::complex<float>{}) order.emplace_back(magnitude, column);
   }
-  std::sort(order.begin(), order.end());
   const double discard_budget = total * std::clamp(sparsity, 0.0f, 1.0f);
-  double discarded = 0.0;
-  std::vector<unsigned char> keep(static_cast<size_t>(columns), 1);
-  for (const auto& [magnitude, column] : order) {
-    if (discarded + magnitude > discard_budget) break;
-    keep[static_cast<size_t>(column)] = 0;
-    discarded += magnitude;
+
+  // The smallest columns are discarded while their running sum fits the budget, so
+  // only the kept head and its boundary need ordering. Sorting every column of a
+  // long kernel made the sort most of a cold kernel build.
+  const auto descending = [](const std::pair<float, int>& a, const std::pair<float, int>& b) {
+    return b < a;
+  };
+  const size_t n = order.size();
+  size_t head = std::min<size_t>(n, 1024);
+  size_t kept = 0;
+  while (true) {
+    std::nth_element(order.begin(), order.begin() + static_cast<std::ptrdiff_t>(head), order.end(),
+                     descending);
+    double discarded = 0.0;
+    for (size_t i = head; i < n; ++i) discarded += order[i].first;
+    if (discarded > discard_budget && head < n) {
+      head = std::min(n, head * 2);
+      continue;
+    }
+    std::sort(order.begin(), order.begin() + static_cast<std::ptrdiff_t>(head), descending);
+    kept = head;
+    while (kept > 0 && discarded + order[kept - 1].first <= discard_budget) {
+      discarded += order[kept - 1].first;
+      --kept;
+    }
+    break;
   }
 
+  std::vector<unsigned char> keep(static_cast<size_t>(columns), 0);
+  for (size_t i = 0; i < kept; ++i) keep[static_cast<size_t>(order[i].second)] = 1;
   for (int column = 0; column < columns; ++column) {
-    if (keep[static_cast<size_t>(column)] == 0 || row[column] == std::complex<float>{}) continue;
+    if (keep[static_cast<size_t>(column)] == 0) continue;
     out.column_indices.push_back(column);
     out.values.push_back(row[column]);
   }
