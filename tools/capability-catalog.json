@@ -95477,7 +95477,7 @@
       "realtimeInsertable": true,
       "slots": [],
       "stereoOnly": false,
-      "tailSamples": 0
+      "tailSamples": 48
     },
     {
       "category": "maximizer",
@@ -130175,7 +130175,7 @@
       "realtimeInsertable": true,
       "slots": [],
       "stereoOnly": false,
-      "tailSamples": 2509
+      "tailSamples": 17611
     },
     {
       "category": "saturation",
