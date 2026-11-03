@@ -24,12 +24,12 @@ struct StreamingPreviewResult {
   bool ceiling_risk = false;
 };
 
+/// @brief The platforms previewed when the caller names none.
+const std::vector<StreamingPlatform>& default_streaming_platforms();
+
 std::vector<StreamingPreviewResult> streaming_preview(
-    const Audio& audio, const std::vector<StreamingPlatform>& platforms = {
-                            {"Spotify", -14.0f, -1.0f},
-                            {"Apple Music", -16.0f, -1.0f},
-                            {"YouTube", -14.0f, -1.0f},
-                        });
+    const Audio& audio,
+    const std::vector<StreamingPlatform>& platforms = default_streaming_platforms());
 
 /// @brief Multi-channel counterpart preserving BS.1770 channel summing.
 /// @details The normalization gain and the ceiling-risk flag are both derived
@@ -44,11 +44,7 @@ std::vector<StreamingPreviewResult> streaming_preview(
 /// @param platforms Platforms to preview; must not be empty.
 std::vector<StreamingPreviewResult> streaming_preview_interleaved(
     const float* samples, std::size_t frames, int channels, int sample_rate,
-    const std::vector<StreamingPlatform>& platforms = {
-        {"Spotify", -14.0f, -1.0f},
-        {"Apple Music", -16.0f, -1.0f},
-        {"YouTube", -14.0f, -1.0f},
-    });
+    const std::vector<StreamingPlatform>& platforms = default_streaming_platforms());
 
 std::string streaming_preview_to_json(const std::vector<StreamingPreviewResult>& results);
 

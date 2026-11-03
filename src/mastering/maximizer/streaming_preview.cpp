@@ -30,6 +30,15 @@ std::vector<StreamingPreviewResult> preview_from_measurements(
 
 }  // namespace
 
+const std::vector<StreamingPlatform>& default_streaming_platforms() {
+  static const std::vector<StreamingPlatform> platforms = {
+      {"Spotify", -14.0f, -1.0f},
+      {"Apple Music", -16.0f, -1.0f},
+      {"YouTube", -14.0f, -1.0f},
+  };
+  return platforms;
+}
+
 std::vector<StreamingPreviewResult> streaming_preview(
     const Audio& audio, const std::vector<StreamingPlatform>& platforms) {
   if (audio.empty()) throw SonareException(ErrorCode::InvalidParameter, "audio must not be empty");
