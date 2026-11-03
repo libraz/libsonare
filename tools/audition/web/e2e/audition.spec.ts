@@ -70,7 +70,7 @@ test('opens exactly the render a link names', async ({ page }) => {
 
 test('speaks Japanese after a switch and keeps it across a reload', async ({ page }) => {
   await fresh(page);
-  await page.locator('#langToggle button[data-lang="ja"]').click();
+  await page.locator('#langPick').selectOption('ja');
   await expect(page.locator('html')).toHaveAttribute('lang', 'ja');
   await expect(page.locator('#playBtn .tlabel')).toHaveText(ja['transport.play']);
   await page.reload();

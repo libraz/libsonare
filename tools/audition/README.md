@@ -11,7 +11,7 @@ A switch seeks back to the start, so the attack is the first thing heard. Turn `
 
 The server is standard library only and nothing in it is specific to this repository; point it at any directory of renders. The page is built once from `web/` and the server serves the build, answering with the build command where there is none.
 
-The page is in English and Japanese and opens in whichever the browser asks for; the toggle in the header moves it and is remembered. Only the page's own words move — a take's label, an engine's name and a source key are data and stay as they are.
+The page is in English and Japanese and opens in whichever the browser asks for; the language list in the header moves it and is remembered. Only the page's own words move — a take's label, an engine's name and a source key are data and stay as they are.
 
 ## Which side of the comparison is sounding
 
@@ -278,10 +278,10 @@ Any format the browser decodes will play. 16-bit PCM WAV is the safe choice — 
 - `src/api/` holds the zod schema of every shape that crosses from the server and of every note sent to it; a reply is parsed where it arrives, and a note is checked against its strict schema before it leaves, since the log keeps it.
 - `src/state/` is the one store every region reads and the pure questions asked of it; `src/player/` is the transport, whose clock and audio graph stay outside the store because they move every frame.
 - `src/listen/` is the listening surface (takes, the version switch, the banner, blind mode, the address, the conditions a note carries); `src/scope/` and `src/path/` draw the two pictures and the signal-path line; `src/feedback/` is the panel that takes a note and the question tree; `src/bank/` and `src/voice/` are the bank, the palette and the band saying which voice the page is about; `src/run/` is the listening run; `src/app/` wires the views, the keys and boot.
-- `src/i18n/` is i18next over one table per language (`en.json`, `ja.json`, plus one file per region under `extra/`). Nothing outside the tables chooses by language: detection, persistence and fallback are the library's, and text arriving in data per language is resolved in its order. A third language is a third set of tables.
+- `src/i18n/` is i18next over one table per language (`en.json`, `ja.json`, plus one file per region under `extra/`), found by file name: a language is listed, offered in the header and checked by the tests once its files exist, with no code naming it. Nothing outside the tables chooses by language: detection, persistence, fallback and plural forms are the library's (a counted string is `key_one` / `key_other`, spelled in whatever forms its language has), and text arriving in data per language is resolved in its order.
 - `src/styles/` holds one stylesheet per region; the Japanese layout keys on `:lang(ja)`.
 
-`yarn dev` serves the page with hot reload and forwards the server's routes to a `serve.py` on port 8730 (`AUDITION_SERVER` moves it). `yarn test` is the unit suite (Vitest, jsdom): the schemas, the store's questions, the transport against a recording stand-in for Web Audio, every component, the tables agreeing key for key and placeholder for placeholder, no source line branching on a language code, and every class a component writes having a rule. `yarn test:e2e` (`make test-audition-e2e`) runs the built page in Chrome against a real `serve.py` over synthetic sets, with the scratch root moved to a temp directory so no listener's log is touched.
+`yarn dev` serves the page with hot reload and forwards the server's routes to a `serve.py` on port 8730 (`AUDITION_SERVER` moves it). `yarn test` is the unit suite (Vitest, jsdom): the schemas, the store's questions, the transport against a recording stand-in for Web Audio, every component, the tables agreeing key for key, plural form for plural form and placeholder for placeholder, no source line branching on a language code, and every class a component writes having a rule. `yarn test:e2e` (`make test-audition-e2e`) runs the built page in Chrome against a real `serve.py` over synthetic sets, with the scratch root moved to a temp directory so no listener's log is touched.
 
 ## In this repository
 

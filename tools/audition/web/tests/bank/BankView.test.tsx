@@ -3,11 +3,11 @@ import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { BankView, bankKey } from '../../src/bank/BankView';
 import { getBank, resetBank } from '../../src/bank/store';
-import { RESOURCES, setLang } from '../../src/i18n';
+import { setLang, tableOf } from '../../src/i18n';
 import { setState } from '../../src/state/store';
 import { bank, setEntry } from './fixtures';
 
-const en = RESOURCES.en;
+const en = tableOf('en');
 
 function mount() {
   const onOpen = vi.fn();
@@ -362,7 +362,7 @@ describe('the inspector', () => {
     expect(text).toContain('decay, tnr');
     expect(text).toContain('3 of 5 inside the spread');
     expect(text).toContain('centroid 2×');
-    expect(text).toContain('2 timbre(s), 40 rows, gate green');
+    expect(text).toContain('2 timbres, 40 rows, gate green');
     expect(inspector().querySelector('dd.warn')).not.toBeNull();
   });
 
@@ -404,12 +404,12 @@ describe('both languages', () => {
     const en1 = document.getElementById('bank')?.textContent ?? '';
     expect(en1).toContain(en['bank.colProg']);
     setLang('ja');
-    const ja1 = await screen.findByText(RESOURCES.ja['bank.colProg']);
+    const ja1 = await screen.findByText(tableOf('ja')['bank.colProg']);
     expect(ja1).toBeInTheDocument();
     const text = document.getElementById('bank')?.textContent ?? '';
     expect(text).not.toMatch(/\b(bank|stage|slot|method|tgt|tst|ship|id|pick|keys)\.[a-zA-Z0-9]+/);
-    expect(text).toContain(RESOURCES.ja['stage.3']);
-    expect(text).toContain(RESOURCES.ja['bank.sortStage']);
-    expect(screen.getByRole('listbox')).toHaveAttribute('aria-label', RESOURCES.ja['bank.voices']);
+    expect(text).toContain(tableOf('ja')['stage.3']);
+    expect(text).toContain(tableOf('ja')['bank.sortStage']);
+    expect(screen.getByRole('listbox')).toHaveAttribute('aria-label', tableOf('ja')['bank.voices']);
   });
 });

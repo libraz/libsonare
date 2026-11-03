@@ -169,7 +169,9 @@ describe('the transport', () => {
     expect(container.querySelector('#blindScore')?.textContent).toBe(t('blind.pickEach'));
     expect((container.querySelector('#blindRecord') as HTMLButtonElement).hidden).toBe(true);
     await userEvent.click(container.querySelector('#blindPick') as HTMLElement);
-    expect(container.querySelector('#blindScore')?.textContent).toBe(t('blind.decided', { n: 1 }));
+    expect(container.querySelector('#blindScore')?.textContent).toBe(
+      t('blind.decided', { count: 1 }),
+    );
     expect(container.querySelector('#blindPick')?.getAttribute('aria-pressed')).toBe('true');
     vi.spyOn(feedback, 'recordBlind').mockResolvedValue(true);
     await userEvent.click(container.querySelector('#blindRecord') as HTMLElement);

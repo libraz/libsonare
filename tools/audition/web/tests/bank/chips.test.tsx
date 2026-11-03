@@ -1,11 +1,11 @@
 import { render } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
-import { RESOURCES } from '../../src/i18n';
+import { tableOf } from '../../src/i18n';
 import { setState } from '../../src/state/store';
 import { HeardChip, MethodDot, ShipChip, SignoffChip, StageBar } from '../../src/voice/chips';
 import { voice } from './fixtures';
 
-const en = RESOURCES.en;
+const en = tableOf('en');
 const row = (worst: string, over: Record<string, unknown> = {}) => ({
   n: 2,
   worst,
@@ -74,7 +74,7 @@ describe('HeardChip', () => {
   it('says in words what was heard', () => {
     setState({ feedbackIndex: { a: row('wrong-instrument', { prefer: 3 }) } });
     expect(chip().title).toBe(
-      `2 listening note(s) · ${en['grade.wrongInstrument']} · 3 put forward to keep`,
+      `2 listening notes · ${en['grade.wrongInstrument']} · 3 put forward to keep`,
     );
   });
 

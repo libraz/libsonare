@@ -47,7 +47,7 @@ export function HeardChip({ id }: { id: string }) {
   } else if (got.worst === 'ok') {
     tone = ' good';
   }
-  const said = [t('pick.notes', { n: got.n })];
+  const said = [t('pick.notes', { count: got.n })];
   if (got.worst) {
     said.push(gradeWord(got.worst));
   }

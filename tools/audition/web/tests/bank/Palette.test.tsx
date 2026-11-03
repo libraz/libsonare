@@ -2,13 +2,13 @@ import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { resetBank } from '../../src/bank/store';
-import { RESOURCES, setLang } from '../../src/i18n';
+import { setLang, tableOf } from '../../src/i18n';
 import { getState, setState } from '../../src/state/store';
 import { VoicePalette, VoicePickButton } from '../../src/voice/Palette';
 import { paletteRows } from '../../src/voice/paletteRows';
 import { bank, setEntry } from './fixtures';
 
-const en = RESOURCES.en;
+const en = tableOf('en');
 
 const sets = () => [
   setEntry('p000', { title: 'Glass Harmonica', group: 'Keys' }),
@@ -128,7 +128,7 @@ describe('the palette', () => {
     expect(first.querySelector('.stage')?.textContent).toBe('0.6');
     expect(first.querySelectorAll('.bar .seg.on')).toHaveLength(3);
     expect(first.querySelector('.heard')).toHaveClass('on', 'good');
-    expect(first.querySelector('.heard')?.getAttribute('title')).toContain('2 listening note(s)');
+    expect(first.querySelector('.heard')?.getAttribute('title')).toContain('2 listening notes');
     expect(first.querySelector('.solo')?.textContent).toBe('');
     expect((options()[1] as HTMLElement).querySelector('.solo')?.textContent).toBe(
       en['pick.playOnly'],
@@ -236,15 +236,15 @@ describe('both languages', () => {
   it('render the chrome in the language in force, with no raw key', async () => {
     const { user } = mount();
     setLang('ja');
-    await user.click(await screen.findByRole('button', { name: RESOURCES.ja['head.voice'] }));
-    expect(screen.getByRole('searchbox', { name: RESOURCES.ja['pick.find'] })).toHaveAttribute(
+    await user.click(await screen.findByRole('button', { name: tableOf('ja')['head.voice'] }));
+    expect(screen.getByRole('searchbox', { name: tableOf('ja')['pick.find'] })).toHaveAttribute(
       'placeholder',
-      RESOURCES.ja['pick.findPlaceholder'],
+      tableOf('ja')['pick.findPlaceholder'],
     );
-    expect(screen.getByText(RESOURCES.ja['pick.legend'])).toBeInTheDocument();
+    expect(screen.getByText(tableOf('ja')['pick.legend'])).toBeInTheDocument();
     expect(panel().textContent).not.toMatch(/\b(pick|head|bank|stage)\.[a-zA-Z]+/);
     expect((options()[1] as HTMLElement).querySelector('.solo')?.textContent).toBe(
-      RESOURCES.ja['pick.playOnly'],
+      tableOf('ja')['pick.playOnly'],
     );
   });
 });

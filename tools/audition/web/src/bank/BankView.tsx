@@ -610,7 +610,7 @@ function InspectVoice({
             term={t('bank.oracle')}
             value={v.capture}
             aside={t('bank.timbres', {
-              timbres: ax?.timbres ?? 0,
+              count: ax?.timbres ?? 0,
               rows: ax?.profile_rows ?? 0,
               gate: ax?.gate_state || t('bank.gateNotRecorded'),
             })}
@@ -652,7 +652,7 @@ function InspectVoice({
             <Fact
               term={t('bank.agreement')}
               value={t('bank.noSpread')}
-              aside={t('bank.unjudgeable', { n: ag.unjudgeable.length })}
+              aside={t('bank.unjudgeable', { count: ag.unjudgeable.length })}
               warn
             />
           )

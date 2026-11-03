@@ -26,5 +26,8 @@ export default defineConfig({
     setupFiles: ['tests/setup.ts'],
     include: ['tests/**/*.test.{ts,tsx}'],
     restoreMocks: true,
+    // A cached transform keeps the file list `import.meta.glob` expanded to, so a
+    // table added or removed would go unseen until the source importing it changed.
+    fsModuleCache: false,
   },
 });

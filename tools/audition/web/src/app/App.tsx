@@ -71,20 +71,20 @@ function Header() {
       <HeadStage />
       <h1 id="title">{shownTitle}</h1>
       <span className="grow" />
-      {/* biome-ignore lint/a11y/useSemanticElements: a fieldset brings a border and legend the toggle is not laid out for. */}
-      <div id="langToggle" className="toggle lang" role="group" aria-label={t('head.lang')}>
+      {/* A list rather than a switch: it holds however many tables ship, each named in its own words. */}
+      <select
+        id="langPick"
+        className="lang-pick"
+        aria-label={t('head.lang')}
+        value={lang}
+        onChange={(ev) => setLang(ev.target.value)}
+      >
         {LANGS.map((code) => (
-          <button
-            key={code}
-            type="button"
-            data-lang={code}
-            aria-pressed={code === lang}
-            onClick={() => setLang(code)}
-          >
+          <option key={code} value={code} lang={code}>
             {langName(code)}
-          </button>
+          </option>
         ))}
-      </div>
+      </select>
       <button
         id="helpBtn"
         type="button"

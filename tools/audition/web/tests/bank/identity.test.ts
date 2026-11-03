@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { RESOURCES, setLang } from '../../src/i18n';
+import { setLang, tableOf } from '../../src/i18n';
 import {
   addressOf,
   aliasOf,
@@ -140,7 +140,7 @@ describe('target words', () => {
     expect(targetState({ state: 'off-target' })).toEqual({
       text: 'off target',
       key: 'off-target',
-      title: RESOURCES.en['tst.off-target.long'],
+      title: tableOf('en')['tst.off-target.long'],
     });
     expect(targetState({})).toBeNull();
     expect(targetState(null)).toBeNull();
@@ -166,8 +166,8 @@ describe('ships', () => {
   });
 
   it('explains the state when there is nothing to list', () => {
-    expect(shipReasons(readShips({ state: 'current' }))).toBe(RESOURCES.en['ship.current.long']);
-    expect(shipReasons(null)).toBe(RESOURCES.en['ship.none.long']);
+    expect(shipReasons(readShips({ state: 'current' }))).toBe(tableOf('en')['ship.current.long']);
+    expect(shipReasons(null)).toBe(tableOf('en')['ship.none.long']);
   });
 
   it('builds the chip long or short, and none for no record', () => {

@@ -37,8 +37,8 @@ function withOctave(text: string): string | null {
     return null;
   }
   const shift = Number(m[2]);
-  const key = `take.octave.${shift > 0 ? 'up' : 'down'}.${Math.abs(shift) === 1 ? 'one' : 'many'}`;
-  return isKey(key) ? t(key, { base, n: Math.abs(shift) }) : null;
+  // The direction is the sentence; which plural form it takes is the language's.
+  return t(shift > 0 ? 'take.octave.up' : 'take.octave.down', { base, count: Math.abs(shift) });
 }
 
 /** The text for one of the strings a manifest carries in the language in force, or the string itself. */

@@ -2,7 +2,19 @@ import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { TREE } from '../src/feedback/tree';
-import { currentLang, isKey, LANGS, langName, phrase, RESOURCES, setLang, t } from '../src/i18n';
+import {
+  assemble,
+  currentLang,
+  isKey,
+  LANGS,
+  langName,
+  PLURAL_FORMS,
+  phrase,
+  SOURCE_LANG,
+  setLang,
+  t,
+  tableOf,
+} from '../src/i18n';
 
 const SRC = join(__dirname, '..', 'src');
 
@@ -16,30 +28,102 @@ function sources(dir: string): string[] {
   });
 }
 
+/** A key with its plural suffix taken off, and the suffix (or null). */
+function split(key: string): [string, string | null] {
+  const m = new RegExp(`^(.*)_(${PLURAL_FORMS.join('|')})$`).exec(key);
+  return m?.[1] && m[2] ? [m[1], m[2]] : [key, null];
+}
+
+/** A table as its keys with plural families folded, each with the forms it spells out. */
+function families(table: Record<string, string>): Map<string, Set<string>> {
+  const out = new Map<string, Set<string>>();
+  for (const key of Object.keys(table)) {
+    const [base, form] = split(key);
+    const forms = out.get(base) ?? new Set<string>();
+    if (form) {
+      forms.add(form);
+    }
+    out.set(base, forms);
+  }
+  return out;
+}
+
+const pluralForms = (lang: string) => new Intl.PluralRules(lang).resolvedOptions().pluralCategories;
+
 describe('the string tables', () => {
-  it('declare the same keys in every language', () => {
-    const [first, ...rest] = LANGS;
-    const want = Object.keys(RESOURCES[first as keyof typeof RESOURCES]).sort();
-    for (const lang of rest) {
-      expect(Object.keys(RESOURCES[lang]).sort(), lang).toEqual(want);
+  it('are found by file name, so a language is its files', () => {
+    const found = assemble({
+      './en.json': { a: 'A' },
+      './extra/x.en.json': { b: 'B' },
+      './fr.json': { a: 'Á' },
+      './extra/x.fr.json': { b: 'É' },
+    });
+    expect(Object.keys(found).sort()).toEqual(['en', 'fr']);
+    expect(found.fr).toEqual({ a: 'Á', b: 'É' });
+    expect(LANGS[0]).toBe(SOURCE_LANG);
+    expect(LANGS.length).toBe(new Set(LANGS).size);
+  });
+
+  it('declare the same keys in every language, plural families folded', () => {
+    const want = [...families(tableOf(SOURCE_LANG)).keys()].sort();
+    for (const lang of LANGS) {
+      expect([...families(tableOf(lang)).keys()].sort(), lang).toEqual(want);
+    }
+  });
+
+  it('spell each counted string in exactly the plural forms its language has', () => {
+    const counted = [...families(tableOf(SOURCE_LANG))].filter(([, forms]) => forms.size > 0);
+    expect(counted.length).toBeGreaterThan(0);
+    for (const lang of LANGS) {
+      const have = families(tableOf(lang));
+      for (const [base] of counted) {
+        expect([...(have.get(base) ?? [])].sort(), `${lang} ${base}`).toEqual(
+          [...pluralForms(lang)].sort(),
+        );
+      }
     }
   });
 
   it('fill every placeholder with the same names in every language', () => {
     const names = (s: string) => [...s.matchAll(/\{(\w+)\}/g)].map((m) => m[1]).sort();
-    for (const key of Object.keys(RESOURCES.en) as (keyof typeof RESOURCES.en)[]) {
+    const source: Record<string, string> = tableOf(SOURCE_LANG);
+    const ofBase = (table: Record<string, string>, base: string) =>
+      Object.entries(table).filter(([k]) => split(k)[0] === base);
+    for (const base of families(source).keys()) {
+      const want = names(ofBase(source, base)[0]?.[1] ?? '');
       for (const lang of LANGS) {
-        expect(names(RESOURCES[lang][key]), `${lang} ${key}`).toEqual(names(RESOURCES.en[key]));
+        for (const [key, value] of ofBase(tableOf(lang), base)) {
+          expect(names(value), `${lang} ${key}`).toEqual(want);
+        }
+      }
+    }
+  });
+
+  it('count through the count variable', () => {
+    for (const [key, value] of Object.entries(tableOf(SOURCE_LANG))) {
+      if (split(key)[1]) {
+        expect(value, key).toContain('{count}');
       }
     }
   });
 
   it('leave no value empty', () => {
     for (const lang of LANGS) {
-      for (const [key, value] of Object.entries(RESOURCES[lang])) {
+      for (const [key, value] of Object.entries(tableOf(lang))) {
         expect(value.trim(), `${lang} ${key}`).not.toBe('');
       }
     }
+  });
+
+  it('choose the plural form by the language, not by the code', () => {
+    setLang('en');
+    expect(t('pick.notes', { count: 1 })).toBe('1 listening note');
+    expect(t('pick.notes', { count: 2 })).toBe('2 listening notes');
+    setLang('ja');
+    expect(t('pick.notes', { count: 1 })).toBe(
+      tableOf('ja')['pick.notes_other'].replace('{count}', '1'),
+    );
+    setLang('en');
   });
 
   it('read flat keys rather than paths', () => {
@@ -57,14 +141,14 @@ describe('the language switch', () => {
     setLang('ja');
     expect(currentLang()).toBe('ja');
     expect(document.documentElement.lang).toBe('ja');
-    expect(t('view.run')).toBe(RESOURCES.ja['view.run']);
+    expect(t('view.run')).toBe(tableOf('ja')['view.run']);
     setLang('en');
-    expect(t('view.run')).toBe(RESOURCES.en['view.run']);
+    expect(t('view.run')).toBe(tableOf('en')['view.run']);
   });
 
   it('names each language in its own words', () => {
-    expect(langName('ja')).toBe(RESOURCES.ja['lang.self']);
-    expect(langName('en')).toBe(RESOURCES.en['lang.self']);
+    expect(langName('ja')).toBe(tableOf('ja')['lang.self']);
+    expect(langName('en')).toBe(tableOf('en')['lang.self']);
   });
 
   it('resolves per-language data in the library order, falling back to the first table', () => {

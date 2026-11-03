@@ -108,12 +108,12 @@ function BlindControls() {
   const here = item ? s.picks[item.id] : undefined;
   const { n, parts } = blindTally(s);
   const old = earlierCount(s);
-  const earlier = old ? `   ${t('blind.earlier', { n: old })}` : '';
+  const earlier = old ? `   ${t('blind.earlier', { count: old })}` : '';
   let score = t('blind.pickEach');
   if (n) {
     score = s.blindRevealed
       ? `${t('blind.preferred')}: ${parts.join('   ')}`
-      : t('blind.decided', { n });
+      : t('blind.decided', { count: n });
   }
   return (
     <>

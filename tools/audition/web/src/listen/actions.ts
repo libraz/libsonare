@@ -642,7 +642,7 @@ export async function recordBlindResult(): Promise<void> {
       answered_at: p.answered_at ?? null,
     }));
   const sent = await recordBlind(
-    t('blind.result', { n, tally: parts.join(', ') }),
+    t('blind.result', { count: n, tally: parts.join(', ') }),
     picks,
     unsure,
     answers,

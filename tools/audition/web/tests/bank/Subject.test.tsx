@@ -1,13 +1,13 @@
 import { render, screen } from '@testing-library/react';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { resetBank } from '../../src/bank/store';
-import { RESOURCES, setLang } from '../../src/i18n';
+import { setLang, tableOf } from '../../src/i18n';
 import { setState } from '../../src/state/store';
 import { HeadStage } from '../../src/voice/HeadStage';
 import { Subject } from '../../src/voice/Subject';
 import { bank, manifest, setEntry, voice } from './fixtures';
 
-const en = RESOURCES.en;
+const en = tableOf('en');
 const subject = () => document.getElementById('subject') as HTMLElement;
 const cell = (cls: string) => subject().querySelector(`.${cls}`) as HTMLElement;
 const cells = () => [...subject().querySelectorAll('.idcell')] as HTMLElement[];
@@ -270,17 +270,17 @@ describe('Subject in both languages', () => {
     setState({ manifest: withReference(), setId: 'nowhere' });
     render(<Subject />);
     setLang('ja');
-    await screen.findByText(RESOURCES.ja['id.voice']);
+    await screen.findByText(tableOf('ja')['id.voice']);
     expect(cells().map((c) => c.querySelector('.idhead')?.textContent)).toEqual([
-      RESOURCES.ja['id.voice'],
-      RESOURCES.ja['id.target'],
-      RESOURCES.ja['id.ships'],
+      tableOf('ja')['id.voice'],
+      tableOf('ja')['id.target'],
+      tableOf('ja')['id.ships'],
     ]);
     expect(subject().textContent).not.toMatch(
       /\b(id|subj|tgt|tst|ship|src|room|slot|method)\.[a-zA-Z]+/,
     );
     expect(cell('id-target').querySelector('.idbig')?.textContent).toBe(
-      RESOURCES.ja['tgt.machine_defined'],
+      tableOf('ja')['tgt.machine_defined'],
     );
   });
 });
@@ -318,6 +318,6 @@ describe('HeadStage', () => {
     setState({ setId: 'p002' });
     render(<HeadStage />);
     setLang('ja');
-    await screen.findByText(new RegExp(RESOURCES.ja['stage.5']));
+    await screen.findByText(new RegExp(tableOf('ja')['stage.5']));
   });
 });

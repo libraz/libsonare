@@ -1,19 +1,21 @@
 import { describe, expect, it } from 'vitest';
-import { RESOURCES, setLang } from '../../src/i18n';
+import { LANGS, SOURCE_LANG, type SourceKey, setLang, tableOf } from '../../src/i18n';
 import { takeSlug, takeText } from '../../src/takes/text';
 
-const takeKeys = (lang: 'en' | 'ja') =>
-  Object.keys(RESOURCES[lang]).filter((k) => /^take\.(group|label|sub)\./.test(k));
+const takeKeys = (lang: string) =>
+  Object.keys(tableOf(lang)).filter((k) => /^take\.(group|label|sub)\./.test(k));
 
 describe('takeText', () => {
   it('carries every converted sentence', () => {
-    expect(takeKeys('en').length).toBe(takeKeys('ja').length);
+    for (const lang of LANGS) {
+      expect(takeKeys(lang).length, lang).toBe(takeKeys(SOURCE_LANG).length);
+    }
     expect(takeKeys('en').length).toBeGreaterThan(100);
   });
 
   it('keeps ids stable: the key is the slug of the English sentence', () => {
     for (const key of takeKeys('en')) {
-      const english = RESOURCES.en[key as keyof typeof RESOURCES.en];
+      const english = tableOf('en')[key as SourceKey];
       expect(key.endsWith(`.${takeSlug(english)}`)).toBe(true);
     }
   });
@@ -21,7 +23,7 @@ describe('takeText', () => {
   it('returns every sentence unchanged in English', () => {
     setLang('en');
     for (const key of takeKeys('en')) {
-      const english = RESOURCES.en[key as keyof typeof RESOURCES.en];
+      const english = tableOf('en')[key as SourceKey];
       expect(takeText(english)).toBe(english);
     }
   });
@@ -29,8 +31,8 @@ describe('takeText', () => {
   it('translates every sentence in Japanese', () => {
     setLang('ja');
     for (const key of takeKeys('ja')) {
-      const english = RESOURCES.en[key as keyof typeof RESOURCES.en];
-      expect(takeText(english)).toBe(RESOURCES.ja[key as keyof typeof RESOURCES.ja]);
+      const english = tableOf('en')[key as SourceKey];
+      expect(takeText(english)).toBe(tableOf('ja')[key as SourceKey]);
     }
   });
 
@@ -78,13 +80,5 @@ describe('takeText', () => {
   it('answers empty for nothing', () => {
     expect(takeText(undefined)).toBe('');
     expect(takeText('')).toBe('');
-  });
-
-  it('keeps placeholders identical between languages', () => {
-    const vars = (s: string) => (s.match(/\{\w+\}/g) ?? []).sort().join();
-    for (const key of Object.keys(RESOURCES.en).filter((k) => /^(take|path)\./.test(k))) {
-      const k = key as keyof typeof RESOURCES.en;
-      expect(vars(RESOURCES.ja[k])).toBe(vars(RESOURCES.en[k]));
-    }
   });
 });
