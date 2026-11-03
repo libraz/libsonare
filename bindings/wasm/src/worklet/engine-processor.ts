@@ -1338,7 +1338,7 @@ export class SonareRealtimeEngineWorkletProcessor {
 
   // Interval gate per target, so one busy target cannot hold back another's cadence.
   private meterDue(targetId: number, frame: number): boolean {
-    const slot = targetId < METER_TARGET_SLOTS - 1 ? targetId : METER_TARGET_SLOTS - 1;
+    const slot = Math.min(targetId, METER_TARGET_SLOTS - 1);
     const last = this.lastMeterFrameBySlot[slot];
     if (frame !== last && frame - last < this.meterIntervalFrames) {
       return false;

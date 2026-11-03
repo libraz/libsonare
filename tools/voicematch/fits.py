@@ -78,7 +78,7 @@ def record_fit(
         raise ValueError("the report carries no objective fingerprint; re-run the fit")
     entry = {
         "objective": digest,
-        "date": today or datetime.datetime.now(tz=datetime.timezone.utc).date().isoformat(),
+        "date": today or datetime.datetime.now(tz=datetime.UTC).date().isoformat(),
         "capture": capture,
         "timbre": timbre,
         "outcome": outcome,

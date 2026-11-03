@@ -246,7 +246,7 @@ def main() -> int:
         raise SystemExit(f"{args.library}: the knob dump was empty")
     registry = load_registry(args.output)
     # A registry entry records the calendar day of a bump, not an instant.
-    when = args.date or date_type.today().isoformat()  # noqa: DTZ011
+    when = args.date or date_type.today().isoformat()
     rebuilt, changed, gone = rebuild(registry, units, patches, args.note, when)
 
     if args.check:

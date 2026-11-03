@@ -18,3 +18,8 @@ reject:
   # so v7 is taken for both surfaces at once or neither.
   - typescript
 
+  # @types/node: tracks the runtime major, not npm's latest. mise.toml runs
+  # Node 22 and engines promises >=22, so a newer major's types would let an
+  # API Node 22 lacks type-check. Raise within 22.x by hand; move the major
+  # with the mise pin and engines together.
+  - '@types/node'

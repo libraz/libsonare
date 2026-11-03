@@ -354,9 +354,12 @@ def expand_observation(item: dict[str, Any]) -> list[tuple[str, dict[str, Any]]]
         if expected_numerator is not None and expected_denominator is not None:
             derived = f"meter_{expected_numerator}_{expected_denominator}"
             pairs.append((derived, {**item, "metric": derived}))
-    if metric == "beat":
-        if item.get("median_offset_ms") is not None and float(item["f_measure"]) > 0.5:
-            pairs.append(("beat_offset", {**item, "metric": "beat_offset"}))
+    if (
+        metric == "beat"
+        and item.get("median_offset_ms") is not None
+        and float(item["f_measure"]) > 0.5
+    ):
+        pairs.append(("beat_offset", {**item, "metric": "beat_offset"}))
     if metric == "downbeat":
         time_signature = item.get("time_signature")
         if time_signature:

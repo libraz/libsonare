@@ -114,7 +114,7 @@ import subprocess
 import sys
 import tempfile
 from dataclasses import replace
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 import numpy as np
@@ -1398,7 +1398,7 @@ def render_set(
             "difference between them is real. " + reference_note(voice, timbres, args.model_sends)
         ),
         # Display only; the identity of what was rendered is `set_generation`.
-        "generated": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+        "generated": datetime.now(UTC).isoformat(timespec="seconds"),
         "set_generation": generation,
         "sources": sources,
         "comparisons": comparisons_out,

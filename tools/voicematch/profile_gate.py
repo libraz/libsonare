@@ -6,7 +6,7 @@ import json
 import os
 import sys
 import time
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 import numpy as np
@@ -926,7 +926,7 @@ def write_gate_file(
                 # alternative is reading the file's history to find out whether the
                 # profile moved under it, which nobody does until a gate is already red.
                 "reference_measured_utc": measured_utc,
-                "recorded_utc": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+                "recorded_utc": datetime.now(UTC).isoformat(timespec="seconds"),
                 # And which library produced the MODEL side. Without it a gate recorded
                 # through a dylib older than the sources is indistinguishable from one
                 # recorded through the shipped build, and its bounds are a photograph of

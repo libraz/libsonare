@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import json
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 from capture import load_config
@@ -87,7 +87,7 @@ def measurement_stamp(profile: dict, out_path: Path) -> str:
     So the stamp is carried forward whenever everything else is unchanged, and
     moves only when a number does.
     """
-    now = datetime.now(timezone.utc).isoformat(timespec="seconds")
+    now = datetime.now(UTC).isoformat(timespec="seconds")
     if not out_path.exists():
         return now
     try:

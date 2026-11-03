@@ -37,7 +37,9 @@ function expectFirstAppearanceNumbering(groups: number[]): void {
     expect(Number.isInteger(g)).toBe(true);
     expect(g).toBeGreaterThanOrEqual(0);
     expect(g).toBeLessThanOrEqual(next);
-    if (g === next) next++;
+    if (g === next) {
+      next++;
+    }
   }
 }
 

@@ -8,7 +8,7 @@ import os
 import re
 import subprocess
 from dataclasses import asdict
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -553,7 +553,7 @@ def main() -> int:
     timeout_seconds = args.timeout_seconds if args.timeout_seconds > 0.0 else None
 
     report: dict[str, Any] = {
-        "generated_at": datetime.now(timezone.utc).isoformat(),
+        "generated_at": datetime.now(UTC).isoformat(),
         "sonare_tests": str(args.sonare_tests),
         "suites": {},
         "runs": [],
