@@ -72,6 +72,7 @@ import http.server
 import json
 import os
 import re
+import signal
 import socketserver
 import sys
 import tempfile
@@ -85,12 +86,16 @@ from pathlib import Path
 from typing import ClassVar
 
 APP_DIR = Path(__file__).resolve().parent
-#: The page itself: `index.html`, with its stylesheets under `css/` and its
-#: modules under `js/`.
-WEB_DIR = APP_DIR / "web"
+#: The page itself, as `yarn build` in `web/` writes it: `index.html` and its
+#: hashed bundles under `assets/`.
+WEB_DIR = APP_DIR / "web" / "dist"
+#: What to run when the page has not been built.
+BUILD_HINT = "yarn --cwd tools/audition/web install && yarn --cwd tools/audition/web build"
 sys.path.insert(0, str(APP_DIR.parent))
 sys.path.insert(0, str(APP_DIR))
 
+import heard
+import wizard
 from _repo import REPO_ROOT
 from heard import BANK_VERSIONS, oracle_flag, unit_facts
 
@@ -997,6 +1002,10 @@ def resolve_set(ident: str, scratch: Path | None = None) -> Path | None:
     return taken.get(ident)
 
 
+#: Empty directories already reported, so a reload does not repeat the line.
+_SAID_EMPTY: set[Path] = set()
+
+
 class Sets:
     """The served sets, by id, and the index the page reads to list them.
 
@@ -1031,8 +1040,11 @@ class Sets:
             items = manifest.get("items", [])
             if not items:
                 # An empty directory is not a set. Listing it would put a name in
-                # the picker that plays nothing.
-                print(f"skipping (no renders in it): {root}", file=sys.stderr)
+                # the picker that plays nothing. Said once: the index is rebuilt
+                # on every poll of the listening run.
+                if root not in _SAID_EMPTY:
+                    _SAID_EMPTY.add(root)
+                    print(f"skipping (no renders in it): {root}", file=sys.stderr)
                 continue
             ident = assign_id(root, by_id)
             # A set whose takes each hold one version has nothing to compare, so
@@ -1060,6 +1072,31 @@ class Sets:
             )
         cls.by_id = by_id
         cls.index = index
+
+
+#: The listening run's renderer, one per server; `main` points it at `--lib`.
+RENDERER = wizard.Renderer()
+
+
+def listening_queue() -> list[dict]:
+    """The listening run's queue: every voice still owed a verdict, in working order."""
+    Sets.reload()
+    return wizard.build_queue(
+        read_bank_voices(),
+        _read_json(POLICY_PATH),
+        {entry["id"]: entry for entry in Sets.index},
+        heard.logs(FEEDBACK_ROOT),
+        RENDERER.snapshot(),
+    )
+
+
+def request_renders(wanted: list[str]) -> list[dict]:
+    """Start a render for each named voice whose page needs one, then report the queue."""
+    voices = {v.get("slug"): v for v in read_bank_voices()}
+    for step in listening_queue():
+        if step["set"] in wanted and step["page"] == "render" and step["set"] in voices:
+            RENDERER.want(voices[step["set"]])
+    return listening_queue()
 
 
 class StaleClaim(Exception):
@@ -1253,12 +1290,13 @@ class Handler(http.server.SimpleHTTPRequestHandler):
         makes by accident.
         """
         if rel in ("", "index.html"):
-            return self.app_dir / "index.html"
-        # The page is ES modules, so its own files are a set rather than two
-        # names: one fixed directory and a leaf name with no separator in it
-        # cannot leave the page, and the file has to already be there.
+            page = self.app_dir / "index.html"
+            return page if page.is_file() else None
+        # The build's own files are one fixed directory and a leaf name with no
+        # separator in it, which cannot leave the page, and the file has to
+        # already be there.
         if (
-            re.fullmatch(r"js/[a-z0-9_-]+\.js|css/[a-z0-9_-]+\.css", rel)
+            re.fullmatch(r"assets/[A-Za-z0-9_-]+(?:\.[A-Za-z0-9_-]+)*\.(?:js|css|map)", rel)
             and (self.app_dir / rel).is_file()
         ):
             return self.app_dir / rel
@@ -1302,6 +1340,9 @@ class Handler(http.server.SimpleHTTPRequestHandler):
         if rel == "bank.json":
             self._json(read_bank())
             return
+        if rel == "queue.json":
+            self._json(listening_queue())
+            return
         if rel == "feedback-index.json":
             self._json(feedback_index())
             return
@@ -1329,6 +1370,10 @@ class Handler(http.server.SimpleHTTPRequestHandler):
             self._json(manifest)
             return
         if self._resolve(rel) is None:
+            if rel in ("", "index.html"):
+                # A clone that has not built the page gets the command, not a bare 404.
+                self.send_error(503, f"the page is not built: {BUILD_HINT}")
+                return
             self.send_error(404, "not found")
             return
         super().do_GET()
@@ -1344,7 +1389,8 @@ class Handler(http.server.SimpleHTTPRequestHandler):
         page is the identity of what was heard: a note naming a recording the
         manifest no longer holds is answered 409 and nothing is written.
         """
-        if self.path.split("?", 1)[0].lstrip("/") != "feedback":
+        route = self.path.split("?", 1)[0].lstrip("/")
+        if route not in ("feedback", "render"):
             self.send_error(404, "not found")
             return
         try:
@@ -1362,6 +1408,13 @@ class Handler(http.server.SimpleHTTPRequestHandler):
             return
         if not isinstance(payload, dict):
             self.send_error(400, "not an object")
+            return
+        if route == "render":
+            wanted = payload.get("sets")
+            if not isinstance(wanted, list) or not all(isinstance(w, str) for w in wanted):
+                self.send_error(400, "sets is not a list of set ids")
+                return
+            self._json(request_renders(wanted))
             return
 
         conditions = payload.get("conditions") or {}
@@ -1383,7 +1436,7 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                 self._json({"error": "not_found"}, 404)
                 return
         else:
-            now = datetime.datetime.now(datetime.timezone.utc).replace(microsecond=0).isoformat()
+            now = datetime.datetime.now(datetime.UTC).replace(microsecond=0).isoformat()
             try:
                 entry = feedback_entry(payload, now)
             except StaleClaim as stale:
@@ -1405,6 +1458,10 @@ class Handler(http.server.SimpleHTTPRequestHandler):
     def log_message(self, fmt: str, *args) -> None:
         if "404" in (fmt % args):
             super().log_message(fmt, *args)
+
+
+def _interrupt(*_args) -> None:
+    raise KeyboardInterrupt
 
 
 def already_serving(port: int) -> bool:
@@ -1434,7 +1491,18 @@ def main() -> int:
     )
     ap.add_argument("--port", type=int, default=8730)
     ap.add_argument("--no-open", action="store_true", help="do not launch a browser")
+    ap.add_argument(
+        "--lib",
+        default="",
+        help="library the listening run renders stale pages with "
+        f"(default: {wizard.DEFAULT_LIB.relative_to(REPO_ROOT)} when it exists)",
+    )
     args = ap.parse_args()
+    if args.lib:
+        RENDERER.lib = Path(args.lib).expanduser().resolve()
+
+    if not (WEB_DIR / "index.html").is_file():
+        print(f"the page is not built; run: {BUILD_HINT}", file=sys.stderr)
 
     # A running server rediscovers its sets on every index request, so one that
     # is already up is showing this set too and there is nothing to start.
@@ -1479,10 +1547,15 @@ def main() -> int:
         print(f"  {url}   (ctrl-c to stop)")
         if not args.no_open:
             threading.Timer(0.4, lambda: webbrowser.open(url)).start()
+        # A terminate is turned into the interrupt path, so either way of
+        # stopping the server ends the render it started.
+        signal.signal(signal.SIGTERM, _interrupt)
         try:
             httpd.serve_forever()
         except KeyboardInterrupt:
             print()
+        finally:
+            RENDERER.stop()
     return 0
 
 

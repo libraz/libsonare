@@ -1,4 +1,4 @@
-.PHONY: all build fixtures release install test-install test test-cxx test-voicematch test-slow test-golden test-optional-fixtures test-librosa-live clean rebuild format format-check lint wasm coverage \
+.PHONY: all build fixtures release install test-install test test-cxx test-voicematch test-audition-e2e test-slow test-golden test-optional-fixtures test-librosa-live clean rebuild format format-check lint wasm coverage \
        coverage-build coverage-clean build-shared build-node build-wasm-binding \
        test-python test-python-slow test-node test-wasm parity conformance test-gm-cross-surface test-mix-assistant-cross-surface abi-layout abi-layout-check check-abi-version \
        capability-catalog capability-catalog-check processor-types processor-types-check ci-local \
@@ -131,6 +131,12 @@ test: test-cxx
 test-voicematch:
 	$(RYE) run --pyproject bindings/python/pyproject.toml python -m pytest tools/voicematch tools/audition tools/playback -q
 
+# The listening page in a browser against a real serve.py over synthetic sets,
+# with the scratch root moved to a temp directory so no listener's log is read
+# or written. Needs a local Chrome; the unit suite runs under `conformance`.
+test-audition-e2e:
+	cd tools/audition/web && yarn test:e2e
+
 # Heavy cases (>~2 s each) are tagged [.][slow] and hidden from the default
 # ctest run; this runs just those. Must run from the repo root (librosa
 # fixtures load by relative path).
@@ -205,6 +211,7 @@ format:
 	git ls-files -z -- '*.h' '*.hpp' '*.c' '*.cpp' '*.mm' ':!:third_party/**' | $(LS_EXISTING) | xargs -0 clang-format -i
 	cd bindings/wasm && yarn lint:fix
 	cd bindings/node && yarn lint:fix
+	cd tools/audition/web && yarn lint:fix
 	UV_CACHE_DIR=$(UV_CACHE_DIR) $(RYE) sync --pyproject bindings/python/pyproject.toml
 	git ls-files -z -- $(RUFF_FORMAT_PATHS) | $(LS_EXISTING) | xargs -0 env UV_CACHE_DIR=$(UV_CACHE_DIR) $(RYE) run --pyproject bindings/python/pyproject.toml ruff format
 	git ls-files -z -- '*.py' '*.pyi' '*pyproject.toml' | $(LS_EXISTING) | xargs -0 env UV_CACHE_DIR=$(UV_CACHE_DIR) $(RYE) run --pyproject bindings/python/pyproject.toml ruff check --fix
@@ -381,6 +388,8 @@ lint:
 	cd bindings/wasm && yarn lint
 	cd bindings/node && yarn lint
 	cd bindings/node && yarn test:types
+	cd tools/audition/web && yarn lint
+	cd tools/audition/web && yarn typecheck
 	UV_CACHE_DIR=$(UV_CACHE_DIR) $(RYE) sync --pyproject bindings/python/pyproject.toml
 	UV_CACHE_DIR=$(UV_CACHE_DIR) $(RYE) run --pyproject bindings/python/pyproject.toml ruff check .
 # The Python half of the type check that `yarn test:types` above already does for
@@ -895,7 +904,8 @@ conformance:
 	python3 tools/eval/test_summarize_accuracy.py
 	python3 -m unittest tests/conformance/test_report_input_validation.py
 	python3 tools/audition/test_serve.py
-	python3 tools/audition/test_page.py
+	cd tools/audition/web && yarn test
+	python3 tools/audition/test_wizard.py
 	python3 tools/parity/surface_coverage.py --check
 	python3 tools/parity/check_parity.py --audit-allowlist
 	@if test -x "$(BUILD_DIR)/bin/sonare-cli" && test -x "bindings/python/.venv/bin/python"; then \

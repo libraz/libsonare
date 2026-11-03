@@ -1,6 +1,7 @@
 # audition — an A/B listening page for a directory of renders
 
 ```sh
+yarn --cwd tools/audition/web install && yarn --cwd tools/audition/web build   # once, and after a page change
 python tools/audition/serve.py [<audition-dir> ...]
 ```
 
@@ -8,7 +9,7 @@ Opens a browser on a page that plays every version of a take from one transport,
 
 A switch seeks back to the start, so the attack is the first thing heard. Turn `restart from the top when I switch` off and the versions stay sample-aligned instead: the switch becomes a gain change on a sound that never stopped, which is the only way to compare a sustain or a decay.
 
-Standard library only, no build step, nothing specific to this repository. Point it at any directory of renders.
+The server is standard library only and nothing in it is specific to this repository; point it at any directory of renders. The page is built once from `web/` and the server serves the build, answering with the build command where there is none.
 
 The page is in English and Japanese and opens in whichever the browser asks for; the toggle in the header moves it and is remembered. Only the page's own words move — a take's label, an engine's name and a source key are data and stay as they are.
 
@@ -112,6 +113,19 @@ Either form opens on exactly that render, and an address arriving at a page alre
 
 The version is left out of the address in blind mode, along with the path and the label: an address bar is visible, and hiding the name is the whole point of that mode.
 
+## The listening run
+
+`run` in the header walks the bank one voice at a time and leaves only the ear to supply. Every choice the listening surface offers is made for you:
+
+- **which voice** — the bank in `tools/voicematch/policy.json`'s working order: tier, then the `groups` inside a tier (acoustic piano, pipe organ, electric guitar, drums, electric bass, …), then number, every capital and kit before any variation. A voice leaves the run once it carries a verdict on the recording that ships now, by `heard.py`'s own freshness rule, and comes back by itself when it moves.
+- **which take** — the musical one (`music`, or `groove` on a kit), since "is this the instrument" is answered by hearing it played. A page without one opens on its first take.
+- **what it is set against** — the page's best-standing comparison, the same one the listening surface would select. The library side sounds first, looping; `tab` brings in the other side, and the pair above the transport shows which is sounding.
+- **what is asked** — the same two-at-a-time questions as everywhere else, on the digit keys.
+
+Three keys carry a whole session: `tab` to compare, `1` `2` `3` to answer, `enter` to send, which moves the run on. `N` skips a voice for this tab without a note.
+
+**A page that trails the bank is rendered again before it is played.** Most pages on disk were rendered under an older bank, and a verdict on one describes a voice that no longer ships. So the server renders the voice in front of the run and the two behind it, one `make_audition.py` at a time at `nice 10`, with the tuning library under `build-tuning/` (`--lib` moves it) so the page records its bank and its notes can be dated. Each program is attempted once per server: a render that still does not come out current is played and the page says so, rather than being rendered again. Stopping the server stops the render in flight. Job logs land in `<scratch root>/wizard/`.
+
 ## Choosing what to listen to
 
 `V`, or the control in the header. A native select over a hundred and eighty entries shows one at a time and says nothing but the name, so choosing what to open next meant already knowing the answer. Every row here carries the three facts that decide whether a voice is worth opening, and they are rendered by the same functions the bank view uses rather than a second set that can drift from them:
@@ -184,6 +198,15 @@ Everything that is set once and then left alone is behind `options`. What stays 
 | `B` | blind |
 | `R` | reveal this take, or reshuffle if already revealed |
 
+In the listening run the digits answer the question on screen instead of picking a version:
+
+| key | |
+|---|---|
+| `tab` | hear the other side |
+| `1` `2` `3` | answer, `3` being "not sure" |
+| `enter` | send, and go on to the next voice |
+| `N` | skip this voice for now |
+
 On the bank the rows are what is navigated, since nothing is sounding there:
 
 | key | |
@@ -250,15 +273,15 @@ Any format the browser decodes will play. 16-bit PCM WAV is the safe choice — 
 
 ## The page's own files
 
-`serve.py` and `heard.py` stay at the top, beside their tests; the page is `web/`. `web/index.html` loads one stylesheet per region from `web/css/` — `base.css` holds the tokens and shared controls, then `header.css`, `listen.css`, `console.css`, `feedback.css` and `bank.css` — and one ES module per job from `web/js/`:
+`serve.py`, `heard.py` and `wizard.py` (the listening run's queue and renderer) stay at the top, beside their tests. The page is `web/`, a React + TypeScript package built by Vite into `web/dist/`, which is what the server serves: `index.html` and the hashed bundles under `assets/`, by pattern, and nothing else.
 
-- `app.js` wires the two views, the keys and the frame loop.
-- `listen.js` loads a set and moves between its takes; `versions.js` is the version switch and the banner naming what is sounding; `blind.js` is blind mode; `address.js` is the URL, the breadcrumbs and the copied block; `path.js` is the signal-path line; `palette.js` is the voice picker; `subject.js` is the band saying which voice the page is about, what it is aimed at and whether it ships; `identity.js` holds the words and tags for those facts, shared by that band and the bank.
-- `player.js` is the transport, `scope.js` draws the two pictures, `bank.js` is the bank, `feedback.js` is the panel that takes a note, `i18n.js` holds every string in both languages and the question tree, `take-text.js` translates take labels, and `state.js` is what they all read.
+- `src/api/` holds the zod schema of every shape that crosses from the server and of every note sent to it; a reply is parsed where it arrives, and a note is checked against its strict schema before it leaves, since the log keeps it.
+- `src/state/` is the one store every region reads and the pure questions asked of it; `src/player/` is the transport, whose clock and audio graph stay outside the store because they move every frame.
+- `src/listen/` is the listening surface (takes, the version switch, the banner, blind mode, the address, the conditions a note carries); `src/scope/` and `src/path/` draw the two pictures and the signal-path line; `src/feedback/` is the panel that takes a note and the question tree; `src/bank/` and `src/voice/` are the bank, the palette and the band saying which voice the page is about; `src/run/` is the listening run; `src/app/` wires the views, the keys and boot.
+- `src/i18n/` is i18next over one table per language (`en.json`, `ja.json`, plus one file per region under `extra/`). Nothing outside the tables chooses by language: detection, persistence and fallback are the library's, and text arriving in data per language is resolved in its order. A third language is a third set of tables.
+- `src/styles/` holds one stylesheet per region; the Japanese layout keys on `:lang(ja)`.
 
-The server serves `web/js/*.js` and `web/css/*.css` by pattern and nothing else from the tree, so a new file under either needs no change to it; a new directory does.
-
-`test_page.py` checks the agreements a server cannot: every element the script reaches for exists, every class it uses has a rule, every string it asks for is declared in both languages, and the question tree has no unreachable node or dead end. It reads every module and every sheet rather than the entry point, since most of what builds an element is in the others.
+`yarn dev` serves the page with hot reload and forwards the server's routes to a `serve.py` on port 8730 (`AUDITION_SERVER` moves it). `yarn test` is the unit suite (Vitest, jsdom): the schemas, the store's questions, the transport against a recording stand-in for Web Audio, every component, the tables agreeing key for key and placeholder for placeholder, no source line branching on a language code, and every class a component writes having a rule. `yarn test:e2e` (`make test-audition-e2e`) runs the built page in Chrome against a real `serve.py` over synthetic sets, with the scratch root moved to a temp directory so no listener's log is touched.
 
 ## In this repository
 

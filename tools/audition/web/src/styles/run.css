@@ -1,0 +1,282 @@
+/* The listening run. The listening surface with every choice taken away: the
+   run bar says which voice, against what, and which three keys matter; the
+   take rail, the version switch, the signal path and the options go, because
+   the run has already decided each of them. The bar is the one rounded panel
+   on the console, so its accents are full borders and tints, never a stripe. */
+
+/* ---- the view toggle: three views, equal segments ---- */
+
+.toggle.views {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: 1fr;
+}
+
+.toggle.views button { text-align: center; white-space: nowrap; }
+
+/* ---- what the run hides ---- */
+
+.run-only { display: none; }
+body.run-view .run-only { display: flex; }
+
+body.run-view main { grid-template-columns: minmax(0, 1fr); }
+body.run-view nav#takes,
+body.run-view .pick,
+body.run-view #headStage,
+body.run-view #optionsBtn,
+body.run-view #subject,
+body.run-view #versions,
+body.run-view .now,
+body.run-view #pathLine,
+body.run-view .ident,
+body.run-view #blindPick,
+body.run-view #blindUnsure,
+body.run-view #blindRecord,
+body.run-view #blindScore,
+body.run-view .fb-cmp-row,
+body.run-view .fb-attach,
+body.run-view .fb-log { display: none; }
+
+/* While a page is being rendered there is nothing to play or to describe. */
+body.run-pending .console > :not(#run),
+body.run-pending .stage-body { display: none; }
+
+/* The answer keys belong to the run; elsewhere the digits pick a version. */
+.fb-key { display: none; }
+body.run-view .fb-key {
+  display: inline-block;
+  margin-right: 9px;
+  vertical-align: 1px;
+  color: var(--ink-dim);
+}
+
+/* The narrowing is finished: sending is the one thing left, so it is lit. */
+body.run-view .send.ready {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--accent-ink);
+}
+
+/* ---- the bar ---- */
+
+.run {
+  position: relative;
+  flex-direction: column;
+  gap: 12px;
+  padding: 16px 18px 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--panel);
+  overflow: hidden;
+}
+
+/* Progress runs along the whole top edge, which the rounded corner clips
+   evenly at both ends. */
+.run-rail {
+  position: absolute;
+  inset: 0 0 auto;
+  height: 2px;
+  background: var(--line-soft);
+}
+
+.run-fill {
+  display: block;
+  width: 0;
+  height: 100%;
+  background: var(--accent);
+  transition: width 320ms ease;
+}
+
+.run-head {
+  display: flex;
+  align-items: flex-end;
+  gap: 14px;
+  min-width: 0;
+}
+
+.run-who { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+
+.run-place {
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+  white-space: nowrap;
+}
+
+:lang(ja) .run-place { letter-spacing: 0.04em; text-transform: none; font-size: 11px; }
+
+.run-name {
+  margin: 0;
+  font-size: 22px;
+  font-weight: 600;
+  line-height: 1.2;
+  letter-spacing: -0.01em;
+  color: var(--ink);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.run-count {
+  flex: none;
+  font-family: var(--mono);
+  font-size: 13px;
+  color: var(--ink-dim);
+  font-variant-numeric: tabular-nums;
+}
+
+.run-count { padding-bottom: 5px; }
+.run-skip { align-self: flex-end; margin-bottom: 1px; }
+.run-skip[hidden] { display: none; }
+
+/* ---- what is set against what ---- */
+
+.run-pair {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  font-size: 12.5px;
+}
+
+.run-pair:empty { display: none; }
+
+/* Both sides are switches: the one sounding is lit in its role's colour, the
+   other waits as an outline, so which side is heard never needs reading. */
+.run-side {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 7px;
+  padding: 3px 12px;
+  border: 1px solid color-mix(in srgb, var(--role) 30%, var(--line));
+  border-radius: 999px;
+  background: transparent;
+  color: var(--role);
+  font-size: 12.5px;
+  font-weight: 600;
+}
+
+.run-side:hover { background: color-mix(in srgb, var(--role) 9%, var(--panel)); }
+
+.run-side[aria-pressed="true"] {
+  border-color: var(--role);
+  background: var(--role);
+  color: var(--accent-ink);
+}
+
+.run-side .dot { width: 7px; height: 7px; background: var(--role); }
+.run-side[aria-pressed="true"] .dot { background: var(--accent-ink); }
+
+.run-vs { flex: none; color: var(--ink-faint); }
+
+.run-oracle, .run-solo {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--ink-dim);
+}
+
+/* ---- the three keys, and what comes next ---- */
+
+.run-foot {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  padding-top: 11px;
+  border-top: 1px solid var(--line-soft);
+}
+
+.run-foot[hidden] { display: none; }
+
+.run-keys {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 20px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: 12px;
+  color: var(--ink-dim);
+}
+
+.run-keys li { display: flex; align-items: center; gap: 4px; }
+.run-keys span { margin-left: 4px; }
+
+.run-next {
+  margin: 0 0 0 auto;
+  font-size: 12px;
+  color: var(--ink-faint);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.run-next:empty { display: none; }
+
+/* ---- waiting, failing, finished ---- */
+
+.run-wait {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+  padding: 16px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--bg);
+}
+
+.run-wait[hidden] { display: none; }
+
+.run-wait.failed { border-color: var(--warn-line); background: var(--warn-tint); }
+.run-wait.done { border-color: var(--tint-line); background: var(--tint); }
+
+.run-spin {
+  flex: none;
+  width: 16px;
+  height: 16px;
+  margin-top: 2px;
+  border: 2px solid var(--line);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: run-spin 900ms linear infinite;
+}
+
+.run-wait.failed .run-spin,
+.run-wait.done .run-spin { display: none; }
+
+@keyframes run-spin { to { transform: rotate(360deg); } }
+
+@media (prefers-reduced-motion: reduce) {
+  .run-spin { animation: none; border-top-color: var(--line); }
+  .run-fill { transition: none; }
+}
+
+.run-wait-text { min-width: 0; }
+
+.run-wait-title { margin: 0; font-size: 14px; font-weight: 600; color: var(--ink); }
+.run-wait.failed .run-wait-title { color: var(--warn); }
+.run-wait.done .run-wait-title { color: var(--accent); }
+
+.run-wait-why {
+  margin: 4px 0 0;
+  max-width: 72ch;
+  font-size: 12.5px;
+  color: var(--ink-dim);
+}
+
+.run-wait-why:empty { display: none; }
+
+.run-wait-log {
+  display: block;
+  margin-top: 6px;
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--ink-faint);
+  overflow-wrap: anywhere;
+}
+
+.run-wait-log:empty { display: none; }

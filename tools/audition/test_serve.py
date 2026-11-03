@@ -319,30 +319,56 @@ def test_a_truncated_line_does_not_take_the_log_down() -> None:
         assert [e["tag"] for e in serve.read_feedback(path)] == ["onset/hard"]
 
 
-def test_every_module_the_page_loads_is_servable() -> None:
-    """The page is ES modules, so a file the resolver does not know about is a
-    blank page rather than a missing style: the import throws before anything
-    on it runs."""
+def test_the_built_page_and_only_its_files_are_servable() -> None:
+    """The page is a build: `index.html` and the hashed bundles beside it are
+    served, and nothing else in or around the build directory is."""
     handler = serve.Handler.__new__(serve.Handler)
-    web = serve.WEB_DIR
-    files = sorted(str(p.relative_to(web)) for p in [*web.glob("js/*.js"), *web.glob("css/*.css")])
-    assert len(files) >= 4, files
-    # Every sheet and the entry module the markup names, so a file added to the
-    # page and not to the resolver's pattern fails here rather than in a browser.
-    linked = re.findall(r'(?:href|src)="((?:js|css)/[^"]+)"', (web / "index.html").read_text())
-    assert linked and set(linked) <= set(files), linked
-    for name in files + ["index.html", ""]:
-        assert handler._resolve(name) == web / (name or "index.html"), name
-    for bad in (
-        "../serve.py",
-        "js/../../serve.py",
-        "sub/dir.js",
-        "css/a/b.css",
-        "serve.py",
-        "app.js",
-        "js/nope.js",
-    ):
-        assert handler._resolve(bad) is None, bad
+    with tempfile.TemporaryDirectory() as tmp:
+        dist = Path(tmp)
+        (dist / "assets").mkdir()
+        for name in (
+            "index.html",
+            "assets/index-Ab3_x9.js",
+            "assets/index-Q1.css",
+            "assets/index-Ab3_x9.js.map",
+        ):
+            (dist / name).write_text("x")
+        (dist / "assets" / "nested").mkdir()
+        (dist / "assets" / "nested" / "a.js").write_text("x")
+        (dist / "secret.txt").write_text("x")
+        handler.app_dir = dist
+        for name in ("assets/index-Ab3_x9.js", "assets/index-Q1.css", "assets/index-Ab3_x9.js.map"):
+            assert handler._resolve(name) == dist / name, name
+        assert handler._resolve("") == dist / "index.html"
+        assert handler._resolve("index.html") == dist / "index.html"
+        for bad in (
+            "../serve.py",
+            "assets/../secret.txt",
+            "assets/nested/a.js",
+            "assets/missing.js",
+            "assets/index.html",
+            "secret.txt",
+            "js/app.js",
+            "assets/.hidden.js",
+        ):
+            assert handler._resolve(bad) is None, bad
+
+
+def test_an_unbuilt_page_resolves_to_nothing() -> None:
+    """Without a build there is no page to serve; `do_GET` answers with the command to build it."""
+    handler = serve.Handler.__new__(serve.Handler)
+    with tempfile.TemporaryDirectory() as tmp:
+        handler.app_dir = Path(tmp)
+        assert handler._resolve("") is None
+        assert handler._resolve("index.html") is None
+    assert "yarn" in serve.BUILD_HINT and "build" in serve.BUILD_HINT
+
+
+def test_the_build_writes_where_the_server_reads() -> None:
+    """`vite.config.ts` and the server name the same directory, or a build lands where nothing serves it."""
+    config = (serve.APP_DIR / "web" / "vite.config.ts").read_text()
+    assert re.search(r"outDir:\s*'dist'", config), "vite outDir moved"
+    assert serve.WEB_DIR == serve.APP_DIR / "web" / "dist"
 
 
 @_with_feedback_root
@@ -1091,6 +1117,39 @@ def _with_server(fn):
     finally:
         server.shutdown()
         server.server_close()
+
+
+def test_the_page_is_served_from_the_build_and_an_unbuilt_one_says_how() -> None:
+    """Through the handler: the built page and its bundle come back as files, an
+    unbuilt page as a 503 naming the command, and a stray name as a 404."""
+
+    def fetch(port: int, rel: str) -> tuple[int, bytes]:
+        try:
+            with urllib.request.urlopen(f"http://127.0.0.1:{port}/{rel}", timeout=5) as r:
+                return r.status, r.read()
+        except urllib.error.HTTPError as e:
+            return e.code, e.read()
+
+    real = serve.Handler.app_dir
+    with tempfile.TemporaryDirectory() as tmp:
+        dist = Path(tmp)
+        try:
+            serve.Handler.app_dir = dist
+            status, body = _with_server(lambda port: fetch(port, ""))
+            assert status == 503 and b"yarn" in body, (status, body[:200])
+            (dist / "assets").mkdir()
+            (dist / "index.html").write_text("<div id=root></div>")
+            (dist / "assets" / "index-x1.js").write_text("export {}")
+            got = _with_server(
+                lambda port: [
+                    fetch(port, rel)
+                    for rel in ("", "assets/index-x1.js", "assets/no.js", "js/app.js")
+                ]
+            )
+            assert [g[0] for g in got] == [200, 200, 404, 404], [g[0] for g in got]
+            assert got[0][1] == b"<div id=root></div>" and got[1][1] == b"export {}"
+        finally:
+            serve.Handler.app_dir = real
 
 
 def _raw_post(port: int, body: bytes, length: str | None = None) -> int:

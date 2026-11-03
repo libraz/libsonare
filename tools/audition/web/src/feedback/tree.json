@@ -1,0 +1,131 @@
+{
+  "start": "off",
+  "nodes": {
+    "off": {
+      "solo": true,
+      "a": [
+        {
+          "tag": "off",
+          "to": "grade"
+        },
+        {
+          "tag": "ok",
+          "leaf": true
+        }
+      ],
+      "unsure": "off/unsure"
+    },
+    "grade": {
+      "solo": false,
+      "a": [
+        {
+          "tag": "acceptable",
+          "to": "when"
+        },
+        {
+          "tag": "wrong-instrument",
+          "to": "broken"
+        }
+      ],
+      "unsure": "off/unsure"
+    },
+    "broken": {
+      "solo": false,
+      "a": [
+        {
+          "tag": "broken",
+          "leaf": true
+        },
+        {
+          "tag": "wrong-instrument",
+          "to": "alien"
+        }
+      ],
+      "unsure": "wrong-instrument/unsure"
+    },
+    "alien": {
+      "solo": false,
+      "a": [
+        {
+          "tag": "wrong-instrument/synthetic",
+          "leaf": true
+        },
+        {
+          "tag": "wrong-instrument/other",
+          "leaf": true
+        }
+      ],
+      "unsure": "wrong-instrument/unsure"
+    },
+    "when": {
+      "solo": false,
+      "a": [
+        {
+          "tag": "onset",
+          "to": "onset"
+        },
+        {
+          "tag": "body",
+          "to": "body"
+        }
+      ],
+      "unsure": "acceptable/unsure"
+    },
+    "onset": {
+      "solo": false,
+      "a": [
+        {
+          "tag": "onset/hard",
+          "leaf": true
+        },
+        {
+          "tag": "onset/soft",
+          "leaf": true
+        }
+      ],
+      "unsure": "onset/unsure"
+    },
+    "body": {
+      "solo": false,
+      "a": [
+        {
+          "tag": "tail",
+          "to": "tail"
+        },
+        {
+          "tag": "tone",
+          "to": "tone"
+        }
+      ],
+      "unsure": "body/unsure"
+    },
+    "tail": {
+      "solo": false,
+      "a": [
+        {
+          "tag": "tail/long",
+          "leaf": true
+        },
+        {
+          "tag": "tail/short",
+          "leaf": true
+        }
+      ],
+      "unsure": "tail/unsure"
+    },
+    "tone": {
+      "solo": false,
+      "a": [
+        {
+          "tag": "tone/bright",
+          "leaf": true
+        },
+        {
+          "tag": "tone/dark",
+          "leaf": true
+        }
+      ],
+      "unsure": "tone/unsure"
+    }
+  }
+}

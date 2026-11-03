@@ -1,0 +1,13 @@
+# Packages `ncu -u` must not raise, and why. Drop an entry once its blocker is
+# gone so the next run picks the package up again.
+
+# Yarn refuses to install versions younger than npmMinimalAgeGate (24h by
+# default, and .yarnrc.yml leaves it at the default), so proposing them here
+# would only produce an uninstallable package.json.
+cooldown: 1d
+
+reject:
+  # @types/node: tracks the runtime major, not npm's latest. mise.toml runs
+  # Node 22, so a newer major's types would let an API Node 22 lacks
+  # type-check. Raise within 22.x by hand; move the major with the mise pin.
+  - '@types/node'
