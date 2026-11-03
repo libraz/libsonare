@@ -914,8 +914,9 @@ TEST_CASE("receiver-pair RIRs without a late tail are each receiver's mono RIR",
   const std::vector<float> right = samples_of(pair.right);
   REQUIRE(left.size() == right.size());
 
-  for (const auto& [channel, receiver] :
-       {std::make_pair(&left, receivers.left), std::make_pair(&right, receivers.right)}) {
+  const std::pair<const std::vector<float>*, decltype(receivers.left)> channels[] = {
+      {&left, receivers.left}, {&right, receivers.right}};
+  for (const auto& [channel, receiver] : channels) {
     const std::vector<float> mono =
         samples_of(synthesize_rir(room, {pl.source, receiver}, sr, cfg).rir);
     REQUIRE(mono.size() <= channel->size());
