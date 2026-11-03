@@ -20,7 +20,7 @@
       "a": [
         {
           "tag": "acceptable",
-          "to": "when"
+          "to": "aspect"
         },
         {
           "tag": "wrong-instrument",
@@ -52,10 +52,80 @@
         },
         {
           "tag": "wrong-instrument/other",
-          "leaf": true
+          "to": "kin"
         }
       ],
       "unsure": "wrong-instrument/unsure"
+    },
+    "kin": {
+      "solo": false,
+      "a": [
+        {
+          "tag": "wrong-instrument/kin",
+          "leaf": true
+        },
+        {
+          "tag": "wrong-instrument/far",
+          "leaf": true
+        }
+      ],
+      "unsure": "wrong-instrument/other/unsure"
+    },
+    "aspect": {
+      "solo": false,
+      "a": [
+        {
+          "tag": "kind",
+          "to": "kind"
+        },
+        {
+          "tag": "detail",
+          "to": "when"
+        }
+      ],
+      "unsure": "acceptable/unsure"
+    },
+    "kind": {
+      "solo": false,
+      "a": [
+        {
+          "tag": "kind/variant",
+          "to": "variant"
+        },
+        {
+          "tag": "kind/lifeless",
+          "to": "lifeless"
+        }
+      ],
+      "unsure": "kind/unsure"
+    },
+    "variant": {
+      "solo": false,
+      "a": [
+        {
+          "tag": "kind/smaller",
+          "leaf": true
+        },
+        {
+          "tag": "kind/larger",
+          "leaf": true
+        }
+      ],
+      "unsure": "kind/variant/unsure"
+    },
+    "lifeless": {
+      "solo": false,
+      "a": [
+        {
+          "tag": "kind/uniform",
+          "leaf": true
+        },
+        {
+          "tag": "kind/dynamics",
+          "leaf": true
+        }
+      ],
+      "unsure": "kind/lifeless/unsure"
     },
     "when": {
       "solo": false,
@@ -69,7 +139,7 @@
           "to": "body"
         }
       ],
-      "unsure": "acceptable/unsure"
+      "unsure": "detail/unsure"
     },
     "onset": {
       "solo": false,
@@ -93,13 +163,27 @@
           "to": "tail"
         },
         {
-          "tag": "tone",
-          "to": "tone"
+          "tag": "sound",
+          "to": "sound"
         }
       ],
       "unsure": "body/unsure"
     },
     "tail": {
+      "solo": false,
+      "a": [
+        {
+          "tag": "tail/length",
+          "to": "length"
+        },
+        {
+          "tag": "tail/shape",
+          "leaf": true
+        }
+      ],
+      "unsure": "tail/unsure"
+    },
+    "length": {
       "solo": false,
       "a": [
         {
@@ -111,9 +195,37 @@
           "leaf": true
         }
       ],
-      "unsure": "tail/unsure"
+      "unsure": "tail/length/unsure"
+    },
+    "sound": {
+      "solo": false,
+      "a": [
+        {
+          "tag": "tone",
+          "to": "tone"
+        },
+        {
+          "tag": "texture",
+          "to": "texture"
+        }
+      ],
+      "unsure": "sound/unsure"
     },
     "tone": {
+      "solo": false,
+      "a": [
+        {
+          "tag": "tone/brightness",
+          "to": "brightness"
+        },
+        {
+          "tag": "tone/weight",
+          "to": "weight"
+        }
+      ],
+      "unsure": "tone/unsure"
+    },
+    "brightness": {
       "solo": false,
       "a": [
         {
@@ -125,7 +237,63 @@
           "leaf": true
         }
       ],
-      "unsure": "tone/unsure"
+      "unsure": "tone/brightness/unsure"
+    },
+    "weight": {
+      "solo": false,
+      "a": [
+        {
+          "tag": "tone/thin",
+          "leaf": true
+        },
+        {
+          "tag": "tone/thick",
+          "leaf": true
+        }
+      ],
+      "unsure": "tone/weight/unsure"
+    },
+    "texture": {
+      "solo": false,
+      "a": [
+        {
+          "tag": "pitch",
+          "to": "pitch"
+        },
+        {
+          "tag": "air",
+          "to": "air"
+        }
+      ],
+      "unsure": "texture/unsure"
+    },
+    "pitch": {
+      "solo": false,
+      "a": [
+        {
+          "tag": "pitch/off",
+          "leaf": true
+        },
+        {
+          "tag": "pitch/wobble",
+          "leaf": true
+        }
+      ],
+      "unsure": "pitch/unsure"
+    },
+    "air": {
+      "solo": false,
+      "a": [
+        {
+          "tag": "air/noise",
+          "leaf": true
+        },
+        {
+          "tag": "air/room",
+          "leaf": true
+        }
+      ],
+      "unsure": "air/unsure"
     }
   }
 }

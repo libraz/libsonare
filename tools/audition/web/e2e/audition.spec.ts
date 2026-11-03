@@ -112,9 +112,12 @@ test('walks the narrowing to a finer answer and records the trail', async ({ pag
     page.locator('.fb-choices button', { hasText: en[key] }).click();
   await choose('tree.off.off');
   await choose('tree.grade.acceptable');
+  await choose('tree.aspect.detail');
   await choose('tree.when.body');
-  await choose('tree.body.tone');
-  await choose('tree.tone.tone/dark');
+  await choose('tree.body.sound');
+  await choose('tree.sound.tone');
+  await choose('tree.tone.tone/brightness');
+  await choose('tree.brightness.tone/dark');
   await expect(page.locator('#fbSend')).toHaveClass(/ready/);
   await page.locator('#fbSend').click();
   await expect.poll(() => log('e2e-grand').at(-1)?.tag).toBe('tone/dark');
@@ -123,8 +126,11 @@ test('walks the narrowing to a finer answer and records the trail', async ({ pag
   expect((note.answers as { tag: string }[]).map((a) => a.tag)).toEqual([
     'off',
     'acceptable',
+    'detail',
     'body',
+    'sound',
     'tone',
+    'tone/brightness',
     'tone/dark',
   ]);
 });

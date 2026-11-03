@@ -60,11 +60,9 @@ beforeEach(() => {
 describe('send', () => {
   it('posts an attached note field for field', async () => {
     const server = stubServer();
-    answerAt(0);
-    answerAt(0);
-    answerAt(1);
-    answerAt(0);
-    answerAt(0);
+    for (const p of [0, 0, 1, 1, 0, 0, 0]) {
+      answerAt(p);
+    }
     setComment('  too hard at the start ');
     expect(await send()).toBe(true);
     const [post] = server.posts();
@@ -77,9 +75,11 @@ describe('send', () => {
       answers: [
         { q: 'off', tag: 'off', said: 'Something bothers me' },
         { q: 'grade', tag: 'acceptable', said: t('tree.grade.acceptable') },
+        { q: 'aspect', tag: 'detail', said: t('tree.aspect.detail') },
         { q: 'when', tag: 'body', said: t('tree.when.body') },
         { q: 'body', tag: 'tail', said: t('tree.body.tail') },
-        { q: 'tail', tag: 'tail/long', said: t('tree.tail.tail/long') },
+        { q: 'tail', tag: 'tail/length', said: t('tree.tail.tail/length') },
+        { q: 'length', tag: 'tail/long', said: t('tree.length.tail/long') },
       ],
       text: 'too hard at the start',
       conditions: CONDITIONS,

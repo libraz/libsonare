@@ -14,22 +14,108 @@ beforeEach(() => {
 /** Every answer position that ends the narrowing, with the tags it records and the verdict it earns. */
 const LEAVES: [string, number[], string[], string][] = [
   ['fine as it is', [1], ['ok'], 'ok'],
-  ['hard onset', [0, 0, 0, 0], ['off', 'acceptable', 'onset', 'onset/hard'], 'acceptable'],
-  ['soft onset', [0, 0, 0, 1], ['off', 'acceptable', 'onset', 'onset/soft'], 'acceptable'],
-  ['long tail', [0, 0, 1, 0, 0], ['off', 'acceptable', 'body', 'tail', 'tail/long'], 'acceptable'],
+  [
+    'smaller model',
+    [0, 0, 0, 0, 0],
+    ['off', 'acceptable', 'kind', 'kind/variant', 'kind/smaller'],
+    'acceptable',
+  ],
+  [
+    'larger model',
+    [0, 0, 0, 0, 1],
+    ['off', 'acceptable', 'kind', 'kind/variant', 'kind/larger'],
+    'acceptable',
+  ],
+  [
+    'every note alike',
+    [0, 0, 0, 1, 0],
+    ['off', 'acceptable', 'kind', 'kind/lifeless', 'kind/uniform'],
+    'acceptable',
+  ],
+  [
+    'no dynamics',
+    [0, 0, 0, 1, 1],
+    ['off', 'acceptable', 'kind', 'kind/lifeless', 'kind/dynamics'],
+    'acceptable',
+  ],
+  [
+    'hard onset',
+    [0, 0, 1, 0, 0],
+    ['off', 'acceptable', 'detail', 'onset', 'onset/hard'],
+    'acceptable',
+  ],
+  [
+    'soft onset',
+    [0, 0, 1, 0, 1],
+    ['off', 'acceptable', 'detail', 'onset', 'onset/soft'],
+    'acceptable',
+  ],
+  [
+    'long tail',
+    [0, 0, 1, 1, 0, 0, 0],
+    ['off', 'acceptable', 'detail', 'body', 'tail', 'tail/length', 'tail/long'],
+    'acceptable',
+  ],
   [
     'short tail',
-    [0, 0, 1, 0, 1],
-    ['off', 'acceptable', 'body', 'tail', 'tail/short'],
+    [0, 0, 1, 1, 0, 0, 1],
+    ['off', 'acceptable', 'detail', 'body', 'tail', 'tail/length', 'tail/short'],
+    'acceptable',
+  ],
+  [
+    'unnatural fade',
+    [0, 0, 1, 1, 0, 1],
+    ['off', 'acceptable', 'detail', 'body', 'tail', 'tail/shape'],
     'acceptable',
   ],
   [
     'bright tone',
-    [0, 0, 1, 1, 0],
-    ['off', 'acceptable', 'body', 'tone', 'tone/bright'],
+    [0, 0, 1, 1, 1, 0, 0, 0],
+    ['off', 'acceptable', 'detail', 'body', 'sound', 'tone', 'tone/brightness', 'tone/bright'],
     'acceptable',
   ],
-  ['dark tone', [0, 0, 1, 1, 1], ['off', 'acceptable', 'body', 'tone', 'tone/dark'], 'acceptable'],
+  [
+    'dark tone',
+    [0, 0, 1, 1, 1, 0, 0, 1],
+    ['off', 'acceptable', 'detail', 'body', 'sound', 'tone', 'tone/brightness', 'tone/dark'],
+    'acceptable',
+  ],
+  [
+    'thin tone',
+    [0, 0, 1, 1, 1, 0, 1, 0],
+    ['off', 'acceptable', 'detail', 'body', 'sound', 'tone', 'tone/weight', 'tone/thin'],
+    'acceptable',
+  ],
+  [
+    'thick tone',
+    [0, 0, 1, 1, 1, 0, 1, 1],
+    ['off', 'acceptable', 'detail', 'body', 'sound', 'tone', 'tone/weight', 'tone/thick'],
+    'acceptable',
+  ],
+  [
+    'pitch out',
+    [0, 0, 1, 1, 1, 1, 0, 0],
+    ['off', 'acceptable', 'detail', 'body', 'sound', 'texture', 'pitch', 'pitch/off'],
+    'acceptable',
+  ],
+  [
+    'beating',
+    [0, 0, 1, 1, 1, 1, 0, 1],
+    ['off', 'acceptable', 'detail', 'body', 'sound', 'texture', 'pitch', 'pitch/wobble'],
+    'acceptable',
+  ],
+  [
+    'extra noise',
+    [0, 0, 1, 1, 1, 1, 1, 0],
+    ['off', 'acceptable', 'detail', 'body', 'sound', 'texture', 'air', 'air/noise'],
+    'acceptable',
+  ],
+  [
+    'wrong room',
+    [0, 0, 1, 1, 1, 1, 1, 1],
+    ['off', 'acceptable', 'detail', 'body', 'sound', 'texture', 'air', 'air/room'],
+    'acceptable',
+  ],
   ['barely sounds', [0, 1, 0], ['off', 'wrong-instrument', 'broken'], 'broken'],
   [
     'synthetic',
@@ -38,9 +124,27 @@ const LEAVES: [string, number[], string[], string][] = [
     'wrong-instrument',
   ],
   [
-    'other',
-    [0, 1, 1, 1],
-    ['off', 'wrong-instrument', 'wrong-instrument', 'wrong-instrument/other'],
+    'close relative',
+    [0, 1, 1, 1, 0],
+    [
+      'off',
+      'wrong-instrument',
+      'wrong-instrument',
+      'wrong-instrument/other',
+      'wrong-instrument/kin',
+    ],
+    'wrong-instrument',
+  ],
+  [
+    'another family',
+    [0, 1, 1, 1, 1],
+    [
+      'off',
+      'wrong-instrument',
+      'wrong-instrument',
+      'wrong-instrument/other',
+      'wrong-instrument/far',
+    ],
     'wrong-instrument',
   ],
 ];
@@ -102,7 +206,7 @@ describe('"not sure"', () => {
     answerAt(2);
     expect(gradeOf(fb().trail)).toBe('off/unsure');
     resetComposer();
-    for (const p of [0, 0, 1, 2]) {
+    for (const p of [0, 0, 1, 1, 2]) {
       answerAt(p);
     }
     expect(gradeOf(fb().trail)).toBe('acceptable');
@@ -130,7 +234,7 @@ describe('back and start over', () => {
   it('back steps to the question that was answered last', () => {
     answerAt(0);
     answerAt(0);
-    expect(fb().node).toBe('when');
+    expect(fb().node).toBe('aspect');
     back();
     expect(fb().node).toBe('grade');
     expect(fb().trail.map((s) => s.tag)).toEqual(['off']);
