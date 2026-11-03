@@ -25,7 +25,7 @@ The rest of this document has two parts. [Checklist](#checklist) describes what 
 
 What you need depends on what you are changing. Nothing here requires the full toolchain.
 
-**C++ core only** — a C++17 compiler, CMake 3.16 or newer, `clang-format`, and `python3` (standard library only):
+**C++ core only** — a C++17 compiler, CMake 3.16 or newer, `clang-format` 18 (CI pins 18.1.8, and other major versions rewrap code differently), and `python3` (standard library only):
 
 ```bash
 make build            # Debug build into build/
