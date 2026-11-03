@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { onKey } from '../../src/app/keys';
 import * as feedback from '../../src/feedback/actions';
 import { t } from '../../src/i18n';
 import { setContextFactory } from '../../src/player/engine';
@@ -16,7 +17,7 @@ import {
   stopRun,
 } from '../../src/run/run';
 import { activeKey } from '../../src/state/selectors';
-import { getState } from '../../src/state/store';
+import { getState, setState } from '../../src/state/store';
 import { FakeContext, serveFetch, wav } from '../audio';
 import { comparedManifest, opened, SETS, soloManifest, step } from '../fixtures';
 
@@ -98,6 +99,18 @@ describe('a run', () => {
     expect(s.loop).toBe(true);
     expect(s.attach).toBe(true);
     expect(s.playing).toBe(true);
+  });
+
+  it('hears every voice under the same conditions, whatever the listening surface had set', async () => {
+    serveRun([step()]);
+    setState({ blind: true, matchRms: true, restartOnSwitch: false, region: [0.1, 0.2] });
+    await startRun();
+    const s = getState();
+    expect(s.blind).toBe(false);
+    expect(s.matchRms).toBe(false);
+    expect(s.restartOnSwitch).toBe(true);
+    expect(s.region).toBeNull();
+    expect(activeKey(s)).toBe('model');
   });
 
   it('stays silent when restored without a gesture', async () => {
@@ -215,5 +228,36 @@ describe('the keys', () => {
     expect(runKey(press('Tab'), { answerAt, send })).toBe(false);
     expect(runKey(press('n'), { answerAt, send })).toBe(true);
     await vi.waitFor(() => expect(runStore.getState().step?.set).toBe('p019-organ'));
+  });
+});
+
+describe('the keys on the run view', () => {
+  const fire = (key: string) => {
+    const ev = press(key);
+    onKey(ev);
+    return ev;
+  };
+
+  it('take play and the side swap, and nothing the run decided', async () => {
+    serveRun([step(), step({ set: 'p019-organ' })]);
+    await startRun();
+    setState({ view: 'run' });
+    const before = getState();
+    for (const key of ['v', 'b', 'm', 's', 'r', 'l', 'ArrowDown', 'ArrowRight', 'Home', '4']) {
+      expect(fire(key).defaultPrevented, key).toBe(false);
+    }
+    const after = getState();
+    expect(after.paletteOpen).toBe(false);
+    expect(after.blind).toBe(before.blind);
+    expect(after.matchRms).toBe(before.matchRms);
+    expect(after.restartOnSwitch).toBe(before.restartOnSwitch);
+    expect(after.loop).toBe(true);
+    expect(after.itemIndex).toBe(before.itemIndex);
+    expect(activeKey(after)).toBe('model');
+    fire('Tab');
+    expect(activeKey(getState())).toBe('ref');
+    expect(getState().playing).toBe(true);
+    fire(' ');
+    expect(getState().playing).toBe(false);
   });
 });

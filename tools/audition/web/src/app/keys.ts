@@ -3,7 +3,7 @@
  * Two key maps, because the two views have different subjects: on the
  * listening surface every shortcut acts on what is sounding, on the bank
  * nothing is sounding and the rows are what is navigated. The listening run
- * takes its three keys ahead of the listening surface's own.
+ * answers only its own keys, play and the side swap.
  */
 
 import { bankKey } from '../bank/BankView';
@@ -62,6 +62,20 @@ function move(k: string, itemIndex: number): boolean {
   }
 }
 
+/** The run's own keys plus play and the side swap; every other key does nothing, so nothing the run decided can be changed from the keyboard. */
+function runViewKey(ev: KeyboardEvent): void {
+  if (runKey(ev, { answerAt, send })) {
+    return;
+  }
+  if (ev.key === ' ') {
+    ev.preventDefault();
+    togglePlay();
+  } else if (ev.key === 'Tab' && getState().take) {
+    ev.preventDefault();
+    swapRole();
+  }
+}
+
 export function onKey(ev: KeyboardEvent): void {
   const target = ev.target as HTMLElement | null;
   // The palette's find box owns its own keys (the palette handles them); escape leaves an input.
@@ -92,7 +106,8 @@ export function onKey(ev: KeyboardEvent): void {
     bankKey(ev);
     return;
   }
-  if (s.view === 'run' && runKey(ev, { answerAt, send })) {
+  if (s.view === 'run') {
+    runViewKey(ev);
     return;
   }
   const k = ev.key;

@@ -15,8 +15,15 @@ import { getJSON, postJSON } from '../api/client';
 import { Queue, type QueueStep } from '../api/schemas';
 import { onNoteSent } from '../feedback/actions';
 import { t } from '../i18n';
-import { loadSet, loadSets, setVersion } from '../listen/actions';
-import { pause, setLoop } from '../player/engine';
+import {
+  loadSet,
+  loadSets,
+  setBlind,
+  setMatchRms,
+  setRestartOnSwitch,
+  setVersion,
+} from '../listen/actions';
+import { pause, setLoop, setRegion } from '../player/engine';
 import { roleOf, selectedComparison } from '../state/selectors';
 import { type AppState, getState, setState } from '../state/store';
 
@@ -130,12 +137,18 @@ export function modelKey(s: AppState): string {
   );
 }
 
-/** The library side first, looping, so the reference is one key away. */
+/** The library side first, looping, so the reference is one key away. Every
+ * voice is heard under the same conditions, whatever the listening surface had set. */
 function sound(autoplay: boolean): void {
   const s = getState();
   if (!s.take) {
     return;
   }
+  // Before the version is chosen: a blind index is a draw position, not a take index.
+  setBlind(false);
+  setMatchRms(false);
+  setRestartOnSwitch(true);
+  setRegion(null);
   setState({ attach: true });
   setLoop(true);
   setVersion(s.take.keys.indexOf(modelKey(getState())), { play: autoplay });
