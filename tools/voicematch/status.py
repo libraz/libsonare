@@ -171,14 +171,64 @@ def tier_of(pol: dict, program: int, bank: int, *, kit: bool) -> tuple[int, str]
         # whole bank — the long tail included — as the most urgent thing to work
         # on, which is the one answer a missing file must not be able to give.
         return 0, "unranked"
-    fallback = (len(tiers) + 1, "unranked")
-    for t in tiers:
-        if t.get("default"):
-            fallback = (int(t.get("rank", fallback[0])), t["name"])
-            continue
-        if program in set(t.get("kits" if kit else "programs") or []):
-            return int(t["rank"]), t["name"]
-    return fallback
+    found = placement(pol, program, bank, kit=kit)
+    return found["rank"], found["tier"]
+
+
+def tier_groups(tier: dict) -> list[dict]:
+    """A tier's members in the order they are worked, as `{name, programs, kits}`.
+
+    A tier lists its members either flat (`programs` / `kits`, one group named
+    after the tier) or as ordered `groups`, which is how the order inside a
+    tier is stated: the piano before the organ before the guitars, rather than
+    whatever order the program numbers happen to fall in.
+    """
+    groups = tier.get("groups")
+    if isinstance(groups, list):
+        return [g for g in groups if isinstance(g, dict)]
+    return [
+        {
+            "name": tier.get("name") or "",
+            "programs": tier.get("programs") or [],
+            "kits": tier.get("kits") or [],
+        }
+    ]
+
+
+def placement(pol: dict, program: int, bank: int, *, kit: bool) -> dict:
+    """Where a slot sits in the working order: tier, group within it, and a sort key.
+
+    `key` sorts every capital and kit ahead of every variation (a variation is
+    its capital narrowed and is not something a file is owed), then by tier
+    rank, then by the group's position inside the tier, then by number. The
+    rank rules are `tier_of`'s; this adds only the order inside a tier.
+    """
+    tiers = pol.get("tiers") or []
+    found = {"rank": 0, "tier": "unranked", "group": "", "group_index": 0}
+    if tiers:
+        found["rank"] = len(tiers) + 1
+        for t in tiers:
+            if t.get("default"):
+                found.update(rank=int(t.get("rank", found["rank"])), tier=t["name"])
+                continue
+            members = "kits" if kit else "programs"
+            index = next(
+                (i for i, g in enumerate(tier_groups(t)) if program in set(g.get(members) or [])),
+                None,
+            )
+            if index is not None:
+                group = tier_groups(t)[index]
+                found = {
+                    "rank": int(t["rank"]),
+                    "tier": t["name"],
+                    "group": group.get("name") or "",
+                    "group_index": index,
+                }
+                break
+    # Rank 0 (no policy) sorts last rather than first, for `tier_of`'s reason.
+    rank = found["rank"] or len(tiers) + 2
+    found["key"] = (bool(bank), rank, found["group_index"], bool(kit), program, bank)
+    return found
 
 
 def goal_members(goal: dict, rows: list[dict]) -> list[dict]:

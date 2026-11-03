@@ -106,7 +106,10 @@ DECISION_KEYS = ("tier", "rank", "goal", "goals", "priority", "release")
 #: Keys a tier entry may carry. Anything else is read by nothing: the policy is
 #: consumed through `.get()`, so an invented or misspelled key is silent and
 #: the tier goes on being resolved by whatever is left.
-TIER_KEYS = {"name", "rank", "programs", "kits", "default", "reason"}
+TIER_KEYS = {"name", "rank", "programs", "kits", "groups", "default", "reason"}
+
+#: Keys a tier's ordered `groups` entry may carry, for the same reason.
+GROUP_KEYS = {"name", "programs", "kits"}
 
 #: The same for a goal. `banks` is deliberately not here — a goal names capital
 #: tones and kits, never a variation, and a key that looked like it would work
@@ -208,9 +211,12 @@ def tier_slots(policy: dict) -> list[Slot]:
         if not isinstance(tier, dict):
             continue
         where = f"tier `{tier.get('name', '?')}`"
-        out += [Slot(where, "program", n) for n in tier.get("programs") or []
-                if isinstance(n, int)]
-        out += [Slot(where, "kit", n) for n in tier.get("kits") or [] if isinstance(n, int)]
+        groups = tier.get("groups")
+        members = [g for g in groups if isinstance(g, dict)] if isinstance(groups, list) else [tier]
+        for group in members:
+            out += [Slot(where, "program", n) for n in group.get("programs") or []
+                    if isinstance(n, int)]
+            out += [Slot(where, "kit", n) for n in group.get("kits") or [] if isinstance(n, int)]
     return out
 
 
@@ -388,6 +394,29 @@ def _tiers(scan: Scan) -> list[str]:
                 f"reads — the policy is consumed through `.get()`, so the tier goes on being "
                 f"resolved by the keys that are left"
             )
+        groups = tier.get("groups")
+        if groups is not None:
+            label = tier.get("name", index)
+            if "programs" in tier or "kits" in tier:
+                out.append(
+                    f"  tier `{label}` carries `groups` beside a flat `programs`/`kits`; "
+                    f"`status.py` reads the groups alone, so the flat list would be ignored"
+                )
+            if not isinstance(groups, list) or not groups:
+                out.append(f"  tier `{label}` has `groups` that is not a non-empty list")
+            else:
+                for gi, group in enumerate(groups):
+                    if not isinstance(group, dict):
+                        out.append(f"  tier `{label}` group {gi} is not an object")
+                        continue
+                    if not str(group.get("name") or "").strip():
+                        out.append(f"  tier `{label}` group {gi} carries no `name`")
+                    extra = sorted(set(group) - GROUP_KEYS)
+                    if extra:
+                        out.append(
+                            f"  tier `{label}` group `{group.get('name', gi)}` carries "
+                            f"{', '.join(extra)}, which nothing reads"
+                        )
     duplicated = sorted({n for n in names if names.count(n) > 1 and n})
     if duplicated:
         out.append(f"  two tiers are named {', '.join(duplicated)}")

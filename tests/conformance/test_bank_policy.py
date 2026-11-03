@@ -142,7 +142,7 @@ class ShippingTreeTest(unittest.TestCase):
 class ProgramNumberTest(_CopiedTree):
     def test_a_program_past_127_is_reported(self) -> None:
         def edit(pol):
-            pol["tiers"][0]["programs"].append(128)
+            pol["tiers"][0]["groups"][0]["programs"].append(128)
 
         lines = self.lines(check.evaluate(self.tree(edit), NO_FLOOR, NO_CEILING), "outside the GM range")
         self.assertEqual(len(lines), 1, lines)
@@ -157,7 +157,7 @@ class ProgramNumberTest(_CopiedTree):
 
     def test_an_out_of_range_number_is_not_also_reported_as_unresolved(self) -> None:
         """It resolves against nothing by construction; two lines would read as two faults."""
-        failures = check.evaluate(self.tree(lambda p: p["tiers"][0]["programs"].append(200)),
+        failures = check.evaluate(self.tree(lambda p: p["tiers"][0]["groups"][0]["programs"].append(200)),
                                   NO_FLOOR, NO_CEILING)
         self.absent(failures, "name a slot the bank has no row for")
 
@@ -210,6 +210,24 @@ class TierTest(_CopiedTree):
         )
         self.assertTrue(any("which nothing reads" in line for line in lines), lines)
 
+    def test_a_flat_member_list_beside_groups_is_reported(self) -> None:
+        """`status.py` reads the groups alone, so the flat list would rank nothing."""
+        lines = self.lines(
+            check.evaluate(self.tree(lambda p: p["tiers"][0].__setitem__("programs", [7])),
+                           NO_FLOOR, NO_CEILING),
+            "cannot express an order",
+        )
+        self.assertTrue(any("beside a flat" in line for line in lines), lines)
+
+    def test_an_invented_group_key_is_reported(self) -> None:
+        lines = self.lines(
+            check.evaluate(
+                self.tree(lambda p: p["tiers"][0]["groups"][0].__setitem__("program", [7])),
+                NO_FLOOR, NO_CEILING),
+            "cannot express an order",
+        )
+        self.assertTrue(any("which nothing reads" in line for line in lines), lines)
+
     def test_a_tier_that_is_not_an_object_is_reported_rather_than_raised(self) -> None:
         lines = self.lines(
             check.evaluate(self.tree(lambda p: p["tiers"].append("core")), NO_FLOOR, NO_CEILING),
@@ -223,7 +241,7 @@ class KitNumberTest(_CopiedTree):
 
     def test_a_kit_number_no_gs_map_defines_is_reported(self) -> None:
         lines = self.lines(
-            check.evaluate(self.tree(lambda p: p["tiers"][0].__setitem__("kits", [3])), NO_FLOOR, NO_CEILING),
+            check.evaluate(self.tree(lambda p: p["tiers"][0]["groups"].append({"name": "x", "kits": [3]})), NO_FLOOR, NO_CEILING),
             "name a slot the bank has no row for",
         )
         self.assertEqual(len(lines), 1, lines)
@@ -237,7 +255,7 @@ class KitNumberTest(_CopiedTree):
         at once -- which is the case a single space cannot represent, and the
         reason the two are tagged where they are collected rather than resolved.
         """
-        scan = check.Scan(self.tree(lambda p: p["tiers"][0].__setitem__("kits", [3])))
+        scan = check.Scan(self.tree(lambda p: p["tiers"][0]["groups"].append({"name": "x", "kits": [3]})))
         self.assertIn(3, scan.capitals)
         self.assertNotIn(3, scan.gs_kits)
         self.assertEqual(sorted(s.kind for s in scan.tier_slots if s.number == 3),

@@ -95,6 +95,41 @@ def test_a_variation_is_ranked_with_its_capital():
     assert status.tier_of(POLICY, 3, 8, kit=False) == (1, "core")
 
 
+GROUPED = {
+    "tiers": [
+        {
+            "name": "core",
+            "rank": 1,
+            "groups": [
+                {"name": "piano", "programs": [0, 1]},
+                {"name": "organ", "programs": [19]},
+                {"name": "drums", "kits": [0]},
+            ],
+        },
+        COMMON,
+    ]
+}
+
+
+def test_groups_order_a_tier_by_position_rather_than_by_number():
+    """The organ precedes the drums and both precede a common voice of lower number."""
+    order = sorted(
+        [(40, 0, False), (0, 0, True), (19, 0, False), (1, 0, False)],
+        key=lambda s: status.placement(GROUPED, s[0], s[1], kit=s[2])["key"],
+    )
+    assert order == [(1, 0, False), (19, 0, False), (0, 0, True), (40, 0, False)]
+    assert status.tier_of(GROUPED, 19, 0, kit=False) == (1, "core")
+    assert status.placement(GROUPED, 0, 0, kit=True)["group"] == "drums"
+
+
+def test_every_variation_sorts_after_every_capital():
+    """A variation is not something a file is owed, so the long tail's capitals precede it."""
+    capital = status.placement(GROUPED, 40, 0, kit=False)["key"]
+    variation = status.placement(GROUPED, 0, 8, kit=False)["key"]
+    assert capital < variation
+    assert status.tier_of(GROUPED, 0, 8, kit=False) == (1, "core")
+
+
 def test_no_policy_at_all_ranks_nothing_rather_than_ranking_everything_first():
     """Rank 0 renders as `t-`; a 1 would report the long tail as the most urgent."""
     assert status.tier_of({}, 0, 0, kit=False) == (0, "unranked")

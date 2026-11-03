@@ -44,8 +44,19 @@
     {
       "name": "core",
       "rank": 1,
-      "programs": [0, 1, 2, 3, 4, 5, 6, 19, 24, 26, 27, 28, 29, 30, 31, 33, 34, 35, 36, 37, 38, 39, 80, 81, 82, 83, 84, 85, 86, 87, 88, 89, 90, 91, 92, 93, 94, 95],
-      "kits": [0],
+      "groups": [
+        {"name": "acoustic piano", "programs": [0, 1, 2, 3]},
+        {"name": "pipe organ", "programs": [19]},
+        {"name": "electric guitar", "programs": [26, 27, 28, 29, 30, 31]},
+        {"name": "drums", "kits": [0]},
+        {"name": "electric bass", "programs": [33, 34, 35, 36, 37]},
+        {"name": "synth bass", "programs": [38, 39]},
+        {"name": "electric piano", "programs": [4, 5]},
+        {"name": "harpsichord", "programs": [6]},
+        {"name": "classical guitar", "programs": [24]},
+        {"name": "synth lead", "programs": [80, 81, 82, 83, 84, 85, 86, 87]},
+        {"name": "synth pad", "programs": [88, 89, 90, 91, 92, 93, 94, 95]}
+      ],
       "reason": "three grounds, and only the first is frequency. Reached often: the piano family, the standard kit, the electric guitars and the basses, measured in tools/gs/program-census.json. Irreplaceable: the synth basses, leads and pads are machine-defined, so nothing stands behind them for a recording to answer with and a substitute with a different envelope and spectrum stops the arrangement working — they are here whatever their frequency, and four of them are in the corpus's bottom quartile. This project's own interest: pipe organ, harpsichord and classical guitar, worked ahead of their frequency rather than because the corpus asks for it"
     },
     {
