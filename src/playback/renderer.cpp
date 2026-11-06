@@ -639,11 +639,12 @@ std::vector<float> render_interleaved(PlaybackRenderer& renderer, const float* i
 
   for (size_t start = 0; start < total; start += block) {
     const size_t count = std::min(block, total - start);
-    std::fill(in_block.begin(), in_block.end(), 0.0f);
-    if (start < frames) {
-      const size_t available = std::min(count, frames - start);
+    const size_t available = start < frames ? std::min(count, frames - start) : 0;
+    if (available > 0) {
       std::copy(in + start * in_ch, in + (start + available) * in_ch, in_block.begin());
     }
+    std::fill(in_block.begin() + static_cast<std::ptrdiff_t>(available * in_ch),
+              in_block.begin() + static_cast<std::ptrdiff_t>(count * in_ch), 0.0f);
     const bool ok = renderer.process_interleaved(in_block.data(), in_channels, out_block.data(),
                                                  channels, static_cast<int>(count));
     SONARE_CHECK_MSG(ok, ErrorCode::InvalidParameter, "playback render rejected a block");

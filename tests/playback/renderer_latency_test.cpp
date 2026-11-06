@@ -168,6 +168,39 @@ void check_onsets(const std::vector<int>& delays, int latency) {
   CHECK(carried > 0);
 }
 
+std::vector<float> reference_offline_render(const std::vector<float>& input, size_t frames,
+                                            int in_channels, const RendererConfig& config,
+                                            int block_frames, int* out_channels) {
+  PlaybackRenderer renderer(config, nullptr, 48000, block_frames);
+  const int channels = renderer.output_channel_count();
+  const size_t latency = static_cast<size_t>(renderer.latency_samples());
+  const size_t total = frames + latency;
+  const size_t block = static_cast<size_t>(block_frames);
+  const size_t padded_frames = ((total + block - 1) / block) * block;
+  std::vector<float> padded(padded_frames * static_cast<size_t>(in_channels), 0.0f);
+  std::copy(input.begin(), input.end(), padded.begin());
+  std::vector<float> block_output(block * static_cast<size_t>(channels), 0.0f);
+  std::vector<float> result(frames * static_cast<size_t>(channels), 0.0f);
+
+  for (size_t start = 0; start < total; start += block) {
+    const size_t count = std::min(block, total - start);
+    REQUIRE(renderer.process_interleaved(padded.data() + start * static_cast<size_t>(in_channels),
+                                         in_channels, block_output.data(), channels,
+                                         static_cast<int>(count)));
+    for (size_t i = 0; i < count; ++i) {
+      const size_t t = start + i;
+      if (t < latency) continue;
+      const size_t result_frame = t - latency;
+      if (result_frame >= frames) continue;
+      std::copy(block_output.begin() + static_cast<std::ptrdiff_t>(i * channels),
+                block_output.begin() + static_cast<std::ptrdiff_t>((i + 1) * channels),
+                result.begin() + static_cast<std::ptrdiff_t>(result_frame * channels));
+    }
+  }
+  if (out_channels != nullptr) *out_channels = channels;
+  return result;
+}
+
 }  // namespace
 
 TEST_CASE("latency depends on the target only", "[playback][latency]") {
@@ -386,6 +419,45 @@ TEST_CASE("offline rendering keeps the opening of speakers that distance compens
       CHECK(std::abs(onset[1] - static_cast<int>(burst_at)) <= 2);
       const double delay = with_distance ? expected_delay : 0.0;
       CHECK(std::abs(onset[0] - onset[1] - delay) <= 2.0);
+    }
+  }
+}
+
+TEST_CASE("offline rendering matches explicit zero padding across partial blocks",
+          "[playback][latency]") {
+  constexpr int kRenderBlockFrames = 64;
+  RendererConfig config;
+  config.prepare.input_layout = InputLayout::Stereo;
+  config.prepare.target_kind = TargetKind::Speakers;
+  config.prepare.target_layout = ChannelLayout::Stereo;
+  config.realtime.limiter_enabled = false;
+
+  for (const size_t frames : {size_t{1}, size_t{kRenderBlockFrames - 1}, size_t{kRenderBlockFrames},
+                              size_t{kRenderBlockFrames + 1}, size_t{2 * kRenderBlockFrames - 1},
+                              size_t{2 * kRenderBlockFrames}, size_t{2 * kRenderBlockFrames + 1}}) {
+    INFO("input frames " << frames);
+    std::vector<float> input(frames * 2);
+    for (size_t i = 0; i < frames; ++i) {
+      input[i * 2] = static_cast<float>(static_cast<int>(i % 17) - 8) * 0.01f;
+      input[i * 2 + 1] = static_cast<float>(static_cast<int>(i % 13) - 6) * 0.02f;
+    }
+    // Ensure the final copied input frame is nonzero in both channels.
+    input[(frames - 1) * 2] = 0.17f;
+    input[(frames - 1) * 2 + 1] = -0.23f;
+
+    int expected_channels = 0;
+    const std::vector<float> expected =
+        reference_offline_render(input, frames, 2, config, kRenderBlockFrames, &expected_channels);
+    int actual_channels = 0;
+    PlaybackRenderer actual_renderer(config, nullptr, 48000, kRenderBlockFrames);
+    REQUIRE(actual_renderer.latency_samples() > kRenderBlockFrames);
+    const std::vector<float> actual = render_interleaved(actual_renderer, input.data(), frames, 2);
+    actual_channels = actual_renderer.output_channel_count();
+    REQUIRE(actual_channels == expected_channels);
+    REQUIRE(actual.size() == expected.size());
+    for (size_t i = 0; i < actual.size(); ++i) {
+      INFO("sample " << i);
+      CHECK(std::abs(actual[i] - expected[i]) <= 1e-7f);
     }
   }
 }
