@@ -421,6 +421,7 @@ def report_result(knobs, pristine, best_values, evaluator, args, extra=None) -> 
             "pattern": args.pattern,
             "notes": args.notes,
             "velocities": args.velocities,
+            "mono_mode": getattr(args, "mono_mode", "mean"),
             "loss": {
                 "start": _finite(evaluator.trajectory[0][1]) if evaluator.trajectory else None,
                 # `best` stays the search winner; the explicit objects below govern a fallback.

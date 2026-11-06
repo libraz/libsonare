@@ -684,7 +684,9 @@ def corpus_pattern(
     )
 
 
-def corpus_oracle(corpus: Corpus, pattern: Pattern, sr: int) -> np.ndarray:
+def corpus_oracle(
+    corpus: Corpus, pattern: Pattern, sr: int, *, mono_mode: str = "mean"
+) -> np.ndarray:
     """Assemble the captured WAVs onto the probe's timeline as one render.
 
     The capture's lead-in is dropped rather than kept: it exists so the plugin's
@@ -730,7 +732,7 @@ def corpus_oracle(corpus: Corpus, pattern: Pattern, sr: int) -> np.ndarray:
             audio = audio[:, None]
         if out is None:
             out = np.zeros((total, audio.shape[1]), dtype=np.float64)
-        lead_s = sound_onset_s(to_mono(audio), sr, corpus.preroll_s, len(audio) / sr)
+        lead_s = sound_onset_s(to_mono(audio, mono_mode), sr, corpus.preroll_s, len(audio) / sr)
         seg = audio[round(lead_s * sr) :]
         start = round(note.start * sr)
         slot = corpus.slot_for(slot_note, note.velocity)

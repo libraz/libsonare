@@ -82,6 +82,7 @@ def render_model_rows_subprocess(
     band_edge_hz: float | None = None,
     metric_threads: int = 1,
     tnr_masks: list[dict] | None = None,
+    mono_mode: str = "mean",
 ) -> tuple[list[dict], np.ndarray | None]:
     """Render the model in a fresh subprocess; return per-note metrics (+ audio).
 
@@ -116,6 +117,8 @@ def render_model_rows_subprocess(
         notes_csv,
         "--velocities",
         velocities_csv,
+        "--mono-mode",
+        mono_mode,
     ]
     if bank:
         cmd += ["--bank", str(bank)]
