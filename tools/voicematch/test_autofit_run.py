@@ -43,6 +43,54 @@ from staging import _better_seed, screen_knobs
 # --------------------------------------------------------------------------- #
 # Proving the probe reached the code
 # --------------------------------------------------------------------------- #
+@pytest.mark.parametrize(
+    ("term", "velocities", "message"),
+    [
+        ("harm", "64,100,127", "no active loss terms"),
+        (None, "64,100,127", "no active loss terms"),
+        ("dyn", "100", "single velocity"),
+    ],
+)
+def test_fit_refuses_unusable_objectives_before_building(tmp_path, term, velocities, message):
+    weights = dict.fromkeys(LOSS_TERMS, 0.0)
+    if term is not None:
+        weights[term] = 1.0
+    spec = tmp_path / "unsupported-objective.json"
+    spec.write_text(
+        json.dumps(
+            {
+                "weights": weights,
+                "knobs": [{"tunable": "d045.percussion.mallet_vel_exp", "min": 0.0, "max": 1.0}],
+            }
+        )
+    )
+    build_path = tmp_path / "must-not-build"
+    build_path.write_text("sentinel")
+    result = subprocess.run(
+        [
+            sys.executable,
+            str(Path(autofit.__file__)),
+            "--spec",
+            str(spec),
+            "--program",
+            "0",
+            "--drum-note",
+            "45",
+            "--velocities",
+            velocities,
+            "--build-dir",
+            str(build_path),
+            "--dry-run",
+        ],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert result.returncode != 0
+    assert message in result.stderr
+    assert build_path.read_text() == "sentinel"
+
+
 class _FakeEvaluator:
     """Scores a knob vector from a formula, so a probe's reach is decidable."""
 
@@ -664,7 +712,7 @@ def test_repo_tree_state_names_the_dirty_path(tmp_path, monkeypatch):
 
 def _precondition_args(**kwargs) -> argparse.Namespace:
     """The minimum a Namespace needs to reach `run()`'s own tree-state guard."""
-    base = {"build_dir": "build-precondition-test"}
+    base = {"build_dir": "build-precondition-test", "spec": "auto"}
     base.update(kwargs)
     return argparse.Namespace(**base)
 

@@ -43,10 +43,10 @@ TERM_UNITS = {
     # all three. A decibel per second over the probe's two-second hold is two
     # decibels of drift across the note.
     "env": 3.0,
-    # Twelve cells (two decay bands over six harmonics) and six, each carrying
-    # a dB/s already divided by ten, so one unit is one dB/s on every cell.
-    "slope": 0.1 * 12,
-    "tail": 0.1 * 6,
+    # Two decay bands over the full measured harmonic ladder, and one tail
+    # band over that ladder. Each slope is divided by ten before aggregation.
+    "slope": 0.1 * 2 * HARM_REACH,
+    "tail": 0.1 * HARM_REACH,
     # Thirty cells for the attack's high bands, five bands over six slices, at a
     # dB each. `lf` carries no count on purpose and is the one exception to the
     # rule above: it AVERAGES its bands rather than summing them, so that its
@@ -66,6 +66,8 @@ TERM_UNITS = {
     "onsetvel": 2.0,
     # A mean absolute difference of the peak-level span in dB, capped like `level`.
     "velspan": 1.0,
+    # A per-note gain-centered peak-level error, averaged over velocity cells.
+    "velcurve": 1.0,
     # A dB of overshoot and a doubling of settle per cell.
     "onset": 2.0,
     # The third-octave profile's twenty-five bands at a dB each, and its eight
@@ -165,6 +167,7 @@ def cli_weights(args) -> dict[str, float]:
         weights.pop("modedyn", None)
         weights.pop("onsetvel", None)
         weights.pop("velspan", None)
+        weights.pop("velcurve", None)
     if not getattr(args, "has_level_contrasts", True):
         weights.pop("level", None)
     if not getattr(args, "has_onset_reference", True):
@@ -206,11 +209,12 @@ def refused_weights(args) -> list[str]:
 DROP_REASONS = {
     "level": ("has_level_contrasts", "the probe has no note/velocity level contrast"),
     "kit": ("has_kit_groups", "the probe covers no whole family of the capture's"),
-    "dyn": ("has_velocity_spread", "the probe sounds each pitch at one velocity"),
-    "hfdyn": ("has_velocity_spread", "the probe sounds each pitch at one velocity"),
-    "modedyn": ("has_velocity_spread", "the probe sounds each pitch at one velocity"),
-    "onsetvel": ("has_velocity_spread", "the probe sounds each pitch at one velocity"),
-    "velspan": ("has_velocity_spread", "the probe sounds each pitch at one velocity"),
+    "dyn": ("has_velocity_spread", "the probe has no usable per-note velocity span"),
+    "hfdyn": ("has_velocity_spread", "the probe has no usable per-note velocity span"),
+    "modedyn": ("has_velocity_spread", "the probe has no usable per-note velocity span"),
+    "onsetvel": ("has_velocity_spread", "the probe has no usable per-note velocity span"),
+    "velspan": ("has_velocity_spread", "the probe has no usable per-note velocity span"),
+    "velcurve": ("has_velocity_spread", "the probe has no usable per-note velocity span"),
     "onset": ("has_onset_reference", "no reference cell is onset-eligible"),
     "tail": ("has_tail_window", "no note is held long enough to reach the 2-6 s band"),
 }
@@ -285,6 +289,7 @@ TERM_COUNT_KEYS = {
     "modedyn": "modedyn_groups",
     "onsetvel": "onsetvel_groups",
     "velspan": "velspan_groups",
+    "velcurve": "velcurve_cells",
     "onset": "onset_compared",
     "band": "band_bins",
     "bdecay": "bdecay_bins",
@@ -342,7 +347,7 @@ SURVIVOR_MEAN_TERMS = frozenset(
 # Terms whose raw value already charges each missing reference cell at the cap
 # inside a fixed reference denominator, so the unmeasurable penalty would charge
 # the same absence twice. Their coverage stays reported.
-ABSENCE_CAPPED_TERMS = frozenset(("level", "evolve", "diffuse"))
+ABSENCE_CAPPED_TERMS = frozenset(("level", "evolve", "diffuse", "velcurve"))
 
 # What a term costs once it can no longer be measured, in multiples of its own
 # start value. Above 1.0 on purpose: equal to the start would make going blind

@@ -80,6 +80,7 @@ from loss_dimensions import (
     _perc_lf_terms,
     _rows_comparable,
     _stiff_terms,
+    _velcurve_terms,
     _velspan_terms,
     measured_terms,
 )
@@ -135,6 +136,18 @@ from metrics import (
     stretch_cents,
 )
 from metrics_hit import ring_doublings
+from metrics_skeleton import (
+    SKELETON_FRAME_HOP_S as _SKELETON_FRAME_HOP_S,
+)
+from metrics_skeleton import (
+    SKELETON_FRAME_MIN_S as _SKELETON_FRAME_MIN_S,
+)
+from metrics_skeleton import (
+    partial_envelopes,
+    sample_count,
+    skeleton_frame_s,
+    skeleton_frame_samples,
+)
 from metrics_texture import (
     DENSITY_CLIP,
     EVOLUTION_CLIP_DB,
@@ -160,17 +173,31 @@ SKELETON_MAX_S = 8.0
 # two-second window could never reach.
 SKELETON_BANDS = {"early_db_s": (0.08, 0.40), "late_db_s": (0.80, 1.80), "tail_db_s": (2.00, 6.00)}
 
-# The envelope grid every band is fitted on, and the fewest frames a fit is
+# The envelope grid every band is fitted on (the shortest window; a low note's
+# is longer, see `skeleton_frame_s`), and the fewest frames a fit is
 # allowed to run on. Module constants rather than locals because the shortest
 # note that reaches a band is derived from them below, and a hand-copied mirror
 # of a number that is right here is how a gate comes to describe a window the
 # code no longer uses.
-SKELETON_FRAME_WIN_S = 0.05
-SKELETON_FRAME_HOP_S = 0.01
+SKELETON_FRAME_WIN_S = _SKELETON_FRAME_MIN_S
+SKELETON_FRAME_HOP_S = _SKELETON_FRAME_HOP_S
 SKELETON_MIN_FRAMES = 4
 
 
-def band_min_note_s(band: str) -> float:
+def band_min_note_samples(band: str, *, frame_s: float, sample_rate: int) -> int:
+    """Minimum integer note length whose exclusive frame grid reaches a band."""
+    win_n, hop = skeleton_frame_samples(frame_s, sample_rate)
+    start_n = sample_count(SKELETON_BANDS[band][0], sample_rate)
+    first = max(0, math.ceil((start_n - (win_n - 1) / 2.0) / hop))
+    return win_n + (first + SKELETON_MIN_FRAMES) * hop
+
+
+def band_min_note_s(
+    band: str,
+    *,
+    frame_s: float = SKELETON_FRAME_WIN_S,
+    sample_rate: int | None = None,
+) -> float:
     """Shortest note that puts `SKELETON_MIN_FRAMES` frames inside `band`.
 
     A note under this reaches the band with nothing in it, and every cell of the
@@ -180,17 +207,45 @@ def band_min_note_s(band: str) -> float:
     2.0 s, so it misses by 70 ms and the term has never once been measured on
     that probe.
     """
+    if sample_rate is not None:
+        return band_min_note_samples(band, frame_s=frame_s, sample_rate=sample_rate) / sample_rate
     start = SKELETON_BANDS[band][0]
     # A frame is timed at its own centre, so the first one inside the band sits
     # half a window before it rather than on it.
-    first = math.ceil((start - SKELETON_FRAME_WIN_S / 2.0) / SKELETON_FRAME_HOP_S)
-    return (first + SKELETON_MIN_FRAMES) * SKELETON_FRAME_HOP_S + SKELETON_FRAME_WIN_S
+    first = math.ceil((start - frame_s / 2.0) / SKELETON_FRAME_HOP_S)
+    return (first + SKELETON_MIN_FRAMES) * SKELETON_FRAME_HOP_S + frame_s
 
 
-# How far under the note's loudest frame a band may sit and still be treated as
-# a measurement rather than as the floor. Generous, since a high partial 70 dB
-# down is still a partial; what it excludes is a band with nothing in it at all.
+def band_min_note_for(
+    band: str, note, *, percussive: bool = False, sample_rate: int | None = None
+) -> float:
+    """Minimum duration for a note's frame grid to reach one decay band."""
+    frame_s = band_frame_s_for_note(note, percussive=percussive)
+    return band_min_note_s(band, frame_s=frame_s, sample_rate=sample_rate)
+
+
+def band_frame_s_for_note(note, *, percussive: bool = False) -> float:
+    """Frame duration used by the skeleton for this pitched note or hit."""
+    return SKELETON_FRAME_WIN_S if percussive else skeleton_frame_s(midi_to_hz(note.note))
+
+
+def band_min_note_samples_for(
+    band: str, note, sample_rate: int, *, percussive: bool = False
+) -> int:
+    """Reachability threshold in the renderer's integer sample domain."""
+    return band_min_note_samples(
+        band,
+        frame_s=band_frame_s_for_note(note, percussive=percussive),
+        sample_rate=sample_rate,
+    )
+
+
+# Maximum usable decay range below the note's loudest partial. This keeps
+# missing partials and noise-only bins from becoming measurements.
 SKELETON_FLOOR_DB = 90.0
+# Maximum usable decay range below a partial's own peak. This stops a real
+# partial's decay at the recording floor, before that floor can set its slope.
+SKELETON_PARTIAL_FLOOR_DB = 60.0
 
 # The zoom grid a partial's frequency is refined over: 41 points spanning ±1.5%
 # of the guess, or ±26 cents. Shared by both refiners so the value they return
@@ -259,12 +314,12 @@ def skeleton_note(mono: np.ndarray, sr: int, note, n_harm: int = HARM_REACH) -> 
     reach.
     """
     f0_nominal = 440.0 * 2.0 ** ((note.note - 69) / 12.0)
-    start = int(note.start * sr)
+    start = sample_count(note.start, sr)
     seg = np.asarray(
-        mono[start : start + int(min(note.dur, SKELETON_MAX_S) * sr)], dtype=np.float64
+        mono[start : start + sample_count(min(note.dur, SKELETON_MAX_S), sr)], dtype=np.float64
     )
-    win_n = int(SKELETON_FRAME_WIN_S * sr)
-    hop = int(SKELETON_FRAME_HOP_S * sr)
+    frame_s = skeleton_frame_s(f0_nominal)
+    win_n, hop = skeleton_frame_samples(frame_s, sr)
     empty = {"init_db": [None] * n_harm, **{b: [None] * n_harm for b in SKELETON_BANDS}}
     if len(seg) < win_n + hop:
         return empty
@@ -303,29 +358,35 @@ def skeleton_note(mono: np.ndarray, sr: int, note, n_harm: int = HARM_REACH) -> 
             continue
         freqs.append(_refine(guess))
 
-    n_frames = (len(seg) - win_n) // hop
-    frames = np.lib.stride_tricks.sliding_window_view(seg, win_n)[::hop][:n_frames]
-    frames = frames * np.hanning(win_n)
-    t_win = np.arange(win_n) / sr
     active = [f for f in freqs if f is not None]
-    basis = np.exp(-2j * np.pi * np.outer(t_win, np.array(active)))
-    env = np.abs(frames @ basis)  # (n_frames, n_active)
+    t_frame, env = partial_envelopes(seg, sr, active, frame_s=frame_s)
+    if env.size == 0:
+        return empty
     env_db = 20.0 * np.log10(env + 1e-12)
-    t_frame = (np.arange(n_frames) * hop + win_n / 2) / sr
 
-    # Where a partial has stopped being a partial. A band whose frames all sit
-    # this far under the loudest thing in the note is measuring the render's
-    # floor, and a slope fitted to that is noise with a direction: the top two
-    # octaves are gone well before the 2-6 s band on any real grand, so without
-    # this the aftersound term compares one silence with another and reports a
-    # confident number that no knob can move.
-    floor_db = float(np.max(env_db)) - SKELETON_FLOOR_DB
+    # Per partial, the higher of the note-wide floor and the partial's own floor.
+    note_floor_db = float(np.max(env_db)) - SKELETON_FLOOR_DB
+    partial_floor_db = np.max(env_db, axis=0) - SKELETON_PARTIAL_FLOOR_DB
+    floor_db = np.maximum(note_floor_db, partial_floor_db)
 
-    def fit(lo: float, hi: float, col: np.ndarray) -> tuple[float, float] | None:
+    def fit(lo: float, hi: float, col: np.ndarray, floor: float) -> tuple[float, float] | None:
         mask = (t_frame >= lo) & (t_frame <= hi)
-        if mask.sum() < SKELETON_MIN_FRAMES or float(np.max(col[mask])) < floor_db:
+        in_band = np.flatnonzero(mask)
+        if in_band.size < SKELETON_MIN_FRAMES:
             return None
-        m, b = np.polyfit(t_frame[mask], col[mask], 1)
+        # Fit only the first contiguous run above the floor, so the floor never sets the slope.
+        valid = in_band[col[in_band] > floor]
+        if valid.size < SKELETON_MIN_FRAMES:
+            return None
+        run_end = (
+            int(np.flatnonzero(np.diff(valid) != 1)[0]) + 1
+            if np.any(np.diff(valid) != 1)
+            else len(valid)
+        )
+        valid = valid[:run_end]
+        if valid.size < SKELETON_MIN_FRAMES:
+            return None
+        m, b = np.polyfit(t_frame[valid], col[valid], 1)
         return float(m), float(b)
 
     init_db: list[float | None] = []
@@ -338,8 +399,9 @@ def skeleton_note(mono: np.ndarray, sr: int, note, n_harm: int = HARM_REACH) -> 
                 slopes[band].append(None)
             continue
         col = env_db[:, col_i]
+        col_floor = float(floor_db[col_i])
         col_i += 1
-        fits = {band: fit(lo, hi, col) for band, (lo, hi) in SKELETON_BANDS.items()}
+        fits = {band: fit(lo, hi, col, col_floor) for band, (lo, hi) in SKELETON_BANDS.items()}
         early = fits["early_db_s"]
         init_db.append(early[1] if early else None)
         for band, got in fits.items():
@@ -750,13 +812,13 @@ def loss_terms(
                 totals["init"] += _absent_or(a, b, 12.0, cells["init"])
             for key in ("early_db_s", "late_db_s"):
                 for a, b in _reference_indexed_pairs(
-                    _limited_cells(model_skeleton.get(key), 6),
-                    _limited_cells(oracle_skeleton.get(key), 6),
+                    _limited_cells(model_skeleton.get(key), HARM_REACH),
+                    _limited_cells(oracle_skeleton.get(key), HARM_REACH),
                 ):
                     totals["slope"] += _absent_or(a, b, 30.0, cells["slope"], 0.1) / 10.0
             for a, b in _reference_indexed_pairs(
-                _limited_cells(model_skeleton.get("tail_db_s"), 6),
-                _limited_cells(oracle_skeleton.get("tail_db_s"), 6),
+                _limited_cells(model_skeleton.get("tail_db_s"), HARM_REACH),
+                _limited_cells(oracle_skeleton.get("tail_db_s"), HARM_REACH),
             ):
                 totals["tail"] += _absent_or(a, b, TAIL_DELTA_CAP_DB_S, cells["tail"], 0.1) / 10.0
         for a, b in _reference_indexed_pairs(m.get("attack_hf_db"), o.get("attack_hf_db")):
@@ -814,6 +876,8 @@ def loss_terms(
     out["onset"], onset_compared = _onset_terms(model_rows, oracle_rows_, counts=onset_counts)
     velspan_counts: dict[str, float] = {}
     out["velspan"], velspan_groups = _velspan_terms(model_rows, oracle_rows_, counts=velspan_counts)
+    velcurve_counts: dict[str, float] = {}
+    out["velcurve"], _ = _velcurve_terms(model_rows, oracle_rows_, counts=velcurve_counts)
     stiff_counts: dict[str, float] = {}
     out["stiff"], stiff_notes = _stiff_terms(model_rows, oracle_rows_, counts=stiff_counts)
     out.update(stiff_counts)
@@ -824,6 +888,7 @@ def loss_terms(
     out["modedyn_groups"] = float(modedyn_groups)
     out["onsetvel_groups"] = float(onsetvel_groups)
     out["velspan_groups"] = float(velspan_groups)
+    out.update({f"velcurve_{key}": value for key, value in velcurve_counts.items()})
     out["onset_compared"] = float(onset_compared)
     out["stiff_notes"] = float(stiff_notes)
     out["tnr_notes"] = float(tnr_notes)
@@ -1144,6 +1209,10 @@ def percussion_terms(
     # only score zero here, and zero is this term's best possible value.
     dyn_counts: dict[str, float] = {}
     out["dyn"], dyn_groups = _dyn_terms(model_rows, oracle_rows_, counts=dyn_counts)
+    velspan_counts: dict[str, float] = {}
+    out["velspan"], velspan_groups = _velspan_terms(model_rows, oracle_rows_, counts=velspan_counts)
+    velcurve_counts: dict[str, float] = {}
+    out["velcurve"], _ = _velcurve_terms(model_rows, oracle_rows_, counts=velcurve_counts)
     # The pitch of everything in a kit that has one — see `_modes_terms`. Empty
     # for a cymbal or a shaker, whose rows carry no modes, so the term costs
     # those nothing and prices a mistuned tom.
@@ -1161,6 +1230,8 @@ def percussion_terms(
     if any(not math.isfinite(v) for v in out.values()):
         return None
     out["dyn_groups"] = float(dyn_groups)
+    out["velspan_groups"] = float(velspan_groups)
+    out.update({f"velcurve_{key}": value for key, value in velcurve_counts.items()})
     out["modes_notes"] = float(modes_notes)
     out["lf_notes"] = float(lf_notes)
     out["kit_notes"] = float(kit_notes)
@@ -1200,6 +1271,7 @@ def percussion_terms(
             out[f"{term}_uncapped"] = tally.uncapped(out[term], denominator)
     out.update(level_counts)
     out.update({f"dyn_{key}": value for key, value in dyn_counts.items()})
+    out.update({f"velspan_{key}": value for key, value in velspan_counts.items()})
     out.update(lf_counts)
     out.update(kit_counts)
     out["level_offset_db"] = offset

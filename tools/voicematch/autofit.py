@@ -438,6 +438,7 @@ def oracle_reference(args) -> tuple[list[dict], np.ndarray, np.ndarray | None, f
     """
     corpus = resolve_corpus(args)
     sr = render_rate(corpus)
+    mono_mode = getattr(args, "mono_mode", "mean")
     pattern, total, _ = _score(
         args.program,
         args.pattern,
@@ -450,7 +451,7 @@ def oracle_reference(args) -> tuple[list[dict], np.ndarray, np.ndarray | None, f
         # Assembled from the capture rather than played: the reference for a
         # corpus run already exists as audio, one file per slot, and nothing
         # about it depends on a plugin still being installed.
-        audio = corpus_oracle(corpus, pattern, sr)
+        audio = corpus_oracle(corpus, pattern, sr, mono_mode=mono_mode)
     else:
         smf_bytes = write_smf(
             pattern.notes,
@@ -519,16 +520,15 @@ def oracle_reference(args) -> tuple[list[dict], np.ndarray, np.ndarray | None, f
     # reproduce. The correlation is reported so the risk is visible; the
     # reduction stays a sum by default because every committed profile in
     # `reference/` was measured through one.
-    mode = getattr(args, "mono_mode", "mean")
     corr = channel_correlation(audio)
-    if mode == "mean" and corr is not None and corr < STEREO_COMB_CORRELATION:
+    if mono_mode == "mean" and corr is not None and corr < STEREO_COMB_CORRELATION:
         print(
             f"  note: the oracle's channels correlate at {corr:+.2f}, so summing "
             f"them comb-filters what differs between them. --mono-mode left "
             f"takes one channel and has no sum in it.",
             file=sys.stderr,
         )
-    raw = to_mono(audio, mode)
+    raw = to_mono(audio, mono_mode)
     mono = normalize_rms(raw)
     threads = resolve_metric_threads(args)
     rows = probe_rows(mono, pattern, sr, raw=raw, threads=threads)
@@ -746,6 +746,7 @@ class Evaluator:
                 "pattern": self.args.pattern,
                 "notes": self.args.notes,
                 "velocities": self.args.velocities,
+                "mono_mode": getattr(self.args, "mono_mode", "mean"),
                 "gate_ms": getattr(self.args, "drum_gate_ms", 0),
                 "band_edge_hz": self.band_edge_hz,
                 "room_ir": file_digest(self.room_ir) if self.room_ir else "",
@@ -887,6 +888,7 @@ class Evaluator:
             band_edge_hz=self.band_edge_hz,
             metric_threads=self.metric_threads,
             tnr_masks=oracle_tnr_masks(self.oracle),
+            mono_mode=getattr(self.args, "mono_mode", "mean"),
         )
         mss = 0.0
         if want_audio and model_audio is not None:
@@ -1276,6 +1278,7 @@ def holdout_scorer(args, build_dir, knobs, room_ir):
             band_edge_hz=band_edge,
             metric_threads=resolve_metric_threads(args),
             tnr_masks=oracle_tnr_masks(oracle_rows),
+            mono_mode=getattr(holdout, "mono_mode", "mean"),
         )
         mss = mss_distance(audio, oracle_audio) if want_audio and audio is not None else 0.0
         terms = robust_score_terms(
@@ -1634,6 +1637,7 @@ def run(args, argv: list[str] | None = None) -> int:
             file=sys.stderr,
         )
 
+    apply_spec_weights(args, argv if argv is not None else sys.argv[1:])
     resolve_probe(args)
     if adoption_refusal(getattr(args, "fit_assessment", None)) is not None:
         print(
@@ -1643,8 +1647,11 @@ def run(args, argv: list[str] | None = None) -> int:
         )
     # Resolve the fit axis first: an overlapping hold-out is invalid even without the fit flag.
     validation_partition = check_validation_partition(args)
-    apply_spec_weights(args, argv if argv is not None else sys.argv[1:])
     weights = cli_weights(args)
+    if not weights and not getattr(args, "dump_knobs", False):
+        raise ValueError(
+            "no active loss terms for this probe; choose at least one supported positive weight"
+        )
     print(
         f"probe: pattern {args.pattern!r} on MIDI channel "
         f"{10 if args.percussive else 1}, scored with the "
@@ -1837,6 +1844,7 @@ def run(args, argv: list[str] | None = None) -> int:
                 gate_ms=getattr(args, "drum_gate_ms", 0),
                 bank=getattr(args, "bank", 0),
                 band_edge_hz=band_edge,
+                mono_mode=getattr(args, "mono_mode", "mean"),
             )
             if dry_model is None:
                 raise RuntimeError("room correction needs the model render, which came back empty")
@@ -2192,6 +2200,15 @@ _WEIGHT_FLAGS_1: tuple[tuple[str, str], ...] = (
             "weight on the VELOCITY SPAN: the softest-to-hardest range of the peak "
             "level per pitch, the quantity the gate's `vel_range` reads. Needs a probe "
             "with a velocity axis"
+        ),
+    ),
+    (
+        "--w-velcurve",
+        (
+            "weight on the VELOCITY CURVE: per-note peak-level differences across "
+            "velocity after removing that note's common gain offset. Finds a wrong "
+            "middle-velocity response even when the softest-to-hardest span matches. "
+            "Needs a probe whose velocities span at least 16 on one pitch"
         ),
     ),
     (

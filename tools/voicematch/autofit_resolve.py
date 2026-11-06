@@ -22,14 +22,17 @@ from corpus import (
 )
 from knobs import load_spec_weights
 from loss import (
+    DYN_MIN_VELOCITY_SPREAD,
     KIT_MIN_MEMBERS,
     LOSS_TERMS,
     SKELETON_BANDS,
     SKELETON_MAX_S,
     band_min_note_s,
+    band_min_note_samples_for,
     cli_weights,
 )
 from metrics import measure_band_edge
+from metrics_skeleton import sample_count
 from patterns import build_pattern, pattern_length
 from render_oracle import check_oracle_rig
 
@@ -260,6 +263,12 @@ def resolve_probe(args) -> None:
         corpus=corpus,
         gate_ms=getattr(args, "drum_gate_ms", 0),
     )
+    # Import at call time: render_rows depends on this module's _score, while
+    # the reachability check must use the same rate the renderer will use.
+    from render_rows import render_rate
+
+    sample_rate = render_rate(corpus)
+    args.sample_rate = sample_rate
     if corpus is not None:
         print(describe(corpus, pattern), file=sys.stderr)
     args.percussive = pattern.percussive
@@ -284,7 +293,9 @@ def resolve_probe(args) -> None:
     velocities: dict[int, set[int]] = {}
     for n in pattern.analysis_notes:
         velocities.setdefault(n.note, set()).add(n.velocity)
-    args.has_velocity_spread = any(len(v) >= 2 for v in velocities.values())
+    args.has_velocity_spread = any(
+        len(v) >= 2 and max(v) - min(v) >= DYN_MIN_VELOCITY_SPREAD for v in velocities.values()
+    )
     args.has_level_contrasts = len({(n.note, n.velocity) for n in pattern.analysis_notes}) >= 2
     args.has_onset_reference = has_onset_reference(corpus, pattern)
     # Whether any note is held long enough for the aftersound band to have
@@ -293,9 +304,18 @@ def resolve_probe(args) -> None:
     # probe holds 2.0 s, and a band with no frames is skipped rather than
     # charged — so the term scored exactly 0.0, its BEST value, on every
     # candidate of every fit that ever weighted it.
-    tail_min = band_min_note_s("tail_db_s")
+    tail_min_samples_by_note = [
+        band_min_note_samples_for("tail_db_s", note, sample_rate, percussive=pattern.percussive)
+        for note in pattern.analysis_notes
+    ]
+    tail_min = (
+        min(tail_min_samples_by_note) / sample_rate
+        if tail_min_samples_by_note
+        else band_min_note_s("tail_db_s")
+    )
     args.has_tail_window = any(
-        min(n.dur, SKELETON_MAX_S) >= tail_min for n in pattern.analysis_notes
+        min(sample_count(n.dur, sample_rate), sample_count(SKELETON_MAX_S, sample_rate)) >= required
+        for n, required in zip(pattern.analysis_notes, tail_min_samples_by_note)
     )
     probe_notes = {n.note for n in pattern.analysis_notes}
     args.has_kit_groups = any(
@@ -325,11 +345,18 @@ def resolve_probe(args) -> None:
     # dynamics match on every candidate and quietly dilute the whole objective.
     # Only what was asked for explicitly reaches here: a class default is already
     # gone, dropped by `cli_weights` off `has_velocity_spread`.
-    for flag in ("dyn", "hfdyn", "modedyn", "onsetvel", "velspan"):
+    for flag in ("dyn", "hfdyn", "modedyn", "onsetvel", "velspan", "velcurve"):
         if getattr(args, f"w_{flag}", None) and not args.has_velocity_spread:
+            spans = [max(v) - min(v) for v in velocities.values() if len(v) >= 2]
+            axis_problem = (
+                f"the widest per-note velocity span is {max(spans):g} steps, below the "
+                f"required {DYN_MIN_VELOCITY_SPREAD:g}"
+                if spans
+                else "each note is sounded at a single velocity"
+            )
             raise ValueError(
                 f"--w-{flag} fits against velocity per pitch, and pattern "
-                f"{args.pattern!r} sounds each note at a single velocity, so there is no "
+                f"{args.pattern!r} has {axis_problem}, so there is no "
                 f"curve to fit. Use --pattern velocity, a drum probe, or drop --w-{flag}."
             )
     if getattr(args, "w_onset", None) and not args.has_onset_reference:
@@ -347,7 +374,7 @@ def resolve_probe(args) -> None:
             f"--w-tail reads the {SKELETON_BANDS['tail_db_s'][0]:g}-"
             f"{SKELETON_BANDS['tail_db_s'][1]:g} s decay band, and the longest note "
             f"pattern {args.pattern!r} holds is {longest:g} s, so the band has no frames "
-            f"in it on any note. Hold the notes past {band_min_note_s('tail_db_s'):g} s "
+            f"in it on any note. Hold the notes past {tail_min:g} s "
             f"(--dur), fit against a corpus whose gate is longer, or drop --w-tail."
         )
     # Same shape as the dynamics refusal, on the other between-note axis. An

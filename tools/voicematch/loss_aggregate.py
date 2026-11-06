@@ -5,11 +5,11 @@ from __future__ import annotations
 import math
 
 from loss import score_terms
-from loss_dimensions import LEVEL_DELTA_CAP_DB, LOSS_TERMS
+from loss_dimensions import LEVEL_DELTA_CAP_DB, LOSS_TERMS, _velcurve_groups
 from loss_weights import TERM_COUNT_KEYS
 
 DEFAULT_TAIL_FRACTION = 0.25
-GRID_TERMS = frozenset(("mss", "dyn", "hfdyn", "modedyn", "onsetvel", "velspan", "kit"))
+GRID_TERMS = frozenset(("mss", "dyn", "hfdyn", "modedyn", "onsetvel", "velspan", "velcurve", "kit"))
 
 
 def upper_tail_mean(values, fraction):
@@ -99,5 +99,15 @@ def robust_score_terms(model_rows, oracle_rows, *, tail_fraction=DEFAULT_TAIL_FR
                 aggregate[f"{name}_uncapped"], upper_tail_mean(uncapped, tail_fraction)
             )
             aggregate[f"{name}_uncapped_worst"] = max(uncapped)
+    velocity_curves = _velcurve_groups(model_rows, oracle_rows)
+    if velocity_curves:
+        residuals = [group.residual_db for group in velocity_curves]
+        tail = upper_tail_mean(residuals, tail_fraction)
+        worst = max(velocity_curves, key=lambda group: group.residual_db)
+        aggregate["velcurve_mean"] = aggregate["velcurve"]
+        aggregate["velcurve_upper_tail"] = tail
+        aggregate["velcurve_worst"] = worst.residual_db
+        aggregate["velcurve_worst_note"] = float(worst.note)
+        aggregate["velcurve"] = max(aggregate["velcurve"], tail)
     aggregate["aggregation_tail_fraction"] = tail_fraction
     return aggregate

@@ -35,9 +35,10 @@ from types import SimpleNamespace
 
 import numpy as np
 from loss import (
+    DYN_MIN_VELOCITY_SPREAD,
     LOSS_TERMS,
     SKELETON_MAX_S,
-    band_min_note_s,
+    band_min_note_samples_for,
     cli_weights,
     mss_distance,
     oracle_tnr_masks,
@@ -45,6 +46,7 @@ from loss import (
     score_terms,
 )
 from metrics import normalize_rms, to_mono
+from metrics_skeleton import sample_count
 from patterns import (
     drum_pattern,
     pattern_length,
@@ -114,7 +116,9 @@ def census(terms: dict[str, float]) -> dict[str, Counter]:
     return out
 
 
-def resolved_weights(report: dict, rows: list[dict], pattern) -> dict[str, float]:
+def resolved_weights(
+    report: dict, rows: list[dict], pattern, *, sample_rate: int
+) -> dict[str, float]:
     """The weights a fit on this probe would actually resolve to.
 
     Read through `cli_weights` with the probe-shape flags rather than off the
@@ -125,16 +129,25 @@ def resolved_weights(report: dict, rows: list[dict], pattern) -> dict[str, float
     velocities: dict[int, set[int]] = {}
     for note in pattern.analysis_notes:
         velocities.setdefault(note.note, set()).add(note.velocity)
-    tail_min = band_min_note_s("tail_db_s")
+    tail_min_samples_by_note = [
+        band_min_note_samples_for("tail_db_s", note, sample_rate, percussive=pattern.percussive)
+        for note in pattern.analysis_notes
+    ]
     args = SimpleNamespace(
         program=report["program"],
         percussive=pattern.percussive,
         drum_note=rows[0]["note"] if pattern.percussive else None,
         has_analysis_notes=bool(pattern.analysis_notes),
         has_kit_groups=False,
-        has_velocity_spread=any(len(v) >= 2 for v in velocities.values()),
+        has_velocity_spread=any(
+            len(v) >= 2 and max(v) - min(v) >= DYN_MIN_VELOCITY_SPREAD for v in velocities.values()
+        ),
         has_level_contrasts=len({(n.note, n.velocity) for n in pattern.analysis_notes}) >= 2,
-        has_tail_window=any(min(n.dur, SKELETON_MAX_S) >= tail_min for n in pattern.analysis_notes),
+        has_tail_window=any(
+            min(sample_count(note.dur, sample_rate), sample_count(SKELETON_MAX_S, sample_rate))
+            >= required
+            for note, required in zip(pattern.analysis_notes, tail_min_samples_by_note)
+        ),
         **{f"w_{term}": None for term in LOSS_TERMS},
     )
     return cli_weights(args)
@@ -185,7 +198,7 @@ def measure(directory: Path) -> dict | None:
         "gm_name": report.get("gm_name", ""),
         "pattern": report["pattern"],
         "notes": len(model_rows),
-        "weighted": sorted(resolved_weights(report, rows, pattern)),
+        "weighted": sorted(resolved_weights(report, rows, pattern, sample_rate=sr)),
         "cells": {t: dict(c) for t, c in census(terms).items()},
     }
 

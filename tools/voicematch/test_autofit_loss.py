@@ -898,6 +898,6 @@ def test_the_four_cell_outcomes_are_what_the_loss_actually_emits():
     terms = loss_terms([model], [oracle])
     assert terms is not None
     census = loss_cells.census(terms)
-    assert census["slope"]["clipped"] == 12 and census["slope"]["compared"] == 0
-    assert census["tail"]["skipped"] == 6 and census["tail"]["compared"] == 0
+    assert census["slope"]["clipped"] == 24 and census["slope"]["compared"] == 0
+    assert census["tail"]["skipped"] == 12 and census["tail"]["compared"] == 0
     assert terms["tail"] == 0.0, "a band with no cells scores the term's best"

@@ -847,6 +847,7 @@ GATE_TERMS = {
 #: The same for a drum note, whose objective is the percussion term set. `level`
 #: and `dyn` are absent: a module note is one velocity, and both need a contrast.
 PERCUSSION_GATE_TERMS = {
+    "vel_range": "velspan",
     "band_tilt": "band",
     "band_shape": "band",
     "band_decay": "bdecay",

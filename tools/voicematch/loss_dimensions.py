@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import math
+from dataclasses import dataclass
 from statistics import median as median_offset
 
 import numpy as np
@@ -15,6 +16,7 @@ from metrics import (
     stretch_cents,
 )
 from metrics_attack import ATTACK_BANDS_HZ
+from metrics_signal import DB_FLOOR
 
 #: How far up the ladder `harm` compares. `analyze_note` measures exactly
 #: `N_HARMONICS` bins, so this is the whole of what the measurement offers
@@ -26,8 +28,10 @@ HARM_REACH = N_HARMONICS
 # The terms the loss is built from, in report order. `harm`/`cents`/`tnr`/`init`/
 # `slope`/`tail`/`hf`/`lf` come from the harmonic metric set and `band`/`bdecay`
 # from the percussion one; `env`, `mss`, `level` and `crest` are computed for
-# both. A run uses one group or the other — which one the probe pattern decides
-# — and the unused terms stay at zero weight.
+# both. `velspan` measures the gate's endpoint range; `velcurve` compares the
+# per-velocity peak levels after removing each note's common offset. A run uses
+# one metric set or the other — which one the probe pattern decides — and the
+# unused terms stay at zero weight.
 LOSS_TERMS = (
     "harm",
     "modes",
@@ -48,6 +52,7 @@ LOSS_TERMS = (
     "modedyn",
     "onsetvel",
     "velspan",
+    "velcurve",
     "onset",
     "mss",
     "band",
@@ -91,13 +96,27 @@ BODY_DELTA_CAP_DB = 24.0
 # the reference's did not: the same cap the other absent-model terms use,
 # rather than skipping a note a fit could make disappear for free.
 TNR_ABSENT_CAP_DB = 24.0
+PEAK_DB_FLOOR = 20.0 * math.log10(DB_FLOOR)
 
 # Which terms a metric set actually produces. Both reducers fill every entry of
 # LOSS_TERMS so the dict has one shape, which means a term belonging to the
 # other set reads as exactly 0.0 — indistinguishable, in the dict alone, from a
 # term the model matched perfectly. Anything that reasons about a residual
 # rather than about the combined loss has to know the difference.
-_SHARED_TERMS = ("env", "mss", "level", "crest", "dyn", "modes", "bright")
+# These terms read row-level measurements or relations that both metric sets
+# produce. `velspan` is the gate's `vel_range`; `velcurve` reads the same peak
+# levels across each note's velocity ladder.
+_SHARED_TERMS = (
+    "env",
+    "mss",
+    "level",
+    "crest",
+    "dyn",
+    "modes",
+    "bright",
+    "velspan",
+    "velcurve",
+)
 PITCHED_TERMS = (
     "harm",
     "cents",
@@ -112,7 +131,6 @@ PITCHED_TERMS = (
     "hfdyn",
     "modedyn",
     "onsetvel",
-    "velspan",
     "onset",
     "arrival",
     "body",
@@ -572,6 +590,108 @@ def _velspan_terms(
         counts["capped"] = float(capped)
         counts["absent"] = float(absent)
     return (total / used if used else 0.0), used
+
+
+@dataclass(frozen=True)
+class VelocityCurveGroup:
+    """One note's gain-invariant peak-level curve residual."""
+
+    note: int
+    residual_db: float
+    cells: int
+    capped: int
+    absent: int
+
+
+def _peak_db_above_floor(row: dict) -> float | None:
+    """Read a peak level only when it rose above the signal dB arithmetic floor."""
+    peak = _finite_or_none(row.get("peak_dbfs"))
+    return peak if peak is not None and peak > PEAK_DB_FLOOR else None
+
+
+def _velcurve_groups(model_rows: list[dict], oracle_rows_: list[dict]) -> list[VelocityCurveGroup]:
+    """Return eligible oracle-defined per-note peak-curve residuals.
+
+    A common model/reference offset within one note is removed using the
+    capped-L1 optimum over finite pairs, preferring the ordinary median on
+    ties. The term therefore measures changes in level across velocity rather
+    than output gain. The oracle owns the cells and denominator: missing model
+    peaks pay the cap, and reference peaks at the arithmetic floor remain
+    unknown.
+    """
+    by_note: dict[int, list[tuple[int, float, float]]] = {}
+    for index, oracle in enumerate(oracle_rows_):
+        note = oracle.get("note")
+        velocity = _finite_or_none(oracle.get("velocity"))
+        peak = _peak_db_above_floor(oracle)
+        if note is None or velocity is None or peak is None:
+            continue
+        by_note.setdefault(int(note), []).append((index, velocity, peak))
+
+    groups = []
+    for note, cells in by_note.items():
+        velocities = {velocity for _, velocity, _ in cells}
+        if len(velocities) < 2 or max(velocities) - min(velocities) < DYN_MIN_VELOCITY_SPREAD:
+            continue
+
+        deltas = []
+        for index, _velocity, oracle_peak in cells:
+            model_peak = _peak_db_above_floor(model_rows[index])
+            if model_peak is not None:
+                deltas.append(model_peak - oracle_peak)
+        offset = None
+        if deltas:
+            median = median_offset(deltas)
+
+            def capped_cost(candidate: float, paired: tuple[float, ...] = tuple(deltas)) -> float:
+                return math.fsum(
+                    min(abs(delta - candidate), LEVEL_DELTA_CAP_DB) for delta in paired
+                )
+
+            offset = median
+            best_cost = capped_cost(median)
+            # Capped-L1 minima occur at observed deltas; retain the median on ties.
+            for candidate in dict.fromkeys(deltas):
+                cost = capped_cost(candidate)
+                if cost < best_cost:
+                    offset = candidate
+                    best_cost = cost
+
+        residuals = []
+        capped = absent = 0
+        for index, _velocity, oracle_peak in cells:
+            model_peak = _peak_db_above_floor(model_rows[index])
+            if model_peak is None or offset is None:
+                delta = LEVEL_DELTA_CAP_DB
+                absent += 1
+            else:
+                delta = abs((model_peak - oracle_peak) - offset)
+            capped += int(delta >= LEVEL_DELTA_CAP_DB)
+            residuals.append(min(delta, LEVEL_DELTA_CAP_DB))
+        groups.append(
+            VelocityCurveGroup(
+                note=note,
+                residual_db=math.fsum(residuals) / len(cells),
+                cells=len(cells),
+                capped=capped,
+                absent=absent,
+            )
+        )
+    return groups
+
+
+def _velcurve_terms(
+    model_rows: list[dict], oracle_rows_: list[dict], *, counts: dict[str, float] | None = None
+) -> tuple[float, int]:
+    """Mean per-note curve residual and total oracle-cell denominator."""
+    groups = _velcurve_groups(model_rows, oracle_rows_)
+    if counts is not None:
+        counts["groups"] = float(len(groups))
+        counts["cells"] = float(sum(group.cells for group in groups))
+        counts["capped"] = float(sum(group.capped for group in groups))
+        counts["absent"] = float(sum(group.absent for group in groups))
+    value = math.fsum(group.residual_db for group in groups) / len(groups) if groups else 0.0
+    return value, sum(group.cells for group in groups)
 
 
 # --------------------------------------------------------------------------- #
