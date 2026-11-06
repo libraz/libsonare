@@ -4,6 +4,7 @@
 #include <algorithm>
 #include <catch2/catch_test_macros.hpp>
 #include <cmath>
+#include <limits>
 #include <vector>
 
 #include "core/audio.h"
@@ -47,6 +48,26 @@ TEST_CASE("chroma_cqt normalized values are in [0, 1]", "[chroma_cqt][unit][smok
   for (size_t i = 0; i < n; ++i) {
     REQUIRE(data[i] >= 0.0f);
     REQUIRE(data[i] <= 1.0f + 1e-5f);
+  }
+}
+
+TEST_CASE("chroma_cqt applies a positive threshold to its magnitudes",
+          "[chroma_cqt][unit][threshold]") {
+  Audio audio = make_c_major_chord(22050, 0.5f);
+  ChromaCqtConfig config;
+  config.normalize_frames = false;
+  const Chroma unthresholded = chroma_cqt(audio, config);
+  REQUIRE(std::any_of(unthresholded.data(),
+                      unthresholded.data() +
+                          static_cast<size_t>(unthresholded.n_chroma() * unthresholded.n_frames()),
+                      [](float value) { return value > 0.0f; }));
+
+  config.threshold = std::numeric_limits<float>::max();
+  const Chroma thresholded = chroma_cqt(audio, config);
+  REQUIRE(thresholded.n_frames() == unthresholded.n_frames());
+  for (size_t i = 0; i < static_cast<size_t>(thresholded.n_chroma() * thresholded.n_frames());
+       ++i) {
+    REQUIRE(thresholded.data()[i] == 0.0f);
   }
 }
 
