@@ -42,15 +42,17 @@ void DynamicsAnalyzer::analyze(const Audio& audio) {
   SONARE_CHECK_MSG(numeric::all_finite(data, n_samples), ErrorCode::InvalidParameter,
                    "DynamicsAnalyzer: audio contains a non-finite sample");
 
-  // Compute peak and overall sum of squares in single pass
+  // Compute peak and cumulative squared samples once for overall and per-window RMS.
+  std::vector<double> prefix_sum(n_samples + 1);
+  prefix_sum[0] = 0.0;
   float peak = 0.0f;
-  double sum_sq = 0.0;
   for (size_t i = 0; i < n_samples; ++i) {
-    float sample = data[i];
+    const float sample = data[i];
     peak = std::max(peak, std::abs(sample));
-    sum_sq += static_cast<double>(sample) * static_cast<double>(sample);
+    prefix_sum[i + 1] = prefix_sum[i] + static_cast<double>(sample) * static_cast<double>(sample);
   }
-  float rms = static_cast<float>(std::sqrt(sum_sq / static_cast<double>(n_samples)));
+  const float rms =
+      static_cast<float>(std::sqrt(prefix_sum.back() / static_cast<double>(n_samples)));
 
   // Convert to dB
   constexpr float eps = kEpsilon;
@@ -79,13 +81,6 @@ void DynamicsAnalyzer::analyze(const Audio& audio) {
     window_samples = std::max(1, static_cast<int>(requested_window));
   }
 
-  // Build prefix sum of squared samples: prefix_sum[i] = sum(data[0..i-1]^2)
-  std::vector<double> prefix_sum(n_samples + 1);
-  prefix_sum[0] = 0.0;
-  for (size_t i = 0; i < n_samples; ++i) {
-    prefix_sum[i + 1] = prefix_sum[i] + static_cast<double>(data[i]) * static_cast<double>(data[i]);
-  }
-
   loudness_curve_.times.clear();
   loudness_curve_.rms_db.clear();
 
@@ -95,9 +90,6 @@ void DynamicsAnalyzer::analyze(const Audio& audio) {
                          : 0;
   loudness_curve_.times.reserve(n_windows);
   loudness_curve_.rms_db.reserve(n_windows);
-
-  std::vector<float> rms_values;
-  rms_values.reserve(n_windows);
 
   for (size_t pos = 0; pos + window_samples <= n_samples; pos += hop_length) {
     // Compute RMS for this window using prefix sum: O(1) per window
@@ -109,13 +101,12 @@ void DynamicsAnalyzer::analyze(const Audio& audio) {
     float time = static_cast<float>(center_sample / static_cast<double>(sr));
     loudness_curve_.times.push_back(time);
     loudness_curve_.rms_db.push_back(win_rms_db);
-    rms_values.push_back(win_rms_db);
   }
 
   // Compute dynamic range and loudness range
-  if (!rms_values.empty()) {
+  if (!loudness_curve_.rms_db.empty()) {
     // Sort for percentile calculation
-    std::vector<float> sorted_rms = rms_values;
+    std::vector<float> sorted_rms = loudness_curve_.rms_db;
     std::sort(sorted_rms.begin(), sorted_rms.end());
 
     // Dynamic range: difference between interpolated 95th and 10th percentiles.

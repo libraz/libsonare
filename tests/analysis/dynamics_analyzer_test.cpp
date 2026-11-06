@@ -11,6 +11,7 @@
 #include <vector>
 
 #include "util/constants.h"
+#include "util/db.h"
 #include "util/exception.h"
 #include "util/math_utils.h"
 
@@ -304,6 +305,65 @@ TEST_CASE("DynamicsAnalyzer dynamic range comes from the shared percentile kerne
       static_cast<float>(percentile_sorted(sorted, 0.95) - percentile_sorted(sorted, 0.10));
   CAPTURE(sorted.size(), analyzer.dynamic_range_db(), expected);
   REQUIRE_THAT(analyzer.dynamic_range_db(), WithinAbs(expected, 1e-4f));
+}
+
+TEST_CASE("DynamicsAnalyzer preserves ordered block RMS and shared percentiles",
+          "[dynamics_analyzer][percentile]") {
+  constexpr int sr = 1000;
+  constexpr size_t window = 100;
+  const std::vector<float> amplitudes = {0.12f, 0.7f, 0.25f, 0.5f, 0.15f};
+  std::vector<float> samples;
+  samples.reserve(amplitudes.size() * window);
+  for (float amplitude : amplitudes) samples.insert(samples.end(), window, amplitude);
+
+  DynamicsConfig config;
+  config.window_sec = 0.1f;
+  config.hop_length = static_cast<int>(window);
+  const Audio audio = Audio::from_vector(samples, sr);
+  const DynamicsAnalyzer analyzer(audio, config);
+
+  float expected_peak = 0.0f;
+  double sum_sq = 0.0;
+  for (float sample : samples) {
+    expected_peak = std::max(expected_peak, std::abs(sample));
+    sum_sq += static_cast<double>(sample) * static_cast<double>(sample);
+  }
+  const float expected_peak_db = linear_to_db(std::max(expected_peak, constants::kEpsilon));
+  const float expected_rms =
+      static_cast<float>(std::sqrt(sum_sq / static_cast<double>(samples.size())));
+  const float expected_rms_db = linear_to_db(std::max(expected_rms, constants::kEpsilon));
+  REQUIRE_THAT(analyzer.peak_db(), WithinAbs(expected_peak_db, 1e-5f));
+  REQUIRE_THAT(analyzer.rms_db(), WithinAbs(expected_rms_db, 1e-5f));
+
+  const auto& curve = analyzer.loudness_curve();
+  REQUIRE(curve.times.size() == amplitudes.size());
+  REQUIRE(curve.rms_db.size() == amplitudes.size());
+  std::vector<float> expected_blocks;
+  expected_blocks.reserve(amplitudes.size());
+  for (size_t block = 0; block < amplitudes.size(); ++block) {
+    double block_sum_sq = 0.0;
+    const size_t start = block * window;
+    for (size_t i = start; i < start + window; ++i) {
+      block_sum_sq += static_cast<double>(samples[i]) * static_cast<double>(samples[i]);
+    }
+    const float block_rms =
+        static_cast<float>(std::sqrt(block_sum_sq / static_cast<double>(window)));
+    const float expected_block_db = linear_to_db(std::max(block_rms, constants::kEpsilon));
+    const float expected_time =
+        static_cast<float>((static_cast<double>(start) + 0.5 * static_cast<double>(window)) / sr);
+    expected_blocks.push_back(expected_block_db);
+    REQUIRE_THAT(curve.rms_db[block], WithinAbs(expected_block_db, 1e-4f));
+    REQUIRE_THAT(curve.times[block], WithinAbs(expected_time, 1e-7f));
+  }
+  REQUIRE(curve.rms_db[0] < curve.rms_db[1]);
+  REQUIRE(curve.rms_db[1] > curve.rms_db[2]);
+  REQUIRE(curve.rms_db[2] < curve.rms_db[3]);
+  REQUIRE(curve.rms_db[3] > curve.rms_db[4]);
+
+  std::sort(expected_blocks.begin(), expected_blocks.end());
+  const float p10 = static_cast<float>(percentile_sorted(expected_blocks, 0.10));
+  const float p95 = static_cast<float>(percentile_sorted(expected_blocks, 0.95));
+  REQUIRE_THAT(analyzer.dynamic_range_db(), WithinAbs(p95 - p10, 1e-4f));
 }
 
 // The peak fold absorbs a non-finite sample while the sum of squares beside it
