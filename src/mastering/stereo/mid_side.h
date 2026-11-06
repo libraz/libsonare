@@ -30,4 +30,25 @@ MidSideSample decode_sample(float mid, float side);
 void encode_buffer(const float* left, const float* right, float* mid, float* side, size_t length);
 void decode_buffer(const float* mid, const float* side, float* left, float* right, size_t length);
 
+/// @brief Encode L/R to M/S with the half-scale convention: mid = (L+R)/2, side = (L-R)/2.
+/// @details Not energy-preserving; pairs with decode_buffer_half for an exact round trip.
+inline void encode_buffer_half(const float* left, const float* right, float* mid, float* side,
+                               size_t length) {
+  for (size_t i = 0; i < length; ++i) {
+    mid[i] = (left[i] + right[i]) * 0.5f;
+    side[i] = (left[i] - right[i]) * 0.5f;
+  }
+}
+
+/// @brief Decode half-scale M/S back to L/R: left = M+S, right = M-S.
+inline void decode_buffer_half(const float* mid, const float* side, float* left, float* right,
+                               size_t length) {
+  for (size_t i = 0; i < length; ++i) {
+    const float m = mid[i];
+    const float s = side[i];
+    left[i] = m + s;
+    right[i] = m - s;
+  }
+}
+
 }  // namespace sonare::mastering::stereo

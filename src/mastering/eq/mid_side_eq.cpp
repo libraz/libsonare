@@ -4,6 +4,7 @@
 #include <cstdint>
 #include <string>
 
+#include "mastering/stereo/mid_side.h"
 #include "rt/scoped_no_denormals.h"
 #include "util/exception.h"
 
@@ -50,22 +51,16 @@ void MidSideEq::process(float* const* channels, int num_channels, int num_sample
   const uint32_t side_discards = side_eq_.non_finite_discard_count();
   for (int start = 0; start < num_samples; start += chunk) {
     const int n = std::min(chunk, num_samples - start);
-    for (int i = 0; i < n; ++i) {
-      const float left = channels[0][start + i];
-      const float right = channels[1][start + i];
-      mid[i] = (left + right) * 0.5f;
-      side[i] = (left - right) * 0.5f;
-    }
+    stereo::encode_buffer_half(channels[0] + start, channels[1] + start, mid, side,
+                               static_cast<size_t>(n));
 
     float* mid_channels[] = {mid};
     float* side_channels[] = {side};
     mid_eq_.process(mid_channels, 1, n);
     side_eq_.process(side_channels, 1, n);
 
-    for (int i = 0; i < n; ++i) {
-      channels[0][start + i] = mid[i] + side[i];
-      channels[1][start + i] = mid[i] - side[i];
-    }
+    stereo::decode_buffer_half(mid, side, channels[0] + start, channels[1] + start,
+                               static_cast<size_t>(n));
   }
 
   if (mid_eq_.non_finite_discard_count() != mid_discards ||

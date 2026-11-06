@@ -7,6 +7,7 @@
 #include "mastering/eq/band_frequency.h"
 #include "mastering/eq/parametric.h"
 #include "mastering/eq/spectrum_registry.h"
+#include "mastering/stereo/mid_side.h"
 #include "rt/biquad_design.h"
 #include "rt/tail_budget.h"
 #include "util/constants.h"
@@ -210,20 +211,13 @@ void EqualizerProcessor::process_chunk(float* const* channels, int num_channels,
     }
   }
   if (has_mid_side_linear_bands_) {
-    for (int i = 0; i < num_samples; ++i) {
-      const float left = channels[0][i];
-      const float right = channels[1][i];
-      mid_buffer_[static_cast<size_t>(i)] = (left + right) * 0.5f;
-      side_buffer_[static_cast<size_t>(i)] = (left - right) * 0.5f;
-    }
+    const size_t length = static_cast<size_t>(num_samples);
+    stereo::encode_buffer_half(channels[0], channels[1], mid_buffer_.data(), side_buffer_.data(),
+                               length);
     process_mono_fir(mid_fir_, mid_buffer_.data(), num_samples);
     process_mono_fir(side_fir_, side_buffer_.data(), num_samples);
-    for (int i = 0; i < num_samples; ++i) {
-      const float mid = mid_buffer_[static_cast<size_t>(i)];
-      const float side = side_buffer_[static_cast<size_t>(i)];
-      channels[0][i] = mid + side;
-      channels[1][i] = mid - side;
-    }
+    stereo::decode_buffer_half(mid_buffer_.data(), side_buffer_.data(), channels[0], channels[1],
+                               length);
   }
   stereo_iir_.process(channels, num_channels, num_samples);
 
@@ -235,20 +229,13 @@ void EqualizerProcessor::process_chunk(float* const* channels, int num_channels,
   }
 
   if (has_mid_side_bands_) {
-    for (int i = 0; i < num_samples; ++i) {
-      const float left = channels[0][i];
-      const float right = channels[1][i];
-      mid_buffer_[static_cast<size_t>(i)] = (left + right) * 0.5f;
-      side_buffer_[static_cast<size_t>(i)] = (left - right) * 0.5f;
-    }
+    const size_t length = static_cast<size_t>(num_samples);
+    stereo::encode_buffer_half(channels[0], channels[1], mid_buffer_.data(), side_buffer_.data(),
+                               length);
     process_mono_backend(mid_iir_, mid_buffer_.data(), num_samples);
     process_mono_backend(side_iir_, side_buffer_.data(), num_samples);
-    for (int i = 0; i < num_samples; ++i) {
-      const float mid = mid_buffer_[static_cast<size_t>(i)];
-      const float side = side_buffer_[static_cast<size_t>(i)];
-      channels[0][i] = mid + side;
-      channels[1][i] = mid - side;
-    }
+    stereo::decode_buffer_half(mid_buffer_.data(), side_buffer_.data(), channels[0], channels[1],
+                               length);
   }
   apply_auto_gain(channels, num_channels, num_samples);
   apply_output_gain_and_pan(channels, num_channels, num_samples);
