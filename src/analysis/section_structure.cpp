@@ -2,7 +2,6 @@
 
 #include <algorithm>
 #include <cmath>
-#include <complex>
 #include <functional>
 #include <limits>
 
@@ -206,11 +205,7 @@ FrameFeatures frame_features(const Audio& audio, const Spectrogram& spec,
       rms_energy(audio, chroma_config.to_stft_config().actual_win_length(), config.hop_length);
 
   const int n_bins = spec.n_bins();
-  std::vector<float> mag(static_cast<size_t>(n_bins) * static_cast<size_t>(n_frames));
-  const std::complex<float>* spectrum = spec.complex_data();
-  for (size_t i = 0; i < mag.size(); ++i) mag[i] = std::abs(spectrum[i]);
-  const std::vector<float> flatness =
-      n_frames > 0 ? spectral_flatness(mag.data(), n_bins, n_frames) : std::vector<float>{};
+  constexpr int kMagnitudeTileFrameBudget = 256;
   const float bin_hz = static_cast<float>(sr) / static_cast<float>(spec.n_fft());
   const int low_bin =
       std::clamp(static_cast<int>(std::floor(kVocalBandLowHz / bin_hz)), 0, n_bins - 1);
@@ -219,21 +214,29 @@ FrameFeatures frame_features(const Audio& audio, const Spectrogram& spec,
   out.vocal_band_energy.assign(static_cast<size_t>(n_frames), 0.0f);
   out.total_energy.assign(static_cast<size_t>(n_frames), 0.0f);
   out.tonality.assign(static_cast<size_t>(n_frames), 0.0f);
-  for (int f = 0; f < n_frames; ++f) {
-    double band = 0.0;
-    double total = 0.0;
-    for (int k = 0; k < n_bins; ++k) {
-      const double m = mag[static_cast<size_t>(k) * n_frames + f];
-      total += m * m;
-      if (k >= low_bin && k <= high_bin) band += m * m;
-    }
-    out.vocal_band_energy[static_cast<size_t>(f)] = static_cast<float>(band);
-    out.total_energy[static_cast<size_t>(f)] = static_cast<float>(total);
-    if (static_cast<size_t>(f) < flatness.size()) {
-      out.tonality[static_cast<size_t>(f)] =
-          1.0f - std::clamp(flatness[static_cast<size_t>(f)], 0.0f, 1.0f);
-    }
-  }
+  int emitted = 0;
+  spec.for_each_magnitude_tile(
+      std::min(n_frames, kMagnitudeTileFrameBudget), 0,
+      [&](const float* magnitude, int tile_frames, int discard) {
+        const std::vector<float> flatness = spectral_flatness(magnitude, n_bins, tile_frames);
+        for (int frame = discard; frame < tile_frames; ++frame) {
+          double band = 0.0;
+          double total = 0.0;
+          for (int bin = 0; bin < n_bins; ++bin) {
+            const double value =
+                magnitude[static_cast<size_t>(bin) * static_cast<size_t>(tile_frames) +
+                          static_cast<size_t>(frame)];
+            total += value * value;
+            if (bin >= low_bin && bin <= high_bin) band += value * value;
+          }
+          const size_t output = static_cast<size_t>(emitted + frame - discard);
+          out.vocal_band_energy[output] = static_cast<float>(band);
+          out.total_energy[output] = static_cast<float>(total);
+          out.tonality[output] =
+              1.0f - std::clamp(flatness[static_cast<size_t>(frame)], 0.0f, 1.0f);
+        }
+        emitted += tile_frames - discard;
+      });
   return out;
 }
 

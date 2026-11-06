@@ -6,6 +6,7 @@
 #include <algorithm>
 #include <catch2/catch_test_macros.hpp>
 #include <cmath>
+#include <complex>
 #include <cstddef>
 #include <cstdint>
 #include <limits>
@@ -19,6 +20,7 @@
 #include "analysis/section_analyzer.h"
 #include "core/spectrum.h"
 #include "feature/chroma.h"
+#include "feature/spectral.h"
 #include "support/structure_song.h"
 #include "util/constants.h"
 #include "util/exception.h"
@@ -429,6 +431,86 @@ float dot(const ss::ColumnFeatures& f, int a, int b) {
 }
 
 }  // namespace
+
+TEST_CASE("section frame energies match a materialized magnitude oracle across cache tiles",
+          "[section][section_structure]") {
+  constexpr int sr = 22050;
+  constexpr int hop = 128;
+  const std::vector<int> frame_counts = {7, 255, 256, 257, 513};
+  SectionConfig config;
+  config.n_fft = 512;
+  config.hop_length = hop;
+
+  const auto require_scaled_near = [](const std::vector<float>& actual,
+                                      const std::vector<float>& expected) {
+    REQUIRE(actual.size() == expected.size());
+    for (size_t i = 0; i < actual.size(); ++i) {
+      const float tolerance = 1e-5f * std::max(1.0f, std::abs(expected[i]));
+      REQUIRE(std::abs(actual[i] - expected[i]) <= tolerance);
+    }
+  };
+
+  for (const int n_frames : frame_counts) {
+    const size_t n_samples = static_cast<size_t>(n_frames - 1) * hop;
+    std::vector<float> samples(n_samples, 0.0f);
+    const size_t active_start = n_samples / 3;
+    for (size_t i = active_start; i < n_samples; ++i) {
+      const float t = static_cast<float>(i) / static_cast<float>(sr);
+      samples[i] = 0.35f * std::sin(constants::kTwoPi * 440.0f * t) +
+                   0.16f * std::sin(constants::kTwoPi * 1320.0f * t) +
+                   0.07f * std::sin(constants::kTwoPi * 2750.0f * t);
+    }
+    const Audio audio = Audio::from_vector(std::move(samples), sr);
+    const StftConfig stft = section_structure::section_chroma_config(config, sr).to_stft_config();
+    const Spectrogram base_spec = Spectrogram::compute(audio, stft);
+    REQUIRE(base_spec.n_frames() == n_frames);
+
+    const int n_bins = base_spec.n_bins();
+    std::vector<float> magnitude(static_cast<size_t>(n_bins) * static_cast<size_t>(n_frames));
+    const std::complex<float>* spectrum = base_spec.complex_data();
+    for (size_t i = 0; i < magnitude.size(); ++i) magnitude[i] = std::abs(spectrum[i]);
+    const std::vector<float> flatness = spectral_flatness(magnitude.data(), n_bins, n_frames);
+    const float bin_hz = static_cast<float>(sr) / static_cast<float>(base_spec.n_fft());
+    const int low_bin = std::clamp(static_cast<int>(std::floor(300.0f / bin_hz)), 0, n_bins - 1);
+    const int high_bin = std::clamp(static_cast<int>(std::ceil(3400.0f / bin_hz)), 0, n_bins - 1);
+    std::vector<float> expected_band(static_cast<size_t>(n_frames));
+    std::vector<float> expected_total(static_cast<size_t>(n_frames));
+    std::vector<float> expected_tonality(static_cast<size_t>(n_frames));
+    for (int frame = 0; frame < n_frames; ++frame) {
+      double band = 0.0;
+      double total = 0.0;
+      for (int bin = 0; bin < n_bins; ++bin) {
+        const double value = magnitude[static_cast<size_t>(bin) * static_cast<size_t>(n_frames) +
+                                       static_cast<size_t>(frame)];
+        total += value * value;
+        if (bin >= low_bin && bin <= high_bin) band += value * value;
+      }
+      expected_band[static_cast<size_t>(frame)] = static_cast<float>(band);
+      expected_total[static_cast<size_t>(frame)] = static_cast<float>(total);
+      expected_tonality[static_cast<size_t>(frame)] =
+          1.0f - std::clamp(flatness[static_cast<size_t>(frame)], 0.0f, 1.0f);
+    }
+    REQUIRE(expected_band.back() > 0.0f);
+    REQUIRE(expected_total.back() > 0.0f);
+    REQUIRE(std::any_of(expected_tonality.begin(), expected_tonality.end(),
+                        [](float value) { return value > 0.0f; }));
+
+    for (int cache_state = 0; cache_state < 3; ++cache_state) {
+      Spectrogram spec = base_spec;
+      if (cache_state == 1) {
+        (void)spec.power();
+      } else if (cache_state == 2) {
+        (void)spec.magnitude();
+      }
+      const section_structure::FrameFeatures actual =
+          section_structure::frame_features(audio, spec, config);
+      CAPTURE(n_frames, cache_state);
+      require_scaled_near(actual.vocal_band_energy, expected_band);
+      require_scaled_near(actual.total_energy, expected_total);
+      require_scaled_near(actual.tonality, expected_tonality);
+    }
+  }
+}
 
 TEST_CASE("column features zero silence, centre MFCC and weight the blocks",
           "[section_structure]") {
