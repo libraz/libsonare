@@ -32,7 +32,7 @@ inline constexpr uint32_t lane_meter_target(size_t lane_index) noexcept {
 }
 
 inline constexpr uint32_t bus_meter_target(size_t bus_index) noexcept {
-  return static_cast<uint32_t>(33 + bus_index);
+  return static_cast<uint32_t>(TrackMixerRuntime::kMaxTrackLanes + 1 + bus_index);
 }
 
 /// A decoded meter target id; @c index is the lane or bus slot where one applies.
