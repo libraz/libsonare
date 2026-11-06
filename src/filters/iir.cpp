@@ -51,9 +51,9 @@ BiquadZi lfilter_zi(const BiquadCoeffs& c) {
 }
 
 /// @brief Applies a DF2T biquad with explicit initial delay states.
-std::vector<float> apply_biquad_zi(const float* input, size_t size, const BiquadCoeffs& coeffs,
-                                   const BiquadZi& zi) {
-  std::vector<float> output(size);
+/// @details Caches each input sample before writing so exact in-place use is safe.
+void apply_biquad_zi_into(const float* input, size_t size, const BiquadCoeffs& coeffs,
+                          const BiquadZi& zi, float* output) {
   float z1 = zi.z1;
   float z2 = zi.z2;
   for (size_t i = 0; i < size; ++i) {
@@ -63,7 +63,38 @@ std::vector<float> apply_biquad_zi(const float* input, size_t size, const Biquad
     z2 = coeffs.b2 * x - coeffs.a2 * y;
     output[i] = y;
   }
+}
+
+/// @brief Allocating wrapper for one standalone section pass.
+std::vector<float> apply_biquad_zi(const float* input, size_t size, const BiquadCoeffs& coeffs,
+                                   const BiquadZi& zi) {
+  std::vector<float> output(size);
+  apply_biquad_zi_into(input, size, coeffs, zi, output.data());
   return output;
+}
+
+/// @brief Applies a zero-phase section into an output buffer.
+/// @details The output can alias the input exactly; the section pass caches its
+///          input sample before writing it.
+void apply_biquad_filtfilt_into(const float* input, size_t size, const BiquadCoeffs& coeffs,
+                                float* output) {
+  // Seed each pass with lfilter_zi-style steady-state initial conditions scaled
+  // by the boundary sample. This implementation does not use scipy's extended
+  // edge padding; it suppresses the leading transient without claiming exact
+  // scipy.signal.filtfilt parity at the boundaries.
+  const BiquadZi zi = lfilter_zi(coeffs);
+
+  // Forward pass seeded at the leading edge.
+  const BiquadZi zi_fwd{zi.z1 * input[0], zi.z2 * input[0]};
+  apply_biquad_zi_into(input, size, coeffs, zi_fwd, output);
+
+  // Reverse, then run the backward pass seeded at what is now the leading edge.
+  std::reverse(output, output + size);
+  const BiquadZi zi_bwd{zi.z1 * output[0], zi.z2 * output[0]};
+  apply_biquad_zi_into(output, size, coeffs, zi_bwd, output);
+
+  // Reverse again to restore the original time order.
+  std::reverse(output, output + size);
 }
 
 }  // namespace
@@ -115,26 +146,9 @@ std::vector<float> apply_biquad(const std::vector<float>& input, const BiquadCoe
 std::vector<float> apply_biquad_filtfilt(const float* input, size_t size,
                                          const BiquadCoeffs& coeffs) {
   SONARE_CHECK(input != nullptr && size > 0, ErrorCode::InvalidParameter);
-
-  // Seed each pass with lfilter_zi-style steady-state initial conditions scaled
-  // by the boundary sample. This implementation does not use scipy's extended
-  // edge padding; it suppresses the leading transient without claiming exact
-  // scipy.signal.filtfilt parity at the boundaries.
-  const BiquadZi zi = lfilter_zi(coeffs);
-
-  // Forward pass seeded at the leading edge.
-  const BiquadZi zi_fwd{zi.z1 * input[0], zi.z2 * input[0]};
-  std::vector<float> forward = apply_biquad_zi(input, size, coeffs, zi_fwd);
-
-  // Reverse, then run the backward pass seeded at what is now the leading edge.
-  std::reverse(forward.begin(), forward.end());
-  const BiquadZi zi_bwd{zi.z1 * forward[0], zi.z2 * forward[0]};
-  std::vector<float> backward = apply_biquad_zi(forward.data(), size, coeffs, zi_bwd);
-
-  // Reverse again to restore the original time order.
-  std::reverse(backward.begin(), backward.end());
-
-  return backward;
+  std::vector<float> output(size);
+  apply_biquad_filtfilt_into(input, size, coeffs, output.data());
+  return output;
 }
 
 CascadedBiquad highpass_coeffs_4th(float cutoff_hz, int sr) {
@@ -173,7 +187,7 @@ std::vector<float> apply_cascade(const float* input, size_t size, const Cascaded
 
   std::vector<float> result(input, input + size);
   for (const auto& section : cascade.sections) {
-    result = apply_biquad(result.data(), result.size(), section);
+    apply_biquad_zi_into(result.data(), result.size(), section, BiquadZi{}, result.data());
   }
   return result;
 }
@@ -187,7 +201,7 @@ std::vector<float> apply_cascade_filtfilt(const float* input, size_t size,
   std::vector<float> result(input, input + size);
 
   for (const auto& section : cascade.sections) {
-    result = apply_biquad_filtfilt(result.data(), result.size(), section);
+    apply_biquad_filtfilt_into(result.data(), result.size(), section, result.data());
   }
 
   return result;

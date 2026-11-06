@@ -13,6 +13,7 @@
 #include "rt/biquad_design.h"
 #include "support/audio_fixtures.h"
 #include "util/constants.h"
+#include "util/exception.h"
 
 using namespace sonare;
 using Catch::Matchers::WithinAbs;
@@ -227,6 +228,51 @@ TEST_CASE("cascaded biquad exposes distinct causal and zero-phase paths", "[iir]
 
   REQUIRE(peak_index(causal) > samples / 2);
   REQUIRE(std::abs(static_cast<int>(peak_index(zero_phase)) - samples / 2) < 5);
+}
+
+TEST_CASE("cascades match separate section passes without changing the input", "[iir]") {
+  constexpr int sr = 16000;
+  const std::vector<float> input = {0.2f,   -0.7f, 0.35f, 0.9f,   -0.1f, 0.55f, -0.4f, 0.05f,
+                                    -0.85f, 0.3f,  0.6f,  -0.25f, 0.1f,  -0.5f, 0.75f};
+  const std::vector<float> original = input;
+  const CascadedBiquad empty;
+  REQUIRE_THROWS_AS(apply_cascade(input.data(), input.size(), empty), SonareException);
+  REQUIRE_THROWS_AS(apply_cascade_filtfilt(input.data(), input.size(), empty), SonareException);
+  const std::vector<BiquadCoeffs> sections = {
+      lowpass_coeffs(1800.0f, sr),
+      highpass_coeffs(220.0f, sr),
+      notch_coeffs(900.0f, 300.0f, sr),
+      lowpass_coeffs(4500.0f, sr),
+  };
+
+  for (size_t count : {size_t{1}, size_t{2}, size_t{4}}) {
+    CascadedBiquad cascade;
+    for (size_t i = 0; i < count; ++i) cascade.sections.push_back(sections[i]);
+
+    std::vector<float> expected_causal = input;
+    std::vector<float> expected_zero_phase = input;
+    for (const auto& section : cascade.sections) {
+      expected_causal = apply_biquad(expected_causal, section);
+      expected_zero_phase =
+          apply_biquad_filtfilt(expected_zero_phase.data(), expected_zero_phase.size(), section);
+    }
+
+    const auto actual_causal = apply_cascade(input.data(), input.size(), cascade);
+    REQUIRE(actual_causal.size() == expected_causal.size());
+    for (size_t i = 0; i < actual_causal.size(); ++i) {
+      const float tolerance = std::max(1e-6f, std::abs(expected_causal[i]) * 1e-6f);
+      REQUIRE_THAT(actual_causal[i], WithinAbs(expected_causal[i], tolerance));
+    }
+    REQUIRE(input == original);
+
+    const auto actual_zero_phase = apply_cascade_filtfilt(input.data(), input.size(), cascade);
+    REQUIRE(actual_zero_phase.size() == expected_zero_phase.size());
+    for (size_t i = 0; i < actual_zero_phase.size(); ++i) {
+      const float tolerance = std::max(1e-6f, std::abs(expected_zero_phase[i]) * 1e-6f);
+      REQUIRE_THAT(actual_zero_phase[i], WithinAbs(expected_zero_phase[i], tolerance));
+    }
+    REQUIRE(input == original);
+  }
 }
 
 TEST_CASE("apply_biquad_filtfilt reduced edge transient", "[iir]") {
