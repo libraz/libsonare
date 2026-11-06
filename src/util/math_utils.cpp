@@ -62,12 +62,16 @@ float pearson_correlation(const float* a, const float* b, size_t size) {
 float median(const float* data, size_t size) {
   if (size == 0) return 0.0f;
 
-  std::vector<float> sorted(data, data + size);
-  // std::sort needs a strict weak ordering, which a non-finite breaks.
-  (void)resolve_non_finite_run(SampleDestination::kOrderedContainer, sorted.data(), sorted.size());
-  std::sort(sorted.begin(), sorted.end());
+  std::vector<float> values(data, data + size);
+  // Ordered selection needs a strict weak ordering, which non-finite values break.
+  (void)resolve_non_finite_run(SampleDestination::kOrderedContainer, values.data(), values.size());
 
-  return static_cast<float>(percentile_sorted(sorted, 0.5));
+  const auto middle = values.begin() + static_cast<std::ptrdiff_t>(values.size() / 2);
+  std::nth_element(values.begin(), middle, values.end());
+  if (values.size() % 2 != 0) return *middle;
+
+  const float lower = *std::max_element(values.begin(), middle);
+  return static_cast<float>(static_cast<double>(lower) * 0.5 + static_cast<double>(*middle) * 0.5);
 }
 
 AutocorrelationWorkspace::AutocorrelationWorkspace() = default;
