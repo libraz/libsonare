@@ -23,29 +23,9 @@ inline constexpr int kControlIntervalSamples = 64;
 /// delay past this bound saturates so the audio-thread path never resizes.
 inline constexpr float kMaxDetectorDelayMs = 20.0f;
 
-/// @brief Broadband RMS level of a block, in dB.
-/// @details Root-mean-square over all channels and samples, converted to dB.
-///          The accumulation is double-precision and the sample count is floored
-///          at 1 to avoid a divide-by-zero on an empty block. Shared by the
-///          static parametric EQ (dynamic bands) and the dedicated dynamic EQ so
-///          their broadband detector reads identically. Only the first
-///          @p readable_samples positions are read (negative = all); the rest of
-///          the block counts as silence, so a short external key is zero-padded.
-inline float broadband_detector_db(const float* const* channels, int num_channels, int num_samples,
-                                   int excluded_channel, int readable_samples = -1) {
-  const int readable =
-      (readable_samples < 0 || readable_samples > num_samples) ? num_samples : readable_samples;
-  double sum = 0.0;
-  int counted = 0;
-  for (int ch = 0; ch < num_channels; ++ch) {
-    if (ch == excluded_channel) continue;
-    ++counted;
-    for (int i = 0; i < readable; ++i) {
-      const double sample = channels[ch][i];
-      sum += sample * sample;
-    }
-  }
-  const double count = static_cast<double>(counted) * static_cast<double>(num_samples);
+/// @brief RMS level in dB of a summed square over @p count samples, the count
+///        floored at 1 so an empty accumulation reads as silence.
+inline float detector_level_db(double sum, double count) {
   return linear_to_db(static_cast<float>(std::sqrt(sum / std::max(count, 1.0))));
 }
 
@@ -165,11 +145,5 @@ struct BandDetectorChannel {
     return sum;
   }
 };
-
-/// @brief Detector level in dB from a summed squared envelope over @p counted channels.
-inline float band_detector_level_db(double sum, int counted, int num_samples) {
-  const double count = static_cast<double>(counted) * static_cast<double>(num_samples);
-  return linear_to_db(static_cast<float>(std::sqrt(sum / std::max(count, 1.0))));
-}
 
 }  // namespace sonare::mastering::eq

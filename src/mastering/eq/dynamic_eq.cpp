@@ -173,14 +173,11 @@ void DynamicEq::process(float* const* channels, int num_channels, int num_sample
 }
 
 void DynamicEq::settle_control() {
-  last_detector_db_ =
-      linear_to_db(static_cast<float>(std::sqrt(detector_sum_ / std::max(detector_count_, 1.0))));
+  last_detector_db_ = detector_level_db(detector_sum_, detector_count_);
   for (size_t i = 0; i < kMaxBands; ++i) {
     last_band_detector_db_[i] =
-        band_gates_[i].active()
-            ? linear_to_db(static_cast<float>(
-                  std::sqrt(band_detector_sum_[i] / std::max(band_detector_count_[i], 1.0))))
-            : kFloorDb;
+        band_gates_[i].active() ? detector_level_db(band_detector_sum_[i], band_detector_count_[i])
+                                : kFloorDb;
   }
   detector_sum_ = 0.0;
   detector_count_ = 0.0;

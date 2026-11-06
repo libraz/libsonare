@@ -15,14 +15,6 @@ namespace sonare::mastering::eq {
 using sonare::discard_if_non_finite;
 using sonare::constants::kFloorDb;
 
-namespace {
-
-float level_db(double sum, double count) {
-  return linear_to_db(static_cast<float>(std::sqrt(sum / std::max(count, 1.0))));
-}
-
-}  // namespace
-
 void EqualizerProcessor::accumulate_band_detector(size_t band_index, const float* const* channels,
                                                   int num_channels, int count, int excluded_channel,
                                                   const EqBand& band, int readable_samples) {
@@ -126,7 +118,7 @@ void EqualizerProcessor::accumulate_control_input(const float* const* channels, 
 bool EqualizerProcessor::settle_control() {
   bool discarded = false;
   if (has_dynamic_bands_) {
-    last_detector_db_ = level_db(detector_sum_, detector_count_);
+    last_detector_db_ = detector_level_db(detector_sum_, detector_count_);
     for (size_t i = 0; i < kMaxBands; ++i) {
       const auto& band = bands_[i];
       if (band.enabled && band.dyn.enabled) {
@@ -134,7 +126,8 @@ bool EqualizerProcessor::settle_control() {
           dynamic_gain_live_[i] = false;
           dynamic_reading_seen_[i] = true;
         }
-        last_band_detector_db_[i] = level_db(band_detector_sum_[i], band_detector_count_[i]);
+        last_band_detector_db_[i] =
+            detector_level_db(band_detector_sum_[i], band_detector_count_[i]);
         if (band.dyn.auto_threshold) {
           const float target = last_band_detector_db_[i] - 6.0f;
           if (auto_threshold_db_[i] <= kFloorDb + 1.0f) {
@@ -158,8 +151,8 @@ bool EqualizerProcessor::settle_control() {
     update_iir_bands_preserving_state(kControlIntervalSamples);
   }
   if (auto_gain_enabled_) {
-    const float input_db = level_db(auto_gain_input_sum_, auto_gain_count_);
-    const float output_db = level_db(auto_gain_output_sum_, auto_gain_count_);
+    const float input_db = detector_level_db(auto_gain_input_sum_, auto_gain_count_);
+    const float output_db = detector_level_db(auto_gain_output_sum_, auto_gain_count_);
     if (input_db <= kFloorDb + 1.0f || output_db <= kFloorDb + 1.0f) {
       last_auto_gain_db_ = 0.0f;
     } else {
