@@ -22,18 +22,7 @@ using namespace sonare_c_mastering_detail;
 
 const char* sonare_mastering_preset_names(void) {
   SONARE_C_TRY
-  // Gate on a write-once flag, not on names.empty(): the header promises the
-  // returned pointer stays valid across later API calls on the thread, so the
-  // thread_local must be built exactly once. An empty-string test would recompute
-  // (and reassign, invalidating a previously-returned pointer) every call if the
-  // name set were ever empty. Matches the sibling *_names getters in
-  // sonare_c_mastering_apply.cpp.
-  static thread_local std::string names;
-  static thread_local bool built = false;
-  if (!built) {
-    join_names(sonare::mastering::api::preset_names(), names);
-    built = true;
-  }
+  static thread_local const std::string names = join_names(sonare::mastering::api::preset_names());
   return names.c_str();
   SONARE_C_CATCH_RETURN(nullptr)
 }
@@ -53,14 +42,8 @@ SonareError sonare_mastering_preset_params_json(const char* preset, char** json_
 
 const char* sonare_mastering_platform_names(void) {
   SONARE_C_TRY
-  // Same write-once thread_local contract as sonare_mastering_preset_names: the
-  // returned pointer must stay valid across later calls on the thread.
-  static thread_local std::string names;
-  static thread_local bool built = false;
-  if (!built) {
-    join_names(sonare::mastering::assistant::platform_names(), names);
-    built = true;
-  }
+  static thread_local const std::string names =
+      join_names(sonare::mastering::assistant::platform_names());
   return names.c_str();
   SONARE_C_CATCH_RETURN(nullptr)
 }

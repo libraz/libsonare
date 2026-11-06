@@ -1,7 +1,9 @@
 /// @file sonare_c_mastering_test.cpp
 /// @brief Mastering C API tests.
 
+#include <array>
 #include <catch2/matchers/catch_matchers_string.hpp>
+#include <string>
 
 #include "c_api/eq_band_json.h"
 #include "c_api/sonare_c_mastering_helpers.h"
@@ -936,18 +938,14 @@ TEST_CASE("sonare_eq_set_band accepts detectorDelayMs and its former lookaheadMs
 TEST_CASE("sonare_mastering name getters return a stable pointer across calls",
           "[c_api][mastering]") {
   // The header promises the returned pointer stays valid across later API calls
-  // on the thread. The name caches are gated on a write-once flag (not on the
-  // string being empty), so repeated calls must return the very same pointer
-  // without recomputing/reassigning the thread_local.
+  // on the thread. Immutable thread-local initialization keeps even an empty
+  // name cache from being recomputed or reassigned on later calls.
   REQUIRE(sonare_mastering_processor_names() == sonare_mastering_processor_names());
   REQUIRE(sonare_mastering_pair_processor_names() == sonare_mastering_pair_processor_names());
   REQUIRE(sonare_mastering_pair_analysis_names() == sonare_mastering_pair_analysis_names());
   REQUIRE(sonare_mastering_stereo_analysis_names() == sonare_mastering_stereo_analysis_names());
   REQUIRE(sonare_mastering_insert_names() == sonare_mastering_insert_names());
   REQUIRE(sonare_mastering_processor_catalog() == sonare_mastering_processor_catalog());
-  // sonare_mastering_preset_names now follows the same SONARE_C_TRY-guarded,
-  // write-once-flag pattern as its siblings above (it previously had neither
-  // the exception guard nor the stable-pointer cache).
   REQUIRE(sonare_mastering_preset_names() == sonare_mastering_preset_names());
   const char* presets = sonare_mastering_preset_names();
   REQUIRE(presets != nullptr);
@@ -1762,23 +1760,40 @@ TEST_CASE("sonare_eq_set_band refuses a band that would design non-finite taps",
   sonare_eq_destroy(eq);
 }
 
-TEST_CASE("mastering *_names getters keep their documented write-once storage",
+TEST_CASE("mastering name and catalog getters keep independent stable storage",
           "[c_api][mastering]") {
-  // The header promises these stay valid across later API calls on the thread,
-  // which only holds because the thread_local is built once. Pin the pointer
-  // identity: a change to rebuild-per-call would silently demote them to the
-  // weaker contract the mixing *_names getters carry, and nothing else would
-  // notice.
-  for (auto* fn : {&sonare_mastering_processor_names, &sonare_mastering_pair_processor_names,
-                   &sonare_mastering_pair_analysis_names, &sonare_mastering_stereo_analysis_names,
-                   &sonare_mastering_insert_names, &sonare_mastering_preset_names,
-                   &sonare_mastering_platform_names}) {
-    const char* first = (*fn)();
-    REQUIRE(first != nullptr);
-    // Another API call in between is exactly what the doc says is survivable.
-    (void)sonare_mastering_processor_catalog();
-    REQUIRE((*fn)() == first);
+  const std::array<const char* (*)(), 7> getters = {
+      sonare_mastering_processor_names,     sonare_mastering_pair_processor_names,
+      sonare_mastering_pair_analysis_names, sonare_mastering_stereo_analysis_names,
+      sonare_mastering_insert_names,        sonare_mastering_preset_names,
+      sonare_mastering_platform_names,
+  };
+  std::array<const char*, 7> pointers{};
+  std::array<std::string, 7> contents{};
+
+  for (size_t i = 0; i < getters.size(); ++i) {
+    pointers[i] = getters[i]();
+    REQUIRE(pointers[i] != nullptr);
+    contents[i] = pointers[i];
   }
+  const char* processor_catalog = sonare_mastering_processor_catalog();
+  REQUIRE(processor_catalog != nullptr);
+  const std::string processor_contents = processor_catalog;
+  const char* amp_preset_catalog = sonare_mastering_amp_preset_catalog();
+  REQUIRE(amp_preset_catalog != nullptr);
+  const std::string amp_preset_contents = amp_preset_catalog;
+
+  for (size_t i = 0; i < getters.size(); ++i) {
+    REQUIRE(getters[i]() == pointers[i]);
+  }
+  REQUIRE(sonare_mastering_processor_catalog() == processor_catalog);
+  REQUIRE(sonare_mastering_amp_preset_catalog() == amp_preset_catalog);
+
+  for (size_t i = 0; i < getters.size(); ++i) {
+    REQUIRE(pointers[i] == contents[i]);
+  }
+  REQUIRE(processor_catalog == processor_contents);
+  REQUIRE(amp_preset_catalog == amp_preset_contents);
 }
 
 TEST_CASE("an unrealizable dynamic EQ gain never reaches the audio as NaN",

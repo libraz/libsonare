@@ -189,89 +189,54 @@ SonareError sonare_mastering_apply_processor_stereo(const char* processor_name, 
 
 const char* sonare_mastering_processor_names(void) {
   SONARE_C_TRY
-  // Gate on a write-once flag, not on names.empty(): the header promises the
-  // returned pointer stays valid across later API calls on the thread, so the
-  // thread_local must be built exactly once. An empty-string test would recompute
-  // (and reassign, invalidating a previously-returned pointer) every call if the
-  // name set were ever empty.
-  static thread_local std::string names;
-  static thread_local bool built = false;
-  if (!built) {
-    join_names(sonare::mastering::api::processor_names(), names);
-    built = true;
-  }
+  static thread_local const std::string names =
+      join_names(sonare::mastering::api::processor_names());
   return names.c_str();
   SONARE_C_CATCH_RETURN(nullptr)
 }
 
 const char* sonare_mastering_pair_processor_names(void) {
   SONARE_C_TRY
-  static thread_local std::string names;
-  static thread_local bool built = false;
-  if (!built) {
-    join_names(sonare::mastering::api::pair_processor_names(), names);
-    built = true;
-  }
+  static thread_local const std::string names =
+      join_names(sonare::mastering::api::pair_processor_names());
   return names.c_str();
   SONARE_C_CATCH_RETURN(nullptr)
 }
 
 const char* sonare_mastering_pair_analysis_names(void) {
   SONARE_C_TRY
-  static thread_local std::string names;
-  static thread_local bool built = false;
-  if (!built) {
-    join_names(sonare::mastering::api::pair_analysis_names(), names);
-    built = true;
-  }
+  static thread_local const std::string names =
+      join_names(sonare::mastering::api::pair_analysis_names());
   return names.c_str();
   SONARE_C_CATCH_RETURN(nullptr)
 }
 
 const char* sonare_mastering_stereo_analysis_names(void) {
   SONARE_C_TRY
-  static thread_local std::string names;
-  static thread_local bool built = false;
-  if (!built) {
-    join_names(sonare::mastering::api::stereo_analysis_names(), names);
-    built = true;
-  }
+  static thread_local const std::string names =
+      join_names(sonare::mastering::api::stereo_analysis_names());
   return names.c_str();
   SONARE_C_CATCH_RETURN(nullptr)
 }
 
 const char* sonare_mastering_insert_names(void) {
   SONARE_C_TRY
-  static thread_local std::string names;
-  static thread_local bool built = false;
-  if (!built) {
-    join_names(sonare::mastering::api::insert_factory_names(), names);
-    built = true;
-  }
+  static thread_local const std::string names =
+      join_names(sonare::mastering::api::insert_factory_names());
   return names.c_str();
   SONARE_C_CATCH_RETURN(nullptr)
 }
 
 const char* sonare_mastering_processor_catalog(void) {
   SONARE_C_TRY
-  static thread_local std::string catalog;
-  static thread_local bool built = false;
-  if (!built) {
-    catalog = sonare::mastering::api::processor_catalog_json();
-    built = true;
-  }
+  static thread_local const std::string catalog = sonare::mastering::api::processor_catalog_json();
   return catalog.c_str();
   SONARE_C_CATCH_RETURN(nullptr)
 }
 
 const char* sonare_mastering_amp_preset_catalog(void) {
   SONARE_C_TRY
-  static thread_local std::string catalog;
-  static thread_local bool built = false;
-  if (!built) {
-    catalog = sonare::mastering::api::amp_preset_catalog_json();
-    built = true;
-  }
+  static thread_local const std::string catalog = sonare::mastering::api::amp_preset_catalog_json();
   return catalog.c_str();
   SONARE_C_CATCH_RETURN(nullptr)
 }

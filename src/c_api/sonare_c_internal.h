@@ -348,6 +348,13 @@ inline const char* join_names(const std::vector<std::string>& values, std::strin
   return storage.c_str();
 }
 
+/// @brief Joins names into an owned string for immutable per-thread caches.
+inline std::string join_names(const std::vector<std::string>& values) {
+  std::string storage;
+  join_names(values, storage);
+  return storage;
+}
+
 }  // namespace sonare_c_detail
 
 // Stubs out a C API function body when an optional module is not compiled in:
