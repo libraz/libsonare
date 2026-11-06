@@ -21,6 +21,7 @@
 #include "effects/common/mix_law.h"
 #include "effects/modulation/lfo.h"
 #include "effects/modulation/mod_delay_line.h"
+#include "rt/biquad_design.h"
 #include "rt/processor_base.h"
 #include "rt/stage_gate.h"
 #include "util/constants.h"
@@ -46,10 +47,10 @@ class PreFilter {
     const bool usable =
         std::isfinite(corner_hz) && corner_hz > 0.0f && static_cast<double>(corner_hz) < rate * 0.5;
     mode_ = usable ? mode : PreFilterMode::kOff;
-    // exp(-2*pi*fc/sr): evaluated here so the corner stays a frequency in hertz.
+    // Evaluated here so the corner stays a frequency in hertz.
     pole_ = mode_ == PreFilterMode::kOff
                 ? 0.0f
-                : static_cast<float>(std::exp(-sonare::constants::kTwoPiD * corner_hz / rate));
+                : static_cast<float>(rt::one_pole_pole_matched_d(corner_hz, rate));
     state_ = 0.0f;
   }
 

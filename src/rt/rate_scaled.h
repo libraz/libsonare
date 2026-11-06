@@ -159,15 +159,4 @@ inline FirstOrderShelf voiced_one_pole_at_rate(float b0, float a1, double sample
   return {static_cast<float>(gain), static_cast<float>(-gain * zero), static_cast<float>(pole)};
 }
 
-/// Samples spanning @p seconds at @p sample_rate, rounded up (at least @p minimum).
-inline size_t samples_for_seconds(double seconds, double sample_rate, size_t minimum = 1) noexcept {
-  if (!(seconds > 0.0) || !(sample_rate > 0.0)) return minimum;
-  return std::max(minimum, static_cast<size_t>(std::ceil(seconds * sample_rate)));
-}
-
-/// Per-pass gain that decays by 60 dB in @p t60_s when a pass lasts @p pass_seconds.
-inline float pass_gain_for_t60(float pass_seconds, float t60_s) noexcept {
-  return std::pow(10.0f, -3.0f * pass_seconds / std::max(1.0e-6f, t60_s));
-}
-
 }  // namespace sonare::rt

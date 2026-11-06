@@ -50,30 +50,16 @@ std::pair<Biquad, Biquad> k_weighting_filters(int sample_rate) {
   return {coeffs.pre, coeffs.rlb};
 }
 
-/// Biquad state carried across calls, so a signal can be filtered in chunks and
-/// still produce the sample-for-sample result of one pass over the whole buffer.
-struct BiquadState {
-  double z1 = 0.0;
-  double z2 = 0.0;
-};
-
 // Keep the K-weighted intermediate signal in `double` for the duration of the
 // two-stage filter. Narrowing to `float` between stages introduces ~0.01 dB
 // rounding on quiet signals and contradicts the project's "double for
-// K-weighting" precision contract.
-void apply_biquad_double_in_place(double* samples, size_t size, const Biquad& coeffs,
-                                  BiquadState* state) {
-  double z1 = state->z1;
-  double z2 = state->z2;
-  for (size_t i = 0; i < size; ++i) {
-    const double x = samples[i];
-    const double y = coeffs.b0 * x + z1;
-    z1 = coeffs.b1 * x - coeffs.a1 * y + z2;
-    z2 = coeffs.b2 * x - coeffs.a2 * y;
-    samples[i] = y;
-  }
-  state->z1 = z1;
-  state->z2 = z2;
+// K-weighting" precision contract. The state carries across calls, so a signal
+// filtered in chunks matches one pass over the whole buffer.
+void apply_biquad_double_in_place(double* samples, size_t size, rt::BiquadStateD* state) {
+  // A local copy keeps the state in registers; stores through samples could alias it.
+  rt::BiquadStateD local = *state;
+  for (size_t i = 0; i < size; ++i) samples[i] = local.process(samples[i]);
+  *state = local;
 }
 
 std::vector<double> to_double(const float* input, size_t size) {
@@ -93,10 +79,12 @@ std::vector<double> k_weighted(const Audio& audio) {
   // buffer costs nothing and keeps the peak footprint at one `double` per sample
   // instead of the three that a copy per stage would hold live at once.
   std::vector<double> filtered = to_double(audio.data(), audio.size());
-  BiquadState pre_state;
-  BiquadState rlb_state;
-  apply_biquad_double_in_place(filtered.data(), filtered.size(), pre, &pre_state);
-  apply_biquad_double_in_place(filtered.data(), filtered.size(), rlb, &rlb_state);
+  rt::BiquadStateD pre_state;
+  rt::BiquadStateD rlb_state;
+  pre_state.set(pre);
+  rlb_state.set(rlb);
+  apply_biquad_double_in_place(filtered.data(), filtered.size(), &pre_state);
+  apply_biquad_double_in_place(filtered.data(), filtered.size(), &rlb_state);
   return filtered;
 }
 
@@ -235,8 +223,10 @@ WeightedBlockEnergies k_weighted_block_energies(const float* interleaved, size_t
       accumulator->next_block = 0;
     }
     scratch.clear();
-    BiquadState pre_state;
-    BiquadState rlb_state;
+    rt::BiquadStateD pre_state;
+    rt::BiquadStateD rlb_state;
+    pre_state.set(pre);
+    rlb_state.set(rlb);
     size_t origin = 0;    // absolute frame index of scratch[0]
     size_t produced = 0;  // frames de-interleaved and filtered so far
     while (produced < frames) {
@@ -250,8 +240,8 @@ WeightedBlockEnergies k_weighted_block_energies(const float* interleaved, size_t
       }
       // Both stages run over the new chunk only, carrying their state, which is
       // the same recurrence a whole-signal pass evaluates.
-      apply_biquad_double_in_place(scratch.data() + tail, take, pre, &pre_state);
-      apply_biquad_double_in_place(scratch.data() + tail, take, rlb, &rlb_state);
+      apply_biquad_double_in_place(scratch.data() + tail, take, &pre_state);
+      apply_biquad_double_in_place(scratch.data() + tail, take, &rlb_state);
       produced += take;
 
       size_t keep = frames;
@@ -392,7 +382,7 @@ LufsGainToTarget gain_to_integrated_lufs(const float* samples, size_t frames, in
   double best_gain_db = gain_db;
   double best_error = std::numeric_limits<double>::infinity();
   for (int pass = 0; pass < kMaxPasses; ++pass) {
-    const double power = std::pow(10.0, gain_db / 10.0);
+    const double power = db_to_power_scalar(gain_db);
     for (size_t i = 0; i < energies.size(); ++i) scaled[i] = energies[i] * power;
     const float achieved = gated_integrated_lufs(scaled, config);
     if (!std::isfinite(achieved)) break;
