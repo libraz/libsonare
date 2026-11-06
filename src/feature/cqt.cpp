@@ -496,21 +496,23 @@ CqtResult pseudo_cqt(const Audio& audio, const CqtConfig& config) {
   const std::vector<float>& mag = spec.magnitude();
   const int n_freq = spec.n_bins();
   const int n_frames = spec.n_frames();
-  const std::vector<float> P = detail::build_cqt_projection(kernel.kernel(), n_fft);
+  const SparseComplexKernel& basis = kernel.kernel();
   const float scale = 1.0f / std::sqrt(static_cast<float>(n_fft));
 
   // Phase is not estimated: the magnitude is stored in the real part so
   // magnitude() returns it.
   std::vector<std::complex<float>> data(static_cast<size_t>(config.n_bins) * n_frames,
                                         std::complex<float>(0.0f, 0.0f));
-  // `mag` is row-major [n_freq x n_frames], so each projection bin walks every
-  // row once and contiguously.
+  // Sparse columns are ascending; each selected magnitude row is contiguous.
   std::vector<float> acc(static_cast<size_t>(n_frames), 0.0f);
   for (int k = 0; k < config.n_bins; ++k) {
     std::fill(acc.begin(), acc.end(), 0.0f);
-    const float* prow = P.data() + static_cast<size_t>(k) * n_freq;
-    for (int b = 0; b < n_freq; ++b) {
-      const float p = prow[b];
+    const int begin = basis.row_offsets[static_cast<size_t>(k)];
+    const int end = basis.row_offsets[static_cast<size_t>(k + 1)];
+    for (int index = begin; index < end; ++index) {
+      const int b = basis.column_indices[static_cast<size_t>(index)];
+      if (b >= n_freq) continue;
+      const float p = std::abs(basis.values[static_cast<size_t>(index)]);
       if (p == 0.0f) continue;
       const float* mrow = mag.data() + static_cast<size_t>(b) * n_frames;
       for (int t = 0; t < n_frames; ++t) {

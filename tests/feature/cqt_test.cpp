@@ -910,11 +910,9 @@ TEST_CASE("cqt_to_chroma scales non-C fmin pitch classes for 24 bins", "[cqt][ch
 
 namespace {
 
-/// @brief pseudo_cqt()'s projection walked frame-major.
-/// @details Every quantity feeding the loop is produced by the same helper the library calls,
-///          so the two differ only in the order the projection is walked: the library carries
-///          a per-frame accumulator across the STFT bin loop, while this recomputes one
-///          accumulator per (bin, frame) with the innermost loop striding `mag`.
+/// @brief Dense frame-major oracle for pseudo_cqt's sparse projection.
+/// @details Uses the same kernel and STFT, but expands the kernel to a dense matrix
+///          and sums each frame separately instead of walking the sparse rows.
 std::vector<float> oracle_pseudo_cqt(const Audio& audio, const CqtConfig& config) {
   const int sr = audio.sample_rate();
   const auto kernel = CqtKernel::create(sr, config);
@@ -1024,20 +1022,24 @@ std::vector<float> cqt_magnitude_fixture(int n_bins, int n_frames, uint32_t seed
 
 TEST_CASE("pseudo_cqt matches a frame-major projection oracle", "[cqt]") {
   const Audio audio = generate_chord({220.0f, 330.0f, 440.0f}, 0.25f, 22050);
-  CqtConfig config;
-  config.hop_length = 256;
-  config.n_bins = 24;
-  config.bins_per_octave = 12;
-  config.fmin = 110.0f;
+  for (int bins_per_octave : {12, 24, 36}) {
+    CAPTURE(bins_per_octave);
+    CqtConfig config;
+    config.hop_length = 256;
+    config.n_bins = 24;
+    config.bins_per_octave = bins_per_octave;
+    config.fmin = 110.0f;
 
-  const CqtResult result = pseudo_cqt(audio, config);
-  const std::vector<float> want = oracle_pseudo_cqt(audio, config);
-  const std::vector<float> got = result.magnitude();
-  REQUIRE(got.size() == want.size());
-  for (size_t i = 0; i < got.size(); ++i) {
-    CAPTURE(i, got[i], want[i]);
-    REQUIRE(std::isfinite(got[i]));
-    REQUIRE(got[i] == want[i]);
+    const CqtResult result = pseudo_cqt(audio, config);
+    const std::vector<float> want = oracle_pseudo_cqt(audio, config);
+    const std::vector<float> got = result.magnitude();
+    REQUIRE(got.size() == want.size());
+    for (size_t i = 0; i < got.size(); ++i) {
+      CAPTURE(i, got[i], want[i]);
+      REQUIRE(std::isfinite(got[i]));
+      const float tolerance = std::max(1e-6f, std::abs(want[i]) * 1e-6f);
+      REQUIRE_THAT(got[i], WithinAbs(want[i], tolerance));
+    }
   }
 }
 
