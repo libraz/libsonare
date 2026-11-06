@@ -153,10 +153,13 @@ Chroma nnls_chroma(const Audio& audio, const NnlsChromaConfig& config) {
 
   const int n_bins = cqt_result.n_bins();
   const int n_frames = cqt_result.n_frames();
-  std::vector<float> magnitude = cqt_result.magnitude();
+  const std::vector<float>& cqt_magnitude = cqt_result.magnitude();
+  std::vector<float> whitened_magnitude;
   if (config.whiten) {
-    magnitude = whiten_across_frequency(magnitude, n_bins, n_frames, config.cqt.bins_per_octave);
+    whitened_magnitude =
+        whiten_across_frequency(cqt_magnitude, n_bins, n_frames, config.cqt.bins_per_octave);
   }
+  const std::vector<float>& magnitude = config.whiten ? whitened_magnitude : cqt_magnitude;
 
   const std::vector<float> template_matrix =
       build_nnls_harmonic_template(cqt_result.frequencies(), config);
