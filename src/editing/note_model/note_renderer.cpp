@@ -39,15 +39,6 @@ void check_disjoint_spans(const std::vector<NoteObject>& notes) {
   }
 }
 
-/// Cross-fade phase at offset @p k of a span of @p length: 0 at either edge,
-/// 1 once past the fade zone.
-float fade_phase(int64_t k, int64_t length, int64_t fade) noexcept {
-  if (fade <= 0) return 1.0f;
-  if (k < fade) return (static_cast<float>(k) + 0.5f) / static_cast<float>(fade);
-  if (k >= length - fade) return (static_cast<float>(length - k) - 0.5f) / static_cast<float>(fade);
-  return 1.0f;
-}
-
 /// Writes @p segment at @p dest, cross-fading its edges against @p output's
 /// OWN current content over @p fade samples with the level-keeping weights of
 /// seam_crossfade.h: a segment over the source it was cut from fades at equal

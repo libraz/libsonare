@@ -60,22 +60,13 @@ int64_t fade_samples(double fade_ms, int sample_rate, int64_t length) noexcept {
   return note_model::edge_fade_samples(fade_ms, sample_rate, length);
 }
 
-float fade_phase(int64_t offset, int64_t length, int64_t fade) noexcept {
-  if (fade <= 0 || length <= 0) return 1.0f;
-  if (offset < fade) return (static_cast<float>(offset) + 0.5f) / static_cast<float>(fade);
-  if (offset >= length - fade) {
-    return (static_cast<float>(length - offset) - 0.5f) / static_cast<float>(fade);
-  }
-  return 1.0f;
-}
-
 void erase_source(std::vector<float>& output, const Audio& source, SampleRange span,
                   SampleRange request, int64_t fade) {
   const int64_t begin = std::max(span.start, request.start);
   const int64_t end = std::min(span.end, request.end);
   for (int64_t sample = begin; sample < end; ++sample) {
     const int64_t local = sample - span.start;
-    const float phase = fade_phase(local, span.length(), fade);
+    const float phase = note_model::fade_phase(local, span.length(), fade);
     const float source_gain =
         phase >= 1.0f ? 0.0f : std::cos(static_cast<float>(sonare::constants::kHalfPi) * phase);
     output[checked_size(sample - request.start, "render.range")] =
@@ -109,7 +100,7 @@ void overlay(std::vector<float>& output, const std::vector<float>& segment,
   if (begin >= end) return;
   for (int64_t sample = begin; sample < end; ++sample) {
     const int64_t local = sample - destination_start;
-    const float phase = fade_phase(local, segment_length, fade);
+    const float phase = note_model::fade_phase(local, segment_length, fade);
     const float segment_gain =
         phase >= 1.0f ? 1.0f : std::sin(static_cast<float>(sonare::constants::kHalfPi) * phase);
     const float existing_gain =

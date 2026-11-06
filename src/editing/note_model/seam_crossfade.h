@@ -45,6 +45,17 @@ inline int64_t edge_fade_samples(double fade_ms, int sample_rate, int64_t region
   return static_cast<int64_t>(requested);
 }
 
+/// @brief Cross-fade phase at @p offset within a span of @p length: 0 at either
+///        edge, 1 once past the @p fade zone (and everywhere when there is none).
+inline float fade_phase(int64_t offset, int64_t length, int64_t fade) noexcept {
+  if (fade <= 0 || length <= 0) return 1.0f;
+  if (offset < fade) return (static_cast<float>(offset) + 0.5f) / static_cast<float>(fade);
+  if (offset >= length - fade) {
+    return (static_cast<float>(length - offset) - 0.5f) / static_cast<float>(fade);
+  }
+  return 1.0f;
+}
+
 /// @brief Gains of a level-keeping fade.
 struct SeamGains {
   float outgoing;

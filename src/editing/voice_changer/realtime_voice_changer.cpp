@@ -35,8 +35,6 @@ constexpr double kVocoderRingGroupDelays = 8.0;
 /// Bound on how long any character type rings (the 4th-order radio corners are the longest).
 constexpr double kCharacterTailS = 0.05;
 
-float db_to_gain(float db) noexcept { return sonare::db_to_linear(db); }
-
 rt::BiquadCoeffs input_highpass(double sample_rate, float corner_hz) {
   return rt::rbj_highpass(rt::frequency_to_w0(corner_hz, sample_rate),
                           sonare::constants::kButterworthQ);
@@ -357,8 +355,8 @@ void RealtimeVoiceChanger::apply_channel_config(ChannelState& state, int channel
   }
   state.space.set_config(config.reverb, config.reverb_variation);
   state.character.set_config(config.character);
-  state.input_gain.set_target(db_to_gain(config.input_gain_db));
-  state.output_gain.set_target(db_to_gain(config.output_gain_db));
+  state.input_gain.set_target(db_to_linear(config.input_gain_db));
+  state.output_gain.set_target(db_to_linear(config.output_gain_db));
   state.wet_mix.set_target(std::clamp(config.wet_mix, 0.0f, 1.0f));
   state.eq_highpass_hz.set_target(config.eq.highpass_hz);
   state.eq_body_db.set_target(config.eq.body_db);
@@ -559,8 +557,8 @@ void RealtimeVoiceChanger::reset_channel(ChannelState& state) {
   state.filter_presence_db = state.eq_presence_db.current();
   state.filter_air_db = state.eq_air_db.current();
   state.filter_deess_frequency_hz = state.deess_frequency_hz.current();
-  state.gate_threshold_linear = db_to_gain(state.gate_threshold_db.current());
-  state.gate_range_linear = db_to_gain(-state.gate_range_db.current());
+  state.gate_threshold_linear = db_to_linear(state.gate_threshold_db.current());
+  state.gate_range_linear = db_to_linear(-state.gate_range_db.current());
   state.gate_attack_alpha =
       rt::one_pole_alpha_from_time_ms(state.gate_attack_ms.current(), sample_rate_);
   state.gate_release_alpha =
@@ -569,7 +567,7 @@ void RealtimeVoiceChanger::reset_channel(ChannelState& state) {
       rt::one_pole_alpha_from_time_ms(state.comp_attack_ms.current(), sample_rate_);
   state.comp_release_alpha =
       rt::one_pole_alpha_from_time_ms(state.comp_release_ms.current(), sample_rate_);
-  state.limiter_ceiling_linear = db_to_gain(state.limiter_ceiling_db.current());
+  state.limiter_ceiling_linear = db_to_linear(state.limiter_ceiling_db.current());
   state.limiter_release_alpha =
       rt::one_pole_alpha_from_time_ms(state.limiter_release_ms.current(), sample_rate_);
   update_input_filter(state);

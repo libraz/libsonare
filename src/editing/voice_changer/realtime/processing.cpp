@@ -23,8 +23,6 @@ constexpr float kVoiceFadeFloor = 1e-3f;
 /// Samples between pitch-target updates in the voice stage.
 constexpr int kTransformControlChunk = 128;
 
-float db_to_gain(float db) noexcept { return sonare::db_to_linear(db); }
-
 float amp_to_db(float amp) noexcept {
   return sonare::linear_to_db(std::max(std::abs(amp), sonare::constants::kAmpEpsilon));
 }
@@ -58,8 +56,8 @@ float RealtimeVoiceChanger::process_input_stage(ChannelState& state, float input
 
     // Cache the gate's expensive dB-derived controls. The detector and gate
     // gain continue to run at the audio sample rate below.
-    state.gate_threshold_linear = db_to_gain(state.gate_threshold_db.current());
-    state.gate_range_linear = db_to_gain(-state.gate_range_db.current());
+    state.gate_threshold_linear = db_to_linear(state.gate_threshold_db.current());
+    state.gate_range_linear = db_to_linear(-state.gate_range_db.current());
     state.gate_attack_alpha =
         rt::one_pole_alpha_from_time_ms(state.gate_attack_ms.current(), sample_rate_);
     state.gate_release_alpha =
@@ -141,12 +139,12 @@ float RealtimeVoiceChanger::process_output_stage(ChannelState& state, float inpu
   // established compressor recurrence; only config-derived A/R transforms are
   // refreshed at the bounded control cadence above.
   const float over = amp_to_db(state.comp_env) - comp_threshold_db;
-  float comp_target = db_to_gain(comp_makeup_db);
+  float comp_target = db_to_linear(comp_makeup_db);
   float comp_reduction_target = 1.0f;
   if (over > 0.0f) {
     const float reduction_db = over - over / comp_ratio;
-    comp_target = db_to_gain(-reduction_db + comp_makeup_db);
-    comp_reduction_target = db_to_gain(-reduction_db);
+    comp_target = db_to_linear(-reduction_db + comp_makeup_db);
+    comp_reduction_target = db_to_linear(-reduction_db);
   }
   smooth_attack_release(state.comp_gain, comp_target, state.comp_attack_alpha,
                         state.comp_release_alpha, /*attack_when_decreasing=*/true);
@@ -171,7 +169,7 @@ float RealtimeVoiceChanger::process_output_stage(ChannelState& state, float inpu
   float deess_target = 1.0f;
   if (ess_over > 0.0f) {
     const float reduction_db = std::min(deess_range_db, ess_over - ess_over / deess_ratio);
-    deess_target = db_to_gain(-reduction_db);
+    deess_target = db_to_linear(-reduction_db);
   }
   state.deess_gain += deess_gain_alpha_ * (deess_target - state.deess_gain);
   x *= state.deess_gain;
@@ -196,7 +194,7 @@ float RealtimeVoiceChanger::process_output_stage(ChannelState& state, float inpu
   const float limiter_ceiling_db = state.limiter_ceiling_db.process();
   const float limiter_release_ms = state.limiter_release_ms.process();
   if (control_update) {
-    state.limiter_ceiling_linear = db_to_gain(limiter_ceiling_db);
+    state.limiter_ceiling_linear = db_to_linear(limiter_ceiling_db);
     state.limiter_release_alpha = rt::one_pole_alpha_from_time_ms(limiter_release_ms, sample_rate_);
   }
   const float ceiling = state.limiter_ceiling_linear;
