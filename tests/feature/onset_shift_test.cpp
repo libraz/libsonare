@@ -68,6 +68,33 @@ TEST_CASE("onset_center_shift_frames matches the applied shift", "[onset][shift]
   }
 }
 
+TEST_CASE("onset centering shifts in place across every size boundary", "[onset][shift]") {
+  const std::vector<float> input{1.0f, 2.0f, 3.0f, 4.0f, 5.0f};
+  const std::vector<float> partial_expected{0.0f, 0.0f, 1.0f, 2.0f, 3.0f};
+  const std::vector<float> zero_expected = input;
+  const std::vector<float> filled_expected(input.size(), 0.0f);
+
+  REQUIRE(center_onset_strength(input, 1, 1, true) == zero_expected);
+  REQUIRE(center_onset_strength(input, 4, 1, true) == partial_expected);
+  REQUIRE(center_onset_strength(input, 10, 1, true) == filled_expected);
+  REQUIRE(center_onset_strength(input, 20, 1, true) == filled_expected);
+  REQUIRE(input == std::vector<float>{1.0f, 2.0f, 3.0f, 4.0f, 5.0f});
+
+  StftConfig geometry;
+  geometry.hop_length = 1;
+  geometry.win_length = 4;
+  REQUIRE(center_onset_strength(input, geometry, true) == partial_expected);
+  geometry.win_length = 10;
+  REQUIRE(center_onset_strength(input, geometry, true) == filled_expected);
+  geometry.win_length = 20;
+  REQUIRE(center_onset_strength(input, geometry, true) == filled_expected);
+  REQUIRE(center_onset_strength(input, geometry, false) == zero_expected);
+
+  const std::vector<float> empty;
+  REQUIRE(center_onset_strength(empty, 10, 1, true).empty());
+  REQUIRE(center_onset_strength(empty, geometry, true).empty());
+}
+
 TEST_CASE("envelope_frame_time converts envelope frames to event times", "[onset][shift]") {
   REQUIRE(envelope_frame_time(10, 0, 22050, 512) == Catch::Approx(frames_to_time(10, 22050, 512)));
   REQUIRE(envelope_frame_time(10, 2, 22050, 512) == Catch::Approx(frames_to_time(8, 22050, 512)));

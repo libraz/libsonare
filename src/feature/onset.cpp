@@ -30,13 +30,15 @@ LogPowerMatrix power_to_relative_db(const Eigen::Map<const LogPowerMatrix>& powe
 /// Downstream beat/tempo/meter analyzers rely on the Mel frame count, so terminal
 /// frames shifted past the end are intentionally discarded.
 std::vector<float> shift_onset_frames(std::vector<float> onset_env, int frame_offset) {
-  if (frame_offset <= 0) return onset_env;
-  std::vector<float> shifted(onset_env.size(), 0.0f);
-  for (size_t i = 0; i < onset_env.size(); ++i) {
-    const size_t shifted_index = i + static_cast<size_t>(frame_offset);
-    if (shifted_index < shifted.size()) shifted[shifted_index] = onset_env[i];
+  if (frame_offset <= 0 || onset_env.empty()) return onset_env;
+
+  const size_t offset = std::min(static_cast<size_t>(frame_offset), onset_env.size());
+  if (offset < onset_env.size()) {
+    std::move_backward(onset_env.begin(), onset_env.end() - static_cast<std::ptrdiff_t>(offset),
+                       onset_env.end());
   }
-  return shifted;
+  std::fill_n(onset_env.begin(), offset, 0.0f);
+  return onset_env;
 }
 
 }  // namespace
@@ -248,14 +250,13 @@ std::vector<float> spectral_flux(const float* magnitude, int n_bins, int n_frame
     // and the accumulator run along a contiguous row, where a frame-major inner loop over
     // bins vectorizes just as well but takes a cache line per bin. Each frame still sums
     // bins in ascending order, so the flux is unchanged bit for bit.
-    std::vector<float> sums(static_cast<size_t>(diff_frames), 0.0f);
+    float* sums = flux.data() + lag;
     for (int b = 0; b < n_bins; ++b) {
       const float* row = magnitude + static_cast<size_t>(b) * n_frames;
       for (int f = 0; f < diff_frames; ++f) {
         sums[f] += std::abs(row[f + lag] - row[f]);
       }
     }
-    for (int f = 0; f < diff_frames; ++f) flux[f + lag] = sums[f];
   }
 
   return flux;
