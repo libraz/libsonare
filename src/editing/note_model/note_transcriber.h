@@ -3,12 +3,10 @@
 /// @file note_transcriber.h
 /// @brief Turns audio into pitched, velocity-bearing note events.
 ///
-/// A bridge, not a detector. The spans and the measured curves come from the
-/// chains that already produce them -- pYIN cut by NoteSegmenter for one line at
-/// a time, the multi-F0 chain for overlapping ones -- and this file decides only
-/// the three conversions a note event needs on top of them: which chain answers,
-/// what MIDI note a median F0 lands on, and what velocity a measured level
-/// becomes.
+/// The monophonic path starts from pYIN regions cut by NoteSegmenter and can
+/// separate a brief RMS valley within an existing region into repeated attacks.
+/// The polyphonic path reads the multi-F0 chain for overlapping notes. Both paths
+/// map the measured F0 and level to MIDI pitch and velocity.
 ///
 /// Output is in SAMPLES and carries no musical time. Placing notes on a bar grid
 /// needs a tempo, which is the caller's, so the conversion to PPQ happens above
@@ -29,7 +27,8 @@ namespace sonare::editing::note_model {
 /// @brief Which chain the notes are read from.
 enum class TranscribeSource : uint32_t {
   /// pYIN's F0 track cut by NoteSegmenter. One note sounds at a time; a chord
-  /// arrives as whichever line the tracker followed.
+  /// arrives as whichever line the tracker followed. The transcription pass can
+  /// also separate a clear brief RMS valley within an existing note region.
   kMonophonic = 0,
   /// The multi-F0 chain. Overlapping notes are expected, and the cost is a full
   /// STFT plus a mask per tracked ridge.

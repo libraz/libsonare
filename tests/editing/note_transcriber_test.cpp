@@ -16,17 +16,25 @@
 #include <catch2/catch_approx.hpp>
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
+#include <chrono>
 #include <cmath>
 #include <cstdint>
+#include <cstdlib>
+#include <iomanip>
+#include <iostream>
 #include <limits>
 #include <string>
+#include <tuple>
+#include <utility>
 #include <vector>
 
 #include "core/audio.h"
+#include "editing/pitch_editor/f0_provider.h"
 #include "editing/polyphony/f0_salience.h"
 #include "feature/pitch.h"
 #include "util/constants.h"
 #include "util/exception.h"
+#include "util/json_reader.h"
 
 using Catch::Matchers::WithinAbs;
 using Catch::Matchers::WithinRel;
@@ -38,12 +46,9 @@ constexpr int kSampleRate = 22050;
 constexpr float kNaN = std::numeric_limits<float>::quiet_NaN();
 constexpr float kInf = std::numeric_limits<float>::infinity();
 
-/// The tracker's hop at this rate. Every span the segmenter emits starts on a
-/// frame boundary, so an onset can be no closer to the true one than this.
-constexpr int64_t kHopSamples = 512;
-/// Two hops: the boundary the run starts on plus the frame the voicing decision
-/// settles in. The sequence below lands 478 to 836 samples early against it.
-constexpr int64_t kOnsetToleranceSamples = 2 * kHopSamples;
+/// Fixed tolerance for the sequence's measured onset. Keep this independent of
+/// tracker cadence so rate-specific settings do not change the expectation.
+constexpr int64_t kOnsetToleranceSamples = 1024;
 
 /// The default floor, and one shallow enough to move every measured velocity.
 constexpr float kDeepFloorDb = -48.0f;
@@ -109,6 +114,264 @@ sonare::Audio sustained(int midi_note, float amplitude = 0.5f) {
   return sonare::Audio::from_buffer(samples.data(), samples.size(), kSampleRate);
 }
 
+struct RateSequence {
+  std::vector<float> samples;
+  std::vector<int> notes;
+  std::vector<int64_t> onsets;
+
+  sonare::Audio audio(int sample_rate) const {
+    return sonare::Audio::from_buffer(samples.data(), samples.size(), sample_rate);
+  }
+};
+
+/// A short, legato arpeggio rendered at the requested input rate.
+RateSequence fast_arpeggio(int sample_rate) {
+  constexpr double kLeadSeconds = 0.2;
+  constexpr double kToneSeconds = 0.125;
+  constexpr double kAttackSeconds = 0.004;
+  constexpr double kReleaseSeconds = 0.008;
+  const std::vector<int> intended{60, 64, 67, 72, 69, 65, 62, 71};
+  RateSequence sequence;
+  sequence.notes = intended;
+  sequence.samples.resize(static_cast<size_t>(std::lround(kLeadSeconds * sample_rate)), 0.0f);
+  for (const int note : intended) {
+    const int tone_samples = static_cast<int>(std::lround(kToneSeconds * sample_rate));
+    const float hz = hz_for_midi(note);
+    sequence.onsets.push_back(static_cast<int64_t>(sequence.samples.size()));
+    for (int i = 0; i < tone_samples; ++i) {
+      const double t = static_cast<double>(i) / sample_rate;
+      const double envelope =
+          std::min({1.0, t / kAttackSeconds, std::max(0.0, kToneSeconds - t) / kReleaseSeconds});
+      double value = 0.0;
+      for (int harmonic = 1; harmonic <= 5; ++harmonic) {
+        value += std::sin(sonare::constants::kTwoPiD * hz * harmonic * t) / harmonic;
+      }
+      sequence.samples.push_back(static_cast<float>(0.18 * envelope * value));
+    }
+  }
+  return sequence;
+}
+
+RateSequence repeated_harmonic_tone(int sample_rate, int midi_note,
+                                    const std::vector<float>& gains) {
+  constexpr double kLeadSeconds = 0.2;
+  constexpr double kPeriodSeconds = 0.125;
+  constexpr double kTailSeconds = 0.2;
+  constexpr double kAttackSeconds = 0.004;
+  constexpr double kReleaseSeconds = 0.008;
+  RateSequence sequence;
+  sequence.notes.assign(gains.size(), midi_note);
+  const int64_t sample_count = static_cast<int64_t>(
+      std::llround((kLeadSeconds + gains.size() * kPeriodSeconds + kTailSeconds) * sample_rate));
+  sequence.samples.resize(static_cast<size_t>(sample_count), 0.0f);
+  const double fundamental_hz = hz_for_midi(midi_note);
+  for (size_t attack = 0; attack < gains.size(); ++attack) {
+    const int64_t start =
+        static_cast<int64_t>(std::llround((kLeadSeconds + attack * kPeriodSeconds) * sample_rate));
+    const int64_t end = static_cast<int64_t>(
+        std::llround((kLeadSeconds + (attack + 1) * kPeriodSeconds) * sample_rate));
+    const double duration_seconds = static_cast<double>(end - start) / sample_rate;
+    sequence.onsets.push_back(start);
+    for (int64_t sample = start; sample < end; ++sample) {
+      const double t = static_cast<double>(sample - start) / sample_rate;
+      const double envelope = std::min(
+          {1.0, t / kAttackSeconds, std::max(0.0, duration_seconds - t) / kReleaseSeconds});
+      double value = 0.0;
+      for (int harmonic = 1; harmonic <= 5; ++harmonic) {
+        value += std::sin(sonare::constants::kTwoPiD * fundamental_hz * harmonic * t) / harmonic;
+      }
+      sequence.samples[static_cast<size_t>(sample)] +=
+          static_cast<float>(gains[attack] * envelope * value);
+    }
+  }
+  return sequence;
+}
+
+RateSequence repeated_harmonic_tone(int sample_rate, int midi_note, float gain) {
+  return repeated_harmonic_tone(sample_rate, midi_note, std::vector<float>(4, gain));
+}
+
+sonare::Audio modulated_harmonic_tone(int sample_rate, int midi_note, double amplitude_rate_hz,
+                                      double amplitude_depth, double vibrato_rate_hz = 0.0,
+                                      double vibrato_depth_cents = 0.0) {
+  constexpr double kLeadSeconds = 0.2;
+  constexpr double kHeldSeconds = 1.6;
+  constexpr double kTailSeconds = 0.2;
+  constexpr double kAttackSeconds = 0.004;
+  constexpr double kReleaseSeconds = 0.008;
+  constexpr float kGain = 0.18f;
+  const int64_t start = static_cast<int64_t>(std::llround(kLeadSeconds * sample_rate));
+  const int64_t end =
+      static_cast<int64_t>(std::llround((kLeadSeconds + kHeldSeconds) * sample_rate));
+  const int64_t total = static_cast<int64_t>(
+      std::llround((kLeadSeconds + kHeldSeconds + kTailSeconds) * sample_rate));
+  std::vector<float> samples(static_cast<size_t>(total), 0.0f);
+  const double duration_seconds = static_cast<double>(end - start) / sample_rate;
+  const double fundamental_hz = hz_for_midi(midi_note);
+  double phase = 0.0;
+  for (int64_t sample = start; sample < end; ++sample) {
+    const double t = static_cast<double>(sample - start) / sample_rate;
+    const double edge =
+        std::min({1.0, t / kAttackSeconds, std::max(0.0, duration_seconds - t) / kReleaseSeconds});
+    const double amplitude =
+        1.0 - amplitude_depth * 0.5 *
+                  (1.0 + std::cos(sonare::constants::kTwoPiD * amplitude_rate_hz * t));
+    const double frequency =
+        fundamental_hz *
+        std::pow(2.0, vibrato_depth_cents *
+                          std::sin(sonare::constants::kTwoPiD * vibrato_rate_hz * t) /
+                          sonare::constants::kCentsPerOctave);
+    phase += sonare::constants::kTwoPiD * frequency / sample_rate;
+    double value = 0.0;
+    for (int harmonic = 1; harmonic <= 5; ++harmonic) {
+      value += std::sin(harmonic * phase) / harmonic;
+    }
+    samples[static_cast<size_t>(sample)] = kGain * static_cast<float>(edge * amplitude * value);
+  }
+  return sonare::Audio::from_buffer(samples.data(), samples.size(), sample_rate);
+}
+
+sonare::Audio noisy_harmonic_tone(int sample_rate, int midi_note, float noise_peak) {
+  constexpr double kLeadSeconds = 0.2;
+  constexpr double kHeldSeconds = 1.6;
+  constexpr double kTailSeconds = 0.2;
+  constexpr double kAttackSeconds = 0.004;
+  constexpr double kReleaseSeconds = 0.008;
+  constexpr float kGain = 0.18f;
+  const int64_t start = static_cast<int64_t>(std::llround(kLeadSeconds * sample_rate));
+  const int64_t end =
+      static_cast<int64_t>(std::llround((kLeadSeconds + kHeldSeconds) * sample_rate));
+  const int64_t total = static_cast<int64_t>(
+      std::llround((kLeadSeconds + kHeldSeconds + kTailSeconds) * sample_rate));
+  std::vector<float> samples(static_cast<size_t>(total), 0.0f);
+  const double duration_seconds = static_cast<double>(end - start) / sample_rate;
+  const double fundamental_hz = hz_for_midi(midi_note);
+  double phase = 0.0;
+  uint32_t state = 0x6d2b79f5u;
+  for (int64_t sample = start; sample < end; ++sample) {
+    const double t = static_cast<double>(sample - start) / sample_rate;
+    const double envelope =
+        std::min({1.0, t / kAttackSeconds, std::max(0.0, duration_seconds - t) / kReleaseSeconds});
+    phase += sonare::constants::kTwoPiD * fundamental_hz / sample_rate;
+    double value = 0.0;
+    for (int harmonic = 1; harmonic <= 5; ++harmonic) {
+      value += std::sin(harmonic * phase) / harmonic;
+    }
+    state = 1664525u * state + 1013904223u;
+    const float unit = static_cast<float>(state >> 8) / 16777215.0f;
+    const float noise = (2.0f * unit - 1.0f) * noise_peak;
+    samples[static_cast<size_t>(sample)] = envelope * (kGain * static_cast<float>(value) + noise);
+  }
+  return sonare::Audio::from_buffer(samples.data(), samples.size(), sample_rate);
+}
+
+struct BachReferenceNote {
+  int pitch = 0;
+  int64_t onset_sample = 0;
+  int64_t offset_sample = 0;
+};
+
+struct BachExcerpt {
+  const char* work;
+  double first_quarter;
+  double end_quarter;
+  int tempo_bpm;
+};
+
+std::vector<BachReferenceNote> bach_excerpt(const sonare::test::JsonValue& root,
+                                            const BachExcerpt& excerpt, int sample_rate) {
+  REQUIRE(root.contains("tracks"));
+  const auto& tracks = root["tracks"].as_array();
+  REQUIRE(!tracks.empty());
+  REQUIRE(tracks[0].contains("notes"));
+  const auto& notes = tracks[0]["notes"].as_array();
+  std::vector<BachReferenceNote> selected;
+  constexpr double kLeadSeconds = 0.2;
+  for (const auto& note : notes) {
+    const double onset_quarters = note["onset"].as_number();
+    if (onset_quarters < excerpt.first_quarter || onset_quarters >= excerpt.end_quarter) continue;
+    const double duration_quarters = note["duration"].as_number();
+    const double onset_seconds =
+        kLeadSeconds + (onset_quarters - excerpt.first_quarter) * 60.0 / excerpt.tempo_bpm;
+    const double offset_seconds =
+        kLeadSeconds +
+        (onset_quarters - excerpt.first_quarter + duration_quarters) * 60.0 / excerpt.tempo_bpm;
+    const int64_t onset_sample = static_cast<int64_t>(std::llround(onset_seconds * sample_rate));
+    const int64_t offset_sample = static_cast<int64_t>(std::llround(offset_seconds * sample_rate));
+    selected.push_back({note["pitch"].as_int(), onset_sample, offset_sample});
+  }
+  return selected;
+}
+
+sonare::Audio render_bach_excerpt(const std::vector<BachReferenceNote>& notes, int sample_rate) {
+  constexpr double kAttackSeconds = 0.004;
+  constexpr double kReleaseSeconds = 0.008;
+  constexpr double kTailSeconds = 0.2;
+  REQUIRE(!notes.empty());
+  int64_t sample_count = notes.front().offset_sample;
+  for (const auto& note : notes) sample_count = std::max(sample_count, note.offset_sample);
+  sample_count += static_cast<int64_t>(std::llround(kTailSeconds * sample_rate));
+  std::vector<float> samples(static_cast<size_t>(sample_count), 0.0f);
+  for (const auto& note : notes) {
+    const double duration_seconds =
+        static_cast<double>(note.offset_sample - note.onset_sample) / sample_rate;
+    const double fundamental_hz = hz_for_midi(note.pitch);
+    for (int64_t sample = note.onset_sample; sample < note.offset_sample; ++sample) {
+      const double t = static_cast<double>(sample - note.onset_sample) / sample_rate;
+      const double envelope = std::min(
+          {1.0, t / kAttackSeconds, std::max(0.0, duration_seconds - t) / kReleaseSeconds});
+      double value = 0.0;
+      for (int harmonic = 1; harmonic <= 5; ++harmonic) {
+        value += std::sin(sonare::constants::kTwoPiD * fundamental_hz * harmonic * t) / harmonic;
+      }
+      samples[static_cast<size_t>(sample)] += static_cast<float>(0.18 * envelope * value);
+    }
+  }
+  return sonare::Audio::from_buffer(samples.data(), samples.size(), sample_rate);
+}
+
+struct MatchScore {
+  size_t true_positive = 0;
+  size_t false_positive = 0;
+  size_t false_negative = 0;
+};
+
+MatchScore score_bach_notes(const std::vector<BachReferenceNote>& truth,
+                            const std::vector<TranscribedNote>& estimates, int sample_rate) {
+  constexpr double kOnsetToleranceSeconds = 0.050;
+  constexpr int kPitchToleranceCents = 50;
+  std::vector<int> estimate_to_truth(estimates.size(), -1);
+  const auto augment = [&](auto&& self, size_t truth_index, std::vector<bool>& visited) -> bool {
+    for (size_t estimate_index = 0; estimate_index < estimates.size(); ++estimate_index) {
+      if (visited[estimate_index]) continue;
+      const double onset_error =
+          std::abs(static_cast<double>(estimates[estimate_index].onset_sample -
+                                       truth[truth_index].onset_sample) /
+                   sample_rate);
+      const int pitch_error_cents =
+          100 *
+          std::abs(static_cast<int>(estimates[estimate_index].note) - truth[truth_index].pitch);
+      if (onset_error > kOnsetToleranceSeconds || pitch_error_cents > kPitchToleranceCents)
+        continue;
+      visited[estimate_index] = true;
+      if (estimate_to_truth[estimate_index] < 0 ||
+          self(self, static_cast<size_t>(estimate_to_truth[estimate_index]), visited)) {
+        estimate_to_truth[estimate_index] = static_cast<int>(truth_index);
+        return true;
+      }
+    }
+    return false;
+  };
+  MatchScore score;
+  for (size_t truth_index = 0; truth_index < truth.size(); ++truth_index) {
+    std::vector<bool> visited(estimates.size(), false);
+    if (augment(augment, truth_index, visited)) ++score.true_positive;
+  }
+  score.false_positive = estimates.size() - score.true_positive;
+  score.false_negative = truth.size() - score.true_positive;
+  return score;
+}
+
 /// @brief The note numbers, as ints so a failed comparison prints numbers.
 std::vector<int> note_numbers(const std::vector<TranscribedNote>& notes) {
   std::vector<int> numbers;
@@ -150,8 +413,8 @@ TEST_CASE(
 
   for (size_t i = 0; i < notes.size(); ++i) {
     INFO("note " << i << ": onset " << notes[i].onset_sample << ", intended " << intended.onsets[i]
-                 << ", tolerance " << kOnsetToleranceSamples << " samples (two tracker hops of "
-                 << kHopSamples << " at " << kSampleRate << " Hz)");
+                 << ", tolerance " << kOnsetToleranceSamples << " samples at " << kSampleRate
+                 << " Hz");
     CHECK(std::llabs(notes[i].onset_sample - intended.onsets[i]) <= kOnsetToleranceSamples);
     CHECK(notes[i].offset_sample > notes[i].onset_sample);
     // The pitch the note number was rounded from, so a right number reached by a
@@ -173,6 +436,165 @@ TEST_CASE(
     REQUIRE(note_numbers(other_notes) == other.notes);
     REQUIRE(note_numbers(other_notes) != intended.notes);
   }
+}
+
+TEST_CASE("default monophonic transcription follows a fast arpeggio across input rates",
+          "[note_transcriber][pitch_cadence]") {
+  const std::vector<int> expected{60, 64, 67, 72, 69, 65, 62, 71};
+  for (const int sample_rate : {16000, 22050, 44100}) {
+    const RateSequence sequence = fast_arpeggio(sample_rate);
+    const std::vector<TranscribedNote> notes = transcribe_notes(sequence.audio(sample_rate));
+    INFO("sample rate " << sample_rate << ", detected notes " << note_numbers(notes).size()
+                        << ": ");
+    for (size_t i = 0; i < notes.size(); ++i) {
+      INFO("note " << i << ": midi " << static_cast<int>(notes[i].note) << ", onset "
+                   << notes[i].onset_sample << ", intended "
+                   << (i < sequence.onsets.size() ? sequence.onsets[i] : -1));
+    }
+    CHECK(note_numbers(notes) == expected);
+    if (notes.size() == sequence.onsets.size()) {
+      for (size_t i = 0; i < notes.size(); ++i) {
+        INFO("sample rate " << sample_rate << ", note " << i << ", onset " << notes[i].onset_sample
+                            << ", intended " << sequence.onsets[i]);
+        CHECK(std::llabs(notes[i].onset_sample - sequence.onsets[i]) <=
+              static_cast<int64_t>(std::llround(0.050 * sample_rate)));
+      }
+    }
+  }
+}
+
+TEST_CASE("editing pYIN defaults scale the frame and cap the hop", "[note_transcriber]") {
+  struct ExpectedGeometry {
+    int sample_rate;
+    int frame_length;
+    int hop_length;
+  };
+  const std::vector<ExpectedGeometry> expected{
+      {16000, 1486, 186}, {22050, 2048, 256}, {44100, 4096, 512}, {48000, 4458, 512}};
+  for (const ExpectedGeometry& geometry : expected) {
+    const sonare::PitchConfig config =
+        sonare::editing::pitch_editor::default_editing_pitch_config(geometry.sample_rate);
+    INFO("sample rate " << geometry.sample_rate);
+    CHECK(config.frame_length == geometry.frame_length);
+    CHECK(config.hop_length == geometry.hop_length);
+  }
+}
+
+TEST_CASE("monophonic transcription separates short same-pitch attacks",
+          "[note_transcriber][reattack]") {
+  constexpr int64_t kOnsetToleranceMs = 50;
+  const std::vector<int> sample_rates{16000, 22050, 44100, 48000};
+  const std::vector<int> midi_notes{57, 69, 76};
+  const std::vector<float> gains{0.03f, 0.3f};
+  for (const int sample_rate : sample_rates) {
+    for (const int midi_note : midi_notes) {
+      for (const float gain : gains) {
+        const RateSequence sequence = repeated_harmonic_tone(sample_rate, midi_note, gain);
+        const std::vector<TranscribedNote> notes = transcribe_notes(sequence.audio(sample_rate));
+        INFO("sample rate " << sample_rate << ", MIDI " << midi_note << ", gain " << gain
+                            << ", detected " << notes.size() << " attacks");
+        CHECK(notes.size() == sequence.onsets.size());
+        if (notes.size() != sequence.onsets.size()) continue;
+        for (size_t i = 0; i < notes.size(); ++i) {
+          INFO("attack " << i << ", actual onset " << notes[i].onset_sample << ", expected "
+                         << sequence.onsets[i]);
+          CHECK(notes[i].note == midi_note);
+          CHECK(std::llabs(notes[i].onset_sample - sequence.onsets[i]) * 1000 <=
+                kOnsetToleranceMs * sample_rate);
+          CHECK(notes[i].offset_sample - notes[i].onset_sample >=
+                static_cast<int64_t>(std::lround(30.0 * sample_rate / 1000.0)));
+        }
+      }
+    }
+  }
+
+  const RateSequence alternating_gain =
+      repeated_harmonic_tone(22050, 69, std::vector<float>{0.3f, 0.15f, 0.3f, 0.15f});
+  const std::vector<TranscribedNote> alternating_notes =
+      transcribe_notes(alternating_gain.audio(22050));
+  REQUIRE(alternating_notes.size() == alternating_gain.onsets.size());
+  for (size_t i = 0; i < alternating_notes.size(); ++i) {
+    INFO("alternating-gain attack " << i);
+    CHECK(alternating_notes[i].note == 69);
+    CHECK(std::llabs(alternating_notes[i].onset_sample - alternating_gain.onsets[i]) * 1000 <=
+          kOnsetToleranceMs * 22050);
+  }
+}
+
+TEST_CASE("reattack splitting leaves smooth motion, silence, and noise intact",
+          "[note_transcriber][reattack]") {
+  const auto require_one_note = [](const sonare::Audio& audio, int midi_note) {
+    const std::vector<TranscribedNote> notes = transcribe_notes(audio);
+    std::string note_spans;
+    for (const TranscribedNote& note : notes) {
+      note_spans += "[" + std::to_string(note.onset_sample) + "," +
+                    std::to_string(note.offset_sample) + "," + std::to_string(note.note) + "]";
+    }
+    INFO("expected MIDI " << midi_note << ", detected " << notes.size() << " notes");
+    INFO("note spans " << note_spans);
+    for (size_t i = 0; i < notes.size(); ++i) {
+      INFO("note " << i << ": onset " << notes[i].onset_sample << ", offset "
+                   << notes[i].offset_sample << ", MIDI " << static_cast<int>(notes[i].note));
+    }
+    REQUIRE(notes.size() == 1);
+    CHECK(notes.front().note == midi_note);
+  };
+
+  for (const int sample_rate : {16000, 22050, 44100, 48000}) {
+    INFO("held tone at " << sample_rate << " Hz");
+    require_one_note(modulated_harmonic_tone(sample_rate, 69, 0.0, 0.0), 69);
+  }
+
+  const std::vector<std::tuple<int, int, double>> amplitude_cases{
+      {16000, 57, 4.0}, {22050, 69, 8.0}, {48000, 76, 12.0}};
+  for (const auto& [sample_rate, midi_note, modulation_hz] : amplitude_cases) {
+    INFO("smooth amplitude modulation " << modulation_hz << " Hz at " << sample_rate << " Hz");
+    require_one_note(modulated_harmonic_tone(sample_rate, midi_note, modulation_hz, 0.95),
+                     midi_note);
+  }
+
+  for (const auto& [sample_rate, midi_note] :
+       {std::pair<int, int>{22050, 69}, std::pair<int, int>{48000, 57}}) {
+    INFO("50-cent vibrato at " << sample_rate << " Hz");
+    require_one_note(modulated_harmonic_tone(sample_rate, midi_note, 0.0, 0.0, 6.0, 50.0),
+                     midi_note);
+  }
+
+  INFO("110 Hz smooth amplitude modulation at 16 kHz");
+  require_one_note(modulated_harmonic_tone(16000, 45, 8.0, 0.95), 45);
+  INFO("held tone with moderate white noise");
+  require_one_note(noisy_harmonic_tone(22050, 69, 0.04f), 69);
+
+  const RateSequence repeated = repeated_harmonic_tone(22050, 69, 0.18f);
+  TranscribeConfig long_minimum;
+  long_minimum.min_note_ms = 300.0f;
+  const std::vector<TranscribedNote> constrained =
+      transcribe_notes(repeated.audio(22050), long_minimum);
+  REQUIRE(constrained.size() == 1);
+  CHECK(constrained.front().note == 69);
+  CHECK(constrained.front().offset_sample - constrained.front().onset_sample >= 0.300 * 22050);
+
+  const int64_t quiet_samples = static_cast<int64_t>(2 * 22050);
+  std::vector<float> silence(static_cast<size_t>(quiet_samples), 0.0f);
+  REQUIRE(
+      transcribe_notes(sonare::Audio::from_buffer(silence.data(), silence.size(), 22050)).empty());
+
+  uint32_t state = 0x12345678u;
+  std::vector<float> low_noise(static_cast<size_t>(quiet_samples));
+  for (float& sample : low_noise) {
+    state = 1664525u * state + 1013904223u;
+    const float unit = static_cast<float>(state >> 8) / 16777215.0f;
+    sample = (2.0f * unit - 1.0f) * 1.0e-5f;
+  }
+  REQUIRE(transcribe_notes(sonare::Audio::from_buffer(low_noise.data(), low_noise.size(), 22050))
+              .empty());
+}
+
+TEST_CASE("a finite minimum longer than the recording returns no monophonic notes",
+          "[note_transcriber]") {
+  TranscribeConfig config;
+  config.min_note_ms = std::numeric_limits<float>::max();
+  CHECK(transcribe_notes(sustained(69), config).empty());
 }
 
 TEST_CASE("transcribe_notes answers the same audio identically", "[note_transcriber]") {
@@ -967,4 +1389,58 @@ TEST_CASE("the polyphonic limits refuse what they cannot read", "[note_transcrib
       refused_naming(reattack, "reattack_ratio");
     }
   }
+}
+
+TEST_CASE("Bach score transcription evaluation", "[.][bach_transcribe_eval]") {
+  const char* reference_dir = std::getenv("SONARE_BACH_REFERENCE_DIR");
+  REQUIRE(reference_dir != nullptr);
+  REQUIRE(reference_dir[0] != '\0');
+
+  std::string directory(reference_dir);
+  if (directory.back() != '/') directory.push_back('/');
+  const std::vector<BachExcerpt> excerpts{{"BWV1001_4", 0.0, 16.0, 96},
+                                          {"BWV1006_1", 320.0, 336.0, 120},
+                                          {"BWV1007_1", 36.0, 52.0, 120},
+                                          {"BWV1003_4", 276.0, 292.0, 80}};
+  const std::vector<int> sample_rates{16000, 22050, 44100, 48000};
+  size_t evaluated_cases = 0;
+  for (const BachExcerpt& excerpt : excerpts) {
+    const sonare::test::JsonValue score =
+        sonare::test::JsonReader::parse_file(directory + excerpt.work + ".json");
+    for (const int sample_rate : sample_rates) {
+      const std::vector<BachReferenceNote> truth = bach_excerpt(score, excerpt, sample_rate);
+      REQUIRE(!truth.empty());
+      const sonare::Audio audio = render_bach_excerpt(truth, sample_rate);
+      TranscribeConfig config;
+      config.tempo_bpm = static_cast<float>(excerpt.tempo_bpm);
+      const auto start = std::chrono::steady_clock::now();
+      const std::vector<TranscribedNote> estimates = transcribe_notes(audio, config);
+      const auto stop = std::chrono::steady_clock::now();
+      const double wall_ms = std::chrono::duration<double, std::milli>(stop - start).count();
+      const MatchScore match = score_bach_notes(truth, estimates, sample_rate);
+      const double precision =
+          estimates.empty() ? 0.0 : static_cast<double>(match.true_positive) / estimates.size();
+      const double recall = static_cast<double>(match.true_positive) / truth.size();
+      const double f_measure =
+          precision + recall > 0.0 ? 2.0 * precision * recall / (precision + recall) : 0.0;
+
+      std::cout << std::setprecision(9) << "BACH_TRANSCRIBE_EVAL {\"work\":\"" << excerpt.work
+                << "\",\"input\":\"external_score_json\",\"sample_rate\":" << sample_rate
+                << ",\"tempo_bpm\":" << excerpt.tempo_bpm << ",\"truth_count\":" << truth.size()
+                << ",\"predicted_count\":" << estimates.size() << ",\"tp\":" << match.true_positive
+                << ",\"fp\":" << match.false_positive << ",\"fn\":" << match.false_negative
+                << ",\"precision\":" << precision << ",\"recall\":" << recall
+                << ",\"f_measure\":" << f_measure << ",\"wall_ms\":" << wall_ms << ",\"notes\":[";
+      for (size_t i = 0; i < estimates.size(); ++i) {
+        if (i != 0) std::cout << ',';
+        const TranscribedNote& note = estimates[i];
+        std::cout << '[' << note.onset_sample << ',' << note.offset_sample << ','
+                  << static_cast<int>(note.note) << ',' << static_cast<int>(note.velocity) << ','
+                  << note.median_hz << ']';
+      }
+      std::cout << "]}" << std::endl;
+      ++evaluated_cases;
+    }
+  }
+  REQUIRE(evaluated_cases == excerpts.size() * sample_rates.size());
 }

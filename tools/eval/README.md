@@ -30,6 +30,43 @@ The figures are the frame-level precision, recall and F-measure at a 50-cent tol
 
 **Note-level polyphonic transcription is measured the same way, against rendered piano scores** (chords of five to eight voices with and without octave doubling, a sixteenth-note line, a melody over a held chord, repeated strikes of one key, a held note, and white and pink noise). Run it from a Release build — its floors were taken there — with `sonare_tests "[transcribe_eval]"`. Each item prints two `TRANSCRIBE_EVAL {json}` lines, `"config":"default"` (the transcription defaults) and `"config":"legacy"` (four voices, 140 ms, no re-strike split), with `tp`/`fp`/`fn`, precision, recall and F-measure under a match of onset within 50 ms and pitch within 50 cents, one-to-one; `cap_hit_share` is the share of frames whose estimated voice count reached the polyphony cap, `mean_polyphony` the mean count, `notes_per_second` the transcribed note rate (the figure to read on the noise items, where every note is false), and `wall_ms` the transcription's own time. `"[transcribe_eval_sweep]"` prints `TRANSCRIBE_SWEEP {json}` lines with a `param` and `value` for each candidate default varied alone from the defaults; it asserts nothing.
 
+## Monophonic pitch editing
+
+```sh
+cmake --build build --target sonare_tests -j2
+./build/bin/sonare_tests "[pitch_refinement]" -s
+```
+
+These regressions measure mean and maximum absolute pitch error in cents against generated tones with known frequencies, excluding windows that touch the signal boundaries. They exercise pitches between pYIN's 10-cent bins, including harmonic tones, and check that refinement preserves the decoder's voicing decisions and probabilities. The measurements cover synthetic signals; they do not establish accuracy on recorded singing.
+
+The editing provider refines each voiced estimate within 25 cents using a fixed-window squared-difference minimum and parabolic interpolation. This shares the existing vocal-note measurement code. Public `pyin` output and persisted vocal analysis retain their original values; auto-tune and monophonic transcription receive the refined contour.
+
+The method follows the difference-function and interpolation approach in [de Cheveigné and Kawahara's YIN paper](https://doi.org/10.1121/1.1458024), after the candidate tracking described in [Mauch and Dixon's pYIN paper](https://webspace.eecs.qmul.ac.uk/s.e.dixon/pub/2014/MauchDixon-PYIN-ICASSP2014.pdf). Reference implementations consulted were [QMUL's pYIN](https://github.com/c4dm/pyin) and [librosa's pitch implementation](https://github.com/librosa/librosa/blob/main/librosa/core/pitch.py). The local refinement retains the decoder's octave choice; it does not repair octave errors or missed voiced frames.
+
+## Score-derived monophonic transcription
+
+The optional Bach evaluation reads note events from external score JSON files. It generates audio with known note times, then calls `transcribe_notes` with its default pitch and segmentation settings. No scores or recordings are bundled with this repository.
+
+```sh
+cmake --build build --target sonare_tests -j2
+SONARE_BACH_REFERENCE_DIR=/path/to/score-reference \
+  ./build/bin/sonare_tests "[bach_transcribe_eval]"
+```
+
+The directory must contain `BWV1001_4.json`, `BWV1006_1.json`, `BWV1007_1.json`, and `BWV1003_4.json`. Each file supplies `tracks[0].notes`, an array of objects with `pitch` (MIDI note number), `onset` (quarter-note beats from the score's start), and `duration` (quarter-note beats). For example, a note event can be `{"pitch": 69, "onset": 0, "duration": 0.25}`. The selected passages must contain notes; an empty file is not an evaluation input.
+
+The excerpts are track 0 of BWV 1001/4 (beats 0–16, 96 BPM), BWV 1006/1 (320–336, 120 BPM), BWV 1007/1 (36–52, 120 BPM), and BWV 1003/4 (276–292, 80 BPM). Each is rendered at 16, 22.05, 44.1, and 48 kHz with five harmonics, a 4 ms attack, an 8 ms release, and 200 ms of silence at each end. The fixed rendering tempi replace the corpus tempo maps. Ground-truth onsets and offsets use the rendered sample positions.
+
+Notes are matched one-to-one by maximum bipartite matching, with onset error at most 50 ms and MIDI-note pitch error at most 50 cents. Since both note numbers are integers, the pitch criterion requires the same MIDI note; it does not measure the continuous F0 error. Each observation reports TP/FP/FN, precision, recall, F-measure, and transcription time. Missing corpus files fail an explicitly requested run; accuracy figures have no CI pass threshold. Keep the corpus revision and build alongside any before/after report.
+
+This evaluation measures transcription of generated audio. Evaluating a recording against the same score requires a separate alignment: the [Bach Violin Dataset](https://hermandong.com/bach-violin-dataset/alignment.html) uses synthesized scores and CQT-based dynamic time warping. Such an estimated alignment needs checking before it can serve as timing ground truth.
+
+The implicit analysis configurations used by monophonic transcription and auto-tune cap their hop at approximately 11.6 ms, while retaining the existing 512-sample hop at 44.1 kHz and above. Explicit pitch-analysis configurations keep their caller-supplied hop. [Tony's transcription method](https://www.justinsalamon.com/uploads/4/3/9/4/4394963/mauch_tony_tenor_2015.pdf) likewise uses a fixed analysis cadence after resampling; this implementation keeps the existing analysis-window duration and improves only the lower-rate hop.
+
+Monophonic transcription also separates rearticulations inside an existing note using short valleys in its RMS envelope. The envelope window spans two periods at the note's measured pitch. A split requires a deep valley with a rapid fall and recovery, enough distance from the original boundaries, and child notes that satisfy the configured minimum duration. The fall and recovery are measured against their respective local peaks, so a quiet release cannot make a slow amplitude dip appear brief. Each child is measured again from its own pitch frames. This follows the use of amplitude changes for note segmentation in Tony §3.3; the valley-width and boundary checks are specific to this implementation. Regression controls include smooth amplitude modulation and vibrato. A short rearticulation at low pitch can remain merged because the two-period window smooths over its amplitude valley.
+
+Run `./build/bin/sonare_tests "[reattack]"` for repeated-note regressions and controls. These generated signals require no external corpus.
+
 ## Corpora that can be measured against
 
 Each is obtained separately, under its own terms. The annotations are what matters; several of these distribute annotations openly while the audio has to be sourced by the user.
