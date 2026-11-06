@@ -4,6 +4,7 @@
 #include <algorithm>
 #include <array>
 #include <atomic>
+#include <cstring>
 #include <limits>
 #include <thread>
 
@@ -1818,6 +1819,65 @@ TEST_CASE("StreamAnalyzer counts a call whose input it had to scrub", "[streamin
     analyzer.reset();
     REQUIRE(analyzer.stats().non_finite_discard_blocks == 0u);
   }
+}
+
+TEST_CASE("96 kHz StreamAnalyzer borrows clean input and counts scrubbed calls",
+          "[streaming][non_finite]") {
+  constexpr int kSampleRate = 96000;
+  constexpr size_t kSamples = 8192;
+  StreamConfig config;
+  config.sample_rate = kSampleRate;
+  config.n_fft = 1024;
+  config.hop_length = 256;
+  config.n_mels = 16;
+  config.compute_mel = false;
+  config.compute_chroma = false;
+  config.compute_onset = false;
+  config.compute_spectral = false;
+  config.max_pending_frames = 64;
+  StreamAnalyzer analyzer(config);
+
+  std::vector<float> clean = generate_sine(static_cast<int>(kSamples), 440.0f, kSampleRate);
+  const std::vector<float> original_clean = clean;
+  analyzer.process(clean.data(), clean.size());
+  REQUIRE(analyzer.stats().total_frames > 0);
+  REQUIRE(analyzer.stats().non_finite_discard_blocks == 0u);
+  REQUIRE(clean == original_clean);
+
+  std::vector<float> poisoned = clean;
+  for (size_t i = 32; i < poisoned.size() - 32; i += 257) {
+    switch (i % 3) {
+      case 0:
+        poisoned[i] = std::numeric_limits<float>::quiet_NaN();
+        break;
+      case 1:
+        poisoned[i] = std::numeric_limits<float>::infinity();
+        break;
+      default:
+        poisoned[i] = -std::numeric_limits<float>::infinity();
+        break;
+    }
+  }
+  poisoned.front() = std::numeric_limits<float>::quiet_NaN();
+  poisoned[poisoned.size() / 2] = std::numeric_limits<float>::infinity();
+  poisoned.back() = -std::numeric_limits<float>::infinity();
+  const std::vector<float> original_poisoned = poisoned;
+
+  analyzer.process(poisoned.data(), poisoned.size());
+  REQUIRE(analyzer.stats().non_finite_discard_blocks == 1u);
+  REQUIRE(std::memcmp(poisoned.data(), original_poisoned.data(), poisoned.size() * sizeof(float)) ==
+          0);
+
+  analyzer.process(clean.data(), clean.size());
+  REQUIRE(analyzer.stats().non_finite_discard_blocks == 1u);
+  REQUIRE(clean == original_clean);
+
+  analyzer.reset();
+  REQUIRE(analyzer.stats().non_finite_discard_blocks == 0u);
+  analyzer.process(clean.data(), clean.size());
+  REQUIRE(analyzer.stats().total_frames > 0);
+  REQUIRE(analyzer.stats().non_finite_discard_blocks == 0u);
+  REQUIRE(clean == original_clean);
 }
 
 TEST_CASE("StreamAnalyzer confidence ramp counts audio since reset and ignores the timeline anchor",

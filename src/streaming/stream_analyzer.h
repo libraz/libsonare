@@ -557,9 +557,12 @@ class StreamAnalyzer {
   void process_internal(const float* samples, size_t n_samples);
   void process_complete_frames();
   void emit_frame(const float* frame_start, size_t frame_sample_offset, bool force_emit);
-  /// @brief Copies @p n_samples from @p src into @p dst, replacing any NaN/Inf
-  ///        with 0. Returns dst.data(). Used to keep one bad input sample from
-  ///        poisoning every downstream estimate (FFT, mel, chroma, onset).
+  /// @brief Returns finite input unchanged; otherwise copies it to @p dst and
+  ///        replaces NaN/Inf with 0. Used to keep one bad sample from poisoning
+  ///        downstream estimates (FFT, mel, chroma, onset).
+  /// @return @p src when finite, or dst.data() when a replacement was needed.
+  ///         The resampler caller consumes this pointer synchronously and copies
+  ///         it before returning.
   /// @param out_discarded Set when at least one sample was replaced. The caller
   ///   counts the call rather than the samples, so this is a flag and not a
   ///   tally: the published unit is one processed block.

@@ -11,6 +11,7 @@
 #include "streaming/stream_analyzer_utils.h"
 #include "util/exception.h"
 #include "util/non_finite_sample.h"
+#include "util/numeric_validation.h"
 
 namespace sonare {
 
@@ -77,10 +78,12 @@ void StreamAnalyzer::process_internal(const float* samples, size_t n_samples) {
 
   /// Non-finite samples are replaced by 0 before they can reach the FFT or the
   /// resampler's filter history, where one bad sample would poison every
-  /// downstream estimate for the rest of the stream. A resampled stream is
-  /// scrubbed in a scratch copy ahead of the resampler; a direct one is scrubbed
-  /// in place after it lands in the overlap buffer. One bump per call, never per
-  /// sample: a block carrying a thousand NaNs lost its state once.
+  /// downstream estimate for the rest of the stream. Finite resampled input is
+  /// borrowed directly; the resampler copies synchronously before process()
+  /// returns. Only input needing replacement is copied to scratch; a direct
+  /// stream is scrubbed in place after it lands in the overlap buffer. One bump
+  /// per call, never per sample: a block carrying a thousand NaNs loses its
+  /// state once.
   const float* process_samples = nullptr;
   size_t process_n_samples = n_samples;
 
@@ -269,6 +272,11 @@ std::array<float, 12> StreamAnalyzer::median_full_chroma(size_t start, size_t co
 
 const float* StreamAnalyzer::sanitize_into(const float* src, size_t n_samples,
                                            std::vector<float>& dst, bool& out_discarded) {
+  if (numeric::all_finite(src, n_samples)) {
+    out_discarded = false;
+    return src;
+  }
+
   dst.assign(src, src + n_samples);
   /// The copy feeds the STFT and, through it, the onset and chroma histories the
   /// analyzer carries between frames, so a replacement here is the only thing
