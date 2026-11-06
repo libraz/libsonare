@@ -1,7 +1,11 @@
 /// @file cli_effects_test.cpp
 /// @brief Tests for the sonare CLI effect, acoustic and transform commands.
 
+#include "analysis/analysis_rate.h"
 #include "cli/cli_test_helpers.h"
+#include "editing/pitch_editor/f0_provider.h"
+#include "editing/pitch_editor/pitch_corrector.h"
+#include "feature/pitch.h"
 
 TEST_CASE("CLI effect commands require an output destination", "[cli]") {
   // Offline-effect output contract: commands that render audio require -o and
@@ -1013,4 +1017,53 @@ TEST_CASE("CLI pitch-correct-timevarying exposes the correction parameters",
   }
 
   std::remove(input.c_str());
+}
+
+TEST_CASE("CLI pitch-correct-timevarying corrects against the unrefined pYIN track",
+          "[cli][pitch-correct-timevarying]") {
+  // The Python front-end feeds the public pitch_pyin track to the corrector, so
+  // the native one must not substitute the editing provider's refined contour.
+  const std::string input = unique_temp_path("_tv_raw_in.wav");
+  const std::string output = unique_temp_path("_tv_raw_out.wav");
+  create_test_wav(input, 1.5f, 452.0f);
+  const auto [code, text] = exec_command(CLI + " pitch-correct-timevarying " + input + " -o " +
+                                         output + " --mode midi --target-midi 70 --json -q");
+  INFO(text);
+  REQUIRE(code == 0);
+  const auto actual = std::get<0>(load_wav(output));
+  auto [samples, sample_rate] = load_wav(input);
+  std::remove(input.c_str());
+  std::remove(output.c_str());
+  const Audio audio = Audio::from_vector(std::move(samples), sample_rate);
+
+  PitchConfig pitch_config;
+  pitch_config.frame_length = window_length_at_rate(pitch_config.frame_length, sample_rate);
+  const PitchResult pyin_result = pyin(audio, pitch_config);
+  editing::pitch_editor::F0Track raw_track;
+  raw_track.f0_hz = pyin_result.f0;
+  raw_track.voiced_prob = pyin_result.voiced_prob;
+  raw_track.voiced = pyin_result.voiced_flag;
+  raw_track.hop_length = pitch_config.hop_length;
+  raw_track.sample_rate = sample_rate;
+  const editing::pitch_editor::F0Track refined_track =
+      editing::pitch_editor::PyinF0Provider(pitch_config).detect(audio);
+
+  const editing::pitch_editor::PitchCorrector corrector{
+      editing::pitch_editor::PitchCorrectionConfig{}};
+  const Audio from_raw = corrector.correct_to_midi_timevarying(audio, raw_track, 70.0f);
+  const Audio from_refined = corrector.correct_to_midi_timevarying(audio, refined_track, 70.0f);
+  REQUIRE(actual.size() == from_raw.size());
+  REQUIRE(from_refined.size() == from_raw.size());
+
+  // The output is 16-bit PCM, so it matches the in-process render to within one step.
+  constexpr float kPcmStep = 1.0f / 32768.0f;
+  float raw_error = 0.0f;
+  float refined_gap = 0.0f;
+  for (size_t i = 0; i < actual.size(); ++i) {
+    raw_error = std::max(raw_error, std::abs(actual[i] - from_raw[i]));
+    refined_gap = std::max(refined_gap, std::abs(from_refined[i] - from_raw[i]));
+  }
+  CAPTURE(raw_error, refined_gap);
+  REQUIRE(refined_gap > 100.0f * kPcmStep);
+  REQUIRE(raw_error <= 2.0f * kPcmStep);
 }

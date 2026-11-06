@@ -8,6 +8,7 @@
 #include <cstdint>
 #include <cstring>
 #include <limits>
+#include <numeric>
 #include <random>
 #include <string>
 #include <utility>
@@ -578,6 +579,192 @@ TEST_CASE("PyinF0Provider adapts existing pYIN output to F0Track", "[pitch_edito
   REQUIRE(track.hop_length == 256);
   REQUIRE(track.sample_rate == sample_rate);
   REQUIRE(track.f0_hz.size() == track.voiced.size());
+}
+
+TEST_CASE("PyinF0Provider refines pYIN pitch-bin centres against the source audio",
+          "[pitch_editor][pitch_refinement]") {
+  constexpr int sample_rate = 44100;
+  constexpr int hop_length = 256;
+  struct Case {
+    int pitch_grid_index;
+    double tuning_offset_cents;
+    int frame_length;
+    bool center;
+    bool harmonics;
+  };
+  // The public pYIN grid is 10 cents wide. These cases put known tones between
+  // grid points in three registers, with both frame parities and framing modes
+  // represented. One tone also carries a modest harmonic series.
+  const Case cases[] = {{70, 4.7, 4096, true, false},
+                        {220, -4.2, 4097, true, true},
+                        {400, 3.8, 4097, false, false},
+                        {340, -3.1, 4096, false, true}};
+
+  for (const Case& test_case : cases) {
+    sonare::PitchConfig config;
+    config.frame_length = test_case.frame_length;
+    config.hop_length = hop_length;
+    config.fmin = 60.0f;
+    config.fmax = 1200.0f;
+    config.center = test_case.center;
+
+    const double grid_hz = static_cast<double>(config.fmin) *
+                           std::pow(2.0, static_cast<double>(test_case.pitch_grid_index) / 120.0);
+    const double target_hz = grid_hz * std::pow(2.0, test_case.tuning_offset_cents / 1200.0);
+    std::vector<float> samples(static_cast<size_t>(sample_rate * 3 / 4));
+    for (size_t sample = 0; sample < samples.size(); ++sample) {
+      const double phase =
+          sonare::constants::kTwoPiD * target_hz * static_cast<double>(sample) / sample_rate;
+      const double fundamental = 0.5 * std::sin(phase);
+      const double harmonics =
+          test_case.harmonics ? 0.2 * std::sin(2.0 * phase) + 0.08 * std::sin(3.0 * phase) : 0.0;
+      samples[sample] = static_cast<float>(fundamental + harmonics);
+    }
+    const sonare::Audio audio = sonare::Audio::from_vector(std::move(samples), sample_rate);
+
+    const sonare::PitchResult raw = sonare::pyin(audio, config);
+    PyinF0Provider provider(config);
+    const F0Track refined = provider.detect(audio);
+    REQUIRE(refined.n_frames() == raw.n_frames());
+    REQUIRE(refined.voiced.size() == raw.voiced_flag.size());
+    REQUIRE(refined.voiced_prob.size() == raw.voiced_prob.size());
+
+    std::vector<double> raw_cents_error;
+    std::vector<double> refined_cents_error;
+    bool voicing_matches = true;
+    bool probability_matches = true;
+    bool unvoiced_payload_matches = true;
+    bool voiced_values_within_search = true;
+    for (int frame = 0; frame < raw.n_frames(); ++frame) {
+      const size_t index = static_cast<size_t>(frame);
+      voicing_matches = voicing_matches && refined.voiced[index] == raw.voiced_flag[index];
+      probability_matches =
+          probability_matches && refined.voiced_prob[index] == raw.voiced_prob[index];
+      if (!raw.voiced_flag[index]) {
+        // With the default fill_na=false, unvoiced frames keep pYIN's NaN.
+        unvoiced_payload_matches = unvoiced_payload_matches &&
+                                   std::isnan(refined.f0_hz[index]) == std::isnan(raw.f0[index]);
+        continue;
+      }
+      const int64_t frame_begin = static_cast<int64_t>(frame) * hop_length -
+                                  (test_case.center ? test_case.frame_length / 2 : 0);
+      const int64_t frame_end = frame_begin + test_case.frame_length;
+      if (frame_begin < 0 || frame_end > static_cast<int64_t>(audio.size())) continue;
+      raw_cents_error.push_back(std::abs(1200.0 * std::log2(raw.f0[index] / target_hz)));
+      refined_cents_error.push_back(std::abs(1200.0 * std::log2(refined.f0_hz[index] / target_hz)));
+      voiced_values_within_search = voiced_values_within_search &&
+                                    refined.f0_hz[index] >= config.fmin &&
+                                    refined.f0_hz[index] <= config.fmax;
+    }
+    REQUIRE(raw_cents_error.size() > 20);
+    REQUIRE(refined_cents_error.size() == raw_cents_error.size());
+    const double raw_mean_error =
+        std::accumulate(raw_cents_error.begin(), raw_cents_error.end(), 0.0) /
+        raw_cents_error.size();
+    const double mean_error =
+        std::accumulate(refined_cents_error.begin(), refined_cents_error.end(), 0.0) /
+        refined_cents_error.size();
+    const double raw_max_error = *std::max_element(raw_cents_error.begin(), raw_cents_error.end());
+    const double max_error =
+        *std::max_element(refined_cents_error.begin(), refined_cents_error.end());
+    CHECK(voicing_matches);
+    CHECK(probability_matches);
+    CHECK(unvoiced_payload_matches);
+    CHECK(voiced_values_within_search);
+    INFO("f0=" << target_hz << " Hz, frame_length=" << test_case.frame_length
+               << ", center=" << test_case.center << ", harmonics=" << test_case.harmonics
+               << ", tuning=" << test_case.tuning_offset_cents << " cents"
+               << ", raw MAE=" << raw_mean_error << " cents, max=" << raw_max_error
+               << " cents, refined MAE=" << mean_error << " cents, max=" << max_error << " cents");
+    CHECK(mean_error < 1.0);
+    CHECK(max_error < 2.0);
+  }
+}
+
+TEST_CASE("PyinF0Provider preserves both unvoiced output encodings",
+          "[pitch_editor][pitch_refinement]") {
+  constexpr int sample_rate = 22050;
+  const sonare::Audio silence =
+      sonare::Audio::from_vector(std::vector<float>(8192, 0.0f), sample_rate);
+  for (const bool fill_na : {false, true}) {
+    sonare::PitchConfig config;
+    config.frame_length = 1024;
+    config.hop_length = 256;
+    config.fill_na = fill_na;
+    const sonare::PitchResult raw = sonare::pyin(silence, config);
+    PyinF0Provider provider(config);
+    const F0Track track = provider.detect(silence);
+
+    REQUIRE(track.n_frames() == raw.n_frames());
+    bool all_unvoiced = true;
+    bool values_match = true;
+    for (int frame = 0; frame < raw.n_frames(); ++frame) {
+      const size_t index = static_cast<size_t>(frame);
+      all_unvoiced = all_unvoiced && !raw.voiced_flag[index] && !track.voiced[index];
+      values_match = values_match && track.voiced_prob[index] == raw.voiced_prob[index];
+      if (fill_na) {
+        values_match = values_match && track.f0_hz[index] == 0.0f && raw.f0[index] == 0.0f;
+      } else {
+        values_match = values_match && std::isnan(track.f0_hz[index]) && std::isnan(raw.f0[index]);
+      }
+    }
+    CHECK(all_unvoiced);
+    CHECK(values_match);
+  }
+}
+
+TEST_CASE("PyinF0Provider keeps refined pitch inside the configured search range",
+          "[pitch_editor][pitch_refinement]") {
+  constexpr int sample_rate = 44100;
+  constexpr int frame_length = 4096;
+  constexpr int hop_length = 256;
+  struct Case {
+    double target_hz;
+    float boundary_hz;
+  };
+  // The true tones are just outside the requested range. pYIN can assign an
+  // adjacent in-range grid centre; when refinement finds the out-of-range
+  // waveform minimum, the provider must retain that decoded candidate.
+  const Case cases[] = {{100.0 * std::pow(2.0, -4.7 / 1200.0), 100.0f},
+                        {200.0 * std::pow(2.0, 4.7 / 1200.0), 200.0f}};
+
+  for (const Case& test_case : cases) {
+    sonare::PitchConfig config;
+    config.frame_length = frame_length;
+    config.hop_length = hop_length;
+    config.fmin = 100.0f;
+    config.fmax = 200.0f;
+    const sonare::Audio audio = sonare::Audio::from_vector(
+        sine(static_cast<float>(test_case.target_hz), sample_rate, sample_rate * 3 / 4),
+        sample_rate);
+    const sonare::PitchResult raw = sonare::pyin(audio, config);
+    PyinF0Provider provider(config);
+    const F0Track refined = provider.detect(audio);
+
+    std::vector<float> raw_interior;
+    std::vector<float> refined_interior;
+    for (int frame = 0; frame < raw.n_frames(); ++frame) {
+      const int64_t begin = static_cast<int64_t>(frame) * hop_length - frame_length / 2;
+      if (begin < 0 || begin + frame_length > static_cast<int64_t>(audio.size()) ||
+          !raw.voiced_flag[static_cast<size_t>(frame)]) {
+        continue;
+      }
+      raw_interior.push_back(raw.f0[static_cast<size_t>(frame)]);
+      refined_interior.push_back(refined.f0_hz[static_cast<size_t>(frame)]);
+    }
+    REQUIRE(raw_interior.size() > 20);
+    REQUIRE(refined_interior.size() == raw_interior.size());
+    const bool raw_reaches_boundary = std::find(raw_interior.begin(), raw_interior.end(),
+                                                test_case.boundary_hz) != raw_interior.end();
+    const bool same_as_raw =
+        std::equal(raw_interior.begin(), raw_interior.end(), refined_interior.begin());
+    const bool within_configured_range =
+        std::all_of(refined_interior.begin(), refined_interior.end(),
+                    [&](float hz) { return hz >= config.fmin && hz <= config.fmax; });
+    CHECK(raw_reaches_boundary);
+    CHECK(same_as_raw);
+    CHECK(within_configured_range);
+  }
 }
 
 TEST_CASE("PitchCorrector estimates and limits semitone corrections", "[pitch_editor]") {

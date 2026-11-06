@@ -9,7 +9,7 @@
 #include <numeric>
 #include <string>
 
-#include "editing/pitch_editor/f0_provider.h"
+#include "editing/pitch_editor/f0_refinement.h"
 #include "editing/pitch_editor/note_segmenter.h"
 #include "editing/vocal_edit/session_internal.h"
 #include "editing/vocal_edit/source_digest.h"
@@ -86,68 +86,6 @@ double median_of_sorted(const std::vector<double>& sorted) {
   return n % 2 == 1 ? sorted[n / 2] : 0.5 * (sorted[n / 2 - 1] + sorted[n / 2]);
 }
 
-// The analysis F0 is a pYIN bin centre (10-cent grid anchored at fmin), and the Viterbi path
-// has been seen one bin past the nearest; the next difference-function minimum is an octave away.
-constexpr double kRefineWindowCents = 25.0;
-
-/// @brief Sub-bin F0 for one analysis frame, read off the source audio.
-///
-/// Minimises the exact fixed-window difference function d(tau) = sum (x[n] - x[n + tau])^2 over
-/// the lags within kRefineWindowCents of the analysis period, with a parabolic sub-sample
-/// minimum. The window is fixed across lags so its length cannot bias the minimum. Returns the
-/// analysis value when the minimum sits on the search edge or the frame carries no dip.
-float refine_frame_f0(const Audio& source, const AnalysisGrid& grid, uint32_t frame, float f0_hz,
-                      std::vector<float>& frame_samples, std::vector<double>& difference) {
-  const double sample_rate = source.sample_rate();
-  const double period = sample_rate / static_cast<double>(f0_hz);
-  const double ratio = std::pow(2.0, kRefineWindowCents / kCentsPerOctave);
-  const int frame_length = static_cast<int>(grid.frame_length_samples);
-  const double lag_low_raw = std::floor(period / ratio);
-  const double lag_high_raw = std::ceil(period * ratio);
-  if (!(lag_low_raw >= 1.0) || !(lag_high_raw + 1.0 < static_cast<double>(frame_length))) {
-    return f0_hz;
-  }
-  const int lag_low = static_cast<int>(lag_low_raw);
-  const int lag_high = static_cast<int>(lag_high_raw);
-  const int window = frame_length - lag_high;
-
-  const double centre = frame_sample_position(grid, frame);
-  const int64_t begin = static_cast<int64_t>(std::floor(centre - 0.5 * frame_length));
-  frame_samples.assign(static_cast<size_t>(frame_length), 0.0f);
-  const int64_t source_size = static_cast<int64_t>(source.size());
-  for (int n = 0; n < frame_length; ++n) {
-    const int64_t sample = begin + n;
-    if (sample >= 0 && sample < source_size) {
-      frame_samples[static_cast<size_t>(n)] = source[static_cast<size_t>(sample)];
-    }
-  }
-
-  difference.assign(static_cast<size_t>(lag_high - lag_low + 1), 0.0);
-  size_t best = 0;
-  for (int lag = lag_low; lag <= lag_high; ++lag) {
-    double sum = 0.0;
-    for (int n = 0; n < window; ++n) {
-      const double delta = static_cast<double>(frame_samples[static_cast<size_t>(n)]) -
-                           static_cast<double>(frame_samples[static_cast<size_t>(n + lag)]);
-      sum += delta * delta;
-    }
-    const size_t index = static_cast<size_t>(lag - lag_low);
-    difference[index] = sum;
-    if (sum < difference[best]) best = index;
-  }
-  if (best == 0 || best + 1 == difference.size()) return f0_hz;
-  const double left = difference[best - 1];
-  const double middle = difference[best];
-  const double right = difference[best + 1];
-  const double denominator = left - 2.0 * middle + right;
-  if (!(denominator > 0.0)) return f0_hz;
-  const double offset = 0.5 * (left - right) / denominator;
-  const double refined_period = static_cast<double>(lag_low) + static_cast<double>(best) + offset;
-  const double refined = sample_rate / refined_period;
-  if (!std::isfinite(refined) || refined < f0_hz / ratio || refined > f0_hz * ratio) return f0_hz;
-  return static_cast<float>(refined);
-}
-
 /// @brief Refined F0 for the frames [frame_start, frame_end); unusable frames keep their value.
 std::vector<float> refine_f0_range(const Audio& source, const VocalAnalysisData& analysis,
                                    uint32_t frame_start, uint32_t frame_end) {
@@ -158,8 +96,11 @@ std::vector<float> refine_f0_range(const Audio& source, const VocalAnalysisData&
   for (uint32_t frame = frame_start; frame < frame_end; ++frame) {
     const size_t i = static_cast<size_t>(frame);
     if (!usable_frame(analysis, i)) continue;
-    refined[static_cast<size_t>(frame - frame_start)] =
-        refine_frame_f0(source, analysis.grid, frame, analysis.f0_hz[i], frame_samples, difference);
+    const int frame_length = static_cast<int>(analysis.grid.frame_length_samples);
+    const int64_t begin = static_cast<int64_t>(
+        std::floor(frame_sample_position(analysis.grid, frame) - 0.5 * frame_length));
+    refined[static_cast<size_t>(frame - frame_start)] = pitch_editor::detail::refine_frame_f0(
+        source, begin, frame_length, analysis.f0_hz[i], frame_samples, difference);
   }
   return refined;
 }
@@ -567,8 +508,7 @@ VocalAnalysisData analyze_vocal(const Audio& source, const VocalAnalysisOptions&
   if (options.pitch.frame_length <= 0 || options.pitch.hop_length <= 0) {
     invalid("analysis.pitch", "frame and hop lengths must be positive");
   }
-  editing::pitch_editor::PyinF0Provider provider(options.pitch);
-  const auto track = provider.detect(source);
+  const PitchResult track = pyin(source, options.pitch);
   VocalAnalysisData result;
   result.grid.frame_origin_sample = options.pitch.center ? 0.0 : options.pitch.frame_length * 0.5;
   result.grid.samples_per_frame = static_cast<double>(options.pitch.hop_length);
@@ -581,9 +521,11 @@ VocalAnalysisData analyze_vocal(const Audio& source, const VocalAnalysisOptions&
   result.settings.segmentation_threshold_cents = options.segmentation_threshold_cents;
   result.settings.minimum_note_ms = options.minimum_note_ms;
   result.settings.reference_hz = options.reference_hz;
-  result.f0_hz = track.f0_hz;
-  result.voiced.resize(track.voiced.size());
-  for (size_t i = 0; i < result.voiced.size(); ++i) result.voiced[i] = track.voiced[i] ? 1 : 0;
+  result.f0_hz = track.f0;
+  result.voiced.resize(track.voiced_flag.size());
+  for (size_t i = 0; i < result.voiced.size(); ++i) {
+    result.voiced[i] = track.voiced_flag[i] ? 1 : 0;
+  }
   // Amplitude is derived by validate_analysis from the saved grid. The pYIN
   // voiced bool mask is authoritative; voiced_prob is intentionally ignored.
   result.algorithm_id = options.algorithm_id;

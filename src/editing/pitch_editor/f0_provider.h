@@ -5,8 +5,9 @@
 ///
 /// Core-internal: the F0 provider (and its pYIN implementation) backs the
 /// pitch-editing pipeline and is not exposed on any public surface (C ABI /
-/// Node / Python / WASM). Callers reach it indirectly through the pitch-shift /
-/// pitch-correction entry points.
+/// Node / Python / WASM). Its pYIN candidate is locally refined against the
+/// source audio for continuous pitch curves. Callers reach it indirectly
+/// through the pitch-shift / pitch-correction entry points.
 
 #include <cmath>
 #include <vector>
@@ -67,6 +68,16 @@ class F0Provider {
   virtual ~F0Provider() = default;
   virtual F0Track detect(const Audio& audio) = 0;
 };
+
+/// @brief Decoded pYIN track without the provider's local refinement.
+/// @details The contour the public pYIN surfaces return; front-ends that hand a
+///          caller-measured track to the corrector use this one.
+F0Track pyin_f0_track(const Audio& audio, const PitchConfig& config);
+
+/// @brief Default pYIN settings for editing at an input sample rate.
+/// @details Keeps the default frame duration and caps the hop to 256 reference-rate
+///          samples, so editing retains enough frames at lower input rates.
+PitchConfig default_editing_pitch_config(int sample_rate);
 
 class PyinF0Provider final : public F0Provider {
  public:

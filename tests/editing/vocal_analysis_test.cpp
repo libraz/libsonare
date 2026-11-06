@@ -121,6 +121,30 @@ TEST_CASE("vocal note centre reads an off-grid tone to within a cent", "[vocal_a
   }
 }
 
+TEST_CASE("vocal analysis persists the public pYIN track without pitch refinement",
+          "[vocal_analysis]") {
+  const std::vector<float> samples = sing({{6907.0, 0.6}}, 0.0, Vibrato{5.5, 0.0, 0.0});
+  const sonare::Audio audio = sonare::Audio::from_vector(samples, kRate);
+  sonare::editing::vocal_edit::VocalAnalysisOptions options;
+  options.pitch.frame_length = 2048;
+  options.pitch.hop_length = 256;
+  const auto analysis = sonare::editing::vocal_edit::analyze_vocal(audio, options);
+  const auto expected = sonare::pyin(audio, options.pitch);
+
+  REQUIRE(analysis.f0_hz.size() == expected.f0.size());
+  REQUIRE(analysis.voiced.size() == expected.voiced_flag.size());
+  for (size_t frame = 0; frame < expected.f0.size(); ++frame) {
+    if (expected.voiced_flag[frame]) {
+      CHECK(analysis.voiced[frame] == 1);
+      CHECK(analysis.f0_hz[frame] == expected.f0[frame]);
+    } else {
+      CHECK(analysis.voiced[frame] == 0);
+      // Persisted analysis canonicalizes unvoiced F0 to zero.
+      CHECK(analysis.f0_hz[frame] == 0.0f);
+    }
+  }
+}
+
 TEST_CASE("a vibrato that develops after the onset does not split the note", "[vocal_analysis]") {
   // The take that found this: G4+20 to A4-15 over a 60 ms glide, the vibrato reaching its full
   // 25 cents 200 ms into the A, which a single mid-glide reference frame cut in two there.

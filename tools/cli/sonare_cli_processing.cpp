@@ -203,7 +203,7 @@ int cmd_pitch_correct_timevarying(const CliArgs& args, const Audio& audio) {
   // The pYIN frame is 2048 samples at 22050 Hz, held as a duration.
   pitch_config.frame_length = window_length_at_rate(pitch_config.frame_length, audio.sample_rate());
   const editing::pitch_editor::F0Track track =
-      editing::pitch_editor::PyinF0Provider(pitch_config).detect(audio);
+      editing::pitch_editor::pyin_f0_track(audio, pitch_config);
 
   editing::pitch_editor::PitchCorrectionConfig config;
   config.scale.root = args.get_int("scale-root", 0);
@@ -695,7 +695,7 @@ int cmd_tune_to_midi(const CliArgs& args, const Audio& audio) {
   PitchConfig pitch_config;
   pitch_config.frame_length = window_length_at_rate(pitch_config.frame_length, audio.sample_rate());
   const editing::pitch_editor::F0Track track =
-      editing::pitch_editor::PyinF0Provider(pitch_config).detect(audio);
+      editing::pitch_editor::pyin_f0_track(audio, pitch_config);
   std::vector<editing::note_model::NoteObject> notes =
       editing::note_model::extract_notes(audio, track);
   const size_t assigned =
