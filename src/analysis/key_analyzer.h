@@ -185,17 +185,24 @@ Key detect_key(const Audio& audio, const KeyConfig& config = KeyConfig());
 /// @details Uses diatonic chord analysis to determine the most likely key.
 /// For progressions like C-G-Am-F, this correctly identifies C major.
 /// @param chords Detected chord sequence
-/// @return Estimated key. Its @ref Key::confidence is the winning key's share of
-///         the progression's total duration once cadence and bookend bonuses are
-///         counted — a coverage figure, not the posterior @ref KeyAnalyzer
-///         reports and not comparable with it.
+/// @return Estimated key. Its @ref Key::confidence is the winning key score divided by total
+///         recognized duration, capped at 1. The score includes diatonic, tonic and dominant
+///         support, direct natural-minor v-i support, a terminal cadence weighted by its final
+///         runs, and full-length first-chord/bookend priors. It is a coverage figure, not the
+///         posterior @ref KeyAnalyzer reports and not comparable with it.
 Key estimate_key_from_chords(const std::vector<struct Chord>& chords);
 
 /// @brief Refines the chroma key estimate using the chord progression.
-/// @details The chroma winner stands unless the progression's key differs from it, carries at
-///          least a quarter of the winner's chroma posterior (a key the chroma leaves ambiguous)
-///          and scores higher than the winner on the progression's own key score. A key the chroma
-///          rules out, or one it never scored, is never returned.
+/// @details The chroma winner normally stands unless the progression's key differs from it, carries
+///          at least a quarter of the winner's chroma posterior (a key the chroma leaves
+///          ambiguous), and scores higher on the progression's own key score. For a scored relative
+///          major/minor pair, a strong progression can also resolve aggregate chroma ambiguity when
+///          its opening tonic (I/i) lasts at least the median harmonic-run duration and belongs to
+///          at least three strong tonic runs, or, for a minor candidate, a strong opening
+///          natural-minor v-i pair has a v run at least as long as that median and belongs to at
+///          least three strong v-i pairs. Both paths require three chord roots and globally strong
+///          template confidence. Natural-minor v-i score support counts only the v-run duration
+///          that directly resolves to i. A key never scored by chroma is never returned.
 /// @param chroma_candidates Scored chroma candidates, each carrying its posterior confidence
 /// @param chords Detected chords
 /// @return The chosen key with its chroma posterior as confidence; C major with 0 when
