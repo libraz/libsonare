@@ -709,8 +709,7 @@ SonareError sonare_vocal_session_analysis(const SonareVocalEditSession* s,
       out, require_pointer(s, "session"); auto a = s->value.analysis();
       auto descriptor = s->value.source_descriptor(); auto f0 = copy_output(a.f0_hz);
       auto voiced = copy_output(a.voiced);
-      auto name = std::make_unique<char[]>(a.algorithm_id.size() + 1);
-      std::memcpy(name.get(), a.algorithm_id.c_str(), a.algorithm_id.size() + 1);
+      std::unique_ptr<char[]> name(sonare_c_detail::copy_string(a.algorithm_id));
       SonareVocalAnalysisResult local; initialize(&local);
       sonare_vocal_analysis_init(&local.analysis);
       local.analysis.frame_origin_sample = a.grid.frame_origin_sample;
