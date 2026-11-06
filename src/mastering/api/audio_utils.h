@@ -166,9 +166,9 @@ inline bool loudness_target_was_limited(float requested_gain_db, float applied_g
 // Measures the stereo true peak as the maximum across the two independent
 // channels, reading the caller's planar buffers rather than copying each into an
 // Audio: on a track-length master the two copies were the measurement's whole
-// allocation cost. @p sample_rate is unused because the meter is rate-agnostic.
+// allocation cost. The meter is rate-agnostic, so it takes no sample rate.
 inline float stereo_true_peak_dbtp(const std::vector<float>& left, const std::vector<float>& right,
-                                   int /*sample_rate*/, int true_peak_oversample) {
+                                   int true_peak_oversample) {
   if (left.size() != right.size()) {
     throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
                                   "stereo channel lengths must match");
@@ -184,7 +184,7 @@ inline LoudnessStageGain loudness_gain_db_with_ceiling(const std::vector<float>&
                                                        int sample_rate, float target_lufs,
                                                        float ceiling_db, int true_peak_oversample,
                                                        float max_limiter_gain_reduction_db) {
-  const float peak_db = stereo_true_peak_dbtp(left, right, sample_rate, true_peak_oversample);
+  const float peak_db = stereo_true_peak_dbtp(left, right, true_peak_oversample);
   const std::vector<float> interleaved = interleave_stereo(left, right);
   return loudness_stage_gain(interleaved.data(), left.size(), 2, sample_rate, target_lufs,
                              ceiling_db, peak_db, max_limiter_gain_reduction_db);

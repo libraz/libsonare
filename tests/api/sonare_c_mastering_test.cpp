@@ -1886,7 +1886,7 @@ TEST_CASE("planar stereo true peak matches the Audio-copy path exactly", "[maste
   SECTION("loud program") {
     CHECK(sonare::mastering::common::measure_true_peak_dbtp_stereo_planar(
               left.data(), right.data(), left.size(), kOversample) == copied(left, right));
-    CHECK(sonare::mastering::api::detail::stereo_true_peak_dbtp(left, right, kSr, kOversample) ==
+    CHECK(sonare::mastering::api::detail::stereo_true_peak_dbtp(left, right, kOversample) ==
           copied(left, right));
   }
 

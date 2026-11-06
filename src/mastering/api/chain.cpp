@@ -34,6 +34,7 @@
 #include "mastering/spectral/air_band.h"
 #include "mastering/stereo/imager.h"
 #include "mastering/stereo/mono_maker.h"
+#include "util/db.h"
 
 namespace sonare::mastering::api {
 namespace {
@@ -116,8 +117,8 @@ std::array<float, kMasteringReportBandCount> spectrum_delta(
 
 float stereo_spectrum_db(const mastering::match::ReferenceSpectrum& left,
                          const mastering::match::ReferenceSpectrum& right, float frequency_hz) {
-  const float left_power = std::pow(10.0f, interpolated_spectrum_db(left, frequency_hz) / 10.0f);
-  const float right_power = std::pow(10.0f, interpolated_spectrum_db(right, frequency_hz) / 10.0f);
+  const float left_power = db_to_power_scalar(interpolated_spectrum_db(left, frequency_hz));
+  const float right_power = db_to_power_scalar(interpolated_spectrum_db(right, frequency_hz));
   return 10.0f * std::log10(0.5f * (left_power + right_power));
 }
 
