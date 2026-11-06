@@ -261,7 +261,7 @@ int cmd_chords(const CliArgs& args, const Audio& audio) {
 int cmd_sections(const CliArgs& args, const Audio& audio) {
   SectionConfig config;
   config.min_section_sec = args.get_float("min-duration", 4.0f);
-  config.boundary_threshold = args.get_float("threshold", 0.3f);
+  config.boundary_threshold = args.get_float("threshold", config.boundary_threshold);
   config.n_fft = args.n_fft;
   config.hop_length = args.hop_length;
 

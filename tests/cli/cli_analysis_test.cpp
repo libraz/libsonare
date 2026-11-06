@@ -2,9 +2,12 @@
 /// @brief Tests for the sonare CLI analysis commands.
 
 #include <catch2/catch_approx.hpp>
+#include <utility>
 
+#include "analysis/section_analyzer.h"
 #include "cli/cli_test_helpers.h"
 #include "metering/lufs.h"
+#include "support/structure_song.h"
 #include "util/constants.h"
 
 TEST_CASE("CLI info command", "[cli]") {
@@ -381,6 +384,68 @@ TEST_CASE("CLI sections command", "[cli]") {
       REQUIRE(spelling.find(' ') == std::string::npos);
     }
   }
+}
+
+TEST_CASE("CLI sections defaults to the core boundary threshold", "[cli][sections]") {
+  const Audio& source = sonare::test::structure_song::rendered_audio();
+  const std::string path = unique_temp_path("_sections_default.wav");
+  save_wav(path, std::vector<float>(source.data(), source.data() + source.size()),
+           source.sample_rate());
+
+  const auto run_sections = [&](const std::string& options) {
+    return exec_command(CLI + " sections " + path + " " + options + " --json -q");
+  };
+  const auto default_command = run_sections("");
+  const auto core_threshold_command =
+      run_sections("--threshold " + std::to_string(sonare::kSectionBoundaryThreshold));
+  const auto higher_threshold_command = run_sections("--threshold 0.3");
+
+  auto [samples, sample_rate] = load_audio(path);
+  std::remove(path.c_str());
+  const Audio audio = Audio::from_vector(std::move(samples), sample_rate);
+
+  REQUIRE(default_command.first == 0);
+  REQUIRE(core_threshold_command.first == 0);
+  REQUIRE(higher_threshold_command.first == 0);
+  const auto default_result = sonare::util::json::parse_strict(default_command.second);
+  const auto core_threshold_result =
+      sonare::util::json::parse_strict(core_threshold_command.second);
+  const auto higher_threshold_result =
+      sonare::util::json::parse_strict(higher_threshold_command.second);
+
+  sonare::SectionAnalyzer direct(audio);
+  const auto& expected = direct.sections();
+  const auto& actual = default_result["sections"].as_array();
+  REQUIRE(actual.size() == expected.size());
+  REQUIRE(core_threshold_result["sections"].as_array().size() == expected.size());
+  CHECK(default_result["form"].as_string() == core_threshold_result["form"].as_string());
+  for (size_t i = 0; i < expected.size(); ++i) {
+    CAPTURE(i);
+    CHECK(actual[i]["type"].as_string() == to_lowercase(expected[i].type_string()));
+    CHECK(actual[i]["group"].as_int() == expected[i].group);
+    CHECK(actual[i]["start"].as_number() == Catch::Approx(expected[i].start).margin(0.001));
+    CHECK(actual[i]["end"].as_number() == Catch::Approx(expected[i].end).margin(0.001));
+    CHECK(actual[i]["energy"].as_number() == Catch::Approx(expected[i].energy_level).margin(0.001));
+    CHECK(actual[i]["confidence"].as_number() ==
+          Catch::Approx(expected[i].confidence).margin(0.001));
+    const auto& explicit_core = core_threshold_result["sections"].as_array()[i];
+    CHECK(actual[i]["type"].as_string() == explicit_core["type"].as_string());
+    CHECK(actual[i]["group"].as_int() == explicit_core["group"].as_int());
+    CHECK(actual[i]["start"].as_number() == explicit_core["start"].as_number());
+    CHECK(actual[i]["end"].as_number() == explicit_core["end"].as_number());
+    CHECK(actual[i]["energy"].as_number() == explicit_core["energy"].as_number());
+    CHECK(actual[i]["confidence"].as_number() == explicit_core["confidence"].as_number());
+  }
+
+  CHECK(default_result["count"].as_int() == static_cast<int>(expected.size()));
+  const auto& higher = higher_threshold_result["sections"].as_array();
+  const bool same_boundaries =
+      actual.size() == higher.size() &&
+      std::equal(actual.begin(), actual.end(), higher.begin(), [](const auto& a, const auto& b) {
+        return a["start"].as_number() == b["start"].as_number() &&
+               a["end"].as_number() == b["end"].as_number();
+      });
+  CHECK_FALSE(same_boundaries);
 }
 
 TEST_CASE("CLI timbre command", "[cli]") {

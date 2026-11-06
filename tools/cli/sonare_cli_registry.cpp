@@ -8,6 +8,7 @@
 #include <vector>
 
 #include "analysis/key_analyzer.h"
+#include "analysis/section_analyzer.h"
 #include "core/audio.h"
 #include "core/channel_layout.h"
 
@@ -527,11 +528,11 @@ const std::vector<CliCommandSpec>& build_cli_registry() {
                  string_value("key-mode", "major"), flag("detect-inversions")});
     // SectionAnalyzer validates only that the audio is non-empty, so nothing
     // downstream refuses a negative minimum section length.
-    add_command(
-        commands, "sections", true,
-        {with_domain(number_value("min-duration", 4.0),
-                     at_least(0.0, CliOptionDomainStage::Parameter)),
-         number_value("threshold", 0.3), global_int("n-fft", 2048), global_int("hop-length", 512)});
+    add_command(commands, "sections", true,
+                {with_domain(number_value("min-duration", 4.0),
+                             at_least(0.0, CliOptionDomainStage::Parameter)),
+                 number_value("threshold", sonare::kSectionBoundaryThreshold),
+                 global_int("n-fft", 2048), global_int("hop-length", 512)});
     // DynamicsAnalyzer floors a tiny or negative window to avoid a 0/0 rather
     // than refusing it, so the refusal the other surfaces get has to be here.
     add_command(commands, "dynamics", true,

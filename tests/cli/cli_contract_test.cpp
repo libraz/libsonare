@@ -4,6 +4,7 @@
 
 #include <algorithm>
 
+#include "analysis/section_analyzer.h"
 #include "cli/cli_test_helpers.h"
 
 TEST_CASE("CLI JSON numbers keep a dot decimal separator under any host locale", "[cli][json]") {
@@ -31,6 +32,13 @@ TEST_CASE("CLI JSON numbers keep a dot decimal separator under any host locale",
       JsonBuilder().begin_object().kv("peak", -1.25f).end_object().build();
   REQUIRE_THAT(from_float, ContainsSubstring("\"peak\": -1.25"));
   REQUIRE(from_float.find(',') == std::string::npos);
+}
+
+TEST_CASE("CLI sections threshold registry follows the core default", "[cli][sections]") {
+  const auto* threshold = cli_option_spec_for_command("sections", "threshold");
+  REQUIRE(threshold != nullptr);
+  REQUIRE(threshold->default_value.kind == CliOptionDefaultKind::Number);
+  CHECK(threshold->default_value.number_value == kSectionBoundaryThreshold);
 }
 
 // Native-only commands have no cross-surface contract, so the conformance
