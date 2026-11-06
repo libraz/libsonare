@@ -2,7 +2,6 @@
 
 #include <algorithm>
 #include <cmath>
-#include <numeric>
 #include <utility>
 
 #include "analysis/analysis_evidence.h"
@@ -86,58 +85,53 @@ float RhythmAnalyzer::calculate_swing_ratio() const {
     return 0.5f;  // Default to straight
   }
 
-  // Get beat times
-  std::vector<float> beat_times;
-  beat_times.reserve(beats_.size());
-  for (const auto& beat : beats_) {
-    beat_times.push_back(beat.time);
-  }
+  // Beats and onset times are produced in nondecreasing order, so a single
+  // onset cursor visits each onset at most once across the half-open intervals.
+  size_t onset_index = 0;
+  size_t onset_count = 0;
+  int swing_count = 0;
+  int straight_count = 0;
 
-  // Calculate onset positions within each beat (0-1)
-  std::vector<float> eighth_note_positions;
-
-  for (size_t i = 0; i + 1 < beat_times.size(); ++i) {
-    float beat_start = beat_times[i];
-    float beat_end = beat_times[i + 1];
+  for (size_t i = 0; i + 1 < beats_.size(); ++i) {
+    const float beat_start = beats_[i].time;
+    const float beat_end = beats_[i + 1].time;
     float beat_duration = beat_end - beat_start;
 
     if (beat_duration <= 0.0f) continue;
 
-    // Find onsets within this beat
-    for (float onset : onset_times_) {
-      if (onset >= beat_start && onset < beat_end) {
-        float position = (onset - beat_start) / beat_duration;
-        eighth_note_positions.push_back(position);
+    while (onset_index < onset_times_.size() && onset_times_[onset_index] < beat_start) {
+      ++onset_index;
+    }
+
+    while (onset_index < onset_times_.size()) {
+      const float onset = onset_times_[onset_index];
+      if (!(onset < beat_end)) break;
+      ++onset_index;
+      ++onset_count;
+
+      const float pos = (onset - beat_start) / beat_duration;
+      // The two grids lie closer together than the tolerance (0.25 and 0.75 are
+      // 0.08 from 0.33 and 0.67), so an onset takes the class of its nearest grid
+      // point rather than of whichever grid is tested first.
+      float swing_dist = 1.0f;
+      for (float swing_pos : rhythm_constants::kSwingPositions) {
+        swing_dist = std::min(swing_dist, std::abs(pos - swing_pos));
+      }
+      float straight_dist = 1.0f;
+      for (float straight_pos : rhythm_constants::kStraightPositions) {
+        straight_dist = std::min(straight_dist, std::abs(pos - straight_pos));
+      }
+      if (std::min(swing_dist, straight_dist) >= rhythm_constants::kSwingTolerance) continue;
+      if (swing_dist < straight_dist) {
+        swing_count++;
+      } else {
+        straight_count++;
       }
     }
   }
 
-  if (eighth_note_positions.size() < 4) {
+  if (onset_count < 4) {
     return 0.5f;
-  }
-
-  // Count onsets near swing vs straight positions
-  int swing_count = 0;
-  int straight_count = 0;
-
-  for (float pos : eighth_note_positions) {
-    // The two grids lie closer together than the tolerance (0.25 and 0.75 are
-    // 0.08 from 0.33 and 0.67), so an onset takes the class of its nearest grid
-    // point rather than of whichever grid is tested first.
-    float swing_dist = 1.0f;
-    for (float swing_pos : rhythm_constants::kSwingPositions) {
-      swing_dist = std::min(swing_dist, std::abs(pos - swing_pos));
-    }
-    float straight_dist = 1.0f;
-    for (float straight_pos : rhythm_constants::kStraightPositions) {
-      straight_dist = std::min(straight_dist, std::abs(pos - straight_pos));
-    }
-    if (std::min(swing_dist, straight_dist) >= rhythm_constants::kSwingTolerance) continue;
-    if (swing_dist < straight_dist) {
-      swing_count++;
-    } else {
-      straight_count++;
-    }
   }
 
   int total_count = swing_count + straight_count;
