@@ -8,9 +8,8 @@ decay leaves room for the next entry. That is what a musical take is for, and it
 is judged by ear alone — nothing here measures it.
 
 The passage is extracted once and **committed** as note data, so a clone renders
-it with nothing installed. The corpus it came from is a sibling repository
-(`$SONARE_BACH_ROOT`, default `../bach-mcp/data/reference`), read only when an
-excerpt is (re)cut.
+it with nothing installed. Set `SONARE_BACH_ROOT` to an external score corpus
+directory when extracting or regenerating an excerpt.
 
 ## What the source can and cannot give
 
@@ -31,7 +30,6 @@ from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 EXCERPT_DIR = HERE / "excerpts"
-DEFAULT_CORPUS = HERE.parent.parent.parent / "bach-mcp" / "data" / "reference"
 
 #: Where the first note lands, matching every other take in `phrases.py` — the
 #: renders are compared by eye on a waveform as well as by ear, and a passage
@@ -40,7 +38,10 @@ LEAD_IN_S = 0.3
 
 
 def corpus_root() -> Path:
-    return Path(os.environ.get("SONARE_BACH_ROOT") or DEFAULT_CORPUS).expanduser()
+    root = os.environ.get("SONARE_BACH_ROOT")
+    if not root:
+        raise SystemExit("Set SONARE_BACH_ROOT to an external score corpus directory.")
+    return Path(root).expanduser()
 
 
 def beat_to_seconds(work: dict) -> callable:
