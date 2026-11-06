@@ -29,6 +29,7 @@
 #include "host/audio_device.h"
 #include "host/backends/coreaudio/coreaudio_device.h"
 #include "host/backends/coremidi/coremidi_io.h"
+#include "util/constants.h"
 
 namespace sonare::engine {
 class RealtimeEngine;
@@ -94,7 +95,7 @@ class LiveSession final {
   struct Config {
     size_t audio_output_index = 0;
     size_t midi_input_index = 0;
-    double sample_rate = 48000.0;
+    double sample_rate = sonare::constants::kDefaultDawSampleRate;
     int block_size = 128;
     uint32_t destination_id = 0;
     /// Opens the system default output instead of `audio_output_index`. The

@@ -28,6 +28,8 @@
 #include <cstddef>
 #include <cstdint>
 
+#include "util/constants.h"
+
 namespace sonare::host {
 
 /// Negotiated stream format the host opens the device with. Plain value data;
@@ -42,7 +44,7 @@ namespace sonare::host {
 /// single render() call may request (the host sizes its scratch and calls
 /// engine.prepare() with it).
 struct AudioStreamConfig {
-  double sample_rate = 48000.0;
+  double sample_rate = sonare::constants::kDefaultDawSampleRate;
   int max_block_size = 512;
   int num_input_channels = 0;
   int num_output_channels = 2;

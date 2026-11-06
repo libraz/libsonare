@@ -23,6 +23,7 @@
 #include "serialize/project_serializer_private.h"
 #include "serialize/serialized_enum_bounds.h"
 #include "transport/tempo_map.h"
+#include "util/constants.h"
 #include "util/exception.h"
 #include "util/json_budget.h"
 #include "util/numeric_validation.h"
@@ -39,6 +40,7 @@ using json::Value;
 using namespace detail;
 
 using midi::kPartRigModeNames;
+using sonare::constants::kDefaultDawSampleRate;
 
 Value part_rig_to_json(const arrangement::ProjectPartRig& entry) {
   Object o;
@@ -388,7 +390,7 @@ DeserializeResult project_from_json(const std::string& json_text) {
     // Default matches arrangement::Project's constructor default (48 kHz, the
     // conventional DAW render rate) so a document that omits "sample_rate"
     // round-trips to the same rate an in-memory project would have.
-    const double sample_rate = num_or(root, "sample_rate", 48000.0);
+    const double sample_rate = num_or(root, "sample_rate", kDefaultDawSampleRate);
     if (!is_supported_sample_rate(sample_rate)) {
       result.diagnostics.push_back(
           {DiagnosticSeverity::kError, "invalid_sample_rate",
