@@ -19,7 +19,9 @@
 #include "metering/stereo.h"
 #include "metering/true_peak.h"
 #include "metering/waveform.h"
+#include "rt/biquad_design.h"
 #include "util/constants.h"
+#include "util/db.h"
 #include "util/exception.h"
 #include "util/math_utils.h"
 #include "util/resource_limits.h"
@@ -84,6 +86,78 @@ Audio make_sine(float amplitude, int sample_rate = 22050, float duration_sec = 0
         amplitude * std::sin(2.0f * static_cast<float>(sonare::constants::kPiD) * 440.0f * t);
   }
   return Audio::from_vector(std::move(samples), sample_rate);
+}
+
+std::vector<double> reference_k_weighted(const float* samples, size_t frames, int sample_rate) {
+  const auto coefficients = rt::k_weighting_coefficients(static_cast<double>(sample_rate));
+  rt::BiquadStateD pre;
+  rt::BiquadStateD rlb;
+  pre.set(coefficients.pre);
+  rlb.set(coefficients.rlb);
+
+  std::vector<double> weighted(frames);
+  for (size_t i = 0; i < frames; ++i) {
+    weighted[i] = rlb.process(pre.process(static_cast<double>(samples[i])));
+  }
+  return weighted;
+}
+
+float reference_energy_to_lufs(double energy) {
+  if (energy < 1e-15) return -std::numeric_limits<float>::infinity();
+  return static_cast<float>(rt::kLoudnessOffset + 10.0 * std::log10(energy));
+}
+
+std::vector<float> reference_lufs_blocks(const std::vector<double>& weighted, size_t window,
+                                         size_t hop) {
+  std::vector<float> blocks;
+  if (window == 0 || weighted.size() < window) return blocks;
+  blocks.reserve((weighted.size() - window) / hop + 1);
+  for (size_t start = 0; start <= weighted.size() - window; start += hop) {
+    double sum_sq = 0.0;
+    for (size_t i = start; i < start + window; ++i) sum_sq += weighted[i] * weighted[i];
+    blocks.push_back(reference_energy_to_lufs(sum_sq / static_cast<double>(window)));
+  }
+  return blocks;
+}
+
+size_t reference_window(float duration_sec, int sample_rate) {
+  return std::max<size_t>(1, static_cast<size_t>(std::round(duration_sec * sample_rate)));
+}
+
+size_t reference_hop(size_t window, float overlap) {
+  return std::max<size_t>(1, static_cast<size_t>(std::round(window * (1.0f - overlap))));
+}
+
+float reference_short_term_overlap(int sample_rate, float duration_sec) {
+  const float block = duration_sec * static_cast<float>(sample_rate);
+  const float hop =
+      std::max(1.0f, std::round(metering::kLufsShortTermHopSec * static_cast<float>(sample_rate)));
+  return std::clamp(1.0f - hop / block, 0.0f, 0.99f);
+}
+
+std::pair<std::vector<float>, std::vector<float>> reference_mono_lufs_series(
+    const float* samples, size_t frames, int sample_rate, const metering::LufsConfig& config) {
+  const std::vector<double> weighted = reference_k_weighted(samples, frames, sample_rate);
+  const size_t momentary_window = reference_window(config.momentary_duration_sec, sample_rate);
+  const size_t momentary_hop = reference_hop(momentary_window, metering::kLufsMomentaryOverlap);
+  const size_t short_term_window = reference_window(config.short_term_duration_sec, sample_rate);
+  const size_t short_term_hop = reference_hop(
+      short_term_window, reference_short_term_overlap(sample_rate, config.short_term_duration_sec));
+  return {reference_lufs_blocks(weighted, momentary_window, momentary_hop),
+          reference_lufs_blocks(weighted, short_term_window, short_term_hop)};
+}
+
+void require_lufs_series_near(const std::vector<float>& actual,
+                              const std::vector<float>& expected) {
+  REQUIRE(actual.size() == expected.size());
+  for (size_t i = 0; i < actual.size(); ++i) {
+    if (std::isfinite(expected[i])) {
+      const float tolerance = std::max(1e-4f, std::abs(expected[i]) * 1e-6f);
+      REQUIRE_THAT(actual[i], WithinAbs(expected[i], tolerance));
+    } else {
+      REQUIRE(actual[i] == expected[i]);
+    }
+  }
 }
 
 }  // namespace
@@ -554,8 +628,7 @@ TEST_CASE("LUFS curves expose momentary and short term blocks", "[meter]") {
 TEST_CASE("LUFS yields the short-term series it reduced to scalars", "[meter][lufs]") {
   // Amplitude steps half way through, so the series varies and a reading taken
   // off the wrong blocks cannot hide behind a flat curve. Six seconds at 22.05 kHz
-  // also runs the block accumulator past its chunk boundary, which the
-  // whole-signal filter the series meter uses does not have.
+  // also runs the streaming filter past its chunk boundary.
   constexpr int sample_rate = 22050;
   std::vector<float> samples(static_cast<size_t>(sample_rate) * 6);
   for (size_t i = 0; i < samples.size(); ++i) {
@@ -575,9 +648,8 @@ TEST_CASE("LUFS yields the short-term series it reduced to scalars", "[meter][lu
   const auto result = metering::lufs(audio, config, &series);
   const auto measured = metering::short_term_lufs(audio, config);
 
-  // Element for element, not within a tolerance: the whole point of the
-  // out-parameter is that both readings come from one K-weighting pass, so a
-  // difference of any size means they did not.
+  // Compare the out-parameter with an independent call to the standalone meter;
+  // a mismatch means their windows, hops, or filtering paths have drifted.
   REQUIRE(!series.empty());
   REQUIRE(series.size() == measured.size());
   for (size_t index = 0; index < series.size(); ++index) {
@@ -590,6 +662,67 @@ TEST_CASE("LUFS yields the short-term series it reduced to scalars", "[meter][lu
   REQUIRE(result.short_term_lufs == plain.short_term_lufs);
   REQUIRE(result.max_short_term_lufs == plain.max_short_term_lufs);
   REQUIRE(result.loudness_range == plain.loudness_range);
+}
+
+TEST_CASE("mono LUFS series match an independent whole-signal reference", "[meter][lufs]") {
+  constexpr int sample_rate = 44117;
+  constexpr size_t kChunkFrames = 1u << 17;
+  metering::LufsConfig config;
+  config.momentary_duration_sec = 0.4f;
+  config.short_term_duration_sec = 0.75f;
+
+  const size_t momentary_window = reference_window(config.momentary_duration_sec, sample_rate);
+  const size_t momentary_hop = reference_hop(momentary_window, metering::kLufsMomentaryOverlap);
+  const size_t short_term_window = reference_window(config.short_term_duration_sec, sample_rate);
+  const size_t short_term_hop = reference_hop(
+      short_term_window, reference_short_term_overlap(sample_rate, config.short_term_duration_sec));
+  const std::vector<size_t> frame_counts = {
+      momentary_window - 1,  momentary_window,  momentary_window + momentary_hop + 1,
+      short_term_window - 1, short_term_window, short_term_window + short_term_hop + 1,
+      kChunkFrames + 1079,
+  };
+
+  std::vector<float> samples(frame_counts.back());
+  for (size_t i = 0; i < samples.size(); ++i) {
+    const float t = static_cast<float>(i) / static_cast<float>(sample_rate);
+    const float amplitude = i < samples.size() / 2 ? 0.3f : 0.07f;
+    samples[i] =
+        amplitude * std::sin(2.0f * static_cast<float>(sonare::constants::kPiD) * 713.0f * t);
+  }
+
+  for (size_t frames : frame_counts) {
+    const Audio audio = Audio::from_buffer(samples.data(), frames, sample_rate);
+    const auto expected = reference_mono_lufs_series(samples.data(), frames, sample_rate, config);
+    const auto momentary = metering::momentary_lufs(audio, config);
+    const auto short_term = metering::short_term_lufs(audio, config);
+    if (frames == momentary_window - 1) REQUIRE(expected.first.empty());
+    if (frames == momentary_window) REQUIRE(expected.first.size() == 1);
+    if (frames == momentary_window + momentary_hop + 1) REQUIRE(expected.first.size() == 2);
+    if (frames == short_term_window - 1) REQUIRE(expected.second.empty());
+    if (frames == short_term_window) REQUIRE(expected.second.size() == 1);
+    if (frames == short_term_window + short_term_hop + 1) REQUIRE(expected.second.size() == 2);
+    require_lufs_series_near(momentary, expected.first);
+    require_lufs_series_near(short_term, expected.second);
+  }
+}
+
+TEST_CASE("mono LUFS silence series remain negative infinity", "[meter][lufs]") {
+  constexpr int sample_rate = 44117;
+  metering::LufsConfig config;
+  config.momentary_duration_sec = 0.4f;
+  config.short_term_duration_sec = 0.75f;
+  const size_t frames = static_cast<size_t>(sample_rate);
+  const std::vector<float> samples(frames, 0.0f);
+  const Audio audio = Audio::from_buffer(samples.data(), samples.size(), sample_rate);
+
+  const auto momentary = metering::momentary_lufs(audio, config);
+  const auto short_term = metering::short_term_lufs(audio, config);
+  REQUIRE_FALSE(momentary.empty());
+  REQUIRE_FALSE(short_term.empty());
+  REQUIRE(std::all_of(momentary.begin(), momentary.end(),
+                      [](float value) { return std::isinf(value) && std::signbit(value); }));
+  REQUIRE(std::all_of(short_term.begin(), short_term.end(),
+                      [](float value) { return std::isinf(value) && std::signbit(value); }));
 }
 
 namespace {
@@ -649,7 +782,7 @@ float max_finite(const std::vector<float>& values) {
 
 TEST_CASE("interleaved LUFS yields the two series it reduced to scalars", "[meter][lufs]") {
   // Six seconds at 22.05 kHz runs the block accumulator past its chunk boundary,
-  // which the whole-signal filter the mono series meters use does not have.
+  // exercising the streaming filter across a chunk boundary.
   constexpr int sample_rate = 22050;
   const std::vector<float> samples = stepped_sine(sample_rate, 6.0f);
   const Audio audio = Audio::from_buffer(samples.data(), samples.size(), sample_rate);
@@ -1162,9 +1295,9 @@ TEST_CASE("lra_from_short_term_blocks ignores non-finite and gated-out blocks", 
   REQUIRE_THAT(metering::lra_from_short_term_blocks(blocks), WithinAbs(0.0f, 1e-6f));
 }
 
-TEST_CASE("ebur128 LRA matches the shared short-term helper", "[meter][lufs]") {
-  // A loud section followed by a much quieter (but non-silent) tail: the LRA from
-  // the audio path must equal the shared helper applied to short_term_lufs.
+TEST_CASE("ebur128 LRA matches independent whole-signal reference blocks", "[meter][lufs]") {
+  // A loud section followed by a much quieter (but non-silent) tail checks the
+  // audio path against independently filtered, explicitly 3 s / 100 ms blocks.
   const int sample_rate = 48000;
   const int n_samples = sample_rate * 8;
   std::vector<float> samples(static_cast<size_t>(n_samples), 0.0f);
@@ -1177,8 +1310,17 @@ TEST_CASE("ebur128 LRA matches the shared short-term helper", "[meter][lufs]") {
   const Audio audio = Audio::from_buffer(samples.data(), samples.size(), sample_rate);
 
   const float lra = metering::ebur128_loudness_range(audio);
+  const std::vector<double> weighted =
+      reference_k_weighted(samples.data(), samples.size(), sample_rate);
+  const size_t block_size = static_cast<size_t>(std::round(3.0 * sample_rate));
+  const size_t hop = static_cast<size_t>(std::round(0.1 * sample_rate));
+  const std::vector<float> reference_short_term = reference_lufs_blocks(weighted, block_size, hop);
+  const float expected_lra = metering::lra_from_short_term_blocks(reference_short_term);
+  const float tolerance = std::max(1e-4f, std::abs(expected_lra) * 1e-6f);
+
   REQUIRE(std::isfinite(lra));
   REQUIRE(lra >= 0.0f);
+  REQUIRE_THAT(lra, WithinAbs(expected_lra, tolerance));
 }
 
 TEST_CASE("LUFS integrated is unaffected by a trailing partial block", "[meter][lufs]") {

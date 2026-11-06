@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cmath>
 #include <cstddef>
+#include <initializer_list>
 #include <limits>
 #include <numeric>
 #include <utility>
@@ -62,32 +63,6 @@ void apply_biquad_double_in_place(double* samples, size_t size, rt::BiquadStateD
   *state = local;
 }
 
-std::vector<double> to_double(const float* input, size_t size) {
-  std::vector<double> output(size);
-  for (size_t i = 0; i < size; ++i) {
-    output[i] = static_cast<double>(input[i]);
-  }
-  return output;
-}
-
-std::vector<double> k_weighted(const Audio& audio) {
-  if (audio.empty()) return {};
-
-  const auto [pre, rlb] = k_weighting_filters(audio.sample_rate());
-
-  // Filtered in place: both stages are causal recurrences, so reusing the one
-  // buffer costs nothing and keeps the peak footprint at one `double` per sample
-  // instead of the three that a copy per stage would hold live at once.
-  std::vector<double> filtered = to_double(audio.data(), audio.size());
-  rt::BiquadStateD pre_state;
-  rt::BiquadStateD rlb_state;
-  pre_state.set(pre);
-  rlb_state.set(rlb);
-  apply_biquad_double_in_place(filtered.data(), filtered.size(), &pre_state);
-  apply_biquad_double_in_place(filtered.data(), filtered.size(), &rlb_state);
-  return filtered;
-}
-
 double mean_square(const double* data, size_t start, size_t length) {
   if (length == 0) return 0.0;
   double sum_sq = 0.0;
@@ -97,42 +72,11 @@ double mean_square(const double* data, size_t start, size_t length) {
   return sum_sq / static_cast<double>(length);
 }
 
-// When `allow_partial_window` is false (momentary/short-term meters) the window
-// is NOT clamped down to the signal length: a signal shorter than the requested
-// window emits zero blocks, so the scalar meter reports -inf ("no measurement")
-// rather than a value measured over a sub-spec window (metering#2), matching the
-// ebur128_loudness_range guard. When true (offline integrated loudness for
-// finite clips), the window is clamped to the whole signal so a short clip still
-// yields a measurable loudness over the audio that exists.
-std::vector<double> block_energies(const std::vector<double>& samples, int sample_rate,
-                                   float duration_sec, float overlap,
-                                   bool allow_partial_window = false) {
-  if (samples.empty()) return {};
-  const size_t block_size =
-      std::max<size_t>(1, static_cast<size_t>(std::round(duration_sec * sample_rate)));
-  const size_t window = allow_partial_window ? std::min(block_size, samples.size()) : block_size;
-  // Ceiling is 0.99 (not 0.95) so the short-term 100 ms hop @ 3 s window
-  // (overlap = 1 - 4800/144000 = 0.9667 @ 48 kHz) survives. A 0.95 ceiling would
-  // round the hop up to 150 ms and break EBU R128 short-term/LRA.
-  const float clamped_overlap = std::clamp(overlap, 0.0f, 0.99f);
-  const size_t hop =
-      std::max<size_t>(1, static_cast<size_t>(std::round(window * (1.0f - clamped_overlap))));
-
-  // Emit only complete `window` blocks (ITU-R BS.1770-4): a trailing partial
-  // block would be averaged over its own short length, inflating its energy and
-  // contaminating the momentary/short-term/gating statistics.
-  std::vector<double> energies;
-  for (size_t start = 0; start + window <= samples.size(); start += hop) {
-    energies.push_back(mean_square(samples.data(), start, window));
-  }
-  return energies;
-}
-
 /// Per-block K-weighted energy, summed across channels.
 ///
 /// `next_block` makes the accumulator streamable: the blocks are emitted in
-/// order as the signal arrives, so `k_weighted_block_energies` never has to hold
-/// more of the filtered signal than the longest window still owes a sum.
+/// order as the signal arrives, so a measurement never has to hold more of the
+/// filtered signal than the longest window still owes a sum.
 struct BlockEnergyAccumulator {
   size_t window = 0;
   size_t hop = 0;
@@ -141,20 +85,33 @@ struct BlockEnergyAccumulator {
 };
 
 float short_term_overlap_for(int sample_rate, float duration_sec);
+void accumulate_k_weighted_blocks(const float* interleaved, size_t frames, int channels,
+                                  int sample_rate,
+                                  std::initializer_list<BlockEnergyAccumulator*> accumulators);
 
-BlockEnergyAccumulator make_block_accumulator(size_t frames, int sample_rate, float duration_sec,
-                                              float overlap, bool allow_partial_window) {
+BlockEnergyAccumulator make_block_accumulator(size_t frames, size_t window, size_t hop) {
   BlockEnergyAccumulator accumulator;
-  const size_t block_size =
-      std::max<size_t>(1, static_cast<size_t>(std::round(duration_sec * sample_rate)));
-  accumulator.window = allow_partial_window ? std::min(block_size, frames) : block_size;
-  const float clamped_overlap = std::clamp(overlap, 0.0f, 0.99f);
-  accumulator.hop = std::max<size_t>(
-      1, static_cast<size_t>(std::round(accumulator.window * (1.0f - clamped_overlap))));
-  if (accumulator.window > 0 && frames >= accumulator.window) {
-    accumulator.energies.assign((frames - accumulator.window) / accumulator.hop + 1, 0.0);
+  accumulator.window = window;
+  accumulator.hop = std::max<size_t>(1, hop);
+  if (window > 0 && frames >= window) {
+    accumulator.energies.assign((frames - window) / accumulator.hop + 1, 0.0);
   }
   return accumulator;
+}
+
+/// Only complete windows become blocks (BS.1770-4). Without @p allow_partial_window
+/// a signal shorter than the window yields none, so momentary/short-term report
+/// -inf rather than a sub-spec reading; integrated loudness clamps to a short clip.
+/// The 0.99 overlap ceiling keeps the 100 ms short-term hop of a 3 s window.
+BlockEnergyAccumulator make_block_accumulator(size_t frames, int sample_rate, float duration_sec,
+                                              float overlap, bool allow_partial_window) {
+  const size_t block_size =
+      std::max<size_t>(1, static_cast<size_t>(std::round(duration_sec * sample_rate)));
+  const size_t window = allow_partial_window ? std::min(block_size, frames) : block_size;
+  const float clamped_overlap = std::clamp(overlap, 0.0f, 0.99f);
+  const size_t hop =
+      std::max<size_t>(1, static_cast<size_t>(std::round(window * (1.0f - clamped_overlap))));
+  return make_block_accumulator(frames, window, hop);
 }
 
 /// Sums every block whose window is now fully covered.
@@ -191,7 +148,6 @@ struct WeightedBlockEnergies {
 WeightedBlockEnergies k_weighted_block_energies(const float* interleaved, size_t frames,
                                                 int channels, int sample_rate,
                                                 const LufsConfig& config) {
-  const auto [pre, rlb] = k_weighting_filters(sample_rate);
   BlockEnergyAccumulator integrated =
       make_block_accumulator(frames, sample_rate, config.block_duration_sec, config.block_overlap,
                              /*allow_partial_window=*/true);
@@ -203,19 +159,26 @@ WeightedBlockEnergies k_weighted_block_energies(const float* interleaved, size_t
                              short_term_overlap_for(sample_rate, config.short_term_duration_sec),
                              /*allow_partial_window=*/false);
 
-  // The K-weighted signal is held in a sliding window rather than materialized
-  // whole: an hour of 48 kHz audio is 1.4 GB of `double` scratch for a
-  // measurement that never reaches further back than the longest gating window
-  // (3 s for short-term). The window keeps whatever the earliest unfinished
-  // block still needs, so the footprint is bounded by that window plus one
-  // chunk, independent of the clip length.
-  BlockEnergyAccumulator* const accumulators[] = {&integrated, &momentary, &short_term};
+  accumulate_k_weighted_blocks(interleaved, frames, channels, sample_rate,
+                               {&integrated, &momentary, &short_term});
+  return {std::move(integrated.energies), std::move(momentary.energies),
+          std::move(short_term.energies)};
+}
+
+/// Filters each input channel once and accumulates only the requested windows.
+/// The filtered scratch is bounded by the longest window plus one chunk instead
+/// of growing with the full recording length.
+void accumulate_k_weighted_blocks(const float* interleaved, size_t frames, int channels,
+                                  int sample_rate,
+                                  std::initializer_list<BlockEnergyAccumulator*> accumulators) {
+  const auto [pre, rlb] = k_weighting_filters(sample_rate);
   size_t longest_window = 0;
   for (const BlockEnergyAccumulator* accumulator : accumulators) {
     longest_window = std::max(longest_window, accumulator->window);
   }
   std::vector<double> scratch;
-  scratch.reserve(std::min(frames, longest_window) + kChunkFrames);
+  const size_t retained = std::min(frames, longest_window);
+  scratch.reserve(retained + std::min(kChunkFrames, frames - retained));
 
   for (int channel = 0; channel < channels; ++channel) {
     const double weight = bs1770_channel_weight(channel, channels);
@@ -256,8 +219,6 @@ WeightedBlockEnergies k_weighted_block_energies(const float* interleaved, size_t
       }
     }
   }
-  return {std::move(integrated.energies), std::move(momentary.energies),
-          std::move(short_term.energies)};
 }
 
 float gated_integrated_lufs(const std::vector<double>& energies, const LufsConfig& config) {
@@ -312,7 +273,7 @@ float short_term_overlap_for(int sample_rate, float duration_sec) {
   const float block = duration_sec * static_cast<float>(sample_rate);
   const float hop =
       std::max(1.0f, std::round(kLufsShortTermHopSec * static_cast<float>(sample_rate)));
-  // Ceiling matches block_energies* (0.99) so the derived overlap reproduces the
+  // Ceiling matches the accumulator's overlap limit so the derived overlap reproduces the
   // exact 100 ms short-term hop instead of being truncated to a 150 ms hop.
   return std::clamp(1.0f - hop / block, 0.0f, 0.99f);
 }
@@ -426,23 +387,12 @@ float ebur128_loudness_range(const Audio& audio) {
   constexpr double kWindowSec = 3.0;
   constexpr double kHopSec = 0.1;
   const int sample_rate = audio.sample_rate();
-  const std::vector<double> weighted = k_weighted(audio);
-  if (weighted.empty()) return 0.0f;
-
   const size_t block_size =
       std::max<size_t>(1, static_cast<size_t>(std::round(kWindowSec * sample_rate)));
   const size_t hop = std::max<size_t>(1, static_cast<size_t>(std::round(kHopSec * sample_rate)));
-
-  // Compute short-term loudness blocks (full-length blocks only, per EBU R128).
-  std::vector<float> short_term;
-  if (weighted.size() >= block_size) {
-    short_term.reserve((weighted.size() - block_size) / hop + 1);
-    for (size_t start = 0; start + block_size <= weighted.size(); start += hop) {
-      short_term.push_back(energy_to_lufs(mean_square(weighted.data(), start, block_size)));
-    }
-  }
-
-  return lra_from_short_term_blocks(short_term);
+  BlockEnergyAccumulator short_term = make_block_accumulator(audio.size(), block_size, hop);
+  accumulate_k_weighted_blocks(audio.data(), audio.size(), 1, sample_rate, {&short_term});
+  return lra_from_short_term_blocks(energies_to_lufs(short_term.energies));
 }
 
 float lra_from_short_term_blocks(const std::vector<float>& short_term_lufs) {
@@ -483,21 +433,27 @@ float lra_from_short_term_blocks(const std::vector<float>& short_term_lufs) {
 
 std::vector<float> momentary_lufs(const Audio& audio, const LufsConfig& config) {
   validate_config(config);
+  if (audio.empty()) return {};
 
   // ITU-R BS.1770-4 Annex 2: momentary uses a fixed 75% overlap (100 ms hop @ 400 ms),
   // independent of `config.block_overlap`.
-  const std::vector<double> weighted = k_weighted(audio);
-  return energies_to_lufs(block_energies(weighted, audio.sample_rate(),
-                                         config.momentary_duration_sec, kLufsMomentaryOverlap));
+  BlockEnergyAccumulator momentary =
+      make_block_accumulator(audio.size(), audio.sample_rate(), config.momentary_duration_sec,
+                             kLufsMomentaryOverlap, /*allow_partial_window=*/false);
+  accumulate_k_weighted_blocks(audio.data(), audio.size(), 1, audio.sample_rate(), {&momentary});
+  return energies_to_lufs(momentary.energies);
 }
 
 std::vector<float> short_term_lufs(const Audio& audio, const LufsConfig& config) {
   validate_config(config);
+  if (audio.empty()) return {};
 
-  const std::vector<double> weighted = k_weighted(audio);
-  return energies_to_lufs(
-      block_energies(weighted, audio.sample_rate(), config.short_term_duration_sec,
-                     short_term_overlap_for(audio.sample_rate(), config.short_term_duration_sec)));
+  BlockEnergyAccumulator short_term = make_block_accumulator(
+      audio.size(), audio.sample_rate(), config.short_term_duration_sec,
+      short_term_overlap_for(audio.sample_rate(), config.short_term_duration_sec),
+      /*allow_partial_window=*/false);
+  accumulate_k_weighted_blocks(audio.data(), audio.size(), 1, audio.sample_rate(), {&short_term});
+  return energies_to_lufs(short_term.energies);
 }
 
 }  // namespace sonare::metering
