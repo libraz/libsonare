@@ -280,6 +280,46 @@ TEST_CASE("rqa on a perfect identity matrix returns rate=1/n", "[util][sequence]
   REQUIRE(stats.max_diagonal_length == 3);
 }
 
+TEST_CASE("rqa aggregates mixed diagonal runs and ignores singleton or nonpositive cells",
+          "[util][sequence][rqa]") {
+  constexpr int n = 6;
+  std::vector<float> rec(static_cast<size_t>(n * n), 0.0f);
+  const auto set = [&rec](int i, int j, float value) {
+    rec[static_cast<size_t>(i * n + j)] = value;
+  };
+
+  // Qualifying runs have lengths 3, 2, 3 (ending at the matrix edge), and 2.
+  set(0, 0, 1.0f);
+  set(1, 1, 0.5f);
+  set(2, 2, 1.0f);
+  set(0, 1, 1.0f);
+  set(1, 2, 1.0f);
+  set(3, 2, 1.0f);
+  set(4, 3, 1.0f);
+  set(5, 4, 1.0f);
+  set(0, 2, 1.0f);  // Singleton: contributes to recurrence rate, not diagonal lengths.
+  set(2, 0, 1.0f);
+  set(3, 1, 1.0f);
+  set(4, 2, -1.0f);  // Nonpositive values terminate a run and are not recurrences.
+  set(0, 5, std::numeric_limits<float>::quiet_NaN());
+
+  const RqaResult stats = rqa(rec.data(), n);
+  REQUIRE_THAT(stats.recurrence_rate, WithinAbs(11.0f / 36.0f, 1e-6f));
+  REQUIRE_THAT(stats.determinism, WithinAbs(10.0f / 11.0f, 1e-6f));
+  REQUIRE(stats.max_diagonal_length == 3);
+  REQUIRE_THAT(stats.average_diagonal_length, WithinAbs(2.5f, 1e-6f));
+}
+
+TEST_CASE("rqa returns zero statistics for empty or null input", "[util][sequence][rqa]") {
+  const std::vector<float> one_cell{1.0f};
+  for (const RqaResult stats : {rqa(nullptr, 4), rqa(one_cell.data(), 0), rqa(nullptr, 0)}) {
+    REQUIRE(stats.recurrence_rate == 0.0f);
+    REQUIRE(stats.determinism == 0.0f);
+    REQUIRE(stats.average_diagonal_length == 0.0f);
+    REQUIRE(stats.max_diagonal_length == 0);
+  }
+}
+
 TEST_CASE("dtw rejects a cell count that would overflow int", "[util][sequence][dtw]") {
   // X_cols * Y_cols here is 2.5e9 > INT_MAX; the int index `i * Y_cols + j`
   // would overflow (UB). The guard must reject the dimensions before reading any

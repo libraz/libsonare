@@ -229,26 +229,34 @@ RqaResult rqa(const float* rec, int n) {
     if (rec[i] > 0.0f) ++n_rec;
   out.recurrence_rate = static_cast<float>(n_rec) / static_cast<float>(n2);
 
-  // Collect diagonal line lengths (lines of consecutive ones along main diagonal direction).
-  std::vector<int> lengths;
+  // Aggregate qualifying diagonal runs as they end instead of storing each length.
+  size_t diagonal_count = 0;
+  int sum_diag = 0;
+  int max_diag = 0;
   for (int d = -(n - 1); d < n; ++d) {
     int run = 0;
+    const auto accumulate_run = [&] {
+      if (run >= 2) {
+        sum_diag += run;
+        max_diag = std::max(max_diag, run);
+        ++diagonal_count;
+      }
+    };
     for (int i = std::max(0, -d); i + 1 <= n && i + d < n && i + d >= 0; ++i) {
       if (rec[i * n + (i + d)] > 0.0f) {
         ++run;
       } else {
-        if (run >= 2) lengths.push_back(run);
+        accumulate_run();
         run = 0;
       }
     }
-    if (run >= 2) lengths.push_back(run);
+    accumulate_run();
   }
-  int sum_diag = 0;
-  for (int L : lengths) sum_diag += L;
   out.determinism = (n_rec > 0) ? static_cast<float>(sum_diag) / static_cast<float>(n_rec) : 0.0f;
-  out.max_diagonal_length = lengths.empty() ? 0 : *std::max_element(lengths.begin(), lengths.end());
+  out.max_diagonal_length = max_diag;
   out.average_diagonal_length =
-      lengths.empty() ? 0.0f : static_cast<float>(sum_diag) / static_cast<float>(lengths.size());
+      diagonal_count == 0 ? 0.0f
+                          : static_cast<float>(sum_diag) / static_cast<float>(diagonal_count);
   return out;
 }
 
