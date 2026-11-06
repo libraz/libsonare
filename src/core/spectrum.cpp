@@ -5,6 +5,7 @@
 #include <cmath>
 #include <cstddef>
 #include <limits>
+#include <optional>
 #include <random>
 #include <string>
 
@@ -78,38 +79,16 @@ int frames_for_padded_length(size_t padded_length, int n_fft, int hop_length) {
   return static_cast<int>(frames);
 }
 
-/// @brief Computes the STFT of @p signal with an arbitrary precomputed window.
-/// @details Single source of truth for the framing/windowing/FFT loop shared by
-///          Spectrogram::compute and the reassignment path. Centers the signal
-///          when requested, reports the frame count through @p out_n_frames, and
-///          drives @p progress_callback (if set). Element counts are computed in
-///          size_t and range-checked so long inputs cannot overflow an int index.
-std::vector<std::complex<float>> stft_with_window(
-    const float* signal, size_t signal_length, const std::vector<float>& padded_window, int n_fft,
-    int hop_length, bool center, PadMode pad_mode, int* out_n_frames,
-    SpectrogramProgressCallback progress_callback = nullptr) {
-  std::vector<float> padded_signal;
-  if (center) {
-    int pad_length = n_fft / 2;
-    padded_signal = pad_center(signal, signal_length, pad_length, pad_mode);
-    signal = padded_signal.data();
-    signal_length = padded_signal.size();
-  }
-
-  const int n_frames = frames_for_padded_length(signal_length, n_fft, hop_length);
-
-  const int n_bins = n_fft / 2 + 1;
-  // Compute the element count in size_t so the n_bins*n_frames multiply (and the
-  // column-major index below) cannot overflow int for long inputs.
-  const size_t total = static_cast<size_t>(n_bins) * static_cast<size_t>(n_frames);
-  SONARE_CHECK(total / static_cast<size_t>(n_bins) == static_cast<size_t>(n_frames),
-               ErrorCode::InvalidParameter);
-  std::vector<std::complex<float>> spectrum(total);
-
-  FFT fft(n_fft);
-  std::vector<float> frame(n_fft);
-  std::vector<std::complex<float>> frame_spectrum(n_bins);
-
+/// @brief Transforms already prepared frames into a caller-sized STFT buffer.
+/// @details Uses caller-owned frame and output buffers without resizing; the FFT
+///          wrapper retains its lazy backend initialization on the first forward.
+void stft_frames_into(
+    const float* signal, size_t signal_length, const std::vector<float>& padded_window,
+    int hop_length, int n_frames, FFT& fft, std::vector<float>& frame,
+    std::vector<std::complex<float>>& frame_spectrum, std::vector<std::complex<float>>& spectrum,
+    const SpectrogramProgressCallback& progress_callback = SpectrogramProgressCallback{}) {
+  const int n_fft = fft.n_fft();
+  const int n_bins = fft.n_bins();
   // Progress reporting interval (every 5% or at least every 100 frames).
   const int progress_interval = std::max(1, std::min(n_frames / 20, 100));
 
@@ -143,8 +122,71 @@ std::vector<std::complex<float>> stft_with_window(
       progress_callback(static_cast<float>(t + 1) / static_cast<float>(n_frames));
     }
   }
+}
 
-  *out_n_frames = n_frames;
+/// @brief Reusable geometry and scratch for STFTs over one signal.
+/// @details Center padding is retained once, and each transform replaces only
+///          its output while reusing the FFT plan and per-frame scratch.
+class StftWorkspace {
+ public:
+  StftWorkspace(const float* signal, size_t signal_length, int n_fft, int hop_length, bool center,
+                PadMode pad_mode)
+      : signal_(signal), signal_length_(signal_length), n_fft_(n_fft), hop_length_(hop_length) {
+    if (center) {
+      const int pad_length = n_fft_ / 2;
+      padded_signal_ = pad_center(signal_, signal_length_, pad_length, pad_mode);
+      signal_ = padded_signal_.data();
+      signal_length_ = padded_signal_.size();
+    }
+
+    n_frames_ = frames_for_padded_length(signal_length_, n_fft_, hop_length_);
+    n_bins_ = n_fft_ / 2 + 1;
+    spectrum_size_ = static_cast<size_t>(n_bins_) * static_cast<size_t>(n_frames_);
+    SONARE_CHECK(spectrum_size_ / static_cast<size_t>(n_bins_) == static_cast<size_t>(n_frames_),
+                 ErrorCode::InvalidParameter);
+  }
+
+  int n_frames() const { return n_frames_; }
+
+  std::vector<std::complex<float>> transform(
+      const std::vector<float>& padded_window,
+      const SpectrogramProgressCallback& progress_callback = SpectrogramProgressCallback{}) {
+    std::vector<std::complex<float>> spectrum(spectrum_size_);
+
+    if (!fft_) fft_.emplace(n_fft_);
+    frame_.resize(static_cast<size_t>(n_fft_));
+    frame_spectrum_.resize(static_cast<size_t>(n_bins_));
+    stft_frames_into(signal_, signal_length_, padded_window, hop_length_, n_frames_, *fft_, frame_,
+                     frame_spectrum_, spectrum, progress_callback);
+
+    return spectrum;
+  }
+
+ private:
+  const float* signal_;
+  size_t signal_length_;
+  const int n_fft_;
+  const int hop_length_;
+  int n_frames_ = 0;
+  int n_bins_ = 0;
+  size_t spectrum_size_ = 0;
+  std::vector<float> padded_signal_;
+  std::optional<FFT> fft_;
+  std::vector<float> frame_;
+  std::vector<std::complex<float>> frame_spectrum_;
+};
+
+/// @brief Runs one STFT through the reusable workspace.
+/// @details Ordinary Spectrogram::compute uses this adapter; reassignment calls
+///          StftWorkspace directly to share its signal padding and FFT scratch
+///          across windows. The frame count is written only after success.
+std::vector<std::complex<float>> stft_with_window(
+    const float* signal, size_t signal_length, const std::vector<float>& padded_window, int n_fft,
+    int hop_length, bool center, PadMode pad_mode, int* out_n_frames,
+    SpectrogramProgressCallback progress_callback = nullptr) {
+  StftWorkspace workspace(signal, signal_length, n_fft, hop_length, center, pad_mode);
+  std::vector<std::complex<float>> spectrum = workspace.transform(padded_window, progress_callback);
+  *out_n_frames = workspace.n_frames();
   return spectrum;
 }
 
@@ -170,14 +212,14 @@ namespace {
 ///          hop_length, window, center=true) is fixed across n_iter passes, so
 ///          the caller hoists the allocation and the FFT plan out of its loop
 ///          instead of paying Spectrogram::from_complex + to_audio's cost each
-///          pass. @p output and @p window_sum must be sized to full_length.
-Audio griffin_lim_synthesize(const std::complex<float>* data, int n_bins, int n_frames, int n_fft,
-                             int hop_length, int sample_rate, int target_length,
-                             const std::vector<float>& synthesis_window,
-                             const Eigen::VectorXf& window_product_vec, FFT& fft,
-                             std::vector<std::complex<float>>& frame_spectrum,
-                             std::vector<float>& frame, std::vector<float>& output,
-                             std::vector<float>& window_sum) {
+///          pass. @p output and @p window_sum must be sized to full_length; the
+///          caller consumes the centered target-length view without copying it.
+void griffin_lim_synthesize(const std::complex<float>* data, int n_bins, int n_frames, int n_fft,
+                            int hop_length, const std::vector<float>& synthesis_window,
+                            const Eigen::VectorXf& window_product_vec, FFT& fft,
+                            std::vector<std::complex<float>>& frame_spectrum,
+                            std::vector<float>& frame, std::vector<float>& output,
+                            std::vector<float>& window_sum) {
   const int full_length = (n_frames - 1) * hop_length + n_fft;
   std::fill(output.begin(), output.end(), 0.0f);
   std::fill(window_sum.begin(), window_sum.end(), 0.0f);
@@ -202,56 +244,24 @@ Audio griffin_lim_synthesize(const std::complex<float>* data, int n_bins, int n_
       (window_sum_vec.array() > eps)
           .select(output_vec.array() / window_sum_vec.array().max(eps), output_vec.array());
 
-  // center is always true for griffin_lim's StftConfig, and n_frames > 1 here
-  // makes target_length > 0 always, so to_audio's length > 0 branch is the
-  // only one this geometry can reach.
-  const int trim_start = n_fft / 2;
-  std::vector<float> trimmed(static_cast<size_t>(target_length), 0.0f);
-  std::copy(output.begin() + trim_start, output.begin() + trim_start + target_length,
-            trimmed.begin());
-  return Audio::from_vector(std::move(trimmed), sample_rate);
+  // The iterative caller reads the centered target-length view directly from
+  // output, avoiding an intermediate trimmed Audio allocation.
 }
 
 /// @brief Forward STFT for griffin_lim's iteration loop (n_frames > 1).
-/// @details Same framing, windowing and per-frame FFT as stft_with_window --
-///          mirror it exactly if either changes -- against caller-owned
-///          scratch and an externally owned FFT plan, for the reason given on
-///          griffin_lim_synthesize. @p signal is exactly target_length samples
-///          (never empty for n_frames > 1), so the padded/framed length here
-///          always agrees with the @p n_frames the caller already knows.
-void griffin_lim_analyze(const Audio& signal, PadMode pad_mode,
-                         const std::vector<float>& padded_window, int n_fft, int hop_length,
-                         int n_bins, int n_frames, FFT& fft, std::vector<float>& frame,
+/// @details The caller passes a borrowed target-length view into the synthesis
+///          output. Center padding copies that view before the shared
+///          stft_frames_into kernel writes the re-analysis buffer.
+void griffin_lim_analyze(const float* signal, size_t signal_length, PadMode pad_mode,
+                         const std::vector<float>& padded_window, int hop_length, int n_frames,
+                         FFT& fft, std::vector<float>& frame,
                          std::vector<std::complex<float>>& frame_spectrum,
                          std::vector<std::complex<float>>& spectrum) {
+  const int n_fft = fft.n_fft();
   const int pad_length = n_fft / 2;
-  std::vector<float> padded_signal = pad_center(signal.data(), signal.size(), pad_length, pad_mode);
-
-  for (int t = 0; t < n_frames; ++t) {
-    const size_t start = static_cast<size_t>(t) * static_cast<size_t>(hop_length);
-    const size_t remaining = start < padded_signal.size() ? padded_signal.size() - start : 0;
-    const int valid_samples = static_cast<int>(std::min(static_cast<size_t>(n_fft), remaining));
-
-    if (valid_samples >= n_fft) {
-      for (int i = 0; i < n_fft; ++i) {
-        frame[i] = padded_signal[start + static_cast<size_t>(i)] * padded_window[i];
-      }
-    } else if (valid_samples > 0) {
-      for (int i = 0; i < valid_samples; ++i) {
-        frame[i] = padded_signal[start + static_cast<size_t>(i)] * padded_window[i];
-      }
-      std::fill(frame.begin() + valid_samples, frame.end(), 0.0f);
-    } else {
-      std::fill(frame.begin(), frame.end(), 0.0f);
-    }
-
-    fft.forward(frame.data(), frame_spectrum.data());
-
-    for (int f = 0; f < n_bins; ++f) {
-      spectrum[static_cast<size_t>(f) * static_cast<size_t>(n_frames) + static_cast<size_t>(t)] =
-          frame_spectrum[f];
-    }
-  }
+  std::vector<float> padded_signal = pad_center(signal, signal_length, pad_length, pad_mode);
+  stft_frames_into(padded_signal.data(), padded_signal.size(), padded_window, hop_length, n_frames,
+                   fft, frame, frame_spectrum, spectrum);
 }
 
 }  // namespace
@@ -687,12 +697,13 @@ Audio griffin_lim(const float* magnitude, int n_bins, int n_frames, int n_fft, i
   // re-analysis can return to and no phase estimate can change, so every
   // iteration count yields the same reconstruction as none.
   const int iterations = n_frames > 1 ? config.n_iter : 0;
+  if (iterations > 0) SONARE_CHECK(sample_rate > 0, ErrorCode::InvalidParameter);
   for (int iter = 0; iter < iterations; ++iter) {
-    Audio reconstructed = griffin_lim_synthesize(
-        spectrum.data(), n_bins, n_frames, n_fft, hop_length, sample_rate, target_length,
-        synthesis_window, window_product_vec, fft, frame_spectrum, frame, output, window_sum);
-    griffin_lim_analyze(reconstructed, checked.pad_mode, analysis_window, n_fft, hop_length, n_bins,
-                        n_frames, fft, frame, frame_spectrum, new_spectrum);
+    griffin_lim_synthesize(spectrum.data(), n_bins, n_frames, n_fft, hop_length, synthesis_window,
+                           window_product_vec, fft, frame_spectrum, frame, output, window_sum);
+    griffin_lim_analyze(output.data() + n_fft / 2, static_cast<size_t>(target_length),
+                        checked.pad_mode, analysis_window, hop_length, n_frames, fft, frame,
+                        frame_spectrum, new_spectrum);
 
     // Update phase while preserving magnitude
     for (int f = 0; f < n_bins; ++f) {
@@ -815,9 +826,9 @@ ReassignedSpectrogram reassigned_spectrogram(const Audio& audio, const StftConfi
   const int n_fft = config.n_fft;
   const int hop_length = config.hop_length;
   // reassigned_spectrogram bypasses Spectrogram::compute (it drives
-  // stft_with_window directly for the three reassignment windows), so it does
-  // not inherit that path's n_fft/hop_length > 0 guard. Without this check,
-  // hop_length == 0 divides by zero in stft_with_window's frame-count math
+  // StftWorkspace directly for the three reassignment windows), so it does not
+  // inherit that path's n_fft/hop_length > 0 guard. Without this check,
+  // hop_length == 0 divides by zero in the workspace frame-count math
   // (SIGFPE) instead of returning a recoverable error.
   SONARE_CHECK(n_fft > 0 && hop_length > 0, ErrorCode::InvalidParameter);
   const int win_length = config.actual_win_length();
@@ -831,18 +842,15 @@ ReassignedSpectrogram reassigned_spectrogram(const Audio& audio, const StftConfi
   const float* signal = audio.data();
   const size_t signal_len = audio.size();
 
+  std::vector<std::complex<float>> Sw, Stw, Sdw;
   int n_frames = 0;
-  std::vector<std::complex<float>> Sw =
-      stft_with_window(signal, signal_len, padded_window, n_fft, hop_length, config.center,
-                       config.pad_mode, &n_frames);
-  int n_frames_t = 0;
-  std::vector<std::complex<float>> Stw = stft_with_window(
-      signal, signal_len, t_window, n_fft, hop_length, config.center, config.pad_mode, &n_frames_t);
-  int n_frames_d = 0;
-  std::vector<std::complex<float>> Sdw =
-      stft_with_window(signal, signal_len, dw_window, n_fft, hop_length, config.center,
-                       config.pad_mode, &n_frames_d);
-  SONARE_CHECK(n_frames == n_frames_t && n_frames == n_frames_d, ErrorCode::InvalidParameter);
+  {
+    StftWorkspace workspace(signal, signal_len, n_fft, hop_length, config.center, config.pad_mode);
+    Sw = workspace.transform(padded_window);
+    Stw = workspace.transform(t_window);
+    Sdw = workspace.transform(dw_window);
+    n_frames = workspace.n_frames();
+  }
 
   const int n_bins = n_fft / 2 + 1;
   ReassignedSpectrogram out;
@@ -904,15 +912,14 @@ std::vector<float> reassign_axis(const Audio& audio, const StftConfig& config, f
   const float* signal = audio.data();
   const size_t signal_len = audio.size();
 
+  std::vector<std::complex<float>> Sw, Sx;
   int n_frames = 0;
-  std::vector<std::complex<float>> Sw =
-      stft_with_window(signal, signal_len, padded_window, n_fft, hop_length, config.center,
-                       config.pad_mode, &n_frames);
-  int n_frames_2 = 0;
-  std::vector<std::complex<float>> Sx =
-      stft_with_window(signal, signal_len, second_window, n_fft, hop_length, config.center,
-                       config.pad_mode, &n_frames_2);
-  SONARE_CHECK(n_frames == n_frames_2, ErrorCode::InvalidParameter);
+  {
+    StftWorkspace workspace(signal, signal_len, n_fft, hop_length, config.center, config.pad_mode);
+    Sw = workspace.transform(padded_window);
+    Sx = workspace.transform(second_window);
+    n_frames = workspace.n_frames();
+  }
 
   const int n_bins = n_fft / 2 + 1;
   std::vector<float> out(static_cast<size_t>(n_bins) * n_frames, 0.0f);

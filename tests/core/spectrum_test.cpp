@@ -183,6 +183,29 @@ TEST_CASE("Spectrogram compute basic", "[spectrum]") {
   REQUIRE(spec.n_frames() > 0);
 }
 
+TEST_CASE("Spectrogram compute keeps its progress callback sequence", "[spectrum]") {
+  Audio audio = Audio::from_vector(generate_sine(777, 440.0f, 22050), 22050);
+  StftConfig config;
+  config.n_fft = 64;
+  config.hop_length = 8;
+
+  std::vector<float> progress;
+  const Spectrogram spec =
+      Spectrogram::compute(audio, config, [&](float value) { progress.push_back(value); });
+
+  const std::vector<int> expected_frame_counts = {1,  5,  9,  13, 17, 21, 25, 29, 33,
+                                                  37, 41, 45, 49, 53, 57, 61, 65, 69,
+                                                  73, 77, 81, 85, 89, 93, 97, 98};
+  REQUIRE(spec.n_frames() == 98);
+  REQUIRE(progress.size() == expected_frame_counts.size());
+  for (size_t i = 0; i < progress.size(); ++i) {
+    const float expected = static_cast<float>(expected_frame_counts[i]) / 98.0f;
+    CAPTURE(i, progress[i], expected);
+    REQUIRE_THAT(progress[i], WithinAbs(expected, 1e-7f));
+  }
+  REQUIRE_THAT(progress.back(), WithinAbs(1.0f, 1e-7f));
+}
+
 TEST_CASE("Spectrogram magnitude and power", "[spectrum]") {
   constexpr int sr = 22050;
   std::vector<float> sine = generate_sine(sr / 2, 440.0f, sr);
@@ -1092,6 +1115,38 @@ TEST_CASE("Griffin-Lim's fast path matches the public-API reference at a KissFFT
   REQUIRE(std::memcmp(fast.data(), reference.data(), fast.size() * sizeof(float)) == 0);
 }
 
+TEST_CASE("Griffin-Lim rejects an invalid sample rate on each reconstruction path",
+          "[spectrum][griffin_lim]") {
+  constexpr int n_fft = 32;
+  constexpr int n_bins = n_fft / 2 + 1;
+  constexpr int hop_length = 8;
+  const std::vector<float> magnitude(static_cast<size_t>(n_bins) * 2, 0.5f);
+
+  const auto error_code = [&](int n_frames, int n_iter) {
+    GriffinLimConfig config;
+    config.n_iter = n_iter;
+    try {
+      static_cast<void>(
+          griffin_lim(magnitude.data(), n_bins, n_frames, n_fft, hop_length, 0, config));
+    } catch (const SonareException& error) {
+      if (n_frames > 1 && n_iter > 0) {
+        const SonareException expected(ErrorCode::InvalidParameter);
+        CHECK(std::string(error.what()) == expected.what());
+      }
+      return error.code();
+    }
+    return ErrorCode::Ok;
+  };
+
+  // Two frames with iterations reach the explicit guard before the loop; without
+  // iterations they reach the final Spectrogram metadata validation instead.
+  CHECK(error_code(2, 2) == ErrorCode::InvalidParameter);
+  CHECK(error_code(2, 0) == ErrorCode::InvalidParameter);
+  // A single frame skips the iteration loop even when n_iter is positive.
+  CHECK(error_code(1, 2) == ErrorCode::InvalidParameter);
+  CHECK(error_code(1, 0) == ErrorCode::InvalidParameter);
+}
+
 TEST_CASE("Griffin-Lim bounds the reconstruction its own geometry asks for",
           "[spectrum][griffin_lim]") {
   // The length is (n_frames - 1) * hop_length, and none of that is a buffer the
@@ -1350,6 +1405,97 @@ TEST_CASE("reassign_frequencies uses a cyclic derivative window", "[spectrum][re
   // Reassignment should pin the tone to its true frequency far tighter than the
   // raw FFT bin spacing (~10.77 Hz).
   REQUIRE_THAT(reassigned, WithinAbs(freq, 1.0f));
+}
+
+TEST_CASE("reassignment axes agree with the combined transform across STFT geometries",
+          "[spectrum][reassign]") {
+  enum class SignalShape { Long, Short, Silence };
+  struct Case {
+    int n_fft;
+    bool center;
+    PadMode pad_mode;
+    bool short_window;
+    SignalShape signal_shape;
+    bool fill_nan;
+  };
+  // Pairwise coverage across FFT backend, centering, padding, window length,
+  // signal shape, and NaN filling without taking their full Cartesian product.
+  constexpr Case cases[] = {
+      {510, true, PadMode::Reflect, false, SignalShape::Long, false},
+      {512, false, PadMode::Reflect, true, SignalShape::Silence, true},
+      {510, false, PadMode::Constant, false, SignalShape::Short, true},
+      {512, true, PadMode::Constant, true, SignalShape::Silence, false},
+      {512, true, PadMode::Reflect, true, SignalShape::Short, false},
+      {512, true, PadMode::Constant, false, SignalShape::Long, true},
+      {510, false, PadMode::Constant, false, SignalShape::Silence, false},
+      {510, false, PadMode::Constant, true, SignalShape::Long, false},
+  };
+
+  constexpr int sample_rate = 22050;
+  constexpr int hop_length = 64;
+  constexpr float ref_power = 1e-6f;
+  size_t case_index = 0;
+  for (const Case& test : cases) {
+    CAPTURE(case_index, test.n_fft, test.center, static_cast<int>(test.pad_mode), test.short_window,
+            static_cast<int>(test.signal_shape), test.fill_nan);
+
+    const size_t sample_count =
+        test.signal_shape == SignalShape::Short ? 7 : static_cast<size_t>(test.n_fft + hop_length);
+    std::vector<float> samples(sample_count, 0.0f);
+    if (test.signal_shape != SignalShape::Silence) {
+      for (size_t i = 0; i < samples.size(); ++i) {
+        samples[i] = 0.1f * std::sin(kTwoPi * 440.0f * static_cast<float>(i) / sample_rate);
+      }
+      samples.back() += 0.5f;
+    }
+    const Audio audio = Audio::from_vector(std::move(samples), sample_rate);
+
+    StftConfig config;
+    config.n_fft = test.n_fft;
+    config.hop_length = hop_length;
+    config.win_length = test.short_window ? test.n_fft / 2 : 0;
+    config.center = test.center;
+    config.pad_mode = test.pad_mode;
+
+    const ReassignedSpectrogram combined =
+        reassigned_spectrogram(audio, config, ref_power, test.fill_nan);
+    const std::vector<float> times = reassign_times(audio, config, ref_power, test.fill_nan);
+    const std::vector<float> frequencies =
+        reassign_frequencies(audio, config, ref_power, test.fill_nan);
+
+    REQUIRE(combined.magnitude.size() == combined.times.size());
+    REQUIRE(combined.magnitude.size() == combined.frequencies.size());
+    REQUIRE(combined.times.size() == times.size());
+    REQUIRE(combined.frequencies.size() == frequencies.size());
+    REQUIRE_FALSE(combined.times.empty());
+
+    for (size_t i = 0; i < combined.times.size(); ++i) {
+      CAPTURE(i);
+      const float expected = combined.times[i];
+      if (std::isnan(expected)) {
+        REQUIRE(std::isnan(times[i]));
+        continue;
+      }
+      REQUIRE(std::isfinite(expected));
+      REQUIRE(std::isfinite(times[i]));
+      const float tolerance = std::max(1e-6f, std::abs(expected) * 1e-6f);
+      REQUIRE_THAT(times[i], WithinAbs(expected, tolerance));
+    }
+
+    for (size_t i = 0; i < combined.frequencies.size(); ++i) {
+      CAPTURE(i);
+      const float expected = combined.frequencies[i];
+      if (std::isnan(expected)) {
+        REQUIRE(std::isnan(frequencies[i]));
+        continue;
+      }
+      REQUIRE(std::isfinite(expected));
+      REQUIRE(std::isfinite(frequencies[i]));
+      const float tolerance = std::max(1e-6f, std::abs(expected) * 1e-6f);
+      REQUIRE_THAT(frequencies[i], WithinAbs(expected, tolerance));
+    }
+    ++case_index;
+  }
 }
 
 TEST_CASE("reassignment helpers reject non-positive STFT dimensions", "[spectrum][reassign]") {
