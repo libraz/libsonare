@@ -446,14 +446,10 @@ bool has_recurrent_relative_tonic(const Key& proposed, const Key& chroma_key,
       runs.push_back({chord.root, quality, duration, confidence_mass});
     }
   }
-  if (runs.empty() || total_duration <= 0.0 ||
-      total_confidence_mass / total_duration < kRelativeKeyMinTemplateConfidence) {
-    return false;
-  }
+  if (runs.empty() || total_duration <= 0.0) return false;
 
   int distinct_roots = 0;
   for (bool present : roots) distinct_roots += present ? 1 : 0;
-  if (distinct_roots < kRelativeKeyMinChordRoots) return false;
 
   const ChordQuality tonic_quality =
       proposed.mode == Mode::Minor ? ChordQuality::Minor : ChordQuality::Major;
@@ -473,15 +469,46 @@ bool has_recurrent_relative_tonic(const Key& proposed, const Key& chroma_key,
   };
   const bool opening_tonic = runs.front().root == proposed.root &&
                              runs.front().quality == tonic_quality && is_strong_run(runs.front());
-  int tonic_runs = 0;
+  double tonic_duration = 0.0;
+  double tonic_confidence_mass = 0.0;
   for (const HarmonicRun& run : runs) {
     if (run.root == proposed.root && run.quality == tonic_quality) {
-      if (is_strong_run(run)) ++tonic_runs;
+      tonic_duration += run.duration;
+      tonic_confidence_mass += run.confidence_mass;
     }
   }
-  if (opening_tonic && tonic_runs >= kRelativeKeyMinTonicRuns) return true;
+  int reliable_tonic_runs = 0;
+  int distinct_reliable_roots = 0;
+  std::array<bool, 12> reliable_roots{};
+  bool has_previous_reliable_run = false;
+  PitchClass previous_reliable_root = PitchClass::C;
+  ChordQuality previous_reliable_quality = ChordQuality::Unknown;
+  for (const HarmonicRun& run : runs) {
+    if (!is_strong_run(run)) continue;
+    reliable_roots[static_cast<size_t>(run.root)] = true;
+    if (has_previous_reliable_run && previous_reliable_root == run.root &&
+        previous_reliable_quality == run.quality) {
+      continue;
+    }
+    has_previous_reliable_run = true;
+    previous_reliable_root = run.root;
+    previous_reliable_quality = run.quality;
+    if (run.root == proposed.root && run.quality == tonic_quality) ++reliable_tonic_runs;
+  }
+  for (bool present : reliable_roots) distinct_reliable_roots += present ? 1 : 0;
 
-  if (proposed.mode != Mode::Minor || runs.size() < 2) return false;
+  if (opening_tonic && tonic_duration > 0.0 &&
+      tonic_confidence_mass / tonic_duration >= kRelativeKeyMinTemplateConfidence &&
+      reliable_tonic_runs >= kRelativeKeyMinTonicRuns &&
+      distinct_reliable_roots >= kRelativeKeyMinChordRoots) {
+    return true;
+  }
+
+  if (proposed.mode != Mode::Minor || runs.size() < 2 ||
+      total_confidence_mass / total_duration < kRelativeKeyMinTemplateConfidence ||
+      distinct_roots < kRelativeKeyMinChordRoots) {
+    return false;
+  }
   const auto minor_v_root = static_cast<PitchClass>((static_cast<int>(proposed.root) + 7) % 12);
   if (runs[0].root != minor_v_root || runs[0].quality != ChordQuality::Minor ||
       !is_strong_run(runs[0]) || runs[1].root != proposed.root ||

@@ -197,12 +197,14 @@ Key estimate_key_from_chords(const std::vector<struct Chord>& chords);
 ///          at least a quarter of the winner's chroma posterior (a key the chroma leaves
 ///          ambiguous), and scores higher on the progression's own key score. For a scored relative
 ///          major/minor pair, a strong progression can also resolve aggregate chroma ambiguity when
-///          its opening tonic (I/i) lasts at least the median harmonic-run duration and belongs to
-///          at least three strong tonic runs, or, for a minor candidate, a strong opening
-///          natural-minor v-i pair has a v run at least as long as that median and belongs to at
-///          least three strong v-i pairs. Both paths require three chord roots and globally strong
-///          template confidence. Natural-minor v-i score support counts only the v-run duration
-///          that directly resolves to i. A key never scored by chroma is never returned.
+///          its opening tonic (I/i) is strong, lasts at least the median harmonic-run duration, and
+///          all tonic runs together have duration-weighted confidence >=0.8. After weak runs are
+///          ignored and successive matching root/triad runs are coalesced, this path requires at
+///          least three tonic runs and three distinct roots. A minor candidate also has an opening
+///          natural-minor v-i path with the same opening duration and strength checks plus at least
+///          three strong direct v-i pairs; this path retains the globally strong-confidence and
+///          three-root checks. Natural-minor v-i score support counts only v-run duration that
+///          directly resolves to i. A key never scored by chroma is never returned.
 /// @param chroma_candidates Scored chroma candidates, each carrying its posterior confidence
 /// @param chords Detected chords
 /// @return The chosen key with its chroma posterior as confidence; C major with 0 when

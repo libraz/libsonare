@@ -824,3 +824,225 @@ TEST_CASE("refine_key_with_chords recognizes repeated natural-minor v-i motion",
     CHECK(refined.confidence == 0.004f);
   }
 }
+
+TEST_CASE("refine_key_with_chords uses reliable evidence for opening tonic returns",
+          "[key_analyzer][relative_tonic]") {
+  const auto relative_candidates = [](PitchClass tonic, Mode mode) {
+    const bool minor = mode == Mode::Minor;
+    const PitchClass other_root = transpose(tonic, minor ? 3 : 9);
+    const Mode other_mode = minor ? Mode::Major : Mode::Minor;
+    return chroma_candidates({{Key{other_root, other_mode, 0.97f}, Key{tonic, mode, 0.004f}}});
+  };
+  const auto append = [](std::vector<Chord>& chords, float& t, PitchClass root,
+                         ChordQuality quality, float duration, float confidence) {
+    chords.push_back(chord(root, quality, t, t + duration));
+    chords.back().confidence = confidence;
+    t += duration;
+  };
+
+  SECTION("weak unrelated accompaniment cannot veto strong returns in all 24 keys") {
+    for (int root = 0; root < 12; ++root) {
+      const auto tonic = static_cast<PitchClass>(root);
+      for (Mode mode : {Mode::Major, Mode::Minor}) {
+        std::vector<Chord> chords;
+        float t = 0.0f;
+        const std::array<int, 4> offsets =
+            mode == Mode::Minor ? std::array<int, 4>{0, 8, 3, 10} : std::array<int, 4>{0, 7, 9, 5};
+        for (int cycle = 0; cycle < 3; ++cycle) {
+          for (int index = 0; index < 4; ++index) {
+            const bool minor_chord = mode == Mode::Minor ? index == 0 : index == 2;
+            const float confidence = index == 1 ? 0.1f : 1.0f;
+            append(chords, t, transpose(tonic, offsets[static_cast<size_t>(index)]),
+                   minor_chord ? ChordQuality::Minor : ChordQuality::Major, 2.0f, confidence);
+          }
+        }
+        float confidence_mass = 0.0f;
+        float total_duration = 0.0f;
+        for (const Chord& item : chords) {
+          confidence_mass += item.duration() * item.confidence;
+          total_duration += item.duration();
+        }
+        REQUIRE(confidence_mass / total_duration < 0.8f);
+
+        const Key chord_key = estimate_key_from_chords(chords);
+        REQUIRE(chord_key.root == tonic);
+        REQUIRE(chord_key.mode == mode);
+        const Key refined = refine_key_with_chords(relative_candidates(tonic, mode), chords);
+        CHECK(refined.root == tonic);
+        CHECK(refined.mode == mode);
+        CHECK(refined.confidence == 0.004f);
+      }
+    }
+  }
+
+  SECTION("weak recognized separators cannot manufacture three tonic returns") {
+    for (int root = 0; root < 12; ++root) {
+      const auto tonic = static_cast<PitchClass>(root);
+      std::vector<Chord> chords;
+      float t = 0.0f;
+      for (int cycle = 0; cycle < 3; ++cycle) {
+        append(chords, t, tonic, ChordQuality::Minor, 2.0f, 1.0f);
+        append(chords, t, transpose(tonic, 8), ChordQuality::Major, 2.0f, 0.6f);
+      }
+      append(chords, t, transpose(tonic, 3), ChordQuality::Major, 2.0f, 1.0f);
+      append(chords, t, transpose(tonic, 10), ChordQuality::Major, 2.0f, 1.0f);
+
+      float confidence_mass = 0.0f;
+      float total_duration = 0.0f;
+      for (const Chord& item : chords) {
+        confidence_mass += item.duration() * item.confidence;
+        total_duration += item.duration();
+      }
+      REQUIRE(confidence_mass / total_duration > 0.8f);
+      const Key chord_key = estimate_key_from_chords(chords);
+      REQUIRE(chord_key.root == tonic);
+      REQUIRE(chord_key.mode == Mode::Minor);
+      const Key refined = refine_key_with_chords(relative_candidates(tonic, Mode::Minor), chords);
+      CHECK(refined.root == transpose(tonic, 3));
+      CHECK(refined.mode == Mode::Major);
+      CHECK(refined.confidence == 0.97f);
+    }
+  }
+
+  SECTION("weak recognized harmony between v and i breaks a direct resolution") {
+    const PitchClass tonic = PitchClass::A;
+    std::vector<Chord> chords;
+    float t = 0.0f;
+    for (int cycle = 0; cycle < 3; ++cycle) {
+      append(chords, t, transpose(tonic, 7), ChordQuality::Minor, 2.0f, 1.0f);
+      if (cycle == 1) {
+        append(chords, t, transpose(tonic, 1), ChordQuality::Major, 0.25f, 0.1f);
+      }
+      append(chords, t, tonic, ChordQuality::Minor, 2.0f, 1.0f);
+      append(chords, t, transpose(tonic, 8), ChordQuality::Major, 2.0f, 1.0f);
+      append(chords, t, transpose(tonic, 3), ChordQuality::Major, 2.0f, 1.0f);
+      append(chords, t, transpose(tonic, 10), ChordQuality::Major, 1.0f, 1.0f);
+    }
+
+    float confidence_mass = 0.0f;
+    float total_duration = 0.0f;
+    for (const Chord& item : chords) {
+      confidence_mass += item.duration() * item.confidence;
+      total_duration += item.duration();
+    }
+    REQUIRE(confidence_mass / total_duration > 0.8f);
+    const Key chord_key = estimate_key_from_chords(chords);
+    REQUIRE(chord_key.root == tonic);
+    REQUIRE(chord_key.mode == Mode::Minor);
+    const Key refined = refine_key_with_chords(relative_candidates(tonic, Mode::Minor), chords);
+    CHECK(refined.root == transpose(tonic, 3));
+    CHECK(refined.mode == Mode::Major);
+  }
+
+  SECTION("the natural-minor v-i path keeps its whole-progression confidence gate") {
+    const PitchClass tonic = PitchClass::A;
+    std::vector<Chord> chords;
+    float t = 0.0f;
+    for (int cycle = 0; cycle < 3; ++cycle) {
+      append(chords, t, transpose(tonic, 7), ChordQuality::Minor, 2.0f, 1.0f);
+      append(chords, t, tonic, ChordQuality::Minor, 2.0f, 1.0f);
+      append(chords, t, transpose(tonic, 8), ChordQuality::Major, 2.0f, 0.1f);
+      append(chords, t, transpose(tonic, 3), ChordQuality::Major, 2.0f, 1.0f);
+    }
+
+    float confidence_mass = 0.0f;
+    float total_duration = 0.0f;
+    for (const Chord& item : chords) {
+      confidence_mass += item.duration() * item.confidence;
+      total_duration += item.duration();
+    }
+    REQUIRE(confidence_mass / total_duration < 0.8f);
+    const Key chord_key = estimate_key_from_chords(chords);
+    REQUIRE(chord_key.root == tonic);
+    REQUIRE(chord_key.mode == Mode::Minor);
+    const Key refined = refine_key_with_chords(relative_candidates(tonic, Mode::Minor), chords);
+    CHECK(refined.root == transpose(tonic, 3));
+    CHECK(refined.mode == Mode::Major);
+  }
+
+  SECTION("all tonic-run confidence must be strong when weak tonic duration is long") {
+    const PitchClass tonic = PitchClass::A;
+    std::vector<Chord> chords;
+    float t = 0.0f;
+    for (int cycle = 0; cycle < 3; ++cycle) {
+      append(chords, t, tonic, ChordQuality::Minor, 2.0f, 1.0f);
+      append(chords, t, transpose(tonic, 8), ChordQuality::Major, 2.0f, 1.0f);
+      append(chords, t, transpose(tonic, 3), ChordQuality::Major, 2.0f, 1.0f);
+      append(chords, t, transpose(tonic, 10), ChordQuality::Major, 2.0f, 1.0f);
+    }
+    append(chords, t, tonic, ChordQuality::Minor, 20.0f, 0.6f);
+
+    float confidence_mass = 0.0f;
+    float total_duration = 0.0f;
+    float tonic_confidence_mass = 0.0f;
+    float tonic_duration = 0.0f;
+    float tonic_run_confidence_sum = 0.0f;
+    int tonic_run_count = 0;
+    for (const Chord& item : chords) {
+      confidence_mass += item.duration() * item.confidence;
+      total_duration += item.duration();
+      if (item.root == tonic && item.quality == ChordQuality::Minor) {
+        tonic_confidence_mass += item.duration() * item.confidence;
+        tonic_duration += item.duration();
+        tonic_run_confidence_sum += item.confidence;
+        ++tonic_run_count;
+      }
+    }
+    REQUIRE(confidence_mass / total_duration > 0.8f);
+    REQUIRE(tonic_run_confidence_sum / tonic_run_count > 0.8f);
+    REQUIRE(tonic_confidence_mass / tonic_duration < 0.8f);
+    const Key chord_key = estimate_key_from_chords(chords);
+    REQUIRE(chord_key.root == tonic);
+    REQUIRE(chord_key.mode == Mode::Minor);
+    const Key refined = refine_key_with_chords(relative_candidates(tonic, Mode::Minor), chords);
+    CHECK(refined.root == transpose(tonic, 3));
+    CHECK(refined.mode == Mode::Major);
+  }
+
+  SECTION("three tonic returns need three reliable roots") {
+    const PitchClass tonic = PitchClass::A;
+    std::vector<Chord> chords;
+    float t = 0.0f;
+    for (int cycle = 0; cycle < 3; ++cycle) {
+      append(chords, t, tonic, ChordQuality::Minor, 2.0f, 1.0f);
+      append(chords, t, transpose(tonic, 8), ChordQuality::Major, 2.0f, 1.0f);
+    }
+    append(chords, t, transpose(tonic, 3), ChordQuality::Major, 0.1f, 0.6f);
+
+    float confidence_mass = 0.0f;
+    float total_duration = 0.0f;
+    for (const Chord& item : chords) {
+      confidence_mass += item.duration() * item.confidence;
+      total_duration += item.duration();
+    }
+    REQUIRE(confidence_mass / total_duration > 0.8f);
+    const Key chord_key = estimate_key_from_chords(chords);
+    REQUIRE(chord_key.root == tonic);
+    REQUIRE(chord_key.mode == Mode::Minor);
+    const Key refined = refine_key_with_chords(relative_candidates(tonic, Mode::Minor), chords);
+    CHECK(refined.root == transpose(tonic, 3));
+    CHECK(refined.mode == Mode::Major);
+  }
+
+  SECTION("fragmentation and N.C. preserve strong tonic runs") {
+    const PitchClass tonic = PitchClass::A;
+    std::vector<Chord> chords;
+    float t = 0.0f;
+    for (int cycle = 0; cycle < 3; ++cycle) {
+      append(chords, t, tonic, ChordQuality::Minor, 1.0f, 0.9f);
+      append(chords, t, PitchClass::C, ChordQuality::Unknown, 0.25f, 1.0f);
+      append(chords, t, tonic, ChordQuality::Minor7, 1.0f, 0.9f);
+      append(chords, t, transpose(tonic, 8), ChordQuality::Major, 2.0f, 1.0f);
+      append(chords, t, transpose(tonic, 3), ChordQuality::Major, 2.0f, 1.0f);
+      append(chords, t, transpose(tonic, 10), ChordQuality::Major, 2.0f, 1.0f);
+    }
+
+    const Key chord_key = estimate_key_from_chords(chords);
+    REQUIRE(chord_key.root == tonic);
+    REQUIRE(chord_key.mode == Mode::Minor);
+    const Key refined = refine_key_with_chords(relative_candidates(tonic, Mode::Minor), chords);
+    CHECK(refined.root == tonic);
+    CHECK(refined.mode == Mode::Minor);
+    CHECK(refined.confidence == 0.004f);
+  }
+}
