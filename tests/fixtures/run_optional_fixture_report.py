@@ -27,6 +27,7 @@ SUITES = {
             ("music:downbeat", "downbeat_manifest.tsv", 1, 2, 6),
             ("music:chord", "chord_manifest.tsv", 1, 2, 4),
             ("music:structure", "structure_manifest.tsv", 1, 2, 5),
+            ("music:notes", "notes_manifest.tsv", 1, 2, 5),
         ],
     },
     "acoustic": {
@@ -436,6 +437,27 @@ def extract_observations(stdout: str) -> list[dict[str, Any]]:
                 "pairwise_f": float(match.group(5)),
                 "min_hr3f": float(match.group(6)),
                 "min_pairwise_f": float(match.group(7)),
+            }
+        )
+
+    for match in re.finditer(
+        r"Report-only notes fixture (.+?) F-measure_note ([0-9.+\-eE]+); "
+        r"F-measure_note_offset ([0-9.+\-eE]+); F-measure_onset ([0-9.+\-eE]+); "
+        r"truth ([0-9]+); predicted ([0-9]+); min_f_note ([0-9.+\-eE]+); "
+        r"min_f_note_offset ([0-9.+\-eE]+)",
+        text,
+    ):
+        observations.append(
+            {
+                "metric": "notes",
+                "fixture": clean_fixture_name(match.group(1)),
+                "f_note": float(match.group(2)),
+                "f_note_offset": float(match.group(3)),
+                "f_onset": float(match.group(4)),
+                "truth_count": int(match.group(5)),
+                "predicted_count": int(match.group(6)),
+                "min_f_note": float(match.group(7)),
+                "min_f_note_offset": float(match.group(8)),
             }
         )
 

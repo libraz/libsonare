@@ -94,6 +94,8 @@ def metric_value(item: dict[str, Any]) -> float | None:
         return float(item["hr3f"])
     if metric == "structure_pairwise_f":
         return float(item["pairwise_f"])
+    if metric == "notes":
+        return float(item["f_note"])
     if metric in ("chord_wcsr", "chord_extended_wcsr"):
         return float(item["wcsr"])
     if metric == "chord_exact_wcsr":
@@ -141,6 +143,10 @@ def metric_pass(item: dict[str, Any]) -> bool | None:
         return float(item["f_measure"]) >= float(item["threshold"])
     if metric in ("beat_offset", "structure_hr3f", "structure_pairwise_f"):
         return None
+    if metric == "notes":
+        return float(item["f_note"]) >= float(item["min_f_note"]) and (
+            float(item["f_note_offset"]) >= float(item["min_f_note_offset"])
+        )
     if metric in ("chord_wcsr", "chord_extended_wcsr"):
         threshold = item.get("threshold")
         return float(item["wcsr"]) >= float(threshold) if threshold is not None else None

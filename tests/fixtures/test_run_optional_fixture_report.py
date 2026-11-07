@@ -101,6 +101,26 @@ def test_median_offset_is_parsed() -> None:
     assert all(abs(item["f_measure"] - 0.142149) < 1e-9 for item in observations)
 
 
+def test_notes_observation_is_parsed() -> None:
+    message = (
+        "Report-only notes fixture mir1k/mir1k/Ada_01.wav F-measure_note 0.812; "
+        "F-measure_note_offset 0.5; F-measure_onset 0.9; truth 30; predicted 33; "
+        "min_f_note 0.7; min_f_note_offset 0.4"
+    )
+    observations = runner.extract_observations_from_report_output(_document(_warning(message)))
+    assert len(observations) == 1, observations
+    item = observations[0]
+    assert item["metric"] == "notes", item
+    assert item["fixture"] == "mir1k/mir1k/Ada_01.wav", item
+    assert item["f_note"] == 0.812, item
+    assert item["f_note_offset"] == 0.5, item
+    assert item["f_onset"] == 0.9, item
+    assert item["truth_count"] == 30 and isinstance(item["truth_count"], int), item
+    assert item["predicted_count"] == 33 and isinstance(item["predicted_count"], int), item
+    assert item["min_f_note"] == 0.7, item
+    assert item["min_f_note_offset"] == 0.4, item
+
+
 def _run_all() -> int:
     tests = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     failed = 0

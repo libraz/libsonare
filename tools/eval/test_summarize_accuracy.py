@@ -51,6 +51,7 @@ def test_empty_report_reports_every_dimension_unmeasured() -> None:
         "meter",
         "chord",
         "structure",
+        "notes",
     }
     for name, entry in summary["dimensions"].items():
         assert entry["measured"] is False, name
@@ -238,6 +239,48 @@ def test_structure_means_each_feature_set_separately() -> None:
     assert overall["timbre_mean_hr3f"] == 0.5
     assert overall["timbre_mean_pairwise_f"] == 0.25
     assert entry["by_dataset"]["harmonix"]["fixtures"] == 2
+
+
+def _notes_row(
+    fixture: str, f_note: float, f_note_offset: float, f_onset: float, truth: int, predicted: int
+) -> dict:
+    return {
+        "metric": "notes",
+        "fixture": fixture,
+        "f_note": f_note,
+        "f_note_offset": f_note_offset,
+        "f_onset": f_onset,
+        "truth_count": truth,
+        "predicted_count": predicted,
+        "min_f_note": 0.0,
+        "min_f_note_offset": 0.0,
+    }
+
+
+def test_notes_means_and_count_ratio() -> None:
+    # Track a matches every note. Track b is over-split: twice as many predicted
+    # notes as annotated, so the ratio over both tracks is 30 / 20 = 1.5.
+    summary = summarizer.summarize(
+        _report(
+            _notes_row("mir1k/a.wav", 1.0, 0.5, 1.0, 10, 10),
+            _notes_row("mir1k/b.wav", 0.5, 0.25, 0.5, 10, 20),
+        )
+    )
+    entry = summary["dimensions"]["notes"]
+    assert entry["measured"] is True
+    assert entry["fixtures"] == 2
+    overall = entry["overall"]
+    assert abs(overall["mean_f_note"] - 0.75) < 1e-9
+    assert abs(overall["mean_f_note_offset"] - 0.375) < 1e-9
+    assert abs(overall["mean_f_onset"] - 0.75) < 1e-9
+    assert abs(overall["note_count_ratio"] - 1.5) < 1e-9
+    assert entry["by_dataset"]["mir1k"]["fixtures"] == 2
+
+
+def test_notes_count_ratio_is_absent_without_annotated_notes() -> None:
+    summary = summarizer.summarize(_report(_notes_row("mir1k/a.wav", 0.0, 0.0, 0.0, 0, 3)))
+    # Predicted notes against an empty annotation have no ratio to report.
+    assert summary["dimensions"]["notes"]["overall"]["note_count_ratio"] is None
 
 
 def _run_all() -> int:

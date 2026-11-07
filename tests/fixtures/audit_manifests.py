@@ -191,6 +191,7 @@ def main() -> int:
         ManifestSpec(
             "music:structure", args.music_root / "structure_manifest.tsv", 1, 2, fixed_columns=5
         ),
+        ManifestSpec("music:notes", args.music_root / "notes_manifest.tsv", 1, 2, fixed_columns=5),
     ]
     acoustic_specs = [
         ManifestSpec("acoustic:rt60", args.acoustic_root / "manifest.tsv", 1, fixed_columns=6)

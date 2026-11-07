@@ -152,6 +152,22 @@ def summarize_structure(observations: list[dict[str, Any]]) -> dict[str, Any]:
     return result
 
 
+def summarize_notes(observations: list[dict[str, Any]]) -> dict[str, Any]:
+    """Mean note F-measures, and the predicted-to-annotated note count ratio.
+
+    Above 1 the estimate has more notes than the annotation, which is over-splitting;
+    below 1 it is merging or missing notes.
+    """
+    truth = sum(int(item["truth_count"]) for item in observations)
+    predicted = sum(int(item["predicted_count"]) for item in observations)
+    return {
+        "mean_f_note": mean(float(item["f_note"]) for item in observations),
+        "mean_f_note_offset": mean(float(item["f_note_offset"]) for item in observations),
+        "mean_f_onset": mean(float(item["f_onset"]) for item in observations),
+        "note_count_ratio": predicted / truth if truth else None,
+    }
+
+
 DIMENSIONS = (
     Dimension("key", ("key",), summarize_key, "accuracy"),
     Dimension("bpm", ("bpm",), summarize_bpm, "accuracy"),
@@ -165,6 +181,7 @@ DIMENSIONS = (
         "wcsr_maj_min",
     ),
     Dimension("structure", ("structure",), summarize_structure, "mean_hr3f"),
+    Dimension("notes", ("notes",), summarize_notes, "mean_f_note"),
 )
 
 

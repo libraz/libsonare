@@ -106,6 +106,33 @@ def test_bare_metric_keys_still_group_all_datasets() -> None:
     assert _summary(result, "beat")["count"] == 2 and result["ok"]
 
 
+def _notes(
+    f_note: float, f_note_offset: float, min_f_note: float, min_f_note_offset: float
+) -> dict[str, Any]:
+    return {
+        "metric": "notes",
+        "fixture": "mir1k/mir1k/Ada_01.wav",
+        "f_note": f_note,
+        "f_note_offset": f_note_offset,
+        "f_onset": 0.9,
+        "truth_count": 30,
+        "predicted_count": 30,
+        "min_f_note": min_f_note,
+        "min_f_note_offset": min_f_note_offset,
+    }
+
+
+def test_notes_value_is_note_f_measure() -> None:
+    assert evaluator.metric_value(_notes(0.812, 0.5, 0.7, 0.4)) == 0.812
+
+
+def test_notes_pass_requires_both_floors() -> None:
+    assert evaluator.metric_pass(_notes(0.8, 0.5, 0.7, 0.4)) is True
+    assert evaluator.metric_pass(_notes(0.6, 0.5, 0.7, 0.4)) is False
+    # A note F above its floor does not excuse an offset F below its floor.
+    assert evaluator.metric_pass(_notes(0.8, 0.3, 0.7, 0.4)) is False
+
+
 def _run_all() -> int:
     tests = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     failed = 0
