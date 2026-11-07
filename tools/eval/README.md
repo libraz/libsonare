@@ -69,7 +69,7 @@ Monophonic transcription also separates rearticulations inside an existing note 
 
 Run `./build/bin/sonare_tests "[reattack]"` for repeated-note regressions and controls. These generated signals require no external corpus.
 
-Before extracting monophonic notes, transcription checks for stable pitch estimates at one-half, one-third, or one-quarter of a locally measured fundamental. A short fixed-window YIN analysis proposes a correction; a fractional-period waveform comparison must also show that the shorter period fits at least as well as its integer multiple. This second check protects low notes with a strong second harmonic. Corrections must persist for 30 ms. This pass adds waveform analysis to monophonic transcription; the shared editing provider, public pYIN output, and persisted vocal analysis keep their existing behavior. Run `./build/bin/sonare_tests "[pitch_alias]"` for independent leap melodies and low-fundamental controls.
+Before extracting monophonic notes, transcription checks for stable pitch estimates at one-half, one-third, or one-quarter of a locally measured fundamental. A short fixed-window YIN analysis proposes a correction; a fractional-period waveform comparison must also show that the shorter period fits at least as well as its integer multiple. This second check protects low notes with a strong second harmonic. Corrections must persist for 30 ms. The correction applies to monophonic transcription only; the shared editing provider, public pYIN output, and persisted vocal analysis do not receive it. Run `./build/bin/sonare_tests "[pitch_alias]"` for independent leap melodies and low-fundamental controls.
 
 ## Corpora that can be measured against
 
