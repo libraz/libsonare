@@ -726,6 +726,53 @@ TEST_CASE("the section floor keeps boundaries between sections longer than it",
           std::vector<float>{10.0f, 14.0f});
 }
 
+TEST_CASE("the section floor favors the strongest feasible boundary", "[section_analyzer]") {
+  const auto boundary = [](float time, float strength) { return Boundary{time, 0, strength}; };
+  const auto kept = [](std::vector<Boundary> boundaries, float duration, float minimum,
+                       float column_sec = 0.0f) {
+    return kept_times(
+        section_structure::merge_short_sections(boundaries, duration, minimum, column_sec));
+  };
+
+  // The center represents one strong transition; its two weaker shoulders must not add up to
+  // more priority merely because both fit together.
+  CHECK(kept({boundary(6.0f, 0.6f), boundary(8.0f, 0.9f), boundary(10.0f, 0.6f)}, 16.0f, 4.0f) ==
+        std::vector<float>{8.0f});
+  // With a weaker center, the two separated shoulder transitions remain feasible.
+  CHECK(kept({boundary(6.0f, 0.6f), boundary(8.0f, 0.5f), boundary(10.0f, 0.6f)}, 16.0f, 4.0f) ==
+        std::vector<float>{6.0f, 10.0f});
+}
+
+TEST_CASE("the section floor checks snapped endpoints before boundary competition",
+          "[section_analyzer]") {
+  const auto boundary = [](float time, float strength) { return Boundary{time, 0, strength}; };
+  const auto kept = [](std::vector<Boundary> boundaries, float duration, float minimum,
+                       float column_sec) {
+    return kept_times(
+        section_structure::merge_short_sections(boundaries, duration, minimum, column_sec));
+  };
+
+  // reach = 4 - .5 * .5 = 3.75 s. The stronger edge candidates are infeasible after snapping.
+  CHECK(kept({boundary(3.5f, 0.9f), boundary(7.5f, 0.8f)}, 16.0f, 4.0f, 0.5f) ==
+        std::vector<float>{7.5f});
+  CHECK(kept({boundary(8.5f, 0.8f), boundary(12.5f, 0.9f)}, 16.0f, 4.0f, 0.5f) ==
+        std::vector<float>{8.5f});
+  CHECK(kept({boundary(3.5f, 0.9f), boundary(6.5f, 0.8f)}, 16.0f, 4.0f, 0.5f) ==
+        std::vector<float>{6.5f});
+  CHECK(kept({boundary(9.5f, 0.8f), boundary(12.5f, 0.9f)}, 16.0f, 4.0f, 0.5f) ==
+        std::vector<float>{9.5f});
+  // Equality at the reach remains valid for both endpoints and neighboring sections.
+  CHECK(kept({boundary(3.75f, 0.8f), boundary(7.5f, 0.7f)}, 16.0f, 4.0f, 0.5f) ==
+        std::vector<float>{3.75f, 7.5f});
+  // An exact strength tie is resolved by earliest time; the returned result stays chronological.
+  CHECK(kept({boundary(8.0f, 0.8f), boundary(6.0f, 0.8f)}, 16.0f, 4.0f, 0.0f) ==
+        std::vector<float>{6.0f});
+  // The zero floor remains a sorted pass-through, and a too-short track has no interior cuts.
+  CHECK(kept({boundary(10.0f, 0.8f), boundary(2.0f, 0.9f)}, 16.0f, 0.0f, 0.0f) ==
+        std::vector<float>{2.0f, 10.0f});
+  CHECK(kept({boundary(1.0f, 1.0f)}, 3.0f, 4.0f, 0.0f).empty());
+}
+
 namespace {
 
 /// @brief Adds a decaying note whose partials fall as 1 / n^tilt.

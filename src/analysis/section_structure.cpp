@@ -694,48 +694,33 @@ std::vector<Boundary> merge_short_sections(const std::vector<Boundary>& boundari
   std::sort(sorted.begin(), sorted.end(),
             [](const Boundary& a, const Boundary& b) { return a.time < b.time; });
   const float minimum = std::max(0.0f, min_section_sec);
-  const size_t n = sorted.size() + 1;  // sections
-  if (minimum <= 0.0f || n < 2) return sorted;
+  if (minimum <= 0.0f || sorted.empty()) return sorted;
   const float reach = minimum - 0.5f * std::max(0.0f, column_sec);
 
-  // Keep the boundary subset with the largest total strength (then the most boundaries) whose
-  // sections all reach the floor. Cut k (1..n-1) is boundary k-1; cut 0 and cut n are the ends.
-  struct Score {
-    double strength = 0.0;
-    size_t count = 0;
-    bool feasible = false;
-    bool operator<(const Score& o) const {
-      return strength < o.strength || (strength == o.strength && count < o.count);
-    }
-  };
-  const auto cut_time = [&](size_t k) {
-    if (k == 0) return 0.0f;
-    return k < n ? sorted[k - 1].time : duration_sec;
-  };
-  std::vector<Score> best(n + 1);
-  std::vector<size_t> previous(n + 1, 0);
-  best[0].feasible = true;
-  for (size_t j = 1; j <= n; ++j) {
-    for (size_t i = 0; i < j; ++i) {
-      if (!best[i].feasible || cut_time(j) - cut_time(i) < reach) continue;
-      Score candidate = best[i];
-      if (j < n) {
-        candidate.strength += static_cast<double>(sorted[j - 1].strength);
-        ++candidate.count;
-      }
-      if (!best[j].feasible || best[j] < candidate) {
-        best[j] = candidate;
-        best[j].feasible = true;
-        previous[j] = i;
-      }
+  // Reject snapped cuts that cannot meet the end spans before they compete with feasible cuts.
+  std::vector<Boundary> candidates;
+  candidates.reserve(sorted.size());
+  for (const Boundary& boundary : sorted) {
+    if (boundary.time >= reach && duration_sec - boundary.time >= reach) {
+      candidates.push_back(boundary);
     }
   }
-  // Shorter than the floor as a whole: one whole-track section.
+  std::sort(candidates.begin(), candidates.end(), [](const Boundary& a, const Boundary& b) {
+    return a.strength != b.strength ? a.strength > b.strength : a.time < b.time;
+  });
+
+  // Keep the strongest feasible cuts first. Their snapped times, not their original detector
+  // frames, determine whether neighboring sections reach the length floor.
   std::vector<Boundary> kept;
-  if (best[n].feasible) {
-    for (size_t k = previous[n]; k > 0; k = previous[k]) kept.push_back(sorted[k - 1]);
+  kept.reserve(candidates.size());
+  for (const Boundary& candidate : candidates) {
+    const bool separated = std::all_of(kept.begin(), kept.end(), [&](const Boundary& selected) {
+      return std::abs(candidate.time - selected.time) >= reach;
+    });
+    if (separated) kept.push_back(candidate);
   }
-  std::reverse(kept.begin(), kept.end());
+  std::sort(kept.begin(), kept.end(),
+            [](const Boundary& a, const Boundary& b) { return a.time < b.time; });
   return kept;
 }
 

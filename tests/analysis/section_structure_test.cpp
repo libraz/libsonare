@@ -421,6 +421,104 @@ ss::ColumnGrid half_second_columns(int n) {
   return grid;
 }
 
+ss::FrameFeatures strongest_boundary_frames(float scale, bool periodic_modulation) {
+  constexpr int kFrames = 512;
+  constexpr int kBaseColumns = kFrames / 4;
+  ss::FrameFeatures frames;
+  frames.n_frames = kFrames;
+  frames.frame_sec = 0.125f * scale;
+  frames.duration_sec = frames.n_frames * frames.frame_sec;
+  frames.mfcc.assign(static_cast<std::size_t>(ss::kFrameMfcc) * kFrames, 0.0f);
+  frames.chroma.assign(static_cast<std::size_t>(ss::kFrameChroma) * kFrames, 0.0f);
+  frames.rms.assign(kFrames, 1.0f);
+  frames.vocal_band_energy.assign(kFrames, 1.0f);
+  frames.total_energy.assign(kFrames, 1.0f);
+  frames.tonality.assign(kFrames, 1.0f);
+  frames.frame_times.reserve(kFrames);
+  for (int f = 0; f < kFrames; ++f) {
+    const int column = f / 4;
+    const int material = column / 32;
+    const int note = (column / 5) % 4;
+    frames.frame_times.push_back(static_cast<float>(f) * frames.frame_sec);
+    frames.mfcc[static_cast<std::size_t>(material) * kFrames + f] = 10.0f;
+    if (periodic_modulation) {
+      frames.mfcc[static_cast<std::size_t>(4 + note) * kFrames + f] = 20.0f;
+    }
+    frames.chroma[static_cast<std::size_t>(note + 4 * (material % 2)) * kFrames + f] = 1.0f;
+  }
+  static_assert(kBaseColumns == 128);
+  return frames;
+}
+
+SectionGrid regular_test_grid(float duration, float beat_sec, float bar_sec,
+                              bool downbeats_reliable) {
+  SectionGrid grid;
+  const int beats_per_bar = static_cast<int>(std::lround(bar_sec / beat_sec));
+  for (int beat = 0; static_cast<float>(beat) * beat_sec < duration; ++beat) {
+    grid.beat_times.push_back(static_cast<float>(beat) * beat_sec);
+    if (beat % beats_per_bar == 0) grid.downbeat_indices.push_back(beat);
+  }
+  grid.downbeats_reliable = downbeats_reliable;
+  return grid;
+}
+
+ss::FrameFeatures endpoint_boundary_frames(bool reverse) {
+  constexpr int kFrames = 512;
+  constexpr int kColumns = 128;
+  ss::FrameFeatures frames;
+  frames.n_frames = kFrames;
+  frames.frame_sec = 0.125f;
+  frames.duration_sec = 64.0f;
+  frames.mfcc.assign(static_cast<std::size_t>(ss::kFrameMfcc) * kFrames, 0.0f);
+  frames.chroma.assign(static_cast<std::size_t>(ss::kFrameChroma) * kFrames, 0.0f);
+  frames.rms.assign(kFrames, 1.0f);
+  frames.vocal_band_energy.assign(kFrames, 1.0f);
+  frames.total_energy.assign(kFrames, 1.0f);
+  frames.tonality.assign(kFrames, 1.0f);
+  frames.frame_times.reserve(kFrames);
+  for (int f = 0; f < kFrames; ++f) {
+    const int c = f / 4;
+    frames.frame_times.push_back(static_cast<float>(f) * frames.frame_sec);
+    if (c < 8) {
+      frames.mfcc[f] = 10.0f;
+      frames.chroma[f] = 1.0f;
+    } else if (c < 14) {
+      frames.mfcc[static_cast<std::size_t>(kFrames) + f] = 10.0f;
+      frames.chroma[static_cast<std::size_t>(kFrames) + f] = 1.0f;
+    } else if (c < 64) {
+      frames.mfcc[static_cast<std::size_t>(kFrames) + f] = 10.0f;
+      frames.mfcc[static_cast<std::size_t>(2 * kFrames) + f] = 10.0f;
+      frames.chroma[static_cast<std::size_t>(kFrames) + f] = 1.0f;
+      frames.chroma[static_cast<std::size_t>(2 * kFrames) + f] = 1.0f;
+    } else {
+      frames.mfcc[static_cast<std::size_t>(3 * kFrames) + f] = 10.0f;
+      frames.chroma[static_cast<std::size_t>(3 * kFrames) + f] = 1.0f;
+    }
+  }
+  if (reverse) {
+    for (auto* features : {&frames.mfcc, &frames.chroma}) {
+      for (std::size_t offset = 0; offset < features->size(); offset += kFrames) {
+        std::reverse(features->begin() + static_cast<std::ptrdiff_t>(offset),
+                     features->begin() + static_cast<std::ptrdiff_t>(offset + kFrames));
+      }
+    }
+  }
+  static_assert(kColumns == 128);
+  return frames;
+}
+
+SectionGrid endpoint_test_grid(bool reverse, bool irregular) {
+  SectionGrid grid;
+  for (int c = 0; c < 128; ++c) {
+    const float offset =
+        irregular && c >= 40 && c < 88 ? 0.1f * std::sin(0.4f * static_cast<float>(c)) : 0.0f;
+    grid.beat_times.push_back(0.5f * static_cast<float>(c) + offset);
+    if (c % 4 == (reverse ? 1 : 3)) grid.downbeat_indices.push_back(c);
+  }
+  grid.downbeats_reliable = true;
+  return grid;
+}
+
 float dot(const ss::ColumnFeatures& f, int a, int b) {
   float sum = 0.0f;
   for (int d = 0; d < f.n_dims; ++d) {
@@ -431,6 +529,85 @@ float dot(const ss::ColumnFeatures& f, int a, int b) {
 }
 
 }  // namespace
+
+TEST_CASE("strongest feasible sections retain material changes across column resolutions",
+          "[section_structure]") {
+  struct ResolutionCase {
+    float beat_sec;
+    bool downbeats_reliable;
+    float scale;
+    int columns;
+  };
+  const std::vector<ResolutionCase> cases{{0.25f, false, 1.0f, 256}, {0.25f, true, 2.0f, 256},
+                                          {0.5f, false, 2.0f, 128},  {0.5f, true, 1.0f, 128},
+                                          {1.0f, false, 1.0f, 64},   {1.0f, true, 2.0f, 64}};
+  for (const ResolutionCase& row : cases) {
+    CAPTURE(row.beat_sec, row.downbeats_reliable, row.scale);
+    const auto frames = strongest_boundary_frames(row.scale, true);
+    const auto grid = regular_test_grid(frames.duration_sec, row.beat_sec * row.scale,
+                                        2.0f * row.scale, row.downbeats_reliable);
+    SectionConfig config;
+    config.min_section_sec = 4.0f * row.scale;
+    const auto columns = ss::column_grid(grid, frames.duration_sec, frames.frame_sec);
+    REQUIRE(columns.size() == row.columns);
+
+    const auto result = ss::analyze_structure(frames, grid, config);
+    std::vector<float> starts;
+    for (const Section& section : result.sections) starts.push_back(section.start);
+    CAPTURE(starts, result.boundary_times);
+    for (const float expected : {16.0f, 32.0f, 48.0f}) {
+      const float target = expected * row.scale;
+      CAPTURE(expected, target);
+      CHECK(std::any_of(result.boundary_times.begin(), result.boundary_times.end(),
+                        [target, &columns](float actual) {
+                          return std::abs(actual - target) <= columns.column_sec * 0.51f;
+                        }));
+      CHECK(std::any_of(result.sections.begin(), result.sections.end(),
+                        [target, &columns](const Section& section) {
+                          return std::abs(section.start - target) <= columns.column_sec * 0.51f;
+                        }));
+    }
+    for (const Section& section : result.sections) {
+      CHECK(section.duration() + 0.5f * columns.column_sec >= config.min_section_sec);
+    }
+  }
+
+  // Without the periodic MFCC motif (coefficient 5 onward), the underlying three material
+  // changes remain the only required transitions.
+  const auto plain_frames = strongest_boundary_frames(1.0f, false);
+  const auto plain_grid = regular_test_grid(plain_frames.duration_sec, 0.5f, 2.0f, false);
+  const auto plain_columns =
+      ss::column_grid(plain_grid, plain_frames.duration_sec, plain_frames.frame_sec);
+  const auto plain_result = ss::analyze_structure(plain_frames, plain_grid, SectionConfig{});
+  for (const float expected : {16.0f, 32.0f, 48.0f}) {
+    CHECK(std::any_of(plain_result.sections.begin(), plain_result.sections.end(),
+                      [expected, &plain_columns](const Section& section) {
+                        return std::abs(section.start - expected) <=
+                               plain_columns.column_sec * 0.51f;
+                      }));
+  }
+}
+
+TEST_CASE("downbeat snapping keeps feasible end boundaries on irregular grids",
+          "[section_structure]") {
+  for (const bool reverse : {false, true}) {
+    for (const bool irregular : {false, true}) {
+      CAPTURE(reverse, irregular);
+      const auto frames = endpoint_boundary_frames(reverse);
+      const auto grid = endpoint_test_grid(reverse, irregular);
+      const auto columns = ss::column_grid(grid, frames.duration_sec, frames.frame_sec);
+      const auto result = ss::analyze_structure(frames, grid, SectionConfig{});
+      const float expected = reverse ? 56.5f : 7.5f;
+      CHECK(std::any_of(result.sections.begin(), result.sections.end(),
+                        [expected, &columns](const Section& section) {
+                          return std::abs(section.start - expected) <= columns.column_sec * 0.51f;
+                        }));
+      for (const Section& section : result.sections) {
+        CHECK(section.duration() + 0.5f * columns.column_sec >= 4.0f);
+      }
+    }
+  }
+}
 
 TEST_CASE("section frame energies match a materialized magnitude oracle across cache tiles",
           "[section][section_structure]") {

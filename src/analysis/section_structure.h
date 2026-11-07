@@ -224,9 +224,9 @@ void merge_adjacent(std::vector<Span>& spans, std::vector<int>& groups, const Co
 Repetition resolve_repetition(std::vector<Span> spans, const std::vector<float>& smoothed,
                               const ColumnGrid& grid, float tau = kRepeatScore);
 
-/// Strongest boundary subset whose sections all reach @p min_section_sec, less half of
-/// @p column_sec: boundaries sit on column times, so a shortfall under the grid's resolution
-/// does not remove a section.
+/// Greedily keeps the strongest endpoint-feasible boundaries whose sections reach
+/// @p min_section_sec, less half of @p column_sec: boundaries sit on column times, so a shortfall
+/// under the grid's resolution does not remove a section. Equal strengths prefer earlier times.
 std::vector<Boundary> merge_short_sections(const std::vector<Boundary>& boundaries,
                                            float duration_sec, float min_section_sec,
                                            float column_sec);

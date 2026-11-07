@@ -46,9 +46,9 @@ struct SectionConfig {
   int hop_length = 512;  ///< Hop length in samples at the analysis rate
   /// Minimum section duration in seconds. It also sets the analysis scale: the novelty kernel
   /// spans twice this on each side of a boundary, and repetition is matched over runs this long.
-  /// Of the detected boundaries, the subset with the largest total novelty strength whose
-  /// sections all reach this floor is kept, so a boundary between two sections at or above it is
-  /// never removed; only a lone whole-track section may fall below it.
+  /// After downbeat snapping, endpoint-feasible boundaries are considered by decreasing novelty
+  /// strength (ties go to earlier times); a boundary is kept when it leaves this floor between
+  /// itself and every already-kept boundary or track edge, less half a grid column.
   float min_section_sec = 4.0f;
   float boundary_threshold = kSectionBoundaryThreshold;  ///< Boundary detection threshold
   /// Recording tuning offset in fractions of a semitone (estimate_tuning() unit) applied to the
