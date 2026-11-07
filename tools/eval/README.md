@@ -61,11 +61,15 @@ Notes are matched one-to-one by maximum bipartite matching, with onset error at 
 
 This evaluation measures transcription of generated audio. Evaluating a recording against the same score requires a separate alignment: the [Bach Violin Dataset](https://hermandong.com/bach-violin-dataset/alignment.html) uses synthesized scores and CQT-based dynamic time warping. Such an estimated alignment needs checking before it can serve as timing ground truth.
 
+Monophonic recordings with note annotations are measured through `tests/fixtures/music_eval/notes_manifest.tsv` instead, against the annotated notes rather than a generated score. Each row reports three figures under one-to-one matching: `f_onset` checks onset alone, so it reads segmentation (splits and merges) without any pitch term; `f_note` adds pitch within 50 cents and is the figure a row's `min_f_note` floor applies to; `f_note_offset` further requires the offset within the larger of 50 ms and 20% of the annotated note's duration. `note_count_ratio` is the predicted note count over the annotated one, so a value above 1 means over-splitting and a value below 1 means merged or missed notes.
+
 The implicit analysis configurations used by monophonic transcription and auto-tune cap their hop at approximately 11.6 ms, while retaining the existing 512-sample hop at 44.1 kHz and above. Explicit pitch-analysis configurations keep their caller-supplied hop. [Tony's transcription method](https://www.justinsalamon.com/uploads/4/3/9/4/4394963/mauch_tony_tenor_2015.pdf) likewise uses a fixed analysis cadence after resampling; this implementation keeps the existing analysis-window duration and improves only the lower-rate hop.
 
 Monophonic transcription also separates rearticulations inside an existing note using short valleys in its RMS envelope. The envelope window spans two periods at the note's measured pitch. A split requires a deep valley with a rapid fall and recovery, enough distance from the original boundaries, and child notes that satisfy the configured minimum duration. The fall and recovery are measured against their respective local peaks, so a quiet release cannot make a slow amplitude dip appear brief. Each child is measured again from its own pitch frames. This follows the use of amplitude changes for note segmentation in Tony §3.3; the valley-width and boundary checks are specific to this implementation. Regression controls include smooth amplitude modulation and vibrato. A short rearticulation at low pitch can remain merged because the two-period window smooths over its amplitude valley.
 
 Run `./build/bin/sonare_tests "[reattack]"` for repeated-note regressions and controls. These generated signals require no external corpus.
+
+Before extracting monophonic notes, transcription checks for stable pitch estimates at one-half, one-third, or one-quarter of a locally measured fundamental. A short fixed-window YIN analysis proposes a correction; a fractional-period waveform comparison must also show that the shorter period fits at least as well as its integer multiple. This second check protects low notes with a strong second harmonic. Corrections must persist for 30 ms. This pass adds waveform analysis to monophonic transcription; the shared editing provider, public pYIN output, and persisted vocal analysis keep their existing behavior. Run `./build/bin/sonare_tests "[pitch_alias]"` for independent leap melodies and low-fundamental controls.
 
 ## Corpora that can be measured against
 
@@ -82,6 +86,7 @@ Each is obtained separately, under its own terms. The annotations are what matte
 | bpm | Ballroom, GTZAN | tempo annotations accompany the beat ones |
 | meter | Ballroom | one time signature per genre class |
 | structure | Harmonix Set, SALAMI | section boundaries and same-material labels; annotations are open, the audio is not |
+| notes | URMP, Bach10, TONAS | note annotations on monophonic material: URMP's and Bach10's per-instrument tracks, TONAS's a cappella singing; frame-level F0 corpora carry no note boundaries and do not fit this manifest |
 
 ## Running a measurement
 
