@@ -1,0 +1,5 @@
+# dataset	file	annotation	min_f_note	min_f_note_offset
+# Optional extra columns after min_f_note_offset (any order): fmin=80	fmax=1000	report_only	notes
+# Annotation: one "onset_sec<TAB>offset_sec<TAB>pitch_hz" line per note (mir_eval transcription format; spaces also separate fields).
+# Add local fixture rows here. The optional test skips cleanly when no rows
+# with present audio and annotation files are available.

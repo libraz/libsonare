@@ -2,9 +2,11 @@
 /// @brief Optional external BPM/key/meter/beat/downbeat/chord/structure evaluation fixture checks.
 
 #include <algorithm>
+#include <catch2/catch_approx.hpp>
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
 #include <cctype>
+#include <chrono>
 #include <cmath>
 #include <cstdlib>
 #include <filesystem>
@@ -25,6 +27,11 @@
 #include "core/audio.h"
 #include "core/spectrum.h"
 #include "quick.h"
+#ifdef SONARE_WITH_PITCH_EDITOR
+#include "core/audio_io.h"
+#include "editing/note_model/note_transcriber.h"
+#include "support/note_match.h"
+#endif
 
 namespace sonare {
 namespace {
@@ -865,7 +872,266 @@ void report_structure_feature_sets(const Audio& audio, const std::vector<Structu
   }
 }
 
+#ifdef SONARE_WITH_PITCH_EDITOR
+
+using editing::note_model::transcribe_notes;
+using editing::note_model::TranscribeConfig;
+using editing::note_model::TranscribedNote;
+using editing::note_model::TranscribeSource;
+
+/// @brief Reads a mir_eval transcription annotation: "onset_sec offset_sec pitch_hz" per line.
+std::vector<test::EvalNote> read_notes_annotation(const std::filesystem::path& path) {
+  std::ifstream in(path);
+  REQUIRE(in.is_open());
+  std::vector<test::EvalNote> notes;
+  std::string line;
+  size_t line_number = 0;
+  while (std::getline(in, line)) {
+    ++line_number;
+    const size_t first = line.find_first_not_of(" \t\r");
+    if (first == std::string::npos || line[first] == '#') continue;
+    std::istringstream fields(line);
+    double onset = 0.0;
+    double offset = 0.0;
+    double hz = 0.0;
+    INFO("Notes annotation " << path.string() << ":" << line_number);
+    REQUIRE((fields >> onset >> offset >> hz));
+    REQUIRE(std::isfinite(onset));
+    REQUIRE(std::isfinite(offset));
+    REQUIRE(onset < offset);
+    REQUIRE(std::isfinite(hz));
+    REQUIRE(hz > 0.0);
+    notes.push_back({onset, offset, test::midi_from_hz(hz)});
+  }
+  return notes;
+}
+
+struct NotesRowResult {
+  double f_note = 0.0;
+  double f_note_offset = 0.0;
+  double f_onset = 0.0;
+  size_t truth_count = 0;
+  size_t predicted_count = 0;
+};
+
+/// @brief Transcribes a manifest row's audio (monophonic) and scores it against its annotation.
+NotesRowResult evaluate_notes_row(const std::filesystem::path& root,
+                                  const std::vector<std::string>& row) {
+  REQUIRE(row.size() >= 5);
+  const Audio audio = Audio::from_file((root / row[1]).string());
+  const std::vector<test::EvalNote> truth = read_notes_annotation(root / row[2]);
+  REQUIRE_FALSE(truth.empty());
+
+  TranscribeConfig config;
+  config.source = TranscribeSource::kMonophonic;
+  float fmin = 0.0f;
+  float fmax = 0.0f;
+  if (parse_optional_float_token(row, 5, "fmin=", fmin)) config.fmin = fmin;
+  if (parse_optional_float_token(row, 5, "fmax=", fmax)) config.fmax = fmax;
+  const std::vector<TranscribedNote> transcribed = transcribe_notes(audio, config);
+
+  const double sample_rate = static_cast<double>(audio.sample_rate());
+  std::vector<test::EvalNote> estimates;
+  estimates.reserve(transcribed.size());
+  for (const TranscribedNote& note : transcribed) {
+    REQUIRE(note.median_hz > 0.0f);
+    estimates.push_back({static_cast<double>(note.onset_sample) / sample_rate,
+                         static_cast<double>(note.offset_sample) / sample_rate,
+                         test::midi_from_hz(note.median_hz)});
+  }
+
+  test::NoteMatchCriteria onset_only;
+  onset_only.pitch_tolerance_cents = std::numeric_limits<double>::infinity();
+  test::NoteMatchCriteria with_pitch;
+  test::NoteMatchCriteria with_offset;
+  with_offset.match_offset = true;
+
+  NotesRowResult result;
+  result.f_onset = test::match_notes(truth, estimates, onset_only).f_measure();
+  result.f_note = test::match_notes(truth, estimates, with_pitch).f_measure();
+  result.f_note_offset = test::match_notes(truth, estimates, with_offset).f_measure();
+  result.truth_count = truth.size();
+  result.predicted_count = estimates.size();
+  return result;
+}
+
+std::string notes_report_line(const std::vector<std::string>& row, const NotesRowResult& result) {
+  std::ostringstream line;
+  line << "Report-only notes fixture " << row[0] << "/" << row[1] << " F-measure_note "
+       << result.f_note << "; F-measure_note_offset " << result.f_note_offset
+       << "; F-measure_onset " << result.f_onset << "; truth " << result.truth_count
+       << "; predicted " << result.predicted_count << "; min_f_note " << row[3]
+       << "; min_f_note_offset " << row[4];
+  return line.str();
+}
+
+#endif  // SONARE_WITH_PITCH_EDITOR
+
 }  // namespace
+
+#ifdef SONARE_WITH_PITCH_EDITOR
+
+TEST_CASE("Music optional note transcription fixtures", "[music_dataset][notes]") {
+  const std::filesystem::path root = fixture_root();
+  const auto rows = read_rows(root / "notes_manifest.tsv");
+  if (rows.empty()) SKIP("No notes fixture rows are configured");
+
+  size_t checked = 0;
+  for (const auto& row : rows) {
+    if (row.size() < 5) continue;
+    if (!std::filesystem::exists(root / row[1]) || !std::filesystem::exists(root / row[2])) {
+      continue;
+    }
+
+    INFO("Notes fixture: " << row[0] << " / " << row[1]);
+    const NotesRowResult result = evaluate_notes_row(root, row);
+    if (is_report_only(row, 5)) {
+      WARN(notes_report_line(row, result));
+    } else {
+      REQUIRE(result.f_note >= std::stod(row[3]));
+      REQUIRE(result.f_note_offset >= std::stod(row[4]));
+    }
+    ++checked;
+  }
+  if (checked == 0) SKIP("No notes audio/annotation fixtures are present");
+}
+
+TEST_CASE("Notes fixture row evaluation end to end", "[music_dataset_parsing][notes]") {
+  constexpr int kSampleRate = 22050;
+  constexpr double kLeadSeconds = 0.2;
+  constexpr double kNoteSeconds = 0.4;
+  constexpr double kGapSeconds = 0.1;
+  constexpr double kFadeSeconds = 0.01;
+  const double frequencies[] = {220.0, 261.6255653005986, 329.6275569128699};
+
+  const std::filesystem::path dir =
+      std::filesystem::temp_directory_path() /
+      ("sonare_notes_fixture_" +
+       std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()));
+  std::filesystem::create_directories(dir);
+
+  const double total_seconds = kLeadSeconds * 2 + kNoteSeconds * 3 + kGapSeconds * 2;
+  std::vector<float> samples(static_cast<size_t>(total_seconds * kSampleRate), 0.0f);
+  std::ostringstream annotation;
+  annotation << "# onset_sec offset_sec pitch_hz\n\n";
+  for (size_t i = 0; i < 3; ++i) {
+    const double onset = kLeadSeconds + static_cast<double>(i) * (kNoteSeconds + kGapSeconds);
+    const size_t first = static_cast<size_t>(std::llround(onset * kSampleRate));
+    const size_t count = static_cast<size_t>(std::llround(kNoteSeconds * kSampleRate));
+    const double fade_samples = kFadeSeconds * kSampleRate;
+    for (size_t n = 0; n < count; ++n) {
+      const double envelope = std::min({1.0, static_cast<double>(n) / fade_samples,
+                                        static_cast<double>(count - n) / fade_samples});
+      samples[first + n] = static_cast<float>(
+          0.5 * envelope * std::sin(constants::kTwoPiD * frequencies[i] * n / kSampleRate));
+    }
+    annotation << onset << '\t' << onset + kNoteSeconds << '\t' << frequencies[i] << '\n';
+  }
+  save_wav((dir / "notes.wav").string(), samples, kSampleRate);
+  {
+    std::ofstream out(dir / "notes.txt");
+    out << annotation.str();
+  }
+  {
+    std::ofstream out(dir / "notes_manifest.tsv");
+    out << "# dataset\tfile\tannotation\tmin_f_note\tmin_f_note_offset\n"
+        << "synthetic\tnotes.wav\tnotes.txt\t0.9\t0.5\treport_only\n";
+  }
+
+  const auto rows = read_rows(dir / "notes_manifest.tsv");
+  REQUIRE(rows.size() == 1);
+  const NotesRowResult result = evaluate_notes_row(dir, rows[0]);
+  const std::string line = notes_report_line(rows[0], result);
+  std::filesystem::remove_all(dir);
+
+  INFO(line);
+  CHECK(result.truth_count == 3);
+  CHECK(result.predicted_count == 3);
+  CHECK(result.f_note == 1.0);
+  CHECK(line.find("; truth 3; predicted 3; min_f_note 0.9; min_f_note_offset 0.5") !=
+        std::string::npos);
+}
+
+TEST_CASE("Note matching", "[note_match]") {
+  using test::EvalNote;
+  using test::match_notes;
+  using test::NoteMatchCriteria;
+  const NoteMatchCriteria defaults;
+
+  SECTION("one-to-one: two estimates on one reference give one match") {
+    const auto counts =
+        match_notes({{1.0, 1.5, 60.0}}, {{1.0, 1.5, 60.0}, {1.01, 1.5, 60.0}}, defaults);
+    CHECK(counts.true_positive == 1);
+    CHECK(counts.false_positive == 1);
+    CHECK(counts.false_negative == 0);
+  }
+
+  SECTION("augmenting paths reassign an estimate that a greedy pass would take") {
+    const auto counts = match_notes({{0.0, 0.5, 60.0}, {0.04, 0.5, 60.0}},
+                                    {{0.02, 0.5, 60.0}, {-0.02, 0.5, 60.0}}, defaults);
+    CHECK(counts.true_positive == 2);
+  }
+
+  SECTION("onset tolerance") {
+    CHECK(match_notes({{1.0, 1.5, 60.0}}, {{1.045, 1.5, 60.0}}, defaults).true_positive == 1);
+    CHECK(match_notes({{1.0, 1.5, 60.0}}, {{1.055, 1.5, 60.0}}, defaults).true_positive == 0);
+    CHECK(match_notes({{1.0, 1.5, 60.0}}, {{0.945, 1.5, 60.0}}, defaults).true_positive == 0);
+  }
+
+  SECTION("pitch tolerance") {
+    CHECK(match_notes({{1.0, 1.5, 60.0}}, {{1.0, 1.5, 60.49}}, defaults).true_positive == 1);
+    CHECK(match_notes({{1.0, 1.5, 60.0}}, {{1.0, 1.5, 60.51}}, defaults).true_positive == 0);
+    CHECK(match_notes({{1.0, 1.5, 60.0}}, {{1.0, 1.5, 59.51}}, defaults).true_positive == 1);
+  }
+
+  SECTION("offset tolerance scales with reference length") {
+    NoteMatchCriteria with_offset;
+    with_offset.match_offset = true;
+    // 1 s reference: tolerance 0.2 s.
+    CHECK(match_notes({{0.0, 1.0, 60.0}}, {{0.0, 1.19, 60.0}}, with_offset).true_positive == 1);
+    CHECK(match_notes({{0.0, 1.0, 60.0}}, {{0.0, 1.21, 60.0}}, with_offset).true_positive == 0);
+    // 0.1 s reference: tolerance floors at 50 ms.
+    CHECK(match_notes({{0.0, 0.1, 60.0}}, {{0.0, 0.145, 60.0}}, with_offset).true_positive == 1);
+    CHECK(match_notes({{0.0, 0.1, 60.0}}, {{0.0, 0.155, 60.0}}, with_offset).true_positive == 0);
+    // Offset is ignored unless asked for.
+    CHECK(match_notes({{0.0, 1.0, 60.0}}, {{0.0, 3.0, 60.0}}, defaults).true_positive == 1);
+  }
+
+  SECTION("infinite pitch tolerance ignores pitch") {
+    NoteMatchCriteria onset_only;
+    onset_only.pitch_tolerance_cents = std::numeric_limits<double>::infinity();
+    CHECK(match_notes({{1.0, 1.5, 60.0}}, {{1.0, 1.5, 72.0}}, onset_only).true_positive == 1);
+    CHECK(match_notes({{1.0, 1.5, 60.0}}, {{1.0, 1.5, 72.0}}, defaults).true_positive == 0);
+  }
+
+  SECTION("empty input scores zero") {
+    const auto none = match_notes({}, {}, defaults);
+    CHECK(none.precision() == 0.0);
+    CHECK(none.recall() == 0.0);
+    CHECK(none.f_measure() == 0.0);
+    CHECK(match_notes({{0.0, 1.0, 60.0}}, {}, defaults).f_measure() == 0.0);
+    CHECK(match_notes({}, {{0.0, 1.0, 60.0}}, defaults).f_measure() == 0.0);
+  }
+
+  SECTION("integer pitches with offset off score as a semitone-exact onset matcher") {
+    const std::vector<EvalNote> truth = {{0.0, 0.4, 60.0}, {0.5, 0.9, 62.0}, {1.0, 1.4, 64.0}};
+    const std::vector<EvalNote> estimates = {
+        {0.01, 0.3, 60.0}, {0.52, 0.9, 63.0}, {1.04, 2.0, 64.0}, {1.5, 1.9, 60.0}};
+    const auto counts = match_notes(truth, estimates, defaults);
+    CHECK(counts.true_positive == 2);
+    CHECK(counts.false_positive == 2);
+    CHECK(counts.false_negative == 1);
+    CHECK(counts.precision() == Catch::Approx(0.5));
+    CHECK(counts.recall() == Catch::Approx(2.0 / 3.0));
+  }
+
+  SECTION("midi_from_hz") {
+    CHECK(test::midi_from_hz(440.0) == Catch::Approx(69.0));
+    CHECK(test::midi_from_hz(880.0) == Catch::Approx(81.0));
+  }
+}
+
+#endif  // SONARE_WITH_PITCH_EDITOR
 
 TEST_CASE("Music optional BPM fixtures", "[music_dataset][bpm]") {
   const std::filesystem::path root = fixture_root();
