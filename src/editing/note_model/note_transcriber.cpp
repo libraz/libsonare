@@ -2,11 +2,16 @@
 
 #include <algorithm>
 #include <cmath>
+#include <complex>
 #include <cstddef>
+#include <cstdint>
 #include <functional>
+#include <limits>
+#include <memory>
 #include <utility>
 #include <vector>
 
+#include "core/fft.h"
 #include "editing/note_model/note_extractor.h"
 #include "editing/pitch_editor/f0_provider.h"
 #include "editing/pitch_editor/note_segmenter.h"
@@ -16,6 +21,7 @@
 #include "feature/pitch.h"
 #include "util/constants.h"
 #include "util/exception.h"
+#include "util/math_utils.h"
 
 namespace sonare::editing::note_model {
 
@@ -72,6 +78,15 @@ constexpr double kReattackValleyRatio = 0.5;
 constexpr double kReattackLowRmsRatio = 0.7;
 constexpr double kReattackMaximumValleyWidthMs = 15.0;
 constexpr double kReattackCrestFloor = 1.0e-6;
+constexpr double kAliasWindowPeriodMargin = 1.04;
+constexpr float kAliasCmnfThreshold = 0.1f;
+constexpr int kAliasMinimumMultiple = 2;
+constexpr int kAliasMaximumMultiple = 4;
+constexpr double kAliasMaximumCents = 50.0;
+constexpr double kAliasResidualEnergyRatio = 1.0e-5;
+// Keep an alias candidate stable for at least the segmenter's default minimum
+// note duration before it changes the contour.
+constexpr double kAliasMinimumStableMs = pitch_editor::NoteSegmenterConfig{}.min_note_ms;
 
 /// Length of a 1/@p division note at @p tempo_bpm, in milliseconds.
 float note_value_ms(int division, float tempo_bpm) noexcept {
@@ -427,14 +442,208 @@ std::vector<NoteObject> split_monophonic_reattacks(const Audio& audio,
   return result;
 }
 
+void repair_monophonic_pitch_aliases(const Audio& audio, pitch_editor::F0Track& track,
+                                     const PitchConfig& config) {
+  const int sample_rate = audio.sample_rate();
+  if (audio.empty() || sample_rate <= 0 || track.hop_length <= 0 || track.sample_rate <= 0 ||
+      config.fmax <= 0.0f || !std::isfinite(config.fmax) || config.fmin <= 0.0f ||
+      !std::isfinite(config.fmin) || track.voiced.size() < track.f0_hz.size() ||
+      audio.size() > static_cast<size_t>(std::numeric_limits<int64_t>::max())) {
+    return;
+  }
+
+  const float* const samples = audio.data();
+  const int64_t audio_size = static_cast<int64_t>(audio.size());
+  const size_t frame_count = track.f0_hz.size();
+  std::vector<float> proposed(frame_count, 0.0f);
+  std::vector<float> difference;
+  std::vector<float> cmndf;
+  std::unique_ptr<FFT> fft;
+  std::vector<float> reference;
+  std::vector<float> comparison;
+  std::vector<float> correlation;
+  std::vector<std::complex<float>> reference_spectrum;
+  std::vector<std::complex<float>> comparison_spectrum;
+  std::vector<double> squared_prefix;
+
+  for (size_t frame = 0; frame < frame_count; ++frame) {
+    const float current_hz = track.f0_hz[frame];
+    if (!track.voiced[frame] || !std::isfinite(current_hz) || current_hz <= 0.0f) continue;
+
+    const double current_period = static_cast<double>(sample_rate) / current_hz;
+    const double max_lag_exact = std::ceil(current_period * kAliasWindowPeriodMargin);
+    if (!std::isfinite(max_lag_exact) || max_lag_exact < 2.0 ||
+        max_lag_exact > static_cast<double>(std::numeric_limits<int>::max() / 3)) {
+      continue;
+    }
+    const int max_lag = static_cast<int>(max_lag_exact);
+    const int window_length = 2 * max_lag;
+    const int sample_span = window_length + max_lag;
+    if (frame > static_cast<size_t>(std::numeric_limits<int64_t>::max() / track.hop_length))
+      continue;
+    const int64_t frame_center = static_cast<int64_t>(frame) * track.hop_length;
+    const int64_t window_begin = frame_center - sample_span / 2;
+    if (window_begin < 0 || window_begin > audio_size || sample_span > audio_size - window_begin) {
+      continue;
+    }
+
+    // d(lag) = E(window) + E(window shifted by lag) - 2 r(lag); r via one FFT correlation.
+    const int n_fft = next_power_of_2(window_length + sample_span - 1);
+    if (!fft || fft->n_fft() != n_fft) {
+      fft = std::make_unique<FFT>(n_fft);
+      reference.assign(static_cast<size_t>(n_fft), 0.0f);
+      comparison.assign(static_cast<size_t>(n_fft), 0.0f);
+      correlation.assign(static_cast<size_t>(n_fft), 0.0f);
+      reference_spectrum.assign(static_cast<size_t>(fft->n_bins()), {});
+      comparison_spectrum.assign(static_cast<size_t>(fft->n_bins()), {});
+    } else {
+      std::fill(reference.begin(), reference.end(), 0.0f);
+      std::fill(comparison.begin(), comparison.end(), 0.0f);
+    }
+    const float* const span = samples + window_begin;
+    for (int offset = 0; offset < window_length; ++offset) {
+      reference[static_cast<size_t>(window_length - 1 - offset)] = span[offset];
+    }
+    std::copy(span, span + sample_span, comparison.begin());
+    fft->forward(reference.data(), reference_spectrum.data());
+    fft->forward(comparison.data(), comparison_spectrum.data());
+    for (size_t bin = 0; bin < reference_spectrum.size(); ++bin) {
+      reference_spectrum[bin] *= comparison_spectrum[bin];
+    }
+    fft->inverse(reference_spectrum.data(), correlation.data());
+
+    squared_prefix.assign(static_cast<size_t>(sample_span) + 1, 0.0);
+    for (int offset = 0; offset < sample_span; ++offset) {
+      const double value = span[offset];
+      squared_prefix[static_cast<size_t>(offset) + 1] =
+          squared_prefix[static_cast<size_t>(offset)] + value * value;
+    }
+    const double window_energy = squared_prefix[static_cast<size_t>(window_length)];
+    difference.assign(static_cast<size_t>(max_lag) + 1, 0.0f);
+    for (int lag = 1; lag <= max_lag; ++lag) {
+      const double shifted_energy = squared_prefix[static_cast<size_t>(lag + window_length)] -
+                                    squared_prefix[static_cast<size_t>(lag)];
+      const double cross = correlation[static_cast<size_t>(window_length - 1 + lag)];
+      const double value = window_energy + shifted_energy - 2.0 * cross;
+      difference[static_cast<size_t>(lag)] = value <= 0.0 ? 0.0f : static_cast<float>(value);
+    }
+    yin_cmndf_into(difference, cmndf);
+
+    const double minimum_period_exact =
+        std::floor(static_cast<double>(sample_rate) / static_cast<double>(config.fmax));
+    if (!std::isfinite(minimum_period_exact) ||
+        minimum_period_exact > static_cast<double>(std::numeric_limits<int>::max())) {
+      continue;
+    }
+    const int minimum_period = std::max(2, static_cast<int>(minimum_period_exact));
+    bool has_first_trough = false;
+    const float candidate_period =
+        yin_find_pitch(cmndf, kAliasCmnfThreshold, minimum_period, max_lag, &has_first_trough);
+    if (!has_first_trough || !std::isfinite(candidate_period) || candidate_period <= 0.0f) {
+      continue;
+    }
+
+    const double candidate_hz = static_cast<double>(sample_rate) / candidate_period;
+    if (!std::isfinite(candidate_hz) || candidate_hz < config.fmin || candidate_hz > config.fmax) {
+      continue;
+    }
+    const double candidate_multiple = candidate_hz / current_hz;
+    if (!std::isfinite(candidate_multiple) || candidate_multiple < 1.5 ||
+        candidate_multiple >= static_cast<double>(kAliasMaximumMultiple) + 0.5) {
+      continue;
+    }
+    const int multiple = static_cast<int>(std::llround(candidate_multiple));
+    if (multiple < kAliasMinimumMultiple || multiple > kAliasMaximumMultiple) continue;
+    const double cents_error =
+        std::abs(constants::kCentsPerOctave * std::log2(candidate_hz / (multiple * current_hz)));
+    if (!std::isfinite(cents_error) || cents_error > kAliasMaximumCents) continue;
+
+    const double base_period = static_cast<double>(candidate_period) * multiple;
+    auto fractional_difference = [&](double period, double& squared_error) {
+      if (!std::isfinite(period) || period < 1.0 || period >= max_lag + 1.0) return false;
+      const double integer_part_exact = std::floor(period);
+      if (integer_part_exact < 1.0 || integer_part_exact > max_lag) return false;
+      const int integer_part = static_cast<int>(integer_part_exact);
+      const double fractional_part = period - integer_part;
+      squared_error = 0.0;
+      for (int offset = 1; offset < window_length - 2; ++offset) {
+        const int64_t source_index = window_begin + offset;
+        const int64_t delayed_index = source_index + integer_part;
+        if (source_index < 1 || delayed_index < 1 || delayed_index > audio_size - 3) {
+          return false;
+        }
+        const size_t source = static_cast<size_t>(source_index);
+        const size_t delayed = static_cast<size_t>(delayed_index);
+        const double a = samples[delayed - 1];
+        const double b = samples[delayed];
+        const double c = samples[delayed + 1];
+        const double d = samples[delayed + 2];
+        const double interpolated =
+            b + 0.5 * fractional_part *
+                    (c - a +
+                     fractional_part * (2.0 * a - 5.0 * b + 4.0 * c - d +
+                                        fractional_part * (3.0 * (b - c) + d - a)));
+        const double delta = static_cast<double>(samples[source]) - interpolated;
+        squared_error += delta * delta;
+      }
+      return true;
+    };
+
+    double window_mean = 0.0;
+    for (int offset = 0; offset < window_length; ++offset) {
+      window_mean += samples[static_cast<size_t>(window_begin + offset)];
+    }
+    window_mean /= window_length;
+    double centered_energy = 0.0;
+    for (int offset = 0; offset < window_length; ++offset) {
+      const double centered =
+          static_cast<double>(samples[static_cast<size_t>(window_begin + offset)]) - window_mean;
+      centered_energy += centered * centered;
+    }
+
+    double short_period_error = 0.0;
+    double base_period_error = 0.0;
+    if (!(centered_energy > 0.0) || !std::isfinite(centered_energy) ||
+        !fractional_difference(candidate_period, short_period_error) ||
+        !fractional_difference(base_period, base_period_error) ||
+        short_period_error > base_period_error + kAliasResidualEnergyRatio * centered_energy) {
+      continue;
+    }
+    proposed[frame] = static_cast<float>(candidate_hz);
+  }
+
+  const double frame_duration_ms = static_cast<double>(track.hop_length) * 1000.0 / sample_rate;
+  if (!std::isfinite(frame_duration_ms) || frame_duration_ms <= 0.0) return;
+  for (size_t start = 0; start < proposed.size();) {
+    if (!(proposed[start] > 0.0f)) {
+      ++start;
+      continue;
+    }
+    size_t end = start + 1;
+    while (end < proposed.size() && proposed[end] > 0.0f) {
+      const double stable_cents =
+          std::abs(constants::kCentsPerOctave *
+                   std::log2(static_cast<double>(proposed[end]) / proposed[start]));
+      if (!std::isfinite(stable_cents) || stable_cents > kAliasMaximumCents) break;
+      ++end;
+    }
+    const double stable_duration_ms = static_cast<double>(end - start) * frame_duration_ms;
+    if (stable_duration_ms >= kAliasMinimumStableMs) {
+      for (size_t frame = start; frame < end; ++frame) track.f0_hz[frame] = proposed[frame];
+    }
+    start = end;
+  }
+}
+
 std::vector<NoteObject> monophonic_notes(const Audio& audio, const TranscribeConfig& config) {
   PitchConfig pitch_config = pitch_editor::default_editing_pitch_config(audio.sample_rate());
   pitch_config.fmin = config.fmin;
   pitch_config.fmax = config.fmax;
   pitch_config.center = true;
   pitch_editor::PyinF0Provider provider(pitch_config);
-  const pitch_editor::F0Track track = provider.detect(audio);
+  pitch_editor::F0Track track = provider.detect(audio);
   if (track.n_frames() == 0) return {};
+  repair_monophonic_pitch_aliases(audio, track, pitch_config);
 
   NoteExtractorConfig extractor;
   extractor.segmenter.segmentation_threshold_cents = config.segmentation_threshold_cents;

@@ -152,6 +152,73 @@ RateSequence fast_arpeggio(int sample_rate) {
   return sequence;
 }
 
+/// A contiguous leap phrase that exposes pYIN octave errors after abrupt pitch
+/// changes without changing the known note onsets.
+RateSequence alias_arpeggio(int sample_rate) {
+  constexpr double kLeadSeconds = 0.2;
+  constexpr double kToneSeconds = 0.125;
+  constexpr double kAttackSeconds = 0.004;
+  constexpr double kReleaseSeconds = 0.008;
+  const std::vector<int> intended{57, 62, 67, 69, 71, 67, 74, 67, 76, 67, 77, 67};
+  RateSequence sequence;
+  sequence.notes = intended;
+  sequence.samples.resize(
+      static_cast<size_t>(std::llround((0.4 + intended.size() * kToneSeconds) * sample_rate)),
+      0.0f);
+  for (size_t index = 0; index < intended.size(); ++index) {
+    const int64_t start =
+        static_cast<int64_t>(std::llround((kLeadSeconds + index * kToneSeconds) * sample_rate));
+    const int64_t end = static_cast<int64_t>(
+        std::llround((kLeadSeconds + (index + 1) * kToneSeconds) * sample_rate));
+    sequence.onsets.push_back(start);
+    const double fundamental_hz = hz_for_midi(intended[index]);
+    double phase = 0.0;
+    for (int64_t sample = start; sample < end; ++sample) {
+      const double t = static_cast<double>(sample - start) / sample_rate;
+      const double envelope =
+          std::min({1.0, t / kAttackSeconds,
+                    (static_cast<double>(end - sample) / sample_rate) / kReleaseSeconds});
+      phase += sonare::constants::kTwoPiD * fundamental_hz / sample_rate;
+      double value = 0.0;
+      for (int harmonic = 1; harmonic <= 5; ++harmonic) {
+        value += std::sin(harmonic * phase) / harmonic;
+      }
+      sequence.samples[static_cast<size_t>(sample)] = static_cast<float>(0.18 * envelope * value);
+    }
+  }
+  return sequence;
+}
+
+sonare::Audio low_fundamental_harmonic_tone(int sample_rate, double fundamental_gain,
+                                            double second_harmonic_gain,
+                                            double third_harmonic_gain = 0.0) {
+  constexpr double kLeadSeconds = 0.2;
+  constexpr double kHeldSeconds = 1.6;
+  constexpr double kTailSeconds = 0.2;
+  constexpr double kAttackSeconds = 0.004;
+  constexpr double kReleaseSeconds = 0.008;
+  const int64_t start = static_cast<int64_t>(std::llround(kLeadSeconds * sample_rate));
+  const int64_t end =
+      static_cast<int64_t>(std::llround((kLeadSeconds + kHeldSeconds) * sample_rate));
+  const int64_t total = static_cast<int64_t>(
+      std::llround((kLeadSeconds + kHeldSeconds + kTailSeconds) * sample_rate));
+  std::vector<float> samples(static_cast<size_t>(total), 0.0f);
+  const double fundamental_hz = hz_for_midi(45);
+  double phase = 0.0;
+  for (int64_t sample = start; sample < end; ++sample) {
+    const double t = static_cast<double>(sample - start) / sample_rate;
+    const double envelope =
+        std::min({1.0, t / kAttackSeconds,
+                  (static_cast<double>(end - sample) / sample_rate) / kReleaseSeconds});
+    phase += sonare::constants::kTwoPiD * fundamental_hz / sample_rate;
+    const double value = fundamental_gain * std::sin(phase) +
+                         second_harmonic_gain * std::sin(2.0 * phase) +
+                         third_harmonic_gain * std::sin(3.0 * phase);
+    samples[static_cast<size_t>(sample)] = static_cast<float>(0.18 * envelope * value);
+  }
+  return sonare::Audio::from_buffer(samples.data(), samples.size(), sample_rate);
+}
+
 RateSequence repeated_harmonic_tone(int sample_rate, int midi_note,
                                     const std::vector<float>& gains) {
   constexpr double kLeadSeconds = 0.2;
@@ -460,6 +527,58 @@ TEST_CASE("default monophonic transcription follows a fast arpeggio across input
               static_cast<int64_t>(std::llround(0.050 * sample_rate)));
       }
     }
+  }
+}
+
+TEST_CASE("monophonic transcription repairs octave aliases without raising true low notes",
+          "[note_transcriber][pitch_alias]") {
+  constexpr int64_t kOnsetToleranceMs = 50;
+  for (const int sample_rate : {16000, 22050, 44100, 48000}) {
+    const RateSequence sequence = alias_arpeggio(sample_rate);
+    const std::vector<TranscribedNote> notes = transcribe_notes(sequence.audio(sample_rate));
+    INFO("fast leap phrase at " << sample_rate << " Hz; detected " << notes.size() << " notes");
+    REQUIRE(notes.size() == sequence.notes.size());
+    CHECK(note_numbers(notes) == sequence.notes);
+    for (size_t i = 0; i < notes.size(); ++i) {
+      INFO("sample rate " << sample_rate << ", note " << i << ", actual onset "
+                          << notes[i].onset_sample << ", intended " << sequence.onsets[i]);
+      CHECK(std::llabs(notes[i].onset_sample - sequence.onsets[i]) * 1000 <=
+            kOnsetToleranceMs * sample_rate);
+    }
+  }
+
+  for (const int sample_rate : {16000, 22050, 44100, 48000}) {
+    const std::vector<TranscribedNote> notes =
+        transcribe_notes(low_fundamental_harmonic_tone(sample_rate, 0.20, 1.0));
+    INFO("110 Hz fundamental with stronger second harmonic at " << sample_rate << " Hz");
+    REQUIRE(notes.size() == 1);
+    CHECK(notes.front().note == 45);
+  }
+
+  SECTION("a missing fundamental and a dominant third harmonic remain low") {
+    const std::vector<TranscribedNote> missing_fundamental =
+        transcribe_notes(low_fundamental_harmonic_tone(22050, 0.0, 1.0, 0.5));
+    REQUIRE(missing_fundamental.size() == 1);
+    CHECK(missing_fundamental.front().note == 45);
+
+    const std::vector<TranscribedNote> dominant_third =
+        transcribe_notes(low_fundamental_harmonic_tone(22050, 0.4, 0.0, 1.0));
+    REQUIRE(dominant_third.size() == 1);
+    CHECK(dominant_third.front().note == 45);
+  }
+
+  for (const int sample_rate : {16000, 22050, 44100, 48000}) {
+    const std::vector<TranscribedNote> amplitude_modulated =
+        transcribe_notes(modulated_harmonic_tone(sample_rate, 45, 8.0, 0.95));
+    INFO("110 Hz amplitude modulation at " << sample_rate << " Hz");
+    REQUIRE(amplitude_modulated.size() == 1);
+    CHECK(amplitude_modulated.front().note == 45);
+
+    const std::vector<TranscribedNote> vibrato =
+        transcribe_notes(modulated_harmonic_tone(sample_rate, 45, 0.0, 0.0, 6.0, 50.0));
+    INFO("110 Hz 50-cent vibrato at " << sample_rate << " Hz");
+    REQUIRE(vibrato.size() == 1);
+    CHECK(vibrato.front().note == 45);
   }
 }
 
