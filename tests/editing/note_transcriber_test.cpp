@@ -32,6 +32,7 @@
 #include "editing/pitch_editor/f0_provider.h"
 #include "editing/polyphony/f0_salience.h"
 #include "feature/pitch.h"
+#include "support/note_match.h"
 #include "util/constants.h"
 #include "util/exception.h"
 #include "util/json_reader.h"
@@ -397,46 +398,25 @@ sonare::Audio render_bach_excerpt(const std::vector<BachReferenceNote>& notes, i
   return sonare::Audio::from_buffer(samples.data(), samples.size(), sample_rate);
 }
 
-struct MatchScore {
-  size_t true_positive = 0;
-  size_t false_positive = 0;
-  size_t false_negative = 0;
-};
-
-MatchScore score_bach_notes(const std::vector<BachReferenceNote>& truth,
-                            const std::vector<TranscribedNote>& estimates, int sample_rate) {
-  constexpr double kOnsetToleranceSeconds = 0.050;
-  constexpr int kPitchToleranceCents = 50;
-  std::vector<int> estimate_to_truth(estimates.size(), -1);
-  const auto augment = [&](auto&& self, size_t truth_index, std::vector<bool>& visited) -> bool {
-    for (size_t estimate_index = 0; estimate_index < estimates.size(); ++estimate_index) {
-      if (visited[estimate_index]) continue;
-      const double onset_error =
-          std::abs(static_cast<double>(estimates[estimate_index].onset_sample -
-                                       truth[truth_index].onset_sample) /
-                   sample_rate);
-      const int pitch_error_cents =
-          100 *
-          std::abs(static_cast<int>(estimates[estimate_index].note) - truth[truth_index].pitch);
-      if (onset_error > kOnsetToleranceSeconds || pitch_error_cents > kPitchToleranceCents)
-        continue;
-      visited[estimate_index] = true;
-      if (estimate_to_truth[estimate_index] < 0 ||
-          self(self, static_cast<size_t>(estimate_to_truth[estimate_index]), visited)) {
-        estimate_to_truth[estimate_index] = static_cast<int>(truth_index);
-        return true;
-      }
-    }
-    return false;
-  };
-  MatchScore score;
-  for (size_t truth_index = 0; truth_index < truth.size(); ++truth_index) {
-    std::vector<bool> visited(estimates.size(), false);
-    if (augment(augment, truth_index, visited)) ++score.true_positive;
+sonare::test::NoteMatchCounts score_bach_notes(const std::vector<BachReferenceNote>& truth,
+                                               const std::vector<TranscribedNote>& estimates,
+                                               int sample_rate) {
+  std::vector<sonare::test::EvalNote> reference;
+  reference.reserve(truth.size());
+  for (const BachReferenceNote& note : truth) {
+    reference.push_back({static_cast<double>(note.onset_sample) / sample_rate,
+                         static_cast<double>(note.offset_sample) / sample_rate,
+                         static_cast<double>(note.pitch)});
   }
-  score.false_positive = estimates.size() - score.true_positive;
-  score.false_negative = truth.size() - score.true_positive;
-  return score;
+  // Integer note numbers on both sides, so the 50-cent criterion requires the same MIDI note.
+  std::vector<sonare::test::EvalNote> estimated;
+  estimated.reserve(estimates.size());
+  for (const TranscribedNote& note : estimates) {
+    estimated.push_back({static_cast<double>(note.onset_sample) / sample_rate,
+                         static_cast<double>(note.offset_sample) / sample_rate,
+                         static_cast<double>(note.note)});
+  }
+  return sonare::test::match_notes(reference, estimated, sonare::test::NoteMatchCriteria{});
 }
 
 /// @brief The note numbers, as ints so a failed comparison prints numbers.
@@ -1536,7 +1516,7 @@ TEST_CASE("Bach score transcription evaluation", "[.][bach_transcribe_eval]") {
       const std::vector<TranscribedNote> estimates = transcribe_notes(audio, config);
       const auto stop = std::chrono::steady_clock::now();
       const double wall_ms = std::chrono::duration<double, std::milli>(stop - start).count();
-      const MatchScore match = score_bach_notes(truth, estimates, sample_rate);
+      const sonare::test::NoteMatchCounts match = score_bach_notes(truth, estimates, sample_rate);
       const double precision =
           estimates.empty() ? 0.0 : static_cast<double>(match.true_positive) / estimates.size();
       const double recall = static_cast<double>(match.true_positive) / truth.size();
