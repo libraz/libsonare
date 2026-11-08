@@ -1755,10 +1755,12 @@ TEST_CASE("the singing model follows fast and contiguous pitch changes",
     check_onsets(notes, sequence.onsets, sample_rate);
   }
 
-  const std::vector<TranscribedNote> glide =
-      transcribe_notes(gliding_harmonic_tone(22050), singing);
-  INFO("300-cent glide produced " << glide.size() << " notes");
-  CHECK(glide.size() == 3);
+  for (const int sample_rate : {22050, 48000, 96000}) {
+    const std::vector<TranscribedNote> glide =
+        transcribe_notes(gliding_harmonic_tone(sample_rate), singing);
+    INFO("300-cent glide at " << sample_rate << " Hz produced " << glide.size() << " notes");
+    CHECK(glide.size() == 3);
+  }
 
   for (const std::vector<int>& intended :
        {std::vector<int>{69, 70}, std::vector<int>{69, 70, 69, 70, 69, 70, 69, 70}}) {
@@ -1858,6 +1860,9 @@ TEST_CASE("Bach score transcription evaluation", "[.][bach_transcribe_eval]") {
 
   std::string directory(reference_dir);
   if (directory.back() != '/') directory.push_back('/');
+  const char* model_name = std::getenv("SONARE_BACH_MONOPHONIC_MODEL");
+  const std::string model = model_name != nullptr ? model_name : "segments";
+  REQUIRE((model == "segments" || model == "singing"));
   const std::vector<BachExcerpt> excerpts{{"BWV1001_4", 0.0, 16.0, 96},
                                           {"BWV1006_1", 320.0, 336.0, 120},
                                           {"BWV1007_1", 36.0, 52.0, 120},
@@ -1873,6 +1878,7 @@ TEST_CASE("Bach score transcription evaluation", "[.][bach_transcribe_eval]") {
       const sonare::Audio audio = render_bach_excerpt(truth, sample_rate);
       TranscribeConfig config;
       config.tempo_bpm = static_cast<float>(excerpt.tempo_bpm);
+      if (model == "singing") config.monophonic_model = MonophonicModel::kSinging;
       const auto start = std::chrono::steady_clock::now();
       const std::vector<TranscribedNote> estimates = transcribe_notes(audio, config);
       const auto stop = std::chrono::steady_clock::now();

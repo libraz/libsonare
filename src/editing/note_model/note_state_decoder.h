@@ -6,8 +6,9 @@
 /// Each pitch bin of a third of a semitone carries an Attack and a Stable state, and one
 /// Silent state is shared by all bins. A frame's F0, its RMS level and nearby narrow RMS
 /// valleys are the observations; the best path is cut into notes where it enters an
-/// Attack state. Emission costs scale with the frame period and leaving a state costs the
-/// same at any period, so a take segments alike at every sample rate.
+/// Attack state. Emission costs scale with the frame period, while leaving a state, an
+/// entry's one Attack frame and a valley's cue each count once at any period, so a take
+/// segments alike at every sample rate.
 ///
 /// Scores are unnormalised log costs accumulated in double. Ties are broken by fixed
 /// candidate order and toward the lower bin, so the result is deterministic.

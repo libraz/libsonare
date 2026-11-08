@@ -153,9 +153,8 @@ TEST_CASE("(g) a 20 ms 300-cent blip does not split the note", "[note_state_deco
 }
 
 TEST_CASE("(h) every case decodes alike at 11.61 ms and 5.33 ms frames", "[note_state_decoder]") {
-  // The glide is left out: the reference model cuts it into four notes at 5.33 ms frames.
   for (const Shape shape : {Shape::kVibrato, Shape::kStep, Shape::kSameWithValley, Shape::kSame,
-                            Shape::kGap, Shape::kBlip}) {
+                            Shape::kGap, Shape::kGlide, Shape::kBlip}) {
     const Take base = make_take(shape, kBaseRate);
     const Take high = make_take(shape, kHighRate);
     const std::vector<DecodedSpan> a = decode(base);
@@ -195,6 +194,34 @@ TEST_CASE("(i) an all-unvoiced, a one-frame and an empty track decode to no note
   empty.track.sample_rate = kBaseRate;
   empty.track.hop_length = kHop;
   CHECK(decode(empty).empty());
+}
+
+TEST_CASE("(j) alternating 93.75 ms notes with a valley at each change keep every note",
+          "[note_state_decoder]") {
+  constexpr int kNotes = 16;
+  constexpr double kNoteSec = 0.09375;
+  for (const int sample_rate : {kBaseRate, 48000, kHighRate}) {
+    Take take;
+    take.track.sample_rate = sample_rate;
+    take.track.hop_length = kHop;
+    const double h = frame_period(take);
+    const auto n = static_cast<int>(std::lround((kLeadSec + kNotes * kNoteSec + kLeadSec) / h));
+    for (int i = 0; i < n; ++i) {
+      const double t = static_cast<double>(i) * h - kLeadSec;
+      const int note = static_cast<int>(std::floor(t / kNoteSec));
+      const bool voiced = t >= 0.0 && note < kNotes;
+      const double cents = note % 2 == 0 ? 300.0 : 500.0;
+      const double hz =
+          static_cast<double>(sonare::constants::kA4Hz) *
+          std::pow(2.0, cents / static_cast<double>(sonare::constants::kCentsPerOctave));
+      take.track.f0_hz.push_back(voiced ? static_cast<float>(hz) : 0.0f);
+      take.track.voiced.push_back(voiced);
+      take.rms.push_back(voiced ? kLoudRms : kQuietRms);
+    }
+    for (int k = 1; k < kNotes; ++k) take.valley_sec.push_back(kLeadSec + k * kNoteSec);
+    INFO("sample rate " << sample_rate);
+    CHECK(decode(take).size() == static_cast<std::size_t>(kNotes));
+  }
 }
 
 TEST_CASE("frame_rms_for_track covers each frame's samples and cuts at the end of the audio",

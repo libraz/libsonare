@@ -42,8 +42,6 @@ constexpr double kLogEntry = -2.0;
 constexpr double kLogSameBin = -6.0;
 /// Log emission of an Attack or Stable state on an unvoiced frame, per reference period.
 constexpr double kLogUnvoicedNote = -9.0;
-/// Half-width of the window in which a valley supports a frame (s).
-constexpr double kCueWindowSec = 0.025;
 /// A frame this far below its local level reference counts as unvoiced (dB).
 constexpr double kLevelFloorDb = 40.0;
 /// Radius of the sliding level reference (s).
@@ -136,20 +134,13 @@ std::vector<bool> usable_voicing(const pitch_editor::F0Track& track,
   return voiced;
 }
 
-/// Frames within the cue window of a valley frame.
-std::vector<bool> valley_cues(const std::vector<int>& valley_frames, std::size_t n, double h) {
+/// The valley frames, one cue each: a per-frame bonus over a window could be collected once
+/// per frame by cycling through same-bin re-entries, so its total would grow with the frame rate.
+std::vector<bool> valley_cues(const std::vector<int>& valley_frames, std::size_t n) {
   std::vector<bool> cue(n, false);
   for (const int frame : valley_frames) {
-    const double valley_sec = static_cast<double>(frame) * h;
-    const double lo = std::floor((valley_sec - kCueWindowSec) / h) - 1.0;
-    const double hi = std::ceil((valley_sec + kCueWindowSec) / h) + 1.0;
-    const double last = static_cast<double>(n) - 1.0;
-    if (hi < 0.0 || lo > last) continue;
-    const auto begin = static_cast<std::size_t>(std::max(0.0, lo));
-    const auto end = static_cast<std::size_t>(std::min(last, hi));
-    for (std::size_t t = begin; t <= end; ++t) {
-      if (std::abs(static_cast<double>(t) * h - valley_sec) <= kCueWindowSec) cue[t] = true;
-    }
+    if (frame >= 0 && static_cast<std::size_t>(frame) < n)
+      cue[static_cast<std::size_t>(frame)] = true;
   }
   return cue;
 }
@@ -295,7 +286,7 @@ std::vector<DecodedSpan> decode_note_states(const NoteDecoderInput& input, float
   }
 
   const std::vector<bool> voiced = usable_voicing(track, input.frame_rms, h);
-  const std::vector<bool> cue = valley_cues(input.valley_frames, n, h);
+  const std::vector<bool> cue = valley_cues(input.valley_frames, n);
 
   const double scale = h / kReferenceFramePeriodSec;
   const double sigma_stable =
@@ -326,6 +317,7 @@ std::vector<DecodedSpan> decode_note_states(const NoteDecoderInput& input, float
   std::vector<double> next_s(nb);
   std::vector<double> e_a(nb);
   std::vector<double> e_s(nb);
+  std::vector<double> entry_fix(nb);
 
   for (std::size_t t = 0; t < n; ++t) {
     double e_q = 0.0;
@@ -335,13 +327,18 @@ std::vector<DecodedSpan> decode_note_states(const NoteDecoderInput& input, float
         const double d = x - centres[b];
         const double rs = d / sigma_stable;
         const double ra = d / kAttackSigmaCents;
-        e_s[b] = scale * (norm_s - std::log1p(rs * rs));
-        e_a[b] = scale * (norm_a - std::log1p(ra * ra));
+        const double stable = norm_s - std::log1p(rs * rs);
+        const double attack = norm_a - std::log1p(ra * ra);
+        e_s[b] = scale * stable;
+        e_a[b] = scale * attack;
+        // An entry's one Attack frame is charged as a reference period of Attack, not h.
+        entry_fix[b] = (1.0 - scale) * (attack - stable);
       }
       e_q = scale * kLogVoicedSilence;
     } else {
       std::fill(e_s.begin(), e_s.end(), scale * kLogUnvoicedNote);
       std::fill(e_a.begin(), e_a.end(), scale * kLogUnvoicedNote);
+      std::fill(entry_fix.begin(), entry_fix.end(), 0.0);
     }
 
     // Ties go to the lower bin.
@@ -366,19 +363,19 @@ std::vector<DecodedSpan> decode_note_states(const NoteDecoderInput& input, float
     const double enter_from_q = q + q_to_a;
     for (std::size_t b = 0; b < nb; ++b) {
       // Candidates in fixed order; a later one replaces an earlier only when strictly better.
-      double best = enter_from_q;
+      double best = enter_from_q + entry_fix[b];
       std::int8_t code = 0;
       const double stay = a[b] + lp_a;
       if (stay > best) {
         best = stay;
         code = 1;
       }
-      const double other = (b == top1 ? s[top2] : s[top1]) + s_to_a;
+      const double other = ((b == top1 ? s[top2] : s[top1]) + s_to_a) + entry_fix[b];
       if (other > best) {
         best = other;
         code = 2;
       }
-      const double same = ((s[b] + s_to_a) + kLogSameBin) + cue_bonus;
+      const double same = (((s[b] + s_to_a) + kLogSameBin) + cue_bonus) + entry_fix[b];
       if (same > best) {
         best = same;
         code = 3;
