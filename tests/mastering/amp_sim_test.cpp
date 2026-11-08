@@ -630,9 +630,10 @@ TEST_CASE("backing the mic off trims the proximity lift and the top",
   };
   // Proximity: a 90 Hz tone sits in the shelf and above the cab's 75 Hz cut.
   REQUIRE(rms_of(render(60.0f, 90.0)) < rms_of(render(2.5f, 90.0)));
-  // Air: the top goes first as the mic backs away.
-  REQUIRE(high_band_fraction(render(60.0f, 220.0), 4000.0) <
-          high_band_fraction(render(2.5f, 220.0), 4000.0));
+  // Air: the top goes first as the mic backs away. A 1 kHz tone, because at this drive a
+  // 220 Hz tone leaves nothing above 4 kHz but the transform's own floor (~1e-14).
+  REQUIRE(high_band_fraction(render(60.0f, 1000.0), 4000.0) <
+          high_band_fraction(render(2.5f, 1000.0), 4000.0));
 }
 
 TEST_CASE("a second mic combs against the first through their path difference",
