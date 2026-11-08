@@ -909,6 +909,7 @@ conformance:
 	python3 tools/eval/test_temporal_keys.py
 	python3 tools/eval/test_continuous_keys.py
 	python3 tools/eval/test_export_key_windows.py
+	python3 tools/eval/test_note_oracle.py
 	python3 -m unittest tests/conformance/test_report_input_validation.py
 	python3 tools/audition/test_serve.py
 	cd tools/audition/web && yarn test

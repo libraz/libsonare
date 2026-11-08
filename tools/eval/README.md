@@ -95,17 +95,6 @@ Disabling the pitch-alias repair leaves all 28 exported note lists identical. Di
 
 The earlier 0.994 Bach figure describes development on generated audio and does not estimate recorded-singing accuracy. The 28-recording audit is observed development evidence. The default preparation command excludes the reserved singers; the frozen experiment below subsequently used those 12 recordings for confirmation. They are now observed data too and cannot serve as an untouched test set for later tuning. Use a separate instrument corpus before claiming instrument coverage.
 
-### Frozen boundary-reconciliation experiment
-
-A candidate joined frame-contiguous regions whose original median pitches stayed within the existing segmentation threshold, before RMS reattack splitting. It improved pooled note and offset F on the 28 development recordings, with lower recall. Source, executable hashes, and acceptance conditions were fixed before evaluating the 12 singer-disjoint confirmation recordings. No parameters were adjusted afterward.
-
-| Confirmation reference | Note F, baseline → candidate | Offset F, baseline → candidate |
-| --- | ---: | ---: |
-| A1 | 0.534207 → 0.548070 | 0.352256 → 0.369417 |
-| A2 | 0.511337 → 0.515498 | 0.325254 → 0.324633 |
-
-The fixed acceptance condition required both figures to be nondecreasing against both annotators. A2 offset F decreased, so the candidate was rejected and the default detector was restored. The [complete experiment record](reports/vocadito-v3-boundary-experiment.json) includes all per-recording results, the frozen protocol and hashes, the recall tradeoff, and an embedded patch for reproducing the rejected candidate. That experiment changed neither the default detector nor its regression tests.
-
 ### Acoustic support for note boundaries
 
 Monophonic transcription keeps a median-compatible boundary when a spectral onset falls within 50 ms. It joins unsupported, frame-contiguous regions only while the original median pitches of the whole group remain within the existing segmentation threshold. RMS reattack splitting follows. The onset cue uses maximum-filter vibrato suppression from [Böck and Widmer's SuperFlux method](https://www.dafx.de/paper-archive/details/0oee-99Z88WL7pSo749gcA), with the fixed geometry and peak rule recorded in the [measurement](reports/monophonic-acoustic-boundary-2026-11-08.json). Public pYIN and persisted vocal analysis retain their existing behavior. Run `./build/bin/sonare_tests "[acoustic_boundary]"` for generated vibrato, glide, and semitone controls.
@@ -121,57 +110,59 @@ The implementation and acceptance conditions were frozen before predictions on 1
 
 The primary VocalSet note result is nearly unchanged and its absolute accuracy remains low. Note true positives decrease from 51 to 49 while predictions decrease from 503 to 473. Extended4 retains 160 note true positives and gains seven offset matches. On the observed Vocadito recordings, predictions decrease from 2,573 to 2,445; A1 loses three note true positives and A2 retains its count. These are precision/recall tradeoffs, with all recording-level results in the measurement.
 
-A separate development control multiplies float samples by 0.1 without normalization or re-quantization. Both annotators' pooled note and offset F improve against the same-gain baseline, but note true positives decrease by 16/10. The absolute spectral threshold remains gain-sensitive; passing this control does not establish gain invariance. Short repeated notes at 110 Hz remain an unresolved synthetic case.
+A separate development control multiplies float samples by 0.1 without normalization or re-quantization. Both annotators' pooled note and offset F improve against the same-gain baseline, but note true positives decrease by 16/10. The absolute spectral threshold remains gain-sensitive; passing this control does not establish gain invariance. Short repeated notes at 110 Hz, a held tone with wide vibrato, and fast 32 Hz amplitude modulation remain unresolved synthetic cases.
 
 Three alternating serial runs on the original 28 development recordings increased median user CPU time from 10.74 to 11.51 seconds, about 7.2%. Median wall time was 12.46 → 14.38 seconds and peak RSS 137.4 → 147.3 MB, with unrelated background work causing variation. The short synthetic reattack matrix showed no measurable overhead; full-recording costs are the relevant comparison.
 
 The measurement identifies all selected archive members, SHA256 hashes, the exact annotation conversion, source and executable hashes, and matching tolerances. Use `Sound` rows with `Start time`, `End time`, and `Median F0` as onset/offset/Hz fixture annotations, without alignment fitting. These human-reviewed annotations use pYIN-assisted pitch contours; they are not independent frame-level F0 labels. Only selected ZIP members were retrieved and checked against member CRC/size; whole archive checksums were not verified for this corpus. All 18 recordings are now observed. Broader singing and instrument coverage still needs separate data.
 
-### Short low-note reattack experiment
+### Where the remaining error is
 
-A later candidate addressed four 110 Hz repeated notes that the adopted baseline detects as one. The pitch track remains voiced and accurate through those attacks; the two-period RMS window blurs their short amplitude valleys. The candidate preserved existing cuts, added a one-period RMS pass, and required body-level normalized spectral support for shallower valleys. It passed the fixed 18-row waveform matrix, gain controls, and existing regressions. The raw onset oracle and Bach16 results remained unchanged.
+`note_oracle.py` separates tracker errors from segmentation errors. For every Vocadito recording it runs `sonare_eval_note_oracle`, which prints the tracker's contour and the default notes, then repeats the same segmentation stages along the annotated F0 contour through `transcribe_monophonic_track`. It also labels each annotated note span with the median of the tracker's voiced frames inside it, and scores frame voicing and pitch against the annotated contour. Matching uses the MIREX defaults given above.
 
-Source, executables, and acceptance conditions were frozen before recorded predictions. Each observed reference had to retain both pooled F and true-positive counts for note and offset matching. The [complete experiment](reports/monophonic-short-reattack-experiment-2026-11-08.json) records the rejected patch, hashes, all recording results, and generated-signal limits.
+```sh
+cmake --build build --target sonare_eval_note_oracle
+python3 tools/eval/note_oracle.py --vocadito /path/to/extracted/vocadito \
+    --output /path/to/note-oracle.json
+```
 
-| Observed reference | Note F, baseline → candidate | Offset F, baseline → candidate |
+The [2026-11-08 measurement](reports/vocadito-v3-note-oracle-2026-11-08.json) covers all 40 recordings, all of them already observed. Pooled note F:
+
+| Condition | A1 | A2 |
 | --- | ---: | ---: |
-| Vocadito40, A1 | 0.565997 → 0.574615 | 0.404528 → 0.418897 |
-| Vocadito40, A2 | 0.526267 → 0.535988 | 0.348993 → 0.372785 |
-| VocalSet18, extended1 | 0.136300 → 0.136111 | 0.083449 → 0.083333 |
-| VocalSet18, extended4 | 0.445063 → 0.444444 | 0.397775 → 0.397222 |
+| Default transcription | 0.566 | 0.526 |
+| Annotated contour, same segmentation | 0.633 | 0.588 |
+| Annotated note spans, tracker pitch | 0.899 | 0.956 |
 
-Vocadito note true positives increased by 92/88, while false positives increased by 158/162. The fixed −20 dB control also improved. On VocalSet18, predictions increased from 473 to 474 with unchanged true-positive counts against both conventions. All four F values decreased, so the candidate was rejected without retuning and the adopted source was restored exactly. The separately selected 12-recording confirmation subset remains unpredicted.
+Against the annotated contour the tracker reaches 0.920 raw pitch accuracy and 0.924 raw chroma accuracy, with 0.981 voicing recall and a 0.431 voicing false-alarm rate. Given correct boundaries, its pitch labels most notes correctly. Given a correct contour, segmentation still stays near 0.63. Most remaining note error therefore belongs to segmentation.
 
-The added false boundary combines a shallow RMS valley and spectral recovery inside a vibrato note. These cues can respond to the same amplitude fluctuation; their conjunction does not establish a new note. A separate wide-vibrato control already fails in the baseline at all four rates. That incorrect design assumption was corrected before recorded predictions: the whole control family was characterized against its true one-note reference, without asserting that two notes were correct. Fast AM at 32 Hz also exposes an existing oversegmentation problem. Neither limitation is claimed solved.
+The boundary profile in the report shows the shape of that error. Against A1, the default output starts two or more notes inside 295 reference notes and starts inside two or more reference notes in 370 estimates; 214 estimates overlap no reference. With the annotated contour, spurious notes fall to 12, so most of them follow the tracker's voicing, while split references rise to 492. A pitch-movement threshold splits natural intonation movement once the contour is accurate, and it cannot separate same-pitch articulations. Each candidate below added one local cue to that threshold.
 
-A native trace also tested whether requiring overlap with the two compared FFT windows would reject the false boundary. It would not: one window still overlaps the RMS support by 26 samples. That hypothesis was discarded without choosing a fitted overlap length or a shorter time radius.
+The annotated contour is itself an annotation, not ground truth. Annotated notes overlap in places, which is why the span condition stays under 1.
 
-### RMS width consistency experiment
+### Candidates that did not hold
 
-A second candidate filtered the existing RMS cuts using a one-period window at each unchanged cut center. It removed broad amplitude-modulation valleys without adding or retiming cuts. All 512 generated held-note AM rows passed, as did repeated-note, envelope-asymmetry, gain, raw-onset, and Bach controls. The [experiment record](reports/monophonic-width-consistency-experiment-2026-11-08.json) includes the rejected patch and complete recorded results.
+Each candidate below was frozen before recorded predictions and judged against fixed acceptance conditions. The reports keep the patches, hashes and per-recording results.
 
-On Vocadito40, predictions decreased from 2,445 to 2,440. Note true positives fell from 1,325 to 1,324 against A1 and from 1,137 to 1,136 against A2; offset true positives fell from 947 to 945 and from 754 to 753. The same true reattack was lost in the fixed gain control. VocalSet18 improved slightly, with one fewer false positive and unchanged true positives. The candidate failed 14 of the 24 fixed comparisons and was rejected. The adopted source was restored exactly, and the separate 12-recording confirmation subset remains unpredicted. Width agreement alone does not distinguish amplitude modulation from a genuine articulation.
+| Candidate | Why it does not hold | Record |
+| --- | --- | --- |
+| Join frame-contiguous, median-compatible regions without onset support | Confirmation A2 offset F fell (0.325254 → 0.324633) | [report](reports/vocadito-v3-boundary-experiment.json) |
+| One-period RMS pass with spectral support for short low repeats | Shallow RMS valleys and spectral recovery respond to the same vibrato fluctuation; VocalSet F fell on all four figures | [report](reports/monophonic-short-reattack-experiment-2026-11-08.json) |
+| Filter RMS cuts by one-period width agreement | Width agreement does not separate amplitude modulation from articulation; failed 14 of 24 comparisons | [report](reports/monophonic-width-consistency-experiment-2026-11-08.json) |
+| Require recurring broad valleys around a cut | Removed all 24 true boundaries where modulation continues across a reattack | [report](reports/monophonic-temporal-cue-experiment-2026-11-08.json) |
 
-### Temporal RMS cue experiment
+A published learned note-transcription model with its official checkpoint and unchanged decoder defaults was also compared on the same 32 synthetic recordings holding 96 reference notes. Source, checkpoint, runtime, scoring code and inputs were hashed before predictions, and every returned event was scored.
 
-An offline follow-up required recurring broad valleys near a candidate cut, first on either side and then on both sides. The second rule reduced selected cuts in 512 held-note AM signals from 1,872 to 89 while preserving several separate reattack controls. It nevertheless removed all 24 baseline-detected true boundaries in 96 generated signals where AM continued across an explicit release and reattack. These are cue-level results at the known synthetic fundamental, rather than native transcription scores. The [experiment record](reports/monophonic-temporal-cue-experiment-2026-11-08.json) gives the waveform formula, corrected sampling convention, counterexample, and limits. Both rules were discarded before production implementation or recorded predictions.
-
-The existing baseline's onset-only matching leaves 660 missed references and 868 extra predictions against Vocadito A1, or 524 and 1,093 against A2. This identifies a broad timing and segmentation problem to investigate, without attributing those counts to a particular tracker or split rule. Pitch and offset constraints reduce matching further; differences between independent matching maxima are not a partition of error causes. No additional threshold or recording-specific exception was added.
-
-### Frozen default-model comparison
-
-A separate comparison used a published learned note-transcription model with its official checkpoint and unchanged decoder defaults. Source, checkpoint, runtime, scoring code and all inputs were hashed before predictions. Both systems received the same 32 synthetic recordings containing 96 constructive reference notes. All returned events, including extra pitches, were scored; raw onset, note and contour arrays were retained.
-
-| Control family | Reference notes | Baseline note TP / FP | Default model note TP / FP |
+| Control family | Reference notes | Default transcription note TP / FP | Learned model note TP / FP |
 | --- | ---: | ---: | ---: |
 | Held AM24/32 | 8 | 8 / 115 | 8 / 12 |
 | Ordinary repeated notes | 64 | 64 / 0 | 53 / 13 |
 | Short 110 Hz repeats | 16 | 4 / 0 | 8 / 4 |
 | Reattack during continuing AM | 8 | 8 / 114 | 4 / 4 |
 
-The default model reduces AM oversegmentation and improves pooled F, while losing true notes in the ordinary-repeat and continuing-AM controls. It was not adopted or integrated. Its nominal 127.70 ms minimum note length exceeds the 125 ms targets; settings were kept fixed, and this comparison does not isolate the learned onset head. No decoder retuning, recorded-data run or new confirmation prediction followed. These synthetic results establish no vocal-transfer or production-accuracy improvement. Training-data overlap with potential recorded evaluation corpora was not audited.
+The model reduces modulation oversegmentation and loses true notes in ordinary repeats and continuing modulation. Its nominal 127.70 ms minimum note length exceeds the 125 ms targets; at the 1.0 s reattack its onset activity peaks near 0.154, under the fixed 0.5 threshold, while note activity stays above 0.621. It was not integrated. These synthetic results establish no vocal accuracy, and training-data overlap with recorded evaluation corpora was not audited.
 
-At the constructed 1.0 s reattack, the saved fundamental onset activity peaks near 0.154 within the 50 ms matching window, below the fixed 0.5 threshold, while note activity stays above 0.621. The true notes each last 0.8 s, so minimum duration alone does not explain this miss. This read-only diagnostic supports no fitted replacement threshold; the original AM controls also differ in carrier and modulation phase.
+The 12 VocalSet confirmation recordings selected for the reattack and width experiments remain unpredicted.
 
 ## Corpora that can be measured against
 

@@ -163,6 +163,12 @@ if(TARGET sonare_mir)
   target_compile_options(sonare_eval_key_windows PRIVATE ${SONARE_WARNING_FLAGS})
   target_include_directories(sonare_eval_key_windows PRIVATE ${PROJECT_SOURCE_DIR}/src)
 endif()
+if(TARGET sonare_pitch_editor)
+  add_executable(sonare_eval_note_oracle EXCLUDE_FROM_ALL eval/export_note_oracle.cpp)
+  target_link_libraries(sonare_eval_note_oracle PRIVATE sonare_pitch_editor)
+  target_compile_options(sonare_eval_note_oracle PRIVATE ${SONARE_WARNING_FLAGS})
+  target_include_directories(sonare_eval_note_oracle PRIVATE ${PROJECT_SOURCE_DIR}/src)
+endif()
 
 # Profiling build option
 option(ENABLE_PROFILER "Enable gperftools profiler" OFF)
