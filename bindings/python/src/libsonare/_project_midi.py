@@ -158,14 +158,15 @@ class _ProjectMidiMixin:
                 the monophonic path or 1760 Hz for the polyphonic path. Both
                 paths use this bound, with the same polyphonic salience-axis
                 behavior as ``fmin``.
-            min_note_ms: Shortest span kept as a note; ``None`` keeps 30 ms
+            min_note_ms: Shortest span kept as a note; ``None`` keeps 45 ms
                 (monophonic) or 60 ms (polyphonic), whatever the tempo. Not
                 given together with ``min_note_division``.
             min_note_division: Shortest note kept, as a note value: ``n`` is a
                 1/n note at the project's tempo at the clip start (32 is a
                 thirty-second note), 1..128. Applies to both paths.
-            segmentation_threshold_cents: Pitch movement that ends one note and
-                starts the next; ``None`` keeps 50 cents.
+            segmentation_threshold_cents: Scale of the pitch movement the
+                monophonic path keeps within one note, in cents; larger values
+                hold more movement in a note. ``None`` keeps 50 cents.
             velocity_floor_db: Level mapped to velocity 1; a note under it gets
                 velocity 1. A note more than 36 dB under the take's loudest
                 notes, or under -80 dBFS, is dropped whatever this is. Must be

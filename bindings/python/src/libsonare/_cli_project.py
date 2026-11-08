@@ -952,7 +952,7 @@ def register_project_parsers(
         "--min-note-ms",
         type=_finite_float,
         default=None,
-        help="Shortest span kept as a note, in ms (default: 30 monophonic, 60 polyphonic)",
+        help="Shortest span kept as a note, in ms (default: 45 monophonic, 60 polyphonic)",
     )
     transcribe_p.add_argument(
         "--min-note-division",
@@ -993,7 +993,7 @@ def register_project_parsers(
         "--segmentation-threshold-cents",
         type=_finite_float,
         default=None,
-        help="Pitch movement that ends one note and starts the next (default: 50)",
+        help="Pitch movement, in cents, kept within one monophonic note (default: 50)",
     )
     transcribe_p.add_argument(
         "--velocity-floor-db",

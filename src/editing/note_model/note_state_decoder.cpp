@@ -6,7 +6,6 @@
 #include <cstdint>
 #include <vector>
 
-#include "editing/note_model/monophonic_onset_evidence.h"
 #include "util/constants.h"
 #include "util/exception.h"
 #include "util/peak.h"
@@ -43,7 +42,7 @@ constexpr double kLogEntry = -2.0;
 constexpr double kLogSameBin = -6.0;
 /// Log emission of an Attack or Stable state on an unvoiced frame, per reference period.
 constexpr double kLogUnvoicedNote = -9.0;
-/// Half-width of the window in which an onset peak supports a frame (s).
+/// Half-width of the window in which a valley supports a frame (s).
 constexpr double kCueWindowSec = 0.025;
 /// A frame this far below its local level reference counts as unvoiced (dB).
 constexpr double kLevelFloorDb = 40.0;
@@ -54,18 +53,36 @@ constexpr float kLevelLoneRatio = 0.3f;
 /// Minimum spacing between RMS events of the level reference (s).
 constexpr double kLevelEventSpacingSec = 0.05;
 
-// Frozen by a 5-fold cross-validated grid on development recordings; every fold picked
-// the same values, all inside the grid.
-/// Stable pitch width per cent of segmentation threshold (90 cents at the default 50).
-constexpr double kStableSigmaPerThreshold = 1.8;
+// Frozen by a 5-fold cross-validated grid on development recordings, restricted to values
+// that also segment every synthetic regression take correctly; the silence emission sits at
+// the edge of that feasible region.
+/// Stable pitch width per cent of segmentation threshold (70 cents at the default 50).
+constexpr double kStableSigmaPerThreshold = 1.4;
 /// Width the Stable density is normalised at, whatever width the threshold gives (cents).
 constexpr double kStableNormSigmaCents = 90.0;
 /// Mean dwell of a Stable state (s).
 constexpr double kStableDwellSec = 0.6;
 /// Log emission of the Silent state on a voiced frame, per reference period.
-constexpr double kLogVoicedSilence = -7.0;
-/// Bonus on a same-bin re-entry at a frame an onset peak supports.
+constexpr double kLogVoicedSilence = -9.0;
+/// Bonus on a same-bin re-entry at a frame a valley supports.
 constexpr double kCueBonus = 16.0;
+
+// Narrow-valley detector: these split repeated same-pitch strikes in the synthetic regression
+// takes at every gain tried, while an 8 Hz amplitude-modulation trough fails the width test.
+/// Spacing of the RMS grid (ms).
+constexpr double kValleyGridMs = 1.0;
+/// RMS window length in periods of the run's median F0.
+constexpr double kValleyWindowPeriods = 2.0;
+/// Span on either side a valley's crest is taken over (ms).
+constexpr double kValleyContextMs = 20.0;
+/// A valley lies under this fraction of the lower crest.
+constexpr double kValleyDepthRatio = 0.5;
+/// The low stretch around a valley is under this fraction of each side's crest.
+constexpr double kValleyLowRatio = 0.7;
+/// Widest low stretch still counted as a valley (ms).
+constexpr double kValleyMaxWidthMs = 15.0;
+/// Lowest crest a valley is measured against.
+constexpr double kValleyCrestFloor = 1e-6;
 
 enum class Kind : std::int8_t { kSilent, kAttack, kStable };
 
@@ -119,24 +136,83 @@ std::vector<bool> usable_voicing(const pitch_editor::F0Track& track,
   return voiced;
 }
 
-/// Frames within the cue window of an onset peak.
-std::vector<bool> onset_cues(const NoteDecoderInput& input, std::size_t n, double h) {
+/// Frames within the cue window of a valley frame.
+std::vector<bool> valley_cues(const std::vector<int>& valley_frames, std::size_t n, double h) {
   std::vector<bool> cue(n, false);
-  if (!input.onsets_available) return cue;
-  for (const int frame : input.onset_frames) {
-    const double onset_sec =
-        static_cast<double>(frame) / detail::monophonic_onset_detail::kFramesPerSecond;
-    const double lo = std::floor((onset_sec - kCueWindowSec) / h) - 1.0;
-    const double hi = std::ceil((onset_sec + kCueWindowSec) / h) + 1.0;
+  for (const int frame : valley_frames) {
+    const double valley_sec = static_cast<double>(frame) * h;
+    const double lo = std::floor((valley_sec - kCueWindowSec) / h) - 1.0;
+    const double hi = std::ceil((valley_sec + kCueWindowSec) / h) + 1.0;
     const double last = static_cast<double>(n) - 1.0;
     if (hi < 0.0 || lo > last) continue;
     const auto begin = static_cast<std::size_t>(std::max(0.0, lo));
     const auto end = static_cast<std::size_t>(std::min(last, hi));
     for (std::size_t t = begin; t <= end; ++t) {
-      if (std::abs(static_cast<double>(t) * h - onset_sec) <= kCueWindowSec) cue[t] = true;
+      if (std::abs(static_cast<double>(t) * h - valley_sec) <= kCueWindowSec) cue[t] = true;
     }
   }
   return cue;
+}
+
+/// Python-style rounding (half to even) of a non-negative quantity to an index.
+std::ptrdiff_t round_index(double value) {
+  return static_cast<std::ptrdiff_t>(std::nearbyint(value));
+}
+
+/// Absolute samples of the narrow valleys in `samples[begin, end)`.
+void append_valley_samples(const float* samples, std::ptrdiff_t begin, std::ptrdiff_t end,
+                           int sample_rate, double median_hz, std::vector<std::ptrdiff_t>& out) {
+  const std::ptrdiff_t n = end - begin;
+  const double sr = static_cast<double>(sample_rate);
+  const std::ptrdiff_t window =
+      std::max<std::ptrdiff_t>(2, round_index(kValleyWindowPeriods * sr / median_hz));
+  if (window > n) return;
+  const std::ptrdiff_t left = window / 2;
+  const std::ptrdiff_t right = window - left;
+  const std::ptrdiff_t step = std::max<std::ptrdiff_t>(1, round_index(sr * kValleyGridMs / 1000.0));
+  const std::ptrdiff_t context =
+      std::max<std::ptrdiff_t>(1, round_index(sr * kValleyContextMs / 1000.0));
+  const std::ptrdiff_t cp = std::max<std::ptrdiff_t>(
+      1, round_index(static_cast<double>(context) / static_cast<double>(step)));
+  const std::ptrdiff_t max_width = round_index(sr * kValleyMaxWidthMs / 1000.0);
+
+  std::vector<double> prefix(static_cast<std::size_t>(n) + 1, 0.0);
+  for (std::ptrdiff_t k = 0; k < n; ++k) {
+    const double v = static_cast<double>(samples[begin + k]);
+    prefix[static_cast<std::size_t>(k) + 1] = prefix[static_cast<std::size_t>(k)] + v * v;
+  }
+  std::vector<std::ptrdiff_t> centers;
+  for (std::ptrdiff_t c = left; c <= n - right; c += step) centers.push_back(c);
+  const auto count = static_cast<std::ptrdiff_t>(centers.size());
+  if (count < 2 * cp + 1) return;
+  std::vector<double> rms(centers.size());
+  for (std::size_t j = 0; j < centers.size(); ++j) {
+    const auto lo = static_cast<std::size_t>(centers[j] - left);
+    const double energy = std::max(0.0, prefix[lo + static_cast<std::size_t>(window)] - prefix[lo]);
+    rms[j] = std::sqrt(energy / static_cast<double>(window));
+  }
+
+  const auto at = [&](std::ptrdiff_t i) { return rms[static_cast<std::size_t>(i)]; };
+  for (std::ptrdiff_t i = cp; i < count - cp; ++i) {
+    if (at(i) > at(i - 1) || at(i) >= at(i + 1)) continue;
+    double lmax = at(i - cp);
+    for (std::ptrdiff_t k = i - cp + 1; k < i; ++k) lmax = std::max(lmax, at(k));
+    double rmax = at(i + 1);
+    for (std::ptrdiff_t k = i + 2; k <= i + cp; ++k) rmax = std::max(rmax, at(k));
+    const double crest = std::min(lmax, rmax);
+    if (!std::isfinite(crest) || crest < kValleyCrestFloor ||
+        !(at(i) < kValleyDepthRatio * crest)) {
+      continue;
+    }
+    std::ptrdiff_t lo = i;
+    while (lo > i - cp && at(lo) < kValleyLowRatio * lmax) --lo;
+    std::ptrdiff_t hi = i;
+    while (hi < i + cp && at(hi) < kValleyLowRatio * rmax) ++hi;
+    if (centers[static_cast<std::size_t>(hi)] - centers[static_cast<std::size_t>(lo)] > max_width) {
+      continue;
+    }
+    out.push_back(begin + centers[static_cast<std::size_t>(i)]);
+  }
 }
 
 /// Notes from the decoded path; a same-bin re-entry never leaves a piece under the minimum.
@@ -219,7 +295,7 @@ std::vector<DecodedSpan> decode_note_states(const NoteDecoderInput& input, float
   }
 
   const std::vector<bool> voiced = usable_voicing(track, input.frame_rms, h);
-  const std::vector<bool> cue = onset_cues(input, n, h);
+  const std::vector<bool> cue = valley_cues(input.valley_frames, n, h);
 
   const double scale = h / kReferenceFramePeriodSec;
   const double sigma_stable =
@@ -391,6 +467,49 @@ std::vector<float> frame_rms_for_track(const Audio& audio, const pitch_editor::F
     if (std::isfinite(value)) rms[static_cast<std::size_t>(i)] = value;
   }
   return rms;
+}
+
+std::vector<int> narrow_valley_frames(const Audio& audio, const pitch_editor::F0Track& track) {
+  const double spf = track.samples_per_frame();
+  SONARE_CHECK_MSG(spf > 0.0, ErrorCode::InvalidParameter,
+                   "narrow_valley_frames: track needs a frame cadence");
+  SONARE_CHECK_MSG(audio.sample_rate() > 0, ErrorCode::InvalidParameter,
+                   "narrow_valley_frames: audio needs a sample rate");
+  const auto total = static_cast<std::ptrdiff_t>(audio.size());
+  const auto frames = static_cast<std::size_t>(std::max(0, track.n_frames()));
+  const auto voiced = [&](std::size_t t) {
+    const float hz = track.f0_hz[t];
+    return std::isfinite(hz) && hz > 0.0f;
+  };
+
+  std::vector<std::ptrdiff_t> samples;
+  std::vector<double> run_hz;
+  for (std::size_t a = 0; a < frames;) {
+    if (!voiced(a)) {
+      ++a;
+      continue;
+    }
+    std::size_t b = a;
+    run_hz.clear();
+    while (b < frames && voiced(b)) run_hz.push_back(static_cast<double>(track.f0_hz[b++]));
+    std::sort(run_hz.begin(), run_hz.end());
+    const std::size_t mid = run_hz.size() / 2;
+    const double median =
+        run_hz.size() % 2 == 1 ? run_hz[mid] : (run_hz[mid - 1] + run_hz[mid]) / 2.0;
+    const auto begin = static_cast<std::ptrdiff_t>(static_cast<double>(a) * spf);
+    const auto end = std::min(total, static_cast<std::ptrdiff_t>(static_cast<double>(b) * spf));
+    append_valley_samples(audio.data(), begin, end, audio.sample_rate(), median, samples);
+    a = b;
+  }
+
+  std::vector<int> out;
+  out.reserve(samples.size());
+  for (const std::ptrdiff_t sample : samples) {
+    out.push_back(static_cast<int>(std::nearbyint(static_cast<double>(sample) / spf)));
+  }
+  std::sort(out.begin(), out.end());
+  out.erase(std::unique(out.begin(), out.end()), out.end());
+  return out;
 }
 
 }  // namespace sonare::editing::note_model

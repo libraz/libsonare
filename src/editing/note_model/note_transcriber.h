@@ -3,10 +3,10 @@
 /// @file note_transcriber.h
 /// @brief Turns audio into pitched, velocity-bearing note events.
 ///
-/// The monophonic path starts from pYIN regions cut by NoteSegmenter and can
-/// separate a brief RMS valley within an existing region into repeated attacks.
-/// The polyphonic path reads the multi-F0 chain for overlapping notes. Both paths
-/// map the measured F0 and level to MIDI pitch and velocity.
+/// The monophonic path cuts pYIN's F0 track into notes with the note-state
+/// decoder, which reads the track, its frame RMS and narrow RMS valleys
+/// together. The polyphonic path reads the multi-F0 chain for overlapping notes.
+/// Both paths map the measured F0 and level to MIDI pitch and velocity.
 ///
 /// Output is in SAMPLES and carries no musical time. Placing notes on a bar grid
 /// needs a tempo, which is the caller's, so the conversion to PPQ happens above
@@ -27,9 +27,10 @@ namespace sonare::editing::note_model {
 
 /// @brief Which chain the notes are read from.
 enum class TranscribeSource : uint32_t {
-  /// pYIN's F0 track cut by NoteSegmenter. One note sounds at a time; a chord
-  /// arrives as whichever line the tracker followed. The transcription pass can
-  /// also separate a clear brief RMS valley within an existing note region.
+  /// pYIN's F0 track cut into notes by the note-state decoder, which also reads
+  /// frame RMS and narrow RMS valleys, so a re-struck note of the same pitch
+  /// can start anew. One note sounds at a time; a chord arrives as whichever line the
+  /// tracker followed.
   kMonophonic = 0,
   /// The multi-F0 chain. Overlapping notes are expected, and the cost is a full
   /// STFT plus a mask per tracked ridge.
@@ -57,9 +58,10 @@ struct TranscribeConfig {
   float fmax = 0.0f;
 
   /// Shortest span kept as a note, in milliseconds. 0 => @c min_note_division
-  /// if set, else the source's default: the segmenter's 30 ms for monophonic
-  /// notes; for polyphonic ones, where it is the shortest ridge the tracker
-  /// keeps, 60 ms whatever the tempo.
+  /// if set, else the source's default: 45 ms for monophonic notes, where it
+  /// is the decoder's shortest note (raised to two track frames); for
+  /// polyphonic ones, where it is the shortest ridge the tracker keeps, 60 ms
+  /// whatever the tempo.
   float min_note_ms = 0.0f;
   /// Shortest span kept as a note, as a note value: n is a 1/n note at
   /// @c tempo_bpm (32 => a thirty-second note), 1..128. 0 => unset. Needs a
@@ -67,9 +69,12 @@ struct TranscribeConfig {
   int min_note_division = 0;
   /// Tempo @c min_note_division is read at, in BPM. 0 => none. No default reads it.
   float tempo_bpm = 0.0f;
-  /// Monophonic: pitch movement, in cents, that ends one note and starts the
-  /// next. Polyphonic: scales the reported f0 stability figure only -- a
-  /// mid-ridge pitch jump is never split into two notes.
+  /// Monophonic: scale, in cents, of the pitch deviation held within one note;
+  /// the decoder's Stable pitch width is 1.4 times this value, so a larger
+  /// value lets more drift and vibrato stay one note. Notes are never split
+  /// finer than a third of a semitone. Polyphonic: scales the reported f0
+  /// stability figure only -- a mid-ridge pitch jump is never split into two
+  /// notes.
   float segmentation_threshold_cents = 50.0f;
 
   /// Level that maps to velocity 1. A note's PEAK per-frame RMS of the input
@@ -180,10 +185,11 @@ std::vector<TranscribedNote> transcribe_notes(const Audio& audio,
                                               const TranscribeConfig& config = {});
 
 /// @brief Monophonic transcription along a caller-supplied F0 track.
-/// @details Skips the pitch tracker and its alias repair; segmentation, boundary
-///          reconciliation, reattack splitting and the level gate run exactly as
-///          in @ref transcribe_notes. Lets an evaluation score segmentation
-///          against a reference contour. @p track must be on @p audio's rate.
+/// @details Skips the pitch tracker and its alias repair; the note-state decoder
+///          (over @p track and the frame RMS and narrow RMS valleys of @p audio)
+///          and the level gate run exactly as in @ref transcribe_notes. Lets an
+///          evaluation score segmentation against a reference contour. @p track
+///          must be on @p audio's rate.
 /// @throws SonareException(InvalidParameter) as @ref transcribe_notes, on a
 ///         polyphonic @c source, on a track whose sample rate differs from
 ///         @p audio's or that has no frame cadence, and on per-frame arrays of

@@ -756,7 +756,7 @@ export interface TranscribeOptions {
   /**
    * Shortest span kept as a note, in milliseconds. Must be finite and
    * positive. Refused together with {@link minNoteDivision}. When neither is
-   * given the default is `30` for the monophonic tracker and `60` for the
+   * given the default is `45` for the monophonic tracker and `60` for the
    * polyphonic one; neither depends on the tempo.
    */
   minNoteMs?: number;
@@ -770,8 +770,9 @@ export interface TranscribeOptions {
    */
   minNoteDivision?: number;
   /**
-   * Pitch movement, in cents, that ends one note and starts the next. Must be
-   * finite and positive. Default `50`.
+   * Scale, in cents, of the pitch movement the monophonic tracker keeps within
+   * one note; larger values hold more movement in a note. Must be finite and
+   * positive. Default `50`.
    */
   segmentationThresholdCents?: number;
   /**

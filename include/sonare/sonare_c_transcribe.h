@@ -78,12 +78,12 @@ typedef struct {
   float fmin;
   float fmax;
   /// Shortest span kept as a note, in milliseconds; 0 => @c min_note_division
-  /// if set, else the source's default: 30 for the monophonic path, and for the
+  /// if set, else the source's default: 45 for the monophonic path, and for the
   /// polyphonic path, where it is the shortest ridge the tracker keeps, 60
   /// whatever the tempo.
   float min_note_ms;
-  /// Pitch movement, in cents, that ends one note and starts the next;
-  /// 0 => 50.
+  /// Scale, in cents, of the pitch movement the monophonic path keeps within
+  /// one note; larger values hold more movement in a note. 0 => 50.
   float segmentation_threshold_cents;
   /// Level mapped to velocity 1. A note's PEAK per-frame RMS of the input over
   /// its span (other notes sounding then included) is taken in dBFS and mapped

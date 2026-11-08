@@ -29,7 +29,6 @@
 #include <vector>
 
 #include "core/audio.h"
-#include "editing/note_model/monophonic_onset_evidence.h"
 #include "editing/pitch_editor/f0_provider.h"
 #include "editing/polyphony/f0_salience.h"
 #include "feature/pitch.h"
@@ -765,14 +764,6 @@ TEST_CASE("acoustic onsets preserve a held tone with wide vibrato",
     if (notes.size() == 1) CHECK(notes.front().note == 57);
   }
 
-  for (const int sample_rate : {16000, 48000}) {
-    const auto evidence = sonare::editing::note_model::detail::monophonic_onset_evidence(
-        modulated_harmonic_tone(sample_rate, 57, 0.0, 0.0, 6.0, 75.0));
-    INFO("synthetic onset frames at " << sample_rate << " Hz");
-    REQUIRE(evidence.available);
-    CHECK((evidence.frames == std::vector<int>{39, 357}));
-  }
-
   const std::vector<TranscribedNote> vibrato50 =
       transcribe_notes(modulated_harmonic_tone(44100, 57, 0.0, 0.0, 6.0, 50.0));
   REQUIRE(vibrato50.size() == 1);
@@ -1444,7 +1435,7 @@ size_t count_of(const std::vector<TranscribedNote>& notes, int midi_note) {
 TEST_CASE("the polyphonic limits resolve per source", "[note_transcriber]") {
   TranscribeConfig monophonic;
   const TranscribePolyphonyLimits mono = resolve_transcribe_polyphony_limits(monophonic);
-  CHECK(mono.min_note_ms == 30.0f);
+  CHECK(mono.min_note_ms == 45.0f);
 
   TranscribeConfig polyphonic;
   polyphonic.source = TranscribeSource::kPolyphonic;
@@ -1509,7 +1500,7 @@ TEST_CASE("the shortest note resolves from the tempo", "[note_transcriber]") {
   SECTION("the monophonic default does not move with the tempo, a division does") {
     TranscribeConfig monophonic;
     monophonic.tempo_bpm = 300.0f;
-    CHECK(resolve_transcribe_polyphony_limits(monophonic).min_note_ms == 30.0f);
+    CHECK(resolve_transcribe_polyphony_limits(monophonic).min_note_ms == 45.0f);
     monophonic.min_note_division = 8;
     CHECK(resolve_transcribe_polyphony_limits(monophonic).min_note_ms == Catch::Approx(100.0f));
   }
@@ -1703,71 +1694,4 @@ TEST_CASE("Bach score transcription evaluation", "[.][bach_transcribe_eval]") {
     }
   }
   REQUIRE(evaluated_cases == excerpts.size() * sample_rates.size());
-}
-
-TEST_CASE("native monophonic onset frames match the frozen reference",
-          "[.][superflux_native_oracle]") {
-  const char* audio_dir = std::getenv("SONARE_SUPERFLUX_AUDIO_DIR");
-  const char* oracle_path = std::getenv("SONARE_SUPERFLUX_ORACLE_JSON");
-  REQUIRE(audio_dir != nullptr);
-  REQUIRE(audio_dir[0] != '\0');
-  REQUIRE(oracle_path != nullptr);
-  REQUIRE(oracle_path[0] != '\0');
-
-  const sonare::test::JsonValue oracle = sonare::test::JsonReader::parse_file(oracle_path);
-  REQUIRE(oracle.is_object());
-  REQUIRE(oracle.size() == 28);
-  std::string directory(audio_dir);
-  if (directory.back() != '/') directory.push_back('/');
-  size_t total_expected_frames = 0;
-  for (const auto& [track_id, values] : oracle.as_object()) {
-    const sonare::Audio audio =
-        sonare::Audio::from_file(directory + "vocadito_" + track_id + ".wav");
-    REQUIRE(audio.sample_rate() == 44100);
-    std::vector<int> expected;
-    expected.reserve(values.size());
-    for (const sonare::test::JsonValue& value : values.as_array()) {
-      expected.push_back(value.as_int());
-    }
-    total_expected_frames += expected.size();
-    const auto evidence = sonare::editing::note_model::detail::monophonic_onset_evidence(audio);
-    INFO("audit track " << track_id << ", expected " << expected.size() << " onsets, got "
-                        << evidence.frames.size());
-    REQUIRE(evidence.available);
-    CHECK(evidence.frames == expected);
-  }
-  REQUIRE(total_expected_frames == 2107);
-}
-
-TEST_CASE("monophonic onset reconciliation exports the audit notes",
-          "[.][superflux_transcribe_replay]") {
-  const char* audio_dir = std::getenv("SONARE_SUPERFLUX_AUDIO_DIR");
-  const char* oracle_path = std::getenv("SONARE_SUPERFLUX_ORACLE_JSON");
-  REQUIRE(audio_dir != nullptr);
-  REQUIRE(audio_dir[0] != '\0');
-  REQUIRE(oracle_path != nullptr);
-  REQUIRE(oracle_path[0] != '\0');
-  const sonare::test::JsonValue oracle = sonare::test::JsonReader::parse_file(oracle_path);
-  REQUIRE(oracle.is_object());
-
-  std::string directory(audio_dir);
-  if (directory.back() != '/') directory.push_back('/');
-  size_t exported_tracks = 0;
-  for (const auto& entry : oracle.as_object()) {
-    const std::string& track_id = entry.first;
-    const sonare::Audio audio =
-        sonare::Audio::from_file(directory + "vocadito_" + track_id + ".wav");
-    const std::vector<TranscribedNote> notes = transcribe_notes(audio);
-    std::cout << std::setprecision(17) << "ACOUSTIC_TRANSCRIBE {\"file\":\"audio/vocadito_"
-              << track_id << ".wav\",\"sample_rate\":" << audio.sample_rate() << ",\"notes\":[";
-    for (size_t i = 0; i < notes.size(); ++i) {
-      if (i != 0) std::cout << ',';
-      std::cout << '[' << static_cast<double>(notes[i].onset_sample) / audio.sample_rate() << ','
-                << static_cast<double>(notes[i].offset_sample) / audio.sample_rate() << ','
-                << notes[i].median_hz << ']';
-    }
-    std::cout << "]}" << std::endl;
-    ++exported_tracks;
-  }
-  REQUIRE(exported_tracks == 28);
 }

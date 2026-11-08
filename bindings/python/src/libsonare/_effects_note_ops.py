@@ -1038,13 +1038,14 @@ def transcribe(
             this bound, with the same polyphonic salience-axis behavior as
             ``fmin``.
         min_note_ms: Shortest span kept as a note; ``None`` keeps the default
-            (30 ms monophonic, 60 ms polyphonic, whatever the tempo). Not given
+            (45 ms monophonic, 60 ms polyphonic, whatever the tempo). Not given
             together with ``min_note_division``.
         min_note_division: Shortest note kept, as a note value: ``n`` is a 1/n
             note at the transcription tempo (32 is a thirty-second note), 1..128.
             Applies to both paths; ``None`` keeps the ``min_note_ms`` rule.
-        segmentation_threshold_cents: Pitch movement that ends one note and
-            starts the next; ``None`` keeps the default (50 cents).
+        segmentation_threshold_cents: Scale of the pitch movement the
+            monophonic path keeps within one note, in cents; larger values hold
+            more movement in a note. ``None`` keeps the default (50 cents).
         velocity_floor_db: Level mapped to velocity 1. A note's peak per-frame
             RMS of the input over its span (other notes sounding then included)
             is taken in dBFS and mapped linearly from ``[velocity_floor_db, 0]``
