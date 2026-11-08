@@ -2155,6 +2155,7 @@ const TranscribeRequestKeys = keysOf<TranscribeRequest>()([
   'minNoteMs',
   'minNoteDivision',
   'segmentationThresholdCents',
+  'monophonicModel',
   'velocityFloorDb',
   'fixedVelocity',
   'maxPolyphony',

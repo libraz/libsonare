@@ -677,9 +677,9 @@ export interface TranscribeOptions {
   /** Upper end of the F0 tracker range in Hz; omitted defaults to `2093` mono or `1760` poly. */
   fmax?: number;
   /**
-   * Shortest span kept as a note, in milliseconds. Default `45` monophonic and
-   * `60` polyphonic, where it is the shortest ridge the tracker keeps; neither
-   * default depends on the tempo.
+   * Shortest span kept as a note, in milliseconds. Default `30` monophonic
+   * (segments), `45` monophonic (singing) and `60` polyphonic, where it is the
+   * shortest ridge the tracker keeps; no default depends on the tempo.
    * Must be positive, and cannot be written together with `minNoteDivision`.
    */
   minNoteMs?: number;
@@ -692,10 +692,20 @@ export interface TranscribeOptions {
    */
   minNoteDivision?: number;
   /**
-   * Scale, in cents, of the pitch movement the monophonic path keeps within one
-   * note; larger values hold more movement in a note. Default `50`; must be positive.
+   * Monophonic only. With the `'segments'` model, the pitch movement in cents at
+   * which one note ends and the next starts; with `'singing'`, the scale of the
+   * pitch movement kept within one note. Default `50`; must be positive.
    */
   segmentationThresholdCents?: number;
+  /**
+   * Monophonic only. `'segments'` (default) cuts the pitch track where it moves
+   * and splits brief level dips; it is accurate on instrument lines, including
+   * short notes. `'singing'` decodes notes jointly over pitch bins and holds
+   * vibrato and intonation drift within a note; it suits sung takes and can
+   * merge very short notes at fast tempos. Any other string is refused, and
+   * with `polyphonic` set a non-default model is refused.
+   */
+  monophonicModel?: 'segments' | 'singing';
   /**
    * Level mapped to velocity 1, in dBFS. Default `-48`; **must be negative**.
    *

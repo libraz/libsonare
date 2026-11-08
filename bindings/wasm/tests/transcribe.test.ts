@@ -676,3 +676,56 @@ describe('WASM Project.transcribeToClip', () => {
     ).not.toThrow();
   });
 });
+
+/** A harmonic tone at `hz` with sinusoidal vibrato of `rateHz` and `depthCents`, at 22050 Hz. */
+function vibratoTone(
+  hz: number,
+  seconds: number,
+  rateHz: number,
+  depthCents: number,
+): Float32Array {
+  const rate = 22050;
+  const out = new Float32Array(Math.round(rate * seconds));
+  const edge = 0.01 * rate;
+  let phase = 0;
+  for (let i = 0; i < out.length; i++) {
+    const f = hz * 2 ** ((depthCents / 1200) * Math.sin((2 * Math.PI * rateHz * i) / rate));
+    phase += (2 * Math.PI * f) / rate;
+    const envelope = Math.min(1, i / edge, (out.length - 1 - i) / edge);
+    out[i] =
+      0.4 * envelope * (Math.sin(phase) + 0.5 * Math.sin(2 * phase) + 0.25 * Math.sin(3 * phase));
+  }
+  return out;
+}
+
+describe('WASM transcribe monophonicModel', () => {
+  const G4 = 67;
+  const sung = vibratoTone(391.995, 2, 6, 75);
+  const run = (extra: Record<string, unknown> = {}) =>
+    transcribe({ samples: sung, sampleRate: 22050, tempoBpm: 120, ...extra } as TranscribeRequest);
+
+  beforeAll(async () => {
+    await init();
+  });
+
+  it("'singing' holds vibrato inside one note and differs from the default", () => {
+    const singing = run({ monophonicModel: 'singing' });
+    expect(singing.noteCount).toBe(1);
+    expect(noteNumbers(singing)).toEqual([G4]);
+    expect(singing.events).not.toEqual(run().events);
+  });
+
+  it("an explicit 'segments' equals an omitted field", () => {
+    expect(run({ monophonicModel: 'segments' }).events).toEqual(run().events);
+  });
+
+  it('refuses an unknown name as a RangeError and a non-string as a TypeError', () => {
+    expect(() => run({ monophonicModel: 'choir' })).toThrow(RangeError);
+    expect(() => run({ monophonicModel: 'choir' })).toThrow(/monophonicModel/);
+    expect(() => run({ monophonicModel: 1 })).toThrow(TypeError);
+  });
+
+  it("refuses 'singing' on the polyphonic path", () => {
+    expect(() => run({ polyphonic: true, monophonicModel: 'singing' })).toThrow(RangeError);
+  });
+});

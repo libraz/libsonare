@@ -91,7 +91,7 @@ int rangeField(val config, const char* key, int lo, int hi) {
 
 SonareTranscribeConfig transcribeConfigFromVal(val config) {
   SonareTranscribeConfig out = {};
-  out.struct_version = 3;
+  out.struct_version = 4;
   if (config.isUndefined() || config.isNull()) return out;
   out.polyphonic = boolProperty(config, "polyphonic", false) ? 1 : 0;
   // `referenceHz` is a positive number in Hz, or "auto" to measure it from the audio.
@@ -118,6 +118,13 @@ SonareTranscribeConfig transcribeConfigFromVal(val config) {
   out.min_frame_peak_ratio = signedField(config, "minFramePeakRatio", FloatDomain::kUnitRatio);
   out.min_ridge_peak_ratio = signedField(config, "minRidgePeakRatio", FloatDomain::kUnitRatio);
   out.reattack_ratio = signedField(config, "reattackRatio", FloatDomain::kSplitRatio);
+  // Absence is the segments model; the C ABI refuses a non-segments model on the polyphonic path.
+  const std::string model = stringProperty(config, "monophonicModel", "segments");
+  if (model == "singing") {
+    out.monophonic_model = 1;
+  } else if (model != "segments") {
+    throw WasmRangeError("monophonicModel must be 'segments' or 'singing'");
+  }
   // Not the same family: 0 is IN domain on these two -- group 0 and channel 0
   // are values a caller can mean -- so there is no sentinel to separate.
   out.group = intProperty(config, "group", 0);
