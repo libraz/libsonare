@@ -653,3 +653,60 @@ def test_to_clip_forwards_min_note_division(melody: np.ndarray) -> None:
         )
     finally:
         project.close()
+
+
+# ---------------------------------------------------------------------------
+# monophonic_model: segments (default) or singing
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture(scope="module")
+def vibrato_tone() -> np.ndarray:
+    """A 2 s G4 harmonic tone with a 6 Hz, 75-cent vibrato."""
+    t = np.arange(2 * SR) / SR
+    inst_freq = 391.9954 * 2.0 ** (0.75 * np.sin(2.0 * np.pi * 6.0 * t) / 12.0)
+    phase = 2.0 * np.pi * np.cumsum(inst_freq) / SR
+    tone = sum(np.sin(h * phase) / h for h in (1, 2, 3))
+    return (0.2 * tone).astype(np.float32)
+
+
+def test_singing_model_holds_vibrato_in_one_note(vibrato_tone: np.ndarray) -> None:
+    singing = libsonare.transcribe(vibrato_tone, SR, tempo_bpm=120.0, monophonic_model="singing")
+    default = libsonare.transcribe(vibrato_tone, SR, tempo_bpm=120.0)
+    assert singing.note_count == 1
+    assert [_note_number(d0) for _p, d0, _d1 in singing.events if _status(d0) == _NOTE_ON] == [67]
+    assert singing.events != default.events
+
+
+def test_explicit_segments_equals_the_default(vibrato_tone: np.ndarray) -> None:
+    explicit = libsonare.transcribe(vibrato_tone, SR, tempo_bpm=120.0, monophonic_model="segments")
+    default = libsonare.transcribe(vibrato_tone, SR, tempo_bpm=120.0, monophonic_model=None)
+    assert explicit.events == default.events
+    assert explicit.note_count == default.note_count
+
+
+def test_unknown_monophonic_model_is_refused_by_name(melody: np.ndarray) -> None:
+    with pytest.raises(SonareValueError, match="monophonic_model"):
+        libsonare.transcribe(melody, SR, monophonic_model="choir")  # type: ignore[arg-type]
+
+
+@pytest.mark.parametrize("value", [1, b"singing", True])
+def test_non_string_monophonic_model_is_a_type_error(melody: np.ndarray, value: object) -> None:
+    with pytest.raises(TypeError, match="monophonic_model"):
+        libsonare.transcribe(melody, SR, monophonic_model=value)  # type: ignore[arg-type]
+
+
+def test_singing_model_with_polyphonic_is_refused(melody: np.ndarray) -> None:
+    with pytest.raises(SonareValueError, match="monophonic_model"):
+        libsonare.transcribe(melody, SR, polyphonic=True, monophonic_model="singing")
+
+
+def test_to_clip_forwards_monophonic_model(vibrato_tone: np.ndarray) -> None:
+    project = libsonare.Project()
+    try:
+        _track_id, clip_id = project.add_midi_clip(0.0, 8.0)
+        assert (
+            project.transcribe_to_clip(clip_id, vibrato_tone, SR, monophonic_model="singing") == 1
+        )
+    finally:
+        project.close()

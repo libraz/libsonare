@@ -397,6 +397,45 @@ def test_transcribe_leaves_the_polyphonic_limits_unsent_by_default(
     for name in ("max_polyphony", "min_frame_peak_ratio", "min_ridge_peak_ratio", "reattack_ratio"):
         assert seen[name] is None
     assert seen["min_note_division"] is None
+    assert seen["monophonic_model"] == "segments"
+
+
+def test_transcribe_forwards_the_monophonic_model(
+    melody_wav: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import libsonare
+    from libsonare import cli
+
+    seen: dict[str, object] = {}
+    original = libsonare.Project.transcribe_to_clip
+
+    def spy(self: object, clip_id: int, samples: object, sr: int, **options: object) -> int:
+        seen.update(options)
+        return original(self, clip_id, samples, sr, **options)  # type: ignore[arg-type]
+
+    monkeypatch.setattr(libsonare.Project, "transcribe_to_clip", spy)
+    with tempfile.TemporaryDirectory() as tmpdir:
+        output = os.path.join(tmpdir, "take.mid")
+        monkeypatch.setattr(
+            sys,
+            "argv",
+            [
+                "sonare",
+                "transcribe",
+                melody_wav,
+                "-o",
+                output,
+                "--tempo-bpm",
+                "120",
+                "--monophonic-model",
+                "singing",
+            ],
+        )
+        try:
+            cli.main()
+        except SystemExit as exc:
+            assert exc.code in (0, None)
+    assert seen["monophonic_model"] == "singing"
 
 
 def test_transcribe_refuses_a_polyphonic_limit_without_polyphonic(melody_wav: str) -> None:

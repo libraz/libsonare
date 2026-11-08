@@ -673,6 +673,7 @@ def cmd_transcribe(args: argparse.Namespace) -> int:
             min_ridge_peak_ratio=args.min_ridge_peak_ratio,
             reattack_ratio=args.reattack_ratio,
             min_note_division=args.min_note_division,
+            monophonic_model=args.monophonic_model,
         )
         data = cast(Any, project).export_smf()
     finally:
@@ -952,7 +953,8 @@ def register_project_parsers(
         "--min-note-ms",
         type=_finite_float,
         default=None,
-        help="Shortest span kept as a note, in ms (default: 45 monophonic, 60 polyphonic)",
+        help="Shortest span kept as a note, in ms "
+        "(default: 30 monophonic segments, 45 singing, 60 polyphonic)",
     )
     transcribe_p.add_argument(
         "--min-note-division",
@@ -993,7 +995,19 @@ def register_project_parsers(
         "--segmentation-threshold-cents",
         type=_finite_float,
         default=None,
-        help="Pitch movement, in cents, kept within one monophonic note (default: 50)",
+        help="Monophonic: segments ends a note where the pitch moves this many cents; "
+        "singing reads it as the pitch movement kept within one note (default: 50)",
+    )
+    _cli_domain(
+        transcribe_p.add_argument(
+            "--monophonic-model",
+            default="segments",
+            metavar="{segments,singing}",
+            help="Monophonic note model: segments (default) cuts the pitch track where it "
+            "moves, singing holds vibrato and drift within a note; not with --polyphonic",
+        ),
+        choices=["segments", "singing"],
+        reject_exit="invalid_parameter",
     )
     transcribe_p.add_argument(
         "--velocity-floor-db",

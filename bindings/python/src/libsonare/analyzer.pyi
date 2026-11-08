@@ -874,6 +874,7 @@ def transcribe(
     min_ridge_peak_ratio: float | None = None,
     reattack_ratio: float | None = None,
     min_note_division: int | None = None,
+    monophonic_model: Literal["segments", "singing"] | None = None,
 ) -> TranscribeResult: ...
 
 class PercussiveEventEdit:

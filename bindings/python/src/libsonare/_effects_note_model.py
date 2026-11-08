@@ -43,7 +43,10 @@ _NOTE_STRUCT_VERSION = 1
 
 # The transcription config's own layout version. Unlike the note-object configs
 # above, 0 is rejected rather than read as version 1.
-_TRANSCRIBE_STRUCT_VERSION = 3
+_TRANSCRIBE_STRUCT_VERSION = 4
+
+# Monophonic note models, by C ABI value (0 is the default, segments).
+_MONOPHONIC_MODELS = {"segments": 0, "singing": 1}
 
 
 @dataclasses.dataclass
@@ -331,6 +334,17 @@ def _transcribe_reattack(fn_name: str, value: float) -> float:
     return number
 
 
+def _transcribe_monophonic_model(fn_name: str, value: str | None) -> int:
+    """Narrow ``monophonic_model`` to its C value; ``None`` is the segments default."""
+    if value is None:
+        return 0
+    if not isinstance(value, str):
+        raise TypeError(f"{fn_name}: monophonic_model must be a string or None")
+    if value not in _MONOPHONIC_MODELS:
+        raise SonareValueError(f"{fn_name}: monophonic_model must be 'segments' or 'singing'")
+    return _MONOPHONIC_MODELS[value]
+
+
 def _transcribe_config(
     fn_name: str,
     *,
@@ -349,6 +363,7 @@ def _transcribe_config(
     min_ridge_peak_ratio: float | None = None,
     reattack_ratio: float | None = None,
     min_note_division: int | None = None,
+    monophonic_model: str | None = None,
 ) -> SonareTranscribeConfig:
     """Build the transcription config, refusing an out-of-domain field by name.
 
@@ -426,6 +441,10 @@ def _transcribe_config(
         if min_note_division is None
         else _transcribe_int(fn_name, min_note_division, "min_note_division", 1, 128)
     )
+
+    # Given with `polyphonic`, a non-default model is refused by the C ABI,
+    # naming the field.
+    config.monophonic_model = _transcribe_monophonic_model(fn_name, monophonic_model)
     return config
 
 

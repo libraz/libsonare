@@ -5,7 +5,7 @@ from __future__ import annotations
 import ctypes
 import dataclasses
 from collections.abc import Sequence
-from typing import cast
+from typing import Literal, cast
 
 import numpy as np
 
@@ -982,6 +982,7 @@ def transcribe(
     min_ridge_peak_ratio: float | None = None,
     reattack_ratio: float | None = None,
     min_note_division: int | None = None,
+    monophonic_model: Literal["segments", "singing"] | None = None,
 ) -> TranscribeResult:
     """Transcribe mono audio into MIDI events on a constant-tempo grid.
 
@@ -1038,14 +1039,23 @@ def transcribe(
             this bound, with the same polyphonic salience-axis behavior as
             ``fmin``.
         min_note_ms: Shortest span kept as a note; ``None`` keeps the default
-            (45 ms monophonic, 60 ms polyphonic, whatever the tempo). Not given
+            (30 ms monophonic segments, 45 ms singing, 60 ms
+            polyphonic, whatever the tempo). Not given
             together with ``min_note_division``.
         min_note_division: Shortest note kept, as a note value: ``n`` is a 1/n
             note at the transcription tempo (32 is a thirty-second note), 1..128.
             Applies to both paths; ``None`` keeps the ``min_note_ms`` rule.
-        segmentation_threshold_cents: Scale of the pitch movement the
-            monophonic path keeps within one note, in cents; larger values hold
-            more movement in a note. ``None`` keeps the default (50 cents).
+        segmentation_threshold_cents: Monophonic only, in cents. ``"segments"``
+            ends one note and starts the next where the pitch moves this far;
+            ``"singing"`` reads it as the scale of the pitch movement kept
+            within one note. ``None`` keeps the default (50 cents).
+        monophonic_model: Monophonic only. ``"segments"`` (the default, also
+            ``None``) cuts the pitch track where it moves and splits brief level
+            dips -- accurate on instrument lines, short notes included.
+            ``"singing"`` decodes notes jointly over pitch bins and holds vibrato
+            and intonation drift within a note -- suited to sung takes, and can
+            merge very short notes at fast tempos. Refused with
+            ``polyphonic=True``.
         velocity_floor_db: Level mapped to velocity 1. A note's peak per-frame
             RMS of the input over its span (other notes sounding then included)
             is taken in dBFS and mapped linearly from ``[velocity_floor_db, 0]``
@@ -1080,7 +1090,10 @@ def transcribe(
             ``min_note_ms``, if any polyphonic-only field is given with
             ``polyphonic=False`` (the message names the field), or if only one
             of ``fmin``/``fmax`` is given and it does not lie on the right side
-            of the selected path's default for the other bound.
+            of the selected path's default for the other bound, or if
+            ``monophonic_model`` is an unknown name or is not ``None`` with
+            ``polyphonic=True``.
+        TypeError: If ``monophonic_model`` is neither a string nor ``None``.
         SonareError: ``NOT_SUPPORTED`` when the library was built without the
             pitch editor.
 
@@ -1121,6 +1134,7 @@ def transcribe(
         min_ridge_peak_ratio=min_ridge_peak_ratio,
         reattack_ratio=reattack_ratio,
         min_note_division=min_note_division,
+        monophonic_model=monophonic_model,
     )
     c_array, length = _to_c_float_array(samples)
 
