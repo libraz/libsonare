@@ -7,6 +7,7 @@
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
 #include <cmath>
+#include <iterator>
 #include <string>
 #include <vector>
 
@@ -1020,4 +1021,240 @@ TEST_CASE("Chord HMM smoothing keeps a clean I-V-vi-IV progression", "[chord_ana
       }
     }
   }
+}
+
+namespace merge_confidence_tests {
+using namespace sonare;
+struct Row {
+  int root;
+  bool minor, beat, hmm;
+  float scale, gain, noise;
+  bool reverse;
+  int sr;
+};
+struct Piece {
+  int root;
+  bool minor;
+  int frames;
+  float noise;
+};
+const Row rows[] = {{5, 0, 1, 1, 1, 0.05, 0.8, 0, 44100},   {3, 1, 0, 0, 2, 1, 0.6, 1, 44100},
+                    {9, 1, 0, 0, 1, 8, 0.8, 0, 10000},      {9, 0, 1, 1, 0.5, 8, 0.6, 1, 48000},
+                    {2, 1, 0, 1, 0.5, 0.05, 0.6, 1, 10000}, {4, 0, 1, 1, 2, 1, 0.8, 0, 48000},
+                    {11, 1, 1, 0, 1, 0.05, 0.6, 1, 48000},  {1, 0, 1, 0, 0.5, 1, 0.8, 1, 10000},
+                    {0, 0, 0, 1, 1, 1, 0.6, 0, 48000},      {6, 1, 0, 0, 2, 0.05, 0.8, 1, 10000},
+                    {10, 1, 1, 0, 0.5, 8, 0.6, 0, 10000},   {7, 1, 0, 1, 0.5, 0.05, 0.6, 0, 44100},
+                    {8, 1, 0, 1, 2, 1, 0.8, 0, 44100},      {3, 0, 1, 1, 0.5, 8, 0.8, 0, 10000},
+                    {2, 1, 1, 0, 2, 8, 0.8, 0, 44100},      {8, 1, 1, 0, 1, 0.05, 0.6, 1, 48000},
+                    {5, 1, 0, 0, 2, 1, 0.8, 1, 10000},      {11, 1, 0, 1, 0.5, 1, 0.8, 0, 48000},
+                    {1, 1, 0, 1, 2, 8, 0.6, 0, 44100},      {10, 0, 0, 1, 2, 1, 0.8, 1, 44100},
+                    {11, 0, 0, 1, 2, 8, 0.6, 0, 44100},     {5, 1, 1, 1, 0.5, 8, 0.6, 0, 48000},
+                    {0, 1, 1, 0, 2, 8, 0.8, 0, 44100},      {2, 0, 0, 1, 1, 1, 0.8, 0, 48000},
+                    {6, 0, 1, 1, 1, 8, 0.6, 0, 48000},      {4, 0, 0, 0, 0.5, 0.05, 0.6, 1, 44100},
+                    {7, 0, 0, 0, 2, 8, 0.8, 1, 48000},      {3, 1, 1, 1, 1, 0.05, 0.8, 0, 48000},
+                    {8, 0, 0, 1, 0.5, 8, 0.8, 1, 10000},    {6, 0, 1, 1, 0.5, 1, 0.8, 0, 48000},
+                    {6, 1, 1, 1, 1, 8, 0.6, 1, 44100},      {10, 0, 0, 1, 1, 0.05, 0.6, 1, 48000},
+                    {1, 0, 0, 1, 1, 1, 0.8, 0, 48000},      {4, 1, 0, 1, 1, 8, 0.6, 1, 10000},
+                    {0, 0, 0, 1, 0.5, 0.05, 0.6, 1, 48000}, {7, 0, 0, 1, 1, 1, 0.6, 0, 10000},
+                    {11, 0, 0, 1, 1, 8, 0.8, 0, 10000},     {9, 1, 0, 0, 2, 0.05, 0.6, 0, 48000},
+                    {1, 1, 0, 0, 2, 0.05, 0.8, 0, 44100},   {0, 1, 0, 1, 1, 8, 0.6, 1, 10000},
+                    {9, 1, 0, 1, 1, 0.05, 0.8, 0, 44100},   {7, 0, 1, 0, 2, 8, 0.6, 1, 10000},
+                    {9, 0, 1, 1, 0.5, 1, 0.8, 0, 48000}};
+std::vector<Chord> analyze(const std::vector<Piece>& pieces, const Row& r, float min,
+                           float threshold = 0) {
+  int n = 0;
+  for (auto& p : pieces) n += p.frames;
+  std::vector<float> x(12 * n), beats;
+  int f0 = 0;
+  float dt = float(r.sr / 100) / r.sr;
+  for (auto& p : pieces) {
+    beats.push_back(f0 * dt);
+    for (int f = f0; f < f0 + p.frames; ++f)
+      for (int c = 0; c < 12; ++c) {
+        float v = p.noise;
+        if (p.root >= 0 &&
+            (c == p.root || c == (p.root + (p.minor ? 3 : 4)) % 12 || c == (p.root + 7) % 12))
+          v = 1;
+        x[c * n + f] = v * r.gain;
+      }
+    f0 += p.frames;
+  }
+  beats.push_back(n * dt);
+  ChordConfig cfg;
+  cfg.min_duration = min;
+  cfg.smoothing_window = 0;
+  cfg.threshold = threshold;
+  cfg.use_hmm = r.hmm;
+  cfg.use_beat_sync = r.beat;
+  Chroma z(std::move(x), 12, n, r.sr, r.sr / 100);
+  return r.beat ? ChordAnalyzer(z, beats, cfg).chords() : ChordAnalyzer(z, cfg).chords();
+}
+bool eq(const Chord& a, const Chord& b) {
+  return a.root == b.root && a.quality == b.quality && a.bass == b.bass &&
+         std::abs(a.start - b.start) < 1e-5 && std::abs(a.end - b.end) < 1e-5 &&
+         std::abs(a.confidence - b.confidence) < 2e-5;
+}
+
+TEST_CASE("same-identity chord merges preserve the confidence duration integral",
+          "[chord][chord_analyzer][merge_confidence]") {
+  for (size_t ri = 0; ri < std::size(rows); ++ri) {
+    const auto& r = rows[ri];
+    int a = int(100 * r.scale), b = int(10 * r.scale), z = int(300 * r.scale);
+    float lo = r.reverse ? 0 : r.noise, hi = r.reverse ? r.noise : 0;
+    int other = (r.root + 6) % 12;
+    for (std::string kind : {"unequal", "short_same", "three_same", "equal_score", "distinct_final",
+                             "nc_barrier", "unmerged"}) {
+      std::vector<Piece> parts;
+      float threshold = 0;
+      if (kind == "short_same")
+        parts = {{r.root, r.minor, a, lo}, {other, r.minor, b, 0}, {r.root, r.minor, b, hi}};
+      else if (kind == "three_same")
+        parts = {{r.root, r.minor, a, lo},
+                 {other, r.minor, b, 0},
+                 {r.root, r.minor, 2 * a, .7f},
+                 {other, r.minor, b, 0},
+                 {r.root, r.minor, 4 * a, hi}};
+      else if (kind == "distinct_final")
+        parts = {{r.root, r.minor, a, 0}, {other, r.minor, b, 0}};
+      else if (kind == "nc_barrier") {
+        parts = {{r.root, r.minor, a, 0}, {-1, r.minor, b, 1}, {r.root, r.minor, z, 0}};
+        threshold = .9f;
+      } else
+        parts = {{r.root, r.minor, a, lo},
+                 {other, r.minor, b, 0},
+                 {r.root, r.minor, z, kind == "equal_score" ? lo : hi}};
+      auto raw = analyze(parts, r, 0, threshold),
+           got = analyze(parts, r, kind == "unmerged" ? 0 : .3f, threshold);
+      REQUIRE(raw.size() == parts.size());
+      for (size_t j = 0; j < parts.size(); ++j) {
+        REQUIRE(raw[j].quality ==
+                (parts[j].root < 0 ? ChordQuality::Unknown
+                                   : (parts[j].minor ? ChordQuality::Minor : ChordQuality::Major)));
+        if (j) REQUIRE(std::abs(raw[j - 1].end - raw[j].start) < 1e-5f);
+      }
+      bool setup = raw.size() == parts.size();
+      if (setup)
+        for (size_t j = 0; j < parts.size(); ++j) {
+          setup = setup && (parts[j].root < 0 ? raw[j].quality == ChordQuality::Unknown
+                                              : int(raw[j].root) == parts[j].root);
+        }
+      if (setup && (kind == "unequal" || kind == "short_same" || kind == "three_same"))
+        setup = std::abs(raw[0].confidence - raw[2].confidence) > 1e-3f;
+      double want = 0;
+      bool pass = false;
+      if (setup) {
+        if (kind == "distinct_final" || kind == "nc_barrier" || kind == "unmerged") {
+          pass = got.size() == raw.size();
+          if (pass)
+            for (size_t j = 0; j < raw.size(); ++j) pass = pass && eq(raw[j], got[j]);
+          want = raw[0].confidence;
+        } else {
+          double d0 = double(raw[1].end) - raw[0].start, d1 = raw[2].duration();
+          want = (d0 * raw[0].confidence + d1 * raw[2].confidence) / (d0 + d1);
+          if (kind == "three_same") {
+            double first = double(raw[3].end) - raw[0].start, last = raw[4].duration();
+            want = (first * want + last * raw[4].confidence) / (first + last);
+          }
+          pass = got.size() == 1 && int(got[0].root) == r.root &&
+                 got[0].quality == (r.minor ? ChordQuality::Minor : ChordQuality::Major) &&
+                 got[0].bass == raw[0].bass && std::abs(got[0].start) < 1e-5 &&
+                 std::abs(got[0].end - raw.back().end) < 1e-5 &&
+                 std::abs(got[0].confidence - want) < 2e-5;
+        }
+      }
+
+      CAPTURE(ri, kind, r.root, r.minor, r.beat, r.hmm, r.scale, r.gain, r.noise, r.reverse, r.sr,
+              want);
+      REQUIRE(setup);
+      CHECK(pass);
+    }
+  }
+}
+
+TEST_CASE("short different chords and rejected intervals preserve confidence policy",
+          "[chord][chord_analyzer][merge_confidence]") {
+  for (size_t ri = 0; ri < std::size(rows); ++ri) {
+    const auto& r = rows[ri];
+    int a = int(100 * r.scale), b = int(10 * r.scale), other = (r.root + 6) % 12,
+        next = (r.root + 5) % 12;
+    for (std::string kind : {"different_absorb", "prefix_absorb", "silence"}) {
+      std::vector<Piece> pieces;
+      if (kind == "different_absorb")
+        pieces = {{r.root, r.minor, a, r.noise}, {other, r.minor, b, 0}, {next, r.minor, 2 * a, 0}};
+      else if (kind == "prefix_absorb")
+        pieces = {{other, r.minor, b, 0}, {r.root, r.minor, a, r.noise}};
+      else
+        pieces = {{-1, false, a, 0}};
+      auto raw = analyze(pieces, r, 0, kind == "silence" ? .5f : 0),
+           got = analyze(pieces, r, .3f, kind == "silence" ? .5f : 0);
+      bool setup = raw.size() == pieces.size(), pass = false;
+      double want = -1;
+      if (setup) {
+        if (kind == "different_absorb") {
+          want = raw[0].confidence;
+          pass = got.size() == 2 && int(got[0].root) == r.root &&
+                 got[0].quality == raw[0].quality && got[0].bass == raw[0].bass &&
+                 std::abs(got[0].start - raw[0].start) < 1e-5 && int(got[1].root) == next &&
+                 std::abs(got[0].confidence - raw[0].confidence) < 2e-5 &&
+                 std::abs(got[0].end - raw[1].end) < 1e-5 && eq(got[1], raw[2]);
+        } else if (kind == "prefix_absorb") {
+          want = raw[1].confidence;
+          pass = got.size() == 1 && int(got[0].root) == r.root &&
+                 got[0].quality == raw[1].quality && got[0].bass == raw[1].bass &&
+                 std::abs(got[0].confidence - want) < 2e-5 && std::abs(got[0].start) < 1e-5 &&
+                 std::abs(got[0].end - raw[1].end) < 1e-5;
+        } else {
+          want = 0;
+          pass = got.size() == 1 && got[0].quality == ChordQuality::Unknown &&
+                 std::abs(got[0].confidence) < 2e-5 && eq(got[0], raw[0]);
+        }
+      }
+      CAPTURE(ri, kind, r.root, r.minor, r.beat, r.hmm, r.scale, r.gain, r.noise, r.reverse, r.sr,
+              want);
+      REQUIRE(setup);
+      CHECK(pass);
+    }
+  }
+}
+
+}  // namespace merge_confidence_tests
+
+TEST_CASE("a zero-duration same chord does not dilute retained confidence",
+          "[chord][chord_analyzer][merge_confidence]") {
+  constexpr int frames = 110;
+  std::vector<float> data(12 * frames);
+  for (int c = 0; c < 12; ++c) {
+    for (int f = 0; f < frames; ++f) {
+      const int chord_root = f < 100 || f == frames - 1 ? 0 : 6;
+      const float noise = f == frames - 1 ? 0.8f : 0.0f;
+      data[c * frames + f] =
+          c == chord_root || c == (chord_root + 4) % 12 || c == (chord_root + 7) % 12 ? 1.0f
+                                                                                      : noise;
+    }
+  }
+  const Chroma chroma(std::move(data), 12, frames, 10000, 100);
+  ChordConfig config;
+  config.use_hmm = false;
+  config.smoothing_window = 0.0f;
+  config.threshold = 0.0f;
+  config.min_duration = 0.0f;
+  const std::vector<float> beats{0.0f, 1.0f, chroma.duration()};
+  const auto raw = ChordAnalyzer(chroma, beats, config).chords();
+  REQUIRE(raw.size() == 3);
+  REQUIRE(raw[0].root == PitchClass::C);
+  REQUIRE(raw[1].root == PitchClass::Fs);
+  REQUIRE(raw[2].root == PitchClass::C);
+  REQUIRE(raw[2].quality == ChordQuality::Major);
+  REQUIRE(std::abs(raw[2].end - raw[2].start) < 1e-6f);
+  REQUIRE(raw[0].confidence > 0.9f);
+  REQUIRE(raw[2].confidence < 0.8f);
+  config.min_duration = 0.3f;
+  const auto merged = ChordAnalyzer(chroma, beats, config).chords();
+  REQUIRE(merged.size() == 1);
+  CHECK(merged[0].root == raw[0].root);
+  CHECK(merged[0].quality == raw[0].quality);
+  CHECK(merged[0].bass == raw[0].bass);
+  CHECK_THAT(merged[0].start, WithinAbs(raw[0].start, 1e-5f));
+  CHECK_THAT(merged[0].end, WithinAbs(raw[2].end, 1e-5f));
+  CHECK_THAT(merged[0].confidence, WithinAbs(raw[0].confidence, 2e-5f));
 }

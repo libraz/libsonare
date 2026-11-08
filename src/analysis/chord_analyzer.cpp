@@ -743,8 +743,14 @@ void ChordAnalyzer::analyze_chords_beat_sync(const std::vector<float>& tracked_b
 
   int current_chord = beat_chords[0];
   float segment_start = 0.0f;
-  float segment_confidence = beat_confidences[0];
-  int confidence_count = 1;
+  const auto beat_duration = [&](size_t index) {
+    const double start = index == 0 ? 0.0 : static_cast<double>(beat_times[index]);
+    const double end = index + 1 < beat_times.size() ? static_cast<double>(beat_times[index + 1])
+                                                     : static_cast<double>(analysis_end());
+    return std::max(0.0, end - start);
+  };
+  double confidence_duration = beat_duration(0);
+  double confidence_mass = static_cast<double>(beat_confidences[0]) * confidence_duration;
 
   for (size_t i = 1; i <= beat_chords.size(); ++i) {
     bool is_last = (i == beat_chords.size());
@@ -760,7 +766,9 @@ void ChordAnalyzer::analyze_chords_beat_sync(const std::vector<float>& tracked_b
       chord.quality = no_chord ? ChordQuality::Unknown : templates_[current_chord].quality;
       chord.start = segment_start;
       chord.end = segment_end;
-      chord.confidence = segment_confidence / static_cast<float>(confidence_count);
+      chord.confidence = confidence_duration > 0.0
+                             ? static_cast<float>(confidence_mass / confidence_duration)
+                             : beat_confidences[i - 1];
       const int start_frame = std::max(0, static_cast<int>(segment_start / hop_duration));
       const int end_frame =
           std::min(chroma_.n_frames(), static_cast<int>(segment_end / hop_duration) + 1);
@@ -778,12 +786,13 @@ void ChordAnalyzer::analyze_chords_beat_sync(const std::vector<float>& tracked_b
       if (!is_last) {
         current_chord = beat_chords[i];
         segment_start = beat_times[i];
-        segment_confidence = beat_confidences[i];
-        confidence_count = 1;
+        confidence_duration = beat_duration(i);
+        confidence_mass = static_cast<double>(beat_confidences[i]) * confidence_duration;
       }
     } else if (!is_last) {
-      segment_confidence += beat_confidences[i];
-      confidence_count++;
+      const double duration = beat_duration(i);
+      confidence_mass += static_cast<double>(beat_confidences[i]) * duration;
+      confidence_duration += duration;
     }
   }
 
@@ -793,6 +802,19 @@ void ChordAnalyzer::analyze_chords_beat_sync(const std::vector<float>& tracked_b
 
 void ChordAnalyzer::merge_short_segments() {
   if (chords_.size() < 2) return;
+
+  const auto append_same = [](Chord& previous, const Chord& next) {
+    const double previous_duration =
+        std::max(0.0, static_cast<double>(previous.end) - previous.start);
+    const double next_duration = std::max(0.0, static_cast<double>(next.end) - next.start);
+    const double duration = previous_duration + next_duration;
+    previous.confidence = duration > 0.0
+                              ? static_cast<float>((previous.confidence * previous_duration +
+                                                    next.confidence * next_duration) /
+                                                   duration)
+                              : next.confidence;
+    previous.end = next.end;
+  };
 
   std::vector<Chord> merged;
   merged.reserve(chords_.size());
@@ -812,8 +834,7 @@ void ChordAnalyzer::merge_short_segments() {
         pending_start = -1.0f;
       }
       if (!merged.empty() && merged.back().quality == ChordQuality::Unknown) {
-        merged.back().end = retained.end;
-        merged.back().confidence = (merged.back().confidence + retained.confidence) / 2.0f;
+        append_same(merged.back(), retained);
       } else {
         merged.push_back(retained);
       }
@@ -841,6 +862,8 @@ void ChordAnalyzer::merge_short_segments() {
         pending_start = -1.0f;
       }
       merged.push_back(retained);
+    } else if (short_chord && same_as_prev) {
+      append_same(merged.back(), chord);
     } else if (chord.duration() < config_.min_duration && !merged.empty()) {
       // Merge with previous chord
       merged.back().end = chord.end;
@@ -853,8 +876,7 @@ void ChordAnalyzer::merge_short_segments() {
     } else if (!merged.empty() && merged.back().root == chord.root &&
                merged.back().quality == chord.quality && merged.back().bass == chord.bass) {
       // Same chord as previous: extend
-      merged.back().end = chord.end;
-      merged.back().confidence = (merged.back().confidence + chord.confidence) / 2.0f;
+      append_same(merged.back(), chord);
     } else {
       Chord retained = chord;
       if (pending_start >= 0.0f) {
