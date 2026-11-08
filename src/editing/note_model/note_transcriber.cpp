@@ -772,6 +772,7 @@ std::vector<NoteObject> decode_notes_from_track(const Audio& audio,
   input.track = &track;
   input.frame_rms = frame_rms_for_track(audio, track);
   input.valley_frames = narrow_valley_frames(audio, track);
+  input.onset_frames = onset_frames_for_track(audio, track);
   const std::vector<DecodedSpan> spans =
       decode_note_states(input, config.fmin, config.fmax, config.reference_hz,
                          config.segmentation_threshold_cents, config.min_note_ms);

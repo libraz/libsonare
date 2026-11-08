@@ -4,8 +4,8 @@
 /// @brief Monophonic note segmentation by Viterbi decoding of a joint note-state model.
 ///
 /// Each pitch bin of a third of a semitone carries an Attack and a Stable state, and one
-/// Silent state is shared by all bins. A frame's F0, its RMS level and nearby narrow RMS
-/// valleys are the observations; the best path is cut into notes where it enters an
+/// Silent state is shared by all bins. A frame's F0, its RMS level, narrow RMS valleys and
+/// spectral onsets are the observations; the best path is cut into notes where it enters an
 /// Attack state. Emission costs scale with the frame period, while leaving a state, an
 /// entry's one Attack frame and a valley's cue each count once at any period, so a take
 /// segments alike at every sample rate.
@@ -28,6 +28,9 @@ struct NoteDecoderInput {
   std::vector<float> frame_rms;
   /// Track frames of narrow RMS valleys, as @ref narrow_valley_frames returns them.
   std::vector<int> valley_frames;
+  /// Track frames of spectral onsets. Each favours entering a different pitch bin on its
+  /// frame; it never splits a held pitch, since onsets fire on amplitude modulation too.
+  std::vector<int> onset_frames;
 };
 
 /// One decoded note as a half-open range `[frame_start, frame_end)` of track frames.
@@ -71,5 +74,11 @@ std::vector<float> frame_rms_for_track(const Audio& audio, const pitch_editor::F
 /// @throw sonare::SonareException (InvalidParameter) on a track with no frame cadence or
 ///        audio with no sample rate.
 std::vector<int> narrow_valley_frames(const Audio& audio, const pitch_editor::F0Track& track);
+
+/// @brief Track frames of the spectral onsets of @p audio.
+/// @details The monophonic onset detector's 200 fps frames, each mapped to the nearest track
+///          frame (half to even). Empty when the detector cannot run on @p audio.
+/// @throw sonare::SonareException (InvalidParameter) on a track with no frame cadence.
+std::vector<int> onset_frames_for_track(const Audio& audio, const pitch_editor::F0Track& track);
 
 }  // namespace sonare::editing::note_model

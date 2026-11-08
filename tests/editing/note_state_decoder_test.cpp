@@ -43,13 +43,15 @@ constexpr float kMinNoteMs = 45.0f;
 constexpr int kBoundaryToleranceFrames = 2;
 constexpr double kRateBoundaryToleranceSec = 0.012;
 
-enum class Shape { kVibrato, kStep, kSameWithValley, kSame, kGap, kGlide, kBlip };
+enum class Shape { kVibrato, kStep, kSameWithValley, kSame, kGap, kGlide, kBlip, kWobble };
 
 struct Take {
   F0Track track;
   std::vector<float> rms;
   /// Times of the narrow valleys the line carries (s).
   std::vector<double> valley_sec;
+  /// Times of the spectral onsets the line carries (s).
+  std::vector<double> onset_sec;
 };
 
 double frame_period(const Take& take) { return 1.0 / static_cast<double>(take.track.frame_rate()); }
@@ -68,6 +70,8 @@ double line_cents(Shape shape, double t, bool& voiced) {
       return 300.0 * (t - kLeadSec) / 1.5;
     case Shape::kBlip:
       return (t >= 0.85 && t < 0.87) ? 300.0 : 0.0;
+    case Shape::kWobble:
+      return 20.0 * std::sin(sonare::constants::kTwoPiD * 8.0 * t);
     case Shape::kSameWithValley:
     case Shape::kSame:
       return 0.0;
@@ -104,6 +108,9 @@ std::vector<DecodedSpan> decode(const Take& take) {
   const double h = frame_period(take);
   for (const double sec : take.valley_sec) {
     input.valley_frames.push_back(static_cast<int>(std::nearbyint(sec / h)));
+  }
+  for (const double sec : take.onset_sec) {
+    input.onset_frames.push_back(static_cast<int>(std::nearbyint(sec / h)));
   }
   return decode_note_states(input, kFmin, kFmax, sonare::constants::kA4Hz, kThresholdCents,
                             kMinNoteMs);
@@ -221,6 +228,36 @@ TEST_CASE("(j) alternating 93.75 ms notes with a valley at each change keep ever
     for (int k = 1; k < kNotes; ++k) take.valley_sec.push_back(kLeadSec + k * kNoteSec);
     INFO("sample rate " << sample_rate);
     CHECK(decode(take).size() == static_cast<std::size_t>(kNotes));
+  }
+}
+
+TEST_CASE("(k) an onset just before or after a pitch step moves the boundary onto it",
+          "[note_state_decoder]") {
+  for (const int sample_rate : {kBaseRate, kHighRate}) {
+    const double h = 1.0 / (static_cast<double>(sample_rate) / kHop);
+    const auto frame_at = [&](double sec) { return static_cast<int>(std::lround(sec / h)); };
+    INFO("sample rate " << sample_rate);
+    const std::vector<DecodedSpan> plain = decode(make_take(Shape::kStep, sample_rate));
+    REQUIRE(plain.size() == 2);
+    CHECK(std::abs(plain[1].frame_start - frame_at(0.85)) <= kBoundaryToleranceFrames);
+    for (const double onset : {0.81, 0.89}) {
+      Take take = make_take(Shape::kStep, sample_rate);
+      take.onset_sec.push_back(onset);
+      const std::vector<DecodedSpan> spans = decode(take);
+      INFO("onset at " << onset << " s");
+      REQUIRE(spans.size() == 2);
+      CHECK(std::abs(spans[1].frame_start - frame_at(onset)) <= 1);
+    }
+  }
+}
+
+TEST_CASE("(l) onsets on a held pitch with an 8 Hz 20-cent wobble do not split it",
+          "[note_state_decoder]") {
+  for (const int sample_rate : {kBaseRate, kHighRate}) {
+    Take take = make_take(Shape::kWobble, sample_rate);
+    for (double sec = 0.2; sec < kTakeSec; sec += 0.125) take.onset_sec.push_back(sec);
+    INFO("sample rate " << sample_rate);
+    CHECK(decode(take).size() == 1);
   }
 }
 

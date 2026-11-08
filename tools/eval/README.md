@@ -142,19 +142,22 @@ The annotated contour is itself an annotation, not ground truth. Annotated notes
 
 ### The singing model
 
-`monophonic_model` selects the monophonic segmentation. `segments`, the default, is the pipeline described above. `singing` decodes notes with a Viterbi pass over Attack and Stable states per third-of-a-semitone bin and one shared Silent state. The pitch emission is a normalised Cauchy density. Per-frame costs scale with the frame period, while an event (leaving a state, the one Attack frame of an entry, a valley's cue) costs the same at any period, so a take segments alike across sample rates. Narrow RMS valleys, found on the same 1 ms grid as the re-attack splitter, are the only cue for re-striking the same pitch; each valley supports its own frame only, because a bonus spread over a window could be collected once per frame. A spectral onset cue scored higher on Vocadito, but it fires on every cycle of amplitude modulation and misses quiet re-attacks.
+`monophonic_model` selects the monophonic segmentation. `segments`, the default, is the pipeline described above. `singing` decodes notes with a Viterbi pass over Attack and Stable states per third-of-a-semitone bin and one shared Silent state. The pitch emission is a normalised Cauchy density. Per-frame costs scale with the frame period, while an event (leaving a state, the one Attack frame of an entry, a valley's cue) costs the same at any period, so a take segments alike across sample rates. Narrow RMS valleys, found on the same 1 ms grid as the re-attack splitter, are the only cue for re-striking the same pitch. Spectral onsets from the segmenter's onset detector only favour entering a different pitch bin: they fire on every cycle of amplitude modulation and miss quiet re-attacks, so they cannot be trusted to split a held pitch, but they place a pitch change where its attack is. Each cue supports its own frame only, because a bonus spread over a window could be collected once per frame.
 
-The constants were chosen by 5-fold cross-validation over Vocadito track ids, with the cue then spread over ±25 ms around each valley. Each fold maximised mean pooled note F under two constraints: offset F could not fall below the default's, and every synthetic transcription regression had to pass. Pass `--monophonic-model singing` to `note_oracle.py` to reproduce the singing measurement.
+The constants were chosen by 5-fold cross-validation over Vocadito track ids, with the valley cue then spread over ±25 ms. Each fold maximised mean pooled note F under two constraints: offset F could not fall below the default's, and every synthetic transcription regression had to pass. The onset bonus was chosen the same way, with the other constants fixed: every fold chose 8, held-out note F was 0.672 / 0.644, and from 12 up an 8 Hz amplitude-modulated held tone splits. Pass `--monophonic-model singing` to `note_oracle.py` to reproduce the singing measurement.
 
 | Pooled note F | segments | singing |
 | --- | ---: | ---: |
-| Vocadito A1 / A2, all 40 | 0.566 / 0.526 | 0.656 / 0.604 |
-| Same, along the annotated contour | 0.633 / 0.588 | 0.781 / 0.750 |
-| VocalSet observed18, extended1 / extended4 | 0.136 / 0.445 | 0.208 / 0.742 |
+| Vocadito A1 / A2, all 40 | 0.566 / 0.526 | 0.677 / 0.650 |
+| Same, along the annotated contour | 0.633 / 0.588 | 0.758 / 0.754 |
+| VocalSet observed18, extended1 / extended4 | 0.136 / 0.445 | 0.203 / 0.709 |
+| CSD, 50 reannotated Korean songs | 0.665 | 0.739 |
 
-On the 12 confirmation recordings, measured with that ±25 ms cue, delta note F was +0.245 (95% CI +0.152 to +0.338) under extended4 and +0.002 (−0.045 to +0.056) under extended1. The pre-registered rule required both lower bounds above −0.02, so the rule was not met. Those recordings are now observed.
+On the 12 VocalSet confirmation recordings, measured with that ±25 ms cue and no onset cue, delta note F was +0.245 (95% CI +0.152 to +0.338) under extended4 and +0.002 (−0.045 to +0.056) under extended1. The pre-registered rule required both lower bounds above −0.02, so the rule was not met.
 
-The singing model is opt-in because it can merge very short notes. On the BWV1003_4 render, with 32nds at 80 bpm, note F falls from 0.988 to 0.975 at 44.1 kHz and to 0.963 at 48 kHz. Most reference onsets still merged into another note on Vocadito have neither a spectral onset nor an unvoiced frame within 50 ms, so separating them needs evidence beyond these features.
+CSD ([Choi et al., 2020](https://zenodo.org/records/4916302); the 50 songs with [refined note annotations](https://github.com/seyong92/CSD_reannotation)) was then held out as a second confirmation, with one rule per candidate fixed before any prediction. Without the onset cue, delta note F against `segments` was +0.052 (95% CI +0.043 to +0.060). The onset cue added +0.022 (+0.015 to +0.030) on top, so it was kept; against `segments` the shipped model gains +0.074 (+0.063 to +0.085). Offset F rose by +0.050 (+0.037 to +0.062). The onset cue moves the other corpora in both directions: the annotated-contour condition loses 0.023 against A1, and VocalSet observed18 extended4 loses 0.033. Both confirmation sets are now observed.
+
+The singing model is opt-in because it can merge very short notes. On the BWV1003_4 render, with 32nds at 80 bpm, note F falls from 0.988 to 0.969 at 44.1 kHz and to 0.963 at 48 kHz. Most reference onsets still merged into another note on Vocadito have neither a spectral onset nor an unvoiced frame within 50 ms, so separating them needs evidence beyond these features.
 
 ### Candidates that did not hold
 

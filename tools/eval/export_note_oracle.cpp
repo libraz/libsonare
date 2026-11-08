@@ -160,19 +160,23 @@ int main(int argc, char** argv) {
     for (int i = 0; i < detected.n_frames(); ++i) {
       std::cout << (i ? "," : "") << (detected.voiced[i] ? detected.f0_hz[i] : 0.0f);
     }
-    // The decoder's inputs beside the contour: per-frame RMS and the narrow valley frames.
+    // The decoder's inputs beside the contour: per-frame RMS, narrow valley and onset frames.
     std::cout << "],\"rms\":[";
     const std::vector<float> rms = editing::note_model::frame_rms_for_track(audio, detected);
     for (size_t i = 0; i < rms.size(); ++i) std::cout << (i ? "," : "") << rms[i];
     const std::vector<int> valleys = editing::note_model::narrow_valley_frames(audio, detected);
     std::cout << "]},\"valley_frames\":[";
     for (size_t i = 0; i < valleys.size(); ++i) std::cout << (i ? "," : "") << valleys[i];
+    const std::vector<int> onsets = editing::note_model::onset_frames_for_track(audio, detected);
+    std::cout << "],\"onset_track_frames\":[";
+    for (size_t i = 0; i < onsets.size(); ++i) std::cout << (i ? "," : "") << onsets[i];
     // The decoder over exactly the exported inputs, at the singing model's resolved values
     // whichever model cuts the notes.
     editing::note_model::NoteDecoderInput input;
     input.track = &detected;
     input.frame_rms = rms;
     input.valley_frames = valleys;
+    input.onset_frames = onsets;
     TranscribeConfig decoder_config = config;
     decoder_config.monophonic_model = MonophonicModel::kSinging;
     const auto limits = editing::note_model::resolve_transcribe_polyphony_limits(decoder_config);

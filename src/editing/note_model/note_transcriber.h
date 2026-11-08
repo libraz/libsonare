@@ -44,7 +44,8 @@ enum class MonophonicModel : uint32_t {
   /// on clean instrument lines, short notes included.
   kSegments = 0,
   /// A joint note-state decoder over pitch bins, with narrow RMS valleys as
-  /// re-articulation evidence. Holds vibrato and intonation drift within one
+  /// re-articulation evidence and spectral onsets placing pitch changes. Holds vibrato and
+  /// intonation drift within one
   /// note; meant for sung recordings. It can merge very short notes, such as
   /// thirty-second notes at fast tempos.
   kSinging = 1,

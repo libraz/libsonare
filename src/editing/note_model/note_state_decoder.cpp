@@ -6,6 +6,7 @@
 #include <cstdint>
 #include <vector>
 
+#include "editing/note_model/monophonic_onset_evidence.h"
 #include "util/constants.h"
 #include "util/exception.h"
 #include "util/peak.h"
@@ -64,6 +65,9 @@ constexpr double kStableDwellSec = 0.6;
 constexpr double kLogVoicedSilence = -9.0;
 /// Bonus on a same-bin re-entry at a frame a valley supports.
 constexpr double kCueBonus = 16.0;
+/// Bonus on entering another bin at an onset frame. Chosen by the same cross-validation;
+/// from 12 up an 8 Hz amplitude-modulated held tone splits.
+constexpr double kOnsetChangeBonus = 8.0;
 
 // Narrow-valley detector: these split repeated same-pitch strikes in the synthetic regression
 // takes at every gain tried, while an 8 Hz amplitude-modulation trough fails the width test.
@@ -134,11 +138,11 @@ std::vector<bool> usable_voicing(const pitch_editor::F0Track& track,
   return voiced;
 }
 
-/// The valley frames, one cue each: a per-frame bonus over a window could be collected once
-/// per frame by cycling through same-bin re-entries, so its total would grow with the frame rate.
-std::vector<bool> valley_cues(const std::vector<int>& valley_frames, std::size_t n) {
+/// The cue frames, one each: a per-frame bonus over a window could be collected once per
+/// frame by cycling through re-entries, so its total would grow with the frame rate.
+std::vector<bool> frame_cues(const std::vector<int>& frames, std::size_t n) {
   std::vector<bool> cue(n, false);
-  for (const int frame : valley_frames) {
+  for (const int frame : frames) {
     if (frame >= 0 && static_cast<std::size_t>(frame) < n)
       cue[static_cast<std::size_t>(frame)] = true;
   }
@@ -286,7 +290,8 @@ std::vector<DecodedSpan> decode_note_states(const NoteDecoderInput& input, float
   }
 
   const std::vector<bool> voiced = usable_voicing(track, input.frame_rms, h);
-  const std::vector<bool> cue = valley_cues(input.valley_frames, n);
+  const std::vector<bool> cue = frame_cues(input.valley_frames, n);
+  const std::vector<bool> onset = frame_cues(input.onset_frames, n);
 
   const double scale = h / kReferenceFramePeriodSec;
   const double sigma_stable =
@@ -360,6 +365,7 @@ std::vector<DecodedSpan> decode_note_states(const NoteDecoderInput& input, float
     }
 
     const double cue_bonus = cue[t] ? kCueBonus : 0.0;
+    const double onset_bonus = onset[t] ? kOnsetChangeBonus : 0.0;
     const double enter_from_q = q + q_to_a;
     for (std::size_t b = 0; b < nb; ++b) {
       // Candidates in fixed order; a later one replaces an earlier only when strictly better.
@@ -370,7 +376,8 @@ std::vector<DecodedSpan> decode_note_states(const NoteDecoderInput& input, float
         best = stay;
         code = 1;
       }
-      const double other = ((b == top1 ? s[top2] : s[top1]) + s_to_a) + entry_fix[b];
+      const double other =
+          (((b == top1 ? s[top2] : s[top1]) + s_to_a) + entry_fix[b]) + onset_bonus;
       if (other > best) {
         best = other;
         code = 2;
@@ -507,6 +514,22 @@ std::vector<int> narrow_valley_frames(const Audio& audio, const pitch_editor::F0
   std::sort(out.begin(), out.end());
   out.erase(std::unique(out.begin(), out.end()), out.end());
   return out;
+}
+
+std::vector<int> onset_frames_for_track(const Audio& audio, const pitch_editor::F0Track& track) {
+  SONARE_CHECK_MSG(track.frame_rate() > 0.0f, ErrorCode::InvalidParameter,
+                   "onset_frames_for_track: track needs a frame cadence");
+  const detail::MonophonicOnsetEvidence evidence = detail::monophonic_onset_evidence(audio);
+  std::vector<int> frames;
+  if (!evidence.available) return frames;
+  const double frame_sec = 1.0 / static_cast<double>(track.frame_rate());
+  frames.reserve(evidence.frames.size());
+  for (const int frame : evidence.frames) {
+    const double sec =
+        static_cast<double>(frame) / detail::monophonic_onset_detail::kFramesPerSecond;
+    frames.push_back(static_cast<int>(std::nearbyint(sec / frame_sec)));
+  }
+  return frames;
 }
 
 }  // namespace sonare::editing::note_model
