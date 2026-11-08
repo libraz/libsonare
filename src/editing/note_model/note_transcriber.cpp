@@ -501,7 +501,8 @@ std::vector<NoteObject> split_monophonic_reattacks(const Audio& audio,
     std::vector<int> edges;
     edges.reserve(cuts.size() + 2);
     edges.push_back(parent.frame_start);
-    edges.insert(edges.end(), cuts.begin(), cuts.end());
+    // Appended one at a time: GCC 14 -O2 misreads a range insert here as an oversized memcpy.
+    for (const int cut : cuts) edges.push_back(cut);
     edges.push_back(parent.frame_end);
 
     std::vector<NoteObject> children;

@@ -1140,9 +1140,11 @@ TEST_CASE("the column kernel is truncated at the ends down to half its width",
   // A masked column is no candidate.
   std::vector<uint8_t> mask(40, 1);
   mask[6] = 0;
-  for (const Boundary& b : detect(6, mask).boundaries()) CHECK(b.frame != 6);
+  const BoundaryDetector masked = detect(6, mask);
+  for (const Boundary& b : masked.boundaries()) CHECK(b.frame != 6);
   // A change closer to the start than half the kernel is not computed where it is.
-  for (const Boundary& b : detect(3, {}).boundaries()) CHECK(b.frame != 3);
+  const BoundaryDetector at_three = detect(3, {});
+  for (const Boundary& b : at_three.boundaries()) CHECK(b.frame != 3);
 }
 
 TEST_CASE("analysis confidences stay in range", "[section_structure]") {
