@@ -22,6 +22,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import math
 import statistics
 import sys
 from collections.abc import Callable, Iterable
@@ -119,20 +120,137 @@ def summarize_meter(observations: list[dict[str, Any]]) -> dict[str, Any]:
 
 
 def summarize_chord(observations: list[dict[str, Any]]) -> dict[str, Any]:
-    def collect(metric: str, field: str) -> list[float]:
-        return [
-            float(item[field])
-            for item in observations
-            if item.get("metric") == metric and item.get(field) is not None
-        ]
-
-    return {
-        "wcsr_maj_min": mean(collect("chord_wcsr", "wcsr")),
-        "wcsr_exact": mean(collect("chord_detail", "exact_wcsr")),
-        "root_accuracy": mean(collect("chord_detail", "root_accuracy")),
-        "quality_accuracy": mean(collect("chord_detail", "quality_accuracy")),
-        "bass_accuracy": mean(collect("chord_bass_acc", "accuracy")),
+    metric_fields = {
+        "wcsr_maj_min": ("chord_wcsr", "wcsr"),
+        "wcsr_exact": ("chord_exact_wcsr", "exact_wcsr"),
+        "root_accuracy": ("chord_root_accuracy", "root_accuracy"),
+        "quality_accuracy": ("chord_quality_accuracy", "quality_accuracy"),
+        "bass_accuracy": ("chord_bass_acc", "accuracy"),
     }
+    versions = {str(item.get("metric_version", "legacy_midpoint_v1")) for item in observations}
+    if len(versions) > 1:
+        raise ValueError(f"cannot aggregate mixed chord metric versions: {sorted(versions)}")
+    version = next(iter(versions), "legacy_midpoint_v1")
+    if version not in {"legacy_midpoint_v1", "chord_overlap_v2"}:
+        raise ValueError(f"unsupported chord metric version: {version}")
+    if version == "chord_overlap_v2":
+        for item in observations:
+            counters = (
+                "correct_seconds",
+                "scored_seconds",
+                "annotated_seconds",
+                "ignored_seconds",
+                "missing_prediction_seconds",
+            )
+            try:
+                values = {name: float(item[name]) for name in counters}
+            except (KeyError, TypeError, ValueError) as error:
+                raise ValueError(
+                    "chord_overlap_v2 observation is missing valid duration fields"
+                ) from error
+            if any(not math.isfinite(value) or value < 0 for value in values.values()):
+                raise ValueError("chord_overlap_v2 duration fields must be finite and nonnegative")
+            correct = values["correct_seconds"]
+            scored = values["scored_seconds"]
+            annotated = values["annotated_seconds"]
+            ignored = values["ignored_seconds"]
+            missing = values["missing_prediction_seconds"]
+            if correct > scored + 1e-9 or missing > scored + 1e-9:
+                raise ValueError(
+                    "chord_overlap_v2 correct/missing duration exceeds scored duration"
+                )
+            if not math.isclose(scored + ignored, annotated, rel_tol=1e-9, abs_tol=1e-9):
+                raise ValueError(
+                    "chord_overlap_v2 scored plus ignored duration must equal annotated duration"
+                )
+            score = item.get("score")
+            if scored == 0 and score is not None:
+                raise ValueError("chord_overlap_v2 unmeasured observation must have a null score")
+            if scored > 0:
+                if score is None or not math.isfinite(float(score)):
+                    raise ValueError(
+                        "chord_overlap_v2 measured observation must have a finite score"
+                    )
+                if not math.isclose(float(score), correct / scored, rel_tol=1e-9, abs_tol=1e-9):
+                    raise ValueError("chord_overlap_v2 score does not match its seconds")
+
+    result: dict[str, Any] = {"metric_version": version}
+    if version == "chord_overlap_v2":
+        result["root_scope"] = "known_chords"
+        result["quality_scope"] = "known_chords"
+        result["exact_scope"] = "known_chords"
+        result["bass_scope"] = "explicit_known_bass"
+    else:
+        result["root_scope"] = "legacy_midpoint_v1"
+        result["bass_scope"] = "legacy_midpoint_v1"
+
+    coverage_by_metric: dict[str, Any] = {}
+    attempted_fixtures = len({str(item.get("fixture", "")) for item in observations})
+    all_scored_fixtures: set[str] = set()
+    for output_name, (metric, legacy_field) in metric_fields.items():
+        rows: list[dict[str, Any]] = []
+        for item in observations:
+            if version == "chord_overlap_v2":
+                if item.get("metric") == metric and float(item.get("scored_seconds", 0.0)) > 0:
+                    rows.append(item)
+            elif (item.get("metric") == metric and item.get(legacy_field) is not None) or (
+                metric != "chord_wcsr"
+                and item.get("metric") == "chord_detail"
+                and item.get(legacy_field) is not None
+            ):
+                rows.append(item)
+
+        if version == "chord_overlap_v2":
+            attempted_rows = [item for item in observations if item.get("metric") == metric]
+            values = [float(item["score"]) for item in rows if item.get("score") is not None]
+            correct_seconds = sum(float(item["correct_seconds"]) for item in rows)
+            scored_seconds = sum(float(item["scored_seconds"]) for item in rows)
+            pooled = correct_seconds / scored_seconds if scored_seconds > 0 else None
+            result[f"{output_name}_pooled"] = pooled
+            result[f"{output_name}_correct_seconds"] = correct_seconds
+            result[f"{output_name}_scored_seconds"] = scored_seconds
+            result[f"{output_name}_track_macro"] = mean(values)
+            result[output_name] = mean(values)  # Keep the historical field as track macro.
+            scored_fixtures = {str(item.get("fixture", "")) for item in rows}
+            all_scored_fixtures.update(scored_fixtures)
+            coverage_by_metric[output_name] = {
+                "attempted_fixtures": len(
+                    {
+                        str(item.get("fixture", ""))
+                        for item in observations
+                        if item.get("metric") == metric
+                    }
+                ),
+                "scored_fixtures": len(scored_fixtures),
+                "scored_seconds": scored_seconds,
+                "annotated_seconds": sum(
+                    float(item["annotated_seconds"]) for item in attempted_rows
+                ),
+                "ignored_seconds": sum(float(item["ignored_seconds"]) for item in attempted_rows),
+            }
+        else:
+            values = [float(item[legacy_field]) for item in rows]
+            result[f"{output_name}_track_macro"] = mean(values)
+            result[output_name] = mean(values)
+            coverage_by_metric[output_name] = {
+                "attempted_fixtures": len(
+                    {
+                        str(item.get("fixture", ""))
+                        for item in observations
+                        if item.get("metric") in (metric, "chord_detail")
+                    }
+                ),
+                "scored_fixtures": len({str(item.get("fixture", "")) for item in rows}),
+                "scored_seconds": None,
+            }
+
+    if version == "chord_overlap_v2":
+        result["coverage"] = {
+            "attempted_fixtures": attempted_fixtures,
+            "scored_fixtures": len(all_scored_fixtures),
+            "by_metric": coverage_by_metric,
+        }
+    return result
 
 
 def summarize_structure(observations: list[dict[str, Any]]) -> dict[str, Any]:
@@ -176,7 +294,14 @@ DIMENSIONS = (
     Dimension("meter", ("meter",), summarize_meter, "accuracy"),
     Dimension(
         "chord",
-        ("chord_wcsr", "chord_detail", "chord_bass_acc"),
+        (
+            "chord_wcsr",
+            "chord_exact_wcsr",
+            "chord_root_accuracy",
+            "chord_quality_accuracy",
+            "chord_detail",  # Legacy midpoint report compatibility.
+            "chord_bass_acc",
+        ),
         summarize_chord,
         "wcsr_maj_min",
     ),
@@ -196,6 +321,18 @@ def fixture_count(observations: list[dict[str, Any]]) -> int:
     return len({str(item.get("fixture", "")) for item in observations})
 
 
+def chord_has_measurement(observations: list[dict[str, Any]]) -> bool:
+    return any(
+        float(item.get("scored_seconds", 0.0)) > 0 and item.get("score") is not None
+        if item.get("metric_version") == "chord_overlap_v2"
+        else any(
+            item.get(field) is not None
+            for field in ("wcsr", "root_accuracy", "quality_accuracy", "exact_wcsr", "accuracy")
+        )
+        for item in observations
+    )
+
+
 def summarize_dimension(dimension: Dimension, observations: list[dict[str, Any]]) -> dict[str, Any]:
     selected = [item for item in observations if item.get("metric") in dimension.metrics]
     if not selected:
@@ -203,19 +340,43 @@ def summarize_dimension(dimension: Dimension, observations: list[dict[str, Any]]
         # over an empty set would read as a measurement that never happened.
         return {"measured": False, "fixtures": 0}
 
+    if dimension.name == "chord":
+        values = dimension.summarize(selected)
+        measured = chord_has_measurement(selected)
+        if not measured:
+            return {
+                "measured": False,
+                "fixtures": fixture_count(selected),
+                "coverage": values.get("coverage"),
+            }
+    else:
+        values = dimension.summarize(selected)
+        measured = True
+
     result: dict[str, Any] = {
         "measured": True,
         "fixtures": fixture_count(selected),
-        "overall": dimension.summarize(selected),
+        "overall": values,
         "by_dataset": {},
     }
     datasets = sorted({dataset_of(str(item.get("fixture", ""))) for item in selected})
     for dataset in datasets:
         subset = [item for item in selected if dataset_of(str(item.get("fixture", ""))) == dataset]
-        result["by_dataset"][dataset] = {
-            "fixtures": fixture_count(subset),
-            **dimension.summarize(subset),
-        }
+        if dimension.name == "chord":
+            dataset_values = dimension.summarize(subset)
+            result["by_dataset"][dataset] = {
+                "fixtures": fixture_count(subset),
+                **(
+                    {"measured": False, "coverage": dataset_values.get("coverage")}
+                    if not chord_has_measurement(subset)
+                    else {"measured": True, **dataset_values}
+                ),
+            }
+        else:
+            result["by_dataset"][dataset] = {
+                "fixtures": fixture_count(subset),
+                **dimension.summarize(subset),
+            }
     return result
 
 
@@ -236,12 +397,16 @@ def summarize(report: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def format_value(value: Any) -> str:
+def format_value(value: Any, field_name: str | None = None) -> str:
     if value is None:
         return "n/a"
     if isinstance(value, bool):
         return "yes" if value else "no"
     if isinstance(value, float):
+        if field_name and field_name.endswith("_seconds"):
+            return f"{value:.3f}s"
+        if field_name and field_name.endswith("_ratio"):
+            return f"{value:.3f}"
         return f"{value * 100.0:.1f}%"
     return str(value)
 
@@ -254,7 +419,22 @@ def to_markdown(summary: dict[str, Any]) -> str:
     for dimension in DIMENSIONS:
         entry = summary["dimensions"][dimension.name]
         if not entry["measured"]:
-            lines.append(f"| {dimension.name} | — | 0 | unmeasured | no fixtures configured |")
+            count = entry["fixtures"]
+            coverage = entry.get("coverage")
+            if dimension.name == "chord" and coverage and coverage.get("attempted_fixtures", 0) > 0:
+                primary = max(
+                    coverage["by_metric"].values(), key=lambda item: item["attempted_fixtures"]
+                )
+                reason = (
+                    "no scored chord intervals; "
+                    f"attempted {primary['attempted_fixtures']}, "
+                    f"scored {primary['scored_seconds']:.3f}s, "
+                    f"annotated {primary['annotated_seconds']:.3f}s, "
+                    f"ignored {primary['ignored_seconds']:.3f}s"
+                )
+            else:
+                reason = "no fixtures configured"
+            lines.append(f"| {dimension.name} | — | {count} | unmeasured | {reason} |")
             continue
         rows = [("all", entry["fixtures"], entry["overall"])]
         rows.extend(
@@ -262,12 +442,17 @@ def to_markdown(summary: dict[str, Any]) -> str:
             for dataset, values in sorted(entry["by_dataset"].items())
         )
         for dataset, count, values in rows:
-            headline = format_value(values.get(dimension.headline))
+            headline_field = dimension.headline
+            if dimension.name == "chord" and values.get("metric_version") == "chord_overlap_v2":
+                headline_field = "wcsr_maj_min_pooled"
+            hidden_fields = {headline_field, "fixtures", "mirex_categories"}
+            if dimension.name == "chord" and values.get("metric_version") == "chord_overlap_v2":
+                hidden_fields.add("wcsr_maj_min")
+            headline = format_value(values.get(headline_field))
             detail = ", ".join(
-                f"{key} {format_value(value)}"
+                f"{key} {format_value(value, key)}"
                 for key, value in values.items()
-                if key not in {dimension.headline, "fixtures", "mirex_categories"}
-                and not isinstance(value, dict)
+                if key not in hidden_fields and not isinstance(value, dict)
             )
             lines.append(
                 f"| {dimension.name} | {dataset} | {count} | {headline} | {detail or '—'} |"
@@ -305,7 +490,11 @@ def parse_args() -> argparse.Namespace:
 def main() -> int:
     args = parse_args()
     report = json.loads(args.report.read_text())
-    summary = summarize(report)
+    try:
+        summary = summarize(report)
+    except ValueError as error:
+        print(f"invalid accuracy report: {error}", file=sys.stderr)
+        return 2
 
     missing = [
         name

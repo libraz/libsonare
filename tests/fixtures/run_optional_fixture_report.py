@@ -333,6 +333,34 @@ def extract_observations(stdout: str) -> list[dict[str, Any]]:
         )
 
     for match in re.finditer(
+        r"Report-only chord measurement fixture (.+?) metric ([a-z_]+) version "
+        r"(chord_overlap_v2) correct_seconds ([0-9.+\-eE]+) scored_seconds "
+        r"([0-9.+\-eE]+) annotated_seconds ([0-9.+\-eE]+) ignored_seconds "
+        r"([0-9.+\-eE]+) missing_prediction_seconds ([0-9.+\-eE]+) score "
+        r"([0-9.+\-eE]+|nan) threshold ([0-9.+\-eE]+|nan) scope ([a-z_]+)",
+        text,
+    ):
+        score_text = match.group(9)
+        threshold_text = match.group(10)
+        scored_seconds = float(match.group(5))
+        observations.append(
+            {
+                "metric": match.group(2),
+                "fixture": clean_fixture_name(match.group(1)),
+                "metric_version": match.group(3),
+                "correct_seconds": float(match.group(4)),
+                "scored_seconds": scored_seconds,
+                "annotated_seconds": float(match.group(6)),
+                "ignored_seconds": float(match.group(7)),
+                "missing_prediction_seconds": float(match.group(8)),
+                "score": float(score_text) if score_text != "nan" else None,
+                "threshold": float(threshold_text) if threshold_text != "nan" else None,
+                "metric_scope": match.group(11),
+                "measured": scored_seconds > 0.0 and score_text != "nan",
+            }
+        )
+
+    for match in re.finditer(
         r"Report-only chord fixture (.+?) WCSR ([0-9.+\-eE]+); threshold ([0-9.+\-eE]+)",
         text,
     ):
@@ -340,6 +368,7 @@ def extract_observations(stdout: str) -> list[dict[str, Any]]:
             {
                 "metric": "chord_wcsr",
                 "fixture": clean_fixture_name(match.group(1)),
+                "metric_version": "legacy_midpoint_v1",
                 "wcsr": float(match.group(2)),
                 "threshold": float(match.group(3)),
             }
@@ -355,6 +384,7 @@ def extract_observations(stdout: str) -> list[dict[str, Any]]:
             {
                 "metric": "chord_extended_wcsr",
                 "fixture": clean_fixture_name(match.group(1)),
+                "metric_version": "legacy_midpoint_v1",
                 "wcsr": float(match.group(2)),
                 "threshold": float(threshold_text) if threshold_text != "nan" else None,
             }
@@ -369,6 +399,7 @@ def extract_observations(stdout: str) -> list[dict[str, Any]]:
             {
                 "metric": "chord_detail",
                 "fixture": clean_fixture_name(match.group(1)),
+                "metric_version": "legacy_midpoint_v1",
                 "root_accuracy": float(match.group(2)),
                 "quality_accuracy": float(match.group(3)),
                 "exact_wcsr": float(match.group(4)),
@@ -383,6 +414,7 @@ def extract_observations(stdout: str) -> list[dict[str, Any]]:
             {
                 "metric": "chord_bass_acc",
                 "fixture": clean_fixture_name(match.group(1)),
+                "metric_version": "legacy_midpoint_v1",
                 "accuracy": float(match.group(2)),
                 "threshold": float(match.group(3)),
             }

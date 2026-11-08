@@ -40,6 +40,21 @@ def _key(fixture: str, correct: bool, category: str, score: float) -> dict:
     }
 
 
+def _chord_v2(fixture: str, metric: str, correct: float, scored: float) -> dict:
+    return {
+        "metric": metric,
+        "fixture": fixture,
+        "metric_version": "chord_overlap_v2",
+        "correct_seconds": correct,
+        "scored_seconds": scored,
+        "annotated_seconds": scored,
+        "ignored_seconds": 0.0,
+        "missing_prediction_seconds": 0.0,
+        "score": correct / scored if scored else None,
+        "measured": scored > 0,
+    }
+
+
 def test_empty_report_reports_every_dimension_unmeasured() -> None:
     summary = summarizer.summarize(_report())
     assert summary["measured_dimensions"] == []
@@ -187,6 +202,91 @@ def test_chord_bass_stays_absent_when_no_row_measured_it() -> None:
     # No bass-labelled reference was present. Reporting 0% would read as a
     # measured failure of inversion detection rather than as its absence.
     assert overall["bass_accuracy"] is None
+
+
+def test_chord_v2_reports_track_macro_and_duration_pooled_scores() -> None:
+    report = _report(
+        _chord_v2("public/a.wav", "chord_wcsr", 1.0, 10.0),
+        _chord_v2("public/b.wav", "chord_wcsr", 90.0, 90.0),
+    )
+    summary = summarizer.summarize(report)
+    entry = summary["dimensions"]["chord"]
+    overall = entry["overall"]
+    assert entry["measured"] is True
+    assert entry["fixtures"] == 2
+    assert overall["metric_version"] == "chord_overlap_v2"
+    assert overall["wcsr_maj_min"] == overall["wcsr_maj_min_track_macro"] == 0.55
+    assert overall["wcsr_maj_min_pooled"] == 0.91
+    assert overall["wcsr_maj_min_correct_seconds"] == 91.0
+    assert overall["wcsr_maj_min_scored_seconds"] == 100.0
+    assert overall["root_scope"] == "known_chords"
+    assert overall["coverage"]["attempted_fixtures"] == 2
+    markdown = summarizer.to_markdown(summary)
+    chord_all_row = next(
+        line for line in markdown.splitlines() if line.startswith("| chord | all |")
+    )
+    assert "| chord | all | 2 | 91.0% |" in chord_all_row
+    assert "wcsr_maj_min_track_macro 55.0%" in chord_all_row
+    assert "wcsr_maj_min_correct_seconds 91.000s" in markdown
+    assert "wcsr_maj_min_scored_seconds 100.000s" in markdown
+    assert "wcsr_maj_min_scored_seconds 10000.0%" not in markdown
+
+
+def test_chord_all_excluded_is_unmeasured_but_keeps_attempt_coverage() -> None:
+    observation = _chord_v2("public/all-x.wav", "chord_wcsr", 0.0, 0.0)
+    observation.update({"annotated_seconds": 12.0, "ignored_seconds": 12.0})
+    summary = summarizer.summarize(_report(observation))
+    chord = summary["dimensions"]["chord"]
+    assert chord["measured"] is False
+    assert chord["fixtures"] == 1
+    assert chord["coverage"]["attempted_fixtures"] == 1
+    assert "overall" not in chord
+    markdown = summarizer.to_markdown(summary)
+    assert "| chord | — | 1 | unmeasured | no scored chord intervals" in markdown
+    assert "attempted 1, scored 0.000s, annotated 12.000s, ignored 12.000s" in markdown
+    assert "no fixtures configured" not in next(
+        line for line in markdown.splitlines() if line.startswith("| chord |")
+    )
+
+
+def test_chord_mixed_metric_versions_are_rejected() -> None:
+    with_error = False
+    try:
+        summarizer.summarize(
+            _report(
+                _chord_v2("public/new.wav", "chord_wcsr", 1.0, 1.0),
+                {
+                    "metric": "chord_wcsr",
+                    "fixture": "public/old.wav",
+                    "metric_version": "legacy_midpoint_v1",
+                    "wcsr": 0.4,
+                },
+            )
+        )
+    except ValueError as error:
+        with_error = "mixed chord metric versions" in str(error)
+    assert with_error
+
+
+def test_v2_rejects_inconsistent_score_and_duration_fields() -> None:
+    observation = _chord_v2("public/a.wav", "chord_wcsr", 1.0, 2.0)
+    observation["score"] = 0.9
+    try:
+        summarizer.summarize(_report(observation))
+    except ValueError as error:
+        assert "score does not match its seconds" in str(error)
+    else:
+        raise AssertionError("inconsistent chord measurement was accepted")
+
+
+def test_legacy_chord_report_is_labeled_and_keeps_old_fields() -> None:
+    overall = summarizer.summarize(
+        _report({"metric": "chord_wcsr", "fixture": "jaah/a.wav", "wcsr": 0.8})
+    )["dimensions"]["chord"]["overall"]
+    assert overall["metric_version"] == "legacy_midpoint_v1"
+    assert overall["wcsr_maj_min"] == 0.8
+    assert overall["wcsr_maj_min_track_macro"] == 0.8
+    assert "wcsr_maj_min_pooled" not in overall
 
 
 def test_markdown_carries_the_fixture_count_with_every_figure() -> None:

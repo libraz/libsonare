@@ -11,9 +11,11 @@
 #include <cstdlib>
 #include <filesystem>
 #include <fstream>
+#include <iomanip>
 #include <limits>
 #include <map>
 #include <sstream>
+#include <stdexcept>
 #include <string>
 #include <vector>
 
@@ -356,26 +358,68 @@ bool parse_chord_symbol(const std::string& symbol, PitchClass& root, ChordQualit
 }
 
 struct ReferenceChord {
-  float start = 0.0f;
-  float end = 0.0f;
+  double start = 0.0;
+  double end = 0.0;
   PitchClass root = PitchClass::C;
   ChordQuality quality = ChordQuality::Major;
   PitchClass bass = PitchClass::C;
   bool has_bass = false;
+  enum class State { Known, NoChord, Excluded } state = State::Known;
 };
 
 std::vector<ReferenceChord> read_chord_annotation(const std::filesystem::path& path) {
   std::vector<ReferenceChord> chords;
-  for (const auto& fields : read_rows(path)) {
-    if (fields.size() < 3) continue;
+  std::ifstream input(path);
+  if (!input) throw std::runtime_error("Cannot open chord annotation: " + path.string());
+  std::string line;
+  size_t line_number = 0;
+  double previous_start = -1.0;
+  double previous_end = -1.0;
+  while (std::getline(input, line)) {
+    ++line_number;
+    if (!line.empty() && line.back() == '\r') line.pop_back();
+    if (line.empty() || line[0] == '#') continue;
+    const auto fields = split_tsv(line);
+    auto invalid = [&](const std::string& reason) -> void {
+      throw std::runtime_error(path.string() + ":" + std::to_string(line_number) + ": " + reason);
+    };
+    if (fields.size() < 3) invalid("expected start, end, and chord symbol");
+    auto parse_time = [&](const std::string& value, const char* name) {
+      size_t consumed = 0;
+      double result = 0.0;
+      try {
+        result = std::stod(value, &consumed);
+      } catch (const std::exception&) {
+        invalid(std::string("invalid ") + name + " time");
+      }
+      if (consumed != value.size() || !std::isfinite(result)) {
+        invalid(std::string("invalid ") + name + " time");
+      }
+      return result;
+    };
     ReferenceChord chord;
-    chord.start = std::stof(fields[0]);
-    chord.end = std::stof(fields[1]);
-    if (chord.end <= chord.start ||
-        !parse_chord_symbol(fields[2], chord.root, chord.quality, chord.bass, chord.has_bass)) {
-      continue;
+    const double start = parse_time(fields[0], "start");
+    const double end = parse_time(fields[1], "end");
+    if (start < 0.0 || end <= start)
+      invalid("interval must have finite nonnegative start and positive duration");
+    if (!chords.empty() && (start < previous_start || start < previous_end)) {
+      invalid("intervals must be sorted and non-overlapping");
+    }
+    chord.start = start;
+    chord.end = end;
+    std::string symbol = fields[2];
+    if (symbol == "N") {
+      chord.state = ReferenceChord::State::NoChord;
+      chord.quality = ChordQuality::Unknown;
+    } else if (symbol == "X") {
+      chord.state = ReferenceChord::State::Excluded;
+      chord.quality = ChordQuality::Unknown;
+    } else if (!parse_chord_symbol(symbol, chord.root, chord.quality, chord.bass, chord.has_bass)) {
+      invalid("unsupported chord symbol: " + symbol);
     }
     chords.push_back(chord);
+    previous_start = start;
+    previous_end = end;
   }
   return chords;
 }
@@ -409,7 +453,16 @@ bool majmin_reduction(ChordQuality quality, ChordQuality& reduced) {
   }
 }
 
+bool exact_chord_equal(const Chord& detected, const ReferenceChord& reference);
+
 bool maj_min_equal(const Chord& detected, const ReferenceChord& reference) {
+  if (reference.state == ReferenceChord::State::NoChord) {
+    return detected.quality == ChordQuality::Unknown;
+  }
+  if (reference.state != ReferenceChord::State::Known ||
+      detected.quality == ChordQuality::Unknown) {
+    return false;
+  }
   ChordQuality detected_collapsed;
   ChordQuality reference_collapsed;
   return detected.root == reference.root &&
@@ -418,24 +471,107 @@ bool maj_min_equal(const Chord& detected, const ReferenceChord& reference) {
          detected_collapsed == reference_collapsed;
 }
 
-/// Majmin WCSR; a reference chord outside the maj/min vocabulary is not scored.
-float chord_wcsr(const std::vector<Chord>& detected, const std::vector<ReferenceChord>& reference) {
-  float total = 0.0f;
-  float correct = 0.0f;
+enum class ChordMetric { MajMin, Root, Quality, Exact, Bass };
+
+struct ChordMetricMeasurement {
+  double correct_seconds = 0.0;
+  double scored_seconds = 0.0;
+  double annotated_seconds = 0.0;
+  double ignored_seconds = 0.0;
+  double missing_prediction_seconds = 0.0;
+  bool measured() const { return scored_seconds > 0.0; }
+  double score() const {
+    return measured() ? correct_seconds / scored_seconds : std::numeric_limits<double>::quiet_NaN();
+  }
+};
+
+/// Integrate the selected label over actual interval intersections. Prediction gaps remain in
+/// the scored denominator, while excluded annotation vocabulary contributes only to ignored time.
+ChordMetricMeasurement measure_chords(const std::vector<Chord>& detected,
+                                      const std::vector<ReferenceChord>& reference,
+                                      ChordMetric metric) {
+  ChordMetricMeasurement result;
   for (const auto& ref : reference) {
-    const float duration = ref.end - ref.start;
+    const double ref_start = ref.start;
+    const double ref_end = ref.end;
+    const double duration = ref_end - ref_start;
+    result.annotated_seconds += duration;
+    if (ref.state == ReferenceChord::State::Excluded) {
+      result.ignored_seconds += duration;
+      continue;
+    }
     ChordQuality reduced;
-    if (duration <= 0.0f || !majmin_reduction(ref.quality, reduced)) continue;
-    total += duration;
-    const float midpoint = 0.5f * (ref.start + ref.end);
-    auto found = std::find_if(detected.begin(), detected.end(), [midpoint](const Chord& chord) {
-      return chord.start <= midpoint && midpoint < chord.end;
-    });
-    if (found != detected.end() && maj_min_equal(*found, ref)) {
-      correct += duration;
+    const bool supported =
+        ref.state == ReferenceChord::State::NoChord
+            ? metric == ChordMetric::MajMin
+            : (metric != ChordMetric::MajMin || majmin_reduction(ref.quality, reduced));
+    if (!supported || (metric == ChordMetric::Bass &&
+                       (ref.state == ReferenceChord::State::NoChord || !ref.has_bass))) {
+      result.ignored_seconds += duration;
+      continue;
+    }
+    result.scored_seconds += duration;
+
+    std::vector<double> boundaries{ref_start, ref_end};
+    for (const auto& chord : detected) {
+      const double start = std::max(ref_start, static_cast<double>(chord.start));
+      const double end = std::min(ref_end, static_cast<double>(chord.end));
+      if (end > start) {
+        boundaries.push_back(start);
+        boundaries.push_back(end);
+      }
+    }
+    std::sort(boundaries.begin(), boundaries.end());
+    boundaries.erase(std::unique(boundaries.begin(), boundaries.end()), boundaries.end());
+    for (size_t index = 1; index < boundaries.size(); ++index) {
+      const double start = boundaries[index - 1];
+      const double end = boundaries[index];
+      if (end <= start) continue;
+      const double midpoint = start + (end - start) * 0.5;
+      auto found = std::find_if(detected.begin(), detected.end(), [midpoint](const Chord& chord) {
+        return static_cast<double>(chord.start) <= midpoint && midpoint < chord.end;
+      });
+      if (found == detected.end()) {
+        result.missing_prediction_seconds += end - start;
+        continue;
+      }
+      bool correct = false;
+      if (ref.state == ReferenceChord::State::NoChord) {
+        correct = found->quality == ChordQuality::Unknown;
+      } else if (found->quality != ChordQuality::Unknown) {
+        switch (metric) {
+          case ChordMetric::MajMin:
+            correct = maj_min_equal(*found, ref);
+            break;
+          case ChordMetric::Root:
+            correct = found->root == ref.root;
+            break;
+          case ChordMetric::Quality:
+            correct = found->quality == ref.quality;
+            break;
+          case ChordMetric::Exact:
+            correct = exact_chord_equal(*found, ref);
+            break;
+          case ChordMetric::Bass:
+            correct = found->bass == ref.bass;
+            break;
+        }
+      }
+      if (correct) result.correct_seconds += end - start;
     }
   }
-  return total > 0.0f ? correct / total : 0.0f;
+  return result;
+}
+
+float chord_metric_score(const std::vector<Chord>& detected,
+                         const std::vector<ReferenceChord>& reference, ChordMetric metric) {
+  const double score = measure_chords(detected, reference, metric).score();
+  return static_cast<float>(score);
+}
+
+/// Chord metric wrappers retain their historical private names for fixture callers.
+float chord_wcsr(const std::vector<Chord>& detected, const std::vector<ReferenceChord>& reference) {
+  return chord_metric_score(detected, reference, ChordMetric::MajMin);
 }
 
 bool exact_chord_equal(const Chord& detected, const ReferenceChord& reference) {
@@ -444,79 +580,53 @@ bool exact_chord_equal(const Chord& detected, const ReferenceChord& reference) {
 
 float chord_root_accuracy(const std::vector<Chord>& detected,
                           const std::vector<ReferenceChord>& reference) {
-  float total = 0.0f;
-  float correct = 0.0f;
-  for (const auto& ref : reference) {
-    const float duration = ref.end - ref.start;
-    if (duration <= 0.0f) continue;
-    total += duration;
-    const float midpoint = 0.5f * (ref.start + ref.end);
-    auto found = std::find_if(detected.begin(), detected.end(), [midpoint](const Chord& chord) {
-      return chord.start <= midpoint && midpoint < chord.end;
-    });
-    if (found != detected.end() && found->root == ref.root) {
-      correct += duration;
-    }
-  }
-  return total > 0.0f ? correct / total : 0.0f;
+  return chord_metric_score(detected, reference, ChordMetric::Root);
 }
 
 float chord_quality_accuracy(const std::vector<Chord>& detected,
                              const std::vector<ReferenceChord>& reference) {
-  float total = 0.0f;
-  float correct = 0.0f;
-  for (const auto& ref : reference) {
-    const float duration = ref.end - ref.start;
-    if (duration <= 0.0f) continue;
-    total += duration;
-    const float midpoint = 0.5f * (ref.start + ref.end);
-    auto found = std::find_if(detected.begin(), detected.end(), [midpoint](const Chord& chord) {
-      return chord.start <= midpoint && midpoint < chord.end;
-    });
-    if (found != detected.end() && found->quality == ref.quality) {
-      correct += duration;
-    }
-  }
-  return total > 0.0f ? correct / total : 0.0f;
+  return chord_metric_score(detected, reference, ChordMetric::Quality);
 }
 
 float chord_exact_wcsr(const std::vector<Chord>& detected,
                        const std::vector<ReferenceChord>& reference) {
-  float total = 0.0f;
-  float correct = 0.0f;
-  for (const auto& ref : reference) {
-    const float duration = ref.end - ref.start;
-    if (duration <= 0.0f) continue;
-    total += duration;
-    const float midpoint = 0.5f * (ref.start + ref.end);
-    auto found = std::find_if(detected.begin(), detected.end(), [midpoint](const Chord& chord) {
-      return chord.start <= midpoint && midpoint < chord.end;
-    });
-    if (found != detected.end() && exact_chord_equal(*found, ref)) {
-      correct += duration;
-    }
-  }
-  return total > 0.0f ? correct / total : 0.0f;
+  return chord_metric_score(detected, reference, ChordMetric::Exact);
 }
 
 float chord_bass_accuracy(const std::vector<Chord>& detected,
                           const std::vector<ReferenceChord>& reference) {
-  float total = 0.0f;
-  float correct = 0.0f;
-  for (const auto& ref : reference) {
-    if (!ref.has_bass) continue;
-    const float duration = ref.end - ref.start;
-    if (duration <= 0.0f) continue;
-    total += duration;
-    const float midpoint = 0.5f * (ref.start + ref.end);
-    auto found = std::find_if(detected.begin(), detected.end(), [midpoint](const Chord& chord) {
-      return chord.start <= midpoint && midpoint < chord.end;
-    });
-    if (found != detected.end() && found->bass == ref.bass) {
-      correct += duration;
-    }
+  return chord_metric_score(detected, reference, ChordMetric::Bass);
+}
+
+const char* chord_metric_name(ChordMetric metric) {
+  switch (metric) {
+    case ChordMetric::MajMin:
+      return "chord_wcsr";
+    case ChordMetric::Root:
+      return "chord_root_accuracy";
+    case ChordMetric::Quality:
+      return "chord_quality_accuracy";
+    case ChordMetric::Exact:
+      return "chord_exact_wcsr";
+    case ChordMetric::Bass:
+      return "chord_bass_acc";
   }
-  return total > 0.0f ? correct / total : 0.0f;
+  return "unknown";
+}
+
+std::string chord_measurement_warning(const std::string& fixture, ChordMetric metric,
+                                      const ChordMetricMeasurement& measurement, double threshold,
+                                      const char* scope, const char* metric_override = nullptr) {
+  std::ostringstream output;
+  output << std::setprecision(17) << "Report-only chord measurement fixture " << fixture
+         << " metric " << (metric_override ? metric_override : chord_metric_name(metric))
+         << " version chord_overlap_v2"
+         << " correct_seconds " << measurement.correct_seconds << " scored_seconds "
+         << measurement.scored_seconds << " annotated_seconds " << measurement.annotated_seconds
+         << " ignored_seconds " << measurement.ignored_seconds << " missing_prediction_seconds "
+         << measurement.missing_prediction_seconds << " score " << measurement.score()
+         << " threshold " << threshold << " scope " << scope;
+  return output.str();
 }
 
 float chord_change_rate_per_minute(const std::vector<Chord>& chords) {
@@ -1401,12 +1511,15 @@ TEST_CASE("Music optional chord WCSR fixtures", "[music_dataset][chord]") {
     baseline_config.use_key_context = false;
     const ChordAnalyzer baseline_analyzer(audio, baseline_config);
     const auto baseline_detected = baseline_analyzer.chords();
-    const float wcsr = chord_wcsr(detected, reference);
-    const float extended_wcsr = evaluate_extended ? chord_exact_wcsr(detected, reference) : 0.0f;
-    const float exact_wcsr = chord_exact_wcsr(detected, reference);
-    const float root_accuracy = chord_root_accuracy(detected, reference);
-    const float quality_accuracy = chord_quality_accuracy(detected, reference);
-    const float bass_accuracy = evaluate_bass ? chord_bass_accuracy(detected, reference) : 0.0f;
+    const auto majmin_measurement = measure_chords(detected, reference, ChordMetric::MajMin);
+    const auto root_measurement = measure_chords(detected, reference, ChordMetric::Root);
+    const auto quality_measurement = measure_chords(detected, reference, ChordMetric::Quality);
+    const auto exact_measurement = measure_chords(detected, reference, ChordMetric::Exact);
+    const auto bass_measurement = measure_chords(detected, reference, ChordMetric::Bass);
+    const float wcsr = static_cast<float>(majmin_measurement.score());
+    const float extended_wcsr = evaluate_extended ? static_cast<float>(exact_measurement.score())
+                                                  : std::numeric_limits<float>::quiet_NaN();
+    const float bass_accuracy = static_cast<float>(bass_measurement.score());
     const float change_rate = chord_change_rate_per_minute(detected);
     const float baseline_change_rate = chord_change_rate_per_minute(baseline_detected);
     const float change_reduction =
@@ -1414,16 +1527,23 @@ TEST_CASE("Music optional chord WCSR fixtures", "[music_dataset][chord]") {
             ? std::max(0.0f, (baseline_change_rate - change_rate) / baseline_change_rate)
             : (change_rate <= 0.0f ? 1.0f : 0.0f);
     if (is_report_only(row, 4)) {
-      WARN("Report-only chord fixture " << row[0] << "/" << row[1] << " WCSR " << wcsr
-                                        << "; threshold " << row[3]);
-      WARN("Report-only chord detail fixture "
-           << row[0] << "/" << row[1] << " root_accuracy " << root_accuracy << "; quality_accuracy "
-           << quality_accuracy << "; exact_wcsr " << exact_wcsr);
+      const std::string fixture = row[0] + "/" + row[1];
+      WARN(chord_measurement_warning(fixture, ChordMetric::MajMin, majmin_measurement,
+                                     std::stof(row[3]), "known_plus_no_chord"));
+      WARN(chord_measurement_warning(fixture, ChordMetric::Root, root_measurement,
+                                     std::numeric_limits<double>::quiet_NaN(), "known_chords"));
+      WARN(chord_measurement_warning(fixture, ChordMetric::Quality, quality_measurement,
+                                     std::numeric_limits<double>::quiet_NaN(), "known_chords"));
+      WARN(chord_measurement_warning(fixture, ChordMetric::Exact, exact_measurement,
+                                     std::numeric_limits<double>::quiet_NaN(), "known_chords"));
       if (evaluate_extended) {
-        WARN("Report-only chord extended fixture "
-             << row[0] << "/" << row[1] << " WCSR " << extended_wcsr << "; threshold "
-             << (has_extended_threshold ? min_extended_wcsr
-                                        : std::numeric_limits<float>::quiet_NaN()));
+        WARN(chord_measurement_warning(fixture, ChordMetric::Exact, exact_measurement,
+                                       min_extended_wcsr, "extended_vocabulary",
+                                       "chord_extended_wcsr"));
+      }
+      if (evaluate_bass) {
+        WARN(chord_measurement_warning(fixture, ChordMetric::Bass, bass_measurement, min_bass_acc,
+                                       "explicit_known_bass"));
       }
       WARN("Report-only chord change-rate fixture "
            << row[0] << "/" << row[1] << " changes_per_minute " << change_rate << "; threshold "
@@ -1435,16 +1555,15 @@ TEST_CASE("Music optional chord WCSR fixtures", "[music_dataset][chord]") {
            << "; smoothed_changes_per_minute " << change_rate << "; threshold "
            << (has_change_reduction_threshold ? min_change_reduction
                                               : std::numeric_limits<float>::quiet_NaN()));
-      if (evaluate_bass) {
-        WARN("Report-only chord bass fixture " << row[0] << "/" << row[1] << " accuracy "
-                                               << bass_accuracy << "; threshold " << min_bass_acc);
-      }
     } else {
+      REQUIRE(std::isfinite(wcsr));
       REQUIRE(wcsr >= std::stof(row[3]));
       if (has_bass_threshold) {
+        REQUIRE(std::isfinite(bass_accuracy));
         REQUIRE(bass_accuracy >= min_bass_acc);
       }
       if (has_extended_threshold) {
+        REQUIRE(std::isfinite(extended_wcsr));
         REQUIRE(extended_wcsr >= min_extended_wcsr);
       }
       if (has_change_rate_threshold) {
@@ -1533,6 +1652,125 @@ TEST_CASE("Music dataset annotation parsing", "[music_dataset_parsing]") {
   CHECK(chord_wcsr(detected, reference) == 1.0f);
   // Root accuracy still scores the dim span.
   CHECK(chord_root_accuracy(detected, reference) == 1.0f);
+}
+
+TEST_CASE("Chord metrics integrate interval overlap", "[music_dataset_parsing][chord_overlap]") {
+  const std::vector<ReferenceChord> reference = {
+      {0.0, 10.0, PitchClass::C, ChordQuality::Major, PitchClass::C, true},
+  };
+  const std::vector<Chord> midpoint_only = {
+      {PitchClass::C, ChordQuality::Major, 4.9f, 5.1f, 1.0f},
+  };
+  const std::vector<Chord> away_from_midpoint = {
+      {PitchClass::C, ChordQuality::Major, 0.5f, 0.7f, 1.0f},
+  };
+  const auto midpoint_measurement = measure_chords(midpoint_only, reference, ChordMetric::MajMin);
+  const auto away_measurement = measure_chords(away_from_midpoint, reference, ChordMetric::MajMin);
+  CHECK(midpoint_measurement.score() == Catch::Approx(0.02));
+  CHECK(away_measurement.score() == Catch::Approx(0.02));
+  CHECK(midpoint_measurement.scored_seconds == Catch::Approx(10.0));
+
+  const std::vector<Chord> one_prediction = {
+      {PitchClass::C, ChordQuality::Major, 0.0f, 10.0f, 1.0f},
+  };
+  const std::vector<Chord> split_prediction = {
+      {PitchClass::C, ChordQuality::Major, 0.0f, 4.0f, 1.0f},
+      {PitchClass::C, ChordQuality::Major, 4.0f, 10.0f, 1.0f},
+  };
+  CHECK(measure_chords(one_prediction, reference, ChordMetric::Exact).score() == 1.0);
+  CHECK(measure_chords(split_prediction, reference, ChordMetric::Exact).score() == 1.0);
+  CHECK(chord_quality_accuracy(one_prediction, reference) == 1.0f);
+  CHECK(chord_exact_wcsr(one_prediction, reference) == 1.0f);
+  CHECK(chord_bass_accuracy(one_prediction, reference) == 1.0f);
+
+  const std::vector<Chord> with_gap = {
+      {PitchClass::C, ChordQuality::Major, 0.0f, 3.0f, 1.0f},
+      {PitchClass::C, ChordQuality::Major, 5.0f, 10.0f, 1.0f},
+  };
+  const auto gap_measurement = measure_chords(with_gap, reference, ChordMetric::Exact);
+  CHECK(gap_measurement.score() == Catch::Approx(0.8));
+  CHECK(gap_measurement.missing_prediction_seconds == Catch::Approx(2.0));
+}
+
+TEST_CASE("Chord metrics handle no-chord and excluded labels",
+          "[music_dataset_parsing][chord_overlap]") {
+  ReferenceChord no_chord;
+  no_chord.start = 0.0;
+  no_chord.end = 2.0;
+  no_chord.state = ReferenceChord::State::NoChord;
+  no_chord.quality = ChordQuality::Unknown;
+  ReferenceChord excluded;
+  excluded.start = 2.0;
+  excluded.end = 3.0;
+  excluded.state = ReferenceChord::State::Excluded;
+  ReferenceChord known{3.0, 4.0, PitchClass::C, ChordQuality::Major, PitchClass::C, true};
+  const std::vector<ReferenceChord> reference{no_chord, excluded, known};
+  const std::vector<Chord> detected = {
+      {PitchClass::G, ChordQuality::Unknown, 0.0f, 2.0f, 1.0f},
+      {PitchClass::C, ChordQuality::Major, 3.0f, 4.0f, 1.0f},
+  };
+  const auto majmin = measure_chords(detected, reference, ChordMetric::MajMin);
+  const auto root = measure_chords(detected, reference, ChordMetric::Root);
+  const auto quality = measure_chords(detected, reference, ChordMetric::Quality);
+  const auto exact = measure_chords(detected, reference, ChordMetric::Exact);
+  CHECK(majmin.score() == 1.0);
+  CHECK(root.score() == 1.0);
+  CHECK(quality.score() == 1.0);
+  CHECK(exact.score() == 1.0);
+  CHECK(root.scored_seconds == Catch::Approx(1.0));
+  CHECK(quality.ignored_seconds == Catch::Approx(3.0));
+  CHECK(majmin.annotated_seconds == Catch::Approx(4.0));
+  CHECK(majmin.scored_seconds == Catch::Approx(3.0));
+  CHECK(majmin.ignored_seconds == Catch::Approx(1.0));
+
+  const std::vector<Chord> unknown_over_everything = {
+      {PitchClass::C, ChordQuality::Unknown, 0.0f, 4.0f, 1.0f},
+  };
+  const auto known_only_root =
+      measure_chords(unknown_over_everything, reference, ChordMetric::Root);
+  CHECK(known_only_root.score() == 0.0);
+  CHECK(known_only_root.scored_seconds == Catch::Approx(1.0));
+  CHECK(known_only_root.ignored_seconds == Catch::Approx(3.0));
+
+  const std::vector<ReferenceChord> only_excluded{excluded};
+  const auto unmeasured = measure_chords({}, only_excluded, ChordMetric::MajMin);
+  CHECK_FALSE(unmeasured.measured());
+  CHECK_FALSE(std::isfinite(chord_wcsr({}, only_excluded)));
+}
+
+TEST_CASE("Chord annotation parsing fails closed with line diagnostics",
+          "[music_dataset_parsing][chord_overlap]") {
+  const auto write_temp = [](const std::string& contents) {
+    const auto stamp = std::chrono::steady_clock::now().time_since_epoch().count();
+    const auto path = std::filesystem::temp_directory_path() /
+                      ("sonare-chord-annotation-" + std::to_string(stamp) + ".tsv");
+    std::ofstream output(path);
+    output << contents;
+    output.close();
+    return path;
+  };
+  const auto valid_path = write_temp("0\t1\tN\n1\t2\tX\n");
+  const auto parsed = read_chord_annotation(valid_path);
+  std::filesystem::remove(valid_path);
+  REQUIRE(parsed.size() == 2);
+  CHECK(parsed[0].state == ReferenceChord::State::NoChord);
+  CHECK(parsed[1].state == ReferenceChord::State::Excluded);
+
+  const auto expect_invalid = [&](const std::string& contents, const std::string& marker) {
+    const auto path = write_temp(contents);
+    try {
+      (void)read_chord_annotation(path);
+      CHECK(false);
+    } catch (const std::runtime_error& error) {
+      CHECK(std::string(error.what()).find(path.string() + ":2:") != std::string::npos);
+      CHECK(std::string(error.what()).find(marker) != std::string::npos);
+    }
+    std::filesystem::remove(path);
+  };
+  expect_invalid("0\t1\tC\n1\t2\tH:maj\n", "unsupported chord symbol");
+  expect_invalid("0\t1\tC\n0.5\t2\tG\n", "non-overlapping");
+  expect_invalid("0\t1\tC\n1\tinf\tG\n", "invalid end time");
+  expect_invalid("1\t2\tC\n0\t0.5\tG\n", "sorted and non-overlapping");
 }
 
 }  // namespace sonare

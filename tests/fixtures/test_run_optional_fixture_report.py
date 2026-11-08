@@ -121,6 +121,56 @@ def test_notes_observation_is_parsed() -> None:
     assert item["min_f_note_offset"] == 0.4, item
 
 
+def test_chord_overlap_measurement_carries_coverage_and_nan_as_unmeasured() -> None:
+    measured = (
+        "Report-only chord measurement fixture billboard/track.wav metric chord_wcsr "
+        "version chord_overlap_v2 correct_seconds 1.25 scored_seconds 2.5 "
+        "annotated_seconds 3 ignored_seconds 0.5 missing_prediction_seconds 0.75 "
+        "score 0.5 threshold 0.4 scope known_plus_no_chord"
+    )
+    unmeasured = (
+        "Report-only chord measurement fixture billboard/empty.wav metric chord_wcsr "
+        "version chord_overlap_v2 correct_seconds 0 scored_seconds 0 annotated_seconds 1 "
+        "ignored_seconds 1 missing_prediction_seconds 0 score nan threshold 0.4 "
+        "scope known_plus_no_chord"
+    )
+    observations = runner.extract_observations_from_report_output(
+        _document(_warning(measured), _warning(unmeasured))
+    )
+    assert len(observations) == 2, observations
+    assert observations[0] == {
+        "metric": "chord_wcsr",
+        "fixture": "billboard/track.wav",
+        "metric_version": "chord_overlap_v2",
+        "correct_seconds": 1.25,
+        "scored_seconds": 2.5,
+        "annotated_seconds": 3.0,
+        "ignored_seconds": 0.5,
+        "missing_prediction_seconds": 0.75,
+        "score": 0.5,
+        "threshold": 0.4,
+        "metric_scope": "known_plus_no_chord",
+        "measured": True,
+    }
+    assert observations[1]["score"] is None
+    assert observations[1]["measured"] is False
+    assert observations[1]["scored_seconds"] == 0.0
+
+
+def test_old_chord_warning_is_marked_as_legacy_midpoint() -> None:
+    message = "Report-only chord fixture corpus/a.wav WCSR 0.75; threshold 0.5"
+    observations = runner.extract_observations_from_report_output(_document(_warning(message)))
+    assert observations == [
+        {
+            "metric": "chord_wcsr",
+            "fixture": "corpus/a.wav",
+            "metric_version": "legacy_midpoint_v1",
+            "wcsr": 0.75,
+            "threshold": 0.5,
+        }
+    ]
+
+
 def _run_all() -> int:
     tests = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     failed = 0
