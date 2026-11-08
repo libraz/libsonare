@@ -1462,6 +1462,7 @@ const TRANSCRIBE_REQUEST_KEYS = keySet(
   'minFramePeakRatio',
   'minRidgePeakRatio',
   'reattackRatio',
+  'monophonicModel',
   'group',
   'channel',
 );

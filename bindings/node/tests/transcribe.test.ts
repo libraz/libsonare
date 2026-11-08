@@ -646,3 +646,47 @@ describe('transcribe minNoteDivision', () => {
     expect(() => run({ minNoteDivision: 16, minNoteMs: 100 })).toThrow(/min_note_division/);
   });
 });
+
+/** A harmonic tone at `hz` with sinusoidal vibrato of `rateHz` and `depthCents`. */
+function vibrato(hz: number, seconds: number, rateHz: number, depthCents: number): Float32Array {
+  const out = new Float32Array(Math.round(SR * seconds));
+  const edge = 0.01 * SR;
+  let phase = 0;
+  for (let i = 0; i < out.length; i++) {
+    const t = i / SR;
+    const f = hz * 2 ** ((depthCents / 1200) * Math.sin(2 * Math.PI * rateHz * t));
+    phase += (2 * Math.PI * f) / SR;
+    const envelope = Math.min(1, i / edge, (out.length - 1 - i) / edge);
+    out[i] =
+      0.4 * envelope * (Math.sin(phase) + 0.5 * Math.sin(2 * phase) + 0.25 * Math.sin(3 * phase));
+  }
+  return out;
+}
+
+describe('transcribe monophonicModel', () => {
+  const sung = vibrato(391.995, 2, 6, 75);
+  const run = (extra: Record<string, unknown> = {}) =>
+    transcribe({ samples: sung, sampleRate: SR, tempoBpm: 120, ...extra } as TranscribeRequest);
+
+  it("'singing' holds vibrato inside one note and differs from the default", () => {
+    const singing = run({ monophonicModel: 'singing' });
+    expect(singing.noteCount).toBe(1);
+    expect(noteNumbers(singing)).toEqual([G4]);
+    expect(singing.events).not.toEqual(run().events);
+  });
+
+  it("an explicit 'segments' equals an omitted field", () => {
+    expect(run({ monophonicModel: 'segments' }).events).toEqual(run().events);
+  });
+
+  it('refuses an unknown name as a RangeError and a non-string as a TypeError', () => {
+    expect(() => run({ monophonicModel: 'choir' })).toThrow(RangeError);
+    expect(() => run({ monophonicModel: 'choir' })).toThrow(/monophonicModel/);
+    expect(() => run({ monophonicModel: 1 })).toThrow(TypeError);
+    expect(() => run({ monophonicModel: 1 })).toThrow(/monophonicModel/);
+  });
+
+  it("refuses 'singing' on the polyphonic source", () => {
+    expect(() => run({ polyphonic: true, monophonicModel: 'singing' })).toThrow(RangeError);
+  });
+});

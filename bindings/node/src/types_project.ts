@@ -756,8 +756,8 @@ export interface TranscribeOptions {
   /**
    * Shortest span kept as a note, in milliseconds. Must be finite and
    * positive. Refused together with {@link minNoteDivision}. When neither is
-   * given the default is `45` for the monophonic tracker and `60` for the
-   * polyphonic one; neither depends on the tempo.
+   * given the default is `30` for the monophonic `'segments'` model, `45` for
+   * `'singing'` and `60` for the polyphonic tracker; neither depends on the tempo.
    */
   minNoteMs?: number;
   /**
@@ -770,9 +770,10 @@ export interface TranscribeOptions {
    */
   minNoteDivision?: number;
   /**
-   * Scale, in cents, of the pitch movement the monophonic tracker keeps within
-   * one note; larger values hold more movement in a note. Must be finite and
-   * positive. Default `50`.
+   * Pitch movement threshold, in cents, of the monophonic tracker. The
+   * `'segments'` model ends one note and starts the next where the pitch moves
+   * this far; `'singing'` reads it as the scale of the pitch movement kept
+   * within one note. Must be finite and positive. Default `50`.
    */
   segmentationThresholdCents?: number;
   /**
@@ -816,6 +817,16 @@ export interface TranscribeOptions {
    * and a value in `(0, 1]` or a negative one is refused. Default `2.0`.
    */
   reattackRatio?: number;
+  /**
+   * Monophonic segmentation model. `'segments'` (the default) cuts the pitch
+   * track where it moves and splits brief level dips; it is accurate on
+   * instrument lines, including short notes. `'singing'` decodes notes jointly
+   * over pitch bins and holds vibrato and intonation drift within a note; it
+   * suits sung takes and can merge very short notes at fast tempos. Monophonic
+   * only: `'singing'` with {@link polyphonic} is refused. An unknown name is a
+   * `RangeError`.
+   */
+  monophonicModel?: 'segments' | 'singing';
   /** UMP group the events are emitted on, `0`..`15`. Default `0`. */
   group?: number;
   /** MIDI channel the events are emitted on, `0`..`15`. Default `0`. */

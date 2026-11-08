@@ -120,6 +120,17 @@ bool ReadTranscribeConfig(Napi::Env env, const Napi::Object& request, SonareTran
   const Napi::Value reattack = request.Get("reattackRatio");
   const bool wrote_reattack = !reattack.IsUndefined() && !reattack.IsNull();
   out->reattack_ratio = FiniteFloatProperty(request, "reattackRatio", 0.0f);
+  // A string name rather than the ordinal: undefined/null keeps the C default
+  // (segments), a non-string is a TypeError and an unknown name a RangeError.
+  const std::string monophonic_model = StringProperty(request, "monophonicModel", "segments");
+  if (monophonic_model == "segments") {
+    out->monophonic_model = 0;
+  } else if (monophonic_model == "singing") {
+    out->monophonic_model = 1;
+  } else {
+    throw Napi::RangeError::New(
+        env, "monophonicModel must be 'segments' or 'singing', got '" + monophonic_model + "'");
+  }
   out->group = IntProperty(request, "group", out->group);
   out->channel = IntProperty(request, "channel", out->channel);
   // Short-circuited: a reader that already refused a key left an exception
