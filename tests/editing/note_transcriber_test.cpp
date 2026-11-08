@@ -29,6 +29,7 @@
 #include <vector>
 
 #include "core/audio.h"
+#include "editing/note_model/monophonic_onset_evidence.h"
 #include "editing/pitch_editor/f0_provider.h"
 #include "editing/polyphony/f0_salience.h"
 #include "feature/pitch.h"
@@ -151,6 +152,70 @@ RateSequence fast_arpeggio(int sample_rate) {
     }
   }
   return sequence;
+}
+
+RateSequence contiguous_harmonic_notes(int sample_rate, const std::vector<int>& notes) {
+  constexpr double kLeadSeconds = 0.2;
+  constexpr double kToneSeconds = 0.125;
+  constexpr double kTailSeconds = 0.2;
+  constexpr double kAttackSeconds = 0.004;
+  constexpr double kReleaseSeconds = 0.008;
+  const int64_t lead = static_cast<int64_t>(std::llround(kLeadSeconds * sample_rate));
+  const int64_t tone = static_cast<int64_t>(std::llround(kToneSeconds * sample_rate));
+  const int64_t tail = static_cast<int64_t>(std::llround(kTailSeconds * sample_rate));
+  RateSequence sequence;
+  sequence.notes = notes;
+  sequence.samples.assign(
+      static_cast<size_t>(lead + tone * static_cast<int64_t>(notes.size()) + tail), 0.0f);
+  for (size_t note_index = 0; note_index < notes.size(); ++note_index) {
+    const int64_t start = lead + static_cast<int64_t>(note_index) * tone;
+    sequence.onsets.push_back(start);
+    const double fundamental_hz = hz_for_midi(notes[note_index]);
+    double phase = 0.0;
+    for (int64_t offset = 0; offset < tone; ++offset) {
+      const double t = static_cast<double>(offset) / sample_rate;
+      const double duration = static_cast<double>(tone) / sample_rate;
+      const double envelope =
+          std::min({1.0, t / kAttackSeconds, std::max(0.0, duration - t) / kReleaseSeconds});
+      phase += sonare::constants::kTwoPiD * fundamental_hz / sample_rate;
+      double value = 0.0;
+      for (int harmonic = 1; harmonic <= 5; ++harmonic) {
+        value += std::sin(harmonic * phase) / harmonic;
+      }
+      sequence.samples[static_cast<size_t>(start + offset)] =
+          static_cast<float>(0.18 * envelope * value);
+    }
+  }
+  return sequence;
+}
+
+sonare::Audio gliding_harmonic_tone(int sample_rate) {
+  constexpr double kLeadSeconds = 0.2;
+  constexpr double kGlideSeconds = 1.6;
+  constexpr double kTailSeconds = 0.2;
+  constexpr double kAttackSeconds = 0.004;
+  constexpr double kReleaseSeconds = 0.008;
+  const int64_t start = static_cast<int64_t>(std::llround(kLeadSeconds * sample_rate));
+  const int64_t end =
+      static_cast<int64_t>(std::llround((kLeadSeconds + kGlideSeconds) * sample_rate));
+  const int64_t total = static_cast<int64_t>(
+      std::llround((kLeadSeconds + kGlideSeconds + kTailSeconds) * sample_rate));
+  std::vector<float> samples(static_cast<size_t>(total), 0.0f);
+  const double initial_hz = hz_for_midi(57);
+  double phase = 0.0;
+  for (int64_t sample = start; sample < end; ++sample) {
+    const double t = static_cast<double>(sample - start) / sample_rate;
+    const double envelope =
+        std::min({1.0, t / kAttackSeconds, std::max(0.0, kGlideSeconds - t) / kReleaseSeconds});
+    const double frequency = initial_hz * std::pow(2.0, 300.0 * t / (kGlideSeconds * 1200.0));
+    phase += sonare::constants::kTwoPiD * frequency / sample_rate;
+    double value = 0.0;
+    for (int harmonic = 1; harmonic <= 5; ++harmonic) {
+      value += std::sin(harmonic * phase) / harmonic;
+    }
+    samples[static_cast<size_t>(sample)] = static_cast<float>(0.18 * envelope * value);
+  }
+  return sonare::Audio::from_buffer(samples.data(), samples.size(), sample_rate);
 }
 
 /// A contiguous leap phrase that exposes pYIN octave errors after abrupt pitch
@@ -687,6 +752,50 @@ TEST_CASE("reattack splitting leaves smooth motion, silence, and noise intact",
   }
   REQUIRE(transcribe_notes(sonare::Audio::from_buffer(low_noise.data(), low_noise.size(), 22050))
               .empty());
+}
+
+TEST_CASE("acoustic onsets preserve a held tone with wide vibrato",
+          "[note_transcriber][acoustic_boundary]") {
+  for (const int sample_rate : {22050, 44100}) {
+    const std::vector<TranscribedNote> notes =
+        transcribe_notes(modulated_harmonic_tone(sample_rate, 57, 0.0, 0.0, 6.0, 75.0));
+    INFO("220 Hz, 75-cent vibrato at " << sample_rate << " Hz; detected " << notes.size()
+                                       << " notes");
+    CHECK(notes.size() == 1);
+    if (notes.size() == 1) CHECK(notes.front().note == 57);
+  }
+
+  for (const int sample_rate : {16000, 48000}) {
+    const auto evidence = sonare::editing::note_model::detail::monophonic_onset_evidence(
+        modulated_harmonic_tone(sample_rate, 57, 0.0, 0.0, 6.0, 75.0));
+    INFO("synthetic onset frames at " << sample_rate << " Hz");
+    REQUIRE(evidence.available);
+    CHECK((evidence.frames == std::vector<int>{39, 357}));
+  }
+
+  const std::vector<TranscribedNote> vibrato50 =
+      transcribe_notes(modulated_harmonic_tone(44100, 57, 0.0, 0.0, 6.0, 50.0));
+  REQUIRE(vibrato50.size() == 1);
+  CHECK(vibrato50.front().note == 57);
+
+  const std::vector<TranscribedNote> glide = transcribe_notes(gliding_harmonic_tone(22050));
+  INFO("300-cent glide produced " << glide.size() << " notes");
+  CHECK(glide.size() == 3);
+
+  for (const std::vector<int>& intended :
+       {std::vector<int>{69, 70}, std::vector<int>{69, 70, 69, 70, 69, 70, 69, 70}}) {
+    const RateSequence sequence = contiguous_harmonic_notes(22050, intended);
+    const std::vector<TranscribedNote> notes = transcribe_notes(sequence.audio(22050));
+    INFO("contiguous semitone sequence, expected " << intended.size() << " notes, got "
+                                                   << notes.size());
+    CHECK(note_numbers(notes) == intended);
+    if (notes.size() == intended.size()) {
+      for (size_t i = 0; i < notes.size(); ++i) {
+        CHECK(std::llabs(notes[i].onset_sample - sequence.onsets[i]) <=
+              static_cast<int64_t>(std::llround(0.050 * 22050)));
+      }
+    }
+  }
 }
 
 TEST_CASE("a finite minimum longer than the recording returns no monophonic notes",
@@ -1542,4 +1651,71 @@ TEST_CASE("Bach score transcription evaluation", "[.][bach_transcribe_eval]") {
     }
   }
   REQUIRE(evaluated_cases == excerpts.size() * sample_rates.size());
+}
+
+TEST_CASE("native monophonic onset frames match the frozen reference",
+          "[.][superflux_native_oracle]") {
+  const char* audio_dir = std::getenv("SONARE_SUPERFLUX_AUDIO_DIR");
+  const char* oracle_path = std::getenv("SONARE_SUPERFLUX_ORACLE_JSON");
+  REQUIRE(audio_dir != nullptr);
+  REQUIRE(audio_dir[0] != '\0');
+  REQUIRE(oracle_path != nullptr);
+  REQUIRE(oracle_path[0] != '\0');
+
+  const sonare::test::JsonValue oracle = sonare::test::JsonReader::parse_file(oracle_path);
+  REQUIRE(oracle.is_object());
+  REQUIRE(oracle.size() == 28);
+  std::string directory(audio_dir);
+  if (directory.back() != '/') directory.push_back('/');
+  size_t total_expected_frames = 0;
+  for (const auto& [track_id, values] : oracle.as_object()) {
+    const sonare::Audio audio =
+        sonare::Audio::from_file(directory + "vocadito_" + track_id + ".wav");
+    REQUIRE(audio.sample_rate() == 44100);
+    std::vector<int> expected;
+    expected.reserve(values.size());
+    for (const sonare::test::JsonValue& value : values.as_array()) {
+      expected.push_back(value.as_int());
+    }
+    total_expected_frames += expected.size();
+    const auto evidence = sonare::editing::note_model::detail::monophonic_onset_evidence(audio);
+    INFO("audit track " << track_id << ", expected " << expected.size() << " onsets, got "
+                        << evidence.frames.size());
+    REQUIRE(evidence.available);
+    CHECK(evidence.frames == expected);
+  }
+  REQUIRE(total_expected_frames == 2107);
+}
+
+TEST_CASE("monophonic onset reconciliation exports the audit notes",
+          "[.][superflux_transcribe_replay]") {
+  const char* audio_dir = std::getenv("SONARE_SUPERFLUX_AUDIO_DIR");
+  const char* oracle_path = std::getenv("SONARE_SUPERFLUX_ORACLE_JSON");
+  REQUIRE(audio_dir != nullptr);
+  REQUIRE(audio_dir[0] != '\0');
+  REQUIRE(oracle_path != nullptr);
+  REQUIRE(oracle_path[0] != '\0');
+  const sonare::test::JsonValue oracle = sonare::test::JsonReader::parse_file(oracle_path);
+  REQUIRE(oracle.is_object());
+
+  std::string directory(audio_dir);
+  if (directory.back() != '/') directory.push_back('/');
+  size_t exported_tracks = 0;
+  for (const auto& entry : oracle.as_object()) {
+    const std::string& track_id = entry.first;
+    const sonare::Audio audio =
+        sonare::Audio::from_file(directory + "vocadito_" + track_id + ".wav");
+    const std::vector<TranscribedNote> notes = transcribe_notes(audio);
+    std::cout << std::setprecision(17) << "ACOUSTIC_TRANSCRIBE {\"file\":\"audio/vocadito_"
+              << track_id << ".wav\",\"sample_rate\":" << audio.sample_rate() << ",\"notes\":[";
+    for (size_t i = 0; i < notes.size(); ++i) {
+      if (i != 0) std::cout << ',';
+      std::cout << '[' << static_cast<double>(notes[i].onset_sample) / audio.sample_rate() << ','
+                << static_cast<double>(notes[i].offset_sample) / audio.sample_rate() << ','
+                << notes[i].median_hz << ']';
+    }
+    std::cout << "]}" << std::endl;
+    ++exported_tracks;
+  }
+  REQUIRE(exported_tracks == 28);
 }

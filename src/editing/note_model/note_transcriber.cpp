@@ -12,6 +12,7 @@
 #include <vector>
 
 #include "core/fft.h"
+#include "editing/note_model/monophonic_onset_evidence.h"
 #include "editing/note_model/note_extractor.h"
 #include "editing/pitch_editor/f0_provider.h"
 #include "editing/pitch_editor/note_segmenter.h"
@@ -84,6 +85,7 @@ constexpr int kAliasMinimumMultiple = 2;
 constexpr int kAliasMaximumMultiple = 4;
 constexpr double kAliasMaximumCents = 50.0;
 constexpr double kAliasResidualEnergyRatio = 1.0e-5;
+constexpr double kOnsetBoundaryToleranceMs = 50.0;
 // Keep an alias candidate stable for at least the segmenter's default minimum
 // note duration before it changes the contour.
 constexpr double kAliasMinimumStableMs = pitch_editor::NoteSegmenterConfig{}.min_note_ms;
@@ -364,6 +366,103 @@ pitch_editor::F0Track track_window(const pitch_editor::F0Track& track, int frame
   window.sample_rate = track.sample_rate;
   window.frame_rate_hz = track.frame_rate_hz;
   return window;
+}
+
+bool contiguous_median_compatible(const NoteObject& left, const NoteObject& right,
+                                  double threshold_cents) noexcept {
+  if (left.frame_end != right.frame_start || !std::isfinite(left.median_hz) ||
+      !std::isfinite(right.median_hz) || !(left.median_hz > 0.0f) || !(right.median_hz > 0.0f)) {
+    return false;
+  }
+  const double cents = std::abs(constants::kCentsPerOctave *
+                                std::log2(static_cast<double>(right.median_hz) / left.median_hz));
+  return std::isfinite(cents) && cents <= threshold_cents;
+}
+
+bool onset_supports_boundary(const std::vector<int>& onset_frames, int boundary_frame,
+                             const pitch_editor::F0Track& track) noexcept {
+  if (track.hop_length <= 0 || track.sample_rate <= 0) return false;
+  const double boundary_seconds =
+      static_cast<double>(boundary_frame) * track.hop_length / track.sample_rate;
+  for (const int onset_frame : onset_frames) {
+    const double onset_seconds =
+        static_cast<double>(onset_frame) / detail::monophonic_onset_detail::kFramesPerSecond;
+    if (std::isfinite(onset_seconds) &&
+        std::abs(onset_seconds - boundary_seconds) <= kOnsetBoundaryToleranceMs / 1000.0) {
+      return true;
+    }
+  }
+  return false;
+}
+
+std::vector<NoteObject> reconcile_monophonic_boundaries(const Audio& audio,
+                                                        const pitch_editor::F0Track& track,
+                                                        const NoteExtractorConfig& extractor,
+                                                        std::vector<NoteObject> notes) {
+  if (notes.size() < 2 || track.n_frames() <= 0 || track.hop_length <= 0 ||
+      track.sample_rate <= 0) {
+    return notes;
+  }
+
+  const double threshold_cents = extractor.segmenter.segmentation_threshold_cents;
+  std::vector<bool> merge_candidate(notes.size(), false);
+  bool has_compatible_boundary = false;
+  for (size_t i = 1; i < notes.size(); ++i) {
+    if (contiguous_median_compatible(notes[i - 1], notes[i], threshold_cents)) {
+      merge_candidate[i] = true;
+      has_compatible_boundary = true;
+    }
+  }
+  if (!has_compatible_boundary) return notes;
+
+  const detail::MonophonicOnsetEvidence evidence = detail::monophonic_onset_evidence(audio);
+  if (!evidence.available) return notes;
+  for (size_t i = 1; i < notes.size(); ++i) {
+    if (merge_candidate[i] &&
+        onset_supports_boundary(evidence.frames, notes[i].frame_start, track)) {
+      merge_candidate[i] = false;
+    }
+  }
+
+  std::vector<NoteObject> reconciled;
+  reconciled.reserve(notes.size());
+  const int total_frames = track.n_frames();
+  const int64_t sample_count = static_cast<int64_t>(audio.size());
+  bool has_merged_group = false;
+  for (size_t start = 0; start < notes.size();) {
+    size_t end = start + 1;
+    float minimum_hz = notes[start].median_hz;
+    float maximum_hz = notes[start].median_hz;
+    while (end < notes.size() && merge_candidate[end]) {
+      const float next_hz = notes[end].median_hz;
+      const float next_minimum = std::min(minimum_hz, next_hz);
+      const float next_maximum = std::max(maximum_hz, next_hz);
+      const double group_span_cents =
+          constants::kCentsPerOctave *
+          std::log2(static_cast<double>(next_maximum) / static_cast<double>(next_minimum));
+      if (!std::isfinite(group_span_cents) || group_span_cents > threshold_cents) break;
+      minimum_hz = next_minimum;
+      maximum_hz = next_maximum;
+      ++end;
+    }
+
+    if (end == start + 1) {
+      reconciled.push_back(std::move(notes[start]));
+    } else {
+      const int frame_start = notes[start].frame_start;
+      const int frame_end = notes[end - 1].frame_end;
+      const pitch_editor::F0Track window = track_window(track, frame_start, frame_end);
+      reconciled.push_back(make_note(audio, 0, sample_count, window, frame_start, total_frames,
+                                     frame_start, frame_end, extractor));
+      has_merged_group = true;
+    }
+    start = end;
+  }
+
+  if (has_merged_group) {
+    repair_rederived_note_set_bounds(audio, track, reconciled, extractor);
+  }
+  return reconciled;
 }
 
 std::vector<NoteObject> split_monophonic_reattacks(const Audio& audio,
@@ -650,6 +749,7 @@ std::vector<NoteObject> monophonic_notes(const Audio& audio, const TranscribeCon
   extractor.segmenter.min_note_ms = config.min_note_ms;
   extractor.segmenter.reference_hz = config.reference_hz;
   std::vector<NoteObject> notes = extract_notes(audio, track, extractor);
+  notes = reconcile_monophonic_boundaries(audio, track, extractor, std::move(notes));
   return split_monophonic_reattacks(audio, track, extractor, pitch_config.frame_length,
                                     std::move(notes));
 }
