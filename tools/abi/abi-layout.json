@@ -10561,9 +10561,15 @@
         "name": "min_note_division",
         "offset": 64,
         "size": 4
+      },
+      {
+        "kind": "signed",
+        "name": "monophonic_model",
+        "offset": 68,
+        "size": 4
       }
     ],
-    "size": 68
+    "size": 72
   },
   "SonareTranscribeResult": {
     "align": 8,

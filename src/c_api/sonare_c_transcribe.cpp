@@ -21,7 +21,7 @@ namespace {
 namespace ntm = sonare::editing::note_model;
 
 constexpr int32_t kTranscribeConfigVersionMin = 1;
-constexpr int32_t kTranscribeConfigVersion = 3;
+constexpr int32_t kTranscribeConfigVersion = 4;
 constexpr int32_t kTranscribeResultVersion = 2;
 constexpr int32_t kMaxMinNoteDivision = 128;
 
@@ -47,7 +47,7 @@ SonareError read_config(const SonareTranscribeConfig* in, ntm::TranscribeConfig*
   if (in == nullptr) return SONARE_OK;
   if (in->struct_version < kTranscribeConfigVersionMin ||
       in->struct_version > kTranscribeConfigVersion) {
-    return refuse("struct_version must be 1, 2 or 3");
+    return refuse("struct_version must be 1, 2, 3 or 4");
   }
   if (in->struct_version >= 2) *out_reference_auto = in->reference_auto != 0;
 
@@ -137,6 +137,16 @@ SonareError read_config(const SonareTranscribeConfig* in, ntm::TranscribeConfig*
   out->min_frame_peak_ratio = in->min_frame_peak_ratio;
   out->min_ridge_peak_ratio = in->min_ridge_peak_ratio;
   out->reattack_ratio = in->reattack_ratio;
+  if (in->struct_version < 4) return SONARE_OK;
+
+  if (in->monophonic_model != 0 && in->monophonic_model != 1) {
+    return refuse("monophonic_model must be 0 (segments) or 1 (singing)");
+  }
+  if (out->source == ntm::TranscribeSource::kPolyphonic && in->monophonic_model != 0) {
+    return refuse("monophonic_model requires monophonic transcription");
+  }
+  out->monophonic_model =
+      in->monophonic_model == 1 ? ntm::MonophonicModel::kSinging : ntm::MonophonicModel::kSegments;
   return SONARE_OK;
 }
 
@@ -217,12 +227,13 @@ float resolve_tempo(float requested, const sonare::Audio& audio) {
 
 SonareTranscribeConfig sonare_transcribe_config_default(void) {
   SonareTranscribeConfig config = {};
-  config.struct_version = 3;
+  config.struct_version = 4;
 #if defined(SONARE_WITH_ARRANGEMENT) && defined(SONARE_WITH_PITCH_EDITOR)
   // Seeded from the core defaults so the two cannot drift apart.
   const ntm::TranscribeConfig defaults;
   config.polyphonic = defaults.source == ntm::TranscribeSource::kPolyphonic ? 1 : 0;
   config.reference_hz = defaults.reference_hz;
+  config.monophonic_model = defaults.monophonic_model == ntm::MonophonicModel::kSinging ? 1 : 0;
   // fmin/fmax, min_note_ms and the four polyphonic-only fields stay 0: the
   // selected source resolves each, so flipping polyphonic must not pin the
   // monophonic values.

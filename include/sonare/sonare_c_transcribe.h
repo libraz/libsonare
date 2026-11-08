@@ -42,8 +42,8 @@ extern "C" {
 /// @details Every numeric field takes its documented default at 0, so a
 ///          zero-filled struct with @c struct_version set is the defaults.
 ///          @ref sonare_transcribe_config_default initializes the configuration
-///          and keeps @c fmin, @c fmax, @c min_note_ms and the version-3 fields
-///          at 0, so each resolves from the selected source.
+///          and keeps @c fmin, @c fmax, @c min_note_ms and the version-3 and -4
+///          fields at 0, so each resolves from the selected source.
 ///
 ///          **A struct field has no way to spell "absent", which is why 0 means
 ///          "default" here and does NOT mean that on the bindings.** Python,
@@ -58,9 +58,10 @@ extern "C" {
 ///          a caller can mean. The divergence is deliberate and is the reason
 ///          the bindings do not simply forward this struct.
 typedef struct {
-  /// 1, 2 or 3; any other value is rejected. Version 2 adds @c reference_auto
-  /// and version 3 the four polyphonic limits and @c min_note_division; each
-  /// is read only from a struct of its version or later.
+  /// 1 to 4; any other value is rejected. Version 2 adds @c reference_auto,
+  /// version 3 the four polyphonic limits and @c min_note_division, and
+  /// version 4 @c monophonic_model; each is read only from a struct of its
+  /// version or later.
   int32_t struct_version;
   /// Non-zero reads the multi-F0 chain, which finds overlapping notes at the
   /// cost of a full STFT and a mask per tracked ridge. 0 reads pYIN cut into
@@ -78,12 +79,13 @@ typedef struct {
   float fmin;
   float fmax;
   /// Shortest span kept as a note, in milliseconds; 0 => @c min_note_division
-  /// if set, else the source's default: 45 for the monophonic path, and for the
-  /// polyphonic path, where it is the shortest ridge the tracker keeps, 60
-  /// whatever the tempo.
+  /// if set, else the source's default: 30 for the monophonic segments model,
+  /// 45 for the monophonic singing model, and for the polyphonic path, where it
+  /// is the shortest ridge the tracker keeps, 60 whatever the tempo.
   float min_note_ms;
-  /// Scale, in cents, of the pitch movement the monophonic path keeps within
-  /// one note; larger values hold more movement in a note. 0 => 50.
+  /// Monophonic pitch threshold in cents; 0 => 50. The segments model ends one
+  /// note and starts the next where the pitch moves this far; the singing model
+  /// reads it as the scale of the movement kept within one note.
   float segmentation_threshold_cents;
   /// Level mapped to velocity 1. A note's PEAK per-frame RMS of the input over
   /// its span (other notes sounding then included) is taken in dBFS and mapped
@@ -126,6 +128,14 @@ typedef struct {
   /// is the one the events are placed on: the given or detected one for
   /// @ref sonare_transcribe, the project's at its start for a clip.
   int32_t min_note_division;
+  /* --- struct_version 4 --- */
+  /// Monophonic segmentation model. 0 (segments, the default) cuts the pitch
+  /// track where it moves and splits brief RMS dips, accurate on instrument
+  /// lines including short notes. 1 (singing) decodes notes jointly over pitch
+  /// bins, holding vibrato and intonation drift within a note; it can merge
+  /// very short notes at fast tempos. Any other value is rejected, and with
+  /// @c polyphonic non-zero a non-zero value is refused naming the field.
+  int32_t monophonic_model;
 } SonareTranscribeConfig;
 
 /// @brief Heap-owned transcription output. Release with

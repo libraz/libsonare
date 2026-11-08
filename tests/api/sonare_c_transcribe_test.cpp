@@ -227,8 +227,10 @@ TEST_CASE("sonare_transcribe_config_default is the core's defaults, spelled out"
   const SonareTranscribeConfig config = sonare_transcribe_config_default();
   const ntm::TranscribeConfig core;
 
-  REQUIRE(config.struct_version == 3);
+  REQUIRE(config.struct_version == 4);
   CHECK(config.polyphonic == (core.source == ntm::TranscribeSource::kPolyphonic ? 1 : 0));
+  CHECK(config.monophonic_model ==
+        (core.monophonic_model == ntm::MonophonicModel::kSinging ? 1 : 0));
   CHECK(config.reference_hz == core.reference_hz);
   CHECK(config.fmin == core.fmin);
   CHECK(config.fmax == core.fmax);
@@ -258,6 +260,7 @@ TEST_CASE("sonare_transcribe_config_default is the core's defaults, spelled out"
   CHECK(config.min_frame_peak_ratio == 0.0f);
   CHECK(config.min_ridge_peak_ratio == 0.0f);
   CHECK(config.reattack_ratio == 0.0f);
+  CHECK(config.monophonic_model == 0);
   CHECK(config.segmentation_threshold_cents > 0.0f);
   CHECK(config.velocity_floor_db < 0.0f);
 }
@@ -307,8 +310,8 @@ TEST_CASE("sonare_transcribe refuses what it cannot read", "[c_api][transcribe]"
     CHECK(result.get().note_count == 0);
   }
 
-  SECTION("a struct version that is not 1, 2 or 3") {
-    for (const int32_t version : {0, 4, -1, 99}) {
+  SECTION("a struct version that is not 1 to 4") {
+    for (const int32_t version : {0, 5, -1, 99}) {
       INFO("struct_version " << version);
       SonareTranscribeConfig config = sonare_transcribe_config_default();
       config.struct_version = version;
@@ -594,7 +597,7 @@ TEST_CASE("sonare_project_transcribe_to_clip refuses what it cannot write", "[c_
                                           &note_count) == SONARE_ERROR_INVALID_PARAMETER);
 
   SonareTranscribeConfig config = sonare_transcribe_config_default();
-  config.struct_version = 4;
+  config.struct_version = 5;
   CHECK(sonare_project_transcribe_to_clip(fixture.project(), fixture.clip(), samples.data(),
                                           samples.size(), kSampleRate, &config,
                                           &note_count) == SONARE_ERROR_INVALID_PARAMETER);
@@ -1096,6 +1099,92 @@ TEST_CASE("min_note_division is refused by name and read only from version 3",
     Result result;
     CHECK(sonare_transcribe(samples.data(), samples.size(), kSampleRate, 120.0f, &older,
                             result.out()) == SONARE_OK);
+  }
+}
+
+// --- The monophonic model ---------------------------------------------------
+
+namespace {
+
+/// @brief One sung-like note held for 2 s with a 6 Hz, 75-cent vibrato, which
+///        the segments model cuts where the pitch swings and the singing model
+///        holds as one note.
+std::vector<float> vibrato_note() {
+  constexpr double kRateHz = 6.0;
+  constexpr double kDepthCents = 75.0;
+  const double center = static_cast<double>(hz_for_midi(67));
+  std::vector<float> samples(static_cast<size_t>(2 * kSampleRate), 0.0f);
+  double phase = 0.0;
+  for (size_t i = 0; i < samples.size(); ++i) {
+    const double t = static_cast<double>(i) / kSampleRate;
+    const double cents = kDepthCents * std::sin(sonare::constants::kTwoPiD * kRateHz * t);
+    phase += sonare::constants::kTwoPiD * center *
+             std::pow(2.0, cents / static_cast<double>(sonare::constants::kCentsPerOctave)) /
+             kSampleRate;
+    samples[i] = static_cast<float>(0.5 * std::sin(phase));
+  }
+  return samples;
+}
+
+}  // namespace
+
+TEST_CASE("monophonic_model selects the singing decoder from a version-4 struct",
+          "[c_api][transcribe]") {
+  const std::vector<float> samples = vibrato_note();
+  SonareTranscribeConfig segments = sonare_transcribe_config_default();
+  Result by_segments;
+  transcribe_into(&by_segments, samples, 120.0f, &segments);
+
+  SonareTranscribeConfig singing = segments;
+  singing.monophonic_model = 1;
+  Result by_singing;
+  transcribe_into(&by_singing, samples, 120.0f, &singing);
+  CHECK(by_singing.get().note_count != by_segments.get().note_count);
+
+  SECTION("a version-3 struct never reads the field, valid or not") {
+    for (const int32_t garbage : {1, 7, -1}) {
+      INFO("monophonic_model " << garbage);
+      SonareTranscribeConfig older = segments;
+      older.struct_version = 3;
+      older.monophonic_model = garbage;
+      Result result;
+      transcribe_into(&result, samples, 120.0f, &older);
+      require_same_events(result.events(), by_segments.events());
+    }
+  }
+}
+
+TEST_CASE("monophonic_model is refused by name", "[c_api][transcribe]") {
+  const std::vector<float> samples = separated_notes({60, 64});
+
+  SECTION("a value that is neither model") {
+    for (const int32_t bad : {-1, 2, 99}) {
+      INFO("monophonic_model " << bad);
+      SonareTranscribeConfig config = sonare_transcribe_config_default();
+      config.monophonic_model = bad;
+      Result result;
+      CHECK(sonare_transcribe(samples.data(), samples.size(), kSampleRate, 120.0f, &config,
+                              result.out()) == SONARE_ERROR_INVALID_PARAMETER);
+      CHECK(std::string(sonare_last_error_message()).find("monophonic_model") != std::string::npos);
+      CHECK(result.get().events == nullptr);
+    }
+  }
+
+  SECTION("a monophonic-only model on the polyphonic chain") {
+    SonareTranscribeConfig config = sonare_transcribe_config_default();
+    config.polyphonic = 1;
+    config.monophonic_model = 1;
+    Result result;
+    CHECK(sonare_transcribe(samples.data(), samples.size(), kSampleRate, 120.0f, &config,
+                            result.out()) == SONARE_ERROR_INVALID_PARAMETER);
+    CHECK(std::string(sonare_last_error_message()).find("monophonic_model") != std::string::npos);
+    CHECK(result.get().events == nullptr);
+
+    // The segments model is the polyphonic chain's own spelling of "not set".
+    config.monophonic_model = 0;
+    Result polyphonic;
+    CHECK(sonare_transcribe(samples.data(), samples.size(), kSampleRate, 120.0f, &config,
+                            polyphonic.out()) == SONARE_OK);
   }
 }
 
