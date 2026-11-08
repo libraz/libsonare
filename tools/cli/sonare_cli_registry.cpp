@@ -1118,14 +1118,17 @@ const std::vector<CliCommandSpec>& build_cli_registry() {
     // Every numeric here means "keep the library default" when absent, and the
     // C ABI spells that 0 and refuses an out-of-domain value by name, so the
     // domains stay on that one entry rather than being restated per surface.
-    add_command(commands, "transcribe", true,
-                {required_output(), number_value("tempo-bpm"), flag("polyphonic"),
-                 number_value("reference-hz"), number_value("fmin"), number_value("fmax"),
-                 number_value("min-note-ms"), number_value("segmentation-threshold-cents"),
-                 int_value("max-polyphony"), int_value("min-note-division"),
-                 number_value("min-frame-peak-ratio"), number_value("min-ridge-peak-ratio"),
-                 number_value("reattack-ratio"), number_value("velocity-floor-db"),
-                 int_value("fixed-velocity"), int_value("group", 0), int_value("channel", 0)});
+    add_command(
+        commands, "transcribe", true,
+        {required_output(), number_value("tempo-bpm"), flag("polyphonic"),
+         number_value("reference-hz"), number_value("fmin"), number_value("fmax"),
+         number_value("min-note-ms"), number_value("segmentation-threshold-cents"),
+         int_value("max-polyphony"), int_value("min-note-division"),
+         number_value("min-frame-peak-ratio"), number_value("min-ridge-peak-ratio"),
+         number_value("reattack-ratio"), number_value("velocity-floor-db"),
+         int_value("fixed-velocity"), int_value("group", 0), int_value("channel", 0),
+         with_domain(string_value("monophonic-model", "segments"),
+                     choices_of({"segments", "singing"}, CliOptionDomainStage::Parameter))});
     // The reference melody is read by the arrangement library and assigned by the
     // pitch editor, so the leaf exists only where both do. `--reference-smf` is
     // required in the parser on both front-ends and so keeps the usage class,

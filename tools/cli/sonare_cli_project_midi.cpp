@@ -133,7 +133,7 @@ int cmd_transcribe(const CliArgs& args, const Audio& audio) {
   // what an unset option means, so an absent option is left at 0 rather than
   // given a value this CLI would have to keep in step with the core's.
   SonareTranscribeConfig config{};
-  config.struct_version = 3;
+  config.struct_version = 4;
   config.polyphonic = args.has("polyphonic") ? 1 : 0;
   config.reference_hz = args.get_float("reference-hz", 0.0f);
   config.fmin = args.get_float("fmin", 0.0f);
@@ -186,6 +186,19 @@ int cmd_transcribe(const CliArgs& args, const Audio& audio) {
       throw std::invalid_argument("--min-note-division must be an integer in 1..128");
     }
     config.min_note_division = division;
+  }
+
+  // Absent leaves the C ABI's 0 (segments); the core refuses singing together
+  // with --polyphonic, naming the field.
+  if (args.has("monophonic-model")) {
+    const std::string model = args.get_string("monophonic-model");
+    if (model == "segments") {
+      config.monophonic_model = 0;
+    } else if (model == "singing") {
+      config.monophonic_model = 1;
+    } else {
+      throw std::invalid_argument("invalid value for --monophonic-model: " + model);
+    }
   }
 
   size_t note_count = 0;

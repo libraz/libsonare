@@ -4296,6 +4296,25 @@
           "domain": null
         },
         {
+          "name": "monophonic-model",
+          "type": "string",
+          "default": "segments",
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": {
+            "choices": [
+              "segments",
+              "singing"
+            ],
+            "minimum": null,
+            "exclusiveMinimum": false,
+            "maximum": null,
+            "exclusiveMaximum": false,
+            "rejectExit": "invalid_parameter"
+          }
+        },
+        {
           "name": "output",
           "type": "path",
           "default": null,
@@ -15825,6 +15844,25 @@
           "repeatable": false,
           "required": false,
           "domain": null
+        },
+        {
+          "name": "monophonic-model",
+          "type": "string",
+          "default": "segments",
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": {
+            "choices": [
+              "segments",
+              "singing"
+            ],
+            "minimum": null,
+            "exclusiveMinimum": false,
+            "maximum": null,
+            "exclusiveMaximum": false,
+            "rejectExit": "invalid_parameter"
+          }
         },
         {
           "name": "output",

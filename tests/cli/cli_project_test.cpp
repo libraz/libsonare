@@ -962,6 +962,19 @@ TEST_CASE("CLI transcribe polyphony options reach the transcriber", "[cli][trans
     }
   }
 
+  SECTION("the monophonic model is accepted by name and an unknown name is refused") {
+    const std::string mono = CLI + " transcribe " + chord + " --tempo-bpm 120 --json -o " + out;
+    for (const char* model : {"segments", "singing"}) {
+      auto [code, output] = exec_command(mono + " --monophonic-model " + model);
+      INFO(model << ": " << output);
+      REQUIRE(code == 0);
+    }
+    auto [bad_code, bad_output] = exec_command(mono + " --monophonic-model choir");
+    INFO(bad_output);
+    REQUIRE(bad_code == 3);
+    REQUIRE_THAT(bad_output, ContainsSubstring("monophonic-model"));
+  }
+
   SECTION("zero ratios and no-split are accepted") {
     auto [code, output] = exec_command(base +
                                        " --reattack-ratio 0 --min-frame-peak-ratio 0"
