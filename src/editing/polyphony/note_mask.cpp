@@ -327,7 +327,9 @@ NoteSegment invert_cells(const StftGeometry& geometry, const NoteMask& mask, int
   // the part runs to the length as the zero-padded full inverse does.
   const int64_t part_natural = static_cast<int64_t>(span - 1) * hop + n_fft - trim;
   const int64_t available = last < n_frames ? part_natural : whole - first_sample;
-  const int64_t count = std::clamp<int64_t>(whole - first_sample, 0, available);
+  // A length ending before the part leaves `available` negative; that is an empty count.
+  const int64_t count =
+      std::clamp<int64_t>(whole - first_sample, 0, std::max<int64_t>(available, 0));
   if (count == 0) {
     return {Audio::from_vector({}, geometry.sample_rate), first_sample};
   }
