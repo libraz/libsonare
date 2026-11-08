@@ -11,7 +11,7 @@ The two command-line front-ends get a column each because they are two binaries:
 | domain | C entry points | Python | Node | WASM | CLI (python) | CLI (native) |
 |---|---:|---:|---:|---:|---:|---:|
 | assist | 3 | 0/3 | 0/3 | 0/3 | 0/3 | 0/3 |
-| core (analysis, IO, conversion) | 70 | 50/70 | 50/70 | 47/70 | 16/70 | 16/70 |
+| core (analysis, IO, conversion) | 71 | 50/71 | 50/71 | 47/71 | 16/71 | 16/71 |
 | creative effects | 48 | 45/48 | 45/48 | 45/48 | 17/48 | 17/48 |
 | feature extraction | 145 | 126/145 | 126/145 | 126/145 | 25/145 | 49/145 |
 | mastering | 120 | 115/120 | 115/120 | 117/120 | 14/120 | 12/120 |
@@ -29,4 +29,4 @@ The two command-line front-ends get a column each because they are two binaries:
 | vocal edit | 58 | 44/58 | 44/58 | 44/58 | 11/58 | 11/58 |
 | vocal project | 10 | 5/10 | 5/10 | 5/10 | 2/10 | 2/10 |
 | voice changer | 26 | 26/26 | 26/26 | 24/26 | 3/26 | 3/26 |
-| **all domains** | **1034** | **947/1034** | **945/1034** | **944/1034** | **144/1034** | **163/1034** |
+| **all domains** | **1035** | **947/1035** | **945/1035** | **944/1035** | **144/1035** | **163/1035** |
