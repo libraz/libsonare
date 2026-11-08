@@ -13,7 +13,7 @@ inline constexpr double kFitSampleRate = 48000.0;
 
 /// F0 (Hz) of SingingPhonation at the patch defaults voicing @p note_hz, held at
 /// @p force and @p tension, over a window after the onset has settled; 0 when
-/// it does not phonate.
+/// it does not phonate, or when the window's two halves disagree on the pitch.
 double assembly_f0(float note_hz, float force, float tension);
 
 /// Tension at which the assembly sounds @p note_hz at @p force, searched from

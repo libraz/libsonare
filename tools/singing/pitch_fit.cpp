@@ -29,6 +29,9 @@ constexpr double kBranchCents = 40.0;
 constexpr size_t kMedianHalf = 3;
 constexpr double kOffBranchCents = 20.0;
 constexpr double kNoPitch = -1.0e9;
+// Largest F0 disagreement between the window's halves for a periodic oscillation: regular
+// grid points measure at most 1.4 cents, the irregular A2 / force-0.3 regime 6.6 on average.
+constexpr double kHalfWindowCents = 3.0;
 
 /// Autocorrelation F0 with parabolic peak refinement: the first lag within 85 %
 /// of the strongest, which keeps a strong second partial from reading as the period.
@@ -74,6 +77,15 @@ double assembly_f0(float note_hz, float force, float tension) {
     }
   }
   if (!(energy / kWindow > 1.0e-10)) return 0.0;
+  // An oscillation whose two halves disagree has no single pitch to fit.
+  const std::vector<float> first(window.begin(), window.begin() + kWindow / 2);
+  const std::vector<float> second(window.begin() + kWindow / 2, window.end());
+  const double f_first = acf_f0(first, kFitSampleRate);
+  const double f_second = acf_f0(second, kFitSampleRate);
+  if (!(f_first > 0.0 && f_second > 0.0) ||
+      std::fabs(kCentsPerOctave * std::log2(f_second / f_first)) > kHalfWindowCents) {
+    return 0.0;
+  }
   return acf_f0(window, kFitSampleRate);
 }
 

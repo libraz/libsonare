@@ -31,8 +31,9 @@ OUTPUT_PATH = REPO_ROOT / "src/midi/synth/singing_pitch_compensation.inc"
 SWEEP_PATH = REPO_ROOT / "build/bin/sonare_singing_sweep"
 
 #: Breath axis grid. Dense at the low end, where F0 is most sensitive to the
-#: breath, starting where every pitch of the grid already phonates.
-FORCES = (0.3, 0.34, 0.39, 0.45, 0.52, 0.6, 0.7, 0.83, 1.0)
+#: breath, starting where every pitch of the grid phonates periodically: up to 0.34
+#: the reference tract holds A2 in an irregular subharmonic regime with no stable F0.
+FORCES = (0.39, 0.45, 0.52, 0.6, 0.7, 0.83, 1.0)
 
 #: Pitch grid: every other semitone from A2 to C#4, the range the reference tract
 #: compensates without its F0 locking onto a formant. On equal-tempered notes so
