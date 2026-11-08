@@ -591,6 +591,7 @@ if(BUILD_PITCH_EDITOR)
                                       editing/vocal_renderer_contract_test.cpp
                                       editing/vocal_analysis_test.cpp
                                       editing/note_transcriber_test.cpp
+                                      editing/note_state_decoder_test.cpp
                                       editing/note_transcriber_piano_test.cpp
                                       editing/note_pitch_curve_test.cpp
                                       editing/pitch_editor_test.cpp

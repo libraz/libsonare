@@ -793,6 +793,7 @@ if(BUILD_PITCH_EDITOR)
     editing/note_model/note_extractor.cpp
     editing/note_model/note_renderer.cpp
     editing/note_model/note_split_merge.cpp
+    editing/note_model/note_state_decoder.cpp
     editing/note_model/note_target.cpp
     editing/note_model/note_transcriber.cpp
     editing/note_model/pitch_decomposition.cpp
