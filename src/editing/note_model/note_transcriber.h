@@ -3,10 +3,10 @@
 /// @file note_transcriber.h
 /// @brief Turns audio into pitched, velocity-bearing note events.
 ///
-/// The monophonic path cuts pYIN's F0 track into notes with the note-state
-/// decoder, which reads the track, its frame RMS and narrow RMS valleys
-/// together. The polyphonic path reads the multi-F0 chain for overlapping notes.
-/// Both paths map the measured F0 and level to MIDI pitch and velocity.
+/// The monophonic path reads pYIN's F0 track with one of two models: regions cut
+/// by NoteSegmenter, or the note-state decoder. The polyphonic path reads the
+/// multi-F0 chain for overlapping notes. Both paths map the measured F0 and
+/// level to MIDI pitch and velocity.
 ///
 /// Output is in SAMPLES and carries no musical time. Placing notes on a bar grid
 /// needs a tempo, which is the caller's, so the conversion to PPQ happens above
@@ -27,19 +27,35 @@ namespace sonare::editing::note_model {
 
 /// @brief Which chain the notes are read from.
 enum class TranscribeSource : uint32_t {
-  /// pYIN's F0 track cut into notes by the note-state decoder, which also reads
-  /// frame RMS and narrow RMS valleys, so a re-struck note of the same pitch
-  /// can start anew. One note sounds at a time; a chord arrives as whichever line the
-  /// tracker followed.
+  /// pYIN's F0 track cut into notes by the selected @ref MonophonicModel. One
+  /// note sounds at a time; a chord arrives as whichever line the tracker
+  /// followed.
   kMonophonic = 0,
   /// The multi-F0 chain. Overlapping notes are expected, and the cost is a full
   /// STFT plus a mask per tracked ridge.
   kPolyphonic = 1,
 };
 
+/// @brief How the monophonic path cuts the F0 track into notes.
+enum class MonophonicModel : uint32_t {
+  /// Pitch regions cut by NoteSegmenter, contiguous same-pitch regions joined
+  /// unless an acoustic onset supports the boundary, and a clear brief RMS
+  /// valley within a region split into repeated attacks. The default; accurate
+  /// on clean instrument lines, short notes included.
+  kSegments = 0,
+  /// A joint note-state decoder over pitch bins, with narrow RMS valleys as
+  /// re-articulation evidence. Holds vibrato and intonation drift within one
+  /// note; meant for sung recordings. It can merge very short notes, such as
+  /// thirty-second notes at fast tempos.
+  kSinging = 1,
+};
+
 /// @brief What the transcription reads and how it converts what it finds.
 struct TranscribeConfig {
   TranscribeSource source = TranscribeSource::kMonophonic;
+  /// Monophonic only: a polyphonic config with anything but @c kSegments is
+  /// refused by name.
+  MonophonicModel monophonic_model = MonophonicModel::kSegments;
 
   /// Tuning reference the MIDI note number is measured against. A take recorded
   /// against a different reference lands a full semitone out at roughly 26 Hz of
@@ -58,10 +74,10 @@ struct TranscribeConfig {
   float fmax = 0.0f;
 
   /// Shortest span kept as a note, in milliseconds. 0 => @c min_note_division
-  /// if set, else the source's default: 45 ms for monophonic notes, where it
-  /// is the decoder's shortest note (raised to two track frames); for
-  /// polyphonic ones, where it is the shortest ridge the tracker keeps, 60 ms
-  /// whatever the tempo.
+  /// if set, else the source's default. Monophonic, per model: the segmenter's
+  /// 30 ms for @c kSegments, 45 ms for @c kSinging, where it is the decoder's
+  /// shortest note (raised to two track frames). Polyphonic, where it is the
+  /// shortest ridge the tracker keeps: 60 ms whatever the tempo.
   float min_note_ms = 0.0f;
   /// Shortest span kept as a note, as a note value: n is a 1/n note at
   /// @c tempo_bpm (32 => a thirty-second note), 1..128. 0 => unset. Needs a
@@ -69,12 +85,13 @@ struct TranscribeConfig {
   int min_note_division = 0;
   /// Tempo @c min_note_division is read at, in BPM. 0 => none. No default reads it.
   float tempo_bpm = 0.0f;
-  /// Monophonic: scale, in cents, of the pitch deviation held within one note;
-  /// the decoder's Stable pitch width is 1.4 times this value, so a larger
-  /// value lets more drift and vibrato stay one note. Notes are never split
-  /// finer than a third of a semitone. Polyphonic: scales the reported f0
-  /// stability figure only -- a mid-ridge pitch jump is never split into two
-  /// notes.
+  /// Monophonic @c kSegments: pitch movement, in cents, that ends one note and
+  /// starts the next. Monophonic @c kSinging: scale of the pitch deviation held
+  /// within one note; the decoder's Stable pitch width is 1.4 times this value,
+  /// so a larger value lets more drift and vibrato stay one note, and notes are
+  /// never split finer than a third of a semitone. Polyphonic: scales the
+  /// reported f0 stability figure only -- a mid-ridge pitch jump is never split
+  /// into two notes.
   float segmentation_threshold_cents = 50.0f;
 
   /// Level that maps to velocity 1. A note's PEAK per-frame RMS of the input
@@ -132,7 +149,8 @@ struct TranscribePolyphonyLimits {
 };
 
 /// @brief Resolves the zero sentinels against the selected source's defaults.
-/// @details @c min_note_ms resolves per source and tempo. The four polyphonic-only
+/// @details @c min_note_ms resolves per source, monophonic model and tempo. The four
+/// polyphonic-only
 ///          fields resolve to the transcription defaults whatever the source,
 ///          since the monophonic chain never reads them. Nonzero values are
 ///          copied, a negative ratio as 0 and a negative @c reattack_ratio as
@@ -180,16 +198,17 @@ uint8_t velocity_for_peak_rms(float peak_rms, float velocity_floor_db) noexcept;
 ///         the source-specific default before that ordering check. Also on a
 ///         @c max_polyphony outside {0} U [1, 64], a non-finite or above-1
 ///         peak ratio, a @c reattack_ratio in (0, 1] or non-finite, and on a
-///         monophonic config with any of those four fields non-zero.
+///         monophonic config with any of those four fields non-zero. Also on an
+///         unknown @c monophonic_model, and on a polyphonic config whose
+///         @c monophonic_model is not @c kSegments.
 std::vector<TranscribedNote> transcribe_notes(const Audio& audio,
                                               const TranscribeConfig& config = {});
 
 /// @brief Monophonic transcription along a caller-supplied F0 track.
-/// @details Skips the pitch tracker and its alias repair; the note-state decoder
-///          (over @p track and the frame RMS and narrow RMS valleys of @p audio)
-///          and the level gate run exactly as in @ref transcribe_notes. Lets an
-///          evaluation score segmentation against a reference contour. @p track
-///          must be on @p audio's rate.
+/// @details Skips the pitch tracker and its alias repair; the selected
+///          @c monophonic_model and the level gate run exactly as in
+///          @ref transcribe_notes. Lets an evaluation score segmentation against
+///          a reference contour. @p track must be on @p audio's rate.
 /// @throws SonareException(InvalidParameter) as @ref transcribe_notes, on a
 ///         polyphonic @c source, on a track whose sample rate differs from
 ///         @p audio's or that has no frame cadence, and on per-frame arrays of

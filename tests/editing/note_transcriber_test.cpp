@@ -29,6 +29,7 @@
 #include <vector>
 
 #include "core/audio.h"
+#include "editing/note_model/monophonic_onset_evidence.h"
 #include "editing/pitch_editor/f0_provider.h"
 #include "editing/polyphony/f0_salience.h"
 #include "feature/pitch.h"
@@ -764,6 +765,14 @@ TEST_CASE("acoustic onsets preserve a held tone with wide vibrato",
     if (notes.size() == 1) CHECK(notes.front().note == 57);
   }
 
+  for (const int sample_rate : {16000, 48000}) {
+    const auto evidence = sonare::editing::note_model::detail::monophonic_onset_evidence(
+        modulated_harmonic_tone(sample_rate, 57, 0.0, 0.0, 6.0, 75.0));
+    INFO("synthetic onset frames at " << sample_rate << " Hz");
+    REQUIRE(evidence.available);
+    CHECK((evidence.frames == std::vector<int>{39, 357}));
+  }
+
   const std::vector<TranscribedNote> vibrato50 =
       transcribe_notes(modulated_harmonic_tone(44100, 57, 0.0, 0.0, 6.0, 50.0));
   REQUIRE(vibrato50.size() == 1);
@@ -1435,7 +1444,7 @@ size_t count_of(const std::vector<TranscribedNote>& notes, int midi_note) {
 TEST_CASE("the polyphonic limits resolve per source", "[note_transcriber]") {
   TranscribeConfig monophonic;
   const TranscribePolyphonyLimits mono = resolve_transcribe_polyphony_limits(monophonic);
-  CHECK(mono.min_note_ms == 45.0f);
+  CHECK(mono.min_note_ms == 30.0f);
 
   TranscribeConfig polyphonic;
   polyphonic.source = TranscribeSource::kPolyphonic;
@@ -1500,7 +1509,7 @@ TEST_CASE("the shortest note resolves from the tempo", "[note_transcriber]") {
   SECTION("the monophonic default does not move with the tempo, a division does") {
     TranscribeConfig monophonic;
     monophonic.tempo_bpm = 300.0f;
-    CHECK(resolve_transcribe_polyphony_limits(monophonic).min_note_ms == 45.0f);
+    CHECK(resolve_transcribe_polyphony_limits(monophonic).min_note_ms == 30.0f);
     monophonic.min_note_division = 8;
     CHECK(resolve_transcribe_polyphony_limits(monophonic).min_note_ms == Catch::Approx(100.0f));
   }
@@ -1642,6 +1651,206 @@ TEST_CASE("the polyphonic limits refuse what they cannot read", "[note_transcrib
   }
 }
 
+// --- The singing model ----------------------------------------------------
+
+namespace {
+
+TranscribeConfig singing_config() {
+  TranscribeConfig config;
+  config.monophonic_model = MonophonicModel::kSinging;
+  return config;
+}
+
+}  // namespace
+
+TEST_CASE("the singing model separates short same-pitch attacks", "[note_transcriber][singing]") {
+  constexpr int64_t kOnsetToleranceMs = 50;
+  const TranscribeConfig singing = singing_config();
+  for (const int sample_rate : {16000, 22050, 44100, 48000}) {
+    for (const int midi_note : {57, 69, 76}) {
+      for (const float gain : {0.03f, 0.3f}) {
+        const RateSequence sequence = repeated_harmonic_tone(sample_rate, midi_note, gain);
+        const std::vector<TranscribedNote> notes =
+            transcribe_notes(sequence.audio(sample_rate), singing);
+        INFO("sample rate " << sample_rate << ", MIDI " << midi_note << ", gain " << gain
+                            << ", detected " << notes.size() << " attacks");
+        CHECK(notes.size() == sequence.onsets.size());
+        if (notes.size() != sequence.onsets.size()) continue;
+        for (size_t i = 0; i < notes.size(); ++i) {
+          INFO("attack " << i << ", actual onset " << notes[i].onset_sample << ", expected "
+                         << sequence.onsets[i]);
+          CHECK(notes[i].note == midi_note);
+          CHECK(std::llabs(notes[i].onset_sample - sequence.onsets[i]) * 1000 <=
+                kOnsetToleranceMs * sample_rate);
+        }
+      }
+    }
+  }
+
+  const RateSequence alternating_gain =
+      repeated_harmonic_tone(22050, 69, std::vector<float>{0.3f, 0.15f, 0.3f, 0.15f});
+  const std::vector<TranscribedNote> alternating_notes =
+      transcribe_notes(alternating_gain.audio(22050), singing);
+  REQUIRE(alternating_notes.size() == alternating_gain.onsets.size());
+  for (size_t i = 0; i < alternating_notes.size(); ++i) {
+    INFO("alternating-gain attack " << i);
+    CHECK(alternating_notes[i].note == 69);
+    CHECK(std::llabs(alternating_notes[i].onset_sample - alternating_gain.onsets[i]) * 1000 <=
+          kOnsetToleranceMs * 22050);
+  }
+}
+
+TEST_CASE("the singing model holds amplitude modulation and vibrato as one note",
+          "[note_transcriber][singing]") {
+  const TranscribeConfig singing = singing_config();
+  const auto require_one_note = [&](const sonare::Audio& audio, int midi_note) {
+    const std::vector<TranscribedNote> notes = transcribe_notes(audio, singing);
+    INFO("expected MIDI " << midi_note << ", detected " << notes.size() << " notes");
+    REQUIRE(notes.size() == 1);
+    CHECK(notes.front().note == midi_note);
+  };
+
+  for (const int sample_rate : {16000, 22050, 44100, 48000}) {
+    INFO("110 Hz, 8 Hz amplitude modulation at " << sample_rate << " Hz");
+    require_one_note(modulated_harmonic_tone(sample_rate, 45, 8.0, 0.95), 45);
+  }
+  INFO("440 Hz, 8 Hz amplitude modulation at 22050 Hz");
+  require_one_note(modulated_harmonic_tone(22050, 69, 8.0, 0.95), 69);
+
+  for (const int sample_rate : {22050, 44100}) {
+    INFO("220 Hz, 75-cent vibrato at " << sample_rate << " Hz");
+    require_one_note(modulated_harmonic_tone(sample_rate, 57, 0.0, 0.0, 6.0, 75.0), 57);
+  }
+}
+
+TEST_CASE("the singing model follows fast and contiguous pitch changes",
+          "[note_transcriber][singing]") {
+  const TranscribeConfig singing = singing_config();
+  const auto check_onsets = [](const std::vector<TranscribedNote>& notes,
+                               const std::vector<int64_t>& onsets, int sample_rate) {
+    if (notes.size() != onsets.size()) return;
+    for (size_t i = 0; i < notes.size(); ++i) {
+      INFO("sample rate " << sample_rate << ", note " << i << ", onset " << notes[i].onset_sample
+                          << ", intended " << onsets[i]);
+      CHECK(std::llabs(notes[i].onset_sample - onsets[i]) * 1000 <= 50 * sample_rate);
+    }
+  };
+
+  for (const int sample_rate : {16000, 22050, 44100}) {
+    const RateSequence sequence = fast_arpeggio(sample_rate);
+    const std::vector<TranscribedNote> notes =
+        transcribe_notes(sequence.audio(sample_rate), singing);
+    INFO("fast arpeggio at " << sample_rate << " Hz");
+    CHECK(note_numbers(notes) == sequence.notes);
+    check_onsets(notes, sequence.onsets, sample_rate);
+  }
+
+  for (const int sample_rate : {16000, 22050, 44100, 48000}) {
+    const RateSequence sequence = alias_arpeggio(sample_rate);
+    const std::vector<TranscribedNote> notes =
+        transcribe_notes(sequence.audio(sample_rate), singing);
+    INFO("fast leap phrase at " << sample_rate << " Hz; detected " << notes.size() << " notes");
+    REQUIRE(notes.size() == sequence.notes.size());
+    CHECK(note_numbers(notes) == sequence.notes);
+    check_onsets(notes, sequence.onsets, sample_rate);
+  }
+
+  const std::vector<TranscribedNote> glide =
+      transcribe_notes(gliding_harmonic_tone(22050), singing);
+  INFO("300-cent glide produced " << glide.size() << " notes");
+  CHECK(glide.size() == 3);
+
+  for (const std::vector<int>& intended :
+       {std::vector<int>{69, 70}, std::vector<int>{69, 70, 69, 70, 69, 70, 69, 70}}) {
+    const RateSequence sequence = contiguous_harmonic_notes(22050, intended);
+    const std::vector<TranscribedNote> notes = transcribe_notes(sequence.audio(22050), singing);
+    INFO("contiguous semitone sequence, expected " << intended.size() << " notes, got "
+                                                   << notes.size());
+    CHECK(note_numbers(notes) == intended);
+    check_onsets(notes, sequence.onsets, 22050);
+  }
+}
+
+TEST_CASE("a supplied F0 track runs the selected monophonic model", "[note_transcriber][singing]") {
+  const RateSequence sequence = repeated_harmonic_tone(22050, 69, 0.3f);
+  const sonare::Audio audio = sequence.audio(22050);
+  sonare::PitchConfig pitch_config =
+      sonare::editing::pitch_editor::default_editing_pitch_config(22050);
+  const TranscribeF0Range range = resolve_transcribe_f0_range(TranscribeConfig{});
+  pitch_config.fmin = range.fmin;
+  pitch_config.fmax = range.fmax;
+  pitch_config.center = true;
+  sonare::editing::pitch_editor::PyinF0Provider provider(pitch_config);
+  const sonare::editing::pitch_editor::F0Track detected = provider.detect(audio);
+
+  const TranscribeConfig singing = singing_config();
+  const std::vector<TranscribedNote> sung = transcribe_notes(audio, singing);
+  require_same_notes(transcribe_monophonic_track(audio, detected, singing), sung);
+  // The control: the two models answer this take differently, so the equality
+  // above is attributable to the model the track path selected.
+  const std::vector<TranscribedNote> segmented = transcribe_notes(audio);
+  REQUIRE(sung.size() == segmented.size());
+  bool any_differs = false;
+  for (size_t i = 0; i < sung.size(); ++i) {
+    any_differs = any_differs || sung[i].onset_sample != segmented[i].onset_sample ||
+                  sung[i].offset_sample != segmented[i].offset_sample;
+  }
+  CHECK(any_differs);
+}
+
+TEST_CASE("the monophonic model resolves its own shortest note", "[note_transcriber][singing]") {
+  TranscribeConfig singing = singing_config();
+  CHECK(resolve_transcribe_polyphony_limits(singing).min_note_ms == 45.0f);
+  singing.tempo_bpm = 300.0f;
+  CHECK(resolve_transcribe_polyphony_limits(singing).min_note_ms == 45.0f);
+  singing.min_note_division = 8;
+  CHECK(resolve_transcribe_polyphony_limits(singing).min_note_ms == Catch::Approx(100.0f));
+  singing.min_note_division = 0;
+  singing.tempo_bpm = 0.0f;
+  singing.min_note_ms = 80.0f;
+  CHECK(resolve_transcribe_polyphony_limits(singing).min_note_ms == 80.0f);
+
+  TranscribeConfig segments;
+  segments.monophonic_model = MonophonicModel::kSegments;
+  CHECK(resolve_transcribe_polyphony_limits(segments).min_note_ms == 30.0f);
+}
+
+TEST_CASE("the monophonic model refuses what it cannot read", "[note_transcriber][singing]") {
+  const sonare::Audio audio = sustained(69);
+  auto refused_naming = [&](const TranscribeConfig& config, const std::string& field) {
+    try {
+      (void)transcribe_notes(audio, config);
+      FAIL("accepted a config naming " << field);
+    } catch (const sonare::SonareException& error) {
+      CHECK(error.code() == sonare::ErrorCode::InvalidParameter);
+      CHECK(std::string(error.what()).find(field) != std::string::npos);
+    }
+  };
+
+  SECTION("a model that is neither") {
+    for (const TranscribeSource source :
+         {TranscribeSource::kMonophonic, TranscribeSource::kPolyphonic}) {
+      TranscribeConfig config;
+      config.source = source;
+      config.monophonic_model = static_cast<MonophonicModel>(2);
+      refused_naming(config, "monophonic_model");
+    }
+  }
+
+  SECTION("a polyphonic config carrying the singing model") {
+    TranscribeConfig config;
+    config.source = TranscribeSource::kPolyphonic;
+    config.monophonic_model = MonophonicModel::kSinging;
+    refused_naming(config, "monophonic_model");
+  }
+
+  TranscribeConfig polyphonic;
+  polyphonic.source = TranscribeSource::kPolyphonic;
+  polyphonic.monophonic_model = MonophonicModel::kSegments;
+  REQUIRE_NOTHROW(transcribe_notes(audio, polyphonic));
+  REQUIRE_NOTHROW(transcribe_notes(audio, singing_config()));
+}
+
 TEST_CASE("Bach score transcription evaluation", "[.][bach_transcribe_eval]") {
   const char* reference_dir = std::getenv("SONARE_BACH_REFERENCE_DIR");
   REQUIRE(reference_dir != nullptr);
@@ -1694,4 +1903,71 @@ TEST_CASE("Bach score transcription evaluation", "[.][bach_transcribe_eval]") {
     }
   }
   REQUIRE(evaluated_cases == excerpts.size() * sample_rates.size());
+}
+
+TEST_CASE("native monophonic onset frames match the frozen reference",
+          "[.][superflux_native_oracle]") {
+  const char* audio_dir = std::getenv("SONARE_SUPERFLUX_AUDIO_DIR");
+  const char* oracle_path = std::getenv("SONARE_SUPERFLUX_ORACLE_JSON");
+  REQUIRE(audio_dir != nullptr);
+  REQUIRE(audio_dir[0] != '\0');
+  REQUIRE(oracle_path != nullptr);
+  REQUIRE(oracle_path[0] != '\0');
+
+  const sonare::test::JsonValue oracle = sonare::test::JsonReader::parse_file(oracle_path);
+  REQUIRE(oracle.is_object());
+  REQUIRE(oracle.size() == 28);
+  std::string directory(audio_dir);
+  if (directory.back() != '/') directory.push_back('/');
+  size_t total_expected_frames = 0;
+  for (const auto& [track_id, values] : oracle.as_object()) {
+    const sonare::Audio audio =
+        sonare::Audio::from_file(directory + "vocadito_" + track_id + ".wav");
+    REQUIRE(audio.sample_rate() == 44100);
+    std::vector<int> expected;
+    expected.reserve(values.size());
+    for (const sonare::test::JsonValue& value : values.as_array()) {
+      expected.push_back(value.as_int());
+    }
+    total_expected_frames += expected.size();
+    const auto evidence = sonare::editing::note_model::detail::monophonic_onset_evidence(audio);
+    INFO("audit track " << track_id << ", expected " << expected.size() << " onsets, got "
+                        << evidence.frames.size());
+    REQUIRE(evidence.available);
+    CHECK(evidence.frames == expected);
+  }
+  REQUIRE(total_expected_frames == 2107);
+}
+
+TEST_CASE("monophonic onset reconciliation exports the audit notes",
+          "[.][superflux_transcribe_replay]") {
+  const char* audio_dir = std::getenv("SONARE_SUPERFLUX_AUDIO_DIR");
+  const char* oracle_path = std::getenv("SONARE_SUPERFLUX_ORACLE_JSON");
+  REQUIRE(audio_dir != nullptr);
+  REQUIRE(audio_dir[0] != '\0');
+  REQUIRE(oracle_path != nullptr);
+  REQUIRE(oracle_path[0] != '\0');
+  const sonare::test::JsonValue oracle = sonare::test::JsonReader::parse_file(oracle_path);
+  REQUIRE(oracle.is_object());
+
+  std::string directory(audio_dir);
+  if (directory.back() != '/') directory.push_back('/');
+  size_t exported_tracks = 0;
+  for (const auto& entry : oracle.as_object()) {
+    const std::string& track_id = entry.first;
+    const sonare::Audio audio =
+        sonare::Audio::from_file(directory + "vocadito_" + track_id + ".wav");
+    const std::vector<TranscribedNote> notes = transcribe_notes(audio);
+    std::cout << std::setprecision(17) << "ACOUSTIC_TRANSCRIBE {\"file\":\"audio/vocadito_"
+              << track_id << ".wav\",\"sample_rate\":" << audio.sample_rate() << ",\"notes\":[";
+    for (size_t i = 0; i < notes.size(); ++i) {
+      if (i != 0) std::cout << ',';
+      std::cout << '[' << static_cast<double>(notes[i].onset_sample) / audio.sample_rate() << ','
+                << static_cast<double>(notes[i].offset_sample) / audio.sample_rate() << ','
+                << notes[i].median_hz << ']';
+    }
+    std::cout << "]}" << std::endl;
+    ++exported_tracks;
+  }
+  REQUIRE(exported_tracks == 28);
 }
