@@ -139,9 +139,12 @@ void DynamicEq::process(float* const* channels, int num_channels, int num_sample
     int readable = chunk;
     if (external) {
       readable = std::clamp(sidechain_num_samples_ - offset, 0, chunk);
-      for (int ch = 0; ch < sidechain_num_channels_; ++ch) {
-        sidechain_view_[static_cast<size_t>(ch)] =
-            sidechain_channels_[ch] + (readable > 0 ? offset : 0);
+      // Only enabled bands read the view, and the preflight caps them at its capacity; a wider
+      // key reaches the broadband meter below straight from the caller's pointers.
+      const size_t view_channels =
+          std::min(static_cast<size_t>(sidechain_num_channels_), sidechain_view_.size());
+      for (size_t ch = 0; ch < view_channels; ++ch) {
+        sidechain_view_[ch] = sidechain_channels_[ch] + (readable > 0 ? offset : 0);
       }
       detector_channels = sidechain_view_.data();
     }
@@ -150,8 +153,10 @@ void DynamicEq::process(float* const* channels, int num_channels, int num_sample
     for (int ch = 0; ch < detector_num_channels; ++ch) {
       if (ch == excluded) continue;
       ++counted;
+      const float* channel =
+          external ? sidechain_channels_[ch] + (readable > 0 ? offset : 0) : detector_channels[ch];
       for (int i = 0; i < readable; ++i) {
-        const double sample = detector_channels[ch][i];
+        const double sample = channel[i];
         broadband += sample * sample;
       }
     }
