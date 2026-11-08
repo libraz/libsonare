@@ -67,6 +67,8 @@ tools/mastering-eval/runs/
 tests/fixtures/local/
 tests/fixtures/local_eval/
 tests/fixtures/reports/
+# Accuracy measurement records: local run output, not published
+tools/eval/reports/
 tests/fixtures/music_eval/FSL10K/
 tests/fixtures/music_eval/annotation/
 tests/fixtures/music_eval/annotations/
