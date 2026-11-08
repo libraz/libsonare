@@ -1,0 +1,378 @@
+{
+  "subject": "monophonic transcription: singing model (joint note-state Viterbi decoder) beside the default pitch-segment model",
+  "date": "2026-11-09",
+  "data": {
+    "development": [
+      "Vocadito v3, 40 recordings, annotators A1 and A2 (CC BY 4.0)",
+      "Annotated-VocalSet, 18 recordings, extended1 and extended4 (CC BY 4.0)"
+    ],
+    "confirmation": "Annotated-VocalSet, 12 singer-disjoint recordings selected before any prediction; used once, now observed",
+    "synthetic": "36 regression fixtures from the transcription tests and 16 Bach score renders (4 excerpts x 4 rates)"
+  },
+  "matching": {
+    "onset_sec": 0.05,
+    "pitch_cents": 50,
+    "offset": "max(50 ms, 20% of reference duration)"
+  },
+  "model": {
+    "states": "Attack and Stable per third-of-a-semitone bin plus one shared Silent state",
+    "emissions": "normalised Cauchy pitch densities scaled by frame period / (512/44100 s); voicing from the tracker and a level reference that sets aside lone peaks",
+    "re_articulation_cue": "narrow RMS valleys on a 1 ms grid (two-period window, valley under half the smaller 20 ms side maximum, low run at most 15 ms)",
+    "frozen_params": {
+      "sigma_stable": 70.0,
+      "sigma_attack": 300.0,
+      "log_q_voiced": -9.0,
+      "log_voiced_unvoiced": -9.0,
+      "tau_silence": 1.0,
+      "tau_attack": 0.03,
+      "tau_stable": 0.6,
+      "w_change": 0.3,
+      "log_entry": -2.0,
+      "log_same": -6.0,
+      "gamma": 16.0,
+      "cue_ms": 25.0,
+      "level_floor_db": 40.0,
+      "level_radius_s": 1.0,
+      "lone_ratio": 0.3,
+      "event_min_distance_s": 0.05,
+      "prune_ms": 45.0,
+      "h_ref": 0.011609977324263039,
+      "sigma_norm": 90.0,
+      "cue_source": "valley"
+    }
+  },
+  "selection": {
+    "method": "5-fold cross-validation over Vocadito track ids; maximise mean pooled COnP F over A1/A2 subject to pooled COnPOff F not below the default model on the training folds; every synthetic fixture required to pass",
+    "cv_held_out": {
+      "A1": {
+        "note": 0.6428,
+        "offset": 0.4549
+      },
+      "A2": {
+        "note": 0.5911,
+        "offset": 0.4043
+      }
+    },
+    "notes": [
+      "a spectral-onset re-articulation cue scored 0.678/0.677 on Vocadito but fires on every cycle of amplitude modulation and misses quiet re-attacks, failing the synthetic regressions",
+      "four configurations that passed the fixtures in the prototype failed the alias-arpeggio onset tolerance in C++ and were excluded before the final selection"
+    ]
+  },
+  "results": {
+    "vocadito_production": {
+      "default_segments": {
+        "A1": 0.566,
+        "A2": 0.526
+      },
+      "singing": {
+        "A1": {
+          "note": 0.654,
+          "offset": 0.464
+        },
+        "A2": {
+          "note": 0.601,
+          "offset": 0.41
+        },
+        "reference_f0": {
+          "A1": 0.78,
+          "A2": 0.748
+        }
+      }
+    },
+    "vocalset_observed18_note_f": {
+      "baseline": {
+        "extended1": 0.136,
+        "extended4": 0.445
+      },
+      "frozen": {
+        "extended1": 0.207,
+        "extended4": 0.733
+      }
+    },
+    "vocalset_reserved12_confirmation": {
+      "rule": "paired bootstrap over recordings (10000 draws, seed 0): pass if the 95% lower bound of delta COnP F exceeds -0.02 under both conventions and the mean of the two point deltas is positive",
+      "result": {
+        "conventions": {
+          "extended1": {
+            "point": 0.0020165355918531913,
+            "ci_low": -0.045043815875078455,
+            "ci_high": 0.055938622503616545,
+            "recordings": 12,
+            "counts": [
+              [
+                17,
+                2,
+                17,
+                2,
+                17
+              ],
+              [
+                7,
+                1,
+                19,
+                2,
+                7
+              ],
+              [
+                17,
+                1,
+                17,
+                1,
+                17
+              ],
+              [
+                17,
+                5,
+                23,
+                2,
+                19
+              ],
+              [
+                7,
+                1,
+                52,
+                1,
+                16
+              ],
+              [
+                17,
+                3,
+                20,
+                2,
+                18
+              ],
+              [
+                17,
+                2,
+                21,
+                0,
+                18
+              ],
+              [
+                7,
+                2,
+                15,
+                2,
+                5
+              ],
+              [
+                17,
+                1,
+                22,
+                0,
+                18
+              ],
+              [
+                17,
+                2,
+                16,
+                2,
+                17
+              ],
+              [
+                7,
+                2,
+                31,
+                2,
+                8
+              ],
+              [
+                17,
+                3,
+                18,
+                4,
+                18
+              ]
+            ]
+          },
+          "extended4": {
+            "point": 0.24448477515628148,
+            "ci_low": 0.15212839221296778,
+            "ci_high": 0.337717587500574,
+            "recordings": 12,
+            "counts": [
+              [
+                17,
+                8,
+                17,
+                10,
+                17
+              ],
+              [
+                7,
+                5,
+                19,
+                6,
+                7
+              ],
+              [
+                17,
+                11,
+                17,
+                13,
+                17
+              ],
+              [
+                17,
+                10,
+                23,
+                13,
+                19
+              ],
+              [
+                7,
+                4,
+                52,
+                3,
+                16
+              ],
+              [
+                17,
+                12,
+                20,
+                14,
+                18
+              ],
+              [
+                17,
+                10,
+                21,
+                13,
+                18
+              ],
+              [
+                7,
+                1,
+                15,
+                1,
+                5
+              ],
+              [
+                17,
+                7,
+                22,
+                10,
+                18
+              ],
+              [
+                17,
+                14,
+                16,
+                17,
+                17
+              ],
+              [
+                7,
+                4,
+                31,
+                7,
+                8
+              ],
+              [
+                17,
+                16,
+                18,
+                15,
+                18
+              ]
+            ]
+          }
+        },
+        "recordings": {
+          "extended1": [
+            "m8_scales_straight_a.wav",
+            "m8_arpeggios_vibrato_a.wav",
+            "m8_scales_breathy_a.wav",
+            "m11_scales_straight_a.wav",
+            "m11_arpeggios_vibrato_a.wav",
+            "m11_scales_breathy_a.wav",
+            "m2_scales_straight_a.wav",
+            "m2_arpeggios_vibrato_a.wav",
+            "m2_scales_breathy_a.wav",
+            "f6_scales_straight_a.wav",
+            "f6_arpeggios_vibrato_a.wav",
+            "f6_scales_breathy_a.wav"
+          ],
+          "extended4": [
+            "m8_scales_straight_a.wav",
+            "m8_arpeggios_vibrato_a.wav",
+            "m8_scales_breathy_a.wav",
+            "m11_scales_straight_a.wav",
+            "m11_arpeggios_vibrato_a.wav",
+            "m11_scales_breathy_a.wav",
+            "m2_scales_straight_a.wav",
+            "m2_arpeggios_vibrato_a.wav",
+            "m2_scales_breathy_a.wav",
+            "f6_scales_straight_a.wav",
+            "f6_arpeggios_vibrato_a.wav",
+            "f6_scales_breathy_a.wav"
+          ]
+        },
+        "pass": false
+      },
+      "verdict": "rule not met: extended4 improved (delta +0.245, 95% CI excludes 0); extended1 showed no difference (delta +0.002) with a lower bound of -0.045"
+    },
+    "bach16_note_f": {
+      "default_segments": {
+        "BWV1001_4@16000": 1.0,
+        "BWV1001_4@22050": 1.0,
+        "BWV1001_4@44100": 1.0,
+        "BWV1001_4@48000": 1.0,
+        "BWV1006_1@16000": 1.0,
+        "BWV1006_1@22050": 1.0,
+        "BWV1006_1@44100": 1.0,
+        "BWV1006_1@48000": 1.0,
+        "BWV1007_1@16000": 0.992248062,
+        "BWV1007_1@22050": 0.984375,
+        "BWV1007_1@44100": 0.984375,
+        "BWV1007_1@48000": 1.0,
+        "BWV1003_4@16000": 0.987804878,
+        "BWV1003_4@22050": 0.987804878,
+        "BWV1003_4@44100": 0.987804878,
+        "BWV1003_4@48000": 0.987804878
+      },
+      "singing_v4b": {
+        "BWV1001_4@16000": 1.0,
+        "BWV1001_4@22050": 1.0,
+        "BWV1001_4@44100": 1.0,
+        "BWV1001_4@48000": 1.0,
+        "BWV1006_1@16000": 1.0,
+        "BWV1006_1@22050": 1.0,
+        "BWV1006_1@44100": 1.0,
+        "BWV1006_1@48000": 1.0,
+        "BWV1007_1@16000": 1.0,
+        "BWV1007_1@22050": 0.984375,
+        "BWV1007_1@44100": 0.984375,
+        "BWV1007_1@48000": 1.0,
+        "BWV1003_4@16000": 0.962962963,
+        "BWV1003_4@22050": 0.956521739,
+        "BWV1003_4@44100": 0.95,
+        "BWV1003_4@48000": 0.857142857
+      }
+    },
+    "robustness_nas": {
+      "files": 24,
+      "all_exit_zero_and_identical": true,
+      "max_rss_ratio_vs_default": 1.0097171461728993
+    },
+    "cost_vocadito_user_sec": {
+      "segments": 8.37,
+      "singing": 7.75,
+      "invocation": "--notes-only, 40 recordings, sequential"
+    }
+  },
+  "limitations": [
+    "short notes: on the BWV1003_4 render (32nds at 80 bpm) the singing model drops F from 0.988 to 0.950 at 44.1 kHz and 0.857 at 48 kHz; it stays opt-in",
+    "a 300-cent glide over 1.5 s decodes as three notes at 44.1 kHz and four at 96 kHz",
+    "the remaining merges: 174 of 238 swallowed reference onsets (A1) have neither an onset nor an unvoiced frame within 50 ms"
+  ],
+  "sha256": {
+    "candidate_tool": "d7e16f8360312df08515c034be89786fd557a1d7cbc576e88fd84e7cd0313d1d",
+    "default_tool": "dde06562c28819eebafc81c4043a0c761f4830983ba8634a622c31bfee12cf86",
+    "sources": {
+      "src/editing/note_model/note_state_decoder.cpp": "098d720da65bbffca5eee91c86b733342b3c3ae2e9121cf9404dceb91553046b",
+      "src/editing/note_model/note_state_decoder.h": "1848e1c31ddf0a9f74ee41f9c29e89ab60953f893eef16d9952dff778628abbe",
+      "src/editing/note_model/note_transcriber.cpp": "a7e5b3ea4732d03572dedda68b8d5afa0335784cd59595927292335d0780b24b"
+    }
+  }
+}

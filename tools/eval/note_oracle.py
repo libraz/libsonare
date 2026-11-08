@@ -176,7 +176,9 @@ def sha256(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
-def evaluate(root: Path, tool: Path, track_ids: list[str]) -> dict[str, Any]:
+def evaluate(
+    root: Path, tool: Path, track_ids: list[str], monophonic_model: str = "segments"
+) -> dict[str, Any]:
     pooled: dict[str, dict[str, dict[str, int]]] = {
         f"{cond}/{ann}": {"n_ref": 0, "n_est": 0, "onset": 0, "note": 0, "offset": 0}
         for cond in CONDITIONS
@@ -189,7 +191,14 @@ def evaluate(root: Path, tool: Path, track_ids: list[str]) -> dict[str, Any]:
         audio = root / "Audio" / f"vocadito_{track_id}.wav"
         contour_path = root / "Annotations" / "F0" / f"vocadito_{track_id}_f0.csv"
         output = subprocess.run(
-            [str(tool), str(audio), "--reference-f0", str(contour_path)],
+            [
+                str(tool),
+                "--monophonic-model",
+                monophonic_model,
+                str(audio),
+                "--reference-f0",
+                str(contour_path),
+            ],
             check=True,
             capture_output=True,
             text=True,
@@ -249,6 +258,7 @@ def evaluate(root: Path, tool: Path, track_ids: list[str]) -> dict[str, Any]:
     }
     return {
         "tool_sha256": sha256(tool),
+        "monophonic_model": monophonic_model,
         "criteria": {
             "onset_tolerance_sec": ONSET_TOLERANCE_SEC,
             "pitch_tolerance_cents": PITCH_TOLERANCE_CENTS,
@@ -272,6 +282,7 @@ def main() -> int:
         help="extracted Vocadito root holding Audio/ and Annotations/",
     )
     parser.add_argument("--tool", type=Path, default=Path("build/bin/sonare_eval_note_oracle"))
+    parser.add_argument("--monophonic-model", choices=("segments", "singing"), default="segments")
     parser.add_argument("--tracks", nargs="*", help="track ids; default every audio file")
     parser.add_argument("--output", type=Path, required=True)
     args = parser.parse_args()
@@ -279,7 +290,7 @@ def main() -> int:
         (path.stem.removeprefix("vocadito_") for path in (args.vocadito / "Audio").glob("*.wav")),
         key=int,
     )
-    report = evaluate(args.vocadito, args.tool, track_ids)
+    report = evaluate(args.vocadito, args.tool, track_ids, args.monophonic_model)
     args.output.write_text(json.dumps(report, indent=2) + "\n")
     for key, row in report["summary"].items():
         print(

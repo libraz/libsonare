@@ -140,6 +140,23 @@ The boundary profile in the report shows the shape of that error. Against A1, th
 
 The annotated contour is itself an annotation, not ground truth. Annotated notes overlap in places, which is why the span condition stays under 1.
 
+### The singing model
+
+`monophonic_model` selects the monophonic segmentation. `segments`, the default, is the pipeline described above. `singing` decodes notes with a Viterbi pass over Attack and Stable states per third-of-a-semitone bin and one shared Silent state. The pitch emission is a normalised Cauchy density, and costs scale with the frame period so a take segments alike across sample rates. Narrow RMS valleys, found on the same 1 ms grid as the re-attack splitter, are the only cue for re-striking the same pitch. A spectral onset cue scored higher on Vocadito, but it fires on every cycle of amplitude modulation and misses quiet re-attacks.
+
+The constants were chosen by 5-fold cross-validation over Vocadito track ids. Each fold maximised mean pooled note F under two constraints: offset F could not fall below the default's, and every synthetic transcription regression had to pass. Pass `--monophonic-model singing` to `note_oracle.py` to reproduce the [singing measurement](reports/vocadito-v3-note-oracle-singing-2026-11-09.json). The [experiment record](reports/monophonic-singing-model-2026-11-09.json) holds the frozen constants, selection, confirmation and limits.
+
+| Pooled note F | segments | singing |
+| --- | ---: | ---: |
+| Vocadito A1 / A2, held-out folds | 0.566 / 0.526 | 0.643 / 0.591 |
+| Vocadito A1 / A2, all 40 | 0.566 / 0.526 | 0.654 / 0.601 |
+| Same, along the annotated contour | 0.633 / 0.588 | 0.780 / 0.748 |
+| VocalSet observed18, extended1 / extended4 | 0.136 / 0.445 | 0.207 / 0.733 |
+
+On the 12 confirmation recordings, delta note F was +0.245 (95% CI +0.152 to +0.338) under extended4 and +0.002 (−0.045 to +0.056) under extended1. The pre-registered rule required both lower bounds above −0.02, so the rule was not met. Those recordings are now observed.
+
+The singing model is opt-in because it can merge very short notes. On the BWV1003_4 render, with 32nds at 80 bpm, note F falls from 0.988 to 0.950 at 44.1 kHz and to 0.857 at 48 kHz. A slow 300-cent glide decodes as three notes at 44.1 kHz and four at 96 kHz. Against A1, 174 of the 238 reference onsets still merged into another note have neither an onset nor an unvoiced frame within 50 ms. Separating them needs evidence beyond these three features.
+
 ### Candidates that did not hold
 
 Each candidate below was frozen before recorded predictions and judged against fixed acceptance conditions. The reports keep the patches, hashes and per-recording results.
@@ -162,7 +179,7 @@ A published learned note-transcription model with its official checkpoint and un
 
 The model reduces modulation oversegmentation and loses true notes in ordinary repeats and continuing modulation. Its nominal 127.70 ms minimum note length exceeds the 125 ms targets; at the 1.0 s reattack its onset activity peaks near 0.154, under the fixed 0.5 threshold, while note activity stays above 0.621. It was not integrated. These synthetic results establish no vocal accuracy, and training-data overlap with recorded evaluation corpora was not audited.
 
-The 12 VocalSet confirmation recordings selected for the reattack and width experiments remain unpredicted.
+The 12 VocalSet confirmation recordings selected for the reattack and width experiments were used once, for the singing model, and are now observed.
 
 ## Corpora that can be measured against
 
