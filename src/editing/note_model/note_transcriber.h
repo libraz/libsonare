@@ -20,6 +20,7 @@
 #include <vector>
 
 #include "core/audio.h"
+#include "editing/pitch_editor/f0_provider.h"
 #include "util/constants.h"
 
 namespace sonare::editing::note_model {
@@ -177,5 +178,18 @@ uint8_t velocity_for_peak_rms(float peak_rms, float velocity_floor_db) noexcept;
 ///         monophonic config with any of those four fields non-zero.
 std::vector<TranscribedNote> transcribe_notes(const Audio& audio,
                                               const TranscribeConfig& config = {});
+
+/// @brief Monophonic transcription along a caller-supplied F0 track.
+/// @details Skips the pitch tracker and its alias repair; segmentation, boundary
+///          reconciliation, reattack splitting and the level gate run exactly as
+///          in @ref transcribe_notes. Lets an evaluation score segmentation
+///          against a reference contour. @p track must be on @p audio's rate.
+/// @throws SonareException(InvalidParameter) as @ref transcribe_notes, on a
+///         polyphonic @c source, on a track whose sample rate differs from
+///         @p audio's or that has no frame cadence, and on per-frame arrays of
+///         unequal length.
+std::vector<TranscribedNote> transcribe_monophonic_track(const Audio& audio,
+                                                         const pitch_editor::F0Track& track,
+                                                         const TranscribeConfig& config = {});
 
 }  // namespace sonare::editing::note_model

@@ -816,6 +816,58 @@ TEST_CASE("transcribe_notes answers the same audio identically", "[note_transcri
   require_same_notes(second, first);
 }
 
+TEST_CASE("a supplied F0 track runs the transcription stages after the tracker",
+          "[note_transcriber]") {
+  const Sequence sequence = sequence_of({60, 64, 67, 72});
+  const sonare::Audio audio = sequence.audio();
+  sonare::PitchConfig pitch_config =
+      sonare::editing::pitch_editor::default_editing_pitch_config(kSampleRate);
+  const TranscribeF0Range range = resolve_transcribe_f0_range(TranscribeConfig{});
+  pitch_config.fmin = range.fmin;
+  pitch_config.fmax = range.fmax;
+  pitch_config.center = true;
+  sonare::editing::pitch_editor::PyinF0Provider provider(pitch_config);
+  const sonare::editing::pitch_editor::F0Track detected = provider.detect(audio);
+
+  // These tones carry no alias, so the tracker's own track reproduces the default.
+  require_same_notes(transcribe_monophonic_track(audio, detected), transcribe_notes(audio));
+
+  // A track two semitones up moves every note, so the pitch comes from the track.
+  sonare::editing::pitch_editor::F0Track shifted = detected;
+  for (float& hz : shifted.f0_hz) hz *= std::exp2(2.0f / 12.0f);
+  std::vector<int> expected;
+  for (const int note : sequence.notes) expected.push_back(note + 2);
+  CHECK(note_numbers(transcribe_monophonic_track(audio, shifted)) == expected);
+}
+
+TEST_CASE("transcribe_monophonic_track refuses a track it cannot align", "[note_transcriber]") {
+  const sonare::Audio audio = sustained(60);
+  sonare::editing::pitch_editor::F0Track track;
+  track.sample_rate = kSampleRate;
+  track.hop_length = 256;
+  track.f0_hz.assign(8, 261.6f);
+  track.voiced.assign(8, true);
+  REQUIRE_NOTHROW(transcribe_monophonic_track(audio, track));
+
+  SECTION("another sample rate") {
+    track.sample_rate = kSampleRate * 2;
+    REQUIRE_THROWS_AS(transcribe_monophonic_track(audio, track), sonare::SonareException);
+  }
+  SECTION("unequal per-frame arrays") {
+    track.voiced.pop_back();
+    REQUIRE_THROWS_AS(transcribe_monophonic_track(audio, track), sonare::SonareException);
+  }
+  SECTION("no frame cadence") {
+    track.hop_length = 0;
+    REQUIRE_THROWS_AS(transcribe_monophonic_track(audio, track), sonare::SonareException);
+  }
+  SECTION("the polyphonic source") {
+    TranscribeConfig config;
+    config.source = TranscribeSource::kPolyphonic;
+    REQUIRE_THROWS_AS(transcribe_monophonic_track(audio, track, config), sonare::SonareException);
+  }
+}
+
 // --- midi_note_for_hz -----------------------------------------------------
 
 TEST_CASE("midi_note_for_hz places a frequency on the equal-tempered grid", "[note_transcriber]") {

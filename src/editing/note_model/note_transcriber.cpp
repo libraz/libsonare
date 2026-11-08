@@ -734,6 +734,19 @@ void repair_monophonic_pitch_aliases(const Audio& audio, pitch_editor::F0Track& 
   }
 }
 
+std::vector<NoteObject> monophonic_notes_from_track(const Audio& audio,
+                                                    const pitch_editor::F0Track& track,
+                                                    const TranscribeConfig& config,
+                                                    int frame_length) {
+  NoteExtractorConfig extractor;
+  extractor.segmenter.segmentation_threshold_cents = config.segmentation_threshold_cents;
+  extractor.segmenter.min_note_ms = config.min_note_ms;
+  extractor.segmenter.reference_hz = config.reference_hz;
+  std::vector<NoteObject> notes = extract_notes(audio, track, extractor);
+  notes = reconcile_monophonic_boundaries(audio, track, extractor, std::move(notes));
+  return split_monophonic_reattacks(audio, track, extractor, frame_length, std::move(notes));
+}
+
 std::vector<NoteObject> monophonic_notes(const Audio& audio, const TranscribeConfig& config) {
   PitchConfig pitch_config = pitch_editor::default_editing_pitch_config(audio.sample_rate());
   pitch_config.fmin = config.fmin;
@@ -743,15 +756,7 @@ std::vector<NoteObject> monophonic_notes(const Audio& audio, const TranscribeCon
   pitch_editor::F0Track track = provider.detect(audio);
   if (track.n_frames() == 0) return {};
   repair_monophonic_pitch_aliases(audio, track, pitch_config);
-
-  NoteExtractorConfig extractor;
-  extractor.segmenter.segmentation_threshold_cents = config.segmentation_threshold_cents;
-  extractor.segmenter.min_note_ms = config.min_note_ms;
-  extractor.segmenter.reference_hz = config.reference_hz;
-  std::vector<NoteObject> notes = extract_notes(audio, track, extractor);
-  notes = reconcile_monophonic_boundaries(audio, track, extractor, std::move(notes));
-  return split_monophonic_reattacks(audio, track, extractor, pitch_config.frame_length,
-                                    std::move(notes));
+  return monophonic_notes_from_track(audio, track, config, pitch_config.frame_length);
 }
 
 std::vector<NoteObject> polyphonic_notes(const Audio& audio, const TranscribeConfig& config) {
@@ -825,18 +830,10 @@ float note_gate_db(std::vector<float> levels_db) noexcept {
   return std::max(kSilenceDb, levels_db[set_aside] - kNoteGateBelowReferenceDb);
 }
 
-}  // namespace
-
-std::vector<TranscribedNote> transcribe_notes(const Audio& audio, const TranscribeConfig& config) {
-  // No pitch-editor guard here: this unit is compiled into the pitch-editor
-  // archive, so its existence is the gate. The NOT_SUPPORTED answer belongs to
-  // the C-ABI entry, which is compiled either way.
-  const TranscribeConfig resolved = validate_and_resolve(audio, config);
-
-  const std::vector<NoteObject> measured = resolved.source == TranscribeSource::kPolyphonic
-                                               ? polyphonic_notes(audio, resolved)
-                                               : monophonic_notes(audio, resolved);
-
+/// Maps measured regions to MIDI notes and velocities, dropping those under the
+/// take-relative level gate.
+std::vector<TranscribedNote> finalize_notes(const std::vector<NoteObject>& measured,
+                                            const TranscribeConfig& resolved) {
   struct Candidate {
     const NoteObject* note;
     int midi_note;
@@ -878,6 +875,38 @@ std::vector<TranscribedNote> transcribe_notes(const Audio& audio, const Transcri
               return a.note < b.note;
             });
   return notes;
+}
+
+}  // namespace
+
+std::vector<TranscribedNote> transcribe_notes(const Audio& audio, const TranscribeConfig& config) {
+  // No pitch-editor guard here: this unit is compiled into the pitch-editor
+  // archive, so its existence is the gate. The NOT_SUPPORTED answer belongs to
+  // the C-ABI entry, which is compiled either way.
+  const TranscribeConfig resolved = validate_and_resolve(audio, config);
+  return finalize_notes(resolved.source == TranscribeSource::kPolyphonic
+                            ? polyphonic_notes(audio, resolved)
+                            : monophonic_notes(audio, resolved),
+                        resolved);
+}
+
+std::vector<TranscribedNote> transcribe_monophonic_track(const Audio& audio,
+                                                         const pitch_editor::F0Track& track,
+                                                         const TranscribeConfig& config) {
+  const TranscribeConfig resolved = validate_and_resolve(audio, config);
+  require(resolved.source == TranscribeSource::kMonophonic,
+          "transcribe_monophonic_track: source must be monophonic");
+  require(track.sample_rate == audio.sample_rate(),
+          "transcribe_monophonic_track: track sample rate must match the audio");
+  require(track.frame_rate() > 0.0f, "transcribe_monophonic_track: track needs a frame cadence");
+  require(track.voiced.size() == track.f0_hz.size() &&
+              (track.voiced_prob.empty() || track.voiced_prob.size() == track.f0_hz.size()),
+          "transcribe_monophonic_track: track arrays must have one entry per frame");
+  if (track.n_frames() == 0) return {};
+  const int frame_length =
+      pitch_editor::default_editing_pitch_config(audio.sample_rate()).frame_length;
+  return finalize_notes(monophonic_notes_from_track(audio, track, resolved, frame_length),
+                        resolved);
 }
 
 }  // namespace sonare::editing::note_model
