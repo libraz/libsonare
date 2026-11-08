@@ -1253,6 +1253,18 @@ TEST_CASE("kernel sparsification keeps the columns a full ascending sort keeps",
     v = std::complex<float>(1.0f / u, 0.0f);
   }
   rows.push_back(heavy);
+  // Steep sixth-power magnitudes put the full budget within summation rounding of the total,
+  // where the kept set depends on the order the discarded columns are summed in.
+  uint32_t steep_state = 12345u;
+  for (int seed = 0; seed < 100; ++seed) {
+    std::vector<std::complex<float>> steep(static_cast<size_t>(3000 + seed * 7));
+    for (auto& v : steep) {
+      steep_state = steep_state * 1664525u + 1013904223u;
+      const float u = static_cast<float>((steep_state >> 8) + 1) / static_cast<float>(1u << 24);
+      v = std::complex<float>(u * u * u * u * u * u * 3.7f, 0.0f);
+    }
+    rows.push_back(std::move(steep));
+  }
   // Ties in magnitude across the boundary, zeros, a single column and an empty row.
   std::vector<std::complex<float>> ties(64, std::complex<float>(1.0f, 0.0f));
   ties[3] = ties[40] = std::complex<float>{};

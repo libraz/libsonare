@@ -34,10 +34,11 @@ inline void append_sparsified_kernel_row(SparseComplexKernel& out, const std::co
   const size_t n = order.size();
   size_t head = std::min<size_t>(n, 1024);
   size_t kept = 0;
+  double discarded = 0.0;
   while (true) {
     std::nth_element(order.begin(), order.begin() + static_cast<std::ptrdiff_t>(head), order.end(),
                      descending);
-    double discarded = 0.0;
+    discarded = 0.0;
     for (size_t i = head; i < n; ++i) discarded += order[i].first;
     if (discarded > discard_budget && head < n) {
       head = std::min(n, head * 2);
@@ -50,6 +51,25 @@ inline void append_sparsified_kernel_row(SparseComplexKernel& out, const std::co
       --kept;
     }
     break;
+  }
+
+  // The tail was summed in nth_element's order, which differs between standard libraries. A
+  // decision within summation rounding of the budget is retaken in full ascending order.
+  const double rounding_margin =
+      static_cast<double>(n + 1) * std::ldexp(1.0, -52) * std::max(total, discard_budget);
+  const bool near_boundary =
+      (kept < n && discard_budget - discarded <= rounding_margin) ||
+      (kept > 0 && discarded + order[kept - 1].first - discard_budget <= rounding_margin);
+  if (near_boundary) {
+    std::sort(order.begin(), order.end());
+    double ascending = 0.0;
+    size_t discarded_count = 0;
+    while (discarded_count < n && ascending + order[discarded_count].first <= discard_budget) {
+      ascending += order[discarded_count].first;
+      ++discarded_count;
+    }
+    std::reverse(order.begin(), order.end());
+    kept = n - discarded_count;
   }
 
   std::vector<unsigned char> keep(static_cast<size_t>(columns), 0);
