@@ -346,7 +346,7 @@ SonareMusicAnalyzeOptions sonare_music_analyze_options_default(void) {
                                        {},
                                        0,
                                        config.meter_denominator,
-                                       config.tuning.value_or(0.0f),
+                                       config.tuning ? *config.tuning : 0.0f,
                                        config.tuning ? 0 : 1};
   const size_t count = std::min(config.meter_candidate_numerators.size(),
                                 static_cast<size_t>(SONARE_MAX_METER_CANDIDATE_NUMERATORS));
