@@ -98,6 +98,10 @@
 
 - Every section carries a `group`: sections that share a value repeat the same material, numbered 0, 1, 2... in order of first appearance, and a section that repeats nothing has a group of its own. It is `SonareSection.group` in C, `sections[].group` in the analyze JSON, `Section.group` in C++ and Python, `AnalysisSection.group` and `Section.group` in Node, `Section.group` in WASM, and the `group` key of each section in the `sections` and `analyze` output of both command lines. `form` keeps its meaning, one label character per section.
 
+#### Transcription
+
+- Monophonic transcription takes a model: `segments`, the default and unchanged, or `singing`, which decodes notes jointly over pitch and holds vibrato and intonation drift within one note. On solo singing it raises note F-measure from 0.566 to 0.654 against one Vocadito annotator and from 0.526 to 0.601 against the other; it can merge very short notes such as 32nds at fast tempos, so instrument lines stay on `segments`. It is `monophonic_model` in `SonareTranscribeConfig` (`struct_version` 4, 0 segments, 1 singing) and in C++ `TranscribeConfig`, `monophonic_model="singing"` in Python, `monophonicModel: 'singing'` in Node and WASM, and `--monophonic-model singing` on both command lines. Its default `min_note_ms` is 45, and it reads `segmentation_threshold_cents` as the pitch movement kept within one note. A polyphonic request naming `singing` is refused.
+
 #### Synthesizer
 
 - A `singing` engine mode (`SONARE_SYNTH_ENGINE_SINGING`), reached through the `singing-voice` preset: a self-oscillating vocal-fold model sounding through a vocal tract. All four excitation axes apply — force is breath pressure, position and brightness move the vowel's constriction, morph leans the vocal register — and a measured compensation table keeps the written pitch as the breath rises. A non-slurred note opens with an alveolar tap. The pitch holds within 20 cents from D#2 to D4 at the default breath; above that the voice is drawn toward its first formant.
