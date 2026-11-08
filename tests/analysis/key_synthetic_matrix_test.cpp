@@ -1,9 +1,11 @@
 /// @file key_synthetic_matrix_test.cpp
 /// @brief Synthetic matrix tests for key detection.
 
+#include <algorithm>
 #include <array>
 #include <catch2/catch_test_macros.hpp>
 #include <limits>
+#include <utility>
 #include <vector>
 
 #include "analysis/chord_analyzer.h"
@@ -1044,5 +1046,244 @@ TEST_CASE("refine_key_with_chords uses reliable evidence for opening tonic retur
     CHECK(refined.root == tonic);
     CHECK(refined.mode == Mode::Minor);
     CHECK(refined.confidence == 0.004f);
+  }
+}
+
+TEST_CASE("refine_key_with_chords recognizes repeated major authentic cadences",
+          "[key_analyzer][authentic_cadence]") {
+  const auto make_progression = [](int root, int variant, int repeats = 3) {
+    std::vector<Chord> out;
+    float t = 0.0f;
+    const auto append = [&](int pitch, ChordQuality quality, float duration, float confidence) {
+      out.push_back(chord(static_cast<PitchClass>(pitch % 12), quality, t, t + duration));
+      out.back().confidence = confidence;
+      t += duration;
+    };
+    if (variant == 5) append(root + 2, ChordQuality::Minor, 2.0f, 1.0f);
+    append(root, variant == 10 ? ChordQuality::Minor : ChordQuality::Major,
+           variant == 4 ? 0.25f : 2.0f, variant == 1 ? 0.6f : 1.0f);
+    for (int repeat = 0; repeat < repeats; ++repeat) {
+      if (variant != 8) {
+        append(root + (variant == 7 ? 9 : 2), ChordQuality::Minor, 2.0f, 1.0f);
+      }
+      append(root + 7, ChordQuality::Major, variant == 11 ? 8.0f : 4.0f,
+             variant == 3 ? 0.6f : 1.0f);
+      if (variant == 6) append(root + 6, ChordQuality::Minor, 0.25f, 0.1f);
+      append(root, variant == 10 ? ChordQuality::Minor : ChordQuality::Major, 2.0f,
+             variant == 1 ? 0.6f : 1.0f);
+    }
+    if (variant == 2) {
+      append(root + 1, ChordQuality::Major, 0.25f, 1.0f);
+      append(root, ChordQuality::Major, 20.0f, 0.1f);
+    }
+    if (variant == 14) out[out.size() - 2].confidence = 0.6f;
+    if (variant == 15) out.back().confidence = 0.6f;
+    return out;
+  };
+  const auto tonic_run_mean = [](const std::vector<Chord>& progression, PitchClass tonic) {
+    double duration = 0.0;
+    double confidence_mass = 0.0;
+    for (const Chord& item : progression) {
+      if (item.root == tonic && item.quality == ChordQuality::Major) {
+        duration += item.duration();
+        confidence_mass += item.duration() * item.confidence;
+      }
+    }
+    return duration > 0.0 ? confidence_mass / duration : 0.0;
+  };
+
+  SECTION("strong major V-I evidence is transposition invariant and retains chroma posterior") {
+    for (int root = 0; root < 12; ++root) {
+      const auto tonic = static_cast<PitchClass>(root);
+      const auto dominant = transpose(tonic, 7);
+      const auto candidates =
+          chroma_candidates({{Key{dominant, Mode::Major, 0.97f}, Key{tonic, Mode::Major, 0.004f}}});
+      for (const int variant : {0, 11, 12, 13}) {
+        const int progression_variant = variant == 12 || variant == 13 ? 0 : variant;
+        auto progression = make_progression(root, progression_variant);
+        if (variant == 12 || variant == 13) {
+          for (Chord& item : progression) {
+            item.quality =
+                item.quality == ChordQuality::Major ? ChordQuality::Major7 : ChordQuality::Minor7;
+          }
+        }
+        if (variant == 13) {
+          // Fragment a valid progression with ignored N.C. gaps.
+          std::vector<Chord> fragmented;
+          float time = 0.0f;
+          for (const Chord& item : progression) {
+            const float half = 0.5f * item.duration();
+            fragmented.push_back(chord(item.root, item.quality, time, time + half));
+            fragmented.back().confidence = item.confidence;
+            time += half;
+            fragmented.push_back(chord(PitchClass::C, ChordQuality::Unknown, time, time + 0.25f));
+            time += 0.25f;
+            fragmented.push_back(chord(item.root, item.quality, time, time + half));
+            fragmented.back().confidence = item.confidence;
+            time += half;
+          }
+          progression = std::move(fragmented);
+        }
+        CAPTURE(root, variant);
+        const Key chord_key = estimate_key_from_chords(progression);
+        REQUIRE(chord_key.root == tonic);
+        REQUIRE(chord_key.mode == Mode::Major);
+        const Key refined = refine_key_with_chords(candidates, progression);
+        CHECK(refined.root == tonic);
+        CHECK(refined.mode == Mode::Major);
+        CHECK(refined.confidence == 0.004f);
+      }
+    }
+  }
+
+  SECTION("weak and non-diagnostic cadence evidence cannot overturn the chroma key") {
+    for (int root = 0; root < 12; ++root) {
+      const auto tonic = static_cast<PitchClass>(root);
+      const auto dominant = transpose(tonic, 7);
+      const auto candidates =
+          chroma_candidates({{Key{dominant, Mode::Major, 0.97f}, Key{tonic, Mode::Major, 0.004f}}});
+      for (const int variant : {1, 2, 3, 4, 5, 6, 7, 8, 10, 14, 15}) {
+        CAPTURE(root, variant);
+        const auto progression = make_progression(root, variant);
+        const Key chord_key = estimate_key_from_chords(progression);
+        REQUIRE(chord_key.root == tonic);
+        REQUIRE(chord_key.mode == (variant == 10 ? Mode::Minor : Mode::Major));
+        if (variant == 15) {
+          REQUIRE(tonic_run_mean(progression, tonic) > 0.8);
+        }
+        if (variant == 2) {
+          float tonic_duration = 0.0f;
+          float tonic_mass = 0.0f;
+          int strong_direct_pairs = 0;
+          for (size_t index = 0; index < progression.size(); ++index) {
+            const Chord& item = progression[index];
+            if (item.root == tonic && item.quality == ChordQuality::Major) {
+              tonic_duration += item.duration();
+              tonic_mass += item.duration() * item.confidence;
+            }
+            if (index + 1 < progression.size() && item.root == dominant &&
+                item.quality == ChordQuality::Major && item.confidence >= 0.8f &&
+                progression[index + 1].root == tonic &&
+                progression[index + 1].quality == ChordQuality::Major &&
+                progression[index + 1].confidence >= 0.8f) {
+              ++strong_direct_pairs;
+            }
+          }
+          REQUIRE(tonic_mass / tonic_duration < 0.8f);
+          REQUIRE(strong_direct_pairs == 3);
+        }
+        const Key refined = refine_key_with_chords(candidates, progression);
+        CHECK(refined.root == dominant);
+        CHECK(refined.mode == Mode::Major);
+        CHECK(refined.confidence == 0.97f);
+      }
+      const auto two_cadences = make_progression(root, 0, 2);
+      const Key chord_key = estimate_key_from_chords(two_cadences);
+      REQUIRE(chord_key.root == tonic);
+      REQUIRE(chord_key.mode == Mode::Major);
+      const Key refined = refine_key_with_chords(candidates, two_cadences);
+      CHECK(refined.root == dominant);
+      CHECK(refined.mode == Mode::Major);
+    }
+  }
+
+  SECTION("prior-free evidence rejects a winner carried by position bonuses") {
+    for (int root = 0; root < 12; ++root) {
+      const auto tonic = static_cast<PitchClass>(root);
+      const auto dominant = transpose(tonic, 7);
+      const auto candidates =
+          chroma_candidates({{Key{dominant, Mode::Major, 0.97f}, Key{tonic, Mode::Major, 0.004f}}});
+      std::vector<Chord> progression;
+      float time = 0.0f;
+      const auto append = [&](int pitch, ChordQuality quality, float duration) {
+        progression.push_back(
+            chord(static_cast<PitchClass>(pitch % 12), quality, time, time + duration));
+        time += duration;
+      };
+      append(root, ChordQuality::Major, 2.0f);
+      for (int repeat = 0; repeat < 3; ++repeat) {
+        append(root + 2, ChordQuality::Minor, 0.25f);
+        append(root + 7, ChordQuality::Major, 30.0f);
+        append(root, ChordQuality::Major, 2.0f);
+      }
+      const Key chord_key = estimate_key_from_chords(progression);
+      REQUIRE(chord_key.root == tonic);
+      REQUIRE(chord_key.mode == Mode::Major);
+      const Key refined = refine_key_with_chords(candidates, progression);
+      CHECK(refined.root == dominant);
+      CHECK(refined.mode == Mode::Major);
+      CHECK(refined.confidence == 0.97f);
+    }
+  }
+
+  SECTION("the ordinary posterior gate still accepts a scored key at and above one quarter") {
+    for (const auto [dominant_posterior, tonic_posterior] :
+         {std::pair<float, float>{0.8f, 0.2f}, std::pair<float, float>{0.79f, 0.21f}}) {
+      for (int root = 0; root < 12; ++root) {
+        const auto tonic = static_cast<PitchClass>(root);
+        const auto dominant = transpose(tonic, 7);
+        const auto progression = make_progression(root, 7);
+        const auto candidates = chroma_candidates({{Key{dominant, Mode::Major, dominant_posterior},
+                                                    Key{tonic, Mode::Major, tonic_posterior}}});
+        const Key chord_key = estimate_key_from_chords(progression);
+        REQUIRE(chord_key.root == tonic);
+        const Key refined = refine_key_with_chords(candidates, progression);
+        CHECK(refined.root == tonic);
+        CHECK(refined.mode == Mode::Major);
+        CHECK(refined.confidence == tonic_posterior);
+      }
+    }
+  }
+
+  SECTION("a chord winner omitted from chroma candidates remains ineligible") {
+    for (int root = 0; root < 12; ++root) {
+      const auto dominant = transpose(static_cast<PitchClass>(root), 7);
+      const auto progression = make_progression(root, 0);
+      const Key chord_key = estimate_key_from_chords(progression);
+      REQUIRE(chord_key.root == static_cast<PitchClass>(root));
+      const std::vector<KeyCandidate> candidates{{Key{dominant, Mode::Major, 0.97f}, 1.0f}};
+      REQUIRE(candidates.size() == 1);
+      CHECK(std::none_of(candidates.begin(), candidates.end(), [&](const KeyCandidate& candidate) {
+        return candidate.key.root == chord_key.root && candidate.key.mode == chord_key.mode;
+      }));
+      const Key refined = refine_key_with_chords(candidates, progression);
+      CHECK(refined.root == dominant);
+      CHECK(refined.mode == Mode::Major);
+      CHECK(refined.confidence == 0.97f);
+    }
+  }
+
+  SECTION("opposite-fifth and minor-mode candidates do not use the major guard") {
+    for (int root = 0; root < 12; ++root) {
+      const auto tonic = static_cast<PitchClass>(root);
+      const auto progression = make_progression(root, 0);
+      const Key chord_key = estimate_key_from_chords(progression);
+      REQUIRE(chord_key.root == tonic);
+      const Key opposite = Key{transpose(tonic, 5), Mode::Major, 0.97f};
+      {
+        const auto candidates = chroma_candidates({opposite, Key{tonic, Mode::Major, 0.004f}});
+        const Key refined = refine_key_with_chords(candidates, progression);
+        CHECK(refined.root == opposite.root);
+        CHECK(refined.mode == Mode::Major);
+      }
+      {
+        const Key minor_chroma{transpose(tonic, 7), Mode::Minor, 0.97f};
+        const auto candidates = chroma_candidates({minor_chroma, Key{tonic, Mode::Minor, 0.004f}});
+        const auto minor_progression = make_progression(root, 10);
+        const Key minor_chord_key = estimate_key_from_chords(minor_progression);
+        REQUIRE(minor_chord_key.root == tonic);
+        REQUIRE(minor_chord_key.mode == Mode::Minor);
+        const Key refined = refine_key_with_chords(candidates, minor_progression);
+        CHECK(refined.root == minor_chroma.root);
+        CHECK(refined.mode == Mode::Minor);
+      }
+      {
+        const Key minor_chroma{transpose(tonic, 7), Mode::Minor, 0.97f};
+        const auto candidates = chroma_candidates({minor_chroma, Key{tonic, Mode::Major, 0.004f}});
+        const Key refined = refine_key_with_chords(candidates, progression);
+        CHECK(refined.root == minor_chroma.root);
+        CHECK(refined.mode == Mode::Minor);
+      }
+    }
   }
 }

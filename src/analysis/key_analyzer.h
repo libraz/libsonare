@@ -204,7 +204,10 @@ Key estimate_key_from_chords(const std::vector<struct Chord>& chords);
 ///          natural-minor v-i path with the same opening duration and strength checks plus at least
 ///          three strong direct v-i pairs; this path retains the globally strong-confidence and
 ///          three-root checks. Natural-minor v-i score support counts only v-run duration that
-///          directly resolves to i. A key never scored by chroma is never returned.
+///          directly resolves to i. For a major tonic against its major dominant, three strong
+///          direct V-I returns can also resolve a weak chroma posterior when reliable diatonic
+///          duration and chord scores without first/bookend priors both favor the tonic. A key
+///          never scored by chroma is never returned.
 /// @param chroma_candidates Scored chroma candidates, each carrying its posterior confidence
 /// @param chords Detected chords
 /// @return The chosen key with its chroma posterior as confidence; C major with 0 when

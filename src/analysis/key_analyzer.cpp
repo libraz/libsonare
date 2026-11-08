@@ -534,7 +534,12 @@ bool has_recurrent_relative_tonic(const Key& proposed, const Key& chroma_key,
 using ChordKeyScores = std::array<std::array<float, 12>, 2>;
 
 Key estimate_key_from_recognized_chords(const std::vector<Chord>& chords,
-                                        ChordKeyScores* scores = nullptr);
+                                        ChordKeyScores* scores = nullptr,
+                                        ChordKeyScores* prior_free_scores = nullptr);
+bool has_recurrent_major_authentic_tonic(const Key& proposed, const Key& chroma_key,
+                                         const std::vector<Chord>& all_chords,
+                                         const std::vector<KeyCandidate>& chroma_candidates,
+                                         const ChordKeyScores& prior_free_scores);
 
 }  // namespace
 
@@ -544,9 +549,13 @@ Key estimate_key_from_chords(const std::vector<Chord>& all_chords) {
 
 namespace {
 
-Key estimate_key_from_recognized_chords(const std::vector<Chord>& chords, ChordKeyScores* scores) {
+Key estimate_key_from_recognized_chords(const std::vector<Chord>& chords, ChordKeyScores* scores,
+                                        ChordKeyScores* prior_free_scores) {
   if (scores != nullptr) {
     for (auto& row : *scores) row.fill(0.0f);
+  }
+  if (prior_free_scores != nullptr) {
+    for (auto& row : *prior_free_scores) row.fill(0.0f);
   }
   if (chords.empty()) {
     return Key{PitchClass::C, Mode::Major, 0.0f};
@@ -683,6 +692,10 @@ Key estimate_key_from_recognized_chords(const std::vector<Chord>& chords, ChordK
     float total_major_score =
         major_score + major_tonic_score + cadence_bonus + bookend_bonus + first_chord_bonus;
     if (scores != nullptr) (*scores)[0][static_cast<size_t>(key_idx)] = total_major_score;
+    if (prior_free_scores != nullptr) {
+      (*prior_free_scores)[0][static_cast<size_t>(key_idx)] =
+          major_score + major_tonic_score + cadence_bonus;
+    }
     if (total_major_score > best_score) {
       best_score = total_major_score;
       best_root = key_root;
@@ -765,6 +778,10 @@ Key estimate_key_from_recognized_chords(const std::vector<Chord>& chords, ChordK
     float total_minor_score = minor_score + minor_tonic_score + natural_minor_dominant_score +
                               minor_cadence_bonus + minor_bookend_bonus + minor_first_chord_bonus;
     if (scores != nullptr) (*scores)[1][static_cast<size_t>(minor_root)] = total_minor_score;
+    if (prior_free_scores != nullptr) {
+      (*prior_free_scores)[1][static_cast<size_t>(minor_root)] =
+          minor_score + minor_tonic_score + natural_minor_dominant_score + minor_cadence_bonus;
+    }
     if (total_minor_score > best_score) {
       best_score = total_minor_score;
       best_root = minor_root;
@@ -783,6 +800,107 @@ Key estimate_key_from_recognized_chords(const std::vector<Chord>& chords, ChordK
   confidence = std::min(confidence, 1.0f);
 
   return Key{best_root, best_mode, confidence};
+}
+
+bool has_recurrent_major_authentic_tonic(const Key& proposed, const Key& chroma_key,
+                                         const std::vector<Chord>& all_chords,
+                                         const std::vector<KeyCandidate>& chroma_candidates,
+                                         const ChordKeyScores& prior_free_scores) {
+  if (proposed.mode != Mode::Major || chroma_key.mode != Mode::Major ||
+      static_cast<int>(chroma_key.root) != (static_cast<int>(proposed.root) + 7) % 12) {
+    return false;
+  }
+
+  bool proposed_was_scored = false;
+  for (const KeyCandidate& candidate : chroma_candidates) {
+    if (candidate.key.root == proposed.root && candidate.key.mode == proposed.mode) {
+      proposed_was_scored = true;
+      break;
+    }
+  }
+  if (!proposed_was_scored) return false;
+
+  struct HarmonicRun {
+    PitchClass root;
+    ChordQuality quality;
+    double duration;
+    double confidence_mass;
+  };
+  std::vector<HarmonicRun> runs;
+  for (const Chord& chord : all_chords) {
+    const double duration = static_cast<double>(chord.duration());
+    if (chord.quality == ChordQuality::Unknown || !std::isfinite(duration) || duration <= 0.0) {
+      continue;
+    }
+    if (!std::isfinite(chord.confidence)) return false;
+    const ChordQuality quality = reduce_to_triad(chord.quality);
+    const double confidence_mass = duration * chord.confidence;
+    if (!runs.empty() && runs.back().root == chord.root && runs.back().quality == quality) {
+      runs.back().duration += duration;
+      runs.back().confidence_mass += confidence_mass;
+    } else {
+      runs.push_back({chord.root, quality, duration, confidence_mass});
+    }
+  }
+  if (runs.empty()) return false;
+
+  const auto is_strong_run = [](const HarmonicRun& run) {
+    return run.confidence_mass / run.duration >= kRelativeKeyMinTemplateConfidence;
+  };
+  std::vector<double> run_durations;
+  run_durations.reserve(runs.size());
+  for (const HarmonicRun& run : runs) run_durations.push_back(run.duration);
+  std::sort(run_durations.begin(), run_durations.end());
+  const size_t middle = run_durations.size() / 2;
+  const double median_duration = run_durations.size() % 2 == 0
+                                     ? 0.5 * (run_durations[middle - 1] + run_durations[middle])
+                                     : run_durations[middle];
+  const bool strong_opening =
+      runs.front().root == proposed.root && runs.front().quality == ChordQuality::Major &&
+      is_strong_run(runs.front()) && runs.front().duration >= median_duration;
+
+  double tonic_duration = 0.0;
+  double tonic_confidence_mass = 0.0;
+  std::array<bool, 12> reliable_roots{};
+  for (const HarmonicRun& run : runs) {
+    if (run.root == proposed.root && run.quality == ChordQuality::Major) {
+      tonic_duration += run.duration;
+      tonic_confidence_mass += run.confidence_mass;
+    }
+    if (is_strong_run(run)) reliable_roots[static_cast<size_t>(run.root)] = true;
+  }
+  if (!strong_opening || tonic_duration <= 0.0 ||
+      tonic_confidence_mass / tonic_duration < kRelativeKeyMinTemplateConfidence) {
+    return false;
+  }
+  const int distinct_roots =
+      static_cast<int>(std::count(reliable_roots.begin(), reliable_roots.end(), true));
+  if (distinct_roots < kRelativeKeyMinChordRoots) return false;
+
+  int strong_cadences = 0;
+  for (size_t index = 0; index + 1 < runs.size(); ++index) {
+    const HarmonicRun& dominant = runs[index];
+    const HarmonicRun& tonic = runs[index + 1];
+    if (dominant.root == chroma_key.root && dominant.quality == ChordQuality::Major &&
+        tonic.root == proposed.root && tonic.quality == ChordQuality::Major &&
+        is_strong_run(dominant) && is_strong_run(tonic)) {
+      ++strong_cadences;
+      ++index;
+    }
+  }
+  if (strong_cadences < kRelativeKeyMinTonicRuns) return false;
+
+  double proposed_support = 0.0;
+  double chroma_support = 0.0;
+  for (const HarmonicRun& run : runs) {
+    if (!is_strong_run(run)) continue;
+    if (is_diatonic_major(run.root, run.quality, proposed.root)) proposed_support += run.duration;
+    if (is_diatonic_major(run.root, run.quality, chroma_key.root)) chroma_support += run.duration;
+  }
+  if (proposed_support <= chroma_support) return false;
+
+  return prior_free_scores[0][static_cast<size_t>(proposed.root)] >
+         prior_free_scores[0][static_cast<size_t>(chroma_key.root)];
 }
 
 }  // namespace
@@ -812,7 +930,8 @@ Key refine_key_with_chords(const std::vector<KeyCandidate>& chroma_candidates,
     return chroma_key;
   }
   ChordKeyScores scores{};
-  Key chord_key = estimate_key_from_recognized_chords(chords, &scores);
+  ChordKeyScores prior_free_scores{};
+  Key chord_key = estimate_key_from_recognized_chords(chords, &scores, &prior_free_scores);
   if (chord_key.root == chroma_key.root && chord_key.mode == chroma_key.mode) {
     return chroma_key;
   }
@@ -822,7 +941,9 @@ Key refine_key_with_chords(const std::vector<KeyCandidate>& chroma_candidates,
   // chroma leaves numerically decisive but harmonically ambiguous.
   const float chord_posterior = key_posterior(chroma_candidates, chord_key);
   if (chord_posterior < kChordOverrideMinPosteriorRatio * chroma_key.confidence) {
-    if (!has_recurrent_relative_tonic(chord_key, chroma_key, all_chords, chroma_candidates)) {
+    if (!has_recurrent_relative_tonic(chord_key, chroma_key, all_chords, chroma_candidates) &&
+        !has_recurrent_major_authentic_tonic(chord_key, chroma_key, all_chords, chroma_candidates,
+                                             prior_free_scores)) {
       return chroma_key;
     }
   }
