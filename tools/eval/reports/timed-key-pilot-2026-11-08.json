@@ -1,0 +1,1423 @@
+{
+  "report_version": "timed_key_pilot_v1",
+  "date": "2026-11-08",
+  "dataset": {
+    "title": "Schubert Winterreise Dataset",
+    "version": "2.1",
+    "source": "https://zenodo.org/records/10839767",
+    "citation": "Christof Weiss et al., Schubert Winterreise Dataset: A Multimodal Scenario for Music Analysis, DOI10.1145/3429743",
+    "audio_license": "PDM-1.0 for HU33 per included license; SC06 audio not used",
+    "annotation_license": "CC-BY-3.0",
+    "recordings": [
+      {
+        "id": "Schubert_D911-01_HU33",
+        "work_group": "Schubert_D911-01",
+        "performance_id": "HU33",
+        "performer_group": "Gerhard Huesch / Hanns-Udo Mueller (HU33)",
+        "composer_group": "Franz Schubert",
+        "edited_audio": true,
+        "audio_annotation_transform": {
+          "offset_seconds": 0,
+          "rate_ratio": 1
+        },
+        "audio": "01_RawData/audio_wav/Schubert_D911-01_HU33.wav",
+        "duration_seconds": 311.6930612244898,
+        "audio_sha256": "074adc8f5899d326f10dfb2ff8b1c72312e9755ed41727c3ce7da2def18e7f60",
+        "annotation_sources": [
+          {
+            "annotator": "ann1",
+            "path": "02_Annotations/ann_audio_localkey-ann1/Schubert_D911-01_HU33.csv",
+            "sha256": "936f3e318059f5638afd455d8af9dfe7d6a5a137c40e92bb165755f3b29494fa",
+            "scored_seconds": 304.42
+          },
+          {
+            "annotator": "ann2",
+            "path": "02_Annotations/ann_audio_localkey-ann2/Schubert_D911-01_HU33.csv",
+            "sha256": "b9da949a18b2060d197388b34d09884e6686ab23601c1d55d2834fd8f5cefce7",
+            "scored_seconds": 304.42
+          },
+          {
+            "annotator": "ann3",
+            "path": "02_Annotations/ann_audio_localkey-ann3/Schubert_D911-01_HU33.csv",
+            "sha256": "d88f1c2b086e0f7eeb73d498d0ef941d57d65087050cff27b0fd64aa5ca79e03",
+            "scored_seconds": 304.42
+          }
+        ]
+      },
+      {
+        "id": "Schubert_D911-02_HU33",
+        "work_group": "Schubert_D911-02",
+        "performance_id": "HU33",
+        "performer_group": "Gerhard Huesch / Hanns-Udo Mueller (HU33)",
+        "composer_group": "Franz Schubert",
+        "edited_audio": false,
+        "audio_annotation_transform": {
+          "offset_seconds": 0,
+          "rate_ratio": 1
+        },
+        "audio": "01_RawData/audio_wav/Schubert_D911-02_HU33.wav",
+        "duration_seconds": 101.1461224489796,
+        "audio_sha256": "82df858661d662f162ab3bd3066925dc0faefeb3429584c152bc7b5e91c4e0d2",
+        "annotation_sources": [
+          {
+            "annotator": "ann1",
+            "path": "02_Annotations/ann_audio_localkey-ann1/Schubert_D911-02_HU33.csv",
+            "sha256": "ad4c542840d8a589b37cdc4975ec18d0e845ca27f850fccc9d3063f268d6f67b",
+            "scored_seconds": 95.60000000000001
+          },
+          {
+            "annotator": "ann2",
+            "path": "02_Annotations/ann_audio_localkey-ann2/Schubert_D911-02_HU33.csv",
+            "sha256": "c9b0a2f602e6093826aaf16608ef8890a558feb966d78b74ac0c5bb5bec55320",
+            "scored_seconds": 60.56000000000002
+          },
+          {
+            "annotator": "ann3",
+            "path": "02_Annotations/ann_audio_localkey-ann3/Schubert_D911-02_HU33.csv",
+            "sha256": "82985de070baf8d73aedffc7e42fbeeb9300cb87f2252949cfc8ab7adbcf5e5f",
+            "scored_seconds": 95.60000000000001
+          }
+        ]
+      },
+      {
+        "id": "Schubert_D911-03_HU33",
+        "work_group": "Schubert_D911-03",
+        "performance_id": "HU33",
+        "performer_group": "Gerhard Huesch / Hanns-Udo Mueller (HU33)",
+        "composer_group": "Franz Schubert",
+        "edited_audio": false,
+        "audio_annotation_transform": {
+          "offset_seconds": 0,
+          "rate_ratio": 1
+        },
+        "audio": "01_RawData/audio_wav/Schubert_D911-03_HU33.wav",
+        "duration_seconds": 150.32598639455782,
+        "audio_sha256": "c67fef1ed6355a43f2f25c6f3f774f3ad2019f8941c4999c45711b3b497f9ad7",
+        "annotation_sources": [
+          {
+            "annotator": "ann1",
+            "path": "02_Annotations/ann_audio_localkey-ann1/Schubert_D911-03_HU33.csv",
+            "sha256": "158aea662e40889806d4ef7ef4dd146c2e4e3ce7fbc34dc1b4972eaa67943728",
+            "scored_seconds": 144.57999999999998
+          },
+          {
+            "annotator": "ann2",
+            "path": "02_Annotations/ann_audio_localkey-ann2/Schubert_D911-03_HU33.csv",
+            "sha256": "f7cd85f8ad61dd3e79e4a079a85991da762b2fd41969022e483c491af7c5029a",
+            "scored_seconds": 112.53999999999999
+          },
+          {
+            "annotator": "ann3",
+            "path": "02_Annotations/ann_audio_localkey-ann3/Schubert_D911-03_HU33.csv",
+            "sha256": "caf0db6d418d742b659a8791aaf1f2dc2137caf841f9d9b780f5c30b3af9f2de",
+            "scored_seconds": 144.57999999999998
+          }
+        ]
+      },
+      {
+        "id": "Schubert_D911-04_HU33",
+        "work_group": "Schubert_D911-04",
+        "performance_id": "HU33",
+        "performer_group": "Gerhard Huesch / Hanns-Udo Mueller (HU33)",
+        "composer_group": "Franz Schubert",
+        "edited_audio": false,
+        "audio_annotation_transform": {
+          "offset_seconds": 0,
+          "rate_ratio": 1
+        },
+        "audio": "01_RawData/audio_wav/Schubert_D911-04_HU33.wav",
+        "duration_seconds": 178.60789115646259,
+        "audio_sha256": "4194489027aa84a167e84cdb98f8328a9f65c529dbfc070114b4864e9a262fef",
+        "annotation_sources": [
+          {
+            "annotator": "ann1",
+            "path": "02_Annotations/ann_audio_localkey-ann1/Schubert_D911-04_HU33.csv",
+            "sha256": "161de47347d1c8da0a4f3a988fc1c27ff35eb64f5d4fd4df7352fd4c9d8dc02a",
+            "scored_seconds": 174.5
+          },
+          {
+            "annotator": "ann2",
+            "path": "02_Annotations/ann_audio_localkey-ann2/Schubert_D911-04_HU33.csv",
+            "sha256": "3f8a598db9ee9be3268f8bdd801b919aa9445e8984e38198b42ebf556b2bedcb",
+            "scored_seconds": 174.5
+          },
+          {
+            "annotator": "ann3",
+            "path": "02_Annotations/ann_audio_localkey-ann3/Schubert_D911-04_HU33.csv",
+            "sha256": "9e32c5b92068f640580e4da72be5c4ab2c172d80ea58c89b7f3e398195662537",
+            "scored_seconds": 174.5
+          }
+        ]
+      }
+    ],
+    "annotators": [
+      "ann1",
+      "ann2",
+      "ann3"
+    ],
+    "annotation_process": "Related expert revisions, not independent blind annotations. Previous labels were known during revision (Weiss et al.2021, section4.3). The three reference series are reported separately; their agreement is not three independent votes."
+  },
+  "scope": "Four works from one composer and one performer group; external-domain controls, not artist-disjoint pop generalization",
+  "protocol": {
+    "window_seconds": 8,
+    "temperature": 0.08,
+    "transition_stay": 0.5106382978723404,
+    "transition_other": 0.02127659574468085,
+    "prior": "uniform",
+    "decoder": "forward_backward_marginal_argmax",
+    "window_profile": "full-track auto-selected profile frozen for all windows, all24 native candidate parity required",
+    "frontend": "full recording tuned production chroma; same features across arms",
+    "baseline": "default standalone native KeyAnalyzer(audio), not chord-blended analyze output",
+    "parameter_search": false,
+    "reference_gaps": "excluded; prediction gaps counted incorrect",
+    "primary": "exact key duration overlap",
+    "secondary": "MIREX2017+ weighted duration overlap with both fifths allowed",
+    "reference_policy": "each analyst separately, plus all-three-agree common support; no selected or majority analyst",
+    "default_promotion": false
+  },
+  "provenance": {
+    "reference_sha256": "a2073f17a85a105e4b91218eee07c6cd8a6297fbc8d7d2f4a4fa9b215c2c7bb2",
+    "initial_frozen_reference_sha256": "c2278497b2d083242dfa41e5c09068bf60707e17e2e908661fd8fef7e237f93d",
+    "reference_metadata_reconciliation": "After prediction, regenerate grouping metadata from final preparer; audio hashes/durations/all12 annotation hashes and interval arrays identical; every reported score unchanged. Initial frozen reference preserved.",
+    "native_binary_sha256": "8bd128256865fbc3cd382cae9cd1768873b0606fc81b6022f2d7ff50539e8bd9",
+    "tool_sources_sha256": {
+      "export_key_windows.cpp": "e6600b98a3e2e2f32feec0cd2f081c85bd18e757559a4fdc00b972bba04c6347",
+      "infer_temporal_keys.py": "08c5aceb3a61a8ad9ec20208a307a324703d3e6e020b3d6eedd5c0603255dc98",
+      "prepare_timed_keys.py": "a6d6fe346a41f3048400017e9888e868d56abc011fb3429967861a5eae7ab817",
+      "evaluate_timed_keys.py": "12ce3e11bc02805008fdfe01fc0b5d2da97d71f69228988f53edd1a41143ad5b"
+    },
+    "predictions_sha256": {
+      "raw_global": "48e70e5a2074d8216289eba783e28b8602420b55d3ffbcb1dec7ea3c2904d8df",
+      "independent_8s": "16e5e45d60918e55e8c7198a9359509b97610d74d2002fe7f5d8f6dc6ba401dc",
+      "hmm_8s": "d19890554f01ff67cabf8cc66e4a5c48fc70a19b808eda3f3536f1004373a578"
+    },
+    "initial_tool_sources_sha256": {
+      "export_key_windows.cpp": "e6600b98a3e2e2f32feec0cd2f081c85bd18e757559a4fdc00b972bba04c6347",
+      "infer_temporal_keys.py": "e69ef6de398082a9a3e3d8de08ebf29ff258f8ea12aa820f11e63f99c469deab",
+      "prepare_timed_keys.py": "a6d6fe346a41f3048400017e9888e868d56abc011fb3429967861a5eae7ab817",
+      "evaluate_timed_keys.py": "12ce3e11bc02805008fdfe01fc0b5d2da97d71f69228988f53edd1a41143ad5b"
+    },
+    "numerical_correction": "After observation, exact symmetric transition formula fixesPython3.11 roundoff instability on uniform evidence. Parameters unchanged; all3 predictionfiles byte-identical and all36 recording/analyst/methodscores identical on frozen observations; no native rerun."
+  },
+  "results": {
+    "raw_global": {
+      "per_annotator": {
+        "ann1": {
+          "pooled": {
+            "measured_tracks": 4,
+            "scored_seconds": 719.1,
+            "weighted_correct_seconds": 436.086,
+            "weighted_score": 0.606433041301627,
+            "predicted_seconds_on_reference": 719.1,
+            "prediction_coverage_fraction": 1.0,
+            "exact_seconds": 349.88000000000005,
+            "exact_accuracy": 0.4865526352384926,
+            "measured": true
+          },
+          "track_macro_weighted_score": 0.5892227657815768,
+          "track_macro_exact_accuracy": 0.45103754622549747,
+          "track_macro_prediction_coverage": 1.0,
+          "per_track": {
+            "Schubert_D911-01_HU33": {
+              "scored_seconds": 304.42,
+              "predicted_seconds_on_reference": 304.42,
+              "prediction_coverage_fraction": 1.0,
+              "exact_seconds": 186.18000000000004,
+              "weighted_correct_seconds": 205.33200000000002,
+              "score": 0.6745023323040537,
+              "exact_accuracy": 0.6115892516917417,
+              "measured": true,
+              "categories_seconds": {
+                "exact": 186.18000000000004,
+                "fifth": 0.0,
+                "relative": 26.679999999999986,
+                "parallel": 55.73999999999998,
+                "other": 35.81999999999999
+              }
+            },
+            "Schubert_D911-02_HU33": {
+              "scored_seconds": 95.60000000000001,
+              "predicted_seconds_on_reference": 95.60000000000001,
+              "prediction_coverage_fraction": 1.0,
+              "exact_seconds": 53.80000000000001,
+              "weighted_correct_seconds": 66.06,
+              "score": 0.6910041841004184,
+              "exact_accuracy": 0.5627615062761507,
+              "measured": true,
+              "categories_seconds": {
+                "exact": 53.80000000000001,
+                "fifth": 19.56,
+                "relative": 3.8000000000000007,
+                "parallel": 6.699999999999996,
+                "other": 11.739999999999995
+              }
+            },
+            "Schubert_D911-03_HU33": {
+              "scored_seconds": 144.57999999999998,
+              "predicted_seconds_on_reference": 144.57999999999998,
+              "prediction_coverage_fraction": 1.0,
+              "exact_seconds": 0.0,
+              "weighted_correct_seconds": 40.12,
+              "score": 0.2774934292433255,
+              "exact_accuracy": 0.0,
+              "measured": true,
+              "categories_seconds": {
+                "exact": 0.0,
+                "fifth": 80.24,
+                "relative": 0.0,
+                "parallel": 0.0,
+                "other": 64.34
+              }
+            },
+            "Schubert_D911-04_HU33": {
+              "scored_seconds": 174.5,
+              "predicted_seconds_on_reference": 174.5,
+              "prediction_coverage_fraction": 1.0,
+              "exact_seconds": 109.9,
+              "weighted_correct_seconds": 124.57399999999998,
+              "score": 0.71389111747851,
+              "exact_accuracy": 0.6297994269340974,
+              "measured": true,
+              "categories_seconds": {
+                "exact": 109.9,
+                "fifth": 24.320000000000007,
+                "relative": 8.379999999999995,
+                "parallel": 0.0,
+                "other": 31.900000000000006
+              }
+            }
+          }
+        },
+        "ann2": {
+          "pooled": {
+            "measured_tracks": 4,
+            "scored_seconds": 652.02,
+            "weighted_correct_seconds": 424.84000000000003,
+            "weighted_score": 0.6515751050581271,
+            "predicted_seconds_on_reference": 652.02,
+            "prediction_coverage_fraction": 1.0,
+            "exact_seconds": 366.44000000000005,
+            "exact_accuracy": 0.5620073003895587,
+            "measured": true
+          },
+          "track_macro_weighted_score": 0.653356320944392,
+          "track_macro_exact_accuracy": 0.5561658893045958,
+          "track_macro_prediction_coverage": 1.0,
+          "per_track": {
+            "Schubert_D911-01_HU33": {
+              "scored_seconds": 304.42,
+              "predicted_seconds_on_reference": 304.42,
+              "prediction_coverage_fraction": 1.0,
+              "exact_seconds": 186.18000000000004,
+              "weighted_correct_seconds": 205.33200000000002,
+              "score": 0.6745023323040537,
+              "exact_accuracy": 0.6115892516917417,
+              "measured": true,
+              "categories_seconds": {
+                "exact": 186.18000000000004,
+                "fifth": 0.0,
+                "relative": 26.679999999999986,
+                "parallel": 55.73999999999998,
+                "other": 35.81999999999999
+              }
+            },
+            "Schubert_D911-02_HU33": {
+              "scored_seconds": 60.56000000000002,
+              "predicted_seconds_on_reference": 60.56000000000002,
+              "prediction_coverage_fraction": 1.0,
+              "exact_seconds": 53.80000000000001,
+              "weighted_correct_seconds": 55.82800000000002,
+              "score": 0.9218626155878468,
+              "exact_accuracy": 0.8883751651254953,
+              "measured": true,
+              "categories_seconds": {
+                "exact": 53.80000000000001,
+                "fifth": 0.0,
+                "relative": 6.760000000000002,
+                "parallel": 0.0,
+                "other": 0.0
+              }
+            },
+            "Schubert_D911-03_HU33": {
+              "scored_seconds": 112.53999999999999,
+              "predicted_seconds_on_reference": 112.53999999999999,
+              "prediction_coverage_fraction": 1.0,
+              "exact_seconds": 0.0,
+              "weighted_correct_seconds": 25.059999999999995,
+              "score": 0.2226763817309401,
+              "exact_accuracy": 0.0,
+              "measured": true,
+              "categories_seconds": {
+                "exact": 0.0,
+                "fifth": 50.11999999999999,
+                "relative": 0.0,
+                "parallel": 0.0,
+                "other": 62.42
+              }
+            },
+            "Schubert_D911-04_HU33": {
+              "scored_seconds": 174.5,
+              "predicted_seconds_on_reference": 174.5,
+              "prediction_coverage_fraction": 1.0,
+              "exact_seconds": 126.45999999999998,
+              "weighted_correct_seconds": 138.61999999999998,
+              "score": 0.7943839541547276,
+              "exact_accuracy": 0.724699140401146,
+              "measured": true,
+              "categories_seconds": {
+                "exact": 126.45999999999998,
+                "fifth": 24.320000000000007,
+                "relative": 0.0,
+                "parallel": 0.0,
+                "other": 23.720000000000013
+              }
+            }
+          }
+        },
+        "ann3": {
+          "pooled": {
+            "measured_tracks": 4,
+            "scored_seconds": 719.1,
+            "weighted_correct_seconds": 463.45200000000006,
+            "weighted_score": 0.6444889445139759,
+            "predicted_seconds_on_reference": 719.1,
+            "prediction_coverage_fraction": 1.0,
+            "exact_seconds": 379.18000000000006,
+            "exact_accuracy": 0.5272980114031429,
+            "measured": true
+          },
+          "track_macro_weighted_score": 0.6438108584478652,
+          "track_macro_exact_accuracy": 0.5098386649073718,
+          "track_macro_prediction_coverage": 1.0,
+          "per_track": {
+            "Schubert_D911-01_HU33": {
+              "scored_seconds": 304.42,
+              "predicted_seconds_on_reference": 304.42,
+              "prediction_coverage_fraction": 1.0,
+              "exact_seconds": 184.50000000000003,
+              "weighted_correct_seconds": 204.02400000000006,
+              "score": 0.6702056369489523,
+              "exact_accuracy": 0.60607056040996,
+              "measured": true,
+              "categories_seconds": {
+                "exact": 184.50000000000003,
+                "fifth": 0.0,
+                "relative": 28.36,
+                "parallel": 55.079999999999984,
+                "other": 36.47999999999999
+              }
+            },
+            "Schubert_D911-02_HU33": {
+              "scored_seconds": 95.6,
+              "predicted_seconds_on_reference": 95.6,
+              "prediction_coverage_fraction": 1.0,
+              "exact_seconds": 67.16,
+              "weighted_correct_seconds": 77.016,
+              "score": 0.8056066945606696,
+              "exact_accuracy": 0.702510460251046,
+              "measured": true,
+              "categories_seconds": {
+                "exact": 67.16,
+                "fifth": 17.040000000000003,
+                "relative": 0.0,
+                "parallel": 6.68,
+                "other": 4.719999999999999
+              }
+            },
+            "Schubert_D911-03_HU33": {
+              "scored_seconds": 144.57999999999998,
+              "predicted_seconds_on_reference": 144.57999999999998,
+              "prediction_coverage_fraction": 1.0,
+              "exact_seconds": 0.0,
+              "weighted_correct_seconds": 45.60999999999999,
+              "score": 0.3154654862359939,
+              "exact_accuracy": 0.0,
+              "measured": true,
+              "categories_seconds": {
+                "exact": 0.0,
+                "fifth": 91.21999999999998,
+                "relative": 0.0,
+                "parallel": 0.0,
+                "other": 53.36000000000001
+              }
+            },
+            "Schubert_D911-04_HU33": {
+              "scored_seconds": 174.5,
+              "predicted_seconds_on_reference": 174.5,
+              "prediction_coverage_fraction": 1.0,
+              "exact_seconds": 127.52000000000002,
+              "weighted_correct_seconds": 136.80200000000002,
+              "score": 0.7839656160458454,
+              "exact_accuracy": 0.7307736389684815,
+              "measured": true,
+              "categories_seconds": {
+                "exact": 127.52000000000002,
+                "fifth": 12.11999999999999,
+                "relative": 10.739999999999991,
+                "parallel": 0.0,
+                "other": 24.120000000000005
+              }
+            }
+          }
+        }
+      },
+      "unanimous_reference": {
+        "pooled": {
+          "measured_tracks": 4,
+          "scored_seconds": 579.4399999999999,
+          "weighted_correct_seconds": 394.67,
+          "weighted_score": 0.6811231533894796,
+          "predicted_seconds_on_reference": 579.4399999999999,
+          "prediction_coverage_fraction": 1.0,
+          "exact_seconds": 344.92,
+          "exact_accuracy": 0.5952643932072347,
+          "measured": true
+        },
+        "track_macro_weighted_score": 0.6931379840649082,
+        "track_macro_exact_accuracy": 0.5908876452179476,
+        "track_macro_prediction_coverage": 1.0,
+        "per_track": {
+          "Schubert_D911-01_HU33": {
+            "scored_seconds": 302.08,
+            "predicted_seconds_on_reference": 302.08,
+            "prediction_coverage_fraction": 1.0,
+            "exact_seconds": 184.50000000000003,
+            "weighted_correct_seconds": 203.52000000000004,
+            "score": 0.6737288135593222,
+            "exact_accuracy": 0.6107653601694917,
+            "measured": true,
+            "categories_seconds": {
+              "exact": 184.50000000000003,
+              "fifth": 0.0,
+              "relative": 26.679999999999986,
+              "parallel": 55.079999999999984,
+              "other": 35.81999999999999
+            }
+          },
+          "Schubert_D911-02_HU33": {
+            "scored_seconds": 53.66000000000001,
+            "predicted_seconds_on_reference": 53.66000000000001,
+            "prediction_coverage_fraction": 1.0,
+            "exact_seconds": 53.66000000000001,
+            "weighted_correct_seconds": 53.66000000000001,
+            "score": 1.0,
+            "exact_accuracy": 1.0,
+            "measured": true,
+            "categories_seconds": {
+              "exact": 53.66000000000001,
+              "fifth": 0.0,
+              "relative": 0.0,
+              "parallel": 0.0,
+              "other": 0.0
+            }
+          },
+          "Schubert_D911-03_HU33": {
+            "scored_seconds": 81.87999999999998,
+            "predicted_seconds_on_reference": 81.87999999999998,
+            "prediction_coverage_fraction": 1.0,
+            "exact_seconds": 0.0,
+            "weighted_correct_seconds": 25.059999999999995,
+            "score": 0.3060576453346361,
+            "exact_accuracy": 0.0,
+            "measured": true,
+            "categories_seconds": {
+              "exact": 0.0,
+              "fifth": 50.11999999999999,
+              "relative": 0.0,
+              "parallel": 0.0,
+              "other": 31.75999999999999
+            }
+          },
+          "Schubert_D911-04_HU33": {
+            "scored_seconds": 141.82,
+            "predicted_seconds_on_reference": 141.82,
+            "prediction_coverage_fraction": 1.0,
+            "exact_seconds": 106.75999999999999,
+            "weighted_correct_seconds": 112.42999999999998,
+            "score": 0.7927654773656747,
+            "exact_accuracy": 0.7527852207022987,
+            "measured": true,
+            "categories_seconds": {
+              "exact": 106.75999999999999,
+              "fifth": 11.339999999999982,
+              "relative": 0.0,
+              "parallel": 0.0,
+              "other": 23.720000000000013
+            }
+          }
+        }
+      },
+      "annotator_disagreement": {
+        "per_track": {
+          "Schubert_D911-01_HU33": {
+            "common_annotated_seconds": 304.42,
+            "disagreement_seconds": 2.3400000000000105,
+            "disagreement_fraction": 0.007686748571053184
+          },
+          "Schubert_D911-02_HU33": {
+            "common_annotated_seconds": 60.56000000000002,
+            "disagreement_seconds": 6.900000000000002,
+            "disagreement_fraction": 0.11393659180977543
+          },
+          "Schubert_D911-03_HU33": {
+            "common_annotated_seconds": 112.53999999999998,
+            "disagreement_seconds": 30.660000000000007,
+            "disagreement_fraction": 0.2724364670339436
+          },
+          "Schubert_D911-04_HU33": {
+            "common_annotated_seconds": 174.5,
+            "disagreement_seconds": 32.68000000000002,
+            "disagreement_fraction": 0.18727793696275083
+          }
+        },
+        "pooled_common_annotated_seconds": 652.02,
+        "pooled_disagreement_seconds": 72.58000000000004,
+        "pooled_disagreement_fraction": 0.11131560381583394
+      }
+    },
+    "independent_8s": {
+      "per_annotator": {
+        "ann1": {
+          "pooled": {
+            "measured_tracks": 4,
+            "scored_seconds": 719.1,
+            "weighted_correct_seconds": 508.07,
+            "weighted_score": 0.7065359477124182,
+            "predicted_seconds_on_reference": 719.1,
+            "prediction_coverage_fraction": 1.0,
+            "exact_seconds": 440.72,
+            "exact_accuracy": 0.6128772076206369,
+            "measured": true
+          },
+          "track_macro_weighted_score": 0.6348665606546772,
+          "track_macro_exact_accuracy": 0.5201395563735656,
+          "track_macro_prediction_coverage": 1.0,
+          "per_track": {
+            "Schubert_D911-01_HU33": {
+              "scored_seconds": 304.42,
+              "predicted_seconds_on_reference": 304.42,
+              "prediction_coverage_fraction": 1.0,
+              "exact_seconds": 275.18,
+              "weighted_correct_seconds": 282.668,
+              "score": 0.9285460876420735,
+              "exact_accuracy": 0.9039484922147033,
+              "measured": true,
+              "categories_seconds": {
+                "exact": 275.18,
+                "fifth": 7.320000000000007,
+                "relative": 4.719999999999992,
+                "parallel": 12.059999999999974,
+                "other": 5.140000000000001
+              }
+            },
+            "Schubert_D911-02_HU33": {
+              "scored_seconds": 95.6,
+              "predicted_seconds_on_reference": 95.6,
+              "prediction_coverage_fraction": 1.0,
+              "exact_seconds": 42.18000000000001,
+              "weighted_correct_seconds": 54.622,
+              "score": 0.5713598326359833,
+              "exact_accuracy": 0.441213389121339,
+              "measured": true,
+              "categories_seconds": {
+                "exact": 42.18000000000001,
+                "fifth": 15.579999999999991,
+                "relative": 11.040000000000006,
+                "parallel": 6.699999999999996,
+                "other": 20.100000000000005
+              }
+            },
+            "Schubert_D911-03_HU33": {
+              "scored_seconds": 144.57999999999998,
+              "predicted_seconds_on_reference": 144.57999999999998,
+              "prediction_coverage_fraction": 1.0,
+              "exact_seconds": 24.0,
+              "weighted_correct_seconds": 51.334,
+              "score": 0.35505602434638267,
+              "exact_accuracy": 0.16599806335592754,
+              "measured": true,
+              "categories_seconds": {
+                "exact": 24.0,
+                "fifth": 49.54,
+                "relative": 8.0,
+                "parallel": 0.8199999999999932,
+                "other": 62.22
+              }
+            },
+            "Schubert_D911-04_HU33": {
+              "scored_seconds": 174.5,
+              "predicted_seconds_on_reference": 174.5,
+              "prediction_coverage_fraction": 1.0,
+              "exact_seconds": 99.36,
+              "weighted_correct_seconds": 119.446,
+              "score": 0.6845042979942694,
+              "exact_accuracy": 0.5693982808022923,
+              "measured": true,
+              "categories_seconds": {
+                "exact": 99.36,
+                "fifth": 31.980000000000018,
+                "relative": 8.320000000000007,
+                "parallel": 8.0,
+                "other": 26.83999999999999
+              }
+            }
+          }
+        },
+        "ann2": {
+          "pooled": {
+            "measured_tracks": 4,
+            "scored_seconds": 652.02,
+            "weighted_correct_seconds": 490.948,
+            "weighted_score": 0.7529646329867182,
+            "predicted_seconds_on_reference": 652.02,
+            "prediction_coverage_fraction": 1.0,
+            "exact_seconds": 428.32,
+            "exact_accuracy": 0.656912364651391,
+            "measured": true
+          },
+          "track_macro_weighted_score": 0.6718653553967043,
+          "track_macro_exact_accuracy": 0.5493569926451982,
+          "track_macro_prediction_coverage": 1.0,
+          "per_track": {
+            "Schubert_D911-01_HU33": {
+              "scored_seconds": 304.42,
+              "predicted_seconds_on_reference": 304.42,
+              "prediction_coverage_fraction": 1.0,
+              "exact_seconds": 275.18,
+              "weighted_correct_seconds": 282.668,
+              "score": 0.9285460876420735,
+              "exact_accuracy": 0.9039484922147033,
+              "measured": true,
+              "categories_seconds": {
+                "exact": 275.18,
+                "fifth": 7.320000000000007,
+                "relative": 4.719999999999992,
+                "parallel": 12.059999999999974,
+                "other": 5.140000000000001
+              }
+            },
+            "Schubert_D911-02_HU33": {
+              "scored_seconds": 60.56000000000002,
+              "predicted_seconds_on_reference": 60.56000000000002,
+              "prediction_coverage_fraction": 1.0,
+              "exact_seconds": 33.44000000000001,
+              "weighted_correct_seconds": 39.82200000000001,
+              "score": 0.6575627476882431,
+              "exact_accuracy": 0.5521796565389696,
+              "measured": true,
+              "categories_seconds": {
+                "exact": 33.44000000000001,
+                "fifth": 10.940000000000001,
+                "relative": 3.0400000000000063,
+                "parallel": 0.0,
+                "other": 13.14
+              }
+            },
+            "Schubert_D911-03_HU33": {
+              "scored_seconds": 112.53999999999999,
+              "predicted_seconds_on_reference": 112.53999999999999,
+              "prediction_coverage_fraction": 1.0,
+              "exact_seconds": 17.539999999999996,
+              "weighted_correct_seconds": 43.098,
+              "score": 0.3829571707837214,
+              "exact_accuracy": 0.15585569575262126,
+              "measured": true,
+              "categories_seconds": {
+                "exact": 17.539999999999996,
+                "fifth": 49.0,
+                "relative": 2.9800000000000004,
+                "parallel": 0.8199999999999932,
+                "other": 42.199999999999996
+              }
+            },
+            "Schubert_D911-04_HU33": {
+              "scored_seconds": 174.5,
+              "predicted_seconds_on_reference": 174.5,
+              "prediction_coverage_fraction": 1.0,
+              "exact_seconds": 102.16,
+              "weighted_correct_seconds": 125.35999999999999,
+              "score": 0.7183954154727793,
+              "exact_accuracy": 0.5854441260744986,
+              "measured": true,
+              "categories_seconds": {
+                "exact": 102.16,
+                "fifth": 34.98000000000002,
+                "relative": 13.700000000000003,
+                "parallel": 8.0,
+                "other": 15.659999999999997
+              }
+            }
+          }
+        },
+        "ann3": {
+          "pooled": {
+            "measured_tracks": 4,
+            "scored_seconds": 719.1,
+            "weighted_correct_seconds": 531.5640000000001,
+            "weighted_score": 0.7392073425114728,
+            "predicted_seconds_on_reference": 719.1,
+            "prediction_coverage_fraction": 1.0,
+            "exact_seconds": 471.5200000000001,
+            "exact_accuracy": 0.6557085245445697,
+            "measured": true
+          },
+          "track_macro_weighted_score": 0.676480701615929,
+          "track_macro_exact_accuracy": 0.5721114934323034,
+          "track_macro_prediction_coverage": 1.0,
+          "per_track": {
+            "Schubert_D911-01_HU33": {
+              "scored_seconds": 304.42,
+              "predicted_seconds_on_reference": 304.42,
+              "prediction_coverage_fraction": 1.0,
+              "exact_seconds": 274.62000000000006,
+              "weighted_correct_seconds": 282.144,
+              "score": 0.9268247815518034,
+              "exact_accuracy": 0.9021089284541096,
+              "measured": true,
+              "categories_seconds": {
+                "exact": 274.62000000000006,
+                "fifth": 7.320000000000007,
+                "relative": 5.280000000000001,
+                "parallel": 11.399999999999977,
+                "other": 5.799999999999997
+              }
+            },
+            "Schubert_D911-02_HU33": {
+              "scored_seconds": 95.6,
+              "predicted_seconds_on_reference": 95.6,
+              "prediction_coverage_fraction": 1.0,
+              "exact_seconds": 46.52,
+              "weighted_correct_seconds": 59.571999999999996,
+              "score": 0.6231380753138075,
+              "exact_accuracy": 0.48661087866108793,
+              "measured": true,
+              "categories_seconds": {
+                "exact": 46.52,
+                "fifth": 14.959999999999997,
+                "relative": 14.120000000000005,
+                "parallel": 6.68,
+                "other": 13.32
+              }
+            },
+            "Schubert_D911-03_HU33": {
+              "scored_seconds": 144.57999999999998,
+              "predicted_seconds_on_reference": 144.57999999999998,
+              "prediction_coverage_fraction": 1.0,
+              "exact_seconds": 32.0,
+              "weighted_correct_seconds": 57.34400000000001,
+              "score": 0.39662470604509625,
+              "exact_accuracy": 0.2213307511412367,
+              "measured": true,
+              "categories_seconds": {
+                "exact": 32.0,
+                "fifth": 50.36000000000001,
+                "relative": 0.0,
+                "parallel": 0.8199999999999932,
+                "other": 61.39999999999999
+              }
+            },
+            "Schubert_D911-04_HU33": {
+              "scored_seconds": 174.5,
+              "predicted_seconds_on_reference": 174.5,
+              "prediction_coverage_fraction": 1.0,
+              "exact_seconds": 118.38000000000001,
+              "weighted_correct_seconds": 132.50400000000002,
+              "score": 0.7593352435530087,
+              "exact_accuracy": 0.6783954154727794,
+              "measured": true,
+              "categories_seconds": {
+                "exact": 118.38000000000001,
+                "fifth": 23.580000000000005,
+                "relative": 5.4999999999999964,
+                "parallel": 3.4199999999999875,
+                "other": 23.62000000000001
+              }
+            }
+          }
+        }
+      },
+      "unanimous_reference": {
+        "pooled": {
+          "measured_tracks": 4,
+          "scored_seconds": 579.4399999999999,
+          "weighted_correct_seconds": 460.58,
+          "weighted_score": 0.7948709098439873,
+          "predicted_seconds_on_reference": 579.4399999999999,
+          "prediction_coverage_fraction": 1.0,
+          "exact_seconds": 418.72,
+          "exact_accuracy": 0.7226287449951678,
+          "measured": true
+        },
+        "track_macro_weighted_score": 0.7034876093942761,
+        "track_macro_exact_accuracy": 0.6008939563077444,
+        "track_macro_prediction_coverage": 1.0,
+        "per_track": {
+          "Schubert_D911-01_HU33": {
+            "scored_seconds": 302.08,
+            "predicted_seconds_on_reference": 302.08,
+            "prediction_coverage_fraction": 1.0,
+            "exact_seconds": 274.06,
+            "weighted_correct_seconds": 281.248,
+            "score": 0.9310381355932204,
+            "exact_accuracy": 0.9072431144067797,
+            "measured": true,
+            "categories_seconds": {
+              "exact": 274.06,
+              "fifth": 7.320000000000007,
+              "relative": 4.1599999999999895,
+              "parallel": 11.399999999999977,
+              "other": 5.140000000000001
+            }
+          },
+          "Schubert_D911-02_HU33": {
+            "scored_seconds": 53.66000000000001,
+            "predicted_seconds_on_reference": 53.66000000000001,
+            "prediction_coverage_fraction": 1.0,
+            "exact_seconds": 33.30000000000001,
+            "weighted_correct_seconds": 38.872000000000014,
+            "score": 0.7244129705553486,
+            "exact_accuracy": 0.6205739843458815,
+            "measured": true,
+            "categories_seconds": {
+              "exact": 33.30000000000001,
+              "fifth": 9.32,
+              "relative": 3.0400000000000063,
+              "parallel": 0.0,
+              "other": 8.0
+            }
+          },
+          "Schubert_D911-03_HU33": {
+            "scored_seconds": 81.87999999999997,
+            "predicted_seconds_on_reference": 81.87999999999997,
+            "prediction_coverage_fraction": 1.0,
+            "exact_seconds": 17.539999999999996,
+            "weighted_correct_seconds": 32.56399999999999,
+            "score": 0.397703957010259,
+            "exact_accuracy": 0.2142159257449927,
+            "measured": true,
+            "categories_seconds": {
+              "exact": 17.539999999999996,
+              "fifth": 29.71999999999999,
+              "relative": 0.0,
+              "parallel": 0.8199999999999932,
+              "other": 33.8
+            }
+          },
+          "Schubert_D911-04_HU33": {
+            "scored_seconds": 141.82,
+            "predicted_seconds_on_reference": 141.82,
+            "prediction_coverage_fraction": 1.0,
+            "exact_seconds": 93.82,
+            "weighted_correct_seconds": 107.896,
+            "score": 0.7607953744182767,
+            "exact_accuracy": 0.6615428007333239,
+            "measured": true,
+            "categories_seconds": {
+              "exact": 93.82,
+              "fifth": 23.580000000000005,
+              "relative": 5.34,
+              "parallel": 3.4199999999999875,
+              "other": 15.659999999999997
+            }
+          }
+        }
+      },
+      "annotator_disagreement": {
+        "per_track": {
+          "Schubert_D911-01_HU33": {
+            "common_annotated_seconds": 304.42,
+            "disagreement_seconds": 2.3400000000000105,
+            "disagreement_fraction": 0.007686748571053184
+          },
+          "Schubert_D911-02_HU33": {
+            "common_annotated_seconds": 60.56000000000002,
+            "disagreement_seconds": 6.900000000000002,
+            "disagreement_fraction": 0.11393659180977543
+          },
+          "Schubert_D911-03_HU33": {
+            "common_annotated_seconds": 112.53999999999998,
+            "disagreement_seconds": 30.660000000000007,
+            "disagreement_fraction": 0.2724364670339436
+          },
+          "Schubert_D911-04_HU33": {
+            "common_annotated_seconds": 174.5,
+            "disagreement_seconds": 32.68000000000002,
+            "disagreement_fraction": 0.18727793696275083
+          }
+        },
+        "pooled_common_annotated_seconds": 652.02,
+        "pooled_disagreement_seconds": 72.58000000000004,
+        "pooled_disagreement_fraction": 0.11131560381583394
+      }
+    },
+    "hmm_8s": {
+      "per_annotator": {
+        "ann1": {
+          "pooled": {
+            "measured_tracks": 4,
+            "scored_seconds": 719.1,
+            "weighted_correct_seconds": 530.3580000000001,
+            "weighted_score": 0.7375302461410097,
+            "predicted_seconds_on_reference": 719.1,
+            "prediction_coverage_fraction": 1.0,
+            "exact_seconds": 477.74000000000007,
+            "exact_accuracy": 0.6643582255597275,
+            "measured": true
+          },
+          "track_macro_weighted_score": 0.6876393236996582,
+          "track_macro_exact_accuracy": 0.6083035452454474,
+          "track_macro_prediction_coverage": 1.0,
+          "per_track": {
+            "Schubert_D911-01_HU33": {
+              "scored_seconds": 304.42,
+              "predicted_seconds_on_reference": 304.42,
+              "prediction_coverage_fraction": 1.0,
+              "exact_seconds": 267.44000000000005,
+              "weighted_correct_seconds": 281.0340000000001,
+              "score": 0.9231785033834836,
+              "exact_accuracy": 0.8785230930950662,
+              "measured": true,
+              "categories_seconds": {
+                "exact": 267.44000000000005,
+                "fifth": 22.58,
+                "relative": 4.719999999999992,
+                "parallel": 4.439999999999969,
+                "other": 5.239999999999995
+              }
+            },
+            "Schubert_D911-02_HU33": {
+              "scored_seconds": 95.6,
+              "predicted_seconds_on_reference": 95.6,
+              "prediction_coverage_fraction": 1.0,
+              "exact_seconds": 67.68,
+              "weighted_correct_seconds": 71.56,
+              "score": 0.7485355648535565,
+              "exact_accuracy": 0.7079497907949792,
+              "measured": true,
+              "categories_seconds": {
+                "exact": 67.68,
+                "fifth": 5.079999999999998,
+                "relative": 0.0,
+                "parallel": 6.699999999999996,
+                "other": 16.139999999999997
+              }
+            },
+            "Schubert_D911-03_HU33": {
+              "scored_seconds": 144.57999999999998,
+              "predicted_seconds_on_reference": 144.57999999999998,
+              "prediction_coverage_fraction": 1.0,
+              "exact_seconds": 24.819999999999993,
+              "weighted_correct_seconds": 50.709999999999994,
+              "score": 0.3507400746991285,
+              "exact_accuracy": 0.17166966385392168,
+              "measured": true,
+              "categories_seconds": {
+                "exact": 24.819999999999993,
+                "fifth": 51.779999999999994,
+                "relative": 0.0,
+                "parallel": 0.0,
+                "other": 67.98
+              }
+            },
+            "Schubert_D911-04_HU33": {
+              "scored_seconds": 174.5,
+              "predicted_seconds_on_reference": 174.5,
+              "prediction_coverage_fraction": 1.0,
+              "exact_seconds": 117.8,
+              "weighted_correct_seconds": 127.05399999999999,
+              "score": 0.7281031518624641,
+              "exact_accuracy": 0.6750716332378224,
+              "measured": true,
+              "categories_seconds": {
+                "exact": 117.8,
+                "fifth": 17.02000000000001,
+                "relative": 2.480000000000004,
+                "parallel": 0.0,
+                "other": 37.2
+              }
+            }
+          }
+        },
+        "ann2": {
+          "pooled": {
+            "measured_tracks": 4,
+            "scored_seconds": 652.02,
+            "weighted_correct_seconds": 507.23400000000015,
+            "weighted_score": 0.7779423944050798,
+            "predicted_seconds_on_reference": 652.02,
+            "prediction_coverage_fraction": 1.0,
+            "exact_seconds": 462.48,
+            "exact_accuracy": 0.709303395601362,
+            "measured": true
+          },
+          "track_macro_weighted_score": 0.7270633012517225,
+          "track_macro_exact_accuracy": 0.6531973841177834,
+          "track_macro_prediction_coverage": 1.0,
+          "per_track": {
+            "Schubert_D911-01_HU33": {
+              "scored_seconds": 304.42,
+              "predicted_seconds_on_reference": 304.42,
+              "prediction_coverage_fraction": 1.0,
+              "exact_seconds": 267.44000000000005,
+              "weighted_correct_seconds": 281.0340000000001,
+              "score": 0.9231785033834836,
+              "exact_accuracy": 0.8785230930950662,
+              "measured": true,
+              "categories_seconds": {
+                "exact": 267.44000000000005,
+                "fifth": 22.58,
+                "relative": 4.719999999999992,
+                "parallel": 4.439999999999969,
+                "other": 5.239999999999995
+              }
+            },
+            "Schubert_D911-02_HU33": {
+              "scored_seconds": 60.56000000000002,
+              "predicted_seconds_on_reference": 60.56000000000002,
+              "prediction_coverage_fraction": 1.0,
+              "exact_seconds": 50.94000000000001,
+              "weighted_correct_seconds": 52.37000000000002,
+              "score": 0.864762219286658,
+              "exact_accuracy": 0.8411492734478203,
+              "measured": true,
+              "categories_seconds": {
+                "exact": 50.94000000000001,
+                "fifth": 2.8599999999999994,
+                "relative": 0.0,
+                "parallel": 0.0,
+                "other": 6.760000000000002
+              }
+            },
+            "Schubert_D911-03_HU33": {
+              "scored_seconds": 112.53999999999999,
+              "predicted_seconds_on_reference": 112.53999999999999,
+              "prediction_coverage_fraction": 1.0,
+              "exact_seconds": 21.33999999999999,
+              "weighted_correct_seconds": 39.34999999999999,
+              "score": 0.34965345654878255,
+              "exact_accuracy": 0.18962146792251636,
+              "measured": true,
+              "categories_seconds": {
+                "exact": 21.33999999999999,
+                "fifth": 36.019999999999996,
+                "relative": 0.0,
+                "parallel": 0.0,
+                "other": 55.18
+              }
+            },
+            "Schubert_D911-04_HU33": {
+              "scored_seconds": 174.5,
+              "predicted_seconds_on_reference": 174.5,
+              "prediction_coverage_fraction": 1.0,
+              "exact_seconds": 122.75999999999999,
+              "weighted_correct_seconds": 134.48000000000002,
+              "score": 0.7706590257879657,
+              "exact_accuracy": 0.7034957020057306,
+              "measured": true,
+              "categories_seconds": {
+                "exact": 122.75999999999999,
+                "fifth": 20.02000000000001,
+                "relative": 5.700000000000003,
+                "parallel": 0.0,
+                "other": 26.02000000000001
+              }
+            }
+          }
+        },
+        "ann3": {
+          "pooled": {
+            "measured_tracks": 4,
+            "scored_seconds": 719.1,
+            "weighted_correct_seconds": 544.9340000000001,
+            "weighted_score": 0.7578000278125435,
+            "predicted_seconds_on_reference": 719.1,
+            "prediction_coverage_fraction": 1.0,
+            "exact_seconds": 505.9200000000001,
+            "exact_accuracy": 0.7035460992907803,
+            "measured": true
+          },
+          "track_macro_weighted_score": 0.7180997419588883,
+          "track_macro_exact_accuracy": 0.6600162699478538,
+          "track_macro_prediction_coverage": 1.0,
+          "per_track": {
+            "Schubert_D911-01_HU33": {
+              "scored_seconds": 304.42,
+              "predicted_seconds_on_reference": 304.42,
+              "prediction_coverage_fraction": 1.0,
+              "exact_seconds": 266.22,
+              "weighted_correct_seconds": 280.312,
+              "score": 0.9208067801064319,
+              "exact_accuracy": 0.8745154720452007,
+              "measured": true,
+              "categories_seconds": {
+                "exact": 266.22,
+                "fifth": 23.239999999999995,
+                "relative": 5.280000000000001,
+                "parallel": 4.439999999999969,
+                "other": 5.239999999999995
+              }
+            },
+            "Schubert_D911-02_HU33": {
+              "scored_seconds": 95.6,
+              "predicted_seconds_on_reference": 95.6,
+              "prediction_coverage_fraction": 1.0,
+              "exact_seconds": 76.64000000000001,
+              "weighted_correct_seconds": 81.45600000000002,
+              "score": 0.8520502092050212,
+              "exact_accuracy": 0.8016736401673642,
+              "measured": true,
+              "categories_seconds": {
+                "exact": 76.64000000000001,
+                "fifth": 6.959999999999997,
+                "relative": 0.0,
+                "parallel": 6.68,
+                "other": 5.32
+              }
+            },
+            "Schubert_D911-03_HU33": {
+              "scored_seconds": 144.57999999999998,
+              "predicted_seconds_on_reference": 144.57999999999998,
+              "prediction_coverage_fraction": 1.0,
+              "exact_seconds": 24.819999999999993,
+              "weighted_correct_seconds": 42.06,
+              "score": 0.29091160603126304,
+              "exact_accuracy": 0.17166966385392168,
+              "measured": true,
+              "categories_seconds": {
+                "exact": 24.819999999999993,
+                "fifth": 34.48000000000001,
+                "relative": 0.0,
+                "parallel": 0.0,
+                "other": 85.27999999999999
+              }
+            },
+            "Schubert_D911-04_HU33": {
+              "scored_seconds": 174.5,
+              "predicted_seconds_on_reference": 174.5,
+              "prediction_coverage_fraction": 1.0,
+              "exact_seconds": 138.24,
+              "weighted_correct_seconds": 141.10600000000002,
+              "score": 0.8086303724928368,
+              "exact_accuracy": 0.7922063037249284,
+              "measured": true,
+              "categories_seconds": {
+                "exact": 138.24,
+                "fifth": 4.039999999999985,
+                "relative": 2.8199999999999967,
+                "parallel": 0.0,
+                "other": 29.400000000000013
+              }
+            }
+          }
+        }
+      },
+      "unanimous_reference": {
+        "pooled": {
+          "measured_tracks": 4,
+          "scored_seconds": 579.4399999999999,
+          "weighted_correct_seconds": 475.926,
+          "weighted_score": 0.8213551014772885,
+          "predicted_seconds_on_reference": 579.4399999999999,
+          "prediction_coverage_fraction": 1.0,
+          "exact_seconds": 449.56,
+          "exact_accuracy": 0.7758525472870358,
+          "measured": true
+        },
+        "track_macro_weighted_score": 0.7690107570808477,
+        "track_macro_exact_accuracy": 0.7187009622244448,
+        "track_macro_prediction_coverage": 1.0,
+        "per_track": {
+          "Schubert_D911-01_HU33": {
+            "scored_seconds": 302.08,
+            "predicted_seconds_on_reference": 302.08,
+            "prediction_coverage_fraction": 1.0,
+            "exact_seconds": 265.66,
+            "weighted_correct_seconds": 279.086,
+            "score": 0.923881091101695,
+            "exact_accuracy": 0.8794359110169493,
+            "measured": true,
+            "categories_seconds": {
+              "exact": 265.66,
+              "fifth": 22.58,
+              "relative": 4.1599999999999895,
+              "parallel": 4.439999999999969,
+              "other": 5.239999999999995
+            }
+          },
+          "Schubert_D911-02_HU33": {
+            "scored_seconds": 53.66000000000001,
+            "predicted_seconds_on_reference": 53.66000000000001,
+            "prediction_coverage_fraction": 1.0,
+            "exact_seconds": 50.80000000000001,
+            "weighted_correct_seconds": 52.23000000000002,
+            "score": 0.9733507267983602,
+            "exact_accuracy": 0.9467014535967201,
+            "measured": true,
+            "categories_seconds": {
+              "exact": 50.80000000000001,
+              "fifth": 2.8599999999999994,
+              "relative": 0.0,
+              "parallel": 0.0,
+              "other": 0.0
+            }
+          },
+          "Schubert_D911-03_HU33": {
+            "scored_seconds": 81.87999999999997,
+            "predicted_seconds_on_reference": 81.87999999999997,
+            "prediction_coverage_fraction": 1.0,
+            "exact_seconds": 21.33999999999999,
+            "weighted_correct_seconds": 30.829999999999984,
+            "score": 0.37652662432828526,
+            "exact_accuracy": 0.2606253053248656,
+            "measured": true,
+            "categories_seconds": {
+              "exact": 21.33999999999999,
+              "fifth": 18.97999999999999,
+              "relative": 0.0,
+              "parallel": 0.0,
+              "other": 41.559999999999995
+            }
+          },
+          "Schubert_D911-04_HU33": {
+            "scored_seconds": 141.82,
+            "predicted_seconds_on_reference": 141.82,
+            "prediction_coverage_fraction": 1.0,
+            "exact_seconds": 111.75999999999999,
+            "weighted_correct_seconds": 113.77999999999999,
+            "score": 0.80228458609505,
+            "exact_accuracy": 0.7880411789592441,
+            "measured": true,
+            "categories_seconds": {
+              "exact": 111.75999999999999,
+              "fifth": 4.039999999999985,
+              "relative": 0.0,
+              "parallel": 0.0,
+              "other": 26.02000000000001
+            }
+          }
+        }
+      },
+      "annotator_disagreement": {
+        "per_track": {
+          "Schubert_D911-01_HU33": {
+            "common_annotated_seconds": 304.42,
+            "disagreement_seconds": 2.3400000000000105,
+            "disagreement_fraction": 0.007686748571053184
+          },
+          "Schubert_D911-02_HU33": {
+            "common_annotated_seconds": 60.56000000000002,
+            "disagreement_seconds": 6.900000000000002,
+            "disagreement_fraction": 0.11393659180977543
+          },
+          "Schubert_D911-03_HU33": {
+            "common_annotated_seconds": 112.53999999999998,
+            "disagreement_seconds": 30.660000000000007,
+            "disagreement_fraction": 0.2724364670339436
+          },
+          "Schubert_D911-04_HU33": {
+            "common_annotated_seconds": 174.5,
+            "disagreement_seconds": 32.68000000000002,
+            "disagreement_fraction": 0.18727793696275083
+          }
+        },
+        "pooled_common_annotated_seconds": 652.02,
+        "pooled_disagreement_seconds": 72.58000000000004,
+        "pooled_disagreement_fraction": 0.11131560381583394
+      }
+    }
+  },
+  "hmm_vs_independent": {
+    "counts": {
+      "improved": 8,
+      "same": 0,
+      "regressed": 4
+    },
+    "comparisons": [
+      {
+        "analyst": "ann1",
+        "id": "Schubert_D911-01_HU33",
+        "independent_exact": 0.9039484922147033,
+        "hmm_exact": 0.8785230930950662,
+        "delta": -0.02542539911963715
+      },
+      {
+        "analyst": "ann1",
+        "id": "Schubert_D911-02_HU33",
+        "independent_exact": 0.441213389121339,
+        "hmm_exact": 0.7079497907949792,
+        "delta": 0.2667364016736402
+      },
+      {
+        "analyst": "ann1",
+        "id": "Schubert_D911-03_HU33",
+        "independent_exact": 0.16599806335592754,
+        "hmm_exact": 0.17166966385392168,
+        "delta": 0.005671600497994145
+      },
+      {
+        "analyst": "ann1",
+        "id": "Schubert_D911-04_HU33",
+        "independent_exact": 0.5693982808022923,
+        "hmm_exact": 0.6750716332378224,
+        "delta": 0.10567335243553011
+      },
+      {
+        "analyst": "ann2",
+        "id": "Schubert_D911-01_HU33",
+        "independent_exact": 0.9039484922147033,
+        "hmm_exact": 0.8785230930950662,
+        "delta": -0.02542539911963715
+      },
+      {
+        "analyst": "ann2",
+        "id": "Schubert_D911-02_HU33",
+        "independent_exact": 0.5521796565389696,
+        "hmm_exact": 0.8411492734478203,
+        "delta": 0.2889696169088507
+      },
+      {
+        "analyst": "ann2",
+        "id": "Schubert_D911-03_HU33",
+        "independent_exact": 0.15585569575262126,
+        "hmm_exact": 0.18962146792251636,
+        "delta": 0.0337657721698951
+      },
+      {
+        "analyst": "ann2",
+        "id": "Schubert_D911-04_HU33",
+        "independent_exact": 0.5854441260744986,
+        "hmm_exact": 0.7034957020057306,
+        "delta": 0.11805157593123206
+      },
+      {
+        "analyst": "ann3",
+        "id": "Schubert_D911-01_HU33",
+        "independent_exact": 0.9021089284541096,
+        "hmm_exact": 0.8745154720452007,
+        "delta": -0.027593456408908867
+      },
+      {
+        "analyst": "ann3",
+        "id": "Schubert_D911-02_HU33",
+        "independent_exact": 0.48661087866108793,
+        "hmm_exact": 0.8016736401673642,
+        "delta": 0.31506276150627627
+      },
+      {
+        "analyst": "ann3",
+        "id": "Schubert_D911-03_HU33",
+        "independent_exact": 0.2213307511412367,
+        "hmm_exact": 0.17166966385392168,
+        "delta": -0.049661087287315026
+      },
+      {
+        "analyst": "ann3",
+        "id": "Schubert_D911-04_HU33",
+        "independent_exact": 0.6783954154727794,
+        "hmm_exact": 0.7922063037249284,
+        "delta": 0.11381088825214902
+      }
+    ]
+  },
+  "decision": "Retain evaluation-only prototype. Pooled scores improve but4/12 recording-analyst comparisons regress; one performer/composer does not justify changing defaults."
+}

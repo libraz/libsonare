@@ -1,0 +1,314 @@
+{
+  "measurement_date": "2026-11-08",
+  "decision": "rejected during offline design; no production candidate implemented",
+  "experiment": {
+    "status": "rejected_before_native_implementation",
+    "measurement_level": "Offline squared-sample-prefix RMS cue analysis at known synthetic F0 and fixed parent framing; counts are selected interior cuts, not native note predictions or independently maximized note-match TP.",
+    "native_candidate_predictions": false,
+    "recorded_candidate_predictions": false,
+    "production_changes": false,
+    "recurrence_rule": {
+      "coarse_window_samples": "N=max(2,round(2*sample_rate/f0))",
+      "grid_samples": "g=max(1,round(0.001*sample_rate))",
+      "period_band_samples": "N<P<2*N",
+      "separation_condition": "delta+g>N and delta-g<2*N",
+      "fine_witness": "Coarse local minimum whose one-period RMS is below both existing0.7 local crests and whose low interval is wider than15ms; witness low intervals must not overlap.",
+      "one_sided": "Require a distinct witness on either side.",
+      "interior_only": "Require a distinct witness on each side.",
+      "legacy_selection": "Complete existing greedy cut selection first; only remove selected cuts."
+    },
+    "timing_provenance": {
+      "final_separation_uncertainty_grid_steps": 1,
+      "interim_separation_uncertainty_grid_steps": 2,
+      "correction": "The interim value bracketed each minimum by adjacent grid centers. The requested one-grid-step separation convention was restored and all cited probes were rerun. Aggregate totals below are from the corrected runs.",
+      "limitation": "Grid tolerance is an estimator convention; it is not a proved bound on carrier-induced displacement of the continuous RMS minimum."
+    },
+    "held_am": {
+      "signals": 512,
+      "rates_hz": [
+        16000,
+        22050,
+        44100,
+        48000
+      ],
+      "fundamental_hz": 110,
+      "modulation_hz": [
+        4,
+        8,
+        12,
+        16,
+        24,
+        32,
+        40,
+        48
+      ],
+      "carrier_and_modulation_phases": "Independent0,pi/2,pi,3pi/2",
+      "am_depth": 0.95,
+      "truth_notes_per_signal": 1,
+      "coarse_eligible_events": 2144,
+      "legacy_selected_cuts": 1872,
+      "one_sided_with_cut_eligible_witnesses_remaining_cuts": 662,
+      "one_sided_with_trough_witnesses_remaining_cuts": 0,
+      "interior_only_remaining_cuts": 89,
+      "maximum_remaining_cuts_per_signal": 3,
+      "limitation": "Interior-only leaves ambiguous episode-edge cuts; it does not recover one note for every signal."
+    },
+    "isolated_rearticulations": {
+      "signals": 432,
+      "truth_notes_per_signal": 2,
+      "baseline_detected_true_boundaries": 120,
+      "flat_width_veto_retained": 99,
+      "one_sided_recurrence_retained": 120
+    },
+    "prior_true_repeats": {
+      "signals": 384,
+      "truth_notes_per_signal": 4,
+      "baseline_selected_cuts": 1152,
+      "interior_only_retained": 1152
+    },
+    "rapid_true_repeats": {
+      "signals": 44,
+      "truth_notes_per_signal": 8,
+      "baseline_selected_cuts": 25,
+      "interior_only_retained": 25,
+      "limitation": "The baseline detects only a small subset of the seven true interior boundaries per signal; preservation is not a complete-transcription claim."
+    },
+    "am_stops_then_true_rearticulation": {
+      "signals": 192,
+      "truth_notes_per_signal": 2,
+      "baseline_detected_true_boundaries": 31,
+      "one_sided_retained": 20,
+      "interior_only_retained": 31
+    },
+    "am_continues_across_true_rearticulation": {
+      "signals": 96,
+      "truth_notes_per_signal": 2,
+      "baseline_detected_true_boundaries": 24,
+      "interior_only_retained": 0,
+      "rows_losing_a_true_boundary": 24,
+      "attribution": "A cue within15ms of the constructed boundary is associated with it for this diagnostic; this is not the authoritative native scoring rule."
+    },
+    "constructive_counterexample": {
+      "sample_rate_hz": 16000,
+      "f0_hz": 110,
+      "gain": 0.18,
+      "harmonics": "sum(sin(h*phase)/h,h=1..5)",
+      "body_seconds": 1.6,
+      "lead_and_tail_seconds": 0.2,
+      "articulation_body_time_seconds": 0.8,
+      "articulation_absolute_time_seconds": 1.0,
+      "attack_seconds": 0.008,
+      "release_seconds": 0.008,
+      "phase": "2*pi*110*(t-0.8)+pi/2, with t measured from the body start",
+      "am": "A(t)=1-0.95/2*(1+cos(2*pi*32*(t-0.8)))",
+      "outer_envelope": "E(t)=min(1,t/0.004,(1.6-t)/0.008), for0<=t<1.6",
+      "articulation_envelope": "R(t)=min(1,abs(t-0.8)/0.008)",
+      "audio": "x(t)=0.18*E(t)*A(t)*R(t)*sum(sin(h*phase)/h,h=1..5); zero outside the body; stored as float32",
+      "distinguishing_feature": "The added R(t) creates a genuine zero-envelope release and reattack while AM continues; the unarticulated AM control is not the same waveform.",
+      "coarse_center_sample": 16007,
+      "rounded_cut_frame": 86,
+      "coarse_low_width_ms": 12.0,
+      "fine_low_width_ms": 20.0,
+      "coarse_minimum_to_crest_ratio": 0.37644958643806575,
+      "fine_minimum_to_crest_ratio": 0.06428517477495914,
+      "neighbor_center_samples": [
+        15495,
+        16503
+      ],
+      "decision": "Interior recurrence veto incorrectly removes this true boundary."
+    },
+    "conclusion": "Temporal recurrence explains smooth-AM false cuts but is not sufficient evidence that a local minimum is not a genuine rearticulation. No further exclusion rule or production candidate is proposed from this cue family."
+  },
+  "baseline_error_inventory": {
+    "input": "Previously frozen adopted-baseline note exports and reference notes; no new inference.",
+    "matching": "Independent maximum-cardinality matching for onset-only, onset+pitch, and onset+pitch+offset. Tolerances:50ms onset,50c pitch,max(50ms,20%reference duration) offset.",
+    "summary": {
+      "vocadito40": {
+        "vocadito-a1": {
+          "tracks": 40,
+          "truth": 2237,
+          "predicted": 2445,
+          "modes": {
+            "onset": {
+              "tp": 1577,
+              "fp": 868,
+              "fn": 660,
+              "micro_f": 0.6736437419906023,
+              "macro_track_f": 0.6878609225975715
+            },
+            "note": {
+              "tp": 1325,
+              "fp": 1120,
+              "fn": 912,
+              "micro_f": 0.5659974369927382,
+              "macro_track_f": 0.5806705146823832
+            },
+            "offset": {
+              "tp": 947,
+              "fp": 1498,
+              "fn": 1290,
+              "micro_f": 0.4045279794959419,
+              "macro_track_f": 0.4208998093926963
+            }
+          }
+        },
+        "vocadito-a2": {
+          "tracks": 40,
+          "truth": 1876,
+          "predicted": 2445,
+          "modes": {
+            "onset": {
+              "tp": 1352,
+              "fp": 1093,
+              "fn": 524,
+              "micro_f": 0.6257810691969452,
+              "macro_track_f": 0.6407579871034575
+            },
+            "note": {
+              "tp": 1137,
+              "fp": 1308,
+              "fn": 739,
+              "micro_f": 0.5262670678083777,
+              "macro_track_f": 0.540997675440763
+            },
+            "offset": {
+              "tp": 754,
+              "fp": 1691,
+              "fn": 1122,
+              "micro_f": 0.348993288590604,
+              "macro_track_f": 0.368165530803353
+            }
+          }
+        }
+      },
+      "vocalset18": {
+        "annotated-vocalset-extended1": {
+          "tracks": 18,
+          "truth": 246,
+          "predicted": 473,
+          "modes": {
+            "onset": {
+              "tp": 58,
+              "fp": 415,
+              "fn": 188,
+              "micro_f": 0.16133518776077885,
+              "macro_track_f": 0.15843889534516647
+            },
+            "note": {
+              "tp": 49,
+              "fp": 424,
+              "fn": 197,
+              "micro_f": 0.13630041724617525,
+              "macro_track_f": 0.13851018687479133
+            },
+            "offset": {
+              "tp": 30,
+              "fp": 443,
+              "fn": 216,
+              "micro_f": 0.08344923504867872,
+              "macro_track_f": 0.09158454673160556
+            }
+          }
+        },
+        "annotated-vocalset-extended4": {
+          "tracks": 18,
+          "truth": 246,
+          "predicted": 473,
+          "modes": {
+            "onset": {
+              "tp": 178,
+              "fp": 295,
+              "fn": 68,
+              "micro_f": 0.4951321279554937,
+              "macro_track_f": 0.5229797356276397
+            },
+            "note": {
+              "tp": 160,
+              "fp": 313,
+              "fn": 86,
+              "micro_f": 0.44506258692628653,
+              "macro_track_f": 0.4808515955828329
+            },
+            "offset": {
+              "tp": 143,
+              "fp": 330,
+              "fn": 103,
+              "micro_f": 0.39777468706536856,
+              "macro_track_f": 0.44110208682554863
+            }
+          }
+        }
+      },
+      "gain28": {
+        "vocadito-a1": {
+          "tracks": 28,
+          "truth": 1574,
+          "predicted": 1736,
+          "modes": {
+            "onset": {
+              "tp": 1123,
+              "fp": 613,
+              "fn": 451,
+              "micro_f": 0.6785498489425982,
+              "macro_track_f": 0.6925363104192148
+            },
+            "note": {
+              "tp": 945,
+              "fp": 791,
+              "fn": 629,
+              "micro_f": 0.5709969788519638,
+              "macro_track_f": 0.5854253550037286
+            },
+            "offset": {
+              "tp": 689,
+              "fp": 1047,
+              "fn": 885,
+              "micro_f": 0.4163141993957704,
+              "macro_track_f": 0.43479089182129255
+            }
+          }
+        },
+        "vocadito-a2": {
+          "tracks": 28,
+          "truth": 1308,
+          "predicted": 1736,
+          "modes": {
+            "onset": {
+              "tp": 953,
+              "fp": 783,
+              "fn": 355,
+              "micro_f": 0.626149802890933,
+              "macro_track_f": 0.6393238382351232
+            },
+            "note": {
+              "tp": 800,
+              "fp": 936,
+              "fn": 508,
+              "micro_f": 0.5256241787122208,
+              "macro_track_f": 0.5372226349205946
+            },
+            "offset": {
+              "tp": 536,
+              "fp": 1200,
+              "fn": 772,
+              "micro_f": 0.35216819973718794,
+              "macro_track_f": 0.37266575858232537
+            }
+          }
+        }
+      }
+    },
+    "interpretation": "Onset-only misses and extra predictions occur across recordings. These note exports do not identify whether the cause is voicing, pitch tracking, segmentation, or boundary timing. Differences of independent matching maxima are not disjoint causal error buckets."
+  },
+  "baseline_source_unchanged": true,
+  "separate_confirmation_recordings_predicted": false,
+  "limitations": [
+    "Cue counts use known synthetic fundamental frequencies and fixed parent framing; they are not native transcription results.",
+    "The constructive two-note references come from explicit release/reattack envelopes. Counts of preserved cues do not claim complete note transcription.",
+    "The failure rejects these RMS recurrence rules; it does not establish an accuracy ceiling for a richer estimator."
+  ],
+  "artifact_sha256": {
+    "offline_summary": "0a291fa942354fd906f1104b6fada9e2c8cd8b972186cc5699807892f13d569c",
+    "baseline_inventory": "bd81e96630c5a56a34942454058f0d6a15eecddae857ba52d7c9fde09ea89abd"
+  }
+}

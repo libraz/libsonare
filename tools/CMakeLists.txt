@@ -156,6 +156,14 @@ target_include_directories(sonare PRIVATE
   ${PROJECT_SOURCE_DIR}/tools/cli
 )
 
+# Offline evaluation helper, built only when requested.
+if(TARGET sonare_mir)
+  add_executable(sonare_eval_key_windows EXCLUDE_FROM_ALL eval/export_key_windows.cpp)
+  target_link_libraries(sonare_eval_key_windows PRIVATE sonare_mir)
+  target_compile_options(sonare_eval_key_windows PRIVATE ${SONARE_WARNING_FLAGS})
+  target_include_directories(sonare_eval_key_windows PRIVATE ${PROJECT_SOURCE_DIR}/src)
+endif()
+
 # Profiling build option
 option(ENABLE_PROFILER "Enable gperftools profiler" OFF)
 if(ENABLE_PROFILER)

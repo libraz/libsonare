@@ -1,0 +1,1564 @@
+{
+  "dataset": "Vocadito v3",
+  "source": "https://zenodo.org/records/5578807",
+  "doi": "10.5281/zenodo.5578807",
+  "license": "CC-BY-4.0",
+  "creators": [
+    "Rachel Bittner",
+    "Katherine Pasalo",
+    "Juan Jos\u00e9 Bosch",
+    "Gabriel Meseguer Brocal",
+    "David Rubinstein"
+  ],
+  "evaluation_date": "2026-11-08",
+  "detector_commit": "aa5609d15722b406ed012f6013836d3935774217",
+  "production_source_sha256": "0378b7b7b425e38b340fa0993e6be87047284a21d6fc9e4b01ed8dae377289ec",
+  "archive_md5": "dea40fd18f14d899643c4ba221b33a46",
+  "archive_sha256": "e0d6b99d3f9c594afe5ae5c4d7bdacebe569e53b809e90b89d1c771c4f9990e3",
+  "split_rule": "Sort unique singer IDs by ascending SHA256 of 'libsonare-vocadito-v3-split-v1:' + singer ID; reserve the first ceil(singer_count / 3) singers; audit all remaining singers.",
+  "audit_track_ids": [
+    "1",
+    "3",
+    "4",
+    "5",
+    "7",
+    "8",
+    "9",
+    "10",
+    "11",
+    "12",
+    "13",
+    "16",
+    "18",
+    "19",
+    "21",
+    "23",
+    "25",
+    "27",
+    "29",
+    "31",
+    "32",
+    "33",
+    "35",
+    "36",
+    "37",
+    "38",
+    "39",
+    "40"
+  ],
+  "reserved_track_ids": [
+    "2",
+    "6",
+    "14",
+    "15",
+    "17",
+    "20",
+    "22",
+    "24",
+    "26",
+    "28",
+    "30",
+    "34"
+  ],
+  "audit_singers": 19,
+  "reserved_singers": 10,
+  "reserved_predictions": 0,
+  "configuration": "unchanged monophonic defaults; native44100Hz; no timing alignment",
+  "criteria": {
+    "onset_tolerance_seconds": 0.05,
+    "pitch_tolerance_cents": 50,
+    "offset_tolerance_seconds": "max(0.05, 0.2 * reference_duration)"
+  },
+  "aggregation": "micro_f pools TP/FP/FN; macro_track_f averages recording F values; annotators remain separate",
+  "summary": {
+    "A1": {
+      "tracks": 28,
+      "truth": 1574,
+      "predicted": 1862,
+      "note_count_ratio": 1.1829733163913596,
+      "onset": {
+        "tp": 1141,
+        "fp": 721,
+        "fn": 433,
+        "micro_f": 0.6641443538998836,
+        "macro_track_f": 0.6777472120159646
+      },
+      "note": {
+        "tp": 961,
+        "fp": 901,
+        "fn": 613,
+        "micro_f": 0.559371362048894,
+        "macro_track_f": 0.5741450795081148
+      },
+      "offset": {
+        "tp": 682,
+        "fp": 1180,
+        "fn": 892,
+        "micro_f": 0.3969732246798603,
+        "macro_track_f": 0.41671158251664175
+      },
+      "onset_only_matched_pitch": {
+        "pairs": 1141,
+        "truth_coverage": 0.7249047013977128,
+        "mean_abs_cents": 39.4333956934595,
+        "median_abs_cents": 8.51701317923631,
+        "p95_abs_cents": 190.46841993937542
+      }
+    },
+    "A2": {
+      "tracks": 28,
+      "truth": 1308,
+      "predicted": 1862,
+      "note_count_ratio": 1.4235474006116209,
+      "onset": {
+        "tp": 965,
+        "fp": 897,
+        "fn": 343,
+        "micro_f": 0.6088328075709779,
+        "macro_track_f": 0.6215263470113659
+      },
+      "note": {
+        "tp": 810,
+        "fp": 1052,
+        "fn": 498,
+        "micro_f": 0.5110410094637224,
+        "macro_track_f": 0.5228725760059534
+      },
+      "offset": {
+        "tp": 522,
+        "fp": 1340,
+        "fn": 786,
+        "micro_f": 0.32933753943217664,
+        "macro_track_f": 0.3487056435481359
+      },
+      "onset_only_matched_pitch": {
+        "pairs": 965,
+        "truth_coverage": 0.7377675840978594,
+        "mean_abs_cents": 38.90870049484118,
+        "median_abs_cents": 7.975401279321173,
+        "p95_abs_cents": 190.329026249295
+      }
+    }
+  },
+  "annotation_agreement": {
+    "A1_to_A2": {
+      "tracks": 28,
+      "singers": 19,
+      "truth": 1574,
+      "estimate": 1308,
+      "onset": {
+        "tp": 1169,
+        "fp": 139,
+        "fn": 405,
+        "micro_f": 0.8112421929215823,
+        "macro_track_f": 0.8234271976920329
+      },
+      "note": {
+        "tp": 1054,
+        "fp": 254,
+        "fn": 520,
+        "micro_f": 0.7314365024288688,
+        "macro_track_f": 0.7425639805002591
+      },
+      "offset": {
+        "tp": 910,
+        "fp": 398,
+        "fn": 664,
+        "micro_f": 0.6315058986814712,
+        "macro_track_f": 0.6541156020849893
+      }
+    },
+    "A2_to_A1": {
+      "tracks": 28,
+      "singers": 19,
+      "truth": 1308,
+      "estimate": 1574,
+      "onset": {
+        "tp": 1169,
+        "fp": 405,
+        "fn": 139,
+        "micro_f": 0.8112421929215823,
+        "macro_track_f": 0.8234271976920329
+      },
+      "note": {
+        "tp": 1054,
+        "fp": 520,
+        "fn": 254,
+        "micro_f": 0.7314365024288688,
+        "macro_track_f": 0.7425639805002591
+      },
+      "offset": {
+        "tp": 912,
+        "fp": 662,
+        "fn": 396,
+        "micro_f": 0.6328938237335184,
+        "macro_track_f": 0.6559438783056573
+      }
+    }
+  },
+  "tracks": [
+    {
+      "track_id": "1",
+      "annotator": "A1",
+      "truth": 59,
+      "predicted": 75,
+      "onset": {
+        "tp": 52,
+        "fp": 23,
+        "fn": 7,
+        "f": 0.7761194029850746
+      },
+      "note": {
+        "tp": 48,
+        "fp": 27,
+        "fn": 11,
+        "f": 0.7164179104477612
+      },
+      "offset": {
+        "tp": 36,
+        "fp": 39,
+        "fn": 23,
+        "f": 0.5373134328358209
+      }
+    },
+    {
+      "track_id": "1",
+      "annotator": "A2",
+      "truth": 64,
+      "predicted": 75,
+      "onset": {
+        "tp": 53,
+        "fp": 22,
+        "fn": 11,
+        "f": 0.762589928057554
+      },
+      "note": {
+        "tp": 49,
+        "fp": 26,
+        "fn": 15,
+        "f": 0.7050359712230215
+      },
+      "offset": {
+        "tp": 34,
+        "fp": 41,
+        "fn": 30,
+        "f": 0.4892086330935252
+      }
+    },
+    {
+      "track_id": "3",
+      "annotator": "A1",
+      "truth": 51,
+      "predicted": 58,
+      "onset": {
+        "tp": 42,
+        "fp": 16,
+        "fn": 9,
+        "f": 0.7706422018348624
+      },
+      "note": {
+        "tp": 39,
+        "fp": 19,
+        "fn": 12,
+        "f": 0.7155963302752294
+      },
+      "offset": {
+        "tp": 34,
+        "fp": 24,
+        "fn": 17,
+        "f": 0.6238532110091743
+      }
+    },
+    {
+      "track_id": "3",
+      "annotator": "A2",
+      "truth": 46,
+      "predicted": 58,
+      "onset": {
+        "tp": 35,
+        "fp": 23,
+        "fn": 11,
+        "f": 0.6730769230769231
+      },
+      "note": {
+        "tp": 33,
+        "fp": 25,
+        "fn": 13,
+        "f": 0.6346153846153846
+      },
+      "offset": {
+        "tp": 28,
+        "fp": 30,
+        "fn": 18,
+        "f": 0.5384615384615384
+      }
+    },
+    {
+      "track_id": "4",
+      "annotator": "A1",
+      "truth": 69,
+      "predicted": 71,
+      "onset": {
+        "tp": 39,
+        "fp": 32,
+        "fn": 30,
+        "f": 0.5571428571428572
+      },
+      "note": {
+        "tp": 27,
+        "fp": 44,
+        "fn": 42,
+        "f": 0.38571428571428573
+      },
+      "offset": {
+        "tp": 17,
+        "fp": 54,
+        "fn": 52,
+        "f": 0.24285714285714285
+      }
+    },
+    {
+      "track_id": "4",
+      "annotator": "A2",
+      "truth": 51,
+      "predicted": 71,
+      "onset": {
+        "tp": 34,
+        "fp": 37,
+        "fn": 17,
+        "f": 0.5573770491803278
+      },
+      "note": {
+        "tp": 26,
+        "fp": 45,
+        "fn": 25,
+        "f": 0.4262295081967213
+      },
+      "offset": {
+        "tp": 14,
+        "fp": 57,
+        "fn": 37,
+        "f": 0.22950819672131148
+      }
+    },
+    {
+      "track_id": "5",
+      "annotator": "A1",
+      "truth": 96,
+      "predicted": 82,
+      "onset": {
+        "tp": 57,
+        "fp": 25,
+        "fn": 39,
+        "f": 0.6404494382022472
+      },
+      "note": {
+        "tp": 44,
+        "fp": 38,
+        "fn": 52,
+        "f": 0.4943820224719101
+      },
+      "offset": {
+        "tp": 28,
+        "fp": 54,
+        "fn": 68,
+        "f": 0.3146067415730337
+      }
+    },
+    {
+      "track_id": "5",
+      "annotator": "A2",
+      "truth": 72,
+      "predicted": 82,
+      "onset": {
+        "tp": 45,
+        "fp": 37,
+        "fn": 27,
+        "f": 0.5844155844155844
+      },
+      "note": {
+        "tp": 35,
+        "fp": 47,
+        "fn": 37,
+        "f": 0.45454545454545453
+      },
+      "offset": {
+        "tp": 17,
+        "fp": 65,
+        "fn": 55,
+        "f": 0.22077922077922077
+      }
+    },
+    {
+      "track_id": "7",
+      "annotator": "A1",
+      "truth": 47,
+      "predicted": 57,
+      "onset": {
+        "tp": 37,
+        "fp": 20,
+        "fn": 10,
+        "f": 0.7115384615384616
+      },
+      "note": {
+        "tp": 28,
+        "fp": 29,
+        "fn": 19,
+        "f": 0.5384615384615384
+      },
+      "offset": {
+        "tp": 25,
+        "fp": 32,
+        "fn": 22,
+        "f": 0.4807692307692308
+      }
+    },
+    {
+      "track_id": "7",
+      "annotator": "A2",
+      "truth": 42,
+      "predicted": 57,
+      "onset": {
+        "tp": 34,
+        "fp": 23,
+        "fn": 8,
+        "f": 0.6868686868686869
+      },
+      "note": {
+        "tp": 29,
+        "fp": 28,
+        "fn": 13,
+        "f": 0.5858585858585859
+      },
+      "offset": {
+        "tp": 19,
+        "fp": 38,
+        "fn": 23,
+        "f": 0.3838383838383838
+      }
+    },
+    {
+      "track_id": "8",
+      "annotator": "A1",
+      "truth": 40,
+      "predicted": 37,
+      "onset": {
+        "tp": 37,
+        "fp": 0,
+        "fn": 3,
+        "f": 0.961038961038961
+      },
+      "note": {
+        "tp": 36,
+        "fp": 1,
+        "fn": 4,
+        "f": 0.935064935064935
+      },
+      "offset": {
+        "tp": 30,
+        "fp": 7,
+        "fn": 10,
+        "f": 0.7792207792207793
+      }
+    },
+    {
+      "track_id": "8",
+      "annotator": "A2",
+      "truth": 37,
+      "predicted": 37,
+      "onset": {
+        "tp": 35,
+        "fp": 2,
+        "fn": 2,
+        "f": 0.9459459459459459
+      },
+      "note": {
+        "tp": 35,
+        "fp": 2,
+        "fn": 2,
+        "f": 0.9459459459459459
+      },
+      "offset": {
+        "tp": 29,
+        "fp": 8,
+        "fn": 8,
+        "f": 0.7837837837837838
+      }
+    },
+    {
+      "track_id": "9",
+      "annotator": "A1",
+      "truth": 62,
+      "predicted": 67,
+      "onset": {
+        "tp": 45,
+        "fp": 22,
+        "fn": 17,
+        "f": 0.6976744186046512
+      },
+      "note": {
+        "tp": 38,
+        "fp": 29,
+        "fn": 24,
+        "f": 0.5891472868217055
+      },
+      "offset": {
+        "tp": 27,
+        "fp": 40,
+        "fn": 35,
+        "f": 0.4186046511627907
+      }
+    },
+    {
+      "track_id": "9",
+      "annotator": "A2",
+      "truth": 59,
+      "predicted": 67,
+      "onset": {
+        "tp": 38,
+        "fp": 29,
+        "fn": 21,
+        "f": 0.6031746031746031
+      },
+      "note": {
+        "tp": 34,
+        "fp": 33,
+        "fn": 25,
+        "f": 0.5396825396825397
+      },
+      "offset": {
+        "tp": 24,
+        "fp": 43,
+        "fn": 35,
+        "f": 0.38095238095238093
+      }
+    },
+    {
+      "track_id": "10",
+      "annotator": "A1",
+      "truth": 35,
+      "predicted": 35,
+      "onset": {
+        "tp": 21,
+        "fp": 14,
+        "fn": 14,
+        "f": 0.6
+      },
+      "note": {
+        "tp": 12,
+        "fp": 23,
+        "fn": 23,
+        "f": 0.34285714285714286
+      },
+      "offset": {
+        "tp": 7,
+        "fp": 28,
+        "fn": 28,
+        "f": 0.2
+      }
+    },
+    {
+      "track_id": "10",
+      "annotator": "A2",
+      "truth": 27,
+      "predicted": 35,
+      "onset": {
+        "tp": 15,
+        "fp": 20,
+        "fn": 12,
+        "f": 0.4838709677419355
+      },
+      "note": {
+        "tp": 10,
+        "fp": 25,
+        "fn": 17,
+        "f": 0.3225806451612903
+      },
+      "offset": {
+        "tp": 6,
+        "fp": 29,
+        "fn": 21,
+        "f": 0.1935483870967742
+      }
+    },
+    {
+      "track_id": "11",
+      "annotator": "A1",
+      "truth": 37,
+      "predicted": 38,
+      "onset": {
+        "tp": 22,
+        "fp": 16,
+        "fn": 15,
+        "f": 0.5866666666666667
+      },
+      "note": {
+        "tp": 16,
+        "fp": 22,
+        "fn": 21,
+        "f": 0.4266666666666667
+      },
+      "offset": {
+        "tp": 14,
+        "fp": 24,
+        "fn": 23,
+        "f": 0.37333333333333335
+      }
+    },
+    {
+      "track_id": "11",
+      "annotator": "A2",
+      "truth": 30,
+      "predicted": 38,
+      "onset": {
+        "tp": 20,
+        "fp": 18,
+        "fn": 10,
+        "f": 0.5882352941176471
+      },
+      "note": {
+        "tp": 15,
+        "fp": 23,
+        "fn": 15,
+        "f": 0.4411764705882353
+      },
+      "offset": {
+        "tp": 12,
+        "fp": 26,
+        "fn": 18,
+        "f": 0.35294117647058826
+      }
+    },
+    {
+      "track_id": "12",
+      "annotator": "A1",
+      "truth": 27,
+      "predicted": 31,
+      "onset": {
+        "tp": 23,
+        "fp": 8,
+        "fn": 4,
+        "f": 0.7931034482758621
+      },
+      "note": {
+        "tp": 21,
+        "fp": 10,
+        "fn": 6,
+        "f": 0.7241379310344828
+      },
+      "offset": {
+        "tp": 15,
+        "fp": 16,
+        "fn": 12,
+        "f": 0.5172413793103449
+      }
+    },
+    {
+      "track_id": "12",
+      "annotator": "A2",
+      "truth": 24,
+      "predicted": 31,
+      "onset": {
+        "tp": 19,
+        "fp": 12,
+        "fn": 5,
+        "f": 0.6909090909090909
+      },
+      "note": {
+        "tp": 17,
+        "fp": 14,
+        "fn": 7,
+        "f": 0.6181818181818182
+      },
+      "offset": {
+        "tp": 11,
+        "fp": 20,
+        "fn": 13,
+        "f": 0.4
+      }
+    },
+    {
+      "track_id": "13",
+      "annotator": "A1",
+      "truth": 74,
+      "predicted": 90,
+      "onset": {
+        "tp": 49,
+        "fp": 41,
+        "fn": 25,
+        "f": 0.5975609756097561
+      },
+      "note": {
+        "tp": 38,
+        "fp": 52,
+        "fn": 36,
+        "f": 0.4634146341463415
+      },
+      "offset": {
+        "tp": 27,
+        "fp": 63,
+        "fn": 47,
+        "f": 0.32926829268292684
+      }
+    },
+    {
+      "track_id": "13",
+      "annotator": "A2",
+      "truth": 52,
+      "predicted": 90,
+      "onset": {
+        "tp": 38,
+        "fp": 52,
+        "fn": 14,
+        "f": 0.5352112676056338
+      },
+      "note": {
+        "tp": 28,
+        "fp": 62,
+        "fn": 24,
+        "f": 0.39436619718309857
+      },
+      "offset": {
+        "tp": 19,
+        "fp": 71,
+        "fn": 33,
+        "f": 0.2676056338028169
+      }
+    },
+    {
+      "track_id": "16",
+      "annotator": "A1",
+      "truth": 47,
+      "predicted": 52,
+      "onset": {
+        "tp": 42,
+        "fp": 10,
+        "fn": 5,
+        "f": 0.8484848484848485
+      },
+      "note": {
+        "tp": 36,
+        "fp": 16,
+        "fn": 11,
+        "f": 0.7272727272727273
+      },
+      "offset": {
+        "tp": 29,
+        "fp": 23,
+        "fn": 18,
+        "f": 0.5858585858585859
+      }
+    },
+    {
+      "track_id": "16",
+      "annotator": "A2",
+      "truth": 36,
+      "predicted": 52,
+      "onset": {
+        "tp": 32,
+        "fp": 20,
+        "fn": 4,
+        "f": 0.7272727272727273
+      },
+      "note": {
+        "tp": 25,
+        "fp": 27,
+        "fn": 11,
+        "f": 0.5681818181818182
+      },
+      "offset": {
+        "tp": 17,
+        "fp": 35,
+        "fn": 19,
+        "f": 0.38636363636363635
+      }
+    },
+    {
+      "track_id": "18",
+      "annotator": "A1",
+      "truth": 45,
+      "predicted": 72,
+      "onset": {
+        "tp": 36,
+        "fp": 36,
+        "fn": 9,
+        "f": 0.6153846153846154
+      },
+      "note": {
+        "tp": 30,
+        "fp": 42,
+        "fn": 15,
+        "f": 0.5128205128205128
+      },
+      "offset": {
+        "tp": 22,
+        "fp": 50,
+        "fn": 23,
+        "f": 0.37606837606837606
+      }
+    },
+    {
+      "track_id": "18",
+      "annotator": "A2",
+      "truth": 34,
+      "predicted": 72,
+      "onset": {
+        "tp": 31,
+        "fp": 41,
+        "fn": 3,
+        "f": 0.5849056603773585
+      },
+      "note": {
+        "tp": 25,
+        "fp": 47,
+        "fn": 9,
+        "f": 0.4716981132075472
+      },
+      "offset": {
+        "tp": 18,
+        "fp": 54,
+        "fn": 16,
+        "f": 0.33962264150943394
+      }
+    },
+    {
+      "track_id": "19",
+      "annotator": "A1",
+      "truth": 73,
+      "predicted": 121,
+      "onset": {
+        "tp": 54,
+        "fp": 67,
+        "fn": 19,
+        "f": 0.5567010309278351
+      },
+      "note": {
+        "tp": 40,
+        "fp": 81,
+        "fn": 33,
+        "f": 0.41237113402061853
+      },
+      "offset": {
+        "tp": 20,
+        "fp": 101,
+        "fn": 53,
+        "f": 0.20618556701030927
+      }
+    },
+    {
+      "track_id": "19",
+      "annotator": "A2",
+      "truth": 61,
+      "predicted": 121,
+      "onset": {
+        "tp": 46,
+        "fp": 75,
+        "fn": 15,
+        "f": 0.5054945054945055
+      },
+      "note": {
+        "tp": 37,
+        "fp": 84,
+        "fn": 24,
+        "f": 0.4065934065934066
+      },
+      "offset": {
+        "tp": 16,
+        "fp": 105,
+        "fn": 45,
+        "f": 0.17582417582417584
+      }
+    },
+    {
+      "track_id": "21",
+      "annotator": "A1",
+      "truth": 97,
+      "predicted": 89,
+      "onset": {
+        "tp": 56,
+        "fp": 33,
+        "fn": 41,
+        "f": 0.6021505376344086
+      },
+      "note": {
+        "tp": 49,
+        "fp": 40,
+        "fn": 48,
+        "f": 0.5268817204301075
+      },
+      "offset": {
+        "tp": 26,
+        "fp": 63,
+        "fn": 71,
+        "f": 0.27956989247311825
+      }
+    },
+    {
+      "track_id": "21",
+      "annotator": "A2",
+      "truth": 62,
+      "predicted": 89,
+      "onset": {
+        "tp": 43,
+        "fp": 46,
+        "fn": 19,
+        "f": 0.5695364238410596
+      },
+      "note": {
+        "tp": 34,
+        "fp": 55,
+        "fn": 28,
+        "f": 0.4503311258278146
+      },
+      "offset": {
+        "tp": 14,
+        "fp": 75,
+        "fn": 48,
+        "f": 0.18543046357615894
+      }
+    },
+    {
+      "track_id": "23",
+      "annotator": "A1",
+      "truth": 53,
+      "predicted": 54,
+      "onset": {
+        "tp": 38,
+        "fp": 16,
+        "fn": 15,
+        "f": 0.7102803738317757
+      },
+      "note": {
+        "tp": 31,
+        "fp": 23,
+        "fn": 22,
+        "f": 0.5794392523364486
+      },
+      "offset": {
+        "tp": 19,
+        "fp": 35,
+        "fn": 34,
+        "f": 0.35514018691588783
+      }
+    },
+    {
+      "track_id": "23",
+      "annotator": "A2",
+      "truth": 51,
+      "predicted": 54,
+      "onset": {
+        "tp": 34,
+        "fp": 20,
+        "fn": 17,
+        "f": 0.6476190476190476
+      },
+      "note": {
+        "tp": 29,
+        "fp": 25,
+        "fn": 22,
+        "f": 0.5523809523809524
+      },
+      "offset": {
+        "tp": 15,
+        "fp": 39,
+        "fn": 36,
+        "f": 0.2857142857142857
+      }
+    },
+    {
+      "track_id": "25",
+      "annotator": "A1",
+      "truth": 38,
+      "predicted": 42,
+      "onset": {
+        "tp": 22,
+        "fp": 20,
+        "fn": 16,
+        "f": 0.55
+      },
+      "note": {
+        "tp": 15,
+        "fp": 27,
+        "fn": 23,
+        "f": 0.375
+      },
+      "offset": {
+        "tp": 11,
+        "fp": 31,
+        "fn": 27,
+        "f": 0.275
+      }
+    },
+    {
+      "track_id": "25",
+      "annotator": "A2",
+      "truth": 33,
+      "predicted": 42,
+      "onset": {
+        "tp": 19,
+        "fp": 23,
+        "fn": 14,
+        "f": 0.5066666666666667
+      },
+      "note": {
+        "tp": 13,
+        "fp": 29,
+        "fn": 20,
+        "f": 0.3466666666666667
+      },
+      "offset": {
+        "tp": 10,
+        "fp": 32,
+        "fn": 23,
+        "f": 0.26666666666666666
+      }
+    },
+    {
+      "track_id": "27",
+      "annotator": "A1",
+      "truth": 34,
+      "predicted": 43,
+      "onset": {
+        "tp": 25,
+        "fp": 18,
+        "fn": 9,
+        "f": 0.6493506493506493
+      },
+      "note": {
+        "tp": 23,
+        "fp": 20,
+        "fn": 11,
+        "f": 0.5974025974025974
+      },
+      "offset": {
+        "tp": 15,
+        "fp": 28,
+        "fn": 19,
+        "f": 0.38961038961038963
+      }
+    },
+    {
+      "track_id": "27",
+      "annotator": "A2",
+      "truth": 28,
+      "predicted": 43,
+      "onset": {
+        "tp": 23,
+        "fp": 20,
+        "fn": 5,
+        "f": 0.647887323943662
+      },
+      "note": {
+        "tp": 21,
+        "fp": 22,
+        "fn": 7,
+        "f": 0.5915492957746479
+      },
+      "offset": {
+        "tp": 13,
+        "fp": 30,
+        "fn": 15,
+        "f": 0.36619718309859156
+      }
+    },
+    {
+      "track_id": "29",
+      "annotator": "A1",
+      "truth": 36,
+      "predicted": 41,
+      "onset": {
+        "tp": 29,
+        "fp": 12,
+        "fn": 7,
+        "f": 0.7532467532467533
+      },
+      "note": {
+        "tp": 29,
+        "fp": 12,
+        "fn": 7,
+        "f": 0.7532467532467533
+      },
+      "offset": {
+        "tp": 24,
+        "fp": 17,
+        "fn": 12,
+        "f": 0.6233766233766234
+      }
+    },
+    {
+      "track_id": "29",
+      "annotator": "A2",
+      "truth": 32,
+      "predicted": 41,
+      "onset": {
+        "tp": 27,
+        "fp": 14,
+        "fn": 5,
+        "f": 0.7397260273972602
+      },
+      "note": {
+        "tp": 26,
+        "fp": 15,
+        "fn": 6,
+        "f": 0.7123287671232876
+      },
+      "offset": {
+        "tp": 20,
+        "fp": 21,
+        "fn": 12,
+        "f": 0.547945205479452
+      }
+    },
+    {
+      "track_id": "31",
+      "annotator": "A1",
+      "truth": 47,
+      "predicted": 56,
+      "onset": {
+        "tp": 41,
+        "fp": 15,
+        "fn": 6,
+        "f": 0.7961165048543689
+      },
+      "note": {
+        "tp": 36,
+        "fp": 20,
+        "fn": 11,
+        "f": 0.6990291262135923
+      },
+      "offset": {
+        "tp": 30,
+        "fp": 26,
+        "fn": 17,
+        "f": 0.5825242718446602
+      }
+    },
+    {
+      "track_id": "31",
+      "annotator": "A2",
+      "truth": 38,
+      "predicted": 56,
+      "onset": {
+        "tp": 34,
+        "fp": 22,
+        "fn": 4,
+        "f": 0.723404255319149
+      },
+      "note": {
+        "tp": 27,
+        "fp": 29,
+        "fn": 11,
+        "f": 0.574468085106383
+      },
+      "offset": {
+        "tp": 22,
+        "fp": 34,
+        "fn": 16,
+        "f": 0.46808510638297873
+      }
+    },
+    {
+      "track_id": "32",
+      "annotator": "A1",
+      "truth": 57,
+      "predicted": 71,
+      "onset": {
+        "tp": 30,
+        "fp": 41,
+        "fn": 27,
+        "f": 0.46875
+      },
+      "note": {
+        "tp": 27,
+        "fp": 44,
+        "fn": 30,
+        "f": 0.421875
+      },
+      "offset": {
+        "tp": 14,
+        "fp": 57,
+        "fn": 43,
+        "f": 0.21875
+      }
+    },
+    {
+      "track_id": "32",
+      "annotator": "A2",
+      "truth": 55,
+      "predicted": 71,
+      "onset": {
+        "tp": 27,
+        "fp": 44,
+        "fn": 28,
+        "f": 0.42857142857142855
+      },
+      "note": {
+        "tp": 24,
+        "fp": 47,
+        "fn": 31,
+        "f": 0.38095238095238093
+      },
+      "offset": {
+        "tp": 7,
+        "fp": 64,
+        "fn": 48,
+        "f": 0.1111111111111111
+      }
+    },
+    {
+      "track_id": "33",
+      "annotator": "A1",
+      "truth": 80,
+      "predicted": 140,
+      "onset": {
+        "tp": 63,
+        "fp": 77,
+        "fn": 17,
+        "f": 0.5727272727272728
+      },
+      "note": {
+        "tp": 47,
+        "fp": 93,
+        "fn": 33,
+        "f": 0.42727272727272725
+      },
+      "offset": {
+        "tp": 32,
+        "fp": 108,
+        "fn": 48,
+        "f": 0.2909090909090909
+      }
+    },
+    {
+      "track_id": "33",
+      "annotator": "A2",
+      "truth": 87,
+      "predicted": 140,
+      "onset": {
+        "tp": 60,
+        "fp": 80,
+        "fn": 27,
+        "f": 0.5286343612334802
+      },
+      "note": {
+        "tp": 50,
+        "fp": 90,
+        "fn": 37,
+        "f": 0.44052863436123346
+      },
+      "offset": {
+        "tp": 29,
+        "fp": 111,
+        "fn": 58,
+        "f": 0.2555066079295154
+      }
+    },
+    {
+      "track_id": "35",
+      "annotator": "A1",
+      "truth": 37,
+      "predicted": 55,
+      "onset": {
+        "tp": 31,
+        "fp": 24,
+        "fn": 6,
+        "f": 0.6739130434782609
+      },
+      "note": {
+        "tp": 28,
+        "fp": 27,
+        "fn": 9,
+        "f": 0.6086956521739131
+      },
+      "offset": {
+        "tp": 20,
+        "fp": 35,
+        "fn": 17,
+        "f": 0.43478260869565216
+      }
+    },
+    {
+      "track_id": "35",
+      "annotator": "A2",
+      "truth": 26,
+      "predicted": 55,
+      "onset": {
+        "tp": 22,
+        "fp": 33,
+        "fn": 4,
+        "f": 0.5432098765432098
+      },
+      "note": {
+        "tp": 14,
+        "fp": 41,
+        "fn": 12,
+        "f": 0.345679012345679
+      },
+      "offset": {
+        "tp": 10,
+        "fp": 45,
+        "fn": 16,
+        "f": 0.24691358024691357
+      }
+    },
+    {
+      "track_id": "36",
+      "annotator": "A1",
+      "truth": 67,
+      "predicted": 96,
+      "onset": {
+        "tp": 57,
+        "fp": 39,
+        "fn": 10,
+        "f": 0.6993865030674846
+      },
+      "note": {
+        "tp": 50,
+        "fp": 46,
+        "fn": 17,
+        "f": 0.6134969325153374
+      },
+      "offset": {
+        "tp": 38,
+        "fp": 58,
+        "fn": 29,
+        "f": 0.4662576687116564
+      }
+    },
+    {
+      "track_id": "36",
+      "annotator": "A2",
+      "truth": 54,
+      "predicted": 96,
+      "onset": {
+        "tp": 45,
+        "fp": 51,
+        "fn": 9,
+        "f": 0.6
+      },
+      "note": {
+        "tp": 38,
+        "fp": 58,
+        "fn": 16,
+        "f": 0.5066666666666667
+      },
+      "offset": {
+        "tp": 25,
+        "fp": 71,
+        "fn": 29,
+        "f": 0.3333333333333333
+      }
+    },
+    {
+      "track_id": "37",
+      "annotator": "A1",
+      "truth": 51,
+      "predicted": 63,
+      "onset": {
+        "tp": 38,
+        "fp": 25,
+        "fn": 13,
+        "f": 0.6666666666666666
+      },
+      "note": {
+        "tp": 32,
+        "fp": 31,
+        "fn": 19,
+        "f": 0.5614035087719298
+      },
+      "offset": {
+        "tp": 24,
+        "fp": 39,
+        "fn": 27,
+        "f": 0.42105263157894735
+      }
+    },
+    {
+      "track_id": "37",
+      "annotator": "A2",
+      "truth": 41,
+      "predicted": 63,
+      "onset": {
+        "tp": 31,
+        "fp": 32,
+        "fn": 10,
+        "f": 0.5961538461538461
+      },
+      "note": {
+        "tp": 26,
+        "fp": 37,
+        "fn": 15,
+        "f": 0.5
+      },
+      "offset": {
+        "tp": 19,
+        "fp": 44,
+        "fn": 22,
+        "f": 0.36538461538461536
+      }
+    },
+    {
+      "track_id": "38",
+      "annotator": "A1",
+      "truth": 78,
+      "predicted": 83,
+      "onset": {
+        "tp": 55,
+        "fp": 28,
+        "fn": 23,
+        "f": 0.6832298136645962
+      },
+      "note": {
+        "tp": 49,
+        "fp": 34,
+        "fn": 29,
+        "f": 0.6086956521739131
+      },
+      "offset": {
+        "tp": 30,
+        "fp": 53,
+        "fn": 48,
+        "f": 0.37267080745341613
+      }
+    },
+    {
+      "track_id": "38",
+      "annotator": "A2",
+      "truth": 64,
+      "predicted": 83,
+      "onset": {
+        "tp": 48,
+        "fp": 35,
+        "fn": 16,
+        "f": 0.6530612244897959
+      },
+      "note": {
+        "tp": 41,
+        "fp": 42,
+        "fn": 23,
+        "f": 0.5578231292517006
+      },
+      "offset": {
+        "tp": 26,
+        "fp": 57,
+        "fn": 38,
+        "f": 0.35374149659863946
+      }
+    },
+    {
+      "track_id": "39",
+      "annotator": "A1",
+      "truth": 92,
+      "predicted": 98,
+      "onset": {
+        "tp": 67,
+        "fp": 31,
+        "fn": 25,
+        "f": 0.7052631578947368
+      },
+      "note": {
+        "tp": 62,
+        "fp": 36,
+        "fn": 30,
+        "f": 0.6526315789473685
+      },
+      "offset": {
+        "tp": 46,
+        "fp": 52,
+        "fn": 46,
+        "f": 0.4842105263157895
+      }
+    },
+    {
+      "track_id": "39",
+      "annotator": "A2",
+      "truth": 66,
+      "predicted": 98,
+      "onset": {
+        "tp": 49,
+        "fp": 49,
+        "fn": 17,
+        "f": 0.5975609756097561
+      },
+      "note": {
+        "tp": 43,
+        "fp": 55,
+        "fn": 23,
+        "f": 0.524390243902439
+      },
+      "offset": {
+        "tp": 28,
+        "fp": 70,
+        "fn": 38,
+        "f": 0.34146341463414637
+      }
+    },
+    {
+      "track_id": "40",
+      "annotator": "A1",
+      "truth": 45,
+      "predicted": 45,
+      "onset": {
+        "tp": 33,
+        "fp": 12,
+        "fn": 12,
+        "f": 0.7333333333333333
+      },
+      "note": {
+        "tp": 30,
+        "fp": 15,
+        "fn": 15,
+        "f": 0.6666666666666666
+      },
+      "offset": {
+        "tp": 22,
+        "fp": 23,
+        "fn": 23,
+        "f": 0.4888888888888889
+      }
+    },
+    {
+      "track_id": "40",
+      "annotator": "A2",
+      "truth": 36,
+      "predicted": 45,
+      "onset": {
+        "tp": 28,
+        "fp": 17,
+        "fn": 8,
+        "f": 0.691358024691358
+      },
+      "note": {
+        "tp": 26,
+        "fp": 19,
+        "fn": 10,
+        "f": 0.6419753086419753
+      },
+      "offset": {
+        "tp": 20,
+        "fp": 25,
+        "fn": 16,
+        "f": 0.49382716049382713
+      }
+    }
+  ],
+  "ablation_summary": {
+    "alias_repair": {
+      "audit_note_outputs_identical_when_disabled": true,
+      "audit_recordings": 28,
+      "disabled_positive_control_failed": true
+    },
+    "rms_reattack_split": {
+      "enabled_predictions": 1862,
+      "disabled_predictions": 1860,
+      "changed_recordings": [
+        "9",
+        "10"
+      ],
+      "effect_on_each_annotator": "one false positive added on recording9; one true positive recovered on recording10",
+      "disabled_positive_control_failed": true
+    },
+    "interpretation": "neither added pass explains most excess notes; upstream pitch, voicing, and segmentation remain to be diagnosed"
+  },
+  "pitch_error_diagnostic": "absolute cents on onset-only maximum-cardinality matched note pairs, without a pitch filter; chronological traversal; coverage is matched pairs/reference notes; p95 uses linear interpolation; not frame-level F0 accuracy"
+}

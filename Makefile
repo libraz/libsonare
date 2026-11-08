@@ -902,6 +902,13 @@ conformance:
 	python3 tools/parity/test_comparison_reach.py
 	python3 tools/parity/test_c_return_type_coverage.py
 	python3 tools/eval/test_summarize_accuracy.py
+	python3 tools/eval/test_prepare_vocadito.py
+	python3 tools/eval/test_timed_keys.py
+	python3 tools/eval/test_key_regions.py
+	python3 tools/eval/test_key_transpositions.py
+	python3 tools/eval/test_temporal_keys.py
+	python3 tools/eval/test_continuous_keys.py
+	python3 tools/eval/test_export_key_windows.py
 	python3 -m unittest tests/conformance/test_report_input_validation.py
 	python3 tools/audition/test_serve.py
 	cd tools/audition/web && yarn test
