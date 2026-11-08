@@ -57,6 +57,7 @@ jobs:
           cache-dependency-path: |
             bindings/wasm/yarn.lock
             bindings/node/yarn.lock
+            tools/audition/web/yarn.lock
       - run: yarn install --immutable
       - run: yarn lint
       - name: Emit the WASM binding's declarations
@@ -114,7 +115,9 @@ jobs:
       - name: Drift gates
         # The mechanical cross-surface gates, all read-only and stdlib-only
         # except numpy: the bank-policy gate imports the shipping
-        # `tools/voicematch/status.py`, which reaches numpy through `capture.py`.
+        # `tools/voicematch/status.py`, which reaches numpy through `capture.py`;
+        # `conformance` also runs the listening page's vitest suite, so its
+        # node_modules are installed first.
         # Invoked through the Makefile so this list cannot drift from it: a
         # hand-copied one silently omits whatever gate is added to `conformance`
         # next, and reports green while doing it.
@@ -133,6 +136,7 @@ jobs:
         working-directory: .
         run: |
           python3 -m pip install --disable-pip-version-check numpy==2.4.6
+          (cd tools/audition/web && yarn install --immutable)
           python3 tools/abi/gen_abi_layout.py --check
           make check-abi-version
           make processor-types-check
