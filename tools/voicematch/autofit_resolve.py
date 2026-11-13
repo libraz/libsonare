@@ -209,6 +209,12 @@ def _committed_band_edge(corpus: Corpus | None) -> float | None:
     return (profile.get("capture") or {}).get("band_edge_hz")
 
 
+def window_line(corpus: Corpus, pattern) -> str:
+    """The held window of one capture: how long the model sounds a note against how long the reference did."""
+    model = max(n.dur for n in pattern.notes)
+    return f"window: model {model:g} s / reference {corpus.gate_s:g} s"
+
+
 def has_onset_reference(corpus: Corpus | None, pattern) -> bool:
     """Whether the committed profile has an onset-eligible cell on this probe's grid.
 
@@ -396,6 +402,7 @@ def resolve_probe(args) -> None:
     args.sample_rate = sample_rate
     if corpus is not None:
         print(describe(corpus, pattern), file=sys.stderr)
+        print(window_line(corpus, pattern), file=sys.stderr)
     args.percussive = pattern.percussive
     # Whether the probe has anything to measure a note at a time. `cli_weights`
     # fills unset weights from the instrument's class, and on a pattern with no
@@ -639,24 +646,31 @@ def reference_median_tnr(corpus: Corpus | None) -> float | None:
     return statistics.median(values) if values else None
 
 
-def noise_led_tnr(corpora: list[Corpus | None]) -> float | None:
-    """The highest reference median tnr among the captures, if every one is at or under the trigger.
+def noise_led_tnr(corpora: list[Corpus | None]) -> tuple[str, float] | None:
+    """The noise-led capture with the lowest reference median tnr, and that tnr, if any is at or under the trigger.
 
-    One weight vector scores every capture of a joint fit, so the trigger holds only
-    when none of them is tonal. A kit is skipped: its class defaults already weigh `bright`.
+    One weight vector scores every capture of a joint fit, so one noise-led capture
+    is enough to weigh `bright` for all of them. A capture with no committed
+    reference is skipped, and a kit anywhere in the list leaves the answer to its
+    class defaults, which already weigh `bright`.
     """
     if not corpora or any(
         c is not None and c.channel == CORPUS_PERCUSSION_CHANNEL for c in corpora
     ):
         return None
-    got = [reference_median_tnr(c) for c in corpora]
-    if any(t is None or t > NOISE_LED_TNR_DB for t in got):
+    found = []
+    for c in corpora:
+        tnr = reference_median_tnr(c)
+        if tnr is not None and tnr <= NOISE_LED_TNR_DB:
+            found.append((tnr, c.capture_id))
+    if not found:
         return None
-    return max(got)
+    tnr, capture = min(found)
+    return capture, tnr
 
 
 def apply_noise_led_bright(args) -> None:
-    """Weigh `bright` by default on a capture whose reference is noise-led.
+    """Weigh `bright` by default when any capture's reference is noise-led.
 
     Runs after `apply_spec_weights`, so a weight the command line or the spec gave
     (including 0) is never replaced; only an unset `bright` takes the percussion
@@ -668,11 +682,13 @@ def apply_noise_led_bright(args) -> None:
     specs = capture_specs(args)
     if default_weights(getattr(args, "program", 0)).get("bright", 0.0) > 0.0:
         return
-    tnr = noise_led_tnr([load_corpus(s.path, s.timbre) for s in specs])
-    if tnr is None:
+    led = noise_led_tnr([load_corpus(s.path, s.timbre) for s in specs])
+    if led is None:
         return
+    capture, tnr = led
     args.w_bright = PERCUSSION_WEIGHTS["bright"]
     print(
-        f"bright weighted: reference tnr {tnr:.1f} dB ≤ {NOISE_LED_TNR_DB:g} (noise-led trigger)",
+        f"bright weighted: {capture} reference tnr {tnr:.1f} dB ≤ {NOISE_LED_TNR_DB:g} "
+        f"(noise-led trigger)",
         file=sys.stderr,
     )

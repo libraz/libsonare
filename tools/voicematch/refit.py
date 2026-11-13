@@ -64,6 +64,7 @@ import boundary
 import fits as fits_mod
 import gate_audit
 import harness_lock
+import policy
 from _repo import REPO_ROOT
 from autofit_resolve import noise_led_tnr
 from autofit_weight_flags import _WEIGHT_FLAGS_1, _WEIGHT_FLAGS_2
@@ -269,15 +270,34 @@ def joint_captures(voice: dict) -> tuple[list[dict], list[dict]]:
 
     Every capture the voice's gates name, its own first. A capture needs its
     corpus on this machine and notes enough to hold some out; one without is
-    dropped with the reason rather than fitted without a hold-out. Fewer than
-    two usable captures is no joint fit, so the list is empty and the voice is
-    fitted against its own capture alone.
+    dropped with the reason rather than fitted without a hold-out. A capture whose
+    source class is not on the layer `policy.json` aims the slot at is off-layer: it
+    is still judged by the gate, so it is listed as a comparison, but it is not a fit
+    target. The voice's own capture is the primary one, rendered as the voice itself,
+    so when it is off-layer there is no joint fit. Fewer than two usable captures is
+    no joint fit, so the list is empty and the voice is fitted against its own
+    capture alone.
     """
     usable: list[dict] = []
     dropped: list[dict] = []
+    pol = policy.load()
+    own_off = False
     for gate in voice["gates"]:
         cap = gate["capture"]
         if cap == voice["capture"]:
+            if "source_class" in voice:
+                layer = policy.capture_layer(
+                    voice["source_class"], voice["program"], voice.get("bank", 0), policy=pol
+                )
+                if layer == policy.LAYER_OFF:
+                    own_off = True
+                    dropped.append(
+                        {
+                            "capture": cap,
+                            "layer": layer,
+                            "reason": f"comparison ({layer}): the voice's own capture, so no joint fit",
+                        }
+                    )
             usable.insert(
                 0,
                 {
@@ -295,6 +315,19 @@ def joint_captures(voice: dict) -> tuple[list[dict], list[dict]]:
             dropped.append({"capture": cap, "reason": "no corpus on this machine"})
             continue
         raw = json.loads((CAPTURE_DIR / f"{cap}.json").read_text())
+        layer = policy.capture_layer(
+            raw.get("source_class"), voice["program"], voice.get("bank", 0), policy=pol
+        )
+        if layer == policy.LAYER_OFF:
+            dropped.append(
+                {
+                    "capture": cap,
+                    "layer": layer,
+                    "reason": f"comparison ({layer}): source class "
+                    f"{raw.get('source_class') or 'unclassified'}",
+                }
+            )
+            continue
         train, held = _split(raw["notes"])
         if not held:
             dropped.append({"capture": cap, "reason": "one note: nothing to hold out"})
@@ -309,7 +342,7 @@ def joint_captures(voice: dict) -> tuple[list[dict], list[dict]]:
                 "velocities": _three(raw["velocities"]),
             }
         )
-    return (usable if len(usable) > 1 else []), dropped
+    return (usable if len(usable) > 1 and not own_off else []), dropped
 
 
 def plan(banks: str) -> tuple[list[dict], list[dict]]:
@@ -360,6 +393,7 @@ def plan(banks: str) -> tuple[list[dict], list[dict]]:
             "patch": patch,
             "engine": row.get("engine"),
             "capture": cap,
+            "source_class": raw.get("source_class"),
             "timbre": json.loads(gate.read_text())["timbre"],
             "corpus": str(corpus),
             "gate": str(gate),
@@ -916,17 +950,53 @@ def far_line(slug: str, dim: str, far: dict, threshold: float) -> str:
     return f"{slug}: {dim} far: {far['floors']:g} {unit} (bank p90 {threshold:g})"
 
 
-def prefit_raise(voice: dict, pre: dict, weights: dict[str, float]) -> dict:
+def gate_provenance_readings(voice: dict) -> list[dict]:
+    """The pre readings a gate's own provenance holds: each bound statistic's stored `measured`.
+
+    A gate verification (`gate_verify.py`) writes the unpadded measurement beside every bound
+    it read. Read as `prefit_raise` reads a compare run, keyed `<capture>:<dimension>`, a
+    statistic that was never measured contributes nothing.
+    """
+    readings = []
+    for g in voice.get("gates") or []:
+        path = Path(g["gate"]) if g.get("gate") else None
+        gate = json.loads(path.read_text()) if path is not None and path.is_file() else {}
+        for dim, bound in (gate.get("bounds") or {}).items():
+            for stat, prov in (bound.get("provenance") or {}).items():
+                value, limit = prov.get("measured"), bound.get(stat)
+                if value is None or limit is None:
+                    continue
+                readings.append(
+                    {
+                        "key": f"{g.get('capture', '')}:{dim}",
+                        "stat": stat,
+                        "value": value,
+                        "limit": limit,
+                        "over": value > limit,
+                    }
+                )
+    return readings
+
+
+def prefit_raise(
+    voice: dict,
+    pre: dict,
+    weights: dict[str, float],
+    given: dict[str, float] | None = None,
+) -> dict:
     """The terms the first fit weighs up because their gate dimension is already over its bound.
 
     A dimension red in `pre`, or at least `far_floors()` floors from the reference, whose OWN
     term has no weight gets that term raised by the rule `reweighed` uses; one with a weighted
     own term is left, and a red one with no own term (a proxy-only mapping) is listed, not
-    raised. `weights` is the fit's profile. A term the user gave a weight of 0 (`WEIGHTS`) is
-    never raised, even when its own dimension is red or far: the explicit 0 wins, and the term
-    is listed in `user_zero`. `raised_far` is the raised terms whose dimension was far; `far`
-    holds each far dimension's floors.
+    raised. `weights` is the fit's profile. A term the user gave a weight of 0 (`given`,
+    `WEIGHTS` when omitted) is never raised, even when its own dimension is red or far: the
+    explicit 0 wins, and the term is listed in `user_zero`. `raised_far` is the raised terms
+    whose dimension was far; `far` holds each far dimension's floors. `already_weighted`
+    holds each red or far dimension whose own term is weighted and so is left as it is: its
+    heaviest own weight, whether it is red, and its far reading if it is far.
     """
+    given = WEIGHTS if given is None else given
     own = PERCUSSION_GATE_OWN_TERMS if "drum_note" in voice else GATE_OWN_TERMS
     readings = pre["gate"]["readings"]
     red = sorted({r["key"].rpartition(":")[2] for r in readings if r.get("over")})
@@ -935,13 +1005,20 @@ def prefit_raise(voice: dict, pre: dict, weights: dict[str, float]) -> dict:
     raised_far: set[str] = set()
     no_own: list[str] = []
     user_zero: set[str] = set()
+    already: dict[str, dict] = {}
     for dim in sorted({*red, *far}):
         terms = own.get(dim, ())
         if not terms:
             if dim in red:
                 no_own.append(dim)
-        elif not any(weights.get(t, 0.0) > 0.0 for t in terms):
-            held = {t for t in terms if WEIGHTS.get(t) == 0.0}
+        elif any(weights.get(t, 0.0) > 0.0 for t in terms):
+            already[dim] = {
+                "weight": max(weights.get(t, 0.0) for t in terms),
+                "red": dim in red,
+                "far": far.get(dim),
+            }
+        else:
+            held = {t for t in terms if given.get(t) == 0.0}
             user_zero.update(held)
             take = {t: _doubled(weights.get(t, 0.0)) for t in terms if t not in held}
             raised.update(take)
@@ -954,7 +1031,41 @@ def prefit_raise(voice: dict, pre: dict, weights: dict[str, float]) -> dict:
         "far": far,
         "no_own_term": no_own,
         "user_zero": sorted(user_zero),
+        "already_weighted": already,
     }
+
+
+def already_weighted_lines(slug: str, already: dict[str, dict]) -> list[str]:
+    """One line per reason a red or far dimension was left alone because its own term is weighted."""
+    lines = []
+    for dim, got in already.items():
+        head = f"{slug}: {dim} already weighted ({got['weight']:g}): "
+        if got["red"]:
+            lines.append(f"{head}red")
+        if got["far"]:
+            unit = "guessed floors" if got["far"]["guessed"] else "floors"
+            lines.append(f"{head}far {got['far']['floors']:g} {unit}")
+    return lines
+
+
+def prefit_lines(slug: str, prefit: dict, threshold: float | None = None) -> list[str]:
+    """The lines that say what the pre-fit reading did, for refit and a bare autofit alike."""
+    threshold = far_floors() if threshold is None else threshold
+    lines = []
+    if prefit["no_own_term"]:
+        lines.append(f"{slug}: red with no own term: {', '.join(prefit['no_own_term'])}")
+    if prefit["user_zero"]:
+        lines.append(
+            f"{slug}: red, but kept at the weight 0 given: {', '.join(prefit['user_zero'])}"
+        )
+    weighted = prefit["already_weighted"]
+    for dim, far in prefit["far"].items():
+        if dim not in weighted:
+            lines.append(far_line(slug, dim, far, threshold))
+    lines += already_weighted_lines(slug, weighted)
+    if prefit["raised_from_zero"]:
+        lines.append(f"{slug}: [raised from zero weight: {', '.join(prefit['raised_from_zero'])}]")
+    return lines
 
 
 def profile_weights(voice: dict) -> dict[str, float]:
@@ -969,26 +1080,20 @@ def profile_weights(voice: dict) -> dict[str, float]:
     weights.update(WEIGHTS)
     # The trigger the fit applies at start-up, so the pre-fit raise sees what the fit weighs.
     pitched = "drum_note" not in voice and "bright" not in weights and voice.get("corpus")
-    if pitched and noise_led_tnr([load_corpus(voice["corpus"], voice["timbre"])]) is not None:
-        weights["bright"] = PERCUSSION_WEIGHTS["bright"]
+    if pitched:
+        # A joint fit scores every capture it names under one weight vector.
+        parts = voice.get("joint") or [voice]
+        corpora = [load_corpus(p["corpus"], p["timbre"]) for p in parts]
+        if noise_led_tnr(corpora) is not None:
+            weights["bright"] = PERCUSSION_WEIGHTS["bright"]
     return weights
 
 
 def _first_fit(voice: dict, d: Path, build_dir: str, per_knob: int) -> None:
     """Fit once, with the terms the pre reading shows red at zero weight raised."""
     prefit = prefit_raise(voice, json.loads((d / "pre.json").read_text()), profile_weights(voice))
-    if prefit["no_own_term"]:
-        print(f"{voice['slug']}: red with no own term: {', '.join(prefit['no_own_term'])}")
-    if prefit["user_zero"]:
-        print(
-            f"{voice['slug']}: red, but kept at the weight 0 given: {', '.join(prefit['user_zero'])}"
-        )
-    for dim, far in prefit["far"].items():
-        print(far_line(voice["slug"], dim, far, far_floors()))
-    if prefit["raised_from_zero"]:
-        print(
-            f"{voice['slug']}: [raised from zero weight: {', '.join(prefit['raised_from_zero'])}]"
-        )
+    for line in prefit_lines(voice["slug"], prefit):
+        print(line)
     weights = prefit["prefit_weights"]
     try:
         _fit(voice, d / "fit.json", build_dir, per_knob, weights or None)

@@ -20,6 +20,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import autofit
 import autofit_resolve
 import fits
+import policy
 import refit
 import report
 from autofit import (
@@ -34,6 +35,20 @@ from autofit_test_fixtures import _fit_args, _terms, _write_corpus
 from knobs import Knob, KnobClasses
 from loss import LOSS_TERMS, LossWeights, cli_weights
 from loss_weights import TERM_UNITS
+
+STUB_POLICY = {
+    "reference_layer": {
+        "default": {"timbre": "instrument", "behaviour": "instrument"},
+        "machine_defined": {"timbre": "machine", "behaviour": "machine", "programs": [127]},
+    }
+}
+
+
+@pytest.fixture(autouse=True)
+def _slot_aimed_at_nothing(monkeypatch):
+    """The synthetic captures here carry no source class; the layer tests set their own policy."""
+    monkeypatch.setattr(policy, "load", lambda path=None: {})
+
 
 KNOB = Knob(label="x.k", lo=0.0, hi=1.0, log=False, start_value=0.5, tunable="x.k")
 START = [0.5]
@@ -734,3 +749,149 @@ def test_primary_corpus_is_the_first_capture_and_none_without_one(tmp_path):
     assert autofit_resolve.primary_corpus(argparse.Namespace(corpus="")) is None
     with pytest.raises(ValueError, match="several captures"):
         autofit_resolve.resolve_corpus(args)
+
+
+# --------------------------------------------------------------------------- #
+# the layer a capture answers
+# --------------------------------------------------------------------------- #
+def _aim(monkeypatch):
+    monkeypatch.setattr(policy, "load", lambda path=None: STUB_POLICY)
+
+
+def _layer_world(tmp_path, monkeypatch, classes):
+    """The refit world with one extra gate capture per entry of @p classes (id -> source class)."""
+    _refit_world(tmp_path, monkeypatch)
+    for cap, source_class in classes.items():
+        (tmp_path / "scratch" / "capture" / cap).mkdir(parents=True)
+        (tmp_path / "scratch" / "capture" / cap / "manifest.json").write_text("{}")
+        (tmp_path / "defs" / f"{cap}.json").write_text(
+            json.dumps(
+                {
+                    "notes": [40, 52, 64, 76],
+                    "velocities": [30, 60, 90, 120],
+                    "source_class": source_class,
+                }
+            )
+        )
+    _aim(monkeypatch)
+
+
+def _layer_voice(tmp_path, own_class, others, *, program=0):
+    gates = [{"capture": "nylon", "gate": "g", "timbre": "t0", "patch": "nylon"}]
+    gates += [{"capture": c, "gate": "g", "timbre": "t0", "patch": c} for c in others]
+    voice = _voice(tmp_path)
+    voice.update(program=program, bank=0, gates=gates, source_class=own_class)
+    return voice
+
+
+def test_a_joint_fit_takes_only_the_captures_on_the_wanted_layer(tmp_path, monkeypatch):
+    _layer_world(tmp_path, monkeypatch, {"lib": "library", "mod": "module"})
+    voice = _layer_voice(tmp_path, "library", ["lib", "mod"])
+    usable, dropped = refit.joint_captures(voice)
+    assert [u["capture"] for u in usable] == ["nylon", "lib"]
+    assert dropped == [
+        {
+            "capture": "mod",
+            "layer": "off-layer",
+            "reason": "comparison (off-layer): source class module",
+        }
+    ]
+
+
+def test_a_machine_defined_slot_takes_the_module_and_leaves_the_library_a_comparison(
+    tmp_path, monkeypatch
+):
+    _layer_world(tmp_path, monkeypatch, {"lib": "library", "mod": "module"})
+    voice = _layer_voice(tmp_path, "module", ["lib", "mod"], program=127)
+    usable, dropped = refit.joint_captures(voice)
+    assert [u["capture"] for u in usable] == ["nylon", "mod"]
+    assert [(d["capture"], d["layer"]) for d in dropped] == [("lib", "off-layer")]
+
+
+def test_an_unclassified_capture_is_never_a_fit_target(tmp_path, monkeypatch):
+    _layer_world(tmp_path, monkeypatch, {"lib": "library", "bare": None})
+    usable, dropped = refit.joint_captures(_layer_voice(tmp_path, "library", ["lib", "bare"]))
+    assert [u["capture"] for u in usable] == ["nylon", "lib"]
+    assert "unclassified" in dropped[0]["reason"]
+
+
+def test_a_voice_whose_own_capture_is_off_layer_is_not_fitted_jointly(tmp_path, monkeypatch):
+    _layer_world(tmp_path, monkeypatch, {"lib": "library"})
+    usable, dropped = refit.joint_captures(_layer_voice(tmp_path, "module", ["lib"]))
+    assert usable == [] and dropped[0]["capture"] == "nylon"
+
+
+def _hand_listed(tmp_path, classes, **given):
+    caps = {}
+    for cap in classes:
+        root = _write_corpus(tmp_path / cap, notes=(60, 72))
+        caps[cap] = root
+    return _fit_args(
+        corpus=[str(r) for r in caps.values()],
+        corpus_timbre=None,
+        program=0,
+        bank=0,
+        drum_note=None,
+        **given,
+    )
+
+
+def _serve_definitions(monkeypatch, classes):
+    monkeypatch.setattr(
+        autofit.bank,
+        "captures",
+        lambda: [argparse.Namespace(id=cid, source_class=sc) for cid, sc in classes.items()],
+    )
+    monkeypatch.setattr(
+        autofit,
+        "load_corpus",
+        lambda path, timbre: argparse.Namespace(
+            capture_id=Path(path).name, timbre="t", root=Path(path)
+        ),
+    )
+
+
+def test_a_hand_listed_off_layer_capture_is_refused_without_the_flag(tmp_path, monkeypatch):
+    classes = {"lib": "library", "mod": "module"}
+    _aim(monkeypatch)
+    _serve_definitions(monkeypatch, classes)
+    args = _hand_listed(tmp_path, classes)
+    with pytest.raises(ValueError, match=r"off-layer capture\(s\) mod:t.*--allow-off-layer"):
+        autofit.check_capture_layers(args)
+
+
+def test_the_allow_flag_fits_an_off_layer_capture_and_names_it(tmp_path, monkeypatch, capsys):
+    classes = {"lib": "library", "mod": "module"}
+    _aim(monkeypatch)
+    _serve_definitions(monkeypatch, classes)
+    args = _hand_listed(tmp_path, classes, allow_off_layer=True)
+    layers = autofit.check_capture_layers(args)
+    assert layers == {"lib:t": "wanted", "mod:t": "off-layer"}
+    assert "--allow-off-layer: fitting off-layer capture(s) mod:t" in capsys.readouterr().err
+
+
+def test_captures_on_the_wanted_layer_and_a_single_capture_pass_unremarked(tmp_path, monkeypatch):
+    classes = {"lib": "library", "other": "dedicated"}
+    _aim(monkeypatch)
+    _serve_definitions(monkeypatch, classes)
+    assert set(autofit.check_capture_layers(_hand_listed(tmp_path, classes)).values()) == {"wanted"}
+    single = _hand_listed(tmp_path, {"mod": "module"})
+    assert autofit.check_capture_layers(single) == {}
+
+
+def test_every_per_capture_entry_carries_its_layer(tmp_path, monkeypatch):
+    ok = _fit_args(corpus=str(_write_corpus(tmp_path / "a", notes=(60, 72))), validate_notes="48")
+    other = _fit_args(
+        corpus=str(_write_corpus(tmp_path / "b", notes=(60, 72))), validate_notes="48"
+    )
+    layers = {"a": "wanted", "b": "off-layer"}
+    part = autofit.partition_joint([ok, other], ["a", "b"], layers)
+    assert [(p["capture"], p["layer"]) for p in part["per_capture"]] == [
+        ("a", "wanted"),
+        ("b", "off-layer"),
+    ]
+    _serve(monkeypatch, [_Held(0.8, held="48"), None])
+    caps = _captures("a", "b")
+    caps[0].layer, caps[1].layer = "wanted", "off-layer"
+    result = validate_joint(caps, None, [KNOB], START, [0.2])
+    assert [p["layer"] for p in result["per_capture"]] == ["wanted", "off-layer"]

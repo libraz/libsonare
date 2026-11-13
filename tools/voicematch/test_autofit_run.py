@@ -996,7 +996,7 @@ def test_bright_takes_a_default_weight_only_on_a_noise_led_reference(
     err = capsys.readouterr().err
     if weighted:
         assert args.w_bright == autofit_resolve.PERCUSSION_WEIGHTS["bright"]
-        assert f"bright weighted: reference tnr {tnr:.1f} dB ≤ 6 (noise-led trigger)" in err
+        assert f"bright weighted: cap reference tnr {tnr:.1f} dB ≤ 6 (noise-led trigger)" in err
     else:
         assert args.w_bright is None and "bright weighted" not in err
 
@@ -1027,3 +1027,172 @@ def test_the_noise_led_trigger_stays_outside_the_objective():
     import autofit_resolve
 
     assert autofit_resolve.NOISE_LED_TNR_DB == 6.0
+
+
+def _joint_noise_args(monkeypatch, tmp_path, tnr_by_capture, **given):
+    """Args for a joint fit over one capture per entry, each with its committed median tnr."""
+    import autofit_resolve
+
+    (tmp_path / "reference").mkdir(exist_ok=True)
+    corpora = {}
+    for cap, tnr in tnr_by_capture.items():
+        rows = [{"timbre": "t0", "tnr_db": tnr}]
+        (tmp_path / "reference" / f"{cap}.json").write_text(json.dumps({"rows": rows}))
+        corpora[f"dir-{cap}"] = argparse.Namespace(capture_id=cap, timbre="t0", channel=1)
+    monkeypatch.setattr(autofit_resolve, "HERE", tmp_path)
+    monkeypatch.setattr(autofit_resolve, "load_corpus", lambda path, timbre: corpora[path])
+    return argparse.Namespace(
+        corpus=list(corpora), corpus_timbre=["t0"] * len(corpora), program=0, w_bright=None, **given
+    )
+
+
+def test_one_noise_led_capture_of_a_joint_fit_weighs_bright_and_is_named(
+    monkeypatch, tmp_path, capsys
+):
+    import autofit_resolve
+
+    args = _joint_noise_args(monkeypatch, tmp_path, {"tonal": 25.0, "airy": 4.5, "other": 12.0})
+    autofit_resolve.apply_noise_led_bright(args)
+    err = capsys.readouterr().err
+    assert args.w_bright == autofit_resolve.PERCUSSION_WEIGHTS["bright"]
+    assert "bright weighted: airy reference tnr 4.5 dB ≤ 6 (noise-led trigger)" in err
+
+
+def test_a_joint_fit_of_tonal_captures_only_is_left_alone(monkeypatch, tmp_path, capsys):
+    import autofit_resolve
+
+    args = _joint_noise_args(monkeypatch, tmp_path, {"a": 25.0, "b": 6.5})
+    autofit_resolve.apply_noise_led_bright(args)
+    assert args.w_bright is None and "bright weighted" not in capsys.readouterr().err
+
+
+def test_refit_reads_the_same_noise_led_trigger_over_a_joint_voice(monkeypatch, tmp_path):
+    import autofit_resolve
+    import refit
+
+    args = _joint_noise_args(monkeypatch, tmp_path, {"tonal": 25.0, "airy": 4.5})
+    monkeypatch.setattr(refit, "load_corpus", autofit_resolve.load_corpus)
+    voice = {
+        "program": 0,
+        "corpus": "dir-tonal",
+        "timbre": "t0",
+        "joint": [
+            {"corpus": "dir-tonal", "timbre": "t0"},
+            {"corpus": "dir-airy", "timbre": "t0"},
+        ],
+    }
+    assert args.corpus == ["dir-tonal", "dir-airy"]
+    assert refit.profile_weights(voice)["bright"] == refit.PERCUSSION_WEIGHTS["bright"]
+    voice["joint"] = voice["joint"][:1]
+    assert "bright" not in refit.profile_weights(voice)
+
+
+# --------------------------------------------------------------------------
+# the pre-fit reading of a bare autofit
+
+
+def _prefit_world(tmp_path, monkeypatch, bounds, *, spread=None, **weights):
+    """A one-gate voice whose gate stores @p bounds, with the bank's far threshold at 10 floors."""
+    import refit
+
+    gate = tmp_path / "cap_gate.json"
+    gate.write_text(json.dumps({"bounds": bounds, "reference_spread": spread or {}}))
+    units = tmp_path / "floor-units.json"
+    units.write_text(json.dumps({"p90": 10.0}))
+    monkeypatch.setattr(refit, "FLOOR_UNITS_PATH", units)
+    voice = {"slug": "v", "gates": [{"capture": "cap", "gate": str(gate)}]}
+    monkeypatch.setattr(autofit, "gate_sources", lambda args: (voice, ""))
+    args = _fit_args()
+    for term, weight in weights.items():
+        setattr(args, f"w_{term}", weight)
+    return args
+
+
+def _bound(stat, limit, measured):
+    return {stat: limit, "provenance": {stat: {"measured": measured}}}
+
+
+def test_a_bare_autofit_raises_a_red_dimensions_zero_weight_own_term(tmp_path, monkeypatch, capsys):
+    bounds = {"body": _bound("p90", 1.0, 2.0)}
+    args = _prefit_world(tmp_path, monkeypatch, bounds)
+    assert "body" not in autofit.cli_weights(args)
+    prefit = autofit.apply_prefit(args)
+    assert args.w_body == 1.0 and autofit.cli_weights(args)["body"] == 1.0
+    assert prefit["prefit_weights"] == {"body": 1.0} and prefit["readings"] == 1
+    assert "v: [raised from zero weight: body]" in capsys.readouterr().err
+
+
+def test_a_bare_autofit_raises_a_far_dimension_and_labels_a_guessed_floor(
+    tmp_path, monkeypatch, capsys
+):
+    bounds = {"centroid_pct": _bound("abs_median", 999.0, 22.0)}
+    args = _prefit_world(tmp_path, monkeypatch, bounds, spread={"centroid_pct": 2.0})
+    prefit = autofit.apply_prefit(args)
+    assert args.w_bright == 1.0 and prefit["raised_far"] == ["bright"]
+    assert "v: centroid_pct far: 11 floors (bank p90 10)" in capsys.readouterr().err
+    guessed = _prefit_world(tmp_path, monkeypatch, bounds)
+    autofit.apply_prefit(guessed)
+    assert "guessed floors" in capsys.readouterr().err
+
+
+def test_an_already_weighted_dimension_prints_why_nothing_was_raised(tmp_path, monkeypatch, capsys):
+    bounds = {
+        "attack_hf_swing": _bound("p90", 1.0, 2.0),
+        "stretch": _bound("abs_median", 999.0, 22.0),
+    }
+    args = _prefit_world(tmp_path, monkeypatch, bounds, spread={"stretch": 2.0})
+    weights = autofit.cli_weights(args)
+    prefit = autofit.apply_prefit(args)
+    err = capsys.readouterr().err
+    assert prefit["prefit_weights"] == {} and autofit.cli_weights(args) == weights
+    assert f"v: attack_hf_swing already weighted ({weights['hfdyn']:g}): red" in err
+    assert f"v: stretch already weighted ({weights['stiff']:g}): far 11 floors" in err
+
+
+def test_the_users_zero_weight_wins_over_a_bare_autofits_pre_fit_raise(
+    tmp_path, monkeypatch, capsys
+):
+    bounds = {"body": _bound("p90", 1.0, 2.0)}
+    args = _prefit_world(tmp_path, monkeypatch, bounds, body=0.0)
+    prefit = autofit.apply_prefit(args)
+    assert args.w_body == 0.0 and prefit["prefit_weights"] == {} and prefit["user_zero"] == ["body"]
+    assert "kept at the weight 0 given: body" in capsys.readouterr().err
+
+
+def test_a_gate_with_no_stored_measurement_raises_nothing(tmp_path, monkeypatch, capsys):
+    bounds = {"body": {"p90": 1.0, "provenance": {"p90": {"measured": None}}}}
+    args = _prefit_world(tmp_path, monkeypatch, bounds)
+    prefit = autofit.apply_prefit(args)
+    assert prefit["readings"] == 0 and prefit["prefit_weights"] == {}
+    assert capsys.readouterr().err == ""
+
+
+def test_refit_and_autofit_print_the_already_weighted_line_from_one_function():
+    import refit
+
+    got = refit.already_weighted_lines(
+        "v",
+        {
+            "stretch": {"weight": 0.5, "red": True, "far": {"floors": 11.0, "guessed": True}},
+        },
+    )
+    assert got == [
+        "v: stretch already weighted (0.5): red",
+        "v: stretch already weighted (0.5): far 11 guessed floors",
+    ]
+
+
+# --------------------------------------------------------------------------
+# the held window, in the fit's own start-up lines
+
+
+def test_a_capture_prints_its_held_window_against_the_models(tmp_path, capsys):
+    root = _write_corpus(tmp_path / "c", notes=(60,), velocities=(56,), gate_ms=1500, seconds=3.6)
+    args = autofit.argparse.Namespace(**vars(_fit_args()))
+    args.corpus, args.corpus_timbre, args.pattern = str(root), "t", "corpus"
+    autofit.resolve_probe(args)
+    err = capsys.readouterr().err.splitlines()
+    assert err.count("window: model 1.5 s / reference 1.5 s") == 1
+    assert err.index("window: model 1.5 s / reference 1.5 s") == (
+        next(i for i, ln in enumerate(err) if ln.startswith("corpus oracle:")) + 1
+    )

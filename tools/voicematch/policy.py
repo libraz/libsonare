@@ -99,6 +99,31 @@ def answers_layer(source_class: str | None, want: dict) -> bool:
     return source_class != MACHINE_SOURCE
 
 
+#: A capture whose source class answers the layer its slot is aimed at: a fit target.
+LAYER_WANTED = "wanted"
+#: A capture that does not: a comparison, never a fit target.
+LAYER_OFF = "off-layer"
+
+
+def capture_layer(
+    source_class: str | None,
+    program: int,
+    bank: int = 0,
+    kit: bool = False,
+    policy: dict | None = None,
+) -> str:
+    """Whether a capture of this class is a fit target for the slot: `wanted` or `off-layer`.
+
+    This is `wanted_layer` and `answers_layer` under one name, so a fit, a gate audit and a
+    page cannot sort captures differently. A policy that aims the slot at nothing leaves
+    nothing off-layer; an unclassified capture against a slot that is aimed is off-layer.
+    """
+    want = wanted_layer(load() if policy is None else policy, program, kit, bank)
+    if not want:
+        return LAYER_WANTED
+    return LAYER_WANTED if answers_layer(source_class, want) else LAYER_OFF
+
+
 def references_by_scope(
     policy: dict,
     program: int,

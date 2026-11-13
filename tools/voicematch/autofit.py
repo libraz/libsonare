@@ -272,6 +272,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import bank
 import gate_audit
 import harness_lock
+import policy
 from _repo import REPO_ROOT
 
 # The split modules below hold what this file used to define inline. Every
@@ -353,11 +354,13 @@ from loss import (
     LossWeights,
     cli_weights,
     dropped_weights,
+    measured_terms,
     mss_distance,
     oracle_tnr_masks,
     probe_rows,
     refused_weights,
     score_terms,
+    unmeasurable_terms,
 )
 from loss_aggregate import DEFAULT_TAIL_FRACTION, robust_score_terms
 from metrics import (
@@ -1626,6 +1629,8 @@ class Capture:
     band_edge: float | None
     ir_path: Path | None = None
     reach: CopyReach | None = None
+    #: `wanted` or `off-layer` for a joint fit's capture; empty for a single capture.
+    layer: str = ""
 
 
 class JointEvaluator:
@@ -1883,7 +1888,63 @@ def capture_label(corpus: Corpus) -> str:
     return f"{corpus.capture_id or Path(corpus.root).name}:{corpus.timbre}"
 
 
-def partition_joint(namespaces: list[argparse.Namespace], labels: list[str]) -> dict:
+def capture_layers(args) -> dict[str, str]:
+    """Each capture of a joint fit by label: `wanted` or `off-layer` for the slot being fitted.
+
+    The layer is `policy.capture_layer` over the capture definition's `source_class`; a
+    capture with no definition is unclassified, so it is off-layer. Empty for a single capture.
+    """
+    specs = capture_specs(args)
+    if len(specs) < 2:
+        return {}
+    classes = {c.id: c.source_class for c in bank.captures()}
+    out = {}
+    for spec in specs:
+        corpus = load_corpus(spec.path, spec.timbre)
+        out[capture_label(corpus)] = policy.capture_layer(
+            classes.get(corpus.capture_id),
+            args.program,
+            getattr(args, "bank", 0),
+            kit=getattr(args, "drum_note", None) is not None,
+        )
+    return out
+
+
+def check_capture_layers(args) -> dict[str, str]:
+    """Refuse a hand-listed joint fit over an off-layer capture unless `--allow-off-layer` is given.
+
+    An off-layer capture is a comparison, not a fit target: its source class is not the one
+    `policy.json` aims this slot at. Returns the layers by capture label for the records.
+    """
+    layers = capture_layers(args)
+    off = [label for label, layer in layers.items() if layer == policy.LAYER_OFF]
+    if not off:
+        return layers
+    want = policy.wanted_layer(
+        policy.load(),
+        args.program,
+        getattr(args, "drum_note", None) is not None,
+        getattr(args, "bank", 0),
+    ).get("timbre")
+    if not getattr(args, "allow_off_layer", False):
+        raise ValueError(
+            f"off-layer capture(s) {', '.join(off)}: this slot wants the {want or 'unaimed'} "
+            f"layer, so they are comparisons and not fit targets; drop them from --corpus or "
+            f"pass --allow-off-layer to fit them anyway"
+        )
+    print(
+        f"--allow-off-layer: fitting off-layer capture(s) {', '.join(off)} "
+        f"(the slot wants the {want} layer)",
+        file=sys.stderr,
+    )
+    return layers
+
+
+def partition_joint(
+    namespaces: list[argparse.Namespace],
+    labels: list[str],
+    layers: dict[str, str] | None = None,
+) -> dict:
     """Each capture's validation partition, and whether all of them are independent."""
     parts = []
     for ns, label in zip(namespaces, labels):
@@ -1897,8 +1958,17 @@ def partition_joint(namespaces: list[argparse.Namespace], labels: list[str]) -> 
         "status": "independent" if open_ is None else open_["status"],
         "independent": open_ is None,
         "axis": axes.pop() if len(axes) == 1 else "mixed",
-        "per_capture": [{"capture": label, **p} for label, p in zip(labels, parts)],
+        "per_capture": [
+            {"capture": label, **({"layer": layers[label]} if layers else {}), **p}
+            for label, p in zip(labels, parts)
+        ],
     }
+
+
+def _layer_of(cap: Capture) -> dict:
+    """`{"layer": ...}` for a capture that has one, else nothing."""
+    layer = getattr(cap, "layer", "")
+    return {"layer": layer} if layer else {}
 
 
 def validate_joint(captures, build_dir, knobs, start_values, best_values) -> dict | None:
@@ -1913,7 +1983,7 @@ def validate_joint(captures, build_dir, knobs, start_values, best_values) -> dic
     for cap in captures:
         resolved = holdout_scorer(cap.args, build_dir, knobs, cap.ir_path, cap.reach)
         if resolved is None:
-            per.append({"capture": cap.label, "scored": False})
+            per.append({"capture": cap.label, **_layer_of(cap), "scored": False})
             continue
         score, axis, held = resolved
         start = score(start_values)
@@ -1922,6 +1992,7 @@ def validate_joint(captures, build_dir, knobs, start_values, best_values) -> dic
         per.append(
             {
                 "capture": cap.label,
+                **_layer_of(cap),
                 "scored": True,
                 "axis": axis,
                 "held_out": held,
@@ -2235,7 +2306,9 @@ def gate_adoption(args, evaluator) -> None:
         evaluator.write_back_refusal = "unverified_reference"
 
 
-def _fold_write_back_verdict(out_path: str, evaluator) -> None:
+def _fold_write_back_verdict(
+    out_path: str, evaluator, layers: dict[str, str] | None = None
+) -> None:
     """Add why a finished fit kept the defaults, if it did.
 
     A refusal leaves a voice whose values did not change, which from every
@@ -2273,6 +2346,7 @@ def _fold_write_back_verdict(out_path: str, evaluator) -> None:
         record["write_back"]["per_capture"] = [
             {
                 "capture": label,
+                **({"layer": layers[label]} if layers and label in layers else {}),
                 "refused": member.write_back_refusal,
                 "tnr_notes": {"start": member.start_tnr_notes, "best": member.best_tnr_notes},
                 "tnr_absent": {"start": member.start_tnr_absent, "best": member.best_tnr_absent},
@@ -2363,12 +2437,11 @@ def _gate_voice(args) -> tuple[dict | None, str]:
     return voice, ""
 
 
-def gated_dimensions(args) -> tuple[frozenset[str] | None, str]:
-    """The dimensions this run's capture gate holds a bound for, or (None, why not).
+def gate_sources(args) -> tuple[dict | None, str]:
+    """The gates this run is read against as a voice (`slug`, `gates`), or (None, why not).
 
     A corpus run names its captures (every one of a joint fit); any other run asks
-    refit's planner which gates resolve to the voice. Either way it is the union of
-    their bounds.
+    refit's planner which gates resolve to the voice.
     """
     specs = capture_specs(args)
     corpora = (
@@ -2379,16 +2452,90 @@ def gated_dimensions(args) -> tuple[frozenset[str] | None, str]:
     if corpora[0] is not None:
         if not all(c.capture_id for c in corpora):
             return None, "the corpus names no capture"
-        paths = [HERE / "reference" / f"{c.capture_id}_gate.json" for c in corpora]
+        voice = {
+            "slug": corpora[0].capture_id,
+            "gates": [
+                {
+                    "capture": c.capture_id,
+                    "gate": str(HERE / "reference" / f"{c.capture_id}_gate.json"),
+                }
+                for c in corpora
+            ],
+        }
+        if getattr(args, "drum_note", None) is not None:
+            voice["drum_note"] = args.drum_note
     else:
         voice, why = _gate_voice(args)
         if voice is None:
             return None, why
-        paths = [Path(g["gate"]) for g in voice["gates"]]
-    missing = [p.name for p in paths if not p.exists()]
+    missing = [Path(g["gate"]).name for g in voice["gates"] if not Path(g["gate"]).exists()]
     if missing:
         return None, f"{', '.join(missing)} does not exist"
-    return frozenset(d for p in paths for d in json.loads(p.read_text()).get("bounds", {})), ""
+    return voice, ""
+
+
+def gated_dimensions(args) -> tuple[frozenset[str] | None, str]:
+    """The dimensions this run's capture gate holds a bound for, or (None, why not).
+
+    The union of the bounds of every gate `gate_sources` names.
+    """
+    voice, why = gate_sources(args)
+    if voice is None:
+        return None, why
+    return (
+        frozenset(
+            d
+            for g in voice["gates"]
+            for d in json.loads(Path(g["gate"]).read_text()).get("bounds", {})
+        ),
+        "",
+    )
+
+
+def apply_prefit(args) -> dict | None:
+    """Raise the own term of a red or far gate dimension before the search, from the gate's stored readings.
+
+    The readings are each bound's `provenance.measured` (what the last gate verification
+    stored; none when it stored none). The rule and its lines are refit's: a red dimension,
+    or one far from its reference, whose own term has no weight gets that term raised, an
+    explicit weight of 0 on the command line wins, and a dimension whose term is already
+    weighted is named as such. A term this probe cannot measure is not raised.
+    Returns the record `--out` keeps under `prefit`, or None where no fit follows.
+    """
+    if any(getattr(args, flag, None) for flag in ("diagnose", "dump_knobs", "grid")):
+        return None
+    voice, why = gate_sources(args)
+    if voice is None:
+        print(f"pre-fit reading: skipped ({why})", file=sys.stderr)
+        return {"skipped": why}
+    import refit  # lazy: see _gate_voice
+
+    readings = refit.gate_provenance_readings(voice)
+    given = {
+        t: getattr(args, f"w_{t}") for t in LOSS_TERMS if getattr(args, f"w_{t}", None) is not None
+    }
+    prefit = refit.prefit_raise(voice, {"gate": {"readings": readings}}, cli_weights(args), given)
+    probe_cannot = dict(unmeasurable_terms(args))
+    produced = set(measured_terms(getattr(args, "percussive", False)))
+    cannot = {}
+    for term in prefit["prefit_weights"]:
+        if term in probe_cannot:
+            cannot[term] = probe_cannot[term]
+        elif term not in produced:
+            cannot[term] = "this metric set does not produce it"
+    if cannot:
+        prefit["not_measurable"] = cannot
+        prefit["prefit_weights"] = {
+            t: w for t, w in prefit["prefit_weights"].items() if t not in cannot
+        }
+        prefit["raised_from_zero"] = sorted(prefit["prefit_weights"])
+        prefit["raised_far"] = [t for t in prefit["raised_far"] if t in prefit["prefit_weights"]]
+    for term, weight in prefit["prefit_weights"].items():
+        setattr(args, f"w_{term}", weight)
+    prefit["readings"] = len(readings)
+    for line in refit.prefit_lines(voice["slug"], prefit):
+        print(line, file=sys.stderr)
+    return prefit
 
 
 def _fold_gate_audit(args, build_dir, compare=gate_audit.compare_voice) -> None:
@@ -2442,13 +2589,27 @@ def _fold_gate_audit(args, build_dir, compare=gate_audit.compare_voice) -> None:
         weighing = gate_audit.weighting(weights, refit.GATE_TERMS, refit.GATE_OWN_TERMS)
     entries = gate_audit.audit(json.loads(pre.read_text()), json.loads(post.read_text()), weighing)
     flagged = gate_audit.summary(entries)
+    classes = {c.id: c.source_class for c in bank.captures()}
+    gate_layers = {
+        g["capture"]: policy.capture_layer(
+            classes.get(g["capture"]),
+            args.program,
+            getattr(args, "bank", 0),
+            kit=getattr(args, "drum_note", None) is not None,
+        )
+        for g in voice["gates"]
+    }
     record["gate_audit"] = {
         "lib": str(lib),
         "gates": [g["capture"] for g in voice["gates"]],
+        "layers": gate_layers,
         "entries": entries,
         **flagged,
     }
     path.write_text(json.dumps(_json_safe(record), indent=2, allow_nan=False) + "\n")
+    for cap, layer in gate_layers.items():
+        if layer == policy.LAYER_OFF:
+            print(f"gate audit: {cap}: comparison ({layer})", file=sys.stderr)
     print("\n" + "\n".join(gate_audit.format_flagged(entries)), file=sys.stderr)
 
 
@@ -2563,6 +2724,7 @@ def run(args, argv: list[str] | None = None) -> int:
             file=sys.stderr,
         )
 
+    layers = check_capture_layers(args)
     apply_spec_weights(args, argv if argv is not None else sys.argv[1:])
     apply_noise_led_bright(args)
     capture_args = resolve_probes(args, resolve_probe)
@@ -2592,8 +2754,11 @@ def run(args, argv: list[str] | None = None) -> int:
         )
     # Resolve the fit axis first: an overlapping hold-out is invalid even without the fit flag.
     validation_partition = (
-        partition_joint(capture_args, capture_labels) if joint else check_validation_partition(args)
+        partition_joint(capture_args, capture_labels, layers)
+        if joint
+        else check_validation_partition(args)
     )
+    prefit = apply_prefit(args)
     weights = cli_weights(args)
     if not weights and not getattr(args, "dump_knobs", False):
         raise ValueError(
@@ -2833,6 +2998,7 @@ def run(args, argv: list[str] | None = None) -> int:
                 oracle_audio,
                 room,
                 band_edge,
+                layer=layers.get(capture_label(corpus), "") if corpus is not None else "",
             )
         )
     if joint:
@@ -2984,12 +3150,14 @@ def run(args, argv: list[str] | None = None) -> int:
             "full_spec_budget_warning": full_spec_budget_warning,
             "clamp_check": clamp_entries,
             "clamp_bounds": clamp_bounds,
+            "prefit": prefit,
             "corpora": corpora_record(captures),
             "captures": [
                 {
                     **record,
                     "room": None if cap.room is None else cap.room.to_dict(),
                     "assessment": _assessment_status(cap.args),
+                    **_layer_of(cap),
                 }
                 for record, cap in zip(corpora_record(captures), captures)
             ]
@@ -2999,7 +3167,7 @@ def run(args, argv: list[str] | None = None) -> int:
     gate_adoption(args, evaluator)
     report_result(knobs, pristine, best_values, evaluator, args, extra)
     _fold_tree_provenance(args.out, head_sha, dirty_src, library)
-    _fold_write_back_verdict(args.out, evaluator)
+    _fold_write_back_verdict(args.out, evaluator, layers)
     _fold_gate_audit(args, build_dir)
     _fold_assessment(args.out, args)
     return 0
@@ -3138,6 +3306,13 @@ def build_parser() -> argparse.ArgumentParser:
             help=f"{what} of the --corpus at the same position, in place of "
             f"--{flag}; '' keeps the run-wide flag",
         )
+    parser.add_argument(
+        "--allow-off-layer",
+        action="store_true",
+        dest="allow_off_layer",
+        help="fit a hand-listed --corpus whose source class is not on the layer policy.json "
+        "aims this slot at. By default such a capture is a comparison and the run refuses it",
+    )
     parser.add_argument(
         "--allow-rigged-oracle",
         action="store_true",
