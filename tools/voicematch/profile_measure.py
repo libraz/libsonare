@@ -32,6 +32,8 @@ from metrics import (
     to_mono,
     tone_to_noise_db,
 )
+from metrics_floor import partial_clearance, recording_floor, valley_profile
+from metrics_note import body_bands
 from smf import Note
 
 # The partial count, the floor and the reliability gate all live with the fit in
@@ -520,6 +522,9 @@ def measure_note(
     body = body_below_f0_db(held, sr, float(row.get("f0_hz") or 0.0))
     if body is not None:
         row["body_below_f0_db"] = body
+        bands = body_bands(held, sr, float(row["f0_hz"]))
+        if bands is not None:
+            row["body_under_db"], row["body_f0_db"] = round(bands[0], 2), round(bands[1], 2)
 
     t_env, env = _rms_envelope(held, sr)
     env_db = np.asarray(_db(env))
@@ -575,6 +580,9 @@ def measure_note(
         row.update(double_decay(env_db[tail], t_env[tail]))
     if row.get("partials_hz"):
         row["partial_decay_db_s"] = partial_decay(held[a:], sr, row["partials_hz"])
+        row.update(partial_clearance(held[a:], sr, row["partials_hz"]))
+        row.update(valley_profile(held[a:b], sr, row["partials_hz"], row["partials_db"]))
+    row.update(recording_floor(mono, sr, preroll_s, float(env_db[peak_i]), f0=row["f0_hz"]))
 
     # Damper: note-off to 40 dB below the level it was still holding. Skipped
     # when the string had already stopped — a held C7 is 45 dB down long before

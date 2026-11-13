@@ -169,6 +169,45 @@ BODY_WINDOW_S = (0.2, 1.2)
 BODY_MIN_F0_HZ = 120.0
 
 
+def band_power_db(seg: np.ndarray, sr: int, lo: float, hi: float) -> float | None:
+    """Power in `lo <= f < hi` of a Hann-windowed segment, in dB re full-scale power.
+
+    A one-sided power spectral density integrated over the band, so a stationary
+    noise reads the same whatever the segment's length and two bands of different
+    segments compare directly. None where the band holds no bin or no power.
+    """
+    n = len(seg)
+    if n < 2:
+        return None
+    w = np.hanning(n)
+    spec = np.fft.rfft(np.asarray(seg, dtype=np.float64) * w)
+    psd = 2.0 * np.abs(spec) ** 2 / (sr * float(np.sum(w**2)))
+    psd[0] *= 0.5
+    if n % 2 == 0:
+        psd[-1] *= 0.5
+    freqs = np.fft.rfftfreq(n, 1.0 / sr)
+    sel = (freqs >= lo) & (freqs < hi)
+    if not sel.any():
+        return None
+    power = float(np.sum(psd[sel]) * sr / n)
+    return float(10.0 * np.log10(power)) if power > 0.0 else None
+
+
+def body_bands(x: np.ndarray, sr: int, f0: float) -> tuple[float, float] | None:
+    """(under_db, fundamental_db): `band_power_db` under the note and around its fundamental."""
+    if f0 < BODY_MIN_F0_HZ:
+        return None
+    a, b = int(BODY_WINDOW_S[0] * sr), int(BODY_WINDOW_S[1] * sr)
+    seg = x[a:b]
+    if seg.size < sr // 8:
+        return None
+    under = band_power_db(seg, sr, 40.0, f0 * 0.7)
+    fundamental = band_power_db(seg, sr, f0 * 0.8, f0 * 1.25)
+    if under is None or fundamental is None:
+        return None
+    return under, fundamental
+
+
 def body_below_f0_db(x: np.ndarray, sr: int, f0: float) -> float | None:
     """Energy under the note's own fundamental, relative to the fundamental.
 
@@ -185,23 +224,10 @@ def body_below_f0_db(x: np.ndarray, sr: int, f0: float) -> float | None:
     only a string sits flat across the whole keyboard here, which no amount of
     body LEVEL corrects -- the register dependence is the measurement.
     """
-    if f0 < BODY_MIN_F0_HZ:
+    bands = body_bands(x, sr, f0)
+    if bands is None:
         return None
-    a, b = int(BODY_WINDOW_S[0] * sr), int(BODY_WINDOW_S[1] * sr)
-    seg = x[a:b]
-    if seg.size < sr // 8:
-        return None
-    spec = np.abs(np.fft.rfft(seg * np.hanning(len(seg))))
-    freqs = np.fft.rfftfreq(len(seg), 1.0 / sr)
-
-    def band(lo: float, hi: float) -> float:
-        sel = (freqs >= lo) & (freqs < hi)
-        return float(np.sqrt(np.sum(spec[sel] ** 2))) if sel.any() else 0.0
-
-    under, fundamental = band(40.0, f0 * 0.7), band(f0 * 0.8, f0 * 1.25)
-    if fundamental <= 0.0 or under <= 0.0:
-        return None
-    return round(float(20.0 * np.log10(under / fundamental)), 2)
+    return round(bands[0] - bands[1], 2)
 
 
 def onset_shape(mono: np.ndarray, sr: int, onset_s: float, note_dur: float, f0: float) -> dict:

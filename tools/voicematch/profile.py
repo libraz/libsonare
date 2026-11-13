@@ -119,6 +119,7 @@ from metrics import (
     shared_band_edge,
     to_mono,
 )
+from metrics_floor import body_at_floor
 from phrases import TAKE_SETS, build_takes
 from profile_gate import (
     DELTA_LABELS,
@@ -1375,6 +1376,7 @@ def compare(
     deltas: dict[str, list[float]] = {}
     damper_censored: list[tuple[int, int]] = []
     span_censored: list[tuple[int, int]] = []
+    body_censored: list[tuple[int, int]] = []
     # Rows that reached the per-row arithmetic at all, which is what every
     # dimension below was OFFERED — see `print_summary_table`.
     attempted = 0
@@ -1448,6 +1450,10 @@ def compare(
         span_mismatch = min(m_span, r_span) < DECAY_SPAN_AGREEMENT * max(m_span, r_span, 1e-9)
         if span_mismatch:
             span_censored.append((note, vel, m_span, r_span))
+        # The reference's body band is its recording's own flat floor, so the delta is the floor's.
+        body_floor = body_at_floor(r)
+        if body_floor:
+            body_censored.append((note, vel))
         row = {
             "stretch": None if stretch is None else stretch + a4_off,
             "decay": None if span_mismatch else d("decay_db_s"),
@@ -1479,7 +1485,7 @@ def compare(
             # the decay bound while its late rate at C5 was three times theirs.
             "aftersound": None if span_mismatch else d("decay_late_db_s"),
             "doubling": None if span_mismatch or gap_m is None or gap_r is None else gap_m - gap_r,
-            "body": d("body_below_f0_db"),
+            "body": None if body_floor else d("body_below_f0_db"),
             # The two radiation paths of a real board arrive decorrelated. A
             # model that folds one signal into both legs scores exactly 0.0
             # here and is inaudibly mono however wide the reverb around it is,
@@ -1560,6 +1566,12 @@ def compare(
         print(
             "  " + ", ".join(f"n{n}v{v} ({ms:.1f}s vs {rs:.1f}s)" for n, v, ms, rs in span_censored)
         )
+    if body_censored:
+        print(
+            f"\n^ {len(body_censored)} of {len(pairs)} rows: reference band at its recorded "
+            "floor, so the body delta is left out of the median:"
+        )
+        print("  " + ", ".join(f"n{n}v{v}" for n, v in body_censored))
     for note, model_peaks in sorted(peaks.get("m", {}).items()):
         ref_peaks = peaks.get("r", {}).get(note, {})
         shared = sorted(set(model_peaks) & set(ref_peaks))
