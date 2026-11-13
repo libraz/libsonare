@@ -20,6 +20,7 @@ import numpy as np
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))  # tools/ for _repo
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
+import harness_lock
 from autofit_resolve import _score
 from build_lib import dylib_path
 from capture import model_rig
@@ -97,6 +98,7 @@ def render_model_rows_subprocess(
     a ten-second probe is millions of samples, which JSON would spend more time
     encoding than the render itself takes.
     """
+    harness_lock.check_workers()
     dylib = dylib_path(build_dir)
     if dylib is None:
         raise RuntimeError(f"no libsonare dylib found under {build_dir}")

@@ -930,3 +930,37 @@ def test_the_guard_never_runs_inside_the_rebuild_path():
             f"its own second candidate, since src/ is dirty by design once one "
             f"starts"
         )
+
+
+def _stub_status(tmp_path, monkeypatch, gates):
+    import refit
+
+    row = {"slug": "v", "kit": False, "program": 90, "bank": 0, "patch": "p", "capture": "c"}
+    status = tmp_path / "voice-status.json"
+    status.write_text(json.dumps({"voices": [row]}))
+    monkeypatch.setattr(refit, "STATUS", status)
+    monkeypatch.setattr(refit, "capital_gates", lambda *a, **k: gates)
+    monkeypatch.setattr(autofit.bank, "captures", list)
+
+
+def _gate_args():
+    return argparse.Namespace(corpus="", program=90, bank=0, drum_note=None)
+
+
+def test_gated_dimensions_without_a_corpus_is_the_union_of_the_voices_gates(tmp_path, monkeypatch):
+    one, two = tmp_path / "one_gate.json", tmp_path / "two_gate.json"
+    one.write_text(json.dumps({"bounds": {"decay": {}, "tnr": {}}}))
+    two.write_text(json.dumps({"bounds": {"tnr": {}, "centroid_pct": {}}}))
+    gates = [
+        {"capture": "one", "gate": str(one), "timbre": "t"},
+        {"capture": "two", "gate": str(two), "timbre": "t"},
+    ]
+    _stub_status(tmp_path, monkeypatch, gates)
+    got, why = autofit.gated_dimensions(_gate_args())
+    assert got == frozenset({"decay", "tnr", "centroid_pct"})
+    assert why == ""
+
+
+def test_gated_dimensions_reports_nothing_gated_with_its_message(tmp_path, monkeypatch):
+    _stub_status(tmp_path, monkeypatch, [])
+    assert autofit.gated_dimensions(_gate_args()) == (None, "no gate resolves to this voice")

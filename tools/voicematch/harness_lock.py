@@ -4,6 +4,8 @@ A long run that imports a voicematch module late, or re-reads one, after the fil
 changed on disk spans two harness versions. `lock` imports everything a run can
 reach up front and then refuses any local module not yet loaded; `digest` names
 the code on disk, so a parent can tell its children are still the same version.
+Render workers are fresh processes that import from disk, so `lock` also stamps the
+files they reach and `check_workers` refuses a spawn once one has moved.
 """
 
 from __future__ import annotations
@@ -11,6 +13,7 @@ from __future__ import annotations
 import ast
 import hashlib
 import importlib
+import os
 import sys
 from pathlib import Path
 
@@ -18,6 +21,17 @@ from objective import HERE, _imports, code_text
 
 #: Carries the digest a child must have locked to, from a parent that pinned it.
 ENV = "SONARE_VOICEMATCH_HARNESS_DIGEST"
+
+#: The module a render worker subprocess runs; its closure is what a worker imports.
+WORKER_ROOTS = ("render_rows",)
+
+
+class HarnessFileMoved(Exception):
+    """A file a render worker imports changed on disk after the lock.
+
+    Deliberately not a RuntimeError: render failures are caught as that and scored as
+    an unusable candidate, which would let the run finish on two versions.
+    """
 
 
 def closure(roots: tuple[str, ...], directory: Path = HERE) -> list[str]:
@@ -44,6 +58,25 @@ def digest(roots: tuple[str, ...], directory: Path = HERE) -> str:
     return h.hexdigest()[:16]
 
 
+def snapshot_mtimes(roots: tuple[str, ...], directory: Path = HERE) -> dict[str, int]:
+    """Modification time (ns) of every file in the roots' closure, keyed by path."""
+    return {
+        str(path): path.stat().st_mtime_ns
+        for path in (directory / f"{name}.py" for name in closure(roots, directory))
+    }
+
+
+def moved_since(snapshot: dict[str, int]) -> str | None:
+    """File name of the first snapshotted file changed or gone since, else None. Stat only."""
+    for path, mtime in snapshot.items():
+        try:
+            if os.stat(path).st_mtime_ns != mtime:
+                return Path(path).name
+        except OSError:
+            return Path(path).name
+    return None
+
+
 class _Finder:
     """Refuses a local module that is not loaded yet."""
 
@@ -60,6 +93,7 @@ class _Finder:
 
 _finder: _Finder | None = None
 _locked: dict[tuple[str, ...], str] = {}
+_workers: dict[str, int] | None = None
 
 
 def _uninstall() -> None:
@@ -71,22 +105,40 @@ def _uninstall() -> None:
 
 def lock(roots: tuple[str, ...], directory: Path = HERE) -> str:
     """Import the closure now, refuse any other local module later; return the digest."""
-    global _finder
+    global _finder, _workers
     if roots in _locked and _finder is not None:
         return _locked[roots]
     _uninstall()
     for name in closure(roots, directory):
         importlib.import_module(name)
     _locked[roots] = digest(roots, directory)
+    _workers = snapshot_mtimes(WORKER_ROOTS, directory)
     _finder = _Finder(frozenset(p.stem for p in directory.glob("*.py")))
     sys.meta_path.insert(0, _finder)
     return _locked[roots]
 
 
 def unlock() -> None:
-    """Remove the finder and forget the locked digests."""
+    """Remove the finder and forget the locked digests and worker snapshot."""
+    global _workers
     _uninstall()
     _locked.clear()
+    _workers = None
+
+
+def check_workers() -> None:
+    """Raise `HarnessFileMoved` if a render worker would import a file changed since `lock`.
+
+    A no-op when no lock was taken.
+    """
+    if _workers is None:
+        return
+    name = moved_since(_workers)
+    if name is not None:
+        raise HarnessFileMoved(
+            f"harness file {name} changed on disk since this run started; "
+            "the run would score with two versions"
+        )
 
 
 def locked_digest(roots: tuple[str, ...]) -> str | None:

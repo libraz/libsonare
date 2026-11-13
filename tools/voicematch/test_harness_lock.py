@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+import os
 import re
 import sys
+import time
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -11,6 +13,7 @@ import autofit
 import harness_lock
 import pytest
 import refit
+import render_rows
 
 HERE = Path(__file__).resolve().parent
 
@@ -133,3 +136,66 @@ def test_autofit_accepts_the_matching_pin(monkeypatch):
     here = harness_lock.digest(("autofit",))
     monkeypatch.setenv(harness_lock.ENV, here)
     assert harness_lock.mismatch(here) is None
+
+
+def _locked_worker(tmp_path, monkeypatch):
+    (tmp_path / "hl_main.py").write_text("x = 1\n")
+    (tmp_path / "hl_worker.py").write_text("import hl_dep\n")
+    (tmp_path / "hl_dep.py").write_text("y = 1\n")
+    monkeypatch.syspath_prepend(str(tmp_path))
+    monkeypatch.setattr(harness_lock, "WORKER_ROOTS", ("hl_worker",))
+    harness_lock.lock(("hl_main",), tmp_path)
+
+
+def test_a_moved_worker_file_stops_the_next_render(tmp_path, monkeypatch):
+    _locked_worker(tmp_path, monkeypatch)
+    spawned = []
+    monkeypatch.setattr(render_rows.subprocess, "run", lambda *a, **k: spawned.append(a))
+    try:
+        harness_lock.check_workers()
+        dep = tmp_path / "hl_dep.py"
+        stamp = dep.stat().st_mtime_ns
+        dep.write_text("y = 2\n")
+        os.utime(dep, ns=(stamp + 10**9, stamp + 10**9))
+        with pytest.raises(harness_lock.HarnessFileMoved, match="harness file hl_dep.py changed"):
+            render_rows.render_model_rows_subprocess(tmp_path, 0, "p", "60")
+        assert not spawned
+        # Not a RuntimeError, so a render-failure handler cannot score it as one.
+        assert not issubclass(harness_lock.HarnessFileMoved, RuntimeError)
+    finally:
+        harness_lock.unlock()
+        for name in ("hl_main", "hl_worker", "hl_dep"):
+            sys.modules.pop(name, None)
+
+
+def test_a_deleted_worker_file_counts_as_moved(tmp_path):
+    f = tmp_path / "a.py"
+    f.write_text("x = 1\n")
+    snap = {str(f): f.stat().st_mtime_ns}
+    assert harness_lock.moved_since(snap) is None
+    f.unlink()
+    assert harness_lock.moved_since(snap) == "a.py"
+
+
+def test_no_lock_means_no_check(tmp_path, monkeypatch):
+    harness_lock.unlock()
+    harness_lock.check_workers()
+    monkeypatch.setattr(render_rows, "dylib_path", lambda b: None)
+    with pytest.raises(RuntimeError, match="no libsonare dylib"):
+        render_rows.render_model_rows_subprocess(tmp_path, 0, "p", "60")
+
+
+def test_stat_check_cost_on_the_real_closure():
+    roots = harness_lock.WORKER_ROOTS
+    start = time.perf_counter()
+    snap = harness_lock.snapshot_mtimes(roots)
+    taken = time.perf_counter() - start
+    runs = 200
+    start = time.perf_counter()
+    for _ in range(runs):
+        assert harness_lock.moved_since(snap) is None
+    per_call = (time.perf_counter() - start) / runs
+    print(
+        f"\nsnapshot of {len(snap)} files: {taken * 1e3:.2f} ms; moved_since: {per_call * 1e6:.1f} us"
+    )
+    assert snap
