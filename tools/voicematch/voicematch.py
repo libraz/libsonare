@@ -342,7 +342,7 @@ def run_compare(args: argparse.Namespace) -> int:
         out.mkdir(parents=True, exist_ok=True)
         (out / "notes.mid").write_bytes(smf_bytes)
 
-        model = render_model(smf_bytes, total, SR)
+        model = render_model(smf_bytes, total, SR, rig=True)
         oracle = obtain_oracle(
             args,
             smf_bytes,
@@ -596,7 +596,7 @@ def run_room_match(args: argparse.Namespace) -> int:
         f"pat = build_pattern({args.pattern!r}, prog)\n"
         "smf = write_smf(pat.notes, program=prog, channel=pat.channel, "
         "end_pad=pat.tail, sends=(cc91, 0, 0))\n"
-        "a = render_model.render_model(smf, pattern_length(pat), 48000)\n"
+        "a = render_model.render_model(smf, pattern_length(pat), 48000, rig=True)\n"
         "r = estimate_room(a, 48000, [(n.start, n.start + n.dur) for n in pat.notes])\n"
         "print(f'{r.rt60_s} {r.tail_db} {r.hf_ratio}')\n"
     )

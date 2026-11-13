@@ -346,7 +346,7 @@ def room_match(cfg: dict, *, archive: Path, take_id: str, program: int, verbose:
         "t = [x for x in build_takes(tset, prog) if x.id == tid][0]\n"
         "smf = write_smf(t.notes, program=prog, end_pad=t.tail_s, "
         "cc_events=t.cc_events, channel=t.channel, sends=(cc91, 0, 0))\n"
-        "a = render_model(smf, t.duration(), 48000)\n"
+        "a = render_model(smf, t.duration(), 48000, rig=True)\n"
         "r = estimate_room(a, 48000, [(n.start, n.start + n.dur) for n in t.notes])\n"
         "print(f'{r.rt60_s} {r.tail_db} {r.hf_ratio}')\n"
     )

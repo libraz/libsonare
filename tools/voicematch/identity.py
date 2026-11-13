@@ -81,7 +81,7 @@ program, channel, seconds, gate, bank = (int(sys.argv[1]), int(sys.argv[2]),
 for note, velocity in json.loads(sys.argv[5]):
     smf = write_smf([Note(note, velocity, 0.1, gate)], program=program, bank=bank,
                     channel=channel, end_pad=1.0)
-    a = np.asarray(render_model(smf, seconds, 48000), dtype=np.float32)
+    a = np.asarray(render_model(smf, seconds, 48000, rig=True), dtype=np.float32)
     peak = float(np.max(np.abs(a))) if a.size else 0.0
     sys.stdout.write(hashlib.sha256(a.tobytes()).hexdigest() + " " + repr(peak) + "\n")
 """

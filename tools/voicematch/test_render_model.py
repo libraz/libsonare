@@ -211,8 +211,8 @@ def test_a_path_record_is_returned_with_the_audio_and_names_the_bank(monkeypatch
     }
     seen, lib_sha = _fake_bounce_library(monkeypatch, tmp_path, record=record)
 
-    rendered = render_model.render_model_rendered(b"MThd", 0.01, 48000, request_id="req")
-    again = render_model.render_model_rendered(b"MThd", 0.01, 48000, request_id="req")
+    rendered = render_model.render_model_rendered(b"MThd", 0.01, 48000, rig=True, request_id="req")
+    again = render_model.render_model_rendered(b"MThd", 0.01, 48000, rig=True, request_id="req")
 
     ev = rendered.evidence
     assert ev["status"] == "recorded" and ev["reason"] is None
@@ -231,7 +231,7 @@ def test_a_path_record_is_returned_with_the_audio_and_names_the_bank(monkeypatch
 def test_no_path_record_leaves_the_evidence_unknown_and_says_why(monkeypatch, tmp_path):
     _, lib_sha = _fake_bounce_library(monkeypatch, tmp_path, record=None)
 
-    ev = render_model.render_model_rendered(b"MThd", 0.01, 48000).evidence
+    ev = render_model.render_model_rendered(b"MThd", 0.01, 48000, rig=True).evidence
 
     assert ev["status"] == "unknown" and ev["path"] is None and ev["complete"] is False
     assert ev["reason"] == render_model.NO_PATH_RECORD
@@ -245,7 +245,7 @@ def test_no_path_record_leaves_the_evidence_unknown_and_says_why(monkeypatch, tm
 
 def test_a_record_of_another_schema_is_not_read_as_evidence(monkeypatch, tmp_path):
     _fake_bounce_library(monkeypatch, tmp_path, record={"schema": 2, "complete": True})
-    ev = render_model.render_model_rendered(b"MThd", 0.01, 48000).evidence
+    ev = render_model.render_model_rendered(b"MThd", 0.01, 48000, rig=True).evidence
     assert ev["status"] == "unknown" and ev["path"] is None
     assert "schema 2" in ev["reason"]
 

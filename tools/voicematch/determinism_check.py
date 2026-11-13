@@ -86,7 +86,7 @@ import sys
 sys.path.insert(0, {tools_dir!r})
 from determinism_check import single_note_smf
 from render_model import render_model
-audio = render_model(single_note_smf({program}), total_seconds=3.5, sr={sr})
+audio = render_model(single_note_smf({program}), total_seconds=3.5, sr={sr}, rig=True)
 audio.astype("<f4").tofile({out!r})
 """
 
@@ -144,10 +144,10 @@ def compare_b(program: int) -> dict:
     start2 = round((ONSET + GAP) * SR)
 
     a_audio = np.atleast_2d(
-        render_model(single_note_smf(program), total_seconds=total_seconds, sr=SR)
+        render_model(single_note_smf(program), total_seconds=total_seconds, sr=SR, rig=True)
     )
     b_audio = np.atleast_2d(
-        render_model(double_hit_smf(program), total_seconds=total_seconds, sr=SR)
+        render_model(double_hit_smf(program), total_seconds=total_seconds, sr=SR, rig=True)
     )
     a = np.asarray(a_audio, dtype=np.float64)
     b = np.asarray(b_audio, dtype=np.float64)

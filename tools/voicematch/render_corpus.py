@@ -268,7 +268,7 @@ def main() -> int:
             sends=(None, None, None),
         )
 
-        audio = render_model(smf_bytes, seconds)
+        audio = render_model(smf_bytes, seconds, SR, rig=True)
         name = f"{program:03d}_{slug}" if program >= 0 else f"drm_{slug}"
         write_wav(out_dir / f"{name}.wav", audio, SR)
         results[name] = metrics(audio, SR)

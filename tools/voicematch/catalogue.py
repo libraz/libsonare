@@ -180,7 +180,7 @@ def dump_catalogue(
             "pat = build_pattern(%r, %d, **kw)\n"
             "render_model.render_model(write_smf("
             "pat.notes, program=%d, bank=%d, channel=pat.channel, end_pad=pat.tail), "
-            "pattern_length(pat), %d)\n"
+            "pattern_length(pat), %d, rig=True)\n"
         ) % (
             str(HERE),
             tuple(int(n) for n in notes.split(",")) if notes else (),

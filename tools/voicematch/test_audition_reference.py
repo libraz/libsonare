@@ -964,7 +964,9 @@ def test_a_subprocess_render_returns_the_workers_evidence(monkeypatch):
         return SimpleNamespace(returncode=0, stderr="")
 
     monkeypatch.setattr(make_audition.subprocess, "run", fake_run)
-    rendered = make_audition.render_variant_rendered(b"MThd", 0.1, 48000, "a=1", request_id="req-1")
+    rendered = make_audition.render_variant_rendered(
+        b"MThd", 0.1, 48000, "a=1", rig=True, request_id="req-1"
+    )
     assert rendered.audio.shape == (4, 2)
     assert rendered.evidence == _evidence("req-1")
 

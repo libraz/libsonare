@@ -224,11 +224,14 @@ def render_variant(
     sr: int,
     overrides: str,
     lib_path: str = "",
-    rig: bool = True,
+    *,
+    rig: bool,
     preset: str = "",
 ) -> np.ndarray:
     """`render_variant_rendered` for a caller that wants the audio alone."""
-    return render_variant_rendered(smf, seconds, sr, overrides, lib_path, rig, preset).audio
+    return render_variant_rendered(
+        smf, seconds, sr, overrides, lib_path, rig=rig, preset=preset
+    ).audio
 
 
 def render_variant_rendered(
@@ -237,7 +240,8 @@ def render_variant_rendered(
     sr: int,
     overrides: str,
     lib_path: str = "",
-    rig: bool = True,
+    *,
+    rig: bool,
     preset: str = "",
     request_id: str | None = None,
 ) -> RenderedAudio:
@@ -1063,11 +1067,18 @@ def render_take(
     keep(
         "model",
         render_variant_rendered(
-            smf, total, SR, "", args.lib, preset=voice.preset, request_id=product.fingerprint()
+            smf,
+            total,
+            SR,
+            "",
+            args.lib,
+            rig=product.rig,
+            preset=voice.preset,
+            request_id=product.fingerprint(),
         )
         if args.lib
         else render_model_rendered(
-            smf, total, SR, preset=voice.preset, request_id=product.fingerprint()
+            smf, total, SR, rig=product.rig, preset=voice.preset, request_id=product.fingerprint()
         ),
     )
     print("  model", file=sys.stderr)
@@ -1140,6 +1151,7 @@ def render_take(
                 SR,
                 variant.overrides,
                 args.lib,
+                rig=product.rig,
                 preset=voice.preset,
                 request_id=replace(product, overrides=variant.overrides).fingerprint(),
             ),

@@ -183,7 +183,7 @@ def render_evidence(request_id: str, dump: Path, library: str) -> dict:
 
 
 def render_model(
-    smf_bytes: bytes, total_seconds: float, sr: int = 48000, *, rig: bool = True, preset: str = ""
+    smf_bytes: bytes, total_seconds: float, sr: int, *, rig: bool, preset: str = ""
 ) -> np.ndarray:
     """`render_model_rendered` for a caller that wants the audio alone."""
     return render_model_rendered(smf_bytes, total_seconds, sr, rig=rig, preset=preset).audio
@@ -192,9 +192,9 @@ def render_model(
 def render_model_rendered(
     smf_bytes: bytes,
     total_seconds: float,
-    sr: int = 48000,
+    sr: int,
     *,
-    rig: bool = True,
+    rig: bool,
     preset: str = "",
     request_id: str | None = None,
 ) -> RenderedAudio:
@@ -208,9 +208,9 @@ def render_model_rendered(
     bare patch.
 
     `rig` selects which side of the instrument's boundary the render stops at.
-    The default is the product sound — the bank binds an amplifier after an
-    electric guitar's voice, and a listener hears it — which is what an audition
-    should play and what a consumer gets from the same file.
+    It has no default: `True` is the product sound — the bank binds an amplifier
+    after an electric guitar's voice, which an audition plays — and a caller
+    holding a capture takes it from `model_rig(cfg)` so the two cannot disagree.
 
     A measurement passes `rig=False` when the reference it will be compared with
     was captured at the instrument's own boundary. Comparing a rigged model
