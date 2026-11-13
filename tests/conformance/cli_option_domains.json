@@ -652,6 +652,19 @@
       "exclusiveMaximum": false
     },
     {
+      "command": "transcribe",
+      "option": "monophonic-model",
+      "rejectExit": "invalid_parameter",
+      "choices": [
+        "segments",
+        "singing"
+      ],
+      "minimum": null,
+      "exclusiveMinimum": false,
+      "maximum": null,
+      "exclusiveMaximum": false
+    },
+    {
       "command": "tune-to-midi",
       "option": "track",
       "rejectExit": "invalid_parameter",
