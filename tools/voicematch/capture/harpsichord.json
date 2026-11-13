@@ -66,6 +66,9 @@
     88,
     120
   ],
+  "dimensions_na": {
+    "attack_hf_swing": "the reference's velocity response is a sampler tone filter rather than the instrument's: over all 11 notes the 4-8 kHz share rises 1.6-2.7 dB from v24 to v120 in the same per-step increments at every register, each partial's v120-v24 difference is a smooth function of its absolute frequency (+0.4 dB near 1 kHz, up to +3 dB by 4 kHz), and the decay rate does not move (n84 -11.89 against -12.13 dB/s) - one sample per note under a velocity-tracked filter, while a harpsichord's jack speed moves neither its level nor its centroid (Paté et al. 2017)"
+  },
   "source_class": "library",
   "_identity": "Which product this was captured from lives in the untracked sibling `harpsichord.local.json`: the plugin's component triple and each timbre's preset. Everything here is the method, which is the part worth keeping. Re-capturing needs the overlay; scoring, fitting and diagnosing read `reference/harpsichord.json` and need nothing."
 }
