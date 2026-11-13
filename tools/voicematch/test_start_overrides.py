@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import json
 import sys
+from dataclasses import replace
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -15,14 +16,21 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import autofit
 import fits
+import knobs as knobs_module
 import report
+from catalogue import TunableDef
 from knobs import (
     Knob,
     apply_start_overrides,
+    build_knobs,
+    describe_moved_starts,
     head_of,
     load_start_overrides,
+    moved_starts,
+    start_report,
     tunable_overrides,
 )
+from writeback import patch_field_assignments
 
 
 def _knob(label: str, *, lo=0.0, hi=10.0, start=3.0, tunable=True) -> Knob:
@@ -88,9 +96,9 @@ def test_a_fit_record_carries_the_start_next_to_the_base():
 
 
 def test_the_report_states_what_its_start_numbers_are_relative_to():
-    assert "start-override point" in report._anchors("a.x=1")["start"]
+    assert "moved from HEAD (spec: a.x)" in report._anchors("spec: a.x")["start"]
     assert "HEAD's render" in report._anchors("")["start"]
-    assert report._anchors("a.x=1")["gate_audit_pre"].startswith("HEAD")
+    assert report._anchors("spec: a.x")["gate_audit_pre"].startswith("HEAD")
 
 
 def _fold(tmp_path, evaluator) -> dict:
@@ -102,7 +110,7 @@ def _fold(tmp_path, evaluator) -> dict:
 
 def _evaluator(start_overrides: str, **extra):
     return SimpleNamespace(
-        args=argparse.Namespace(start_overrides=start_overrides),
+        args=argparse.Namespace(start_moved=start_overrides),
         write_back_refusal=None,
         start_level_offset_db=-2.0,
         best_level_offset_db=-3.0,
@@ -116,7 +124,7 @@ def test_level_anchor_names_its_anchor_and_reads_head_apart(tmp_path):
     assert "head_offset_db" not in plain and plain["drift_fence_anchor"] == "start"
 
     moved = _fold(tmp_path, _evaluator("a.x=7.0", head_level_offset_db=-1.0))
-    assert "start-override point" in moved["anchor"] and "a.x=7.0" in moved["anchor"]
+    assert "moved from HEAD" in moved["anchor"] and "a.x=7.0" in moved["anchor"]
     assert moved["head_offset_db"] == -1.0 and moved["winner_minus_head_db"] == -2.0
     assert moved["winner_minus_start_db"] == -1.0 and moved["drift_fence_anchor"] == "start"
 
@@ -140,3 +148,105 @@ def test_head_is_rendered_once_and_only_for_runtime_knobs():
     me.head_level_offset_db = None
     autofit.Evaluator.read_head_level(me, [_knob("s", tunable=False)])
     assert me.head_level_offset_db is None and "source knob" in me.head_level_unavailable
+
+
+def _fake_tunable(monkeypatch, tmp_path, name="kBellRadiationNorm", value=0.35):
+    src = tmp_path / "reed_voice.cpp"
+    src.write_text(f"SONARE_TUNABLE({name}, {value}f);\n")
+    at = src.read_text().index(str(value))
+    found = TunableDef(file=src, value=value, span_start=at, span_end=at + len(str(value)))
+    monkeypatch.setattr(knobs_module, "scan_tunables", lambda: {name: found})
+    monkeypatch.setattr(knobs_module, "resolve_knob_name", lambda key, _t: key)
+
+
+_ENGINE_ENTRY = {"tunable": "kBellRadiationNorm", "min": 0.35, "max": 2.0, "start": 0.7}
+
+
+def test_an_engine_tunable_starts_at_its_spec_start_and_keeps_the_shipped_head(
+    monkeypatch, tmp_path, capsys
+):
+    _fake_tunable(monkeypatch, tmp_path)
+    built = build_knobs([dict(_ENGINE_ENTRY)], {})
+    assert built[0].start_value == 0.7 and head_of(built[0]) == 0.35
+    assert built[0].start_source == "spec"
+    lines = start_report(built)
+    assert lines[0] == "start kBellRadiationNorm 0.7 (from spec; HEAD 0.35)"
+    assert lines[1] == "0 of 1 knobs start at HEAD"
+    plain = build_knobs([{k: v for k, v in _ENGINE_ENTRY.items() if k != "start"}], {})
+    assert plain[0].start_value == 0.35 and plain[0].start_source == "head"
+    assert start_report(plain) == ["1 of 1 knobs start at HEAD"]
+
+
+def test_a_spec_start_outside_the_range_is_clamped_and_the_head_stays_shipped(
+    monkeypatch, tmp_path, capsys
+):
+    _fake_tunable(monkeypatch, tmp_path)
+    built = build_knobs([{**_ENGINE_ENTRY, "start": 9.0}], {})
+    assert built[0].start_value == 2.0 and head_of(built[0]) == 0.35
+    assert "clamped to 2.0" in capsys.readouterr().err
+
+
+def test_a_file_pattern_knob_takes_its_spec_start(tmp_path):
+    src = tmp_path / "x.cpp"
+    src.write_text("float kGain = 1.5f;\n")
+    entry = {"file": str(src), "pattern": r"kGain = ([0-9.]+)f", "min": 0.5, "max": 4.0}
+    built = build_knobs([{**entry, "start": 3.0}], {})
+    assert built[0].start_value == 3.0 and head_of(built[0]) == 1.5
+    assert built[0].start_source == "spec"
+    assert build_knobs([entry], {})[0].start_source == "head"
+
+
+def test_a_start_in_both_the_spec_and_the_override_is_refused(monkeypatch, tmp_path):
+    _fake_tunable(monkeypatch, tmp_path)
+    built = build_knobs([dict(_ENGINE_ENTRY)], {})
+    with pytest.raises(ValueError, match=r"kBellRadiationNorm.*0\.7.*0\.9"):
+        apply_start_overrides(built, "kBellRadiationNorm=0.9", tunables={})
+    # A spec start that equals HEAD is still a start given in the spec.
+    same = build_knobs([{**_ENGINE_ENTRY, "start": 0.35}], {})
+    with pytest.raises(ValueError, match="both the spec and --start-overrides"):
+        apply_start_overrides(same, "kBellRadiationNorm=0.9", tunables={})
+
+
+def test_a_start_override_is_recorded_as_its_source(monkeypatch, tmp_path):
+    _fake_tunable(monkeypatch, tmp_path)
+    built = build_knobs([{k: v for k, v in _ENGINE_ENTRY.items() if k != "start"}], {})
+    apply_start_overrides(built, "kBellRadiationNorm=0.9", tunables={})
+    assert built[0].start_source == "start override"
+    assert start_report(built)[0].startswith("start kBellRadiationNorm 0.9 (from start override;")
+
+
+def test_the_record_carries_each_knobs_start_source(monkeypatch, tmp_path):
+    _fake_tunable(monkeypatch, tmp_path)
+    built = build_knobs([dict(_ENGINE_ENTRY)], {})
+    entry = report.knob_records(built, [0.7])[0]
+    assert entry["start_source"] == "spec" and entry["head"] == 0.35 and entry["start"] == 0.7
+
+
+def test_a_spec_started_patch_field_that_ends_at_its_start_is_still_written():
+    catalogue = SimpleNamespace(defaults={"fam3.piano.brightness": 0.35})
+    spec = [{"tunable": "fam3.piano.brightness", "min": 0.0, "max": 2.0, "start": 0.7}]
+    built = build_knobs(spec, {}, catalogue)
+    assert head_of(built[0]) == 0.35
+    shipped = [replace(k, start_value=head_of(k), head_value=None) for k in built]
+    _, _, per_family, _ = patch_field_assignments(shipped, [0.7])
+    assert per_family == {3: [("piano.brightness", 0.7)]}
+    # Left at HEAD's value the same knob is not written.
+    assert patch_field_assignments(shipped, [0.35])[2] == {}
+    assert tunable_overrides(built, [0.7], changed_only=True) == "fam3.piano.brightness=0.7"
+
+
+def test_a_spec_only_start_gets_the_moved_anchor_and_a_head_read(monkeypatch, tmp_path):
+    _fake_tunable(monkeypatch, tmp_path)
+    built = build_knobs([dict(_ENGINE_ENTRY)], {})
+    moved = describe_moved_starts(built)
+    assert moved == "spec: kBellRadiationNorm" and moved_starts(built) == built
+    assert "moved from HEAD (spec: kBellRadiationNorm)" in report._anchors(moved)["start"]
+    anchor = _fold(tmp_path, _evaluator(moved, head_level_offset_db=-1.0))
+    assert "moved from HEAD (spec: kBellRadiationNorm)" in anchor["anchor"]
+    assert anchor["head_offset_db"] == -1.0
+    unmoved = build_knobs([{**_ENGINE_ENTRY, "start": 0.35}], {})
+    assert describe_moved_starts(unmoved) == ""
+    mixed = build_knobs([dict(_ENGINE_ENTRY)], {})
+    mixed.append(_knob("a.y"))
+    apply_start_overrides(mixed, "a.y=5", tunables={})
+    assert describe_moved_starts(mixed) == "spec: kBellRadiationNorm; start override: a.y"

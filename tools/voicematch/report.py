@@ -115,6 +115,36 @@ def _quality_display(report: dict) -> None:
             )
 
 
+NOT_A_SEARCH = "not a search"
+
+
+def optimizer_minimum(optimizer: str | None, dimension: int, population: int = 0) -> int:
+    """Fewest evaluations an optimizer needs over `dimension` knobs to move off the start point.
+
+    - `coord`: 2n+1 — the start point plus a probe either side of it on every knob. The
+      `--screen` pass costs 2n on its own and leaves the same floor.
+    - `cmaes`: the start point plus two generations of its population (`--population`, else
+      4 + floor(3 ln n), at least 4), so the distribution is updated at least once; never
+      below the 2n+1 coverage floor.
+    """
+    if not dimension:
+        return 0
+    coverage = 2 * dimension + 1
+    if optimizer == "cmaes":
+        lam = max(population if population > 0 else 4 + int(3 * math.log(dimension)), 4)
+        return max(coverage, 1 + 2 * lam)
+    return coverage
+
+
+def budget_line(max_evals: int, dimension: int, optimizer: str | None, minimum: int) -> str:
+    """The start-up line stating the knobs against the budget and what the optimizer needs."""
+    return (
+        f"search budget: {dimension} knobs, max_evals={max_evals}, "
+        f"{max_evals / dimension if dimension else 0:.1f} evals per knob; "
+        f"{optimizer or 'coord'} needs at least {minimum}"
+    )
+
+
 def broad_budget_warning(max_evals: int | None, dimension: int) -> str | None:
     """Warn when a runtime fit's budget is below the 2*n+1 broad-coverage baseline."""
 
@@ -135,7 +165,9 @@ def search_effort(evaluator, args, dimension: int, spec_dimension: int | None = 
     max_evals = getattr(args, "max_evals", None)
     max_evals = int(max_evals) if max_evals is not None else None
     evals_per_knob = evaluations / dimension if dimension else None
-    minimum = 2 * dimension + 1 if dimension else 0
+    minimum = getattr(args, "minimum_evals", None) or optimizer_minimum(
+        getattr(args, "optimizer", None), dimension, getattr(args, "population", 0) or 0
+    )
     warning = (
         None
         if getattr(evaluator, "needs_rebuild", False)
@@ -148,14 +180,33 @@ def search_effort(evaluator, args, dimension: int, spec_dimension: int | None = 
         "max_evals": max_evals,
         "evaluations": evaluations,
         "evals_per_knob": evals_per_knob,
-        "minimum_broad_evals": minimum or None,
+        "minimum_broad_evals": 2 * dimension + 1 if dimension else None,
+        "minimum_evals": minimum or None,
+        "search": NOT_A_SEARCH if minimum and evaluations < minimum else "search",
         "budget_warning": warning,
     }
 
 
-def _anchors(start_overrides: str) -> dict:
+def knob_records(knobs, best_values) -> list[dict]:
+    """The `--out` record's per-knob entries: start, where it came from, head, best and range."""
+    return [
+        {
+            "key": k.label,
+            "start": _finite(k.start_value),
+            "start_source": k.start_source,
+            **({"head": _finite(head_of(k))} if head_of(k) != k.start_value else {}),
+            "best": _finite(b),
+            "min": _finite(k.lo),
+            "max": _finite(k.hi),
+            "scale": "log" if k.log else "linear",
+        }
+        for k, b in zip(knobs, best_values)
+    ]
+
+
+def _anchors(start_moved: str) -> dict:
     """What the report's start-relative numbers are relative to."""
-    anchor = "the start-override point" if start_overrides else "HEAD's render"
+    anchor = f"the start point moved from HEAD ({start_moved})" if start_moved else "HEAD's render"
     return {
         "start": f"{anchor}: loss.start, the loss calibration and --max-level-drift-db "
         f"are anchored on it",
@@ -188,7 +239,7 @@ def print_level_drift(evaluator, label: str = "") -> None:
         f"  the winner's whole-grid level sits {drift:+.1f} dB against the start point "
         f"({start:+.1f} -> {best:+.1f} dB against the reference)"
     )
-    if getattr(getattr(evaluator, "args", None), "start_overrides", ""):
+    if getattr(getattr(evaluator, "args", None), "start_moved", ""):
         head = getattr(evaluator, "head_level_offset_db", None)
         why = getattr(evaluator, "head_level_unavailable", None) or "not read"
         print(
@@ -457,7 +508,11 @@ def report_result(knobs, pristine, best_values, evaluator, args, extra=None) -> 
             elif margin < -0.005:
                 verdict = "does NOT generalise — worse than the defaults off the probe"
             else:
-                verdict = "unchanged off the probe"
+                verdict = (
+                    NOT_A_SEARCH
+                    if len(evaluator.trajectory) < (getattr(args, "minimum_evals", 0) or 0)
+                    else "unchanged off the probe"
+                )
             print(f"\n== held-out {v['axis']} {v['held_out']} ==")
             print(f"  start {v['start']:.4f}  ->  best {v['best']:.4f}   {verdict}")
             held_quality = v.get("best_quality")
@@ -503,6 +558,12 @@ def report_result(knobs, pristine, best_values, evaluator, args, extra=None) -> 
         f"evaluations={effort['evaluations']} max_evals={effort['max_evals']!r} "
         f"evals_per_knob={effort['evals_per_knob']!r}"
     )
+    if effort["search"] == NOT_A_SEARCH:
+        print(
+            f"  {NOT_A_SEARCH}: {effort['evaluations']} evaluations is below the "
+            f"{effort['minimum_evals']} {effort['optimizer'] or 'coord'} needs; "
+            "an unchanged result says nothing about the voice"
+        )
     if effort["budget_warning"]:
         print(f"  warning: {effort['budget_warning']}")
     full_spec_warning = extra.get("full_spec_budget_warning")
@@ -626,22 +687,11 @@ def report_result(knobs, pristine, best_values, evaluator, args, extra=None) -> 
             },
             "evaluations": len(evaluator.trajectory),
             "renders": evaluator.n_renders,
-            "knobs": [
-                {
-                    "key": k.label,
-                    "start": _finite(k.start_value),
-                    **({"head": _finite(head_of(k))} if head_of(k) != k.start_value else {}),
-                    "best": _finite(b),
-                    "min": _finite(k.lo),
-                    "max": _finite(k.hi),
-                    "scale": "log" if k.log else "linear",
-                }
-                for k, b in zip(knobs, best_values)
-            ],
+            "knobs": knob_records(knobs, best_values),
             "overrides": overrides,
             "base_overrides": getattr(args, "base_overrides", ""),
             "start_overrides": getattr(args, "start_overrides", ""),
-            "anchors": _anchors(getattr(args, "start_overrides", "")),
+            "anchors": _anchors(getattr(args, "start_moved", "")),
             "path": [
                 {
                     "eval": i,

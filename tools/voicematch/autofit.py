@@ -334,6 +334,7 @@ from knobs import (
     clamp_check,
     clamp_warning,
     declared_ranges,
+    describe_moved_starts,
     format_value,
     hand_spec_warnings,
     head_of,
@@ -344,6 +345,7 @@ from knobs import (
     load_spec,
     load_spec_weights,
     load_start_overrides,
+    start_report,
     tunable_overrides,
 )
 from loss import (
@@ -387,7 +389,13 @@ from render_rows import (
     render_rate,
     resolve_metric_threads,
 )
-from report import _json_safe, broad_budget_warning, report_result
+from report import (
+    _json_safe,
+    broad_budget_warning,
+    budget_line,
+    optimizer_minimum,
+    report_result,
+)
 from room import apply_room, estimate_room, fit_room_ir
 from smf import write_smf
 from staging import SubEvaluator, run_stages, screen_knobs
@@ -975,7 +983,7 @@ class Evaluator:
         return self._record(values, terms, rendered=False)
 
     def read_head_level(self, knobs) -> None:
-        """Read HEAD's own whole-grid level when the start is a `--start-overrides` point.
+        """Read HEAD's own whole-grid level when the start is moved from HEAD (spec or override).
 
         One render at most, and none for a spec with a source knob (that needs the tree
         spliced); the reason is kept when the reading is unavailable.
@@ -2391,10 +2399,10 @@ def _fold_write_back_verdict(
     # unless --start-overrides moved it: then the anchor is that point and HEAD is read apart.
     start = getattr(first, "start_level_offset_db", None)
     best = getattr(first, "best_level_offset_db", None)
-    moved = getattr(getattr(evaluator, "args", None), "start_overrides", "")
+    moved = getattr(getattr(evaluator, "args", None), "start_moved", "")
     anchor = {
         "anchor": (
-            f"start-override point ({moved}); base overrides included"
+            f"start point moved from HEAD ({moved}); base overrides included"
             if moved
             else "start values (HEAD's render, base overrides included)"
         ),
@@ -2415,7 +2423,7 @@ def _fold_write_back_verdict(
         )
     record["level_anchor"] = anchor
     if start is not None and best is not None:
-        against = "the start-override point" if moved else "HEAD's render"
+        against = "the moved start point" if moved else "HEAD's render"
         print(f"level: winner {best - start:+.2f} dB against {against}", file=sys.stderr)
     if moved and anchor.get("winner_minus_head_db") is not None:
         print(
@@ -2950,6 +2958,9 @@ def run(args, argv: list[str] | None = None) -> int:
     )
     if args.start_overrides:
         print(f"start overrides: {args.start_overrides}", file=sys.stderr)
+    args.start_moved = describe_moved_starts(knobs)
+    for line in start_report(knobs):
+        print(line, file=sys.stderr)
 
     # Before any render of the fit: a base key a knob owns, or one the library
     # does not know, would otherwise run to the end and say nothing.
@@ -3006,6 +3017,29 @@ def run(args, argv: list[str] | None = None) -> int:
     )
     if full_spec_budget_warning:
         print(f"warning: {full_spec_budget_warning}", file=sys.stderr)
+
+    # Before the first render: a budget under what the optimizer needs to move at
+    # all returns the start point as the winner, and says nothing about the space.
+    args.minimum_evals = optimizer_minimum(
+        args.optimizer, len(knobs), getattr(args, "population", 0)
+    )
+    print(
+        budget_line(args.max_evals, len(knobs), args.optimizer, args.minimum_evals), file=sys.stderr
+    )
+    searches = not any(getattr(args, f, None) for f in ("diagnose", "grid", "dump_knobs"))
+    if searches and args.max_evals < args.minimum_evals:
+        if not getattr(args, "short_run", False):
+            raise ValueError(
+                f"--max-evals {args.max_evals} is below the {args.minimum_evals} that "
+                f"--optimizer {args.optimizer} needs over {len(knobs)} knobs; raise "
+                f"--max-evals (or use --evals-per-knob), or pass --short-run if the short "
+                f"run is deliberate"
+            )
+        print(
+            f"warning: --short-run: {args.max_evals} evaluations is not a search "
+            f"over {len(knobs)} knobs",
+            file=sys.stderr,
+        )
 
     if not lib:
         configure_build(build_dir, args.cmake, tuning=n_runtime > 0)
@@ -3113,7 +3147,7 @@ def run(args, argv: list[str] | None = None) -> int:
                 run_stages(problem, fit_knobs, args, optimizer)
             else:
                 optimizer(problem, fit_knobs, args)
-            if args.start_overrides:
+            if args.start_moved:
                 evaluator.read_head_level(knobs)
         finally:
             # Always undo this run's own edits, whatever happened above — and
@@ -3370,6 +3404,15 @@ def build_parser() -> argparse.ArgumentParser:
         dest="evals_per_knob",
         help="set --max-evals to this many evaluations per resolved knob, for a spec whose "
         "size is only known once --spec auto has read the catalogue",
+    )
+    parser.add_argument(
+        "--short-run",
+        action="store_true",
+        dest="short_run",
+        help="run although --max-evals is below the minimum the optimizer needs over this "
+        "many knobs (2n+1 for coord; one start point plus two populations for cmaes). "
+        "Without it the run is refused before the first render; with it the result is "
+        "labelled 'not a search'",
     )
     parser.add_argument(
         "--optimizer",

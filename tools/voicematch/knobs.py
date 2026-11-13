@@ -58,6 +58,8 @@ class Knob:
     start_value: float
     #: The shipped value, when the search starts elsewhere (`--start-overrides`); None = start.
     head_value: float | None = None
+    #: Where `start_value` came from: "head" (the shipped value), "spec" or "start override".
+    start_source: str = "head"
     tunable: str | None = None
     file: Path | None = None
     pattern: str | None = None
@@ -69,6 +71,45 @@ def head_of(knob) -> float:
     """The value HEAD ships for a knob: what an unchanged knob is compared against."""
     head = getattr(knob, "head_value", None)
     return knob.start_value if head is None else head
+
+
+def _started(
+    entry: dict, shipped: float, lo: float, hi: float, label: str
+) -> tuple[float, float | None, str]:
+    """A knob's (start, head, source): the entry's `start` if it has one, else the shipped value.
+
+    The head is the shipped value clamped into the range, and is None when the knob starts there.
+    """
+    head = min(max(shipped, lo), hi)
+    if "start" not in entry:
+        return _clamp_start(shipped, lo, hi, label), None, "head"
+    start = _clamp_start(float(entry["start"]), lo, hi, label)
+    return start, (None if start == head else head), "spec"
+
+
+def moved_starts(knobs: list[Knob]) -> list[Knob]:
+    """The knobs whose start is not the shipped value: the one test for "the start is not HEAD"."""
+    return [k for k in knobs if head_of(k) != k.start_value]
+
+
+def describe_moved_starts(knobs: list[Knob]) -> str:
+    """Name the moved starts by source, e.g. `spec: a, b; start override: c`; empty if none."""
+    by_source: dict[str, list[str]] = {}
+    for k in moved_starts(knobs):
+        by_source.setdefault(k.start_source, []).append(k.label)
+    return "; ".join(f"{src}: {', '.join(names)}" for src, names in by_source.items())
+
+
+def start_report(knobs: list[Knob]) -> list[str]:
+    """The start-up lines naming every knob that does not start at HEAD, then the count that does."""
+    moved = moved_starts(knobs)
+    lines = [
+        f"start {k.label} {format_value(k.start_value)} "
+        f"(from {k.start_source}; HEAD {format_value(head_of(k))})"
+        for k in moved
+    ]
+    lines.append(f"{len(knobs) - len(moved)} of {len(knobs)} knobs start at HEAD")
+    return lines
 
 
 def _spec_document(spec_path: Path) -> dict:
@@ -187,27 +228,32 @@ def build_knobs(
                         f"knob #{i}: {name!r} is neither a SONARE_TUNABLE in src/ nor a key "
                         f"the library reported{hint}. Run --dump-knobs to list what exists."
                     )
-                start = entry.get("start", catalogue.defaults[name])
+                start, head, source = _started(entry, catalogue.defaults[name], lo, hi, name)
                 knobs.append(
                     Knob(
                         label=name,
                         lo=lo,
                         hi=hi,
                         log=log,
-                        start_value=_clamp_start(float(start), lo, hi, name),
+                        start_value=start,
+                        head_value=head,
+                        start_source=source,
                         tunable=name,
                     )
                 )
                 continue
             if found.file not in pristine:
                 pristine[found.file] = found.file.read_text()
+            start, head, source = _started(entry, found.value, lo, hi, name)
             knobs.append(
                 Knob(
                     label=name,
                     lo=lo,
                     hi=hi,
                     log=log,
-                    start_value=_clamp_start(found.value, lo, hi, name),
+                    start_value=start,
+                    head_value=head,
+                    start_source=source,
                     tunable=name,
                     file=found.file,
                     span_start=found.span_start,
@@ -243,13 +289,16 @@ def build_knobs(
         except (TypeError, ValueError):
             raise ValueError(f"knob #{i}: captured text {m.group(1)!r} is not a number") from None
         label = f"{Path(rel).name}:{pattern}"
+        start, head, source = _started(entry, start_value, lo, hi, label)
         knobs.append(
             Knob(
                 label=label,
                 lo=lo,
                 hi=hi,
                 log=log,
-                start_value=_clamp_start(start_value, lo, hi, label),
+                start_value=start,
+                head_value=head,
+                start_source=source,
                 file=path,
                 pattern=pattern,
                 span_start=m.start(1),
@@ -1485,8 +1534,19 @@ def apply_start_overrides(
             f"start override key(s) that are not search knobs: {', '.join(not_knobs)}. "
             f"Only a knob the spec searches has a starting point."
         )
+    twice = [
+        f"{k.label} (spec start {format_value(k.start_value)}, --start-overrides {format_value(v)})"
+        for k, v in out
+        if k.start_source == "spec"
+    ]
+    if twice:
+        raise ValueError(
+            f"start given in both the spec and --start-overrides: {', '.join(twice)}; "
+            f"give each knob one start"
+        )
     applied = []
     for knob, value in out:
+        knob.start_source = "start override"
         if knob.head_value is None:
             knob.head_value = knob.start_value
         knob.start_value = _clamp_start(

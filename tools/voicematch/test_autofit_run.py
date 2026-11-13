@@ -888,6 +888,7 @@ def test_allow_dirty_src_run_records_provenance_in_out(tmp_path, monkeypatch):
         diagnose=True,
         grid=0,
         optimizer="coord",
+        max_evals=30,
         metric_threads=0,
         out=str(out),
         dry_run=True,
