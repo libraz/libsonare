@@ -50,6 +50,12 @@
       "basis": "ruled: on the sustained scan the only surviving term that reads it is held-window crest, four phase-sensitive snapshots (stored-waveform groups) against a measured 3 dB of upper partials, which does not identify body_mix",
       "lane": "sustained"
     },
+    "trombone.cutoff_hz": {
+      "class": "pinned",
+      "value": 580.0,
+      "basis": "ruled: the bell carries level and register better than the post-voice lowpass (gain-removed level RMS against the reference 1.12 vs 2.53, register 0.94 vs 2.10, ladder 5.48 vs 6.42), but a fixed-hertz corner low enough to darken the low notes leaves fewer than about three supported partials at the top and h2 falls (n64 -8.8 vs -4.6 dB); bell-only is re-tested when the corner can follow the note (sustained trombone_grid and bell grids)",
+      "lane": "sustained"
+    },
     "filter_model": {
       "class": "identity",
       "basis": "filter topology / tap enum; a type, not a setting",
