@@ -455,7 +455,10 @@ def print_summary_table(summary: dict[str, dict], spread: dict[str, float], atte
             f"{row['n']:5d} {missing}"
         )
     if "tnr" in summary:
-        print("  caution: tnr reads vibrato/chorus/beating as noise until the measure is fixed")
+        print(
+            "  caution: tnr reads deep vibrato on bright notes and slow chorus as noise "
+            "until the measure is fixed"
+        )
     thin = [
         k for k, row in summary.items() if k not in PER_NOTE_DIMENSIONS and row["n"] < attempted
     ]

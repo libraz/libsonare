@@ -119,7 +119,7 @@ from metrics import (
     shared_band_edge,
     to_mono,
 )
-from metrics_floor import body_at_floor
+from metrics_floor import body_floor_state
 from phrases import TAKE_SETS, build_takes
 from profile_gate import (
     DELTA_LABELS,
@@ -1383,7 +1383,7 @@ def compare(
     deltas: dict[str, list[float]] = {}
     damper_censored: list[tuple[int, int]] = []
     span_censored: list[tuple[int, int]] = []
-    body_censored: list[tuple[int, int]] = []
+    body_censored: list[tuple[int, int, str]] = []
     # Per dimension, how many rows had no value on each side -- what a gate
     # writer says when a requested dimension yields no bound.
     tally = CensorTally()
@@ -1465,10 +1465,10 @@ def compare(
             span_censored.append((note, vel, m_span, r_span))
             for dim in ("decay", "aftersound", "doubling"):
                 tally.absent(dim, True, True)
-        # The reference's body band is its recording's own flat floor, so the delta is the floor's.
-        body_floor = body_at_floor(r)
+        # The reference's body band is its recording's own floor, so the delta is the floor's.
+        body_floor = body_floor_state(r)
         if body_floor:
-            body_censored.append((note, vel))
+            body_censored.append((note, vel, body_floor))
             tally.absent("body", False, True)
         row = {
             "stretch": None if stretch is None else stretch + a4_off,
@@ -1591,7 +1591,8 @@ def compare(
             f"\n^ {len(body_censored)} of {len(pairs)} rows: reference band at its recorded "
             "floor, so the body delta is left out of the median:"
         )
-        print("  " + ", ".join(f"n{n}v{v}" for n, v in body_censored))
+        for n, v, why in body_censored:
+            print(f"  n{n}v{v}: {why}")
     for note, model_peaks in sorted(peaks.get("m", {}).items()):
         ref_peaks = peaks.get("r", {}).get(note, {})
         shared = sorted(set(model_peaks) & set(ref_peaks))
