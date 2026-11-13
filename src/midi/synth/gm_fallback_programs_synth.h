@@ -210,6 +210,15 @@ constexpr void configure_synth_programs(ProgramOverrides& o) noexcept {
   o.lead_bass_lead.amp_env.sustain = 0.618034f;
   o.lead_bass_lead.filter_env.attack_ms = 0.33365f;
   o.lead_bass_lead.stereo_spread = 0.309017f;
+  // A faint noise floor with a narrow band at ~340 Hz between the partials: against the
+  // module this took tone-to-noise from 25.6 to 8.0 dB off and the band under f0 from 62 to
+  // 8.8 dB off, leaving the partial stack, the centroid and the level unchanged.
+  o.lead_bass_lead.va.noise_level = 0.00182408f;
+  o.lead_bass_lead.va.band_noise_level = 0.0012967f;
+  o.lead_bass_lead.va.band_noise_low_hz = 314.999f;
+  o.lead_bass_lead.va.band_noise_low_key_track = 0.722838f;
+  o.lead_bass_lead.va.band_noise_high_hz = 365.197f;
+  o.lead_bass_lead.va.band_noise_high_key_track = 0.171678f;
 
   // Synth Strings (GM 50, 51). Both hold a note that swells and falls by about
   // 10 dB, and the two differ in what that motion is made of: the second's rate
