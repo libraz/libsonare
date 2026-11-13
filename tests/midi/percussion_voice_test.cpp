@@ -1815,3 +1815,34 @@ TEST_CASE("the plate's 8 kHz band decays with the same T60 at every host rate",
     CHECK(std::fabs(t60 - reference) < 0.03 * reference);
   }
 }
+
+TEST_CASE("the percussion velocity_exponent scales the level span between soft and loud strikes",
+          "[midi][synth][percussion]") {
+  const auto level_ratio = [](float exponent, bool rms) {
+    NativeSynthPatch p = tom_patch();
+    p.percussion.velocity_exponent = exponent;
+    const auto measure = [&](uint8_t velocity) {
+      const std::vector<float> out = render_patch(p, 50, velocity, 4096);
+      double acc = 0.0;
+      double peak = 0.0;
+      for (float x : out) {
+        acc += static_cast<double>(x) * x;
+        peak = std::max(peak, static_cast<double>(std::fabs(x)));
+      }
+      return rms ? std::sqrt(acc / static_cast<double>(out.size())) : peak;
+    };
+    return measure(40) / measure(127);
+  };
+
+  // The strike model sees the same velocity under both exponents, so only the
+  // amplifier curve differs: the soft-to-loud ratio moves by (40/127)^(3.0 - 1.1).
+  const double expected = std::pow(40.0 / 127.0, 3.0 - 1.1);
+  for (const bool rms : {false, true}) {
+    const double shallow = level_ratio(1.1f, rms);
+    const double steep = level_ratio(3.0f, rms);
+    INFO("rms " << rms << " shallow " << shallow << " steep " << steep);
+    REQUIRE(shallow > 0.0);
+    CHECK(steep < shallow);
+    CHECK(steep / shallow == Catch::Approx(expected).epsilon(0.02));
+  }
+}

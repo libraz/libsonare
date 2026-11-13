@@ -342,6 +342,10 @@ const GateRow kEngineGates[] = {
      [](const GateSite& s) { return s.key == "gmKit" ? Gate{} : is("gmKit", false); }},
     // A choke fades the amplitude envelope, which the direct contact bypasses.
     {"percussion.exclusive_class", shell_input},
+    // The voice-amplifier curve scales every layer and the contact pulse, so it acts once any
+    // sounds.
+    {"percussion.velocity_exponent",
+     [](const GateSite& s) { return shell_input(s) | above("contact", 0); }},
     {"percussion.num_modes",
      [](const GateSite&) {
        Gate out = never();

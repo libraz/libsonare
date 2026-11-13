@@ -217,6 +217,7 @@ constexpr PercussionPatchParams blank_percussion() noexcept {
   z.phisem_body_gain = 0.0f;
   z.phisem_scrape_hz = 0.0f;
   z.phisem_pitch_glide = 0.0f;
+  z.velocity_exponent = 0.0f;
   return z;
 }
 

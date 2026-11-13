@@ -396,6 +396,11 @@ struct PercussionPatchParams {
   /// Resonance pitch glide (cuica): the resonance centre starts at
   /// res_hz * (1 + glide) and eases to res_hz over the note. 0 = static.
   float phisem_pitch_glide = 0.0f;
+
+  /// Exponent of the voice-amplifier velocity curve, (velocity/127)^e; 2 is the
+  /// SoundFont curve. The default is the kit's measured midpoint between two
+  /// reference kits.
+  float velocity_exponent = 1.1f;
 };
 
 /// Per-voice percussion state, embedded in NativeSynthVoice.

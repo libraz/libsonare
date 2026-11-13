@@ -362,6 +362,7 @@ constexpr UnitRow kEngineUnits[] = {
     {"percussion.phisem_body_gain", Unit::None},
     {"percussion.phisem_scrape_hz", Unit::Hz},
     {"percussion.phisem_pitch_glide", Unit::None},
+    {"percussion.velocity_exponent", Unit::None},
     {"pipe_organ.ranks.footage_mult", Unit::Ratio},
     {"pipe_organ.ranks.stopped", Unit::None},
     {"pipe_organ.ranks.brightness", Unit::None},

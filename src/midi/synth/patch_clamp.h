@@ -366,6 +366,8 @@ constexpr NativeSynthPatch clamp_synth_patch(const NativeSynthPatch& patch) noex
       std::clamp(patch_clamp_detail::sanitize(p.percussion.phisem_scrape_hz, 0.0f), 0.0f, 20000.0f);
   p.percussion.phisem_pitch_glide =
       std::clamp(patch_clamp_detail::sanitize(p.percussion.phisem_pitch_glide, 0.0f), -0.95f, 8.0f);
+  p.percussion.velocity_exponent =
+      std::clamp(patch_clamp_detail::sanitize(p.percussion.velocity_exponent, 1.1f), 0.0f, 4.0f);
   p.piano.strings = std::clamp(p.piano.strings, 1, kMaxPianoStrings);
   p.piano.detune_cents =
       std::clamp(patch_clamp_detail::sanitize(p.piano.detune_cents, 1.6f), 0.0f, 50.0f);

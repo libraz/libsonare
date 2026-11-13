@@ -79,15 +79,6 @@ void apply_excitation_base(NativeSynthVoice& v, const ExcitationAxes& base, uint
   }
 }
 
-/// Exponent of the SoundFont velocity-to-amplitude curve, on the kit.
-///
-/// The curve is `(v/127)^2` and every engine but the two below is voiced with
-/// it in place, so it is the exponent rather than the curve that a measured
-/// engine adjusts. The spec's 2.0 swung the kit 10.2 dB wider from velocity 48
-/// to 127 than one reference kit and 4.5 dB wider than the other; the exponent
-/// each asks for on its own is 0.80 and 1.46, and this is the midpoint.
-SONARE_TUNABLE(kPercussionVelocityExponent, 1.1f);
-
 /// Exponent of the same curve on the tonewheel generator.
 ///
 /// A key closes contacts on wheels that are already turning, so the instrument
@@ -141,7 +132,7 @@ float sampler_velocity_exponent(const NativeSynthPatch& p) noexcept {
     return 0.0f;
   }
   if (mode == SynthEngineMode::kBrass) return p.brass.velocity_exponent;
-  if (mode == SynthEngineMode::kPercussion) return kPercussionVelocityExponent;
+  if (mode == SynthEngineMode::kPercussion) return p.percussion.velocity_exponent;
   if (mode == SynthEngineMode::kAdditive) return kAdditiveVelocityExponent;
   if (mode == SynthEngineMode::kKarplusStrong) return p.ks.velocity_exponent;
   if (mode == SynthEngineMode::kBowedString) return p.bowed_string.velocity_exponent;
