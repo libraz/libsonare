@@ -15,6 +15,7 @@ from metrics_partials import (
     measure_tnr_mask,
     partial_hz,
     partial_level,
+    pitch_motion,
     tnr_mask_parts,
     tone_to_noise_db,
 )
@@ -28,6 +29,7 @@ from metrics_signal import (
     arrival_index,
     midi_to_hz,
 )
+from metrics_warp import line_structure
 from smf import Note
 
 MIN_SUSTAIN_SEC = 0.15
@@ -353,7 +355,18 @@ def analyze_note(
     # How far this string's partials have been stretched by its own stiffness.
     # Zero for anything that is not a stiff string, which is what makes every
     # such voice read exactly what it read before this was measured at all.
-    inharmonicity_b, inharmonicity_partials = estimate_inharmonicity_b(freqs, mag, f0, h1_mag, sr)
+    # Stiffness is read on the note's fundamental's clock where the warp collapses its lines,
+    # as the reference's is; a reference that holds still is read raw.
+    read_f, read_m, read_h1 = freqs, mag, h1_mag
+    if tnr_mask is None or tnr_mask.get("fm"):
+        moving = pitch_motion(sustain, sr, f0)
+        unwarped = None if moving is None else line_structure(sustain, sr, f0, moving).unwarped
+        if unwarped is not None:
+            read_f, read_m = _spectrum(unwarped, sr)
+            read_h1 = _peak_near(read_f, read_m, f0, 80.0)[1]
+    inharmonicity_b, inharmonicity_partials = estimate_inharmonicity_b(
+        read_f, read_m, f0, read_h1, sr
+    )
     f0, motion = held_pitch(sustain, sr, f0, inharmonicity_b)
     cents_err = 1200.0 * np.log2(f0 / expected_f0) if f0 > 0 else 0.0
 

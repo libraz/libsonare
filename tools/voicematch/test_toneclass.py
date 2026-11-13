@@ -105,7 +105,7 @@ def test_every_modal_capture_is_gated_off_its_modes_rather_than_the_ladder():
     """
     import json
 
-    from toneclass import _LADDER_DIMENSIONS
+    from toneclass import LADDER_DIMENSIONS
 
     here = Path(__file__).resolve().parent
     checked = 0
@@ -118,11 +118,11 @@ def test_every_modal_capture_is_gated_off_its_modes_rather_than_the_ladder():
         if tone_class(int(cap["program"])) is not ToneClass.MODAL:
             continue
         checked += 1
-        assert not set(cap.get("dimensions") or ()) & set(_LADDER_DIMENSIONS), path.name
+        assert not set(cap.get("dimensions") or ()) & set(LADDER_DIMENSIONS), path.name
         gate = here / "reference" / f"{cap['id']}_gate.json"
         if gate.exists():
             bounds = json.loads(gate.read_text()).get("bounds") or {}
-            assert not set(bounds) & set(_LADDER_DIMENSIONS), gate.name
+            assert not set(bounds) & set(LADDER_DIMENSIONS), gate.name
     assert checked >= 19
 
 

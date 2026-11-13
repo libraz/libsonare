@@ -58,56 +58,53 @@ INHARMONICITY_MIN_CENTS = 5.0
 MAX_INHARMONICITY_B = 0.01
 
 
-def fit_partial_series(
-    freqs: np.ndarray, mag: np.ndarray, f0_seed: float, h1_mag: float, sr: int
-) -> tuple[float, float, int]:
-    """Fit the stiff-string law to a measured spectrum -> (f0, B, partials_fit).
+# Share of the gap to the next partial the second start's search may cover. The gap is 1/n of
+# the partial's frequency, so a fixed +-90 cents spans it from the tenth partial up and finds a neighbour.
+NEIGHBOUR_REACH = 0.4
+# Level, summed in dB over its partials, the h1-free start must put on its series to replace the
+# h1-anchored one. Measured over the grands: 48 dB or more where the anchored fit read valleys, within 3 on nine rows in ten.
+SERIES_GAIN_DB = 15.0
+# Partials h2..h8 the second start's own fundamental and stiffness are estimated from, at least three.
+SECOND_START_MIN_PARTIALS = 3
 
-    `(f_n / n)² = f0² + f0²·B·n²` is linear in `n²`, so both unknowns come out
-    of one weighted least-squares pass — weighted by how strongly each partial
-    was actually present, since a partial near the floor locates itself badly
-    and should not steer the fit. Iterated three times from B=0 with the search
-    window narrowing each pass, which is what stops a high partial from locking
-    onto its neighbour once the prediction is good enough to be trusted.
+_Partial = tuple[int, float, float]
 
-    `partials_fit` is how many partials the last pass actually had. It is the
-    difference between a measurement and a number, and callers gate on it
-    rather than on the value alone.
-    """
-    if f0_seed <= 0.0 or h1_mag <= 0.0:
-        return f0_seed, 0.0, 0
-    floor = h1_mag * 10.0 ** (-INHARMONICITY_FLOOR_DB / 20.0)
-    f0, b, fitted_on = f0_seed, 0.0, 0
 
-    # Seed from the low partials before the first weighted pass, because a pass
-    # that starts at B=0 and admits the whole series mistracks the top of it and
-    # cannot recover: a high partial found at its integer multiple contributes
-    # (f_n/n)² = f0² exactly, which is the value that says B is zero, and enough
-    # of those hold the slope down however many times the fit is iterated. Below
-    # the eighth partial a B=0 prediction is still inside the window for any real
-    # stiffness, so those are the ones that can bootstrap it. The failure is not
-    # hypothetical — without this the fit reported 6.3e-5 for a synthetic series
-    # built at 8e-4, having locked onto the wrong peaks on its first pass.
-    seeds: list[float] = []
-    for n in range(2, INHARMONICITY_SEED_PARTIALS + 1):
-        target = n * f0_seed
-        if target >= 0.45 * sr:
+def _search_cents(n: int, tolerance_cents: float) -> float:
+    """Search half-width for partial `n`: the pass's own, capped at `NEIGHBOUR_REACH` of the gap."""
+    return min(tolerance_cents, 1200.0 * float(np.log2(1.0 + NEIGHBOUR_REACH / n)))
+
+
+def _located(
+    freqs: np.ndarray,
+    mag: np.ndarray,
+    f0: float,
+    b: float,
+    tolerance_cents: float,
+    floor: float,
+    sr: int,
+    capped: bool,
+) -> list[_Partial]:
+    """Partials found over `floor` where the series (f0, b) puts them -> [(n, hz, magnitude)]."""
+    found: list[_Partial] = []
+    for n in range(1, MAX_FIT_PARTIALS + 1):
+        predicted = partial_hz(f0, n, b)
+        if predicted >= 0.45 * sr:
             break
-        fn, an = _peak_near(freqs, mag, target, INHARMONICITY_TOLERANCES[0])
+        reach = _search_cents(n, tolerance_cents) if capped else tolerance_cents
+        fn, an = _peak_near(freqs, mag, predicted, reach)
         if an > floor and fn > 0.0:
-            seeds.append(((fn / target) ** 2 - 1.0) / (n * n))
-    if seeds:
-        b = min(max(float(np.median(seeds)), 0.0), MAX_INHARMONICITY_B)
+            found.append((n, fn, an))
+    return found
 
+
+def _narrowing_fit(
+    freqs: np.ndarray, mag: np.ndarray, f0: float, b: float, floor: float, sr: int, capped: bool
+) -> tuple[float, float, int]:
+    """Three weighted least-squares passes over a narrowing window, from the start (f0, b)."""
+    fitted_on = 0
     for tol in INHARMONICITY_TOLERANCES:
-        strong: list[tuple[int, float, float]] = []
-        for n in range(1, MAX_FIT_PARTIALS + 1):
-            predicted = partial_hz(f0, n, b)
-            if predicted >= 0.45 * sr:
-                break
-            fn, an = _peak_near(freqs, mag, predicted, tol)
-            if an > floor and fn > 0.0:
-                strong.append((n, fn, an))
+        strong = _located(freqs, mag, f0, b, tol, floor, sr, capped)
         if len(strong) < 4:
             break
         x = np.array([n * n for n, _, _ in strong], dtype=np.float64)
@@ -126,6 +123,107 @@ def fit_partial_series(
         b = min(max(0.0, slope / intercept), MAX_INHARMONICITY_B)
         fitted_on = len(strong)
     return f0, b, fitted_on
+
+
+def _pairwise_b(low: list[tuple[int, float]]) -> float:
+    """Median over every pair (m, n) of the B that puts both partials on one series.
+
+    `(f_n/n)² / (f_m/m)² = (1 + B·n²) / (1 + B·m²)` needs no fundamental, which is the point.
+    """
+    pairs: list[float] = []
+    for i, (m, fm) in enumerate(low):
+        for n, fn in low[i + 1 :]:
+            ratio = (fn / n) ** 2 / (fm / m) ** 2
+            if n * n > ratio * m * m:
+                pairs.append((ratio - 1.0) / (n * n - ratio * m * m))
+    if not pairs:
+        return 0.0
+    return min(max(float(np.median(pairs)), 0.0), MAX_INHARMONICITY_B)
+
+
+def _pairwise_f0(low: list[tuple[int, float]], b: float) -> float:
+    """Median over the located partials of the fundamental the series (., b) puts them at."""
+    return float(np.median([fn / partial_hz(1.0, n, b) for n, fn in low]))
+
+
+def fit_partial_series(
+    freqs: np.ndarray, mag: np.ndarray, f0_seed: float, h1_mag: float, sr: int
+) -> tuple[float, float, int]:
+    """Fit the stiff-string law to a measured spectrum -> (f0, B, partials_fit).
+
+    `(f_n / n)² = f0² + f0²·B·n²` is linear in `n²`, so both unknowns come out
+    of one weighted least-squares pass — weighted by how strongly each partial
+    was actually present, since a partial near the floor locates itself badly
+    and should not steer the fit. Iterated three times from B=0 with the search
+    window narrowing each pass, which is what stops a high partial from locking
+    onto its neighbour once the prediction is good enough to be trusted.
+
+    A second start that never refers to h1 (its own fundamental and stiffness
+    from the pairwise partials h2..h8, its windows capped at `NEIGHBOUR_REACH`
+    of the gap) replaces the first where it puts `SERIES_GAIN_DB` more level on
+    its series: in the bass h1 sits cents off the law and the first pass's
+    window reaches the neighbouring partial from the twentieth up.
+
+    `partials_fit` is how many partials the last pass actually had. It is the
+    difference between a measurement and a number, and callers gate on it
+    rather than on the value alone.
+    """
+    if f0_seed <= 0.0 or h1_mag <= 0.0:
+        return f0_seed, 0.0, 0
+    floor = h1_mag * 10.0 ** (-INHARMONICITY_FLOOR_DB / 20.0)
+    b = 0.0
+
+    # Seed from the low partials before the first weighted pass, because a pass
+    # that starts at B=0 and admits the whole series mistracks the top of it and
+    # cannot recover: a high partial found at its integer multiple contributes
+    # (f_n/n)² = f0² exactly, which is the value that says B is zero, and enough
+    # of those hold the slope down however many times the fit is iterated. Below
+    # the eighth partial a B=0 prediction is still inside the window for any real
+    # stiffness, so those are the ones that can bootstrap it. The failure is not
+    # hypothetical — without this the fit reported 6.3e-5 for a synthetic series
+    # built at 8e-4, having locked onto the wrong peaks on its first pass.
+    low: list[tuple[int, float]] = []
+    for n in range(2, INHARMONICITY_SEED_PARTIALS + 1):
+        target = n * f0_seed
+        if target >= 0.45 * sr:
+            break
+        fn, an = _peak_near(freqs, mag, target, INHARMONICITY_TOLERANCES[0])
+        if an > floor and fn > 0.0:
+            low.append((n, fn))
+    seeds = [((fn / (n * f0_seed)) ** 2 - 1.0) / (n * n) for n, fn in low]
+    if seeds:
+        b = min(max(float(np.median(seeds)), 0.0), MAX_INHARMONICITY_B)
+    f0, b, fitted_on = _narrowing_fit(freqs, mag, f0_seed, b, floor, sr, capped=False)
+
+    if len(low) < SECOND_START_MIN_PARTIALS:
+        return f0, b, fitted_on
+
+    def level_db(f0: float, b: float) -> float:
+        found = _located(freqs, mag, f0, b, INHARMONICITY_TOLERANCES[-1], floor, sr, capped=False)
+        return float(sum(20.0 * np.log10(an / floor) for _, _, an in found))
+
+    b2 = _pairwise_b(low)
+    other = _narrowing_fit(freqs, mag, _pairwise_f0(low, b2), b2, floor, sr, capped=True)
+    if other[2] and level_db(*other[:2]) > level_db(f0, b) + SERIES_GAIN_DB:
+        return other
+    return f0, b, fitted_on
+
+
+def series_scatter_cents(
+    freqs: np.ndarray, mag: np.ndarray, f0: float, b: float, h1_mag: float, sr: int
+) -> tuple[float, int]:
+    """How far the located partials sit off the series (f0, b) -> (RMS in cents, partials counted).
+
+    Read at the narrowest search window of the fit, over the partials the fit's own floor admits.
+    A voice whose partial n is one of several lines (a unison, an ensemble) hops between them
+    from one partial to the next, so its partials do not share a series whatever B is fitted.
+    """
+    floor = h1_mag * 10.0 ** (-INHARMONICITY_FLOOR_DB / 20.0)
+    found = _located(freqs, mag, f0, b, INHARMONICITY_TOLERANCES[-1], floor, sr, capped=False)
+    if not found:
+        return 0.0, 0
+    off = [1200.0 * float(np.log2(fn / partial_hz(f0, n, b))) for n, fn, _ in found]
+    return float(np.sqrt(np.mean(np.square(off)))), len(found)
 
 
 def estimate_inharmonicity_b(

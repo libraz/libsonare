@@ -120,6 +120,7 @@ from metrics import (
     to_mono,
 )
 from metrics_floor import body_floor_state
+from metrics_lines import STATIONARY_LINES_REASON
 from phrases import TAKE_SETS, build_takes
 from profile_gate import (
     DELTA_LABELS,
@@ -158,6 +159,7 @@ from profile_measure import (
     is_percussion,
     measure_hit,
     measure_note,
+    measure_stationary_lines,
     partial_decay,
     reference_tnr_mask,
     register_deltas,
@@ -220,6 +222,7 @@ from render_model import render_model
 from render_oracle import render_oracle_fluidsynth
 from room import Room, match_sends, measurable_room, place_model_in
 from smf import Note, write_smf
+from toneclass import tone_class
 from velocity_layers import VELOCITY_SWING_DIMENSIONS, layer_summary
 from wavio import read_wav, write_wav
 
@@ -417,6 +420,12 @@ def measure(cfg: dict, corpus_dir: Path, out_path: Path) -> int:
     # because its rig was baked in would have gone on contributing to the DI
     # profile that replaced it.
     declared = {t["id"] for t in cfg.get("timbres", [])}
+    modal = not percussion and not tone_class(int(cfg.get("program", 0))).stiffness_fit
+    lines = (
+        {}
+        if percussion
+        else measure_stationary_lines(manifest, corpus_dir, declared, preroll_s, gate_s)
+    )
 
     def sweep(max_band_hz: float | None) -> list[dict]:
         rows: list[dict] = []
@@ -438,7 +447,17 @@ def measure(cfg: dict, corpus_dir: Path, out_path: Path) -> int:
                     max_band_hz=max_band_hz,
                 )
                 if percussion
-                else measure_note(audio, sr, rec["note"], preroll_s=preroll_s, gate_s=gate_s)
+                else measure_note(
+                    audio,
+                    sr,
+                    rec["note"],
+                    preroll_s=preroll_s,
+                    gate_s=gate_s,
+                    modal=modal,
+                    stationary_lines_hz=[
+                        ln["hz"] for ln in lines.get(rec["timbre"], {}).get("lines", [])
+                    ],
+                )
             )
             if not m:
                 print(f"  {rec['id']}: nothing measurable", file=sys.stderr)
@@ -506,6 +525,8 @@ def measure(cfg: dict, corpus_dir: Path, out_path: Path) -> int:
         "rows": rows,
         "summary": summarize_percussion(rows) if percussion else summarize(rows),
     }
+    if lines:
+        profile["stationary_lines"] = {"reason": STATIONARY_LINES_REASON, "timbres": lines}
     # Absent rather than empty on a reference with no room, so the profile of a
     # dry capture is byte-identical to one measured before this was recorded and
     # its stamp — and every gate dated against it — stays where it is.
@@ -718,6 +739,8 @@ def dynamics(
                 preroll_s=preroll_s,
                 gate_s=gate_s,
                 tnr_mask=reference_tnr_mask(ref[(note, v)]),
+                modal=not tone_class(program).stiffness_fit,
+                stationary_lines_hz=ref[(note, v)].get("stationary_lines_hz", ()),
             )
             if not m:
                 break
@@ -1447,6 +1470,8 @@ def compare(
             preroll_s=preroll_s,
             gate_s=gate_s,
             tnr_mask=reference_tnr_mask(r),
+            modal=not tone_class(program).stiffness_fit,
+            stationary_lines_hz=r.get("stationary_lines_hz", ()),
         )
         if not m:
             print(f"{note:5d} {vel:4d} | model rendered nothing measurable")

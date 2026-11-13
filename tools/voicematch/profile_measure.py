@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+
 import numpy as np
 from capture import PERCUSSION_CHANNEL
 from metrics import (
@@ -27,14 +29,21 @@ from metrics import (
     onset_shape,
     partial_hz,
     partial_level,
+    pitch_motion,
     sound_onset_s,
     tnr_mask_parts,
     to_mono,
     tone_to_noise_db,
 )
 from metrics_floor import partial_clearance, recording_floor, valley_profile
+from metrics_lines import held_lines, mask_lines, stationary_lines
+from metrics_modal import modal_profile
 from metrics_note import body_bands
+from metrics_partials import series_scatter_cents
+from metrics_warp import LineStructure, line_structure
 from smf import Note
+from toneclass import LADDER_DIMENSIONS
+from wavio import read_wav
 
 # The partial count, the floor and the reliability gate all live with the fit in
 # `metrics`, so the reference profile and the model-vs-oracle comparison read a
@@ -88,7 +97,22 @@ def is_percussion(cap: dict) -> bool:
 # per-note measurement
 
 
-def find_partials(seg: np.ndarray, sr: int, note: int) -> dict:
+#: RMS distance, in cents, of the located partials from the fitted series from which a ladder
+#: whose lines the warp left broad is read as hopping between voices. A clean string reads 0.3-3
+#: (a grand's treble over few partials to 15), unison and ensemble voices 6-13.
+B_SCATTER_CENTS = 6.0
+#: Fewest located partials a scatter is read over.
+B_SCATTER_MIN_PARTIALS = 5
+
+
+def find_partials(
+    seg: np.ndarray,
+    sr: int,
+    note: int,
+    *,
+    modal: bool = False,
+    stationary_lines_hz: list[float] | tuple[float, ...] = (),
+) -> dict:
     """Locate the partials of one struck note and fit the stiff-string law.
 
     Returns the measured f0, the inharmonicity coefficient B, and the partial
@@ -106,12 +130,70 @@ def find_partials(seg: np.ndarray, sr: int, note: int) -> dict:
     level is `partial_level`'s power over the partial's FM extent, the ruler
     `metrics_note.analyze_note` reads the fit's ladder with.
     """
+    return read_partials(seg, sr, note, modal=modal, stationary_lines_hz=stationary_lines_hz)[0]
+
+
+#: How many bins either side of a partial of the note's own series a stationary line is still taken
+#: for that partial. An organ's line that is also a harmonic of every note a tritone apart sits on one bin.
+LINE_ON_PARTIAL_BINS = 3.0
+
+
+def _lines_off_the_series(
+    freqs: np.ndarray,
+    mag: np.ndarray,
+    f0_seed: float,
+    h1_mag: float,
+    sr: int,
+    modal: bool,
+    lines_hz: list[float],
+) -> list[float]:
+    """The stationary lines that are not also a partial of this note's own (unmasked) series."""
+    if not lines_hz or modal:
+        return lines_hz
+    f0, b, _ = fit_partial_series(freqs, mag, f0_seed, h1_mag, sr)
+    tol = LINE_ON_PARTIAL_BINS * float(freqs[1] - freqs[0])
+    series = [partial_hz(f0, n, b) for n in range(1, MAX_PARTIALS + 1)]
+    return [hz for hz in lines_hz if all(abs(hz - p) > tol for p in series)]
+
+
+def read_partials(
+    seg: np.ndarray,
+    sr: int,
+    note: int,
+    *,
+    modal: bool = False,
+    stationary_lines_hz: list[float] | tuple[float, ...] = (),
+) -> tuple[dict, LineStructure | None, list[float]]:
+    """`find_partials`'s row, the note's line structure where it was read, and the lines masked.
+
+    B and the fit's partial count come from the segment on its fundamental's clock
+    where the warp collapses the lines (`metrics_warp`), and from the raw segment
+    otherwise; the located partials and their levels are always the raw
+    spectrum's. `modal` fits no B: the row carries the measured partials as
+    `modal_profile`. Lines in `stationary_lines_hz` are masked from the spectra
+    unless one is also a partial of the note's own series.
+    A ladder whose lines stay broad and whose partials scatter off the series
+    carries `b_unreliable`.
+    """
     freqs, mag = _spectrum(seg, sr)
     et = midi_to_hz(note)
     f0_seed, a0 = _peak_near(freqs, mag, et, 120.0)
     if a0 <= 0.0:
-        return {}
-    f0, b, fitted_on = fit_partial_series(freqs, mag, f0_seed, a0, sr)
+        return {}, None, []
+    lines = _lines_off_the_series(freqs, mag, f0_seed, a0, sr, modal, list(stationary_lines_hz))
+    mag = mask_lines(freqs, mag, lines)
+    structure: LineStructure | None = None
+    if modal:
+        f0, b, fitted_on = f0_seed, 0.0, 0
+    else:
+        structure = line_structure(seg, sr, f0_seed, pitch_motion(seg, sr, f0_seed))
+        if structure.unwarped is None:
+            f0, b, fitted_on = fit_partial_series(freqs, mag, f0_seed, a0, sr)
+        else:
+            wf, wm = _spectrum(structure.unwarped, sr)
+            wm = mask_lines(wf, wm, lines)
+            wf0, wa0 = _peak_near(wf, wm, f0_seed, 120.0)
+            f0, b, fitted_on = fit_partial_series(wf, wm, wf0, wa0, sr)
     # The fit's f0 is the stiffness law's, whose h1 sits above it; without a fit it is h1's own.
     h1_ratio = partial_hz(1.0, 1, b) if fitted_on else 1.0
     h1, motion = held_pitch(seg, sr, f0 * h1_ratio, b)
@@ -128,7 +210,7 @@ def find_partials(seg: np.ndarray, sr: int, note: int) -> dict:
             )
 
     if not found:
-        return {}
+        return {}, structure, lines
     # The ladder is reported against its own fundamental, which is the anchor
     # `harmonics_db` uses on the live path and the one every consumer of this
     # field re-references to before reading it (`partial_balance_db`, `band_db`
@@ -141,7 +223,7 @@ def find_partials(seg: np.ndarray, sr: int, note: int) -> dict:
     # series has no fundamental at all, there being nothing else to be relative
     # to.
     anchor = next((a for n, _, a in found if n == 1), 0.0) or max(a for _, _, a in found)
-    return {
+    row = {
         "f0_hz": round(f0, 3),
         "cents_vs_et": round(float(1200.0 * np.log2(f0 / et)), 2),
         "inharmonicity_b": float(f"{b:.3e}"),
@@ -158,6 +240,68 @@ def find_partials(seg: np.ndarray, sr: int, note: int) -> dict:
             round(float(20 * np.log10(max(an, 1e-12) / anchor)), 2) for _, _, an in found
         ],
     }
+    if modal:
+        row["modal_profile"] = modal_profile(freqs, mag, et)
+    if structure is not None:
+        if structure.width_ratio is not None:
+            row["unwarp"] = {
+                "width_ratio": round(structure.width_ratio, 3),
+                "kept": structure.unwarped is not None,
+            }
+        if structure.broad:
+            row["broad_lines"] = {
+                "broad_ratio": round(structure.broad_ratio, 2),
+                "width_ratio": None
+                if structure.width_ratio is None
+                else round(structure.width_ratio, 3),
+            }
+            scatter, counted = series_scatter_cents(freqs, mag, f0, b, a0, sr)
+            if counted >= B_SCATTER_MIN_PARTIALS and scatter >= B_SCATTER_CENTS:
+                row["b_unreliable"] = {
+                    "reason": (
+                        f"unison or ensemble: lines {structure.broad_ratio:.1f}x a still tone's "
+                        f"and not collapsed by the pitch warp, partials {scatter:.1f} c rms off "
+                        "one series; stretch, balance, partial_tilt and tnr read through B or "
+                        "through partials located on it"
+                    ),
+                    "dimensions": list(LADDER_DIMENSIONS),
+                }
+    return row, structure, lines
+
+
+def measure_stationary_lines(
+    manifest: dict, corpus_dir: Path, declared: set[str], preroll_s: float, gate_s: float
+) -> dict[str, dict]:
+    """The lines each declared timbre latches on, from its softest take of every note.
+
+    -> {timbre: {"of": takes, "lines": [{"hz": ..., "takes": ...}]}}; a timbre with
+    none is absent, so a capture without them reads exactly as before.
+    """
+    softest: dict[str, dict[int, dict]] = {}
+    for rec in manifest["renders"]:
+        if rec["timbre"] not in declared:
+            continue
+        held = softest.setdefault(rec["timbre"], {})
+        if rec["note"] not in held or rec["velocity"] < held[rec["note"]]["velocity"]:
+            held[rec["note"]] = rec
+    out: dict[str, dict] = {}
+    for timbre, notes in softest.items():
+        takes = []
+        for rec in notes.values():
+            path = corpus_dir / rec["path"]
+            if not path.exists():
+                continue
+            audio, sr = read_wav(path)
+            got = held_lines(to_mono(audio), sr, gate_s, preroll_s)
+            if got is not None:
+                takes.append(got[0])
+        lines = stationary_lines(takes)
+        if lines:
+            out[timbre] = {
+                "of": len(takes),
+                "lines": [{"hz": ln.hz, "takes": ln.takes} for ln in lines],
+            }
+    return out
 
 
 #: How far under its own peak an envelope is still the instrument. Past this a
@@ -464,13 +608,16 @@ def measure_note(
     preroll_s: float,
     gate_s: float,
     tnr_mask: dict | None = None,
+    modal: bool = False,
+    stationary_lines_hz: list[float] | tuple[float, ...] = (),
 ) -> dict:
     """Every measurement this profile carries, for one captured note.
 
     `tnr_mask` is the reference row's `tnr_mask`, given when the note is the
     model's, so the tone-to-noise ratio is read through the reference's mask;
     without it the note is measured through its own. Either way the row records
-    the mask it was read through.
+    the mask it was read through. `modal` and `stationary_lines_hz` are the
+    reference's too (`find_partials`), so a model row is read as its reference was.
 
     The gate window is placed on the onset the render actually has rather than
     on the one the score asked for. A capture's own guard refuses a render that
@@ -511,13 +658,18 @@ def measure_note(
         ring_a, ring_b = _short_ring_window(held, sr)
         if ring_b > ring_a:
             a, b = ring_a, ring_b
-    row: dict = dict(find_partials(held[a:b], sr, note))
+    partials, _, masked = read_partials(
+        held[a:b], sr, note, modal=modal, stationary_lines_hz=stationary_lines_hz
+    )
+    row: dict = dict(partials)
     if not row:
         # No fundamental means this is not a struck note, and every measurement
         # below would still produce a number for it — a decay slope of 0 dB/s
         # and a damper release the length of the window. A profile is worse for
         # holding those than for being short a row.
         return {}
+    if stationary_lines_hz:
+        row["stationary_lines_hz"] = list(stationary_lines_hz)
 
     body = body_below_f0_db(held, sr, float(row.get("f0_hz") or 0.0))
     if body is not None:
@@ -609,7 +761,7 @@ def measure_note(
         row["damper_capped"] = not bool(under.size)
 
     freqs, mag = _spectrum(held[a:b], sr)
-    p = mag**2
+    p = mask_lines(freqs, mag, masked) ** 2
     row["centroid_hz"] = round(float((freqs * p).sum() / max(p.sum(), 1e-20)), 1)
     stiffness = row["inharmonicity_b"] if row.get("inharmonicity_reliable") else 0.0
     if tnr_mask is None:

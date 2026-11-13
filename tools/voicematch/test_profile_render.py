@@ -1402,8 +1402,8 @@ def test_the_onset_dimensions_are_differenced_per_row_and_skipped_where_either_s
     monkeypatch.setattr(
         profile_module,
         "measure_note",
-        lambda audio, sr, note, *, preroll_s, gate_s, tnr_mask=None: row(
-            0, onset[(note, _current["vel"])]
+        lambda audio, sr, note, *, preroll_s, gate_s, tnr_mask=None, modal=False, stationary_lines_hz=(): (
+            row(0, onset[(note, _current["vel"])])
         ),
     )
     _current = {}

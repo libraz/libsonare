@@ -45,10 +45,19 @@ class ToneClass(str, Enum):
         """Whether the stiff-string partial law describes this voice.
 
         The harmonic ladder, the inharmonicity fit and the gate dimensions read
-        off them (`_LADDER_DIMENSIONS`) are only meaningful here; `MODAL` needs
+        off them (`LADDER_DIMENSIONS`) are only meaningful here; `MODAL` needs
         the measured-partial path instead.
         """
         return self in (ToneClass.STRUCK_STRING, ToneClass.PLUCKED_STRING, ToneClass.SUSTAINED)
+
+    @property
+    def stiffness_fit(self) -> bool:
+        """Whether a reference row of this class fits a stiffness B.
+
+        A bar, a bell or a membrane has partials a stiffness law does not place, so
+        its row carries the measured partials (`modal_profile`) and no B.
+        """
+        return self is not ToneClass.MODAL
 
     @property
     def fast_attack(self) -> bool:
@@ -471,7 +480,7 @@ def default_weights(
 #: Dimensions read off the n·f0 ladder: `stretch` fits it, `balance` averages
 #: h2-h6, `partial_tilt` compares h5-h8 with h1-h2, and `tnr` masks n·f0 as tone.
 #: A voice whose class is not `stringlike` has no ladder, so none of them apply.
-_LADDER_DIMENSIONS = ("stretch", "balance", "partial_tilt", "tnr")
+LADDER_DIMENSIONS = ("stretch", "balance", "partial_tilt", "tnr")
 
 _MELODIC_ALL = (
     "stretch",  # cents_vs_et       — the ladder against equal temperament
@@ -500,9 +509,7 @@ _BREATH_ONSET_DIMENSIONS = ("onset", "onset_settle")
 def _melodic(tone: ToneClass, drop: tuple[str, ...] = ()) -> tuple[str, ...]:
     """`_MELODIC_ALL` less `drop`, and less the ladder rulers where `tone` has no ladder."""
     return tuple(
-        d
-        for d in _MELODIC_ALL
-        if d not in drop and (tone.stringlike or d not in _LADDER_DIMENSIONS)
+        d for d in _MELODIC_ALL if d not in drop and (tone.stringlike or d not in LADDER_DIMENSIONS)
     )
 
 
