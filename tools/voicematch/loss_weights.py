@@ -183,7 +183,8 @@ def cli_weights(args) -> dict[str, float]:
     # carried at zero: `dyn` on a percussion probe is shared and stays, but a
     # `harm` weight on a drum fit would be a weight on a term that is
     # structurally 0.0, which is that term's best score.
-    return {t: w for t, w in weights.items() if t in group and w > 0.0}
+    loop_read = LOOP_READ_TERMS if not getattr(args, "has_loop_free_reference", True) else ()
+    return {t: w for t, w in weights.items() if t in group and w > 0.0 and t not in loop_read}
 
 
 def refused_weights(args) -> list[str]:
@@ -218,6 +219,31 @@ DROP_REASONS = {
     "onset": ("has_onset_reference", "no reference cell is onset-eligible"),
     "tail": ("has_tail_window", "no note is held long enough to reach the 2-6 s band"),
 }
+
+
+#: Terms whose reading follows the held note over time or its tone against its noise: on a
+#: reference that is a sampler's bit-exact loop they measure the loop, so they carry no weight.
+#: `env` stays: its attack and release belong to the synth's envelope, not to the repeated cycle.
+LOOP_READ_TERMS = ("cents", "tnr", "mod", "slope", "tail")
+
+
+def loop_unweighted_terms(args) -> list[str]:
+    """The terms a looped reference takes out of the objective, named weights included.
+
+    Dropped without a refusal even when named: unlike a term the probe cannot produce, these
+    have a value, and the value is a statement about the sampler's loop. A fit says so at its
+    start, since a weight that is asked for and absent is otherwise invisible in the run.
+    """
+    if getattr(args, "has_loop_free_reference", True):
+        return []
+    asked = default_weights(
+        getattr(args, "program", 0),
+        drum_note=getattr(args, "drum_note", None),
+        percussive=getattr(args, "percussive", False),
+    )
+    return [
+        t for t in LOOP_READ_TERMS if (getattr(args, f"w_{t}", None) or asked.get(t, 0.0)) > 0.0
+    ]
 
 
 def unmeasurable_terms(args) -> list[tuple[str, str]]:

@@ -360,6 +360,7 @@ from loss import (
     cli_weights,
     corpus_reading,
     dropped_weights,
+    loop_unweighted_terms,
     measured_terms,
     mss_distance,
     oracle_tnr_masks,
@@ -2831,6 +2832,15 @@ def run(args, argv: list[str] | None = None) -> int:
             + "; ".join(
                 f"{t}: dropped from the {kind}'s class defaults because {why}" for t, why in dropped
             ),
+            file=sys.stderr,
+        )
+
+    looped = loop_unweighted_terms(args)
+    if looped:
+        print(
+            f"  {', '.join(looped)}: carry no weight, because the reference is a sampler's "
+            f"bit-exact loop ({getattr(args, 'loop_note', None) or 'see the reference profile'}) "
+            f"and these read the loop rather than the instrument",
             file=sys.stderr,
         )
 

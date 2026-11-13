@@ -236,6 +236,26 @@ def has_onset_reference(corpus: Corpus | None, pattern) -> bool:
     )
 
 
+def reference_loop_note(corpus: Corpus | None) -> str | None:
+    """The committed profile's statement that its reference is a bit-exact loop, or None.
+
+    None where there is no committed profile or its capture is not looped, so a capture
+    measured before the loop was recorded fits exactly as it did.
+    """
+    if corpus is None or not corpus.capture_id:
+        return None
+    path = HERE / "reference" / f"{corpus.capture_id}.json"
+    if not path.exists():
+        return None
+    loop = json.loads(path.read_text()).get("loop") or {}
+    if loop.get("status") != "looped":
+        return None
+    return (
+        f"{corpus.capture_id}: {loop['looped_rows']} of {loop['tested']} rows repeat exactly, "
+        f"period {loop['period_ms_median']} ms, residual {loop['residual_db_median']} dB"
+    )
+
+
 def reference_band_edge(corpus: Corpus | None, rows: list[dict]) -> float | None:
     """The highest 1/3-octave band this fit may be scored over, in Hz.
 
@@ -430,6 +450,9 @@ def resolve_probe(args) -> None:
     )
     args.has_level_contrasts = len({(n.note, n.velocity) for n in pattern.analysis_notes}) >= 2
     args.has_onset_reference = has_onset_reference(corpus, pattern)
+    # A looped reference: the terms that read the loop carry no weight (`LOOP_READ_TERMS`).
+    args.loop_note = reference_loop_note(corpus)
+    args.has_loop_free_reference = args.loop_note is None
     # Whether any note is held long enough for the aftersound band to have
     # frames in it. Same treatment for the fourth time, and this one is the
     # quietest of the four: `tail` reads a band that opens at 2.0 s, the default
@@ -541,6 +564,7 @@ _PROBE_FLAGS = (
     "has_onset_reference",
     "has_tail_window",
     "has_kit_groups",
+    "has_loop_free_reference",
 )
 
 
@@ -588,6 +612,7 @@ def resolve_probes(args, resolver=None) -> list[argparse.Namespace]:
         agreed = all(bool(getattr(ns, flag)) for ns in caps)
         for ns in (args, *caps):
             setattr(ns, flag, agreed)
+    args.loop_note = "; ".join(ns.loop_note for ns in caps if getattr(ns, "loop_note", None))
     args.pattern = "corpus"
     args.percussive = caps[0].percussive
     args.sample_rate = caps[0].sample_rate

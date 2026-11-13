@@ -115,6 +115,7 @@ from loss_weights import (
     LossWeights,
     cli_weights,
     dropped_weights,
+    loop_unweighted_terms,
     refused_weights,
     unmeasurable_terms,
 )

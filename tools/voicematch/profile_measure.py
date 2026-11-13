@@ -6,6 +6,14 @@ from pathlib import Path
 
 import numpy as np
 from capture import PERCUSSION_CHANNEL
+from loop_record import (
+    VERDICT_LOOPED,
+    VERDICT_UNRECORDED,
+    body_loop_lines,
+    detect_loop,
+    exclusions,
+    read_to_join_s,
+)
 from metrics import (
     ATTACK_BANDS_HZ,
     INHARMONICITY_TOLERANCES,
@@ -732,14 +740,10 @@ def reference_tnr_mask(row: dict) -> dict:
     return row["tnr_mask"]
 
 
-def note_windows(
+def note_gate(
     audio: np.ndarray, sr: int, preroll_s: float, gate_s: float
-) -> tuple[np.ndarray, np.ndarray, int, int, float, int, int] | None:
-    """(mono, held, a, b, onset_s, on, off): where a captured note's gate and fit window sit, or None.
-
-    `held` is the onset-anchored gate and `held[a:b]` the window the partial fit
-    reads; `measure_note` and the recording-floor pass place them the same way.
-    """
+) -> tuple[np.ndarray, np.ndarray, float, int, int] | None:
+    """(mono, held, onset_s, on, off): the onset-anchored gate of a captured note, or None."""
     mono = to_mono(audio)
     # From the note-on, the same origin `analyze_hit` and `note_onset` give it:
     # the preroll is there to absorb the plugin's first buffer, so a scan that
@@ -750,12 +754,18 @@ def note_windows(
     held = mono[on:off]
     if held.size < sr // 4:
         return None
+    return mono, held, onset_s, on, off
 
+
+def fit_window(held: np.ndarray, sr: int, read_end: int | None = None) -> tuple[int, int]:
+    """(a, b): the window of `held` the partial fit reads, ending by `read_end` when given."""
     # The spectrum for the partial fit comes from a window that starts after the
     # strike: the hammer noise is broadband and would blur every peak the fit
     # depends on, while a window too late has lost the high partials entirely.
     a = int(0.12 * sr)
     b = min(len(held), a + int(1.5 * sr))
+    if read_end is not None:
+        b = min(b, read_end)
     # 120 ms is after the end of a note that is over in 35, and everything read
     # off this window — the partials, the centroid, the tone-to-noise — is then
     # taken on the floor. So it is checked for signal BEFORE it is used rather
@@ -768,7 +778,32 @@ def note_windows(
         ring_a, ring_b = _short_ring_window(held, sr)
         if ring_b > ring_a:
             a, b = ring_a, ring_b
+    return a, b
+
+
+def note_windows(
+    audio: np.ndarray, sr: int, preroll_s: float, gate_s: float
+) -> tuple[np.ndarray, np.ndarray, int, int, float, int, int] | None:
+    """(mono, held, a, b, onset_s, on, off): where a captured note's gate and fit window sit, or None.
+
+    `held` is the onset-anchored gate and `held[a:b]` the window the partial fit
+    reads; `measure_note` and the recording-floor pass place them the same way.
+    """
+    gate = note_gate(audio, sr, preroll_s, gate_s)
+    if gate is None:
+        return None
+    mono, held, onset_s, on, off = gate
+    a, b = fit_window(held, sr)
     return mono, held, a, b, onset_s, on, off
+
+
+def reference_loop(row: dict) -> dict:
+    """The loop record a reference row was read through, for its model note.
+
+    A row measured before the record existed reads as unrecorded, so the model is
+    measured whole as it always was rather than put through a window nobody gave it.
+    """
+    return row.get("loop") or {"verdict": VERDICT_UNRECORDED}
 
 
 def measure_note(
@@ -783,6 +818,8 @@ def measure_note(
     stationary_lines_hz: list[float] | tuple[float, ...] = (),
     body_lines_hz: list[float] | tuple[float, ...] = (),
     body_lines_missed_hz: list[float] | tuple[float, ...] = (),
+    loop: dict | None = None,
+    capture_id: str | None = None,
 ) -> dict:
     """Every measurement this profile carries, for one captured note.
 
@@ -793,6 +830,11 @@ def measure_note(
     reference's too (`find_partials`), so a model row is read as its reference was. `body_lines_hz` are
     masked from the body band; `body_lines_missed_hz`, the lines on one note too few, are
     only recorded under `body_lines.missed`, each with the share of the band it holds.
+
+    `loop` is the reference row's `loop` record, given when the note is the
+    model's, so a spectrum the reference read only up to its loop join is read
+    to the same time; without it the note is tested for a loop and records the
+    verdict, `capture_id` deciding whether the spectral reads stop at the join.
 
     The gate window is placed on the onset the render actually has rather than
     on the one the score asked for. A capture's own guard refuses a render that
@@ -805,10 +847,19 @@ def measure_note(
     the located strike since it was written; this is the same anchor, from the
     same detector.
     """
-    placed = note_windows(audio, sr, preroll_s, gate_s)
-    if placed is None:
+    gate = note_gate(audio, sr, preroll_s, gate_s)
+    if gate is None:
         return {}
-    mono, held, a, b, onset_s, on, off = placed
+    mono, held, onset_s, on, off = gate
+    measured_loop = loop is None
+    loop_rec = detect_loop(held, sr) if measured_loop else dict(loop)
+    if measured_loop:
+        until_s = read_to_join_s(loop_rec, capture_id)
+        if until_s is not None:
+            loop_rec["read_to_join_s"] = until_s
+    until_s = loop_rec.get("read_to_join_s")
+    read_end = None if until_s is None else int(until_s * sr)
+    a, b = fit_window(held, sr, read_end)
     partials, structure, masked = read_partials(
         held[a:b], sr, note, modal=modal, stationary_lines_hz=stationary_lines_hz
     )
@@ -825,17 +876,19 @@ def measure_note(
     if stationary_lines_hz:
         row["stationary_lines_hz"] = list(stationary_lines_hz)
 
-    body = body_below_f0_db(held, sr, float(row.get("f0_hz") or 0.0), body_lines_hz)
+    body_src = held if read_end is None else held[:read_end]
+    body = body_below_f0_db(body_src, sr, float(row.get("f0_hz") or 0.0), body_lines_hz)
     if body is not None:
         row["body_below_f0_db"] = body
-        bands = body_bands(held, sr, float(row["f0_hz"]), body_lines_hz)
+        bands = body_bands(body_src, sr, float(row["f0_hz"]), body_lines_hz)
         if bands is not None:
             row["body_under_db"], row["body_f0_db"] = round(bands[0], 2), round(bands[1], 2)
-        masked_body = body_lines_masked(held, sr, float(row["f0_hz"]), body_lines_hz)
+        masked_body = body_lines_masked(body_src, sr, float(row["f0_hz"]), body_lines_hz)
         if masked_body:
             row["body_lines"] = masked_body
         missed = [
-            body_lines_masked(held, sr, float(row["f0_hz"]), [hz]) for hz in body_lines_missed_hz
+            body_lines_masked(body_src, sr, float(row["f0_hz"]), [hz])
+            for hz in body_lines_missed_hz
         ]
         missed = [{"hz": m["hz"][0], "share": m["share_removed"]} for m in missed if m]
         if missed:
@@ -946,6 +999,18 @@ def measure_note(
     width = channel_width(audio, on, off)
     if width is not None:
         row["stereo_width"] = width
+    if measured_loop and loop_rec.get("verdict") == VERDICT_LOOPED:
+        lines = (
+            body_loop_lines(float(row["f0_hz"]), loop_rec["period_ms"])
+            if body is not None
+            else None
+        )
+        if lines is not None:
+            loop_rec["body_lines"] = lines
+        loop_rec["excluded"], loop_rec["snapshot"] = exclusions(
+            loop_rec, body_on_lines=bool(lines and lines["on_lines"]), attack_ms=row["attack_ms"]
+        )
+    row["loop"] = loop_rec
     return row
 
 

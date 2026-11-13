@@ -92,6 +92,7 @@ from capture import (
 )
 from corpus import in_declared_grid, load_corpus
 from floor_declare import record_floors
+from loop_record import loop_summary
 from loss import KIT_MIN_MEMBERS, kit_report
 from metrics import (
     ATTACK_FLOOR_MS,
@@ -163,6 +164,7 @@ from profile_measure import (
     measure_note,
     measure_stationary_lines,
     partial_decay,
+    reference_loop,
     reference_tnr_mask,
     register_deltas,
     tnr_unreliable,
@@ -474,6 +476,7 @@ def measure(cfg: dict, corpus_dir: Path, out_path: Path) -> int:
                         for ln in body_lines.get(rec["timbre"], {}).get("missed", [])
                         if rec["note"] in ln["on_notes"]
                     ],
+                    capture_id=cfg["id"],
                 )
             )
             if not m:
@@ -556,6 +559,9 @@ def measure(cfg: dict, corpus_dir: Path, out_path: Path) -> int:
         profile["tnr_unreliable"] = unreliable
     if recording_floor_by_timbre:
         profile["recording_floor"] = recording_floor_by_timbre
+    # Absent on a kit, which has no held note to loop; the rows carry the record itself.
+    if not percussion:
+        profile["loop"] = loop_summary(rows)
     # Absent rather than empty on a reference with no room, so the profile of a
     # dry capture is byte-identical to one measured before this was recorded and
     # its stamp — and every gate dated against it — stays where it is.
@@ -771,6 +777,7 @@ def dynamics(
                 modal=not tone_class(program).stiffness_fit,
                 stationary_lines_hz=ref[(note, v)].get("stationary_lines_hz", ()),
                 body_lines_hz=(ref[(note, v)].get("body_lines") or {}).get("hz", ()),
+                loop=reference_loop(ref[(note, v)]),
             )
             if not m:
                 break
@@ -1503,6 +1510,7 @@ def compare(
             modal=not tone_class(program).stiffness_fit,
             stationary_lines_hz=r.get("stationary_lines_hz", ()),
             body_lines_hz=(r.get("body_lines") or {}).get("hz", ()),
+            loop=reference_loop(r),
         )
         if not m:
             print(f"{note:5d} {vel:4d} | model rendered nothing measurable")
