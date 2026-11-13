@@ -791,3 +791,117 @@ def test_a_start_override_point_does_not_change_what_ships():
     pre = post = {"gate": {"readings": []}}
     fit = {**report, "loss": {}, "selected": {"values": [5.0]}}
     assert refit.verdict(pre, fit, post)["moved"] == 1, "against head, not the start point"
+
+
+def _fit_cmd(tmp_path, monkeypatch, weights=None):
+    import subprocess
+
+    import refit
+
+    seen: list = []
+
+    def fake_run(cmd, **kw):
+        seen.append(cmd)
+        Path(cmd[cmd.index("--out") + 1]).write_text("{}")
+        return subprocess.CompletedProcess(cmd, 0)
+
+    monkeypatch.setattr(refit.subprocess, "run", fake_run)
+    voice = {"slug": "v", "program": 1, "bank": 0, "corpus": "c", "timbre": "t", "notes": [60],
+             "velocities": [90], "validate_notes": [61]}  # fmt: skip
+    refit._fit(voice, tmp_path / "fit.json", "b", 8, weights)
+    return seen[-1]
+
+
+def _flags(cmd):
+    return {c[len("--w-") :]: cmd[i + 1] for i, c in enumerate(cmd) if c.startswith("--w-")}
+
+
+def test_weights_reach_each_fit_as_its_own_weight_flags(tmp_path, monkeypatch):
+    import refit
+
+    assert _flags(_fit_cmd(tmp_path, monkeypatch)) == {}
+    monkeypatch.setattr(refit, "WEIGHTS", refit.load_weights("slope=0,tail=0,bright=1,body=1"))
+    assert _flags(_fit_cmd(tmp_path, monkeypatch)) == {
+        "slope": "0",
+        "tail": "0",
+        "bright": "1",
+        "body": "1",
+    }
+    # A term the fit itself raises outranks the user's weight for it.
+    assert _flags(_fit_cmd(tmp_path, monkeypatch, {"slope": 1.0, "hf": 2.0})) == {
+        "slope": "1",
+        "tail": "0",
+        "bright": "1",
+        "body": "1",
+        "hf": "2",
+    }
+
+
+def test_weights_are_read_inline_or_from_a_file_and_unknown_terms_are_refused(tmp_path):
+    import refit
+
+    assert refit.load_weights("") == {}
+    assert refit.load_weights("slope=0, bright=1.5") == {"slope": 0.0, "bright": 1.5}
+    path = tmp_path / "w.txt"
+    path.write_text("slope=0  # off\nbody=1\n")
+    assert refit.load_weights(f"@{path}") == {"slope": 0.0, "body": 1.0}
+    for bad, why in (
+        ("slpoe=0", "not a loss term"),
+        ("slope", "not term=weight"),
+        ("slope=x", "not a number"),
+        ("slope=-1", "not negative"),
+        ("slope=1,slope=2", "twice"),
+        (f"@{tmp_path / 'missing'}", "not a file"),
+    ):
+        with pytest.raises(ValueError, match=why):
+            refit.load_weights(bad)
+
+
+def test_an_unknown_weight_term_stops_the_command_line(monkeypatch):
+    import refit
+
+    monkeypatch.setattr(sys, "argv", ["refit.py", "plan", "--weights", "slpoe=0"])
+    with pytest.raises(SystemExit):
+        refit.main()
+
+
+def test_prefit_starts_from_the_user_weights_and_a_user_zero_outranks_a_red_dimension(
+    tmp_path, monkeypatch, capsys
+):
+    import refit
+
+    # body and centroid are red; slope was zeroed by the user and is not red, bright was
+    # zeroed by the user and is.
+    user = {"slope": 0.0, "bright": 0.0}
+    monkeypatch.setattr(refit, "WEIGHTS", user)
+    red = {"body": True, "centroid_pct": True, "stretch": False}
+    refit_mod, voice, fits_run = _prefit_dir(
+        tmp_path, monkeypatch, red, weights={"harm": 1.0, "stiff": 1.0, **user}
+    )
+    result = refit_mod.run_voice(voice, tmp_path, "build", 8)
+    assert fits_run == [{"body": 1.0}], "body is raised from zero; slope and bright stay at 0"
+    assert result["prefit_weights"] == {"body": 1.0}
+    assert result["user_zero"] == ["bright"]
+    assert result["weights"] == user
+    assert "red, but kept at the weight 0 given: bright" in capsys.readouterr().out
+
+
+def test_the_profile_the_prefit_starts_from_carries_the_user_weights(monkeypatch):
+    import refit
+
+    base = refit.profile_weights({"program": 0})
+    monkeypatch.setattr(refit, "WEIGHTS", {"harm": 0.0, "body": 3.0})
+    got = refit.profile_weights({"program": 0})
+    assert got["harm"] == 0.0 and got["body"] == 3.0
+    assert {k: v for k, v in got.items() if k not in ("harm", "body")} == {
+        k: v for k, v in base.items() if k not in ("harm", "body")
+    }
+
+
+def test_a_reweighed_round_does_not_raise_a_term_the_user_zeroed(monkeypatch):
+    import refit
+
+    report = {"fit_profile": {"weights": {"harm": 1.0}}}
+    assert refit.reweighed(report, ["c:body abs_median"]) == {"body": 1.0}
+    monkeypatch.setattr(refit, "WEIGHTS", {"body": 0.0})
+    assert refit.reweighed(report, ["c:body abs_median"]) is None

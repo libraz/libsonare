@@ -65,6 +65,7 @@ import fits as fits_mod
 import gate_audit
 import harness_lock
 from _repo import REPO_ROOT
+from autofit_weight_flags import _WEIGHT_FLAGS_1, _WEIGHT_FLAGS_2
 from build_lib import _cached_option, dylib_path
 from capture import CORPUS_ROOT
 from catalogue import dump_catalogue
@@ -594,6 +595,49 @@ SPEC_KNOBS: list[str] = []
 #: Where every fit's named knobs start (autofit's --start-overrides).
 START_OVERRIDES = ""
 
+#: The terms autofit takes a `--w-<term>` flag for.
+WEIGHT_TERMS = frozenset(flag[len("--w-") :] for flag, _ in _WEIGHT_FLAGS_1 + _WEIGHT_FLAGS_2)
+
+#: Term weights given to every fit as its own `--w-<term>` flags, from --weights.
+WEIGHTS: dict[str, float] = {}
+
+
+def load_weights(arg: str) -> dict[str, float]:
+    """`term=w,term=w`, or `@file` holding one (commas or newlines, `#` comments), as weights.
+
+    A term autofit has no `--w-<term>` flag for is refused, as is a repeated one or
+    a value that is not a non-negative number.
+    """
+    if not arg:
+        return {}
+    if arg.startswith("@"):
+        path = Path(arg[1:]).expanduser()
+        if not path.is_file():
+            raise ValueError(f"--weights {arg!r}: {path} is not a file")
+        arg = ",".join(line.split("#", 1)[0].strip() for line in path.read_text().splitlines())
+    out: dict[str, float] = {}
+    for item in (e.strip() for e in arg.split(",")):
+        if not item:
+            continue
+        term, eq, text = item.partition("=")
+        term = term.strip()
+        if not eq:
+            raise ValueError(f"--weights entry {item!r} is not term=weight")
+        if term not in WEIGHT_TERMS:
+            raise ValueError(
+                f"--weights: {term!r} is not a loss term (they are {', '.join(sorted(WEIGHT_TERMS))})"
+            )
+        if term in out:
+            raise ValueError(f"--weights: {term!r} is given twice")
+        try:
+            weight = float(text)
+        except ValueError:
+            raise ValueError(f"--weights {term}={text.strip()!r}: not a number") from None
+        if not weight >= 0.0:
+            raise ValueError(f"--weights {term}={text.strip()!r}: a weight is not negative")
+        out[term] = weight
+    return out
+
 
 def _shipped(knob: dict) -> float:
     """The value a report's knob ships at: its `head` when the search started elsewhere."""
@@ -657,7 +701,8 @@ def _fit(
         "--out",
         str(out),
     ]
-    for term, weight in sorted((weights or {}).items()):
+    # A term this fit raises outranks the user's weight for it; the rest are the user's.
+    for term, weight in sorted({**WEIGHTS, **(weights or {})}.items()):
         cmd += [f"--w-{term}", f"{weight:g}"]
     if PREBUILT_LIB:
         cmd += ["--lib", PREBUILT_LIB]
@@ -832,22 +877,32 @@ def prefit_raise(voice: dict, pre: dict, weights: dict[str, float]) -> dict:
     A dimension red in `pre` whose OWN term has no weight gets that term raised by the
     rule `reweighed` uses; one with a weighted own term is left, and one with no own
     term (a proxy-only mapping) is listed, not raised. `weights` is the fit's profile.
+    A term the user gave a weight of 0 (`WEIGHTS`) is never raised, even when its own
+    dimension is red: the explicit 0 wins, and the term is listed in `user_zero`.
     """
     own = PERCUSSION_GATE_OWN_TERMS if "drum_note" in voice else GATE_OWN_TERMS
     red = sorted({r["key"].rpartition(":")[2] for r in pre["gate"]["readings"] if r.get("over")})
     raised: dict[str, float] = {}
     no_own: list[str] = []
+    user_zero: set[str] = set()
     for dim in red:
         terms = own.get(dim, ())
         if not terms:
             no_own.append(dim)
         elif not any(weights.get(t, 0.0) > 0.0 for t in terms):
-            raised.update({t: _doubled(weights.get(t, 0.0)) for t in terms})
-    return {"prefit_weights": raised, "raised_from_zero": sorted(raised), "no_own_term": no_own}
+            held = {t for t in terms if WEIGHTS.get(t) == 0.0}
+            user_zero.update(held)
+            raised.update({t: _doubled(weights.get(t, 0.0)) for t in terms if t not in held})
+    return {
+        "prefit_weights": raised,
+        "raised_from_zero": sorted(raised),
+        "no_own_term": no_own,
+        "user_zero": sorted(user_zero),
+    }
 
 
 def profile_weights(voice: dict) -> dict[str, float]:
-    """The weights the voice's first fit starts from: its class defaults, then the spec's."""
+    """The weights the voice's first fit starts from: its class defaults, the spec's, then --weights."""
     weights = default_weights(
         voice["program"],
         drum_note=voice.get("drum_note"),
@@ -855,6 +910,7 @@ def profile_weights(voice: dict) -> dict[str, float]:
     )
     if SPEC:
         weights.update(load_spec_weights(Path(SPEC)))
+    weights.update(WEIGHTS)
     return weights
 
 
@@ -863,6 +919,10 @@ def _first_fit(voice: dict, d: Path, build_dir: str, per_knob: int) -> None:
     prefit = prefit_raise(voice, json.loads((d / "pre.json").read_text()), profile_weights(voice))
     if prefit["no_own_term"]:
         print(f"{voice['slug']}: red with no own term: {', '.join(prefit['no_own_term'])}")
+    if prefit["user_zero"]:
+        print(
+            f"{voice['slug']}: red, but kept at the weight 0 given: {', '.join(prefit['user_zero'])}"
+        )
     if prefit["raised_from_zero"]:
         print(
             f"{voice['slug']}: [raised from zero weight: {', '.join(prefit['raised_from_zero'])}]"
@@ -937,11 +997,13 @@ def _judge_voice(voice: dict, d: Path, build_dir: str, per_knob: int) -> dict:
     prefit = d / "prefit.json"
     if prefit.exists():
         got = json.loads(prefit.read_text())
-        for key in ("raised_from_zero", "prefit_weights", "no_own_term", "refused"):
+        for key in ("raised_from_zero", "prefit_weights", "no_own_term", "user_zero", "refused"):
             if got.get(key):
                 result["red_without_own_term" if key == "no_own_term" else key] = got[key]
     if SPEC:
         result["spec"] = {"path": SPEC, "knobs": SPEC_KNOBS}
+    if WEIGHTS:
+        result["weights"] = dict(WEIGHTS)
     return result
 
 
@@ -1098,6 +1160,7 @@ def reweighed(
     for d in dims:
         named = table.get(d, ())
         named = (named,) if isinstance(named, str) else named
+        named = tuple(t for t in named if WEIGHTS.get(t) != 0.0)  # an explicit 0 stays
         weighed = [t for t in named if weights.get(t, 0.0) > 0.0]
         terms.update(weighed or named[:1])
     if not terms:
@@ -1356,13 +1419,22 @@ def main() -> int:
         "(autofit's repeated --corpus), each held out on its own notes; without it a voice "
         "is fitted against its own capture alone. Has no effect on kits",
     )
+    ap.add_argument(
+        "--weights",
+        default="",
+        metavar="TERM=W,...|@FILE",
+        help="loss-term weights given to every fit as its own --w-<term> flags (autofit's); the "
+        "first fit's reweighing starts from them instead of the class defaults, and a term "
+        "given 0 is never raised, even when its gate dimension is red. Recorded in each verdict",
+    )
     args = ap.parse_args()
     global ALLOW_DIRTY_SRC, JOINT
     ALLOW_DIRTY_SRC = args.allow_dirty_src
     JOINT = args.joint
-    global BASE_OVERRIDES
+    global BASE_OVERRIDES, WEIGHTS
     try:
         BASE_OVERRIDES = load_base_overrides(args.base_overrides)
+        WEIGHTS = load_weights(args.weights)
     except ValueError as exc:
         ap.error(str(exc))
     global SPEC, SPEC_KNOBS, START_OVERRIDES

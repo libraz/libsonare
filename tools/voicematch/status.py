@@ -751,7 +751,11 @@ def fit_axis(
     """
     ids = {c.id for c in voice.captures}
     if voice.kit:
-        units = sorted(u for u, e in records.items() if u.startswith("d") and e["capture"] in ids)
+        units = sorted(
+            u
+            for u, e in records.items()
+            if u.startswith("d") and any(c["capture"] in ids for c in fits_mod.entry_corpora(e))
+        )
     else:
         units = [voice.patch] if voice.patch else []
     fittable = any(

@@ -143,6 +143,16 @@ def resolve_corpus(args) -> Corpus | None:
     return load_corpus(specs[0].path, specs[0].timbre)
 
 
+def primary_corpus(args) -> Corpus | None:
+    """The first capture's manifest: what a value one render shares across a joint fit is read from.
+
+    The knob catalogue is dumped once for the whole run, at the primary
+    capture's render rate; a single capture is its own primary.
+    """
+    specs = capture_specs(args)
+    return load_corpus(specs[0].path, specs[0].timbre) if specs else None
+
+
 def capture_program(corpus: Corpus) -> tuple[int, int] | None:
     """The (program, bank) a capture's definition says its recording answers, if it has one."""
     for cap in bank.captures():

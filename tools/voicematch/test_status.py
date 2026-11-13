@@ -846,3 +846,37 @@ def test_one_envelope_hop_of_attack_is_resolution_not_a_shared_source():
 
     assert not shares_a_source("attack", ENVELOPE_HOP_MS)
     assert shares_a_source("attack", 0.5 * ENVELOPE_HOP_MS)
+
+
+def test_a_joint_fit_reads_as_a_joint_fit_in_the_fit_axis():
+    joint = {
+        "objective": "o",
+        "date": "2026-10-01",
+        "outcome": "adopted",
+        "capture": "nylon",
+        "timbre": "t0",
+        "corpora": [{"capture": "nylon", "timbre": "t0"}, {"capture": "ukulele", "timbre": "t1"}],
+    }
+    single = {"objective": "o", "date": "2026-10-01", "outcome": "adopted", "capture": "organ"}
+    axis = status.fits_mod.axis(["guitar"], {"guitar": joint}, "o")
+    assert axis["corpora"] == joint["corpora"]
+    assert "corpora" not in status.fits_mod.axis(["organ"], {"organ": single}, "o")
+
+
+def test_a_kit_unit_is_found_through_any_corpus_of_its_fit(monkeypatch):
+    from types import SimpleNamespace
+
+    monkeypatch.setattr(status.boundary, "reference_boundary", lambda *a: None)
+    monkeypatch.setattr(status.boundary.Reference, "from_capture", lambda raw: raw)
+    voice = SimpleNamespace(kit=True, captures=[SimpleNamespace(id="kit-b", raw=None)], program=0)
+    records = {
+        "d36": {
+            "objective": "o",
+            "date": "2026-10-01",
+            "outcome": "adopted",
+            "capture": "kit-a",
+            "timbre": "t",
+            "corpora": [{"capture": "kit-a", "timbre": "t"}, {"capture": "kit-b", "timbre": "t"}],
+        }
+    }
+    assert status.fit_axis(voice, records, "o")["state"] == status.fits_mod.CURRENT

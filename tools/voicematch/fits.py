@@ -86,6 +86,17 @@ def corpora_of(report: dict, capture: str, timbre: str) -> list[dict]:
     return [{"capture": capture, "timbre": timbre}]
 
 
+def entry_corpora(entry: dict) -> list[dict]:
+    """The `{capture, timbre}` list a stored entry answered; readers use this, not `capture`.
+
+    An entry that predates `corpora` is the one pair its `capture` and `timbre` name.
+    """
+    named = entry.get("corpora")
+    if named:
+        return [dict(c) for c in named]
+    return [{"capture": entry.get("capture") or "", "timbre": entry.get("timbre") or ""}]
+
+
 def record_fit(
     report: dict,
     *,
@@ -161,6 +172,13 @@ def axis(
     if recorded:
         last = max(recorded, key=lambda e: e["date"])
         out.update(date=last["date"], outcome=last["outcome"])
+    corpora = []
+    for e in recorded:
+        for c in entry_corpora(e):
+            if c not in corpora:
+                corpora.append(c)
+    if len(corpora) > 1:
+        out["corpora"] = corpora
     if state == UNDER_BASE:
         out["base_overrides"] = sorted(
             {e["base_overrides"] for e in recorded if e.get("base_overrides")}

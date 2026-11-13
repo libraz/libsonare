@@ -253,12 +253,16 @@ def per_capture_rows(evaluator, start_values, search_values, best_values, extra)
             if base is not None and kept is not None
             else []
         )
+        start_loss = _finite(member.loss_for([k.start_value for k in evaluator.knobs]))
         rows.append(
             {
                 **info.get(label, {"label": label}),
                 "weight": weight,
+                "worse_than_start": (
+                    start_loss is not None and kept_loss is not None and kept_loss > start_loss
+                ),
                 "loss": {
-                    "start": _finite(member.loss_for([k.start_value for k in evaluator.knobs])),
+                    "start": start_loss,
                     "search": search_loss,
                     "selected": kept_loss,
                 },
@@ -306,6 +310,8 @@ def print_per_capture(rows: list[dict], refused_by: list[str] | None = None) -> 
             if held and held.get("scored", True) and "start" in held
             else "  held-out n/a"
         )
+        if row.get("worse_than_start"):
+            held_text += "  KEPT ABOVE ITS START"
         worse = row["search_winner"]["regressions"]
         worse_text = (
             "  worse: "

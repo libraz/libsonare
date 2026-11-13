@@ -292,6 +292,7 @@ from autofit_resolve import (
     capture_specs,
     catalogue_pattern,
     check_holdout_oracle,
+    primary_corpus,
     reference_band_edge,
     resolve_corpus,
     resolve_probe,
@@ -1961,10 +1962,10 @@ def joint_winner(
 
     The per-capture guards (a term whose measurements vanished, the one-sided
     `tnr` walk past the reference) run on each capture at the joint winner and any
-    one tripping keeps the defaults. The two readings that are trades are joint:
-    the winner losing to the start point, and the hold-out. A capture whose
-    hold-out got worse is named either way; it only refuses the fit through the
-    joint hold-out, so a gain on one capture can still pay for a loss on another.
+    one tripping keeps the defaults. The winner losing to the start point is a
+    joint reading. The hold-out refuses on either reading: the joint worsening
+    past `HOLDOUT_WORSE_MARGIN`, or any one capture's own hold-out doing so, so a
+    gain on one capture cannot pay for a held-out loss on another.
     """
     start_values = [k.start_value for k in knobs]
     joint.write_back_refusal = None
@@ -1998,18 +1999,24 @@ def joint_winner(
             file=sys.stderr,
         )
         final = start_values
-    elif (
-        validation
-        and "best" in validation
-        and "start" in validation
-        and validation["best"] - validation["start"] > HOLDOUT_WORSE_MARGIN
+    elif validation and (
+        validation.get("worse")
+        or (
+            "best" in validation
+            and "start" in validation
+            and validation["best"] - validation["start"] > HOLDOUT_WORSE_MARGIN
+        )
     ):
         joint.write_back_refusal = "fitted_to_the_probe"
         joint.refused_by = list(validation.get("worse") or [])
+        joint_reading = (
+            f"the winner scores {validation['best']:.4f} against the defaults' "
+            f"{validation['start']:.4f} on the joint held-out {validation['axis']}"
+            if "best" in validation and "start" in validation
+            else "the winner worsens a capture's held-out"
+        )
         print(
-            f"\nthe winner scores {validation['best']:.4f} against the defaults' "
-            f"{validation['start']:.4f} on the joint held-out {validation['axis']} — keeping "
-            f"the defaults"
+            f"\n{joint_reading} — keeping the defaults"
             + (f" (worse on {', '.join(joint.refused_by)})" if joint.refused_by else ""),
             file=sys.stderr,
         )
@@ -2114,7 +2121,7 @@ def _tuning_catalogue(args, build_dir: Path, **kw) -> Catalogue:
         args.program,
         catalogue_pattern(args),
         str(dylib) if dylib else None,
-        sr=render_rate(resolve_corpus(args)),
+        sr=render_rate(primary_corpus(args)),
         notes=args.notes,
         **kw,
     )

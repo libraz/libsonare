@@ -31,7 +31,7 @@ from autofit import (
     validate_joint,
 )
 from autofit_test_fixtures import _fit_args, _terms, _write_corpus
-from knobs import Knob
+from knobs import Knob, KnobClasses
 from loss import LOSS_TERMS, LossWeights, cli_weights
 from loss_weights import TERM_UNITS
 
@@ -321,6 +321,51 @@ def test_the_joint_hold_out_refuses_and_names_the_capture_that_got_worse(tmp_pat
     assert joint_winner([KNOB], [0.9], joint, held) == START
     assert joint.write_back_refusal == "fitted_to_the_probe"
     assert joint.refused_by == ["b:t0"]
+
+
+def test_a_capture_worse_held_out_refuses_even_when_the_joint_improves(tmp_path, monkeypatch):
+    joint = _two(tmp_path, monkeypatch, _steady)
+    held = {
+        "axis": "notes",
+        "start": 1.0,
+        "best": 0.9,  # the joint improves ...
+        "worse": ["b:t0"],  # ... but one capture's own hold-out got worse past the margin
+        "per_capture": [],
+    }
+    assert joint_winner([KNOB], [0.9], joint, held) == START
+    assert joint.write_back_refusal == "fitted_to_the_probe"
+    assert joint.refused_by == ["b:t0"]
+
+
+def test_a_capture_within_the_margin_does_not_refuse(monkeypatch, tmp_path):
+    _serve(monkeypatch, [_Held(0.5), _Held(1.004)])
+    result = validate_joint(_captures("a:t0", "b:t0"), None, [KNOB], START, [0.9])
+    assert result["worse"] == []
+    joint = _two(tmp_path, monkeypatch, _steady)
+    assert joint_winner([KNOB], [0.9], joint, result) == [0.9]
+
+
+def test_per_capture_flags_a_capture_that_ends_above_its_start(tmp_path, monkeypatch):
+    a = _member(tmp_path, monkeypatch, _harm(lambda v: 4.0 - 3.0 * v), harm=1.0)
+    b = _member(tmp_path, monkeypatch, _harm(lambda v: 4.0 + 1.0 * v), harm=1.0)
+    joint = _joint(a, b, labels=["a:t0", "b:t0"])
+    joint(START)
+    joint([0.9])
+    rows = {r["label"]: r for r in report.per_capture_rows(joint, START, [0.9], [0.9], {})}
+    assert rows["a:t0"]["worse_than_start"] is False
+    assert rows["b:t0"]["worse_than_start"] is True
+
+
+def test_the_per_capture_line_says_a_capture_ended_above_its_start(capsys):
+    row = {
+        "label": "b:t0",
+        "weight": 1.0,
+        "worse_than_start": True,
+        "loss": {"start": 1.0, "search": 1.2, "selected": 1.2},
+        "search_winner": {"regressions": []},
+    }
+    report.print_per_capture([row])
+    assert "KEPT ABOVE ITS START" in capsys.readouterr().out
 
 
 # --------------------------------------------------------------------------- #
@@ -616,3 +661,76 @@ def test_a_joint_run_reports_each_capture_and_records_both(tmp_path, monkeypatch
     assert record["validation"]["worse"] == [record["corpora"][1]["label"]]
     assert record["loss"]["start"] == pytest.approx(1.0)
     assert len(record["write_back"]["per_capture"]) == 2
+
+
+def test_a_joint_run_dumps_the_catalogue_once_at_the_primary_rate(tmp_path, monkeypatch):
+    """Two --corpus, --lib and a hand spec with a dotted key reach the dump without a single-capture lookup."""
+    import numpy as np
+    from catalogue import Catalogue
+
+    lib = tmp_path / "libsonare.dylib"
+    lib.write_bytes(b"lib")
+    monkeypatch.setattr(autofit, "repo_tree_state", lambda: ("deadbeef", []))
+    monkeypatch.setattr(autofit, "src_files", list)
+    monkeypatch.setattr(autofit, "CORPUS_ROOT", tmp_path / "scratch")
+    monkeypatch.setattr(autofit, "_fold_gate_audit", lambda *a, **k: None)
+    catalogue = Catalogue(
+        defaults={"nylon.gain": 0.5},
+        programs={(0, 0): "nylon", (1, 0): "ukulele"},
+        bounds={},
+        modes={},
+        rigs={},
+    )
+    dumps = []
+
+    def fake_dump(program, pattern, lib_path, **kw):
+        dumps.append((program, kw["sr"]))
+        return catalogue
+
+    monkeypatch.setattr(autofit, "dump_catalogue", fake_dump)
+    monkeypatch.setattr(autofit, "load_knob_classes", lambda path, cat: KnobClasses({}))
+    monkeypatch.setattr(autofit_resolve, "capture_program", lambda corpus: (1, 0))
+    monkeypatch.setattr(
+        autofit, "oracle_reference", lambda args: ([], np.zeros(4, dtype=np.float32), None, None)
+    )
+    monkeypatch.setattr(
+        Evaluator,
+        "_render_terms",
+        lambda self, values: _terms(harm=_units("harm", 14.0 - 12.0 * values[0])),
+    )
+    scorers = {0: _Held(0.7, held="48"), 1: _Held(0.7, held="50")}
+    monkeypatch.setattr(
+        autofit,
+        "holdout_scorer",
+        lambda args, build_dir, knobs, room_ir, reach=None: (
+            scorers[args.program],
+            scorers[args.program].axis,
+            scorers[args.program].held,
+        ),
+    )
+    spec = tmp_path / "spec.json"
+    spec.write_text(json.dumps([{"tunable": "nylon.gain", "min": 0.0, "max": 1.0}]))
+    nylon = _write_corpus(tmp_path / "nylon", notes=(60, 72))
+    ukulele = _write_corpus(tmp_path / "ukulele", notes=(60, 72))
+    args = autofit.build_parser().parse_args(
+        [
+            *("--spec", str(spec), "--program", "0", "--lib", str(lib), "--dry-run"),
+            *("--corpus", str(nylon), "--corpus", str(ukulele)),
+            *("--corpus-validate-notes", "48", "--corpus-validate-notes", "50"),
+            *("--optimizer", "coord", "--max-evals", "6", "--no-cache"),
+            *("--w-harm", "1", "--out", str(tmp_path / "out.json")),
+        ]
+    )
+    assert autofit.run(args, []) == 0
+    assert dumps and {sr for _, sr in dumps} == {48000}
+    assert {program for program, _ in dumps} == {0}
+
+
+def test_primary_corpus_is_the_first_capture_and_none_without_one(tmp_path):
+    first = _write_corpus(tmp_path / "a", notes=(60,))
+    second = _write_corpus(tmp_path / "b", notes=(60,))
+    args = argparse.Namespace(corpus=[str(first), str(second)], corpus_timbre=None)
+    assert Path(autofit_resolve.primary_corpus(args).root) == first
+    assert autofit_resolve.primary_corpus(argparse.Namespace(corpus="")) is None
+    with pytest.raises(ValueError, match="several captures"):
+        autofit_resolve.resolve_corpus(args)
