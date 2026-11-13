@@ -50,6 +50,12 @@
       "basis": "ruled: on the sustained scan the only surviving term that reads it is held-window crest, four phase-sensitive snapshots (stored-waveform groups) against a measured 3 dB of upper partials, which does not identify body_mix",
       "lane": "sustained"
     },
+    "trombone.cutoff_hz": {
+      "class": "pinned",
+      "value": 580.0,
+      "basis": "ruled: the post-voice lowpass and the bell corner both supply the darkness; on the bell-only grid (lowpass open, effective bell corner 1626/1100/720/500 Hz, n40/52/64 x v32/80/127) no corner matched the 580 Hz lowpass on ladder, h1 share, pitch and level at once, and the bell could not hold h2, so the lowpass keeps the darkness and the bell stays free",
+      "lane": "sustained"
+    },
     "filter_model": {
       "class": "identity",
       "basis": "filter topology / tap enum; a type, not a setting",
