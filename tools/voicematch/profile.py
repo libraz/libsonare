@@ -170,6 +170,7 @@ from profile_percussion import (
     percussion_row_deltas,
     print_kit_relations,
     ring_collapsed,
+    tally_row_absence,
 )
 from profile_status import (
     CAPTURE_DIR,
@@ -882,6 +883,7 @@ def compare_percussion(
     # without it: 11 rows is a full grid on one capture and a third of one here.
     attempted = 0
     offered_keys: set[str] = set()
+    tally = CensorTally()
     for note, vel in pairs:
         played = mapping.get(note, note)
         window_s = window(note, vel)
@@ -933,6 +935,8 @@ def compare_percussion(
             got, offered = band_decay_reach(m, r)
             reach[0] += got
             reach[1] += offered
+        tally.begin_row()
+        tally_row_absence(tally, row, m, r)
         offered_keys |= set(row)
         for k, v in row.items():
             if v is not None and np.isfinite(v):
@@ -1102,7 +1106,15 @@ def compare_percussion(
         return check_gate(summary, Path(gate_path), timbre, profile.get("measured_utc", ""))
     if write_gate:
         return write_gate_file(
-            summary, Path(write_gate), timbre, margin, profile.get("measured_utc", ""), spread
+            summary,
+            Path(write_gate),
+            timbre,
+            margin,
+            profile.get("measured_utc", ""),
+            spread,
+            requested=cfg.get("dimensions") or [],
+            dimensions_na=cfg.get("dimensions_na") or {},
+            censors=tally,
         )
     return 0
 

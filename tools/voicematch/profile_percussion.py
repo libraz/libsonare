@@ -6,6 +6,7 @@ import numpy as np
 from loss import KIT_MIN_MEMBERS, kit_report
 from metrics import band_tilt_db
 from metrics_hit import ring_doublings
+from profile_gate import CensorTally
 
 
 def band_shape_error_db(model: list[float] | None, ref: list[float] | None) -> float | None:
@@ -123,6 +124,46 @@ def print_kit_relations(
         "itself hold is not listed:\n  which relations a family has is read off the "
         "rows, never declared."
     )
+
+
+def tally_row_absence(tally: CensorTally, row: dict, m: dict, r: dict) -> None:
+    """Record, for each dimension `row` left without a delta, which side had no value.
+
+    Read off the same fields `percussion_row_deltas` differences, after the
+    caller has dropped any censored dimension from `row`. A capped decay is
+    charged to the side that capped; the rest to the side missing the field.
+    """
+    capped = bool(m.get("decay_capped")), bool(r.get("decay_capped"))
+    fields = {
+        "band_tilt": "bands_db",
+        "band_shape": "bands_db",
+        "tonality": "flatness_db",
+        "tilt_rise": "tilt_rise_db",
+        "stereo": "stereo_width",
+        "level": "peak_dbfs",
+    }
+    for dim, key in fields.items():
+        if row.get(dim) is None:
+            sm, sr = m.get(key) is None, r.get(key) is None
+            tally.absent(dim, sm or not (sm or sr), sr or not (sm or sr))
+    if row.get("band_decay") is None:
+        if any(capped):
+            tally.absent("band_decay", *capped)
+        else:
+            has_m = any(v is not None for v in m.get("band_decay_db_s") or [])
+            has_r = any(v is not None for v in r.get("band_decay_db_s") or [])
+            tally.absent("band_decay", not has_m or has_m == has_r, not has_r or has_m == has_r)
+    if row.get("ring") is None:
+        if any(capped):
+            tally.absent("ring", *capped)
+        else:
+            tally.absent(
+                "ring",
+                not m.get("decay_ms") or m["decay_ms"] <= 0.0,
+                not r.get("decay_ms") or r["decay_ms"] <= 0.0,
+            )
+    if row.get("centroid_pct") is None:
+        tally.absent("centroid_pct", False, True)
 
 
 def percussion_row_deltas(m: dict, r: dict) -> dict[str, float | None]:

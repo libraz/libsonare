@@ -408,3 +408,83 @@ def test_an_untouched_old_gate_reads_as_before(tmp_path, capsys):
     assert profile_gate.gate_readings(summary, raw["bounds"]) == profile_gate.gate_readings(
         summary, json.loads(migrated.read_text())["bounds"]
     )
+
+
+# --------------------------------------------------------------------------- #
+# percussion rows
+
+
+def _kit_gate(tmp_path, rows, requested, **kw):
+    import profile_percussion as pp
+
+    t = CensorTally()
+    for m, r in rows:
+        t.begin_row()
+        pp.tally_row_absence(t, pp.percussion_row_deltas(m, r), m, r)
+    gate = tmp_path / "kit.json"
+    summary = {**_rows(2.0), **kw.pop("summary", {})}
+    write_gate_file(summary, gate, "kit", 1.0, requested=requested, censors=t, **kw)
+    return json.loads(gate.read_text()).get("_unbounded", {}), gate
+
+
+def _hit(**over):
+    h = {
+        "attack_ms": 2.0,
+        "crest_db": 10.0,
+        "centroid_hz": 1000.0,
+        "decay_ms": 100.0,
+        "bands_db": [0.0, -3.0, -6.0],
+        "band_decay_db_s": [-10.0, -20.0, -30.0],
+        "flatness_db": -10.0,
+        "tilt_rise_db": 1.0,
+        "stereo_width": 0.1,
+        "peak_dbfs": -12.0,
+    }
+    return {**h, **over}
+
+
+def test_a_kit_dimension_absent_on_the_model_side_names_the_model(tmp_path):
+    rows = [(_hit(flatness_db=None), _hit()) for _ in range(3)]
+    un, _ = _kit_gate(tmp_path, rows, ["decay", "tonality"])
+    assert un == {"tonality": "measured: no rows; censored on model, 3 of 3 rows (field absent)"}
+
+
+def test_a_kit_dimension_absent_on_the_reference_side_names_the_reference(tmp_path):
+    rows = [(_hit(), _hit(tilt_rise_db=None)) for _ in range(2)]
+    un, _ = _kit_gate(tmp_path, rows, ["decay", "tilt_rise"])
+    assert un == {
+        "tilt_rise": "measured: no rows; censored on reference, 2 of 2 rows (field absent)"
+    }
+
+
+def test_a_capped_kit_decay_names_the_side_and_the_censor(tmp_path):
+    rows = [(_hit(decay_capped=True), _hit()) for _ in range(2)]
+    un, _ = _kit_gate(tmp_path, rows, ["ring"])
+    assert un == {"ring": "measured: no rows; censored on model, 2 of 2 rows (decay_capped)"}
+
+
+def test_a_hand_written_kit_reason_wins_and_a_measured_dimension_gets_none(tmp_path):
+    rows = [(_hit(flatness_db=None), _hit()) for _ in range(3)]
+    _un, gate = _kit_gate(tmp_path, rows, ["decay", "tonality"])
+    doc = json.loads(gate.read_text())
+    doc["_unbounded"]["tonality"] = "by hand"
+    gate.write_text(json.dumps(doc))
+    t = CensorTally()
+    t.begin_row()
+    t.absent("tonality", True, False)
+    write_gate_file(_rows(2.0), gate, "kit", 1.0, requested=["decay", "tonality"], censors=t)
+    assert json.loads(gate.read_text())["_unbounded"] == {"tonality": "by hand"}
+    # `decay` has rows in `_rows`, so it is bounded and carries no entry.
+    assert "decay" not in json.loads(gate.read_text())["_unbounded"]
+
+
+def test_a_kit_dimension_with_rows_gets_a_bound_and_no_entry(tmp_path):
+    rows = [(_hit(flatness_db=None), _hit()) for _ in range(3)]
+    un, gate = _kit_gate(
+        tmp_path,
+        rows,
+        ["tonality"],
+        summary={"tonality": {"median": 1.0, "abs_median": 1.0, "p90": 1.0, "n": 3}},
+    )
+    assert un == {}
+    assert "tonality" in json.loads(gate.read_text())["bounds"]
