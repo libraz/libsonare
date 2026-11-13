@@ -172,6 +172,7 @@ from profile_percussion import (
 from profile_status import (
     CAPTURE_DIR,
     committed_capture,
+    field_stamps,
     measurement_stamp,
     profile_body,
     readiness,
@@ -505,7 +506,10 @@ def measure(cfg: dict, corpus_dir: Path, out_path: Path) -> int:
     if rooms:
         profile["rooms"] = rooms
     before = out_path.read_text() if out_path.exists() else ""
+    stamps = field_stamps(profile, out_path)
     profile["measured_utc"] = measurement_stamp(profile, out_path)
+    if stamps:
+        profile["field_measured_utc"] = stamps
     out_path.parent.mkdir(parents=True, exist_ok=True)
     written = json.dumps(profile, indent=1, ensure_ascii=False) + "\n"
     out_path.write_text(written)

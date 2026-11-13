@@ -40,14 +40,15 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import profile as profile_module
 
 from capture import load_config, out_root
+from profile_status import STAMP_KEYS
 
 HERE = Path(__file__).resolve().parent
 CAPTURE_DIR = HERE / "capture"
 REFERENCE_DIR = HERE / "reference"
 
-#: Top-level keys a re-measurement is allowed to differ on. Just the one --
-#: see the module docstring for why it always changes.
-IGNORED_KEYS = {"measured_utc"}
+#: Top-level keys a re-measurement is allowed to differ on: the stamps, which
+#: date a scratch path rather than measure anything (see the module docstring).
+IGNORED_KEYS = set(STAMP_KEYS)
 
 #: How many individual field diffs to collect per mismatched id. A profile
 #: mismatch is almost always one root cause repeated over every row of a grid,

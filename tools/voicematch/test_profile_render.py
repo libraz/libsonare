@@ -605,10 +605,21 @@ def test_a_stamp_moves_only_when_the_measurement_does(tmp_path):
     moved = dict(body, rows=[{"note": 60, "f0_hz": 261.7}])
     assert profile_module.measurement_stamp({**moved, "measured_utc": ""}, out) != first
 
-    # A dimension that did not exist before is a change, not a carry-forward —
-    # this is the shape the piano reference had, with tnr_db absent throughout.
+    # A field a newer analysis adds leaves the existing quantities' stamp alone
+    # and is dated on its own, so one date never stands for two measurements.
     grown = dict(body, rows=[{"note": 60, "f0_hz": 261.6, "tnr_db": 12.0}])
-    assert profile_module.measurement_stamp({**grown, "measured_utc": ""}, out) != first
+    assert profile_module.measurement_stamp({**grown, "measured_utc": ""}, out) == first
+    added = profile_module.field_stamps(grown, out)
+    assert list(added) == ["rows.tnr_db"] and added["rows.tnr_db"] != first
+
+    # The same addition with one existing field moved re-dates the whole profile.
+    grown_moved = dict(body, rows=[{"note": 60, "f0_hz": 261.7, "tnr_db": 12.0}])
+    assert profile_module.measurement_stamp({**grown_moved, "measured_utc": ""}, out) != first
+    assert profile_module.field_stamps(grown_moved, out) == {}
+
+    # A field that disappears is a change too.
+    shrunk = dict(body, rows=[{"note": 60}])
+    assert profile_module.measurement_stamp({**shrunk, "measured_utc": ""}, out) != first
 
     # No file yet, and an unreadable one, both mean "stamp it now" rather than
     # an exception — a first measure and a half-written file are both normal.

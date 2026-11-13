@@ -65,40 +65,89 @@ def profile_body(profile: dict) -> str:
     read as a change when nothing changed.
     """
     return json.dumps(
-        {k: v for k, v in profile.items() if k != "measured_utc"}, indent=1, ensure_ascii=False
+        {k: v for k, v in profile.items() if k not in STAMP_KEYS}, indent=1, ensure_ascii=False
     )
 
 
+#: The keys that date a profile rather than measure anything.
+STAMP_KEYS = ("measured_utc", "field_measured_utc")
+
+
+def _fields(profile: dict) -> dict[str, str]:
+    """Each measured quantity of a profile, serialized: top-level keys and per-row fields."""
+    out = {
+        k: json.dumps(v, ensure_ascii=False)
+        for k, v in profile.items()
+        if k not in STAMP_KEYS and k != "rows"
+    }
+    rows = profile.get("rows") or []
+    names = sorted({k for r in rows for k in r})
+    for name in names:
+        out[f"rows.{name}"] = json.dumps([r.get(name) for r in rows], ensure_ascii=False)
+    out["rows#"] = json.dumps(
+        [[r.get("timbre"), r.get("note"), r.get("velocity")] for r in rows], ensure_ascii=False
+    )
+    return out
+
+
+def _previous(out_path: Path) -> dict | None:
+    if not out_path.exists():
+        return None
+    try:
+        return json.loads(out_path.read_text())
+    except (OSError, ValueError):
+        return None
+
+
+def added_fields(profile: dict, previous: dict) -> list[str] | None:
+    """Fields new in @p profile when every field @p previous held is byte-identical, else None."""
+    was, now = (
+        _fields(json.loads(profile_body(previous))),
+        _fields(json.loads(profile_body(profile))),
+    )
+    if any(now.get(k) != v for k, v in was.items()):
+        return None
+    return sorted(now.keys() - was.keys())
+
+
 def measurement_stamp(profile: dict, out_path: Path) -> str:
-    """When this measurement last *changed*, not when it was last taken.
+    """When the quantities this measurement already held last *changed*.
 
-    A profile is a pure function of the captured WAVs and the analysis code —
-    the capture writes audio to disk and every number here is read back from it,
-    with nothing measured live — so re-running `measure` over an unchanged
-    corpus with unchanged code must produce the identical file. A wall-clock
-    stamp written on every run defeats that, and it defeats more than a diff:
-
-    - Nothing can then say mechanically whether an analysis edit moved a
-      committed reference, which is the one question that decides whether the
-      edit is safe to land.
-    - A gate records the stamp of the reference its bounds were read against
-      (`reference_measured_utc`), so a re-measure that changed nothing would
-      still report every gate as predating its own reference.
-
-    So the stamp is carried forward whenever everything else is unchanged, and
-    moves only when a number does.
+    A profile is a pure function of the captured WAVs and the analysis code, so
+    re-running `measure` over an unchanged corpus with unchanged code must produce
+    the identical file; a wall-clock stamp on every run would make every gate
+    dated against it (`reference_measured_utc`) read as predating its reference.
+    The stamp is carried forward when every field the previous file held is
+    byte-identical, compared here rather than assumed. A field added by a newer
+    analysis does not move it: that field is dated on its own in
+    `field_measured_utc` (see `field_stamps`), so one date never stands for two
+    measurements.
     """
     now = datetime.now(UTC).isoformat(timespec="seconds")
-    if not out_path.exists():
-        return now
-    try:
-        previous = json.loads(out_path.read_text())
-    except (OSError, ValueError):
-        return now
-    kept = previous.get("measured_utc", "")
-    if kept and profile_body(previous) == profile_body(profile):
+    previous = _previous(out_path)
+    kept = (previous or {}).get("measured_utc", "")
+    if kept and added_fields(profile, previous) is not None:
         return kept
     return now
+
+
+def field_stamps(profile: dict, out_path: Path) -> dict[str, str]:
+    """When each field newer than the profile's own stamp was measured.
+
+    Carried forward with the profile's stamp; a field added this run is stamped
+    now; everything is dropped when an existing field moved, since the whole
+    profile is then dated by `measured_utc` again.
+    """
+    previous = _previous(out_path)
+    if previous is None:
+        return {}
+    added = added_fields(profile, previous)
+    if added is None or not previous.get("measured_utc"):
+        return {}
+    now = datetime.now(UTC).isoformat(timespec="seconds")
+    stamps = dict(previous.get("field_measured_utc") or {})
+    stamps.update({f: now for f in added})
+    return dict(sorted(stamps.items()))
 
 
 # --------------------------------------------------------------------------
