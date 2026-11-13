@@ -89,6 +89,8 @@
     -42.17
    ],
    "body_below_f0_db": -42.37,
+   "body_under_db": -77.47,
+   "body_f0_db": -35.1,
    "peak_dbfs": -19.72,
    "rms_dbfs": -29.62,
    "held_peak_dbfs": -25.05,
@@ -112,6 +114,40 @@
     0.38,
     1.67
    ],
+   "partial_clear_s": [
+    2.186,
+    2.744,
+    2.744,
+    2.697,
+    2.744,
+    2.744,
+    2.139,
+    2.744
+   ],
+   "partial_decay_clear_db_s": [
+    2.88,
+    -0.87,
+    1.11,
+    -2.49,
+    0.18,
+    -0.33,
+    0.73,
+    1.67
+   ],
+   "floor_source": "preroll",
+   "floor_db": -106.74,
+   "floor_octaves_db": [
+    -155.29,
+    -110.11,
+    -110.33,
+    -118.12,
+    -121.89,
+    -141.53,
+    -159.42,
+    -197.42,
+    -211.41
+   ],
+   "floor_body_db": -152.88,
    "decayed_before_note_off": false,
    "damper_release_ms": 1260.0,
    "damper_capped": false,
@@ -180,6 +216,8 @@
     -41.72
    ],
    "body_below_f0_db": -42.38,
+   "body_under_db": -72.61,
+   "body_f0_db": -30.23,
    "peak_dbfs": -14.85,
    "rms_dbfs": -24.75,
    "held_peak_dbfs": -20.19,
@@ -203,6 +241,40 @@
     0.32,
     1.58
    ],
+   "partial_clear_s": [
+    2.186,
+    2.744,
+    2.744,
+    2.697,
+    2.744,
+    2.744,
+    2.139,
+    2.744
+   ],
+   "partial_decay_clear_db_s": [
+    2.88,
+    -0.87,
+    1.1,
+    -2.51,
+    0.15,
+    -0.34,
+    0.65,
+    1.58
+   ],
+   "floor_source": "preroll",
+   "floor_db": -109.43,
+   "floor_octaves_db": [
+    -157.82,
+    -112.68,
+    -114.39,
+    -116.44,
+    -131.16,
+    -144.11,
+    -163.14,
+    -198.64,
+    -212.6
+   ],
+   "floor_body_db": -157.59,
    "decayed_before_note_off": false,
    "damper_release_ms": 1260.0,
    "damper_capped": false,
@@ -271,6 +343,8 @@
     -41.58
    ],
    "body_below_f0_db": -42.38,
+   "body_under_db": -69.51,
+   "body_f0_db": -27.13,
    "peak_dbfs": -11.74,
    "rms_dbfs": -21.65,
    "held_peak_dbfs": -17.08,
@@ -294,6 +368,40 @@
     0.27,
     1.52
    ],
+   "partial_clear_s": [
+    2.186,
+    2.744,
+    2.744,
+    2.697,
+    2.744,
+    2.744,
+    2.139,
+    2.744
+   ],
+   "partial_decay_clear_db_s": [
+    2.88,
+    -0.88,
+    1.1,
+    -2.52,
+    0.13,
+    -0.35,
+    0.6,
+    1.52
+   ],
+   "floor_source": "preroll",
+   "floor_db": -111.34,
+   "floor_octaves_db": [
+    -158.0,
+    -114.17,
+    -116.62,
+    -118.89,
+    -133.91,
+    -144.36,
+    -165.87,
+    -200.15,
+    -213.32
+   ],
+   "floor_body_db": -157.3,
    "decayed_before_note_off": false,
    "damper_release_ms": 1260.0,
    "damper_capped": false,
@@ -362,6 +470,8 @@
     -43.99
    ],
    "body_below_f0_db": -42.38,
+   "body_under_db": -67.23,
+   "body_f0_db": -24.85,
    "peak_dbfs": -9.45,
    "rms_dbfs": -19.36,
    "held_peak_dbfs": -14.8,
@@ -385,6 +495,40 @@
     0.25,
     1.49
    ],
+   "partial_clear_s": [
+    2.186,
+    2.744,
+    2.744,
+    2.697,
+    2.744,
+    2.744,
+    2.139,
+    2.744
+   ],
+   "partial_decay_clear_db_s": [
+    2.88,
+    -0.88,
+    1.11,
+    -2.53,
+    0.12,
+    -0.35,
+    0.57,
+    1.49
+   ],
+   "floor_source": "preroll",
+   "floor_db": -110.71,
+   "floor_octaves_db": [
+    -158.41,
+    -113.59,
+    -115.78,
+    -118.54,
+    -131.47,
+    -143.36,
+    -165.16,
+    -199.4,
+    -212.44
+   ],
+   "floor_body_db": -158.02,
    "decayed_before_note_off": false,
    "damper_release_ms": 1260.0,
    "damper_capped": false,
@@ -453,6 +597,8 @@
     -41.42
    ],
    "body_below_f0_db": -42.39,
+   "body_under_db": -65.5,
+   "body_f0_db": -23.11,
    "peak_dbfs": -7.7,
    "rms_dbfs": -17.62,
    "held_peak_dbfs": -13.07,
@@ -476,6 +622,40 @@
     0.24,
     1.35
    ],
+   "partial_clear_s": [
+    2.186,
+    2.744,
+    2.744,
+    2.697,
+    2.744,
+    2.744,
+    2.139,
+    2.744
+   ],
+   "partial_decay_clear_db_s": [
+    2.88,
+    -0.88,
+    1.12,
+    -2.54,
+    0.12,
+    -0.35,
+    0.56,
+    1.35
+   ],
+   "floor_source": "preroll",
+   "floor_db": -112.34,
+   "floor_octaves_db": [
+    -158.85,
+    -115.52,
+    -116.85,
+    -120.52,
+    -131.72,
+    -145.31,
+    -166.9,
+    -200.77,
+    -212.96
+   ],
+   "floor_body_db": -158.82,
    "decayed_before_note_off": false,
    "damper_release_ms": 1260.0,
    "damper_capped": false,
@@ -544,6 +724,8 @@
     -44.24
    ],
    "body_below_f0_db": -40.93,
+   "body_under_db": -76.98,
+   "body_f0_db": -36.05,
    "peak_dbfs": -20.21,
    "rms_dbfs": -30.62,
    "held_peak_dbfs": -26.34,
@@ -567,6 +749,40 @@
     -0.7,
     0.07
    ],
+   "partial_clear_s": [
+    1.72,
+    2.744,
+    2.744,
+    2.744,
+    2.744,
+    2.744,
+    1.674,
+    2.744
+   ],
+   "partial_decay_clear_db_s": [
+    3.29,
+    0.48,
+    0.58,
+    -1.47,
+    -0.44,
+    -0.34,
+    1.07,
+    0.07
+   ],
+   "floor_source": "preroll",
+   "floor_db": -105.19,
+   "floor_octaves_db": [
+    -160.45,
+    -106.46,
+    -113.42,
+    -115.33,
+    -127.69,
+    -135.99,
+    -154.98,
+    -189.23,
+    -210.09
+   ],
+   "floor_body_db": -155.81,
    "decayed_before_note_off": false,
    "damper_release_ms": 1160.0,
    "damper_capped": false,
@@ -635,6 +851,8 @@
     -42.75
    ],
    "body_below_f0_db": -40.94,
+   "body_under_db": -72.12,
+   "body_f0_db": -31.18,
    "peak_dbfs": -15.33,
    "rms_dbfs": -25.75,
    "held_peak_dbfs": -21.49,
@@ -658,6 +876,40 @@
     -0.78,
     -0.05
    ],
+   "partial_clear_s": [
+    1.72,
+    2.744,
+    2.744,
+    2.744,
+    2.744,
+    2.744,
+    1.674,
+    2.744
+   ],
+   "partial_decay_clear_db_s": [
+    3.29,
+    0.47,
+    0.57,
+    -1.5,
+    -0.48,
+    -0.37,
+    0.97,
+    -0.05
+   ],
+   "floor_source": "preroll",
+   "floor_db": -108.79,
+   "floor_octaves_db": [
+    -157.05,
+    -110.26,
+    -114.87,
+    -125.34,
+    -126.69,
+    -137.44,
+    -158.33,
+    -192.3,
+    -212.46
+   ],
+   "floor_body_db": -155.0,
    "decayed_before_note_off": false,
    "damper_release_ms": 1160.0,
    "damper_capped": false,
@@ -726,6 +978,8 @@
     -42.33
    ],
    "body_below_f0_db": -40.94,
+   "body_under_db": -69.02,
+   "body_f0_db": -28.08,
    "peak_dbfs": -12.22,
    "rms_dbfs": -22.64,
    "held_peak_dbfs": -18.41,
@@ -749,6 +1003,40 @@
     -0.83,
     -0.12
    ],
+   "partial_clear_s": [
+    1.72,
+    2.744,
+    2.744,
+    2.744,
+    2.744,
+    2.744,
+    1.674,
+    2.744
+   ],
+   "partial_decay_clear_db_s": [
+    3.29,
+    0.47,
+    0.57,
+    -1.52,
+    -0.51,
+    -0.39,
+    0.91,
+    -0.12
+   ],
+   "floor_source": "preroll",
+   "floor_db": -109.54,
+   "floor_octaves_db": [
+    -156.35,
+    -110.95,
+    -115.69,
+    -126.52,
+    -128.21,
+    -137.89,
+    -156.45,
+    -191.91,
+    -212.41
+   ],
+   "floor_body_db": -155.49,
    "decayed_before_note_off": false,
    "damper_release_ms": 1160.0,
    "damper_capped": false,
@@ -817,6 +1105,8 @@
     -42.18
    ],
    "body_below_f0_db": -40.95,
+   "body_under_db": -66.74,
+   "body_f0_db": -25.79,
    "peak_dbfs": -9.92,
    "rms_dbfs": -20.36,
    "held_peak_dbfs": -16.13,
@@ -840,6 +1130,40 @@
     -0.86,
     -0.16
    ],
+   "partial_clear_s": [
+    1.72,
+    2.744,
+    2.744,
+    2.744,
+    2.744,
+    2.744,
+    1.674,
+    2.744
+   ],
+   "partial_decay_clear_db_s": [
+    3.29,
+    0.47,
+    0.59,
+    -1.53,
+    -0.53,
+    -0.41,
+    0.89,
+    -0.16
+   ],
+   "floor_source": "preroll",
+   "floor_db": -111.36,
+   "floor_octaves_db": [
+    -158.23,
+    -112.72,
+    -117.57,
+    -129.27,
+    -131.19,
+    -139.56,
+    -156.79,
+    -193.74,
+    -213.56
+   ],
+   "floor_body_db": -156.56,
    "decayed_before_note_off": false,
    "damper_release_ms": 1160.0,
    "damper_capped": false,
@@ -908,6 +1232,8 @@
     -42.08
    ],
    "body_below_f0_db": -40.95,
+   "body_under_db": -65.0,
+   "body_f0_db": -24.05,
    "peak_dbfs": -8.18,
    "rms_dbfs": -18.62,
    "held_peak_dbfs": -14.39,
@@ -931,6 +1257,40 @@
     -0.87,
     -0.18
    ],
+   "partial_clear_s": [
+    1.72,
+    2.744,
+    2.744,
+    2.744,
+    2.744,
+    2.744,
+    1.674,
+    2.744
+   ],
+   "partial_decay_clear_db_s": [
+    3.29,
+    0.47,
+    0.6,
+    -1.53,
+    -0.53,
+    -0.41,
+    0.88,
+    -0.18
+   ],
+   "floor_source": "preroll",
+   "floor_db": -114.05,
+   "floor_octaves_db": [
+    -158.77,
+    -115.51,
+    -120.07,
+    -131.63,
+    -132.43,
+    -140.77,
+    -157.48,
+    -195.15,
+    -215.05
+   ],
+   "floor_body_db": -157.6,
    "decayed_before_note_off": false,
    "damper_release_ms": 1160.0,
    "damper_capped": false,
@@ -999,6 +1359,8 @@
     -49.4
    ],
    "body_below_f0_db": -40.92,
+   "body_under_db": -76.12,
+   "body_f0_db": -35.2,
    "peak_dbfs": -20.71,
    "rms_dbfs": -30.92,
    "held_peak_dbfs": -26.85,
@@ -1022,6 +1384,40 @@
     -0.01,
     -0.32
    ],
+   "partial_clear_s": [
+    2.372,
+    2.744,
+    2.744,
+    2.511,
+    2.744,
+    2.744,
+    1.302,
+    2.744
+   ],
+   "partial_decay_clear_db_s": [
+    -1.34,
+    -0.02,
+    0.01,
+    -0.95,
+    0.5,
+    -0.37,
+    2.86,
+    -0.32
+   ],
+   "floor_source": "preroll",
+   "floor_db": -110.01,
+   "floor_octaves_db": [
+    -157.79,
+    -154.06,
+    -114.56,
+    -112.32,
+    -123.04,
+    -129.7,
+    -150.39,
+    -183.27,
+    -214.69
+   ],
+   "floor_body_db": -154.7,
    "decayed_before_note_off": false,
    "damper_release_ms": 1270.0,
    "damper_capped": false,
@@ -1090,6 +1486,8 @@
     -46.03
    ],
    "body_below_f0_db": -40.93,
+   "body_under_db": -71.25,
+   "body_f0_db": -30.33,
    "peak_dbfs": -15.83,
    "rms_dbfs": -26.04,
    "held_peak_dbfs": -21.98,
@@ -1113,6 +1511,40 @@
     -0.13,
     -0.49
    ],
+   "partial_clear_s": [
+    2.372,
+    2.744,
+    2.744,
+    2.511,
+    2.744,
+    2.744,
+    1.302,
+    2.744
+   ],
+   "partial_decay_clear_db_s": [
+    -1.35,
+    -0.03,
+    0.01,
+    -0.99,
+    0.44,
+    -0.39,
+    2.77,
+    -0.49
+   ],
+   "floor_source": "preroll",
+   "floor_db": -110.72,
+   "floor_octaves_db": [
+    -163.07,
+    -156.11,
+    -111.47,
+    -119.31,
+    -128.9,
+    -132.95,
+    -154.46,
+    -183.19,
+    -214.3
+   ],
+   "floor_body_db": -160.48,
    "decayed_before_note_off": false,
    "damper_release_ms": 1270.0,
    "damper_capped": false,
@@ -1181,6 +1613,8 @@
     -45.0
    ],
    "body_below_f0_db": -40.94,
+   "body_under_db": -68.16,
+   "body_f0_db": -27.22,
    "peak_dbfs": -12.71,
    "rms_dbfs": -22.93,
    "held_peak_dbfs": -18.87,
@@ -1204,6 +1638,40 @@
     -0.2,
     -0.61
    ],
+   "partial_clear_s": [
+    2.372,
+    2.744,
+    2.744,
+    2.511,
+    2.744,
+    2.744,
+    1.302,
+    2.744
+   ],
+   "partial_decay_clear_db_s": [
+    -1.35,
+    -0.04,
+    0.02,
+    -1.01,
+    0.4,
+    -0.39,
+    2.71,
+    -0.61
+   ],
+   "floor_source": "preroll",
+   "floor_db": -109.46,
+   "floor_octaves_db": [
+    -159.14,
+    -158.29,
+    -109.83,
+    -121.92,
+    -126.04,
+    -133.97,
+    -154.25,
+    -184.0,
+    -211.87
+   ],
+   "floor_body_db": -155.4,
    "decayed_before_note_off": false,
    "damper_release_ms": 1270.0,
    "damper_capped": false,
@@ -1272,6 +1740,8 @@
     -44.7
    ],
    "body_below_f0_db": -40.94,
+   "body_under_db": -65.88,
+   "body_f0_db": -24.93,
    "peak_dbfs": -10.41,
    "rms_dbfs": -20.65,
    "held_peak_dbfs": -16.59,
@@ -1295,6 +1765,40 @@
     -0.24,
     -0.67
    ],
+   "partial_clear_s": [
+    2.372,
+    2.744,
+    2.744,
+    2.511,
+    2.744,
+    2.744,
+    1.302,
+    2.744
+   ],
+   "partial_decay_clear_db_s": [
+    -1.35,
+    -0.04,
+    0.04,
+    -1.03,
+    0.38,
+    -0.39,
+    2.69,
+    -0.67
+   ],
+   "floor_source": "preroll",
+   "floor_db": -108.48,
+   "floor_octaves_db": [
+    -157.37,
+    -154.03,
+    -108.76,
+    -122.99,
+    -124.48,
+    -133.78,
+    -153.38,
+    -183.06,
+    -210.7
+   ],
+   "floor_body_db": -153.49,
    "decayed_before_note_off": false,
    "damper_release_ms": 1270.0,
    "damper_capped": false,
@@ -1363,6 +1867,8 @@
     -44.55
    ],
    "body_below_f0_db": -40.95,
+   "body_under_db": -64.14,
+   "body_f0_db": -23.19,
    "peak_dbfs": -8.66,
    "rms_dbfs": -18.9,
    "held_peak_dbfs": -14.85,
@@ -1386,6 +1892,40 @@
     -0.26,
     -0.7
    ],
+   "partial_clear_s": [
+    2.372,
+    2.744,
+    2.744,
+    2.511,
+    2.744,
+    2.744,
+    1.302,
+    2.744
+   ],
+   "partial_decay_clear_db_s": [
+    -1.35,
+    -0.04,
+    0.06,
+    -1.03,
+    0.37,
+    -0.39,
+    2.69,
+    -0.7
+   ],
+   "floor_source": "preroll",
+   "floor_db": -108.25,
+   "floor_octaves_db": [
+    -157.62,
+    -154.45,
+    -108.49,
+    -124.34,
+    -124.24,
+    -134.37,
+    -152.88,
+    -182.74,
+    -210.24
+   ],
+   "floor_body_db": -154.3,
    "decayed_before_note_off": false,
    "damper_release_ms": 1270.0,
    "damper_capped": false,
@@ -1454,6 +1994,8 @@
     -54.87
    ],
    "body_below_f0_db": -41.76,
+   "body_under_db": -75.4,
+   "body_f0_db": -33.64,
    "peak_dbfs": -21.23,
    "rms_dbfs": -31.63,
    "held_peak_dbfs": -26.81,
@@ -1477,6 +2019,40 @@
     -0.94,
     -0.44
    ],
+   "partial_clear_s": [
+    2.604,
+    2.744,
+    2.744,
+    1.953,
+    2.744,
+    2.744,
+    null,
+    2.744
+   ],
+   "partial_decay_clear_db_s": [
+    -0.43,
+    -0.34,
+    0.33,
+    -1.07,
+    0.11,
+    -0.38,
+    null,
+    -0.44
+   ],
+   "floor_source": "preroll",
+   "floor_db": -107.47,
+   "floor_octaves_db": [
+    -152.79,
+    -154.2,
+    -114.83,
+    -109.01,
+    -117.16,
+    -128.09,
+    -146.35,
+    -173.74,
+    -210.93
+   ],
+   "floor_body_db": -149.79,
    "decayed_before_note_off": false,
    "damper_release_ms": 1185.0,
    "damper_capped": false,
@@ -1545,6 +2121,8 @@
     -49.13
    ],
    "body_below_f0_db": -41.78,
+   "body_under_db": -70.54,
+   "body_f0_db": -28.76,
    "peak_dbfs": -16.34,
    "rms_dbfs": -26.75,
    "held_peak_dbfs": -21.94,
@@ -1568,6 +2146,40 @@
     -1.11,
     -0.68
    ],
+   "partial_clear_s": [
+    2.604,
+    2.744,
+    2.744,
+    1.953,
+    2.744,
+    2.744,
+    null,
+    2.744
+   ],
+   "partial_decay_clear_db_s": [
+    -0.43,
+    -0.36,
+    0.32,
+    -1.14,
+    0.03,
+    -0.41,
+    null,
+    -0.68
+   ],
+   "floor_source": "preroll",
+   "floor_db": -106.94,
+   "floor_octaves_db": [
+    -153.63,
+    -154.62,
+    -112.6,
+    -109.85,
+    -114.01,
+    -123.66,
+    -142.14,
+    -173.28,
+    -210.53
+   ],
+   "floor_body_db": -149.44,
    "decayed_before_note_off": false,
    "damper_release_ms": 1185.0,
    "damper_capped": false,
@@ -1636,6 +2248,8 @@
     -46.99
    ],
    "body_below_f0_db": -41.79,
+   "body_under_db": -67.44,
+   "body_f0_db": -25.66,
    "peak_dbfs": -13.21,
    "rms_dbfs": -23.64,
    "held_peak_dbfs": -18.83,
@@ -1659,6 +2273,40 @@
     -1.21,
     -0.83
    ],
+   "partial_clear_s": [
+    2.604,
+    2.744,
+    2.744,
+    1.953,
+    2.744,
+    2.744,
+    null,
+    2.744
+   ],
+   "partial_decay_clear_db_s": [
+    -0.43,
+    -0.37,
+    0.32,
+    -1.18,
+    -0.02,
+    -0.43,
+    null,
+    -0.83
+   ],
+   "floor_source": "preroll",
+   "floor_db": -107.39,
+   "floor_octaves_db": [
+    -150.1,
+    -150.98,
+    -111.85,
+    -111.47,
+    -114.47,
+    -120.07,
+    -140.38,
+    -173.9,
+    -209.87
+   ],
+   "floor_body_db": -147.82,
    "decayed_before_note_off": false,
    "damper_release_ms": 1185.0,
    "damper_capped": false,
@@ -1727,6 +2375,8 @@
     -46.25
    ],
    "body_below_f0_db": -41.79,
+   "body_under_db": -65.16,
+   "body_f0_db": -23.37,
    "peak_dbfs": -10.92,
    "rms_dbfs": -21.35,
    "held_peak_dbfs": -16.53,
@@ -1750,6 +2400,40 @@
     -1.26,
     -0.91
    ],
+   "partial_clear_s": [
+    2.604,
+    2.744,
+    2.744,
+    1.953,
+    2.744,
+    2.744,
+    null,
+    2.744
+   ],
+   "partial_decay_clear_db_s": [
+    -0.43,
+    -0.37,
+    0.33,
+    -1.2,
+    -0.05,
+    -0.44,
+    null,
+    -0.91
+   ],
+   "floor_source": "preroll",
+   "floor_db": -112.99,
+   "floor_octaves_db": [
+    -153.27,
+    -155.57,
+    -117.71,
+    -116.62,
+    -120.66,
+    -125.46,
+    -150.03,
+    -177.35,
+    -214.08
+   ],
+   "floor_body_db": -150.41,
    "decayed_before_note_off": false,
    "damper_release_ms": 1185.0,
    "damper_capped": false,
@@ -1818,6 +2502,8 @@
     -45.97
    ],
    "body_below_f0_db": -41.8,
+   "body_under_db": -63.42,
+   "body_f0_db": -21.63,
    "peak_dbfs": -9.16,
    "rms_dbfs": -19.6,
    "held_peak_dbfs": -14.78,
@@ -1841,6 +2527,40 @@
     -1.28,
     -0.93
    ],
+   "partial_clear_s": [
+    2.604,
+    2.744,
+    2.744,
+    2.511,
+    2.744,
+    2.744,
+    null,
+    2.744
+   ],
+   "partial_decay_clear_db_s": [
+    -0.43,
+    -0.37,
+    0.33,
+    -0.9,
+    -0.07,
+    -0.44,
+    null,
+    -0.93
+   ],
+   "floor_source": "preroll",
+   "floor_db": -113.19,
+   "floor_octaves_db": [
+    -156.0,
+    -155.93,
+    -118.98,
+    -117.06,
+    -118.99,
+    -125.18,
+    -149.82,
+    -177.13,
+    -213.76
+   ],
+   "floor_body_db": -150.92,
    "decayed_before_note_off": false,
    "damper_release_ms": 1185.0,
    "damper_capped": false,
@@ -1909,6 +2629,8 @@
     -59.95
    ],
    "body_below_f0_db": -42.4,
+   "body_under_db": -75.28,
+   "body_f0_db": -32.87,
    "peak_dbfs": -21.77,
    "rms_dbfs": -32.0,
    "held_peak_dbfs": -27.86,
@@ -1930,6 +2652,40 @@
     -0.55,
     -0.85
    ],
+   "partial_clear_s": [
+    2.697,
+    2.744,
+    2.744,
+    2.558,
+    2.744,
+    2.744,
+    null,
+    2.744
+   ],
+   "partial_decay_clear_db_s": [
+    0.71,
+    -0.73,
+    0.14,
+    0.04,
+    -0.38,
+    0.19,
+    null,
+    -0.85
+   ],
+   "floor_source": "preroll",
+   "floor_db": -106.28,
+   "floor_octaves_db": [
+    -157.05,
+    -157.66,
+    -108.54,
+    -111.24,
+    -118.82,
+    -121.7,
+    -134.4,
+    -170.04,
+    -208.38
+   ],
+   "floor_body_db": -153.01,
    "decayed_before_note_off": false,
    "damper_release_ms": 1145.0,
    "damper_capped": false,
@@ -1998,6 +2754,8 @@
     -51.87
    ],
    "body_below_f0_db": -42.42,
+   "body_under_db": -70.41,
+   "body_f0_db": -27.99,
    "peak_dbfs": -16.88,
    "rms_dbfs": -27.12,
    "held_peak_dbfs": -22.98,
@@ -2019,6 +2777,40 @@
     -0.8,
     -0.84
    ],
+   "partial_clear_s": [
+    2.697,
+    2.744,
+    2.744,
+    2.558,
+    2.744,
+    2.744,
+    null,
+    2.744
+   ],
+   "partial_decay_clear_db_s": [
+    0.71,
+    -0.75,
+    0.12,
+    -0.03,
+    -0.49,
+    0.17,
+    null,
+    -0.84
+   ],
+   "floor_source": "preroll",
+   "floor_db": -105.0,
+   "floor_octaves_db": [
+    -152.81,
+    -158.14,
+    -107.47,
+    -109.18,
+    -119.01,
+    -123.99,
+    -138.08,
+    -168.74,
+    -206.9
+   ],
+   "floor_body_db": -147.47,
    "decayed_before_note_off": false,
    "damper_release_ms": 1145.0,
    "damper_capped": false,
@@ -2087,6 +2879,8 @@
     -48.0
    ],
    "body_below_f0_db": -42.44,
+   "body_under_db": -67.32,
+   "body_f0_db": -24.88,
    "peak_dbfs": -13.75,
    "rms_dbfs": -24.0,
    "held_peak_dbfs": -19.87,
@@ -2108,6 +2902,40 @@
     -0.94,
     -1.05
    ],
+   "partial_clear_s": [
+    2.697,
+    2.744,
+    2.744,
+    2.558,
+    2.744,
+    2.744,
+    null,
+    2.744
+   ],
+   "partial_decay_clear_db_s": [
+    0.71,
+    -0.76,
+    0.11,
+    -0.08,
+    -0.56,
+    0.17,
+    null,
+    -1.05
+   ],
+   "floor_source": "preroll",
+   "floor_db": -109.96,
+   "floor_octaves_db": [
+    -164.69,
+    -162.12,
+    -114.03,
+    -112.46,
+    -124.82,
+    -128.48,
+    -147.58,
+    -177.51,
+    -210.83
+   ],
+   "floor_body_db": -160.1,
    "decayed_before_note_off": false,
    "damper_release_ms": 1145.0,
    "damper_capped": false,
@@ -2176,6 +3004,8 @@
     -46.42
    ],
    "body_below_f0_db": -42.45,
+   "body_under_db": -65.04,
+   "body_f0_db": -22.59,
    "peak_dbfs": -11.46,
    "rms_dbfs": -21.7,
    "held_peak_dbfs": -17.58,
@@ -2197,6 +3027,40 @@
     -1.01,
     -1.16
    ],
+   "partial_clear_s": [
+    2.697,
+    2.744,
+    2.744,
+    2.558,
+    2.744,
+    2.744,
+    null,
+    2.744
+   ],
+   "partial_decay_clear_db_s": [
+    0.71,
+    -0.77,
+    0.12,
+    -0.11,
+    -0.6,
+    0.17,
+    null,
+    -1.16
+   ],
+   "floor_source": "preroll",
+   "floor_db": -109.49,
+   "floor_octaves_db": [
+    -164.18,
+    -161.01,
+    -114.36,
+    -111.59,
+    -124.14,
+    -125.91,
+    -147.08,
+    -176.85,
+    -209.92
+   ],
+   "floor_body_db": -158.38,
    "decayed_before_note_off": false,
    "damper_release_ms": 1145.0,
    "damper_capped": false,
@@ -2265,6 +3129,8 @@
     -45.84
    ],
    "body_below_f0_db": -42.46,
+   "body_under_db": -63.3,
+   "body_f0_db": -20.84,
    "peak_dbfs": -9.72,
    "rms_dbfs": -19.96,
    "held_peak_dbfs": -15.83,
@@ -2286,6 +3152,40 @@
     -1.04,
     -1.19
    ],
+   "partial_clear_s": [
+    2.697,
+    2.744,
+    2.744,
+    2.558,
+    2.744,
+    2.744,
+    null,
+    2.744
+   ],
+   "partial_decay_clear_db_s": [
+    0.71,
+    -0.77,
+    0.12,
+    -0.12,
+    -0.61,
+    0.18,
+    null,
+    -1.19
+   ],
+   "floor_source": "preroll",
+   "floor_db": -109.89,
+   "floor_octaves_db": [
+    -161.96,
+    -161.76,
+    -115.57,
+    -111.68,
+    -124.87,
+    -124.45,
+    -146.06,
+    -176.95,
+    -210.04
+   ],
+   "floor_body_db": -156.19,
    "decayed_before_note_off": false,
    "damper_release_ms": 1145.0,
    "damper_capped": false,
@@ -2354,6 +3254,8 @@
     -64.24
    ],
    "body_below_f0_db": -40.61,
+   "body_under_db": -74.53,
+   "body_f0_db": -33.92,
    "peak_dbfs": -21.82,
    "rms_dbfs": -32.54,
    "held_peak_dbfs": -28.57,
@@ -2375,6 +3277,40 @@
     -0.74,
     -1.01
    ],
+   "partial_clear_s": [
+    2.604,
+    2.744,
+    2.744,
+    2.511,
+    2.744,
+    2.744,
+    null,
+    2.744
+   ],
+   "partial_decay_clear_db_s": [
+    -0.72,
+    0.4,
+    0.55,
+    -0.57,
+    -0.04,
+    0.35,
+    null,
+    -1.01
+   ],
+   "floor_source": "preroll",
+   "floor_db": -101.84,
+   "floor_octaves_db": [
+    -150.03,
+    -155.23,
+    -144.71,
+    -102.79,
+    -109.54,
+    -118.26,
+    -126.77,
+    -161.46,
+    -198.63
+   ],
+   "floor_body_db": -142.73,
    "decayed_before_note_off": false,
    "damper_release_ms": 1175.0,
    "damper_capped": false,
@@ -2443,6 +3379,8 @@
     -54.32
    ],
    "body_below_f0_db": -40.64,
+   "body_under_db": -69.67,
+   "body_f0_db": -29.03,
    "peak_dbfs": -16.93,
    "rms_dbfs": -27.65,
    "held_peak_dbfs": -23.69,
@@ -2464,6 +3402,40 @@
     -1.1,
     -1.51
    ],
+   "partial_clear_s": [
+    2.604,
+    2.744,
+    2.744,
+    2.511,
+    2.744,
+    2.744,
+    null,
+    2.744
+   ],
+   "partial_decay_clear_db_s": [
+    -0.73,
+    0.38,
+    0.53,
+    -0.68,
+    -0.2,
+    0.31,
+    null,
+    -1.51
+   ],
+   "floor_source": "preroll",
+   "floor_db": -112.42,
+   "floor_octaves_db": [
+    -158.3,
+    -161.28,
+    -155.25,
+    -114.05,
+    -118.13,
+    -126.46,
+    -135.82,
+    -169.89,
+    -206.07
+   ],
+   "floor_body_db": -150.17,
    "decayed_before_note_off": false,
    "damper_release_ms": 1175.0,
    "damper_capped": false,
@@ -2532,6 +3504,8 @@
     -48.07
    ],
    "body_below_f0_db": -40.66,
+   "body_under_db": -66.57,
+   "body_f0_db": -25.91,
    "peak_dbfs": -13.82,
    "rms_dbfs": -24.52,
    "held_peak_dbfs": -20.55,
@@ -2553,6 +3527,40 @@
     -1.31,
     -1.84
    ],
+   "partial_clear_s": [
+    2.604,
+    2.744,
+    2.744,
+    2.511,
+    2.744,
+    2.744,
+    null,
+    2.744
+   ],
+   "partial_decay_clear_db_s": [
+    -0.73,
+    0.36,
+    0.52,
+    -0.74,
+    -0.29,
+    0.28,
+    null,
+    -1.84
+   ],
+   "floor_source": "preroll",
+   "floor_db": -110.89,
+   "floor_octaves_db": [
+    -157.26,
+    -161.24,
+    -153.31,
+    -112.31,
+    -117.24,
+    -124.54,
+    -135.45,
+    -168.23,
+    -204.62
+   ],
+   "floor_body_db": -147.5,
    "decayed_before_note_off": false,
    "damper_release_ms": 1175.0,
    "damper_capped": false,
@@ -2621,6 +3629,8 @@
     -45.37
    ],
    "body_below_f0_db": -40.67,
+   "body_under_db": -64.29,
+   "body_f0_db": -23.62,
    "peak_dbfs": -11.52,
    "rms_dbfs": -22.22,
    "held_peak_dbfs": -18.24,
@@ -2642,6 +3652,40 @@
     -1.42,
     -2.02
    ],
+   "partial_clear_s": [
+    2.604,
+    2.744,
+    2.744,
+    2.511,
+    2.744,
+    2.744,
+    null,
+    2.744
+   ],
+   "partial_decay_clear_db_s": [
+    -0.74,
+    0.35,
+    0.53,
+    -0.78,
+    -0.34,
+    0.27,
+    null,
+    -2.02
+   ],
+   "floor_source": "preroll",
+   "floor_db": -110.45,
+   "floor_octaves_db": [
+    -155.99,
+    -159.94,
+    -151.8,
+    -111.7,
+    -117.43,
+    -123.78,
+    -136.55,
+    -166.61,
+    -204.13
+   ],
+   "floor_body_db": -146.82,
    "decayed_before_note_off": false,
    "damper_release_ms": 1175.0,
    "damper_capped": false,
@@ -2710,6 +3754,8 @@
     -44.2
    ],
    "body_below_f0_db": -40.68,
+   "body_under_db": -62.55,
+   "body_f0_db": -21.87,
    "peak_dbfs": -9.77,
    "rms_dbfs": -20.47,
    "held_peak_dbfs": -16.49,
@@ -2731,6 +3777,40 @@
     -1.45,
     -2.09
    ],
+   "partial_clear_s": [
+    2.604,
+    2.744,
+    2.744,
+    2.511,
+    2.744,
+    2.744,
+    null,
+    2.744
+   ],
+   "partial_decay_clear_db_s": [
+    -0.74,
+    0.35,
+    0.53,
+    -0.79,
+    -0.36,
+    0.26,
+    null,
+    -2.09
+   ],
+   "floor_source": "preroll",
+   "floor_db": -110.68,
+   "floor_octaves_db": [
+    -155.1,
+    -157.62,
+    -150.51,
+    -111.89,
+    -117.96,
+    -123.39,
+    -137.78,
+    -165.2,
+    -203.85
+   ],
+   "floor_body_db": -147.91,
    "decayed_before_note_off": false,
    "damper_release_ms": 1175.0,
    "damper_capped": false,
@@ -2799,6 +3879,8 @@
     -70.69
    ],
    "body_below_f0_db": -36.29,
+   "body_under_db": -72.96,
+   "body_f0_db": -36.67,
    "peak_dbfs": -22.47,
    "rms_dbfs": -33.05,
    "held_peak_dbfs": -29.11,
@@ -2820,6 +3902,40 @@
     -1.03,
     -0.94
    ],
+   "partial_clear_s": [
+    2.046,
+    2.744,
+    2.744,
+    2.372,
+    2.744,
+    2.744,
+    null,
+    2.744
+   ],
+   "partial_decay_clear_db_s": [
+    -0.92,
+    -0.01,
+    0.27,
+    0.13,
+    -0.5,
+    0.03,
+    null,
+    -0.94
+   ],
+   "floor_source": "preroll",
+   "floor_db": -107.11,
+   "floor_octaves_db": [
+    -147.84,
+    -156.91,
+    -153.85,
+    -109.11,
+    -112.29,
+    -119.22,
+    -130.7,
+    -162.67,
+    -199.11
+   ],
+   "floor_body_db": -146.14,
    "decayed_before_note_off": false,
    "damper_release_ms": 1225.0,
    "damper_capped": false,
@@ -2888,6 +4004,8 @@
     -59.71
    ],
    "body_below_f0_db": -36.32,
+   "body_under_db": -68.1,
+   "body_f0_db": -31.77,
    "peak_dbfs": -17.52,
    "rms_dbfs": -28.15,
    "held_peak_dbfs": -24.23,
@@ -2911,6 +4029,40 @@
     -1.56,
     -1.54
    ],
+   "partial_clear_s": [
+    2.046,
+    2.744,
+    2.744,
+    2.372,
+    2.744,
+    2.744,
+    null,
+    2.744
+   ],
+   "partial_decay_clear_db_s": [
+    -0.93,
+    -0.05,
+    0.24,
+    -0.03,
+    -0.74,
+    0.03,
+    null,
+    -1.54
+   ],
+   "floor_source": "preroll",
+   "floor_db": -107.94,
+   "floor_octaves_db": [
+    -152.35,
+    -155.11,
+    -156.45,
+    -109.4,
+    -115.98,
+    -117.7,
+    -124.6,
+    -163.79,
+    -199.71
+   ],
+   "floor_body_db": -148.85,
    "decayed_before_note_off": false,
    "damper_release_ms": 1225.0,
    "damper_capped": false,
@@ -2979,6 +4131,8 @@
     -50.21
    ],
    "body_below_f0_db": -36.35,
+   "body_under_db": -65.0,
+   "body_f0_db": -28.65,
    "peak_dbfs": -14.39,
    "rms_dbfs": -25.02,
    "held_peak_dbfs": -21.1,
@@ -3002,6 +4156,40 @@
     -1.9,
     -1.97
    ],
+   "partial_clear_s": [
+    2.046,
+    2.744,
+    2.744,
+    2.372,
+    2.744,
+    2.744,
+    null,
+    2.744
+   ],
+   "partial_decay_clear_db_s": [
+    -0.94,
+    -0.07,
+    0.22,
+    -0.12,
+    -0.87,
+    0.01,
+    null,
+    -1.97
+   ],
+   "floor_source": "preroll",
+   "floor_db": -109.81,
+   "floor_octaves_db": [
+    -153.39,
+    -159.04,
+    -162.63,
+    -110.59,
+    -120.25,
+    -121.52,
+    -131.38,
+    -167.4,
+    -202.96
+   ],
+   "floor_body_db": -151.93,
    "decayed_before_note_off": false,
    "damper_release_ms": 1225.0,
    "damper_capped": false,
@@ -3070,6 +4258,8 @@
     -45.99
    ],
    "body_below_f0_db": -36.37,
+   "body_under_db": -62.72,
+   "body_f0_db": -26.35,
    "peak_dbfs": -12.09,
    "rms_dbfs": -22.71,
    "held_peak_dbfs": -18.81,
@@ -3093,6 +4283,40 @@
     -2.08,
     -2.26
    ],
+   "partial_clear_s": [
+    2.046,
+    2.744,
+    2.744,
+    2.372,
+    2.744,
+    2.744,
+    null,
+    2.744
+   ],
+   "partial_decay_clear_db_s": [
+    -0.94,
+    -0.08,
+    0.22,
+    -0.17,
+    -0.94,
+    -0.01,
+    null,
+    -2.26
+   ],
+   "floor_source": "preroll",
+   "floor_db": -109.15,
+   "floor_octaves_db": [
+    -157.64,
+    -159.31,
+    -161.8,
+    -109.55,
+    -121.73,
+    -124.5,
+    -133.88,
+    -167.07,
+    -203.53
+   ],
+   "floor_body_db": -154.63,
    "decayed_before_note_off": false,
    "damper_release_ms": 1225.0,
    "damper_capped": false,
@@ -3161,6 +4385,8 @@
     -43.88
    ],
    "body_below_f0_db": -36.38,
+   "body_under_db": -60.98,
+   "body_f0_db": -24.6,
    "peak_dbfs": -10.35,
    "rms_dbfs": -20.95,
    "held_peak_dbfs": -17.05,
@@ -3184,6 +4410,40 @@
     -2.14,
     -2.39
    ],
+   "partial_clear_s": [
+    2.046,
+    2.744,
+    2.744,
+    2.372,
+    2.744,
+    2.744,
+    null,
+    2.744
+   ],
+   "partial_decay_clear_db_s": [
+    -0.94,
+    -0.09,
+    0.22,
+    -0.19,
+    -0.97,
+    -0.01,
+    null,
+    -2.39
+   ],
+   "floor_source": "preroll",
+   "floor_db": -108.89,
+   "floor_octaves_db": [
+    -159.78,
+    -158.52,
+    -159.54,
+    -109.31,
+    -121.26,
+    -123.97,
+    -134.42,
+    -166.73,
+    -203.59
+   ],
+   "floor_body_db": -154.15,
    "decayed_before_note_off": false,
    "damper_release_ms": 1225.0,
    "damper_capped": false,
@@ -3505,5 +4765,15 @@
     }
    }
   }
+ },
+ "field_measured_utc": {
+  "rows.body_f0_db": "2026-11-13T10:33:32+00:00",
+  "rows.body_under_db": "2026-11-13T10:33:32+00:00",
+  "rows.floor_body_db": "2026-11-13T10:33:32+00:00",
+  "rows.floor_db": "2026-11-13T10:33:32+00:00",
+  "rows.floor_octaves_db": "2026-11-13T10:33:32+00:00",
+  "rows.floor_source": "2026-11-13T10:33:32+00:00",
+  "rows.partial_clear_s": "2026-11-13T10:33:32+00:00",
+  "rows.partial_decay_clear_db_s": "2026-11-13T10:33:32+00:00"
  }
 }

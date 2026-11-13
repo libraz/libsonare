@@ -80,6 +80,8 @@
     -18.42
    ],
    "body_below_f0_db": -9.68,
+   "body_under_db": -48.06,
+   "body_f0_db": -38.38,
    "peak_dbfs": -4.49,
    "rms_dbfs": -24.17,
    "held_peak_dbfs": -14.8,
@@ -101,6 +103,47 @@
     2.45,
     2.4
    ],
+   "partial_clear_s": [
+    3.207,
+    4.602,
+    null,
+    4.741,
+    4.509,
+    4.602,
+    4.649,
+    1.395
+   ],
+   "partial_decay_clear_db_s": [
+    4.58,
+    2.46,
+    null,
+    2.43,
+    2.57,
+    2.42,
+    2.55,
+    10.1
+   ],
+   "valley_db": [
+    -54.41,
+    -56.62,
+    -64.82,
+    -61.6,
+    -68.19,
+    -73.75,
+    -76.81,
+    -72.43,
+    -73.63,
+    -72.83,
+    -80.45,
+    -76.64,
+    -73.09,
+    -74.71,
+    -75.36,
+    -73.08
+   ],
+   "valley_slope_db_oct": -6.054,
+   "valley_ladder_coupling": 0.969,
+   "floor_source": null,
    "decayed_before_note_off": false,
    "damper_release_ms": 374.2,
    "damper_capped": false,
@@ -162,6 +205,8 @@
     -27.43
    ],
    "body_below_f0_db": 0.83,
+   "body_under_db": -36.31,
+   "body_f0_db": -37.14,
    "peak_dbfs": -4.59,
    "rms_dbfs": -24.08,
    "held_peak_dbfs": -14.51,
@@ -183,6 +228,46 @@
     2.3,
     2.27
    ],
+   "partial_clear_s": [
+    4.649,
+    null,
+    4.741,
+    4.695,
+    0.604,
+    4.649,
+    null,
+    4.277
+   ],
+   "partial_decay_clear_db_s": [
+    1.76,
+    null,
+    1.42,
+    1.75,
+    16.24,
+    1.73,
+    null,
+    2.58
+   ],
+   "valley_db": [
+    -56.69,
+    -58.17,
+    -69.76,
+    -77.09,
+    -73.16,
+    -72.25,
+    -77.87,
+    -77.89,
+    -74.34,
+    -78.96,
+    -75.17,
+    -74.5,
+    -70.96,
+    -79.72,
+    -79.46
+   ],
+   "valley_slope_db_oct": -5.338,
+   "valley_ladder_coupling": 0.978,
+   "floor_source": null,
    "decayed_before_note_off": false,
    "damper_release_ms": 414.1,
    "damper_capped": true,
@@ -244,6 +329,8 @@
     -25.1
    ],
    "body_below_f0_db": 6.4,
+   "body_under_db": -33.0,
+   "body_f0_db": -39.39,
    "peak_dbfs": -4.41,
    "rms_dbfs": -24.11,
    "held_peak_dbfs": -14.83,
@@ -265,6 +352,46 @@
     2.41,
     2.2
    ],
+   "partial_clear_s": [
+    4.556,
+    null,
+    4.509,
+    null,
+    null,
+    3.626,
+    4.741,
+    3.207
+   ],
+   "partial_decay_clear_db_s": [
+    2.55,
+    null,
+    2.42,
+    null,
+    null,
+    3.68,
+    2.41,
+    4.07
+   ],
+   "valley_db": [
+    -65.67,
+    -75.03,
+    -79.53,
+    -72.71,
+    -75.36,
+    -73.72,
+    -79.07,
+    -79.72,
+    -83.3,
+    -80.13,
+    -82.29,
+    -84.1,
+    -86.97,
+    -88.86,
+    -89.11
+   ],
+   "valley_slope_db_oct": -5.427,
+   "valley_ladder_coupling": 1.173,
+   "floor_source": null,
    "decayed_before_note_off": false,
    "damper_release_ms": 404.1,
    "damper_capped": true,
@@ -342,5 +469,15 @@
    },
    "velocity_response": {}
   }
+ },
+ "field_measured_utc": {
+  "rows.body_f0_db": "2026-11-13T10:33:41+00:00",
+  "rows.body_under_db": "2026-11-13T10:33:41+00:00",
+  "rows.floor_source": "2026-11-13T10:33:41+00:00",
+  "rows.partial_clear_s": "2026-11-13T10:33:41+00:00",
+  "rows.partial_decay_clear_db_s": "2026-11-13T10:33:41+00:00",
+  "rows.valley_db": "2026-11-13T10:33:41+00:00",
+  "rows.valley_ladder_coupling": "2026-11-13T10:33:41+00:00",
+  "rows.valley_slope_db_oct": "2026-11-13T10:33:41+00:00"
  }
 }
