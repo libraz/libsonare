@@ -29,6 +29,7 @@ from knobs import (
     hand_spec_warnings,
     load_declared_bounds,
     load_knob_classes,
+    pinned_lines,
     refuse_absent_knobs,
     switch_candidates,
 )
@@ -560,3 +561,82 @@ def test_an_absent_reach_pattern_loads_and_refuses_only_a_fit_under_it(tmp_path)
     refuse_absent_knobs([_knob("p0.lfo_rate_hz")], classes)
     with pytest.raises(ValueError, match=r"drift_\*"):
         refuse_absent_knobs([_knob("p0.drift_cents")], classes)
+
+
+# --- pinned by ruling --------------------------------------------------------
+
+_PINNED = {
+    "class": "pinned",
+    "value": 0.286475,
+    "basis": "ruled: too few terms read it",
+    "lane": "sustained",
+}
+
+
+def _pinned_classes(tmp_path, defaults=None):
+    cat = Catalogue(
+        defaults or {"clarinet.body_mix": 0.286475, "oboe.body_mix": 0.5, "clarinet.gain": 1.0},
+        {(71, 0): "clarinet", (68, 0): "oboe"},
+        {},
+        {"clarinet": "reed", "oboe": "reed"},
+    )
+    return cat, load_knob_classes(_write(tmp_path, {"clarinet.body_mix": _PINNED}), cat)
+
+
+def test_a_pinned_entry_is_never_offered_by_auto_and_counts_as_excluded(tmp_path):
+    cat, classes = _pinned_classes(tmp_path)
+    spec, report = auto_spec_report(71, cat, classes=classes)
+    names = [e["tunable"] for e in spec]
+    assert "clarinet.body_mix" not in names
+    assert report.excluded["pinned"] == ["clarinet.body_mix"]
+    spec, _ = auto_spec_report(68, cat, classes=classes)
+    assert "oboe.body_mix" in [e["tunable"] for e in spec]
+
+
+def test_a_spec_naming_a_pinned_field_is_refused_with_key_value_and_basis(tmp_path):
+    _, classes = _pinned_classes(tmp_path)
+    with pytest.raises(ValueError, match=r"clarinet\.body_mix is pinned at 0\.286475") as exc:
+        refuse_absent_knobs([_knob("clarinet.gain"), _knob("clarinet.body_mix")], classes)
+    assert "lane sustained" in str(exc.value)
+    assert "too few terms read it" in str(exc.value)
+    assert hand_spec_warnings([_knob("clarinet.body_mix")], classes) == []
+
+
+def test_a_pinned_entry_is_scoped_to_its_voice(tmp_path):
+    _, classes = _pinned_classes(tmp_path)
+    refuse_absent_knobs([_knob("oboe.body_mix"), _knob("clarinet.gain")], classes)
+    assert classes.class_of("oboe.body_mix") is None
+
+
+def test_the_start_up_line_prints_the_voice_pins_and_flags_a_stale_value(tmp_path):
+    cat, classes = _pinned_classes(tmp_path)
+    (line,) = pinned_lines(classes, cat, "clarinet")
+    assert line.startswith("pinned by ruling: clarinet.body_mix = 0.286475 (ships 0.286475;")
+    assert pinned_lines(classes, cat, "oboe") == []
+    cat2, classes2 = _pinned_classes(tmp_path, {"clarinet.body_mix": 0.3})
+    assert "STALE: the library ships 0.3" in pinned_lines(classes2, cat2, "clarinet")[0]
+
+
+@pytest.mark.parametrize(
+    "entry",
+    [
+        {**_PINNED, "value": None},
+        {**_PINNED, "class": "identity"},
+        {**_PINNED, "value": "0.3"},
+        {**_PINNED, "basis": ""},
+        {**_PINNED, "lane": ""},
+    ],
+)
+def test_a_malformed_pinned_entry_is_refused_at_load(tmp_path, entry):
+    entry = {k: v for k, v in entry.items() if v is not None}
+    cat = _catalogue({"clarinet.body_mix": 0.286475})
+    with pytest.raises(ValueError, match="clarinet.body_mix"):
+        load_knob_classes(_write(tmp_path, {"clarinet.body_mix": entry}), cat)
+
+
+def test_a_pinned_entry_must_name_one_patch_field(tmp_path):
+    cat = _catalogue({"p0.body_mix": 0.3})
+    with pytest.raises(ValueError, match="pinned entry"):
+        load_knob_classes(_write(tmp_path, {"body_mix": _PINNED}), cat)
+    with pytest.raises(ValueError, match="pinned entry"):
+        load_knob_classes(_write(tmp_path, {"clar*.body_mix": _PINNED}), cat)

@@ -582,10 +582,16 @@ KNOB_CLASS_NAMES = (
     "set_by_measurement",
     "stage_enable",
     "compensating_group",
+    "pinned",
 )
 
-#: Classes `--spec auto` never offers. A hand spec may still name one, with a warning.
-NOT_SEARCHED = ("identity", "switch", "set_by_measurement")
+#: Classes `--spec auto` never offers. A hand spec may still name one, with a warning,
+#: except `pinned`, which `refuse_absent_knobs` refuses.
+NOT_SEARCHED = ("identity", "switch", "set_by_measurement", "pinned")
+
+#: How far a `pinned` entry's value may sit from the catalogue's shipped value before
+#: the start-up line calls the ruling stale.
+PINNED_VALUE_TOLERANCE = 1e-5
 
 #: How far above its off value a clipped stage-enable range starts, as a fraction
 #: of the range it had: the smallest step that is still a stage that is on.
@@ -652,6 +658,8 @@ class KnobClass:
     `off_within` widens that to a band (a field absent at or below -119 dB is
     `off_value=-120`, `off_within=1`). `gates` records a field another field
     switches off. `evidence` says what a compensating-group member's membership rests on.
+    A `pinned` entry is one voice's field (`clarinet.body_mix`, the patch included)
+    held at `value` by a ruling whose reason is `basis`; no spec may name it.
     """
 
     key: str
@@ -664,6 +672,7 @@ class KnobClass:
     off_within: float = 0.0
     gates: str = ""
     type: str = ""
+    value: float | None = None
 
     def is_off(self, value: float) -> bool:
         """Whether a shipped @p value leaves this stage-enable field's stage absent."""
@@ -783,6 +792,21 @@ def load_knob_classes(path: Path, catalogue: Catalogue, *, strict: bool = False)
             raise ValueError(
                 f"{path}: entry {key!r} must carry 'group' exactly when its class is compensating_group"
             )
+        value = e.get("value")
+        if (cls == "pinned") != (value is not None):
+            raise ValueError(
+                f"{path}: entry {key!r} must carry 'value' exactly when its class is pinned"
+            )
+        if cls == "pinned":
+            head, _, tail = key.partition(".")
+            if not tail or "*" in key:
+                raise ValueError(
+                    f"{path}: pinned entry {key!r} must name one patch field as '<patch>.<field>'"
+                )
+            if isinstance(value, bool) or not isinstance(value, (int, float)):
+                raise ValueError(f"{path}: pinned entry {key!r} needs a numeric 'value'")
+            if not e.get("basis") or not e.get("lane"):
+                raise ValueError(f"{path}: pinned entry {key!r} needs a 'basis' and a 'lane'")
         entries[key] = KnobClass(
             key=key,
             cls=cls,
@@ -794,6 +818,7 @@ def load_knob_classes(path: Path, catalogue: Catalogue, *, strict: bool = False)
             off_within=float(e.get("off_within", 0.0)),
             gates=e.get("gates", ""),
             type=e.get("type", ""),
+            value=float(value) if value is not None else None,
         )
     reach: dict[str, KnobReach] = {}
     for pattern, e in data.get("reach", {}).items():
@@ -864,8 +889,21 @@ def refuse_absent_knobs(knobs: list[Knob], classes: KnobClasses) -> None:
     """Refuse a fit whose runtime knobs include a field an absent entry or reach pattern names.
 
     Raises ValueError naming each such knob, the entry and its lane. Entries the
-    fit does not touch are not its concern.
+    fit does not touch are not its concern. The same call refuses a knob a `pinned`
+    entry holds, so a fit has one refusal point for the table.
     """
+    pinned = [
+        f"{k.tunable} is pinned at {e.value:g} by ruling (lane {e.lane}): {e.basis}"
+        for k in knobs
+        if k.tunable is not None
+        and (e := classes.classify(k.tunable)) is not None
+        and e.cls == "pinned"
+    ]
+    if pinned:
+        raise ValueError(
+            "knob-classes.json pins field(s) by ruling; no spec may name them, and the ruling "
+            "is changed by editing the file: " + "; ".join(pinned)
+        )
     if not classes.absent:
         return
     hits = []
@@ -881,6 +919,28 @@ def refuse_absent_knobs(knobs: list[Knob], classes: KnobClasses) -> None:
             "knob-classes.json names field(s) this library does not report (renamed or "
             "removed, or only in uncommitted code): " + "; ".join(hits)
         )
+
+
+def pinned_lines(classes: KnobClasses, catalogue: Catalogue, patch: str | None) -> list[str]:
+    """One start-up line per `pinned` entry of the voiced @p patch.
+
+    Says whether the catalogue still ships the value the ruling holds, since a ruling
+    over a value the library no longer ships holds nothing.
+    """
+    out = []
+    for key, e in classes.entries.items():
+        if e.cls != "pinned" or patch is None or key.partition(".")[0] != patch:
+            continue
+        shipped = catalogue.defaults.get(key)
+        state = (
+            f"ships {shipped:g}"
+            if shipped is not None and abs(shipped - e.value) <= PINNED_VALUE_TOLERANCE
+            else f"STALE: the library ships {shipped:g}"
+            if shipped is not None
+            else "STALE: the library does not report it"
+        )
+        out.append(f"pinned by ruling: {key} = {e.value:g} ({state}; lane {e.lane}): {e.basis}")
+    return out
 
 
 def _patch_heads(catalogue: Catalogue) -> set[str]:
@@ -1228,7 +1288,7 @@ def hand_spec_warnings(
                 + (f" ({reach.basis})" if reach.basis else "")
             )
         entry = classes.classify(k.tunable)
-        if entry is None or entry.cls not in NOT_SEARCHED:
+        if entry is None or entry.cls not in NOT_SEARCHED or entry.cls == "pinned":
             continue
         what = (
             "set by measurement, not searched"

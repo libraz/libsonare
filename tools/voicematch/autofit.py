@@ -346,6 +346,7 @@ from knobs import (
     load_spec,
     load_spec_weights,
     load_start_overrides,
+    pinned_lines,
     refuse_absent_knobs,
     start_report,
     tunable_overrides,
@@ -2953,6 +2954,13 @@ def run(args, argv: list[str] | None = None) -> int:
     if classes is not None:
         if absent_summary(classes):
             print(absent_summary(classes), file=sys.stderr)
+        voiced = (
+            drum_patch_key(args.drum_note)
+            if args.drum_note is not None
+            else catalogue.patch_for(args.program, args.bank)
+        )
+        for line in pinned_lines(classes, catalogue, voiced):
+            print(line, file=sys.stderr)
         refuse_absent_knobs(knobs, classes)
     if not auto and classes is not None:
         gated, _ = gated_dimensions(args)

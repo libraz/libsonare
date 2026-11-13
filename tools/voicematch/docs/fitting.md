@@ -48,6 +48,7 @@ Ranges come from the clamp where the field has a meaningful bound. Small normali
 | `set_by_measurement` | never offered | placed from measured data |
 | `stage_enable` | decided per patch | left out where the patch ships the stage absent (`off_value`, default 0, within `off_within`); where it ships present, the range is cut so it cannot reach the off value |
 | `compensating_group` | all members or none | closed by default and listed at start; `--open-group GROUP` offers every member (repeatable), and refuses a group some of whose members this patch or engine lacks |
+| `pinned` | never offered | one voice's field (`<patch>.<field>`) held at its `value` by a ruling; a spec naming it is refused with the key, value and basis, the start-up line prints the voice's pinned entries and flags one whose value the library no longer ships, and the ruling is changed by editing the entry |
 
 A field whose 0 is an ordinary value of an always-present stage (a signed detune, a crossfade) is not a stage enable and carries no class. A hand spec may still name a held-out field; it is kept, and a warning at start says the table holds it out of a search. The start-up summary counts what was left out by class. `--dump-knobs` reports `fit_knobs` with the same rules.
 
