@@ -6,8 +6,10 @@ from dataclasses import asdict, dataclass
 
 import numpy as np
 from metrics_hit import HIT_ENVELOPE_HOP_MS, HIT_ENVELOPE_WIN_MS, _hit_onset
+from metrics_lines import lines_off_the_series, mask_lines
 from metrics_modal import half_spectra, modal_profile
 from metrics_modulation import f0_width_cents, modulation_note
+from metrics_motion import CoherenceState
 from metrics_partials import (
     estimate_inharmonicity_b,
     held_pitch,
@@ -302,6 +304,7 @@ def analyze_note(
     *,
     onset: float | None = None,
     tnr_mask: dict | None = None,
+    reading: dict | None = None,
 ) -> NoteMetrics:
     """Compute all per-note metrics from the mono render.
 
@@ -352,21 +355,40 @@ def analyze_note(
     # Fundamental: strongest peak within ±80 cents of equal temperament, re-read by `held_pitch`.
     f0, h1_mag = _peak_near(freqs, mag, expected_f0, 80.0)
 
+    # The reference's own record: a modal reference fits no stiffness and a voice's stationary lines
+    # are masked from partial location and the centroid, so the model is read the same way.
+    given = tnr_mask if tnr_mask is not None else (reading or {})
+    modal = bool(given.get("modal"))
+    lines = lines_off_the_series(
+        freqs, mag, f0, h1_mag, sr, modal, list(given.get("stationary_lines_hz", ()))
+    )
+    tnr_m = mag
+    mag = mask_lines(freqs, mag, lines)
+
     # How far this string's partials have been stretched by its own stiffness.
     # Zero for anything that is not a stiff string, which is what makes every
     # such voice read exactly what it read before this was measured at all.
-    # Stiffness is read on the note's fundamental's clock where the warp collapses its lines,
-    # as the reference's is; a reference that holds still is read raw.
+    # Stiffness and tone-to-noise are read on the note's fundamental's clock where the warp
+    # collapses its lines, as the reference's are; a reference that holds still is read raw.
     read_f, read_m, read_h1 = freqs, mag, h1_mag
-    if tnr_mask is None or tnr_mask.get("fm"):
+    tnr_f = freqs
+    unresolved = False
+    if not modal and (tnr_mask is None or tnr_mask.get("fm")):
         moving = pitch_motion(sustain, sr, f0)
-        unwarped = None if moving is None else line_structure(sustain, sr, f0, moving).unwarped
-        if unwarped is not None:
-            read_f, read_m = _spectrum(unwarped, sr)
-            read_h1 = _peak_near(read_f, read_m, f0, 80.0)[1]
-    inharmonicity_b, inharmonicity_partials = estimate_inharmonicity_b(
-        read_f, read_m, f0, read_h1, sr
-    )
+        if moving is not None:
+            seen = line_structure(sustain, sr, f0, moving)
+            unresolved = seen.state is CoherenceState.UNDECIDED
+            if seen.unwarped is not None:
+                read_f, tnr_m = _spectrum(seen.unwarped, sr)
+                read_m = mask_lines(read_f, tnr_m, lines)
+                read_h1 = _peak_near(read_f, read_m, f0, 80.0)[1]
+                tnr_f = read_f
+    if modal or unresolved:
+        inharmonicity_b, inharmonicity_partials = 0.0, 0
+    else:
+        inharmonicity_b, inharmonicity_partials = estimate_inharmonicity_b(
+            read_f, read_m, f0, read_h1, sr
+        )
     f0, motion = held_pitch(sustain, sr, f0, inharmonicity_b)
     cents_err = 1200.0 * np.log2(f0 / expected_f0) if f0 > 0 else 0.0
 
@@ -400,11 +422,11 @@ def analyze_note(
     # The reference profile's ruler, so the fit is charged on the quantity the gate reads.
     # A silent window has nothing real in either bin, so the ratio would read implausibly clean.
     if tnr_mask is None:
-        tnr_mask = measure_tnr_mask(sustain, sr, float(f0))
+        tnr_mask = {**measure_tnr_mask(sustain, sr, float(f0)), **(reading or {})}
     tnr = (
         float("nan")
-        if under_peak_db < SILENT_WINDOW_DB
-        else tone_to_noise_db(freqs, mag, float(f0), inharmonicity_b, *tnr_mask_parts(tnr_mask))
+        if under_peak_db < SILENT_WINDOW_DB or unresolved
+        else tone_to_noise_db(tnr_f, tnr_m, float(f0), inharmonicity_b, *tnr_mask_parts(tnr_mask))
     )
 
     # Envelope metrics.

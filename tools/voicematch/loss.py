@@ -15,9 +15,11 @@ lets a staged fit score those two against different evidence.
 
 from __future__ import annotations
 
+import json
 import math
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
+from pathlib import Path
 
 import numpy as np
 
@@ -157,7 +159,7 @@ from metrics_texture import (
     WINDOW_FLATNESS_CLIP_DB,
 )
 from patterns import analysis_window_end
-from toneclass import default_weights
+from toneclass import default_weights, tone_class
 
 # Longest analysis window per note. The probe patterns hold a note for two
 # seconds and this used to match them, which made the cap invisible — and made
@@ -424,10 +426,31 @@ def skeleton_note(mono: np.ndarray, sr: int, note, n_harm: int = HARM_REACH) -> 
 def oracle_tnr_masks(oracle_rows: list[dict]) -> list[dict] | None:
     """The oracle rows' `tnr_mask`s, for `probe_rows` to read the model through.
 
+    A mask carries the rest of how its row was read where the row says so (`modal`,
+    `stationary_lines_hz`; see `analyze_note`), so the model is read as its reference was.
     None for a percussive probe, whose rows carry no tone-to-noise ratio.
     """
     masks = [row.get("tnr_mask") for row in oracle_rows]
     return None if any(m is None for m in masks) else masks
+
+
+def corpus_reading(corpus, reference_dir) -> dict:
+    """How the capture's reference rows are read, from its committed profile: `modal` and the lines.
+
+    Empty where the capture has no profile or reads as a plain string. The oracle's probe is read
+    this way so its rows, and every model row read through them, match the reference profile's.
+    """
+    path = Path(reference_dir) / f"{corpus.capture_id}.json"
+    if not corpus.capture_id or not path.exists():
+        return {}
+    profile = json.loads(path.read_text())
+    out: dict = {}
+    if not tone_class(int(profile.get("capture", {}).get("program", 0))).stiffness_fit:
+        out["modal"] = True
+    lines = profile.get("stationary_lines", {}).get("timbres", {}).get(corpus.timbre, {})
+    if lines.get("lines"):
+        out["stationary_lines_hz"] = [ln["hz"] for ln in lines["lines"]]
+    return out
 
 
 def probe_rows(
@@ -438,6 +461,7 @@ def probe_rows(
     max_band_hz: float | None = None,
     threads: int = 1,
     tnr_masks: list[dict] | None = None,
+    reading: dict | None = None,
 ) -> list[dict]:
     """Measure every analysis note of `pattern` with the metric set it calls for.
 
@@ -473,7 +497,7 @@ def probe_rows(
 
     `tnr_masks` is the oracle rows' `tnr_mask`, one per analysis note, given
     when the render is the model's so both sides read tone-to-noise through
-    the oracle's mask.
+    the oracle's mask. `reading` is the oracle's own (`corpus_reading`), carried into its rows' masks.
     """
     notes = list(pattern.analysis_notes)
     masks = [None] * len(notes) if tnr_masks is None else list(tnr_masks)
@@ -492,7 +516,9 @@ def probe_rows(
             # Found once and shared, so nothing that reads the attack can
             # disagree about where the note began.
             onset = note_onset(mono, sr, note, end)
-            row = analyze_note(mono, sr, note, end, onset=onset, tnr_mask=mask).to_dict()
+            row = analyze_note(
+                mono, sr, note, end, onset=onset, tnr_mask=mask, reading=reading
+            ).to_dict()
             row["skeleton"] = skeleton_note(mono, sr, note)
             row["onset_ms"] = round((onset - note.start) * 1000.0, 2)
             row["attack_hf_db"] = attack_bands(mono, sr, note, onset)

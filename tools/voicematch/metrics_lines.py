@@ -12,6 +12,7 @@ from __future__ import annotations
 from typing import NamedTuple
 
 import numpy as np
+from metrics_partials import MAX_FIT_PARTIALS, fit_partial_series, partial_hz
 
 #: Reason a capture's rows carry for the lines they were read around.
 STATIONARY_LINES_REASON = "stationary lines, voice-latched"
@@ -116,3 +117,26 @@ def mask_lines(freqs: np.ndarray, mag: np.ndarray, lines_hz: list[float]) -> np.
         ]
         out[k - MASK_BINS : k + MASK_BINS + 1] = float(np.median(around))
     return out
+
+
+#: How many bins either side of a partial of the note's own series a stationary line is still taken
+#: for that partial. An organ's line that is also a harmonic of every note a tritone apart sits on one bin.
+LINE_ON_PARTIAL_BINS = 3.0
+
+
+def lines_off_the_series(
+    freqs: np.ndarray,
+    mag: np.ndarray,
+    f0_seed: float,
+    h1_mag: float,
+    sr: int,
+    modal: bool,
+    lines_hz: list[float],
+) -> list[float]:
+    """The stationary lines that are not also a partial of this note's own (unmasked) series."""
+    if not lines_hz or modal:
+        return lines_hz
+    f0, b, _ = fit_partial_series(freqs, mag, f0_seed, h1_mag, sr)
+    tol = LINE_ON_PARTIAL_BINS * float(freqs[1] - freqs[0])
+    series = [partial_hz(f0, n, b) for n in range(1, MAX_FIT_PARTIALS + 1)]
+    return [hz for hz in lines_hz if all(abs(hz - p) > tol for p in series)]

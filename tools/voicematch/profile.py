@@ -163,6 +163,7 @@ from profile_measure import (
     partial_decay,
     reference_tnr_mask,
     register_deltas,
+    tnr_unreliable,
     tone_to_noise_db,
     usable_decay_end,
 )
@@ -527,6 +528,9 @@ def measure(cfg: dict, corpus_dir: Path, out_path: Path) -> int:
     }
     if lines:
         profile["stationary_lines"] = {"reason": STATIONARY_LINES_REASON, "timbres": lines}
+    unreliable = tnr_unreliable(rows)
+    if unreliable:
+        profile["tnr_unreliable"] = unreliable
     # Absent rather than empty on a reference with no room, so the profile of a
     # dry capture is byte-identical to one measured before this was recorded and
     # its stamp — and every gate dated against it — stays where it is.

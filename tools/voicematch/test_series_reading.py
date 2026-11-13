@@ -144,16 +144,17 @@ def test_a_masked_line_leaves_the_median_of_its_surroundings():
 # the unwarped reading and its keep rule
 
 
-def test_a_vibrato_the_warp_collapses_is_kept():
+def test_a_vibrato_one_source_made_is_kept():
     x = stiff_series(220.0, 0.0, cents=50.0, partials=8, rolloff_db=6.0)
     motion = pitch_motion(x, SR, 220.0)
     assert motion is not None
     got = metrics_warp.line_structure(x, SR, 220.0, motion)
-    assert got.width_ratio is not None and got.width_ratio <= metrics_warp.COLLAPSE_RATIO
+    assert got.state is metrics_warp.CoherenceState.SINGLE_SOURCE and got.coherence > 0.9
+    assert got.width_ratio is not None and got.width_ratio < 0.4
     assert got.unwarped is not None and not got.broad
 
 
-def test_a_unison_the_warp_cannot_collapse_is_refused_and_broad():
+def test_a_unison_is_not_one_source_and_is_read_raw_and_broad():
     x = stiff_series(220.0, 0.0, detune_cents=8.0, partials=8, rolloff_db=6.0)
     motion = pitch_motion(x, SR, 220.0)
     got = metrics_warp.line_structure(x, SR, 220.0, motion)

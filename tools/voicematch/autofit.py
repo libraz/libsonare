@@ -358,6 +358,7 @@ from loss import (
     SUSTAIN_SLOPE_CAP_DB_S,
     LossWeights,
     cli_weights,
+    corpus_reading,
     dropped_weights,
     measured_terms,
     mss_distance,
@@ -583,7 +584,8 @@ def oracle_reference(args) -> tuple[list[dict], np.ndarray, np.ndarray | None, f
     raw = to_mono(audio, mono_mode)
     mono = normalize_rms(raw)
     threads = resolve_metric_threads(args)
-    rows = probe_rows(mono, pattern, sr, raw=raw, threads=threads)
+    reading = None if corpus is None else corpus_reading(corpus, HERE / "reference")
+    rows = probe_rows(mono, pattern, sr, raw=raw, threads=threads, reading=reading)
     edge = reference_band_edge(corpus, rows) if pattern.percussive else None
     if edge is not None:
         # Re-measured rather than patched. The band profile is normalised to the

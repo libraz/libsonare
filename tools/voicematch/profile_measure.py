@@ -36,8 +36,9 @@ from metrics import (
     tone_to_noise_db,
 )
 from metrics_floor import partial_clearance, recording_floor, valley_profile
-from metrics_lines import held_lines, mask_lines, stationary_lines
+from metrics_lines import held_lines, lines_off_the_series, mask_lines, stationary_lines
 from metrics_modal import modal_profile
+from metrics_motion import CoherenceState
 from metrics_note import body_bands
 from metrics_partials import series_scatter_cents
 from metrics_warp import LineStructure, line_structure
@@ -105,6 +106,11 @@ B_SCATTER_CENTS = 6.0
 B_SCATTER_MIN_PARTIALS = 5
 
 
+#: What a row whose motion is undecided takes no reading of: the stiffness (and the partial count it
+#: rests on), the tone-to-noise ratio and the valleys.
+UNRESOLVED_WITHHELD = ("inharmonicity_b", "tnr_db", "valley_db")
+
+
 def find_partials(
     seg: np.ndarray,
     sr: int,
@@ -133,29 +139,6 @@ def find_partials(
     return read_partials(seg, sr, note, modal=modal, stationary_lines_hz=stationary_lines_hz)[0]
 
 
-#: How many bins either side of a partial of the note's own series a stationary line is still taken
-#: for that partial. An organ's line that is also a harmonic of every note a tritone apart sits on one bin.
-LINE_ON_PARTIAL_BINS = 3.0
-
-
-def _lines_off_the_series(
-    freqs: np.ndarray,
-    mag: np.ndarray,
-    f0_seed: float,
-    h1_mag: float,
-    sr: int,
-    modal: bool,
-    lines_hz: list[float],
-) -> list[float]:
-    """The stationary lines that are not also a partial of this note's own (unmasked) series."""
-    if not lines_hz or modal:
-        return lines_hz
-    f0, b, _ = fit_partial_series(freqs, mag, f0_seed, h1_mag, sr)
-    tol = LINE_ON_PARTIAL_BINS * float(freqs[1] - freqs[0])
-    series = [partial_hz(f0, n, b) for n in range(1, MAX_PARTIALS + 1)]
-    return [hz for hz in lines_hz if all(abs(hz - p) > tol for p in series)]
-
-
 def read_partials(
     seg: np.ndarray,
     sr: int,
@@ -180,14 +163,16 @@ def read_partials(
     f0_seed, a0 = _peak_near(freqs, mag, et, 120.0)
     if a0 <= 0.0:
         return {}, None, []
-    lines = _lines_off_the_series(freqs, mag, f0_seed, a0, sr, modal, list(stationary_lines_hz))
+    lines = lines_off_the_series(freqs, mag, f0_seed, a0, sr, modal, list(stationary_lines_hz))
     mag = mask_lines(freqs, mag, lines)
     structure: LineStructure | None = None
     if modal:
         f0, b, fitted_on = f0_seed, 0.0, 0
     else:
         structure = line_structure(seg, sr, f0_seed, pitch_motion(seg, sr, f0_seed))
-        if structure.unwarped is None:
+        if structure.state is CoherenceState.UNDECIDED:
+            f0, b, fitted_on = f0_seed, 0.0, 0
+        elif structure.unwarped is None:
             f0, b, fitted_on = fit_partial_series(freqs, mag, f0_seed, a0, sr)
         else:
             wf, wm = _spectrum(structure.unwarped, sr)
@@ -243,11 +228,19 @@ def read_partials(
     if modal:
         row["modal_profile"] = modal_profile(freqs, mag, et)
     if structure is not None:
-        if structure.width_ratio is not None:
+        if structure.state is not None:
             row["unwarp"] = {
-                "width_ratio": round(structure.width_ratio, 3),
+                "state": structure.state.value,
+                "coherence": round(structure.coherence, 3),
+                "reason": structure.reason,
                 "kept": structure.unwarped is not None,
+                "width_ratio": None
+                if structure.width_ratio is None
+                else round(structure.width_ratio, 3),
             }
+        if structure.state is CoherenceState.UNDECIDED:
+            row["unresolved"] = {"reason": structure.reason, "withheld": list(UNRESOLVED_WITHHELD)}
+            del row["inharmonicity_b"]
         if structure.broad:
             row["broad_lines"] = {
                 "broad_ratio": round(structure.broad_ratio, 2),
@@ -260,13 +253,44 @@ def read_partials(
                 row["b_unreliable"] = {
                     "reason": (
                         f"unison or ensemble: lines {structure.broad_ratio:.1f}x a still tone's "
-                        f"and not collapsed by the pitch warp, partials {scatter:.1f} c rms off "
+                        f"and not read warped, partials {scatter:.1f} c rms off "
                         "one series; stretch, balance, partial_tilt and tnr read through B or "
                         "through partials located on it"
                     ),
                     "dimensions": list(LADDER_DIMENSIONS),
                 }
     return row, structure, lines
+
+
+#: Share of a timbre's rows with broad lines from which its tone-to-noise ratio is unreliable:
+#: the mask follows one pitch track, and a chorus or a unison has several.
+TNR_BROAD_SHARE = 0.5
+TNR_UNRELIABLE_REASON = (
+    "chorus or ensemble: most rows have lines the pitch warp does not collapse, "
+    "and the tone mask follows one pitch track"
+)
+
+
+def tnr_unreliable(rows: list[dict]) -> dict | None:
+    """A capture's `tnr_unreliable` record by timbre, or None where no timbre's lines are mostly broad.
+
+    Read from the rows' own `broad_lines`, per timbre because a gate reads one: an organ
+    whose bright registration is clean and whose dark one is not is only half-diluted
+    into a capture-wide share. A timbre whose notes mostly carry lines the pitch warp
+    cannot collapse is a chorus or an ensemble, whose tone-to-noise ratio the mask
+    (one pitch track) cannot separate from noise.
+    """
+    by_timbre: dict[str, list[dict]] = {}
+    for r in rows:
+        by_timbre.setdefault(str(r.get("timbre")), []).append(r)
+    flagged = {}
+    for timbre, group in by_timbre.items():
+        broad = sum("broad_lines" in r for r in group)
+        if broad >= TNR_BROAD_SHARE * len(group):
+            flagged[timbre] = {"rows": broad, "of": len(group)}
+    if not flagged:
+        return None
+    return {"reason": TNR_UNRELIABLE_REASON, "timbres": flagged}
 
 
 def measure_stationary_lines(
@@ -658,10 +682,13 @@ def measure_note(
         ring_a, ring_b = _short_ring_window(held, sr)
         if ring_b > ring_a:
             a, b = ring_a, ring_b
-    partials, _, masked = read_partials(
+    partials, structure, masked = read_partials(
         held[a:b], sr, note, modal=modal, stationary_lines_hz=stationary_lines_hz
     )
     row: dict = dict(partials)
+    # Tone-to-noise and the valleys read the segment on its fundamental's clock where the warp kept it.
+    warped = structure is not None and structure.unwarped is not None
+    read_seg = structure.unwarped if warped else held[a:b]
     if not row:
         # No fundamental means this is not a struck note, and every measurement
         # below would still produce a number for it — a decay slope of 0 dB/s
@@ -733,7 +760,8 @@ def measure_note(
     if row.get("partials_hz"):
         row["partial_decay_db_s"] = partial_decay(held[a:], sr, row["partials_hz"])
         row.update(partial_clearance(held[a:], sr, row["partials_hz"]))
-        row.update(valley_profile(held[a:b], sr, row["partials_hz"], row["partials_db"]))
+        if "unresolved" not in row:
+            row.update(valley_profile(read_seg, sr, row["partials_hz"], row["partials_db"]))
     row.update(recording_floor(mono, sr, preroll_s, float(env_db[peak_i]), f0=row["f0_hz"]))
 
     # Damper: note-off to 40 dB below the level it was still holding. Skipped
@@ -763,11 +791,17 @@ def measure_note(
     freqs, mag = _spectrum(held[a:b], sr)
     p = mask_lines(freqs, mag, masked) ** 2
     row["centroid_hz"] = round(float((freqs * p).sum() / max(p.sum(), 1e-20)), 1)
+    if warped:
+        freqs, mag = _spectrum(read_seg, sr)
     stiffness = row["inharmonicity_b"] if row.get("inharmonicity_reliable") else 0.0
     if tnr_mask is None:
         tnr_mask = measure_tnr_mask(held[a:b], sr, row["f0_hz"])
     row["tnr_mask"] = tnr_mask
-    tnr = tone_to_noise_db(freqs, mag, row["f0_hz"], stiffness, *tnr_mask_parts(tnr_mask))
+    tnr = (
+        float("nan")
+        if "unresolved" in row
+        else tone_to_noise_db(freqs, mag, row["f0_hz"], stiffness, *tnr_mask_parts(tnr_mask))
+    )
     if np.isfinite(tnr):
         row["tnr_db"] = round(tnr, 2)
     width = channel_width(audio, on, off)
