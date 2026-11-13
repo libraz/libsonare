@@ -536,6 +536,10 @@ def baseline_pins(
 #: Forwarded to every autofit run; set from --allow-dirty-src in main().
 ALLOW_DIRTY_SRC = False
 
+#: A prebuilt tuning dylib from --lib; when set, every fit and comparison uses it
+#: and `--build-dir` is not consulted.
+PREBUILT_LIB = ""
+
 
 def _fit(
     voice: dict, out: Path, build_dir: str, per_knob: int, weights: dict[str, float] | None = None
@@ -581,6 +585,8 @@ def _fit(
     ]
     for term, weight in sorted((weights or {}).items()):
         cmd += [f"--w-{term}", f"{weight:g}"]
+    if PREBUILT_LIB:
+        cmd += ["--lib", PREBUILT_LIB]
     if ALLOW_DIRTY_SRC:
         cmd.append("--allow-dirty-src")
     log = out.with_suffix(".log")
@@ -706,6 +712,9 @@ def verdict(
 
 
 def _tuning_lib(build_dir: str) -> Path:
+    if PREBUILT_LIB:
+        # Whether it honours the overrides is autofit's probe to make, per fit.
+        return Path(PREBUILT_LIB)
     path = (REPO_ROOT / build_dir).resolve()
     lib = dylib_path(path)
     if lib is None or _cached_option(path, "BUILD_TUNING") != "ON":
@@ -1074,6 +1083,12 @@ def main() -> int:
     ap.add_argument("--evals-per-knob", type=int, default=EVALS_PER_KNOB)
     ap.add_argument("--out", default="", help="results directory (default: keyed by objective)")
     ap.add_argument(
+        "--lib",
+        default="",
+        help="fit and compare against this prebuilt BUILD_TUNING=ON dylib (autofit's --lib) "
+        "instead of --build-dir",
+    )
+    ap.add_argument(
         "--allow-dirty-src",
         action="store_true",
         help="pass autofit's --allow-dirty-src: fit against an uncommitted src/ edit of your own",
@@ -1081,6 +1096,11 @@ def main() -> int:
     args = ap.parse_args()
     global ALLOW_DIRTY_SRC
     ALLOW_DIRTY_SRC = args.allow_dirty_src
+    global PREBUILT_LIB
+    if args.lib:
+        if not Path(args.lib).is_file():
+            ap.error(f"--lib {args.lib!r} is not a file")
+        PREBUILT_LIB = str(Path(args.lib).resolve())
     only = {s.strip() for s in args.only.split(",") if s.strip()}
     root = Path(args.out) if args.out else run_root(objective_digest())
 

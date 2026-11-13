@@ -93,7 +93,13 @@ def build_shared(build_dir: Path, cmake: str, jobs: int) -> None:
 
 
 def dylib_path(build_dir: Path) -> Path | None:
-    """Locate the built libsonare shared library in the isolated build dir."""
+    """Locate the built libsonare shared library in the isolated build dir.
+
+    A path that is itself a file is a prebuilt library (`autofit.py --lib`) and
+    is returned as given.
+    """
+    if build_dir.is_file():
+        return build_dir
     direct = build_dir / "lib" / "libsonare.dylib"
     if direct.exists():
         return direct

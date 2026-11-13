@@ -81,6 +81,9 @@ def test_fit_refuses_unusable_objectives_before_building(tmp_path, term, velocit
             "--build-dir",
             str(build_path),
             "--dry-run",
+            # The refusal under test comes after the tree check; another
+            # session's in-flight edit under src/ must not answer first.
+            "--allow-dirty-src",
         ],
         capture_output=True,
         text=True,

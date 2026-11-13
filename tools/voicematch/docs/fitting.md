@@ -102,6 +102,8 @@ Run it in a worktree at a fixed commit: the evaluation cache and the build both 
 
 `autofit.py` configures an isolated `--build-dir` with `BUILD_SHARED=ON` and enables `BUILD_TUNING=ON` when runtime knobs need it. Each candidate render runs in a fresh subprocess with `SONARE_LIB_PATH` pointing at that build's dylib, so the override table is read before library initialization and a rebuild cannot reuse an already loaded artifact. `build-python-shared` is refused as the fit build directory because it is the normal shared-library tree.
 
+`--lib <dylib>` fits against a prebuilt `BUILD_TUNING=ON` library instead: nothing is configured, built or written beside it, and a spec with `file`/`pattern` knobs is refused because only runtime overrides can move a prebuilt library. A dirty `src/` is not a refusal there; the sources newer than the dylib are warned about and recorded in `--out` as `library` (path, mtime, sha256, `newer_sources`), and a render under `SONARE_TUNING_DUMP` first proves the library honours overrides. `refit.py --lib` passes it through to every fit and comparison.
+
 Before a runtime search or diagnosis, the harness checks that a whole-spec override changes a render; a single genuinely inert knob remains a diagnosis result, while a flat whole-spec result indicates an unavailable tuning build, an ignored key, a rejected range, or a loader path that did not select the build. The fit records the build and source state in its report.
 
 For recovery, native component observability, identity, liveness, and the exact verification commands, see [Development](development.md).

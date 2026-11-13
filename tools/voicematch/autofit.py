@@ -250,6 +250,7 @@ and either way `--out` records HEAD's sha and the dirty paths, if any.
 from __future__ import annotations
 
 import argparse
+import hashlib
 import itertools
 import json
 import math
@@ -258,6 +259,7 @@ import subprocess
 import sys
 import tempfile
 from concurrent.futures import ThreadPoolExecutor
+from datetime import UTC, datetime, timezone
 from pathlib import Path
 
 import numpy as np
@@ -800,7 +802,9 @@ class Evaluator:
             )
 
     def _ensure_built(self) -> None:
-        if not self.built and not self.needs_rebuild:
+        if getattr(self.args, "lib", ""):
+            self.built = True
+        elif not self.built and not self.needs_rebuild:
             build_shared(self.build_dir, self.args.cmake, self.args.jobs)
             self.n_builds += 1
             self.built = True
@@ -1484,6 +1488,91 @@ def validate(args, build_dir, knobs, start_values, best_values, room_ir) -> dict
 # --------------------------------------------------------------------------- #
 # CLI
 # --------------------------------------------------------------------------- #
+def src_files() -> list[Path]:
+    """Every tracked or untracked-but-not-ignored file under src/, absolute."""
+    try:
+        listing = subprocess.run(
+            ["git", "ls-files", "-z", "--cached", "--others", "--exclude-standard", "--", "src/"],
+            cwd=REPO_ROOT,
+            capture_output=True,
+            check=True,
+            text=True,
+        )
+    except (OSError, subprocess.CalledProcessError) as exc:
+        print(f"tree state: git unavailable ({exc}); no staleness report", file=sys.stderr)
+        return []
+    return [REPO_ROOT / name for name in listing.stdout.split("\0") if name]
+
+
+def library_record(lib: Path, sources: list[Path]) -> dict:
+    """What a prebuilt library is, and which sources are newer than it.
+
+    The library's mtime stands in for "when it was built": a source touched
+    after it may or may not be compiled into it, which is what the report says.
+    """
+    mtime = lib.stat().st_mtime
+    newer = []
+    for path in sources:
+        try:
+            if path.stat().st_mtime > mtime:
+                newer.append(
+                    str(path.relative_to(REPO_ROOT) if path.is_relative_to(REPO_ROOT) else path)
+                )
+        except OSError:
+            continue
+    return {
+        "path": str(lib),
+        "mtime": datetime.fromtimestamp(mtime, tz=UTC).isoformat(),
+        "sha256": hashlib.sha256(lib.read_bytes()).hexdigest(),
+        "newer_sources": sorted(newer),
+    }
+
+
+def refuse_source_knobs(spec: list[dict]) -> None:
+    """A prebuilt library has only its runtime overrides to move; a source knob needs a rebuild."""
+    source = [
+        str(e.get("file") or e.get("pattern") or f"#{i}")
+        for i, e in enumerate(spec)
+        if "tunable" not in e
+    ]
+    if source:
+        raise ValueError(
+            "--lib cannot fit source knobs (file/pattern), which rebuild the library per "
+            "evaluation: " + ", ".join(source) + ". Only runtime (tunable) knobs can be fitted "
+            "against a prebuilt library."
+        )
+
+
+def _tuning_catalogue(args, build_dir: Path, **kw) -> Catalogue:
+    """The knob catalogue from a tuning library: built here, or the prebuilt `--lib`.
+
+    On a prebuilt library the dump doubles as the proof that it was built with
+    BUILD_TUNING: a library without it writes no dump, or an empty one, and
+    ignores every override.
+    """
+    lib = getattr(args, "lib", "")
+    if lib:
+        dylib = dylib_path(build_dir)
+    else:
+        configure_build(build_dir, args.cmake, tuning=True)
+        build_shared(build_dir, args.cmake, args.jobs)
+        dylib = dylib_path(build_dir)
+    catalogue = dump_catalogue(
+        args.program,
+        catalogue_pattern(args),
+        str(dylib) if dylib else None,
+        sr=render_rate(resolve_corpus(args)),
+        notes=args.notes,
+        **kw,
+    )
+    if lib and not catalogue.defaults:
+        raise RuntimeError(
+            f"{lib} reported no tuning keys under SONARE_TUNING_DUMP — it was built "
+            f"without BUILD_TUNING=ON, so it ignores SONARE_TUNING_OVERRIDES"
+        )
+    return catalogue
+
+
 def repo_tree_state() -> tuple[str | None, list[str]]:
     """HEAD's sha and any dirty path under src/, read once before a run touches anything.
 
@@ -1522,7 +1611,9 @@ def repo_tree_state() -> tuple[str | None, list[str]]:
     return head.stdout.strip(), dirty
 
 
-def _fold_tree_provenance(out_path: str, head: str | None, dirty: list[str]) -> None:
+def _fold_tree_provenance(
+    out_path: str, head: str | None, dirty: list[str], library: dict | None = None
+) -> None:
     """Add this run's src/ tree state and objective fingerprint to a written --out artifact.
 
     A post-write step rather than a field threaded through report.py's or
@@ -1534,6 +1625,8 @@ def _fold_tree_provenance(out_path: str, head: str | None, dirty: list[str]) -> 
     path = Path(out_path)
     record = json.loads(path.read_text())
     record["tree"] = {"head": head, "dirty_src": dirty}
+    if library is not None:
+        record["library"] = library
     record["objective"] = objective_digest()
     path.write_text(json.dumps(_json_safe(record), indent=2, allow_nan=False) + "\n")
 
@@ -1621,12 +1714,38 @@ PER_KNOB_BUDGET_CEILING = 2000
 
 
 def run(args, argv: list[str] | None = None) -> int:
-    build_dir = (REPO_ROOT / args.build_dir).resolve()
-    if build_dir.name == "build-python-shared":
-        raise ValueError("refusing to use build-python-shared; pick a private build dir")
+    lib = getattr(args, "lib", "") or ""
+    if lib:
+        # A prebuilt library stands where the build dir does: `dylib_path` hands
+        # a file straight back, and nothing derives another path from it.
+        build_dir = Path(lib).resolve()
+        if not build_dir.is_file():
+            raise ValueError(f"--lib {lib!r} is not a file")
+        writes = not (
+            args.dry_run or getattr(args, "diagnose", False) or getattr(args, "dump_knobs", False)
+        )
+        if writes:
+            # The sources a prebuilt library came from are not this run's to edit:
+            # a fitted value travels as an override until it is written back
+            # against the build that will ship it.
+            raise ValueError("--lib fits are read-only: pass --dry-run --out and write back later")
+    else:
+        build_dir = (REPO_ROOT / args.build_dir).resolve()
+        if build_dir.name == "build-python-shared":
+            raise ValueError("refusing to use build-python-shared; pick a private build dir")
 
     head_sha, dirty_src = repo_tree_state()
-    if dirty_src and not getattr(args, "allow_dirty_src", False):
+    library: dict | None = None
+    if lib:
+        library = library_record(build_dir, src_files())
+        if library["newer_sources"]:
+            print(
+                f"warning: {len(library['newer_sources'])} source file(s) under src/ are newer "
+                f"than {build_dir.name}; the library may not contain them:\n  "
+                + "\n  ".join(library["newer_sources"]),
+                file=sys.stderr,
+            )
+    elif dirty_src and not getattr(args, "allow_dirty_src", False):
         raise RuntimeError(
             "refusing to fit with src/ dirty — whatever is there right now is what "
             "this run would compile and fit against, silently, with nothing in the "
@@ -1635,7 +1754,7 @@ def run(args, argv: list[str] | None = None) -> int:
             + "\nCommit it, or pass --allow-dirty-src if this is your own in-flight "
             "engine edit."
         )
-    if dirty_src:
+    if dirty_src and not lib:
         print(
             "src/ is dirty and --allow-dirty-src was given; fitting against it "
             "anyway:\n  " + "\n  ".join(dirty_src),
@@ -1693,17 +1812,7 @@ def run(args, argv: list[str] | None = None) -> int:
     auto = args.spec == "auto"
     catalogue: Catalogue | None = None
     if auto or args.dump_knobs:
-        configure_build(build_dir, args.cmake, tuning=True)
-        build_shared(build_dir, args.cmake, args.jobs)
-        dylib = dylib_path(build_dir)
-        catalogue = dump_catalogue(
-            args.program,
-            catalogue_pattern(args),
-            str(dylib) if dylib else None,
-            sr=render_rate(resolve_corpus(args)),
-            notes=args.notes,
-            bank=args.bank,
-        )
+        catalogue = _tuning_catalogue(args, build_dir, bank=args.bank)
         print(
             f"catalogue: {len(catalogue.defaults)} knobs across "
             f"{len({p for p, _ in catalogue.programs})} programs "
@@ -1779,17 +1888,15 @@ def run(args, argv: list[str] | None = None) -> int:
         )
     else:
         spec = load_spec(Path(args.spec).resolve())
+        if lib:
+            refuse_source_knobs(spec)
         if any("." in e.get("tunable", "") for e in spec):
-            configure_build(build_dir, args.cmake, tuning=True)
-            build_shared(build_dir, args.cmake, args.jobs)
-            dylib = dylib_path(build_dir)
-            catalogue = dump_catalogue(
-                args.program,
-                catalogue_pattern(args),
-                str(dylib) if dylib else None,
-                sr=render_rate(resolve_corpus(args)),
-                notes=args.notes,
-            )
+            catalogue = _tuning_catalogue(args, build_dir)
+
+    if lib and catalogue is None:
+        # No step above needed the dump, so this is the only render that proves
+        # the overrides can reach the library.
+        _tuning_catalogue(args, build_dir)
 
     pristine: dict[Path, str] = {}
     knobs = build_knobs(spec, pristine, catalogue)
@@ -1823,7 +1930,8 @@ def run(args, argv: list[str] | None = None) -> int:
     if full_spec_budget_warning:
         print(f"warning: {full_spec_budget_warning}", file=sys.stderr)
 
-    configure_build(build_dir, args.cmake, tuning=n_runtime > 0)
+    if not lib:
+        configure_build(build_dir, args.cmake, tuning=n_runtime > 0)
 
     print("resolving oracle (once)...", file=sys.stderr)
     corpus = resolve_corpus(args)
@@ -1837,7 +1945,8 @@ def run(args, argv: list[str] | None = None) -> int:
             # so the roomed model *measures* the oracle's space rather than
             # merely being convolved with a room of the same nominal size. One
             # extra render, once.
-            build_shared(build_dir, args.cmake, args.jobs)
+            if not lib:
+                build_shared(build_dir, args.cmake, args.jobs)
             _, dry_model = render_model_rows_subprocess(
                 build_dir,
                 args.program,
@@ -1890,7 +1999,7 @@ def run(args, argv: list[str] | None = None) -> int:
                 run_diagnosis(evaluator, knobs, args, catalogue, out_path=args.out or "")
             finally:
                 restore(pristine, evaluator.written)
-            _fold_tree_provenance(args.out, head_sha, dirty_src)
+            _fold_tree_provenance(args.out, head_sha, dirty_src, library)
             return 0
         if args.grid:
             # Also instead of fitting: the point is to look at the surface the
@@ -1970,16 +2079,14 @@ def run(args, argv: list[str] | None = None) -> int:
         }
     gate_adoption(args, evaluator)
     report_result(knobs, pristine, best_values, evaluator, args, extra)
-    _fold_tree_provenance(args.out, head_sha, dirty_src)
+    _fold_tree_provenance(args.out, head_sha, dirty_src, library)
     _fold_write_back_verdict(args.out, evaluator)
     _fold_assessment(args.out, args)
     return 0
 
 
-def main() -> int:
-    if len(sys.argv) > 1 and sys.argv[1] == "_render_metrics":
-        return render_metrics_main(sys.argv[2:])
-
+def build_parser() -> argparse.ArgumentParser:
+    """The command line of a fit, split out of `main` so a test can parse one."""
     parser = argparse.ArgumentParser(
         description=__doc__,
         formatter_class=argparse.RawDescriptionHelpFormatter,
@@ -2357,6 +2464,16 @@ def main() -> int:
         dest="build_dir",
         help="isolated build dir (default: build-autofit)",
     )
+    parser.add_argument(
+        "--lib",
+        default="",
+        help="fit against this prebuilt BUILD_TUNING=ON libsonare dylib instead of "
+        "configuring and building --build-dir: nothing is built or written beside "
+        "the library. Only runtime (tunable) knobs can be fitted this way; a "
+        "dirty src/ is reported against the library's mtime rather than refused, "
+        "and the library's path, mtime, sha256 and the newer sources are recorded "
+        "in --out",
+    )
     parser.add_argument("--jobs", type=int, default=8, help="parallel build jobs")
     parser.add_argument("--cmake", default="cmake", help="cmake executable")
     parser.add_argument(
@@ -2365,7 +2482,13 @@ def main() -> int:
         dest="dry_run",
         help="restore pristine and skip writing the best values",
     )
-    args = parser.parse_args()
+    return parser
+
+
+def main() -> int:
+    if len(sys.argv) > 1 and sys.argv[1] == "_render_metrics":
+        return render_metrics_main(sys.argv[2:])
+    args = build_parser().parse_args()
     return run(args)
 
 
