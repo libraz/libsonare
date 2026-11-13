@@ -259,6 +259,8 @@ The references keep their own rows and are compared against their **median**, wi
 PYTHONPATH=tools/voicematch python -m shape hull --capture <id> --corpus <dir> --lib <tuning dylib> [--subject model|<timbre>] [--overrides file] --json-out out.json
 ```
 
+`--json-out` also carries `cells`, every timbre's feature table by `note,velocity`, so a row of the ranking can be read per note without rendering again.
+
 A ratio is not audibility. The absolute distance is printed beside it in the feature's own unit, and a small family scale turns an inaudible distance into a large ratio; read both columns. `--subject <timbre>` reads a reference against the others, and that is the null every model ranking is read against: on three grands a reference scores a median near 1, a 90th percentile near 2 and almost nothing past 4. Rows pooled from fewer than eight cells are left out, because a reference read as the subject reaches 8-12x there.
 
 `fingerprint` supplies what one spectrum and one envelope per note cannot hold: the share of each partial group at five stations after the onset and its fall from the body window, the octave-band shares of the strike and the body, the energy under the fundamental and between the partials, the third-octave shape of what lies between the partials, and how deep the first three partials beat. Every one is a ratio inside one render. The partial readings are skipped where a window cannot resolve the ladder, so the lowest notes answer fewer cells and the `cells` column says how many.

@@ -848,6 +848,10 @@ def cmd_hull(args):
                     "lib": args.lib,
                     "null": summary,
                     "readings": [dict(vars(r), ratio=r.ratio) for r in readings + colour_readings],
+                    "cells": {
+                        t: {f"{n},{v}": feats for (n, v), feats in sorted(cells.items())}
+                        for t, cells in table.items()
+                    },
                     "colour": {
                         t: {f"{c:.1f}": d for c, d in s.items()} for t, s in colours.items()
                     },
