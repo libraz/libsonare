@@ -194,9 +194,16 @@ def summary(entries: list[dict]) -> dict[str, list[dict]]:
 def format_flagged(entries: list[dict]) -> list[str]:
     """The stderr lines naming every `crossed` and `worse_over` entry."""
     flagged = [e for s in summary(entries).values() for e in s]
+    counts = ", ".join(f"{state} {sum(e['state'] == state for e in entries)}" for state in STATES)
     if not flagged:
-        return ["gate audit: no gated statistic crossed or moved further past its bound"]
-    lines = [f"gate audit: {len(flagged)} gated statistic(s) pushed past a bound by this fit:"]
+        return [
+            "gate audit: no gated statistic crossed or moved further past its bound",
+            f"  states: {counts}",
+        ]
+    lines = [
+        f"gate audit: {len(flagged)} gated statistic(s) pushed past a bound by this fit:",
+        f"  states: {counts}",
+    ]
     for e in flagged:
         flag = {
             WEIGHTED: "weighted",

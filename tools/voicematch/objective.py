@@ -100,6 +100,21 @@ def objective_modules(directory: Path = HERE) -> list[str]:
     return sorted(seen)
 
 
+_LOADED: dict[Path, str] = {}
+
+
+def loaded_digest(directory: Path = HERE) -> str:
+    """The digest as of this process's first call: what the loaded code answered.
+
+    A long fit that spans an edit to an objective module ran the code it loaded,
+    so its record must carry the digest taken when it started, not the one the
+    files on disk hash to when the record is written.
+    """
+    if directory not in _LOADED:
+        _LOADED[directory] = objective_digest(directory)
+    return _LOADED[directory]
+
+
 def objective_digest(directory: Path = HERE) -> str:
     """The fingerprint: sha256 over each objective module's code text."""
     h = hashlib.sha256()

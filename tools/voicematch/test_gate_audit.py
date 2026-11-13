@@ -174,3 +174,13 @@ def test_refit_reads_through_the_moved_functions():
     assert refit.gate_audit is gate_audit
     assert callable(gate_audit.compare) and callable(gate_audit.compare_voice)
     assert not hasattr(refit, "_compare") and not hasattr(refit, "_compare_voice")
+
+
+def test_the_audit_block_counts_every_state_even_when_nothing_crossed():
+    pre = _body(("a", "median", 1.0, 2.0))
+    post = _body(("a", "median", 0.5, 2.0))
+    lines = gate_audit.format_flagged(gate_audit.audit(pre, post, {}))
+    assert (
+        lines[1]
+        == "  states: crossed 0, worse_over 0, cleared 0, better 1, worse_within 0, unchanged 0, unmeasured 0"
+    )

@@ -209,3 +209,22 @@ def test_a_recorded_fit_keeps_the_weights_it_ran_under():
     }
     _unit, entry = fits.record_fit(report, capture="c", timbre="t", outcome="kept", today="x")
     assert entry["weights"] == {"harm": 1.0}
+
+
+def test_the_recorded_digest_is_the_one_the_process_loaded(tmp_path):
+    """A loss file edited on disk mid-run does not move the digest a run records."""
+    import shutil
+
+    import objective
+
+    tree = tmp_path / "tree"
+    shutil.copytree(
+        Path(objective.__file__).resolve().parent,
+        tree,
+        ignore=shutil.ignore_patterns("reference", "capture", "__pycache__", "*.json"),
+    )
+    first = objective.loaded_digest(tree)
+    loss = tree / "loss.py"
+    loss.write_text(loss.read_text() + "\nEDITED_MID_RUN = 1\n")
+    assert objective.objective_digest(tree) != first
+    assert objective.loaded_digest(tree) == first

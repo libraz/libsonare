@@ -343,7 +343,7 @@ from metrics import (
     normalize_rms,
     to_mono,
 )
-from objective import objective_digest
+from objective import loaded_digest
 from optimizers import cma_es, optimize
 from patterns import DRUM_GATE_HELP, build_pattern, pattern_length
 from render_model import render_model
@@ -1638,7 +1638,7 @@ def _fold_tree_provenance(
     record["tree"] = {"head": head, "dirty_src": dirty}
     if library is not None:
         record["library"] = library
-    record["objective"] = objective_digest()
+    record["objective"] = loaded_digest()
     path.write_text(json.dumps(_json_safe(record), indent=2, allow_nan=False) + "\n")
 
 
@@ -1714,6 +1714,18 @@ def _fold_write_back_verdict(out_path: str, evaluator) -> None:
         },
         "walked_back": getattr(evaluator, "walked_back", None),
     }
+    # The fence's anchor is the start, which is HEAD's render with any base overrides:
+    # a lander quotes the winner's level against it.
+    start = getattr(evaluator, "start_level_offset_db", None)
+    best = getattr(evaluator, "best_level_offset_db", None)
+    record["level_anchor"] = {
+        "anchor": "start values (HEAD's render, base overrides included)",
+        "start_offset_db": start,
+        "winner_offset_db": best,
+        "winner_minus_start_db": None if start is None or best is None else round(best - start, 2),
+    }
+    if start is not None and best is not None:
+        print(f"level: winner {best - start:+.2f} dB against HEAD's render", file=sys.stderr)
     path.write_text(json.dumps(_json_safe(record), indent=2, allow_nan=False) + "\n")
 
 
@@ -1826,6 +1838,8 @@ PER_KNOB_BUDGET_CEILING = 2000
 
 
 def run(args, argv: list[str] | None = None) -> int:
+    # The objective this run answers is the code loaded now, whatever changes on disk later.
+    loaded_digest()
     lib = getattr(args, "lib", "") or ""
     if lib:
         # A prebuilt library stands where the build dir does: `dylib_path` hands
