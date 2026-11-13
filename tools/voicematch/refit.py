@@ -794,7 +794,7 @@ GATE_TERMS = {
     "damper": "env",
     "attack": "env",
     "balance": "harm",
-    "centroid_pct": "harm",
+    "centroid_pct": "bright",
     "tnr": "tnr",
     "vel_range": "velspan",
     "onset": "onset",
@@ -802,15 +802,15 @@ GATE_TERMS = {
     "register": "level",
     "aftersound": "tail",
     "doubling": "tail",
-    "body": "lf",
+    "body": "body",
     "attack_hf": "hf",
     "attack_hf_swing": ("hfdyn", "modedyn"),
     "crest": "crest",
 }
-#: The terms whose loss reads the dimension's OWN quantity, where one exists. A
-#: GATE_TERMS entry not listed here is a proxy: `slope` and `tail` read per-harmonic
+#: The terms whose loss reads the dimension's OWN quantity; GATE_TERMS points at
+#: one wherever it exists. The rest are proxies: `slope` and `tail` read per-harmonic
 #: skeleton slopes, `env` a sum of sustain slope, release and attack, `harm` the
-#: harmonic ladder, `lf` the attack's low bands -- none the gate's broadband reading.
+#: ladder, `modedyn` modal brightness -- none the gate's broadband reading.
 GATE_OWN_TERMS = {
     "stretch": ("stiff",),
     "tnr": ("tnr",),
@@ -882,6 +882,7 @@ def resolve_voice(d: Path, build_dir: str, per_knob: int, *, refit: bool = True)
     chosen = ("fit.json", found) if found and found["accepted"] else None
     if chosen is None:
         weights = reweighed(report, ver["newly_over"], percussive="drum_note" in voice)
+        prior = report.get("fit_profile", {}).get("weights") or {}
         if weights is not None:
             fit_path = d / "fit_r1.json"
             refused = None
@@ -897,6 +898,11 @@ def resolve_voice(d: Path, build_dir: str, per_knob: int, *, refit: bool = True)
                     # A raised term the probe cannot read (a tail band past every note) is
                     # refused by the fit itself; that leaves the shipped values.
                     refused = _refusal(fit_path.with_suffix(".log"))
+            # A raised term the default profile never weighed is intended: the red
+            # dimension's own measure is raised whatever weight it started at.
+            from_zero = sorted(t for t in weights if not prior.get(t, 0.0) > 0.0)
+            if from_zero:
+                ver["raised_from_zero"] = from_zero
             if refused is not None:
                 attempts.append({"fit": "fit_r1.json", "weights": weights, "refused": refused})
             else:
@@ -1009,9 +1015,11 @@ def report(root: Path) -> int:
     for r in rows:
         held = "-" if r["held_out_gain"] is None else f"{r['held_out_gain']:+.3f}"
         pre, post = r["excess"]
+        zero = r.get("raised_from_zero")
         print(
             f"{r['decision']:6} {r['slug']:40} moved {r['moved']:3}  held {held:>7}  "
             f"excess {pre:6.3f} -> {post:6.3f}  {r['why']}"
+            + (f"  [raised from zero weight: {', '.join(zero)}]" if zero else "")
         )
     counts = {d: sum(r["decision"] == d for r in rows) for d in ("adopt", "kept", "trade")}
     print(f"{len(rows)} verdict(s): " + ", ".join(f"{n} {d}" for d, n in counts.items()))

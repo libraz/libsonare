@@ -79,7 +79,8 @@ def _weighing(weights):
 def test_a_mapped_term_reading_another_quantity_is_a_proxy():
     got = _weighing({"harm": 1.0, "tnr": 0.0})
     assert got["balance"] == (gate_audit.PROXY, ("harm",))
-    assert got["centroid_pct"] == (gate_audit.PROXY, ("harm",))
+    # Centroid has a term of its own, so the ladder no longer stands in for it.
+    assert "centroid_pct" not in got
     assert "tnr" not in got
 
 

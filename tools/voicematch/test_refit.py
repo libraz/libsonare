@@ -638,3 +638,11 @@ def test_the_velocity_span_and_onset_gate_dimensions_name_their_fit_terms():
 
     assert GATE_TERMS["vel_range"] == "velspan"
     assert GATE_TERMS["onset"] == GATE_TERMS["onset_settle"] == "onset"
+
+
+def test_a_red_dimension_raises_the_term_that_measures_it():
+    from refit import reweighed
+
+    report = {"fit_profile": {"weights": {"harm": 1.0, "lf": 1.0}}}
+    assert reweighed(report, ["c:centroid_pct median"]) == {"bright": 1.0}
+    assert reweighed(report, ["c:body abs_median"]) == {"body": 1.0}
