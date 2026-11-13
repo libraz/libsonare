@@ -79,15 +79,6 @@ void apply_excitation_base(NativeSynthVoice& v, const ExcitationAxes& base, uint
   }
 }
 
-/// Exponent of the same curve on the tonewheel generator.
-///
-/// A key closes contacts on wheels that are already turning, so the instrument
-/// has no velocity response at all; a reference module gives it a little
-/// anyway, and that is what this is fitted to. Two registrations swing 4.0 and
-/// 4.4 dB from velocity 48 to 127 where the spec's 2.0 swings 16.9, and the
-/// exponent each asks for is 0.47 and 0.52.
-SONARE_TUNABLE(kAdditiveVelocityExponent, 0.5f);
-
 /// Corner of the lowpass shaping the subtractive section's amplitude noise.
 /// Set against the calliope reference's skirt on h1: 24 dB down 10 Hz off the
 /// partial, 34 at 20, at the floor by 40.
@@ -133,7 +124,7 @@ float sampler_velocity_exponent(const NativeSynthPatch& p) noexcept {
   }
   if (mode == SynthEngineMode::kBrass) return p.brass.velocity_exponent;
   if (mode == SynthEngineMode::kPercussion) return p.percussion.velocity_exponent;
-  if (mode == SynthEngineMode::kAdditive) return kAdditiveVelocityExponent;
+  if (mode == SynthEngineMode::kAdditive) return p.additive.velocity_exponent;
   if (mode == SynthEngineMode::kKarplusStrong) return p.ks.velocity_exponent;
   if (mode == SynthEngineMode::kBowedString) return p.bowed_string.velocity_exponent;
   if (mode == SynthEngineMode::kModal) return p.modal.velocity_exponent;

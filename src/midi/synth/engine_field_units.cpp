@@ -305,6 +305,7 @@ constexpr UnitRow kEngineUnits[] = {
     {"additive.percussion_decay_ms", Unit::Ms},
     {"additive.percussion_level", Unit::None},
     {"additive.morph", Unit::None},
+    {"additive.velocity_exponent", Unit::None},
     {"percussion.gm_kit", Unit::None},
     {"percussion.num_modes", Unit::Count},
     {"percussion.shell_num_modes", Unit::Count},

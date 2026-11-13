@@ -698,6 +698,7 @@ void apply_additive(NativeSynthPatch& p, const Fields& f) {
   // does anything: sweeping `drawbars_b` at morph 0 reads as "the second
   // registration cannot reach this measurement" and means it is not drawn on.
   F(additive.morph);
+  F(additive.velocity_exponent);
   for (int i = 0; i < kAdditivePartials; ++i) {
     float& d = p.additive.drawbars[static_cast<size_t>(i)];
     d = f(("additive.drawbars" + std::to_string(i)).c_str(), d, "additive.drawbars");

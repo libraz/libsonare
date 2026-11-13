@@ -4926,3 +4926,34 @@ TEST_CASE(
     CHECK(active_c == 0);
   }
 }
+
+TEST_CASE("the additive velocity_exponent scales the level span between soft and loud keys",
+          "[midi][synth]") {
+  const auto level_ratio = [](float exponent) {
+    NativeSynthPatch p{};
+    p.mode = SynthEngineMode::kAdditive;
+    p.amp_env.sustain = 1.0f;
+    p.additive.velocity_exponent = exponent;
+    const auto rms = [&](uint8_t velocity) {
+      NativeSynthConfig cfg;
+      cfg.patch = p;
+      NativeSynth synth(cfg);
+      synth.prepare(kOutRate, 256);
+      synth.on_event(0, event(sonare::midi::make_midi1_note_on(0, 0, 60, velocity)));
+      const StereoRender tone = render(synth, 24000);
+      double acc = 0.0;
+      for (float x : tone.left) acc += static_cast<double>(x) * x;
+      return std::sqrt(acc / static_cast<double>(tone.left.size()));
+    };
+    return rms(40) / rms(127);
+  };
+
+  // Velocity reaches the wheels only through the amplifier curve and the key
+  // click, which both exponents share, so the ratio moves by (40/127)^(3.0 - 0.5).
+  const double shallow = level_ratio(0.5f);
+  const double steep = level_ratio(3.0f);
+  INFO("shallow " << shallow << " steep " << steep);
+  REQUIRE(shallow > 0.0);
+  CHECK(steep < shallow);
+  CHECK(steep / shallow == Catch::Approx(std::pow(40.0 / 127.0, 3.0 - 0.5)).epsilon(0.02));
+}

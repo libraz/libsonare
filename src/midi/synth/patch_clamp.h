@@ -215,6 +215,8 @@ constexpr NativeSynthPatch clamp_synth_patch(const NativeSynthPatch& patch) noex
       patch_clamp_detail::sanitize(p.additive.percussion_decay_ms, 340.0f), 20.0f, 4000.0f);
   p.additive.percussion_level =
       std::clamp(patch_clamp_detail::sanitize(p.additive.percussion_level, 0.6f), 0.0f, 1.0f);
+  p.additive.velocity_exponent =
+      std::clamp(patch_clamp_detail::sanitize(p.additive.velocity_exponent, 0.5f), 0.0f, 4.0f);
   p.percussion.num_modes = std::clamp(p.percussion.num_modes, 0, kMaxPercussionModes);
   for (float& ratio : p.percussion.mode_ratios) {
     ratio = std::clamp(patch_clamp_detail::sanitize(ratio, 0.0f), 0.0f, 64.0f);

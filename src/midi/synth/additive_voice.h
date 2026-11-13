@@ -70,6 +70,12 @@ struct AdditivePatchParams {
   float percussion_decay_ms = 340.0f;
   /// Percussion level, as a fraction of the normalized drawbar sum.
   float percussion_level = 0.6f;
+
+  /// Exponent of the voice-amplifier velocity curve, (velocity/127)^e; 2 is the
+  /// SoundFont curve. A tonewheel organ has no velocity response, but two
+  /// reference registrations swing 4.0 and 4.4 dB from velocity 48 to 127, which
+  /// asks for 0.47 and 0.52.
+  float velocity_exponent = 0.5f;
 };
 
 /// Per-voice additive state, embedded in NativeSynthVoice.

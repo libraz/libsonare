@@ -149,6 +149,7 @@ constexpr AdditivePatchParams blank_additive() noexcept {
   z.percussion_harmonic = 0;
   z.percussion_decay_ms = 0.0f;
   z.percussion_level = 0.0f;
+  z.velocity_exponent = 0.0f;
   return z;
 }
 
