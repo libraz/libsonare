@@ -346,8 +346,10 @@ from knobs import (
     load_spec,
     load_spec_weights,
     load_start_overrides,
+    merge_overrides,
     pinned_lines,
     refuse_absent_knobs,
+    refuse_unknown_override_keys,
     start_report,
     tunable_overrides,
 )
@@ -3032,6 +3034,15 @@ def run(args, argv: list[str] | None = None) -> int:
         print(f"base overrides: {args.base_overrides}", file=sys.stderr)
     else:
         args.base_overrides = ""
+
+    # The string every evaluation sends, base merged under the knobs: one unknown key stops the run.
+    sent = merge_overrides(
+        args.base_overrides, tunable_overrides(knobs, [k.start_value for k in knobs])
+    )
+    if sent:
+        if catalogue is None:
+            catalogue = _tuning_catalogue(args, build_dir)
+        refuse_unknown_override_keys(sent, catalogue)
 
     # Before any render: a range the engine clamps away is inert, and the run
     # would otherwise search it and write back a value the voice never uses.

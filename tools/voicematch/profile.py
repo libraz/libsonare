@@ -91,8 +91,10 @@ from capture import (
     out_root,
     tail_seconds,
 )
+from catalogue import dump_catalogue
 from corpus import in_declared_grid, load_corpus
 from floor_declare import record_floors
+from knobs import refuse_unknown_override_keys
 from loop_record import assign_groups, independence_line, loop_summary
 from loss import KIT_MIN_MEMBERS, kit_report
 from metrics import (
@@ -2199,6 +2201,25 @@ def rig_evidence(cfg: dict, corpus_dir: Path, *, against: list[str], timbre: str
 # --------------------------------------------------------------------------
 
 
+def check_override_keys(cfg: dict) -> None:
+    """Refuse the environment's `SONARE_TUNING_OVERRIDES` before any render if a key is unknown.
+
+    `render-grid` and `compare` (refit's pre and post readings) render under whatever
+    the caller set, so the keys are checked against the capture program's catalogue.
+    """
+    overrides = os.environ.get("SONARE_TUNING_OVERRIDES", "")
+    if not overrides:
+        return
+    catalogue = dump_catalogue(
+        int(cfg.get("program", 0)),
+        "sustain",
+        os.environ.get("SONARE_LIB_PATH"),
+        sr=int(cfg["sample_rate"]),
+        bank=int(cfg.get("bank", 0) or 0),
+    )
+    refuse_unknown_override_keys(overrides, catalogue)
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     sub = ap.add_subparsers(dest="cmd", required=True)
@@ -2389,6 +2410,7 @@ def main() -> int:
         cfg["_program_override"] = True
     corpus_dir = Path(args.corpus).resolve() if args.corpus else out_root(cfg, "")
     profile_path = Path(args.profile) if args.profile else REFERENCE_DIR / f"{cfg['id']}.json"
+    check_override_keys(cfg)
 
     if args.cmd == "measure":
         return measure(cfg, corpus_dir, profile_path)

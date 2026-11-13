@@ -1554,6 +1554,20 @@ def merge_overrides(base: str, candidate: str) -> str:
     return ",".join([*kept, *([candidate] if candidate else [])])
 
 
+def refuse_unknown_override_keys(overrides: str, catalogue: Catalogue) -> None:
+    """Stop before a render on every `SONARE_TUNING_OVERRIDES` key the catalogue does not hold.
+
+    The catalogue's defaults are every engine tunable and patch field the library reports;
+    the library ignores any other key, so a run carrying one would change nothing silently.
+    """
+    unknown = [key for key, _ in parse_overrides(overrides) if key not in catalogue.defaults]
+    if unknown:
+        raise ValueError(
+            f"override key(s) the library does not know: {', '.join(unknown)}. "
+            f"Run --dump-knobs to list what exists."
+        )
+
+
 def _load_overrides(arg: str, flag: str, noun: str) -> str:
     if not arg:
         return ""
