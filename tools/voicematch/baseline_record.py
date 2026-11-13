@@ -1,26 +1,23 @@
-"""Write `<dir>/BASELINE`: which HEAD, which uncommitted sources and which link the shared fit library is.
+"""Publish the HEAD build into `build-tuning/lib` and write `build-tuning/BASELINE`.
 
-`make baseline` is the one writer of `build-tuning/`; this records what it built so
-a fit or a gate written against that library can name it, dirty files included.
+`make baseline` builds the library from a mirror of HEAD (`tools/head_mirror.sh`)
+and this is the one writer of `build-tuning/`: it replaces the library files in
+place by rename, so a run that already loaded the old one keeps it, and records
+which HEAD the library is so a fit or a gate written against it can name it.
 
-    python tools/voicematch/baseline_record.py build-tuning
+    python tools/voicematch/baseline_record.py <head build dir> <head mirror dir> build-tuning
 """
 
 from __future__ import annotations
 
 import json
-import subprocess
+import os
+import shutil
 import sys
 import time
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[2]
-
-
-def _git(*args: str) -> str:
-    return subprocess.run(
-        ["git", "-C", str(REPO), *args], capture_output=True, text=True, check=False
-    ).stdout
 
 
 def library(build_dir: Path) -> Path:
@@ -30,12 +27,30 @@ def library(build_dir: Path) -> Path:
     raise FileNotFoundError(f"no libsonare under {build_dir / 'lib'}")
 
 
-def record(build_dir: Path) -> dict:
-    dylib = library(build_dir).resolve()
-    dirty = _git("status", "--porcelain", "--", "src").splitlines()
+def publish(built: Path, dest: Path) -> Path:
+    """Copy @p built's library and its version symlinks into @p dest/lib by rename."""
+    src_lib = library(built)
+    real = src_lib.resolve()
+    out = dest / "lib"
+    out.mkdir(parents=True, exist_ok=True)
+    tmp = out / f".{real.name}.tmp"
+    shutil.copy2(real, tmp)
+    os.replace(tmp, out / real.name)
+    # The symlink chain (libsonare.dylib -> libsonare.1.dylib -> the versioned file).
+    for link in sorted(src_lib.parent.glob("libsonare*")):
+        if link.is_symlink():
+            tmp = out / f".{link.name}.tmp"
+            if tmp.is_symlink() or tmp.exists():
+                tmp.unlink()
+            tmp.symlink_to(os.readlink(link))
+            os.replace(tmp, out / link.name)
+    return library(dest).resolve()
+
+
+def record(dylib: Path, head: str) -> dict:
     return {
-        "head": _git("rev-parse", "--short", "HEAD").strip(),
-        "dirty": sorted(line[3:] for line in dirty),
+        "head": head,
+        "source": "head mirror",
         "linked_utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(dylib.stat().st_mtime)),
         "dylib": str(dylib),
     }
@@ -48,12 +63,14 @@ def read(build_dir: Path) -> dict | None:
 
 
 def main(argv: list[str]) -> int:
-    build_dir = REPO / (argv[0] if argv else "build-tuning")
-    rec = record(build_dir)
-    (build_dir / "BASELINE").write_text(json.dumps(rec, indent=1) + "\n")
-    print(f"baseline {rec['head']} linked {rec['linked_utc']}, {len(rec['dirty'])} dirty file(s)")
-    for f in rec["dirty"]:
-        print(f"  {f}")
+    if len(argv) != 3:
+        print(__doc__, file=sys.stderr)
+        return 2
+    built, mirror, dest = Path(argv[0]), Path(argv[1]), REPO / argv[2]
+    head = (mirror / ".HEAD").read_text().strip()
+    rec = record(publish(built, dest), head)
+    (dest / "BASELINE").write_text(json.dumps(rec, indent=1) + "\n")
+    print(f"baseline {rec['head']} (HEAD mirror) linked {rec['linked_utc']} -> {rec['dylib']}")
     return 0
 
 

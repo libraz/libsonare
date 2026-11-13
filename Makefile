@@ -2,7 +2,7 @@
        coverage-build coverage-clean build-shared build-node build-wasm-binding \
        test-python test-python-slow test-node test-wasm parity conformance test-gm-cross-surface test-mix-assistant-cross-surface abi-layout abi-layout-check check-abi-version \
        capability-catalog capability-catalog-check processor-types processor-types-check ci-local \
-       build-bank-shared baseline bank-versions bank-versions-check \
+       build-bank-shared build-head-shared baseline bank-versions bank-versions-check \
        surface-coverage surface-coverage-check \
        gs-census gs-census-header gs-census-check gs-program-census gs-address-table-json gs-unit-archive-set gs-unit-diff gs-unit-diff-check \
        gs-efx-archive-set gs-efx-tables gs-efx-tables-check gs-efx-coverage \
@@ -483,17 +483,26 @@ build-bank-shared:
 	$(CMAKE) -S . -B $(BANK_BUILD_DIR) -DCMAKE_BUILD_TYPE=Release -DBUILD_SHARED=ON -DBUILD_TUNING=ON
 	$(CMAKE) --build $(BANK_BUILD_DIR) --target sonare_shared $(BUILD_PARALLEL)
 
-# The shared fit baseline every lane's fits read. Refuses a dirty src/ unless
-# ALLOW_DIRTY=1, and records HEAD, the dirty list and the link time beside the
-# library so a fit report can name what it read.
-baseline:
-	@dirty=$$(git status --porcelain -- src); \
-	if [ -n "$$dirty" ] && [ "$(ALLOW_DIRTY)" != "1" ]; then \
-		echo "make baseline: src/ is dirty; pass ALLOW_DIRTY=1 to record it:"; echo "$$dirty"; exit 1; \
-	fi
-	$(CMAKE) -S . -B build-tuning -DCMAKE_BUILD_TYPE=Release -DBUILD_SHARED=ON -DBUILD_TUNING=ON
-	$(CMAKE) --build build-tuning --target sonare_shared $(BUILD_PARALLEL)
-	$(RYE) run --pyproject bindings/python/pyproject.toml python tools/voicematch/baseline_record.py build-tuning
+# A tuning build of exactly HEAD, from a persistent mirror synced by content so
+# each use rebuilds only what HEAD changed; the working tree never reaches it.
+HEAD_MIRROR ?= $(patsubst %/,%,$(or $(TMPDIR),/tmp))/libsonare-head-src
+HEAD_BUILD_DIR ?= $(patsubst %/,%,$(or $(TMPDIR),/tmp))/libsonare-head-build
+ifeq ($(UNAME_S),Darwin)
+HEAD_SHARED_LIB := $(abspath $(HEAD_BUILD_DIR))/lib/libsonare.dylib
+else
+HEAD_SHARED_LIB := $(abspath $(HEAD_BUILD_DIR))/lib/libsonare.so
+endif
+
+build-head-shared:
+	sh tools/head_mirror.sh $(HEAD_MIRROR)
+	$(CMAKE) -S $(HEAD_MIRROR) -B $(HEAD_BUILD_DIR) -DCMAKE_BUILD_TYPE=Release -DBUILD_SHARED=ON -DBUILD_TUNING=ON
+	$(CMAKE) --build $(HEAD_BUILD_DIR) --target sonare_shared $(BUILD_PARALLEL)
+
+# The shared fit baseline every lane's fits read: the HEAD build published into
+# build-tuning/lib, with the hash it was built from recorded beside it.
+baseline: build-head-shared
+	$(RYE) run --pyproject bindings/python/pyproject.toml python tools/voicematch/baseline_record.py \
+		$(HEAD_BUILD_DIR) $(HEAD_MIRROR) build-tuning
 
 # NOTE is what the bump is recorded as; a run without one records "unrecorded",
 # which the version can never recover.
@@ -1169,15 +1178,15 @@ voicematch-sf2-corpus:
 	done
 
 # Regenerate the bank view. Needs the tuning build, because the engine voicing
-# each patch is reported by the library rather than parsed out of it — the same
-# reason `bank-versions` needs it, and the same build directory.
-voice-status-refresh: build-bank-shared
+# each patch is reported by the library rather than parsed out of it; built from
+# the HEAD mirror, since the committed view describes HEAD and not a working tree.
+voice-status-refresh: build-head-shared
 	$(RYE) run --pyproject bindings/python/pyproject.toml python tools/voicematch/status.py \
-		--write --lib $(BANK_SHARED_LIB)
+		--write --lib $(HEAD_SHARED_LIB)
 
-voice-status-check: build-bank-shared
+voice-status-check: build-head-shared
 	$(RYE) run --pyproject bindings/python/pyproject.toml python tools/voicematch/status.py \
-		--check --lib $(BANK_SHARED_LIB)
+		--check --lib $(HEAD_SHARED_LIB)
 
 # A fit spec outlives the mechanism it was written for. Nothing asks whether its
 # knobs still exist until a run resolves the corpus and then dies on the first
