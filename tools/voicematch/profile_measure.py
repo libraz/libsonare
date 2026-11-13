@@ -37,12 +37,17 @@ from metrics import (
 )
 from metrics_floor import partial_clearance, recording_floor, valley_profile
 from metrics_lines import (
+    BODY_LINE_MISSED_REASON,
     BODY_LINES_REASON,
+    IDLE_AFTER_RELEASE_S,
     body_lines_in,
     held_lines,
+    line_amplitude_dbfs,
+    line_presence,
     lines_off_the_series,
     mask_lines,
-    recurring_body_lines,
+    missed_body_lines,
+    recurring_body_line_groups,
     stationary_lines,
 )
 from metrics_modal import modal_profile
@@ -332,7 +337,10 @@ def measure_body_lines(
 
     Read from one velocity per note (the one nearest 80), in the body window, relative to
     each note's own spectrum, so a line that follows the note's level is found at any velocity.
-    -> {timbre: {"of": notes, "lines": [{"hz": ..., "notes": ...}]}}; absent where none recur.
+    Each masked line records its `line_presence`; a sustained line on one note too few is
+    recorded under `missed` with the notes it stands on, and is not masked.
+    -> {timbre: {"of": notes, "lines": [{"hz", "notes", "presence", ...}], "missed": [...]}};
+    absent where nothing recurs.
     """
     chosen: dict[str, dict[int, dict]] = {}
     for rec in manifest["renders"]:
@@ -345,6 +353,8 @@ def measure_body_lines(
     out: dict[str, dict] = {}
     for timbre, notes in chosen.items():
         per_note = []
+        # Per entry of `per_note`: the note, its body window, and its preroll and post-release tail.
+        reads: list[tuple[int, np.ndarray, list[np.ndarray], int]] = []
         for note, rec in notes.items():
             path = corpus_dir / rec["path"]
             if not path.exists():
@@ -352,19 +362,42 @@ def measure_body_lines(
             audio, sr = read_wav(path)
             mono = to_mono(audio)
             on = int(sound_onset_s(mono, sr, preroll_s, len(mono) / sr) * sr)
-            seg = mono[on : on + int(gate_s * sr)][
-                int(BODY_WINDOW_S[0] * sr) : int(BODY_WINDOW_S[1] * sr)
-            ]
+            off = on + int(gate_s * sr)
+            seg = mono[on:off][int(BODY_WINDOW_S[0] * sr) : int(BODY_WINDOW_S[1] * sr)]
             if seg.size < sr // 8:
                 continue
             f0 = midi_to_hz(note)
             per_note.append((f0, body_lines_in(seg, sr, f0)))
-        lines = recurring_body_lines(per_note)
-        if lines:
-            out[timbre] = {
-                "of": len(per_note),
-                "lines": [{"hz": ln.hz, "notes": ln.takes} for ln in lines],
+            idle = [mono[:on], mono[off + int(IDLE_AFTER_RELEASE_S * sr) :]]
+            reads.append((note, seg, idle, sr))
+        masked = []
+        for hz, idx in recurring_body_line_groups(per_note):
+            note_db = [line_amplitude_dbfs(reads[i][1], reads[i][3], hz) for i in idx]
+            masked.append(
+                {
+                    "hz": hz,
+                    "notes": len(idx),
+                    **line_presence(
+                        [db for db in note_db if db is not None],
+                        [seg for i in idx for seg in reads[i][2]],
+                        reads[idx[0]][3],
+                        hz,
+                    ),
+                }
+            )
+        missed = [
+            {
+                "hz": hz,
+                "notes": len(idx),
+                "on_notes": [reads[i][0] for i in idx],
+                "reason": BODY_LINE_MISSED_REASON,
             }
+            for hz, idx in missed_body_lines(per_note)
+        ]
+        if masked or missed:
+            out[timbre] = {"of": len(per_note), "lines": masked}
+            if missed:
+                out[timbre]["missed"] = missed
     return out
 
 
@@ -749,6 +782,7 @@ def measure_note(
     modal: bool = False,
     stationary_lines_hz: list[float] | tuple[float, ...] = (),
     body_lines_hz: list[float] | tuple[float, ...] = (),
+    body_lines_missed_hz: list[float] | tuple[float, ...] = (),
 ) -> dict:
     """Every measurement this profile carries, for one captured note.
 
@@ -756,7 +790,9 @@ def measure_note(
     model's, so the tone-to-noise ratio is read through the reference's mask;
     without it the note is measured through its own. Either way the row records
     the mask it was read through. `modal` and `stationary_lines_hz` are the
-    reference's too (`find_partials`), so a model row is read as its reference was.
+    reference's too (`find_partials`), so a model row is read as its reference was. `body_lines_hz` are
+    masked from the body band; `body_lines_missed_hz`, the lines on one note too few, are
+    only recorded under `body_lines.missed`, each with the share of the band it holds.
 
     The gate window is placed on the onset the render actually has rather than
     on the one the score asked for. A capture's own guard refuses a render that
@@ -798,6 +834,15 @@ def measure_note(
         masked_body = body_lines_masked(held, sr, float(row["f0_hz"]), body_lines_hz)
         if masked_body:
             row["body_lines"] = masked_body
+        missed = [
+            body_lines_masked(held, sr, float(row["f0_hz"]), [hz]) for hz in body_lines_missed_hz
+        ]
+        missed = [{"hz": m["hz"][0], "share": m["share_removed"]} for m in missed if m]
+        if missed:
+            row.setdefault("body_lines", {})["missed"] = {
+                "lines": missed,
+                "reason": BODY_LINE_MISSED_REASON,
+            }
 
     t_env, env = _rms_envelope(held, sr)
     env_db = np.asarray(_db(env))

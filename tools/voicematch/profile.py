@@ -469,6 +469,11 @@ def measure(cfg: dict, corpus_dir: Path, out_path: Path) -> int:
                     body_lines_hz=[
                         ln["hz"] for ln in body_lines.get(rec["timbre"], {}).get("lines", [])
                     ],
+                    body_lines_missed_hz=[
+                        ln["hz"]
+                        for ln in body_lines.get(rec["timbre"], {}).get("missed", [])
+                        if rec["note"] in ln["on_notes"]
+                    ],
                 )
             )
             if not m:

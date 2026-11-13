@@ -215,7 +215,7 @@ def body_floor_state(ref_row: dict) -> str | None:
     from floor_declare import CENSOR_FLOOR  # floor_declare imports this module
 
     reason = _floor_censor(ref_row, "body")
-    if reason == CENSOR_FLOOR and ref_row.get("body_lines"):
+    if reason == CENSOR_FLOOR and (ref_row.get("body_lines") or {}).get("hz"):
         return BELOW_FLOOR_AFTER_LINES
     return reason
 

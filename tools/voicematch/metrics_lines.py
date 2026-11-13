@@ -226,15 +226,12 @@ def body_lines_in(
     return out
 
 
-def recurring_body_lines(notes: list[tuple[float, list[tuple[float, float]]]]) -> list[Line]:
-    """Sustained lines standing at one absolute frequency on `BODY_LINE_MIN_NOTES` notes of any f0.
-
-    `notes` holds each note's (f0, `body_lines_in`). The count is of notes whatever their f0;
-    a line whose median drift over its notes exceeds `BODY_LINE_MAX_DRIFT_DB` is a decaying
-    resonance (a body mode), not a sustained line, and does not recur.
-    """
+def _steady_body_line_groups(
+    notes: list[tuple[float, list[tuple[float, float]]]],
+) -> list[tuple[float, list[int]]]:
+    """(Hz, indices into `notes`) of every line standing at one absolute frequency and sustained."""
     found = sorted((hz, drift, i) for i, (_, lines) in enumerate(notes) for hz, drift in lines)
-    out: list[Line] = []
+    out: list[tuple[float, list[int]]] = []
     j = 0
     while j < len(found):
         group = [found[j]]
@@ -242,8 +239,92 @@ def recurring_body_lines(notes: list[tuple[float, list[tuple[float, float]]]]) -
         while j < len(found) and found[j][0] - group[0][0] <= BODY_LINE_MATCH_HZ:
             group.append(found[j])
             j += 1
-        seen = {i for _, _, i in group}
         steady = abs(float(np.median([d for _, d, _ in group]))) <= BODY_LINE_MAX_DRIFT_DB
-        if len(seen) >= BODY_LINE_MIN_NOTES and steady:
-            out.append(Line(round(float(np.median([h for h, _, _ in group])), 1), len(seen)))
+        if steady:
+            hz = round(float(np.median([h for h, _, _ in group])), 1)
+            out.append((hz, sorted({i for _, _, i in group})))
     return out
+
+
+def recurring_body_line_groups(
+    notes: list[tuple[float, list[tuple[float, float]]]],
+) -> list[tuple[float, list[int]]]:
+    """(Hz, indices into `notes`) of the lines `recurring_body_lines` finds."""
+    return [
+        (hz, idx) for hz, idx in _steady_body_line_groups(notes) if len(idx) >= BODY_LINE_MIN_NOTES
+    ]
+
+
+def recurring_body_lines(notes: list[tuple[float, list[tuple[float, float]]]]) -> list[Line]:
+    """Sustained lines standing at one absolute frequency on `BODY_LINE_MIN_NOTES` notes of any f0.
+
+    `notes` holds each note's (f0, `body_lines_in`). The count is of notes whatever their f0;
+    a line whose median drift over its notes exceeds `BODY_LINE_MAX_DRIFT_DB` is a decaying
+    resonance (a body mode), not a sustained line, and does not recur.
+    """
+    return [Line(hz, len(idx)) for hz, idx in recurring_body_line_groups(notes)]
+
+
+#: Why a row carries a sustained line seen on one note too few to be masked.
+BODY_LINE_MISSED_REASON = f"recurs on {BODY_LINE_MIN_NOTES - 1} notes; N={BODY_LINE_MIN_NOTES}"
+
+
+def missed_body_lines(
+    notes: list[tuple[float, list[tuple[float, float]]]],
+) -> list[tuple[float, list[int]]]:
+    """(Hz, indices into `notes`) of sustained lines on exactly one note fewer than `BODY_LINE_MIN_NOTES`.
+
+    The same pass as `recurring_body_lines`; these are recorded as known misses, never masked.
+    """
+    return [
+        (hz, idx)
+        for hz, idx in _steady_body_line_groups(notes)
+        if len(idx) == BODY_LINE_MIN_NOTES - 1
+    ]
+
+
+#: Seconds past the gate's end before the tail is read as idle, so the release is not read.
+IDLE_AFTER_RELEASE_S = 0.25
+#: Shortest preroll or tail, in seconds, a line's idle level is read on.
+IDLE_MIN_S = 0.05
+#: An idle line within this many dB of its level under the note is the same tone, standing idle.
+IDLE_SAME_LEVEL_DB = 6.0
+PRESENCE_IDLE = "idle"
+PRESENCE_NOTE_ONLY = "note_only"
+PRESENCE_UNREADABLE = "unreadable"
+
+
+def line_amplitude_dbfs(seg: np.ndarray, sr: int, hz: float) -> float | None:
+    """Amplitude, in dBFS, of a sinusoid at `hz` in `seg`, or None where `seg` is digital silence."""
+    seg = np.asarray(seg, dtype=np.float64)
+    if not np.any(seg):
+        return None
+    window = np.hanning(len(seg))
+    spec = np.abs(np.fft.rfft(seg * window, len(seg) * BODY_LINE_PAD))
+    freqs = np.fft.rfftfreq(len(seg) * BODY_LINE_PAD, 1.0 / sr)
+    near = np.abs(freqs - hz) <= BODY_LINE_HALF_BINS_HZ
+    return float(20.0 * np.log10(2.0 * spec[near].max() / window.sum() + 1e-30))
+
+
+def line_presence(note_dbfs: list[float], idle: list[np.ndarray], sr: int, hz: float) -> dict:
+    """Whether a masked line stands in the idle preroll or tail at its level under the note.
+
+    `note_dbfs` holds the line's amplitude in the body window of each note it was found on,
+    `idle` those notes' preroll and post-release segments. The mask does not read this.
+    """
+    readable = [seg for seg in idle if len(seg) >= int(IDLE_MIN_S * sr)]
+    note_db = float(np.median(note_dbfs))
+    levels = [line_amplitude_dbfs(seg, sr, hz) for seg in readable]
+    heard = [db for db in levels if db is not None]
+    idle_db = max(heard) if heard else None
+    if not readable:
+        state = PRESENCE_UNREADABLE
+    elif idle_db is not None and idle_db >= note_db - IDLE_SAME_LEVEL_DB:
+        state = PRESENCE_IDLE
+    else:
+        state = PRESENCE_NOTE_ONLY
+    return {
+        "presence": state,
+        "note_dbfs": round(note_db, 1),
+        "idle_dbfs": None if idle_db is None else round(idle_db, 1),
+    }
