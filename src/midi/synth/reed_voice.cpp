@@ -60,8 +60,9 @@ SONARE_TUNABLE(kBellPoleSpan, 0.7f);
 // Coupled bell: how far brightness moves the corner, in octaves. Seeded off the
 // mapping above at its midpoint, whose slope there is 2.75 octaves per unit.
 SONARE_TUNABLE(kBellBrightOct, 2.75f);
-// Lowest coupled-bell corner, in multiples of the note, as the flute's in-loop colour filter: at
-// one harmonic the cylinder's top note sank 23 cents under the 1.5 kHz corner.
+// Lowest coupled-bell corner, in multiples of the note: above corner/2 the corner follows the note.
+// A viability bound at its smallest sufficient value: at 1 the cylinder's top sank 23 cents, and
+// 4 over-supports the clarinet's top-register h3 by 10-15 dB against its reference.
 SONARE_TUNABLE(kBellCornerMinHarmonic, 2.0f);
 // Share of the radiation highpass's loss at the fundamental given back (exponent,
 // 1 = all of it), seeded at the brass engine's 0.35.
@@ -635,7 +636,7 @@ float ReedVoiceCore::render_internal(float pitch_ratio) noexcept {
   // term recovers the bore's pressure, which is what reaches the bell. The makeup
   // is normalized at the sounding fundamental, so it follows the live ratio.
   if (bell_cutoff_hz_ > 0.0f) {
-    // What the bell radiates is what it did not reflect: the power complement of the loop lowpass.
+    // What the open holes radiate below the lattice cutoff: a first-order rise on the same corner.
     if (ratio != rad_ratio_) {
       rad_ratio_ = ratio;
       refresh_radiation_scale();
@@ -729,10 +730,13 @@ void ReedVoiceCore::refresh_excitation_targets() noexcept {
 void ReedVoiceCore::retune_loop_comp() noexcept {
   float tau_lp = 0.0f;
   if (bell_cutoff_hz_ > 0.0f) {
-    // The coupled pair on the corner lp_alpha_ names; its phase delay lengthens the loop.
+    // The reflection lowpass on the corner lp_alpha_ names; its phase delay lengthens the loop.
     const float w_c = -std::log(std::max(1.0f - lp_alpha_, 1.0e-6f));
     bell_lp_.set(rt::rbj_lowpass(w_c, sonare::constants::kButterworthQ));
-    bell_hp_.set(rt::rbj_highpass(w_c, sonare::constants::kButterworthQ));
+    // Open holes radiate as a small source below the lattice cutoff (Benade): 6 dB per octave,
+    // first order. The second-order complement left the clarinet's n50-58 fundamental 6-11 dB
+    // short of its share of the note; first order brings it within 1 dB.
+    bell_hp_.set(rt::first_order_highpass(w_c));
     tau_lp =
         -std::arg(rt::biquad_response(bell_lp_.c, comp_omega_)) / std::max(comp_omega_, 1.0e-6f);
     if (f0_ > 0.0f) refresh_radiation_scale();

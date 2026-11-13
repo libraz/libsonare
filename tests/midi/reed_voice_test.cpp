@@ -1159,23 +1159,36 @@ double cents_between(double a, double b) { return 1200.0 * std::log2(a / b); }
 
 }  // namespace
 
-TEST_CASE("reed coupled bell filters are power complementary", "[midi][synth][reed]") {
-  for (const double corner_hz : {800.0, 1500.0, 4000.0}) {
-    const double w0 = sonare::constants::kTwoPiD * corner_hz / kRate;
-    const sonare::rt::BiquadCoeffs lp =
-        sonare::rt::rbj_lowpass(static_cast<float>(w0), sonare::constants::kButterworthQ);
-    const sonare::rt::BiquadCoeffs hp =
-        sonare::rt::rbj_highpass(static_cast<float>(w0), sonare::constants::kButterworthQ);
-    for (const double ratio : {0.5, 1.0, 2.0}) {
-      const double w = w0 * ratio;
-      const double l = biquad_magnitude(lp, w);
-      const double h = biquad_magnitude(hp, w);
-      INFO("corner " << corner_hz << " Hz, ratio " << ratio);
-      CHECK(std::fabs(l * l + h * h - 1.0) < 1.0e-4);
+TEST_CASE("reed coupled bell radiates at first order below the corner", "[midi][synth][reed]") {
+  // Below the lattice cutoff the open holes radiate as a small source: the radiated level falls
+  // one order per octave of corner/f0, not the reflection's two. Read as the ratio of two notes
+  // an octave apart, against the analog first-order law, at both host rates (the corner is Hz).
+  for (const double rate : {44100.0, 48000.0}) {
+    for (const double corner_hz : {1200.0, 1650.0}) {
+      const sonare::rt::BiquadCoeffs hp = sonare::rt::first_order_highpass(
+          static_cast<float>(sonare::constants::kTwoPiD * corner_hz / rate));
+      for (const double octaves_below : {4.0, 3.0, 2.0, 1.0}) {
+        const double f_low = corner_hz * std::pow(2.0, -octaves_below);
+        const double f_high = 2.0 * f_low;
+        const double measured_db =
+            20.0 * std::log10(biquad_magnitude(hp, sonare::constants::kTwoPiD * f_high / rate) /
+                              biquad_magnitude(hp, sonare::constants::kTwoPiD * f_low / rate));
+        const auto analog = [corner_hz](double f) {
+          const double x = f / corner_hz;
+          return x / std::sqrt(1.0 + x * x);
+        };
+        const double expected_db = 20.0 * std::log10(analog(f_high) / analog(f_low));
+        // The bilinear map bends the frequency axis by about (pi f / rate)^2 / 3 near f: that
+        // relative error, carried into dB at the upper note, bounds the departure from the law.
+        const double bend = std::pow(sonare::constants::kPiD * f_high / rate, 2) / 3.0;
+        const double tolerance_db = 20.0 * std::log10(1.0 + bend) + 0.01;
+        INFO("rate " << rate << " corner " << corner_hz << " Hz, " << octaves_below
+                     << " octaves below: " << measured_db << " dB vs " << expected_db);
+        CHECK(std::fabs(measured_db - expected_db) <= tolerance_db);
+        // Far below the corner the step is one order (about 6 dB), never the reflection's twelve.
+        if (octaves_below >= 3.0) CHECK(measured_db < 7.0);
+      }
     }
-    // Butterworth: both are 3 dB down at the corner.
-    CHECK(std::fabs(biquad_magnitude(lp, w0) - std::sqrt(0.5)) < 1.0e-3);
-    CHECK(std::fabs(biquad_magnitude(hp, w0) - std::sqrt(0.5)) < 1.0e-3);
   }
 }
 

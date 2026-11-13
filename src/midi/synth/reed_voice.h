@@ -111,10 +111,11 @@ struct ReedPatchParams {
   /// the render is bit-identical.
   float bell_radiation_hz = 0.0f;
   /// Bell corner frequency (Hz) of the open tone-hole lattice: above 0 the loop
-  /// reflection lowpass and the radiation highpass are one Butterworth pair on
-  /// this corner, tied by |R|² + |T|² = 1, as brass's @c bell_cutoff_hz is.
+  /// reflection is a Butterworth lowpass on this corner and the radiated field a
+  /// first-order highpass on it, since below the lattice cutoff the open holes
+  /// radiate as a small source rising about 6 dB per octave.
   /// @c brightness and CC74 move it in octaves; the loop compensation carries
-  /// the pair's phase delay so the pitch holds. Takes precedence over
+  /// the lowpass's phase delay so the pitch holds. Takes precedence over
   /// @c bell_radiation_hz. 0 = off -> the render is bit-identical.
   float bell_cutoff_hz = 0.0f;
   /// Breath rise on note-on (ms): the reed takes a few periods to lock into
@@ -363,8 +364,8 @@ class ReedVoiceCore {
   float rad_scale_ = 1.0f;
   // Pitch ratio rad_scale_ was normalized at.
   float rad_ratio_ = 1.0f;
-  // Coupled bell (bell_cutoff_hz_ > 0): the loop reflection lowpass and its power
-  // complement on the way out, one Butterworth pair on the corner lp_alpha_ names.
+  // Coupled bell (bell_cutoff_hz_ > 0): the loop reflection lowpass and the open holes'
+  // first-order radiation highpass, both on the corner lp_alpha_ names.
   float bell_cutoff_hz_ = 0.0f;
   rt::BiquadState bell_lp_{};
   rt::BiquadState bell_hp_{};
