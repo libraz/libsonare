@@ -118,6 +118,10 @@ _PROGRAM_CLASS: dict[int, ToneClass] = {
     # it, and the hit is a sampled chord rather than a bar.
     47: ToneClass.STRUCK_STRING,  # timpani
     55: ToneClass.STRUCK_STRING,  # orchestra hit
+    # 96-103 synth effects are sustained, except the crystal: an FM voice whose
+    # sidebands decay with its modulator. Whether the model can reach a modal
+    # decay is a reach question for the fit, not a reason to score it as a pad.
+    98: ToneClass.MODAL,  # fx crystal
     # 104-111 ethnic: plucked, blown and struck in one family.
     104: ToneClass.PLUCKED_STRING,  # sitar
     105: ToneClass.PLUCKED_STRING,  # banjo

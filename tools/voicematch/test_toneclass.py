@@ -1253,3 +1253,10 @@ def test_the_velocity_span_term_defaults_on_where_the_gate_holds_vel_range():
         assert default_weights(program)["velspan"] == pytest.approx(0.5), program
         assert "vel_range" in canonical_dimensions(program)
     assert "velspan" not in default_weights(0, percussive=True)
+
+
+def test_the_crystal_effect_is_modal_whatever_its_family_says():
+    assert tone_class(98) is ToneClass.MODAL
+    assert tone_class(97) is ToneClass.SUSTAINED and tone_class(99) is ToneClass.SUSTAINED
+    assert {"modes"} <= set(default_weights(98)) and "harm" not in default_weights(98)
+    assert "partial_tilt" not in canonical_dimensions(98)
