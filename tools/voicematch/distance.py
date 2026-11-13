@@ -39,6 +39,7 @@ import status
 from _repo import REPO_ROOT
 from profile_gate import DELTA_LABELS, PER_NOTE_DIMENSIONS, dimension_floor
 from profile_measure import is_percussion
+from velocity_layers import VELOCITY_SWING_DIMENSIONS, layer_summary
 
 HERE = Path(__file__).resolve().parent
 CAPTURE_DIR = HERE / "capture"
@@ -143,15 +144,25 @@ def run(out_dir: Path, lib: str, jobs: int, only: set[str] | None) -> int:
     return 1 if failed else 0
 
 
+def reference_rows(cap: str, timbre: str) -> list[dict]:
+    ref = json.loads((REFERENCE_DIR / f"{cap}.json").read_text())
+    return [r for r in ref["rows"] if r.get("timbre") == timbre]
+
+
 def expected_rows(cap: str, timbre: str) -> tuple[int, int]:
     """(grid rows, distinct notes) the reference holds for @p timbre."""
-    ref = json.loads((REFERENCE_DIR / f"{cap}.json").read_text())
-    rows = [r for r in ref["rows"] if r.get("timbre") == timbre]
+    rows = reference_rows(cap, timbre)
     return len(rows), len({r["note"] for r in rows})
 
 
-def dimension_rows(summary: dict, spread: dict, grid: int, notes: int) -> list[dict]:
-    """Every dimension of one compare summary on the common ruler, worst first."""
+def dimension_rows(
+    summary: dict, spread: dict, grid: int, notes: int, layers: dict | None = None
+) -> list[dict]:
+    """Every dimension of one compare summary on the common ruler, worst first.
+
+    @p layers is `velocity_layers.layer_summary` of the reference; a velocity-swing
+    row carries it so its count is read against the recordings behind the grid.
+    """
     out = []
     for key, s in summary.items():
         if not isinstance(s, dict) or RANK_STAT not in s:
@@ -175,6 +186,11 @@ def dimension_rows(summary: dict, spread: dict, grid: int, notes: int) -> list[d
         }
         if key == "centroid_pct":
             row["octaves"] = octaves_from_pct(s.get("median"))
+        if layers is not None and key in VELOCITY_SWING_DIMENSIONS:
+            row["layers"] = {
+                "independent": layers["independent"],
+                "velocities": layers["velocities"],
+            }
         out.append(row)
     out.sort(key=lambda r: -(r["floors"] if r["floors"] is not None else -1.0))
     return out
@@ -248,8 +264,9 @@ def table(out_dir: Path, groups: dict[str, str]) -> dict:
         gate_path = REFERENCE_DIR / f"{cap}_gate.json"
         gate = json.loads(gate_path.read_text()) if gate_path.exists() else {}
         grid, notes = expected_rows(cap, timbre)
+        layers = layer_summary(reference_rows(cap, timbre))
         dims = dimension_rows(
-            body.get("summary") or {}, gate.get("reference_spread") or {}, grid, notes
+            body.get("summary") or {}, gate.get("reference_spread") or {}, grid, notes, layers
         )
         voices, served_by = served.get(cap, ([], "none"))
         engines = sorted({v.get("engine") or "?" for v in voices})
@@ -276,6 +293,7 @@ def table(out_dir: Path, groups: dict[str, str]) -> dict:
                 "distance_rms": voice_rms(dims),
                 "measured": sum(1 for d in dims if d["n"]),
                 "censored_rows": sum(d["censored"] for d in dims),
+                "velocity_layers": layers,
                 "dimensions": dims,
             }
         )
@@ -326,6 +344,8 @@ def markdown(result: dict) -> str:
             tops = []
             for d in e["dimensions"][:TOP_DIMENSIONS]:
                 extra = f" ({_fmt(d.get('octaves'), '+.2f')} oct)" if "octaves" in d else ""
+                if "layers" in d:
+                    extra += f" (layers {d['layers']['independent']}/{d['layers']['velocities']})"
                 tops.append(
                     f"{d['dimension']} {_fmt(d['abs_median'])} {d['unit']}{extra} "
                     f"[{_fmt(d['floors'], '.1f')}×, {d['floor_source']}; {d['censored']}/{d['expected']}]"

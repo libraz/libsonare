@@ -215,6 +215,7 @@ from render_model import render_model
 from render_oracle import render_oracle_fluidsynth
 from room import Room, match_sends, measurable_room, place_model_in
 from smf import Note, write_smf
+from velocity_layers import VELOCITY_SWING_DIMENSIONS, layer_summary
 from wavio import read_wav, write_wav
 
 REFERENCE_DIR = Path(__file__).resolve().parent / "reference"
@@ -1603,6 +1604,17 @@ def compare(
     print_vanished_dimensions(
         offered_keys, summary, cfg.get("dimensions") or [], cfg.get("dimensions_na") or {}
     )
+    layers = layer_summary([r for r in profile["rows"] if r.get("timbre") == timbre])
+    if any(k in summary for k in VELOCITY_SWING_DIMENSIONS):
+        print(
+            f"\n  velocity-swing rows read {layers['independent']} independent recordings of "
+            f"{layers['velocities']} grid cells"
+            + (
+                f"; one sample at several gains on notes {layers['collapsed_notes']}"
+                if layers["collapsed_notes"]
+                else ""
+            )
+        )
     print(
         "\n  The signed median is what the voice is doing on average and the absolute one "
         "is\n  how far any given note is from the reference. They part company exactly where "
@@ -1626,7 +1638,12 @@ def compare(
         write_model_rows(Path(rows_out), profile, model_rows)
     if json_out:
         write_summary_json(
-            Path(json_out), summary, gate_path, timbre, profile.get("measured_utc", "")
+            Path(json_out),
+            summary,
+            gate_path,
+            timbre,
+            profile.get("measured_utc", ""),
+            velocity_layers=layers,
         )
     if gate_path:
         return check_gate(summary, Path(gate_path), timbre, profile.get("measured_utc", ""))

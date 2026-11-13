@@ -538,9 +538,19 @@ def gate_readings(summary: dict[str, dict], bounds: dict[str, dict]) -> list[dic
 
 
 def write_summary_json(
-    out_path: Path, summary: dict[str, dict], gate_path: str, timbre: str, measured_utc: str
+    out_path: Path,
+    summary: dict[str, dict],
+    gate_path: str,
+    timbre: str,
+    measured_utc: str,
+    *,
+    velocity_layers: dict | None = None,
 ) -> None:
-    """Record a compare run's summary and its gate readings for a tool to read."""
+    """Record a compare run's summary and its gate readings for a tool to read.
+
+    @p velocity_layers is the reference's `velocity_layers.layer_summary`, recorded
+    so a velocity-swing reading is read against the recordings behind the grid.
+    """
     gate = json.loads(Path(gate_path).read_text()) if gate_path and Path(gate_path).exists() else {}
     record = {
         "timbre": timbre,
@@ -554,6 +564,8 @@ def write_summary_json(
         if gate
         else None,
     }
+    if velocity_layers is not None:
+        record["velocity_layers"] = velocity_layers
     out_path.write_text(json.dumps(record, indent=2, default=float) + "\n")
 
 

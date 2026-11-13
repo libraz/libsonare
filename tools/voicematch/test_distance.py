@@ -110,3 +110,11 @@ def test_table_reads_a_result_back(tmp_path: Path):
     assert entry["censored_rows"] == entry["dimensions"][0]["expected"] - 3
     assert cap not in result["not_run"]
     assert "## keys" in distance.markdown(result)
+
+
+def test_a_velocity_swing_row_carries_the_recordings_behind_it():
+    layers = {"independent": 4, "velocities": 12, "notes": 4, "collapsed_notes": [60]}
+    summary = {"vel_range": _stat(1.0, 4), "decay": _stat(1.0, 12)}
+    dims = {d["dimension"]: d for d in distance.dimension_rows(summary, {}, 12, 4, layers)}
+    assert dims["vel_range"]["layers"] == {"independent": 4, "velocities": 12}
+    assert "layers" not in dims["decay"]
