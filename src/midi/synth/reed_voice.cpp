@@ -63,7 +63,7 @@ SONARE_TUNABLE(kBellBrightOct, 2.75f);
 // Lowest coupled-bell corner, in multiples of the note: above corner/2 the corner follows the note.
 // A viability bound at its smallest sufficient value: at 1 the cylinder's top sank 23 cents, and
 // 4 over-supports the clarinet's top-register h3 by 10-15 dB against its reference.
-SONARE_TUNABLE(kBellCornerMinHarmonic, 2.0f);
+SONARE_TUNABLE_RANGE(kBellCornerMinHarmonic, 2.0f, 1.0f, 8.0f);
 // Share of the radiation highpass's loss at the fundamental given back (exponent,
 // 1 = all of it), seeded at the brass engine's 0.35.
 SONARE_TUNABLE(kBellRadiationNorm, 0.35f);

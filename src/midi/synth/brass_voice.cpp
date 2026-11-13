@@ -89,7 +89,7 @@ SONARE_TUNABLE(kBellBrightOct, 2.75f);
 SONARE_TUNABLE(kConicalOct, 0.48f);
 // Lowest bell reflection corner, in multiples of the note: a bore resonates only below its bell's
 // cutoff, and the fitted corners left the horn silent from E5 and the muted trumpet from G5.
-constexpr float kBellCornerMinHarmonic = 1.0f;
+SONARE_TUNABLE_RANGE(kBellCornerMinHarmonic, 1.0f, 1.0f, 8.0f);
 
 // How much of the bell highpass's loss at the fundamental is given back, as an
 // exponent: 1 restores it exactly, 0 leaves the radiated level as the filter made
