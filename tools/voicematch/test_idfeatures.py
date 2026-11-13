@@ -102,3 +102,38 @@ def test_auc_counts_ties_as_half():
     assert F.auc([3.0], [3.0]) == 0.5
     assert F.auc([5.0], [1.0]) == 0.0
     assert F.auc([], [1.0]) is None
+
+
+def test_split_halves_cut_by_alternation_and_by_register():
+    rows = [row(note=n, vel=v) for n in (48, 52, 56, 60) for v in (40, 80, 120)]
+    a, b = F.split_halves(rows, "note")
+    assert {r["note"] for r in a} == {48, 56} and {r["note"] for r in b} == {52, 60}
+    a, b = F.split_halves(rows, "register")
+    assert {r["note"] for r in a} == {48, 52} and {r["note"] for r in b} == {56, 60}
+    a, b = F.split_halves(rows, "velocity")
+    assert {r["velocity"] for r in a} == {40, 120} and {r["velocity"] for r in b} == {80}
+    assert len(a) + len(b) == len(rows)
+
+
+def test_split_alignment_reaches_the_neighbouring_note():
+    a = [row(note=48), row(note=56)]
+    b = [row(note=52), row(note=72)]
+    assert F.align(a, b) == []
+    pairs = F.align(a, b, note_reach=None)
+    assert [(x["note"], y["note"]) for x, y in pairs] == [(48, 52), (56, 52)]
+    assert [(x["note"], y["note"]) for x, y in F.align(a, b, note_reach=4)] == [
+        (48, 52),
+        (56, 52),
+    ]
+
+
+def test_combined_rank_finds_the_own_half_and_ignores_a_missing_feature():
+    scale = {f"f{i}": 1.0 for i in range(6)}
+    own = {f"f{i}": 0.1 for i in range(6)}
+    far = {f"f{i}": 2.0 for i in range(6)}
+    # Lacks the one feature where own is far: compared on the shared five only.
+    blind = {f"f{i}": 0.5 for i in range(5)}
+    got = F.combined_hits({"c": (own, {"far": far, "blind": blind})}, scale)
+    assert got["hit_rate"] == 1.0 and got["median_rank"] == 1.0
+    lost = F.combined_hits({"c": ({**own, "f0": 9.0}, {"near": {**own, "f1": 0.05}})}, scale)
+    assert lost["hit_rate"] == 0.0
