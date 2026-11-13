@@ -488,3 +488,24 @@ def test_a_kit_dimension_with_rows_gets_a_bound_and_no_entry(tmp_path):
     )
     assert un == {}
     assert "tonality" in json.loads(gate.read_text())["bounds"]
+
+
+def test_vel_range_names_single_velocity_notes():
+    """A note with one velocity reads no span; the gate says so instead of dropping vel_range."""
+    tally = profile_gate.CensorTally()
+    model = {36: {100: -6.0}, 38: {100: -8.0}}
+    ref = {36: {100: -5.0}, 38: {100: -7.0}}
+    assert profile_gate.vel_range_deltas(model, ref, tally) == []
+    assert tally.reason("vel_range") == (
+        "measured: no rows; censored on both, 2 of 2 notes (fewer than two velocities at this note)"
+    )
+    # The model alone short of two velocities names the model side.
+    tally = profile_gate.CensorTally()
+    profile_gate.vel_range_deltas({36: {100: -6.0}}, {36: {40: -20.0, 100: -5.0}}, tally)
+    assert "censored on model, 1 of 1 notes" in tally.reason("vel_range")
+    # Two shared velocities read a span and leave nothing tallied.
+    tally = profile_gate.CensorTally()
+    got = profile_gate.vel_range_deltas(
+        {36: {40: -20.0, 100: -6.0}}, {36: {40: -21.0, 100: -5.0}}, tally
+    )
+    assert got == [pytest.approx(14.0 - 16.0)] and tally.reason("vel_range") is None

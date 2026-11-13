@@ -61,6 +61,36 @@ def register_levels(rows: list[dict], timbre: str) -> dict[int, dict[int, float]
     return out
 
 
+#: Why a per-note velocity reading has no value at a note.
+FEWER_THAN_TWO_VELOCITIES = "fewer than two velocities at this note"
+
+
+def vel_range_deltas(
+    model: dict[int, dict[int, float]],
+    reference: dict[int, dict[int, float]],
+    tally: CensorTally | None = None,
+) -> list[float]:
+    """Per note, the model's softest-to-hardest peak span minus the reference's.
+
+    A note where the two sides share fewer than two velocities reads nothing; with
+    @p tally it is counted, on the side(s) holding fewer than two of their own.
+    """
+    out: list[float] = []
+    notes = sorted(set(model) | set(reference))
+    for note in notes:
+        pm, pr = model.get(note, {}), reference.get(note, {})
+        shared = sorted(set(pm) & set(pr))
+        if len(shared) < 2:
+            if tally is not None:
+                short_m, short_r = len(pm) < 2, len(pr) < 2
+                both = not (short_m or short_r)  # each has two, but not the same two
+                tally.absent_note("vel_range", short_m or both, short_r or both, len(notes))
+            continue
+        span = ([pm[v] for v in shared], [pr[v] for v in shared])
+        out.append((max(span[0]) - min(span[0])) - (max(span[1]) - min(span[1])))
+    return out
+
+
 def velocity_swing_deltas(
     a: dict[int, dict[int, float]], b: dict[int, dict[int, float]]
 ) -> list[float]:
@@ -1080,6 +1110,8 @@ class CensorTally:
         self.rows = 0
         self.dims: dict[str, dict[str, int]] = {}
         self._seen: set[str] = set()
+        # Dimensions read per note across velocities: counted in notes, not rows.
+        self.note_dims: dict[str, dict[str, int]] = {}
 
     def begin_row(self) -> None:
         self.rows += 1
@@ -1094,7 +1126,22 @@ class CensorTally:
         c["reference"] += int(reference)
         c["rows"] += 1
 
+    def absent_note(self, dimension: str, model: bool, reference: bool, notes: int) -> None:
+        """One note of `notes` left a per-note dimension unread, on these sides."""
+        c = self.note_dims.setdefault(dimension, {"model": 0, "reference": 0, "rows": 0})
+        c["model"] += int(model)
+        c["reference"] += int(reference)
+        c["rows"] += 1
+        c["notes"] = notes
+
     def reason(self, dimension: str) -> str | None:
+        n = self.note_dims.get(dimension)
+        if n:
+            side = "model" if not n["reference"] else "reference" if not n["model"] else "both"
+            return (
+                f"{COMPUTED_UNBOUNDED_PREFIX} no rows; censored on {side}, {n['rows']} of "
+                f"{n['notes']} notes ({FEWER_THAN_TWO_VELOCITIES})"
+            )
         c = self.dims.get(dimension)
         if not c or not self.rows:
             return None

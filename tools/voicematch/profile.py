@@ -135,6 +135,7 @@ from profile_gate import (
     register_spread_by_note,
     select_dimensions,
     summarize_deltas,
+    vel_range_deltas,
     velocity_swing_deltas,
     write_gate_file,
     write_model_rows,
@@ -1006,15 +1007,9 @@ def compare_percussion(
             f"shown, not counted:"
         )
         print("  " + ", ".join(f"n{n}v{v}" for n, v in silent))
-    for note, model_peaks in sorted(peaks.get("m", {}).items()):
-        ref_peaks = peaks.get("r", {}).get(note, {})
-        shared = sorted(set(model_peaks) & set(ref_peaks))
-        if len(shared) < 2:
-            continue
-        span = ([model_peaks[v] for v in shared], [ref_peaks[v] for v in shared])
-        deltas.setdefault("vel_range", []).append(
-            (max(span[0]) - min(span[0])) - (max(span[1]) - min(span[1]))
-        )
+    spans = vel_range_deltas(peaks.get("m", {}), peaks.get("r", {}), tally)
+    if spans:
+        deltas["vel_range"] = spans
     summary = select_dimensions(
         summarize_deltas(deltas), cfg.get("dimensions") or [], cfg.get("dimensions_na") or {}
     )
@@ -1605,15 +1600,9 @@ def compare(
         )
         for n, v, why in body_censored:
             print(f"  n{n}v{v}: {why}")
-    for note, model_peaks in sorted(peaks.get("m", {}).items()):
-        ref_peaks = peaks.get("r", {}).get(note, {})
-        shared = sorted(set(model_peaks) & set(ref_peaks))
-        if len(shared) < 2:
-            continue
-        span = ([model_peaks[v] for v in shared], [ref_peaks[v] for v in shared])
-        deltas.setdefault("vel_range", []).append(
-            (max(span[0]) - min(span[0])) - (max(span[1]) - min(span[1]))
-        )
+    spans = vel_range_deltas(peaks.get("m", {}), peaks.get("r", {}), tally)
+    if spans:
+        deltas["vel_range"] = spans
     swing = velocity_swing_deltas(attack_hf.get("m", {}), attack_hf.get("r", {}))
     if swing:
         deltas["attack_hf_swing"] = swing
