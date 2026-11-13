@@ -15,31 +15,70 @@
     "stretch": {
       "floor": 1.0,
       "floor_from": "guess",
-      "median": 1.219,
-      "abs_median": 1.219,
-      "p90": 3.009,
+      "median": 1.0,
+      "abs_median": 1.0,
+      "p90": 1.742,
       "rows": 35,
       "provenance": {
         "median": {
-          "set_utc": "2026-09-09T16:49:51+00:00",
-          "set_build": null,
-          "held_utc": null,
-          "measured": 2.8125,
-          "outcome": "exceeded"
+          "set_utc": "2026-11-13T18:45:44+00:00",
+          "set_build": "2026-11-13T18:45:10Z",
+          "held_utc": "2026-11-13T18:45:44+00:00",
+          "measured": 0.2225,
+          "outcome": "tightened",
+          "set_tree": {
+            "head": "56ce98708",
+            "dirty": [
+              "src/midi/synth/gm_fallback_programs_physical.h",
+              "src/midi/synth/piano_voice.cpp",
+              "src/midi/synth/piano_voice.h",
+              "src/midi/synth/piano_voice_calibration.cpp",
+              "src/midi/synth/piano_voice_calibration.h",
+              "src/midi/synth/piano_voice_start.cpp",
+              "tools/voicematch/capture/orchestra_hit_module.json",
+              "tools/voicematch/reference/orchestra_hit_module.json"
+            ]
+          }
         },
         "abs_median": {
-          "set_utc": "2026-09-09T16:49:51+00:00",
-          "set_build": null,
-          "held_utc": null,
-          "measured": 2.8125,
-          "outcome": "exceeded"
+          "set_utc": "2026-11-13T18:45:44+00:00",
+          "set_build": "2026-11-13T18:45:10Z",
+          "held_utc": "2026-11-13T18:45:44+00:00",
+          "measured": 0.5125,
+          "outcome": "tightened",
+          "set_tree": {
+            "head": "56ce98708",
+            "dirty": [
+              "src/midi/synth/gm_fallback_programs_physical.h",
+              "src/midi/synth/piano_voice.cpp",
+              "src/midi/synth/piano_voice.h",
+              "src/midi/synth/piano_voice_calibration.cpp",
+              "src/midi/synth/piano_voice_calibration.h",
+              "src/midi/synth/piano_voice_start.cpp",
+              "tools/voicematch/capture/orchestra_hit_module.json",
+              "tools/voicematch/reference/orchestra_hit_module.json"
+            ]
+          }
         },
         "p90": {
-          "set_utc": "2026-09-10T00:31:23+00:00",
-          "set_build": null,
-          "held_utc": null,
-          "measured": 3.5185,
-          "outcome": "exceeded"
+          "set_utc": "2026-11-13T18:45:44+00:00",
+          "set_build": "2026-11-13T18:45:10Z",
+          "held_utc": "2026-11-13T18:45:44+00:00",
+          "measured": 1.3935,
+          "outcome": "tightened",
+          "set_tree": {
+            "head": "56ce98708",
+            "dirty": [
+              "src/midi/synth/gm_fallback_programs_physical.h",
+              "src/midi/synth/piano_voice.cpp",
+              "src/midi/synth/piano_voice.h",
+              "src/midi/synth/piano_voice_calibration.cpp",
+              "src/midi/synth/piano_voice_calibration.h",
+              "src/midi/synth/piano_voice_start.cpp",
+              "tools/voicematch/capture/orchestra_hit_module.json",
+              "tools/voicematch/reference/orchestra_hit_module.json"
+            ]
+          }
         }
       }
     },

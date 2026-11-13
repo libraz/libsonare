@@ -481,6 +481,9 @@ constexpr void configure_physical_programs(ProgramOverrides& o) noexcept {
   o.oboe.resonance_q = 2.96294f;
   o.oboe.amp_env.decay_ms = 98.0261f;
   o.oboe.reed.velocity_exponent = 0.93f;
+  // The reed's phase at the fundamental: notes 58-82 at velocity 80 read -2.61 c mean against
+  // equal temperament, nearly flat across the range (+0.9 c per octave).
+  o.oboe.pitch_offset_cents = 2.61f;
   o.english_horn = reed(true, 0.70f, 0.40f, 0.64f, 0.34f, 24.0f, 90.0f, 0.64f, 0.34f, 0.6f);
   o.english_horn.cutoff_hz = 1396.28f;
   // The reference carries a 5 Hz, 6.1 c vibrato (7.8 c here reads the same);
