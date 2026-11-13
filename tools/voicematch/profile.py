@@ -123,7 +123,9 @@ from metrics_floor import body_at_floor
 from phrases import TAKE_SETS, build_takes
 from profile_gate import (
     DELTA_LABELS,
+    FIELD_DIMENSION,
     PER_NOTE_DIMENSIONS,
+    CensorTally,
     check_gate,
     print_register_profile,
     print_summary_table,
@@ -1382,6 +1384,9 @@ def compare(
     damper_censored: list[tuple[int, int]] = []
     span_censored: list[tuple[int, int]] = []
     body_censored: list[tuple[int, int]] = []
+    # Per dimension, how many rows had no value on each side -- what a gate
+    # writer says when a requested dimension yields no bound.
+    tally = CensorTally()
     # Rows that reached the per-row arithmetic at all, which is what every
     # dimension below was OFFERED — see `print_summary_table`.
     attempted = 0
@@ -1427,11 +1432,13 @@ def compare(
             print(f"{note:5d} {vel:4d} | model rendered nothing measurable")
             continue
         attempted += 1
+        tally.begin_row()
         model_rows.append({**m, "timbre": "model", "note": note, "velocity": vel})
         ladders.append((note, vel, m.get("partials_db"), r.get("partials_db")))
 
         def d(key, scale=1.0, m=m, r=r):
             if m.get(key) is None or r.get(key) is None:
+                tally.absent(FIELD_DIMENSION[key], m.get(key) is None, r.get(key) is None)
                 return None
             return (m[key] - r[key]) * scale
 
@@ -1444,6 +1451,7 @@ def compare(
         damper_capped = bool(m.get("damper_capped") or r.get("damper_capped"))
         if damper_capped:
             damper_censored.append((note, vel))
+            tally.absent("damper", bool(m.get("damper_capped")), bool(r.get("damper_capped")))
         # A decay rate is a slope, and two slopes only difference into a
         # comparison when they were fitted over comparable spans. The span is
         # each side's own -- it ends where that render stopped being audible --
@@ -1455,10 +1463,13 @@ def compare(
         span_mismatch = min(m_span, r_span) < DECAY_SPAN_AGREEMENT * max(m_span, r_span, 1e-9)
         if span_mismatch:
             span_censored.append((note, vel, m_span, r_span))
+            for dim in ("decay", "aftersound", "doubling"):
+                tally.absent(dim, True, True)
         # The reference's body band is its recording's own flat floor, so the delta is the floor's.
         body_floor = body_at_floor(r)
         if body_floor:
             body_censored.append((note, vel))
+            tally.absent("body", False, True)
         row = {
             "stretch": None if stretch is None else stretch + a4_off,
             "decay": None if span_mismatch else d("decay_db_s"),
@@ -1503,9 +1514,13 @@ def compare(
         bal_m = partial_balance_db(m.get("partials_db"))
         bal_r = partial_balance_db(r.get("partials_db"))
         row["balance"] = None if bal_m is None or bal_r is None else bal_m - bal_r
+        tally.absent("balance", bal_m is None, bal_r is None)
         tilt_m = partial_tilt_db_s(m.get("partial_decay_db_s"))
         tilt_r = partial_tilt_db_s(r.get("partial_decay_db_s"))
         row["partial_tilt"] = None if tilt_m is None or tilt_r is None else tilt_m - tilt_r
+        tally.absent("partial_tilt", tilt_m is None, tilt_r is None)
+        tally.absent("doubling", gap_m is None, gap_r is None)
+        tally.absent("centroid_pct", not m.get("centroid_hz"), not r.get("centroid_hz"))
         scored = list(row.items()) + [("centroid_pct", centroid_pct)]
         offered_keys |= {k for k, _v in scored}
         for k, v in scored:
@@ -1649,7 +1664,15 @@ def compare(
         return check_gate(summary, Path(gate_path), timbre, profile.get("measured_utc", ""))
     if write_gate:
         return write_gate_file(
-            summary, Path(write_gate), timbre, margin, profile.get("measured_utc", ""), spread
+            summary,
+            Path(write_gate),
+            timbre,
+            margin,
+            profile.get("measured_utc", ""),
+            spread,
+            requested=cfg.get("dimensions") or [],
+            dimensions_na=cfg.get("dimensions_na") or {},
+            censors=tally,
         )
     return 0
 

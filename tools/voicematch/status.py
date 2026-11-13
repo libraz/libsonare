@@ -73,7 +73,13 @@ import fits as fits_mod
 import signoff
 from _repo import REPO_ROOT
 from objective import objective_digest
-from profile_gate import excused_and_bounded, shares_a_source
+from profile_gate import (
+    excused_and_bounded,
+    model_unmeasurable,
+    provenance_findings,
+    provenance_notes,
+    shares_a_source,
+)
 from toneclass import canonical_dimensions
 
 HERE = Path(__file__).resolve().parent
@@ -467,6 +473,11 @@ def coverage(voice, cap_raws: list[dict], gates: list[dict]) -> dict:
     }
     if unbounded & set(canon):
         out["unbounded"] = sorted(unbounded & set(canon))
+        # Its own state: the model never produced a value, which is not the
+        # reference being unable to support the dimension.
+        unmeasurable = {d for gate in gates for d in model_unmeasurable(gate.get("_unbounded"))}
+        if unmeasurable & unbounded & set(canon):
+            out["model_unmeasurable"] = sorted(unmeasurable & unbounded & set(canon))
     # Excused and bounded by the same capture: the bound can never be checked, so
     # coverage is not complete until one of the two is withdrawn.
     if contradicted:
@@ -488,12 +499,17 @@ def profile_facts(ident: str) -> dict:
             stale = "stale"
         else:
             stale = "current"
+    # A gate whose last re-record kept a bound the model is over is red whatever
+    # its stamp says; a reference that moved is reported first.
+    if stale == "current" and provenance_findings(gate)["exceeded"]:
+        stale = "exceeded"
     return {
         "profile_rows": len(profile.get("rows") or []),
         "measured_utc": profile.get("measured_utc", ""),
         "gate_recorded": bool(gate),
         "gate_state": stale,
         "gate_timbre": gate.get("timbre", ""),
+        "gate_notes": provenance_notes(gate),
         "_gate": gate,
     }
 
@@ -514,9 +530,10 @@ def merged_facts(every: list[dict]) -> dict:
             "gate_recorded": False,
             "gate_state": None,
             "gate_timbre": "",
+            "gate_notes": [],
         }
     states = {f["gate_state"] for f in every if f["gate_state"]}
-    worst = next((s for s in ("unknown", "stale", "current") if s in states), None)
+    worst = next((s for s in ("unknown", "stale", "exceeded", "current") if s in states), None)
     return {
         # The representative's, for the two that describe one reading rather
         # than the set: which reference the page plays and when it was taken.
@@ -525,6 +542,7 @@ def merged_facts(every: list[dict]) -> dict:
         "profile_rows": sum(f["profile_rows"] for f in every),
         "gate_recorded": any(f["gate_recorded"] for f in every),
         "gate_state": worst,
+        "gate_notes": [n for f in every for n in f.get("gate_notes") or []],
     }
 
 
@@ -640,6 +658,9 @@ def next_action(axes: dict, stage: int, candidates: list[str]) -> str:
                 "write the first gate: `profile.py compare --write-gate` against "
                 "the profile just measured"
             )
+        if axes["gate_state"] == "exceeded":
+            notes = [n for n in axes.get("gate_notes") or [] if "re-recorded over" in n]
+            return f"the gate is red: {'; '.join(notes)}"
         if axes["gate_state"] != "current":
             return f"the gate is {axes['gate_state']}: re-record it against the current profile"
         gaps = axes["coverage"]["gaps"]
@@ -648,12 +669,21 @@ def next_action(axes: dict, stage: int, candidates: list[str]) -> str:
                 f"{len(gaps)} canonical dimension(s) neither gated nor excused: {', '.join(gaps)}"
             )
         # No gap left, so what holds the voice here is a reason already written down.
-        unbounded = axes["coverage"].get("unbounded") or []
-        return (
-            f"{len(unbounded)} dimension(s) recorded unbounded in the gate: "
-            f"{', '.join(unbounded)} — read the reason there, then either record a "
-            f"bound that became measurable or fix what the model is missing"
-        )
+        unmeasurable = axes["coverage"].get("model_unmeasurable") or []
+        unbounded = [d for d in axes["coverage"].get("unbounded") or [] if d not in unmeasurable]
+        parts = []
+        if unbounded:
+            parts.append(
+                f"{len(unbounded)} dimension(s) recorded unbounded in the gate: "
+                f"{', '.join(unbounded)} — read the reason there, then either record a "
+                f"bound that became measurable or fix what the model is missing"
+            )
+        if unmeasurable:
+            parts.append(
+                "; ".join(f"model unmeasurable on {d}" for d in unmeasurable)
+                + " — the model yields no value on any row: fix what the model is missing"
+            )
+        return "; ".join(parts)
     fit = axes.get("fit") or {}
     fit_ok = fit.get("state") in (fits_mod.CURRENT, fits_mod.EQUIVALENT)
     if stage in (3, 4) and fit.get("fittable") and not fit_ok:
@@ -778,6 +808,8 @@ def build(catalogue) -> list[dict]:
             ),
         }
         axes["fit"] = fit_axis(v, fit_records, digest, equivalents)
+        if facts["gate_notes"]:
+            axes["gate_notes"] = facts["gate_notes"]
         stage = stage_for(axes)
         open_here = cands.get(v.slug, [])
         rows.append(

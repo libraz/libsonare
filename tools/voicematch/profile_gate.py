@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import sys
 import time
 from datetime import UTC, datetime
@@ -820,6 +821,43 @@ def check_gate(
 #: to have measured rather than tighten what it holds.
 RATCHETED_BOUND_KEYS = ("median", "abs_median", "p90")
 
+OUTCOME_NEW, OUTCOME_TIGHTENED, OUTCOME_KEPT, OUTCOME_EXCEEDED = (
+    "new",
+    "tightened",
+    "kept",
+    "exceeded",
+)
+
+#: A computed `_unbounded` reason starts with this, which is what tells it from a
+#: hand-written one: the writer regenerates the former and carries the latter.
+COMPUTED_UNBOUNDED_PREFIX = "measured:"
+
+FIELD_ABSENT = "field absent"
+
+#: The measured field each `compare` row dimension is differenced from.
+FIELD_DIMENSION = {
+    "cents_vs_et": "stretch",
+    "decay_db_s": "decay",
+    "tnr_db": "tnr",
+    "damper_release_ms": "damper",
+    "attack_ms": "attack",
+    "attack_hf_db": "attack_hf",
+    "onset_overshoot_db": "onset",
+    "onset_settle_ms": "onset_settle",
+    "decay_late_db_s": "aftersound",
+    "body_below_f0_db": "body",
+    "stereo_width": "stereo",
+}
+
+#: The censor that drops a row for a dimension, where one is known.
+CENSOR_BY_DIMENSION = {
+    "damper": "decayed_before_note_off",
+    "decay": "span_mismatch",
+    "aftersound": "span_mismatch",
+    "doubling": "span_mismatch",
+    "body": "body_at_floor",
+}
+
 
 def _carry_the_unbounded(bounds: dict[str, dict], gate_path: Path) -> dict[str, str]:
     """Carry forward the recorded reasons a dimension holds no bound YET.
@@ -837,7 +875,11 @@ def _carry_the_unbounded(bounds: dict[str, dict], gate_path: Path) -> dict[str, 
     if not gate_path.exists():
         return {}
     recorded = json.loads(gate_path.read_text()).get("_unbounded") or {}
-    return {k: v for k, v in recorded.items() if k not in bounds}
+    return {
+        k: v
+        for k, v in recorded.items()
+        if k not in bounds and not str(v).startswith(COMPUTED_UNBOUNDED_PREFIX)
+    }
 
 
 def _carry_the_excluded(gate_path: Path) -> dict[str, str]:
@@ -902,8 +944,14 @@ def _carry_the_annotations(gate_path: Path) -> dict[str, object]:
     }
 
 
-def _keep_the_tighter(bounds: dict[str, dict], gate_path: Path) -> list[str]:
-    """Hold each bound to the tighter of the recorded one and the new one.
+def _keep_the_tighter(
+    bounds: dict[str, dict],
+    measured: dict[str, dict[str, float]],
+    gate_path: Path,
+    now: str,
+    built_utc: str | None,
+) -> list[str]:
+    """Hold each bound to the tighter of the recorded one and the new one, and stamp it.
 
     A re-record may correct a bound and may never loosen one, and until this
     existed that was a rule kept by hand — which is the kind that holds until
@@ -913,23 +961,163 @@ def _keep_the_tighter(bounds: dict[str, dict], gate_path: Path) -> list[str]:
     silently becomes the voice's own error times the margin. Nothing regressed
     and the gate got weaker anyway.
 
+    Each statistic also gets a `provenance` record: when its value was written
+    (`set_*`, carried while the value is kept), the last re-record at which the
+    unpadded measurement was inside it (`held_utc`) and what that measurement
+    was. A kept bound is therefore never read as freshly measured.
+
     Mutates `bounds` and returns one line per bound it refused to loosen, for
     the caller to print — a ratchet that acts silently is a second way to lose
     track of what the gate is holding.
     """
-    if not gate_path.exists():
-        return []
-    recorded = json.loads(gate_path.read_text()).get("bounds", {})
+    recorded = json.loads(gate_path.read_text()).get("bounds", {}) if gate_path.exists() else {}
+    if any("provenance" not in b for b in recorded.values()):
+        # A gate written before provenance: date its kept values from its history.
+        import gate_migrate
+
+        recorded = gate_migrate.migrate({"bounds": recorded}, gate_migrate.read_history(gate_path))[
+            "bounds"
+        ]
     declined = []
     for dimension, row in bounds.items():
-        was = recorded.get(dimension)
-        if not was:
-            continue
+        was = recorded.get(dimension) or {}
+        was_prov = was.get("provenance") or {}
+        provenance = {}
         for key in RATCHETED_BOUND_KEYS:
-            if key in was and was[key] < row[key]:
-                declined.append(f"{dimension}.{key} {row[key]:g} -> {was[key]:g}")
-                row[key] = was[key]
+            value, old, candidate = measured[dimension][key], was.get(key), row[key]
+            old_prov = was_prov.get(key) or {}
+            carried = (old_prov.get("set_utc"), old_prov.get("set_build"))
+            if old is None:
+                outcome, held, set_at = OUTCOME_NEW, now, (now, built_utc)
+            elif old >= candidate:
+                outcome = OUTCOME_KEPT if old == candidate else OUTCOME_TIGHTENED
+                held = now
+                set_at = carried if old == candidate else (now, built_utc)
+            else:
+                row[key] = old
+                set_at = carried
+                if value <= old:
+                    outcome, held = OUTCOME_KEPT, now
+                    verdict = "within it"
+                else:
+                    outcome, held = OUTCOME_EXCEEDED, old_prov.get("held_utc")
+                    verdict = f"over it; last held {held or 'unknown'}"
+                declined.append(
+                    f"{dimension}.{key} {candidate:g} -> {old:g} (measured {value:g}, {verdict})"
+                )
+            provenance[key] = {
+                "set_utc": set_at[0],
+                "set_build": set_at[1],
+                "held_utc": held,
+                "measured": round(value, 4),
+                "outcome": outcome,
+            }
+        row["provenance"] = provenance
     return declined
+
+
+def provenance_findings(gate: dict) -> dict[str, list[tuple]]:
+    """What a gate's per-bound provenance says its bounds are worth.
+
+    `exceeded`: (dimension, stat, held_utc) for a bound the last re-record found
+    the model over and kept anyway. `unverified`: (dimension, stat, set_utc) for
+    a bound nothing records as ever having held. A gate in the older format
+    carries no provenance and reports neither.
+    """
+    out: dict[str, list[tuple]] = {"exceeded": [], "unverified": []}
+    for dim, bound in (gate.get("bounds") or {}).items():
+        for stat, p in (bound.get("provenance") or {}).items():
+            if p.get("outcome") == OUTCOME_EXCEEDED:
+                out["exceeded"].append((dim, stat, p.get("held_utc")))
+            elif p.get("held_utc") is None:
+                out["unverified"].append((dim, stat, p.get("set_utc")))
+    return out
+
+
+def provenance_notes(gate: dict) -> list[str]:
+    """`provenance_findings` as the lines a status report prints."""
+    found = provenance_findings(gate)
+    notes = [
+        f"{dim}.{stat}: re-recorded over a kept bound, last held {held or 'unknown'}"
+        for dim, stat, held in found["exceeded"]
+    ]
+    since: dict[str, list[str]] = {}
+    for dim, stat, set_utc in found["unverified"]:
+        since.setdefault(set_utc or "unknown", []).append(f"{dim}.{stat}")
+    notes += [
+        f"not verified since {when}: {', '.join(names)}" for when, names in sorted(since.items())
+    ]
+    return notes
+
+
+_CENSORED_ON = re.compile(r"^measured: no rows; censored on (\w+), (\d+) of (\d+) rows")
+
+
+def model_unmeasurable(unbounded: dict[str, str]) -> list[str]:
+    """Dimensions whose computed `_unbounded` reason says the model side never measured."""
+    out = []
+    for dim, reason in (unbounded or {}).items():
+        m = _CENSORED_ON.match(str(reason))
+        if m and m.group(1) == "model" and m.group(2) == m.group(3):
+            out.append(dim)
+    return sorted(out)
+
+
+class CensorTally:
+    """How many rows left a dimension unmeasured, and on which side.
+
+    `compare` offers each row to every dimension; where a side has no value (or
+    a named censor drops the row) it is recorded here, once per row and
+    dimension, so a dimension that yields no bound can say why.
+    """
+
+    def __init__(self) -> None:
+        self.rows = 0
+        self.dims: dict[str, dict[str, int]] = {}
+        self._seen: set[str] = set()
+
+    def begin_row(self) -> None:
+        self.rows += 1
+        self._seen = set()
+
+    def absent(self, dimension: str, model: bool, reference: bool) -> None:
+        if not (model or reference) or dimension in self._seen:
+            return
+        self._seen.add(dimension)
+        c = self.dims.setdefault(dimension, {"model": 0, "reference": 0, "rows": 0})
+        c["model"] += int(model)
+        c["reference"] += int(reference)
+        c["rows"] += 1
+
+    def reason(self, dimension: str) -> str | None:
+        c = self.dims.get(dimension)
+        if not c or not self.rows:
+            return None
+        side = "model" if not c["reference"] else "reference" if not c["model"] else "both"
+        censor = CENSOR_BY_DIMENSION.get(dimension, FIELD_ABSENT)
+        return (
+            f"{COMPUTED_UNBOUNDED_PREFIX} no rows; censored on {side}, "
+            f"{c['rows']} of {self.rows} rows ({censor})"
+        )
+
+
+def _computed_unbounded(
+    tally: CensorTally | None,
+    requested: list[str] | None,
+    excused: set[str],
+    bounds: dict[str, dict],
+) -> dict[str, str]:
+    """A reason for each requested dimension that is neither bounded nor excused."""
+    if tally is None:
+        return {}
+    out = {}
+    for dim in requested or []:
+        if dim in bounds or dim in excused:
+            continue
+        reason = tally.reason(dim)
+        if reason:
+            out[dim] = reason
+    return out
 
 
 def write_gate_file(
@@ -939,6 +1127,9 @@ def write_gate_file(
     margin: float,
     measured_utc: str = "",
     spread: dict[str, float] | None = None,
+    requested: list[str] | None = None,
+    dimensions_na: dict[str, str] | None = None,
+    censors: CensorTally | None = None,
 ) -> int:
     """Record the current numbers as the bounds a later run is held to.
 
@@ -951,8 +1142,16 @@ def write_gate_file(
     A dimension recorded in `_excluded` never gets one of these, however
     cleanly `summary` measured it: that register is for a number that CAN be
     computed and must not be turned into a bound anyway.
+
+    `requested` (the capture's dimensions), `dimensions_na` and `censors` let a
+    requested dimension that yielded no row say why in a computed `_unbounded`
+    entry. The top-level `recorded_utc` and `model_build` are when the file was
+    last written; what a bound is worth is in its own `provenance`.
     """
     excluded = _carry_the_excluded(gate_path)
+    now = datetime.now(UTC).isoformat(timespec="seconds")
+    build = _model_build_state()
+    measured: dict[str, dict[str, float]] = {}
     # The floor table is `FLOOR_GUESSES` / `dimension_floor`, at module scope so
     # a reader can reach it too. Nothing here loosens a bound below what was
     # measured: the recorded value times the margin still wins when it is larger.
@@ -961,6 +1160,11 @@ def write_gate_file(
         if key in excluded:
             continue
         floor, floor_from = dimension_floor(key, spread)
+        measured[key] = {
+            "median": abs(row["median"]),
+            "abs_median": row["abs_median"],
+            "p90": row["p90"],
+        }
         bounds[key] = {
             "floor": round(floor, 4),
             "floor_from": floor_from,
@@ -975,8 +1179,12 @@ def write_gate_file(
             # run compares against it as though the whole grid had spoken.
             "rows": int(row.get("n", 0)),
         }
-    declined = _keep_the_tighter(bounds, gate_path)
+    declined = _keep_the_tighter(bounds, measured, gate_path, now, build.get("built_utc"))
     carried = _carry_the_unbounded(bounds, gate_path)
+    computed = _computed_unbounded(
+        censors, requested, set(dimensions_na or {}) | set(excluded), bounds
+    )
+    carried = {**computed, **carried}
     annotations = _carry_the_annotations(gate_path)
     gate_path.parent.mkdir(parents=True, exist_ok=True)
     gate_path.write_text(
@@ -990,7 +1198,10 @@ def write_gate_file(
                 "can sit inside both medians while nearly half its rows are outside the "
                 "references' own spread. 'rows' is how many of the grid's rows survived "
                 "censoring into that median, so a later run can tell whether it is comparing "
-                "against the same population. Re-record only in the same change as the "
+                "against the same population. 'provenance' records, per statistic, when its "
+                "value was set, the last re-record at which the measurement was inside it, "
+                "and what that measurement was; 'recorded_utc' is only when the file was last "
+                "written. Re-record only in the same change as the "
                 "behaviour that justifies it.",
                 "timbre": timbre,
                 "margin": margin,
@@ -999,12 +1210,12 @@ def write_gate_file(
                 # alternative is reading the file's history to find out whether the
                 # profile moved under it, which nobody does until a gate is already red.
                 "reference_measured_utc": measured_utc,
-                "recorded_utc": datetime.now(UTC).isoformat(timespec="seconds"),
+                "recorded_utc": now,
                 # And which library produced the MODEL side. Without it a gate recorded
                 # through a dylib older than the sources is indistinguishable from one
                 # recorded through the shipped build, and its bounds are a photograph of
                 # a generation that no longer exists.
-                "model_build": _model_build_state(),
+                "model_build": build,
                 # What the references disagree with each other by, recorded beside the
                 # bounds so a later reader can see which of them are the measured floor
                 # rather than the voice's own number times the margin.

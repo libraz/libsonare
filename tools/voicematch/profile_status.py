@@ -8,7 +8,12 @@ from pathlib import Path
 
 from capture import load_config
 from phrases import build_takes
-from profile_gate import excused_and_bounded
+from profile_gate import (
+    excused_and_bounded,
+    model_unmeasurable,
+    provenance_findings,
+    provenance_notes,
+)
 from render_evidence import ARCHIVE_HISTORICAL, archived_take_ids
 
 #: Every committed capture definition lives here. Globbed rather than listed:
@@ -240,6 +245,17 @@ def readiness(cfg: dict, *, archive: Path, reference_dir: Path) -> dict:
             )
         else:
             out["gate_stale"] = "current"
+        if out["gate_stale"] == "current" and provenance_findings(gate)["exceeded"]:
+            out["gate_stale"] = "exceeded"
+        for note in provenance_notes(gate):
+            out["next"].append(f"gate: {note}")
+        unmeasurable = [d for d in model_unmeasurable(gate.get("_unbounded")) if d in wanted]
+        if unmeasurable:
+            out["model_unmeasurable"] = unmeasurable
+            out["next"].append(
+                "; ".join(f"model unmeasurable on {d}" for d in unmeasurable)
+                + " — the model yields no value on any row"
+            )
         contradicted = excused_and_bounded(cfg, gate)
         if contradicted:
             out["contradicted"] = contradicted

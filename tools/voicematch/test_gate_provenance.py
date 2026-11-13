@@ -1,0 +1,410 @@
+"""Per-bound provenance in the gate file, the computed `_unbounded`, and the migration.
+
+    rye run --pyproject bindings/python/pyproject.toml \\
+        python -m pytest tools/voicematch/test_gate_provenance.py -q
+"""
+
+from __future__ import annotations
+
+import json
+import sys
+from pathlib import Path
+
+import pytest
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+
+import gate_migrate
+import profile_gate
+import profile_status
+import status
+from profile_gate import CensorTally, write_gate_file
+
+
+@pytest.fixture(autouse=True)
+def _clock(monkeypatch):
+    """Each write gets the next stamp, and a build stamp tied to it."""
+    ticks = iter(f"2026-01-{day:02d}T00:00:00+00:00" for day in range(1, 30))
+
+    class _Now:
+        @staticmethod
+        def now(_tz=None):
+            return _Dt(next(ticks))
+
+    class _Dt:
+        def __init__(self, s):
+            self.s = s
+
+        def isoformat(self, timespec="seconds"):
+            return self.s
+
+    monkeypatch.setattr(profile_gate, "datetime", _Now)
+    monkeypatch.setattr(profile_gate, "_model_build_state", lambda: {"built_utc": "build-1"})
+
+
+def _rows(value, n=10):
+    return {"decay": {"median": value, "abs_median": value, "p90": value, "n": n}}
+
+
+def _record(path, value, **kw):
+    write_gate_file(_rows(value), path, "ref", 1.0, **kw)
+    return json.loads(path.read_text())["bounds"]["decay"]["provenance"]["median"]
+
+
+def test_a_first_record_is_new_and_held_now(tmp_path):
+    p = _record(tmp_path / "g.json", 10.0)
+    assert p["outcome"] == "new"
+    assert p["set_utc"] == p["held_utc"] == "2026-01-01T00:00:00+00:00"
+    assert p["set_build"] == "build-1"
+    assert p["measured"] == 10.0
+
+
+def test_a_tighter_re_record_moves_the_value_and_everything_with_it(tmp_path):
+    gate = tmp_path / "g.json"
+    _record(gate, 10.0)
+    p = _record(gate, 8.0)
+    assert p["outcome"] == "tightened"
+    assert p["set_utc"] == p["held_utc"] == "2026-01-02T00:00:00+00:00"
+    assert json.loads(gate.read_text())["bounds"]["decay"]["median"] == 8.0
+
+
+def test_the_same_value_is_kept_and_its_set_stamp_carried(tmp_path):
+    gate = tmp_path / "g.json"
+    _record(gate, 10.0)
+    p = _record(gate, 10.0)
+    assert p["outcome"] == "kept"
+    assert p["set_utc"] == "2026-01-01T00:00:00+00:00"
+    assert p["held_utc"] == "2026-01-02T00:00:00+00:00"
+
+
+def test_a_refused_loosening_prints_one_line_per_statistic(tmp_path, capsys):
+    gate = tmp_path / "g.json"
+    write_gate_file(_rows(10.0), gate, "ref", 1.0)
+    capsys.readouterr()
+    write_gate_file(_rows(14.0), gate, "ref", 1.0)
+    out = capsys.readouterr().out
+    assert out.count("kept the recorded bound:") == 3
+    assert "decay.median 14 -> 10 (measured 14, over it; last held" in out
+
+
+def test_a_kept_bound_with_the_measurement_inside_it_reads_kept(tmp_path):
+    gate = tmp_path / "g.json"
+    write_gate_file(_rows(10.0), gate, "ref", 1.0)
+    # candidate 12 > old 10 so the ratchet keeps 10, and the measured 9.5 is inside it.
+    write_gate_file(_rows(9.5), gate, "ref", 1.263)
+    b = json.loads(gate.read_text())["bounds"]["decay"]
+    assert b["median"] == 10.0
+    p = b["provenance"]["median"]
+    assert p["outcome"] == "kept"
+    assert p["set_utc"] == "2026-01-01T00:00:00+00:00"
+    assert p["held_utc"] == "2026-01-02T00:00:00+00:00"
+    assert p["measured"] == 9.5
+
+
+def test_an_exceeded_bound_carries_held_and_set_and_turns_status_red(tmp_path):
+    gate = tmp_path / "g.json"
+    _record(gate, 10.0)
+    write_gate_file(_rows(14.0), gate, "ref", 1.0)
+    doc = json.loads(gate.read_text())
+    b = doc["bounds"]["decay"]
+    assert b["median"] == 10.0
+    p = b["provenance"]["median"]
+    assert p["outcome"] == "exceeded"
+    assert p["held_utc"] == "2026-01-01T00:00:00+00:00"
+    assert p["set_utc"] == "2026-01-01T00:00:00+00:00"
+    assert p["measured"] == 14.0
+    # the file stamp moved on, which is exactly what it must not be read as
+    assert doc["recorded_utc"] == "2026-01-02T00:00:00+00:00"
+
+    found = profile_gate.provenance_findings(doc)["exceeded"]
+    assert ("decay", "median", "2026-01-01T00:00:00+00:00") in found
+    note = profile_gate.provenance_notes(doc)[0]
+    assert "re-recorded over a kept bound, last held 2026-01-01T00:00:00+00:00" in note
+
+
+def test_status_reads_an_exceeded_gate_as_red(tmp_path, monkeypatch):
+    gate = tmp_path / "x_gate.json"
+    _record(gate, 10.0)
+    write_gate_file(_rows(14.0), gate, "ref", 1.0, measured_utc="m1")
+    (tmp_path / "x.json").write_text(json.dumps({"measured_utc": "m1", "rows": []}))
+    monkeypatch.setattr(status, "REFERENCE_DIR", tmp_path)
+    facts = status.profile_facts("x")
+    assert facts["gate_state"] == "exceeded"
+    assert any("re-recorded over a kept bound" in n for n in facts["gate_notes"])
+    assert status.stage_for(_axes(gate_state="exceeded")) == 2
+    assert "re-recorded over a kept bound" in status.next_action(
+        _axes(gate_state="exceeded", gate_notes=facts["gate_notes"]), 2, []
+    )
+
+
+def test_an_unknown_held_time_is_not_verified_since_the_set_time():
+    gate = {
+        "bounds": {
+            "decay": {
+                "median": 1.0,
+                "provenance": {
+                    "median": {"set_utc": "2026-03-01T00:00:00+00:00", "held_utc": None},
+                },
+            }
+        }
+    }
+    notes = profile_gate.provenance_notes(gate)
+    assert notes == ["not verified since 2026-03-01T00:00:00+00:00: decay.median"]
+
+
+def test_an_exceeded_bound_with_no_known_hold_says_unknown():
+    gate = {
+        "bounds": {"decay": {"provenance": {"median": {"outcome": "exceeded", "held_utc": None}}}}
+    }
+    assert "last held unknown" in profile_gate.provenance_notes(gate)[0]
+
+
+# --------------------------------------------------------------------------- #
+# computed `_unbounded`
+
+
+def _tally(rows, absent):
+    t = CensorTally()
+    for i in range(rows):
+        t.begin_row()
+        t.absent("tnr", **absent)
+        t.absent("tnr", **absent)  # asked twice in a row, counted once
+    return t
+
+
+def test_a_dimension_the_model_never_measured_is_unbounded_with_side_and_counts(tmp_path):
+    gate = tmp_path / "g.json"
+    write_gate_file(
+        _rows(10.0),
+        gate,
+        "ref",
+        1.0,
+        requested=["decay", "tnr"],
+        censors=_tally(7, {"model": True, "reference": False}),
+    )
+    un = json.loads(gate.read_text())["_unbounded"]
+    assert un == {"tnr": "measured: no rows; censored on model, 7 of 7 rows (field absent)"}
+    assert profile_gate.model_unmeasurable(un) == ["tnr"]
+
+
+def test_a_named_censor_and_both_sides(tmp_path):
+    t = CensorTally()
+    for _ in range(4):
+        t.begin_row()
+        t.absent("damper", True, False)
+    t.begin_row()
+    t.absent("damper", False, True)
+    gate = tmp_path / "g.json"
+    write_gate_file(_rows(1.0), gate, "ref", 1.0, requested=["decay", "damper"], censors=t)
+    reason = json.loads(gate.read_text())["_unbounded"]["damper"]
+    assert reason == "measured: no rows; censored on both, 5 of 5 rows (decayed_before_note_off)"
+    assert profile_gate.model_unmeasurable({"damper": reason}) == []
+
+
+def test_an_excused_dimension_gets_no_computed_reason(tmp_path):
+    gate = tmp_path / "g.json"
+    write_gate_file(
+        _rows(10.0),
+        gate,
+        "ref",
+        1.0,
+        requested=["decay", "tnr"],
+        dimensions_na={"tnr": "no tone"},
+        censors=_tally(3, {"model": True, "reference": False}),
+    )
+    assert "_unbounded" not in json.loads(gate.read_text())
+
+
+def test_a_hand_written_reason_is_carried_and_a_computed_one_regenerated(tmp_path):
+    gate = tmp_path / "g.json"
+    write_gate_file(
+        _rows(10.0),
+        gate,
+        "ref",
+        1.0,
+        requested=["decay", "tnr"],
+        censors=_tally(3, {"model": True, "reference": False}),
+    )
+    doc = json.loads(gate.read_text())
+    doc["_unbounded"]["ring"] = "no second reference reaches it"
+    gate.write_text(json.dumps(doc))
+    # tnr now measures: its computed reason must go; the hand-written one stays.
+    rows = {**_rows(10.0), "tnr": {"median": 1.0, "abs_median": 1.0, "p90": 1.0, "n": 3}}
+    write_gate_file(rows, gate, "ref", 1.0, requested=["decay", "tnr"], censors=CensorTally())
+    assert json.loads(gate.read_text())["_unbounded"] == {"ring": "no second reference reaches it"}
+
+
+def test_status_gives_a_model_unmeasurable_dimension_its_own_state():
+    un = {"tnr": "measured: no rows; censored on model, 7 of 7 rows (field absent)"}
+    ref = {"tnr": "measured: no rows; censored on reference, 7 of 7 rows (field absent)"}
+    assert profile_gate.model_unmeasurable(un) == ["tnr"]
+    assert profile_gate.model_unmeasurable(ref) == []
+    msg = status.next_action(
+        _axes(
+            coverage={
+                "complete": False,
+                "gaps": [],
+                "unbounded": ["tnr"],
+                "model_unmeasurable": ["tnr"],
+            }
+        ),
+        2,
+        [],
+    )
+    assert "model unmeasurable on tnr" in msg
+    assert "recorded unbounded" not in msg
+
+
+def test_profile_status_names_the_states(tmp_path):
+    assert profile_status.model_unmeasurable(
+        {"a": "measured: no rows; censored on model, 2 of 2 rows (x)"}
+    ) == ["a"]
+
+
+# --------------------------------------------------------------------------- #
+# migration
+
+
+def _old_gate():
+    return {
+        "recorded_utc": "2026-06-01T00:00:00+00:00",
+        "model_build": {"built_utc": "b3"},
+        "bounds": {
+            "decay": {"floor": 1.0, "median": 3.5, "abs_median": 4.0, "p90": 9.0, "rows": 12},
+        },
+    }
+
+
+def _hist(median_by_commit):
+    return [
+        (
+            f"c{i}",
+            {
+                "recorded_utc": f"2026-0{i + 1}-01T00:00:00+00:00",
+                "model_build": {"built_utc": f"b{i}"},
+                "bounds": {"decay": {"median": m, "abs_median": 4.0, "p90": 9.0}},
+            },
+        )
+        for i, m in median_by_commit
+    ]
+
+
+def test_migrate_keeps_every_value_and_dates_the_oldest_equal_run():
+    # newest first: c3 and c2 hold 3.5, c1 differs, c0 holds 3.5 again but the run is broken.
+    gate = _old_gate()
+    out = gate_migrate.migrate(gate, _hist([(3, 3.5), (2, 3.5), (1, 9.9), (0, 3.5)]))
+    b, was = out["bounds"]["decay"], gate["bounds"]["decay"]
+    assert {k: b[k] for k in was} == was
+    assert json.dumps({k: b[k] for k in was}) == json.dumps(was)
+    p = b["provenance"]["median"]
+    assert p["set_utc"] == "2026-03-01T00:00:00+00:00"
+    assert p["set_build"] == "b2"
+    assert p["held_utc"] is p["measured"] is p["outcome"] is None
+
+
+def test_migrate_with_no_history_leaves_the_set_stamp_unknown():
+    p = gate_migrate.migrate(_old_gate(), [])["bounds"]["decay"]["provenance"]["p90"]
+    assert p["set_utc"] is None and p["set_build"] is None
+
+
+def test_migrate_reports_a_restamped_gate(tmp_path, monkeypatch, capsys):
+    src = tmp_path / "in"
+    src.mkdir()
+    g = src / "a_gate.json"
+    g.write_text(json.dumps(_old_gate()))
+    monkeypatch.setattr(gate_migrate, "read_history", lambda _p: _hist([(2, 3.5)]))
+    out = tmp_path / "out"
+    assert gate_migrate.run([g], out, False) == 0
+    text = capsys.readouterr().out
+    assert "with a set_utc: 3" in text
+    assert "a_gate.json" in text  # recorded_utc 2026-06 is newer than the 2026-03 set
+    written = json.loads((out / "a_gate.json").read_text())
+    assert written["bounds"]["decay"]["median"] == 3.5
+
+
+def test_migrate_refuses_the_reference_directory_without_in_place(tmp_path, capsys):
+    g = tmp_path / "a_gate.json"
+    g.write_text(json.dumps(_old_gate()))
+    assert gate_migrate.run([g], gate_migrate.REFERENCE_DIR, False) == 2
+    assert "refusing" in capsys.readouterr().err
+
+
+def _axes(**over):
+    base = {
+        "engine": "piano",
+        "patch": "fam0",
+        "timbres": 3,
+        "profile_rows": 180,
+        "gate_state": "current",
+        "coverage": {"complete": True, "gaps": []},
+        "agreement": {"inside": 8, "total": 11, "outside": {}},
+        "structure": None,
+        "music": None,
+    }
+    base.update(over)
+    return base
+
+
+def test_a_first_rerecord_of_an_old_gate_dates_kept_values_from_history(tmp_path, monkeypatch):
+    """The writer migrates an old-format gate before ratcheting, so a kept value keeps its date."""
+    import gate_migrate
+
+    gate = tmp_path / "x_gate.json"
+    gate.write_text(
+        json.dumps({"bounds": {"decay": {"median": 1.0, "abs_median": 1.0, "p90": 2.0}}})
+    )
+    history = [
+        (
+            "c1",
+            {
+                "recorded_utc": "2026-09-10T00:00:00+00:00",
+                "model_build": {"built_utc": "B1"},
+                "bounds": {"decay": {"median": 1.0, "abs_median": 1.0, "p90": 2.0}},
+            },
+        )
+    ]
+    monkeypatch.setattr(gate_migrate, "read_history", lambda _p: history)
+    bounds = {"decay": {"median": 5.0, "abs_median": 5.0, "p90": 9.0, "floor": 0.1}}
+    measured = {"decay": {"median": 4.0, "abs_median": 4.0, "p90": 7.0}}
+    profile_gate._keep_the_tighter(bounds, measured, gate, "2026-11-13T00:00:00+00:00", "B2")
+    prov = bounds["decay"]["provenance"]["median"]
+    assert bounds["decay"]["median"] == 1.0
+    assert (prov["set_utc"], prov["set_build"], prov["outcome"]) == (
+        "2026-09-10T00:00:00+00:00",
+        "B1",
+        "exceeded",
+    )
+
+
+def test_an_untouched_old_gate_reads_as_before(tmp_path, capsys):
+    """Mixed period: a committed old-format gate and its migrated copy give the same verdict."""
+    import gate_migrate
+
+    committed = Path(__file__).resolve().parent / "reference" / "english_horn_gate.json"
+    raw = json.loads(committed.read_text())
+    for bound in raw["bounds"].values():
+        bound.pop("provenance", None)
+    old = tmp_path / "old" / "english_horn_gate.json"
+    old.parent.mkdir()
+    old.write_text(json.dumps(raw))
+    summary = {
+        k: {
+            "median": b["median"] * 0.9,
+            "abs_median": b["abs_median"] * 1.2,
+            "p90": b["p90"],
+            "n": 5,
+        }
+        for k, b in raw["bounds"].items()
+    }
+    migrated = tmp_path / "english_horn_gate.json"
+    migrated.write_text(json.dumps(gate_migrate.migrate(raw, [])))
+    rc_old = profile_gate.check_gate(summary, old, raw["timbre"], "")
+    text_old = capsys.readouterr().out
+    rc_new = profile_gate.check_gate(summary, migrated, raw["timbre"], "")
+    text_new = capsys.readouterr().out
+    assert rc_old == rc_new
+    assert text_old.replace(str(old), "GATE") == text_new.replace(str(migrated), "GATE")
+    assert profile_gate.gate_readings(summary, raw["bounds"]) == profile_gate.gate_readings(
+        summary, json.loads(migrated.read_text())["bounds"]
+    )
