@@ -821,6 +821,17 @@
       "basis": "bridge buzz / pick noise stage",
       "lane": "struck"
     },
+    "plucked_string.pluck_ms": {
+      "class": "stage_enable",
+      "basis": "finite-duration pluck stage, absent at 0; above 0 it replaces the noise burst and retires the excitation-brightness fields",
+      "lane": "struck",
+      "off_value": 0.0
+    },
+    "plucked_string.pluck_vel_exp": {
+      "class": null,
+      "lane": "struck",
+      "gates": "live only while plucked_string.pluck_ms > 0 (engine_field_gates.cpp); a fit owns it once the stage is on, no reference row measures release time against velocity"
+    },
     "reed.bell_cutoff_hz": {
       "class": "stage_enable",
       "basis": "0 = no bell filter (same gate as brass)",
