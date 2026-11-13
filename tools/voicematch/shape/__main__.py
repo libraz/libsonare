@@ -14,6 +14,7 @@ pointing this at a different instrument is a matter of naming its capture.
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import sys
 from dataclasses import replace
@@ -28,7 +29,7 @@ from profile import PERCUSSION_CHANNEL, is_percussion
 from boundary import SCOPE_INSTRUMENT, assess
 from corpus import check_rig, fit_request, load_corpus, reference_of
 
-from . import admittance, attack, probes, purity, struck, takes
+from . import admittance, attack, fingerprint, hull, probes, purity, struck, takes
 from .bed import Bed
 from .loss import DEFAULT_SPECTRUM_TAIL_FRACTION, ShapeLoss
 from .partials import Track
@@ -54,6 +55,7 @@ from .spectro import Spectro
 from .terms import ONSET_BANDS
 
 CAPTURE_DIR = Path(__file__).resolve().parents[1] / "capture"
+REFERENCE_DIR = Path(__file__).resolve().parents[1] / "reference"
 
 
 def _spectrum_tail(value):
@@ -682,6 +684,179 @@ def cmd_purity(args):
             )
 
 
+def _fingerprints(args, corpus, timbre: str, preroll: float) -> dict:
+    """One reference timbre's per-cell fingerprints, cached on the corpus and the extractor's source."""
+    from metrics_signal import sound_onset_s
+    from wavio import read_wav
+
+    from .render import corpus_fingerprint
+
+    source = hashlib.sha1(Path(fingerprint.__file__).read_bytes()).hexdigest()[:12]
+    cache = Path(args.cache) / (
+        f"fingerprint-{args.capture}-{timbre}-{corpus_fingerprint(args.corpus)}-{source}.json"
+    )
+    if cache.exists():
+        raw = json.loads(cache.read_text())
+        return {
+            tuple(int(x) for x in k.split("_")): (v[0], [tuple(p) for p in v[1]])
+            for k, v in raw.items()
+        }
+    out = {}
+    for key, path in sorted(corpus.renders.items()):
+        x, sr = read_wav(path)
+        mono = np.asarray(x, dtype=np.float64)
+        mono = mono.mean(axis=1) if mono.ndim > 1 else mono
+        onset = sound_onset_s(mono, sr, preroll, len(mono) / sr)
+        out[key] = fingerprint.fingerprint(mono, sr, key[0], onset)
+    cache.parent.mkdir(parents=True, exist_ok=True)
+    cache.write_text(json.dumps({f"{n}_{v}": val for (n, v), val in out.items()}))
+    return out
+
+
+def _colour(prints: dict) -> dict[float, float]:
+    """A timbre's colour signature, each note's points pooled over its velocities."""
+    by_note: dict[int, list] = {}
+    for (note, _vel), (_feats, points) in prints.items():
+        by_note.setdefault(note, []).extend(points)
+    return fingerprint.colour_signature(by_note)
+
+
+def cmd_hull(args):
+    """Rank every reading by how far the subject sits outside the references' own disagreement.
+
+    Read the null block first: each reference taken as the subject against the
+    rest is what one more instrument of the family looks like on this table, and
+    a model ratio means something only against that.
+    """
+    from concurrent.futures import ThreadPoolExecutor
+    from profile import scored_profile
+
+    from metrics_signal import sound_onset_s
+    from profile_measure import measure_note
+
+    cap = json.loads((CAPTURE_DIR / f"{args.capture}.json").read_text())
+    profile = scored_profile(Path(args.profile or REFERENCE_DIR / f"{args.capture}.json"), cap)
+    rows = list(profile["rows"])
+    refs = sorted({r["timbre"] for r in rows})
+    gate_s = float(cap["gate_ms"]) / 1000.0
+    preroll = float(cap.get("preroll_ms", 0)) / 1000.0
+    prints: dict[str, dict] = {}
+    for t in refs:
+        prints[t] = _fingerprints(args, load_corpus(args.corpus, t), t, preroll)
+    subject = args.subject
+    if subject == "model":
+        corpus = load_corpus(args.corpus, refs[0])
+        notes = tuple(int(x) for x in args.notes.split(",")) if args.notes else corpus.notes
+        vels = (
+            tuple(int(x) for x in args.velocities.split(","))
+            if args.velocities
+            else corpus.velocities
+        )
+        request = fit_request(
+            corpus,
+            int(cap["program"]),
+            bank=int(cap.get("bank", 0) or 0),
+            seconds=round(corpus.slot_s + preroll, 3),
+        )
+        sigs = Signals(
+            corpus_root=Path(args.corpus),
+            request=request,
+            gate_s=gate_s,
+            preroll_s=preroll,
+            lib_path=args.lib,
+            cache_dir=Path(args.cache),
+            stereo=True,
+        )
+        ov = (
+            ",".join(
+                f"{k}={v!r}"
+                for k, v in sorted(read_overrides(Path(args.overrides).read_text()).items())
+            )
+            if args.overrides
+            else ""
+        )
+        pairs = [(n, v) for n in notes for v in vels]
+        workers = max(1, min(args.workers, len(pairs)))
+        chunks = [pairs[i::workers] for i in range(workers)]
+        with ThreadPoolExecutor(workers) as pool:
+            rendered = {}
+            for part in pool.map(lambda c: sigs(c, ov=ov), chunks):
+                rendered.update(part)
+        sr = corpus.sample_rate
+        prints["model"] = {}
+        for (note, vel), audio in sorted(rendered.items()):
+            row = measure_note(audio, sr, note, preroll_s=preroll, gate_s=gate_s)
+            if row:
+                rows.append(dict(row, timbre="model", note=note, velocity=vel))
+            mono = audio.mean(axis=1) if audio.ndim > 1 else audio
+            mono = np.asarray(mono, dtype=np.float64)
+            onset = sound_onset_s(mono, sr, preroll, len(mono) / sr)
+            prints["model"][(note, vel)] = fingerprint.fingerprint(mono, sr, note, onset)
+    elif subject not in refs:
+        raise SystemExit(f"--subject {subject} is neither 'model' nor one of {', '.join(refs)}")
+
+    table = hull.feature_table(
+        rows, extra={t: {k: v[0] for k, v in cells.items()} for t, cells in prints.items()}
+    )
+    colours = {t: _colour(cells) for t, cells in prints.items()}
+    colour_table = {
+        t: {(round(c), 0): {"colour_db": d} for c, d in sig.items()} for t, sig in colours.items()
+    }
+
+    print("null: each reference as the subject against the others, over every feature")
+    print(f"{'':<12}{'features':>9}{'median':>8}{'p90':>7}{'max':>7}{'>2x':>7}{'>4x':>7}")
+    summary = {}
+    for t in refs + ([subject] if subject not in refs else []):
+        readings = hull.hull(table, refs, t)
+        summary[t] = hull.typicality(readings)
+        s = summary[t]
+        print(
+            f"{t:<12}{s['features']:>9}{s['median']:>8.2f}{s['p90']:>7.2f}{s['max']:>7.1f}"
+            f"{100 * s['over_2']:>6.0f}%{100 * s['over_4']:>6.0f}%"
+        )
+
+    readings = hull.hull(table, refs, subject)
+    for register in ("all",) + tuple(name for name, _, _ in hull.REGISTERS):
+        print(f"\n{subject} against {', '.join(t for t in refs if t != subject)} -- {register}")
+        print(hull.report([r for r in readings if r.register == register], top=args.top))
+
+    print("\nfixed-frequency colour: correlation of signatures, and each one's own split-half")
+    names = list(colours)
+    print(f"{'':<12}" + "".join(f"{n:>12}" for n in names) + f"{'split-half':>12}")
+    for a in names:
+        cells = []
+        for b in names:
+            r = fingerprint.signature_agreement(colours[a], colours[b])
+            cells.append(f"{r:>12.2f}" if r is not None else f"{'-':>12}")
+        notes_a = sorted({n for n, _ in prints[a]})
+        halves = [
+            _colour({k: v for k, v in prints[a].items() if k[0] in notes_a[i::2]}) for i in (0, 1)
+        ]
+        r = fingerprint.signature_agreement(*halves)
+        print(f"{a:<12}" + "".join(cells) + (f"{r:>12.2f}" if r is not None else f"{'-':>12}"))
+    colour_readings = hull.hull(colour_table, refs, subject, group=lambda key: "all")
+    print(hull.report(colour_readings))
+
+    if args.json_out:
+        Path(args.json_out).parent.mkdir(parents=True, exist_ok=True)
+        Path(args.json_out).write_text(
+            json.dumps(
+                {
+                    "subject": subject,
+                    "references": refs,
+                    "overrides": args.overrides,
+                    "lib": args.lib,
+                    "null": summary,
+                    "readings": [dict(vars(r), ratio=r.ratio) for r in readings + colour_readings],
+                    "colour": {
+                        t: {f"{c:.1f}": d for c, d in s.items()} for t, s in colours.items()
+                    },
+                },
+                indent=1,
+            )
+        )
+
+
 def cmd_admittance(args):
     """The prompt decay against the aftersound, pooled by absolute frequency.
 
@@ -932,6 +1107,14 @@ def main(argv=None):
     s = sub.add_parser("admittance", parents=[common])
     s.add_argument("--overrides", default="")
     s.set_defaults(fn=cmd_admittance)
+
+    s = sub.add_parser("hull", parents=[common])
+    s.add_argument("--overrides", default="")
+    s.add_argument("--profile", default="", help="reference profile (default: reference/<id>.json)")
+    s.add_argument("--subject", default="model", help="'model', or a reference timbre to test")
+    s.add_argument("--top", type=int, default=25, help="rows printed per register")
+    s.add_argument("--json-out", default="", dest="json_out")
+    s.set_defaults(fn=cmd_hull)
 
     # Reads a rendered audition page rather than the corpus, so it is given the
     # target options WITHOUT --corpus.

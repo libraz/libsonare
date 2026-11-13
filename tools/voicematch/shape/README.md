@@ -251,6 +251,20 @@ The references keep their own rows and are compared against their **median**, wi
 
 `--reference` names the sources to measure against. A page carrying `role: reference` in its manifest needs no flag; one with several non-`model` sources and no roles is refused rather than guessed at, because `--variant` renders sit beside the references and no rule tells a variant from a reference by its key.
 
+## Which axis says "a different instrument"
+
+`hull` asks a question none of the terms above can: not how far the model is from a reference, but whether that distance is larger than the references' distance from each other. For every reading a profile row carries, gated or not, plus every reading `fingerprint` takes from the audio, each reference is left out in turn; its distance from the mean of the rest is the family's own scale, and the subject's distance from that same mean is read against it. A ratio near 1 is one more instrument of the family. The ranking's head is where the subject is a different instrument, and it needs no gate, no weight and no listener to exist — which is the point, since an axis the objective does not carry cannot report itself.
+
+```
+PYTHONPATH=tools/voicematch python -m shape hull --capture <id> --corpus <dir> --lib <tuning dylib> [--subject model|<timbre>] [--overrides file] --json-out out.json
+```
+
+A ratio is not audibility. The absolute distance is printed beside it in the feature's own unit, and a small family scale turns an inaudible distance into a large ratio; read both columns. `--subject <timbre>` reads a reference against the others, and that is the null every model ranking is read against: on three grands a reference scores a median near 1, a 90th percentile near 2 and almost nothing past 4. Rows pooled from fewer than eight cells are left out, because a reference read as the subject reaches 8-12x there.
+
+`fingerprint` supplies what one spectrum and one envelope per note cannot hold: the share of each partial group at five stations after the onset and its fall from the body window, the octave-band shares of the strike and the body, the energy under the fundamental and between the partials, the third-octave shape of what lies between the partials, and how deep the first three partials beat. Every one is a ratio inside one render. The partial readings are skipped where a window cannot resolve the ladder, so the lowest notes answer fewer cells and the `cells` column says how many.
+
+`colour_signature` — partial levels with each note's own smooth ladder removed, pooled by absolute frequency — is printed with its split-half agreement, and on a grid of fifteen notes six semitones apart it does not reproduce on half of an instrument's own notes. Read that column before the signature; where it is low the estimator has nothing to say about a body colour, in either direction.
+
 ## Tests
 
 `../test_shape.py` runs entirely on synthesised signals. The captured corpus cannot be committed, so a test that needed it would be a test that never runs; synthesis is also the only way to grade an estimator against an answer that is known rather than measured. Both defects the first test run found were real: the stiffness fit was being dragged negative by search windows that held no partial at all, and the cell comparison charged every sub-floor cell at the clip when no bed had been measured.

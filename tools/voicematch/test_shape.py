@@ -15,6 +15,7 @@ shared would quietly remove real signal.
 
 from __future__ import annotations
 
+import math
 import sys
 from pathlib import Path
 
@@ -27,6 +28,8 @@ import itertools
 
 from shape import (
     attack,
+    fingerprint,
+    hull,
     struck,
     terms,
 )
@@ -1868,3 +1871,333 @@ def test_attack_normalises_every_window_by_one_span():
     a = attack.profile(sig, sr)
     b = attack.profile(sig * 0.01, sr)
     assert np.nanmax(np.abs(a - b)) < 1e-3
+
+
+# --- hull ----------------------------------------------------------------
+
+HULL_CELLS = [(note, vel) for note in range(20, 120) for vel in (40, 100)]
+
+
+def _family(shift=0.0, seed=7, feature="f"):
+    """Three references and a subject, every cell an independent unit-normal draw."""
+    rng = np.random.default_rng(seed)
+    table = {n: {k: {feature: float(rng.standard_normal())} for k in HULL_CELLS} for n in "ABC"}
+    table["S"] = {k: {feature: float(rng.standard_normal()) + shift} for k in HULL_CELLS}
+    return table
+
+
+def _pool(readings, feature="f", register="all"):
+    return next(r for r in readings if r.feature == feature and r.register == register)
+
+
+def test_hull_subject_from_the_same_population_reads_near_one():
+    r = _pool(hull.hull(_family(), ["A", "B", "C"], "S"))
+    assert 0.7 < r.ratio < 1.4
+    assert abs(r.bias) < 0.3
+    assert (r.asked, r.got) == (len(HULL_CELLS), len(HULL_CELLS))
+
+
+def test_hull_centre_is_where_the_references_sit_not_the_subject():
+    table = _family(shift=40.0)
+    for name in "ABC":
+        for cell in table[name].values():
+            cell["f"] -= 60.0
+    assert _pool(hull.hull(table, ["A", "B", "C"], "S")).centre == pytest.approx(-60.0, abs=0.5)
+
+
+def test_hull_subject_five_sigma_off_reads_far_outside_with_signed_bias():
+    r = _pool(hull.hull(_family(shift=5.0), ["A", "B", "C"], "S"))
+    assert r.ratio > 3.0
+    assert r.bias == pytest.approx(5.0, abs=0.5)
+    assert _pool(hull.hull(_family(shift=-5.0), ["A", "B", "C"], "S")).bias < -4.5
+
+
+def test_hull_subject_missing_cells_is_counted_not_dropped():
+    table = _family()
+    for i, k in enumerate(HULL_CELLS):
+        if i % 2:
+            del table["S"][k]["f"]
+    r = _pool(hull.hull(table, ["A", "B", "C"], "S"))
+    assert r.asked == len(HULL_CELLS)
+    assert r.got == len(HULL_CELLS) // 2
+    assert np.isfinite(r.distance) and np.isfinite(r.bias)
+
+
+def test_hull_subject_with_no_cells_keeps_its_reading_as_nan():
+    table = _family()
+    for cell in table["S"].values():
+        cell.clear()
+    r = _pool(hull.hull(table, ["A", "B", "C"], "S"))
+    assert r.got == 0 and r.asked == len(HULL_CELLS)
+    assert np.isnan(r.distance) and np.isnan(r.bias)
+
+
+def test_hull_asked_counts_only_cells_every_reference_holds():
+    table = _family()
+    for k in HULL_CELLS[:20]:
+        del table["B"][k]["f"]
+    assert _pool(hull.hull(table, ["A", "B", "C"], "S")).asked == len(HULL_CELLS) - 20
+
+
+def test_hull_references_in_exact_agreement_give_nan_ratio():
+    table = _family(shift=3.0)
+    for n in "BC":
+        table[n] = {k: dict(v) for k, v in table["A"].items()}
+    r = _pool(hull.hull(table, ["A", "B", "C"], "S"))
+    assert r.scale == 0.0 and r.distance > 0.0
+    assert np.isnan(r.ratio)
+
+
+def test_hull_subject_listed_among_references_is_dropped_first():
+    table = _family()
+    assert hull.hull(table, ["A", "B", "C", "S"], "S") == hull.hull(table, ["A", "B", "C"], "S")
+    # Two others left is enough.
+    assert _pool(hull.hull(table, ["A", "B", "S"], "S")).asked == len(HULL_CELLS)
+
+
+def test_hull_fewer_than_two_other_references_is_refused():
+    table = _family()
+    with pytest.raises(ValueError):
+        hull.hull(table, ["A", "S"], "S")
+    with pytest.raises(ValueError):
+        hull.hull(table, ["A"], "S")
+
+
+def test_hull_group_callable_pools_keys_that_are_not_notes_once():
+    rng = np.random.default_rng(3)
+    cells = [(f"k{i}", 0) for i in range(12)]
+    table = {
+        n: {
+            k: {"f": float(rng.standard_normal()), "g": float(rng.standard_normal())} for k in cells
+        }
+        for n in ("A", "B", "C", "S")
+    }
+    readings = hull.hull(table, ["A", "B", "C"], "S", group=lambda key: "all")
+    assert sorted((r.feature, r.register) for r in readings) == [("f", "all"), ("g", "all")]
+    assert all(r.asked == len(cells) for r in readings)
+
+
+def test_hull_default_group_pools_each_feature_by_register_and_overall():
+    readings = hull.hull(_family(), ["A", "B", "C"], "S")
+    assert {r.register for r in readings} == {"bass", "mid", "treble", "all"}
+    by = {r.register: r.asked for r in readings}
+    assert by["bass"] + by["mid"] + by["treble"] == by["all"]
+
+
+def _hull_row(timbre, note, velocity, held, **kw):
+    return {"timbre": timbre, "note": note, "velocity": velocity, "held_peak_dbfs": held, **kw}
+
+
+def _hull_rows(gain_db=0.0, timbre="A"):
+    rows = []
+    for note in (40, 50, 60):
+        for vel in (30, 100):
+            lo = 4.0 + 0.01 * note
+            rows.append(
+                _hull_row(
+                    timbre,
+                    note,
+                    vel,
+                    -40.0 + 0.1 * (note - 50) + 0.05 * vel + gain_db,
+                    decay_db_s=lo + (2.0 + note / 100.0 if vel == 100 else 0.0),
+                )
+            )
+    return rows
+
+
+def test_hull_feature_table_level_is_read_against_the_timbres_own_median():
+    table = hull.feature_table(_hull_rows(0.0, "A") + _hull_rows(17.0, "B"))
+    for key, feats in table["A"].items():
+        if key[1] == hull.SWING_KEY:
+            continue
+        assert table["B"][key]["level_db"] == pytest.approx(feats["level_db"], abs=1e-9)
+    # Median of the three notes at a velocity is the middle one.
+    assert table["A"][(50, 30)]["level_db"] == pytest.approx(0.0, abs=1e-9)
+    assert table["A"][(40, 30)]["level_db"] == pytest.approx(-1.0, abs=1e-9)
+    assert table["A"][(60, 100)]["level_db"] == pytest.approx(1.0, abs=1e-9)
+
+
+def test_hull_feature_table_swing_row_is_hardest_minus_softest_per_note():
+    table = hull.feature_table(_hull_rows())
+    for note in (40, 50, 60):
+        swing = table["A"][(note, hull.SWING_KEY)]
+        assert swing["decay_db_s" + hull.SWING] == pytest.approx(2.0 + note / 100.0, abs=1e-9)
+        assert swing["level_db" + hull.SWING] == pytest.approx(0.0, abs=1e-9)
+        assert all(name.endswith(hull.SWING) for name in swing)
+
+
+def test_hull_feature_table_folds_extra_into_the_matching_cell():
+    extra = {"A": {(50, 30): {"hx": 3.5}, (50, 100): {"hx": 5.0}, (40, 30): {"hy": 1.0}}}
+    table = hull.feature_table(_hull_rows(), extra)
+    assert table["A"][(50, 30)]["hx"] == 3.5
+    assert "decay_db_s" in table["A"][(50, 30)]
+    assert table["A"][(50, hull.SWING_KEY)]["hx" + hull.SWING] == pytest.approx(1.5, abs=1e-9)
+    # A feature held at one velocity of a note has no swing.
+    assert "hy" + hull.SWING not in table["A"][(40, hull.SWING_KEY)]
+
+
+def test_hull_row_features_leave_out_absent_and_non_finite_readings():
+    feats = hull.row_features(
+        {
+            "f0_hz": 220.0,
+            "attack_ms": 0.0,
+            "decay_db_s": float("nan"),
+            "tnr_db": float("inf"),
+            "held_peak_dbfs": -20.0,
+        }
+    )
+    assert feats == {"level_db": -20.0}
+    assert hull.row_features({}) == {}
+
+
+def test_hull_row_features_inharmonicity_only_when_reliable():
+    row = {"inharmonicity_b": 1e-4}
+    assert "inharm_log2" not in hull.row_features(row)
+    got = hull.row_features({**row, "inharmonicity_reliable": True})
+    assert got["inharm_log2"] == pytest.approx(math.log2(1e-4), abs=1e-9)
+
+
+def test_hull_row_features_damper_absent_when_capped():
+    row = {"damper_release_ms": 50.0}
+    assert hull.row_features(row)["damper_log2ms"] == pytest.approx(math.log2(50.0), abs=1e-9)
+    assert "damper_log2ms" not in hull.row_features({**row, "damper_capped": True})
+
+
+def test_hull_report_and_typicality_omit_rows_with_too_few_cells():
+    def reading(name, asked, distance):
+        return hull.Reading(name, "all", asked, asked, 1.0, distance, 0.0, 0.0)
+
+    readings = [
+        reading("xthin", hull.MIN_CELLS - 1, 9.0),
+        reading("xthick", hull.MIN_CELLS, 2.0),
+    ]
+    text = hull.report(readings)
+    assert "xthick" in text and "xthin" not in text
+    assert hull.typicality(readings[:1]) == {}
+    t = hull.typicality(readings)
+    assert t["features"] == 1 and t["median"] == pytest.approx(2.0, abs=1e-12)
+
+
+# --- fingerprint ---------------------------------------------------------
+
+
+def _held_note(note=57, onset_s=0.1, seconds=8.0, **kw):
+    """A synthesised note with leading silence; partials start at the onset."""
+    return np.concatenate([np.zeros(int(onset_s * SR)), synth(note, seconds=seconds, **kw)])
+
+
+def _window_centre(name):
+    return next(0.5 * (lo + hi) for n, lo, hi in fingerprint.WINDOWS if n == name)
+
+
+def test_fingerprint_group_fall_follows_each_partials_own_decay():
+    sig = _held_note(decay=(3.0, 10.0, 10.0), level=(0.0, 0.0, 0.0), n_partials=3)
+    feats, _ = fingerprint.fingerprint(sig, SR, 57, 0.1)
+    span = _window_centre("2s") - _window_centre(fingerprint.BODY)
+    assert feats["h1@2s"] == pytest.approx(-3.0 * span, abs=1.5)
+    assert feats["h2-3@2s"] == pytest.approx(-10.0 * span, abs=1.5)
+    assert feats["h2-3@5s"] < feats["h2-3@2s"] - 10.0
+
+
+def test_fingerprint_groups_fall_relative_to_each_other_by_their_decay_difference():
+    sig = _held_note(decay=(3.0, 10.0, 10.0), level=(0.0, 0.0, 0.0), n_partials=3)
+    feats, _ = fingerprint.fingerprint(sig, SR, 57, 0.1)
+    span = _window_centre("2s") - _window_centre(fingerprint.BODY)
+    # Window length cancels in the difference of two groups at one station.
+    assert feats["h2-3@2s"] - feats["h1@2s"] == pytest.approx(-7.0 * span, abs=1.5)
+
+
+def test_fingerprint_features_are_independent_of_level():
+    sig = _held_note(noise_db=-70.0)
+    a, _ = fingerprint.fingerprint(sig, SR, 57, 0.1)
+    b, _ = fingerprint.fingerprint(sig * 0.1, SR, 57, 0.1)
+    assert a.keys() == b.keys() and len(a) > 20
+    assert max(abs(a[k] - b[k]) for k in a) < 1e-3
+
+
+def test_fingerprint_single_decaying_partial_does_not_beat():
+    sig = _held_note(n_partials=1, decay=(3.0,))
+    feats, _ = fingerprint.fingerprint(sig, SR, 57, 0.1)
+    assert feats["beat_h1_db"] < 0.3
+
+
+def test_fingerprint_unison_one_hertz_apart_beats_clearly():
+    sig = _held_note(n_partials=1, decay=(3.0,), level=(0.0,), extra=((221.0, 1.0, 3.0),))
+    feats, _ = fingerprint.fingerprint(sig, SR, 57, 0.1)
+    assert feats["beat_h1_db"] > 2.0
+
+
+def test_fingerprint_off_partial_rises_with_noise_between_partials():
+    quiet, _ = fingerprint.fingerprint(_held_note(noise_db=-120.0), SR, 57, 0.1)
+    noisy, _ = fingerprint.fingerprint(_held_note(noise_db=-30.0), SR, 57, 0.1)
+    assert noisy["off_partial@0.2s"] > quiet["off_partial@0.2s"] + 15.0
+
+
+def test_fingerprint_under_f0_rises_with_a_tone_below_the_fundamental():
+    quiet, _ = fingerprint.fingerprint(_held_note(noise_db=-90.0), SR, 57, 0.1)
+    rumble = _held_note(noise_db=-90.0, extra=((88.0, 0.3, 4.0),))
+    loud, _ = fingerprint.fingerprint(rumble, SR, 57, 0.1)
+    assert loud["under_f0@0.2s"] > quiet["under_f0@0.2s"] + 20.0
+
+
+def test_fingerprint_ladder_too_dense_for_the_strike_window_has_no_share_there():
+    low, _ = fingerprint.fingerprint(_held_note(33), SR, 33, 0.1)
+    assert not [k for k in low if k.endswith("@50ms") and ("_share" in k or k.startswith("off_"))]
+    assert [k for k in low if k.startswith("band") and k.endswith("@50ms")]
+    assert any(k.endswith("_share@0.2s") for k in low)
+    mid, _ = fingerprint.fingerprint(_held_note(57), SR, 57, 0.1)
+    assert "h1_share@50ms" in mid
+
+
+def _bump_points(n_notes, reach_top, seed=5):
+    """Per-note (hz, dB) points: +6 dB inside the 1 kHz band, 0 elsewhere, small noise."""
+    rng = np.random.default_rng(seed)
+    centre = fingerprint.COLOUR_BANDS_HZ[10]
+    lo, hi = centre * 2.0 ** (-1 / 6), centre * 2.0 ** (1 / 6)
+    out = {}
+    for n in range(n_notes):
+        off = rng.uniform(0.0, 1.0 / 12.0)
+        hz = 100.0 * 2.0 ** (np.arange(78) / 12.0 - 1.0 / 6.0 + off)
+        if n >= reach_top:
+            hz = hz[hz < 7000.0]
+        out[n] = [
+            (float(f), float((6.0 if lo <= f < hi else 0.0) + 0.2 * rng.standard_normal()))
+            for f in hz
+        ]
+    return out
+
+
+def test_fingerprint_colour_signature_recovers_a_fixed_frequency_bump():
+    sig = fingerprint.colour_signature(_bump_points(12, reach_top=12))
+    bump = fingerprint.COLOUR_BANDS_HZ[10]
+    assert sig[bump] == pytest.approx(6.0, abs=0.5)
+    assert all(abs(v) < 0.5 for c, v in sig.items() if c != bump)
+    assert len(sig) >= 18
+
+
+def test_fingerprint_colour_band_needs_enough_notes_to_reach_it():
+    top = fingerprint.COLOUR_BANDS_HZ[19]
+    few = fingerprint.colour_signature(_bump_points(12, reach_top=fingerprint.COLOUR_MIN_NOTES - 1))
+    enough = fingerprint.colour_signature(_bump_points(12, reach_top=fingerprint.COLOUR_MIN_NOTES))
+    assert top not in few
+    assert top in enough
+
+
+def test_fingerprint_signature_agreement_needs_five_shared_bands():
+    sig = fingerprint.colour_signature(_bump_points(12, reach_top=12))
+    assert fingerprint.signature_agreement(sig, sig) == pytest.approx(1.0, abs=1e-9)
+    bands = sorted(sig)
+    assert (
+        fingerprint.signature_agreement(
+            {c: sig[c] for c in bands[:4]}, {c: sig[c] for c in bands[:4]}
+        )
+        is None
+    )
+    five = {c: sig[c] for c in bands[8:13]}
+    assert fingerprint.signature_agreement(five, five) == pytest.approx(1.0, abs=1e-9)
+    assert (
+        fingerprint.signature_agreement(
+            {c: sig[c] for c in bands[:6]}, {c: sig[c] for c in bands[6:]}
+        )
+        is None
+    )

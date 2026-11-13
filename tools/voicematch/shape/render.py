@@ -62,6 +62,7 @@ sys.path.insert(0, "tools"); sys.path.insert(0, "tools/voicematch")
 pairs = [tuple(p) for p in json.loads(sys.argv[1])]
 out, root = sys.argv[2], sys.argv[3]
 stimulus = json.load(sys.stdin)
+stereo = stimulus.get("stereo", False)
 fields = dict(stimulus["request"], smf=b"")
 if root:
     from corpus import load_corpus
@@ -70,7 +71,7 @@ if root:
     def get(n, v):
         x, _ = read_wav(c.renders[(n, v)])
         m = np.asarray(x, dtype=np.float64)
-        return (m.mean(axis=1) if m.ndim > 1 else m).astype(np.float32)
+        return (m.mean(axis=1) if m.ndim > 1 and not stereo else m).astype(np.float32)
 else:
     from boundary import RenderRequest
     from render_model import render_request
@@ -82,7 +83,7 @@ else:
                         channel=request.channel, end_pad=2.0)
         a = np.asarray(render_request(dataclasses.replace(request, smf=smf)),
                        dtype=np.float32)
-        return a.mean(axis=1) if a.ndim > 1 else a
+        return a.mean(axis=1) if a.ndim > 1 and not stereo else a
 np.savez(out, **{f"{n}_{v}": get(n, v) for n, v in pairs})
 """
 
@@ -127,6 +128,8 @@ class Signals:
     preroll_s: float = 0.0
     lib_path: str = ""
     cache_dir: Path = Path("/tmp/voicematch-shape")
+    #: Keep the channels instead of folding to mono; a width reading needs both.
+    stereo: bool = False
 
     def __post_init__(self) -> None:
         self.cache_dir = Path(self.cache_dir)
@@ -168,6 +171,8 @@ class Signals:
                 self.preroll_s,
                 self.lib_path,
             ]
+            # Appended only when set, so every mono cache written before the option keeps its key.
+            + (["stereo"] if self.stereo else [])
         )
         return hashlib.sha1(blob.encode()).hexdigest()[:16]
 
@@ -208,6 +213,7 @@ class Signals:
                         },
                         "gate_s": self.gate_s,
                         "preroll_s": self.preroll_s,
+                        "stereo": self.stereo,
                     }
                 ),
                 capture_output=True,

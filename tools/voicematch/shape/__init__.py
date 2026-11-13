@@ -26,6 +26,8 @@ The modules, in dependency order:
     purity    how much of a render is the played string and how much is not
     admittance  the prompt decay against the aftersound, per absolute frequency
     takes     phrase material -- chords, pedal, repeats -- against a reference
+    fingerprint  what a note's spectrum does over time, as ratios inside one render
+    hull      how far outside the references' own disagreement a subject sits
     reach     which residuals any parameter can move, and which none can
     search    coordinate descent, single-move ablation, and pruning
 
