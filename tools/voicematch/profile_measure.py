@@ -60,7 +60,7 @@ from metrics_lines import (
     stationary_lines,
 )
 from metrics_modal import modal_profile
-from metrics_motion import CoherenceState
+from metrics_motion import CoherenceState, partial_coherence, warp_reading
 from metrics_note import (
     BODY_MIN_F0_HZ,
     BODY_WINDOW_S,
@@ -1023,8 +1023,17 @@ def measure_note(
     if warped:
         freqs, mag = _spectrum(read_seg, sr)
     stiffness = row["inharmonicity_b"] if row.get("inharmonicity_reliable") else 0.0
+    own_mask = measure_tnr_mask(held[a:b], sr, row["f0_hz"])
+    # The note's own pitch motion, beside the mask it is read through, since the model's
+    # mask is its reference's. Where the reference is measured, the coherence of the
+    # partials' tracks says whether one source made it.
+    if "fm" in own_mask:
+        row["fm"] = own_mask["fm"]
+        if tnr_mask is None:
+            row["fm_warp"] = warp_reading(held[a:b], sr, row["f0_hz"])
+            row["fm_coherence"] = round(partial_coherence(held[a:b], sr, row["f0_hz"]), 3)
     if tnr_mask is None:
-        tnr_mask = measure_tnr_mask(held[a:b], sr, row["f0_hz"])
+        tnr_mask = own_mask
     row["tnr_mask"] = tnr_mask
     tnr = (
         float("nan")

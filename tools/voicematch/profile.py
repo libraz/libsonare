@@ -124,6 +124,7 @@ from metrics import (
 )
 from metrics_floor import body_floor_state, tnr_floor_state
 from metrics_lines import BODY_LINES_REASON, STATIONARY_LINES_REASON
+from metrics_motion import motion_deltas, recording_motion
 from phrases import TAKE_SETS, build_takes
 from profile_gate import (
     DELTA_LABELS,
@@ -1571,6 +1572,7 @@ def compare(
     # Per row, the window the model was read through and the span the reference row was read on.
     model_windows: list[float] = []
     reference_spans: list[float | None] = []
+    reference_motion = recording_motion([ref[p] for p in pairs])
     for note, vel in pairs:
         window_s = window(note, vel)
         r = ref[(note, vel)]
@@ -1602,6 +1604,8 @@ def compare(
         attempted += 1
         tails_s.append(window_s - preroll_s - gate_row)
         tally.begin_row()
+        if not reference_motion["gated"]:
+            tally.absent("motion", False, True)
         model_rows.append({**m, "timbre": "model", "note": note, "velocity": vel})
         model_windows.append(gate_row)
         reference_spans.append(float(r["window"]["reference_s"]) if r.get("window") else None)
@@ -1782,6 +1786,19 @@ def compare(
     if register:
         deltas["register"] = [d for _, _, d in register]
         print_register_profile(register, register_spread_by_note(profile))
+    motion = motion_deltas([ref[p] for p in pairs], model_rows)
+    if motion:
+        deltas["motion"] = motion
+    elif reference_motion["moving"]:
+        print(f"\n  motion is not gated: {reference_motion['reason']}")
+    if "states" in reference_motion:
+        counts = ", ".join(f"{k} {v}" for k, v in reference_motion["states"].items())
+        print(
+            f"  motion coherence: {reference_motion['coherence_state']} "
+            f"({reference_motion['coherence']}); rows {counts} of {reference_motion['moving']}"
+        )
+    if warp := reference_motion.get("warp_ratio"):
+        print(f"  motion w20 unwarp ratio {warp} (recorded, not a condition)")
     summary = select_dimensions(
         summarize_deltas(deltas), cfg.get("dimensions") or [], cfg.get("dimensions_na") or {}
     )
@@ -1848,6 +1865,7 @@ def compare(
             velocity_layers=layers,
             windows=windows,
             censored=censored,
+            motion=reference_motion,
         )
     if gate_path:
         return check_gate(

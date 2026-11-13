@@ -37,7 +37,12 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 import status
 from _repo import REPO_ROOT
-from profile_gate import DELTA_LABELS, PER_NOTE_DIMENSIONS, dimension_floor
+from profile_gate import (
+    DELTA_LABELS,
+    PER_NOTE_DIMENSIONS,
+    PER_RECORDING_DIMENSIONS,
+    dimension_floor,
+)
 from profile_measure import is_percussion
 from velocity_layers import VELOCITY_SWING_DIMENSIONS, layer_summary
 
@@ -168,7 +173,7 @@ def dimension_rows(
         if not isinstance(s, dict) or RANK_STAT not in s:
             continue
         floor, source = dimension_floor(key, spread)
-        want = notes if key in PER_NOTE_DIMENSIONS else grid
+        want = PER_RECORDING_DIMENSIONS.get(key, notes if key in PER_NOTE_DIMENSIONS else grid)
         n = int(s.get("n", 0))
         row = {
             "dimension": key,

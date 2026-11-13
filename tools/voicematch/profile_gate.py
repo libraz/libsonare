@@ -12,6 +12,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 import numpy as np
+from metrics_motion import motion_deltas, recording_motion
 from metrics_signal import ENVELOPE_HOP_MS
 from profile_measure import double_decay_gap, register_deltas
 from profile_summary import a4_offset_cents, partial_balance_db, partial_tilt_db_s
@@ -49,6 +50,7 @@ DELTA_LABELS = {
     "ring": "ring length, + = model rings longer (doublings)",
     "tonality": "spectral flatness, + = model is noisier (dB)",
     "tilt_rise": "tilt change from strike to body, + = model brightens more (dB)",
+    "motion": "pitch motion depth, rate (doublings), + = model moves more",
 }
 
 
@@ -280,6 +282,11 @@ def timbre_pair_deltas(rows: list[dict], a: str, b: str) -> dict[str, list[float
     register = register_deltas(register_levels(rows, a), register_levels(rows, b))
     if register:
         out["register"] = [d for _, _, d in register]
+    rows_a, rows_b = ([r for r in rows if r["timbre"] == t] for t in (a, b))
+    if recording_motion(rows_a)["gated"]:
+        motion = motion_deltas(rows_b, rows_a)
+        if motion:
+            out["motion"] = motion
     return out
 
 
@@ -346,7 +353,10 @@ def summarize_deltas(deltas: dict[str, list[float]]) -> dict[str, dict]:
 #: aggregating that note's velocities, so a count below the grid's is their shape
 #: and not evidence a censor took away. Reporting them as thin would put a line
 #: on every gate and teach the reader to skip the one that means something.
-PER_NOTE_DIMENSIONS = ("vel_range", "attack_hf_swing", "register")
+#: Dimensions read once per recording: how many deltas that one reading yields.
+PER_RECORDING_DIMENSIONS = {"motion": 2}
+
+PER_NOTE_DIMENSIONS = ("vel_range", "attack_hf_swing", "register", *PER_RECORDING_DIMENSIONS)
 
 #: Floor for a dimension with neither a measured spread nor a guess. Nobody
 #: chose it for the dimension it lands on, in whatever unit that is: 101 of 119
@@ -392,6 +402,9 @@ FLOOR_GUESSES = {
     "tonality": 1.0,
     # A decibel of tilt, the unit `band_tilt` is floored in.
     "tilt_rise": 1.0,
+    # A synthetic 20 c vibrato at 5.5 Hz reads 19.98 c (0.002 doubling) and a rate span of
+    # 5.18-5.87 Hz (0.1 doubling either side); twice that, as no capture has two references.
+    "motion": 0.25,
 }
 
 
@@ -697,12 +710,15 @@ def write_summary_json(
     velocity_layers: dict | None = None,
     windows: dict[str, dict] | None = None,
     censored: dict[str, int] | None = None,
+    motion: dict | None = None,
 ) -> None:
     """Record a compare run's summary and its gate readings for a tool to read.
 
     @p windows (see `window_spans`) is recorded beside the summary, and the gate's
     readings are taken against it. @p censored is the rows each dimension dropped as
     censored (`damper`), recorded beside the summary the same way.
+
+    @p motion is the reference's `recording_motion`, whose `states` count the rows by coherence state.
 
     @p velocity_layers is the reference's `velocity_layers.layer_summary`, recorded
     so a velocity-swing reading is read against the recordings behind the grid.
@@ -726,6 +742,8 @@ def write_summary_json(
         record["windows"] = windows
     if censored:
         record["censored"] = censored
+    if motion and motion.get("moving"):
+        record["motion"] = motion
     out_path.write_text(json.dumps(record, indent=2, default=float) + "\n")
 
 
@@ -1054,6 +1072,7 @@ CENSOR_BY_DIMENSION = {
     "tnr": "tnr_at_floor",
     "band_decay": "decay_capped",
     "ring": "decay_capped",
+    "motion": "no single periodic motion in the reference; its rows' fm_warp say why",
 }
 
 

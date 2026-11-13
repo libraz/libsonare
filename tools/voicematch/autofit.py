@@ -2661,7 +2661,9 @@ def _fold_gate_audit(args, build_dir, compare=gate_audit.compare_voice) -> None:
         weighing = gate_audit.weighting(weights, table, own, classified=set(own))
     else:
         weighing = gate_audit.weighting(weights, refit.GATE_TERMS, refit.GATE_OWN_TERMS)
-    entries = gate_audit.audit(json.loads(pre.read_text()), json.loads(post.read_text()), weighing)
+    post_body = json.loads(post.read_text())
+    entries = gate_audit.audit(json.loads(pre.read_text()), post_body, weighing)
+    motion_states = post_body.get("motion_states") or {}
     flagged = gate_audit.summary(entries)
     classes = {c.id: c.source_class for c in bank.captures()}
     gate_layers = {
@@ -2678,6 +2680,7 @@ def _fold_gate_audit(args, build_dir, compare=gate_audit.compare_voice) -> None:
         "gates": [g["capture"] for g in voice["gates"]],
         "layers": gate_layers,
         "entries": entries,
+        **({"motion_states": motion_states} if motion_states else {}),
         **flagged,
     }
     path.write_text(json.dumps(_json_safe(record), indent=2, allow_nan=False) + "\n")
@@ -2685,6 +2688,8 @@ def _fold_gate_audit(args, build_dir, compare=gate_audit.compare_voice) -> None:
         if layer == policy.LAYER_OFF:
             print(f"gate audit: {cap}: comparison ({layer})", file=sys.stderr)
     print("\n" + "\n".join(gate_audit.format_flagged(entries)), file=sys.stderr)
+    if motion_states:
+        print("\n".join(gate_audit.format_motion_states(motion_states)), file=sys.stderr)
 
 
 #: The range a per-knob budget is held in. Below the floor a small spec gets fewer

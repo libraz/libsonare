@@ -32,6 +32,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from enum import Enum
 
+from metrics_motion import DIMENSION
+
 
 class ToneClass(str, Enum):
     SUSTAINED = "sustained"
@@ -505,6 +507,17 @@ _MELODIC_ALL = (
 #: the voices whose excitation sets an onset overshoot.
 _BREATH_ONSET_DIMENSIONS = ("onset", "onset_settle")
 
+#: One reading per recording of the vibrato depth and rate (`metrics_motion`), judged where a
+#: single player's or voice's pitch moves. The name is the one `knob-classes.json` `reach` requires.
+_MOTION_DIMENSIONS = (DIMENSION,)
+
+#: Programs that sustain a pitch one player or voice moves:
+#:   bowed strings 40-43 and the fiddle 110: a bow holds the note and a hand vibrates it;
+#:   brass 56-61, reeds 64-71 and pipes 72-79: a breath holds it and the lip or breath vibrates it;
+#:   voice oohs 53 and synth voice 54: a single voice. Choir 52 and the string sections 48-49
+#:   are ensembles, whose lines the unwarp test leaves wide, so they are not offered the dimension.
+_MOTION_PROGRAMS = frozenset((*range(40, 44), 110, 53, 54, *range(56, 62), *range(64, 80)))
+
 
 def _melodic(tone: ToneClass, drop: tuple[str, ...] = ()) -> tuple[str, ...]:
     """`_MELODIC_ALL` less `drop`, and less the ladder rulers where `tone` has no ladder."""
@@ -579,6 +592,8 @@ def canonical_dimensions(
     dims = CANONICAL_DIMENSIONS[tone_class(program)]
     if fit_profile(program).excitation is ExcitationFamily.BREATH_ONSET:
         dims += _BREATH_ONSET_DIMENSIONS
+    if program in _MOTION_PROGRAMS:
+        dims += _MOTION_DIMENSIONS
     return dims
 
 

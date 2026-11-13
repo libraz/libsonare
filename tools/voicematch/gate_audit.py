@@ -98,15 +98,23 @@ def compare_voice(
         body = json.loads(out.read_text())
         if body.get("gate"):
             body["gate"]["readings"] = _with_windows(body)
+        if body.get("motion"):
+            body["motion_states"] = {voice["capture"]: body["motion"]["states"]}
     else:
         readings = []
+        motion_states = {}
         for g in voice["gates"]:
             part = out.with_name(f"{out.stem}.{g['capture']}.json")
             if not part.exists():
                 compare({**voice, **g}, part, lib, overrides, base_overrides=base_overrides)
-            for r in _with_windows(json.loads(part.read_text())):
+            record = json.loads(part.read_text())
+            for r in _with_windows(record):
                 readings.append({**r, "key": f"{g['capture']}:{r['key']}"})
+            if record.get("motion"):
+                motion_states[g["capture"]] = record["motion"]["states"]
         body = {"gate": {"readings": readings}}
+        if motion_states:
+            body["motion_states"] = motion_states
     if baseline is not None:
         body["baseline"] = baseline
     out.write_text(json.dumps(body, indent=2) + "\n")
@@ -216,6 +224,14 @@ def weighting(
 def summary(entries: list[dict]) -> dict[str, list[dict]]:
     """The entries a fit made worse past a bound: newly over it, or further over it."""
     return {s: [e for e in entries if e["state"] == s] for s in ("crossed", "worse_over")}
+
+
+def format_motion_states(states: dict[str, dict[str, int]]) -> list[str]:
+    """One line per capture counting its reference rows by coherence state, undecided included."""
+    return [
+        f"  motion coherence {capture}: " + ", ".join(f"{state} {n}" for state, n in counts.items())
+        for capture, counts in sorted(states.items())
+    ]
 
 
 def format_flagged(entries: list[dict]) -> list[str]:
