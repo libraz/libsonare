@@ -98,7 +98,7 @@ def compare_voice(
         body = json.loads(out.read_text())
         if body.get("gate"):
             body["gate"]["readings"] = _with_windows(body)
-        if body.get("motion"):
+        if (body.get("motion") or {}).get("states"):
             body["motion_states"] = {voice["capture"]: body["motion"]["states"]}
     else:
         readings = []
@@ -110,7 +110,7 @@ def compare_voice(
             record = json.loads(part.read_text())
             for r in _with_windows(record):
                 readings.append({**r, "key": f"{g['capture']}:{r['key']}"})
-            if record.get("motion"):
+            if (record.get("motion") or {}).get("states"):
                 motion_states[g["capture"]] = record["motion"]["states"]
         body = {"gate": {"readings": readings}}
         if motion_states:
