@@ -558,25 +558,19 @@ def test_a_wobble_the_still_reference_does_not_have_is_charged_until_it_is_gone(
     assert gone < 0.1 * wobbling
 
 
-def test_out_of_band_fm_is_charged_one_sided_and_leaves_a_vibrato_match_alone():
-    """The reference's own vibrato terms are scored exactly as without the new fields.
-
-    Only the model's excess over the reference's reading in the same band is
-    charged, so a model no busier than a vibrato reference outside its band
-    scores what it scored before those readings existed.
-    """
+def test_out_of_band_fm_is_charged_both_ways_and_leaves_the_vibrato_terms_alone():
+    """The vibrato terms score exactly as without the fm fields; each fm band adds its own distance."""
     reference = _moving(20.0, 1.5, rate=5.5) | {"fm_slow_cents": 0.4, "fm_fast_cents": 1.2}
     model = _moving(14.0, 1.0, rate=6.5) | {"fm_slow_cents": 0.1, "fm_fast_cents": 0.9}
 
     def strip(row: dict) -> dict:
         return {k: v for k, v in row.items() if not k.startswith("fm_")}
 
-    assert _mod_terms([model], [reference])[0] == pytest.approx(
-        _mod_terms([strip(model)], [strip(reference)])[0]
-    )
+    base = _mod_terms([strip(model)], [strip(reference)])[0]
+    assert _mod_terms([model], [reference])[0] == pytest.approx(base + 0.3 / 5.0 + 0.3 / 0.5)
     busier = model | {"fm_fast_cents": 2.2}
     assert _mod_terms([busier], [reference])[0] == pytest.approx(
-        _mod_terms([model], [reference])[0] + (2.2 - 1.2) / 0.5
+        _mod_terms([model], [reference])[0] + (2.2 - 1.2) / 0.5 - 0.3 / 0.5
     )
 
 

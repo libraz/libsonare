@@ -453,6 +453,8 @@ def print_summary_table(summary: dict[str, dict], spread: dict[str, float], atte
             f"{(f'{ratio:8.1f}x' if ratio is not None else '        -')} "
             f"{row['n']:5d} {missing}"
         )
+    if "tnr" in summary:
+        print("  caution: tnr reads vibrato/chorus/beating as noise until the measure is fixed")
     thin = [
         k for k, row in summary.items() if k not in PER_NOTE_DIMENSIONS and row["n"] < attempted
     ]

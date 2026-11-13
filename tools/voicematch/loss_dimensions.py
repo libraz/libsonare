@@ -92,6 +92,11 @@ LEVEL_DELTA_CAP_DB = 18.0
 # A string that has lost its fundamental reads tens of dB here against a floor on
 # both sides; capped as the attack bands are, so one such note cannot decide the fit.
 BODY_DELTA_CAP_DB = 24.0
+# What a note costs `bright` (percent) or `arrival` (ms) when the reference has
+# the reading and the model has none. Neither term caps a measured delta; both
+# borrow the body term's cap, the only per-note cap among their siblings.
+BRIGHT_ABSENT_CAP = BODY_DELTA_CAP_DB
+ARRIVAL_ABSENT_CAP = BODY_DELTA_CAP_DB
 # What a note charges `tnr` when the model's own window fell silent (NaN) while
 # the reference's did not: the same cap the other absent-model terms use,
 # rather than skipping a note a fit could make disappear for free.
@@ -379,6 +384,13 @@ def _attack_hf_share(row: dict) -> float | None:
     return float(np.median(vals)) if vals else None
 
 
+def _readable_slope(model_rows, oracle_rows_, idx: list[int], read, *, oracle: bool) -> bool:
+    """Whether one side's own readings over a pitch's notes span enough velocity to fit a slope."""
+    rows = oracle_rows_ if oracle else model_rows
+    vel = [float(model_rows[i]["velocity"]) for i in idx if read(rows[i]) is not None]
+    return len(vel) >= 2 and max(vel) - min(vel) >= DYN_MIN_VELOCITY_SPREAD
+
+
 def _dyn_terms(
     model_rows: list[dict],
     oracle_rows_: list[dict],
@@ -413,16 +425,24 @@ def _dyn_terms(
     total = 0.0
     used = 0
     capped = 0
+    absent = 0
     for idx in groups.values():
         pairs = []
         for i in idx:
             m, o = read(model_rows[i]), read(oracle_rows_[i])
             if m is not None and o is not None:
                 pairs.append((float(model_rows[i]["velocity"]), m, o))
-        if len(pairs) < 2:
-            continue
         vel = [p[0] for p in pairs]
-        if max(vel) - min(vel) < DYN_MIN_VELOCITY_SPREAD:
+        if len(pairs) < 2 or max(vel) - min(vel) < DYN_MIN_VELOCITY_SPREAD:
+            # No shared curve. A reference that reads a slope where the model
+            # reads none is the model failing to sound, charged the cap.
+            if _readable_slope(model_rows, oracle_rows_, idx, read, oracle=True) and not (
+                _readable_slope(model_rows, oracle_rows_, idx, read, oracle=False)
+            ):
+                total += cap_db
+                capped += 1
+                absent += 1
+                used += 1
             continue
         v = np.asarray(vel, dtype=np.float64)
         sm = float(np.polyfit(v, [p[1] for p in pairs], 1)[0]) * DYN_VELOCITY_SPAN
@@ -433,6 +453,7 @@ def _dyn_terms(
         used += 1
     if counts is not None:
         counts["capped"] = float(capped)
+        counts["absent"] = float(absent)
     return (total / used if used else 0.0), used
 
 
@@ -518,8 +539,10 @@ def _onset_terms(
 ) -> tuple[float, int]:
     """How far each cell's onset overshoot and settle sit from the reference's.
 
-    A cell either side reads onset-ineligible is excluded, not scored at zero,
-    and counted by side; the compared count is what the coverage guard reads.
+    A cell the reference reads onset-ineligible is excluded, not scored at zero.
+    A cell the model reads ineligible where the reference does not is charged
+    both caps. Both are counted by side; the compared count is what the
+    coverage guard reads.
     """
     total = 0.0
     compared = ref_out = model_out = 0
@@ -530,7 +553,10 @@ def _onset_terms(
             continue
         ov_m, st_m = (_finite_or_none(m.get(k)) for k in ("onset_overshoot_db", "onset_settle_ms"))
         if ov_m is None or st_m is None:
+            # The reference has an onset and the model reads none: charged both caps.
             model_out += 1
+            total += ONSET_OVERSHOOT_CAP_DB + ONSET_SETTLE_CAP_DOUBLINGS
+            compared += 1
             continue
         settle = abs(math.log2((st_m + ONSET_SETTLE_OFFSET_MS) / (st_o + ONSET_SETTLE_OFFSET_MS)))
         total += min(abs(ov_m - ov_o), ONSET_OVERSHOOT_CAP_DB)
@@ -812,9 +838,9 @@ MOD_RATE_CAP_HZ = 4.0
 #: Below this much depth a modulation is not present, so its rate says nothing.
 MOD_RATE_MIN_CENTS = 5.0
 MOD_RATE_MIN_DB = 1.0
-#: Pitch modulation outside the vibrato band, charged only where the model has
-#: more than the reference. Past 9 Hz it is heard as sidebands rather than as
-#: pitch movement, so a tenth of the vibrato's step already counts as one.
+#: Pitch modulation outside the vibrato band, charged both ways. Past 9 Hz it is
+#: heard as sidebands rather than as pitch movement, so a tenth of the vibrato's
+#: step already counts as one.
 MOD_FM_SLOW_CENTS_PER_UNIT = 5.0
 MOD_FM_FAST_CENTS_PER_UNIT = 0.5
 MOD_FM_SLOW_CAP_CENTS = 60.0
@@ -848,15 +874,14 @@ def _mod_terms(
     cliff in it rewarding exactly that, and a decaying note reads as still by
     construction, since `measure_modulation` detrends the level track.
 
-    **Pitch modulation outside the vibrato band is charged one-sided.** A model
+    **Pitch modulation outside the vibrato band is charged both ways.** A model
     LFO the reference does not have — a 23 Hz wobble of a fraction of a cent, or
     a 2 Hz drift — puts sidebands around every partial that no other term
     attributes to it, while the 3-9 Hz rate is skipped against a still
-    reference. Only the model's excess over the reference's own reading in the
-    same band is charged, so sampler-loop and breath jitter the reference
-    carries are not demanded back, and a model stiller than the reference
-    costs nothing here. It applies whatever the reference's vibrato depth,
-    because neither band can hold a vibrato.
+    reference. A model stiller than a reference that carries the movement is
+    equally a difference, and the depth parts cannot see it because these bands
+    sit outside the vibrato's. It applies whatever the reference's vibrato
+    depth, because neither band can hold a vibrato.
     """
     total = 0.0
     used = 0
@@ -910,12 +935,12 @@ def _mod_terms(
                 # A model too dead to read is charged by the depth parts above.
                 continue
             scored = True
-            excess = max(0.0, mv - ov)
-            parts.append(min(excess, cap) / scale)
+            delta = abs(mv - ov)
+            parts.append(min(delta, cap) / scale)
             if tally is not None:
-                tally.clipped += excess >= cap
-                tally.compared += excess < cap
-                tally.excess += max(0.0, excess - cap) / scale
+                tally.clipped += delta >= cap
+                tally.compared += delta < cap
+                tally.excess += max(0.0, delta - cap) / scale
         if scored:
             total += sum(parts)
             used += 1
@@ -943,7 +968,8 @@ def _stiff_terms(
     clean sheet. That is a real property of a real string and it belongs in a
     term of its own rather than as a contaminant of the timbre ones.
 
-    Counted only where both sides fitted enough partials to mean it. Unlike the
+    Counted where the reference fitted enough partials to mean it; a model that
+    did not is charged the cap. Unlike the
     dynamics term, a zero here is a legitimate match rather than a missing
     measurement: two harmonic instruments genuinely agree that neither stretches.
     """
@@ -952,14 +978,13 @@ def _stiff_terms(
     capped = 0
     for m, o in zip(model_rows, oracle_rows_):
         mb, ob = m.get("inharmonicity_b"), o.get("inharmonicity_b")
-        if mb is None or ob is None:
+        if ob is None or o.get("inharmonicity_partials", 0) < MIN_PARTIALS_FOR_B:
             continue
-        if (
-            m.get("inharmonicity_partials", 0) < MIN_PARTIALS_FOR_B
-            or o.get("inharmonicity_partials", 0) < MIN_PARTIALS_FOR_B
-        ):
-            continue
-        delta = abs(stretch_cents(mb) - stretch_cents(ob))
+        if mb is None or m.get("inharmonicity_partials", 0) < MIN_PARTIALS_FOR_B:
+            # The reference fitted a series and the model's did not: charged the cap.
+            delta = STIFF_DELTA_CENTS_CAP
+        else:
+            delta = abs(stretch_cents(mb) - stretch_cents(ob))
         capped += int(delta >= STIFF_DELTA_CENTS_CAP)
         total += min(delta, STIFF_DELTA_CENTS_CAP)
         used += 1

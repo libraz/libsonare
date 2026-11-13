@@ -254,14 +254,18 @@ def test_a_strike_too_dark_is_scored_where_the_rise_and_the_whole_hit_tilt_agree
     assert percussion_terms([_hit(bands, [-20.0])], [ref])["strike_hits"] == 0.0
 
 
-def test_a_ring_half_as_long_costs_a_doubling_and_a_capped_one_costs_nothing():
+def test_a_ring_half_as_long_costs_a_doubling_and_a_capped_reference_costs_nothing():
     bands = [0.0, -6.0, -12.0]
     ref = _hit(bands, [-20.0], decay_ms=1000.0)
     terms = percussion_terms([_hit(bands, [-20.0], decay_ms=500.0)], [ref])
     assert terms["ring"] == pytest.approx(1.0)
     assert terms["ring_hits"] == 1.0
-    capped = {**_hit(bands, [-20.0], decay_ms=500.0), "decay_capped": True}
-    assert percussion_terms([capped], [ref])["ring_hits"] == 0.0
+    capped_ref = {**ref, "decay_capped": True}
+    assert (
+        percussion_terms([_hit(bands, [-20.0], decay_ms=500.0)], [capped_ref])["ring_hits"] == 0.0
+    )
+    capped_model = {**_hit(bands, [-20.0], decay_ms=500.0), "decay_capped": True}
+    assert percussion_terms([capped_model], [ref])["ring"] == pytest.approx(1.0)
 
 
 def test_one_empty_band_cannot_decide_the_whole_objective():

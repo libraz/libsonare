@@ -1194,13 +1194,13 @@ def test_the_onset_term_falls_as_the_candidate_reaches_the_reference_onset():
 
 
 def test_an_onset_ineligible_cell_is_excluded_and_counted_by_side():
-    """Never a zero error: a decaying cell is left out and the side it fell on is counted."""
+    """A decaying reference cell is left out; a decaying model cell is charged both caps. Each side is counted."""
     from loss_dimensions import _onset_terms
 
     held, decaying = _onset_row(4.0, 60.0), _onset_row(0.0, 0.0, decay_db_s=20.0)
     counts: dict[str, float] = {}
     value, compared = _onset_terms([held, decaying, held], [decaying, held, held], counts=counts)
-    assert compared == 1 and value == pytest.approx(0.0, abs=1e-9)
+    assert compared == 2 and value == pytest.approx(8.0)
     assert counts == {"ref_ineligible": 1.0, "model_ineligible": 1.0}
     assert _onset_terms([held], [decaying]) == (0.0, 0)
 

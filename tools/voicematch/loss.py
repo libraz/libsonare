@@ -27,11 +27,13 @@ import numpy as np
 # ruff: noqa: F401
 from loss_dimensions import (
     _SHARED_TERMS,
+    ARRIVAL_ABSENT_CAP,
     BAND_DELTA_CAP_DB,
     BAND_REFERENCE_FLOOR_DB,
     BDECAY_MIN_RATE_DB_S,
     BDECAY_OCTAVE_CAP,
     BODY_DELTA_CAP_DB,
+    BRIGHT_ABSENT_CAP,
     DYN_DELTA_CAP_DB,
     DYN_MIN_VELOCITY_SPREAD,
     DYN_VELOCITY_SPAN,
@@ -739,15 +741,22 @@ def loss_terms(
     cells = {t: CellCount() for t in ("env", "init", "slope", "tail", "hf", "lf", "mod", "modes")}
     bright_hits = arrival_hits = body_hits = 0
     for m, o in zip(model_rows, oracle_rows_):
-        if o.get("centroid_hz") and m.get("centroid_hz"):
-            totals["bright"] += abs(100.0 * (m["centroid_hz"] / o["centroid_hz"] - 1.0))
+        # A reading the reference has and the model lacks costs the cap and still counts as a hit.
+        if o.get("centroid_hz"):
+            if m.get("centroid_hz"):
+                totals["bright"] += abs(100.0 * (m["centroid_hz"] / o["centroid_hz"] - 1.0))
+            else:
+                totals["bright"] += BRIGHT_ABSENT_CAP
             bright_hits += 1
-        if o.get("arrival_ms") is not None and m.get("arrival_ms") is not None:
-            totals["arrival"] += abs(m["arrival_ms"] - o["arrival_ms"])
+        if o.get("arrival_ms") is not None:
+            if m.get("arrival_ms") is not None:
+                totals["arrival"] += abs(m["arrival_ms"] - o["arrival_ms"])
+            else:
+                totals["arrival"] += ARRIVAL_ABSENT_CAP
             arrival_hits += 1
-        if o.get("body_below_f0_db") is not None and m.get("body_below_f0_db") is not None:
-            totals["body"] += min(
-                abs(m["body_below_f0_db"] - o["body_below_f0_db"]), BODY_DELTA_CAP_DB
+        if o.get("body_below_f0_db") is not None:
+            totals["body"] += _absent_or(
+                m.get("body_below_f0_db"), o["body_below_f0_db"], BODY_DELTA_CAP_DB
             )
             body_hits += 1
         pairs = list(zip(m["harmonics_db"][:n_harm], o["harmonics_db"][:n_harm]))
@@ -776,8 +785,13 @@ def loss_terms(
             if audibility
             else np.ones(len(pairs))
         )
+        # A model whose every partial above h1 sits on the sentinel where the
+        # reference has some is silent, not above Nyquist: its floor is charged.
+        silent_model = not any(mh > -120.0 for mh, _ in pairs[1:]) and any(
+            oh > -120.0 for _, oh in pairs[1:]
+        )
         for i, (mh, oh) in enumerate(pairs):
-            if mh <= -120.0 or oh <= -120.0:
+            if oh <= -120.0 or (mh <= -120.0 and not (silent_model and i > 0)):
                 continue
             if not (present_m[i] or present_o[i]):
                 # Neither side has a partial here. Charging the difference
@@ -989,8 +1003,11 @@ def percussion_terms(
         if tilt_m is not None and tilt_o is not None:
             totals["tilt"] += abs(tilt_m - tilt_o)
             tilt_hits += 1
-        if o.get("centroid_hz") and m.get("centroid_hz"):
-            totals["bright"] += abs(100.0 * (m["centroid_hz"] / o["centroid_hz"] - 1.0))
+        if o.get("centroid_hz"):
+            if m.get("centroid_hz"):
+                totals["bright"] += abs(100.0 * (m["centroid_hz"] / o["centroid_hz"] - 1.0))
+            else:
+                totals["bright"] += BRIGHT_ABSENT_CAP
             bright_hits += 1
         flat_m, flat_o = m.get("flatness_db"), o.get("flatness_db")
         if flat_m is not None and flat_o is not None:
@@ -1004,7 +1021,8 @@ def percussion_terms(
         if strike_m is not None and strike_o is not None:
             totals["strike"] += abs(strike_m - strike_o)
             strike_hits += 1
-        ring = ring_doublings(m, o)
+        # A capped model decay is a lower bound, kept as `loss_kit` keeps it; a capped reference is still refused.
+        ring = ring_doublings({**m, "decay_capped": False}, o)
         if ring is not None:
             totals["ring"] += abs(ring)
             ring_hits += 1
