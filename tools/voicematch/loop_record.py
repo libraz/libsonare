@@ -348,13 +348,13 @@ def detect_loop(held: np.ndarray, sr: int) -> dict:
         "reach_ms": round(1000.0 * max(f["lmax"] for f in frames) / sr, 1),
     }
     if unconfirmed:
-        rec["period_agreeing_frames"] = agreeing
+        rec["period_agreeing_frames"] = int(agreeing)
     if not looped:
         rec["borderline"] = best_db <= BORDERLINE_DB
         return rec
     lag = best["L"]
     join = _join_s(xn, sr, lag, end, best_db)
-    rec["period_ms"] = round(1000.0 * lag / sr, 3)
+    rec["period_ms"] = round(1000.0 * float(lag) / sr, 3)
     rec["join_s"] = None if join is None else round(join, 3)
     return rec
 
