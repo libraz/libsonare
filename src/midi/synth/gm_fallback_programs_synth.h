@@ -668,8 +668,22 @@ SONARE_TUNED_CONSTEXPR void configure_synth_bass_and_brass_programs(ProgramOverr
   // everything above — h3 to h6 all sit within 6 dB of each other at every note
   // and every velocity, so there is no series above the knee to shape.
   o.synth_bass_1 = sbass;
-  o.synth_bass_1.cutoff_hz = 183.385f;
-  o.synth_bass_1.resonance_q = 1.05669f;
+  // A filter envelope opens the ~270 Hz corner by 2.6 octaves at the pluck and a
+  // key-tracked noise band fills under the note; against the module this took the
+  // attack's high-band share from 31 to 4 dB off and the centroid from 33 to 12 %.
+  o.synth_bass_1.cutoff_hz = 266.493f;
+  o.synth_bass_1.resonance_q = 1.88962f;
+  o.synth_bass_1.key_track = 0.258796f;
+  o.synth_bass_1.env_to_cutoff_cents = 3093.56f;
+  o.synth_bass_1.filter_env.attack_ms = 51.0895f;
+  o.synth_bass_1.filter_env.decay_ms = 703.586f;
+  o.synth_bass_1.filter_env.sustain = 0.214616f;
+  o.synth_bass_1.va.noise_level = 0.0241884f;
+  o.synth_bass_1.va.band_noise_level = 0.0121555f;
+  o.synth_bass_1.va.band_noise_low_hz = 63.7739f;
+  o.synth_bass_1.va.band_noise_low_key_track = 0.474587f;
+  o.synth_bass_1.va.band_noise_high_hz = 1124.78f;
+  o.synth_bass_1.va.band_noise_high_key_track = 0.823853f;
   // The reference falls 0.06 dB/s under a held key, which is nearly flat and is
   // not nothing: at a dead-flat sustain the envelope has no peak to find and the
   // comparison's onset term reads wherever the argmax lands, 2.2 s in.
@@ -678,9 +692,9 @@ SONARE_TUNED_CONSTEXPR void configure_synth_bass_and_brass_programs(ProgramOverr
   // 6.6 dB apart in held RMS at E2 and are the only same-envelope comparison
   // either of them has, so each moves half of it off the family's 0.5.
   o.synth_bass_1.gain = 0.2693f;
-  o.synth_bass_1.amp_env.attack_ms = 1.16318f;
+  o.synth_bass_1.amp_env.attack_ms = 4.49064f;
   o.synth_bass_1.amp_env.decay_ms = 2294.75f;
-  o.synth_bass_1.amp_env.release_ms = 8.40542f;
+  o.synth_bass_1.amp_env.release_ms = 15.7903f;
   o.synth_bass_1.amp_env.sustain = 0.812374f;
   o.synth_bass_1.va.velocity_exponent = 1.0f;
 
