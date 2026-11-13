@@ -6,24 +6,22 @@ import sys
 from pathlib import Path
 
 import numpy as np
-import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import metrics_floor
 from metrics_floor import (
-    AT_FLAT_FLOOR,
-    AT_FLOOR_UNDER_MODULATION,
-    BODY_FLOOR_MARGIN_DB,
     _partial_bands,
     body_at_floor,
     body_floor_state,
     partial_clearance,
     recording_floor,
+    tnr_at_floor,
+    tnr_floor_state,
     valley_profile,
 )
 from metrics_note import BODY_WINDOW_S, band_power_db, body_below_f0_db
-from profile_measure import measure_note, partial_decay
+from profile_measure import partial_decay
 
 SR = 44100
 
@@ -193,56 +191,23 @@ def test_too_few_valleys_write_nothing():
 # --------------------------------------------------------------------------- #
 
 
-def _ref(**kw):
-    row = {
-        "floor_source": "preroll",
-        "body_under_db": -80.0,
-        "floor_body_db": -82.0,
-        "valley_ladder_coupling": 0.1,
-    }
-    row.update(kw)
-    return row
+def _state(body=None, tnr=None):
+    return {"floor_state": {"censors": {"body": body, "tnr": tnr}}}
 
 
-def test_body_censor_cases():
-    assert body_at_floor(_ref())
-    assert not body_at_floor(_ref(valley_ladder_coupling=0.9))
-    assert not body_at_floor(_ref(floor_source=None))
-    assert not body_at_floor(_ref(body_under_db=-82.0 + BODY_FLOOR_MARGIN_DB + 4.0))
+def test_censor_readers_follow_the_row_floor_state():
+    assert body_floor_state(_state(body="why")) == "why"
+    assert body_at_floor(_state(body="why"))
+    assert not body_at_floor(_state(tnr="why"))
+    assert tnr_floor_state(_state(tnr="why")) == "why"
+    assert tnr_at_floor(_state(tnr="why"))
+    assert not tnr_at_floor(_state(body="why"))
+
+
+def test_rows_without_a_floor_state_are_not_censored():
     assert not body_at_floor({})
-    assert not body_at_floor(_ref(valley_ladder_coupling=None))
-
-
-def test_a_modulated_row_is_censored_on_the_floor_alone():
-    """Vibrato fills the valleys toward flat, so under it only the floor decides."""
-    fm = {"tnr_mask": {"fm": [12.8, 4.3, 5.7]}}
-    # At the floor: censored whatever the valleys say, with the reason named.
-    assert body_floor_state(_ref(valley_ladder_coupling=0.9, **fm)) == AT_FLOOR_UNDER_MODULATION
-    assert body_floor_state(_ref(**fm)) == AT_FLOOR_UNDER_MODULATION
-    assert body_floor_state(_ref()) == AT_FLAT_FLOOR
-    # Well above the floor: never censored, however flat vibrato makes the valleys.
-    assert body_floor_state(_ref(body_under_db=-50.0, valley_ladder_coupling=-1.3, **fm)) is None
-
-
-def test_vibrato_made_flatness_does_not_censor_a_band_above_its_floor():
-    """C3 (the body reading starts at 120 Hz) at 50 cents of vibrato over -30 dB noise: not censored."""
-    sr, pre, gate, note = 48000, 0.1, 2.0, 48
-    f0 = 440.0 * 2 ** ((note - 69) / 12)
-    t = np.arange(int((pre + gate + 0.3) * sr)) / sr
-    rate, cents = 5.5, 50.0
-    # The phase term whose derivative swings f0 by +/- `cents` (peak).
-    dev = f0 * (2 ** (cents / 1200) - 1) / (2 * np.pi * rate) * np.sin(2 * np.pi * rate * t)
-    tone = sum(np.sin(2 * np.pi * k * (f0 * t + dev)) / k for k in range(1, 41))
-    rng = np.random.default_rng(3)
-    held = (t >= pre) & (t < pre + gate)
-    x = 0.05 * tone * held + 0.05 * 10 ** (-30 / 20) * rng.standard_normal(t.size) * held
-    x = x + 10 ** (-110 / 20) * rng.standard_normal(t.size)
-    row = measure_note(x.astype(np.float32), sr, note, preroll_s=pre, gate_s=gate)
-    # The control's own depth, measured: about 100 cents peak to peak.
-    assert row["tnr_mask"]["fm"][0] == pytest.approx(2 * cents, rel=0.15)
-    assert row.get("floor_source") == "preroll"
-    assert row["body_under_db"] > row["floor_body_db"] + BODY_FLOOR_MARGIN_DB
-    assert body_floor_state(row) is None
+    assert not tnr_at_floor({"floor_state": None})
+    assert not body_at_floor({"floor_state": {"censors": {}}})
 
 
 # --------------------------------------------------------------------------- #

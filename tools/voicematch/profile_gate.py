@@ -938,6 +938,7 @@ CENSOR_BY_DIMENSION = {
     "aftersound": "span_mismatch",
     "doubling": "span_mismatch",
     "body": "body_at_floor",
+    "tnr": "tnr_at_floor",
     "band_decay": "decay_capped",
     "ring": "decay_capped",
 }

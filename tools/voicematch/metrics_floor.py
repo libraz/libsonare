@@ -34,8 +34,6 @@ CLEAR_PARTIALS = 8
 
 #: A body band within this many dB of the recorded floor is read as the floor.
 BODY_FLOOR_MARGIN_DB = 6.0
-#: A valley-to-ladder coupling under this is a floor that does not follow the note.
-FLOOR_FLAT_COUPLING = 0.5
 
 
 def _rms_dbfs(seg: np.ndarray) -> float:
@@ -196,36 +194,31 @@ def partial_clearance(
     return {"partial_clear_s": clear_s, "partial_decay_clear_db_s": decay}
 
 
-#: Why a reference row's body delta is censored, by `body_floor_state`.
-AT_FLAT_FLOOR = "reference band at its recorded floor, flat"
-#: Vibrato or chorus fills the valleys toward "flat", so on a row carrying a pitch
-#: motion record the flatness reading is not evidence and only the floor decides.
-AT_FLOOR_UNDER_MODULATION = (
-    "reference band at its recorded floor; flatness unverified under modulation"
-)
+def _floor_censor(ref_row: dict, dimension: str) -> str | None:
+    """The reason `floor_state` censors `dimension` on this row, or None (rows measured before it: None)."""
+    state = ref_row.get("floor_state")
+    return None if not state else (state.get("censors") or {}).get(dimension)
 
 
 def body_floor_state(ref_row: dict) -> str | None:
-    """Why a reference row's body band is its recording's floor, or None when it is not.
+    """Why a reference row's body band is its recording's floor or hum, or None when it is not.
 
-    The row needs a floor and a body under-band within `BODY_FLOOR_MARGIN_DB` of
-    the floor's. Without a pitch-motion record (`tnr_mask.fm`) the valleys must
-    also not follow the ladder (`FLOOR_FLAT_COUPLING`); with one, that reading is
-    not evaluated. Rows measured before these fields: None.
+    Decided at measurement (`floor_declare`): the capture's floor is declared only
+    where note-independent and stationary, and mains hum is counted into the band.
     """
-    if ref_row.get("floor_source") is None:
-        return None
-    under, floor = ref_row.get("body_under_db"), ref_row.get("floor_body_db")
-    if under is None or floor is None or under > floor + BODY_FLOOR_MARGIN_DB:
-        return None
-    if (ref_row.get("tnr_mask") or {}).get("fm"):
-        return AT_FLOOR_UNDER_MODULATION
-    coupling = ref_row.get("valley_ladder_coupling")
-    if coupling is None or coupling >= FLOOR_FLAT_COUPLING:
-        return None
-    return AT_FLAT_FLOOR
+    return _floor_censor(ref_row, "body")
 
 
 def body_at_floor(ref_row: dict) -> bool:
     """Whether a reference row's body delta is censored (`body_floor_state` gives why)."""
     return body_floor_state(ref_row) is not None
+
+
+def tnr_floor_state(ref_row: dict) -> str | None:
+    """Why a reference row's tone-to-noise noise is its recording's floor or hum, or None."""
+    return _floor_censor(ref_row, "tnr")
+
+
+def tnr_at_floor(ref_row: dict) -> bool:
+    """Whether a reference row's tone-to-noise delta is censored (`tnr_floor_state` gives why)."""
+    return tnr_floor_state(ref_row) is not None

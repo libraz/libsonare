@@ -91,6 +91,7 @@ from capture import (
     tail_seconds,
 )
 from corpus import in_declared_grid, load_corpus
+from floor_declare import record_floors
 from loss import KIT_MIN_MEMBERS, kit_report
 from metrics import (
     ATTACK_FLOOR_MS,
@@ -119,7 +120,7 @@ from metrics import (
     shared_band_edge,
     to_mono,
 )
-from metrics_floor import body_floor_state
+from metrics_floor import body_floor_state, tnr_floor_state
 from metrics_lines import STATIONARY_LINES_REASON
 from phrases import TAKE_SETS, build_takes
 from profile_gate import (
@@ -428,8 +429,11 @@ def measure(cfg: dict, corpus_dir: Path, out_path: Path) -> int:
         else measure_stationary_lines(manifest, corpus_dir, declared, preroll_s, gate_s)
     )
 
+    heard: list[tuple[np.ndarray, int]] = []
+
     def sweep(max_band_hz: float | None) -> list[dict]:
         rows: list[dict] = []
+        heard.clear()
         for i, rec in enumerate(manifest["renders"], 1):
             if rec["timbre"] not in declared:
                 continue
@@ -466,11 +470,16 @@ def measure(cfg: dict, corpus_dir: Path, out_path: Path) -> int:
             rows.append(
                 {"timbre": rec["timbre"], "note": rec["note"], "velocity": rec["velocity"], **m}
             )
+            heard.append((audio, sr))
             if i % 20 == 0:
                 print(f"  {i}/{len(manifest['renders'])}", file=sys.stderr)
         return rows
 
     rows = sweep(None)
+    # What the recording itself holds under the notes; a percussion capture has no ladder to read it against.
+    recording_floor_by_timbre = (
+        {} if percussion else record_floors(rows, heard, preroll_s=preroll_s, gate_s=gate_s)
+    )
     # What this capture can actually measure, before anything is committed as
     # what the instrument does. A band profile is normalised to its own loudest
     # band, so the edge cannot be applied to a measured profile after the fact —
@@ -531,6 +540,8 @@ def measure(cfg: dict, corpus_dir: Path, out_path: Path) -> int:
     unreliable = tnr_unreliable(rows)
     if unreliable:
         profile["tnr_unreliable"] = unreliable
+    if recording_floor_by_timbre:
+        profile["recording_floor"] = recording_floor_by_timbre
     # Absent rather than empty on a reference with no room, so the profile of a
     # dry capture is byte-identical to one measured before this was recorded and
     # its stamp — and every gate dated against it — stays where it is.
@@ -1428,7 +1439,7 @@ def compare(
     deltas: dict[str, list[float]] = {}
     damper_censored: list[tuple[int, int]] = []
     span_censored: list[tuple[int, int]] = []
-    body_censored: list[tuple[int, int, str]] = []
+    body_censored: list[tuple[int, int, str, str]] = []
     # Per dimension, how many rows had no value on each side -- what a gate
     # writer says when a requested dimension yields no bound.
     tally = CensorTally()
@@ -1518,7 +1529,10 @@ def compare(
         # The reference's body band is its recording's own floor, so the delta is the floor's.
         body_floor = body_floor_state(r)
         if body_floor:
-            body_censored.append((note, vel, body_floor))
+            body_censored.append((note, vel, "body", body_floor))
+        tnr_floor = tnr_floor_state(r)
+        if tnr_floor:
+            body_censored.append((note, vel, "tnr", tnr_floor))
             tally.absent("body", False, True)
         row = {
             "stretch": None if stretch is None else stretch + a4_off,
@@ -1527,7 +1541,7 @@ def compare(
             # direction this almost always fails in: the mechanism noise a real
             # action makes is the part a physical model most often has no
             # mechanism for at all.
-            "tnr": d("tnr_db"),
+            "tnr": None if tnr_floor else d("tnr_db"),
             "damper": None if damper_capped else d("damper_release_ms"),
             # The rise from the sound's own onset to its loudest point -- the
             # bloom, not the strike. A model whose envelope peaks on the strike
@@ -1638,11 +1652,11 @@ def compare(
         )
     if body_censored:
         print(
-            f"\n^ {len(body_censored)} of {len(pairs)} rows: reference band at its recorded "
-            "floor, so the body delta is left out of the median:"
+            f"\n^ {len(body_censored)} (row, dimension) readings: the reference reads its "
+            "recording's floor or hum, so the delta is left out of the median:"
         )
-        for n, v, why in body_censored:
-            print(f"  n{n}v{v}: {why}")
+        for n, v, dim, why in body_censored:
+            print(f"  n{n}v{v} {dim}: {why}")
     spans = vel_range_deltas(peaks.get("m", {}), peaks.get("r", {}), tally)
     if spans:
         deltas["vel_range"] = spans

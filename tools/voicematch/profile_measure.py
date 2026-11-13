@@ -624,6 +624,45 @@ def reference_tnr_mask(row: dict) -> dict:
     return row["tnr_mask"]
 
 
+def note_windows(
+    audio: np.ndarray, sr: int, preroll_s: float, gate_s: float
+) -> tuple[np.ndarray, np.ndarray, int, int, float, int, int] | None:
+    """(mono, held, a, b, onset_s, on, off): where a captured note's gate and fit window sit, or None.
+
+    `held` is the onset-anchored gate and `held[a:b]` the window the partial fit
+    reads; `measure_note` and the recording-floor pass place them the same way.
+    """
+    mono = to_mono(audio)
+    # From the note-on, the same origin `analyze_hit` and `note_onset` give it:
+    # the preroll is there to absorb the plugin's first buffer, so a scan that
+    # began at the file would answer with whatever that buffer left behind.
+    onset_s = sound_onset_s(mono, sr, preroll_s, len(mono) / sr)
+    on = int(onset_s * sr)
+    off = on + int(gate_s * sr)
+    held = mono[on:off]
+    if held.size < sr // 4:
+        return None
+
+    # The spectrum for the partial fit comes from a window that starts after the
+    # strike: the hammer noise is broadband and would blur every peak the fit
+    # depends on, while a window too late has lost the high partials entirely.
+    a = int(0.12 * sr)
+    b = min(len(held), a + int(1.5 * sr))
+    # 120 ms is after the end of a note that is over in 35, and everything read
+    # off this window — the partials, the centroid, the tone-to-noise — is then
+    # taken on the floor. So it is checked for signal BEFORE it is used rather
+    # than after it has failed, because it does not fail: `find_partials`
+    # returns an f0 from a -124 dBFS floor, which is then reported as the voice.
+    # Where it is empty the same fit is placed against the note's own ring, from
+    # its envelope peak to where the fall leaves the floor. See
+    # `SILENT_WINDOW_DB` for the separation this rests on.
+    if _under_peak_db(held[a:b], held) < SILENT_WINDOW_DB:
+        ring_a, ring_b = _short_ring_window(held, sr)
+        if ring_b > ring_a:
+            a, b = ring_a, ring_b
+    return mono, held, a, b, onset_s, on, off
+
+
 def measure_note(
     audio: np.ndarray,
     sr: int,
@@ -654,34 +693,10 @@ def measure_note(
     the located strike since it was written; this is the same anchor, from the
     same detector.
     """
-    mono = to_mono(audio)
-    # From the note-on, the same origin `analyze_hit` and `note_onset` give it:
-    # the preroll is there to absorb the plugin's first buffer, so a scan that
-    # began at the file would answer with whatever that buffer left behind.
-    onset_s = sound_onset_s(mono, sr, preroll_s, len(mono) / sr)
-    on = int(onset_s * sr)
-    off = on + int(gate_s * sr)
-    held = mono[on:off]
-    if held.size < sr // 4:
+    placed = note_windows(audio, sr, preroll_s, gate_s)
+    if placed is None:
         return {}
-
-    # The spectrum for the partial fit comes from a window that starts after the
-    # strike: the hammer noise is broadband and would blur every peak the fit
-    # depends on, while a window too late has lost the high partials entirely.
-    a = int(0.12 * sr)
-    b = min(len(held), a + int(1.5 * sr))
-    # 120 ms is after the end of a note that is over in 35, and everything read
-    # off this window — the partials, the centroid, the tone-to-noise — is then
-    # taken on the floor. So it is checked for signal BEFORE it is used rather
-    # than after it has failed, because it does not fail: `find_partials`
-    # returns an f0 from a -124 dBFS floor, which is then reported as the voice.
-    # Where it is empty the same fit is placed against the note's own ring, from
-    # its envelope peak to where the fall leaves the floor. See
-    # `SILENT_WINDOW_DB` for the separation this rests on.
-    if _under_peak_db(held[a:b], held) < SILENT_WINDOW_DB:
-        ring_a, ring_b = _short_ring_window(held, sr)
-        if ring_b > ring_a:
-            a, b = ring_a, ring_b
+    mono, held, a, b, onset_s, on, off = placed
     partials, structure, masked = read_partials(
         held[a:b], sr, note, modal=modal, stationary_lines_hz=stationary_lines_hz
     )
