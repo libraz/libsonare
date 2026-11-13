@@ -1,7 +1,7 @@
 {
  "id": "gunshot_module",
  "label": "Gunshot, the GS capital tone, read out of a module's own recordings",
- "measured_utc": "2026-10-25T19:52:41+00:00",
+ "measured_utc": "2026-11-13T19:19:30+00:00",
  "capture": {
   "program": 127,
   "params": [],
@@ -30,326 +30,473 @@
    "timbre": "t0",
    "note": 48,
    "velocity": 100,
-   "f0_hz": 140.159,
-   "cents_vs_et": 119.47,
-   "inharmonicity_b": 0.0009915,
+   "f0_hz": 138.583,
+   "cents_vs_et": 99.89,
+   "inharmonicity_b": 7.815e-05,
    "partials_fit": 20,
    "inharmonicity_reliable": true,
    "partials_hz": [
-    139.07,
-    284.38,
-    420.32,
-    563.29,
-    718.29,
-    844.45,
-    1007.26,
-    1150.07,
-    1317.58,
-    1483.82,
-    1638.6,
-    1771.88,
-    1969.11,
-    2139.2,
-    2346.61,
-    2520.21,
-    2710.08,
-    2894.34,
-    3072.23,
-    3361.15
+    137.52,
+    278.03,
+    420.29,
+    554.72,
+    691.92,
+    837.71,
+    976.93,
+    1123.23,
+    1257.9,
+    1385.71,
+    1519.42,
+    1686.42,
+    1825.76,
+    1968.29,
+    2104.79,
+    2239.01,
+    2384.19,
+    2524.76,
+    2674.5,
+    2841.26
    ],
    "partials_db": [
     0.0,
-    -5.16,
-    -5.02,
-    -0.24,
-    2.89,
-    -4.92,
-    -5.86,
-    -2.11,
-    0.21,
-    0.29,
-    0.24,
-    2.07,
-    -1.28,
-    0.85,
-    -0.03,
+    -1.19,
+    1.92,
+    6.37,
+    1.18,
+    -1.03,
+    -4.32,
+    4.78,
     1.16,
-    1.66,
-    -0.18,
+    -0.23,
+    0.77,
+    0.62,
+    1.62,
     -0.01,
-    1.35
+    2.96,
+    0.78,
+    0.07,
+    2.12,
+    1.43,
+    1.0
    ],
-   "body_below_f0_db": -15.59,
-   "body_under_db": -52.3,
-   "body_f0_db": -36.71,
+   "broad_lines": {
+    "broad_ratio": 20.6,
+    "width_ratio": null
+   },
+   "b_unreliable": {
+    "reason": "unison or ensemble: lines 20.6x a still tone's and not read warped, partials 10.5 c rms off one series; stretch, balance, partial_tilt and tnr read through B or through partials located on it",
+    "dimensions": [
+     "stretch",
+     "balance",
+     "partial_tilt",
+     "tnr"
+    ]
+   },
+   "body_below_f0_db": -13.66,
+   "body_under_db": -50.92,
+   "body_f0_db": -37.26,
    "peak_dbfs": -5.49,
-   "rms_dbfs": -18.26,
+   "rms_dbfs": -20.17,
    "held_peak_dbfs": -13.82,
    "onset_ms": 0.0,
    "attack_ms": 5.0,
    "attack_hf_db": -14.14,
-   "decay_span_s": 0.584,
-   "decay_db_s": -2.64,
-   "decay_early_db_s": -74.27,
-   "decay_late_db_s": -5.5,
-   "decay_knee_s": 0.13,
+   "decay_span_s": 1.207,
+   "decay_db_s": -12.55,
+   "decay_early_db_s": -5.75,
+   "decay_late_db_s": -61.87,
+   "decay_knee_s": 0.903,
    "partial_decay_db_s": [
-    -15.5,
-    -22.5,
-    4.03,
-    -14.04,
-    -26.0,
-    -20.03,
-    -3.33,
-    -4.89
+    -8.07,
+    -17.06,
+    -10.06,
+    -10.39,
+    -13.62,
+    -21.93,
+    -14.32,
+    6.96
    ],
    "partial_clear_s": [
-    0.139,
+    0.883,
     null,
     null,
-    null,
-    0.046,
-    null,
-    null,
-    null
+    0.604,
+    0.883,
+    0.558,
+    0.372,
+    0.837
    ],
    "partial_decay_clear_db_s": [
+    -5.33,
     null,
     null,
-    null,
-    null,
-    null,
-    null,
-    null,
-    null
+    12.32,
+    -10.04,
+    -10.96,
+    -12.44,
+    15.06
    ],
    "valley_db": [
-    -54.13,
-    -55.29,
-    -53.35,
-    -50.77,
-    -55.39,
-    -53.53,
-    -58.1,
-    -58.8,
-    -53.74,
-    -55.1,
-    -54.18,
-    -55.02,
-    -56.64,
-    -53.51,
-    -54.3
+    -54.48,
+    -55.09,
+    -54.75,
+    -52.68,
+    -57.04,
+    -61.95,
+    -60.71,
+    -54.47,
+    -56.6,
+    -56.21,
+    -58.29,
+    -56.85,
+    -56.85,
+    -56.4,
+    -57.52,
+    -57.03,
+    -58.69,
+    -57.38,
+    -58.02
    ],
-   "valley_slope_db_oct": -0.311,
-   "valley_ladder_coupling": 0.201,
+   "valley_slope_db_oct": -0.891,
+   "valley_ladder_coupling": 0.913,
    "floor_source": null,
    "decayed_before_note_off": false,
-   "damper_release_ms": 618.6,
-   "damper_capped": true,
-   "centroid_hz": 2297.8,
+   "centroid_hz": 1778.3,
    "tnr_mask": {},
-   "tnr_db": -3.36
+   "tnr_db": -2.41,
+   "loop": {
+    "verdict": "not",
+    "residual_db": -0.0,
+    "median_db": -0.0,
+    "frames": 2,
+    "reaching_frames": 2,
+    "reach_ms": 191.8,
+    "borderline": false,
+    "ladder_db": [
+     0.0,
+     -2.3,
+     0.7,
+     5.6,
+     2.2,
+     -3.5,
+     -6.0,
+     -1.4,
+     1.0,
+     -2.2,
+     0.2,
+     0.7,
+     4.4,
+     2.3,
+     3.9,
+     3.7,
+     2.4,
+     2.1,
+     1.9,
+     -0.6
+    ],
+    "group": 0,
+    "group_notes": [
+     48
+    ]
+   },
+   "window": {
+    "model_s": 1.227,
+    "reference_s": 1.227
+   },
+   "window_end_ms": 1227,
+   "window_rule": "recorded length",
+   "window_recorded_ms": 1227,
+   "window_end_clearance_db": 1.49,
+   "window_marks": {
+    "truncated": "level still moving by more than 3 dB in the last 120 ms, so the end is not a floor",
+    "fade end": "the last 30 ms fall 17.9 dB under the trend"
+   },
+   "floor_state": {
+    "declared": false,
+    "basis": null,
+    "source": null,
+    "level_db_hz": null,
+    "stationary": {
+     "slope_db_s": -2.39,
+     "corr": 0.31,
+     "tone_slope_db_s": -4.77,
+     "floor_like": false
+    },
+    "clear_partials_tail": 3,
+    "hum_dbfs": null,
+    "censors": {
+     "body": null,
+     "tnr": null
+    },
+    "body_floor_db": null,
+    "body_hum_db": null
+   }
   },
   {
    "timbre": "t0",
    "note": 60,
    "velocity": 100,
-   "f0_hz": 272.362,
-   "cents_vs_et": 69.62,
-   "inharmonicity_b": 3.893e-05,
+   "f0_hz": 269.464,
+   "cents_vs_et": 51.1,
+   "inharmonicity_b": 5.019e-05,
    "partials_fit": 20,
    "inharmonicity_reliable": true,
    "partials_hz": [
-    276.04,
-    540.8,
-    809.54,
-    1083.4,
-    1381.09,
-    1647.8,
-    1897.7,
-    2181.14,
-    2452.46,
-    2717.65,
-    2976.08,
-    3289.3,
-    3543.71,
-    3837.32,
-    4140.66,
-    4341.35,
-    4620.84,
-    4954.94,
-    5177.77,
-    5539.08
+    268.79,
+    539.06,
+    809.42,
+    1083.27,
+    1346.86,
+    1600.46,
+    1904.58,
+    2148.98,
+    2435.98,
+    2718.33,
+    2995.19,
+    3244.92,
+    3564.48,
+    3766.83,
+    4017.86,
+    4339.94,
+    4581.31,
+    4886.66,
+    5177.84,
+    5430.32
    ],
    "partials_db": [
     0.0,
     0.4,
-    -1.1,
-    -1.51,
-    -3.62,
-    -0.46,
-    -2.35,
-    -1.91,
-    -1.54,
-    3.38,
-    3.24,
-    -1.27,
-    -1.24,
-    0.3,
-    -0.88,
-    0.17,
-    -2.15,
-    -2.35,
-    -2.23,
-    -1.48
+    1.06,
+    -0.3,
+    -5.54,
+    1.98,
+    -2.69,
+    -0.98,
+    0.76,
+    0.83,
+    0.7,
+    -0.5,
+    -1.67,
+    0.1,
+    -1.16,
+    -2.38,
+    -3.12,
+    -3.25,
+    -3.26,
+    -2.36
    ],
-   "body_below_f0_db": -4.86,
-   "body_under_db": -38.23,
-   "body_f0_db": -33.38,
+   "broad_lines": {
+    "broad_ratio": 14.23,
+    "width_ratio": null
+   },
+   "b_unreliable": {
+    "reason": "unison or ensemble: lines 14.2x a still tone's and not read warped, partials 10.6 c rms off one series; stretch, balance, partial_tilt and tnr read through B or through partials located on it",
+    "dimensions": [
+     "stretch",
+     "balance",
+     "partial_tilt",
+     "tnr"
+    ]
+   },
+   "body_below_f0_db": -3.74,
+   "body_under_db": -40.67,
+   "body_f0_db": -36.93,
    "peak_dbfs": -5.08,
-   "rms_dbfs": -18.64,
+   "rms_dbfs": -19.95,
    "held_peak_dbfs": -13.23,
    "onset_ms": 0.0,
    "attack_ms": 5.0,
    "attack_hf_db": -12.05,
-   "decay_span_s": 0.589,
-   "decay_db_s": -6.59,
-   "decay_early_db_s": -119.09,
-   "decay_late_db_s": -8.79,
-   "decay_knee_s": 0.09,
+   "decay_span_s": 0.873,
+   "decay_db_s": -16.25,
+   "decay_early_db_s": -8.63,
+   "decay_late_db_s": -70.53,
+   "decay_knee_s": 0.654,
    "partial_decay_db_s": [
-    -7.53,
-    7.82,
-    7.56,
-    -9.57,
-    -15.31,
-    25.46,
-    -11.03,
-    -19.15
+    -24.9,
+    -21.51,
+    -19.57,
+    -30.3,
+    -29.13,
+    6.6,
+    -12.21,
+    -12.45
    ],
    "partial_clear_s": [
     null,
     null,
-    null,
+    0.418,
     0.279,
+    0.232,
+    0.604,
     null,
-    0.372,
-    null,
-    0.186
+    0.325
    ],
    "partial_decay_clear_db_s": [
     null,
     null,
-    null,
+    3.52,
     -13.63,
+    -36.98,
+    12.93,
     null,
-    25.46,
-    null,
-    -12.48
+    -10.86
    ],
    "valley_db": [
-    -56.44,
-    -57.14,
-    -54.95,
-    -59.22,
-    -58.77,
-    -54.99,
-    -57.75,
-    -57.47,
-    -55.66,
     -56.32,
+    -56.82,
+    -56.47,
+    -60.88,
+    -61.05,
+    -58.59,
+    -60.73,
     -58.12,
-    -56.19,
-    -55.7,
-    -54.81,
-    -60.97
+    -58.51,
+    -58.06,
+    -58.45,
+    -59.6,
+    -61.66,
+    -64.39,
+    -63.05
    ],
-   "valley_slope_db_oct": -0.138,
-   "valley_ladder_coupling": 0.56,
+   "valley_slope_db_oct": -1.434,
+   "valley_ladder_coupling": 1.341,
    "floor_source": null,
    "decayed_before_note_off": false,
-   "damper_release_ms": 274.4,
-   "damper_capped": true,
-   "centroid_hz": 2888.7,
+   "centroid_hz": 2421.8,
    "tnr_mask": {},
-   "tnr_db": -2.47
+   "tnr_db": -2.65,
+   "loop": {
+    "verdict": "not",
+    "residual_db": -0.0,
+    "median_db": -0.0,
+    "frames": 1,
+    "reaching_frames": 1,
+    "reach_ms": 232.5,
+    "borderline": false
+   },
+   "window": {
+    "model_s": 0.884,
+    "reference_s": 0.884
+   },
+   "window_end_ms": 884,
+   "window_rule": "recorded length",
+   "window_recorded_ms": 884,
+   "window_end_clearance_db": -0.39,
+   "window_marks": {
+    "truncated": "level still moving by more than 3 dB in the last 120 ms, so the end is not a floor",
+    "fade end": "the last 30 ms fall 12.5 dB under the trend"
+   },
+   "floor_state": {
+    "declared": false,
+    "basis": null,
+    "source": null,
+    "level_db_hz": null,
+    "stationary": {
+     "slope_db_s": 4.28,
+     "corr": 0.11,
+     "tone_slope_db_s": -3.35,
+     "floor_like": false
+    },
+    "clear_partials_tail": 1,
+    "hum_dbfs": null,
+    "censors": {
+     "body": null,
+     "tnr": null
+    },
+    "body_floor_db": null,
+    "body_hum_db": null
+   }
   },
   {
    "timbre": "t0",
    "note": 72,
    "velocity": 100,
-   "f0_hz": 556.072,
-   "cents_vs_et": 105.32,
-   "inharmonicity_b": 0.001366,
+   "f0_hz": 558.964,
+   "cents_vs_et": 114.3,
+   "inharmonicity_b": 6.064e-06,
    "partials_fit": 20,
    "inharmonicity_reliable": true,
    "partials_hz": [
-    555.8,
-    1109.2,
-    1675.68,
-    2246.55,
-    2806.9,
-    3445.43,
-    4052.01,
-    4589.15,
-    5327.52,
-    5889.25,
-    6627.4,
-    7322.96,
-    8079.12,
-    8764.08,
-    9408.32,
-    10434.31,
-    11170.98,
-    11856.57,
-    12741.32,
-    13893.02
+    555.75,
+    1109.04,
+    1675.66,
+    2246.74,
+    2771.8,
+    3373.08,
+    3887.25,
+    4462.31,
+    5049.53,
+    5636.6,
+    6207.17,
+    6704.06,
+    7323.03,
+    7832.76,
+    8278.55,
+    8907.23,
+    9459.15,
+    10045.32,
+    10501.39,
+    11170.55
    ],
    "partials_db": [
     0.0,
-    8.89,
-    1.34,
-    7.84,
-    0.3,
-    4.31,
-    3.35,
-    2.61,
-    3.44,
-    1.41,
-    -1.46,
-    -1.18,
-    -6.69,
-    -8.1,
-    -11.34,
-    -11.41,
-    -16.94,
-    -17.46,
-    -25.41,
-    -30.41
+    9.31,
+    1.02,
+    9.42,
+    0.95,
+    3.26,
+    3.41,
+    2.56,
+    5.09,
+    1.88,
+    0.62,
+    0.43,
+    -1.58,
+    -2.75,
+    -5.94,
+    -9.69,
+    -10.83,
+    -11.88,
+    -9.8,
+    -16.84
    ],
-   "body_below_f0_db": -1.35,
-   "body_under_db": -37.26,
-   "body_f0_db": -35.91,
+   "broad_lines": {
+    "broad_ratio": 9.42,
+    "width_ratio": null
+   },
+   "b_unreliable": {
+    "reason": "unison or ensemble: lines 9.4x a still tone's and not read warped, partials 11.5 c rms off one series; stretch, balance, partial_tilt and tnr read through B or through partials located on it",
+    "dimensions": [
+     "stretch",
+     "balance",
+     "partial_tilt",
+     "tnr"
+    ]
+   },
+   "body_below_f0_db": -1.23,
+   "body_under_db": -37.71,
+   "body_f0_db": -36.47,
    "peak_dbfs": -4.65,
-   "rms_dbfs": -19.59,
+   "rms_dbfs": -19.78,
    "held_peak_dbfs": -12.91,
    "onset_ms": 0.0,
    "attack_ms": 5.0,
    "attack_hf_db": -8.43,
-   "decay_span_s": 0.589,
-   "decay_db_s": -17.79,
-   "decay_early_db_s": -155.28,
-   "decay_late_db_s": -20.74,
-   "decay_knee_s": 0.065,
+   "decay_span_s": 0.614,
+   "decay_db_s": -22.32,
+   "decay_early_db_s": -12.64,
+   "decay_late_db_s": -85.91,
+   "decay_knee_s": 0.459,
    "partial_decay_db_s": [
     -25.7,
     -14.67,
     -32.93,
     27.37,
-    -25.86,
-    -8.05,
-    -22.35,
-    -26.73
+    -18.73,
+    -22.32,
+    13.43,
+    -21.35
    ],
    "partial_clear_s": [
     null,
@@ -357,8 +504,8 @@
     0.325,
     0.325,
     null,
+    null,
     0.232,
-    0.186,
     null
    ],
    "partial_decay_clear_db_s": [
@@ -367,112 +514,180 @@
     -29.39,
     44.12,
     null,
-    11.68,
-    -1.52,
+    null,
+    24.03,
     null
    ],
    "valley_db": [
-    -57.41,
-    -57.96,
-    -63.52,
-    -59.57,
-    -60.83,
-    -59.72,
-    -61.03,
-    -59.44,
+    -57.52,
+    -58.33,
+    -64.06,
+    -59.67,
+    -60.61,
+    -59.77,
+    -58.7,
     -60.86,
-    -62.93,
-    -64.04,
-    -65.63,
-    -69.44,
-    -70.64,
-    -75.5,
-    -80.86
+    -60.73,
+    -61.59,
+    -62.05,
+    -65.06,
+    -66.65,
+    -69.53,
+    -70.45,
+    -72.28,
+    -73.44,
+    -73.78
    ],
-   "valley_slope_db_oct": -4.568,
-   "valley_ladder_coupling": 0.906,
+   "valley_slope_db_oct": -4.066,
+   "valley_ladder_coupling": 0.891,
    "floor_source": null,
    "decayed_before_note_off": false,
-   "centroid_hz": 3157.5,
+   "centroid_hz": 3165.4,
    "tnr_mask": {},
-   "tnr_db": -4.83
+   "tnr_db": -4.49,
+   "loop": {
+    "verdict": "not_testable",
+    "reason": "shorter than one template and a 100 ms lag"
+   },
+   "window": {
+    "model_s": 0.627,
+    "reference_s": 0.627
+   },
+   "window_end_ms": 627,
+   "window_rule": "recorded length",
+   "window_recorded_ms": 627,
+   "window_end_clearance_db": 1.75,
+   "window_marks": {
+    "truncated": "level still moving by more than 3 dB in the last 120 ms, so the end is not a floor",
+    "fade end": "the last 30 ms fall 9.3 dB under the trend"
+   },
+   "floor_state": {
+    "declared": false,
+    "basis": null,
+    "source": null,
+    "level_db_hz": null,
+    "stationary": {
+     "slope_db_s": -25.53,
+     "corr": 0.65,
+     "tone_slope_db_s": -5.66,
+     "floor_like": false
+    },
+    "clear_partials_tail": 1,
+    "hum_dbfs": null,
+    "censors": {
+     "body": null,
+     "tnr": null
+    },
+    "body_floor_db": null,
+    "body_hum_db": null
+   }
   }
  ],
  "summary": {
   "t0": {
    "stretch_cents": {
-    "48": 119.47,
-    "60": 69.62,
-    "72": 105.32
+    "48": 99.89,
+    "60": 51.1,
+    "72": 114.3
    },
    "inharmonicity_b": {
-    "48": 0.0009915,
-    "60": 3.893e-05,
-    "72": 0.001366
+    "48": 7.815e-05,
+    "60": 5.019e-05,
+    "72": 6.06e-06
    },
    "level_dbfs": {
     "48": {
-     "100": -18.26
+     "100": -20.17
     },
     "60": {
-     "100": -18.64
+     "100": -19.95
     },
     "72": {
-     "100": -19.59
+     "100": -19.78
     }
    },
    "centroid_hz": {
     "48": {
-     "100": 2297.8
+     "100": 1778.3
     },
     "60": {
-     "100": 2888.7
+     "100": 2421.8
     },
     "72": {
-     "100": 3157.5
+     "100": 3165.4
     }
    },
    "decay_db_s": {
     "48": {
-     "100": -2.64
+     "100": -12.55
     },
     "60": {
-     "100": -6.59
+     "100": -16.25
     },
     "72": {
-     "100": -17.79
+     "100": -22.32
     }
    },
-   "damper_release_ms": {
-    "48": {
-     "100": 618.6
-    },
-    "60": {
-     "100": 274.4
-    }
-   },
+   "damper_release_ms": {},
    "tnr_db": {
     "48": {
-     "100": -3.36
+     "100": -2.41
     },
     "60": {
-     "100": -2.47
+     "100": -2.65
     },
     "72": {
-     "100": -4.83
+     "100": -4.49
     }
    },
    "velocity_response": {}
   }
  },
- "field_measured_utc": {
-  "rows.body_f0_db": "2026-11-13T10:33:44+00:00",
-  "rows.body_under_db": "2026-11-13T10:33:44+00:00",
-  "rows.floor_source": "2026-11-13T10:33:44+00:00",
-  "rows.partial_clear_s": "2026-11-13T10:33:44+00:00",
-  "rows.partial_decay_clear_db_s": "2026-11-13T10:33:44+00:00",
-  "rows.valley_db": "2026-11-13T10:33:44+00:00",
-  "rows.valley_ladder_coupling": "2026-11-13T10:33:44+00:00",
-  "rows.valley_slope_db_oct": "2026-11-13T10:33:44+00:00"
+ "tnr_unreliable": {
+  "reason": "chorus or ensemble: most rows have lines the pitch warp does not collapse, and the tone mask follows one pitch track",
+  "timbres": {
+   "t0": {
+    "rows": 3,
+    "of": 3
+   }
+  }
+ },
+ "recording_floor": {
+  "t0": {
+   "declared": false,
+   "rows": 3,
+   "lines": [],
+   "lines_found": 0,
+   "hum": null,
+   "note_independent": false,
+   "basis": null,
+   "level_db_hz": -59.13,
+   "slope_db_oct": -0.98,
+   "agree_share": 0.536,
+   "stationary": {
+    "verdict": false,
+    "evaluable_rows": 3,
+    "floor_like_share": 0.0,
+    "slope_db_s": -2.39,
+    "tone_slope_db_s": -4.77,
+    "corr": 0.31,
+    "hum_reference_slope_db_s": null
+   },
+   "reason": "not note-independent"
+  }
+ },
+ "loop": {
+  "status": "not_looped",
+  "rows": 3,
+  "tested": 2,
+  "looped_rows": 0,
+  "borderline_rows": 0,
+  "not_testable_rows": 1,
+  "unweighted_rows": 0,
+  "groups": {
+   "0": [
+    48
+   ]
+  }
  }
 }

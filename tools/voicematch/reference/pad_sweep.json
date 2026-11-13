@@ -1,7 +1,7 @@
 {
  "id": "pad_sweep",
  "label": "Pad 8 (sweep), sampled, close and dry",
- "measured_utc": "2026-10-23T19:15:32+00:00",
+ "measured_utc": "2026-11-13T19:54:05+00:00",
  "capture": {
   "program": 95,
   "params": [],
@@ -87,6 +87,19 @@
     -42.69,
     -43.6
    ],
+   "broad_lines": {
+    "broad_ratio": 3.92,
+    "width_ratio": null
+   },
+   "b_unreliable": {
+    "reason": "unison or ensemble: lines 3.9x a still tone's and not read warped, partials 9.4 c rms off one series; stretch, balance, partial_tilt and tnr read through B or through partials located on it",
+    "dimensions": [
+     "stretch",
+     "balance",
+     "partial_tilt",
+     "tnr"
+    ]
+   },
    "peak_dbfs": -22.0,
    "rms_dbfs": -34.7,
    "held_peak_dbfs": -29.01,
@@ -171,7 +184,71 @@
    "centroid_hz": 188.8,
    "tnr_mask": {},
    "tnr_db": 17.88,
-   "stereo_width": 0.188
+   "stereo_width": 0.188,
+   "loop": {
+    "verdict": "not",
+    "residual_db": -3.4,
+    "median_db": -2.7,
+    "frames": 6,
+    "reaching_frames": 6,
+    "reach_ms": 782.9,
+    "borderline": false,
+    "ladder_db": [
+     0.0,
+     -14.7,
+     -6.7,
+     -6.7,
+     -5.9,
+     -9.5,
+     -4.5,
+     -5.7,
+     -8.7,
+     -6.7,
+     -10.2,
+     -10.0,
+     -14.7,
+     -17.7,
+     -18.6,
+     -22.5,
+     -24.4,
+     -25.2,
+     -27.4,
+     -28.7
+    ],
+    "group": 0,
+    "group_notes": [
+     36,
+     52,
+     60,
+     68,
+     76
+    ],
+    "flagged": {
+     "register": "level read across notes that share one stored waveform: the spectrum is one fixed shape shifted with pitch, so the register curve over the group is a transposition artefact"
+    }
+   },
+   "window": {
+    "model_s": 3.0,
+    "reference_s": 3.0
+   },
+   "floor_state": {
+    "declared": false,
+    "basis": null,
+    "source": "preroll",
+    "level_db_hz": null,
+    "stationary": {
+     "slope_db_s": 0.34,
+     "corr": -0.5,
+     "tone_slope_db_s": -0.26,
+     "floor_like": true
+    },
+    "clear_partials_tail": 8,
+    "hum_dbfs": null,
+    "censors": {
+     "body": null,
+     "tnr": null
+    }
+   }
   },
   {
    "timbre": "gm096",
@@ -226,6 +303,19 @@
     -42.69,
     -43.6
    ],
+   "broad_lines": {
+    "broad_ratio": 3.92,
+    "width_ratio": null
+   },
+   "b_unreliable": {
+    "reason": "unison or ensemble: lines 3.9x a still tone's and not read warped, partials 9.4 c rms off one series; stretch, balance, partial_tilt and tnr read through B or through partials located on it",
+    "dimensions": [
+     "stretch",
+     "balance",
+     "partial_tilt",
+     "tnr"
+    ]
+   },
    "peak_dbfs": -18.09,
    "rms_dbfs": -30.79,
    "held_peak_dbfs": -25.09,
@@ -310,7 +400,71 @@
    "centroid_hz": 188.8,
    "tnr_mask": {},
    "tnr_db": 17.88,
-   "stereo_width": 0.188
+   "stereo_width": 0.188,
+   "loop": {
+    "verdict": "not",
+    "residual_db": -3.4,
+    "median_db": -2.7,
+    "frames": 6,
+    "reaching_frames": 6,
+    "reach_ms": 782.9,
+    "borderline": false,
+    "ladder_db": [
+     0.0,
+     -14.7,
+     -6.7,
+     -6.7,
+     -5.9,
+     -9.5,
+     -4.5,
+     -5.7,
+     -8.7,
+     -6.7,
+     -10.2,
+     -10.0,
+     -14.7,
+     -17.7,
+     -18.6,
+     -22.5,
+     -24.4,
+     -25.2,
+     -27.4,
+     -28.7
+    ],
+    "group": 0,
+    "group_notes": [
+     36,
+     52,
+     60,
+     68,
+     76
+    ],
+    "flagged": {
+     "register": "level read across notes that share one stored waveform: the spectrum is one fixed shape shifted with pitch, so the register curve over the group is a transposition artefact"
+    }
+   },
+   "window": {
+    "model_s": 3.0,
+    "reference_s": 3.0
+   },
+   "floor_state": {
+    "declared": false,
+    "basis": null,
+    "source": "preroll",
+    "level_db_hz": null,
+    "stationary": {
+     "slope_db_s": 0.34,
+     "corr": -0.5,
+     "tone_slope_db_s": -0.26,
+     "floor_like": true
+    },
+    "clear_partials_tail": 8,
+    "hum_dbfs": null,
+    "censors": {
+     "body": null,
+     "tnr": null
+    }
+   }
   },
   {
    "timbre": "gm096",
@@ -365,6 +519,19 @@
     -42.69,
     -43.6
    ],
+   "broad_lines": {
+    "broad_ratio": 3.92,
+    "width_ratio": null
+   },
+   "b_unreliable": {
+    "reason": "unison or ensemble: lines 3.9x a still tone's and not read warped, partials 9.4 c rms off one series; stretch, balance, partial_tilt and tnr read through B or through partials located on it",
+    "dimensions": [
+     "stretch",
+     "balance",
+     "partial_tilt",
+     "tnr"
+    ]
+   },
    "peak_dbfs": -15.4,
    "rms_dbfs": -28.1,
    "held_peak_dbfs": -22.4,
@@ -449,7 +616,71 @@
    "centroid_hz": 188.8,
    "tnr_mask": {},
    "tnr_db": 17.88,
-   "stereo_width": 0.188
+   "stereo_width": 0.188,
+   "loop": {
+    "verdict": "not",
+    "residual_db": -3.4,
+    "median_db": -2.7,
+    "frames": 6,
+    "reaching_frames": 6,
+    "reach_ms": 782.9,
+    "borderline": false,
+    "ladder_db": [
+     0.0,
+     -14.7,
+     -6.7,
+     -6.7,
+     -5.9,
+     -9.5,
+     -4.5,
+     -5.7,
+     -8.7,
+     -6.7,
+     -10.2,
+     -10.0,
+     -14.7,
+     -17.7,
+     -18.6,
+     -22.5,
+     -24.4,
+     -25.2,
+     -27.4,
+     -28.7
+    ],
+    "group": 0,
+    "group_notes": [
+     36,
+     52,
+     60,
+     68,
+     76
+    ],
+    "flagged": {
+     "register": "level read across notes that share one stored waveform: the spectrum is one fixed shape shifted with pitch, so the register curve over the group is a transposition artefact"
+    }
+   },
+   "window": {
+    "model_s": 3.0,
+    "reference_s": 3.0
+   },
+   "floor_state": {
+    "declared": false,
+    "basis": null,
+    "source": "preroll",
+    "level_db_hz": null,
+    "stationary": {
+     "slope_db_s": 0.34,
+     "corr": -0.5,
+     "tone_slope_db_s": -0.26,
+     "floor_like": true
+    },
+    "clear_partials_tail": 8,
+    "hum_dbfs": null,
+    "censors": {
+     "body": null,
+     "tnr": null
+    }
+   }
   },
   {
    "timbre": "gm096",
@@ -504,6 +735,19 @@
     -42.69,
     -43.6
    ],
+   "broad_lines": {
+    "broad_ratio": 3.92,
+    "width_ratio": null
+   },
+   "b_unreliable": {
+    "reason": "unison or ensemble: lines 3.9x a still tone's and not read warped, partials 9.4 c rms off one series; stretch, balance, partial_tilt and tnr read through B or through partials located on it",
+    "dimensions": [
+     "stretch",
+     "balance",
+     "partial_tilt",
+     "tnr"
+    ]
+   },
    "peak_dbfs": -13.4,
    "rms_dbfs": -26.1,
    "held_peak_dbfs": -20.41,
@@ -588,7 +832,71 @@
    "centroid_hz": 188.8,
    "tnr_mask": {},
    "tnr_db": 17.88,
-   "stereo_width": 0.188
+   "stereo_width": 0.188,
+   "loop": {
+    "verdict": "not",
+    "residual_db": -3.4,
+    "median_db": -2.7,
+    "frames": 6,
+    "reaching_frames": 6,
+    "reach_ms": 782.9,
+    "borderline": false,
+    "ladder_db": [
+     0.0,
+     -14.7,
+     -6.7,
+     -6.7,
+     -5.9,
+     -9.5,
+     -4.5,
+     -5.7,
+     -8.7,
+     -6.7,
+     -10.2,
+     -10.0,
+     -14.7,
+     -17.7,
+     -18.6,
+     -22.5,
+     -24.4,
+     -25.2,
+     -27.4,
+     -28.7
+    ],
+    "group": 0,
+    "group_notes": [
+     36,
+     52,
+     60,
+     68,
+     76
+    ],
+    "flagged": {
+     "register": "level read across notes that share one stored waveform: the spectrum is one fixed shape shifted with pitch, so the register curve over the group is a transposition artefact"
+    }
+   },
+   "window": {
+    "model_s": 3.0,
+    "reference_s": 3.0
+   },
+   "floor_state": {
+    "declared": false,
+    "basis": null,
+    "source": "preroll",
+    "level_db_hz": null,
+    "stationary": {
+     "slope_db_s": 0.34,
+     "corr": -0.5,
+     "tone_slope_db_s": -0.26,
+     "floor_like": true
+    },
+    "clear_partials_tail": 8,
+    "hum_dbfs": null,
+    "censors": {
+     "body": null,
+     "tnr": null
+    }
+   }
   },
   {
    "timbre": "gm096",
@@ -643,6 +951,19 @@
     -36.43,
     -37.78
    ],
+   "broad_lines": {
+    "broad_ratio": 4.73,
+    "width_ratio": null
+   },
+   "b_unreliable": {
+    "reason": "unison or ensemble: lines 4.7x a still tone's and not read warped, partials 10.0 c rms off one series; stretch, balance, partial_tilt and tnr read through B or through partials located on it",
+    "dimensions": [
+     "stretch",
+     "balance",
+     "partial_tilt",
+     "tnr"
+    ]
+   },
    "peak_dbfs": -21.28,
    "rms_dbfs": -32.5,
    "held_peak_dbfs": -27.14,
@@ -726,7 +1047,64 @@
    "centroid_hz": 342.5,
    "tnr_mask": {},
    "tnr_db": 23.22,
-   "stereo_width": 0.161
+   "stereo_width": 0.161,
+   "loop": {
+    "verdict": "not",
+    "residual_db": -2.4,
+    "median_db": -1.2,
+    "frames": 6,
+    "reaching_frames": 6,
+    "reach_ms": 782.9,
+    "borderline": false,
+    "ladder_db": [
+     0.0,
+     9.1,
+     3.0,
+     3.6,
+     5.8,
+     4.1,
+     7.8,
+     3.9,
+     5.2,
+     4.7,
+     1.9,
+     1.2,
+     -0.3,
+     -5.5,
+     -6.7,
+     -10.2,
+     -11.6,
+     -13.7,
+     -15.0,
+     -16.4
+    ],
+    "group": 1,
+    "group_notes": [
+     44
+    ]
+   },
+   "window": {
+    "model_s": 3.0,
+    "reference_s": 3.0
+   },
+   "floor_state": {
+    "declared": false,
+    "basis": null,
+    "source": "preroll",
+    "level_db_hz": null,
+    "stationary": {
+     "slope_db_s": 1.18,
+     "corr": -0.7,
+     "tone_slope_db_s": 0.27,
+     "floor_like": false
+    },
+    "clear_partials_tail": 8,
+    "hum_dbfs": null,
+    "censors": {
+     "body": null,
+     "tnr": null
+    }
+   }
   },
   {
    "timbre": "gm096",
@@ -781,6 +1159,19 @@
     -36.43,
     -37.78
    ],
+   "broad_lines": {
+    "broad_ratio": 4.73,
+    "width_ratio": null
+   },
+   "b_unreliable": {
+    "reason": "unison or ensemble: lines 4.7x a still tone's and not read warped, partials 10.0 c rms off one series; stretch, balance, partial_tilt and tnr read through B or through partials located on it",
+    "dimensions": [
+     "stretch",
+     "balance",
+     "partial_tilt",
+     "tnr"
+    ]
+   },
    "peak_dbfs": -17.37,
    "rms_dbfs": -28.59,
    "held_peak_dbfs": -23.22,
@@ -864,7 +1255,64 @@
    "centroid_hz": 342.5,
    "tnr_mask": {},
    "tnr_db": 23.22,
-   "stereo_width": 0.161
+   "stereo_width": 0.161,
+   "loop": {
+    "verdict": "not",
+    "residual_db": -2.4,
+    "median_db": -1.2,
+    "frames": 6,
+    "reaching_frames": 6,
+    "reach_ms": 782.9,
+    "borderline": false,
+    "ladder_db": [
+     0.0,
+     9.1,
+     3.0,
+     3.6,
+     5.8,
+     4.1,
+     7.8,
+     3.9,
+     5.2,
+     4.7,
+     1.9,
+     1.2,
+     -0.3,
+     -5.5,
+     -6.7,
+     -10.2,
+     -11.6,
+     -13.7,
+     -15.0,
+     -16.4
+    ],
+    "group": 1,
+    "group_notes": [
+     44
+    ]
+   },
+   "window": {
+    "model_s": 3.0,
+    "reference_s": 3.0
+   },
+   "floor_state": {
+    "declared": false,
+    "basis": null,
+    "source": "preroll",
+    "level_db_hz": null,
+    "stationary": {
+     "slope_db_s": 1.18,
+     "corr": -0.7,
+     "tone_slope_db_s": 0.27,
+     "floor_like": false
+    },
+    "clear_partials_tail": 8,
+    "hum_dbfs": null,
+    "censors": {
+     "body": null,
+     "tnr": null
+    }
+   }
   },
   {
    "timbre": "gm096",
@@ -919,6 +1367,19 @@
     -36.43,
     -37.78
    ],
+   "broad_lines": {
+    "broad_ratio": 4.73,
+    "width_ratio": null
+   },
+   "b_unreliable": {
+    "reason": "unison or ensemble: lines 4.7x a still tone's and not read warped, partials 10.0 c rms off one series; stretch, balance, partial_tilt and tnr read through B or through partials located on it",
+    "dimensions": [
+     "stretch",
+     "balance",
+     "partial_tilt",
+     "tnr"
+    ]
+   },
    "peak_dbfs": -14.68,
    "rms_dbfs": -25.9,
    "held_peak_dbfs": -20.54,
@@ -1002,7 +1463,64 @@
    "centroid_hz": 342.5,
    "tnr_mask": {},
    "tnr_db": 23.22,
-   "stereo_width": 0.161
+   "stereo_width": 0.161,
+   "loop": {
+    "verdict": "not",
+    "residual_db": -2.4,
+    "median_db": -1.2,
+    "frames": 6,
+    "reaching_frames": 6,
+    "reach_ms": 782.9,
+    "borderline": false,
+    "ladder_db": [
+     0.0,
+     9.1,
+     3.0,
+     3.6,
+     5.8,
+     4.1,
+     7.8,
+     3.9,
+     5.2,
+     4.7,
+     1.9,
+     1.2,
+     -0.3,
+     -5.5,
+     -6.7,
+     -10.2,
+     -11.6,
+     -13.7,
+     -15.0,
+     -16.4
+    ],
+    "group": 1,
+    "group_notes": [
+     44
+    ]
+   },
+   "window": {
+    "model_s": 3.0,
+    "reference_s": 3.0
+   },
+   "floor_state": {
+    "declared": false,
+    "basis": null,
+    "source": "preroll",
+    "level_db_hz": null,
+    "stationary": {
+     "slope_db_s": 1.18,
+     "corr": -0.7,
+     "tone_slope_db_s": 0.27,
+     "floor_like": false
+    },
+    "clear_partials_tail": 8,
+    "hum_dbfs": null,
+    "censors": {
+     "body": null,
+     "tnr": null
+    }
+   }
   },
   {
    "timbre": "gm096",
@@ -1057,6 +1575,19 @@
     -36.43,
     -37.78
    ],
+   "broad_lines": {
+    "broad_ratio": 4.73,
+    "width_ratio": null
+   },
+   "b_unreliable": {
+    "reason": "unison or ensemble: lines 4.7x a still tone's and not read warped, partials 10.0 c rms off one series; stretch, balance, partial_tilt and tnr read through B or through partials located on it",
+    "dimensions": [
+     "stretch",
+     "balance",
+     "partial_tilt",
+     "tnr"
+    ]
+   },
    "peak_dbfs": -12.69,
    "rms_dbfs": -23.91,
    "held_peak_dbfs": -18.54,
@@ -1140,16 +1671,73 @@
    "centroid_hz": 342.5,
    "tnr_mask": {},
    "tnr_db": 23.22,
-   "stereo_width": 0.161
+   "stereo_width": 0.161,
+   "loop": {
+    "verdict": "not",
+    "residual_db": -2.4,
+    "median_db": -1.2,
+    "frames": 6,
+    "reaching_frames": 6,
+    "reach_ms": 782.9,
+    "borderline": false,
+    "ladder_db": [
+     0.0,
+     9.1,
+     3.0,
+     3.6,
+     5.8,
+     4.1,
+     7.8,
+     3.9,
+     5.2,
+     4.7,
+     1.9,
+     1.2,
+     -0.3,
+     -5.5,
+     -6.7,
+     -10.2,
+     -11.6,
+     -13.7,
+     -15.0,
+     -16.4
+    ],
+    "group": 1,
+    "group_notes": [
+     44
+    ]
+   },
+   "window": {
+    "model_s": 3.0,
+    "reference_s": 3.0
+   },
+   "floor_state": {
+    "declared": false,
+    "basis": null,
+    "source": "preroll",
+    "level_db_hz": null,
+    "stationary": {
+     "slope_db_s": 1.18,
+     "corr": -0.7,
+     "tone_slope_db_s": 0.27,
+     "floor_like": false
+    },
+    "clear_partials_tail": 8,
+    "hum_dbfs": null,
+    "censors": {
+     "body": null,
+     "tnr": null
+    }
+   }
   },
   {
    "timbre": "gm096",
    "note": 52,
    "velocity": 32,
-   "f0_hz": 164.983,
-   "cents_vs_et": 1.78,
-   "inharmonicity_b": 0.0001667,
-   "partials_fit": 18,
+   "f0_hz": 165.185,
+   "cents_vs_et": 3.89,
+   "inharmonicity_b": 0.0,
+   "partials_fit": 20,
    "inharmonicity_reliable": true,
    "partials_hz": [
     163.43,
@@ -1161,17 +1749,17 @@
     1147.58,
     1311.41,
     1490.12,
-    1655.54,
-    1827.39,
+    1638.85,
+    1802.65,
     1993.39,
     2159.4,
-    2317.41,
-    2491.53,
-    2657.62,
-    2832.24,
-    3020.86,
-    3273.96,
-    3452.94
+    2294.0,
+    2457.82,
+    2630.78,
+    2795.19,
+    2949.39,
+    3124.05,
+    3288.48
    ],
    "partials_db": [
     0.0,
@@ -1183,18 +1771,31 @@
     -9.08,
     -11.58,
     -14.5,
-    -17.4,
-    -19.28,
+    -16.79,
+    -18.67,
     -21.07,
     -22.94,
-    -24.81,
-    -26.91,
-    -28.99,
-    -67.29,
-    -68.84,
-    -57.14,
-    -33.68
+    -24.25,
+    -26.37,
+    -27.63,
+    -28.89,
+    -29.83,
+    -30.86,
+    -32.16
    ],
+   "broad_lines": {
+    "broad_ratio": 5.65,
+    "width_ratio": null
+   },
+   "b_unreliable": {
+    "reason": "unison or ensemble: lines 5.7x a still tone's and not read warped, partials 11.2 c rms off one series; stretch, balance, partial_tilt and tnr read through B or through partials located on it",
+    "dimensions": [
+     "stretch",
+     "balance",
+     "partial_tilt",
+     "tnr"
+    ]
+   },
    "body_below_f0_db": -52.98,
    "body_under_db": -98.51,
    "body_f0_db": -45.53,
@@ -1248,19 +1849,20 @@
     -111.31,
     -108.61,
     -113.81,
-    -122.13,
-    -123.27,
-    -122.03,
+    -118.9,
+    -120.81,
+    -120.32,
     -126.36,
-    -127.56,
-    -126.97,
-    -130.12,
-    -132.39,
-    -95.84,
-    -129.15
+    -125.72,
+    -125.58,
+    -127.58,
+    -129.21,
+    -124.89,
+    -128.95,
+    -129.9
    ],
-   "valley_slope_db_oct": -4.115,
-   "valley_ladder_coupling": 0.092,
+   "valley_slope_db_oct": -5.561,
+   "valley_ladder_coupling": 0.564,
    "floor_source": "preroll",
    "floor_db": -110.66,
    "floor_octaves_db": [
@@ -1280,17 +1882,83 @@
    "damper_capped": false,
    "centroid_hz": 590.8,
    "tnr_mask": {},
-   "tnr_db": 26.95,
-   "stereo_width": 0.201
+   "tnr_db": 33.28,
+   "stereo_width": 0.201,
+   "loop": {
+    "verdict": "not",
+    "residual_db": -1.2,
+    "median_db": -0.7,
+    "frames": 6,
+    "reaching_frames": 6,
+    "reach_ms": 782.9,
+    "borderline": false,
+    "ladder_db": [
+     0.0,
+     -8.2,
+     -8.0,
+     -8.6,
+     -7.2,
+     -7.1,
+     -7.5,
+     -7.8,
+     -8.2,
+     -8.8,
+     -9.6,
+     -11.4,
+     -13.7,
+     -16.8,
+     -20.0,
+     -22.7,
+     -24.7,
+     -26.4,
+     -27.9,
+     -29.3
+    ],
+    "group": 0,
+    "group_notes": [
+     36,
+     52,
+     60,
+     68,
+     76
+    ],
+    "flagged": {
+     "register": "level read across notes that share one stored waveform: the spectrum is one fixed shape shifted with pitch, so the register curve over the group is a transposition artefact"
+    }
+   },
+   "window": {
+    "model_s": 3.0,
+    "reference_s": 3.0
+   },
+   "floor_state": {
+    "declared": false,
+    "basis": null,
+    "source": "preroll",
+    "level_db_hz": null,
+    "stationary": {
+     "slope_db_s": -1.55,
+     "corr": 0.02,
+     "tone_slope_db_s": -0.46,
+     "floor_like": false
+    },
+    "clear_partials_tail": 8,
+    "hum_dbfs": null,
+    "censors": {
+     "body": null,
+     "tnr": null
+    },
+    "body_floor_db": null,
+    "body_hum_db": null
+   }
   },
   {
    "timbre": "gm096",
    "note": 52,
    "velocity": 64,
-   "f0_hz": 164.983,
-   "cents_vs_et": 1.78,
-   "inharmonicity_b": 0.0001667,
-   "partials_fit": 18,
+   "f0_hz": 165.185,
+   "cents_vs_et": 3.89,
+   "inharmonicity_b": 0.0,
+   "partials_fit": 20,
    "inharmonicity_reliable": true,
    "partials_hz": [
     163.43,
@@ -1302,17 +1970,17 @@
     1147.58,
     1311.41,
     1490.12,
-    1655.54,
-    1827.39,
+    1638.85,
+    1802.65,
     1993.39,
     2159.4,
-    2317.41,
-    2491.53,
-    2657.62,
-    2832.24,
-    3020.86,
-    3273.96,
-    3452.94
+    2294.0,
+    2457.82,
+    2630.78,
+    2795.19,
+    2949.39,
+    3124.05,
+    3288.48
    ],
    "partials_db": [
     0.0,
@@ -1324,18 +1992,31 @@
     -9.08,
     -11.58,
     -14.5,
-    -17.4,
-    -19.28,
+    -16.79,
+    -18.67,
     -21.07,
     -22.94,
-    -24.81,
-    -26.91,
-    -28.99,
-    -67.29,
-    -68.84,
-    -57.14,
-    -33.68
+    -24.25,
+    -26.37,
+    -27.63,
+    -28.89,
+    -29.83,
+    -30.86,
+    -32.16
    ],
+   "broad_lines": {
+    "broad_ratio": 5.65,
+    "width_ratio": null
+   },
+   "b_unreliable": {
+    "reason": "unison or ensemble: lines 5.7x a still tone's and not read warped, partials 11.2 c rms off one series; stretch, balance, partial_tilt and tnr read through B or through partials located on it",
+    "dimensions": [
+     "stretch",
+     "balance",
+     "partial_tilt",
+     "tnr"
+    ]
+   },
    "body_below_f0_db": -52.98,
    "body_under_db": -94.59,
    "body_f0_db": -41.61,
@@ -1389,19 +2070,20 @@
     -107.39,
     -104.7,
     -109.9,
-    -118.22,
-    -119.35,
-    -118.12,
+    -114.99,
+    -116.9,
+    -116.41,
     -122.45,
-    -123.65,
-    -123.06,
-    -126.2,
-    -128.47,
-    -91.93,
-    -125.23
+    -121.81,
+    -121.67,
+    -123.67,
+    -125.3,
+    -120.98,
+    -125.04,
+    -125.99
    ],
-   "valley_slope_db_oct": -4.115,
-   "valley_ladder_coupling": 0.092,
+   "valley_slope_db_oct": -5.561,
+   "valley_ladder_coupling": 0.564,
    "floor_source": "preroll",
    "floor_db": -115.76,
    "floor_octaves_db": [
@@ -1421,17 +2103,83 @@
    "damper_capped": false,
    "centroid_hz": 590.8,
    "tnr_mask": {},
-   "tnr_db": 26.95,
-   "stereo_width": 0.201
+   "tnr_db": 33.28,
+   "stereo_width": 0.201,
+   "loop": {
+    "verdict": "not",
+    "residual_db": -1.2,
+    "median_db": -0.7,
+    "frames": 6,
+    "reaching_frames": 6,
+    "reach_ms": 782.9,
+    "borderline": false,
+    "ladder_db": [
+     0.0,
+     -8.2,
+     -8.0,
+     -8.6,
+     -7.2,
+     -7.1,
+     -7.5,
+     -7.8,
+     -8.2,
+     -8.8,
+     -9.6,
+     -11.4,
+     -13.7,
+     -16.8,
+     -20.0,
+     -22.7,
+     -24.7,
+     -26.4,
+     -27.9,
+     -29.3
+    ],
+    "group": 0,
+    "group_notes": [
+     36,
+     52,
+     60,
+     68,
+     76
+    ],
+    "flagged": {
+     "register": "level read across notes that share one stored waveform: the spectrum is one fixed shape shifted with pitch, so the register curve over the group is a transposition artefact"
+    }
+   },
+   "window": {
+    "model_s": 3.0,
+    "reference_s": 3.0
+   },
+   "floor_state": {
+    "declared": false,
+    "basis": null,
+    "source": "preroll",
+    "level_db_hz": null,
+    "stationary": {
+     "slope_db_s": -1.55,
+     "corr": 0.02,
+     "tone_slope_db_s": -0.46,
+     "floor_like": false
+    },
+    "clear_partials_tail": 8,
+    "hum_dbfs": null,
+    "censors": {
+     "body": null,
+     "tnr": null
+    },
+    "body_floor_db": null,
+    "body_hum_db": null
+   }
   },
   {
    "timbre": "gm096",
    "note": 52,
    "velocity": 96,
-   "f0_hz": 164.983,
-   "cents_vs_et": 1.78,
-   "inharmonicity_b": 0.0001667,
-   "partials_fit": 18,
+   "f0_hz": 165.185,
+   "cents_vs_et": 3.89,
+   "inharmonicity_b": 0.0,
+   "partials_fit": 20,
    "inharmonicity_reliable": true,
    "partials_hz": [
     163.43,
@@ -1443,17 +2191,17 @@
     1147.58,
     1311.41,
     1490.12,
-    1655.54,
-    1827.39,
+    1638.85,
+    1802.65,
     1993.39,
     2159.4,
-    2317.41,
-    2491.53,
-    2657.62,
-    2832.24,
-    3020.86,
-    3273.96,
-    3452.94
+    2294.0,
+    2457.82,
+    2630.78,
+    2795.19,
+    2949.39,
+    3124.05,
+    3288.48
    ],
    "partials_db": [
     0.0,
@@ -1465,18 +2213,31 @@
     -9.08,
     -11.58,
     -14.5,
-    -17.4,
-    -19.28,
+    -16.79,
+    -18.67,
     -21.07,
     -22.94,
-    -24.81,
-    -26.91,
-    -28.99,
-    -67.29,
-    -68.84,
-    -57.14,
-    -33.68
+    -24.25,
+    -26.37,
+    -27.63,
+    -28.89,
+    -29.83,
+    -30.86,
+    -32.16
    ],
+   "broad_lines": {
+    "broad_ratio": 5.65,
+    "width_ratio": null
+   },
+   "b_unreliable": {
+    "reason": "unison or ensemble: lines 5.7x a still tone's and not read warped, partials 11.2 c rms off one series; stretch, balance, partial_tilt and tnr read through B or through partials located on it",
+    "dimensions": [
+     "stretch",
+     "balance",
+     "partial_tilt",
+     "tnr"
+    ]
+   },
    "body_below_f0_db": -52.98,
    "body_under_db": -91.91,
    "body_f0_db": -38.92,
@@ -1530,19 +2291,20 @@
     -104.7,
     -102.01,
     -107.21,
-    -115.53,
-    -116.67,
-    -115.43,
+    -112.3,
+    -114.21,
+    -113.72,
     -119.76,
-    -120.96,
-    -120.37,
-    -123.51,
-    -125.78,
-    -89.24,
-    -122.54
+    -119.12,
+    -118.98,
+    -120.98,
+    -122.61,
+    -118.29,
+    -122.35,
+    -123.3
    ],
-   "valley_slope_db_oct": -4.115,
-   "valley_ladder_coupling": 0.092,
+   "valley_slope_db_oct": -5.561,
+   "valley_ladder_coupling": 0.564,
    "floor_source": "preroll",
    "floor_db": -116.86,
    "floor_octaves_db": [
@@ -1562,17 +2324,83 @@
    "damper_capped": false,
    "centroid_hz": 590.8,
    "tnr_mask": {},
-   "tnr_db": 26.95,
-   "stereo_width": 0.201
+   "tnr_db": 33.28,
+   "stereo_width": 0.201,
+   "loop": {
+    "verdict": "not",
+    "residual_db": -1.2,
+    "median_db": -0.7,
+    "frames": 6,
+    "reaching_frames": 6,
+    "reach_ms": 782.9,
+    "borderline": false,
+    "ladder_db": [
+     0.0,
+     -8.2,
+     -8.0,
+     -8.6,
+     -7.2,
+     -7.1,
+     -7.5,
+     -7.8,
+     -8.2,
+     -8.8,
+     -9.6,
+     -11.4,
+     -13.7,
+     -16.8,
+     -20.0,
+     -22.7,
+     -24.7,
+     -26.4,
+     -27.9,
+     -29.3
+    ],
+    "group": 0,
+    "group_notes": [
+     36,
+     52,
+     60,
+     68,
+     76
+    ],
+    "flagged": {
+     "register": "level read across notes that share one stored waveform: the spectrum is one fixed shape shifted with pitch, so the register curve over the group is a transposition artefact"
+    }
+   },
+   "window": {
+    "model_s": 3.0,
+    "reference_s": 3.0
+   },
+   "floor_state": {
+    "declared": false,
+    "basis": null,
+    "source": "preroll",
+    "level_db_hz": null,
+    "stationary": {
+     "slope_db_s": -1.55,
+     "corr": 0.02,
+     "tone_slope_db_s": -0.46,
+     "floor_like": false
+    },
+    "clear_partials_tail": 8,
+    "hum_dbfs": null,
+    "censors": {
+     "body": null,
+     "tnr": null
+    },
+    "body_floor_db": null,
+    "body_hum_db": null
+   }
   },
   {
    "timbre": "gm096",
    "note": 52,
    "velocity": 127,
-   "f0_hz": 164.983,
-   "cents_vs_et": 1.78,
-   "inharmonicity_b": 0.0001667,
-   "partials_fit": 18,
+   "f0_hz": 165.185,
+   "cents_vs_et": 3.89,
+   "inharmonicity_b": 0.0,
+   "partials_fit": 20,
    "inharmonicity_reliable": true,
    "partials_hz": [
     163.43,
@@ -1584,17 +2412,17 @@
     1147.58,
     1311.41,
     1490.12,
-    1655.54,
-    1827.39,
+    1638.85,
+    1802.65,
     1993.39,
     2159.4,
-    2317.41,
-    2491.53,
-    2657.62,
-    2832.24,
-    3020.86,
-    3273.96,
-    3452.94
+    2294.0,
+    2457.82,
+    2630.78,
+    2795.19,
+    2949.39,
+    3124.05,
+    3288.48
    ],
    "partials_db": [
     0.0,
@@ -1606,18 +2434,31 @@
     -9.08,
     -11.58,
     -14.5,
-    -17.4,
-    -19.28,
+    -16.79,
+    -18.67,
     -21.07,
     -22.94,
-    -24.81,
-    -26.91,
-    -28.99,
-    -67.29,
-    -68.84,
-    -57.14,
-    -33.68
+    -24.25,
+    -26.37,
+    -27.63,
+    -28.89,
+    -29.83,
+    -30.86,
+    -32.16
    ],
+   "broad_lines": {
+    "broad_ratio": 5.65,
+    "width_ratio": null
+   },
+   "b_unreliable": {
+    "reason": "unison or ensemble: lines 5.7x a still tone's and not read warped, partials 11.2 c rms off one series; stretch, balance, partial_tilt and tnr read through B or through partials located on it",
+    "dimensions": [
+     "stretch",
+     "balance",
+     "partial_tilt",
+     "tnr"
+    ]
+   },
    "body_below_f0_db": -52.98,
    "body_under_db": -89.91,
    "body_f0_db": -36.93,
@@ -1671,19 +2512,20 @@
     -102.71,
     -100.02,
     -105.22,
-    -113.54,
-    -114.67,
-    -113.43,
+    -110.3,
+    -112.22,
+    -111.72,
     -117.77,
-    -118.97,
-    -118.37,
-    -121.52,
-    -123.79,
-    -87.24,
-    -120.55
+    -117.12,
+    -116.98,
+    -118.99,
+    -120.62,
+    -116.29,
+    -120.35,
+    -121.31
    ],
-   "valley_slope_db_oct": -4.115,
-   "valley_ladder_coupling": 0.092,
+   "valley_slope_db_oct": -5.561,
+   "valley_ladder_coupling": 0.564,
    "floor_source": "preroll",
    "floor_db": -119.05,
    "floor_octaves_db": [
@@ -1703,8 +2545,74 @@
    "damper_capped": false,
    "centroid_hz": 590.8,
    "tnr_mask": {},
-   "tnr_db": 26.95,
-   "stereo_width": 0.201
+   "tnr_db": 33.28,
+   "stereo_width": 0.201,
+   "loop": {
+    "verdict": "not",
+    "residual_db": -1.2,
+    "median_db": -0.7,
+    "frames": 6,
+    "reaching_frames": 6,
+    "reach_ms": 782.9,
+    "borderline": false,
+    "ladder_db": [
+     0.0,
+     -8.2,
+     -8.0,
+     -8.6,
+     -7.2,
+     -7.1,
+     -7.5,
+     -7.8,
+     -8.2,
+     -8.8,
+     -9.6,
+     -11.4,
+     -13.7,
+     -16.8,
+     -20.0,
+     -22.7,
+     -24.7,
+     -26.4,
+     -27.9,
+     -29.3
+    ],
+    "group": 0,
+    "group_notes": [
+     36,
+     52,
+     60,
+     68,
+     76
+    ],
+    "flagged": {
+     "register": "level read across notes that share one stored waveform: the spectrum is one fixed shape shifted with pitch, so the register curve over the group is a transposition artefact"
+    }
+   },
+   "window": {
+    "model_s": 3.0,
+    "reference_s": 3.0
+   },
+   "floor_state": {
+    "declared": false,
+    "basis": null,
+    "source": "preroll",
+    "level_db_hz": null,
+    "stationary": {
+     "slope_db_s": -1.55,
+     "corr": 0.02,
+     "tone_slope_db_s": -0.46,
+     "floor_like": false
+    },
+    "clear_partials_tail": 8,
+    "hum_dbfs": null,
+    "censors": {
+     "body": null,
+     "tnr": null
+    },
+    "body_floor_db": null,
+    "body_hum_db": null
+   }
   },
   {
    "timbre": "gm096",
@@ -1759,6 +2667,19 @@
     -36.74,
     -38.16
    ],
+   "broad_lines": {
+    "broad_ratio": 7.61,
+    "width_ratio": null
+   },
+   "b_unreliable": {
+    "reason": "unison or ensemble: lines 7.6x a still tone's and not read warped, partials 8.4 c rms off one series; stretch, balance, partial_tilt and tnr read through B or through partials located on it",
+    "dimensions": [
+     "stretch",
+     "balance",
+     "partial_tilt",
+     "tnr"
+    ]
+   },
    "body_below_f0_db": -51.63,
    "body_under_db": -91.55,
    "body_f0_db": -39.92,
@@ -1848,7 +2769,84 @@
    "centroid_hz": 802.6,
    "tnr_mask": {},
    "tnr_db": 43.24,
-   "stereo_width": 0.182
+   "stereo_width": 0.182,
+   "loop": {
+    "verdict": "not",
+    "residual_db": -0.7,
+    "median_db": -0.6,
+    "frames": 6,
+    "reaching_frames": 6,
+    "reach_ms": 782.9,
+    "borderline": false,
+    "ladder_db": [
+     0.0,
+     -7.0,
+     -9.4,
+     -9.9,
+     -9.2,
+     -7.9,
+     -8.0,
+     -8.1,
+     -9.2,
+     -10.1,
+     -11.2,
+     -12.9,
+     -15.6,
+     -18.9,
+     -22.0,
+     -24.5,
+     -26.6,
+     -28.5,
+     -30.1,
+     -31.6
+    ],
+    "group": 0,
+    "group_notes": [
+     36,
+     52,
+     60,
+     68,
+     76
+    ],
+    "group_uncertain": {
+     "ambiguous_with": [
+      84
+     ],
+     "loosest_inside_db": 2.7,
+     "nearest_outside_db": 7.3,
+     "band_db": [
+      4.0,
+      8.0
+     ]
+    },
+    "flagged": {
+     "register": "level read across notes that share one stored waveform: the spectrum is one fixed shape shifted with pitch, so the register curve over the group is a transposition artefact"
+    }
+   },
+   "window": {
+    "model_s": 3.0,
+    "reference_s": 3.0
+   },
+   "floor_state": {
+    "declared": false,
+    "basis": null,
+    "source": "preroll",
+    "level_db_hz": null,
+    "stationary": {
+     "slope_db_s": -0.25,
+     "corr": 0.65,
+     "tone_slope_db_s": -0.04,
+     "floor_like": false
+    },
+    "clear_partials_tail": 8,
+    "hum_dbfs": null,
+    "censors": {
+     "body": null,
+     "tnr": null
+    },
+    "body_floor_db": null,
+    "body_hum_db": null
+   }
   },
   {
    "timbre": "gm096",
@@ -1903,6 +2901,19 @@
     -36.74,
     -38.16
    ],
+   "broad_lines": {
+    "broad_ratio": 7.61,
+    "width_ratio": null
+   },
+   "b_unreliable": {
+    "reason": "unison or ensemble: lines 7.6x a still tone's and not read warped, partials 8.4 c rms off one series; stretch, balance, partial_tilt and tnr read through B or through partials located on it",
+    "dimensions": [
+     "stretch",
+     "balance",
+     "partial_tilt",
+     "tnr"
+    ]
+   },
    "body_below_f0_db": -51.63,
    "body_under_db": -87.63,
    "body_f0_db": -36.0,
@@ -1992,7 +3003,84 @@
    "centroid_hz": 802.6,
    "tnr_mask": {},
    "tnr_db": 43.24,
-   "stereo_width": 0.182
+   "stereo_width": 0.182,
+   "loop": {
+    "verdict": "not",
+    "residual_db": -0.7,
+    "median_db": -0.6,
+    "frames": 6,
+    "reaching_frames": 6,
+    "reach_ms": 782.9,
+    "borderline": false,
+    "ladder_db": [
+     0.0,
+     -7.0,
+     -9.4,
+     -9.9,
+     -9.2,
+     -7.9,
+     -8.0,
+     -8.1,
+     -9.2,
+     -10.1,
+     -11.2,
+     -12.9,
+     -15.6,
+     -18.9,
+     -22.0,
+     -24.5,
+     -26.6,
+     -28.5,
+     -30.1,
+     -31.6
+    ],
+    "group": 0,
+    "group_notes": [
+     36,
+     52,
+     60,
+     68,
+     76
+    ],
+    "group_uncertain": {
+     "ambiguous_with": [
+      84
+     ],
+     "loosest_inside_db": 2.7,
+     "nearest_outside_db": 7.3,
+     "band_db": [
+      4.0,
+      8.0
+     ]
+    },
+    "flagged": {
+     "register": "level read across notes that share one stored waveform: the spectrum is one fixed shape shifted with pitch, so the register curve over the group is a transposition artefact"
+    }
+   },
+   "window": {
+    "model_s": 3.0,
+    "reference_s": 3.0
+   },
+   "floor_state": {
+    "declared": false,
+    "basis": null,
+    "source": "preroll",
+    "level_db_hz": null,
+    "stationary": {
+     "slope_db_s": -0.25,
+     "corr": 0.65,
+     "tone_slope_db_s": -0.04,
+     "floor_like": false
+    },
+    "clear_partials_tail": 8,
+    "hum_dbfs": null,
+    "censors": {
+     "body": null,
+     "tnr": null
+    },
+    "body_floor_db": null,
+    "body_hum_db": null
+   }
   },
   {
    "timbre": "gm096",
@@ -2047,6 +3135,19 @@
     -36.74,
     -38.16
    ],
+   "broad_lines": {
+    "broad_ratio": 7.61,
+    "width_ratio": null
+   },
+   "b_unreliable": {
+    "reason": "unison or ensemble: lines 7.6x a still tone's and not read warped, partials 8.4 c rms off one series; stretch, balance, partial_tilt and tnr read through B or through partials located on it",
+    "dimensions": [
+     "stretch",
+     "balance",
+     "partial_tilt",
+     "tnr"
+    ]
+   },
    "body_below_f0_db": -51.63,
    "body_under_db": -84.94,
    "body_f0_db": -33.31,
@@ -2136,7 +3237,84 @@
    "centroid_hz": 802.6,
    "tnr_mask": {},
    "tnr_db": 43.24,
-   "stereo_width": 0.182
+   "stereo_width": 0.182,
+   "loop": {
+    "verdict": "not",
+    "residual_db": -0.7,
+    "median_db": -0.6,
+    "frames": 6,
+    "reaching_frames": 6,
+    "reach_ms": 782.9,
+    "borderline": false,
+    "ladder_db": [
+     0.0,
+     -7.0,
+     -9.4,
+     -9.9,
+     -9.2,
+     -7.9,
+     -8.0,
+     -8.1,
+     -9.2,
+     -10.1,
+     -11.2,
+     -12.9,
+     -15.6,
+     -18.9,
+     -22.0,
+     -24.5,
+     -26.6,
+     -28.5,
+     -30.1,
+     -31.6
+    ],
+    "group": 0,
+    "group_notes": [
+     36,
+     52,
+     60,
+     68,
+     76
+    ],
+    "group_uncertain": {
+     "ambiguous_with": [
+      84
+     ],
+     "loosest_inside_db": 2.7,
+     "nearest_outside_db": 7.3,
+     "band_db": [
+      4.0,
+      8.0
+     ]
+    },
+    "flagged": {
+     "register": "level read across notes that share one stored waveform: the spectrum is one fixed shape shifted with pitch, so the register curve over the group is a transposition artefact"
+    }
+   },
+   "window": {
+    "model_s": 3.0,
+    "reference_s": 3.0
+   },
+   "floor_state": {
+    "declared": false,
+    "basis": null,
+    "source": "preroll",
+    "level_db_hz": null,
+    "stationary": {
+     "slope_db_s": -0.25,
+     "corr": 0.65,
+     "tone_slope_db_s": -0.04,
+     "floor_like": false
+    },
+    "clear_partials_tail": 8,
+    "hum_dbfs": null,
+    "censors": {
+     "body": null,
+     "tnr": null
+    },
+    "body_floor_db": null,
+    "body_hum_db": null
+   }
   },
   {
    "timbre": "gm096",
@@ -2191,6 +3369,19 @@
     -36.74,
     -38.16
    ],
+   "broad_lines": {
+    "broad_ratio": 7.61,
+    "width_ratio": null
+   },
+   "b_unreliable": {
+    "reason": "unison or ensemble: lines 7.6x a still tone's and not read warped, partials 8.4 c rms off one series; stretch, balance, partial_tilt and tnr read through B or through partials located on it",
+    "dimensions": [
+     "stretch",
+     "balance",
+     "partial_tilt",
+     "tnr"
+    ]
+   },
    "body_below_f0_db": -51.63,
    "body_under_db": -82.95,
    "body_f0_db": -31.32,
@@ -2280,16 +3471,93 @@
    "centroid_hz": 802.6,
    "tnr_mask": {},
    "tnr_db": 43.24,
-   "stereo_width": 0.182
+   "stereo_width": 0.182,
+   "loop": {
+    "verdict": "not",
+    "residual_db": -0.7,
+    "median_db": -0.6,
+    "frames": 6,
+    "reaching_frames": 6,
+    "reach_ms": 782.9,
+    "borderline": false,
+    "ladder_db": [
+     0.0,
+     -7.0,
+     -9.4,
+     -9.9,
+     -9.2,
+     -7.9,
+     -8.0,
+     -8.1,
+     -9.2,
+     -10.1,
+     -11.2,
+     -12.9,
+     -15.6,
+     -18.9,
+     -22.0,
+     -24.5,
+     -26.6,
+     -28.5,
+     -30.1,
+     -31.6
+    ],
+    "group": 0,
+    "group_notes": [
+     36,
+     52,
+     60,
+     68,
+     76
+    ],
+    "group_uncertain": {
+     "ambiguous_with": [
+      84
+     ],
+     "loosest_inside_db": 2.7,
+     "nearest_outside_db": 7.3,
+     "band_db": [
+      4.0,
+      8.0
+     ]
+    },
+    "flagged": {
+     "register": "level read across notes that share one stored waveform: the spectrum is one fixed shape shifted with pitch, so the register curve over the group is a transposition artefact"
+    }
+   },
+   "window": {
+    "model_s": 3.0,
+    "reference_s": 3.0
+   },
+   "floor_state": {
+    "declared": false,
+    "basis": null,
+    "source": "preroll",
+    "level_db_hz": null,
+    "stationary": {
+     "slope_db_s": -0.25,
+     "corr": 0.65,
+     "tone_slope_db_s": -0.04,
+     "floor_like": false
+    },
+    "clear_partials_tail": 8,
+    "hum_dbfs": null,
+    "censors": {
+     "body": null,
+     "tnr": null
+    },
+    "body_floor_db": null,
+    "body_hum_db": null
+   }
   },
   {
    "timbre": "gm096",
    "note": 68,
    "velocity": 32,
-   "f0_hz": 415.684,
-   "cents_vs_et": 1.58,
-   "inharmonicity_b": 0.0001942,
-   "partials_fit": 16,
+   "f0_hz": 416.022,
+   "cents_vs_et": 2.99,
+   "inharmonicity_b": 3.723e-05,
+   "partials_fit": 20,
    "inharmonicity_reliable": true,
    "partials_hz": [
     413.4,
@@ -2306,12 +3574,12 @@
     5021.82,
     5421.39,
     5858.63,
-    6281.14,
-    6802.72,
-    7271.85,
-    7636.81,
-    8266.07,
-    8679.38
+    6255.39,
+    6695.58,
+    7114.05,
+    7532.51,
+    7923.51,
+    8340.52
    ],
    "partials_db": [
     0.0,
@@ -2328,13 +3596,26 @@
     -27.74,
     -29.05,
     -31.43,
-    -58.75,
-    -67.25,
-    -68.51,
-    -68.41,
-    -41.92,
-    -43.19
+    -33.36,
+    -35.87,
+    -36.71,
+    -38.4,
+    -39.92,
+    -41.03
    ],
+   "broad_lines": {
+    "broad_ratio": 10.12,
+    "width_ratio": null
+   },
+   "b_unreliable": {
+    "reason": "unison or ensemble: lines 10.1x a still tone's and not read warped, partials 7.6 c rms off one series; stretch, balance, partial_tilt and tnr read through B or through partials located on it",
+    "dimensions": [
+     "stretch",
+     "balance",
+     "partial_tilt",
+     "tnr"
+    ]
+   },
    "body_below_f0_db": -53.79,
    "body_under_db": -89.5,
    "body_f0_db": -35.71,
@@ -2393,14 +3674,15 @@
     -123.72,
     -124.73,
     -129.61,
-    -128.64,
-    -115.81,
-    -96.28,
-    -98.39,
-    -130.54
+    -128.58,
+    -128.82,
+    -129.72,
+    -130.18,
+    -131.16,
+    -132.1
    ],
-   "valley_slope_db_oct": -0.93,
-   "valley_ladder_coupling": -0.1,
+   "valley_slope_db_oct": -5.623,
+   "valley_ladder_coupling": 0.522,
    "floor_source": "preroll",
    "floor_db": -109.86,
    "floor_octaves_db": [
@@ -2420,17 +3702,94 @@
    "damper_capped": false,
    "centroid_hz": 1239.5,
    "tnr_mask": {},
-   "tnr_db": 31.82,
-   "stereo_width": 0.175
+   "tnr_db": 38.24,
+   "stereo_width": 0.175,
+   "loop": {
+    "verdict": "not",
+    "residual_db": -1.2,
+    "median_db": -0.7,
+    "frames": 6,
+    "reaching_frames": 6,
+    "reach_ms": 782.9,
+    "borderline": false,
+    "ladder_db": [
+     0.0,
+     -6.2,
+     -8.8,
+     -9.3,
+     -8.4,
+     -7.8,
+     -7.8,
+     -8.3,
+     -9.2,
+     -10.5,
+     -11.7,
+     -13.7,
+     -16.4,
+     -20.2,
+     -23.5,
+     -26.4,
+     -28.8,
+     -30.9,
+     -32.9,
+     -34.7
+    ],
+    "group": 0,
+    "group_notes": [
+     36,
+     52,
+     60,
+     68,
+     76
+    ],
+    "group_uncertain": {
+     "ambiguous_with": [
+      84
+     ],
+     "loosest_inside_db": 3.5,
+     "nearest_outside_db": 6.3,
+     "band_db": [
+      4.0,
+      8.0
+     ]
+    },
+    "flagged": {
+     "register": "level read across notes that share one stored waveform: the spectrum is one fixed shape shifted with pitch, so the register curve over the group is a transposition artefact"
+    }
+   },
+   "window": {
+    "model_s": 3.0,
+    "reference_s": 3.0
+   },
+   "floor_state": {
+    "declared": false,
+    "basis": null,
+    "source": "preroll",
+    "level_db_hz": null,
+    "stationary": {
+     "slope_db_s": -2.08,
+     "corr": -0.09,
+     "tone_slope_db_s": 0.21,
+     "floor_like": false
+    },
+    "clear_partials_tail": 8,
+    "hum_dbfs": null,
+    "censors": {
+     "body": null,
+     "tnr": null
+    },
+    "body_floor_db": null,
+    "body_hum_db": null
+   }
   },
   {
    "timbre": "gm096",
    "note": 68,
    "velocity": 64,
-   "f0_hz": 415.684,
-   "cents_vs_et": 1.58,
-   "inharmonicity_b": 0.0001942,
-   "partials_fit": 16,
+   "f0_hz": 416.022,
+   "cents_vs_et": 2.99,
+   "inharmonicity_b": 3.723e-05,
+   "partials_fit": 20,
    "inharmonicity_reliable": true,
    "partials_hz": [
     413.4,
@@ -2447,12 +3806,12 @@
     5021.82,
     5421.39,
     5858.63,
-    6281.14,
-    6802.72,
-    7271.85,
-    7636.81,
-    8266.07,
-    8679.38
+    6255.39,
+    6695.58,
+    7114.05,
+    7532.51,
+    7923.51,
+    8340.52
    ],
    "partials_db": [
     0.0,
@@ -2469,15 +3828,28 @@
     -27.74,
     -29.05,
     -31.43,
-    -58.75,
-    -67.25,
-    -68.51,
-    -68.41,
-    -41.92,
-    -43.19
+    -33.36,
+    -35.87,
+    -36.71,
+    -38.4,
+    -39.92,
+    -41.03
    ],
+   "broad_lines": {
+    "broad_ratio": 10.12,
+    "width_ratio": null
+   },
+   "b_unreliable": {
+    "reason": "unison or ensemble: lines 10.1x a still tone's and not read warped, partials 7.6 c rms off one series; stretch, balance, partial_tilt and tnr read through B or through partials located on it",
+    "dimensions": [
+     "stretch",
+     "balance",
+     "partial_tilt",
+     "tnr"
+    ]
+   },
    "body_below_f0_db": -53.79,
-   "body_under_db": -85.59,
+   "body_under_db": -85.58,
    "body_f0_db": -31.8,
    "peak_dbfs": -12.71,
    "rms_dbfs": -27.46,
@@ -2534,14 +3906,15 @@
     -119.8,
     -120.81,
     -125.69,
-    -124.73,
-    -111.9,
-    -92.37,
-    -94.48,
-    -126.62
+    -124.66,
+    -124.91,
+    -125.81,
+    -126.27,
+    -127.25,
+    -128.19
    ],
-   "valley_slope_db_oct": -0.93,
-   "valley_ladder_coupling": -0.1,
+   "valley_slope_db_oct": -5.623,
+   "valley_ladder_coupling": 0.522,
    "floor_source": "preroll",
    "floor_db": -107.89,
    "floor_octaves_db": [
@@ -2561,17 +3934,94 @@
    "damper_capped": false,
    "centroid_hz": 1239.5,
    "tnr_mask": {},
-   "tnr_db": 31.82,
-   "stereo_width": 0.175
+   "tnr_db": 38.24,
+   "stereo_width": 0.175,
+   "loop": {
+    "verdict": "not",
+    "residual_db": -1.2,
+    "median_db": -0.7,
+    "frames": 6,
+    "reaching_frames": 6,
+    "reach_ms": 782.9,
+    "borderline": false,
+    "ladder_db": [
+     0.0,
+     -6.2,
+     -8.8,
+     -9.3,
+     -8.4,
+     -7.8,
+     -7.8,
+     -8.3,
+     -9.2,
+     -10.5,
+     -11.7,
+     -13.7,
+     -16.4,
+     -20.2,
+     -23.5,
+     -26.4,
+     -28.8,
+     -30.9,
+     -32.9,
+     -34.7
+    ],
+    "group": 0,
+    "group_notes": [
+     36,
+     52,
+     60,
+     68,
+     76
+    ],
+    "group_uncertain": {
+     "ambiguous_with": [
+      84
+     ],
+     "loosest_inside_db": 3.5,
+     "nearest_outside_db": 6.3,
+     "band_db": [
+      4.0,
+      8.0
+     ]
+    },
+    "flagged": {
+     "register": "level read across notes that share one stored waveform: the spectrum is one fixed shape shifted with pitch, so the register curve over the group is a transposition artefact"
+    }
+   },
+   "window": {
+    "model_s": 3.0,
+    "reference_s": 3.0
+   },
+   "floor_state": {
+    "declared": false,
+    "basis": null,
+    "source": "preroll",
+    "level_db_hz": null,
+    "stationary": {
+     "slope_db_s": -2.08,
+     "corr": -0.09,
+     "tone_slope_db_s": 0.21,
+     "floor_like": false
+    },
+    "clear_partials_tail": 8,
+    "hum_dbfs": null,
+    "censors": {
+     "body": null,
+     "tnr": null
+    },
+    "body_floor_db": null,
+    "body_hum_db": null
+   }
   },
   {
    "timbre": "gm096",
    "note": 68,
    "velocity": 96,
-   "f0_hz": 415.684,
-   "cents_vs_et": 1.58,
-   "inharmonicity_b": 0.0001942,
-   "partials_fit": 16,
+   "f0_hz": 416.022,
+   "cents_vs_et": 2.99,
+   "inharmonicity_b": 3.723e-05,
+   "partials_fit": 20,
    "inharmonicity_reliable": true,
    "partials_hz": [
     413.4,
@@ -2588,12 +4038,12 @@
     5021.82,
     5421.39,
     5858.63,
-    6281.14,
-    6802.72,
-    7271.85,
-    7636.81,
-    8266.07,
-    8679.38
+    6255.39,
+    6695.58,
+    7114.05,
+    7532.51,
+    7923.51,
+    8340.52
    ],
    "partials_db": [
     0.0,
@@ -2610,13 +4060,26 @@
     -27.74,
     -29.05,
     -31.43,
-    -58.75,
-    -67.25,
-    -68.51,
-    -68.41,
-    -41.92,
-    -43.19
+    -33.36,
+    -35.87,
+    -36.71,
+    -38.4,
+    -39.92,
+    -41.03
    ],
+   "broad_lines": {
+    "broad_ratio": 10.12,
+    "width_ratio": null
+   },
+   "b_unreliable": {
+    "reason": "unison or ensemble: lines 10.1x a still tone's and not read warped, partials 7.6 c rms off one series; stretch, balance, partial_tilt and tnr read through B or through partials located on it",
+    "dimensions": [
+     "stretch",
+     "balance",
+     "partial_tilt",
+     "tnr"
+    ]
+   },
    "body_below_f0_db": -53.79,
    "body_under_db": -82.9,
    "body_f0_db": -29.11,
@@ -2675,14 +4138,15 @@
     -117.11,
     -118.12,
     -123.0,
-    -122.04,
-    -109.21,
-    -89.68,
-    -91.79,
-    -123.93
+    -121.98,
+    -122.22,
+    -123.12,
+    -123.58,
+    -124.56,
+    -125.5
    ],
-   "valley_slope_db_oct": -0.93,
-   "valley_ladder_coupling": -0.1,
+   "valley_slope_db_oct": -5.623,
+   "valley_ladder_coupling": 0.522,
    "floor_source": "preroll",
    "floor_db": -107.65,
    "floor_octaves_db": [
@@ -2702,17 +4166,94 @@
    "damper_capped": false,
    "centroid_hz": 1239.5,
    "tnr_mask": {},
-   "tnr_db": 31.82,
-   "stereo_width": 0.175
+   "tnr_db": 38.24,
+   "stereo_width": 0.175,
+   "loop": {
+    "verdict": "not",
+    "residual_db": -1.2,
+    "median_db": -0.7,
+    "frames": 6,
+    "reaching_frames": 6,
+    "reach_ms": 782.9,
+    "borderline": false,
+    "ladder_db": [
+     0.0,
+     -6.2,
+     -8.8,
+     -9.3,
+     -8.4,
+     -7.8,
+     -7.8,
+     -8.3,
+     -9.2,
+     -10.5,
+     -11.7,
+     -13.7,
+     -16.4,
+     -20.2,
+     -23.5,
+     -26.4,
+     -28.8,
+     -30.9,
+     -32.9,
+     -34.7
+    ],
+    "group": 0,
+    "group_notes": [
+     36,
+     52,
+     60,
+     68,
+     76
+    ],
+    "group_uncertain": {
+     "ambiguous_with": [
+      84
+     ],
+     "loosest_inside_db": 3.5,
+     "nearest_outside_db": 6.3,
+     "band_db": [
+      4.0,
+      8.0
+     ]
+    },
+    "flagged": {
+     "register": "level read across notes that share one stored waveform: the spectrum is one fixed shape shifted with pitch, so the register curve over the group is a transposition artefact"
+    }
+   },
+   "window": {
+    "model_s": 3.0,
+    "reference_s": 3.0
+   },
+   "floor_state": {
+    "declared": false,
+    "basis": null,
+    "source": "preroll",
+    "level_db_hz": null,
+    "stationary": {
+     "slope_db_s": -2.08,
+     "corr": -0.09,
+     "tone_slope_db_s": 0.21,
+     "floor_like": false
+    },
+    "clear_partials_tail": 8,
+    "hum_dbfs": null,
+    "censors": {
+     "body": null,
+     "tnr": null
+    },
+    "body_floor_db": null,
+    "body_hum_db": null
+   }
   },
   {
    "timbre": "gm096",
    "note": 68,
    "velocity": 127,
-   "f0_hz": 415.684,
-   "cents_vs_et": 1.58,
-   "inharmonicity_b": 0.0001942,
-   "partials_fit": 16,
+   "f0_hz": 416.022,
+   "cents_vs_et": 2.99,
+   "inharmonicity_b": 3.723e-05,
+   "partials_fit": 20,
    "inharmonicity_reliable": true,
    "partials_hz": [
     413.4,
@@ -2729,12 +4270,12 @@
     5021.82,
     5421.39,
     5858.63,
-    6281.14,
-    6802.72,
-    7271.85,
-    7636.81,
-    8266.07,
-    8679.38
+    6255.39,
+    6695.58,
+    7114.05,
+    7532.51,
+    7923.51,
+    8340.52
    ],
    "partials_db": [
     0.0,
@@ -2751,13 +4292,26 @@
     -27.74,
     -29.05,
     -31.43,
-    -58.75,
-    -67.25,
-    -68.51,
-    -68.41,
-    -41.92,
-    -43.19
+    -33.36,
+    -35.87,
+    -36.71,
+    -38.4,
+    -39.92,
+    -41.03
    ],
+   "broad_lines": {
+    "broad_ratio": 10.12,
+    "width_ratio": null
+   },
+   "b_unreliable": {
+    "reason": "unison or ensemble: lines 10.1x a still tone's and not read warped, partials 7.6 c rms off one series; stretch, balance, partial_tilt and tnr read through B or through partials located on it",
+    "dimensions": [
+     "stretch",
+     "balance",
+     "partial_tilt",
+     "tnr"
+    ]
+   },
    "body_below_f0_db": -53.79,
    "body_under_db": -80.9,
    "body_f0_db": -27.12,
@@ -2816,14 +4370,15 @@
     -115.12,
     -116.13,
     -121.01,
-    -120.05,
-    -107.22,
-    -87.68,
-    -89.8,
-    -121.94
+    -119.98,
+    -120.23,
+    -121.13,
+    -121.58,
+    -122.57,
+    -123.51
    ],
-   "valley_slope_db_oct": -0.93,
-   "valley_ladder_coupling": -0.1,
+   "valley_slope_db_oct": -5.623,
+   "valley_ladder_coupling": 0.522,
    "floor_source": "preroll",
    "floor_db": -105.66,
    "floor_octaves_db": [
@@ -2843,8 +4398,85 @@
    "damper_capped": false,
    "centroid_hz": 1239.5,
    "tnr_mask": {},
-   "tnr_db": 31.82,
-   "stereo_width": 0.175
+   "tnr_db": 38.24,
+   "stereo_width": 0.175,
+   "loop": {
+    "verdict": "not",
+    "residual_db": -1.2,
+    "median_db": -0.7,
+    "frames": 6,
+    "reaching_frames": 6,
+    "reach_ms": 782.9,
+    "borderline": false,
+    "ladder_db": [
+     0.0,
+     -6.2,
+     -8.8,
+     -9.3,
+     -8.4,
+     -7.8,
+     -7.8,
+     -8.3,
+     -9.2,
+     -10.5,
+     -11.7,
+     -13.7,
+     -16.4,
+     -20.2,
+     -23.5,
+     -26.4,
+     -28.8,
+     -30.9,
+     -32.9,
+     -34.7
+    ],
+    "group": 0,
+    "group_notes": [
+     36,
+     52,
+     60,
+     68,
+     76
+    ],
+    "group_uncertain": {
+     "ambiguous_with": [
+      84
+     ],
+     "loosest_inside_db": 3.5,
+     "nearest_outside_db": 6.3,
+     "band_db": [
+      4.0,
+      8.0
+     ]
+    },
+    "flagged": {
+     "register": "level read across notes that share one stored waveform: the spectrum is one fixed shape shifted with pitch, so the register curve over the group is a transposition artefact"
+    }
+   },
+   "window": {
+    "model_s": 3.0,
+    "reference_s": 3.0
+   },
+   "floor_state": {
+    "declared": false,
+    "basis": null,
+    "source": "preroll",
+    "level_db_hz": null,
+    "stationary": {
+     "slope_db_s": -2.08,
+     "corr": -0.09,
+     "tone_slope_db_s": 0.21,
+     "floor_like": false
+    },
+    "clear_partials_tail": 8,
+    "hum_dbfs": null,
+    "censors": {
+     "body": null,
+     "tnr": null
+    },
+    "body_floor_db": null,
+    "body_hum_db": null
+   }
   },
   {
    "timbre": "gm096",
@@ -2899,9 +4531,40 @@
     -42.11,
     -43.65
    ],
+   "unwarp": {
+    "state": "ensemble",
+    "coherence": 0.01,
+    "reason": "coherence 0.010 at most 0.456: the partials' tracks do not follow the fundamental's, so the motion is not one source's",
+    "kept": false,
+    "width_ratio": null
+   },
+   "broad_lines": {
+    "broad_ratio": 14.51,
+    "width_ratio": null
+   },
+   "b_unreliable": {
+    "reason": "unison or ensemble: lines 14.5x a still tone's and not read warped, partials 7.1 c rms off one series; stretch, balance, partial_tilt and tnr read through B or through partials located on it",
+    "dimensions": [
+     "stretch",
+     "balance",
+     "partial_tilt",
+     "tnr"
+    ]
+   },
    "body_below_f0_db": -49.04,
    "body_under_db": -86.69,
    "body_f0_db": -37.64,
+   "body_lines": {
+    "missed": {
+     "lines": [
+      {
+       "hz": 47.4,
+       "share": 0.0476
+      }
+     ],
+     "reason": "recurs on 2 notes; N=3"
+    }
+   },
    "peak_dbfs": -16.11,
    "rms_dbfs": -31.75,
    "held_peak_dbfs": -22.76,
@@ -2984,6 +4647,15 @@
    "damper_release_ms": 1175.0,
    "damper_capped": false,
    "centroid_hz": 1939.8,
+   "fm": [
+    54.528,
+    15.873,
+    15.873
+   ],
+   "fm_warp": {
+    "refused": "the fundamental's phase track is not monotone"
+   },
+   "fm_coherence": 0.009,
    "tnr_mask": {
     "fm": [
      54.528,
@@ -2992,7 +4664,84 @@
     ]
    },
    "tnr_db": 39.04,
-   "stereo_width": 0.192
+   "stereo_width": 0.192,
+   "loop": {
+    "verdict": "not",
+    "residual_db": -1.8,
+    "median_db": -1.1,
+    "frames": 6,
+    "reaching_frames": 6,
+    "reach_ms": 782.9,
+    "borderline": false,
+    "ladder_db": [
+     0.0,
+     -5.6,
+     -8.3,
+     -8.9,
+     -8.0,
+     -7.4,
+     -7.4,
+     -8.1,
+     -8.9,
+     -10.3,
+     -11.5,
+     -13.6,
+     -16.6,
+     -20.8,
+     -24.4,
+     -27.5,
+     -30.0,
+     -32.3,
+     -34.3,
+     -36.2
+    ],
+    "group": 0,
+    "group_notes": [
+     36,
+     52,
+     60,
+     68,
+     76
+    ],
+    "group_uncertain": {
+     "ambiguous_with": [
+      84
+     ],
+     "loosest_inside_db": 3.9,
+     "nearest_outside_db": 6.1,
+     "band_db": [
+      4.0,
+      8.0
+     ]
+    },
+    "flagged": {
+     "register": "level read across notes that share one stored waveform: the spectrum is one fixed shape shifted with pitch, so the register curve over the group is a transposition artefact"
+    }
+   },
+   "window": {
+    "model_s": 3.0,
+    "reference_s": 3.0
+   },
+   "floor_state": {
+    "declared": false,
+    "basis": null,
+    "source": "preroll",
+    "level_db_hz": null,
+    "stationary": {
+     "slope_db_s": -0.58,
+     "corr": 0.16,
+     "tone_slope_db_s": 0.11,
+     "floor_like": true
+    },
+    "clear_partials_tail": 8,
+    "hum_dbfs": null,
+    "censors": {
+     "body": null,
+     "tnr": null
+    },
+    "body_floor_db": null,
+    "body_hum_db": null
+   }
   },
   {
    "timbre": "gm096",
@@ -3047,9 +4796,40 @@
     -42.11,
     -43.65
    ],
+   "unwarp": {
+    "state": "ensemble",
+    "coherence": 0.01,
+    "reason": "coherence 0.010 at most 0.456: the partials' tracks do not follow the fundamental's, so the motion is not one source's",
+    "kept": false,
+    "width_ratio": null
+   },
+   "broad_lines": {
+    "broad_ratio": 14.51,
+    "width_ratio": null
+   },
+   "b_unreliable": {
+    "reason": "unison or ensemble: lines 14.5x a still tone's and not read warped, partials 7.1 c rms off one series; stretch, balance, partial_tilt and tnr read through B or through partials located on it",
+    "dimensions": [
+     "stretch",
+     "balance",
+     "partial_tilt",
+     "tnr"
+    ]
+   },
    "body_below_f0_db": -49.04,
    "body_under_db": -82.77,
    "body_f0_db": -33.73,
+   "body_lines": {
+    "missed": {
+     "lines": [
+      {
+       "hz": 47.4,
+       "share": 0.0476
+      }
+     ],
+     "reason": "recurs on 2 notes; N=3"
+    }
+   },
    "peak_dbfs": -12.2,
    "rms_dbfs": -27.84,
    "held_peak_dbfs": -18.84,
@@ -3132,6 +4912,15 @@
    "damper_release_ms": 1175.0,
    "damper_capped": false,
    "centroid_hz": 1939.8,
+   "fm": [
+    54.528,
+    15.873,
+    15.873
+   ],
+   "fm_warp": {
+    "refused": "the fundamental's phase track is not monotone"
+   },
+   "fm_coherence": 0.009,
    "tnr_mask": {
     "fm": [
      54.528,
@@ -3140,7 +4929,84 @@
     ]
    },
    "tnr_db": 39.04,
-   "stereo_width": 0.192
+   "stereo_width": 0.192,
+   "loop": {
+    "verdict": "not",
+    "residual_db": -1.8,
+    "median_db": -1.1,
+    "frames": 6,
+    "reaching_frames": 6,
+    "reach_ms": 782.9,
+    "borderline": false,
+    "ladder_db": [
+     0.0,
+     -5.6,
+     -8.3,
+     -8.9,
+     -8.0,
+     -7.4,
+     -7.4,
+     -8.1,
+     -8.9,
+     -10.3,
+     -11.5,
+     -13.6,
+     -16.6,
+     -20.8,
+     -24.4,
+     -27.5,
+     -30.0,
+     -32.3,
+     -34.3,
+     -36.2
+    ],
+    "group": 0,
+    "group_notes": [
+     36,
+     52,
+     60,
+     68,
+     76
+    ],
+    "group_uncertain": {
+     "ambiguous_with": [
+      84
+     ],
+     "loosest_inside_db": 3.9,
+     "nearest_outside_db": 6.1,
+     "band_db": [
+      4.0,
+      8.0
+     ]
+    },
+    "flagged": {
+     "register": "level read across notes that share one stored waveform: the spectrum is one fixed shape shifted with pitch, so the register curve over the group is a transposition artefact"
+    }
+   },
+   "window": {
+    "model_s": 3.0,
+    "reference_s": 3.0
+   },
+   "floor_state": {
+    "declared": false,
+    "basis": null,
+    "source": "preroll",
+    "level_db_hz": null,
+    "stationary": {
+     "slope_db_s": -0.58,
+     "corr": 0.16,
+     "tone_slope_db_s": 0.11,
+     "floor_like": true
+    },
+    "clear_partials_tail": 8,
+    "hum_dbfs": null,
+    "censors": {
+     "body": null,
+     "tnr": null
+    },
+    "body_floor_db": null,
+    "body_hum_db": null
+   }
   },
   {
    "timbre": "gm096",
@@ -3195,9 +5061,40 @@
     -42.11,
     -43.65
    ],
+   "unwarp": {
+    "state": "ensemble",
+    "coherence": 0.01,
+    "reason": "coherence 0.010 at most 0.456: the partials' tracks do not follow the fundamental's, so the motion is not one source's",
+    "kept": false,
+    "width_ratio": null
+   },
+   "broad_lines": {
+    "broad_ratio": 14.51,
+    "width_ratio": null
+   },
+   "b_unreliable": {
+    "reason": "unison or ensemble: lines 14.5x a still tone's and not read warped, partials 7.1 c rms off one series; stretch, balance, partial_tilt and tnr read through B or through partials located on it",
+    "dimensions": [
+     "stretch",
+     "balance",
+     "partial_tilt",
+     "tnr"
+    ]
+   },
    "body_below_f0_db": -49.04,
    "body_under_db": -80.08,
    "body_f0_db": -31.04,
+   "body_lines": {
+    "missed": {
+     "lines": [
+      {
+       "hz": 47.4,
+       "share": 0.0476
+      }
+     ],
+     "reason": "recurs on 2 notes; N=3"
+    }
+   },
    "peak_dbfs": -9.51,
    "rms_dbfs": -25.15,
    "held_peak_dbfs": -16.15,
@@ -3280,6 +5177,15 @@
    "damper_release_ms": 1175.0,
    "damper_capped": false,
    "centroid_hz": 1939.8,
+   "fm": [
+    54.528,
+    15.873,
+    15.873
+   ],
+   "fm_warp": {
+    "refused": "the fundamental's phase track is not monotone"
+   },
+   "fm_coherence": 0.009,
    "tnr_mask": {
     "fm": [
      54.528,
@@ -3288,7 +5194,84 @@
     ]
    },
    "tnr_db": 39.04,
-   "stereo_width": 0.192
+   "stereo_width": 0.192,
+   "loop": {
+    "verdict": "not",
+    "residual_db": -1.8,
+    "median_db": -1.1,
+    "frames": 6,
+    "reaching_frames": 6,
+    "reach_ms": 782.9,
+    "borderline": false,
+    "ladder_db": [
+     0.0,
+     -5.6,
+     -8.3,
+     -8.9,
+     -8.0,
+     -7.4,
+     -7.4,
+     -8.1,
+     -8.9,
+     -10.3,
+     -11.5,
+     -13.6,
+     -16.6,
+     -20.8,
+     -24.4,
+     -27.5,
+     -30.0,
+     -32.3,
+     -34.3,
+     -36.2
+    ],
+    "group": 0,
+    "group_notes": [
+     36,
+     52,
+     60,
+     68,
+     76
+    ],
+    "group_uncertain": {
+     "ambiguous_with": [
+      84
+     ],
+     "loosest_inside_db": 3.9,
+     "nearest_outside_db": 6.1,
+     "band_db": [
+      4.0,
+      8.0
+     ]
+    },
+    "flagged": {
+     "register": "level read across notes that share one stored waveform: the spectrum is one fixed shape shifted with pitch, so the register curve over the group is a transposition artefact"
+    }
+   },
+   "window": {
+    "model_s": 3.0,
+    "reference_s": 3.0
+   },
+   "floor_state": {
+    "declared": false,
+    "basis": null,
+    "source": "preroll",
+    "level_db_hz": null,
+    "stationary": {
+     "slope_db_s": -0.58,
+     "corr": 0.16,
+     "tone_slope_db_s": 0.11,
+     "floor_like": true
+    },
+    "clear_partials_tail": 8,
+    "hum_dbfs": null,
+    "censors": {
+     "body": null,
+     "tnr": null
+    },
+    "body_floor_db": null,
+    "body_hum_db": null
+   }
   },
   {
    "timbre": "gm096",
@@ -3343,9 +5326,40 @@
     -42.11,
     -43.65
    ],
+   "unwarp": {
+    "state": "ensemble",
+    "coherence": 0.01,
+    "reason": "coherence 0.010 at most 0.456: the partials' tracks do not follow the fundamental's, so the motion is not one source's",
+    "kept": false,
+    "width_ratio": null
+   },
+   "broad_lines": {
+    "broad_ratio": 14.51,
+    "width_ratio": null
+   },
+   "b_unreliable": {
+    "reason": "unison or ensemble: lines 14.5x a still tone's and not read warped, partials 7.1 c rms off one series; stretch, balance, partial_tilt and tnr read through B or through partials located on it",
+    "dimensions": [
+     "stretch",
+     "balance",
+     "partial_tilt",
+     "tnr"
+    ]
+   },
    "body_below_f0_db": -49.04,
    "body_under_db": -78.09,
    "body_f0_db": -29.04,
+   "body_lines": {
+    "missed": {
+     "lines": [
+      {
+       "hz": 47.4,
+       "share": 0.0476
+      }
+     ],
+     "reason": "recurs on 2 notes; N=3"
+    }
+   },
    "peak_dbfs": -7.52,
    "rms_dbfs": -23.16,
    "held_peak_dbfs": -14.16,
@@ -3428,6 +5442,15 @@
    "damper_release_ms": 1175.0,
    "damper_capped": false,
    "centroid_hz": 1939.8,
+   "fm": [
+    54.528,
+    15.873,
+    15.873
+   ],
+   "fm_warp": {
+    "refused": "the fundamental's phase track is not monotone"
+   },
+   "fm_coherence": 0.009,
    "tnr_mask": {
     "fm": [
      54.528,
@@ -3436,7 +5459,84 @@
     ]
    },
    "tnr_db": 39.04,
-   "stereo_width": 0.192
+   "stereo_width": 0.192,
+   "loop": {
+    "verdict": "not",
+    "residual_db": -1.8,
+    "median_db": -1.1,
+    "frames": 6,
+    "reaching_frames": 6,
+    "reach_ms": 782.9,
+    "borderline": false,
+    "ladder_db": [
+     0.0,
+     -5.6,
+     -8.3,
+     -8.9,
+     -8.0,
+     -7.4,
+     -7.4,
+     -8.1,
+     -8.9,
+     -10.3,
+     -11.5,
+     -13.6,
+     -16.6,
+     -20.8,
+     -24.4,
+     -27.5,
+     -30.0,
+     -32.3,
+     -34.3,
+     -36.2
+    ],
+    "group": 0,
+    "group_notes": [
+     36,
+     52,
+     60,
+     68,
+     76
+    ],
+    "group_uncertain": {
+     "ambiguous_with": [
+      84
+     ],
+     "loosest_inside_db": 3.9,
+     "nearest_outside_db": 6.1,
+     "band_db": [
+      4.0,
+      8.0
+     ]
+    },
+    "flagged": {
+     "register": "level read across notes that share one stored waveform: the spectrum is one fixed shape shifted with pitch, so the register curve over the group is a transposition artefact"
+    }
+   },
+   "window": {
+    "model_s": 3.0,
+    "reference_s": 3.0
+   },
+   "floor_state": {
+    "declared": false,
+    "basis": null,
+    "source": "preroll",
+    "level_db_hz": null,
+    "stationary": {
+     "slope_db_s": -0.58,
+     "corr": 0.16,
+     "tone_slope_db_s": 0.11,
+     "floor_like": true
+    },
+    "clear_partials_tail": 8,
+    "hum_dbfs": null,
+    "censors": {
+     "body": null,
+     "tnr": null
+    },
+    "body_floor_db": null,
+    "body_hum_db": null
+   }
   },
   {
    "timbre": "gm096",
@@ -3491,9 +5591,33 @@
     -54.93,
     -57.71
    ],
+   "broad_lines": {
+    "broad_ratio": 14.84,
+    "width_ratio": null
+   },
+   "b_unreliable": {
+    "reason": "unison or ensemble: lines 14.8x a still tone's and not read warped, partials 9.8 c rms off one series; stretch, balance, partial_tilt and tnr read through B or through partials located on it",
+    "dimensions": [
+     "stretch",
+     "balance",
+     "partial_tilt",
+     "tnr"
+    ]
+   },
    "body_below_f0_db": -52.03,
    "body_under_db": -89.09,
    "body_f0_db": -37.06,
+   "body_lines": {
+    "missed": {
+     "lines": [
+      {
+       "hz": 47.4,
+       "share": 0.1212
+      }
+     ],
+     "reason": "recurs on 2 notes; N=3"
+    }
+   },
    "peak_dbfs": -18.42,
    "rms_dbfs": -32.04,
    "held_peak_dbfs": -23.44,
@@ -3578,7 +5702,79 @@
    "centroid_hz": 2854.1,
    "tnr_mask": {},
    "tnr_db": 35.96,
-   "stereo_width": 0.204
+   "stereo_width": 0.204,
+   "loop": {
+    "verdict": "not",
+    "residual_db": -2.2,
+    "median_db": -1.6,
+    "frames": 6,
+    "reaching_frames": 6,
+    "reach_ms": 782.9,
+    "borderline": false,
+    "ladder_db": [
+     0.0,
+     -5.9,
+     -8.7,
+     -9.8,
+     -9.2,
+     -9.0,
+     -9.4,
+     -10.6,
+     -12.1,
+     -14.0,
+     -16.0,
+     -18.6,
+     -22.9,
+     -29.1,
+     -34.1,
+     -38.5,
+     -42.0,
+     -45.4,
+     -48.5,
+     -51.4
+    ],
+    "group": 2,
+    "group_notes": [
+     84
+    ],
+    "group_uncertain": {
+     "ambiguous_with": [
+      60,
+      68,
+      76
+     ],
+     "loosest_inside_db": null,
+     "nearest_outside_db": 6.1,
+     "band_db": [
+      4.0,
+      8.0
+     ]
+    }
+   },
+   "window": {
+    "model_s": 3.0,
+    "reference_s": 3.0
+   },
+   "floor_state": {
+    "declared": false,
+    "basis": null,
+    "source": "preroll",
+    "level_db_hz": null,
+    "stationary": {
+     "slope_db_s": -0.32,
+     "corr": 0.87,
+     "tone_slope_db_s": -0.64,
+     "floor_like": false
+    },
+    "clear_partials_tail": 8,
+    "hum_dbfs": null,
+    "censors": {
+     "body": null,
+     "tnr": null
+    },
+    "body_floor_db": null,
+    "body_hum_db": null
+   }
   },
   {
    "timbre": "gm096",
@@ -3633,9 +5829,33 @@
     -54.93,
     -57.71
    ],
+   "broad_lines": {
+    "broad_ratio": 14.84,
+    "width_ratio": null
+   },
+   "b_unreliable": {
+    "reason": "unison or ensemble: lines 14.8x a still tone's and not read warped, partials 9.8 c rms off one series; stretch, balance, partial_tilt and tnr read through B or through partials located on it",
+    "dimensions": [
+     "stretch",
+     "balance",
+     "partial_tilt",
+     "tnr"
+    ]
+   },
    "body_below_f0_db": -52.03,
    "body_under_db": -85.17,
    "body_f0_db": -33.14,
+   "body_lines": {
+    "missed": {
+     "lines": [
+      {
+       "hz": 47.4,
+       "share": 0.1212
+      }
+     ],
+     "reason": "recurs on 2 notes; N=3"
+    }
+   },
    "peak_dbfs": -14.5,
    "rms_dbfs": -28.13,
    "held_peak_dbfs": -19.53,
@@ -3720,7 +5940,79 @@
    "centroid_hz": 2854.1,
    "tnr_mask": {},
    "tnr_db": 35.96,
-   "stereo_width": 0.204
+   "stereo_width": 0.204,
+   "loop": {
+    "verdict": "not",
+    "residual_db": -2.2,
+    "median_db": -1.6,
+    "frames": 6,
+    "reaching_frames": 6,
+    "reach_ms": 782.9,
+    "borderline": false,
+    "ladder_db": [
+     0.0,
+     -5.9,
+     -8.7,
+     -9.8,
+     -9.2,
+     -9.0,
+     -9.4,
+     -10.6,
+     -12.1,
+     -14.0,
+     -16.0,
+     -18.6,
+     -22.9,
+     -29.1,
+     -34.1,
+     -38.5,
+     -42.0,
+     -45.4,
+     -48.5,
+     -51.4
+    ],
+    "group": 2,
+    "group_notes": [
+     84
+    ],
+    "group_uncertain": {
+     "ambiguous_with": [
+      60,
+      68,
+      76
+     ],
+     "loosest_inside_db": null,
+     "nearest_outside_db": 6.1,
+     "band_db": [
+      4.0,
+      8.0
+     ]
+    }
+   },
+   "window": {
+    "model_s": 3.0,
+    "reference_s": 3.0
+   },
+   "floor_state": {
+    "declared": false,
+    "basis": null,
+    "source": "preroll",
+    "level_db_hz": null,
+    "stationary": {
+     "slope_db_s": -0.32,
+     "corr": 0.87,
+     "tone_slope_db_s": -0.64,
+     "floor_like": false
+    },
+    "clear_partials_tail": 8,
+    "hum_dbfs": null,
+    "censors": {
+     "body": null,
+     "tnr": null
+    },
+    "body_floor_db": null,
+    "body_hum_db": null
+   }
   },
   {
    "timbre": "gm096",
@@ -3775,9 +6067,33 @@
     -54.93,
     -57.71
    ],
+   "broad_lines": {
+    "broad_ratio": 14.84,
+    "width_ratio": null
+   },
+   "b_unreliable": {
+    "reason": "unison or ensemble: lines 14.8x a still tone's and not read warped, partials 9.8 c rms off one series; stretch, balance, partial_tilt and tnr read through B or through partials located on it",
+    "dimensions": [
+     "stretch",
+     "balance",
+     "partial_tilt",
+     "tnr"
+    ]
+   },
    "body_below_f0_db": -52.03,
    "body_under_db": -82.48,
    "body_f0_db": -30.45,
+   "body_lines": {
+    "missed": {
+     "lines": [
+      {
+       "hz": 47.4,
+       "share": 0.1212
+      }
+     ],
+     "reason": "recurs on 2 notes; N=3"
+    }
+   },
    "peak_dbfs": -11.81,
    "rms_dbfs": -25.44,
    "held_peak_dbfs": -16.84,
@@ -3862,7 +6178,79 @@
    "centroid_hz": 2854.1,
    "tnr_mask": {},
    "tnr_db": 35.96,
-   "stereo_width": 0.204
+   "stereo_width": 0.204,
+   "loop": {
+    "verdict": "not",
+    "residual_db": -2.2,
+    "median_db": -1.6,
+    "frames": 6,
+    "reaching_frames": 6,
+    "reach_ms": 782.9,
+    "borderline": false,
+    "ladder_db": [
+     0.0,
+     -5.9,
+     -8.7,
+     -9.8,
+     -9.2,
+     -9.0,
+     -9.4,
+     -10.6,
+     -12.1,
+     -14.0,
+     -16.0,
+     -18.6,
+     -22.9,
+     -29.1,
+     -34.1,
+     -38.5,
+     -42.0,
+     -45.4,
+     -48.5,
+     -51.4
+    ],
+    "group": 2,
+    "group_notes": [
+     84
+    ],
+    "group_uncertain": {
+     "ambiguous_with": [
+      60,
+      68,
+      76
+     ],
+     "loosest_inside_db": null,
+     "nearest_outside_db": 6.1,
+     "band_db": [
+      4.0,
+      8.0
+     ]
+    }
+   },
+   "window": {
+    "model_s": 3.0,
+    "reference_s": 3.0
+   },
+   "floor_state": {
+    "declared": false,
+    "basis": null,
+    "source": "preroll",
+    "level_db_hz": null,
+    "stationary": {
+     "slope_db_s": -0.32,
+     "corr": 0.87,
+     "tone_slope_db_s": -0.64,
+     "floor_like": false
+    },
+    "clear_partials_tail": 8,
+    "hum_dbfs": null,
+    "censors": {
+     "body": null,
+     "tnr": null
+    },
+    "body_floor_db": null,
+    "body_hum_db": null
+   }
   },
   {
    "timbre": "gm096",
@@ -3917,9 +6305,33 @@
     -54.93,
     -57.71
    ],
+   "broad_lines": {
+    "broad_ratio": 14.84,
+    "width_ratio": null
+   },
+   "b_unreliable": {
+    "reason": "unison or ensemble: lines 14.8x a still tone's and not read warped, partials 9.8 c rms off one series; stretch, balance, partial_tilt and tnr read through B or through partials located on it",
+    "dimensions": [
+     "stretch",
+     "balance",
+     "partial_tilt",
+     "tnr"
+    ]
+   },
    "body_below_f0_db": -52.03,
    "body_under_db": -80.49,
    "body_f0_db": -28.46,
+   "body_lines": {
+    "missed": {
+     "lines": [
+      {
+       "hz": 47.4,
+       "share": 0.1212
+      }
+     ],
+     "reason": "recurs on 2 notes; N=3"
+    }
+   },
    "peak_dbfs": -9.82,
    "rms_dbfs": -23.45,
    "held_peak_dbfs": -14.84,
@@ -4004,7 +6416,79 @@
    "centroid_hz": 2854.1,
    "tnr_mask": {},
    "tnr_db": 35.96,
-   "stereo_width": 0.204
+   "stereo_width": 0.204,
+   "loop": {
+    "verdict": "not",
+    "residual_db": -2.2,
+    "median_db": -1.6,
+    "frames": 6,
+    "reaching_frames": 6,
+    "reach_ms": 782.9,
+    "borderline": false,
+    "ladder_db": [
+     0.0,
+     -5.9,
+     -8.7,
+     -9.8,
+     -9.2,
+     -9.0,
+     -9.4,
+     -10.6,
+     -12.1,
+     -14.0,
+     -16.0,
+     -18.6,
+     -22.9,
+     -29.1,
+     -34.1,
+     -38.5,
+     -42.0,
+     -45.4,
+     -48.5,
+     -51.4
+    ],
+    "group": 2,
+    "group_notes": [
+     84
+    ],
+    "group_uncertain": {
+     "ambiguous_with": [
+      60,
+      68,
+      76
+     ],
+     "loosest_inside_db": null,
+     "nearest_outside_db": 6.1,
+     "band_db": [
+      4.0,
+      8.0
+     ]
+    }
+   },
+   "window": {
+    "model_s": 3.0,
+    "reference_s": 3.0
+   },
+   "floor_state": {
+    "declared": false,
+    "basis": null,
+    "source": "preroll",
+    "level_db_hz": null,
+    "stationary": {
+     "slope_db_s": -0.32,
+     "corr": 0.87,
+     "tone_slope_db_s": -0.64,
+     "floor_like": false
+    },
+    "clear_partials_tail": 8,
+    "hum_dbfs": null,
+    "censors": {
+     "body": null,
+     "tnr": null
+    },
+    "body_floor_db": null,
+    "body_hum_db": null
+   }
   }
  ],
  "summary": {
@@ -4012,18 +6496,18 @@
    "stretch_cents": {
     "36": 3.39,
     "44": 3.02,
-    "52": 1.78,
+    "52": 3.89,
     "60": 4.56,
-    "68": 1.58,
+    "68": 2.99,
     "76": 2.46,
     "84": 1.15
    },
    "inharmonicity_b": {
     "36": 0.0,
     "44": 5.11e-06,
-    "52": 0.0001667,
+    "52": 0.0,
     "60": 0.0,
-    "68": 0.0001942,
+    "68": 3.723e-05,
     "76": 4.728e-05,
     "84": 4.057e-05
    },
@@ -4217,10 +6701,10 @@
      "127": 23.22
     },
     "52": {
-     "32": 26.95,
-     "64": 26.95,
-     "96": 26.95,
-     "127": 26.95
+     "32": 33.28,
+     "64": 33.28,
+     "96": 33.28,
+     "127": 33.28
     },
     "60": {
      "32": 43.24,
@@ -4229,10 +6713,10 @@
      "127": 43.24
     },
     "68": {
-     "32": 31.82,
-     "64": 31.82,
-     "96": 31.82,
-     "127": 31.82
+     "32": 38.24,
+     "64": 38.24,
+     "96": 38.24,
+     "127": 38.24
     },
     "76": {
      "32": 39.04,
@@ -4279,17 +6763,186 @@
    }
   }
  },
- "field_measured_utc": {
-  "rows.body_f0_db": "2026-11-13T10:35:40+00:00",
-  "rows.body_under_db": "2026-11-13T10:35:40+00:00",
-  "rows.floor_body_db": "2026-11-13T10:35:40+00:00",
-  "rows.floor_db": "2026-11-13T10:35:40+00:00",
-  "rows.floor_octaves_db": "2026-11-13T10:35:40+00:00",
-  "rows.floor_source": "2026-11-13T10:35:40+00:00",
-  "rows.partial_clear_s": "2026-11-13T10:35:40+00:00",
-  "rows.partial_decay_clear_db_s": "2026-11-13T10:35:40+00:00",
-  "rows.valley_db": "2026-11-13T10:35:40+00:00",
-  "rows.valley_ladder_coupling": "2026-11-13T10:35:40+00:00",
-  "rows.valley_slope_db_oct": "2026-11-13T10:35:40+00:00"
+ "body_lines": {
+  "reason": "recurring fixed-frequency lines in the source",
+  "timbres": {
+   "gm096": {
+    "of": 5,
+    "lines": [],
+    "missed": [
+     {
+      "hz": 47.4,
+      "notes": 2,
+      "on_notes": [
+       76,
+       84
+      ],
+      "reason": "recurs on 2 notes; N=3"
+     }
+    ]
+   }
+  }
+ },
+ "tnr_unreliable": {
+  "reason": "chorus or ensemble: most rows have lines the pitch warp does not collapse, and the tone mask follows one pitch track",
+  "timbres": {
+   "gm096": {
+    "rows": 28,
+    "of": 28
+   }
+  }
+ },
+ "recording_floor": {
+  "gm096": {
+   "declared": false,
+   "rows": 28,
+   "lines": [
+    {
+     "hz": 7220.309,
+     "dbfs": -105.05,
+     "rows_present": 12,
+     "rows_observable": 16,
+     "coverage": 0.57,
+     "mains": null
+    },
+    {
+     "hz": 8284.321,
+     "dbfs": -102.18,
+     "rows_present": 12,
+     "rows_observable": 16,
+     "coverage": 0.57,
+     "mains": null
+    },
+    {
+     "hz": 9634.368,
+     "dbfs": -100.71,
+     "rows_present": 16,
+     "rows_observable": 20,
+     "coverage": 0.71,
+     "mains": null
+    },
+    {
+     "hz": 10206.017,
+     "dbfs": -114.93,
+     "rows_present": 12,
+     "rows_observable": 16,
+     "coverage": 0.57,
+     "mains": null
+    },
+    {
+     "hz": 10355.848,
+     "dbfs": -114.51,
+     "rows_present": 16,
+     "rows_observable": 20,
+     "coverage": 0.71,
+     "mains": null
+    },
+    {
+     "hz": 11196.762,
+     "dbfs": -99.52,
+     "rows_present": 12,
+     "rows_observable": 16,
+     "coverage": 0.57,
+     "mains": null
+    },
+    {
+     "hz": 12000.183,
+     "dbfs": -111.61,
+     "rows_present": 12,
+     "rows_observable": 16,
+     "coverage": 0.57,
+     "mains": null
+    },
+    {
+     "hz": 12453.675,
+     "dbfs": -102.06,
+     "rows_present": 12,
+     "rows_observable": 16,
+     "coverage": 0.57,
+     "mains": null
+    },
+    {
+     "hz": 13109.989,
+     "dbfs": -102.9,
+     "rows_present": 12,
+     "rows_observable": 16,
+     "coverage": 0.57,
+     "mains": null
+    },
+    {
+     "hz": 13765.864,
+     "dbfs": -108.31,
+     "rows_present": 12,
+     "rows_observable": 16,
+     "coverage": 0.57,
+     "mains": null
+    },
+    {
+     "hz": 13813.625,
+     "dbfs": -113.14,
+     "rows_present": 16,
+     "rows_observable": 20,
+     "coverage": 0.71,
+     "mains": null
+    },
+    {
+     "hz": 14245.534,
+     "dbfs": -116.93,
+     "rows_present": 20,
+     "rows_observable": 24,
+     "coverage": 0.86,
+     "mains": null
+    },
+    {
+     "hz": 15951.529,
+     "dbfs": -116.25,
+     "rows_present": 12,
+     "rows_observable": 16,
+     "coverage": 0.57,
+     "mains": null
+    }
+   ],
+   "lines_found": 17,
+   "hum": null,
+   "note_independent": false,
+   "basis": null,
+   "level_db_hz": -131.34,
+   "slope_db_oct": -0.3,
+   "agree_share": 0.199,
+   "stationary": {
+    "verdict": false,
+    "evaluable_rows": 28,
+    "floor_like_share": 0.286,
+    "slope_db_s": -0.32,
+    "tone_slope_db_s": -0.04,
+    "corr": 0.02,
+    "hum_reference_slope_db_s": null
+   },
+   "reason": "not note-independent"
+  }
+ },
+ "loop": {
+  "status": "not_looped",
+  "rows": 28,
+  "tested": 28,
+  "looped_rows": 0,
+  "borderline_rows": 0,
+  "not_testable_rows": 0,
+  "unweighted_rows": 0,
+  "groups": {
+   "0": [
+    36,
+    52,
+    60,
+    68,
+    76
+   ],
+   "1": [
+    44
+   ],
+   "2": [
+    84
+   ]
+  }
  }
 }

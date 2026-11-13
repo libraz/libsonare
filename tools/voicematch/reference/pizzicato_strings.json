@@ -1,7 +1,7 @@
 {
  "id": "pizzicato_strings",
  "label": "Pizzicato Strings, sampled, close and dry",
- "measured_utc": "2026-10-23T19:35:14+00:00",
+ "measured_utc": "2026-11-13T19:58:32+00:00",
  "capture": {
   "program": 45,
   "params": [],
@@ -88,6 +88,19 @@
     -81.04,
     -80.89
    ],
+   "broad_lines": {
+    "broad_ratio": 8.49,
+    "width_ratio": null
+   },
+   "b_unreliable": {
+    "reason": "unison or ensemble: lines 8.5x a still tone's and not read warped, partials 9.7 c rms off one series; stretch, balance, partial_tilt and tnr read through B or through partials located on it",
+    "dimensions": [
+     "stretch",
+     "balance",
+     "partial_tilt",
+     "tnr"
+    ]
+   },
    "body_below_f0_db": -20.85,
    "body_under_db": -94.42,
    "body_f0_db": -73.57,
@@ -172,7 +185,30 @@
    "centroid_hz": 159.2,
    "tnr_mask": {},
    "tnr_db": 5.39,
-   "stereo_width": 0.0
+   "stereo_width": 0.0,
+   "loop": {
+    "verdict": "not_testable",
+    "reason": "shorter than one template and a 100 ms lag"
+   },
+   "window": {
+    "model_s": 1.0,
+    "reference_s": 1.0
+   },
+   "floor_state": {
+    "declared": false,
+    "basis": null,
+    "source": "preroll",
+    "level_db_hz": null,
+    "stationary": null,
+    "clear_partials_tail": 0,
+    "hum_dbfs": null,
+    "censors": {
+     "body": null,
+     "tnr": null
+    },
+    "body_floor_db": null,
+    "body_hum_db": null
+   }
   },
   {
    "timbre": "gm046",
@@ -227,6 +263,19 @@
     -75.69,
     -74.73
    ],
+   "broad_lines": {
+    "broad_ratio": 8.49,
+    "width_ratio": null
+   },
+   "b_unreliable": {
+    "reason": "unison or ensemble: lines 8.5x a still tone's and not read warped, partials 11.4 c rms off one series; stretch, balance, partial_tilt and tnr read through B or through partials located on it",
+    "dimensions": [
+     "stretch",
+     "balance",
+     "partial_tilt",
+     "tnr"
+    ]
+   },
    "body_below_f0_db": -20.85,
    "body_under_db": -90.63,
    "body_f0_db": -69.78,
@@ -311,7 +360,30 @@
    "centroid_hz": 159.1,
    "tnr_mask": {},
    "tnr_db": 5.39,
-   "stereo_width": -0.0
+   "stereo_width": -0.0,
+   "loop": {
+    "verdict": "not_testable",
+    "reason": "shorter than one template and a 100 ms lag"
+   },
+   "window": {
+    "model_s": 1.0,
+    "reference_s": 1.0
+   },
+   "floor_state": {
+    "declared": false,
+    "basis": null,
+    "source": "preroll",
+    "level_db_hz": null,
+    "stationary": null,
+    "clear_partials_tail": 0,
+    "hum_dbfs": null,
+    "censors": {
+     "body": null,
+     "tnr": null
+    },
+    "body_floor_db": null,
+    "body_hum_db": null
+   }
   },
   {
    "timbre": "gm046",
@@ -366,6 +438,19 @@
     -75.02,
     -73.69
    ],
+   "broad_lines": {
+    "broad_ratio": 8.49,
+    "width_ratio": null
+   },
+   "b_unreliable": {
+    "reason": "unison or ensemble: lines 8.5x a still tone's and not read warped, partials 11.4 c rms off one series; stretch, balance, partial_tilt and tnr read through B or through partials located on it",
+    "dimensions": [
+     "stretch",
+     "balance",
+     "partial_tilt",
+     "tnr"
+    ]
+   },
    "body_below_f0_db": -20.85,
    "body_under_db": -85.37,
    "body_f0_db": -64.51,
@@ -450,7 +535,30 @@
    "centroid_hz": 159.0,
    "tnr_mask": {},
    "tnr_db": 5.39,
-   "stereo_width": 0.0
+   "stereo_width": 0.0,
+   "loop": {
+    "verdict": "not_testable",
+    "reason": "shorter than one template and a 100 ms lag"
+   },
+   "window": {
+    "model_s": 1.0,
+    "reference_s": 1.0
+   },
+   "floor_state": {
+    "declared": false,
+    "basis": null,
+    "source": "preroll",
+    "level_db_hz": null,
+    "stationary": null,
+    "clear_partials_tail": 0,
+    "hum_dbfs": null,
+    "censors": {
+     "body": null,
+     "tnr": null
+    },
+    "body_floor_db": null,
+    "body_hum_db": null
+   }
   },
   {
    "timbre": "gm046",
@@ -505,6 +613,19 @@
     -75.15,
     -73.83
    ],
+   "broad_lines": {
+    "broad_ratio": 8.49,
+    "width_ratio": null
+   },
+   "b_unreliable": {
+    "reason": "unison or ensemble: lines 8.5x a still tone's and not read warped, partials 11.4 c rms off one series; stretch, balance, partial_tilt and tnr read through B or through partials located on it",
+    "dimensions": [
+     "stretch",
+     "balance",
+     "partial_tilt",
+     "tnr"
+    ]
+   },
    "body_below_f0_db": -20.85,
    "body_under_db": -80.13,
    "body_f0_db": -59.27,
@@ -589,7 +710,30 @@
    "centroid_hz": 159.0,
    "tnr_mask": {},
    "tnr_db": 5.39,
-   "stereo_width": 0.0
+   "stereo_width": 0.0,
+   "loop": {
+    "verdict": "not_testable",
+    "reason": "shorter than one template and a 100 ms lag"
+   },
+   "window": {
+    "model_s": 1.0,
+    "reference_s": 1.0
+   },
+   "floor_state": {
+    "declared": false,
+    "basis": null,
+    "source": "preroll",
+    "level_db_hz": null,
+    "stationary": null,
+    "clear_partials_tail": 0,
+    "hum_dbfs": null,
+    "censors": {
+     "body": null,
+     "tnr": null
+    },
+    "body_floor_db": null,
+    "body_hum_db": null
+   }
   },
   {
    "timbre": "gm046",
@@ -644,6 +788,19 @@
     -75.24,
     -73.92
    ],
+   "broad_lines": {
+    "broad_ratio": 8.49,
+    "width_ratio": null
+   },
+   "b_unreliable": {
+    "reason": "unison or ensemble: lines 8.5x a still tone's and not read warped, partials 11.4 c rms off one series; stretch, balance, partial_tilt and tnr read through B or through partials located on it",
+    "dimensions": [
+     "stretch",
+     "balance",
+     "partial_tilt",
+     "tnr"
+    ]
+   },
    "body_below_f0_db": -20.85,
    "body_under_db": -75.61,
    "body_f0_db": -54.75,
@@ -728,7 +885,30 @@
    "centroid_hz": 159.0,
    "tnr_mask": {},
    "tnr_db": 5.39,
-   "stereo_width": 0.0
+   "stereo_width": 0.0,
+   "loop": {
+    "verdict": "not_testable",
+    "reason": "shorter than one template and a 100 ms lag"
+   },
+   "window": {
+    "model_s": 1.0,
+    "reference_s": 1.0
+   },
+   "floor_state": {
+    "declared": false,
+    "basis": null,
+    "source": "preroll",
+    "level_db_hz": null,
+    "stationary": null,
+    "clear_partials_tail": 0,
+    "hum_dbfs": null,
+    "censors": {
+     "body": null,
+     "tnr": null
+    },
+    "body_floor_db": null,
+    "body_hum_db": null
+   }
   },
   {
    "timbre": "gm046",
@@ -783,6 +963,19 @@
     -86.51,
     -88.41
    ],
+   "broad_lines": {
+    "broad_ratio": 4.08,
+    "width_ratio": null
+   },
+   "b_unreliable": {
+    "reason": "unison or ensemble: lines 4.1x a still tone's and not read warped, partials 15.9 c rms off one series; stretch, balance, partial_tilt and tnr read through B or through partials located on it",
+    "dimensions": [
+     "stretch",
+     "balance",
+     "partial_tilt",
+     "tnr"
+    ]
+   },
    "body_below_f0_db": -20.96,
    "body_under_db": -101.28,
    "body_f0_db": -80.32,
@@ -866,7 +1059,30 @@
    "centroid_hz": 256.4,
    "tnr_mask": {},
    "tnr_db": 5.08,
-   "stereo_width": 0.0
+   "stereo_width": 0.0,
+   "loop": {
+    "verdict": "not_testable",
+    "reason": "shorter than one template and a 100 ms lag"
+   },
+   "window": {
+    "model_s": 1.0,
+    "reference_s": 1.0
+   },
+   "floor_state": {
+    "declared": false,
+    "basis": null,
+    "source": "preroll",
+    "level_db_hz": null,
+    "stationary": null,
+    "clear_partials_tail": 0,
+    "hum_dbfs": null,
+    "censors": {
+     "body": null,
+     "tnr": null
+    },
+    "body_floor_db": null,
+    "body_hum_db": null
+   }
   },
   {
    "timbre": "gm046",
@@ -921,6 +1137,19 @@
     -77.94,
     -79.65
    ],
+   "broad_lines": {
+    "broad_ratio": 4.08,
+    "width_ratio": null
+   },
+   "b_unreliable": {
+    "reason": "unison or ensemble: lines 4.1x a still tone's and not read warped, partials 15.4 c rms off one series; stretch, balance, partial_tilt and tnr read through B or through partials located on it",
+    "dimensions": [
+     "stretch",
+     "balance",
+     "partial_tilt",
+     "tnr"
+    ]
+   },
    "body_below_f0_db": -20.95,
    "body_under_db": -97.49,
    "body_f0_db": -76.54,
@@ -1003,7 +1232,30 @@
    "centroid_hz": 255.5,
    "tnr_mask": {},
    "tnr_db": 5.08,
-   "stereo_width": -0.0
+   "stereo_width": -0.0,
+   "loop": {
+    "verdict": "not_testable",
+    "reason": "shorter than one template and a 100 ms lag"
+   },
+   "window": {
+    "model_s": 1.0,
+    "reference_s": 1.0
+   },
+   "floor_state": {
+    "declared": false,
+    "basis": null,
+    "source": "preroll",
+    "level_db_hz": null,
+    "stationary": null,
+    "clear_partials_tail": 0,
+    "hum_dbfs": null,
+    "censors": {
+     "body": null,
+     "tnr": null
+    },
+    "body_floor_db": null,
+    "body_hum_db": null
+   }
   },
   {
    "timbre": "gm046",
@@ -1058,6 +1310,19 @@
     -74.58,
     -75.86
    ],
+   "broad_lines": {
+    "broad_ratio": 4.08,
+    "width_ratio": null
+   },
+   "b_unreliable": {
+    "reason": "unison or ensemble: lines 4.1x a still tone's and not read warped, partials 15.4 c rms off one series; stretch, balance, partial_tilt and tnr read through B or through partials located on it",
+    "dimensions": [
+     "stretch",
+     "balance",
+     "partial_tilt",
+     "tnr"
+    ]
+   },
    "body_below_f0_db": -20.95,
    "body_under_db": -92.22,
    "body_f0_db": -71.27,
@@ -1140,7 +1405,30 @@
    "centroid_hz": 255.1,
    "tnr_mask": {},
    "tnr_db": 5.07,
-   "stereo_width": -0.0
+   "stereo_width": -0.0,
+   "loop": {
+    "verdict": "not_testable",
+    "reason": "shorter than one template and a 100 ms lag"
+   },
+   "window": {
+    "model_s": 1.0,
+    "reference_s": 1.0
+   },
+   "floor_state": {
+    "declared": false,
+    "basis": null,
+    "source": "preroll",
+    "level_db_hz": null,
+    "stationary": null,
+    "clear_partials_tail": 0,
+    "hum_dbfs": null,
+    "censors": {
+     "body": null,
+     "tnr": null
+    },
+    "body_floor_db": null,
+    "body_hum_db": null
+   }
   },
   {
    "timbre": "gm046",
@@ -1195,6 +1483,19 @@
     -74.49,
     -75.69
    ],
+   "broad_lines": {
+    "broad_ratio": 4.08,
+    "width_ratio": null
+   },
+   "b_unreliable": {
+    "reason": "unison or ensemble: lines 4.1x a still tone's and not read warped, partials 15.4 c rms off one series; stretch, balance, partial_tilt and tnr read through B or through partials located on it",
+    "dimensions": [
+     "stretch",
+     "balance",
+     "partial_tilt",
+     "tnr"
+    ]
+   },
    "body_below_f0_db": -20.95,
    "body_under_db": -86.98,
    "body_f0_db": -66.03,
@@ -1277,7 +1578,30 @@
    "centroid_hz": 255.0,
    "tnr_mask": {},
    "tnr_db": 5.07,
-   "stereo_width": -0.0
+   "stereo_width": -0.0,
+   "loop": {
+    "verdict": "not_testable",
+    "reason": "shorter than one template and a 100 ms lag"
+   },
+   "window": {
+    "model_s": 1.0,
+    "reference_s": 1.0
+   },
+   "floor_state": {
+    "declared": false,
+    "basis": null,
+    "source": "preroll",
+    "level_db_hz": null,
+    "stationary": null,
+    "clear_partials_tail": 0,
+    "hum_dbfs": null,
+    "censors": {
+     "body": null,
+     "tnr": null
+    },
+    "body_floor_db": null,
+    "body_hum_db": null
+   }
   },
   {
    "timbre": "gm046",
@@ -1332,6 +1656,19 @@
     -74.63,
     -75.83
    ],
+   "broad_lines": {
+    "broad_ratio": 4.08,
+    "width_ratio": null
+   },
+   "b_unreliable": {
+    "reason": "unison or ensemble: lines 4.1x a still tone's and not read warped, partials 16.7 c rms off one series; stretch, balance, partial_tilt and tnr read through B or through partials located on it",
+    "dimensions": [
+     "stretch",
+     "balance",
+     "partial_tilt",
+     "tnr"
+    ]
+   },
    "body_below_f0_db": -20.95,
    "body_under_db": -82.46,
    "body_f0_db": -61.51,
@@ -1415,7 +1752,30 @@
    "centroid_hz": 254.9,
    "tnr_mask": {},
    "tnr_db": 5.05,
-   "stereo_width": 0.0
+   "stereo_width": 0.0,
+   "loop": {
+    "verdict": "not_testable",
+    "reason": "shorter than one template and a 100 ms lag"
+   },
+   "window": {
+    "model_s": 1.0,
+    "reference_s": 1.0
+   },
+   "floor_state": {
+    "declared": false,
+    "basis": null,
+    "source": "preroll",
+    "level_db_hz": null,
+    "stationary": null,
+    "clear_partials_tail": 0,
+    "hum_dbfs": null,
+    "censors": {
+     "body": null,
+     "tnr": null
+    },
+    "body_floor_db": null,
+    "body_hum_db": null
+   }
   },
   {
    "timbre": "gm046",
@@ -1470,6 +1830,19 @@
     -96.68,
     -104.27
    ],
+   "broad_lines": {
+    "broad_ratio": 13.12,
+    "width_ratio": null
+   },
+   "b_unreliable": {
+    "reason": "unison or ensemble: lines 13.1x a still tone's and not read warped, partials 10.4 c rms off one series; stretch, balance, partial_tilt and tnr read through B or through partials located on it",
+    "dimensions": [
+     "stretch",
+     "balance",
+     "partial_tilt",
+     "tnr"
+    ]
+   },
    "body_below_f0_db": -37.31,
    "body_under_db": -114.89,
    "body_f0_db": -77.58,
@@ -1550,7 +1923,30 @@
    "centroid_hz": 262.6,
    "tnr_mask": {},
    "tnr_db": 11.32,
-   "stereo_width": 0.0
+   "stereo_width": 0.0,
+   "loop": {
+    "verdict": "not_testable",
+    "reason": "shorter than one template and a 100 ms lag"
+   },
+   "window": {
+    "model_s": 1.0,
+    "reference_s": 1.0
+   },
+   "floor_state": {
+    "declared": false,
+    "basis": null,
+    "source": "preroll",
+    "level_db_hz": null,
+    "stationary": null,
+    "clear_partials_tail": 0,
+    "hum_dbfs": null,
+    "censors": {
+     "body": null,
+     "tnr": null
+    },
+    "body_floor_db": null,
+    "body_hum_db": null
+   }
   },
   {
    "timbre": "gm046",
@@ -1605,6 +2001,19 @@
     -87.36,
     -94.7
    ],
+   "broad_lines": {
+    "broad_ratio": 13.12,
+    "width_ratio": null
+   },
+   "b_unreliable": {
+    "reason": "unison or ensemble: lines 13.1x a still tone's and not read warped, partials 11.3 c rms off one series; stretch, balance, partial_tilt and tnr read through B or through partials located on it",
+    "dimensions": [
+     "stretch",
+     "balance",
+     "partial_tilt",
+     "tnr"
+    ]
+   },
    "body_below_f0_db": -37.29,
    "body_under_db": -111.1,
    "body_f0_db": -73.81,
@@ -1686,7 +2095,30 @@
    "centroid_hz": 262.6,
    "tnr_mask": {},
    "tnr_db": 11.32,
-   "stereo_width": 0.0
+   "stereo_width": 0.0,
+   "loop": {
+    "verdict": "not_testable",
+    "reason": "shorter than one template and a 100 ms lag"
+   },
+   "window": {
+    "model_s": 1.0,
+    "reference_s": 1.0
+   },
+   "floor_state": {
+    "declared": false,
+    "basis": null,
+    "source": "preroll",
+    "level_db_hz": null,
+    "stationary": null,
+    "clear_partials_tail": 0,
+    "hum_dbfs": null,
+    "censors": {
+     "body": null,
+     "tnr": null
+    },
+    "body_floor_db": null,
+    "body_hum_db": null
+   }
   },
   {
    "timbre": "gm046",
@@ -1741,6 +2173,19 @@
     -79.28,
     -86.23
    ],
+   "broad_lines": {
+    "broad_ratio": 13.12,
+    "width_ratio": null
+   },
+   "b_unreliable": {
+    "reason": "unison or ensemble: lines 13.1x a still tone's and not read warped, partials 11.2 c rms off one series; stretch, balance, partial_tilt and tnr read through B or through partials located on it",
+    "dimensions": [
+     "stretch",
+     "balance",
+     "partial_tilt",
+     "tnr"
+    ]
+   },
    "body_below_f0_db": -37.28,
    "body_under_db": -105.83,
    "body_f0_db": -68.55,
@@ -1822,7 +2267,30 @@
    "centroid_hz": 262.6,
    "tnr_mask": {},
    "tnr_db": 11.32,
-   "stereo_width": 0.0
+   "stereo_width": 0.0,
+   "loop": {
+    "verdict": "not_testable",
+    "reason": "shorter than one template and a 100 ms lag"
+   },
+   "window": {
+    "model_s": 1.0,
+    "reference_s": 1.0
+   },
+   "floor_state": {
+    "declared": false,
+    "basis": null,
+    "source": "preroll",
+    "level_db_hz": null,
+    "stationary": null,
+    "clear_partials_tail": 0,
+    "hum_dbfs": null,
+    "censors": {
+     "body": null,
+     "tnr": null
+    },
+    "body_floor_db": null,
+    "body_hum_db": null
+   }
   },
   {
    "timbre": "gm046",
@@ -1877,6 +2345,19 @@
     -77.04,
     -83.37
    ],
+   "broad_lines": {
+    "broad_ratio": 13.12,
+    "width_ratio": null
+   },
+   "b_unreliable": {
+    "reason": "unison or ensemble: lines 13.1x a still tone's and not read warped, partials 11.2 c rms off one series; stretch, balance, partial_tilt and tnr read through B or through partials located on it",
+    "dimensions": [
+     "stretch",
+     "balance",
+     "partial_tilt",
+     "tnr"
+    ]
+   },
    "body_below_f0_db": -37.28,
    "body_under_db": -100.59,
    "body_f0_db": -63.31,
@@ -1945,7 +2426,30 @@
    "centroid_hz": 262.6,
    "tnr_mask": {},
    "tnr_db": 11.33,
-   "stereo_width": -0.0
+   "stereo_width": -0.0,
+   "loop": {
+    "verdict": "not_testable",
+    "reason": "shorter than one template and a 100 ms lag"
+   },
+   "window": {
+    "model_s": 1.0,
+    "reference_s": 1.0
+   },
+   "floor_state": {
+    "declared": false,
+    "basis": null,
+    "source": null,
+    "level_db_hz": null,
+    "stationary": null,
+    "clear_partials_tail": 0,
+    "hum_dbfs": null,
+    "censors": {
+     "body": null,
+     "tnr": null
+    },
+    "body_floor_db": null,
+    "body_hum_db": null
+   }
   },
   {
    "timbre": "gm046",
@@ -2000,6 +2504,19 @@
     -77.17,
     -83.49
    ],
+   "broad_lines": {
+    "broad_ratio": 13.12,
+    "width_ratio": null
+   },
+   "b_unreliable": {
+    "reason": "unison or ensemble: lines 13.1x a still tone's and not read warped, partials 11.2 c rms off one series; stretch, balance, partial_tilt and tnr read through B or through partials located on it",
+    "dimensions": [
+     "stretch",
+     "balance",
+     "partial_tilt",
+     "tnr"
+    ]
+   },
    "body_below_f0_db": -37.28,
    "body_under_db": -96.07,
    "body_f0_db": -58.79,
@@ -2068,7 +2585,30 @@
    "centroid_hz": 262.6,
    "tnr_mask": {},
    "tnr_db": 11.33,
-   "stereo_width": 0.0
+   "stereo_width": 0.0,
+   "loop": {
+    "verdict": "not_testable",
+    "reason": "shorter than one template and a 100 ms lag"
+   },
+   "window": {
+    "model_s": 1.0,
+    "reference_s": 1.0
+   },
+   "floor_state": {
+    "declared": false,
+    "basis": null,
+    "source": null,
+    "level_db_hz": null,
+    "stationary": null,
+    "clear_partials_tail": 0,
+    "hum_dbfs": null,
+    "censors": {
+     "body": null,
+     "tnr": null
+    },
+    "body_floor_db": null,
+    "body_hum_db": null
+   }
   },
   {
    "timbre": "gm046",
@@ -2123,6 +2663,19 @@
     -104.09,
     -106.33
    ],
+   "broad_lines": {
+    "broad_ratio": 16.07,
+    "width_ratio": null
+   },
+   "b_unreliable": {
+    "reason": "unison or ensemble: lines 16.1x a still tone's and not read warped, partials 9.6 c rms off one series; stretch, balance, partial_tilt and tnr read through B or through partials located on it",
+    "dimensions": [
+     "stretch",
+     "balance",
+     "partial_tilt",
+     "tnr"
+    ]
+   },
    "body_below_f0_db": -21.33,
    "body_under_db": -108.34,
    "body_f0_db": -87.0,
@@ -2205,7 +2758,30 @@
    "centroid_hz": 380.1,
    "tnr_mask": {},
    "tnr_db": 9.8,
-   "stereo_width": 0.0
+   "stereo_width": 0.0,
+   "loop": {
+    "verdict": "not_testable",
+    "reason": "shorter than one template and a 100 ms lag"
+   },
+   "window": {
+    "model_s": 1.0,
+    "reference_s": 1.0
+   },
+   "floor_state": {
+    "declared": false,
+    "basis": null,
+    "source": "preroll",
+    "level_db_hz": null,
+    "stationary": null,
+    "clear_partials_tail": 0,
+    "hum_dbfs": null,
+    "censors": {
+     "body": null,
+     "tnr": null
+    },
+    "body_floor_db": null,
+    "body_hum_db": null
+   }
   },
   {
    "timbre": "gm046",
@@ -2260,6 +2836,19 @@
     -94.25,
     -98.23
    ],
+   "broad_lines": {
+    "broad_ratio": 16.07,
+    "width_ratio": null
+   },
+   "b_unreliable": {
+    "reason": "unison or ensemble: lines 16.1x a still tone's and not read warped, partials 7.1 c rms off one series; stretch, balance, partial_tilt and tnr read through B or through partials located on it",
+    "dimensions": [
+     "stretch",
+     "balance",
+     "partial_tilt",
+     "tnr"
+    ]
+   },
    "body_below_f0_db": -21.31,
    "body_under_db": -104.56,
    "body_f0_db": -83.25,
@@ -2343,7 +2932,30 @@
    "centroid_hz": 380.8,
    "tnr_mask": {},
    "tnr_db": 9.8,
-   "stereo_width": 0.0
+   "stereo_width": 0.0,
+   "loop": {
+    "verdict": "not_testable",
+    "reason": "shorter than one template and a 100 ms lag"
+   },
+   "window": {
+    "model_s": 1.0,
+    "reference_s": 1.0
+   },
+   "floor_state": {
+    "declared": false,
+    "basis": null,
+    "source": "preroll",
+    "level_db_hz": null,
+    "stationary": null,
+    "clear_partials_tail": 0,
+    "hum_dbfs": null,
+    "censors": {
+     "body": null,
+     "tnr": null
+    },
+    "body_floor_db": null,
+    "body_hum_db": null
+   }
   },
   {
    "timbre": "gm046",
@@ -2398,6 +3010,19 @@
     -83.58,
     -83.67
    ],
+   "broad_lines": {
+    "broad_ratio": 16.07,
+    "width_ratio": null
+   },
+   "b_unreliable": {
+    "reason": "unison or ensemble: lines 16.1x a still tone's and not read warped, partials 7.5 c rms off one series; stretch, balance, partial_tilt and tnr read through B or through partials located on it",
+    "dimensions": [
+     "stretch",
+     "balance",
+     "partial_tilt",
+     "tnr"
+    ]
+   },
    "body_below_f0_db": -21.29,
    "body_under_db": -99.3,
    "body_f0_db": -78.0,
@@ -2481,7 +3106,30 @@
    "centroid_hz": 380.9,
    "tnr_mask": {},
    "tnr_db": 9.8,
-   "stereo_width": -0.0
+   "stereo_width": -0.0,
+   "loop": {
+    "verdict": "not_testable",
+    "reason": "shorter than one template and a 100 ms lag"
+   },
+   "window": {
+    "model_s": 1.0,
+    "reference_s": 1.0
+   },
+   "floor_state": {
+    "declared": false,
+    "basis": null,
+    "source": "preroll",
+    "level_db_hz": null,
+    "stationary": null,
+    "clear_partials_tail": 0,
+    "hum_dbfs": null,
+    "censors": {
+     "body": null,
+     "tnr": null
+    },
+    "body_floor_db": null,
+    "body_hum_db": null
+   }
   },
   {
    "timbre": "gm046",
@@ -2536,6 +3184,19 @@
     -78.04,
     -76.97
    ],
+   "broad_lines": {
+    "broad_ratio": 16.07,
+    "width_ratio": null
+   },
+   "b_unreliable": {
+    "reason": "unison or ensemble: lines 16.1x a still tone's and not read warped, partials 7.4 c rms off one series; stretch, balance, partial_tilt and tnr read through B or through partials located on it",
+    "dimensions": [
+     "stretch",
+     "balance",
+     "partial_tilt",
+     "tnr"
+    ]
+   },
    "body_below_f0_db": -21.29,
    "body_under_db": -94.06,
    "body_f0_db": -72.77,
@@ -2619,7 +3280,30 @@
    "centroid_hz": 380.8,
    "tnr_mask": {},
    "tnr_db": 9.8,
-   "stereo_width": 0.0
+   "stereo_width": 0.0,
+   "loop": {
+    "verdict": "not_testable",
+    "reason": "shorter than one template and a 100 ms lag"
+   },
+   "window": {
+    "model_s": 1.0,
+    "reference_s": 1.0
+   },
+   "floor_state": {
+    "declared": false,
+    "basis": null,
+    "source": "preroll",
+    "level_db_hz": null,
+    "stationary": null,
+    "clear_partials_tail": 0,
+    "hum_dbfs": null,
+    "censors": {
+     "body": null,
+     "tnr": null
+    },
+    "body_floor_db": null,
+    "body_hum_db": null
+   }
   },
   {
    "timbre": "gm046",
@@ -2674,6 +3358,19 @@
     -77.75,
     -76.5
    ],
+   "broad_lines": {
+    "broad_ratio": 16.07,
+    "width_ratio": null
+   },
+   "b_unreliable": {
+    "reason": "unison or ensemble: lines 16.1x a still tone's and not read warped, partials 7.4 c rms off one series; stretch, balance, partial_tilt and tnr read through B or through partials located on it",
+    "dimensions": [
+     "stretch",
+     "balance",
+     "partial_tilt",
+     "tnr"
+    ]
+   },
    "body_below_f0_db": -21.29,
    "body_under_db": -89.54,
    "body_f0_db": -68.25,
@@ -2744,7 +3441,30 @@
    "centroid_hz": 380.9,
    "tnr_mask": {},
    "tnr_db": 9.8,
-   "stereo_width": 0.0
+   "stereo_width": 0.0,
+   "loop": {
+    "verdict": "not_testable",
+    "reason": "shorter than one template and a 100 ms lag"
+   },
+   "window": {
+    "model_s": 1.0,
+    "reference_s": 1.0
+   },
+   "floor_state": {
+    "declared": false,
+    "basis": null,
+    "source": null,
+    "level_db_hz": null,
+    "stationary": null,
+    "clear_partials_tail": 0,
+    "hum_dbfs": null,
+    "censors": {
+     "body": null,
+     "tnr": null
+    },
+    "body_floor_db": null,
+    "body_hum_db": null
+   }
   },
   {
    "timbre": "gm046",
@@ -2799,6 +3519,19 @@
     -102.8,
     -106.81
    ],
+   "broad_lines": {
+    "broad_ratio": 15.53,
+    "width_ratio": null
+   },
+   "b_unreliable": {
+    "reason": "unison or ensemble: lines 15.5x a still tone's and not read warped, partials 11.6 c rms off one series; stretch, balance, partial_tilt and tnr read through B or through partials located on it",
+    "dimensions": [
+     "stretch",
+     "balance",
+     "partial_tilt",
+     "tnr"
+    ]
+   },
    "body_below_f0_db": -13.12,
    "body_under_db": -111.36,
    "body_f0_db": -98.25,
@@ -2881,7 +3614,30 @@
    "centroid_hz": 540.9,
    "tnr_mask": {},
    "tnr_db": 12.01,
-   "stereo_width": 0.0
+   "stereo_width": 0.0,
+   "loop": {
+    "verdict": "not_testable",
+    "reason": "shorter than one template and a 100 ms lag"
+   },
+   "window": {
+    "model_s": 1.0,
+    "reference_s": 1.0
+   },
+   "floor_state": {
+    "declared": false,
+    "basis": null,
+    "source": "preroll",
+    "level_db_hz": null,
+    "stationary": null,
+    "clear_partials_tail": 0,
+    "hum_dbfs": null,
+    "censors": {
+     "body": null,
+     "tnr": null
+    },
+    "body_floor_db": null,
+    "body_hum_db": null
+   }
   },
   {
    "timbre": "gm046",
@@ -2936,6 +3692,19 @@
     -96.9,
     -92.16
    ],
+   "broad_lines": {
+    "broad_ratio": 15.53,
+    "width_ratio": null
+   },
+   "b_unreliable": {
+    "reason": "unison or ensemble: lines 15.5x a still tone's and not read warped, partials 8.3 c rms off one series; stretch, balance, partial_tilt and tnr read through B or through partials located on it",
+    "dimensions": [
+     "stretch",
+     "balance",
+     "partial_tilt",
+     "tnr"
+    ]
+   },
    "body_below_f0_db": -13.06,
    "body_under_db": -107.59,
    "body_f0_db": -94.54,
@@ -3014,7 +3783,30 @@
    "centroid_hz": 545.6,
    "tnr_mask": {},
    "tnr_db": 11.97,
-   "stereo_width": 0.0
+   "stereo_width": 0.0,
+   "loop": {
+    "verdict": "not_testable",
+    "reason": "shorter than one template and a 100 ms lag"
+   },
+   "window": {
+    "model_s": 1.0,
+    "reference_s": 1.0
+   },
+   "floor_state": {
+    "declared": false,
+    "basis": null,
+    "source": "preroll",
+    "level_db_hz": null,
+    "stationary": null,
+    "clear_partials_tail": 0,
+    "hum_dbfs": null,
+    "censors": {
+     "body": null,
+     "tnr": null
+    },
+    "body_floor_db": null,
+    "body_hum_db": null
+   }
   },
   {
    "timbre": "gm046",
@@ -3069,6 +3861,19 @@
     -86.73,
     -81.99
    ],
+   "broad_lines": {
+    "broad_ratio": 15.53,
+    "width_ratio": null
+   },
+   "b_unreliable": {
+    "reason": "unison or ensemble: lines 15.5x a still tone's and not read warped, partials 7.4 c rms off one series; stretch, balance, partial_tilt and tnr read through B or through partials located on it",
+    "dimensions": [
+     "stretch",
+     "balance",
+     "partial_tilt",
+     "tnr"
+    ]
+   },
    "body_below_f0_db": -13.03,
    "body_under_db": -102.33,
    "body_f0_db": -89.3,
@@ -3141,7 +3946,30 @@
    "centroid_hz": 547.2,
    "tnr_mask": {},
    "tnr_db": 11.96,
-   "stereo_width": -0.0
+   "stereo_width": -0.0,
+   "loop": {
+    "verdict": "not_testable",
+    "reason": "shorter than one template and a 100 ms lag"
+   },
+   "window": {
+    "model_s": 1.0,
+    "reference_s": 1.0
+   },
+   "floor_state": {
+    "declared": false,
+    "basis": null,
+    "source": null,
+    "level_db_hz": null,
+    "stationary": null,
+    "clear_partials_tail": 0,
+    "hum_dbfs": null,
+    "censors": {
+     "body": null,
+     "tnr": null
+    },
+    "body_floor_db": null,
+    "body_hum_db": null
+   }
   },
   {
    "timbre": "gm046",
@@ -3196,6 +4024,19 @@
     -76.58,
     -71.56
    ],
+   "broad_lines": {
+    "broad_ratio": 15.53,
+    "width_ratio": null
+   },
+   "b_unreliable": {
+    "reason": "unison or ensemble: lines 15.5x a still tone's and not read warped, partials 11.0 c rms off one series; stretch, balance, partial_tilt and tnr read through B or through partials located on it",
+    "dimensions": [
+     "stretch",
+     "balance",
+     "partial_tilt",
+     "tnr"
+    ]
+   },
    "body_below_f0_db": -13.02,
    "body_under_db": -97.1,
    "body_f0_db": -84.07,
@@ -3268,7 +4109,30 @@
    "centroid_hz": 547.1,
    "tnr_mask": {},
    "tnr_db": 11.97,
-   "stereo_width": -0.0
+   "stereo_width": -0.0,
+   "loop": {
+    "verdict": "not_testable",
+    "reason": "shorter than one template and a 100 ms lag"
+   },
+   "window": {
+    "model_s": 1.0,
+    "reference_s": 1.0
+   },
+   "floor_state": {
+    "declared": false,
+    "basis": null,
+    "source": null,
+    "level_db_hz": null,
+    "stationary": null,
+    "clear_partials_tail": 0,
+    "hum_dbfs": null,
+    "censors": {
+     "body": null,
+     "tnr": null
+    },
+    "body_floor_db": null,
+    "body_hum_db": null
+   }
   },
   {
    "timbre": "gm046",
@@ -3323,6 +4187,19 @@
     -72.86,
     -67.08
    ],
+   "broad_lines": {
+    "broad_ratio": 15.53,
+    "width_ratio": null
+   },
+   "b_unreliable": {
+    "reason": "unison or ensemble: lines 15.5x a still tone's and not read warped, partials 11.0 c rms off one series; stretch, balance, partial_tilt and tnr read through B or through partials located on it",
+    "dimensions": [
+     "stretch",
+     "balance",
+     "partial_tilt",
+     "tnr"
+    ]
+   },
    "body_below_f0_db": -13.02,
    "body_under_db": -92.58,
    "body_f0_db": -79.56,
@@ -3395,7 +4272,30 @@
    "centroid_hz": 547.1,
    "tnr_mask": {},
    "tnr_db": 11.97,
-   "stereo_width": 0.0
+   "stereo_width": 0.0,
+   "loop": {
+    "verdict": "not_testable",
+    "reason": "shorter than one template and a 100 ms lag"
+   },
+   "window": {
+    "model_s": 1.0,
+    "reference_s": 1.0
+   },
+   "floor_state": {
+    "declared": false,
+    "basis": null,
+    "source": null,
+    "level_db_hz": null,
+    "stationary": null,
+    "clear_partials_tail": 0,
+    "hum_dbfs": null,
+    "censors": {
+     "body": null,
+     "tnr": null
+    },
+    "body_floor_db": null,
+    "body_hum_db": null
+   }
   },
   {
    "timbre": "gm046",
@@ -3450,6 +4350,10 @@
     -113.3,
     -117.89
    ],
+   "broad_lines": {
+    "broad_ratio": 16.3,
+    "width_ratio": null
+   },
    "body_below_f0_db": -12.05,
    "body_under_db": -127.19,
    "body_f0_db": -115.14,
@@ -3533,7 +4437,30 @@
    "centroid_hz": 749.9,
    "tnr_mask": {},
    "tnr_db": 9.88,
-   "stereo_width": -0.0
+   "stereo_width": -0.0,
+   "loop": {
+    "verdict": "not_testable",
+    "reason": "shorter than one template and a 100 ms lag"
+   },
+   "window": {
+    "model_s": 1.0,
+    "reference_s": 1.0
+   },
+   "floor_state": {
+    "declared": false,
+    "basis": null,
+    "source": "preroll",
+    "level_db_hz": null,
+    "stationary": null,
+    "clear_partials_tail": 0,
+    "hum_dbfs": null,
+    "censors": {
+     "body": null,
+     "tnr": null
+    },
+    "body_floor_db": null,
+    "body_hum_db": null
+   }
   },
   {
    "timbre": "gm046",
@@ -3588,6 +4515,19 @@
     -103.5,
     -108.12
    ],
+   "broad_lines": {
+    "broad_ratio": 16.3,
+    "width_ratio": null
+   },
+   "b_unreliable": {
+    "reason": "unison or ensemble: lines 16.3x a still tone's and not read warped, partials 7.8 c rms off one series; stretch, balance, partial_tilt and tnr read through B or through partials located on it",
+    "dimensions": [
+     "stretch",
+     "balance",
+     "partial_tilt",
+     "tnr"
+    ]
+   },
    "body_below_f0_db": -11.99,
    "body_under_db": -123.46,
    "body_f0_db": -111.47,
@@ -3671,7 +4611,30 @@
    "centroid_hz": 758.4,
    "tnr_mask": {},
    "tnr_db": 9.82,
-   "stereo_width": 0.0
+   "stereo_width": 0.0,
+   "loop": {
+    "verdict": "not_testable",
+    "reason": "shorter than one template and a 100 ms lag"
+   },
+   "window": {
+    "model_s": 1.0,
+    "reference_s": 1.0
+   },
+   "floor_state": {
+    "declared": false,
+    "basis": null,
+    "source": "preroll",
+    "level_db_hz": null,
+    "stationary": null,
+    "clear_partials_tail": 0,
+    "hum_dbfs": null,
+    "censors": {
+     "body": null,
+     "tnr": null
+    },
+    "body_floor_db": null,
+    "body_hum_db": null
+   }
   },
   {
    "timbre": "gm046",
@@ -3726,6 +4689,19 @@
     -99.31,
     -98.01
    ],
+   "broad_lines": {
+    "broad_ratio": 16.3,
+    "width_ratio": null
+   },
+   "b_unreliable": {
+    "reason": "unison or ensemble: lines 16.3x a still tone's and not read warped, partials 7.2 c rms off one series; stretch, balance, partial_tilt and tnr read through B or through partials located on it",
+    "dimensions": [
+     "stretch",
+     "balance",
+     "partial_tilt",
+     "tnr"
+    ]
+   },
    "body_below_f0_db": -11.94,
    "body_under_db": -118.22,
    "body_f0_db": -106.27,
@@ -3797,7 +4773,30 @@
    "centroid_hz": 763.2,
    "tnr_mask": {},
    "tnr_db": 9.8,
-   "stereo_width": -0.0
+   "stereo_width": -0.0,
+   "loop": {
+    "verdict": "not_testable",
+    "reason": "shorter than one template and a 100 ms lag"
+   },
+   "window": {
+    "model_s": 1.0,
+    "reference_s": 1.0
+   },
+   "floor_state": {
+    "declared": false,
+    "basis": null,
+    "source": null,
+    "level_db_hz": null,
+    "stationary": null,
+    "clear_partials_tail": 0,
+    "hum_dbfs": null,
+    "censors": {
+     "body": null,
+     "tnr": null
+    },
+    "body_floor_db": null,
+    "body_hum_db": null
+   }
   },
   {
    "timbre": "gm046",
@@ -3852,6 +4851,19 @@
     -90.72,
     -89.27
    ],
+   "broad_lines": {
+    "broad_ratio": 16.3,
+    "width_ratio": null
+   },
+   "b_unreliable": {
+    "reason": "unison or ensemble: lines 16.3x a still tone's and not read warped, partials 6.7 c rms off one series; stretch, balance, partial_tilt and tnr read through B or through partials located on it",
+    "dimensions": [
+     "stretch",
+     "balance",
+     "partial_tilt",
+     "tnr"
+    ]
+   },
    "body_below_f0_db": -11.93,
    "body_under_db": -112.98,
    "body_f0_db": -101.06,
@@ -3923,7 +4935,30 @@
    "centroid_hz": 764.1,
    "tnr_mask": {},
    "tnr_db": 9.81,
-   "stereo_width": 0.0
+   "stereo_width": 0.0,
+   "loop": {
+    "verdict": "not_testable",
+    "reason": "shorter than one template and a 100 ms lag"
+   },
+   "window": {
+    "model_s": 1.0,
+    "reference_s": 1.0
+   },
+   "floor_state": {
+    "declared": false,
+    "basis": null,
+    "source": null,
+    "level_db_hz": null,
+    "stationary": null,
+    "clear_partials_tail": 0,
+    "hum_dbfs": null,
+    "censors": {
+     "body": null,
+     "tnr": null
+    },
+    "body_floor_db": null,
+    "body_hum_db": null
+   }
   },
   {
    "timbre": "gm046",
@@ -3978,6 +5013,19 @@
     -79.96,
     -77.16
    ],
+   "broad_lines": {
+    "broad_ratio": 16.3,
+    "width_ratio": null
+   },
+   "b_unreliable": {
+    "reason": "unison or ensemble: lines 16.3x a still tone's and not read warped, partials 6.7 c rms off one series; stretch, balance, partial_tilt and tnr read through B or through partials located on it",
+    "dimensions": [
+     "stretch",
+     "balance",
+     "partial_tilt",
+     "tnr"
+    ]
+   },
    "body_below_f0_db": -11.92,
    "body_under_db": -108.47,
    "body_f0_db": -96.55,
@@ -4048,7 +5096,30 @@
    "centroid_hz": 763.8,
    "tnr_mask": {},
    "tnr_db": 9.81,
-   "stereo_width": 0.0
+   "stereo_width": 0.0,
+   "loop": {
+    "verdict": "not_testable",
+    "reason": "shorter than one template and a 100 ms lag"
+   },
+   "window": {
+    "model_s": 1.0,
+    "reference_s": 1.0
+   },
+   "floor_state": {
+    "declared": false,
+    "basis": null,
+    "source": null,
+    "level_db_hz": null,
+    "stationary": null,
+    "clear_partials_tail": 0,
+    "hum_dbfs": null,
+    "censors": {
+     "body": null,
+     "tnr": null
+    },
+    "body_floor_db": null,
+    "body_hum_db": null
+   }
   },
   {
    "timbre": "gm046",
@@ -4103,6 +5174,19 @@
     -129.9,
     -130.36
    ],
+   "broad_lines": {
+    "broad_ratio": 16.39,
+    "width_ratio": null
+   },
+   "b_unreliable": {
+    "reason": "unison or ensemble: lines 16.4x a still tone's and not read warped, partials 11.4 c rms off one series; stretch, balance, partial_tilt and tnr read through B or through partials located on it",
+    "dimensions": [
+     "stretch",
+     "balance",
+     "partial_tilt",
+     "tnr"
+    ]
+   },
    "body_below_f0_db": 14.82,
    "body_under_db": -275.9,
    "body_f0_db": -290.71,
@@ -4168,7 +5252,30 @@
    "centroid_hz": 1042.7,
    "tnr_mask": {},
    "tnr_db": 7.84,
-   "stereo_width": -0.0
+   "stereo_width": -0.0,
+   "loop": {
+    "verdict": "not_testable",
+    "reason": "shorter than one template and a 100 ms lag"
+   },
+   "window": {
+    "model_s": 1.0,
+    "reference_s": 1.0
+   },
+   "floor_state": {
+    "declared": false,
+    "basis": null,
+    "source": null,
+    "level_db_hz": null,
+    "stationary": null,
+    "clear_partials_tail": 0,
+    "hum_dbfs": null,
+    "censors": {
+     "body": null,
+     "tnr": null
+    },
+    "body_floor_db": null,
+    "body_hum_db": null
+   }
   },
   {
    "timbre": "gm046",
@@ -4223,6 +5330,19 @@
     -120.88,
     -128.02
    ],
+   "broad_lines": {
+    "broad_ratio": 16.39,
+    "width_ratio": null
+   },
+   "b_unreliable": {
+    "reason": "unison or ensemble: lines 16.4x a still tone's and not read warped, partials 11.9 c rms off one series; stretch, balance, partial_tilt and tnr read through B or through partials located on it",
+    "dimensions": [
+     "stretch",
+     "balance",
+     "partial_tilt",
+     "tnr"
+    ]
+   },
    "body_below_f0_db": 14.52,
    "body_under_db": -271.72,
    "body_f0_db": -286.24,
@@ -4288,7 +5408,30 @@
    "centroid_hz": 1068.6,
    "tnr_mask": {},
    "tnr_db": 7.87,
-   "stereo_width": 0.0
+   "stereo_width": 0.0,
+   "loop": {
+    "verdict": "not_testable",
+    "reason": "shorter than one template and a 100 ms lag"
+   },
+   "window": {
+    "model_s": 1.0,
+    "reference_s": 1.0
+   },
+   "floor_state": {
+    "declared": false,
+    "basis": null,
+    "source": null,
+    "level_db_hz": null,
+    "stationary": null,
+    "clear_partials_tail": 0,
+    "hum_dbfs": null,
+    "censors": {
+     "body": null,
+     "tnr": null
+    },
+    "body_floor_db": null,
+    "body_hum_db": null
+   }
   },
   {
    "timbre": "gm046",
@@ -4343,6 +5486,19 @@
     -110.98,
     -119.22
    ],
+   "broad_lines": {
+    "broad_ratio": 16.39,
+    "width_ratio": null
+   },
+   "b_unreliable": {
+    "reason": "unison or ensemble: lines 16.4x a still tone's and not read warped, partials 11.8 c rms off one series; stretch, balance, partial_tilt and tnr read through B or through partials located on it",
+    "dimensions": [
+     "stretch",
+     "balance",
+     "partial_tilt",
+     "tnr"
+    ]
+   },
    "body_below_f0_db": 14.58,
    "body_under_db": -267.08,
    "body_f0_db": -281.66,
@@ -4400,7 +5556,30 @@
    "centroid_hz": 1076.0,
    "tnr_mask": {},
    "tnr_db": 7.84,
-   "stereo_width": 0.0
+   "stereo_width": 0.0,
+   "loop": {
+    "verdict": "not_testable",
+    "reason": "shorter than one template and a 100 ms lag"
+   },
+   "window": {
+    "model_s": 1.0,
+    "reference_s": 1.0
+   },
+   "floor_state": {
+    "declared": false,
+    "basis": null,
+    "source": null,
+    "level_db_hz": null,
+    "stationary": null,
+    "clear_partials_tail": 0,
+    "hum_dbfs": null,
+    "censors": {
+     "body": null,
+     "tnr": null
+    },
+    "body_floor_db": null,
+    "body_hum_db": null
+   }
   },
   {
    "timbre": "gm046",
@@ -4455,6 +5634,19 @@
     -99.77,
     -107.95
    ],
+   "broad_lines": {
+    "broad_ratio": 16.39,
+    "width_ratio": null
+   },
+   "b_unreliable": {
+    "reason": "unison or ensemble: lines 16.4x a still tone's and not read warped, partials 12.7 c rms off one series; stretch, balance, partial_tilt and tnr read through B or through partials located on it",
+    "dimensions": [
+     "stretch",
+     "balance",
+     "partial_tilt",
+     "tnr"
+    ]
+   },
    "body_below_f0_db": 14.43,
    "body_under_db": -261.29,
    "body_f0_db": -275.72,
@@ -4512,7 +5704,30 @@
    "centroid_hz": 1077.9,
    "tnr_mask": {},
    "tnr_db": 7.83,
-   "stereo_width": 0.0
+   "stereo_width": 0.0,
+   "loop": {
+    "verdict": "not_testable",
+    "reason": "shorter than one template and a 100 ms lag"
+   },
+   "window": {
+    "model_s": 1.0,
+    "reference_s": 1.0
+   },
+   "floor_state": {
+    "declared": false,
+    "basis": null,
+    "source": null,
+    "level_db_hz": null,
+    "stationary": null,
+    "clear_partials_tail": 0,
+    "hum_dbfs": null,
+    "censors": {
+     "body": null,
+     "tnr": null
+    },
+    "body_floor_db": null,
+    "body_hum_db": null
+   }
   },
   {
    "timbre": "gm046",
@@ -4567,6 +5782,19 @@
     -84.15,
     -92.31
    ],
+   "broad_lines": {
+    "broad_ratio": 16.39,
+    "width_ratio": null
+   },
+   "b_unreliable": {
+    "reason": "unison or ensemble: lines 16.4x a still tone's and not read warped, partials 12.8 c rms off one series; stretch, balance, partial_tilt and tnr read through B or through partials located on it",
+    "dimensions": [
+     "stretch",
+     "balance",
+     "partial_tilt",
+     "tnr"
+    ]
+   },
    "body_below_f0_db": 14.45,
    "body_under_db": -256.11,
    "body_f0_db": -270.57,
@@ -4625,7 +5853,30 @@
    "centroid_hz": 1077.5,
    "tnr_mask": {},
    "tnr_db": 7.91,
-   "stereo_width": 0.0
+   "stereo_width": 0.0,
+   "loop": {
+    "verdict": "not_testable",
+    "reason": "shorter than one template and a 100 ms lag"
+   },
+   "window": {
+    "model_s": 1.0,
+    "reference_s": 1.0
+   },
+   "floor_state": {
+    "declared": false,
+    "basis": null,
+    "source": null,
+    "level_db_hz": null,
+    "stationary": null,
+    "clear_partials_tail": 0,
+    "hum_dbfs": null,
+    "censors": {
+     "body": null,
+     "tnr": null
+    },
+    "body_floor_db": null,
+    "body_hum_db": null
+   }
   }
  ],
  "summary": {
@@ -4885,17 +6136,42 @@
    }
   }
  },
- "field_measured_utc": {
-  "rows.body_f0_db": "2026-11-13T10:36:37+00:00",
-  "rows.body_under_db": "2026-11-13T10:36:37+00:00",
-  "rows.floor_body_db": "2026-11-13T10:36:37+00:00",
-  "rows.floor_db": "2026-11-13T10:36:37+00:00",
-  "rows.floor_octaves_db": "2026-11-13T10:36:37+00:00",
-  "rows.floor_source": "2026-11-13T10:36:37+00:00",
-  "rows.partial_clear_s": "2026-11-13T10:36:37+00:00",
-  "rows.partial_decay_clear_db_s": "2026-11-13T10:36:37+00:00",
-  "rows.valley_db": "2026-11-13T10:36:37+00:00",
-  "rows.valley_ladder_coupling": "2026-11-13T10:36:37+00:00",
-  "rows.valley_slope_db_oct": "2026-11-13T10:36:37+00:00"
+ "tnr_unreliable": {
+  "reason": "chorus or ensemble: most rows have lines the pitch warp does not collapse, and the tone mask follows one pitch track",
+  "timbres": {
+   "gm046": {
+    "rows": 35,
+    "of": 35
+   }
+  }
+ },
+ "recording_floor": {
+  "gm046": {
+   "declared": false,
+   "rows": 35,
+   "lines": [],
+   "lines_found": 0,
+   "hum": null,
+   "note_independent": false,
+   "basis": null,
+   "level_db_hz": -171.47,
+   "slope_db_oct": -1.71,
+   "agree_share": 0.17,
+   "stationary": {
+    "verdict": false,
+    "evaluable_rows": 0,
+    "floor_like_share": null,
+    "slope_db_s": null,
+    "tone_slope_db_s": null,
+    "corr": null,
+    "hum_reference_slope_db_s": null
+   },
+   "reason": "not note-independent"
+  }
+ },
+ "loop": {
+  "status": "not_testable",
+  "rows": 35,
+  "tested": 0
  }
 }

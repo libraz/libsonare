@@ -1,7 +1,7 @@
 {
  "id": "music_box",
  "label": "Music box, sampled, close and dry",
- "measured_utc": "2026-10-23T20:03:42+00:00",
+ "measured_utc": "2026-11-13T19:49:42+00:00",
  "capture": {
   "program": 10,
   "params": [],
@@ -39,10 +39,10 @@
    "timbre": "gm011",
    "note": 72,
    "velocity": 32,
-   "f0_hz": 523.176,
-   "cents_vs_et": -0.25,
-   "inharmonicity_b": 2.296e-06,
-   "partials_fit": 4,
+   "f0_hz": 523.177,
+   "cents_vs_et": -0.24,
+   "inharmonicity_b": 0.0,
+   "partials_fit": 0,
    "inharmonicity_reliable": false,
    "partials_hz": [
     523.17,
@@ -88,9 +88,50 @@
     -127.41,
     -53.05
    ],
-   "body_below_f0_db": -60.65,
-   "body_under_db": -110.38,
+   "modal_profile": {
+    "modal_hz": [
+     523.17,
+     1046.49,
+     2093.07,
+     10465.41
+    ],
+    "modal_db": [
+     0.0,
+     -37.65,
+     -19.89,
+     -53.05
+    ],
+    "modal_ratio": [
+     0.9998,
+     2.0,
+     4.0001,
+     20.0007
+    ]
+   },
+   "body_below_f0_db": -60.66,
+   "body_under_db": -110.39,
    "body_f0_db": -49.73,
+   "body_lines": {
+    "hz": [
+     226.0,
+     246.5
+    ],
+    "share_removed": 0.0013,
+    "reason": "recurring fixed-frequency lines in the source",
+    "missed": {
+     "lines": [
+      {
+       "hz": 82.1,
+       "share": 0.0006
+      },
+      {
+       "hz": 102.5,
+       "share": 0.0
+      }
+     ],
+     "reason": "recurs on 2 notes; N=3"
+    }
+   },
    "peak_dbfs": -41.47,
    "rms_dbfs": -54.76,
    "held_peak_dbfs": -45.64,
@@ -170,16 +211,75 @@
    "centroid_hz": 541.2,
    "tnr_mask": {},
    "tnr_db": 55.54,
-   "stereo_width": 0.0
+   "stereo_width": 0.0,
+   "loop": {
+    "verdict": "not",
+    "residual_db": -32.4,
+    "median_db": -32.4,
+    "frames": 6,
+    "reaching_frames": 6,
+    "reach_ms": 1782.9,
+    "borderline": true,
+    "ladder_db": [
+     0.0,
+     -37.6,
+     -72.7,
+     -19.4,
+     -74.1,
+     -88.8,
+     -82.4,
+     -86.3,
+     -100.3,
+     -84.9,
+     -56.4,
+     -74.1,
+     -84.2,
+     -94.1,
+     -112.6,
+     -70.5,
+     -78.5,
+     -121.2,
+     -120.8,
+     -53.4
+    ],
+    "group": 0,
+    "group_notes": [
+     72
+    ]
+   },
+   "window": {
+    "model_s": 6.0,
+    "reference_s": 6.0
+   },
+   "floor_state": {
+    "declared": false,
+    "basis": null,
+    "source": "preroll",
+    "level_db_hz": null,
+    "stationary": {
+     "slope_db_s": -7.56,
+     "corr": 1.0,
+     "tone_slope_db_s": -7.7,
+     "floor_like": false
+    },
+    "clear_partials_tail": 5,
+    "hum_dbfs": null,
+    "censors": {
+     "body": null,
+     "tnr": null
+    },
+    "body_floor_db": null,
+    "body_hum_db": null
+   }
   },
   {
    "timbre": "gm011",
    "note": 72,
    "velocity": 56,
-   "f0_hz": 523.174,
+   "f0_hz": 523.175,
    "cents_vs_et": -0.25,
-   "inharmonicity_b": 2.33e-06,
-   "partials_fit": 4,
+   "inharmonicity_b": 0.0,
+   "partials_fit": 0,
    "inharmonicity_reliable": false,
    "partials_hz": [
     523.16,
@@ -225,9 +325,50 @@
     -127.38,
     -52.98
    ],
-   "body_below_f0_db": -60.66,
-   "body_under_db": -104.24,
+   "modal_profile": {
+    "modal_hz": [
+     523.16,
+     1046.49,
+     2093.07,
+     10465.41
+    ],
+    "modal_db": [
+     0.0,
+     -37.64,
+     -19.86,
+     -52.98
+    ],
+    "modal_ratio": [
+     0.9998,
+     2.0,
+     4.0001,
+     20.0007
+    ]
+   },
+   "body_below_f0_db": -60.67,
+   "body_under_db": -104.25,
    "body_f0_db": -43.58,
+   "body_lines": {
+    "hz": [
+     226.0,
+     246.5
+    ],
+    "share_removed": 0.0013,
+    "reason": "recurring fixed-frequency lines in the source",
+    "missed": {
+     "lines": [
+      {
+       "hz": 82.1,
+       "share": 0.0007
+      },
+      {
+       "hz": 102.5,
+       "share": 0.0001
+      }
+     ],
+     "reason": "recurs on 2 notes; N=3"
+    }
+   },
    "peak_dbfs": -34.03,
    "rms_dbfs": -48.52,
    "held_peak_dbfs": -39.1,
@@ -307,16 +448,75 @@
    "centroid_hz": 541.3,
    "tnr_mask": {},
    "tnr_db": 55.51,
-   "stereo_width": 0.0
+   "stereo_width": 0.0,
+   "loop": {
+    "verdict": "not",
+    "residual_db": -32.4,
+    "median_db": -32.4,
+    "frames": 6,
+    "reaching_frames": 6,
+    "reach_ms": 1782.9,
+    "borderline": true,
+    "ladder_db": [
+     0.0,
+     -37.6,
+     -72.7,
+     -19.4,
+     -74.1,
+     -88.8,
+     -82.4,
+     -86.3,
+     -100.3,
+     -84.9,
+     -56.4,
+     -74.1,
+     -84.2,
+     -94.1,
+     -112.6,
+     -70.5,
+     -78.5,
+     -121.2,
+     -120.8,
+     -53.4
+    ],
+    "group": 0,
+    "group_notes": [
+     72
+    ]
+   },
+   "window": {
+    "model_s": 6.0,
+    "reference_s": 6.0
+   },
+   "floor_state": {
+    "declared": false,
+    "basis": null,
+    "source": "preroll",
+    "level_db_hz": null,
+    "stationary": {
+     "slope_db_s": -7.56,
+     "corr": 1.0,
+     "tone_slope_db_s": -7.7,
+     "floor_like": false
+    },
+    "clear_partials_tail": 5,
+    "hum_dbfs": null,
+    "censors": {
+     "body": null,
+     "tnr": null
+    },
+    "body_floor_db": null,
+    "body_hum_db": null
+   }
   },
   {
    "timbre": "gm011",
    "note": 72,
    "velocity": 80,
    "f0_hz": 523.171,
-   "cents_vs_et": -0.27,
-   "inharmonicity_b": 2.371e-06,
-   "partials_fit": 4,
+   "cents_vs_et": -0.26,
+   "inharmonicity_b": 0.0,
+   "partials_fit": 0,
    "inharmonicity_reliable": false,
    "partials_hz": [
     523.16,
@@ -362,9 +562,50 @@
     -127.37,
     -52.84
    ],
+   "modal_profile": {
+    "modal_hz": [
+     523.16,
+     1046.48,
+     2093.06,
+     10465.41
+    ],
+    "modal_db": [
+     0.0,
+     -37.63,
+     -19.82,
+     -52.84
+    ],
+    "modal_ratio": [
+     0.9998,
+     2.0,
+     4.0001,
+     20.0007
+    ]
+   },
    "body_below_f0_db": -60.67,
    "body_under_db": -99.22,
    "body_f0_db": -38.55,
+   "body_lines": {
+    "hz": [
+     226.0,
+     246.5
+    ],
+    "share_removed": 0.0013,
+    "reason": "recurring fixed-frequency lines in the source",
+    "missed": {
+     "lines": [
+      {
+       "hz": 82.1,
+       "share": 0.0006
+      },
+      {
+       "hz": 102.5,
+       "share": 0.0
+      }
+     ],
+     "reason": "recurs on 2 notes; N=3"
+    }
+   },
    "peak_dbfs": -26.6,
    "rms_dbfs": -43.37,
    "held_peak_dbfs": -33.63,
@@ -444,16 +685,75 @@
    "centroid_hz": 541.4,
    "tnr_mask": {},
    "tnr_db": 55.46,
-   "stereo_width": 0.0
+   "stereo_width": 0.0,
+   "loop": {
+    "verdict": "not",
+    "residual_db": -32.4,
+    "median_db": -32.4,
+    "frames": 6,
+    "reaching_frames": 6,
+    "reach_ms": 1782.9,
+    "borderline": true,
+    "ladder_db": [
+     0.0,
+     -37.6,
+     -72.7,
+     -19.4,
+     -74.1,
+     -88.8,
+     -82.4,
+     -86.3,
+     -100.3,
+     -84.9,
+     -56.4,
+     -74.1,
+     -84.2,
+     -94.1,
+     -112.6,
+     -70.5,
+     -78.5,
+     -121.2,
+     -120.8,
+     -53.4
+    ],
+    "group": 0,
+    "group_notes": [
+     72
+    ]
+   },
+   "window": {
+    "model_s": 6.0,
+    "reference_s": 6.0
+   },
+   "floor_state": {
+    "declared": false,
+    "basis": null,
+    "source": "preroll",
+    "level_db_hz": null,
+    "stationary": {
+     "slope_db_s": -7.56,
+     "corr": 1.0,
+     "tone_slope_db_s": -7.71,
+     "floor_like": false
+    },
+    "clear_partials_tail": 5,
+    "hum_dbfs": null,
+    "censors": {
+     "body": null,
+     "tnr": null
+    },
+    "body_floor_db": null,
+    "body_hum_db": null
+   }
   },
   {
    "timbre": "gm011",
    "note": 72,
    "velocity": 104,
-   "f0_hz": 523.166,
+   "f0_hz": 523.167,
    "cents_vs_et": -0.28,
-   "inharmonicity_b": 2.4e-06,
-   "partials_fit": 4,
+   "inharmonicity_b": 0.0,
+   "partials_fit": 0,
    "inharmonicity_reliable": false,
    "partials_hz": [
     523.16,
@@ -499,9 +799,50 @@
     -127.35,
     -52.6
    ],
+   "modal_profile": {
+    "modal_hz": [
+     523.16,
+     1046.47,
+     2093.05,
+     10465.41
+    ],
+    "modal_db": [
+     0.0,
+     -37.63,
+     -19.81,
+     -52.6
+    ],
+    "modal_ratio": [
+     0.9998,
+     1.9999,
+     4.0001,
+     20.0007
+    ]
+   },
    "body_below_f0_db": -60.67,
    "body_under_db": -95.16,
    "body_f0_db": -34.49,
+   "body_lines": {
+    "hz": [
+     226.0,
+     246.5
+    ],
+    "share_removed": 0.0013,
+    "reason": "recurring fixed-frequency lines in the source",
+    "missed": {
+     "lines": [
+      {
+       "hz": 82.1,
+       "share": 0.0006
+      },
+      {
+       "hz": 102.5,
+       "share": 0.0
+      }
+     ],
+     "reason": "recurs on 2 notes; N=3"
+    }
+   },
    "peak_dbfs": -18.99,
    "rms_dbfs": -39.15,
    "held_peak_dbfs": -27.88,
@@ -581,16 +922,75 @@
    "centroid_hz": 541.7,
    "tnr_mask": {},
    "tnr_db": 55.37,
-   "stereo_width": -0.0
+   "stereo_width": -0.0,
+   "loop": {
+    "verdict": "not",
+    "residual_db": -32.4,
+    "median_db": -32.4,
+    "frames": 6,
+    "reaching_frames": 6,
+    "reach_ms": 1782.9,
+    "borderline": true,
+    "ladder_db": [
+     0.0,
+     -37.6,
+     -72.7,
+     -19.4,
+     -74.1,
+     -88.8,
+     -82.4,
+     -86.3,
+     -100.3,
+     -84.9,
+     -56.4,
+     -74.1,
+     -84.2,
+     -94.1,
+     -112.6,
+     -70.5,
+     -78.5,
+     -121.2,
+     -120.8,
+     -53.4
+    ],
+    "group": 0,
+    "group_notes": [
+     72
+    ]
+   },
+   "window": {
+    "model_s": 6.0,
+    "reference_s": 6.0
+   },
+   "floor_state": {
+    "declared": false,
+    "basis": null,
+    "source": "preroll",
+    "level_db_hz": null,
+    "stationary": {
+     "slope_db_s": -7.57,
+     "corr": 1.0,
+     "tone_slope_db_s": -7.71,
+     "floor_like": false
+    },
+    "clear_partials_tail": 5,
+    "hum_dbfs": null,
+    "censors": {
+     "body": null,
+     "tnr": null
+    },
+    "body_floor_db": null,
+    "body_hum_db": null
+   }
   },
   {
    "timbre": "gm011",
    "note": 72,
    "velocity": 127,
-   "f0_hz": 523.161,
+   "f0_hz": 523.162,
    "cents_vs_et": -0.3,
-   "inharmonicity_b": 2.395e-06,
-   "partials_fit": 4,
+   "inharmonicity_b": 0.0,
+   "partials_fit": 0,
    "inharmonicity_reliable": false,
    "partials_hz": [
     523.15,
@@ -636,9 +1036,50 @@
     -127.33,
     -52.23
    ],
-   "body_below_f0_db": -60.68,
-   "body_under_db": -91.94,
+   "modal_profile": {
+    "modal_hz": [
+     523.15,
+     1046.46,
+     2093.03,
+     10465.4
+    ],
+    "modal_db": [
+     0.0,
+     -37.64,
+     -19.84,
+     -52.23
+    ],
+    "modal_ratio": [
+     0.9998,
+     1.9999,
+     4.0,
+     20.0007
+    ]
+   },
+   "body_below_f0_db": -60.69,
+   "body_under_db": -91.95,
    "body_f0_db": -31.26,
+   "body_lines": {
+    "hz": [
+     226.0,
+     246.5
+    ],
+    "share_removed": 0.0013,
+    "reason": "recurring fixed-frequency lines in the source",
+    "missed": {
+     "lines": [
+      {
+       "hz": 82.1,
+       "share": 0.0006
+      },
+      {
+       "hz": 102.5,
+       "share": 0.0
+      }
+     ],
+     "reason": "recurs on 2 notes; N=3"
+    }
+   },
    "peak_dbfs": -14.51,
    "rms_dbfs": -35.79,
    "held_peak_dbfs": -23.95,
@@ -718,16 +1159,75 @@
    "centroid_hz": 542.1,
    "tnr_mask": {},
    "tnr_db": 55.22,
-   "stereo_width": 0.0
+   "stereo_width": 0.0,
+   "loop": {
+    "verdict": "not",
+    "residual_db": -32.4,
+    "median_db": -32.4,
+    "frames": 6,
+    "reaching_frames": 6,
+    "reach_ms": 1782.9,
+    "borderline": true,
+    "ladder_db": [
+     0.0,
+     -37.6,
+     -72.7,
+     -19.4,
+     -74.1,
+     -88.8,
+     -82.4,
+     -86.3,
+     -100.3,
+     -84.9,
+     -56.4,
+     -74.1,
+     -84.2,
+     -94.1,
+     -112.6,
+     -70.5,
+     -78.5,
+     -121.2,
+     -120.8,
+     -53.4
+    ],
+    "group": 0,
+    "group_notes": [
+     72
+    ]
+   },
+   "window": {
+    "model_s": 6.0,
+    "reference_s": 6.0
+   },
+   "floor_state": {
+    "declared": false,
+    "basis": null,
+    "source": "preroll",
+    "level_db_hz": null,
+    "stationary": {
+     "slope_db_s": -7.57,
+     "corr": 1.0,
+     "tone_slope_db_s": -7.72,
+     "floor_like": false
+    },
+    "clear_partials_tail": 5,
+    "hum_dbfs": null,
+    "censors": {
+     "body": null,
+     "tnr": null
+    },
+    "body_floor_db": null,
+    "body_hum_db": null
+   }
   },
   {
    "timbre": "gm011",
    "note": 76,
    "velocity": 32,
-   "f0_hz": 659.108,
-   "cents_vs_et": -0.39,
-   "inharmonicity_b": 0.0001561,
-   "partials_fit": 5,
+   "f0_hz": 659.162,
+   "cents_vs_et": -0.24,
+   "inharmonicity_b": 0.0,
+   "partials_fit": 0,
    "inharmonicity_reliable": false,
    "partials_hz": [
     659.15,
@@ -735,21 +1235,21 @@
     2004.12,
     2637.0,
     3269.86,
-    3955.57,
+    3902.77,
     4588.36,
     5274.0,
-    5959.63,
+    5854.15,
     6645.23,
     7278.13,
-    7963.73,
-    8761.44,
-    9440.45,
-    10178.83,
-    10600.75,
-    11490.73,
-    12077.47,
-    13026.79,
-    13754.21
+    7805.53,
+    8543.87,
+    9230.77,
+    9967.85,
+    10476.87,
+    11233.63,
+    11919.23,
+    12446.64,
+    13237.73
    ],
    "partials_db": [
     0.0,
@@ -757,25 +1257,59 @@
     -81.21,
     -25.54,
     -89.65,
-    -92.6,
+    -90.58,
     -102.5,
     -105.57,
-    -105.22,
+    -105.19,
     -95.39,
     -104.02,
-    -84.95,
-    -109.43,
-    -118.7,
-    -116.43,
-    -93.85,
-    -90.93,
-    -115.53,
-    -120.17,
-    -123.36
+    -62.99,
+    -108.56,
+    -96.42,
+    -119.65,
+    -72.96,
+    -96.42,
+    -106.54,
+    -79.31,
+    -50.29
    ],
-   "body_below_f0_db": -65.03,
-   "body_under_db": -115.14,
+   "modal_profile": {
+    "modal_hz": [
+     659.15,
+     1318.5,
+     2637.0
+    ],
+    "modal_db": [
+     0.0,
+     -38.17,
+     -25.54
+    ],
+    "modal_ratio": [
+     0.9998,
+     2.0,
+     4.0
+    ]
+   },
+   "body_below_f0_db": -65.05,
+   "body_under_db": -115.16,
    "body_f0_db": -50.11,
+   "body_lines": {
+    "hz": [
+     226.0,
+     246.5
+    ],
+    "share_removed": 0.0054,
+    "reason": "recurring fixed-frequency lines in the source",
+    "missed": {
+     "lines": [
+      {
+       "hz": 316.5,
+       "share": 0.3328
+      }
+     ],
+     "reason": "recurs on 2 notes; N=3"
+    }
+   },
    "peak_dbfs": -41.55,
    "rms_dbfs": -55.2,
    "held_peak_dbfs": -45.79,
@@ -793,7 +1327,7 @@
     -8.57,
     -8.59,
     -8.6,
-    -8.2,
+    -8.58,
     -8.59,
     -8.46
    ],
@@ -803,7 +1337,7 @@
     5.72,
     5.766,
     null,
-    null,
+    5.766,
     null,
     null
    ],
@@ -813,19 +1347,31 @@
     -8.52,
     -8.59,
     null,
-    null,
+    -8.58,
     null,
     null
    ],
    "valley_db": [
+    -148.52,
+    -147.07,
     -156.55,
     -160.74,
-    -164.27,
-    -186.42,
-    -193.31
+    -153.81,
+    -164.22,
+    -163.05,
+    -169.02,
+    -136.47,
+    -178.75,
+    -182.11,
+    -178.14,
+    -175.49,
+    -181.84,
+    -183.14,
+    -171.26,
+    -186.15
    ],
-   "valley_slope_db_oct": -15.353,
-   "valley_ladder_coupling": 0.524,
+   "valley_slope_db_oct": -10.129,
+   "valley_ladder_coupling": 0.262,
    "floor_source": "preroll",
    "floor_db": -102.63,
    "floor_octaves_db": [
@@ -843,17 +1389,115 @@
    "decayed_before_note_off": true,
    "centroid_hz": 666.3,
    "tnr_mask": {},
-   "tnr_db": 60.33,
-   "stereo_width": 0.0
+   "tnr_db": 60.49,
+   "stereo_width": 0.0,
+   "loop": {
+    "verdict": "looped",
+    "residual_db": -37.1,
+    "median_db": -37.1,
+    "frames": 6,
+    "reaching_frames": 6,
+    "reach_ms": 1782.9,
+    "period_ms": 10.619,
+    "join_s": 0.0,
+    "period_pitch_periods": 7.0,
+    "body_lines": {
+     "lines_below_f0": 4,
+     "on_lines": true
+    },
+    "excluded": {
+     "stretch": "reads the loop (loop period 10.619 ms = 7.0 pitch periods, exact repetition from 0.0 s, residual -37.1 dB)",
+     "tnr": "reads the loop (loop period 10.619 ms = 7.0 pitch periods, exact repetition from 0.0 s, residual -37.1 dB); periodising an unlooped note sample-exactly moved tnr -11..-14 dB and body +2..+7 dB at 100-300 ms; open: a seam statistic did not separate loop seams from arbitrary boundaries (naive loops 2.5-69, unlooped notes 1.3-6.5), so no row is granted a snapshot",
+     "body": "sub-f0 power is the loop's own lines at 1/period (loop period 10.619 ms = 7.0 pitch periods, exact repetition from 0.0 s, residual -37.1 dB); periodising an unlooped note sample-exactly moved tnr -11..-14 dB and body +2..+7 dB at 100-300 ms; open: a seam statistic did not separate loop seams from arbitrary boundaries (naive loops 2.5-69, unlooped notes 1.3-6.5), so no row is granted a snapshot",
+     "decay": "time-varying past the join (loop period 10.619 ms = 7.0 pitch periods, exact repetition from 0.0 s, residual -37.1 dB)",
+     "aftersound": "time-varying past the join (loop period 10.619 ms = 7.0 pitch periods, exact repetition from 0.0 s, residual -37.1 dB)",
+     "doubling": "time-varying past the join (loop period 10.619 ms = 7.0 pitch periods, exact repetition from 0.0 s, residual -37.1 dB)",
+     "partial_tilt": "time-varying past the join (loop period 10.619 ms = 7.0 pitch periods, exact repetition from 0.0 s, residual -37.1 dB)",
+     "band_decay": "time-varying past the join (loop period 10.619 ms = 7.0 pitch periods, exact repetition from 0.0 s, residual -37.1 dB)",
+     "ring": "time-varying past the join (loop period 10.619 ms = 7.0 pitch periods, exact repetition from 0.0 s, residual -37.1 dB)",
+     "onset_settle": "time-varying past the join (loop period 10.619 ms = 7.0 pitch periods, exact repetition from 0.0 s, residual -37.1 dB)",
+     "damper": "time-varying past the join (loop period 10.619 ms = 7.0 pitch periods, exact repetition from 0.0 s, residual -37.1 dB)",
+     "attack": "onset is the envelope over the loop (loop period 10.619 ms = 7.0 pitch periods, exact repetition from 0.0 s, residual -37.1 dB)",
+     "arrival": "onset is the envelope over the loop (loop period 10.619 ms = 7.0 pitch periods, exact repetition from 0.0 s, residual -37.1 dB)"
+    },
+    "snapshot": {
+     "balance": {
+      "label": "snapshot of one frozen cycle",
+      "group": 1
+     },
+     "centroid_pct": {
+      "label": "snapshot of one frozen cycle",
+      "group": 1
+     },
+     "register": {
+      "label": "snapshot of one frozen cycle",
+      "group": 1
+     },
+     "crest": {
+      "label": "snapshot of one frozen cycle",
+      "group": 1
+     }
+    },
+    "ladder_db": [
+     0.0,
+     -38.3,
+     -75.0,
+     -24.5,
+     -83.5,
+     -84.5,
+     -93.0,
+     -86.9,
+     -96.0,
+     -93.9,
+     -98.1,
+     -62.9,
+     -101.9,
+     -95.9,
+     -99.1,
+     -72.9,
+     -95.6,
+     -105.7,
+     -79.7,
+     -49.9
+    ],
+    "group": 1,
+    "group_notes": [
+     76
+    ]
+   },
+   "window": {
+    "model_s": 6.0,
+    "reference_s": 6.0
+   },
+   "floor_state": {
+    "declared": false,
+    "basis": null,
+    "source": "preroll",
+    "level_db_hz": null,
+    "stationary": {
+     "slope_db_s": -8.32,
+     "corr": 1.0,
+     "tone_slope_db_s": -8.5,
+     "floor_like": false
+    },
+    "clear_partials_tail": 3,
+    "hum_dbfs": null,
+    "censors": {
+     "body": null,
+     "tnr": null
+    },
+    "body_floor_db": null,
+    "body_hum_db": null
+   }
   },
   {
    "timbre": "gm011",
    "note": 76,
    "velocity": 56,
-   "f0_hz": 659.106,
-   "cents_vs_et": -0.39,
-   "inharmonicity_b": 0.0001561,
-   "partials_fit": 5,
+   "f0_hz": 659.16,
+   "cents_vs_et": -0.25,
+   "inharmonicity_b": 0.0,
+   "partials_fit": 0,
    "inharmonicity_reliable": false,
    "partials_hz": [
     659.15,
@@ -861,21 +1505,21 @@
     2004.12,
     2637.0,
     3269.86,
-    3955.57,
+    3902.77,
     4588.36,
     5274.0,
-    5959.62,
+    5854.15,
     6645.23,
     7278.13,
-    7963.73,
-    8761.44,
-    9440.45,
-    10178.83,
-    10600.75,
-    11490.73,
-    12077.47,
-    13026.79,
-    13754.21
+    7805.53,
+    8543.87,
+    9230.76,
+    9967.85,
+    10476.87,
+    11233.63,
+    11919.23,
+    12446.64,
+    13237.73
    ],
    "partials_db": [
     0.0,
@@ -883,25 +1527,59 @@
     -81.15,
     -25.47,
     -89.6,
-    -92.54,
+    -90.52,
     -102.47,
     -105.51,
-    -105.16,
+    -105.13,
     -95.34,
     -103.96,
-    -84.9,
-    -109.36,
-    -118.65,
-    -116.37,
-    -93.79,
-    -90.87,
-    -115.47,
-    -120.1,
-    -123.31
+    -62.93,
+    -108.51,
+    -96.35,
+    -119.6,
+    -72.9,
+    -96.37,
+    -106.48,
+    -79.24,
+    -50.24
    ],
-   "body_below_f0_db": -65.03,
-   "body_under_db": -109.0,
+   "modal_profile": {
+    "modal_hz": [
+     659.15,
+     1318.5,
+     2637.0
+    ],
+    "modal_db": [
+     0.0,
+     -38.16,
+     -25.47
+    ],
+    "modal_ratio": [
+     0.9998,
+     2.0,
+     4.0
+    ]
+   },
+   "body_below_f0_db": -65.06,
+   "body_under_db": -109.02,
    "body_f0_db": -43.96,
+   "body_lines": {
+    "hz": [
+     226.0,
+     246.5
+    ],
+    "share_removed": 0.0055,
+    "reason": "recurring fixed-frequency lines in the source",
+    "missed": {
+     "lines": [
+      {
+       "hz": 316.5,
+       "share": 0.3335
+      }
+     ],
+     "reason": "recurs on 2 notes; N=3"
+    }
+   },
    "peak_dbfs": -34.34,
    "rms_dbfs": -48.97,
    "held_peak_dbfs": -39.27,
@@ -919,7 +1597,7 @@
     -8.57,
     -8.54,
     -8.56,
-    -8.25,
+    -8.54,
     -8.5,
     -8.47
    ],
@@ -929,7 +1607,7 @@
     5.72,
     5.766,
     null,
-    null,
+    5.766,
     null,
     null
    ],
@@ -939,19 +1617,31 @@
     -8.57,
     -8.54,
     null,
-    null,
+    -8.54,
     null,
     null
    ],
    "valley_db": [
+    -142.37,
+    -140.92,
     -150.39,
     -154.57,
-    -158.1,
-    -180.26,
-    -187.14
+    -147.65,
+    -158.06,
+    -156.88,
+    -162.85,
+    -130.31,
+    -172.58,
+    -175.95,
+    -171.98,
+    -169.32,
+    -175.67,
+    -176.98,
+    -165.15,
+    -179.99
    ],
-   "valley_slope_db_oct": -15.353,
-   "valley_ladder_coupling": 0.524,
+   "valley_slope_db_oct": -10.13,
+   "valley_ladder_coupling": 0.262,
    "floor_source": "preroll",
    "floor_db": -104.69,
    "floor_octaves_db": [
@@ -969,17 +1659,115 @@
    "decayed_before_note_off": true,
    "centroid_hz": 666.3,
    "tnr_mask": {},
-   "tnr_db": 60.31,
-   "stereo_width": 0.0
+   "tnr_db": 60.47,
+   "stereo_width": 0.0,
+   "loop": {
+    "verdict": "looped",
+    "residual_db": -37.1,
+    "median_db": -37.1,
+    "frames": 6,
+    "reaching_frames": 6,
+    "reach_ms": 1782.9,
+    "period_ms": 10.619,
+    "join_s": 0.0,
+    "period_pitch_periods": 7.0,
+    "body_lines": {
+     "lines_below_f0": 4,
+     "on_lines": true
+    },
+    "excluded": {
+     "stretch": "reads the loop (loop period 10.619 ms = 7.0 pitch periods, exact repetition from 0.0 s, residual -37.1 dB)",
+     "tnr": "reads the loop (loop period 10.619 ms = 7.0 pitch periods, exact repetition from 0.0 s, residual -37.1 dB); periodising an unlooped note sample-exactly moved tnr -11..-14 dB and body +2..+7 dB at 100-300 ms; open: a seam statistic did not separate loop seams from arbitrary boundaries (naive loops 2.5-69, unlooped notes 1.3-6.5), so no row is granted a snapshot",
+     "body": "sub-f0 power is the loop's own lines at 1/period (loop period 10.619 ms = 7.0 pitch periods, exact repetition from 0.0 s, residual -37.1 dB); periodising an unlooped note sample-exactly moved tnr -11..-14 dB and body +2..+7 dB at 100-300 ms; open: a seam statistic did not separate loop seams from arbitrary boundaries (naive loops 2.5-69, unlooped notes 1.3-6.5), so no row is granted a snapshot",
+     "decay": "time-varying past the join (loop period 10.619 ms = 7.0 pitch periods, exact repetition from 0.0 s, residual -37.1 dB)",
+     "aftersound": "time-varying past the join (loop period 10.619 ms = 7.0 pitch periods, exact repetition from 0.0 s, residual -37.1 dB)",
+     "doubling": "time-varying past the join (loop period 10.619 ms = 7.0 pitch periods, exact repetition from 0.0 s, residual -37.1 dB)",
+     "partial_tilt": "time-varying past the join (loop period 10.619 ms = 7.0 pitch periods, exact repetition from 0.0 s, residual -37.1 dB)",
+     "band_decay": "time-varying past the join (loop period 10.619 ms = 7.0 pitch periods, exact repetition from 0.0 s, residual -37.1 dB)",
+     "ring": "time-varying past the join (loop period 10.619 ms = 7.0 pitch periods, exact repetition from 0.0 s, residual -37.1 dB)",
+     "onset_settle": "time-varying past the join (loop period 10.619 ms = 7.0 pitch periods, exact repetition from 0.0 s, residual -37.1 dB)",
+     "damper": "time-varying past the join (loop period 10.619 ms = 7.0 pitch periods, exact repetition from 0.0 s, residual -37.1 dB)",
+     "attack": "onset is the envelope over the loop (loop period 10.619 ms = 7.0 pitch periods, exact repetition from 0.0 s, residual -37.1 dB)",
+     "arrival": "onset is the envelope over the loop (loop period 10.619 ms = 7.0 pitch periods, exact repetition from 0.0 s, residual -37.1 dB)"
+    },
+    "snapshot": {
+     "balance": {
+      "label": "snapshot of one frozen cycle",
+      "group": 1
+     },
+     "centroid_pct": {
+      "label": "snapshot of one frozen cycle",
+      "group": 1
+     },
+     "register": {
+      "label": "snapshot of one frozen cycle",
+      "group": 1
+     },
+     "crest": {
+      "label": "snapshot of one frozen cycle",
+      "group": 1
+     }
+    },
+    "ladder_db": [
+     0.0,
+     -38.3,
+     -75.0,
+     -24.5,
+     -83.5,
+     -84.5,
+     -93.0,
+     -86.9,
+     -96.0,
+     -93.9,
+     -98.1,
+     -62.9,
+     -101.9,
+     -95.9,
+     -99.1,
+     -72.9,
+     -95.6,
+     -105.7,
+     -79.7,
+     -49.9
+    ],
+    "group": 1,
+    "group_notes": [
+     76
+    ]
+   },
+   "window": {
+    "model_s": 6.0,
+    "reference_s": 6.0
+   },
+   "floor_state": {
+    "declared": false,
+    "basis": null,
+    "source": "preroll",
+    "level_db_hz": null,
+    "stationary": {
+     "slope_db_s": -8.33,
+     "corr": 1.0,
+     "tone_slope_db_s": -8.51,
+     "floor_like": false
+    },
+    "clear_partials_tail": 3,
+    "hum_dbfs": null,
+    "censors": {
+     "body": null,
+     "tnr": null
+    },
+    "body_floor_db": null,
+    "body_hum_db": null
+   }
   },
   {
    "timbre": "gm011",
    "note": 76,
    "velocity": 80,
-   "f0_hz": 659.102,
-   "cents_vs_et": -0.4,
-   "inharmonicity_b": 0.0001562,
-   "partials_fit": 5,
+   "f0_hz": 659.157,
+   "cents_vs_et": -0.26,
+   "inharmonicity_b": 0.0,
+   "partials_fit": 0,
    "inharmonicity_reliable": false,
    "partials_hz": [
     659.15,
@@ -987,21 +1775,21 @@
     2004.11,
     2636.99,
     3269.86,
-    3955.57,
+    3902.77,
     4588.36,
     5274.0,
-    5959.62,
+    5854.15,
     6645.23,
     7278.13,
-    7963.73,
-    8761.44,
-    9440.45,
-    10178.83,
-    10600.74,
-    11490.73,
-    12077.47,
-    13026.79,
-    13754.21
+    7805.53,
+    8543.87,
+    9230.76,
+    9967.85,
+    10476.87,
+    11233.63,
+    11919.23,
+    12446.64,
+    13237.73
    ],
    "partials_db": [
     0.0,
@@ -1009,25 +1797,59 @@
     -81.06,
     -25.36,
     -89.52,
-    -92.42,
+    -90.4,
     -102.41,
     -105.4,
-    -105.06,
+    -105.01,
     -95.23,
     -103.84,
-    -84.83,
-    -109.25,
-    -118.56,
-    -116.26,
-    -93.67,
-    -90.75,
-    -115.36,
-    -120.0,
-    -123.2
+    -62.82,
+    -108.4,
+    -96.23,
+    -119.49,
+    -72.79,
+    -96.28,
+    -106.37,
+    -79.13,
+    -50.16
    ],
-   "body_below_f0_db": -65.04,
-   "body_under_db": -103.97,
+   "modal_profile": {
+    "modal_hz": [
+     659.15,
+     1318.5,
+     2636.99
+    ],
+    "modal_db": [
+     0.0,
+     -38.14,
+     -25.36
+    ],
+    "modal_ratio": [
+     0.9998,
+     2.0,
+     4.0
+    ]
+   },
+   "body_below_f0_db": -65.07,
+   "body_under_db": -104.0,
    "body_f0_db": -38.93,
+   "body_lines": {
+    "hz": [
+     226.0,
+     246.5
+    ],
+    "share_removed": 0.0055,
+    "reason": "recurring fixed-frequency lines in the source",
+    "missed": {
+     "lines": [
+      {
+       "hz": 316.5,
+       "share": 0.3333
+      }
+     ],
+     "reason": "recurs on 2 notes; N=3"
+    }
+   },
    "peak_dbfs": -27.32,
    "rms_dbfs": -43.84,
    "held_peak_dbfs": -33.77,
@@ -1045,7 +1867,7 @@
     -8.5,
     -8.44,
     -8.36,
-    -8.11,
+    -8.45,
     -8.41,
     -8.22
    ],
@@ -1055,7 +1877,7 @@
     5.72,
     5.766,
     null,
-    null,
+    5.766,
     null,
     null
    ],
@@ -1065,10 +1887,31 @@
     -8.5,
     -8.44,
     null,
-    null,
+    -8.45,
     null,
     null
    ],
+   "valley_db": [
+    -137.33,
+    -135.87,
+    -145.33,
+    -149.51,
+    -142.59,
+    -152.99,
+    -151.82,
+    -157.79,
+    -125.24,
+    -167.52,
+    -170.88,
+    -166.91,
+    -164.26,
+    -170.61,
+    -171.91,
+    -160.2,
+    -174.93
+   ],
+   "valley_slope_db_oct": -10.13,
+   "valley_ladder_coupling": 0.262,
    "floor_source": "preroll",
    "floor_db": -106.61,
    "floor_octaves_db": [
@@ -1086,17 +1929,113 @@
    "decayed_before_note_off": true,
    "centroid_hz": 666.4,
    "tnr_mask": {},
-   "tnr_db": 60.28,
-   "stereo_width": -0.0
+   "tnr_db": 60.45,
+   "stereo_width": -0.0,
+   "loop": {
+    "verdict": "looped",
+    "residual_db": -37.1,
+    "median_db": -37.1,
+    "frames": 6,
+    "reaching_frames": 6,
+    "reach_ms": 1782.9,
+    "period_ms": 10.619,
+    "join_s": 0.014,
+    "period_pitch_periods": 7.0,
+    "body_lines": {
+     "lines_below_f0": 4,
+     "on_lines": true
+    },
+    "excluded": {
+     "stretch": "reads the loop (loop period 10.619 ms = 7.0 pitch periods, exact repetition from 0.014 s, residual -37.1 dB)",
+     "tnr": "reads the loop (loop period 10.619 ms = 7.0 pitch periods, exact repetition from 0.014 s, residual -37.1 dB); periodising an unlooped note sample-exactly moved tnr -11..-14 dB and body +2..+7 dB at 100-300 ms; open: a seam statistic did not separate loop seams from arbitrary boundaries (naive loops 2.5-69, unlooped notes 1.3-6.5), so no row is granted a snapshot",
+     "body": "sub-f0 power is the loop's own lines at 1/period (loop period 10.619 ms = 7.0 pitch periods, exact repetition from 0.014 s, residual -37.1 dB); periodising an unlooped note sample-exactly moved tnr -11..-14 dB and body +2..+7 dB at 100-300 ms; open: a seam statistic did not separate loop seams from arbitrary boundaries (naive loops 2.5-69, unlooped notes 1.3-6.5), so no row is granted a snapshot",
+     "decay": "time-varying past the join (loop period 10.619 ms = 7.0 pitch periods, exact repetition from 0.014 s, residual -37.1 dB)",
+     "aftersound": "time-varying past the join (loop period 10.619 ms = 7.0 pitch periods, exact repetition from 0.014 s, residual -37.1 dB)",
+     "doubling": "time-varying past the join (loop period 10.619 ms = 7.0 pitch periods, exact repetition from 0.014 s, residual -37.1 dB)",
+     "partial_tilt": "time-varying past the join (loop period 10.619 ms = 7.0 pitch periods, exact repetition from 0.014 s, residual -37.1 dB)",
+     "band_decay": "time-varying past the join (loop period 10.619 ms = 7.0 pitch periods, exact repetition from 0.014 s, residual -37.1 dB)",
+     "ring": "time-varying past the join (loop period 10.619 ms = 7.0 pitch periods, exact repetition from 0.014 s, residual -37.1 dB)",
+     "onset_settle": "time-varying past the join (loop period 10.619 ms = 7.0 pitch periods, exact repetition from 0.014 s, residual -37.1 dB)",
+     "damper": "time-varying past the join (loop period 10.619 ms = 7.0 pitch periods, exact repetition from 0.014 s, residual -37.1 dB)"
+    },
+    "snapshot": {
+     "balance": {
+      "label": "snapshot of one frozen cycle",
+      "group": 1
+     },
+     "centroid_pct": {
+      "label": "snapshot of one frozen cycle",
+      "group": 1
+     },
+     "register": {
+      "label": "snapshot of one frozen cycle",
+      "group": 1
+     },
+     "crest": {
+      "label": "snapshot of one frozen cycle",
+      "group": 1
+     }
+    },
+    "ladder_db": [
+     0.0,
+     -38.3,
+     -75.0,
+     -24.5,
+     -83.5,
+     -84.5,
+     -93.0,
+     -86.9,
+     -96.0,
+     -93.9,
+     -98.1,
+     -62.9,
+     -101.9,
+     -95.9,
+     -99.1,
+     -72.9,
+     -95.6,
+     -105.7,
+     -79.7,
+     -49.9
+    ],
+    "group": 1,
+    "group_notes": [
+     76
+    ]
+   },
+   "window": {
+    "model_s": 6.0,
+    "reference_s": 6.0
+   },
+   "floor_state": {
+    "declared": false,
+    "basis": null,
+    "source": "preroll",
+    "level_db_hz": null,
+    "stationary": {
+     "slope_db_s": -8.33,
+     "corr": 1.0,
+     "tone_slope_db_s": -8.51,
+     "floor_like": false
+    },
+    "clear_partials_tail": 3,
+    "hum_dbfs": null,
+    "censors": {
+     "body": null,
+     "tnr": null
+    },
+    "body_floor_db": null,
+    "body_hum_db": null
+   }
   },
   {
    "timbre": "gm011",
    "note": 76,
    "velocity": 104,
-   "f0_hz": 659.098,
-   "cents_vs_et": -0.41,
-   "inharmonicity_b": 0.0001562,
-   "partials_fit": 5,
+   "f0_hz": 659.153,
+   "cents_vs_et": -0.27,
+   "inharmonicity_b": 0.0,
+   "partials_fit": 0,
    "inharmonicity_reliable": false,
    "partials_hz": [
     659.14,
@@ -1104,21 +2043,21 @@
     2004.11,
     2636.98,
     3269.85,
-    3955.56,
+    3902.76,
     4588.36,
     5273.99,
-    5959.62,
+    5854.14,
     6645.23,
     7278.12,
-    7963.73,
-    8761.44,
-    9440.44,
-    10178.83,
-    10600.74,
-    11490.73,
-    12077.47,
-    13026.79,
-    13754.21
+    7805.53,
+    8543.87,
+    9230.76,
+    9967.85,
+    10476.87,
+    11233.62,
+    11919.23,
+    12446.64,
+    13237.73
    ],
    "partials_db": [
     0.0,
@@ -1126,25 +2065,59 @@
     -80.93,
     -25.18,
     -89.42,
-    -92.24,
+    -90.23,
     -102.35,
     -105.23,
-    -104.88,
+    -104.82,
     -95.07,
     -103.66,
-    -84.72,
-    -109.07,
-    -118.42,
-    -116.08,
-    -93.49,
-    -90.56,
-    -115.18,
-    -119.8,
-    -123.04
+    -62.63,
+    -108.24,
+    -96.04,
+    -119.33,
+    -72.62,
+    -96.13,
+    -106.2,
+    -78.95,
+    -50.03
    ],
-   "body_below_f0_db": -65.05,
-   "body_under_db": -99.93,
+   "modal_profile": {
+    "modal_hz": [
+     659.14,
+     1318.49,
+     2636.98
+    ],
+    "modal_db": [
+     0.0,
+     -38.13,
+     -25.18
+    ],
+    "modal_ratio": [
+     0.9998,
+     2.0,
+     3.9999
+    ]
+   },
+   "body_below_f0_db": -65.08,
+   "body_under_db": -99.95,
    "body_f0_db": -34.87,
+   "body_lines": {
+    "hz": [
+     226.0,
+     246.5
+    ],
+    "share_removed": 0.0055,
+    "reason": "recurring fixed-frequency lines in the source",
+    "missed": {
+     "lines": [
+      {
+       "hz": 316.5,
+       "share": 0.3334
+      }
+     ],
+     "reason": "recurs on 2 notes; N=3"
+    }
+   },
    "peak_dbfs": -17.66,
    "rms_dbfs": -39.57,
    "held_peak_dbfs": -26.83,
@@ -1162,7 +2135,7 @@
     -8.45,
     -8.35,
     -8.28,
-    -7.97,
+    -8.3,
     -8.24,
     -8.04
    ],
@@ -1172,7 +2145,7 @@
     5.72,
     5.766,
     null,
-    null,
+    5.766,
     null,
     null
    ],
@@ -1182,10 +2155,31 @@
     -8.45,
     -8.35,
     null,
-    null,
+    -8.3,
     null,
     null
    ],
+   "valley_db": [
+    -133.26,
+    -131.79,
+    -141.23,
+    -145.4,
+    -138.47,
+    -148.88,
+    -147.71,
+    -153.67,
+    -121.13,
+    -163.4,
+    -166.76,
+    -162.8,
+    -160.14,
+    -166.49,
+    -167.79,
+    -156.28,
+    -170.81
+   ],
+   "valley_slope_db_oct": -10.131,
+   "valley_ladder_coupling": 0.262,
    "floor_source": "preroll",
    "floor_db": -107.29,
    "floor_octaves_db": [
@@ -1203,17 +2197,113 @@
    "decayed_before_note_off": true,
    "centroid_hz": 666.5,
    "tnr_mask": {},
-   "tnr_db": 60.24,
-   "stereo_width": -0.0
+   "tnr_db": 60.41,
+   "stereo_width": -0.0,
+   "loop": {
+    "verdict": "looped",
+    "residual_db": -37.1,
+    "median_db": -37.1,
+    "frames": 6,
+    "reaching_frames": 6,
+    "reach_ms": 1782.9,
+    "period_ms": 10.619,
+    "join_s": 0.058,
+    "period_pitch_periods": 7.0,
+    "body_lines": {
+     "lines_below_f0": 4,
+     "on_lines": true
+    },
+    "excluded": {
+     "stretch": "reads the loop (loop period 10.619 ms = 7.0 pitch periods, exact repetition from 0.058 s, residual -37.1 dB)",
+     "tnr": "reads the loop (loop period 10.619 ms = 7.0 pitch periods, exact repetition from 0.058 s, residual -37.1 dB); periodising an unlooped note sample-exactly moved tnr -11..-14 dB and body +2..+7 dB at 100-300 ms; open: a seam statistic did not separate loop seams from arbitrary boundaries (naive loops 2.5-69, unlooped notes 1.3-6.5), so no row is granted a snapshot",
+     "body": "sub-f0 power is the loop's own lines at 1/period (loop period 10.619 ms = 7.0 pitch periods, exact repetition from 0.058 s, residual -37.1 dB); periodising an unlooped note sample-exactly moved tnr -11..-14 dB and body +2..+7 dB at 100-300 ms; open: a seam statistic did not separate loop seams from arbitrary boundaries (naive loops 2.5-69, unlooped notes 1.3-6.5), so no row is granted a snapshot",
+     "decay": "time-varying past the join (loop period 10.619 ms = 7.0 pitch periods, exact repetition from 0.058 s, residual -37.1 dB)",
+     "aftersound": "time-varying past the join (loop period 10.619 ms = 7.0 pitch periods, exact repetition from 0.058 s, residual -37.1 dB)",
+     "doubling": "time-varying past the join (loop period 10.619 ms = 7.0 pitch periods, exact repetition from 0.058 s, residual -37.1 dB)",
+     "partial_tilt": "time-varying past the join (loop period 10.619 ms = 7.0 pitch periods, exact repetition from 0.058 s, residual -37.1 dB)",
+     "band_decay": "time-varying past the join (loop period 10.619 ms = 7.0 pitch periods, exact repetition from 0.058 s, residual -37.1 dB)",
+     "ring": "time-varying past the join (loop period 10.619 ms = 7.0 pitch periods, exact repetition from 0.058 s, residual -37.1 dB)",
+     "onset_settle": "time-varying past the join (loop period 10.619 ms = 7.0 pitch periods, exact repetition from 0.058 s, residual -37.1 dB)",
+     "damper": "time-varying past the join (loop period 10.619 ms = 7.0 pitch periods, exact repetition from 0.058 s, residual -37.1 dB)"
+    },
+    "snapshot": {
+     "balance": {
+      "label": "snapshot of one frozen cycle",
+      "group": 1
+     },
+     "centroid_pct": {
+      "label": "snapshot of one frozen cycle",
+      "group": 1
+     },
+     "register": {
+      "label": "snapshot of one frozen cycle",
+      "group": 1
+     },
+     "crest": {
+      "label": "snapshot of one frozen cycle",
+      "group": 1
+     }
+    },
+    "ladder_db": [
+     0.0,
+     -38.3,
+     -75.0,
+     -24.5,
+     -83.5,
+     -84.5,
+     -93.0,
+     -86.9,
+     -96.0,
+     -93.9,
+     -98.1,
+     -62.9,
+     -101.9,
+     -95.9,
+     -99.1,
+     -72.9,
+     -95.6,
+     -105.7,
+     -79.7,
+     -49.9
+    ],
+    "group": 1,
+    "group_notes": [
+     76
+    ]
+   },
+   "window": {
+    "model_s": 6.0,
+    "reference_s": 6.0
+   },
+   "floor_state": {
+    "declared": false,
+    "basis": null,
+    "source": "preroll",
+    "level_db_hz": null,
+    "stationary": {
+     "slope_db_s": -8.32,
+     "corr": 1.0,
+     "tone_slope_db_s": -8.52,
+     "floor_like": false
+    },
+    "clear_partials_tail": 3,
+    "hum_dbfs": null,
+    "censors": {
+     "body": null,
+     "tnr": null
+    },
+    "body_floor_db": null,
+    "body_hum_db": null
+   }
   },
   {
    "timbre": "gm011",
    "note": 76,
    "velocity": 127,
-   "f0_hz": 659.094,
-   "cents_vs_et": -0.42,
-   "inharmonicity_b": 0.0001562,
-   "partials_fit": 5,
+   "f0_hz": 659.148,
+   "cents_vs_et": -0.28,
+   "inharmonicity_b": 0.0,
+   "partials_fit": 0,
    "inharmonicity_reliable": false,
    "partials_hz": [
     659.14,
@@ -1221,21 +2311,21 @@
     2004.09,
     2636.97,
     3269.84,
-    3955.55,
+    3902.75,
     4588.34,
     5273.98,
-    5959.61,
+    5854.14,
     6645.22,
     7278.12,
-    7963.72,
-    8761.44,
-    9440.44,
-    10178.82,
-    10600.74,
-    11490.72,
-    12077.47,
-    13026.79,
-    13754.21
+    7805.52,
+    8543.86,
+    9230.76,
+    9967.84,
+    10476.87,
+    11233.62,
+    11919.22,
+    12446.63,
+    13237.72
    ],
    "partials_db": [
     0.0,
@@ -1243,25 +2333,59 @@
     -80.8,
     -24.93,
     -89.32,
-    -91.97,
+    -89.99,
     -102.32,
     -104.99,
-    -104.6,
+    -104.54,
     -94.86,
     -103.36,
-    -84.59,
-    -108.78,
-    -118.23,
-    -115.78,
-    -93.19,
-    -90.27,
-    -114.88,
-    -119.51,
-    -122.77
+    -62.34,
+    -108.01,
+    -95.73,
+    -119.1,
+    -72.33,
+    -95.87,
+    -105.93,
+    -78.66,
+    -49.85
    ],
-   "body_below_f0_db": -65.05,
-   "body_under_db": -96.7,
+   "modal_profile": {
+    "modal_hz": [
+     659.14,
+     1318.48,
+     2636.97
+    ],
+    "modal_db": [
+     0.0,
+     -38.13,
+     -24.93
+    ],
+    "modal_ratio": [
+     0.9998,
+     2.0,
+     3.9999
+    ]
+   },
+   "body_below_f0_db": -65.08,
+   "body_under_db": -96.72,
    "body_f0_db": -31.65,
+   "body_lines": {
+    "hz": [
+     226.0,
+     246.5
+    ],
+    "share_removed": 0.0055,
+    "reason": "recurring fixed-frequency lines in the source",
+    "missed": {
+     "lines": [
+      {
+       "hz": 316.5,
+       "share": 0.3336
+      }
+     ],
+     "reason": "recurs on 2 notes; N=3"
+    }
+   },
    "peak_dbfs": -13.83,
    "rms_dbfs": -36.08,
    "held_peak_dbfs": -22.59,
@@ -1279,7 +2403,7 @@
     -8.45,
     -8.32,
     -8.28,
-    -7.9,
+    -8.24,
     -8.2,
     -8.05
    ],
@@ -1289,7 +2413,7 @@
     5.72,
     5.766,
     null,
-    null,
+    5.766,
     null,
     null
    ],
@@ -1299,19 +2423,31 @@
     -8.45,
     -8.32,
     null,
-    null,
+    -8.24,
     null,
     null
    ],
    "valley_db": [
+    -130.03,
+    -128.53,
     -137.94,
     -142.1,
-    -145.6,
-    -167.83,
-    -174.65
+    -135.16,
+    -145.56,
+    -144.38,
+    -150.35,
+    -117.79,
+    -160.07,
+    -163.43,
+    -159.46,
+    -156.81,
+    -163.16,
+    -164.46,
+    -153.31,
+    -167.48
    ],
-   "valley_slope_db_oct": -15.352,
-   "valley_ladder_coupling": 0.524,
+   "valley_slope_db_oct": -10.127,
+   "valley_ladder_coupling": 0.262,
    "floor_source": "preroll",
    "floor_db": -109.41,
    "floor_octaves_db": [
@@ -1330,7 +2466,103 @@
    "centroid_hz": 666.6,
    "tnr_mask": {},
    "tnr_db": 60.17,
-   "stereo_width": 0.0
+   "stereo_width": 0.0,
+   "loop": {
+    "verdict": "looped",
+    "residual_db": -37.1,
+    "median_db": -37.1,
+    "frames": 6,
+    "reaching_frames": 6,
+    "reach_ms": 1782.9,
+    "period_ms": 10.619,
+    "join_s": 0.106,
+    "period_pitch_periods": 7.0,
+    "body_lines": {
+     "lines_below_f0": 4,
+     "on_lines": true
+    },
+    "excluded": {
+     "stretch": "reads the loop (loop period 10.619 ms = 7.0 pitch periods, exact repetition from 0.106 s, residual -37.1 dB)",
+     "tnr": "reads the loop (loop period 10.619 ms = 7.0 pitch periods, exact repetition from 0.106 s, residual -37.1 dB); periodising an unlooped note sample-exactly moved tnr -11..-14 dB and body +2..+7 dB at 100-300 ms; open: a seam statistic did not separate loop seams from arbitrary boundaries (naive loops 2.5-69, unlooped notes 1.3-6.5), so no row is granted a snapshot",
+     "body": "sub-f0 power is the loop's own lines at 1/period (loop period 10.619 ms = 7.0 pitch periods, exact repetition from 0.106 s, residual -37.1 dB); periodising an unlooped note sample-exactly moved tnr -11..-14 dB and body +2..+7 dB at 100-300 ms; open: a seam statistic did not separate loop seams from arbitrary boundaries (naive loops 2.5-69, unlooped notes 1.3-6.5), so no row is granted a snapshot",
+     "decay": "time-varying past the join (loop period 10.619 ms = 7.0 pitch periods, exact repetition from 0.106 s, residual -37.1 dB)",
+     "aftersound": "time-varying past the join (loop period 10.619 ms = 7.0 pitch periods, exact repetition from 0.106 s, residual -37.1 dB)",
+     "doubling": "time-varying past the join (loop period 10.619 ms = 7.0 pitch periods, exact repetition from 0.106 s, residual -37.1 dB)",
+     "partial_tilt": "time-varying past the join (loop period 10.619 ms = 7.0 pitch periods, exact repetition from 0.106 s, residual -37.1 dB)",
+     "band_decay": "time-varying past the join (loop period 10.619 ms = 7.0 pitch periods, exact repetition from 0.106 s, residual -37.1 dB)",
+     "ring": "time-varying past the join (loop period 10.619 ms = 7.0 pitch periods, exact repetition from 0.106 s, residual -37.1 dB)",
+     "onset_settle": "time-varying past the join (loop period 10.619 ms = 7.0 pitch periods, exact repetition from 0.106 s, residual -37.1 dB)",
+     "damper": "time-varying past the join (loop period 10.619 ms = 7.0 pitch periods, exact repetition from 0.106 s, residual -37.1 dB)"
+    },
+    "snapshot": {
+     "balance": {
+      "label": "snapshot of one frozen cycle",
+      "group": 1
+     },
+     "centroid_pct": {
+      "label": "snapshot of one frozen cycle",
+      "group": 1
+     },
+     "register": {
+      "label": "snapshot of one frozen cycle",
+      "group": 1
+     },
+     "crest": {
+      "label": "snapshot of one frozen cycle",
+      "group": 1
+     }
+    },
+    "ladder_db": [
+     0.0,
+     -38.3,
+     -75.0,
+     -24.5,
+     -83.5,
+     -84.5,
+     -93.0,
+     -86.9,
+     -96.0,
+     -93.9,
+     -98.1,
+     -62.9,
+     -101.9,
+     -95.9,
+     -99.1,
+     -72.9,
+     -95.6,
+     -105.7,
+     -79.7,
+     -49.9
+    ],
+    "group": 1,
+    "group_notes": [
+     76
+    ]
+   },
+   "window": {
+    "model_s": 6.0,
+    "reference_s": 6.0
+   },
+   "floor_state": {
+    "declared": false,
+    "basis": null,
+    "source": "preroll",
+    "level_db_hz": null,
+    "stationary": {
+     "slope_db_s": -8.33,
+     "corr": 1.0,
+     "tone_slope_db_s": -8.52,
+     "floor_like": false
+    },
+    "clear_partials_tail": 3,
+    "hum_dbfs": null,
+    "censors": {
+     "body": null,
+     "tnr": null
+    },
+    "body_floor_db": null,
+    "body_hum_db": null
+   }
   },
   {
    "timbre": "gm011",
@@ -1339,7 +2571,7 @@
    "f0_hz": 830.494,
    "cents_vs_et": -0.24,
    "inharmonicity_b": 0.0,
-   "partials_fit": 4,
+   "partials_fit": 0,
    "inharmonicity_reliable": false,
    "partials_hz": [
     830.48,
@@ -1385,9 +2617,66 @@
     -88.91,
     -76.61
    ],
-   "body_below_f0_db": -69.14,
-   "body_under_db": -119.68,
+   "modal_profile": {
+    "modal_hz": [
+     830.48,
+     1661.22,
+     3322.54,
+     8790.04
+    ],
+    "modal_db": [
+     0.0,
+     -38.64,
+     -20.0,
+     -47.85
+    ],
+    "modal_ratio": [
+     0.9998,
+     2.0,
+     4.0001,
+     10.5826
+    ]
+   },
+   "body_below_f0_db": -69.15,
+   "body_under_db": -119.69,
    "body_f0_db": -50.54,
+   "body_lines": {
+    "hz": [
+     226.0,
+     246.5
+    ],
+    "share_removed": 0.0025,
+    "reason": "recurring fixed-frequency lines in the source",
+    "missed": {
+     "lines": [
+      {
+       "hz": 102.5,
+       "share": 0.0002
+      },
+      {
+       "hz": 138.5,
+       "share": 0.0002
+      },
+      {
+       "hz": 174.5,
+       "share": 0.0005
+      },
+      {
+       "hz": 336.4,
+       "share": 0.0556
+      },
+      {
+       "hz": 498.4,
+       "share": 0.0014
+      },
+      {
+       "hz": 570.4,
+       "share": 0.0007
+      }
+     ],
+     "reason": "recurs on 2 notes; N=3"
+    }
+   },
    "peak_dbfs": -41.36,
    "rms_dbfs": -55.59,
    "held_peak_dbfs": -45.77,
@@ -1465,7 +2754,66 @@
    "centroid_hz": 854.1,
    "tnr_mask": {},
    "tnr_db": 47.81,
-   "stereo_width": 0.0
+   "stereo_width": 0.0,
+   "loop": {
+    "verdict": "not",
+    "residual_db": -29.8,
+    "median_db": -29.1,
+    "frames": 6,
+    "reaching_frames": 6,
+    "reach_ms": 1670.9,
+    "borderline": false,
+    "ladder_db": [
+     0.0,
+     -38.9,
+     -73.4,
+     -20.2,
+     -87.8,
+     -90.0,
+     -100.5,
+     -88.8,
+     -92.0,
+     -105.8,
+     -100.3,
+     -95.8,
+     -95.4,
+     -108.9,
+     -100.5,
+     -73.6,
+     -60.5,
+     -103.5,
+     -88.5,
+     -77.0
+    ],
+    "group": 2,
+    "group_notes": [
+     80
+    ]
+   },
+   "window": {
+    "model_s": 6.0,
+    "reference_s": 6.0
+   },
+   "floor_state": {
+    "declared": false,
+    "basis": null,
+    "source": "preroll",
+    "level_db_hz": null,
+    "stationary": {
+     "slope_db_s": -8.43,
+     "corr": 1.0,
+     "tone_slope_db_s": -9.45,
+     "floor_like": false
+    },
+    "clear_partials_tail": 4,
+    "hum_dbfs": null,
+    "censors": {
+     "body": null,
+     "tnr": null
+    },
+    "body_floor_db": null,
+    "body_hum_db": null
+   }
   },
   {
    "timbre": "gm011",
@@ -1474,7 +2822,7 @@
    "f0_hz": 830.492,
    "cents_vs_et": -0.24,
    "inharmonicity_b": 0.0,
-   "partials_fit": 4,
+   "partials_fit": 0,
    "inharmonicity_reliable": false,
    "partials_hz": [
     830.48,
@@ -1520,9 +2868,66 @@
     -88.87,
     -76.55
    ],
-   "body_below_f0_db": -69.14,
-   "body_under_db": -113.53,
+   "modal_profile": {
+    "modal_hz": [
+     830.48,
+     1661.21,
+     3322.54,
+     8790.04
+    ],
+    "modal_db": [
+     0.0,
+     -38.62,
+     -19.96,
+     -47.8
+    ],
+    "modal_ratio": [
+     0.9998,
+     2.0,
+     4.0001,
+     10.5826
+    ]
+   },
+   "body_below_f0_db": -69.15,
+   "body_under_db": -113.54,
    "body_f0_db": -44.39,
+   "body_lines": {
+    "hz": [
+     226.0,
+     246.5
+    ],
+    "share_removed": 0.0025,
+    "reason": "recurring fixed-frequency lines in the source",
+    "missed": {
+     "lines": [
+      {
+       "hz": 102.5,
+       "share": 0.0001
+      },
+      {
+       "hz": 138.5,
+       "share": 0.0002
+      },
+      {
+       "hz": 174.5,
+       "share": 0.0005
+      },
+      {
+       "hz": 336.4,
+       "share": 0.0552
+      },
+      {
+       "hz": 498.4,
+       "share": 0.0014
+      },
+      {
+       "hz": 570.4,
+       "share": 0.0007
+      }
+     ],
+     "reason": "recurs on 2 notes; N=3"
+    }
+   },
    "peak_dbfs": -33.52,
    "rms_dbfs": -49.31,
    "held_peak_dbfs": -39.07,
@@ -1600,7 +3005,66 @@
    "centroid_hz": 854.2,
    "tnr_mask": {},
    "tnr_db": 47.79,
-   "stereo_width": 0.0
+   "stereo_width": 0.0,
+   "loop": {
+    "verdict": "not",
+    "residual_db": -32.9,
+    "median_db": -29.1,
+    "frames": 6,
+    "reaching_frames": 6,
+    "reach_ms": 1782.9,
+    "borderline": true,
+    "ladder_db": [
+     0.0,
+     -38.9,
+     -73.4,
+     -20.2,
+     -87.8,
+     -90.0,
+     -100.5,
+     -88.8,
+     -92.0,
+     -105.8,
+     -100.3,
+     -95.8,
+     -95.4,
+     -108.9,
+     -100.5,
+     -73.6,
+     -60.5,
+     -103.5,
+     -88.5,
+     -77.0
+    ],
+    "group": 2,
+    "group_notes": [
+     80
+    ]
+   },
+   "window": {
+    "model_s": 6.0,
+    "reference_s": 6.0
+   },
+   "floor_state": {
+    "declared": false,
+    "basis": null,
+    "source": "preroll",
+    "level_db_hz": null,
+    "stationary": {
+     "slope_db_s": -8.43,
+     "corr": 1.0,
+     "tone_slope_db_s": -9.45,
+     "floor_like": false
+    },
+    "clear_partials_tail": 4,
+    "hum_dbfs": null,
+    "censors": {
+     "body": null,
+     "tnr": null
+    },
+    "body_floor_db": null,
+    "body_hum_db": null
+   }
   },
   {
    "timbre": "gm011",
@@ -1609,7 +3073,7 @@
    "f0_hz": 830.489,
    "cents_vs_et": -0.25,
    "inharmonicity_b": 0.0,
-   "partials_fit": 4,
+   "partials_fit": 0,
    "inharmonicity_reliable": false,
    "partials_hz": [
     830.48,
@@ -1655,9 +3119,66 @@
     -88.79,
     -76.46
    ],
-   "body_below_f0_db": -69.16,
-   "body_under_db": -108.52,
+   "modal_profile": {
+    "modal_hz": [
+     830.48,
+     1661.21,
+     3322.54,
+     8790.04
+    ],
+    "modal_db": [
+     0.0,
+     -38.59,
+     -19.9,
+     -47.71
+    ],
+    "modal_ratio": [
+     0.9998,
+     2.0,
+     4.0001,
+     10.5826
+    ]
+   },
+   "body_below_f0_db": -69.17,
+   "body_under_db": -108.53,
    "body_f0_db": -39.36,
+   "body_lines": {
+    "hz": [
+     226.0,
+     246.5
+    ],
+    "share_removed": 0.0025,
+    "reason": "recurring fixed-frequency lines in the source",
+    "missed": {
+     "lines": [
+      {
+       "hz": 102.5,
+       "share": 0.0001
+      },
+      {
+       "hz": 138.5,
+       "share": 0.0003
+      },
+      {
+       "hz": 174.5,
+       "share": 0.0006
+      },
+      {
+       "hz": 336.4,
+       "share": 0.0553
+      },
+      {
+       "hz": 498.4,
+       "share": 0.0014
+      },
+      {
+       "hz": 570.4,
+       "share": 0.0007
+      }
+     ],
+     "reason": "recurs on 2 notes; N=3"
+    }
+   },
    "peak_dbfs": -26.4,
    "rms_dbfs": -44.11,
    "held_peak_dbfs": -33.23,
@@ -1735,7 +3256,66 @@
    "centroid_hz": 854.3,
    "tnr_mask": {},
    "tnr_db": 47.77,
-   "stereo_width": 0.0
+   "stereo_width": 0.0,
+   "loop": {
+    "verdict": "not",
+    "residual_db": -32.2,
+    "median_db": -29.1,
+    "frames": 6,
+    "reaching_frames": 6,
+    "reach_ms": 1782.9,
+    "borderline": true,
+    "ladder_db": [
+     0.0,
+     -38.9,
+     -73.4,
+     -20.2,
+     -87.8,
+     -90.0,
+     -100.5,
+     -88.8,
+     -92.0,
+     -105.8,
+     -100.3,
+     -95.8,
+     -95.4,
+     -108.9,
+     -100.5,
+     -73.6,
+     -60.5,
+     -103.5,
+     -88.5,
+     -77.0
+    ],
+    "group": 2,
+    "group_notes": [
+     80
+    ]
+   },
+   "window": {
+    "model_s": 6.0,
+    "reference_s": 6.0
+   },
+   "floor_state": {
+    "declared": false,
+    "basis": null,
+    "source": "preroll",
+    "level_db_hz": null,
+    "stationary": {
+     "slope_db_s": -8.43,
+     "corr": 1.0,
+     "tone_slope_db_s": -9.46,
+     "floor_like": false
+    },
+    "clear_partials_tail": 4,
+    "hum_dbfs": null,
+    "censors": {
+     "body": null,
+     "tnr": null
+    },
+    "body_floor_db": null,
+    "body_hum_db": null
+   }
   },
   {
    "timbre": "gm011",
@@ -1744,7 +3324,7 @@
    "f0_hz": 830.486,
    "cents_vs_et": -0.26,
    "inharmonicity_b": 0.0,
-   "partials_fit": 4,
+   "partials_fit": 0,
    "inharmonicity_reliable": false,
    "partials_hz": [
     830.47,
@@ -1790,9 +3370,66 @@
     -88.67,
     -76.32
    ],
-   "body_below_f0_db": -69.15,
-   "body_under_db": -104.46,
+   "modal_profile": {
+    "modal_hz": [
+     830.47,
+     1661.2,
+     3322.53,
+     8790.04
+    ],
+    "modal_db": [
+     0.0,
+     -38.57,
+     -19.83,
+     -47.56
+    ],
+    "modal_ratio": [
+     0.9998,
+     2.0,
+     4.0001,
+     10.5826
+    ]
+   },
+   "body_below_f0_db": -69.16,
+   "body_under_db": -104.47,
    "body_f0_db": -35.31,
+   "body_lines": {
+    "hz": [
+     226.0,
+     246.5
+    ],
+    "share_removed": 0.0025,
+    "reason": "recurring fixed-frequency lines in the source",
+    "missed": {
+     "lines": [
+      {
+       "hz": 102.5,
+       "share": 0.0001
+      },
+      {
+       "hz": 138.5,
+       "share": 0.0003
+      },
+      {
+       "hz": 174.5,
+       "share": 0.0005
+      },
+      {
+       "hz": 336.4,
+       "share": 0.0551
+      },
+      {
+       "hz": 498.4,
+       "share": 0.0014
+      },
+      {
+       "hz": 570.4,
+       "share": 0.0007
+      }
+     ],
+     "reason": "recurs on 2 notes; N=3"
+    }
+   },
    "peak_dbfs": -19.41,
    "rms_dbfs": -39.83,
    "held_peak_dbfs": -27.67,
@@ -1870,7 +3507,66 @@
    "centroid_hz": 854.5,
    "tnr_mask": {},
    "tnr_db": 47.73,
-   "stereo_width": 0.0
+   "stereo_width": 0.0,
+   "loop": {
+    "verdict": "not",
+    "residual_db": -31.0,
+    "median_db": -29.1,
+    "frames": 6,
+    "reaching_frames": 6,
+    "reach_ms": 1782.9,
+    "borderline": true,
+    "ladder_db": [
+     0.0,
+     -38.9,
+     -73.4,
+     -20.2,
+     -87.8,
+     -90.0,
+     -100.5,
+     -88.8,
+     -92.0,
+     -105.8,
+     -100.3,
+     -95.8,
+     -95.4,
+     -108.9,
+     -100.5,
+     -73.6,
+     -60.5,
+     -103.5,
+     -88.5,
+     -77.0
+    ],
+    "group": 2,
+    "group_notes": [
+     80
+    ]
+   },
+   "window": {
+    "model_s": 6.0,
+    "reference_s": 6.0
+   },
+   "floor_state": {
+    "declared": false,
+    "basis": null,
+    "source": "preroll",
+    "level_db_hz": null,
+    "stationary": {
+     "slope_db_s": -8.44,
+     "corr": 1.0,
+     "tone_slope_db_s": -9.46,
+     "floor_like": false
+    },
+    "clear_partials_tail": 4,
+    "hum_dbfs": null,
+    "censors": {
+     "body": null,
+     "tnr": null
+    },
+    "body_floor_db": null,
+    "body_hum_db": null
+   }
   },
   {
    "timbre": "gm011",
@@ -1879,7 +3575,7 @@
    "f0_hz": 830.482,
    "cents_vs_et": -0.27,
    "inharmonicity_b": 0.0,
-   "partials_fit": 4,
+   "partials_fit": 0,
    "inharmonicity_reliable": false,
    "partials_hz": [
     830.47,
@@ -1925,9 +3621,66 @@
     -88.47,
     -76.09
    ],
-   "body_below_f0_db": -69.16,
-   "body_under_db": -101.24,
+   "modal_profile": {
+    "modal_hz": [
+     830.47,
+     1661.2,
+     3322.52,
+     8790.04
+    ],
+    "modal_db": [
+     0.0,
+     -38.55,
+     -19.76,
+     -47.34
+    ],
+    "modal_ratio": [
+     0.9998,
+     2.0,
+     4.0001,
+     10.5826
+    ]
+   },
+   "body_below_f0_db": -69.17,
+   "body_under_db": -101.25,
    "body_f0_db": -32.08,
+   "body_lines": {
+    "hz": [
+     226.0,
+     246.5
+    ],
+    "share_removed": 0.0025,
+    "reason": "recurring fixed-frequency lines in the source",
+    "missed": {
+     "lines": [
+      {
+       "hz": 102.5,
+       "share": 0.0001
+      },
+      {
+       "hz": 138.5,
+       "share": 0.0003
+      },
+      {
+       "hz": 174.5,
+       "share": 0.0005
+      },
+      {
+       "hz": 336.4,
+       "share": 0.0554
+      },
+      {
+       "hz": 498.4,
+       "share": 0.0014
+      },
+      {
+       "hz": 570.4,
+       "share": 0.0007
+      }
+     ],
+     "reason": "recurs on 2 notes; N=3"
+    }
+   },
    "peak_dbfs": -15.46,
    "rms_dbfs": -36.46,
    "held_peak_dbfs": -24.18,
@@ -2005,15 +3758,74 @@
    "centroid_hz": 854.8,
    "tnr_mask": {},
    "tnr_db": 47.65,
-   "stereo_width": 0.0
+   "stereo_width": 0.0,
+   "loop": {
+    "verdict": "not",
+    "residual_db": -29.7,
+    "median_db": -29.1,
+    "frames": 6,
+    "reaching_frames": 6,
+    "reach_ms": 1782.9,
+    "borderline": false,
+    "ladder_db": [
+     0.0,
+     -38.9,
+     -73.4,
+     -20.2,
+     -87.8,
+     -90.0,
+     -100.5,
+     -88.8,
+     -92.0,
+     -105.8,
+     -100.3,
+     -95.8,
+     -95.4,
+     -108.9,
+     -100.5,
+     -73.6,
+     -60.5,
+     -103.5,
+     -88.5,
+     -77.0
+    ],
+    "group": 2,
+    "group_notes": [
+     80
+    ]
+   },
+   "window": {
+    "model_s": 6.0,
+    "reference_s": 6.0
+   },
+   "floor_state": {
+    "declared": false,
+    "basis": null,
+    "source": "preroll",
+    "level_db_hz": null,
+    "stationary": {
+     "slope_db_s": -8.44,
+     "corr": 1.0,
+     "tone_slope_db_s": -9.47,
+     "floor_like": false
+    },
+    "clear_partials_tail": 4,
+    "hum_dbfs": null,
+    "censors": {
+     "body": null,
+     "tnr": null
+    },
+    "body_floor_db": null,
+    "body_hum_db": null
+   }
   },
   {
    "timbre": "gm011",
    "note": 84,
    "velocity": 32,
-   "f0_hz": 1046.355,
+   "f0_hz": 1046.356,
    "cents_vs_et": -0.24,
-   "inharmonicity_b": 4.389e-05,
+   "inharmonicity_b": 0.0,
    "partials_fit": 0,
    "inharmonicity_reliable": false,
    "partials_hz": [
@@ -2031,9 +3843,9 @@
     12558.05,
     13581.29,
     14740.48,
-    15996.1,
+    15503.9,
     16783.77,
-    18088.81,
+    17911.19,
     18996.1,
     20003.9,
     21088.81
@@ -2053,16 +3865,61 @@
     -119.25,
     -123.68,
     -113.75,
-    -132.17,
+    -130.39,
     -119.16,
-    -132.27,
+    -133.16,
     -133.43,
     -133.02,
     -133.53
    ],
-   "body_below_f0_db": -71.78,
-   "body_under_db": -122.81,
+   "modal_profile": {
+    "modal_hz": [
+     1046.35,
+     2093.0,
+     4186.02,
+     7906.93
+    ],
+    "modal_db": [
+     0.0,
+     -30.82,
+     -26.49,
+     -41.47
+    ],
+    "modal_ratio": [
+     0.9999,
+     2.0,
+     4.0,
+     7.5556
+    ]
+   },
+   "body_below_f0_db": -71.79,
+   "body_under_db": -122.82,
    "body_f0_db": -51.03,
+   "body_lines": {
+    "hz": [
+     226.0,
+     246.5
+    ],
+    "share_removed": 0.0016,
+    "reason": "recurring fixed-frequency lines in the source",
+    "missed": {
+     "lines": [
+      {
+       "hz": 249.2,
+       "share": 0.0019
+      },
+      {
+       "hz": 570.4,
+       "share": 0.0007
+      },
+      {
+       "hz": 725.5,
+       "share": 0.002
+      }
+     ],
+     "reason": "recurs on 2 notes; N=3"
+    }
+   },
    "peak_dbfs": -41.14,
    "rms_dbfs": -56.09,
    "held_peak_dbfs": -45.93,
@@ -2117,13 +3974,13 @@
     -141.42,
     -200.41,
     -194.54,
-    -211.79,
-    -206.45,
-    -197.9,
+    -204.74,
+    -209.7,
+    -198.82,
     -206.48,
     -188.43
    ],
-   "valley_slope_db_oct": -16.936,
+   "valley_slope_db_oct": -16.93,
    "valley_ladder_coupling": 0.531,
    "floor_source": "preroll",
    "floor_db": -103.09,
@@ -2143,15 +4000,74 @@
    "centroid_hz": 1053.0,
    "tnr_mask": {},
    "tnr_db": 41.78,
-   "stereo_width": -0.0
+   "stereo_width": -0.0,
+   "loop": {
+    "verdict": "not",
+    "residual_db": -33.9,
+    "median_db": -33.9,
+    "frames": 6,
+    "reaching_frames": 6,
+    "reach_ms": 1560.3,
+    "borderline": true,
+    "ladder_db": [
+     0.0,
+     -30.7,
+     -75.3,
+     -27.7,
+     -87.5,
+     -90.2,
+     -70.9,
+     -107.7,
+     -62.0,
+     -88.5,
+     -106.1,
+     -107.0,
+     -120.6,
+     -113.6,
+     -126.8,
+     -118.7,
+     -127.2,
+     -128.1,
+     -128.8,
+     -112.1
+    ],
+    "group": 3,
+    "group_notes": [
+     84
+    ]
+   },
+   "window": {
+    "model_s": 6.0,
+    "reference_s": 6.0
+   },
+   "floor_state": {
+    "declared": false,
+    "basis": null,
+    "source": "preroll",
+    "level_db_hz": null,
+    "stationary": {
+     "slope_db_s": -8.93,
+     "corr": 1.0,
+     "tone_slope_db_s": -10.58,
+     "floor_like": false
+    },
+    "clear_partials_tail": 5,
+    "hum_dbfs": null,
+    "censors": {
+     "body": null,
+     "tnr": null
+    },
+    "body_floor_db": null,
+    "body_hum_db": null
+   }
   },
   {
    "timbre": "gm011",
    "note": 84,
    "velocity": 56,
    "f0_hz": 1046.354,
-   "cents_vs_et": -0.25,
-   "inharmonicity_b": 4.404e-05,
+   "cents_vs_et": -0.24,
+   "inharmonicity_b": 0.0,
    "partials_fit": 0,
    "inharmonicity_reliable": false,
    "partials_hz": [
@@ -2169,9 +4085,9 @@
     12558.05,
     13581.29,
     14740.48,
-    15996.1,
+    15503.9,
     16783.77,
-    18088.81,
+    17911.19,
     18996.1,
     20003.9,
     21088.81
@@ -2191,16 +4107,61 @@
     -119.19,
     -123.64,
     -113.71,
-    -132.13,
+    -130.35,
     -119.16,
-    -132.23,
+    -133.14,
     -133.41,
     -133.03,
     -133.52
    ],
+   "modal_profile": {
+    "modal_hz": [
+     1046.35,
+     2092.99,
+     4186.01,
+     7906.93
+    ],
+    "modal_db": [
+     0.0,
+     -30.76,
+     -26.45,
+     -41.42
+    ],
+    "modal_ratio": [
+     0.9999,
+     2.0,
+     4.0,
+     7.5556
+    ]
+   },
    "body_below_f0_db": -71.79,
-   "body_under_db": -116.67,
+   "body_under_db": -116.68,
    "body_f0_db": -44.88,
+   "body_lines": {
+    "hz": [
+     226.0,
+     246.5
+    ],
+    "share_removed": 0.0016,
+    "reason": "recurring fixed-frequency lines in the source",
+    "missed": {
+     "lines": [
+      {
+       "hz": 249.2,
+       "share": 0.002
+      },
+      {
+       "hz": 570.4,
+       "share": 0.0006
+      },
+      {
+       "hz": 725.5,
+       "share": 0.0019
+      }
+     ],
+     "reason": "recurs on 2 notes; N=3"
+    }
+   },
    "peak_dbfs": -33.59,
    "rms_dbfs": -49.82,
    "held_peak_dbfs": -39.35,
@@ -2255,14 +4216,14 @@
     -135.26,
     -194.26,
     -188.38,
-    -205.6,
-    -200.3,
-    -191.76,
+    -198.56,
+    -203.56,
+    -192.67,
     -200.34,
     -182.28
    ],
-   "valley_slope_db_oct": -16.938,
-   "valley_ladder_coupling": 0.53,
+   "valley_slope_db_oct": -16.932,
+   "valley_ladder_coupling": 0.531,
    "floor_source": "preroll",
    "floor_db": -104.47,
    "floor_octaves_db": [
@@ -2281,15 +4242,74 @@
    "centroid_hz": 1053.0,
    "tnr_mask": {},
    "tnr_db": 41.77,
-   "stereo_width": 0.0
+   "stereo_width": 0.0,
+   "loop": {
+    "verdict": "not",
+    "residual_db": -33.9,
+    "median_db": -33.9,
+    "frames": 6,
+    "reaching_frames": 6,
+    "reach_ms": 1658.2,
+    "borderline": true,
+    "ladder_db": [
+     0.0,
+     -30.7,
+     -75.3,
+     -27.7,
+     -87.5,
+     -90.2,
+     -70.9,
+     -107.7,
+     -62.0,
+     -88.5,
+     -106.1,
+     -107.0,
+     -120.6,
+     -113.6,
+     -126.8,
+     -118.7,
+     -127.2,
+     -128.1,
+     -128.8,
+     -112.1
+    ],
+    "group": 3,
+    "group_notes": [
+     84
+    ]
+   },
+   "window": {
+    "model_s": 6.0,
+    "reference_s": 6.0
+   },
+   "floor_state": {
+    "declared": false,
+    "basis": null,
+    "source": "preroll",
+    "level_db_hz": null,
+    "stationary": {
+     "slope_db_s": -8.93,
+     "corr": 1.0,
+     "tone_slope_db_s": -10.58,
+     "floor_like": false
+    },
+    "clear_partials_tail": 5,
+    "hum_dbfs": null,
+    "censors": {
+     "body": null,
+     "tnr": null
+    },
+    "body_floor_db": null,
+    "body_hum_db": null
+   }
   },
   {
    "timbre": "gm011",
    "note": 84,
    "velocity": 80,
-   "f0_hz": 1046.351,
+   "f0_hz": 1046.352,
    "cents_vs_et": -0.25,
-   "inharmonicity_b": 4.423e-05,
+   "inharmonicity_b": 0.0,
    "partials_fit": 0,
    "inharmonicity_reliable": false,
    "partials_hz": [
@@ -2307,9 +4327,9 @@
     12558.05,
     13581.29,
     14740.48,
-    15996.1,
+    15503.9,
     16783.76,
-    18088.81,
+    17911.19,
     18996.1,
     20003.9,
     21088.8
@@ -2329,16 +4349,61 @@
     -119.11,
     -123.54,
     -113.65,
-    -132.11,
+    -130.34,
     -119.16,
-    -132.2,
+    -133.13,
     -133.39,
     -133.0,
     -133.45
    ],
-   "body_below_f0_db": -71.78,
-   "body_under_db": -111.63,
+   "modal_profile": {
+    "modal_hz": [
+     1046.35,
+     2092.99,
+     4186.01,
+     7906.93
+    ],
+    "modal_db": [
+     0.0,
+     -30.68,
+     -26.37,
+     -41.34
+    ],
+    "modal_ratio": [
+     0.9999,
+     2.0,
+     4.0,
+     7.5556
+    ]
+   },
+   "body_below_f0_db": -71.79,
+   "body_under_db": -111.64,
    "body_f0_db": -39.86,
+   "body_lines": {
+    "hz": [
+     226.0,
+     246.5
+    ],
+    "share_removed": 0.0017,
+    "reason": "recurring fixed-frequency lines in the source",
+    "missed": {
+     "lines": [
+      {
+       "hz": 249.2,
+       "share": 0.0021
+      },
+      {
+       "hz": 570.4,
+       "share": 0.0006
+      },
+      {
+       "hz": 725.5,
+       "share": 0.0019
+      }
+     ],
+     "reason": "recurs on 2 notes; N=3"
+    }
+   },
    "peak_dbfs": -25.71,
    "rms_dbfs": -44.65,
    "held_peak_dbfs": -33.54,
@@ -2393,13 +4458,13 @@
     -130.22,
     -189.22,
     -183.32,
-    -200.56,
-    -195.26,
-    -186.7,
+    -193.55,
+    -198.49,
+    -187.62,
     -195.3,
     -177.22
    ],
-   "valley_slope_db_oct": -16.941,
+   "valley_slope_db_oct": -16.936,
    "valley_ladder_coupling": 0.531,
    "floor_source": "preroll",
    "floor_db": -106.86,
@@ -2419,15 +4484,74 @@
    "centroid_hz": 1053.0,
    "tnr_mask": {},
    "tnr_db": 41.75,
-   "stereo_width": 0.0
+   "stereo_width": 0.0,
+   "loop": {
+    "verdict": "not",
+    "residual_db": -33.9,
+    "median_db": -33.9,
+    "frames": 6,
+    "reaching_frames": 6,
+    "reach_ms": 1728.6,
+    "borderline": true,
+    "ladder_db": [
+     0.0,
+     -30.7,
+     -75.3,
+     -27.7,
+     -87.5,
+     -90.2,
+     -70.9,
+     -107.7,
+     -62.0,
+     -88.5,
+     -106.1,
+     -107.0,
+     -120.6,
+     -113.6,
+     -126.8,
+     -118.7,
+     -127.2,
+     -128.1,
+     -128.8,
+     -112.1
+    ],
+    "group": 3,
+    "group_notes": [
+     84
+    ]
+   },
+   "window": {
+    "model_s": 6.0,
+    "reference_s": 6.0
+   },
+   "floor_state": {
+    "declared": false,
+    "basis": null,
+    "source": "preroll",
+    "level_db_hz": null,
+    "stationary": {
+     "slope_db_s": -8.94,
+     "corr": 1.0,
+     "tone_slope_db_s": -10.59,
+     "floor_like": false
+    },
+    "clear_partials_tail": 5,
+    "hum_dbfs": null,
+    "censors": {
+     "body": null,
+     "tnr": null
+    },
+    "body_floor_db": null,
+    "body_hum_db": null
+   }
   },
   {
    "timbre": "gm011",
    "note": 84,
    "velocity": 104,
-   "f0_hz": 1046.348,
+   "f0_hz": 1046.349,
    "cents_vs_et": -0.25,
-   "inharmonicity_b": 4.444e-05,
+   "inharmonicity_b": 0.0,
    "partials_fit": 0,
    "inharmonicity_reliable": false,
    "partials_hz": [
@@ -2445,9 +4569,9 @@
     12558.04,
     13581.29,
     14740.48,
-    15996.1,
+    15503.9,
     16783.76,
-    18088.8,
+    17911.2,
     18996.1,
     20003.9,
     21088.8
@@ -2467,16 +4591,61 @@
     -118.98,
     -123.42,
     -113.53,
-    -132.11,
+    -130.33,
     -119.18,
-    -132.15,
+    -133.06,
     -133.35,
     -132.99,
     -133.43
    ],
-   "body_below_f0_db": -71.78,
-   "body_under_db": -107.58,
+   "modal_profile": {
+    "modal_hz": [
+     1046.34,
+     2092.98,
+     4186.01,
+     7906.92
+    ],
+    "modal_db": [
+     0.0,
+     -30.57,
+     -26.26,
+     -41.22
+    ],
+    "modal_ratio": [
+     0.9998,
+     2.0,
+     4.0,
+     7.5556
+    ]
+   },
+   "body_below_f0_db": -71.79,
+   "body_under_db": -107.59,
    "body_f0_db": -35.8,
+   "body_lines": {
+    "hz": [
+     226.0,
+     246.5
+    ],
+    "share_removed": 0.0015,
+    "reason": "recurring fixed-frequency lines in the source",
+    "missed": {
+     "lines": [
+      {
+       "hz": 249.2,
+       "share": 0.0019
+      },
+      {
+       "hz": 570.4,
+       "share": 0.0007
+      },
+      {
+       "hz": 725.5,
+       "share": 0.002
+      }
+     ],
+     "reason": "recurs on 2 notes; N=3"
+    }
+   },
    "peak_dbfs": -19.29,
    "rms_dbfs": -40.44,
    "held_peak_dbfs": -28.32,
@@ -2531,13 +4700,13 @@
     -126.13,
     -185.14,
     -179.21,
-    -196.4,
-    -191.17,
-    -182.61,
+    -189.47,
+    -194.38,
+    -183.53,
     -191.27,
     -173.11
    ],
-   "valley_slope_db_oct": -16.945,
+   "valley_slope_db_oct": -16.942,
    "valley_ladder_coupling": 0.531,
    "floor_source": "preroll",
    "floor_db": -107.91,
@@ -2557,7 +4726,66 @@
    "centroid_hz": 1053.0,
    "tnr_mask": {},
    "tnr_db": 41.72,
-   "stereo_width": -0.0
+   "stereo_width": -0.0,
+   "loop": {
+    "verdict": "not",
+    "residual_db": -33.9,
+    "median_db": -33.9,
+    "frames": 6,
+    "reaching_frames": 6,
+    "reach_ms": 1782.9,
+    "borderline": true,
+    "ladder_db": [
+     0.0,
+     -30.7,
+     -75.3,
+     -27.7,
+     -87.5,
+     -90.2,
+     -70.9,
+     -107.7,
+     -62.0,
+     -88.5,
+     -106.1,
+     -107.0,
+     -120.6,
+     -113.6,
+     -126.8,
+     -118.7,
+     -127.2,
+     -128.1,
+     -128.8,
+     -112.1
+    ],
+    "group": 3,
+    "group_notes": [
+     84
+    ]
+   },
+   "window": {
+    "model_s": 6.0,
+    "reference_s": 6.0
+   },
+   "floor_state": {
+    "declared": false,
+    "basis": null,
+    "source": "preroll",
+    "level_db_hz": null,
+    "stationary": {
+     "slope_db_s": -8.94,
+     "corr": 1.0,
+     "tone_slope_db_s": -10.6,
+     "floor_like": false
+    },
+    "clear_partials_tail": 5,
+    "hum_dbfs": null,
+    "censors": {
+     "body": null,
+     "tnr": null
+    },
+    "body_floor_db": null,
+    "body_hum_db": null
+   }
   },
   {
    "timbre": "gm011",
@@ -2565,7 +4793,7 @@
    "velocity": 127,
    "f0_hz": 1046.345,
    "cents_vs_et": -0.26,
-   "inharmonicity_b": 4.464e-05,
+   "inharmonicity_b": 0.0,
    "partials_fit": 0,
    "inharmonicity_reliable": false,
    "partials_hz": [
@@ -2583,9 +4811,9 @@
     12558.04,
     13581.29,
     14740.48,
-    15996.11,
+    15503.89,
     16783.74,
-    18088.8,
+    17911.2,
     18996.11,
     20003.89,
     21088.8
@@ -2605,16 +4833,61 @@
     -118.8,
     -123.23,
     -113.3,
-    -132.07,
+    -130.31,
     -119.27,
-    -132.08,
+    -133.01,
     -133.33,
     -132.97,
     -133.38
    ],
-   "body_below_f0_db": -71.79,
+   "modal_profile": {
+    "modal_hz": [
+     1046.34,
+     2092.98,
+     4186.0,
+     7906.92
+    ],
+    "modal_db": [
+     0.0,
+     -30.45,
+     -26.13,
+     -41.03
+    ],
+    "modal_ratio": [
+     0.9998,
+     2.0,
+     4.0,
+     7.5556
+    ]
+   },
+   "body_below_f0_db": -71.8,
    "body_under_db": -104.37,
    "body_f0_db": -32.58,
+   "body_lines": {
+    "hz": [
+     226.0,
+     246.5
+    ],
+    "share_removed": 0.0016,
+    "reason": "recurring fixed-frequency lines in the source",
+    "missed": {
+     "lines": [
+      {
+       "hz": 249.2,
+       "share": 0.002
+      },
+      {
+       "hz": 570.4,
+       "share": 0.0006
+      },
+      {
+       "hz": 725.5,
+       "share": 0.002
+      }
+     ],
+     "reason": "recurs on 2 notes; N=3"
+    }
+   },
    "peak_dbfs": -16.09,
    "rms_dbfs": -37.12,
    "held_peak_dbfs": -25.08,
@@ -2669,13 +4942,13 @@
     -122.86,
     -181.9,
     -175.87,
-    -193.06,
-    -187.88,
-    -179.34,
+    -186.23,
+    -191.03,
+    -180.25,
     -188.02,
     -169.77
    ],
-   "valley_slope_db_oct": -16.952,
+   "valley_slope_db_oct": -16.948,
    "valley_ladder_coupling": 0.531,
    "floor_source": "preroll",
    "floor_db": -110.49,
@@ -2695,7 +4968,66 @@
    "centroid_hz": 1053.1,
    "tnr_mask": {},
    "tnr_db": 41.67,
-   "stereo_width": 0.0
+   "stereo_width": 0.0,
+   "loop": {
+    "verdict": "not",
+    "residual_db": -33.9,
+    "median_db": -33.9,
+    "frames": 6,
+    "reaching_frames": 6,
+    "reach_ms": 1782.9,
+    "borderline": true,
+    "ladder_db": [
+     0.0,
+     -30.7,
+     -75.3,
+     -27.7,
+     -87.5,
+     -90.2,
+     -70.9,
+     -107.7,
+     -62.0,
+     -88.5,
+     -106.1,
+     -107.0,
+     -120.6,
+     -113.6,
+     -126.8,
+     -118.7,
+     -127.2,
+     -128.1,
+     -128.8,
+     -112.1
+    ],
+    "group": 3,
+    "group_notes": [
+     84
+    ]
+   },
+   "window": {
+    "model_s": 6.0,
+    "reference_s": 6.0
+   },
+   "floor_state": {
+    "declared": false,
+    "basis": null,
+    "source": "preroll",
+    "level_db_hz": null,
+    "stationary": {
+     "slope_db_s": -8.94,
+     "corr": 1.0,
+     "tone_slope_db_s": -10.6,
+     "floor_like": false
+    },
+    "clear_partials_tail": 5,
+    "hum_dbfs": null,
+    "censors": {
+     "body": null,
+     "tnr": null
+    },
+    "body_floor_db": null,
+    "body_hum_db": null
+   }
   },
   {
    "timbre": "gm011",
@@ -2704,7 +5036,7 @@
    "f0_hz": 1318.326,
    "cents_vs_et": -0.24,
    "inharmonicity_b": 0.0,
-   "partials_fit": 4,
+   "partials_fit": 0,
    "inharmonicity_reliable": false,
    "partials_hz": [
     1318.33,
@@ -2742,9 +5074,50 @@
     -127.43,
     -94.11
    ],
+   "modal_profile": {
+    "modal_hz": [
+     1318.33,
+     2637.02,
+     5344.64,
+     10095.43
+    ],
+    "modal_db": [
+     0.0,
+     -31.33,
+     -23.86,
+     -44.23
+    ],
+    "modal_ratio": [
+     0.9999,
+     2.0,
+     4.0535,
+     7.6567
+    ]
+   },
    "body_below_f0_db": -66.53,
    "body_under_db": -118.12,
    "body_f0_db": -51.59,
+   "body_lines": {
+    "hz": [
+     226.0,
+     246.5
+    ],
+    "share_removed": 0.0,
+    "reason": "recurring fixed-frequency lines in the source",
+    "missed": {
+     "lines": [
+      {
+       "hz": 118.8,
+       "share": 0.2053
+      },
+      {
+       "hz": 909.9,
+       "share": 0.0002
+      }
+     ],
+     "reason": "recurs on 2 notes; N=3"
+    }
+   },
    "peak_dbfs": -41.44,
    "rms_dbfs": -56.6,
    "held_peak_dbfs": -46.06,
@@ -2823,7 +5196,105 @@
    "centroid_hz": 1331.6,
    "tnr_mask": {},
    "tnr_db": 45.29,
-   "stereo_width": 0.0
+   "stereo_width": 0.0,
+   "loop": {
+    "verdict": "looped",
+    "residual_db": -38.9,
+    "median_db": -38.6,
+    "frames": 6,
+    "reaching_frames": 6,
+    "reach_ms": 1455.9,
+    "period_ms": 13.654,
+    "join_s": 0.0,
+    "period_pitch_periods": 18.0,
+    "body_lines": {
+     "lines_below_f0": 12,
+     "on_lines": true
+    },
+    "excluded": {
+     "stretch": "reads the loop (loop period 13.654 ms = 18.0 pitch periods, exact repetition from 0.0 s, residual -38.9 dB)",
+     "tnr": "reads the loop (loop period 13.654 ms = 18.0 pitch periods, exact repetition from 0.0 s, residual -38.9 dB); periodising an unlooped note sample-exactly moved tnr -11..-14 dB and body +2..+7 dB at 100-300 ms; open: a seam statistic did not separate loop seams from arbitrary boundaries (naive loops 2.5-69, unlooped notes 1.3-6.5), so no row is granted a snapshot",
+     "body": "sub-f0 power is the loop's own lines at 1/period (loop period 13.654 ms = 18.0 pitch periods, exact repetition from 0.0 s, residual -38.9 dB); periodising an unlooped note sample-exactly moved tnr -11..-14 dB and body +2..+7 dB at 100-300 ms; open: a seam statistic did not separate loop seams from arbitrary boundaries (naive loops 2.5-69, unlooped notes 1.3-6.5), so no row is granted a snapshot",
+     "decay": "time-varying past the join (loop period 13.654 ms = 18.0 pitch periods, exact repetition from 0.0 s, residual -38.9 dB)",
+     "aftersound": "time-varying past the join (loop period 13.654 ms = 18.0 pitch periods, exact repetition from 0.0 s, residual -38.9 dB)",
+     "doubling": "time-varying past the join (loop period 13.654 ms = 18.0 pitch periods, exact repetition from 0.0 s, residual -38.9 dB)",
+     "partial_tilt": "time-varying past the join (loop period 13.654 ms = 18.0 pitch periods, exact repetition from 0.0 s, residual -38.9 dB)",
+     "band_decay": "time-varying past the join (loop period 13.654 ms = 18.0 pitch periods, exact repetition from 0.0 s, residual -38.9 dB)",
+     "ring": "time-varying past the join (loop period 13.654 ms = 18.0 pitch periods, exact repetition from 0.0 s, residual -38.9 dB)",
+     "onset_settle": "time-varying past the join (loop period 13.654 ms = 18.0 pitch periods, exact repetition from 0.0 s, residual -38.9 dB)",
+     "damper": "time-varying past the join (loop period 13.654 ms = 18.0 pitch periods, exact repetition from 0.0 s, residual -38.9 dB)",
+     "attack": "onset is the envelope over the loop (loop period 13.654 ms = 18.0 pitch periods, exact repetition from 0.0 s, residual -38.9 dB)",
+     "arrival": "onset is the envelope over the loop (loop period 13.654 ms = 18.0 pitch periods, exact repetition from 0.0 s, residual -38.9 dB)"
+    },
+    "snapshot": {
+     "balance": {
+      "label": "snapshot of one frozen cycle",
+      "group": 4
+     },
+     "centroid_pct": {
+      "label": "snapshot of one frozen cycle",
+      "group": 4
+     },
+     "register": {
+      "label": "snapshot of one frozen cycle",
+      "group": 4
+     },
+     "crest": {
+      "label": "snapshot of one frozen cycle",
+      "group": 4
+     }
+    },
+    "ladder_db": [
+     0.0,
+     -31.4,
+     -71.0,
+     -25.2,
+     -82.0,
+     -92.3,
+     -72.7,
+     -45.5,
+     -64.7,
+     -85.6,
+     -120.7,
+     -120.7,
+     -124.8,
+     -119.5,
+     -125.5,
+     -94.2,
+     null,
+     null,
+     null,
+     null
+    ],
+    "group": 4,
+    "group_notes": [
+     88
+    ]
+   },
+   "window": {
+    "model_s": 6.0,
+    "reference_s": 6.0
+   },
+   "floor_state": {
+    "declared": false,
+    "basis": null,
+    "source": "preroll",
+    "level_db_hz": null,
+    "stationary": {
+     "slope_db_s": -11.24,
+     "corr": 1.0,
+     "tone_slope_db_s": -11.97,
+     "floor_like": false
+    },
+    "clear_partials_tail": 6,
+    "hum_dbfs": null,
+    "censors": {
+     "body": null,
+     "tnr": null
+    },
+    "body_floor_db": null,
+    "body_hum_db": null
+   }
   },
   {
    "timbre": "gm011",
@@ -2832,7 +5303,7 @@
    "f0_hz": 1318.325,
    "cents_vs_et": -0.24,
    "inharmonicity_b": 0.0,
-   "partials_fit": 4,
+   "partials_fit": 0,
    "inharmonicity_reliable": false,
    "partials_hz": [
     1318.33,
@@ -2870,9 +5341,50 @@
     -127.42,
     -94.11
    ],
+   "modal_profile": {
+    "modal_hz": [
+     1318.33,
+     2637.01,
+     5344.63,
+     10095.43
+    ],
+    "modal_db": [
+     0.0,
+     -31.36,
+     -23.86,
+     -44.22
+    ],
+    "modal_ratio": [
+     0.9999,
+     2.0,
+     4.0535,
+     7.6567
+    ]
+   },
    "body_below_f0_db": -66.52,
    "body_under_db": -111.96,
    "body_f0_db": -45.44,
+   "body_lines": {
+    "hz": [
+     226.0,
+     246.5
+    ],
+    "share_removed": 0.0,
+    "reason": "recurring fixed-frequency lines in the source",
+    "missed": {
+     "lines": [
+      {
+       "hz": 118.8,
+       "share": 0.2064
+      },
+      {
+       "hz": 909.9,
+       "share": 0.0002
+      }
+     ],
+     "reason": "recurs on 2 notes; N=3"
+    }
+   },
    "peak_dbfs": -33.34,
    "rms_dbfs": -50.29,
    "held_peak_dbfs": -39.34,
@@ -2951,7 +5463,105 @@
    "centroid_hz": 1331.6,
    "tnr_mask": {},
    "tnr_db": 45.28,
-   "stereo_width": 0.0
+   "stereo_width": 0.0,
+   "loop": {
+    "verdict": "looped",
+    "residual_db": -38.6,
+    "median_db": -38.6,
+    "frames": 6,
+    "reaching_frames": 6,
+    "reach_ms": 1548.9,
+    "period_ms": 13.654,
+    "join_s": 0.0,
+    "period_pitch_periods": 18.0,
+    "body_lines": {
+     "lines_below_f0": 12,
+     "on_lines": true
+    },
+    "excluded": {
+     "stretch": "reads the loop (loop period 13.654 ms = 18.0 pitch periods, exact repetition from 0.0 s, residual -38.6 dB)",
+     "tnr": "reads the loop (loop period 13.654 ms = 18.0 pitch periods, exact repetition from 0.0 s, residual -38.6 dB); periodising an unlooped note sample-exactly moved tnr -11..-14 dB and body +2..+7 dB at 100-300 ms; open: a seam statistic did not separate loop seams from arbitrary boundaries (naive loops 2.5-69, unlooped notes 1.3-6.5), so no row is granted a snapshot",
+     "body": "sub-f0 power is the loop's own lines at 1/period (loop period 13.654 ms = 18.0 pitch periods, exact repetition from 0.0 s, residual -38.6 dB); periodising an unlooped note sample-exactly moved tnr -11..-14 dB and body +2..+7 dB at 100-300 ms; open: a seam statistic did not separate loop seams from arbitrary boundaries (naive loops 2.5-69, unlooped notes 1.3-6.5), so no row is granted a snapshot",
+     "decay": "time-varying past the join (loop period 13.654 ms = 18.0 pitch periods, exact repetition from 0.0 s, residual -38.6 dB)",
+     "aftersound": "time-varying past the join (loop period 13.654 ms = 18.0 pitch periods, exact repetition from 0.0 s, residual -38.6 dB)",
+     "doubling": "time-varying past the join (loop period 13.654 ms = 18.0 pitch periods, exact repetition from 0.0 s, residual -38.6 dB)",
+     "partial_tilt": "time-varying past the join (loop period 13.654 ms = 18.0 pitch periods, exact repetition from 0.0 s, residual -38.6 dB)",
+     "band_decay": "time-varying past the join (loop period 13.654 ms = 18.0 pitch periods, exact repetition from 0.0 s, residual -38.6 dB)",
+     "ring": "time-varying past the join (loop period 13.654 ms = 18.0 pitch periods, exact repetition from 0.0 s, residual -38.6 dB)",
+     "onset_settle": "time-varying past the join (loop period 13.654 ms = 18.0 pitch periods, exact repetition from 0.0 s, residual -38.6 dB)",
+     "damper": "time-varying past the join (loop period 13.654 ms = 18.0 pitch periods, exact repetition from 0.0 s, residual -38.6 dB)",
+     "attack": "onset is the envelope over the loop (loop period 13.654 ms = 18.0 pitch periods, exact repetition from 0.0 s, residual -38.6 dB)",
+     "arrival": "onset is the envelope over the loop (loop period 13.654 ms = 18.0 pitch periods, exact repetition from 0.0 s, residual -38.6 dB)"
+    },
+    "snapshot": {
+     "balance": {
+      "label": "snapshot of one frozen cycle",
+      "group": 4
+     },
+     "centroid_pct": {
+      "label": "snapshot of one frozen cycle",
+      "group": 4
+     },
+     "register": {
+      "label": "snapshot of one frozen cycle",
+      "group": 4
+     },
+     "crest": {
+      "label": "snapshot of one frozen cycle",
+      "group": 4
+     }
+    },
+    "ladder_db": [
+     0.0,
+     -31.4,
+     -71.0,
+     -25.2,
+     -82.0,
+     -92.3,
+     -72.7,
+     -45.5,
+     -64.7,
+     -85.6,
+     -120.7,
+     -120.7,
+     -124.8,
+     -119.5,
+     -125.6,
+     -94.2,
+     null,
+     null,
+     null,
+     null
+    ],
+    "group": 4,
+    "group_notes": [
+     88
+    ]
+   },
+   "window": {
+    "model_s": 6.0,
+    "reference_s": 6.0
+   },
+   "floor_state": {
+    "declared": false,
+    "basis": null,
+    "source": "preroll",
+    "level_db_hz": null,
+    "stationary": {
+     "slope_db_s": -11.24,
+     "corr": 1.0,
+     "tone_slope_db_s": -11.97,
+     "floor_like": false
+    },
+    "clear_partials_tail": 6,
+    "hum_dbfs": null,
+    "censors": {
+     "body": null,
+     "tnr": null
+    },
+    "body_floor_db": null,
+    "body_hum_db": null
+   }
   },
   {
    "timbre": "gm011",
@@ -2960,7 +5570,7 @@
    "f0_hz": 1318.323,
    "cents_vs_et": -0.25,
    "inharmonicity_b": 0.0,
-   "partials_fit": 4,
+   "partials_fit": 0,
    "inharmonicity_reliable": false,
    "partials_hz": [
     1318.32,
@@ -2998,9 +5608,50 @@
     -127.4,
     -94.11
    ],
+   "modal_profile": {
+    "modal_hz": [
+     1318.32,
+     2637.01,
+     5344.63,
+     10095.43
+    ],
+    "modal_db": [
+     0.0,
+     -31.41,
+     -23.84,
+     -44.19
+    ],
+    "modal_ratio": [
+     0.9999,
+     2.0,
+     4.0535,
+     7.6567
+    ]
+   },
    "body_below_f0_db": -66.53,
    "body_under_db": -106.94,
    "body_f0_db": -40.41,
+   "body_lines": {
+    "hz": [
+     226.0,
+     246.5
+    ],
+    "share_removed": 0.0,
+    "reason": "recurring fixed-frequency lines in the source",
+    "missed": {
+     "lines": [
+      {
+       "hz": 118.8,
+       "share": 0.2056
+      },
+      {
+       "hz": 909.9,
+       "share": 0.0002
+      }
+     ],
+     "reason": "recurs on 2 notes; N=3"
+    }
+   },
    "peak_dbfs": -25.95,
    "rms_dbfs": -45.06,
    "held_peak_dbfs": -33.43,
@@ -3079,7 +5730,103 @@
    "centroid_hz": 1331.7,
    "tnr_mask": {},
    "tnr_db": 45.27,
-   "stereo_width": 0.0
+   "stereo_width": 0.0,
+   "loop": {
+    "verdict": "looped",
+    "residual_db": -38.6,
+    "median_db": -38.6,
+    "frames": 6,
+    "reaching_frames": 6,
+    "reach_ms": 1615.9,
+    "period_ms": 13.654,
+    "join_s": 0.026,
+    "period_pitch_periods": 18.0,
+    "body_lines": {
+     "lines_below_f0": 12,
+     "on_lines": true
+    },
+    "excluded": {
+     "stretch": "reads the loop (loop period 13.654 ms = 18.0 pitch periods, exact repetition from 0.026 s, residual -38.6 dB)",
+     "tnr": "reads the loop (loop period 13.654 ms = 18.0 pitch periods, exact repetition from 0.026 s, residual -38.6 dB); periodising an unlooped note sample-exactly moved tnr -11..-14 dB and body +2..+7 dB at 100-300 ms; open: a seam statistic did not separate loop seams from arbitrary boundaries (naive loops 2.5-69, unlooped notes 1.3-6.5), so no row is granted a snapshot",
+     "body": "sub-f0 power is the loop's own lines at 1/period (loop period 13.654 ms = 18.0 pitch periods, exact repetition from 0.026 s, residual -38.6 dB); periodising an unlooped note sample-exactly moved tnr -11..-14 dB and body +2..+7 dB at 100-300 ms; open: a seam statistic did not separate loop seams from arbitrary boundaries (naive loops 2.5-69, unlooped notes 1.3-6.5), so no row is granted a snapshot",
+     "decay": "time-varying past the join (loop period 13.654 ms = 18.0 pitch periods, exact repetition from 0.026 s, residual -38.6 dB)",
+     "aftersound": "time-varying past the join (loop period 13.654 ms = 18.0 pitch periods, exact repetition from 0.026 s, residual -38.6 dB)",
+     "doubling": "time-varying past the join (loop period 13.654 ms = 18.0 pitch periods, exact repetition from 0.026 s, residual -38.6 dB)",
+     "partial_tilt": "time-varying past the join (loop period 13.654 ms = 18.0 pitch periods, exact repetition from 0.026 s, residual -38.6 dB)",
+     "band_decay": "time-varying past the join (loop period 13.654 ms = 18.0 pitch periods, exact repetition from 0.026 s, residual -38.6 dB)",
+     "ring": "time-varying past the join (loop period 13.654 ms = 18.0 pitch periods, exact repetition from 0.026 s, residual -38.6 dB)",
+     "onset_settle": "time-varying past the join (loop period 13.654 ms = 18.0 pitch periods, exact repetition from 0.026 s, residual -38.6 dB)",
+     "damper": "time-varying past the join (loop period 13.654 ms = 18.0 pitch periods, exact repetition from 0.026 s, residual -38.6 dB)"
+    },
+    "snapshot": {
+     "balance": {
+      "label": "snapshot of one frozen cycle",
+      "group": 4
+     },
+     "centroid_pct": {
+      "label": "snapshot of one frozen cycle",
+      "group": 4
+     },
+     "register": {
+      "label": "snapshot of one frozen cycle",
+      "group": 4
+     },
+     "crest": {
+      "label": "snapshot of one frozen cycle",
+      "group": 4
+     }
+    },
+    "ladder_db": [
+     0.0,
+     -31.4,
+     -71.0,
+     -25.2,
+     -82.0,
+     -92.3,
+     -72.7,
+     -45.5,
+     -64.7,
+     -85.6,
+     -120.7,
+     -120.7,
+     -124.8,
+     -119.5,
+     -125.5,
+     -94.2,
+     null,
+     null,
+     null,
+     null
+    ],
+    "group": 4,
+    "group_notes": [
+     88
+    ]
+   },
+   "window": {
+    "model_s": 6.0,
+    "reference_s": 6.0
+   },
+   "floor_state": {
+    "declared": false,
+    "basis": null,
+    "source": "preroll",
+    "level_db_hz": null,
+    "stationary": {
+     "slope_db_s": -11.24,
+     "corr": 1.0,
+     "tone_slope_db_s": -11.98,
+     "floor_like": false
+    },
+    "clear_partials_tail": 6,
+    "hum_dbfs": null,
+    "censors": {
+     "body": null,
+     "tnr": null
+    },
+    "body_floor_db": null,
+    "body_hum_db": null
+   }
   },
   {
    "timbre": "gm011",
@@ -3088,7 +5835,7 @@
    "f0_hz": 1318.32,
    "cents_vs_et": -0.25,
    "inharmonicity_b": 0.0,
-   "partials_fit": 4,
+   "partials_fit": 0,
    "inharmonicity_reliable": false,
    "partials_hz": [
     1318.32,
@@ -3126,9 +5873,50 @@
     -127.36,
     -94.1
    ],
+   "modal_profile": {
+    "modal_hz": [
+     1318.32,
+     2637.0,
+     5344.63,
+     10095.43
+    ],
+    "modal_db": [
+     0.0,
+     -31.47,
+     -23.81,
+     -44.15
+    ],
+    "modal_ratio": [
+     0.9999,
+     2.0,
+     4.0535,
+     7.6567
+    ]
+   },
    "body_below_f0_db": -66.52,
    "body_under_db": -102.88,
    "body_f0_db": -36.36,
+   "body_lines": {
+    "hz": [
+     226.0,
+     246.5
+    ],
+    "share_removed": 0.0,
+    "reason": "recurring fixed-frequency lines in the source",
+    "missed": {
+     "lines": [
+      {
+       "hz": 118.8,
+       "share": 0.2063
+      },
+      {
+       "hz": 909.9,
+       "share": 0.0002
+      }
+     ],
+     "reason": "recurs on 2 notes; N=3"
+    }
+   },
    "peak_dbfs": -19.1,
    "rms_dbfs": -40.8,
    "held_peak_dbfs": -28.33,
@@ -3207,7 +5995,103 @@
    "centroid_hz": 1331.7,
    "tnr_mask": {},
    "tnr_db": 45.25,
-   "stereo_width": -0.0
+   "stereo_width": -0.0,
+   "loop": {
+    "verdict": "looped",
+    "residual_db": -38.6,
+    "median_db": -38.6,
+    "frames": 6,
+    "reaching_frames": 6,
+    "reach_ms": 1664.6,
+    "period_ms": 13.654,
+    "join_s": 0.08,
+    "period_pitch_periods": 18.0,
+    "body_lines": {
+     "lines_below_f0": 12,
+     "on_lines": true
+    },
+    "excluded": {
+     "stretch": "reads the loop (loop period 13.654 ms = 18.0 pitch periods, exact repetition from 0.08 s, residual -38.6 dB)",
+     "tnr": "reads the loop (loop period 13.654 ms = 18.0 pitch periods, exact repetition from 0.08 s, residual -38.6 dB); periodising an unlooped note sample-exactly moved tnr -11..-14 dB and body +2..+7 dB at 100-300 ms; open: a seam statistic did not separate loop seams from arbitrary boundaries (naive loops 2.5-69, unlooped notes 1.3-6.5), so no row is granted a snapshot",
+     "body": "sub-f0 power is the loop's own lines at 1/period (loop period 13.654 ms = 18.0 pitch periods, exact repetition from 0.08 s, residual -38.6 dB); periodising an unlooped note sample-exactly moved tnr -11..-14 dB and body +2..+7 dB at 100-300 ms; open: a seam statistic did not separate loop seams from arbitrary boundaries (naive loops 2.5-69, unlooped notes 1.3-6.5), so no row is granted a snapshot",
+     "decay": "time-varying past the join (loop period 13.654 ms = 18.0 pitch periods, exact repetition from 0.08 s, residual -38.6 dB)",
+     "aftersound": "time-varying past the join (loop period 13.654 ms = 18.0 pitch periods, exact repetition from 0.08 s, residual -38.6 dB)",
+     "doubling": "time-varying past the join (loop period 13.654 ms = 18.0 pitch periods, exact repetition from 0.08 s, residual -38.6 dB)",
+     "partial_tilt": "time-varying past the join (loop period 13.654 ms = 18.0 pitch periods, exact repetition from 0.08 s, residual -38.6 dB)",
+     "band_decay": "time-varying past the join (loop period 13.654 ms = 18.0 pitch periods, exact repetition from 0.08 s, residual -38.6 dB)",
+     "ring": "time-varying past the join (loop period 13.654 ms = 18.0 pitch periods, exact repetition from 0.08 s, residual -38.6 dB)",
+     "onset_settle": "time-varying past the join (loop period 13.654 ms = 18.0 pitch periods, exact repetition from 0.08 s, residual -38.6 dB)",
+     "damper": "time-varying past the join (loop period 13.654 ms = 18.0 pitch periods, exact repetition from 0.08 s, residual -38.6 dB)"
+    },
+    "snapshot": {
+     "balance": {
+      "label": "snapshot of one frozen cycle",
+      "group": 4
+     },
+     "centroid_pct": {
+      "label": "snapshot of one frozen cycle",
+      "group": 4
+     },
+     "register": {
+      "label": "snapshot of one frozen cycle",
+      "group": 4
+     },
+     "crest": {
+      "label": "snapshot of one frozen cycle",
+      "group": 4
+     }
+    },
+    "ladder_db": [
+     0.0,
+     -31.4,
+     -71.0,
+     -25.2,
+     -82.0,
+     -92.3,
+     -72.7,
+     -45.5,
+     -64.7,
+     -85.6,
+     -120.7,
+     -120.7,
+     -124.8,
+     -119.5,
+     -125.6,
+     -94.2,
+     null,
+     null,
+     null,
+     null
+    ],
+    "group": 4,
+    "group_notes": [
+     88
+    ]
+   },
+   "window": {
+    "model_s": 6.0,
+    "reference_s": 6.0
+   },
+   "floor_state": {
+    "declared": false,
+    "basis": null,
+    "source": "preroll",
+    "level_db_hz": null,
+    "stationary": {
+     "slope_db_s": -11.24,
+     "corr": 1.0,
+     "tone_slope_db_s": -11.99,
+     "floor_like": false
+    },
+    "clear_partials_tail": 6,
+    "hum_dbfs": null,
+    "censors": {
+     "body": null,
+     "tnr": null
+    },
+    "body_floor_db": null,
+    "body_hum_db": null
+   }
   },
   {
    "timbre": "gm011",
@@ -3216,7 +6100,7 @@
    "f0_hz": 1318.317,
    "cents_vs_et": -0.25,
    "inharmonicity_b": 0.0,
-   "partials_fit": 4,
+   "partials_fit": 0,
    "inharmonicity_reliable": false,
    "partials_hz": [
     1318.32,
@@ -3254,9 +6138,50 @@
     -127.27,
     -94.08
    ],
+   "modal_profile": {
+    "modal_hz": [
+     1318.32,
+     2637.0,
+     5344.62,
+     10095.43
+    ],
+    "modal_db": [
+     0.0,
+     -31.52,
+     -23.77,
+     -44.06
+    ],
+    "modal_ratio": [
+     0.9999,
+     2.0,
+     4.0535,
+     7.6567
+    ]
+   },
    "body_below_f0_db": -66.53,
    "body_under_db": -99.67,
    "body_f0_db": -33.14,
+   "body_lines": {
+    "hz": [
+     226.0,
+     246.5
+    ],
+    "share_removed": 0.0,
+    "reason": "recurring fixed-frequency lines in the source",
+    "missed": {
+     "lines": [
+      {
+       "hz": 118.8,
+       "share": 0.2062
+      },
+      {
+       "hz": 909.9,
+       "share": 0.0002
+      }
+     ],
+     "reason": "recurs on 2 notes; N=3"
+    }
+   },
    "peak_dbfs": -15.88,
    "rms_dbfs": -37.46,
    "held_peak_dbfs": -25.11,
@@ -3335,7 +6260,103 @@
    "centroid_hz": 1331.8,
    "tnr_mask": {},
    "tnr_db": 45.22,
-   "stereo_width": 0.0
+   "stereo_width": 0.0,
+   "loop": {
+    "verdict": "looped",
+    "residual_db": -38.6,
+    "median_db": -38.6,
+    "frames": 6,
+    "reaching_frames": 6,
+    "reach_ms": 1700.1,
+    "period_ms": 13.654,
+    "join_s": 0.123,
+    "period_pitch_periods": 18.0,
+    "body_lines": {
+     "lines_below_f0": 12,
+     "on_lines": true
+    },
+    "excluded": {
+     "stretch": "reads the loop (loop period 13.654 ms = 18.0 pitch periods, exact repetition from 0.123 s, residual -38.6 dB)",
+     "tnr": "reads the loop (loop period 13.654 ms = 18.0 pitch periods, exact repetition from 0.123 s, residual -38.6 dB); periodising an unlooped note sample-exactly moved tnr -11..-14 dB and body +2..+7 dB at 100-300 ms; open: a seam statistic did not separate loop seams from arbitrary boundaries (naive loops 2.5-69, unlooped notes 1.3-6.5), so no row is granted a snapshot",
+     "body": "sub-f0 power is the loop's own lines at 1/period (loop period 13.654 ms = 18.0 pitch periods, exact repetition from 0.123 s, residual -38.6 dB); periodising an unlooped note sample-exactly moved tnr -11..-14 dB and body +2..+7 dB at 100-300 ms; open: a seam statistic did not separate loop seams from arbitrary boundaries (naive loops 2.5-69, unlooped notes 1.3-6.5), so no row is granted a snapshot",
+     "decay": "time-varying past the join (loop period 13.654 ms = 18.0 pitch periods, exact repetition from 0.123 s, residual -38.6 dB)",
+     "aftersound": "time-varying past the join (loop period 13.654 ms = 18.0 pitch periods, exact repetition from 0.123 s, residual -38.6 dB)",
+     "doubling": "time-varying past the join (loop period 13.654 ms = 18.0 pitch periods, exact repetition from 0.123 s, residual -38.6 dB)",
+     "partial_tilt": "time-varying past the join (loop period 13.654 ms = 18.0 pitch periods, exact repetition from 0.123 s, residual -38.6 dB)",
+     "band_decay": "time-varying past the join (loop period 13.654 ms = 18.0 pitch periods, exact repetition from 0.123 s, residual -38.6 dB)",
+     "ring": "time-varying past the join (loop period 13.654 ms = 18.0 pitch periods, exact repetition from 0.123 s, residual -38.6 dB)",
+     "onset_settle": "time-varying past the join (loop period 13.654 ms = 18.0 pitch periods, exact repetition from 0.123 s, residual -38.6 dB)",
+     "damper": "time-varying past the join (loop period 13.654 ms = 18.0 pitch periods, exact repetition from 0.123 s, residual -38.6 dB)"
+    },
+    "snapshot": {
+     "balance": {
+      "label": "snapshot of one frozen cycle",
+      "group": 4
+     },
+     "centroid_pct": {
+      "label": "snapshot of one frozen cycle",
+      "group": 4
+     },
+     "register": {
+      "label": "snapshot of one frozen cycle",
+      "group": 4
+     },
+     "crest": {
+      "label": "snapshot of one frozen cycle",
+      "group": 4
+     }
+    },
+    "ladder_db": [
+     0.0,
+     -31.4,
+     -71.0,
+     -25.2,
+     -82.0,
+     -92.3,
+     -72.7,
+     -45.5,
+     -64.7,
+     -85.6,
+     -120.7,
+     -120.7,
+     -124.8,
+     -119.5,
+     -125.6,
+     -94.2,
+     null,
+     null,
+     null,
+     null
+    ],
+    "group": 4,
+    "group_notes": [
+     88
+    ]
+   },
+   "window": {
+    "model_s": 6.0,
+    "reference_s": 6.0
+   },
+   "floor_state": {
+    "declared": false,
+    "basis": null,
+    "source": "preroll",
+    "level_db_hz": null,
+    "stationary": {
+     "slope_db_s": -11.24,
+     "corr": 1.0,
+     "tone_slope_db_s": -11.99,
+     "floor_like": false
+    },
+    "clear_partials_tail": 6,
+    "hum_dbfs": null,
+    "censors": {
+     "body": null,
+     "tnr": null
+    },
+    "body_floor_db": null,
+    "body_hum_db": null
+   }
   },
   {
    "timbre": "gm011",
@@ -3344,7 +6365,7 @@
    "f0_hz": 1660.989,
    "cents_vs_et": -0.24,
    "inharmonicity_b": 0.0,
-   "partials_fit": 4,
+   "partials_fit": 0,
    "inharmonicity_reliable": false,
    "partials_hz": [
     1660.99,
@@ -3376,9 +6397,63 @@
     -132.74,
     -91.26
    ],
-   "body_below_f0_db": -65.63,
-   "body_under_db": -117.86,
+   "modal_profile": {
+    "modal_hz": [
+     1660.99,
+     3322.47,
+     6733.81
+    ],
+    "modal_db": [
+     0.0,
+     -20.51,
+     -25.65
+    ],
+    "modal_ratio": [
+     0.9999,
+     2.0,
+     4.0535
+    ]
+   },
+   "body_below_f0_db": -65.88,
+   "body_under_db": -118.1,
    "body_f0_db": -52.22,
+   "body_lines": {
+    "hz": [
+     226.0,
+     246.5
+    ],
+    "share_removed": 0.0556,
+    "reason": "recurring fixed-frequency lines in the source",
+    "missed": {
+     "lines": [
+      {
+       "hz": 118.8,
+       "share": 0.0002
+      },
+      {
+       "hz": 138.5,
+       "share": 0.0003
+      },
+      {
+       "hz": 316.5,
+       "share": 0.0002
+      },
+      {
+       "hz": 336.4,
+       "share": 0.0002
+      },
+      {
+       "hz": 725.5,
+       "share": 0.0005
+      },
+      {
+       "hz": 909.9,
+       "share": 0.0002
+      }
+     ],
+     "reason": "recurs on 2 notes; N=3"
+    }
+   },
    "peak_dbfs": -40.03,
    "rms_dbfs": -57.1,
    "held_peak_dbfs": -45.84,
@@ -3454,7 +6529,66 @@
    "centroid_hz": 1684.3,
    "tnr_mask": {},
    "tnr_db": 55.1,
-   "stereo_width": 0.0
+   "stereo_width": 0.0,
+   "loop": {
+    "verdict": "not",
+    "residual_db": -31.0,
+    "median_db": -31.0,
+    "frames": 6,
+    "reaching_frames": 6,
+    "reach_ms": 1356.9,
+    "borderline": true,
+    "ladder_db": [
+     0.0,
+     -21.4,
+     -80.1,
+     -26.6,
+     -62.9,
+     -83.7,
+     -87.1,
+     -48.4,
+     -82.3,
+     -96.2,
+     -103.5,
+     -125.7,
+     null,
+     null,
+     null,
+     null,
+     null,
+     null,
+     null,
+     null
+    ],
+    "group": 5,
+    "group_notes": [
+     92
+    ]
+   },
+   "window": {
+    "model_s": 6.0,
+    "reference_s": 6.0
+   },
+   "floor_state": {
+    "declared": false,
+    "basis": null,
+    "source": "preroll",
+    "level_db_hz": null,
+    "stationary": {
+     "slope_db_s": -13.41,
+     "corr": 1.0,
+     "tone_slope_db_s": -13.75,
+     "floor_like": false
+    },
+    "clear_partials_tail": 4,
+    "hum_dbfs": null,
+    "censors": {
+     "body": null,
+     "tnr": null
+    },
+    "body_floor_db": null,
+    "body_hum_db": null
+   }
   },
   {
    "timbre": "gm011",
@@ -3463,7 +6597,7 @@
    "f0_hz": 1660.988,
    "cents_vs_et": -0.24,
    "inharmonicity_b": 0.0,
-   "partials_fit": 4,
+   "partials_fit": 0,
    "inharmonicity_reliable": false,
    "partials_hz": [
     1660.99,
@@ -3495,9 +6629,63 @@
     -132.77,
     -91.26
    ],
-   "body_below_f0_db": -65.64,
-   "body_under_db": -111.72,
+   "modal_profile": {
+    "modal_hz": [
+     1660.99,
+     3322.46,
+     6733.81
+    ],
+    "modal_db": [
+     0.0,
+     -20.52,
+     -25.65
+    ],
+    "modal_ratio": [
+     0.9999,
+     2.0,
+     4.0535
+    ]
+   },
+   "body_below_f0_db": -65.88,
+   "body_under_db": -111.96,
    "body_f0_db": -46.08,
+   "body_lines": {
+    "hz": [
+     226.0,
+     246.5
+    ],
+    "share_removed": 0.0556,
+    "reason": "recurring fixed-frequency lines in the source",
+    "missed": {
+     "lines": [
+      {
+       "hz": 118.8,
+       "share": 0.0003
+      },
+      {
+       "hz": 138.5,
+       "share": 0.0003
+      },
+      {
+       "hz": 316.5,
+       "share": 0.0002
+      },
+      {
+       "hz": 336.4,
+       "share": 0.0002
+      },
+      {
+       "hz": 725.5,
+       "share": 0.0005
+      },
+      {
+       "hz": 909.9,
+       "share": 0.0003
+      }
+     ],
+     "reason": "recurs on 2 notes; N=3"
+    }
+   },
    "peak_dbfs": -32.41,
    "rms_dbfs": -50.73,
    "held_peak_dbfs": -38.88,
@@ -3573,7 +6761,66 @@
    "centroid_hz": 1684.3,
    "tnr_mask": {},
    "tnr_db": 55.1,
-   "stereo_width": -0.0
+   "stereo_width": -0.0,
+   "loop": {
+    "verdict": "not",
+    "residual_db": -31.0,
+    "median_db": -31.0,
+    "frames": 6,
+    "reaching_frames": 6,
+    "reach_ms": 1445.4,
+    "borderline": true,
+    "ladder_db": [
+     0.0,
+     -21.4,
+     -80.1,
+     -26.6,
+     -62.9,
+     -83.7,
+     -87.1,
+     -48.4,
+     -82.3,
+     -96.2,
+     -103.5,
+     -125.7,
+     null,
+     null,
+     null,
+     null,
+     null,
+     null,
+     null,
+     null
+    ],
+    "group": 5,
+    "group_notes": [
+     92
+    ]
+   },
+   "window": {
+    "model_s": 6.0,
+    "reference_s": 6.0
+   },
+   "floor_state": {
+    "declared": false,
+    "basis": null,
+    "source": "preroll",
+    "level_db_hz": null,
+    "stationary": {
+     "slope_db_s": -13.41,
+     "corr": 1.0,
+     "tone_slope_db_s": -13.76,
+     "floor_like": false
+    },
+    "clear_partials_tail": 4,
+    "hum_dbfs": null,
+    "censors": {
+     "body": null,
+     "tnr": null
+    },
+    "body_floor_db": null,
+    "body_hum_db": null
+   }
   },
   {
    "timbre": "gm011",
@@ -3582,7 +6829,7 @@
    "f0_hz": 1660.986,
    "cents_vs_et": -0.24,
    "inharmonicity_b": 0.0,
-   "partials_fit": 4,
+   "partials_fit": 0,
    "inharmonicity_reliable": false,
    "partials_hz": [
     1660.99,
@@ -3614,9 +6861,63 @@
     -132.76,
     -91.24
    ],
-   "body_below_f0_db": -65.64,
-   "body_under_db": -106.69,
+   "modal_profile": {
+    "modal_hz": [
+     1660.99,
+     3322.46,
+     6733.81
+    ],
+    "modal_db": [
+     0.0,
+     -20.53,
+     -25.65
+    ],
+    "modal_ratio": [
+     0.9999,
+     2.0,
+     4.0535
+    ]
+   },
+   "body_below_f0_db": -65.89,
+   "body_under_db": -106.94,
    "body_f0_db": -41.05,
+   "body_lines": {
+    "hz": [
+     226.0,
+     246.5
+    ],
+    "share_removed": 0.0555,
+    "reason": "recurring fixed-frequency lines in the source",
+    "missed": {
+     "lines": [
+      {
+       "hz": 118.8,
+       "share": 0.0003
+      },
+      {
+       "hz": 138.5,
+       "share": 0.0003
+      },
+      {
+       "hz": 316.5,
+       "share": 0.0002
+      },
+      {
+       "hz": 336.4,
+       "share": 0.0002
+      },
+      {
+       "hz": 725.5,
+       "share": 0.0005
+      },
+      {
+       "hz": 909.9,
+       "share": 0.0003
+      }
+     ],
+     "reason": "recurs on 2 notes; N=3"
+    }
+   },
    "peak_dbfs": -25.55,
    "rms_dbfs": -45.45,
    "held_peak_dbfs": -33.04,
@@ -3692,7 +6993,66 @@
    "centroid_hz": 1684.4,
    "tnr_mask": {},
    "tnr_db": 55.1,
-   "stereo_width": 0.0
+   "stereo_width": 0.0,
+   "loop": {
+    "verdict": "not",
+    "residual_db": -31.0,
+    "median_db": -31.0,
+    "frames": 6,
+    "reaching_frames": 6,
+    "reach_ms": 1509.2,
+    "borderline": true,
+    "ladder_db": [
+     0.0,
+     -21.4,
+     -80.1,
+     -26.6,
+     -62.9,
+     -83.7,
+     -87.1,
+     -48.4,
+     -82.3,
+     -96.2,
+     -103.5,
+     -125.7,
+     null,
+     null,
+     null,
+     null,
+     null,
+     null,
+     null,
+     null
+    ],
+    "group": 5,
+    "group_notes": [
+     92
+    ]
+   },
+   "window": {
+    "model_s": 6.0,
+    "reference_s": 6.0
+   },
+   "floor_state": {
+    "declared": false,
+    "basis": null,
+    "source": "preroll",
+    "level_db_hz": null,
+    "stationary": {
+     "slope_db_s": -13.41,
+     "corr": 1.0,
+     "tone_slope_db_s": -13.76,
+     "floor_like": false
+    },
+    "clear_partials_tail": 4,
+    "hum_dbfs": null,
+    "censors": {
+     "body": null,
+     "tnr": null
+    },
+    "body_floor_db": null,
+    "body_hum_db": null
+   }
   },
   {
    "timbre": "gm011",
@@ -3701,7 +7061,7 @@
    "f0_hz": 1660.984,
    "cents_vs_et": -0.24,
    "inharmonicity_b": 0.0,
-   "partials_fit": 4,
+   "partials_fit": 0,
    "inharmonicity_reliable": false,
    "partials_hz": [
     1660.98,
@@ -3733,9 +7093,63 @@
     -132.8,
     -91.2
    ],
-   "body_below_f0_db": -65.64,
-   "body_under_db": -102.64,
+   "modal_profile": {
+    "modal_hz": [
+     1660.98,
+     3322.46,
+     6733.81
+    ],
+    "modal_db": [
+     0.0,
+     -20.56,
+     -25.65
+    ],
+    "modal_ratio": [
+     0.9999,
+     2.0,
+     4.0535
+    ]
+   },
+   "body_below_f0_db": -65.89,
+   "body_under_db": -102.89,
    "body_f0_db": -37.0,
+   "body_lines": {
+    "hz": [
+     226.0,
+     246.5
+    ],
+    "share_removed": 0.0554,
+    "reason": "recurring fixed-frequency lines in the source",
+    "missed": {
+     "lines": [
+      {
+       "hz": 118.8,
+       "share": 0.0003
+      },
+      {
+       "hz": 138.5,
+       "share": 0.0003
+      },
+      {
+       "hz": 316.5,
+       "share": 0.0002
+      },
+      {
+       "hz": 336.4,
+       "share": 0.0002
+      },
+      {
+       "hz": 725.5,
+       "share": 0.0005
+      },
+      {
+       "hz": 909.9,
+       "share": 0.0003
+      }
+     ],
+     "reason": "recurs on 2 notes; N=3"
+    }
+   },
    "peak_dbfs": -20.1,
    "rms_dbfs": -41.17,
    "held_peak_dbfs": -28.56,
@@ -3811,7 +7225,66 @@
    "centroid_hz": 1684.4,
    "tnr_mask": {},
    "tnr_db": 55.09,
-   "stereo_width": -0.0
+   "stereo_width": -0.0,
+   "loop": {
+    "verdict": "not",
+    "residual_db": -31.0,
+    "median_db": -31.0,
+    "frames": 6,
+    "reaching_frames": 6,
+    "reach_ms": 1555.5,
+    "borderline": true,
+    "ladder_db": [
+     0.0,
+     -21.4,
+     -80.1,
+     -26.6,
+     -62.9,
+     -83.7,
+     -87.1,
+     -48.4,
+     -82.3,
+     -96.2,
+     -103.5,
+     -125.7,
+     null,
+     null,
+     null,
+     null,
+     null,
+     null,
+     null,
+     null
+    ],
+    "group": 5,
+    "group_notes": [
+     92
+    ]
+   },
+   "window": {
+    "model_s": 6.0,
+    "reference_s": 6.0
+   },
+   "floor_state": {
+    "declared": false,
+    "basis": null,
+    "source": "preroll",
+    "level_db_hz": null,
+    "stationary": {
+     "slope_db_s": -13.42,
+     "corr": 1.0,
+     "tone_slope_db_s": -13.77,
+     "floor_like": false
+    },
+    "clear_partials_tail": 4,
+    "hum_dbfs": null,
+    "censors": {
+     "body": null,
+     "tnr": null
+    },
+    "body_floor_db": null,
+    "body_hum_db": null
+   }
   },
   {
    "timbre": "gm011",
@@ -3820,7 +7293,7 @@
    "f0_hz": 1660.981,
    "cents_vs_et": -0.25,
    "inharmonicity_b": 0.0,
-   "partials_fit": 4,
+   "partials_fit": 0,
    "inharmonicity_reliable": false,
    "partials_hz": [
     1660.98,
@@ -3852,9 +7325,63 @@
     -132.8,
     -91.14
    ],
-   "body_below_f0_db": -65.64,
-   "body_under_db": -99.41,
+   "modal_profile": {
+    "modal_hz": [
+     1660.98,
+     3322.45,
+     6733.8
+    ],
+    "modal_db": [
+     0.0,
+     -20.6,
+     -25.65
+    ],
+    "modal_ratio": [
+     0.9999,
+     2.0,
+     4.0535
+    ]
+   },
+   "body_below_f0_db": -65.88,
+   "body_under_db": -99.66,
    "body_f0_db": -33.77,
+   "body_lines": {
+    "hz": [
+     226.0,
+     246.5
+    ],
+    "share_removed": 0.0553,
+    "reason": "recurring fixed-frequency lines in the source",
+    "missed": {
+     "lines": [
+      {
+       "hz": 118.8,
+       "share": 0.0003
+      },
+      {
+       "hz": 138.5,
+       "share": 0.0003
+      },
+      {
+       "hz": 316.5,
+       "share": 0.0002
+      },
+      {
+       "hz": 336.4,
+       "share": 0.0001
+      },
+      {
+       "hz": 725.5,
+       "share": 0.0005
+      },
+      {
+       "hz": 909.9,
+       "share": 0.0003
+      }
+     ],
+     "reason": "recurs on 2 notes; N=3"
+    }
+   },
    "peak_dbfs": -16.88,
    "rms_dbfs": -37.81,
    "held_peak_dbfs": -25.34,
@@ -3930,44 +7457,149 @@
    "centroid_hz": 1684.5,
    "tnr_mask": {},
    "tnr_db": 55.08,
-   "stereo_width": 0.0
+   "stereo_width": 0.0,
+   "loop": {
+    "verdict": "not",
+    "residual_db": -31.0,
+    "median_db": -31.0,
+    "frames": 6,
+    "reaching_frames": 6,
+    "reach_ms": 1589.3,
+    "borderline": true,
+    "ladder_db": [
+     0.0,
+     -21.4,
+     -80.1,
+     -26.6,
+     -62.9,
+     -83.7,
+     -87.1,
+     -48.4,
+     -82.3,
+     -96.2,
+     -103.5,
+     -125.7,
+     null,
+     null,
+     null,
+     null,
+     null,
+     null,
+     null,
+     null
+    ],
+    "group": 5,
+    "group_notes": [
+     92
+    ]
+   },
+   "window": {
+    "model_s": 6.0,
+    "reference_s": 6.0
+   },
+   "floor_state": {
+    "declared": false,
+    "basis": null,
+    "source": "preroll",
+    "level_db_hz": null,
+    "stationary": {
+     "slope_db_s": -13.42,
+     "corr": 1.0,
+     "tone_slope_db_s": -13.78,
+     "floor_like": false
+    },
+    "clear_partials_tail": 4,
+    "hum_dbfs": null,
+    "censors": {
+     "body": null,
+     "tnr": null
+    },
+    "body_floor_db": null,
+    "body_hum_db": null
+   }
   },
   {
    "timbre": "gm011",
    "note": 96,
    "velocity": 32,
-   "f0_hz": 2092.459,
-   "cents_vs_et": -0.45,
-   "inharmonicity_b": 0.00024,
-   "partials_fit": 4,
+   "f0_hz": 2092.715,
+   "cents_vs_et": -0.24,
+   "inharmonicity_b": 0.0,
+   "partials_fit": 0,
    "inharmonicity_reliable": false,
    "partials_hz": [
     2092.72,
     4186.06,
     6221.66,
     8484.09,
-    10639.57,
+    10604.78,
     12528.06,
-    14775.77,
+    14440.74,
     16644.55,
     18946.78,
-    20947.64
+    20730.95
    ],
    "partials_db": [
     0.0,
     -22.13,
     -89.63,
     -28.18,
-    -103.7,
+    -106.7,
     -96.31,
-    -92.79,
+    -64.76,
     -108.16,
     -116.2,
-    -133.76
+    -132.45
    ],
+   "modal_profile": {
+    "modal_hz": [
+     2092.72,
+     4186.06,
+     8484.09
+    ],
+    "modal_db": [
+     0.0,
+     -22.13,
+     -28.18
+    ],
+    "modal_ratio": [
+     0.9999,
+     2.0,
+     4.0535
+    ]
+   },
    "body_below_f0_db": -65.79,
    "body_under_db": -118.74,
    "body_f0_db": -52.95,
+   "body_lines": {
+    "hz": [
+     226.0,
+     246.5
+    ],
+    "share_removed": 0.0003,
+    "reason": "recurring fixed-frequency lines in the source",
+    "missed": {
+     "lines": [
+      {
+       "hz": 82.1,
+       "share": 0.0
+      },
+      {
+       "hz": 174.5,
+       "share": 0.0004
+      },
+      {
+       "hz": 249.2,
+       "share": 0.0001
+      },
+      {
+       "hz": 498.4,
+       "share": 0.0013
+      }
+     ],
+     "reason": "recurs on 2 notes; N=3"
+    }
+   },
    "peak_dbfs": -40.28,
    "rms_dbfs": -57.74,
    "held_peak_dbfs": -46.08,
@@ -3984,9 +7616,9 @@
     -11.51,
     -11.67,
     -11.68,
-    -11.54,
+    -10.97,
     -11.53,
-    -10.93,
+    -11.68,
     -11.5
    ],
    "partial_clear_s": [
@@ -4004,24 +7636,24 @@
     -11.51,
     -11.67,
     -11.68,
-    -11.54,
+    -10.97,
     -11.53,
-    -10.93,
+    -11.68,
     -11.5
    ],
    "valley_db": [
     -145.8,
     -157.05,
     -157.69,
-    -180.16,
-    -179.23,
-    -171.77,
-    -200.22,
+    -180.13,
+    -179.21,
+    -171.12,
+    -175.09,
     -186.05,
-    -208.74
+    -208.63
    ],
-   "valley_slope_db_oct": -21.116,
-   "valley_ladder_coupling": 0.513,
+   "valley_slope_db_oct": -18.542,
+   "valley_ladder_coupling": 0.495,
    "floor_source": "preroll",
    "floor_db": -105.34,
    "floor_octaves_db": [
@@ -4040,44 +7672,149 @@
    "centroid_hz": 2115.3,
    "tnr_mask": {},
    "tnr_db": 56.1,
-   "stereo_width": 0.0
+   "stereo_width": 0.0,
+   "loop": {
+    "verdict": "not",
+    "residual_db": -29.3,
+    "median_db": -29.3,
+    "frames": 6,
+    "reaching_frames": 6,
+    "reach_ms": 1262.2,
+    "borderline": false,
+    "ladder_db": [
+     0.0,
+     -22.1,
+     -58.9,
+     -28.1,
+     -65.1,
+     -87.3,
+     -64.7,
+     -53.2,
+     -112.9,
+     null,
+     null,
+     null,
+     null,
+     null,
+     null,
+     null,
+     null,
+     null,
+     null,
+     null
+    ],
+    "group": 6,
+    "group_notes": [
+     96
+    ]
+   },
+   "window": {
+    "model_s": 6.0,
+    "reference_s": 6.0
+   },
+   "floor_state": {
+    "declared": false,
+    "basis": null,
+    "source": "preroll",
+    "level_db_hz": null,
+    "stationary": {
+     "slope_db_s": -14.85,
+     "corr": 1.0,
+     "tone_slope_db_s": -16.19,
+     "floor_like": false
+    },
+    "clear_partials_tail": 3,
+    "hum_dbfs": null,
+    "censors": {
+     "body": null,
+     "tnr": null
+    },
+    "body_floor_db": null,
+    "body_hum_db": null
+   }
   },
   {
    "timbre": "gm011",
    "note": 96,
    "velocity": 56,
-   "f0_hz": 2092.458,
-   "cents_vs_et": -0.45,
-   "inharmonicity_b": 0.0002401,
-   "partials_fit": 4,
+   "f0_hz": 2092.714,
+   "cents_vs_et": -0.24,
+   "inharmonicity_b": 0.0,
+   "partials_fit": 0,
    "inharmonicity_reliable": false,
    "partials_hz": [
     2092.72,
     4186.06,
     6221.66,
     8484.09,
-    10639.57,
+    10604.78,
     12528.06,
-    14775.77,
+    14440.74,
     16644.55,
     18946.78,
-    20947.64
+    20730.95
    ],
    "partials_db": [
     0.0,
     -22.12,
     -89.62,
     -28.17,
-    -103.7,
+    -106.69,
     -96.3,
-    -92.79,
+    -64.75,
     -108.15,
     -116.19,
-    -133.79
+    -132.45
    ],
+   "modal_profile": {
+    "modal_hz": [
+     2092.72,
+     4186.06,
+     8484.09
+    ],
+    "modal_db": [
+     0.0,
+     -22.12,
+     -28.17
+    ],
+    "modal_ratio": [
+     0.9999,
+     2.0,
+     4.0535
+    ]
+   },
    "body_below_f0_db": -65.79,
-   "body_under_db": -112.59,
+   "body_under_db": -112.6,
    "body_f0_db": -46.8,
+   "body_lines": {
+    "hz": [
+     226.0,
+     246.5
+    ],
+    "share_removed": 0.0003,
+    "reason": "recurring fixed-frequency lines in the source",
+    "missed": {
+     "lines": [
+      {
+       "hz": 82.1,
+       "share": 0.0001
+      },
+      {
+       "hz": 174.5,
+       "share": 0.0003
+      },
+      {
+       "hz": 249.2,
+       "share": 0.0001
+      },
+      {
+       "hz": 498.4,
+       "share": 0.0013
+      }
+     ],
+     "reason": "recurs on 2 notes; N=3"
+    }
+   },
    "peak_dbfs": -32.55,
    "rms_dbfs": -51.32,
    "held_peak_dbfs": -39.04,
@@ -4094,9 +7831,9 @@
     -11.47,
     -11.62,
     -11.54,
-    -11.59,
+    -10.83,
     -11.4,
-    -10.81,
+    -11.55,
     -11.55
    ],
    "partial_clear_s": [
@@ -4114,24 +7851,24 @@
     -11.47,
     -11.62,
     -11.54,
-    -11.59,
+    -10.83,
     -11.4,
-    -10.81,
+    -11.55,
     -11.55
    ],
    "valley_db": [
     -139.65,
     -150.91,
     -151.54,
-    -174.01,
-    -173.08,
-    -165.63,
-    -194.07,
+    -173.99,
+    -173.06,
+    -164.98,
+    -168.94,
     -179.9,
-    -202.61
+    -202.5
    ],
-   "valley_slope_db_oct": -21.119,
-   "valley_ladder_coupling": 0.513,
+   "valley_slope_db_oct": -18.544,
+   "valley_ladder_coupling": 0.495,
    "floor_source": "preroll",
    "floor_db": -107.98,
    "floor_octaves_db": [
@@ -4150,44 +7887,149 @@
    "centroid_hz": 2115.3,
    "tnr_mask": {},
    "tnr_db": 56.1,
-   "stereo_width": 0.0
+   "stereo_width": 0.0,
+   "loop": {
+    "verdict": "not",
+    "residual_db": -29.3,
+    "median_db": -29.3,
+    "frames": 6,
+    "reaching_frames": 6,
+    "reach_ms": 1346.6,
+    "borderline": false,
+    "ladder_db": [
+     0.0,
+     -22.1,
+     -58.9,
+     -28.1,
+     -65.1,
+     -87.3,
+     -64.7,
+     -53.2,
+     -112.9,
+     null,
+     null,
+     null,
+     null,
+     null,
+     null,
+     null,
+     null,
+     null,
+     null,
+     null
+    ],
+    "group": 6,
+    "group_notes": [
+     96
+    ]
+   },
+   "window": {
+    "model_s": 6.0,
+    "reference_s": 6.0
+   },
+   "floor_state": {
+    "declared": false,
+    "basis": null,
+    "source": "preroll",
+    "level_db_hz": null,
+    "stationary": {
+     "slope_db_s": -14.85,
+     "corr": 1.0,
+     "tone_slope_db_s": -16.19,
+     "floor_like": false
+    },
+    "clear_partials_tail": 3,
+    "hum_dbfs": null,
+    "censors": {
+     "body": null,
+     "tnr": null
+    },
+    "body_floor_db": null,
+    "body_hum_db": null
+   }
   },
   {
    "timbre": "gm011",
    "note": 96,
    "velocity": 80,
-   "f0_hz": 2092.457,
-   "cents_vs_et": -0.45,
-   "inharmonicity_b": 0.0002403,
-   "partials_fit": 4,
+   "f0_hz": 2092.713,
+   "cents_vs_et": -0.24,
+   "inharmonicity_b": 0.0,
+   "partials_fit": 0,
    "inharmonicity_reliable": false,
    "partials_hz": [
     2092.71,
     4186.06,
     6221.66,
     8484.09,
-    10639.57,
+    10604.78,
     12528.06,
-    14775.77,
+    14440.74,
     16644.55,
     18946.78,
-    20947.64
+    20730.95
    ],
    "partials_db": [
     0.0,
     -22.1,
     -89.6,
     -28.14,
-    -103.68,
+    -106.69,
     -96.28,
-    -92.78,
+    -64.73,
     -108.14,
     -116.18,
-    -133.77
+    -132.45
    ],
+   "modal_profile": {
+    "modal_hz": [
+     2092.71,
+     4186.06,
+     8484.09
+    ],
+    "modal_db": [
+     0.0,
+     -22.1,
+     -28.14
+    ],
+    "modal_ratio": [
+     0.9999,
+     2.0,
+     4.0535
+    ]
+   },
    "body_below_f0_db": -65.8,
    "body_under_db": -107.57,
    "body_f0_db": -41.78,
+   "body_lines": {
+    "hz": [
+     226.0,
+     246.5
+    ],
+    "share_removed": 0.0003,
+    "reason": "recurring fixed-frequency lines in the source",
+    "missed": {
+     "lines": [
+      {
+       "hz": 82.1,
+       "share": 0.0001
+      },
+      {
+       "hz": 174.5,
+       "share": 0.0004
+      },
+      {
+       "hz": 249.2,
+       "share": 0.0001
+      },
+      {
+       "hz": 498.4,
+       "share": 0.0013
+      }
+     ],
+     "reason": "recurs on 2 notes; N=3"
+    }
+   },
    "peak_dbfs": -25.92,
    "rms_dbfs": -46.0,
    "held_peak_dbfs": -33.15,
@@ -4204,9 +8046,9 @@
     -11.36,
     -11.51,
     -11.45,
-    -11.66,
-    -11.33,
     -10.76,
+    -11.33,
+    -11.37,
     -11.53
    ],
    "partial_clear_s": [
@@ -4224,24 +8066,24 @@
     -11.36,
     -11.51,
     -11.45,
-    -11.66,
-    -11.33,
     -10.76,
+    -11.33,
+    -11.37,
     -11.53
    ],
    "valley_db": [
     -134.62,
     -145.87,
     -146.51,
-    -168.97,
-    -168.05,
-    -160.59,
-    -189.03,
+    -168.95,
+    -168.02,
+    -159.94,
+    -163.9,
     -174.86,
-    -197.57
+    -197.46
    ],
-   "valley_slope_db_oct": -21.116,
-   "valley_ladder_coupling": 0.513,
+   "valley_slope_db_oct": -18.542,
+   "valley_ladder_coupling": 0.495,
    "floor_source": "preroll",
    "floor_db": -108.03,
    "floor_octaves_db": [
@@ -4260,44 +8102,149 @@
    "centroid_hz": 2115.3,
    "tnr_mask": {},
    "tnr_db": 56.1,
-   "stereo_width": -0.0
+   "stereo_width": -0.0,
+   "loop": {
+    "verdict": "not",
+    "residual_db": -29.3,
+    "median_db": -29.3,
+    "frames": 6,
+    "reaching_frames": 6,
+    "reach_ms": 1407.5,
+    "borderline": false,
+    "ladder_db": [
+     0.0,
+     -22.1,
+     -58.9,
+     -28.1,
+     -65.1,
+     -87.3,
+     -64.7,
+     -53.2,
+     -112.9,
+     null,
+     null,
+     null,
+     null,
+     null,
+     null,
+     null,
+     null,
+     null,
+     null,
+     null
+    ],
+    "group": 6,
+    "group_notes": [
+     96
+    ]
+   },
+   "window": {
+    "model_s": 6.0,
+    "reference_s": 6.0
+   },
+   "floor_state": {
+    "declared": false,
+    "basis": null,
+    "source": "preroll",
+    "level_db_hz": null,
+    "stationary": {
+     "slope_db_s": -14.85,
+     "corr": 1.0,
+     "tone_slope_db_s": -16.2,
+     "floor_like": false
+    },
+    "clear_partials_tail": 3,
+    "hum_dbfs": null,
+    "censors": {
+     "body": null,
+     "tnr": null
+    },
+    "body_floor_db": null,
+    "body_hum_db": null
+   }
   },
   {
    "timbre": "gm011",
    "note": 96,
    "velocity": 104,
-   "f0_hz": 2092.455,
-   "cents_vs_et": -0.45,
-   "inharmonicity_b": 0.0002404,
-   "partials_fit": 4,
+   "f0_hz": 2092.711,
+   "cents_vs_et": -0.24,
+   "inharmonicity_b": 0.0,
+   "partials_fit": 0,
    "inharmonicity_reliable": false,
    "partials_hz": [
     2092.71,
     4186.05,
     6221.66,
     8484.09,
-    10639.57,
+    10604.78,
     12528.06,
-    14775.77,
+    14440.74,
     16644.55,
     18946.78,
-    20947.63
+    20730.95
    ],
    "partials_db": [
     0.0,
     -22.08,
     -89.56,
     -28.11,
-    -103.66,
+    -106.67,
     -96.23,
-    -92.77,
+    -64.69,
     -108.12,
     -116.17,
-    -133.75
+    -132.43
    ],
+   "modal_profile": {
+    "modal_hz": [
+     2092.71,
+     4186.05,
+     8484.09
+    ],
+    "modal_db": [
+     0.0,
+     -22.08,
+     -28.11
+    ],
+    "modal_ratio": [
+     0.9999,
+     2.0,
+     4.0535
+    ]
+   },
    "body_below_f0_db": -65.79,
-   "body_under_db": -103.51,
+   "body_under_db": -103.52,
    "body_f0_db": -37.72,
+   "body_lines": {
+    "hz": [
+     226.0,
+     246.5
+    ],
+    "share_removed": 0.0003,
+    "reason": "recurring fixed-frequency lines in the source",
+    "missed": {
+     "lines": [
+      {
+       "hz": 82.1,
+       "share": 0.0
+      },
+      {
+       "hz": 174.5,
+       "share": 0.0003
+      },
+      {
+       "hz": 249.2,
+       "share": 0.0001
+      },
+      {
+       "hz": 498.4,
+       "share": 0.0013
+      }
+     ],
+     "reason": "recurs on 2 notes; N=3"
+    }
+   },
    "peak_dbfs": -20.14,
    "rms_dbfs": -41.69,
    "held_peak_dbfs": -28.68,
@@ -4314,9 +8261,9 @@
     -11.29,
     -11.35,
     -11.25,
-    -11.58,
+    -10.67,
     -11.09,
-    -10.68,
+    -11.26,
     -11.55
    ],
    "partial_clear_s": [
@@ -4334,24 +8281,24 @@
     -11.29,
     -11.35,
     -11.25,
-    -11.58,
+    -10.67,
     -11.09,
-    -10.68,
+    -11.26,
     -11.55
    ],
    "valley_db": [
     -130.56,
     -141.81,
     -142.44,
-    -164.91,
-    -163.98,
-    -156.53,
-    -184.97,
+    -164.89,
+    -163.96,
+    -155.88,
+    -159.84,
     -170.8,
-    -193.53
+    -193.42
    ],
-   "valley_slope_db_oct": -21.118,
-   "valley_ladder_coupling": 0.513,
+   "valley_slope_db_oct": -18.544,
+   "valley_ladder_coupling": 0.495,
    "floor_source": "preroll",
    "floor_db": -109.74,
    "floor_octaves_db": [
@@ -4370,44 +8317,149 @@
    "centroid_hz": 2115.3,
    "tnr_mask": {},
    "tnr_db": 56.09,
-   "stereo_width": 0.0
+   "stereo_width": 0.0,
+   "loop": {
+    "verdict": "not",
+    "residual_db": -29.3,
+    "median_db": -29.3,
+    "frames": 6,
+    "reaching_frames": 6,
+    "reach_ms": 1451.6,
+    "borderline": false,
+    "ladder_db": [
+     0.0,
+     -22.1,
+     -58.9,
+     -28.1,
+     -65.1,
+     -87.3,
+     -64.7,
+     -53.2,
+     -112.9,
+     null,
+     null,
+     null,
+     null,
+     null,
+     null,
+     null,
+     null,
+     null,
+     null,
+     null
+    ],
+    "group": 6,
+    "group_notes": [
+     96
+    ]
+   },
+   "window": {
+    "model_s": 6.0,
+    "reference_s": 6.0
+   },
+   "floor_state": {
+    "declared": false,
+    "basis": null,
+    "source": "preroll",
+    "level_db_hz": null,
+    "stationary": {
+     "slope_db_s": -14.85,
+     "corr": 1.0,
+     "tone_slope_db_s": -16.21,
+     "floor_like": false
+    },
+    "clear_partials_tail": 3,
+    "hum_dbfs": null,
+    "censors": {
+     "body": null,
+     "tnr": null
+    },
+    "body_floor_db": null,
+    "body_hum_db": null
+   }
   },
   {
    "timbre": "gm011",
    "note": 96,
    "velocity": 127,
-   "f0_hz": 2092.453,
-   "cents_vs_et": -0.46,
-   "inharmonicity_b": 0.00024,
-   "partials_fit": 4,
+   "f0_hz": 2092.709,
+   "cents_vs_et": -0.24,
+   "inharmonicity_b": 0.0,
+   "partials_fit": 0,
    "inharmonicity_reliable": false,
    "partials_hz": [
     2092.71,
     4186.05,
     6221.65,
     8484.09,
-    10639.57,
+    10604.78,
     12528.06,
-    14775.77,
+    14440.73,
     16644.55,
     18946.78,
-    20947.63
+    20730.95
    ],
    "partials_db": [
     0.0,
     -22.05,
     -89.5,
     -28.05,
-    -103.62,
+    -106.64,
     -96.16,
-    -92.74,
+    -64.63,
     -108.09,
     -116.14,
-    -133.74
+    -132.4
    ],
+   "modal_profile": {
+    "modal_hz": [
+     2092.71,
+     4186.05,
+     8484.09
+    ],
+    "modal_db": [
+     0.0,
+     -22.05,
+     -28.05
+    ],
+    "modal_ratio": [
+     0.9999,
+     2.0,
+     4.0535
+    ]
+   },
    "body_below_f0_db": -65.8,
    "body_under_db": -100.3,
    "body_f0_db": -34.5,
+   "body_lines": {
+    "hz": [
+     226.0,
+     246.5
+    ],
+    "share_removed": 0.0003,
+    "reason": "recurring fixed-frequency lines in the source",
+    "missed": {
+     "lines": [
+      {
+       "hz": 82.1,
+       "share": 0.0001
+      },
+      {
+       "hz": 174.5,
+       "share": 0.0003
+      },
+      {
+       "hz": 249.2,
+       "share": 0.0001
+      },
+      {
+       "hz": 498.4,
+       "share": 0.0013
+      }
+     ],
+     "reason": "recurs on 2 notes; N=3"
+    }
+   },
    "peak_dbfs": -16.92,
    "rms_dbfs": -38.3,
    "held_peak_dbfs": -25.46,
@@ -4424,9 +8476,9 @@
     -11.22,
     -11.19,
     -11.12,
-    -11.54,
+    -10.69,
     -10.97,
-    -10.78,
+    -11.03,
     -11.6
    ],
    "partial_clear_s": [
@@ -4444,24 +8496,24 @@
     -11.22,
     -11.19,
     -11.12,
-    -11.54,
+    -10.69,
     -10.97,
-    -10.78,
+    -11.03,
     -11.6
    ],
    "valley_db": [
     -127.34,
     -138.58,
     -139.21,
-    -161.67,
-    -160.75,
-    -153.29,
-    -181.73,
+    -161.65,
+    -160.73,
+    -152.64,
+    -156.6,
     -167.57,
-    -190.28
+    -190.17
    ],
-   "valley_slope_db_oct": -21.113,
-   "valley_ladder_coupling": 0.513,
+   "valley_slope_db_oct": -18.538,
+   "valley_ladder_coupling": 0.495,
    "floor_source": "preroll",
    "floor_db": -113.19,
    "floor_octaves_db": [
@@ -4480,19 +8532,78 @@
    "centroid_hz": 2115.4,
    "tnr_mask": {},
    "tnr_db": 56.08,
-   "stereo_width": 0.0
+   "stereo_width": 0.0,
+   "loop": {
+    "verdict": "not",
+    "residual_db": -29.3,
+    "median_db": -29.3,
+    "frames": 6,
+    "reaching_frames": 6,
+    "reach_ms": 1483.9,
+    "borderline": false,
+    "ladder_db": [
+     0.0,
+     -22.1,
+     -58.9,
+     -28.1,
+     -65.1,
+     -87.3,
+     -64.7,
+     -53.2,
+     -112.9,
+     null,
+     null,
+     null,
+     null,
+     null,
+     null,
+     null,
+     null,
+     null,
+     null,
+     null
+    ],
+    "group": 6,
+    "group_notes": [
+     96
+    ]
+   },
+   "window": {
+    "model_s": 6.0,
+    "reference_s": 6.0
+   },
+   "floor_state": {
+    "declared": false,
+    "basis": null,
+    "source": "preroll",
+    "level_db_hz": null,
+    "stationary": {
+     "slope_db_s": -14.86,
+     "corr": 1.0,
+     "tone_slope_db_s": -16.21,
+     "floor_like": false
+    },
+    "clear_partials_tail": 3,
+    "hum_dbfs": null,
+    "censors": {
+     "body": null,
+     "tnr": null
+    },
+    "body_floor_db": null,
+    "body_hum_db": null
+   }
   }
  ],
  "summary": {
   "gm011": {
    "stretch_cents": {
-    "72": -0.27,
-    "76": -0.4,
+    "72": -0.26,
+    "76": -0.26,
     "80": -0.25,
     "84": -0.25,
     "88": -0.25,
     "92": -0.24,
-    "96": -0.45
+    "96": -0.24
    },
    "inharmonicity_b": {},
    "level_dbfs": {
@@ -4658,10 +8769,10 @@
      "127": 55.22
     },
     "76": {
-     "32": 60.33,
-     "56": 60.31,
-     "80": 60.28,
-     "104": 60.24,
+     "32": 60.49,
+     "56": 60.47,
+     "80": 60.45,
+     "104": 60.41,
      "127": 60.17
     },
     "80": {
@@ -4732,17 +8843,232 @@
    }
   }
  },
- "field_measured_utc": {
-  "rows.body_f0_db": "2026-11-13T10:34:55+00:00",
-  "rows.body_under_db": "2026-11-13T10:34:55+00:00",
-  "rows.floor_body_db": "2026-11-13T10:34:55+00:00",
-  "rows.floor_db": "2026-11-13T10:34:55+00:00",
-  "rows.floor_octaves_db": "2026-11-13T10:34:55+00:00",
-  "rows.floor_source": "2026-11-13T10:34:55+00:00",
-  "rows.partial_clear_s": "2026-11-13T10:34:55+00:00",
-  "rows.partial_decay_clear_db_s": "2026-11-13T10:34:55+00:00",
-  "rows.valley_db": "2026-11-13T10:34:55+00:00",
-  "rows.valley_ladder_coupling": "2026-11-13T10:34:55+00:00",
-  "rows.valley_slope_db_oct": "2026-11-13T10:34:55+00:00"
+ "body_lines": {
+  "reason": "recurring fixed-frequency lines in the source",
+  "timbres": {
+   "gm011": {
+    "of": 7,
+    "lines": [
+     {
+      "hz": 226.0,
+      "notes": 3,
+      "presence": "note_only",
+      "note_dbfs": -127.3,
+      "idle_dbfs": -184.0
+     },
+     {
+      "hz": 246.5,
+      "notes": 3,
+      "presence": "note_only",
+      "note_dbfs": -131.5,
+      "idle_dbfs": -181.8
+     }
+    ],
+    "missed": [
+     {
+      "hz": 82.1,
+      "notes": 2,
+      "on_notes": [
+       72,
+       96
+      ],
+      "reason": "recurs on 2 notes; N=3"
+     },
+     {
+      "hz": 102.5,
+      "notes": 2,
+      "on_notes": [
+       72,
+       80
+      ],
+      "reason": "recurs on 2 notes; N=3"
+     },
+     {
+      "hz": 118.8,
+      "notes": 2,
+      "on_notes": [
+       88,
+       92
+      ],
+      "reason": "recurs on 2 notes; N=3"
+     },
+     {
+      "hz": 138.5,
+      "notes": 2,
+      "on_notes": [
+       80,
+       92
+      ],
+      "reason": "recurs on 2 notes; N=3"
+     },
+     {
+      "hz": 174.5,
+      "notes": 2,
+      "on_notes": [
+       80,
+       96
+      ],
+      "reason": "recurs on 2 notes; N=3"
+     },
+     {
+      "hz": 249.2,
+      "notes": 2,
+      "on_notes": [
+       84,
+       96
+      ],
+      "reason": "recurs on 2 notes; N=3"
+     },
+     {
+      "hz": 316.5,
+      "notes": 2,
+      "on_notes": [
+       76,
+       92
+      ],
+      "reason": "recurs on 2 notes; N=3"
+     },
+     {
+      "hz": 336.4,
+      "notes": 2,
+      "on_notes": [
+       80,
+       92
+      ],
+      "reason": "recurs on 2 notes; N=3"
+     },
+     {
+      "hz": 498.4,
+      "notes": 2,
+      "on_notes": [
+       80,
+       96
+      ],
+      "reason": "recurs on 2 notes; N=3"
+     },
+     {
+      "hz": 570.4,
+      "notes": 2,
+      "on_notes": [
+       80,
+       84
+      ],
+      "reason": "recurs on 2 notes; N=3"
+     },
+     {
+      "hz": 725.5,
+      "notes": 2,
+      "on_notes": [
+       84,
+       92
+      ],
+      "reason": "recurs on 2 notes; N=3"
+     },
+     {
+      "hz": 909.9,
+      "notes": 2,
+      "on_notes": [
+       88,
+       92
+      ],
+      "reason": "recurs on 2 notes; N=3"
+     }
+    ]
+   }
+  }
+ },
+ "recording_floor": {
+  "gm011": {
+   "declared": false,
+   "rows": 35,
+   "lines": [],
+   "lines_found": 85,
+   "hum": null,
+   "note_independent": false,
+   "basis": null,
+   "level_db_hz": -177.67,
+   "slope_db_oct": -4.37,
+   "agree_share": 0.184,
+   "stationary": {
+    "verdict": false,
+    "evaluable_rows": 35,
+    "floor_like_share": 0.0,
+    "slope_db_s": -8.94,
+    "tone_slope_db_s": -10.59,
+    "corr": 1.0,
+    "hum_reference_slope_db_s": null
+   },
+   "reason": "not note-independent"
+  }
+ },
+ "loop": {
+  "status": "mixed",
+  "rows": 35,
+  "tested": 35,
+  "looped_rows": 10,
+  "borderline_rows": 18,
+  "not_testable_rows": 0,
+  "unweighted_rows": 10,
+  "groups": {
+   "0": [
+    72
+   ],
+   "1": [
+    76
+   ],
+   "2": [
+    80
+   ],
+   "3": [
+    84
+   ],
+   "4": [
+    88
+   ],
+   "5": [
+    92
+   ],
+   "6": [
+    96
+   ]
+  },
+  "period_ms_median": 12.136,
+  "residual_db_median": -37.9,
+  "join_s_median": 0.02,
+  "read_to_join_rows": 0,
+  "excluded": {
+   "aftersound": "time-varying past the join (loop period 10.619 ms = 7.0 pitch periods, exact repetition from 0.0 s, residual -37.1 dB)",
+   "arrival": "onset is the envelope over the loop (loop period 10.619 ms = 7.0 pitch periods, exact repetition from 0.0 s, residual -37.1 dB)",
+   "attack": "onset is the envelope over the loop (loop period 10.619 ms = 7.0 pitch periods, exact repetition from 0.0 s, residual -37.1 dB)",
+   "band_decay": "time-varying past the join (loop period 10.619 ms = 7.0 pitch periods, exact repetition from 0.0 s, residual -37.1 dB)",
+   "body": "sub-f0 power is the loop's own lines at 1/period (loop period 10.619 ms = 7.0 pitch periods, exact repetition from 0.0 s, residual -37.1 dB); periodising an unlooped note sample-exactly moved tnr -11..-14 dB and body +2..+7 dB at 100-300 ms; open: a seam statistic did not separate loop seams from arbitrary boundaries (naive loops 2.5-69, unlooped notes 1.3-6.5), so no row is granted a snapshot",
+   "damper": "time-varying past the join (loop period 10.619 ms = 7.0 pitch periods, exact repetition from 0.0 s, residual -37.1 dB)",
+   "decay": "time-varying past the join (loop period 10.619 ms = 7.0 pitch periods, exact repetition from 0.0 s, residual -37.1 dB)",
+   "doubling": "time-varying past the join (loop period 10.619 ms = 7.0 pitch periods, exact repetition from 0.0 s, residual -37.1 dB)",
+   "onset_settle": "time-varying past the join (loop period 10.619 ms = 7.0 pitch periods, exact repetition from 0.0 s, residual -37.1 dB)",
+   "partial_tilt": "time-varying past the join (loop period 10.619 ms = 7.0 pitch periods, exact repetition from 0.0 s, residual -37.1 dB)",
+   "ring": "time-varying past the join (loop period 10.619 ms = 7.0 pitch periods, exact repetition from 0.0 s, residual -37.1 dB)",
+   "stretch": "reads the loop (loop period 10.619 ms = 7.0 pitch periods, exact repetition from 0.0 s, residual -37.1 dB)",
+   "tnr": "reads the loop (loop period 10.619 ms = 7.0 pitch periods, exact repetition from 0.0 s, residual -37.1 dB); periodising an unlooped note sample-exactly moved tnr -11..-14 dB and body +2..+7 dB at 100-300 ms; open: a seam statistic did not separate loop seams from arbitrary boundaries (naive loops 2.5-69, unlooped notes 1.3-6.5), so no row is granted a snapshot"
+  },
+  "snapshot": {
+   "balance": {
+    "label": "snapshot of one frozen cycle",
+    "independent_readings": 7
+   },
+   "centroid_pct": {
+    "label": "snapshot of one frozen cycle",
+    "independent_readings": 7
+   },
+   "register": {
+    "label": "snapshot of one frozen cycle",
+    "independent_readings": 7
+   },
+   "crest": {
+    "label": "snapshot of one frozen cycle",
+    "independent_readings": 7
+   }
+  },
+  "body_on_lines_rows": 10
  }
 }

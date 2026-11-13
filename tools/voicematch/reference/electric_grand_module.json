@@ -1,7 +1,7 @@
 {
  "id": "electric_grand_module",
  "label": "Piano 3, the GS capital tone, read out of a module's own recordings",
- "measured_utc": "2026-10-23T19:12:54+00:00",
+ "measured_utc": "2026-11-13T19:43:54+00:00",
  "capture": {
   "program": 2,
   "params": [],
@@ -36,232 +36,402 @@
    "timbre": "t0",
    "note": 36,
    "velocity": 100,
-   "f0_hz": 65.181,
-   "cents_vs_et": -5.99,
+   "f0_hz": 65.179,
+   "cents_vs_et": -6.04,
    "inharmonicity_b": 0.0,
-   "partials_fit": 14,
+   "partials_fit": 16,
    "inharmonicity_reliable": true,
    "partials_hz": [
-    65.17,
-    130.39,
-    195.49,
-    260.68,
-    325.84,
-    391.02,
-    462.75,
-    521.37,
-    586.53,
-    651.7,
-    717.33,
-    781.79,
-    847.15,
-    899.67,
-    977.55,
-    1055.71,
-    1107.84,
-    1173.08,
-    1251.39,
-    1290.38
+    65.13,
+    130.35,
+    195.97,
+    260.85,
+    325.97,
+    391.36,
+    461.51,
+    521.87,
+    587.03,
+    651.95,
+    726.45,
+    771.86,
+    848.45,
+    901.53,
+    977.89,
+    1055.43,
+    1109.48,
+    1186.2,
+    1238.67,
+    1291.76
    ],
    "partials_db": [
     0.0,
-    -7.78,
-    -9.09,
-    -6.4,
-    -11.8,
-    -18.07,
-    -50.21,
-    -43.16,
-    -25.49,
-    -21.11,
-    -69.28,
-    -64.87,
-    -68.29,
-    -27.38,
-    -21.95,
-    -26.98,
-    -70.06,
-    -73.23,
-    -81.2,
-    -22.04
+    -8.25,
+    -12.13,
+    -8.17,
+    -12.5,
+    -16.89,
+    -55.09,
+    -42.82,
+    -26.6,
+    -22.66,
+    -58.84,
+    -56.08,
+    -65.0,
+    -21.68,
+    -20.85,
+    -25.11,
+    -62.59,
+    -62.67,
+    -66.38,
+    -20.48
    ],
    "peak_dbfs": -6.64,
-   "rms_dbfs": -23.32,
+   "rms_dbfs": -26.3,
    "held_peak_dbfs": -15.58,
    "onset_ms": 0.0,
    "attack_ms": 5.0,
    "attack_hf_db": -22.94,
    "onset_overshoot_db": 6.71,
    "onset_settle_ms": 213.5,
-   "decay_span_s": 2.385,
-   "decay_db_s": -4.43,
-   "decay_early_db_s": -8.54,
-   "decay_late_db_s": -4.71,
-   "decay_knee_s": 0.544,
+   "decay_span_s": 5.068,
+   "decay_db_s": -5.07,
+   "decay_early_db_s": -7.04,
+   "decay_late_db_s": -5.25,
+   "decay_knee_s": 0.639,
    "partial_decay_db_s": [
-    -4.32,
-    -4.24,
-    -2.59,
-    -3.92,
-    -3.97,
-    -4.32,
-    -5.46,
-    -3.97
+    -5.01,
+    -5.29,
+    -4.49,
+    -4.91,
+    -4.91,
+    -5.0,
+    -5.23,
+    -4.8
    ],
    "partial_clear_s": [
-    2.185,
-    2.185,
-    2.185,
-    2.185,
-    2.185,
-    2.185,
-    2.185,
+    4.834,
+    4.834,
+    4.834,
+    4.834,
+    4.834,
+    4.834,
+    4.834,
     null
    ],
    "partial_decay_clear_db_s": [
-    -4.32,
-    -4.24,
-    -2.59,
-    -3.92,
-    -3.97,
-    -4.32,
-    -5.46,
+    -5.01,
+    -5.29,
+    -4.49,
+    -4.91,
+    -4.91,
+    -5.0,
+    -5.23,
     null
    ],
+   "valley_db": [
+    -90.42,
+    -93.67,
+    -99.57,
+    -102.65,
+    -106.01,
+    -106.36,
+    -104.39,
+    -94.43,
+    -54.11,
+    -91.2,
+    -105.52,
+    -68.01,
+    -102.17
+   ],
+   "valley_slope_db_oct": 2.724,
+   "valley_ladder_coupling": -0.372,
    "floor_source": null,
    "decayed_before_note_off": false,
-   "damper_release_ms": 2678.9,
-   "damper_capped": true,
-   "centroid_hz": 169.4,
+   "centroid_hz": 224.2,
    "tnr_mask": {},
-   "tnr_db": 19.61
+   "tnr_db": 14.55,
+   "loop": {
+    "verdict": "looped",
+    "residual_db": -43.3,
+    "median_db": -42.7,
+    "frames": 6,
+    "reaching_frames": 6,
+    "reach_ms": 1478.2,
+    "period_ms": 153.449,
+    "join_s": 0.578,
+    "read_to_join_s": 0.578,
+    "period_pitch_periods": 10.0,
+    "excluded": {
+     "decay": "time-varying past the join (loop period 153.449 ms = 10.0 pitch periods, exact repetition from 0.578 s, residual -43.3 dB)",
+     "aftersound": "time-varying past the join (loop period 153.449 ms = 10.0 pitch periods, exact repetition from 0.578 s, residual -43.3 dB)",
+     "doubling": "time-varying past the join (loop period 153.449 ms = 10.0 pitch periods, exact repetition from 0.578 s, residual -43.3 dB)",
+     "partial_tilt": "time-varying past the join (loop period 153.449 ms = 10.0 pitch periods, exact repetition from 0.578 s, residual -43.3 dB)",
+     "band_decay": "time-varying past the join (loop period 153.449 ms = 10.0 pitch periods, exact repetition from 0.578 s, residual -43.3 dB)",
+     "ring": "time-varying past the join (loop period 153.449 ms = 10.0 pitch periods, exact repetition from 0.578 s, residual -43.3 dB)",
+     "onset_settle": "time-varying past the join (loop period 153.449 ms = 10.0 pitch periods, exact repetition from 0.578 s, residual -43.3 dB)",
+     "damper": "time-varying past the join (loop period 153.449 ms = 10.0 pitch periods, exact repetition from 0.578 s, residual -43.3 dB)"
+    },
+    "snapshot": {},
+    "ladder_db": [
+     0.0,
+     -6.9,
+     -8.5,
+     -6.5,
+     -11.7,
+     -17.1,
+     -31.1,
+     -43.1,
+     -25.3,
+     -20.0,
+     -72.5,
+     -65.5,
+     -22.5,
+     -22.8,
+     -21.5,
+     -26.1,
+     -33.4,
+     -72.1,
+     -78.4,
+     -21.2
+    ],
+    "group": 0,
+    "group_notes": [
+     36
+    ]
+   },
+   "window": {
+    "model_s": 5.086,
+    "reference_s": 5.086
+   },
+   "window_end_ms": 5086,
+   "window_rule": "recorded length",
+   "window_recorded_ms": 5086,
+   "window_end_clearance_db": 32.55,
+   "window_marks": {
+    "truncated": "partials stand 32.6 dB over the bed in the last 120 ms",
+    "fade end": "the last 30 ms fall 3.2 dB under the trend"
+   },
+   "floor_state": {
+    "declared": false,
+    "basis": null,
+    "source": null,
+    "level_db_hz": null,
+    "stationary": {
+     "slope_db_s": -10.73,
+     "corr": 0.76,
+     "tone_slope_db_s": -4.19,
+     "floor_like": false
+    },
+    "clear_partials_tail": 8,
+    "hum_dbfs": null,
+    "censors": {
+     "body": null,
+     "tnr": null
+    }
+   }
   },
   {
    "timbre": "t0",
    "note": 42,
    "velocity": 100,
-   "f0_hz": 92.198,
-   "cents_vs_et": -5.64,
-   "inharmonicity_b": 0.0003225,
+   "f0_hz": 92.187,
+   "cents_vs_et": -5.84,
+   "inharmonicity_b": 0.0003213,
    "partials_fit": 20,
    "inharmonicity_reliable": true,
    "partials_hz": [
-    92.27,
-    184.73,
-    276.8,
-    369.07,
-    461.42,
-    557.33,
-    649.69,
-    745.84,
-    841.86,
-    937.98,
-    1034.13,
-    1133.96,
-    1230.22,
-    1333.66,
-    1433.89,
-    1533.85,
-    1637.68,
-    1741.49,
-    1849.01,
-    1956.6
+    92.25,
+    185.0,
+    276.9,
+    369.52,
+    462.53,
+    556.57,
+    650.41,
+    746.49,
+    841.81,
+    938.28,
+    1035.02,
+    1133.81,
+    1230.68,
+    1332.71,
+    1434.39,
+    1535.26,
+    1639.21,
+    1743.02,
+    1849.64,
+    1956.43
    ],
    "partials_db": [
     0.0,
-    -22.17,
-    -0.6,
-    -14.07,
-    -21.76,
-    -23.18,
-    -25.54,
-    -28.49,
-    -27.29,
-    -22.54,
-    -17.16,
-    -21.54,
-    -30.63,
-    -23.98,
-    -18.72,
-    -20.97,
-    -28.74,
-    -29.06,
-    -23.48,
-    -29.33
+    -16.14,
+    -0.81,
+    -12.3,
+    -18.2,
+    -20.62,
+    -24.55,
+    -22.88,
+    -26.43,
+    -16.65,
+    -15.84,
+    -18.63,
+    -28.1,
+    -16.64,
+    -13.21,
+    -16.02,
+    -22.9,
+    -22.39,
+    -16.06,
+    -19.91
    ],
    "peak_dbfs": -5.41,
-   "rms_dbfs": -23.23,
+   "rms_dbfs": -26.06,
    "held_peak_dbfs": -17.03,
    "onset_ms": 0.0,
    "attack_ms": 5.0,
    "attack_hf_db": -25.96,
    "onset_overshoot_db": 3.64,
    "onset_settle_ms": 53.4,
-   "decay_span_s": 2.39,
-   "decay_db_s": -5.25,
-   "decay_early_db_s": -4.63,
-   "decay_late_db_s": -5.63,
-   "decay_knee_s": 0.599,
+   "decay_span_s": 4.794,
+   "decay_db_s": -5.84,
+   "decay_early_db_s": -4.67,
+   "decay_late_db_s": -6.13,
+   "decay_knee_s": 1.357,
    "partial_decay_db_s": [
-    -5.0,
-    -3.45,
-    -5.2,
-    -5.57,
-    -6.54,
-    -6.15,
-    -4.31,
-    -6.76
+    -5.7,
+    -3.36,
+    -6.05,
+    -5.99,
+    -6.22,
+    -6.11,
+    -5.62,
+    -6.27
    ],
    "partial_clear_s": [
-    2.185,
-    2.185,
-    2.185,
-    2.185,
-    2.185,
-    2.185,
-    2.185,
-    2.185
+    4.556,
+    4.556,
+    4.556,
+    4.556,
+    4.556,
+    4.556,
+    4.556,
+    4.556
    ],
    "partial_decay_clear_db_s": [
-    -5.0,
-    -3.45,
-    -5.2,
-    -5.57,
-    -6.54,
-    -6.15,
-    -4.31,
-    -6.76
+    -5.7,
+    -3.36,
+    -6.05,
+    -5.99,
+    -6.22,
+    -6.11,
+    -5.62,
+    -6.27
    ],
    "valley_db": [
-    -111.17,
-    -108.72,
-    -111.97,
-    -108.62,
-    -109.11,
-    -111.08,
-    -111.72,
-    -114.3,
-    -116.59,
-    -113.45,
-    -111.14,
-    -115.78,
-    -105.97,
-    -108.18,
-    -108.27,
-    -111.01,
-    -114.74,
-    -112.74,
-    -113.37
+    -97.65,
+    -100.47,
+    -102.46,
+    -104.5,
+    -112.11,
+    -106.29,
+    -107.67,
+    -109.29,
+    -109.29,
+    -111.13,
+    -109.98,
+    -113.18,
+    -109.84,
+    -96.76,
+    -105.32,
+    -102.04,
+    -101.51,
+    -97.81,
+    -105.18
    ],
-   "valley_slope_db_oct": -0.525,
-   "valley_ladder_coupling": 0.14,
+   "valley_slope_db_oct": -0.789,
+   "valley_ladder_coupling": 0.499,
    "floor_source": null,
    "decayed_before_note_off": false,
-   "damper_release_ms": 2399.6,
-   "damper_capped": true,
-   "centroid_hz": 232.8,
+   "centroid_hz": 387.2,
    "tnr_mask": {},
-   "tnr_db": 36.66
+   "tnr_db": 26.29,
+   "loop": {
+    "verdict": "looped",
+    "residual_db": -37.7,
+    "median_db": -33.5,
+    "frames": 6,
+    "reaching_frames": 6,
+    "reach_ms": 1385.5,
+    "period_ms": 260.114,
+    "join_s": 0.471,
+    "read_to_join_s": 0.471,
+    "period_pitch_periods": 24.0,
+    "excluded": {
+     "decay": "time-varying past the join (loop period 260.114 ms = 24.0 pitch periods, exact repetition from 0.471 s, residual -37.7 dB)",
+     "aftersound": "time-varying past the join (loop period 260.114 ms = 24.0 pitch periods, exact repetition from 0.471 s, residual -37.7 dB)",
+     "doubling": "time-varying past the join (loop period 260.114 ms = 24.0 pitch periods, exact repetition from 0.471 s, residual -37.7 dB)",
+     "partial_tilt": "time-varying past the join (loop period 260.114 ms = 24.0 pitch periods, exact repetition from 0.471 s, residual -37.7 dB)",
+     "band_decay": "time-varying past the join (loop period 260.114 ms = 24.0 pitch periods, exact repetition from 0.471 s, residual -37.7 dB)",
+     "ring": "time-varying past the join (loop period 260.114 ms = 24.0 pitch periods, exact repetition from 0.471 s, residual -37.7 dB)",
+     "onset_settle": "time-varying past the join (loop period 260.114 ms = 24.0 pitch periods, exact repetition from 0.471 s, residual -37.7 dB)",
+     "damper": "time-varying past the join (loop period 260.114 ms = 24.0 pitch periods, exact repetition from 0.471 s, residual -37.7 dB)"
+    },
+    "snapshot": {},
+    "ladder_db": [
+     0.0,
+     -20.9,
+     -1.4,
+     -14.3,
+     -22.4,
+     -24.1,
+     -24.8,
+     -29.3,
+     -27.9,
+     -23.9,
+     -17.5,
+     -22.1,
+     -30.8,
+     -69.8,
+     -71.7,
+     -72.9,
+     -71.5,
+     -29.1,
+     -30.5,
+     -24.6
+    ],
+    "group": 1,
+    "group_notes": [
+     42
+    ]
+   },
+   "window": {
+    "model_s": 4.808,
+    "reference_s": 4.808
+   },
+   "window_end_ms": 4808,
+   "window_rule": "recorded length",
+   "window_recorded_ms": 4808,
+   "window_end_clearance_db": 42.9,
+   "window_marks": {
+    "truncated": "partials stand 42.9 dB over the bed in the last 120 ms"
+   },
+   "floor_state": {
+    "declared": false,
+    "basis": null,
+    "source": null,
+    "level_db_hz": null,
+    "stationary": {
+     "slope_db_s": -11.37,
+     "corr": 0.87,
+     "tone_slope_db_s": -5.3,
+     "floor_like": false
+    },
+    "clear_partials_tail": 8,
+    "hum_dbfs": null,
+    "censors": {
+     "body": null,
+     "tnr": null
+    }
+   }
   },
   {
    "timbre": "t0",
@@ -320,45 +490,45 @@
    "body_under_db": -73.05,
    "body_f0_db": -24.41,
    "peak_dbfs": -5.09,
-   "rms_dbfs": -23.22,
+   "rms_dbfs": -25.59,
    "held_peak_dbfs": -15.63,
    "onset_ms": 0.0,
    "attack_ms": 5.0,
    "attack_hf_db": -25.86,
-   "decay_span_s": 2.38,
-   "decay_db_s": -6.64,
-   "decay_early_db_s": -7.75,
-   "decay_late_db_s": -6.7,
-   "decay_knee_s": 0.619,
+   "decay_span_s": 4.205,
+   "decay_db_s": -6.97,
+   "decay_early_db_s": -6.59,
+   "decay_late_db_s": -7.34,
+   "decay_knee_s": 2.1,
    "partial_decay_db_s": [
-    -7.41,
-    -1.53,
-    -5.46,
-    -10.3,
-    -3.63,
-    -4.32,
-    -7.07,
-    -5.42
+    -7.57,
+    -4.78,
+    -6.73,
+    -7.97,
+    -5.91,
+    -6.09,
+    -7.06,
+    -6.54
    ],
    "partial_clear_s": [
-    2.185,
-    2.185,
-    2.185,
-    2.185,
-    2.185,
-    2.185,
-    2.185,
-    2.185
+    3.998,
+    3.998,
+    3.998,
+    3.998,
+    3.998,
+    3.998,
+    3.998,
+    3.998
    ],
    "partial_decay_clear_db_s": [
-    -7.41,
-    -1.53,
-    -5.46,
-    -10.3,
-    -3.63,
-    -4.32,
-    -7.07,
-    -5.42
+    -7.57,
+    -4.78,
+    -6.73,
+    -7.97,
+    -5.91,
+    -6.09,
+    -7.06,
+    -6.54
    ],
    "valley_db": [
     -100.72,
@@ -385,139 +555,293 @@
    "valley_ladder_coupling": -0.361,
    "floor_source": null,
    "decayed_before_note_off": false,
-   "damper_release_ms": 1820.9,
-   "damper_capped": true,
    "centroid_hz": 278.0,
    "tnr_mask": {},
-   "tnr_db": 36.31
+   "tnr_db": 36.31,
+   "loop": {
+    "verdict": "not",
+    "residual_db": -31.3,
+    "median_db": -30.2,
+    "frames": 6,
+    "reaching_frames": 6,
+    "reach_ms": 1192.2,
+    "borderline": true,
+    "ladder_db": [
+     0.0,
+     -3.5,
+     -5.6,
+     -29.8,
+     -17.4,
+     -24.2,
+     -21.0,
+     -17.5,
+     -22.0,
+     -18.9,
+     -13.8,
+     -28.6,
+     -35.2,
+     -52.1,
+     -41.2,
+     -56.6,
+     -50.3,
+     -32.8,
+     -30.9,
+     -35.5
+    ],
+    "group": 2,
+    "group_notes": [
+     48,
+     54
+    ],
+    "flagged": {
+     "register": "level read across notes that share one stored waveform: the spectrum is one fixed shape shifted with pitch, so the register curve over the group is a transposition artefact"
+    }
+   },
+   "window": {
+    "model_s": 4.228,
+    "reference_s": 4.228
+   },
+   "window_end_ms": 4228,
+   "window_rule": "recorded length",
+   "window_recorded_ms": 4228,
+   "window_end_clearance_db": 48.39,
+   "window_marks": {
+    "truncated": "partials stand 48.4 dB over the bed in the last 120 ms"
+   },
+   "floor_state": {
+    "declared": false,
+    "basis": null,
+    "source": null,
+    "level_db_hz": null,
+    "stationary": {
+     "slope_db_s": -11.05,
+     "corr": 0.87,
+     "tone_slope_db_s": -6.55,
+     "floor_like": false
+    },
+    "clear_partials_tail": 8,
+    "hum_dbfs": null,
+    "censors": {
+     "body": null,
+     "tnr": null
+    },
+    "body_floor_db": null,
+    "body_hum_db": null
+   }
   },
   {
    "timbre": "t0",
    "note": 54,
    "velocity": 100,
-   "f0_hz": 184.742,
-   "cents_vs_et": -2.39,
-   "inharmonicity_b": 0.0002829,
-   "partials_fit": 18,
+   "f0_hz": 184.809,
+   "cents_vs_et": -1.76,
+   "inharmonicity_b": 0.0003275,
+   "partials_fit": 20,
    "inharmonicity_reliable": true,
    "partials_hz": [
-    184.82,
-    369.62,
-    554.43,
-    739.36,
-    924.12,
-    1113.68,
-    1303.35,
-    1493.03,
-    1682.7,
-    1877.15,
-    2071.73,
-    2266.34,
-    2465.82,
-    2674.71,
-    2879.01,
-    3078.65,
-    3287.79,
-    3491.9,
-    3706.1,
-    3920.14
+    184.88,
+    369.76,
+    554.92,
+    740.65,
+    928.35,
+    1115.07,
+    1303.65,
+    1494.62,
+    1685.36,
+    1878.71,
+    2073.1,
+    2274.4,
+    2466.8,
+    2675.68,
+    2867.99,
+    3081.82,
+    3291.88,
+    3493.6,
+    3709.03,
+    3924.7
    ],
    "partials_db": [
     0.0,
-    -5.06,
-    -5.97,
-    -30.78,
-    -17.84,
-    -25.48,
+    -9.75,
+    -8.19,
+    -21.49,
+    -27.39,
+    -30.51,
+    -19.51,
     -20.65,
-    -18.58,
-    -22.8,
-    -20.2,
-    -14.92,
-    -31.39,
-    -34.59,
-    -35.41,
-    -49.66,
-    -26.34,
-    -33.53,
-    -30.4,
-    -35.43,
-    -36.58
+    -23.41,
+    -13.16,
+    -20.42,
+    -22.35,
+    -18.24,
+    -31.56,
+    -40.12,
+    -21.19,
+    -26.84,
+    -25.05,
+    -26.97,
+    -28.7
    ],
-   "body_below_f0_db": -48.7,
-   "body_under_db": -73.89,
-   "body_f0_db": -25.2,
+   "body_below_f0_db": -41.69,
+   "body_under_db": -63.65,
+   "body_f0_db": -21.96,
    "peak_dbfs": -4.62,
-   "rms_dbfs": -23.88,
+   "rms_dbfs": -25.9,
    "held_peak_dbfs": -15.37,
    "onset_ms": 0.0,
    "attack_ms": 5.0,
    "attack_hf_db": -16.7,
-   "decay_span_s": 2.39,
-   "decay_db_s": -7.31,
-   "decay_early_db_s": -9.51,
-   "decay_late_db_s": -7.41,
-   "decay_knee_s": 0.444,
+   "decay_span_s": 3.861,
+   "decay_db_s": -7.66,
+   "decay_early_db_s": -7.15,
+   "decay_late_db_s": -8.04,
+   "decay_knee_s": 1.721,
    "partial_decay_db_s": [
-    -7.77,
-    -4.59,
-    -6.66,
-    -9.24,
-    -4.86,
-    -5.65,
-    -7.89,
-    -7.49
+    -8.04,
+    -6.24,
+    -7.44,
+    -8.28,
+    -6.7,
+    -7.01,
+    -7.97,
+    -7.88
    ],
    "partial_clear_s": [
-    2.185,
-    2.185,
-    2.185,
-    2.185,
-    2.185,
-    2.185,
-    2.185,
-    2.185
+    3.626,
+    3.626,
+    3.626,
+    3.626,
+    3.626,
+    3.626,
+    3.626,
+    3.626
    ],
    "partial_decay_clear_db_s": [
-    -7.77,
-    -4.59,
-    -6.66,
-    -9.24,
-    -4.86,
-    -5.65,
-    -7.89,
-    -7.49
+    -8.04,
+    -6.24,
+    -7.44,
+    -8.28,
+    -6.7,
+    -7.01,
+    -7.97,
+    -7.88
    ],
    "valley_db": [
-    -107.49,
-    -113.59,
-    -117.2,
-    -112.1,
-    -115.39,
-    -107.93,
-    -110.01,
-    -112.52,
-    -110.95,
-    -108.99,
-    -113.19,
-    -112.5,
-    -109.97,
-    -83.96,
-    -99.79,
-    -93.75,
-    -101.83,
-    -113.72,
-    -117.76
+    -105.27,
+    -106.86,
+    -112.81,
+    -111.4,
+    -109.85,
+    -109.9,
+    -114.46,
+    -113.96,
+    -115.31,
+    -110.57,
+    -108.75,
+    -110.54,
+    -102.54,
+    -92.32,
+    -87.38,
+    -84.5,
+    -93.12,
+    -99.8,
+    -99.39
    ],
-   "valley_slope_db_oct": 2.523,
-   "valley_ladder_coupling": -0.346,
+   "valley_slope_db_oct": 4.546,
+   "valley_ladder_coupling": -0.612,
    "floor_source": null,
    "decayed_before_note_off": false,
-   "damper_release_ms": 1466.7,
-   "damper_capped": true,
-   "centroid_hz": 386.5,
+   "centroid_hz": 438.1,
    "tnr_mask": {},
-   "tnr_db": 38.81
+   "tnr_db": 35.79,
+   "loop": {
+    "verdict": "looped",
+    "residual_db": -37.6,
+    "median_db": -33.1,
+    "frames": 6,
+    "reaching_frames": 6,
+    "reach_ms": 1074.5,
+    "period_ms": 205.602,
+    "join_s": 0.42,
+    "read_to_join_s": 0.42,
+    "period_pitch_periods": 38.0,
+    "body_lines": {
+     "lines_below_f0": 18,
+     "on_lines": true
+    },
+    "excluded": {
+     "decay": "time-varying past the join (loop period 205.602 ms = 38.0 pitch periods, exact repetition from 0.42 s, residual -37.6 dB)",
+     "aftersound": "time-varying past the join (loop period 205.602 ms = 38.0 pitch periods, exact repetition from 0.42 s, residual -37.6 dB)",
+     "doubling": "time-varying past the join (loop period 205.602 ms = 38.0 pitch periods, exact repetition from 0.42 s, residual -37.6 dB)",
+     "partial_tilt": "time-varying past the join (loop period 205.602 ms = 38.0 pitch periods, exact repetition from 0.42 s, residual -37.6 dB)",
+     "band_decay": "time-varying past the join (loop period 205.602 ms = 38.0 pitch periods, exact repetition from 0.42 s, residual -37.6 dB)",
+     "ring": "time-varying past the join (loop period 205.602 ms = 38.0 pitch periods, exact repetition from 0.42 s, residual -37.6 dB)",
+     "onset_settle": "time-varying past the join (loop period 205.602 ms = 38.0 pitch periods, exact repetition from 0.42 s, residual -37.6 dB)",
+     "damper": "time-varying past the join (loop period 205.602 ms = 38.0 pitch periods, exact repetition from 0.42 s, residual -37.6 dB)"
+    },
+    "snapshot": {},
+    "ladder_db": [
+     0.0,
+     -3.7,
+     -5.3,
+     -29.3,
+     -16.9,
+     -23.9,
+     -21.1,
+     -18.0,
+     -23.2,
+     -20.8,
+     -16.4,
+     -31.8,
+     -39.1,
+     -56.4,
+     -45.9,
+     -61.8,
+     -53.6,
+     -38.4,
+     -36.8,
+     -41.6
+    ],
+    "group": 2,
+    "group_notes": [
+     48,
+     54
+    ],
+    "flagged": {
+     "register": "level read across notes that share one stored waveform: the spectrum is one fixed shape shifted with pitch, so the register curve over the group is a transposition artefact"
+    }
+   },
+   "window": {
+    "model_s": 3.875,
+    "reference_s": 3.875
+   },
+   "window_end_ms": 3875,
+   "window_rule": "recorded length",
+   "window_recorded_ms": 3875,
+   "window_end_clearance_db": 47.61,
+   "window_marks": {
+    "truncated": "partials stand 47.6 dB over the bed in the last 120 ms"
+   },
+   "floor_state": {
+    "declared": false,
+    "basis": null,
+    "source": null,
+    "level_db_hz": null,
+    "stationary": {
+     "slope_db_s": -9.62,
+     "corr": 0.89,
+     "tone_slope_db_s": -7.24,
+     "floor_like": false
+    },
+    "clear_partials_tail": 8,
+    "hum_dbfs": null,
+    "censors": {
+     "body": null,
+     "tnr": null
+    },
+    "body_floor_db": null,
+    "body_hum_db": null
+   }
   },
   {
    "timbre": "t0",
@@ -576,45 +900,45 @@
    "body_under_db": -74.06,
    "body_f0_db": -35.43,
    "peak_dbfs": -3.4,
-   "rms_dbfs": -26.4,
+   "rms_dbfs": -27.57,
    "held_peak_dbfs": -15.35,
    "onset_ms": 0.0,
    "attack_ms": 5.0,
    "attack_hf_db": -14.7,
-   "decay_span_s": 2.39,
-   "decay_db_s": -9.76,
-   "decay_early_db_s": -16.87,
-   "decay_late_db_s": -9.19,
-   "decay_knee_s": 0.399,
+   "decay_span_s": 3.148,
+   "decay_db_s": -9.4,
+   "decay_early_db_s": -16.0,
+   "decay_late_db_s": -9.0,
+   "decay_knee_s": 0.454,
    "partial_decay_db_s": [
-    -8.17,
-    -8.19,
-    -9.12,
-    -8.37,
-    -8.55,
-    -9.76,
-    -11.35,
-    -11.2
+    -8.13,
+    -8.5,
+    -8.89,
+    -8.51,
+    -8.71,
+    -9.52,
+    -10.54,
+    -10.54
    ],
    "partial_clear_s": [
-    2.185,
-    2.185,
-    2.185,
-    2.185,
-    2.185,
-    2.185,
-    2.185,
-    2.185
+    2.929,
+    2.929,
+    2.929,
+    2.929,
+    2.929,
+    2.929,
+    2.929,
+    2.929
    ],
    "partial_decay_clear_db_s": [
-    -8.17,
-    -8.19,
-    -9.12,
-    -8.37,
-    -8.55,
-    -9.76,
-    -11.35,
-    -11.2
+    -8.13,
+    -8.5,
+    -8.89,
+    -8.51,
+    -8.71,
+    -9.52,
+    -10.54,
+    -10.54
    ],
    "valley_db": [
     -107.89,
@@ -641,11 +965,75 @@
    "valley_ladder_coupling": 0.068,
    "floor_source": null,
    "decayed_before_note_off": false,
-   "damper_release_ms": 753.3,
-   "damper_capped": true,
    "centroid_hz": 1242.3,
    "tnr_mask": {},
-   "tnr_db": 35.6
+   "tnr_db": 35.6,
+   "loop": {
+    "verdict": "not",
+    "residual_db": -34.5,
+    "median_db": -29.8,
+    "frames": 6,
+    "reaching_frames": 5,
+    "reach_ms": 835.8,
+    "borderline": true,
+    "ladder_db": [
+     0.0,
+     1.6,
+     -6.7,
+     -1.4,
+     -0.9,
+     -8.1,
+     -2.1,
+     -22.7,
+     -4.5,
+     -24.3,
+     -19.9,
+     -47.1,
+     -38.9,
+     -53.6,
+     -37.6,
+     -29.1,
+     -45.5,
+     -36.8,
+     -63.5,
+     -65.6
+    ],
+    "group": 3,
+    "group_notes": [
+     60
+    ]
+   },
+   "window": {
+    "model_s": 3.159,
+    "reference_s": 3.159
+   },
+   "window_end_ms": 3159,
+   "window_rule": "recorded length",
+   "window_recorded_ms": 3159,
+   "window_end_clearance_db": 47.84,
+   "window_marks": {
+    "truncated": "partials stand 47.8 dB over the bed in the last 120 ms"
+   },
+   "floor_state": {
+    "declared": false,
+    "basis": null,
+    "source": null,
+    "level_db_hz": null,
+    "stationary": {
+     "slope_db_s": -11.13,
+     "corr": 0.9,
+     "tone_slope_db_s": -9.43,
+     "floor_like": false
+    },
+    "clear_partials_tail": 8,
+    "hum_dbfs": null,
+    "censors": {
+     "body": null,
+     "tnr": null
+    },
+    "body_floor_db": null,
+    "body_hum_db": null
+   }
   },
   {
    "timbre": "t0",
@@ -700,49 +1088,53 @@
     -78.39,
     -82.6
    ],
+   "broad_lines": {
+    "broad_ratio": 5.81,
+    "width_ratio": null
+   },
    "body_below_f0_db": -43.36,
    "body_under_db": -79.04,
    "body_f0_db": -35.68,
    "peak_dbfs": -3.93,
-   "rms_dbfs": -26.56,
+   "rms_dbfs": -27.2,
    "held_peak_dbfs": -16.14,
    "onset_ms": 0.0,
    "attack_ms": 5.0,
    "attack_hf_db": -17.26,
-   "decay_span_s": 2.39,
-   "decay_db_s": -9.21,
-   "decay_early_db_s": -21.27,
-   "decay_late_db_s": -9.11,
-   "decay_knee_s": 0.239,
+   "decay_span_s": 2.774,
+   "decay_db_s": -9.25,
+   "decay_early_db_s": -18.74,
+   "decay_late_db_s": -9.2,
+   "decay_knee_s": 0.274,
    "partial_decay_db_s": [
-    -8.39,
-    -8.69,
-    -7.69,
+    -8.37,
+    -8.9,
+    -8.13,
     -59.94,
     -37.9,
-    -13.33,
-    -14.63,
-    -15.47
+    -12.6,
+    -13.63,
+    -14.29
    ],
    "partial_clear_s": [
-    2.185,
-    2.185,
-    2.185,
-    2.185,
-    2.185,
-    2.185,
-    2.185,
-    2.185
+    2.557,
+    2.557,
+    2.557,
+    2.557,
+    2.557,
+    2.557,
+    2.557,
+    2.557
    ],
    "partial_decay_clear_db_s": [
-    -8.39,
-    -8.69,
-    -7.69,
+    -8.37,
+    -8.9,
+    -8.13,
     -59.94,
     -37.9,
-    -13.33,
-    -14.63,
-    -15.47
+    -12.6,
+    -13.63,
+    -14.29
    ],
    "valley_db": [
     -114.24,
@@ -768,137 +1160,298 @@
    "valley_ladder_coupling": 0.127,
    "floor_source": null,
    "decayed_before_note_off": false,
-   "damper_release_ms": 379.1,
-   "damper_capped": true,
    "centroid_hz": 914.9,
    "tnr_mask": {},
-   "tnr_db": 44.69
+   "tnr_db": 44.69,
+   "loop": {
+    "verdict": "not",
+    "residual_db": -32.1,
+    "median_db": -24.2,
+    "frames": 5,
+    "reaching_frames": 4,
+    "reach_ms": 712.2,
+    "borderline": true,
+    "ladder_db": [
+     0.0,
+     8.1,
+     -4.1,
+     -46.4,
+     -43.8,
+     -7.9,
+     -13.9,
+     -17.4,
+     -20.7,
+     -18.2,
+     -34.9,
+     -57.7,
+     -53.5,
+     -58.0,
+     -43.1,
+     -65.8,
+     -62.4,
+     -63.4,
+     -67.2,
+     -68.0
+    ],
+    "group": 4,
+    "group_notes": [
+     66
+    ]
+   },
+   "window": {
+    "model_s": 2.788,
+    "reference_s": 2.788
+   },
+   "window_end_ms": 2788,
+   "window_rule": "recorded length",
+   "window_recorded_ms": 2788,
+   "window_end_clearance_db": 46.19,
+   "window_marks": {
+    "truncated": "partials stand 46.2 dB over the bed in the last 120 ms"
+   },
+   "floor_state": {
+    "declared": false,
+    "basis": null,
+    "source": null,
+    "level_db_hz": null,
+    "stationary": {
+     "slope_db_s": -8.34,
+     "corr": 0.87,
+     "tone_slope_db_s": -9.04,
+     "floor_like": false
+    },
+    "clear_partials_tail": 8,
+    "hum_dbfs": null,
+    "censors": {
+     "body": null,
+     "tnr": null
+    },
+    "body_floor_db": null,
+    "body_hum_db": null
+   }
   },
   {
    "timbre": "t0",
    "note": 72,
    "velocity": 100,
-   "f0_hz": 523.121,
-   "cents_vs_et": -0.43,
-   "inharmonicity_b": 0.0009318,
-   "partials_fit": 7,
+   "f0_hz": 523.175,
+   "cents_vs_et": -0.25,
+   "inharmonicity_b": 0.0009219,
+   "partials_fit": 9,
    "inharmonicity_reliable": true,
    "partials_hz": [
-    523.31,
-    1046.55,
-    1577.16,
-    2109.68,
-    2645.88,
-    3191.31,
-    3736.92,
+    523.36,
+    1046.49,
+    1577.2,
+    2109.63,
+    2645.86,
+    3191.2,
+    3737.09,
     4356.04,
-    4881.1,
-    5467.36,
-    5992.45,
-    6681.98,
-    7370.31,
-    7945.38,
-    8579.55,
-    9441.26,
-    10100.39,
-    10702.76,
-    11607.71,
-    12146.8
+    4881.05,
+    5467.71,
+    5992.01,
+    6672.1,
+    7370.35,
+    7945.49,
+    8601.81,
+    9303.03,
+    10100.4,
+    10702.88,
+    11608.2,
+    12145.97
    ],
    "partials_db": [
     0.0,
-    -21.32,
-    -8.7,
-    -46.49,
-    -9.76,
-    -16.36,
-    -32.32,
-    -68.05,
-    -60.37,
-    -69.27,
-    -84.25,
-    -91.49,
-    -87.72,
-    -88.57,
-    -96.14,
+    -19.97,
+    -8.34,
+    -35.68,
+    -7.9,
+    -13.08,
+    -28.57,
+    -62.96,
+    -49.55,
+    -58.4,
+    -77.33,
+    -89.75,
+    -85.56,
+    -84.52,
+    -94.2,
+    -94.5,
+    -79.73,
+    -85.79,
     -92.65,
-    -78.47,
-    -89.92,
-    -94.96,
-    -94.89
+    -94.67
    ],
-   "body_below_f0_db": -46.39,
-   "body_under_db": -74.62,
-   "body_f0_db": -28.22,
+   "broad_lines": {
+    "broad_ratio": 3.16,
+    "width_ratio": null
+   },
+   "body_below_f0_db": -46.06,
+   "body_under_db": -73.51,
+   "body_f0_db": -27.45,
    "peak_dbfs": -2.18,
-   "rms_dbfs": -26.02,
+   "rms_dbfs": -26.49,
    "held_peak_dbfs": -14.05,
    "onset_ms": 0.0,
    "attack_ms": 5.0,
    "attack_hf_db": -16.22,
-   "decay_span_s": 2.39,
-   "decay_db_s": -10.39,
+   "decay_span_s": 2.664,
+   "decay_db_s": -10.27,
    "decay_early_db_s": -21.75,
-   "decay_late_db_s": -9.72,
+   "decay_late_db_s": -9.73,
    "decay_knee_s": 0.384,
    "partial_decay_db_s": [
-    -9.35,
-    -15.7,
-    -11.12,
+    -9.39,
+    -14.58,
+    -10.99,
     -113.02,
-    -14.88,
-    -16.78,
-    -18.85,
-    -17.96
+    -14.25,
+    -15.85,
+    -17.58,
+    -16.03
    ],
    "partial_clear_s": [
-    2.185,
-    2.185,
-    2.185,
-    2.185,
-    2.185,
-    2.185,
-    2.185,
+    2.417,
+    2.417,
+    2.417,
+    2.371,
+    2.417,
+    2.417,
+    2.417,
     2.092
    ],
    "partial_decay_clear_db_s": [
-    -9.35,
-    -15.7,
-    -11.12,
+    -9.39,
+    -14.58,
+    -10.99,
     -113.02,
-    -14.88,
-    -16.78,
-    -18.85,
+    -14.25,
+    -15.85,
+    -17.58,
     -19.32
    ],
    "valley_db": [
-    -111.81,
-    -113.14,
-    -117.73,
-    -119.56,
-    -118.68,
-    -124.88,
-    -127.42,
-    -128.35,
-    -129.19,
-    -127.28,
-    -126.59,
-    -132.46,
-    -131.84,
-    -133.52,
-    -128.59,
-    -133.05,
-    -134.11
+    -109.27,
+    -110.82,
+    -114.48,
+    -114.76,
+    -114.82,
+    -120.78,
+    -122.95,
+    -123.26,
+    -124.45,
+    -125.55,
+    -121.9,
+    -129.64,
+    -130.56,
+    -132.24,
+    -128.45,
+    -133.5,
+    -134.38
    ],
-   "valley_slope_db_oct": -6.149,
-   "valley_ladder_coupling": 0.202,
+   "valley_slope_db_oct": -6.989,
+   "valley_ladder_coupling": 0.224,
    "floor_source": null,
    "decayed_before_note_off": false,
-   "damper_release_ms": 269.4,
-   "damper_capped": true,
-   "centroid_hz": 907.2,
+   "centroid_hz": 1042.3,
    "tnr_mask": {},
-   "tnr_db": 48.44
+   "tnr_db": 46.79,
+   "loop": {
+    "verdict": "looped",
+    "residual_db": -38.0,
+    "median_db": -36.9,
+    "frames": 5,
+    "reaching_frames": 5,
+    "reach_ms": 674.8,
+    "period_ms": 135.665,
+    "join_s": 0.999,
+    "read_to_join_s": 0.999,
+    "period_pitch_periods": 71.0,
+    "body_lines": {
+     "lines_below_f0": 44,
+     "on_lines": true
+    },
+    "excluded": {
+     "decay": "time-varying past the join (loop period 135.665 ms = 71.0 pitch periods, exact repetition from 0.999 s, residual -38.0 dB)",
+     "aftersound": "time-varying past the join (loop period 135.665 ms = 71.0 pitch periods, exact repetition from 0.999 s, residual -38.0 dB)",
+     "doubling": "time-varying past the join (loop period 135.665 ms = 71.0 pitch periods, exact repetition from 0.999 s, residual -38.0 dB)",
+     "partial_tilt": "time-varying past the join (loop period 135.665 ms = 71.0 pitch periods, exact repetition from 0.999 s, residual -38.0 dB)",
+     "band_decay": "time-varying past the join (loop period 135.665 ms = 71.0 pitch periods, exact repetition from 0.999 s, residual -38.0 dB)",
+     "ring": "time-varying past the join (loop period 135.665 ms = 71.0 pitch periods, exact repetition from 0.999 s, residual -38.0 dB)",
+     "onset_settle": "time-varying past the join (loop period 135.665 ms = 71.0 pitch periods, exact repetition from 0.999 s, residual -38.0 dB)",
+     "damper": "time-varying past the join (loop period 135.665 ms = 71.0 pitch periods, exact repetition from 0.999 s, residual -38.0 dB)"
+    },
+    "snapshot": {},
+    "ladder_db": [
+     0.0,
+     -24.3,
+     -9.9,
+     -61.0,
+     -15.3,
+     -23.5,
+     -39.3,
+     -66.4,
+     -69.2,
+     -71.6,
+     -71.1,
+     -72.9,
+     -72.3,
+     -73.2,
+     -73.1,
+     -73.8,
+     -73.5,
+     -74.6,
+     -68.7,
+     -74.4
+    ],
+    "group": 5,
+    "group_notes": [
+     72
+    ],
+    "group_uncertain": {
+     "ambiguous_with": [
+      78
+     ],
+     "loosest_inside_db": null,
+     "nearest_outside_db": 7.8,
+     "band_db": [
+      4.0,
+      8.0
+     ]
+    }
+   },
+   "window": {
+    "model_s": 2.676,
+    "reference_s": 2.676
+   },
+   "window_end_ms": 2676,
+   "window_rule": "recorded length",
+   "window_recorded_ms": 2676,
+   "window_end_clearance_db": 37.41,
+   "window_marks": {
+    "truncated": "partials stand 37.4 dB over the bed in the last 120 ms"
+   },
+   "floor_state": {
+    "declared": false,
+    "basis": null,
+    "source": null,
+    "level_db_hz": null,
+    "stationary": {
+     "slope_db_s": -10.77,
+     "corr": 0.88,
+     "tone_slope_db_s": -9.92,
+     "floor_like": false
+    },
+    "clear_partials_tail": 6,
+    "hum_dbfs": null,
+    "censors": {
+     "body": null,
+     "tnr": null
+    },
+    "body_floor_db": null,
+    "body_hum_db": null
+   }
   },
   {
    "timbre": "t0",
@@ -957,44 +1510,44 @@
    "body_under_db": -75.72,
    "body_f0_db": -25.22,
    "peak_dbfs": -3.86,
-   "rms_dbfs": -24.89,
+   "rms_dbfs": -25.35,
    "held_peak_dbfs": -16.74,
    "onset_ms": 0.0,
    "attack_ms": 5.0,
    "attack_hf_db": -14.68,
-   "decay_span_s": 2.39,
-   "decay_db_s": -10.08,
-   "decay_early_db_s": -9.96,
-   "decay_late_db_s": -10.53,
-   "decay_knee_s": 0.574,
+   "decay_span_s": 2.659,
+   "decay_db_s": -10.25,
+   "decay_early_db_s": -9.31,
+   "decay_late_db_s": -10.82,
+   "decay_knee_s": 0.828,
    "partial_decay_db_s": [
-    -9.83,
-    -10.71,
-    -14.11,
-    -16.82,
-    -17.7,
-    -19.08,
-    -19.43,
-    -20.03
+    -10.05,
+    -10.73,
+    -13.6,
+    -15.89,
+    -16.66,
+    -17.81,
+    -18.08,
+    -18.79
    ],
    "partial_clear_s": [
-    2.185,
-    2.185,
-    2.185,
-    2.185,
-    2.185,
-    2.185,
-    2.185,
+    2.417,
+    2.417,
+    2.417,
+    2.417,
+    2.417,
+    2.417,
+    2.417,
     1.395
    ],
    "partial_decay_clear_db_s": [
-    -9.83,
-    -10.71,
-    -14.11,
-    -16.82,
-    -17.7,
-    -19.08,
-    -19.43,
+    -10.05,
+    -10.73,
+    -13.6,
+    -15.89,
+    -16.66,
+    -17.81,
+    -18.08,
     -28.37
    ],
    "valley_db": [
@@ -1018,11 +1571,90 @@
    "valley_ladder_coupling": 0.201,
    "floor_source": null,
    "decayed_before_note_off": false,
-   "damper_release_ms": 264.4,
-   "damper_capped": true,
    "centroid_hz": 926.5,
    "tnr_mask": {},
-   "tnr_db": 49.94
+   "tnr_db": 49.94,
+   "loop": {
+    "verdict": "not",
+    "residual_db": -28.5,
+    "median_db": -24.3,
+    "frames": 5,
+    "reaching_frames": 4,
+    "reach_ms": 673.5,
+    "borderline": false,
+    "ladder_db": [
+     0.0,
+     -6.7,
+     -22.6,
+     -36.7,
+     -38.2,
+     -42.5,
+     -49.9,
+     -71.4,
+     -73.1,
+     -74.7,
+     -74.3,
+     -75.1,
+     -73.6,
+     -73.7,
+     -76.1,
+     -76.6,
+     -77.0,
+     -76.9,
+     -76.5,
+     -76.5
+    ],
+    "group": 6,
+    "group_notes": [
+     78,
+     84
+    ],
+    "group_uncertain": {
+     "ambiguous_with": [
+      72
+     ],
+     "loosest_inside_db": 2.8,
+     "nearest_outside_db": 7.8,
+     "band_db": [
+      4.0,
+      8.0
+     ]
+    },
+    "flagged": {
+     "register": "level read across notes that share one stored waveform: the spectrum is one fixed shape shifted with pitch, so the register curve over the group is a transposition artefact"
+    }
+   },
+   "window": {
+    "model_s": 2.672,
+    "reference_s": 2.672
+   },
+   "window_end_ms": 2672,
+   "window_rule": "recorded length",
+   "window_recorded_ms": 2672,
+   "window_end_clearance_db": 26.39,
+   "window_marks": {
+    "truncated": "partials stand 26.4 dB over the bed in the last 120 ms"
+   },
+   "floor_state": {
+    "declared": false,
+    "basis": null,
+    "source": null,
+    "level_db_hz": null,
+    "stationary": {
+     "slope_db_s": -8.6,
+     "corr": 0.94,
+     "tone_slope_db_s": -10.1,
+     "floor_like": false
+    },
+    "clear_partials_tail": 7,
+    "hum_dbfs": null,
+    "censors": {
+     "body": null,
+     "tnr": null
+    },
+    "body_floor_db": null,
+    "body_hum_db": null
+   }
   },
   {
    "timbre": "t0",
@@ -1071,44 +1703,44 @@
    "body_under_db": -73.26,
    "body_f0_db": -25.35,
    "peak_dbfs": -4.47,
-   "rms_dbfs": -25.42,
+   "rms_dbfs": -25.58,
    "held_peak_dbfs": -17.1,
    "onset_ms": 0.0,
    "attack_ms": 5.0,
    "attack_hf_db": -12.75,
-   "decay_span_s": 2.39,
-   "decay_db_s": -10.71,
+   "decay_span_s": 2.479,
+   "decay_db_s": -10.74,
    "decay_early_db_s": -11.01,
-   "decay_late_db_s": -11.08,
+   "decay_late_db_s": -11.09,
    "decay_knee_s": 0.409,
    "partial_decay_db_s": [
-    -10.3,
-    -13.41,
-    -16.68,
-    -18.3,
-    -18.86,
-    -19.27,
-    -19.1,
-    -19.08
+    -10.37,
+    -13.05,
+    -16.32,
+    -17.83,
+    -18.35,
+    -18.71,
+    -18.6,
+    -18.53
    ],
    "partial_clear_s": [
-    2.185,
-    2.185,
-    2.185,
-    2.185,
-    2.185,
-    2.185,
-    2.185,
+    2.278,
+    2.278,
+    2.278,
+    2.278,
+    2.278,
+    2.278,
+    2.278,
     1.348
    ],
    "partial_decay_clear_db_s": [
-    -10.3,
-    -13.41,
-    -16.68,
-    -18.3,
-    -18.86,
-    -19.27,
-    -19.1,
+    -10.37,
+    -13.05,
+    -16.32,
+    -17.83,
+    -18.35,
+    -18.71,
+    -18.6,
     -28.71
    ],
    "valley_db": [
@@ -1130,78 +1762,146 @@
    "valley_ladder_coupling": 0.169,
    "floor_source": null,
    "decayed_before_note_off": false,
-   "damper_release_ms": 84.8,
-   "damper_capped": true,
    "centroid_hz": 1220.1,
    "tnr_mask": {},
-   "tnr_db": 50.54
+   "tnr_db": 50.54,
+   "loop": {
+    "verdict": "not",
+    "residual_db": -31.3,
+    "median_db": -30.5,
+    "frames": 5,
+    "reaching_frames": 5,
+    "reach_ms": 613.5,
+    "borderline": true,
+    "ladder_db": [
+     0.0,
+     -11.2,
+     -29.0,
+     -43.4,
+     -45.0,
+     -49.4,
+     -56.9,
+     -71.8,
+     -73.1,
+     -70.4,
+     -74.3,
+     -74.4,
+     -74.7,
+     -74.4,
+     -75.7,
+     -76.1,
+     -76.4,
+     -76.5,
+     null,
+     null
+    ],
+    "group": 6,
+    "group_notes": [
+     78,
+     84
+    ],
+    "flagged": {
+     "register": "level read across notes that share one stored waveform: the spectrum is one fixed shape shifted with pitch, so the register curve over the group is a transposition artefact"
+    }
+   },
+   "window": {
+    "model_s": 2.492,
+    "reference_s": 2.492
+   },
+   "window_end_ms": 2492,
+   "window_rule": "recorded length",
+   "window_recorded_ms": 2492,
+   "window_end_clearance_db": 18.69,
+   "window_marks": {
+    "truncated": "partials stand 18.7 dB over the bed in the last 120 ms"
+   },
+   "floor_state": {
+    "declared": false,
+    "basis": null,
+    "source": null,
+    "level_db_hz": null,
+    "stationary": {
+     "slope_db_s": -8.54,
+     "corr": 0.97,
+     "tone_slope_db_s": -10.73,
+     "floor_like": false
+    },
+    "clear_partials_tail": 7,
+    "hum_dbfs": null,
+    "censors": {
+     "body": null,
+     "tnr": null
+    },
+    "body_floor_db": null,
+    "body_hum_db": null
+   }
   }
  ],
  "summary": {
   "t0": {
    "stretch_cents": {
-    "36": -5.99,
-    "42": -5.64,
+    "36": -6.04,
+    "42": -5.84,
     "48": -3.79,
-    "54": -2.39,
+    "54": -1.76,
     "60": -2.86,
     "66": -1.87,
-    "72": -0.43,
+    "72": -0.25,
     "78": -0.44,
     "84": 0.67
    },
    "inharmonicity_b": {
     "36": 0.0,
-    "42": 0.0003225,
+    "42": 0.0003213,
     "48": 0.000326,
-    "54": 0.0002829,
+    "54": 0.0003275,
     "60": 0.0005286,
     "66": 0.0005005,
-    "72": 0.0009318,
+    "72": 0.0009219,
     "78": 0.001689,
     "84": 0.001701
    },
    "level_dbfs": {
     "36": {
-     "100": -23.32
+     "100": -26.3
     },
     "42": {
-     "100": -23.23
+     "100": -26.06
     },
     "48": {
-     "100": -23.22
+     "100": -25.59
     },
     "54": {
-     "100": -23.88
+     "100": -25.9
     },
     "60": {
-     "100": -26.4
+     "100": -27.57
     },
     "66": {
-     "100": -26.56
+     "100": -27.2
     },
     "72": {
-     "100": -26.02
+     "100": -26.49
     },
     "78": {
-     "100": -24.89
+     "100": -25.35
     },
     "84": {
-     "100": -25.42
+     "100": -25.58
     }
    },
    "centroid_hz": {
     "36": {
-     "100": 169.4
+     "100": 224.2
     },
     "42": {
-     "100": 232.8
+     "100": 387.2
     },
     "48": {
      "100": 278.0
     },
     "54": {
-     "100": 386.5
+     "100": 438.1
     },
     "60": {
      "100": 1242.3
@@ -1210,7 +1910,7 @@
      "100": 914.9
     },
     "72": {
-     "100": 907.2
+     "100": 1042.3
     },
     "78": {
      "100": 926.5
@@ -1221,74 +1921,46 @@
    },
    "decay_db_s": {
     "36": {
-     "100": -4.43
+     "100": -5.07
     },
     "42": {
-     "100": -5.25
+     "100": -5.84
     },
     "48": {
-     "100": -6.64
+     "100": -6.97
     },
     "54": {
-     "100": -7.31
+     "100": -7.66
     },
     "60": {
-     "100": -9.76
+     "100": -9.4
     },
     "66": {
-     "100": -9.21
+     "100": -9.25
     },
     "72": {
-     "100": -10.39
+     "100": -10.27
     },
     "78": {
-     "100": -10.08
+     "100": -10.25
     },
     "84": {
-     "100": -10.71
+     "100": -10.74
     }
    },
-   "damper_release_ms": {
-    "36": {
-     "100": 2678.9
-    },
-    "42": {
-     "100": 2399.6
-    },
-    "48": {
-     "100": 1820.9
-    },
-    "54": {
-     "100": 1466.7
-    },
-    "60": {
-     "100": 753.3
-    },
-    "66": {
-     "100": 379.1
-    },
-    "72": {
-     "100": 269.4
-    },
-    "78": {
-     "100": 264.4
-    },
-    "84": {
-     "100": 84.8
-    }
-   },
+   "damper_release_ms": {},
    "tnr_db": {
     "36": {
-     "100": 19.61
+     "100": 14.55
     },
     "42": {
-     "100": 36.66
+     "100": 26.29
     },
     "48": {
      "100": 36.31
     },
     "54": {
-     "100": 38.81
+     "100": 35.79
     },
     "60": {
      "100": 35.6
@@ -1297,7 +1969,7 @@
      "100": 44.69
     },
     "72": {
-     "100": 48.44
+     "100": 46.79
     },
     "78": {
      "100": 49.94
@@ -1309,14 +1981,95 @@
    "velocity_response": {}
   }
  },
- "field_measured_utc": {
-  "rows.body_f0_db": "2026-11-13T10:32:26+00:00",
-  "rows.body_under_db": "2026-11-13T10:32:26+00:00",
-  "rows.floor_source": "2026-11-13T10:32:26+00:00",
-  "rows.partial_clear_s": "2026-11-13T10:32:26+00:00",
-  "rows.partial_decay_clear_db_s": "2026-11-13T10:32:26+00:00",
-  "rows.valley_db": "2026-11-13T10:32:26+00:00",
-  "rows.valley_ladder_coupling": "2026-11-13T10:32:26+00:00",
-  "rows.valley_slope_db_oct": "2026-11-13T10:32:26+00:00"
+ "recording_floor": {
+  "t0": {
+   "declared": false,
+   "rows": 9,
+   "lines": [],
+   "lines_found": 0,
+   "hum": null,
+   "note_independent": false,
+   "basis": null,
+   "level_db_hz": -123.82,
+   "slope_db_oct": -2.49,
+   "agree_share": 0.413,
+   "stationary": {
+    "verdict": false,
+    "evaluable_rows": 9,
+    "floor_like_share": 0.0,
+    "slope_db_s": -10.73,
+    "tone_slope_db_s": -9.04,
+    "corr": 0.88,
+    "hum_reference_slope_db_s": null
+   },
+   "reason": "not note-independent"
+  }
+ },
+ "loop": {
+  "status": "mixed",
+  "rows": 9,
+  "tested": 9,
+  "looped_rows": 4,
+  "borderline_rows": 4,
+  "not_testable_rows": 0,
+  "unweighted_rows": 4,
+  "groups": {
+   "0": [
+    36
+   ],
+   "1": [
+    42
+   ],
+   "2": [
+    48,
+    54
+   ],
+   "3": [
+    60
+   ],
+   "4": [
+    66
+   ],
+   "5": [
+    72
+   ],
+   "6": [
+    78,
+    84
+   ]
+  },
+  "period_ms_median": 179.526,
+  "residual_db_median": -37.9,
+  "join_s_median": 0.524,
+  "read_to_join_rows": 4,
+  "excluded": {
+   "aftersound": "time-varying past the join (loop period 153.449 ms = 10.0 pitch periods, exact repetition from 0.578 s, residual -43.3 dB)",
+   "band_decay": "time-varying past the join (loop period 153.449 ms = 10.0 pitch periods, exact repetition from 0.578 s, residual -43.3 dB)",
+   "damper": "time-varying past the join (loop period 153.449 ms = 10.0 pitch periods, exact repetition from 0.578 s, residual -43.3 dB)",
+   "decay": "time-varying past the join (loop period 153.449 ms = 10.0 pitch periods, exact repetition from 0.578 s, residual -43.3 dB)",
+   "doubling": "time-varying past the join (loop period 153.449 ms = 10.0 pitch periods, exact repetition from 0.578 s, residual -43.3 dB)",
+   "onset_settle": "time-varying past the join (loop period 153.449 ms = 10.0 pitch periods, exact repetition from 0.578 s, residual -43.3 dB)",
+   "partial_tilt": "time-varying past the join (loop period 153.449 ms = 10.0 pitch periods, exact repetition from 0.578 s, residual -43.3 dB)",
+   "ring": "time-varying past the join (loop period 153.449 ms = 10.0 pitch periods, exact repetition from 0.578 s, residual -43.3 dB)"
+  },
+  "snapshot": {
+   "balance": {
+    "label": "snapshot of one frozen cycle",
+    "independent_readings": 7
+   },
+   "centroid_pct": {
+    "label": "snapshot of one frozen cycle",
+    "independent_readings": 7
+   },
+   "register": {
+    "label": "snapshot of one frozen cycle",
+    "independent_readings": 7
+   },
+   "crest": {
+    "label": "snapshot of one frozen cycle",
+    "independent_readings": 7
+   }
+  },
+  "body_on_lines_rows": 0
  }
 }

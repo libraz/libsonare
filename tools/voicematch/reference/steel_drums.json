@@ -1,7 +1,7 @@
 {
  "id": "steel_drums",
  "label": "Steel drums, sampled, close and dry",
- "measured_utc": "2026-10-23T19:16:38+00:00",
+ "measured_utc": "2026-11-13T19:54:06+00:00",
  "capture": {
   "program": 114,
   "params": [],
@@ -38,11 +38,11 @@
    "timbre": "gm115",
    "note": 60,
    "velocity": 32,
-   "f0_hz": 261.558,
-   "cents_vs_et": -0.45,
-   "inharmonicity_b": 0.0001682,
-   "partials_fit": 11,
-   "inharmonicity_reliable": true,
+   "f0_hz": 261.686,
+   "cents_vs_et": 0.4,
+   "inharmonicity_b": 0.0,
+   "partials_fit": 0,
+   "inharmonicity_reliable": false,
    "partials_hz": [
     260.73,
     524.66,
@@ -56,14 +56,14 @@
     2628.68,
     2885.89,
     3148.32,
-    3418.75,
+    3352.33,
     3674.46,
-    4002.9,
-    4216.27,
-    4616.16,
-    4890.36,
-    5149.42,
-    5340.86
+    3937.51,
+    4193.33,
+    4463.03,
+    4773.67,
+    4903.69,
+    5197.55
    ],
    "partials_db": [
     0.0,
@@ -78,15 +78,59 @@
     -52.83,
     -70.9,
     -59.18,
-    -89.37,
+    -88.01,
     -80.44,
-    -97.82,
-    -97.65,
-    -93.13,
-    -89.85,
-    -87.43,
-    -96.71
+    -95.46,
+    -86.6,
+    -105.01,
+    -102.01,
+    -101.07,
+    -104.81
    ],
+   "modal_profile": {
+    "modal_hz": [
+     214.56,
+     232.25,
+     246.77,
+     260.73,
+     276.61,
+     524.66,
+     552.95,
+     677.95,
+     789.41,
+     1048.76,
+     1573.32,
+     2098.58
+    ],
+    "modal_db": [
+     -26.78,
+     -17.95,
+     -25.25,
+     -2.15,
+     -30.83,
+     0.0,
+     -26.99,
+     -30.01,
+     -18.37,
+     -3.68,
+     -20.12,
+     -23.78
+    ],
+    "modal_ratio": [
+     0.8201,
+     0.8877,
+     0.9432,
+     0.9966,
+     1.0573,
+     2.0054,
+     2.1135,
+     2.5913,
+     3.0173,
+     4.0086,
+     6.0136,
+     8.0213
+    ]
+   },
    "body_below_f0_db": -47.55,
    "body_under_db": -123.58,
    "body_f0_db": -76.03,
@@ -131,27 +175,6 @@
     -142.76,
     -136.14
    ],
-   "valley_db": [
-    -122.98,
-    -112.01,
-    -125.55,
-    -135.28,
-    -131.84,
-    -141.4,
-    -154.14,
-    -159.44,
-    -165.73,
-    -163.35,
-    -172.12,
-    -169.21,
-    -174.9,
-    -169.58,
-    -184.33,
-    -186.17,
-    -187.94
-   ],
-   "valley_slope_db_oct": -21.22,
-   "valley_ladder_coupling": 0.664,
    "floor_source": "preroll",
    "floor_db": -115.41,
    "floor_octaves_db": [
@@ -172,17 +195,40 @@
    "centroid_hz": 565.4,
    "tnr_mask": {},
    "tnr_db": 17.47,
-   "stereo_width": 0.0
+   "stereo_width": 0.0,
+   "loop": {
+    "verdict": "not_testable",
+    "reason": "shorter than one template and a 100 ms lag"
+   },
+   "window": {
+    "model_s": 0.55,
+    "reference_s": 0.55
+   },
+   "floor_state": {
+    "declared": false,
+    "basis": null,
+    "source": "preroll",
+    "level_db_hz": null,
+    "stationary": null,
+    "clear_partials_tail": 8,
+    "hum_dbfs": null,
+    "censors": {
+     "body": null,
+     "tnr": null
+    },
+    "body_floor_db": null,
+    "body_hum_db": null
+   }
   },
   {
    "timbre": "gm115",
    "note": 60,
    "velocity": 56,
-   "f0_hz": 261.556,
-   "cents_vs_et": -0.46,
-   "inharmonicity_b": 0.0001562,
-   "partials_fit": 11,
-   "inharmonicity_reliable": true,
+   "f0_hz": 261.685,
+   "cents_vs_et": 0.4,
+   "inharmonicity_b": 0.0,
+   "partials_fit": 0,
+   "inharmonicity_reliable": false,
    "partials_hz": [
     260.71,
     524.62,
@@ -196,14 +242,14 @@
     2628.63,
     2885.81,
     3148.26,
-    3418.64,
+    3352.33,
     3674.31,
     3937.57,
-    4216.25,
-    4612.79,
-    4890.35,
-    5149.38,
-    5315.33
+    4193.27,
+    4453.0,
+    4773.61,
+    4903.66,
+    5197.62
    ],
    "partials_db": [
     0.0,
@@ -218,15 +264,59 @@
     -50.77,
     -68.62,
     -57.13,
-    -87.21,
+    -85.67,
     -78.05,
     -93.33,
-    -95.12,
-    -100.88,
-    -87.62,
-    -84.86,
-    -91.17
+    -84.29,
+    -102.41,
+    -99.53,
+    -98.94,
+    -102.53
    ],
+   "modal_profile": {
+    "modal_hz": [
+     214.55,
+     232.23,
+     246.74,
+     260.71,
+     276.6,
+     524.62,
+     552.91,
+     677.89,
+     789.36,
+     1048.69,
+     1573.21,
+     2098.52
+    ],
+    "modal_db": [
+     -26.93,
+     -18.1,
+     -25.36,
+     -2.23,
+     -30.93,
+     0.0,
+     -26.9,
+     -29.78,
+     -17.83,
+     -2.98,
+     -18.86,
+     -21.94
+    ],
+    "modal_ratio": [
+     0.8201,
+     0.8876,
+     0.9431,
+     0.9965,
+     1.0572,
+     2.0052,
+     2.1134,
+     2.5911,
+     3.0171,
+     4.0084,
+     6.0132,
+     8.0211
+    ]
+   },
    "body_below_f0_db": -47.63,
    "body_under_db": -113.82,
    "body_f0_db": -66.19,
@@ -291,17 +381,40 @@
    "centroid_hz": 588.8,
    "tnr_mask": {},
    "tnr_db": 17.6,
-   "stereo_width": 0.0
+   "stereo_width": 0.0,
+   "loop": {
+    "verdict": "not_testable",
+    "reason": "shorter than one template and a 100 ms lag"
+   },
+   "window": {
+    "model_s": 0.55,
+    "reference_s": 0.55
+   },
+   "floor_state": {
+    "declared": false,
+    "basis": null,
+    "source": "preroll",
+    "level_db_hz": null,
+    "stationary": null,
+    "clear_partials_tail": 8,
+    "hum_dbfs": null,
+    "censors": {
+     "body": null,
+     "tnr": null
+    },
+    "body_floor_db": null,
+    "body_hum_db": null
+   }
   },
   {
    "timbre": "gm115",
    "note": 60,
    "velocity": 80,
-   "f0_hz": 261.56,
-   "cents_vs_et": -0.43,
-   "inharmonicity_b": 0.0001359,
-   "partials_fit": 11,
-   "inharmonicity_reliable": true,
+   "f0_hz": 261.686,
+   "cents_vs_et": 0.4,
+   "inharmonicity_b": 0.0,
+   "partials_fit": 0,
+   "inharmonicity_reliable": false,
    "partials_hz": [
     260.68,
     524.56,
@@ -315,14 +428,14 @@
     2617.33,
     2885.66,
     3148.14,
-    3418.47,
+    3352.33,
     3674.08,
     3937.62,
-    4198.84,
-    4535.94,
-    4796.23,
-    5149.29,
-    5315.4
+    4193.14,
+    4452.92,
+    4773.48,
+    4903.6,
+    5197.7
    ],
    "partials_db": [
     0.0,
@@ -337,15 +450,59 @@
     -47.73,
     -65.4,
     -54.16,
-    -84.02,
+    -82.35,
     -74.53,
     -90.08,
-    -86.56,
-    -97.85,
-    -85.58,
-    -80.9,
-    -87.17
+    -80.82,
+    -98.38,
+    -95.73,
+    -95.67,
+    -98.98
    ],
+   "modal_profile": {
+    "modal_hz": [
+     214.54,
+     232.21,
+     246.72,
+     260.68,
+     524.56,
+     552.86,
+     677.83,
+     789.3,
+     1048.59,
+     1314.5,
+     1573.03,
+     2098.41
+    ],
+    "modal_db": [
+     -27.08,
+     -18.26,
+     -25.47,
+     -2.31,
+     0.0,
+     -26.8,
+     -29.36,
+     -17.23,
+     -2.15,
+     -30.65,
+     -16.96,
+     -19.44
+    ],
+    "modal_ratio": [
+     0.82,
+     0.8876,
+     0.943,
+     0.9964,
+     2.005,
+     2.1132,
+     2.5908,
+     3.0169,
+     4.008,
+     5.0244,
+     6.0125,
+     8.0207
+    ]
+   },
    "body_below_f0_db": -47.76,
    "body_under_db": -107.63,
    "body_f0_db": -59.87,
@@ -410,17 +567,40 @@
    "centroid_hz": 621.3,
    "tnr_mask": {},
    "tnr_db": 17.78,
-   "stereo_width": -0.0
+   "stereo_width": -0.0,
+   "loop": {
+    "verdict": "not_testable",
+    "reason": "shorter than one template and a 100 ms lag"
+   },
+   "window": {
+    "model_s": 0.55,
+    "reference_s": 0.55
+   },
+   "floor_state": {
+    "declared": false,
+    "basis": null,
+    "source": "preroll",
+    "level_db_hz": null,
+    "stationary": null,
+    "clear_partials_tail": 8,
+    "hum_dbfs": null,
+    "censors": {
+     "body": null,
+     "tnr": null
+    },
+    "body_floor_db": null,
+    "body_hum_db": null
+   }
   },
   {
    "timbre": "gm115",
    "note": 60,
    "velocity": 104,
-   "f0_hz": 261.567,
-   "cents_vs_et": -0.39,
-   "inharmonicity_b": 0.0001196,
-   "partials_fit": 11,
-   "inharmonicity_reliable": true,
+   "f0_hz": 261.691,
+   "cents_vs_et": 0.43,
+   "inharmonicity_b": 0.0,
+   "partials_fit": 0,
+   "inharmonicity_reliable": false,
    "partials_hz": [
     260.67,
     524.52,
@@ -434,14 +614,14 @@
     2617.22,
     2885.45,
     3147.95,
-    3418.24,
+    3352.33,
     3673.79,
     3937.61,
     4192.94,
-    4535.76,
-    4796.15,
-    5149.09,
-    5315.4
+    4452.71,
+    4773.25,
+    4986.75,
+    5241.64
    ],
    "partials_db": [
     0.0,
@@ -456,15 +636,59 @@
     -44.3,
     -61.88,
     -50.73,
-    -80.19,
+    -78.66,
     -70.4,
     -85.99,
     -76.49,
-    -92.86,
-    -80.93,
-    -75.83,
-    -82.03
+    -93.47,
+    -90.97,
+    -91.32,
+    -94.3
    ],
+   "modal_profile": {
+    "modal_hz": [
+     214.53,
+     232.19,
+     246.7,
+     260.67,
+     524.52,
+     552.82,
+     677.78,
+     789.25,
+     1048.52,
+     1314.41,
+     1572.89,
+     2098.27
+    ],
+    "modal_db": [
+     -27.2,
+     -18.39,
+     -25.57,
+     -2.39,
+     0.0,
+     -26.71,
+     -29.03,
+     -16.75,
+     -1.42,
+     -29.39,
+     -15.18,
+     -16.9
+    ],
+    "modal_ratio": [
+     0.82,
+     0.8875,
+     0.943,
+     0.9963,
+     2.0048,
+     2.113,
+     2.5906,
+     3.0167,
+     4.0077,
+     5.024,
+     6.012,
+     8.0201
+    ]
+   },
    "body_below_f0_db": -47.83,
    "body_under_db": -103.03,
    "body_f0_db": -55.2,
@@ -509,6 +733,27 @@
     -154.48,
     -150.12
    ],
+   "valley_db": [
+    -101.97,
+    -90.15,
+    -102.62,
+    -111.19,
+    -106.58,
+    -114.85,
+    -126.86,
+    -130.96,
+    -137.98,
+    -138.27,
+    -142.37,
+    -141.15,
+    -142.92,
+    -145.23,
+    -155.99,
+    -144.41,
+    -147.77
+   ],
+   "valley_slope_db_oct": -17.443,
+   "valley_ladder_coupling": 0.563,
    "floor_source": "preroll",
    "floor_db": -123.29,
    "floor_octaves_db": [
@@ -529,17 +774,40 @@
    "centroid_hz": 655.7,
    "tnr_mask": {},
    "tnr_db": 17.97,
-   "stereo_width": -0.0
+   "stereo_width": -0.0,
+   "loop": {
+    "verdict": "not_testable",
+    "reason": "shorter than one template and a 100 ms lag"
+   },
+   "window": {
+    "model_s": 0.55,
+    "reference_s": 0.55
+   },
+   "floor_state": {
+    "declared": false,
+    "basis": null,
+    "source": "preroll",
+    "level_db_hz": null,
+    "stationary": null,
+    "clear_partials_tail": 8,
+    "hum_dbfs": null,
+    "censors": {
+     "body": null,
+     "tnr": null
+    },
+    "body_floor_db": null,
+    "body_hum_db": null
+   }
   },
   {
    "timbre": "gm115",
    "note": 60,
    "velocity": 127,
-   "f0_hz": 261.579,
-   "cents_vs_et": -0.31,
-   "inharmonicity_b": 0.000107,
-   "partials_fit": 12,
-   "inharmonicity_reliable": true,
+   "f0_hz": 261.7,
+   "cents_vs_et": 0.49,
+   "inharmonicity_b": 0.0,
+   "partials_fit": 0,
+   "inharmonicity_reliable": false,
    "partials_hz": [
     260.66,
     524.51,
@@ -553,14 +821,14 @@
     2617.06,
     2885.29,
     3147.75,
-    3418.03,
+    3352.33,
     3673.57,
     3937.48,
     4192.7,
-    4535.47,
-    4795.94,
-    5135.09,
-    5315.14
+    4452.48,
+    4772.78,
+    4986.54,
+    5197.58
    ],
    "partials_db": [
     0.0,
@@ -575,15 +843,59 @@
     -41.53,
     -59.07,
     -47.74,
-    -76.67,
+    -75.67,
     -66.72,
     -82.02,
     -72.23,
-    -88.06,
-    -76.07,
-    -83.93,
-    -76.89
+    -88.86,
+    -85.83,
+    -86.24,
+    -89.36
    ],
+   "modal_profile": {
+    "modal_hz": [
+     214.53,
+     232.19,
+     246.69,
+     260.66,
+     524.51,
+     552.8,
+     677.77,
+     789.24,
+     1048.49,
+     1314.33,
+     1572.84,
+     2098.18
+    ],
+    "modal_db": [
+     -27.3,
+     -18.49,
+     -25.66,
+     -2.47,
+     0.0,
+     -26.66,
+     -28.86,
+     -16.49,
+     -0.94,
+     -28.51,
+     -13.97,
+     -15.07
+    ],
+    "modal_ratio": [
+     0.82,
+     0.8875,
+     0.9429,
+     0.9963,
+     2.0048,
+     2.1129,
+     2.5906,
+     3.0167,
+     4.0076,
+     5.0237,
+     6.0118,
+     8.0198
+    ]
+   },
    "body_below_f0_db": -47.86,
    "body_under_db": -99.52,
    "body_f0_db": -51.66,
@@ -640,14 +952,15 @@
     -132.06,
     -131.96,
     -135.68,
-    -135.86,
+    -134.21,
     -135.07,
     -137.15,
-    -149.86,
-    -146.81
+    -147.94,
+    -136.04,
+    -149.46
    ],
-   "valley_slope_db_oct": -16.948,
-   "valley_ladder_coupling": 0.605,
+   "valley_slope_db_oct": -16.639,
+   "valley_ladder_coupling": 0.568,
    "floor_source": "preroll",
    "floor_db": -123.46,
    "floor_octaves_db": [
@@ -668,17 +981,40 @@
    "centroid_hz": 682.7,
    "tnr_mask": {},
    "tnr_db": 18.12,
-   "stereo_width": 0.0
+   "stereo_width": 0.0,
+   "loop": {
+    "verdict": "not_testable",
+    "reason": "shorter than one template and a 100 ms lag"
+   },
+   "window": {
+    "model_s": 0.55,
+    "reference_s": 0.55
+   },
+   "floor_state": {
+    "declared": false,
+    "basis": null,
+    "source": "preroll",
+    "level_db_hz": null,
+    "stationary": null,
+    "clear_partials_tail": 8,
+    "hum_dbfs": null,
+    "censors": {
+     "body": null,
+     "tnr": null
+    },
+    "body_floor_db": null,
+    "body_hum_db": null
+   }
   },
   {
    "timbre": "gm115",
    "note": 63,
    "velocity": 32,
-   "f0_hz": 310.915,
-   "cents_vs_et": -1.18,
-   "inharmonicity_b": 0.0002155,
-   "partials_fit": 9,
-   "inharmonicity_reliable": true,
+   "f0_hz": 311.082,
+   "cents_vs_et": -0.25,
+   "inharmonicity_b": 0.0,
+   "partials_fit": 0,
+   "inharmonicity_reliable": false,
    "partials_hz": [
     310.16,
     622.98,
@@ -692,14 +1028,14 @@
     3112.01,
     3432.44,
     3743.79,
-    4065.84,
-    4411.04,
-    4830.82,
-    5048.55,
-    5487.96,
+    3989.26,
+    4370.41,
+    4613.65,
+    4987.11,
+    5256.55,
+    5642.59,
     5859.95,
-    6076.89,
-    6484.02
+    6177.21
    ],
    "partials_db": [
     0.0,
@@ -714,15 +1050,59 @@
     -54.16,
     -75.65,
     -61.05,
-    -93.27,
-    -95.29,
-    -93.84,
-    -102.99,
-    -110.6,
+    -78.76,
+    -84.45,
+    -91.27,
+    -89.69,
+    -110.86,
+    -105.2,
     -93.51,
-    -99.77,
-    -85.99
+    -106.12
    ],
+   "modal_profile": {
+    "modal_hz": [
+     254.57,
+     276.17,
+     293.04,
+     310.16,
+     327.99,
+     622.98,
+     657.5,
+     806.37,
+     938.7,
+     1247.13,
+     1871.48,
+     2495.42
+    ],
+    "modal_db": [
+     -27.8,
+     -19.62,
+     -26.37,
+     -5.6,
+     -32.17,
+     0.0,
+     -28.67,
+     -32.62,
+     -21.66,
+     -6.89,
+     -24.03,
+     -30.52
+    ],
+    "modal_ratio": [
+     0.8182,
+     0.8876,
+     0.9419,
+     0.9969,
+     1.0542,
+     2.0023,
+     2.1133,
+     2.5918,
+     3.0171,
+     4.0084,
+     6.0152,
+     8.0206
+    ]
+   },
    "body_below_f0_db": -43.31,
    "body_under_db": -123.54,
    "body_f0_db": -80.23,
@@ -779,12 +1159,14 @@
     -168.62,
     -172.47,
     -173.38,
-    -176.85,
-    -189.2,
-    -195.7
+    -179.71,
+    -182.99,
+    -192.52,
+    -194.82,
+    -192.22
    ],
-   "valley_slope_db_oct": -22.613,
-   "valley_ladder_coupling": 0.716,
+   "valley_slope_db_oct": -23.158,
+   "valley_ladder_coupling": 0.702,
    "floor_source": "preroll",
    "floor_db": -117.05,
    "floor_octaves_db": [
@@ -802,18 +1184,41 @@
    "decayed_before_note_off": true,
    "centroid_hz": 641.2,
    "tnr_mask": {},
-   "tnr_db": 17.94,
-   "stereo_width": -0.0
+   "tnr_db": 17.95,
+   "stereo_width": -0.0,
+   "loop": {
+    "verdict": "not_testable",
+    "reason": "shorter than one template and a 100 ms lag"
+   },
+   "window": {
+    "model_s": 0.55,
+    "reference_s": 0.55
+   },
+   "floor_state": {
+    "declared": false,
+    "basis": null,
+    "source": "preroll",
+    "level_db_hz": null,
+    "stationary": null,
+    "clear_partials_tail": 8,
+    "hum_dbfs": null,
+    "censors": {
+     "body": null,
+     "tnr": null
+    },
+    "body_floor_db": null,
+    "body_hum_db": null
+   }
   },
   {
    "timbre": "gm115",
    "note": 63,
    "velocity": 56,
-   "f0_hz": 310.923,
-   "cents_vs_et": -1.14,
-   "inharmonicity_b": 0.0001919,
-   "partials_fit": 11,
-   "inharmonicity_reliable": true,
+   "f0_hz": 311.082,
+   "cents_vs_et": -0.25,
+   "inharmonicity_b": 0.0,
+   "partials_fit": 0,
+   "inharmonicity_reliable": false,
    "partials_hz": [
     310.14,
     622.95,
@@ -827,14 +1232,14 @@
     3111.97,
     3432.31,
     3743.75,
-    4065.72,
-    4370.93,
-    4830.58,
-    5048.56,
-    5487.91,
-    5703.67,
-    6077.0,
-    6484.0
+    3989.13,
+    4370.32,
+    4613.52,
+    4987.04,
+    5286.16,
+    5642.55,
+    5860.08,
+    6177.16
    ],
    "partials_db": [
     0.0,
@@ -849,15 +1254,59 @@
     -52.03,
     -73.21,
     -58.87,
-    -90.44,
-    -82.99,
-    -91.87,
-    -100.48,
-    -108.27,
-    -91.85,
-    -97.69,
-    -83.7
+    -76.53,
+    -81.89,
+    -89.26,
+    -87.17,
+    -109.06,
+    -102.94,
+    -91.44,
+    -103.81
    ],
+   "modal_profile": {
+    "modal_hz": [
+     254.55,
+     276.15,
+     293.01,
+     310.14,
+     327.97,
+     622.95,
+     657.45,
+     806.3,
+     938.64,
+     1247.07,
+     1871.38,
+     2495.38
+    ],
+    "modal_db": [
+     -28.06,
+     -19.93,
+     -26.65,
+     -5.79,
+     -32.42,
+     0.0,
+     -28.65,
+     -32.4,
+     -21.33,
+     -6.07,
+     -22.78,
+     -28.63
+    ],
+    "modal_ratio": [
+     0.8182,
+     0.8876,
+     0.9418,
+     0.9968,
+     1.0541,
+     2.0022,
+     2.1131,
+     2.5915,
+     3.0169,
+     4.0082,
+     6.0148,
+     8.0205
+    ]
+   },
    "body_below_f0_db": -43.42,
    "body_under_db": -113.77,
    "body_f0_db": -70.35,
@@ -914,13 +1363,14 @@
     -156.52,
     -160.47,
     -161.25,
-    -164.57,
-    -161.93,
-    -177.23,
-    -181.71
+    -167.39,
+    -170.77,
+    -180.29,
+    -182.66,
+    -180.14
    ],
-   "valley_slope_db_oct": -21.607,
-   "valley_ladder_coupling": 0.654,
+   "valley_slope_db_oct": -22.477,
+   "valley_ladder_coupling": 0.694,
    "floor_source": "preroll",
    "floor_db": -120.0,
    "floor_octaves_db": [
@@ -939,17 +1389,40 @@
    "centroid_hz": 661.8,
    "tnr_mask": {},
    "tnr_db": 18.1,
-   "stereo_width": 0.0
+   "stereo_width": 0.0,
+   "loop": {
+    "verdict": "not_testable",
+    "reason": "shorter than one template and a 100 ms lag"
+   },
+   "window": {
+    "model_s": 0.55,
+    "reference_s": 0.55
+   },
+   "floor_state": {
+    "declared": false,
+    "basis": null,
+    "source": "preroll",
+    "level_db_hz": null,
+    "stationary": null,
+    "clear_partials_tail": 8,
+    "hum_dbfs": null,
+    "censors": {
+     "body": null,
+     "tnr": null
+    },
+    "body_floor_db": null,
+    "body_hum_db": null
+   }
   },
   {
    "timbre": "gm115",
    "note": 63,
    "velocity": 80,
-   "f0_hz": 310.928,
-   "cents_vs_et": -1.11,
-   "inharmonicity_b": 0.0001708,
-   "partials_fit": 11,
-   "inharmonicity_reliable": true,
+   "f0_hz": 311.083,
+   "cents_vs_et": -0.25,
+   "inharmonicity_b": 0.0,
+   "partials_fit": 0,
+   "inharmonicity_reliable": false,
    "partials_hz": [
     310.11,
     622.91,
@@ -963,14 +1436,14 @@
     3111.87,
     3432.11,
     3743.66,
-    4065.55,
+    3988.92,
     4370.14,
-    4767.39,
-    5013.71,
-    5487.84,
-    5703.6,
-    6077.14,
-    6483.94
+    4613.29,
+    4986.9,
+    5263.32,
+    5676.8,
+    5860.28,
+    6177.05
    ],
    "partials_db": [
     0.0,
@@ -985,15 +1458,59 @@
     -48.86,
     -69.65,
     -55.61,
-    -86.37,
+    -73.13,
     -78.01,
-    -96.52,
-    -94.87,
-    -104.73,
-    -88.02,
-    -94.32,
-    -80.07
+    -86.2,
+    -83.27,
+    -105.77,
+    -99.02,
+    -88.11,
+    -100.23
    ],
+   "modal_profile": {
+    "modal_hz": [
+     254.54,
+     276.12,
+     292.98,
+     310.11,
+     327.94,
+     622.91,
+     657.39,
+     806.23,
+     938.56,
+     1246.97,
+     1871.24,
+     2495.28
+    ],
+    "modal_db": [
+     -28.35,
+     -20.27,
+     -26.95,
+     -6.0,
+     -32.7,
+     0.0,
+     -28.63,
+     -32.15,
+     -20.95,
+     -5.04,
+     -21.1,
+     -25.95
+    ],
+    "modal_ratio": [
+     0.8181,
+     0.8875,
+     0.9417,
+     0.9967,
+     1.054,
+     2.0021,
+     2.1129,
+     2.5913,
+     3.0166,
+     4.0079,
+     6.0144,
+     8.0201
+    ]
+   },
    "body_below_f0_db": -43.59,
    "body_under_db": -107.55,
    "body_f0_db": -63.96,
@@ -1038,25 +1555,6 @@
     -138.06,
     -149.33
    ],
-   "valley_db": [
-    -110.17,
-    -98.37,
-    -110.88,
-    -118.86,
-    -117.34,
-    -128.43,
-    -139.69,
-    -144.85,
-    -146.95,
-    -150.91,
-    -151.51,
-    -154.57,
-    -152.04,
-    -164.95,
-    -171.99
-   ],
-   "valley_slope_db_oct": -20.304,
-   "valley_ladder_coupling": 0.63,
    "floor_source": "preroll",
    "floor_db": -123.78,
    "floor_octaves_db": [
@@ -1075,17 +1573,40 @@
    "centroid_hz": 691.9,
    "tnr_mask": {},
    "tnr_db": 18.3,
-   "stereo_width": 0.0
+   "stereo_width": 0.0,
+   "loop": {
+    "verdict": "not_testable",
+    "reason": "shorter than one template and a 100 ms lag"
+   },
+   "window": {
+    "model_s": 0.55,
+    "reference_s": 0.55
+   },
+   "floor_state": {
+    "declared": false,
+    "basis": null,
+    "source": "preroll",
+    "level_db_hz": null,
+    "stationary": null,
+    "clear_partials_tail": 8,
+    "hum_dbfs": null,
+    "censors": {
+     "body": null,
+     "tnr": null
+    },
+    "body_floor_db": null,
+    "body_hum_db": null
+   }
   },
   {
    "timbre": "gm115",
    "note": 63,
    "velocity": 104,
-   "f0_hz": 310.938,
-   "cents_vs_et": -1.05,
-   "inharmonicity_b": 0.0001489,
-   "partials_fit": 11,
-   "inharmonicity_reliable": true,
+   "f0_hz": 311.088,
+   "cents_vs_et": -0.22,
+   "inharmonicity_b": 0.0,
+   "partials_fit": 0,
+   "inharmonicity_reliable": false,
    "partials_hz": [
     310.1,
     622.87,
@@ -1099,14 +1620,14 @@
     3111.68,
     3431.88,
     3743.48,
-    4065.33,
+    3988.63,
     4369.87,
-    4674.05,
-    5013.58,
-    5389.85,
-    5703.44,
-    6077.23,
-    6483.8
+    4612.97,
+    4986.67,
+    5300.26,
+    5676.68,
+    5860.43,
+    6176.79
    ],
    "partials_db": [
     0.0,
@@ -1121,15 +1642,59 @@
     -45.17,
     -65.55,
     -51.64,
-    -81.54,
+    -68.88,
     -73.21,
-    -88.56,
-    -89.97,
-    -100.93,
-    -82.94,
-    -89.65,
-    -75.13
+    -82.39,
+    -78.27,
+    -100.67,
+    -93.86,
+    -83.55,
+    -95.53
    ],
+   "modal_profile": {
+    "modal_hz": [
+     254.52,
+     276.11,
+     292.96,
+     310.1,
+     622.87,
+     657.34,
+     806.17,
+     938.49,
+     1246.88,
+     1562.72,
+     1871.09,
+     2495.1
+    ],
+    "modal_db": [
+     -28.6,
+     -20.56,
+     -27.22,
+     -6.19,
+     0.0,
+     -28.61,
+     -31.95,
+     -20.63,
+     -4.09,
+     -31.39,
+     -19.42,
+     -23.1
+    ],
+    "modal_ratio": [
+     0.8181,
+     0.8875,
+     0.9416,
+     0.9967,
+     2.002,
+     2.1128,
+     2.5911,
+     3.0164,
+     4.0076,
+     5.0228,
+     6.0139,
+     8.0196
+    ]
+   },
    "body_below_f0_db": -43.69,
    "body_under_db": -102.93,
    "body_f0_db": -59.24,
@@ -1174,29 +1739,6 @@
     -142.06,
     -154.57
    ],
-   "valley_db": [
-    -105.4,
-    -93.24,
-    -105.28,
-    -112.76,
-    -110.73,
-    -121.35,
-    -132.23,
-    -136.6,
-    -138.64,
-    -142.33,
-    -142.69,
-    -145.43,
-    -142.9,
-    -152.53,
-    -151.71,
-    -162.49,
-    -163.57,
-    -153.86,
-    -154.46
-   ],
-   "valley_slope_db_oct": -18.967,
-   "valley_ladder_coupling": 0.596,
    "floor_source": "preroll",
    "floor_db": -123.06,
    "floor_octaves_db": [
@@ -1215,17 +1757,40 @@
    "centroid_hz": 725.6,
    "tnr_mask": {},
    "tnr_db": 18.52,
-   "stereo_width": 0.0
+   "stereo_width": 0.0,
+   "loop": {
+    "verdict": "not_testable",
+    "reason": "shorter than one template and a 100 ms lag"
+   },
+   "window": {
+    "model_s": 0.55,
+    "reference_s": 0.55
+   },
+   "floor_state": {
+    "declared": false,
+    "basis": null,
+    "source": "preroll",
+    "level_db_hz": null,
+    "stationary": null,
+    "clear_partials_tail": 8,
+    "hum_dbfs": null,
+    "censors": {
+     "body": null,
+     "tnr": null
+    },
+    "body_floor_db": null,
+    "body_hum_db": null
+   }
   },
   {
    "timbre": "gm115",
    "note": 63,
    "velocity": 127,
-   "f0_hz": 310.954,
-   "cents_vs_et": -0.96,
-   "inharmonicity_b": 0.0001325,
-   "partials_fit": 11,
-   "inharmonicity_reliable": true,
+   "f0_hz": 311.098,
+   "cents_vs_et": -0.16,
+   "inharmonicity_b": 0.0,
+   "partials_fit": 0,
+   "inharmonicity_reliable": false,
    "partials_hz": [
     310.09,
     622.85,
@@ -1239,14 +1804,14 @@
     3111.45,
     3431.71,
     3743.23,
-    4065.11,
+    3988.34,
     4369.6,
-    4673.49,
-    4987.21,
-    5389.6,
-    5703.18,
-    6077.14,
-    6319.75
+    4612.56,
+    4986.36,
+    5300.01,
+    5676.44,
+    5860.38,
+    6176.38
    ],
    "partials_db": [
     0.0,
@@ -1261,15 +1826,59 @@
     -42.02,
     -62.05,
     -47.97,
-    -77.13,
+    -64.73,
     -68.68,
-    -83.86,
-    -74.61,
-    -96.19,
-    -77.29,
-    -84.29,
-    -79.52
+    -77.98,
+    -73.19,
+    -95.33,
+    -88.5,
+    -78.47,
+    -90.43
    ],
+   "modal_profile": {
+    "modal_hz": [
+     254.51,
+     276.1,
+     292.95,
+     310.09,
+     622.85,
+     657.32,
+     806.15,
+     938.46,
+     1246.82,
+     1562.64,
+     1870.99,
+     2494.94
+    ],
+    "modal_db": [
+     -28.77,
+     -20.75,
+     -27.39,
+     -6.33,
+     0.0,
+     -28.58,
+     -31.82,
+     -20.41,
+     -3.45,
+     -30.32,
+     -18.14,
+     -20.94
+    ],
+    "modal_ratio": [
+     0.818,
+     0.8874,
+     0.9416,
+     0.9967,
+     2.0019,
+     2.1127,
+     2.5911,
+     3.0163,
+     4.0074,
+     5.0225,
+     6.0136,
+     8.019
+    ]
+   },
    "body_below_f0_db": -43.79,
    "body_under_db": -99.45,
    "body_f0_db": -55.67,
@@ -1314,27 +1923,6 @@
     -142.1,
     -155.52
    ],
-   "valley_db": [
-    -101.79,
-    -89.4,
-    -101.09,
-    -108.12,
-    -105.79,
-    -116.01,
-    -126.49,
-    -130.24,
-    -132.14,
-    -136.55,
-    -135.43,
-    -137.8,
-    -135.04,
-    -144.23,
-    -143.05,
-    -154.87,
-    -151.36
-   ],
-   "valley_slope_db_oct": -17.428,
-   "valley_ladder_coupling": 0.595,
    "floor_source": "preroll",
    "floor_db": -128.69,
    "floor_octaves_db": [
@@ -1352,18 +1940,41 @@
    "decayed_before_note_off": true,
    "centroid_hz": 753.4,
    "tnr_mask": {},
-   "tnr_db": 18.69,
-   "stereo_width": 0.0
+   "tnr_db": 18.7,
+   "stereo_width": 0.0,
+   "loop": {
+    "verdict": "not_testable",
+    "reason": "shorter than one template and a 100 ms lag"
+   },
+   "window": {
+    "model_s": 0.55,
+    "reference_s": 0.55
+   },
+   "floor_state": {
+    "declared": false,
+    "basis": null,
+    "source": "preroll",
+    "level_db_hz": null,
+    "stationary": null,
+    "clear_partials_tail": 8,
+    "hum_dbfs": null,
+    "censors": {
+     "body": null,
+     "tnr": null
+    },
+    "body_floor_db": null,
+    "body_hum_db": null
+   }
   },
   {
    "timbre": "gm115",
    "note": 66,
    "velocity": 32,
-   "f0_hz": 369.533,
-   "cents_vs_et": -2.16,
-   "inharmonicity_b": 0.0003362,
-   "partials_fit": 9,
-   "inharmonicity_reliable": true,
+   "f0_hz": 369.815,
+   "cents_vs_et": -0.84,
+   "inharmonicity_b": 0.0,
+   "partials_fit": 0,
+   "inharmonicity_reliable": false,
    "partials_hz": [
     368.32,
     739.84,
@@ -1374,17 +1985,17 @@
     2591.73,
     2966.81,
     3339.05,
-    3716.39,
-    4093.09,
-    4485.4,
-    4969.48,
-    5363.65,
-    5822.84,
-    6142.94,
-    6658.4,
-    6916.24,
-    7515.17,
-    7934.38
+    3700.5,
+    4083.72,
+    4451.78,
+    4835.09,
+    5198.21,
+    5522.35,
+    5930.84,
+    6265.11,
+    6750.89,
+    7120.49,
+    7467.29
    ],
    "partials_db": [
     0.0,
@@ -1396,18 +2007,62 @@
     -47.17,
     -29.67,
     -63.09,
-    -57.55,
-    -89.1,
-    -93.24,
-    -87.21,
-    -98.29,
-    -90.86,
-    -104.65,
-    -108.75,
-    -102.41,
-    -102.65,
-    -107.44
+    -56.78,
+    -80.0,
+    -63.8,
+    -93.37,
+    -88.92,
+    -91.59,
+    -93.48,
+    -100.37,
+    -107.57,
+    -105.38,
+    -109.47
    ],
+   "modal_profile": {
+    "modal_hz": [
+     302.49,
+     328.44,
+     348.77,
+     368.32,
+     390.86,
+     739.84,
+     781.76,
+     828.02,
+     891.07,
+     1116.18,
+     1482.55,
+     2225.79
+    ],
+    "modal_db": [
+     -26.3,
+     -20.15,
+     -27.5,
+     -8.41,
+     -32.85,
+     0.0,
+     -30.66,
+     -34.21,
+     -34.51,
+     -24.23,
+     -10.19,
+     -27.84
+    ],
+    "modal_ratio": [
+     0.8176,
+     0.8877,
+     0.9426,
+     0.9955,
+     1.0564,
+     1.9996,
+     2.1129,
+     2.2379,
+     2.4083,
+     3.0167,
+     4.007,
+     6.0157
+    ]
+   },
    "body_below_f0_db": -40.83,
    "body_under_db": -124.25,
    "body_f0_db": -83.41,
@@ -1461,13 +2116,20 @@
     -155.1,
     -167.66,
     -173.07,
-    -180.21,
-    -176.51,
-    -194.28,
-    -191.31
+    -180.42,
+    -178.08,
+    -182.92,
+    -183.12,
+    -187.1,
+    -190.16,
+    -192.28,
+    -197.24,
+    -198.1,
+    -184.72,
+    -199.21
    ],
-   "valley_slope_db_oct": -22.292,
-   "valley_ladder_coupling": 0.665,
+   "valley_slope_db_oct": -23.274,
+   "valley_ladder_coupling": 0.646,
    "floor_source": "preroll",
    "floor_db": -118.81,
    "floor_octaves_db": [
@@ -1486,17 +2148,40 @@
    "centroid_hz": 746.6,
    "tnr_mask": {},
    "tnr_db": 18.89,
-   "stereo_width": 0.0
+   "stereo_width": 0.0,
+   "loop": {
+    "verdict": "not_testable",
+    "reason": "shorter than one template and a 100 ms lag"
+   },
+   "window": {
+    "model_s": 0.55,
+    "reference_s": 0.55
+   },
+   "floor_state": {
+    "declared": false,
+    "basis": null,
+    "source": "preroll",
+    "level_db_hz": null,
+    "stationary": null,
+    "clear_partials_tail": 8,
+    "hum_dbfs": null,
+    "censors": {
+     "body": null,
+     "tnr": null
+    },
+    "body_floor_db": null,
+    "body_hum_db": null
+   }
   },
   {
    "timbre": "gm115",
    "note": 66,
    "velocity": 56,
-   "f0_hz": 369.529,
-   "cents_vs_et": -2.18,
-   "inharmonicity_b": 0.0003105,
-   "partials_fit": 9,
-   "inharmonicity_reliable": true,
+   "f0_hz": 369.803,
+   "cents_vs_et": -0.9,
+   "inharmonicity_b": 0.0,
+   "partials_fit": 0,
+   "inharmonicity_reliable": false,
    "partials_hz": [
     368.31,
     739.8,
@@ -1509,15 +2194,15 @@
     3339.0,
     3700.45,
     4083.53,
-    4485.34,
-    4969.38,
-    5363.59,
-    5815.12,
-    6143.01,
-    6521.95,
-    6891.93,
-    7512.79,
-    7744.5
+    4451.76,
+    4835.03,
+    5198.11,
+    5522.27,
+    5930.77,
+    6265.05,
+    6750.89,
+    7120.39,
+    7467.34
    ],
    "partials_db": [
     0.0,
@@ -1531,16 +2216,60 @@
     -60.94,
     -54.6,
     -77.59,
-    -91.09,
-    -85.28,
-    -95.96,
-    -94.46,
-    -102.99,
-    -106.78,
-    -86.99,
-    -106.24,
-    -99.33
+    -61.48,
+    -91.16,
+    -86.36,
+    -89.67,
+    -90.91,
+    -98.4,
+    -105.42,
+    -103.05,
+    -107.18
    ],
+   "modal_profile": {
+    "modal_hz": [
+     302.47,
+     328.41,
+     348.74,
+     368.31,
+     390.83,
+     739.8,
+     781.7,
+     827.96,
+     891.0,
+     1116.11,
+     1482.51,
+     2225.71
+    ],
+    "modal_db": [
+     -26.72,
+     -20.52,
+     -27.9,
+     -8.68,
+     -33.2,
+     0.0,
+     -30.58,
+     -34.16,
+     -34.31,
+     -23.76,
+     -9.27,
+     -26.44
+    ],
+    "modal_ratio": [
+     0.8175,
+     0.8876,
+     0.9426,
+     0.9954,
+     1.0563,
+     1.9995,
+     2.1127,
+     2.2378,
+     2.4081,
+     3.0166,
+     4.0068,
+     6.0155
+    ]
+   },
    "body_below_f0_db": -41.0,
    "body_under_db": -114.53,
    "body_f0_db": -73.53,
@@ -1585,6 +2314,29 @@
     -142.64,
     -175.24
    ],
+   "valley_db": [
+    -120.19,
+    -109.3,
+    -122.24,
+    -129.12,
+    -131.42,
+    -143.35,
+    -155.71,
+    -161.01,
+    -168.35,
+    -165.9,
+    -170.9,
+    -171.15,
+    -175.17,
+    -178.0,
+    -180.16,
+    -185.28,
+    -186.22,
+    -172.19,
+    -186.98
+   ],
+   "valley_slope_db_oct": -22.705,
+   "valley_ladder_coupling": 0.64,
    "floor_source": "preroll",
    "floor_db": -119.32,
    "floor_octaves_db": [
@@ -1603,17 +2355,40 @@
    "centroid_hz": 763.1,
    "tnr_mask": {},
    "tnr_db": 19.11,
-   "stereo_width": 0.0
+   "stereo_width": 0.0,
+   "loop": {
+    "verdict": "not_testable",
+    "reason": "shorter than one template and a 100 ms lag"
+   },
+   "window": {
+    "model_s": 0.55,
+    "reference_s": 0.55
+   },
+   "floor_state": {
+    "declared": false,
+    "basis": null,
+    "source": "preroll",
+    "level_db_hz": null,
+    "stationary": null,
+    "clear_partials_tail": 8,
+    "hum_dbfs": null,
+    "censors": {
+     "body": null,
+     "tnr": null
+    },
+    "body_floor_db": null,
+    "body_hum_db": null
+   }
   },
   {
    "timbre": "gm115",
    "note": 66,
    "velocity": 80,
-   "f0_hz": 369.528,
-   "cents_vs_et": -2.19,
-   "inharmonicity_b": 0.0002777,
-   "partials_fit": 10,
-   "inharmonicity_reliable": true,
+   "f0_hz": 369.792,
+   "cents_vs_et": -0.95,
+   "inharmonicity_b": 0.0,
+   "partials_fit": 0,
+   "inharmonicity_reliable": false,
    "partials_hz": [
     368.31,
     739.73,
@@ -1626,15 +2401,15 @@
     3338.88,
     3700.33,
     4083.23,
-    4456.98,
-    4969.23,
-    5246.02,
-    5634.28,
-    6143.05,
-    6448.43,
-    6891.73,
-    7268.71,
-    7744.6
+    4451.7,
+    4834.91,
+    5197.95,
+    5522.17,
+    5930.65,
+    6264.94,
+    6750.88,
+    7120.23,
+    7467.36
    ],
    "partials_db": [
     0.0,
@@ -1648,16 +2423,60 @@
     -57.75,
     -51.28,
     -73.95,
-    -69.2,
-    -82.27,
-    -90.74,
-    -95.99,
-    -100.03,
-    -97.91,
-    -82.72,
-    -102.19,
-    -95.93
+    -57.89,
+    -87.68,
+    -82.39,
+    -86.65,
+    -86.86,
+    -95.26,
+    -101.91,
+    -99.36,
+    -103.53
    ],
+   "modal_profile": {
+    "modal_hz": [
+     302.43,
+     328.37,
+     348.7,
+     368.31,
+     390.79,
+     739.73,
+     781.63,
+     890.91,
+     1116.01,
+     1482.43,
+     2225.58,
+     2966.71
+    ],
+    "modal_db": [
+     -27.2,
+     -20.98,
+     -28.37,
+     -9.01,
+     -33.62,
+     0.0,
+     -30.51,
+     -34.07,
+     -23.21,
+     -8.02,
+     -24.43,
+     -33.2
+    ],
+    "modal_ratio": [
+     0.8174,
+     0.8875,
+     0.9424,
+     0.9954,
+     1.0562,
+     1.9993,
+     2.1125,
+     2.4079,
+     3.0163,
+     4.0066,
+     6.0152,
+     8.0183
+    ]
+   },
    "body_below_f0_db": -41.18,
    "body_under_db": -108.33,
    "body_f0_db": -67.15,
@@ -1713,14 +2532,18 @@
     -151.32,
     -158.67,
     -156.07,
-    -160.84,
-    -160.06,
-    -168.7,
-    -173.57,
-    -175.07
+    -161.2,
+    -161.41,
+    -165.56,
+    -168.01,
+    -170.24,
+    -175.42,
+    -176.58,
+    -161.67,
+    -176.82
    ],
-   "valley_slope_db_oct": -21.491,
-   "valley_ladder_coupling": 0.637,
+   "valley_slope_db_oct": -21.701,
+   "valley_ladder_coupling": 0.629,
    "floor_source": "preroll",
    "floor_db": -135.26,
    "floor_octaves_db": [
@@ -1739,17 +2562,40 @@
    "centroid_hz": 788.8,
    "tnr_mask": {},
    "tnr_db": 19.39,
-   "stereo_width": 0.0
+   "stereo_width": 0.0,
+   "loop": {
+    "verdict": "not_testable",
+    "reason": "shorter than one template and a 100 ms lag"
+   },
+   "window": {
+    "model_s": 0.55,
+    "reference_s": 0.55
+   },
+   "floor_state": {
+    "declared": false,
+    "basis": null,
+    "source": "preroll",
+    "level_db_hz": null,
+    "stationary": null,
+    "clear_partials_tail": 8,
+    "hum_dbfs": null,
+    "censors": {
+     "body": null,
+     "tnr": null
+    },
+    "body_floor_db": null,
+    "body_hum_db": null
+   }
   },
   {
    "timbre": "gm115",
    "note": 66,
    "velocity": 104,
-   "f0_hz": 369.546,
-   "cents_vs_et": -2.1,
-   "inharmonicity_b": 0.0002343,
-   "partials_fit": 11,
-   "inharmonicity_reliable": true,
+   "f0_hz": 369.789,
+   "cents_vs_et": -0.96,
+   "inharmonicity_b": 0.0,
+   "partials_fit": 0,
+   "inharmonicity_reliable": false,
    "partials_hz": [
     368.31,
     739.68,
@@ -1763,14 +2609,14 @@
     3700.1,
     4082.89,
     4451.55,
-    4968.6,
-    5245.84,
-    5753.85,
-    6006.48,
-    6448.31,
-    6891.38,
-    7268.39,
-    7633.35
+    4834.7,
+    5197.69,
+    5522.04,
+    5930.4,
+    6264.73,
+    6750.81,
+    7120.0,
+    7349.62
    ],
    "partials_db": [
     0.0,
@@ -1785,15 +2631,59 @@
     -47.17,
     -69.51,
     -53.29,
-    -80.29,
-    -86.33,
-    -91.28,
-    -93.46,
-    -93.51,
-    -76.91,
-    -96.69,
-    -79.83
+    -83.17,
+    -77.26,
+    -82.42,
+    -81.5,
+    -90.98,
+    -97.08,
+    -94.36,
+    -98.49
    ],
+   "modal_profile": {
+    "modal_hz": [
+     302.41,
+     328.35,
+     348.68,
+     368.31,
+     739.68,
+     781.57,
+     890.85,
+     1115.93,
+     1482.34,
+     1858.67,
+     2225.4,
+     2966.5
+    ],
+    "modal_db": [
+     -27.64,
+     -21.38,
+     -28.78,
+     -9.33,
+     0.0,
+     -30.47,
+     -33.87,
+     -22.72,
+     -6.77,
+     -33.7,
+     -22.27,
+     -29.94
+    ],
+    "modal_ratio": [
+     0.8173,
+     0.8874,
+     0.9424,
+     0.9954,
+     1.9992,
+     2.1124,
+     2.4077,
+     3.0161,
+     4.0064,
+     5.0235,
+     6.0147,
+     8.0177
+    ]
+   },
    "body_below_f0_db": -41.35,
    "body_under_db": -103.77,
    "body_f0_db": -62.42,
@@ -1838,24 +2728,6 @@
     -155.88,
     -173.08
    ],
-   "valley_db": [
-    -108.77,
-    -96.88,
-    -108.6,
-    -114.56,
-    -115.62,
-    -126.68,
-    -138.28,
-    -142.63,
-    -149.74,
-    -152.21,
-    -150.57,
-    -162.94,
-    -165.16,
-    -168.08
-   ],
-   "valley_slope_db_oct": -20.049,
-   "valley_ladder_coupling": 0.645,
    "floor_source": "preroll",
    "floor_db": -158.49,
    "floor_octaves_db": [
@@ -1874,17 +2746,40 @@
    "centroid_hz": 820.0,
    "tnr_mask": {},
    "tnr_db": 19.66,
-   "stereo_width": 0.0
+   "stereo_width": 0.0,
+   "loop": {
+    "verdict": "not_testable",
+    "reason": "shorter than one template and a 100 ms lag"
+   },
+   "window": {
+    "model_s": 0.55,
+    "reference_s": 0.55
+   },
+   "floor_state": {
+    "declared": false,
+    "basis": null,
+    "source": "preroll",
+    "level_db_hz": null,
+    "stationary": null,
+    "clear_partials_tail": 8,
+    "hum_dbfs": null,
+    "censors": {
+     "body": null,
+     "tnr": null
+    },
+    "body_floor_db": null,
+    "body_hum_db": null
+   }
   },
   {
    "timbre": "gm115",
    "note": 66,
    "velocity": 127,
-   "f0_hz": 369.564,
-   "cents_vs_et": -2.01,
-   "inharmonicity_b": 0.0002065,
-   "partials_fit": 11,
-   "inharmonicity_reliable": true,
+   "f0_hz": 369.796,
+   "cents_vs_et": -0.93,
+   "inharmonicity_b": 0.0,
+   "partials_fit": 0,
+   "inharmonicity_reliable": false,
    "partials_hz": [
     368.32,
     739.64,
@@ -1898,14 +2793,14 @@
     3699.83,
     4082.65,
     4451.29,
-    4834.41,
-    5245.59,
-    5592.85,
-    6006.06,
-    6448.07,
-    6890.89,
-    7190.88,
-    7633.01
+    4738.37,
+    5197.38,
+    5521.68,
+    5930.03,
+    6264.4,
+    6706.21,
+    7118.75,
+    7349.29
    ],
    "partials_db": [
     0.0,
@@ -1920,15 +2815,59 @@
     -43.38,
     -65.42,
     -48.74,
-    -78.71,
-    -81.67,
-    -83.22,
-    -88.16,
-    -88.47,
-    -70.57,
-    -82.45,
-    -73.47
+    -78.7,
+    -72.12,
+    -76.94,
+    -75.84,
+    -86.17,
+    -91.46,
+    -88.61,
+    -92.03
    ],
+   "modal_profile": {
+    "modal_hz": [
+     302.4,
+     328.34,
+     348.67,
+     368.32,
+     739.64,
+     781.55,
+     890.81,
+     1115.89,
+     1482.28,
+     1858.57,
+     2225.27,
+     2966.23
+    ],
+    "modal_db": [
+     -27.93,
+     -21.67,
+     -29.06,
+     -9.57,
+     0.0,
+     -30.48,
+     -33.74,
+     -22.4,
+     -5.88,
+     -32.28,
+     -20.56,
+     -27.31
+    ],
+    "modal_ratio": [
+     0.8173,
+     0.8874,
+     0.9424,
+     0.9955,
+     1.9991,
+     2.1123,
+     2.4076,
+     3.016,
+     4.0062,
+     5.0232,
+     6.0143,
+     8.017
+    ]
+   },
    "body_below_f0_db": -41.47,
    "body_under_db": -100.3,
    "body_f0_db": -58.83,
@@ -1974,28 +2913,13 @@
     -173.96
    ],
    "valley_db": [
-    -105.1,
-    -92.91,
-    -104.16,
-    -109.57,
-    -110.22,
-    -120.74,
-    -131.92,
-    -135.65,
-    -142.58,
-    -140.7,
-    -144.35,
-    -144.06,
-    -143.21,
-    -150.3,
-    -142.65,
-    -155.5,
-    -157.93,
-    -159.35,
-    -159.77
+    -146.8,
+    -149.71,
+    -156.81,
+    -161.44
    ],
-   "valley_slope_db_oct": -18.797,
-   "valley_ladder_coupling": 0.602,
+   "valley_slope_db_oct": -23.569,
+   "valley_ladder_coupling": 0.578,
    "floor_source": "preroll",
    "floor_db": -234.92,
    "floor_octaves_db": [
@@ -2014,17 +2938,40 @@
    "centroid_hz": 848.0,
    "tnr_mask": {},
    "tnr_db": 19.88,
-   "stereo_width": 0.0
+   "stereo_width": 0.0,
+   "loop": {
+    "verdict": "not_testable",
+    "reason": "shorter than one template and a 100 ms lag"
+   },
+   "window": {
+    "model_s": 0.55,
+    "reference_s": 0.55
+   },
+   "floor_state": {
+    "declared": false,
+    "basis": null,
+    "source": "preroll",
+    "level_db_hz": null,
+    "stationary": null,
+    "clear_partials_tail": 8,
+    "hum_dbfs": null,
+    "censors": {
+     "body": null,
+     "tnr": null
+    },
+    "body_floor_db": null,
+    "body_hum_db": null
+   }
   },
   {
    "timbre": "gm115",
    "note": 69,
    "velocity": 32,
-   "f0_hz": 439.769,
-   "cents_vs_et": -0.91,
-   "inharmonicity_b": 1.281e-06,
-   "partials_fit": 8,
-   "inharmonicity_reliable": true,
+   "f0_hz": 439.782,
+   "cents_vs_et": -0.86,
+   "inharmonicity_b": 0.0,
+   "partials_fit": 0,
+   "inharmonicity_reliable": false,
    "partials_hz": [
     441.78,
     879.44,
@@ -2069,6 +3016,50 @@
     -112.22,
     -107.63
    ],
+   "modal_profile": {
+    "modal_hz": [
+     359.63,
+     390.57,
+     414.71,
+     441.78,
+     464.52,
+     830.45,
+     879.44,
+     928.57,
+     984.37,
+     1327.34,
+     1762.43,
+     2646.83
+    ],
+    "modal_db": [
+     -25.43,
+     -19.68,
+     -26.84,
+     -6.43,
+     -34.28,
+     -33.42,
+     0.0,
+     -32.76,
+     -33.97,
+     -26.9,
+     -11.54,
+     -31.29
+    ],
+    "modal_ratio": [
+     0.8173,
+     0.8877,
+     0.9425,
+     1.004,
+     1.0557,
+     1.8874,
+     1.9987,
+     2.1104,
+     2.2372,
+     3.0167,
+     4.0055,
+     6.0155
+    ]
+   },
    "body_below_f0_db": -42.08,
    "body_under_db": -125.18,
    "body_f0_db": -83.1,
@@ -2152,17 +3143,40 @@
    "centroid_hz": 868.9,
    "tnr_mask": {},
    "tnr_db": 18.98,
-   "stereo_width": 0.0
+   "stereo_width": 0.0,
+   "loop": {
+    "verdict": "not_testable",
+    "reason": "shorter than one template and a 100 ms lag"
+   },
+   "window": {
+    "model_s": 0.55,
+    "reference_s": 0.55
+   },
+   "floor_state": {
+    "declared": false,
+    "basis": null,
+    "source": "preroll",
+    "level_db_hz": null,
+    "stationary": null,
+    "clear_partials_tail": 8,
+    "hum_dbfs": null,
+    "censors": {
+     "body": null,
+     "tnr": null
+    },
+    "body_floor_db": null,
+    "body_hum_db": null
+   }
   },
   {
    "timbre": "gm115",
    "note": 69,
    "velocity": 56,
-   "f0_hz": 439.713,
-   "cents_vs_et": -1.13,
-   "inharmonicity_b": 2.436e-05,
-   "partials_fit": 8,
-   "inharmonicity_reliable": true,
+   "f0_hz": 439.75,
+   "cents_vs_et": -0.99,
+   "inharmonicity_b": 0.0,
+   "partials_fit": 0,
+   "inharmonicity_reliable": false,
    "partials_hz": [
     441.74,
     879.37,
@@ -2183,7 +3197,7 @@
     7416.0,
     7931.96,
     8468.64,
-    8952.16
+    8809.32
    ],
    "partials_db": [
     0.0,
@@ -2205,8 +3219,52 @@
     -108.1,
     -100.6,
     -110.26,
-    -100.59
+    -105.06
    ],
+   "modal_profile": {
+    "modal_hz": [
+     359.6,
+     390.53,
+     414.67,
+     441.74,
+     464.48,
+     830.38,
+     879.37,
+     928.55,
+     984.31,
+     1327.26,
+     1762.39,
+     2646.76
+    ],
+    "modal_db": [
+     -26.06,
+     -20.24,
+     -27.32,
+     -6.97,
+     -34.79,
+     -33.51,
+     0.0,
+     -32.65,
+     -33.85,
+     -26.42,
+     -10.67,
+     -29.91
+    ],
+    "modal_ratio": [
+     0.8173,
+     0.8876,
+     0.9424,
+     1.004,
+     1.0556,
+     1.8872,
+     1.9986,
+     2.1103,
+     2.2371,
+     3.0165,
+     4.0054,
+     6.0154
+    ]
+   },
    "body_below_f0_db": -42.17,
    "body_under_db": -115.44,
    "body_f0_db": -73.27,
@@ -2268,12 +3326,10 @@
     -183.22,
     -186.64,
     -187.4,
-    -192.63,
-    -193.28,
-    -195.13
+    -195.66
    ],
-   "valley_slope_db_oct": -24.112,
-   "valley_ladder_coupling": 0.682,
+   "valley_slope_db_oct": -23.858,
+   "valley_ladder_coupling": 0.684,
    "floor_source": "preroll",
    "floor_db": -142.93,
    "floor_octaves_db": [
@@ -2292,17 +3348,40 @@
    "centroid_hz": 887.0,
    "tnr_mask": {},
    "tnr_db": 19.34,
-   "stereo_width": -0.0
+   "stereo_width": -0.0,
+   "loop": {
+    "verdict": "not_testable",
+    "reason": "shorter than one template and a 100 ms lag"
+   },
+   "window": {
+    "model_s": 0.55,
+    "reference_s": 0.55
+   },
+   "floor_state": {
+    "declared": false,
+    "basis": null,
+    "source": "preroll",
+    "level_db_hz": null,
+    "stationary": null,
+    "clear_partials_tail": 8,
+    "hum_dbfs": null,
+    "censors": {
+     "body": null,
+     "tnr": null
+    },
+    "body_floor_db": null,
+    "body_hum_db": null
+   }
   },
   {
    "timbre": "gm115",
    "note": 69,
    "velocity": 80,
-   "f0_hz": 439.655,
-   "cents_vs_et": -1.36,
-   "inharmonicity_b": 4.542e-05,
-   "partials_fit": 9,
-   "inharmonicity_reliable": true,
+   "f0_hz": 439.719,
+   "cents_vs_et": -1.11,
+   "inharmonicity_b": 0.0,
+   "partials_fit": 0,
+   "inharmonicity_reliable": false,
    "partials_hz": [
     441.7,
     879.28,
@@ -2321,9 +3400,9 @@
     6566.06,
     7048.53,
     7416.05,
-    8070.2,
-    8503.45,
-    8951.98
+    7931.89,
+    8468.61,
+    8815.66
    ],
    "partials_db": [
     0.0,
@@ -2343,10 +3422,54 @@
     -96.24,
     -87.49,
     -105.64,
-    -93.03,
-    -107.14,
-    -96.19
+    -97.0,
+    -107.16,
+    -100.92
    ],
+   "modal_profile": {
+    "modal_hz": [
+     359.56,
+     390.49,
+     414.63,
+     441.7,
+     830.3,
+     879.28,
+     928.51,
+     984.23,
+     1059.5,
+     1327.14,
+     1762.31,
+     2646.63
+    ],
+    "modal_db": [
+     -26.78,
+     -20.9,
+     -27.89,
+     -7.6,
+     -33.62,
+     0.0,
+     -32.54,
+     -33.69,
+     -35.09,
+     -25.81,
+     -9.45,
+     -27.78
+    ],
+    "modal_ratio": [
+     0.8172,
+     0.8875,
+     0.9423,
+     1.0039,
+     1.887,
+     1.9984,
+     2.1103,
+     2.2369,
+     2.408,
+     3.0162,
+     4.0053,
+     6.0151
+    ]
+   },
    "body_below_f0_db": -42.3,
    "body_under_db": -109.23,
    "body_f0_db": -66.93,
@@ -2409,10 +3532,10 @@
     -176.74,
     -177.66,
     -183.37,
-    -185.32
+    -186.05
    ],
-   "valley_slope_db_oct": -23.05,
-   "valley_ladder_coupling": 0.681,
+   "valley_slope_db_oct": -23.26,
+   "valley_ladder_coupling": 0.677,
    "floor_source": "preroll",
    "floor_db": -154.33,
    "floor_octaves_db": [
@@ -2431,17 +3554,40 @@
    "centroid_hz": 915.3,
    "tnr_mask": {},
    "tnr_db": 19.77,
-   "stereo_width": 0.0
+   "stereo_width": 0.0,
+   "loop": {
+    "verdict": "not_testable",
+    "reason": "shorter than one template and a 100 ms lag"
+   },
+   "window": {
+    "model_s": 0.55,
+    "reference_s": 0.55
+   },
+   "floor_state": {
+    "declared": false,
+    "basis": null,
+    "source": "preroll",
+    "level_db_hz": null,
+    "stationary": null,
+    "clear_partials_tail": 8,
+    "hum_dbfs": null,
+    "censors": {
+     "body": null,
+     "tnr": null
+    },
+    "body_floor_db": null,
+    "body_hum_db": null
+   }
   },
   {
    "timbre": "gm115",
    "note": 69,
    "velocity": 104,
-   "f0_hz": 439.617,
-   "cents_vs_et": -1.51,
-   "inharmonicity_b": 5.852e-05,
-   "partials_fit": 10,
-   "inharmonicity_reliable": true,
+   "f0_hz": 439.704,
+   "cents_vs_et": -1.16,
+   "inharmonicity_b": 0.0,
+   "partials_fit": 0,
+   "inharmonicity_reliable": false,
    "partials_hz": [
     441.66,
     879.21,
@@ -2459,10 +3605,10 @@
     6166.58,
     6565.88,
     7048.49,
-    7581.92,
-    8069.86,
-    8552.59,
-    8951.64
+    7415.93,
+    7931.77,
+    8468.56,
+    8815.38
    ],
    "partials_db": [
     0.0,
@@ -2481,11 +3627,55 @@
     -78.59,
     -91.44,
     -82.13,
-    -103.37,
-    -87.42,
-    -101.09,
-    -90.21
+    -102.35,
+    -92.08,
+    -102.72,
+    -95.19
    ],
+   "modal_profile": {
+    "modal_hz": [
+     359.54,
+     390.46,
+     414.6,
+     441.66,
+     830.23,
+     879.21,
+     928.47,
+     984.16,
+     1059.41,
+     1327.04,
+     1762.18,
+     2646.44
+    ],
+    "modal_db": [
+     -27.41,
+     -21.47,
+     -28.41,
+     -8.16,
+     -33.71,
+     0.0,
+     -32.48,
+     -33.52,
+     -34.98,
+     -25.23,
+     -8.15,
+     -25.26
+    ],
+    "modal_ratio": [
+     0.8171,
+     0.8874,
+     0.9423,
+     1.0038,
+     1.8869,
+     1.9982,
+     2.1102,
+     2.2367,
+     2.4078,
+     3.016,
+     4.005,
+     6.0146
+    ]
+   },
    "body_below_f0_db": -42.41,
    "body_under_db": -104.65,
    "body_f0_db": -62.23,
@@ -2546,13 +3736,12 @@
     -157.89,
     -164.16,
     -167.15,
-    -171.12,
-    -173.4,
-    -174.28,
-    -174.26
+    -168.27,
+    -174.25,
+    -176.61
    ],
-   "valley_slope_db_oct": -21.932,
-   "valley_ladder_coupling": 0.673,
+   "valley_slope_db_oct": -21.927,
+   "valley_ladder_coupling": 0.666,
    "floor_source": "preroll",
    "floor_db": -161.11,
    "floor_octaves_db": [
@@ -2571,17 +3760,40 @@
    "centroid_hz": 951.8,
    "tnr_mask": {},
    "tnr_db": 20.18,
-   "stereo_width": -0.0
+   "stereo_width": -0.0,
+   "loop": {
+    "verdict": "not_testable",
+    "reason": "shorter than one template and a 100 ms lag"
+   },
+   "window": {
+    "model_s": 0.55,
+    "reference_s": 0.55
+   },
+   "floor_state": {
+    "declared": false,
+    "basis": null,
+    "source": "preroll",
+    "level_db_hz": null,
+    "stationary": null,
+    "clear_partials_tail": 8,
+    "hum_dbfs": null,
+    "censors": {
+     "body": null,
+     "tnr": null
+    },
+    "body_floor_db": null,
+    "body_hum_db": null
+   }
   },
   {
    "timbre": "gm115",
    "note": 69,
    "velocity": 127,
-   "f0_hz": 439.602,
-   "cents_vs_et": -1.57,
-   "inharmonicity_b": 5.902e-05,
-   "partials_fit": 11,
-   "inharmonicity_reliable": true,
+   "f0_hz": 439.71,
+   "cents_vs_et": -1.14,
+   "inharmonicity_b": 0.0,
+   "partials_fit": 0,
+   "inharmonicity_reliable": false,
    "partials_hz": [
     441.64,
     879.17,
@@ -2600,9 +3812,9 @@
     6565.55,
     7048.27,
     7495.12,
-    8069.41,
-    8503.22,
-    8951.12
+    7931.55,
+    8468.37,
+    8814.57
    ],
    "partials_db": [
     0.0,
@@ -2622,10 +3834,54 @@
     -85.89,
     -76.15,
     -97.3,
-    -81.05,
-    -95.12,
-    -83.31
+    -86.43,
+    -96.95,
+    -88.42
    ],
+   "modal_profile": {
+    "modal_hz": [
+     359.53,
+     390.45,
+     414.59,
+     441.64,
+     830.2,
+     879.17,
+     928.44,
+     984.12,
+     1326.98,
+     1762.07,
+     2646.26,
+     3526.18
+    ],
+    "modal_db": [
+     -27.82,
+     -21.86,
+     -28.76,
+     -8.52,
+     -33.75,
+     0.0,
+     -32.47,
+     -33.39,
+     -24.82,
+     -7.16,
+     -23.1,
+     -33.34
+    ],
+    "modal_ratio": [
+     0.8171,
+     0.8874,
+     0.9422,
+     1.0037,
+     1.8868,
+     1.9981,
+     2.1101,
+     2.2366,
+     3.0159,
+     4.0047,
+     6.0142,
+     8.014
+    ]
+   },
    "body_below_f0_db": -42.49,
    "body_under_db": -101.14,
    "body_f0_db": -58.66,
@@ -2687,12 +3943,11 @@
     -155.14,
     -158.28,
     -161.25,
-    -165.07,
-    -163.94,
-    -165.88
+    -165.75,
+    -167.18
    ],
-   "valley_slope_db_oct": -20.226,
-   "valley_ladder_coupling": 0.659,
+   "valley_slope_db_oct": -20.308,
+   "valley_ladder_coupling": 0.655,
    "floor_source": "preroll",
    "floor_db": -171.6,
    "floor_octaves_db": [
@@ -2711,17 +3966,40 @@
    "centroid_hz": 987.4,
    "tnr_mask": {},
    "tnr_db": 20.49,
-   "stereo_width": 0.0
+   "stereo_width": 0.0,
+   "loop": {
+    "verdict": "not_testable",
+    "reason": "shorter than one template and a 100 ms lag"
+   },
+   "window": {
+    "model_s": 0.55,
+    "reference_s": 0.55
+   },
+   "floor_state": {
+    "declared": false,
+    "basis": null,
+    "source": "preroll",
+    "level_db_hz": null,
+    "stationary": null,
+    "clear_partials_tail": 8,
+    "hum_dbfs": null,
+    "censors": {
+     "body": null,
+     "tnr": null
+    },
+    "body_floor_db": null,
+    "body_hum_db": null
+   }
   },
   {
    "timbre": "gm115",
    "note": 72,
    "velocity": 32,
-   "f0_hz": 523.152,
-   "cents_vs_et": -0.33,
+   "f0_hz": 523.16,
+   "cents_vs_et": -0.3,
    "inharmonicity_b": 0.0,
-   "partials_fit": 7,
-   "inharmonicity_reliable": true,
+   "partials_fit": 0,
+   "inharmonicity_reliable": false,
    "partials_hz": [
     525.11,
     1045.71,
@@ -2766,6 +4044,50 @@
     -88.01,
     -111.04
    ],
+   "modal_profile": {
+    "modal_hz": [
+     427.69,
+     464.44,
+     493.31,
+     525.11,
+     552.68,
+     987.56,
+     1045.71,
+     1103.36,
+     1170.42,
+     1578.57,
+     2094.78,
+     3147.49
+    ],
+    "modal_db": [
+     -22.41,
+     -18.41,
+     -24.92,
+     -2.9,
+     -32.6,
+     -32.03,
+     0.0,
+     -33.71,
+     -32.63,
+     -28.26,
+     -12.92,
+     -33.65
+    ],
+    "modal_ratio": [
+     0.8174,
+     0.8876,
+     0.9428,
+     1.0036,
+     1.0562,
+     1.8874,
+     1.9985,
+     2.1087,
+     2.2368,
+     3.0168,
+     4.0034,
+     6.0153
+    ]
+   },
    "body_below_f0_db": -43.46,
    "body_under_db": -127.76,
    "body_f0_db": -84.3,
@@ -2851,17 +4173,40 @@
    "centroid_hz": 968.2,
    "tnr_mask": {},
    "tnr_db": 18.33,
-   "stereo_width": 0.0
+   "stereo_width": 0.0,
+   "loop": {
+    "verdict": "not_testable",
+    "reason": "shorter than one template and a 100 ms lag"
+   },
+   "window": {
+    "model_s": 0.55,
+    "reference_s": 0.55
+   },
+   "floor_state": {
+    "declared": false,
+    "basis": null,
+    "source": "preroll",
+    "level_db_hz": null,
+    "stationary": null,
+    "clear_partials_tail": 8,
+    "hum_dbfs": null,
+    "censors": {
+     "body": null,
+     "tnr": null
+    },
+    "body_floor_db": null,
+    "body_hum_db": null
+   }
   },
   {
    "timbre": "gm115",
    "note": 72,
    "velocity": 56,
-   "f0_hz": 523.07,
-   "cents_vs_et": -0.6,
+   "f0_hz": 523.079,
+   "cents_vs_et": -0.57,
    "inharmonicity_b": 0.0,
-   "partials_fit": 8,
-   "inharmonicity_reliable": true,
+   "partials_fit": 0,
+   "inharmonicity_reliable": false,
    "partials_hz": [
     525.1,
     1045.64,
@@ -2906,6 +4251,50 @@
     -85.59,
     -108.65
    ],
+   "modal_profile": {
+    "modal_hz": [
+     427.65,
+     464.4,
+     493.26,
+     525.1,
+     552.63,
+     987.49,
+     1045.64,
+     1103.29,
+     1170.34,
+     1578.47,
+     2094.79,
+     3147.43
+    ],
+    "modal_db": [
+     -23.16,
+     -19.14,
+     -25.58,
+     -3.65,
+     -33.27,
+     -32.22,
+     0.0,
+     -33.53,
+     -32.49,
+     -27.71,
+     -11.97,
+     -32.25
+    ],
+    "modal_ratio": [
+     0.8173,
+     0.8875,
+     0.9427,
+     1.0035,
+     1.0561,
+     1.8872,
+     1.9984,
+     2.1085,
+     2.2367,
+     3.0167,
+     4.0034,
+     6.0151
+    ]
+   },
    "body_below_f0_db": -43.56,
    "body_under_db": -117.99,
    "body_f0_db": -74.43,
@@ -2991,17 +4380,40 @@
    "centroid_hz": 997.5,
    "tnr_mask": {},
    "tnr_db": 18.78,
-   "stereo_width": -0.0
+   "stereo_width": -0.0,
+   "loop": {
+    "verdict": "not_testable",
+    "reason": "shorter than one template and a 100 ms lag"
+   },
+   "window": {
+    "model_s": 0.55,
+    "reference_s": 0.55
+   },
+   "floor_state": {
+    "declared": false,
+    "basis": null,
+    "source": "preroll",
+    "level_db_hz": null,
+    "stationary": null,
+    "clear_partials_tail": 8,
+    "hum_dbfs": null,
+    "censors": {
+     "body": null,
+     "tnr": null
+    },
+    "body_floor_db": null,
+    "body_hum_db": null
+   }
   },
   {
    "timbre": "gm115",
    "note": 72,
    "velocity": 80,
-   "f0_hz": 522.983,
-   "cents_vs_et": -0.89,
+   "f0_hz": 522.995,
+   "cents_vs_et": -0.85,
    "inharmonicity_b": 0.0,
-   "partials_fit": 8,
-   "inharmonicity_reliable": true,
+   "partials_fit": 0,
+   "inharmonicity_reliable": false,
    "partials_hz": [
     525.07,
     1045.56,
@@ -3046,6 +4458,50 @@
     -81.62,
     -104.77
    ],
+   "modal_profile": {
+    "modal_hz": [
+     427.61,
+     464.35,
+     493.21,
+     525.07,
+     987.4,
+     1045.56,
+     1103.2,
+     1170.24,
+     1260.0,
+     1578.34,
+     2094.75,
+     3147.3
+    ],
+    "modal_db": [
+     -24.04,
+     -20.0,
+     -26.37,
+     -4.51,
+     -32.43,
+     0.0,
+     -33.29,
+     -32.27,
+     -33.73,
+     -26.93,
+     -10.54,
+     -29.95
+    ],
+    "modal_ratio": [
+     0.8172,
+     0.8874,
+     0.9426,
+     1.0035,
+     1.887,
+     1.9982,
+     2.1084,
+     2.2365,
+     2.408,
+     3.0164,
+     4.0033,
+     6.0149
+    ]
+   },
    "body_below_f0_db": -43.71,
    "body_under_db": -111.78,
    "body_f0_db": -68.06,
@@ -3131,17 +4587,40 @@
    "centroid_hz": 1039.9,
    "tnr_mask": {},
    "tnr_db": 19.35,
-   "stereo_width": -0.0
+   "stereo_width": -0.0,
+   "loop": {
+    "verdict": "not_testable",
+    "reason": "shorter than one template and a 100 ms lag"
+   },
+   "window": {
+    "model_s": 0.55,
+    "reference_s": 0.55
+   },
+   "floor_state": {
+    "declared": false,
+    "basis": null,
+    "source": "preroll",
+    "level_db_hz": null,
+    "stationary": null,
+    "clear_partials_tail": 8,
+    "hum_dbfs": null,
+    "censors": {
+     "body": null,
+     "tnr": null
+    },
+    "body_floor_db": null,
+    "body_hum_db": null
+   }
   },
   {
    "timbre": "gm115",
    "note": 72,
    "velocity": 104,
-   "f0_hz": 522.915,
-   "cents_vs_et": -1.11,
+   "f0_hz": 522.94,
+   "cents_vs_et": -1.03,
    "inharmonicity_b": 0.0,
-   "partials_fit": 9,
-   "inharmonicity_reliable": true,
+   "partials_fit": 0,
+   "inharmonicity_reliable": false,
    "partials_hz": [
     525.05,
     1045.5,
@@ -3186,6 +4665,50 @@
     -76.08,
     -99.16
    ],
+   "modal_profile": {
+    "modal_hz": [
+     427.58,
+     464.31,
+     493.18,
+     525.05,
+     987.32,
+     1045.5,
+     1103.1,
+     1170.13,
+     1259.89,
+     1578.2,
+     2094.61,
+     3147.09
+    ],
+    "modal_db": [
+     -24.8,
+     -20.74,
+     -27.05,
+     -5.25,
+     -32.59,
+     0.0,
+     -33.09,
+     -32.03,
+     -33.44,
+     -26.15,
+     -8.9,
+     -26.98
+    ],
+    "modal_ratio": [
+     0.8172,
+     0.8874,
+     0.9425,
+     1.0034,
+     1.8869,
+     1.9981,
+     2.1082,
+     2.2363,
+     2.4078,
+     3.0161,
+     4.0031,
+     6.0145
+    ]
+   },
    "body_below_f0_db": -43.84,
    "body_under_db": -107.18,
    "body_f0_db": -63.34,
@@ -3271,17 +4794,40 @@
    "centroid_hz": 1093.3,
    "tnr_mask": {},
    "tnr_db": 19.89,
-   "stereo_width": 0.0
+   "stereo_width": 0.0,
+   "loop": {
+    "verdict": "not_testable",
+    "reason": "shorter than one template and a 100 ms lag"
+   },
+   "window": {
+    "model_s": 0.55,
+    "reference_s": 0.55
+   },
+   "floor_state": {
+    "declared": false,
+    "basis": null,
+    "source": "preroll",
+    "level_db_hz": null,
+    "stationary": null,
+    "clear_partials_tail": 8,
+    "hum_dbfs": null,
+    "censors": {
+     "body": null,
+     "tnr": null
+    },
+    "body_floor_db": null,
+    "body_hum_db": null
+   }
   },
   {
    "timbre": "gm115",
    "note": 72,
    "velocity": 127,
-   "f0_hz": 522.883,
-   "cents_vs_et": -1.22,
-   "inharmonicity_b": 7.209e-06,
-   "partials_fit": 9,
-   "inharmonicity_reliable": true,
+   "f0_hz": 522.926,
+   "cents_vs_et": -1.08,
+   "inharmonicity_b": 0.0,
+   "partials_fit": 0,
+   "inharmonicity_reliable": false,
    "partials_hz": [
     525.03,
     1045.49,
@@ -3326,6 +4872,50 @@
     -69.5,
     -92.29
    ],
+   "modal_profile": {
+    "modal_hz": [
+     427.57,
+     464.3,
+     493.16,
+     525.03,
+     987.28,
+     1045.49,
+     1103.04,
+     1170.07,
+     1259.84,
+     1578.13,
+     2094.48,
+     3146.87
+    ],
+    "modal_db": [
+     -25.3,
+     -21.23,
+     -27.51,
+     -5.72,
+     -32.65,
+     0.0,
+     -32.97,
+     -31.83,
+     -33.2,
+     -25.57,
+     -7.6,
+     -24.21
+    ],
+    "modal_ratio": [
+     0.8171,
+     0.8873,
+     0.9425,
+     1.0034,
+     1.8868,
+     1.9981,
+     2.1081,
+     2.2362,
+     2.4077,
+     3.016,
+     4.0028,
+     6.0141
+    ]
+   },
    "body_below_f0_db": -43.93,
    "body_under_db": -103.67,
    "body_f0_db": -59.75,
@@ -3411,17 +5001,40 @@
    "centroid_hz": 1146.5,
    "tnr_mask": {},
    "tnr_db": 20.29,
-   "stereo_width": -0.0
+   "stereo_width": -0.0,
+   "loop": {
+    "verdict": "not_testable",
+    "reason": "shorter than one template and a 100 ms lag"
+   },
+   "window": {
+    "model_s": 0.55,
+    "reference_s": 0.55
+   },
+   "floor_state": {
+    "declared": false,
+    "basis": null,
+    "source": "preroll",
+    "level_db_hz": null,
+    "stationary": null,
+    "clear_partials_tail": 8,
+    "hum_dbfs": null,
+    "censors": {
+     "body": null,
+     "tnr": null
+    },
+    "body_floor_db": null,
+    "body_hum_db": null
+   }
   },
   {
    "timbre": "gm115",
    "note": 74,
    "velocity": 32,
-   "f0_hz": 587.454,
-   "cents_vs_et": 0.37,
+   "f0_hz": 587.47,
+   "cents_vs_et": 0.41,
    "inharmonicity_b": 0.0,
-   "partials_fit": 7,
-   "inharmonicity_reliable": true,
+   "partials_fit": 0,
+   "inharmonicity_reliable": false,
    "partials_hz": [
     589.12,
     1173.95,
@@ -3466,6 +5079,50 @@
     -97.14,
     -113.53
    ],
+   "modal_profile": {
+    "modal_hz": [
+     480.12,
+     521.33,
+     553.67,
+     589.12,
+     620.16,
+     1108.49,
+     1173.95,
+     1238.29,
+     1313.57,
+     1414.59,
+     1771.97,
+     2349.68
+    ],
+    "modal_db": [
+     -20.75,
+     -16.76,
+     -22.98,
+     0.0,
+     -31.42,
+     -30.62,
+     -0.1,
+     -33.12,
+     -31.33,
+     -33.48,
+     -28.81,
+     -13.38
+    ],
+    "modal_ratio": [
+     0.8175,
+     0.8876,
+     0.9427,
+     1.003,
+     1.0559,
+     1.8873,
+     1.9988,
+     2.1083,
+     2.2365,
+     2.4085,
+     3.017,
+     4.0006
+    ]
+   },
    "body_below_f0_db": -43.3,
    "body_under_db": -130.28,
    "body_f0_db": -86.98,
@@ -3551,17 +5208,40 @@
    "centroid_hz": 993.9,
    "tnr_mask": {},
    "tnr_db": 17.79,
-   "stereo_width": 0.0
+   "stereo_width": 0.0,
+   "loop": {
+    "verdict": "not_testable",
+    "reason": "shorter than one template and a 100 ms lag"
+   },
+   "window": {
+    "model_s": 0.55,
+    "reference_s": 0.55
+   },
+   "floor_state": {
+    "declared": false,
+    "basis": null,
+    "source": "preroll",
+    "level_db_hz": null,
+    "stationary": null,
+    "clear_partials_tail": 7,
+    "hum_dbfs": null,
+    "censors": {
+     "body": null,
+     "tnr": null
+    },
+    "body_floor_db": null,
+    "body_hum_db": null
+   }
   },
   {
    "timbre": "gm115",
    "note": 74,
    "velocity": 56,
-   "f0_hz": 587.326,
-   "cents_vs_et": -0.01,
+   "f0_hz": 587.343,
+   "cents_vs_et": 0.04,
    "inharmonicity_b": 0.0,
-   "partials_fit": 7,
-   "inharmonicity_reliable": true,
+   "partials_fit": 0,
+   "inharmonicity_reliable": false,
    "partials_hz": [
     589.12,
     1173.84,
@@ -3606,6 +5286,50 @@
     -94.66,
     -111.08
    ],
+   "modal_profile": {
+    "modal_hz": [
+     480.07,
+     521.28,
+     553.62,
+     589.12,
+     620.1,
+     1108.41,
+     1173.84,
+     1238.2,
+     1313.49,
+     1771.87,
+     2349.78,
+     3532.85
+    ],
+    "modal_db": [
+     -21.53,
+     -17.51,
+     -23.7,
+     -0.84,
+     -32.12,
+     -30.76,
+     0.0,
+     -32.93,
+     -31.21,
+     -28.16,
+     -12.43,
+     -32.73
+    ],
+    "modal_ratio": [
+     0.8174,
+     0.8875,
+     0.9426,
+     1.003,
+     1.0558,
+     1.8872,
+     1.9986,
+     2.1082,
+     2.2364,
+     3.0168,
+     4.0008,
+     6.0151
+    ]
+   },
    "body_below_f0_db": -43.43,
    "body_under_db": -120.51,
    "body_f0_db": -77.08,
@@ -3691,17 +5415,40 @@
    "centroid_hz": 1037.2,
    "tnr_mask": {},
    "tnr_db": 18.23,
-   "stereo_width": 0.0
+   "stereo_width": 0.0,
+   "loop": {
+    "verdict": "not_testable",
+    "reason": "shorter than one template and a 100 ms lag"
+   },
+   "window": {
+    "model_s": 0.55,
+    "reference_s": 0.55
+   },
+   "floor_state": {
+    "declared": false,
+    "basis": null,
+    "source": "preroll",
+    "level_db_hz": null,
+    "stationary": null,
+    "clear_partials_tail": 7,
+    "hum_dbfs": null,
+    "censors": {
+     "body": null,
+     "tnr": null
+    },
+    "body_floor_db": null,
+    "body_hum_db": null
+   }
   },
   {
    "timbre": "gm115",
    "note": 74,
    "velocity": 80,
-   "f0_hz": 587.182,
-   "cents_vs_et": -0.43,
+   "f0_hz": 587.202,
+   "cents_vs_et": -0.37,
    "inharmonicity_b": 0.0,
-   "partials_fit": 8,
-   "inharmonicity_reliable": true,
+   "partials_fit": 0,
+   "inharmonicity_reliable": false,
    "partials_hz": [
     589.11,
     1173.74,
@@ -3746,6 +5493,50 @@
     -90.72,
     -107.17
    ],
+   "modal_profile": {
+    "modal_hz": [
+     480.02,
+     521.23,
+     553.56,
+     589.11,
+     1108.3,
+     1173.74,
+     1238.07,
+     1313.37,
+     1414.36,
+     1771.71,
+     2349.85,
+     3532.73
+    ],
+    "modal_db": [
+     -22.57,
+     -18.52,
+     -24.69,
+     -1.92,
+     -31.03,
+     0.0,
+     -32.76,
+     -31.13,
+     -32.87,
+     -27.32,
+     -11.0,
+     -30.57
+    ],
+    "modal_ratio": [
+     0.8173,
+     0.8875,
+     0.9425,
+     1.003,
+     1.887,
+     1.9984,
+     2.108,
+     2.2362,
+     2.4081,
+     3.0166,
+     4.0009,
+     6.0149
+    ]
+   },
    "body_below_f0_db": -43.59,
    "body_under_db": -114.27,
    "body_f0_db": -70.68,
@@ -3831,17 +5622,40 @@
    "centroid_hz": 1097.7,
    "tnr_mask": {},
    "tnr_db": 18.81,
-   "stereo_width": -0.0
+   "stereo_width": -0.0,
+   "loop": {
+    "verdict": "not_testable",
+    "reason": "shorter than one template and a 100 ms lag"
+   },
+   "window": {
+    "model_s": 0.55,
+    "reference_s": 0.55
+   },
+   "floor_state": {
+    "declared": false,
+    "basis": null,
+    "source": "preroll",
+    "level_db_hz": null,
+    "stationary": null,
+    "clear_partials_tail": 7,
+    "hum_dbfs": null,
+    "censors": {
+     "body": null,
+     "tnr": null
+    },
+    "body_floor_db": null,
+    "body_hum_db": null
+   }
   },
   {
    "timbre": "gm115",
    "note": 74,
    "velocity": 104,
-   "f0_hz": 587.074,
-   "cents_vs_et": -0.75,
+   "f0_hz": 587.099,
+   "cents_vs_et": -0.68,
    "inharmonicity_b": 0.0,
-   "partials_fit": 8,
-   "inharmonicity_reliable": true,
+   "partials_fit": 0,
+   "inharmonicity_reliable": false,
    "partials_hz": [
     589.1,
     1173.69,
@@ -3886,6 +5700,50 @@
     -85.2,
     -101.72
    ],
+   "modal_profile": {
+    "modal_hz": [
+     479.99,
+     521.19,
+     553.52,
+     589.1,
+     1108.21,
+     1173.69,
+     1237.94,
+     1313.26,
+     1414.24,
+     1771.55,
+     2349.78,
+     3532.51
+    ],
+    "modal_db": [
+     -23.48,
+     -19.42,
+     -25.55,
+     -2.84,
+     -31.23,
+     0.0,
+     -32.57,
+     -30.99,
+     -32.47,
+     -26.41,
+     -9.19,
+     -27.6
+    ],
+    "modal_ratio": [
+     0.8172,
+     0.8874,
+     0.9424,
+     1.003,
+     1.8869,
+     1.9984,
+     2.1077,
+     2.236,
+     2.4079,
+     3.0163,
+     4.0008,
+     6.0145
+    ]
+   },
    "body_below_f0_db": -43.74,
    "body_under_db": -109.68,
    "body_f0_db": -65.94,
@@ -3970,18 +5828,41 @@
    "decayed_before_note_off": true,
    "centroid_hz": 1170.9,
    "tnr_mask": {},
-   "tnr_db": 19.38,
-   "stereo_width": 0.0
+   "tnr_db": 19.39,
+   "stereo_width": 0.0,
+   "loop": {
+    "verdict": "not_testable",
+    "reason": "shorter than one template and a 100 ms lag"
+   },
+   "window": {
+    "model_s": 0.55,
+    "reference_s": 0.55
+   },
+   "floor_state": {
+    "declared": false,
+    "basis": null,
+    "source": "preroll",
+    "level_db_hz": null,
+    "stationary": null,
+    "clear_partials_tail": 7,
+    "hum_dbfs": null,
+    "censors": {
+     "body": null,
+     "tnr": null
+    },
+    "body_floor_db": null,
+    "body_hum_db": null
+   }
   },
   {
    "timbre": "gm115",
    "note": 74,
    "velocity": 127,
-   "f0_hz": 587.026,
-   "cents_vs_et": -0.89,
+   "f0_hz": 587.056,
+   "cents_vs_et": -0.81,
    "inharmonicity_b": 0.0,
-   "partials_fit": 10,
-   "inharmonicity_reliable": true,
+   "partials_fit": 0,
+   "inharmonicity_reliable": false,
    "partials_hz": [
     589.09,
     1173.7,
@@ -4026,6 +5907,50 @@
     -78.48,
     -95.08
    ],
+   "modal_profile": {
+    "modal_hz": [
+     479.98,
+     521.18,
+     553.5,
+     589.09,
+     1108.17,
+     1173.7,
+     1237.88,
+     1313.2,
+     1414.17,
+     1771.47,
+     2349.62,
+     3532.25
+    ],
+    "modal_db": [
+     -24.07,
+     -19.99,
+     -26.11,
+     -3.4,
+     -31.29,
+     0.0,
+     -32.42,
+     -30.81,
+     -32.12,
+     -25.69,
+     -7.62,
+     -24.65
+    ],
+    "modal_ratio": [
+     0.8172,
+     0.8874,
+     0.9424,
+     1.003,
+     1.8868,
+     1.9984,
+     2.1076,
+     2.2359,
+     2.4078,
+     3.0161,
+     4.0005,
+     6.0141
+    ]
+   },
    "body_below_f0_db": -43.84,
    "body_under_db": -106.17,
    "body_f0_db": -62.33,
@@ -4111,27 +6036,43 @@
    "centroid_hz": 1242.8,
    "tnr_mask": {},
    "tnr_db": 19.82,
-   "stereo_width": 0.0
+   "stereo_width": 0.0,
+   "loop": {
+    "verdict": "not_testable",
+    "reason": "shorter than one template and a 100 ms lag"
+   },
+   "window": {
+    "model_s": 0.55,
+    "reference_s": 0.55
+   },
+   "floor_state": {
+    "declared": false,
+    "basis": null,
+    "source": "preroll",
+    "level_db_hz": null,
+    "stationary": null,
+    "clear_partials_tail": 7,
+    "hum_dbfs": null,
+    "censors": {
+     "body": null,
+     "tnr": null
+    },
+    "body_floor_db": null,
+    "body_hum_db": null
+   }
   }
  ],
  "summary": {
   "gm115": {
    "stretch_cents": {
-    "60": -0.43,
-    "63": -1.11,
-    "66": -2.16,
-    "69": -1.36,
-    "72": -0.89,
-    "74": -0.43
+    "60": 0.4,
+    "63": -0.25,
+    "66": -0.93,
+    "69": -1.11,
+    "72": -0.85,
+    "74": -0.37
    },
-   "inharmonicity_b": {
-    "60": 0.0001359,
-    "63": 0.0001708,
-    "66": 0.0002777,
-    "69": 4.542e-05,
-    "72": 0.0,
-    "74": 0.0
-   },
+   "inharmonicity_b": {},
    "level_dbfs": {
     "60": {
      "32": -49.4,
@@ -4282,11 +6223,11 @@
      "127": 18.12
     },
     "63": {
-     "32": 17.94,
+     "32": 17.95,
      "56": 18.1,
      "80": 18.3,
      "104": 18.52,
-     "127": 18.69
+     "127": 18.7
     },
     "66": {
      "32": 18.89,
@@ -4313,7 +6254,7 @@
      "32": 17.79,
      "56": 18.23,
      "80": 18.81,
-     "104": 19.38,
+     "104": 19.39,
      "127": 19.82
     }
    },
@@ -4345,17 +6286,122 @@
    }
   }
  },
- "field_measured_utc": {
-  "rows.body_f0_db": "2026-11-13T10:35:14+00:00",
-  "rows.body_under_db": "2026-11-13T10:35:14+00:00",
-  "rows.floor_body_db": "2026-11-13T10:35:14+00:00",
-  "rows.floor_db": "2026-11-13T10:35:14+00:00",
-  "rows.floor_octaves_db": "2026-11-13T10:35:14+00:00",
-  "rows.floor_source": "2026-11-13T10:35:14+00:00",
-  "rows.partial_clear_s": "2026-11-13T10:35:14+00:00",
-  "rows.partial_decay_clear_db_s": "2026-11-13T10:35:14+00:00",
-  "rows.valley_db": "2026-11-13T10:35:14+00:00",
-  "rows.valley_ladder_coupling": "2026-11-13T10:35:14+00:00",
-  "rows.valley_slope_db_oct": "2026-11-13T10:35:14+00:00"
+ "recording_floor": {
+  "gm115": {
+   "declared": false,
+   "rows": 30,
+   "lines": [
+    {
+     "hz": 359.414,
+     "dbfs": -100.39,
+     "rows_present": 25,
+     "rows_observable": 30,
+     "coverage": 1.0,
+     "mains": "60Hz x6"
+    },
+    {
+     "hz": 439.845,
+     "dbfs": -94.12,
+     "rows_present": 20,
+     "rows_observable": 25,
+     "coverage": 0.83,
+     "mains": null
+    },
+    {
+     "hz": 522.828,
+     "dbfs": -93.8,
+     "rows_present": 20,
+     "rows_observable": 20,
+     "coverage": 0.67,
+     "mains": null
+    },
+    {
+     "hz": 591.384,
+     "dbfs": -99.17,
+     "rows_present": 20,
+     "rows_observable": 25,
+     "coverage": 0.83,
+     "mains": null
+    },
+    {
+     "hz": 830.122,
+     "dbfs": -99.86,
+     "rows_present": 30,
+     "rows_observable": 30,
+     "coverage": 1.0,
+     "mains": null
+    },
+    {
+     "hz": 878.912,
+     "dbfs": -103.7,
+     "rows_present": 25,
+     "rows_observable": 25,
+     "coverage": 0.83,
+     "mains": null
+    },
+    {
+     "hz": 1042.202,
+     "dbfs": -103.91,
+     "rows_present": 20,
+     "rows_observable": 20,
+     "coverage": 0.67,
+     "mains": null
+    },
+    {
+     "hz": 1239.322,
+     "dbfs": -103.71,
+     "rows_present": 20,
+     "rows_observable": 25,
+     "coverage": 0.83,
+     "mains": null
+    },
+    {
+     "hz": 1313.552,
+     "dbfs": -102.89,
+     "rows_present": 15,
+     "rows_observable": 20,
+     "coverage": 0.67,
+     "mains": null
+    },
+    {
+     "hz": 1392.907,
+     "dbfs": -109.64,
+     "rows_present": 25,
+     "rows_observable": 30,
+     "coverage": 1.0,
+     "mains": null
+    },
+    {
+     "hz": 2123.618,
+     "dbfs": -118.61,
+     "rows_present": 15,
+     "rows_observable": 20,
+     "coverage": 0.67,
+     "mains": null
+    }
+   ],
+   "lines_found": 11,
+   "hum": null,
+   "note_independent": false,
+   "basis": null,
+   "level_db_hz": -150.91,
+   "slope_db_oct": -8.51,
+   "agree_share": 0.177,
+   "stationary": {
+    "verdict": false,
+    "evaluable_rows": 0,
+    "floor_like_share": null,
+    "slope_db_s": null,
+    "tone_slope_db_s": null,
+    "corr": null,
+    "hum_reference_slope_db_s": null
+   },
+   "reason": "not note-independent"
+  }
+ },
+ "loop": {
+  "status": "not_testable",
+  "rows": 30,
+  "tested": 0
  }
 }

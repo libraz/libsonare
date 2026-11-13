@@ -1,7 +1,7 @@
 {
  "id": "fx_crystal_module",
  "label": "FX 3 (crystal), the GS capital tone, read out of a module's own recordings",
- "measured_utc": "2026-10-25T19:51:46+00:00",
+ "measured_utc": "2026-11-13T19:45:04+00:00",
  "capture": {
   "program": 98,
   "params": [],
@@ -36,11 +36,11 @@
    "timbre": "t0",
    "note": 48,
    "velocity": 100,
-   "f0_hz": 130.304,
-   "cents_vs_et": -6.75,
-   "inharmonicity_b": 0.0001676,
-   "partials_fit": 8,
-   "inharmonicity_reliable": true,
+   "f0_hz": 130.315,
+   "cents_vs_et": -6.6,
+   "inharmonicity_b": 0.0,
+   "partials_fit": 0,
+   "inharmonicity_reliable": false,
    "partials_hz": [
     130.31,
     258.46,
@@ -53,107 +53,147 @@
     1165.44,
     1302.08,
     1451.38,
-    1561.58,
+    1542.02,
     1718.48,
-    1861.95,
-    2019.3,
-    2122.45,
-    2255.03,
-    2381.01,
-    2584.75,
-    2717.86
+    1849.43,
+    1961.37,
+    2115.21,
+    2199.18,
+    2337.52,
+    2494.57,
+    2630.67
    ],
    "partials_db": [
     0.0,
     -44.96,
-    -39.92,
-    -60.78,
-    -57.61,
-    -47.92,
-    -58.78,
+    -39.75,
+    -60.83,
+    -57.45,
+    -48.52,
+    -58.93,
     -32.92,
-    -51.81,
-    -40.6,
-    -23.33,
-    -66.44,
-    -29.02,
-    -52.69,
-    -64.29,
-    -57.21,
-    -78.26,
-    -80.15,
-    -80.5,
-    -81.5
+    -44.0,
+    -40.61,
+    -23.36,
+    -52.96,
+    -28.66,
+    -58.42,
+    -72.06,
+    -65.07,
+    -79.65,
+    -61.12,
+    -79.04,
+    -76.74
    ],
+   "modal_profile": {
+    "modal_hz": [
+     125.09,
+     130.31,
+     138.15,
+     146.04,
+     349.04,
+     822.65,
+     1041.43,
+     1132.74,
+     1451.38,
+     1520.98,
+     1643.17,
+     1718.48
+    ],
+    "modal_db": [
+     -30.79,
+     0.0,
+     -30.06,
+     -39.01,
+     -10.69,
+     -26.93,
+     -34.83,
+     -25.9,
+     -29.93,
+     -36.39,
+     -39.33,
+     -35.86
+    ],
+    "modal_ratio": [
+     0.9563,
+     0.9962,
+     1.0561,
+     1.1164,
+     2.6682,
+     6.2888,
+     7.9612,
+     8.6592,
+     11.0951,
+     11.6272,
+     12.5612,
+     13.1369
+    ]
+   },
    "body_below_f0_db": -55.35,
    "body_under_db": -82.86,
    "body_f0_db": -27.52,
    "peak_dbfs": -6.56,
-   "rms_dbfs": -24.04,
+   "rms_dbfs": -24.5,
    "held_peak_dbfs": -15.04,
    "onset_ms": 0.0,
    "attack_ms": 5.0,
    "attack_hf_db": -54.38,
-   "decay_span_s": 2.005,
-   "decay_db_s": -18.07,
-   "decay_early_db_s": -21.36,
-   "decay_late_db_s": -17.01,
-   "decay_knee_s": 1.212,
+   "decay_span_s": 2.245,
+   "decay_db_s": -17.41,
+   "decay_early_db_s": -21.38,
+   "decay_late_db_s": -15.4,
+   "decay_knee_s": 1.207,
    "partial_decay_db_s": [
-    -17.7,
-    -15.92,
-    -17.78,
-    -18.85,
-    -19.67,
-    -17.63,
-    -19.19,
-    -18.69
+    -17.23,
+    -15.05,
+    -18.0,
+    -17.79,
+    -18.24,
+    -16.97,
+    -18.53,
+    -17.66
    ],
    "partial_clear_s": [
-    1.859,
+    2.092,
     null,
-    1.859,
+    2.092,
     1.859,
     1.488,
     1.534,
-    1.859,
-    1.859
+    1.906,
+    2.092
    ],
    "partial_decay_clear_db_s": [
-    -17.7,
+    -17.23,
     null,
-    -17.78,
+    -18.0,
     -18.85,
     -22.33,
     -17.59,
-    -19.19,
-    -18.69
+    -18.83,
+    -17.66
    ],
    "valley_db": [
-    -91.82,
-    -77.07,
-    -109.08,
-    -108.16,
-    -108.09,
     -92.11,
-    -106.54,
     -94.56,
-    -103.26,
-    -104.67,
-    -81.78,
-    -112.74,
-    -114.84,
-    -126.8,
-    -116.46,
-    -128.14
+    -79.81,
+    -116.03,
+    -123.89
    ],
-   "valley_slope_db_oct": -8.151,
-   "valley_ladder_coupling": 0.616,
+   "valley_slope_db_oct": -22.242,
+   "valley_ladder_coupling": 1.076,
    "floor_source": null,
    "decayed_before_note_off": false,
-   "damper_release_ms": 229.5,
-   "damper_capped": true,
    "centroid_hz": 166.5,
+   "fm": [
+    20.856,
+    9.474,
+    9.474
+   ],
+   "fm_warp": {
+    "refused": "the fundamental's phase track is not monotone"
+   },
+   "fm_coherence": 0.022,
    "tnr_mask": {
     "fm": [
      20.856,
@@ -161,17 +201,92 @@
      9.474
     ]
    },
-   "tnr_db": 9.86
+   "tnr_db": 9.87,
+   "loop": {
+    "verdict": "not",
+    "residual_db": -14.2,
+    "median_db": -12.1,
+    "frames": 4,
+    "reaching_frames": 4,
+    "reach_ms": 561.5,
+    "borderline": false,
+    "ladder_db": [
+     0.0,
+     -38.2,
+     -9.9,
+     -55.0,
+     -52.7,
+     -25.2,
+     -56.2,
+     -33.1,
+     -63.4,
+     -39.8,
+     -60.2,
+     -44.1,
+     -58.5,
+     -51.8,
+     -69.2,
+     -57.1,
+     -71.6,
+     -60.0,
+     -72.4,
+     -71.6
+    ],
+    "group": 0,
+    "group_notes": [
+     48,
+     51,
+     54,
+     57,
+     60,
+     63,
+     66,
+     69,
+     72
+    ],
+    "flagged": {
+     "register": "level read across notes that share one stored waveform: the spectrum is one fixed shape shifted with pitch, so the register curve over the group is a transposition artefact"
+    }
+   },
+   "window": {
+    "model_s": 2.336,
+    "reference_s": 2.336
+   },
+   "window_end_ms": 2336,
+   "window_rule": "recorded length",
+   "window_recorded_ms": 2336,
+   "window_end_clearance_db": 3.87,
+   "window_sound_end_ms": 2304,
+   "floor_state": {
+    "declared": false,
+    "basis": null,
+    "source": null,
+    "level_db_hz": null,
+    "stationary": {
+     "slope_db_s": -18.36,
+     "corr": 0.97,
+     "tone_slope_db_s": -17.92,
+     "floor_like": false
+    },
+    "clear_partials_tail": 3,
+    "hum_dbfs": -102.32,
+    "censors": {
+     "body": null,
+     "tnr": null
+    },
+    "body_floor_db": null,
+    "body_hum_db": -102.32
+   }
   },
   {
    "timbre": "t0",
    "note": 51,
    "velocity": 100,
-   "f0_hz": 154.792,
-   "cents_vs_et": -8.6,
-   "inharmonicity_b": 0.0001542,
-   "partials_fit": 9,
-   "inharmonicity_reliable": true,
+   "f0_hz": 154.804,
+   "cents_vs_et": -8.47,
+   "inharmonicity_b": 0.0,
+   "partials_fit": 0,
+   "inharmonicity_reliable": false,
    "partials_hz": [
     154.82,
     310.29,
@@ -181,84 +296,128 @@
     938.12,
     1085.13,
     1236.23,
-    1387.56,
+    1373.58,
     1545.77,
     1719.54,
-    1853.88,
+    1841.84,
     2035.3,
-    2210.45,
-    2391.94,
-    2524.48,
+    2197.85,
+    2343.67,
+    2512.67,
     2655.13,
-    2845.26,
-    3037.17,
-    3166.09
+    2784.15,
+    2912.71,
+    3095.57
    ],
    "partials_db": [
     0.0,
     -46.42,
-    -39.26,
-    -62.8,
-    -61.37,
-    -49.19,
-    -59.62,
+    -38.73,
+    -62.84,
+    -61.32,
+    -49.99,
+    -59.16,
     -32.52,
-    -55.45,
-    -40.06,
-    -26.17,
-    -64.69,
-    -31.91,
-    -52.2,
-    -62.0,
-    -56.65,
-    -75.07,
-    -77.62,
-    -74.71,
-    -76.2
+    -52.28,
+    -40.07,
+    -26.19,
+    -52.94,
+    -31.51,
+    -56.88,
+    -71.4,
+    -61.44,
+    -72.73,
+    -60.04,
+    -76.2,
+    -77.06
    ],
+   "modal_profile": {
+    "modal_hz": [
+     147.44,
+     154.82,
+     162.4,
+     174.07,
+     414.51,
+     976.67,
+     1236.23,
+     1344.25,
+     1719.54,
+     1805.44,
+     1950.67,
+     2035.3
+    ],
+    "modal_db": [
+     -32.89,
+     0.0,
+     -29.78,
+     -38.79,
+     -10.27,
+     -27.39,
+     -36.1,
+     -31.36,
+     -32.68,
+     -36.25,
+     -40.44,
+     -39.07
+    ],
+    "modal_ratio": [
+     0.9478,
+     0.9952,
+     1.0439,
+     1.119,
+     2.6646,
+     6.2783,
+     7.9468,
+     8.6412,
+     11.0536,
+     11.6058,
+     12.5394,
+     13.0834
+    ]
+   },
    "body_below_f0_db": -51.32,
    "body_under_db": -79.73,
    "body_f0_db": -28.41,
    "peak_dbfs": -6.29,
-   "rms_dbfs": -24.18,
+   "rms_dbfs": -24.54,
    "held_peak_dbfs": -14.71,
    "onset_ms": 0.0,
    "attack_ms": 5.0,
    "attack_hf_db": -54.6,
-   "decay_span_s": 2.02,
-   "decay_db_s": -16.98,
+   "decay_span_s": 2.2,
+   "decay_db_s": -16.58,
    "decay_early_db_s": -23.75,
-   "decay_late_db_s": -13.44,
+   "decay_late_db_s": -13.58,
    "decay_knee_s": 0.728,
    "partial_decay_db_s": [
-    -16.88,
-    -15.12,
-    -18.06,
-    -20.38,
-    -18.35,
-    -19.25,
-    -17.4,
-    -16.9
+    -16.31,
+    -15.99,
+    -17.59,
+    -18.19,
+    -15.85,
+    -18.77,
+    -16.28,
+    -16.27
    ],
    "partial_clear_s": [
-    1.859,
+    2.045,
     null,
-    1.859,
+    2.045,
     0.279,
-    1.209,
+    1.906,
     null,
     1.209,
-    1.859
+    2.045
    ],
    "partial_decay_clear_db_s": [
-    -16.88,
+    -16.31,
     null,
-    -18.06,
+    -17.59,
     -69.89,
-    -24.65,
+    -17.43,
     null,
     -24.72,
-    -16.9
+    -16.27
    ],
    "valley_db": [
     -95.25,
@@ -268,26 +427,32 @@
     -109.11,
     -94.64,
     -109.48,
-    -95.24,
-    -105.44,
+    -97.28,
+    -107.81,
     -110.45,
-    -83.78,
-    -82.2,
-    -118.03,
-    -121.69,
-    -115.98,
-    -120.38,
-    -112.85,
-    -127.86,
-    -125.35
+    -89.14,
+    -117.58,
+    -117.78,
+    -92.17,
+    -121.21,
+    -123.49,
+    -126.4,
+    -126.84
    ],
-   "valley_slope_db_oct": -7.442,
-   "valley_ladder_coupling": 0.598,
+   "valley_slope_db_oct": -7.779,
+   "valley_ladder_coupling": 0.564,
    "floor_source": null,
    "decayed_before_note_off": false,
-   "damper_release_ms": 169.6,
-   "damper_capped": true,
    "centroid_hz": 192.3,
+   "fm": [
+    23.121,
+    8.421,
+    8.421
+   ],
+   "fm_warp": {
+    "refused": "the fundamental's phase track is not monotone"
+   },
+   "fm_coherence": 0.039,
    "tnr_mask": {
     "fm": [
      23.121,
@@ -295,130 +460,256 @@
      8.421
     ]
    },
-   "tnr_db": 9.51
+   "tnr_db": 9.51,
+   "loop": {
+    "verdict": "not",
+    "residual_db": -13.6,
+    "median_db": -10.9,
+    "frames": 4,
+    "reaching_frames": 4,
+    "reach_ms": 542.2,
+    "borderline": false,
+    "ladder_db": [
+     0.0,
+     -35.4,
+     -13.3,
+     -57.3,
+     -55.7,
+     -28.2,
+     -54.0,
+     -33.3,
+     -63.8,
+     -39.5,
+     -59.6,
+     -41.6,
+     -56.5,
+     -51.8,
+     -69.8,
+     -57.2,
+     -69.9,
+     -62.2,
+     -70.6,
+     -70.0
+    ],
+    "group": 0,
+    "group_notes": [
+     48,
+     51,
+     54,
+     57,
+     60,
+     63,
+     66,
+     69,
+     72
+    ],
+    "flagged": {
+     "register": "level read across notes that share one stored waveform: the spectrum is one fixed shape shifted with pitch, so the register curve over the group is a transposition artefact"
+    }
+   },
+   "window": {
+    "model_s": 2.278,
+    "reference_s": 2.278
+   },
+   "window_end_ms": 2278,
+   "window_rule": "recorded length",
+   "window_recorded_ms": 2278,
+   "window_end_clearance_db": 1.72,
+   "window_sound_end_ms": 2257,
+   "floor_state": {
+    "declared": false,
+    "basis": null,
+    "source": null,
+    "level_db_hz": null,
+    "stationary": {
+     "slope_db_s": -17.75,
+     "corr": 0.96,
+     "tone_slope_db_s": -17.0,
+     "floor_like": false
+    },
+    "clear_partials_tail": 4,
+    "hum_dbfs": -102.32,
+    "censors": {
+     "body": null,
+     "tnr": null
+    },
+    "body_floor_db": null,
+    "body_hum_db": -102.32
+   }
   },
   {
    "timbre": "t0",
    "note": 54,
    "velocity": 100,
-   "f0_hz": 184.034,
-   "cents_vs_et": -9.04,
-   "inharmonicity_b": 0.0001266,
-   "partials_fit": 7,
-   "inharmonicity_reliable": true,
+   "f0_hz": 184.045,
+   "cents_vs_et": -8.93,
+   "inharmonicity_b": 0.0,
+   "partials_fit": 0,
+   "inharmonicity_reliable": false,
    "partials_hz": [
     184.02,
     368.63,
     552.49,
     742.25,
-    934.35,
-    1122.77,
-    1276.49,
+    921.36,
+    1117.16,
+    1270.75,
     1469.38,
     1651.81,
     1837.5,
     2046.7,
-    2207.74,
+    2181.83,
     2422.7,
-    2627.43,
-    2816.43,
-    2995.62,
-    3190.52,
-    3333.33,
-    3567.83,
-    3809.24
+    2612.46,
+    2768.22,
+    2987.67,
+    3131.68,
+    3303.89,
+    3494.6,
+    3684.41
    ],
    "partials_db": [
     0.0,
     -45.82,
     -40.36,
-    -63.54,
-    -62.05,
-    -47.16,
-    -60.23,
+    -63.57,
+    -62.03,
+    -48.72,
+    -59.72,
     -32.3,
-    -59.02,
-    -39.51,
+    -53.62,
+    -39.52,
     -29.7,
-    -67.69,
-    -35.2,
-    -51.66,
-    -73.66,
-    -56.36,
-    -76.04,
-    -77.05,
-    -73.92,
-    -74.56
+    -55.82,
+    -35.03,
+    -57.63,
+    -75.63,
+    -62.27,
+    -74.17,
+    -59.72,
+    -75.56,
+    -75.6
    ],
+   "modal_profile": {
+    "modal_hz": [
+     167.92,
+     177.1,
+     184.02,
+     190.85,
+     492.48,
+     508.87,
+     1160.88,
+     1469.38,
+     1599.78,
+     2046.7,
+     2145.84,
+     2318.57
+    ],
+    "modal_db": [
+     -40.99,
+     -33.94,
+     0.0,
+     -32.74,
+     -11.78,
+     -39.79,
+     -28.59,
+     -36.47,
+     -33.51,
+     -36.14,
+     -37.96,
+     -41.21
+    ],
+    "modal_ratio": [
+     0.9077,
+     0.9573,
+     0.9947,
+     1.0316,
+     2.6621,
+     2.7507,
+     6.2751,
+     7.9427,
+     8.6476,
+     11.0634,
+     11.5993,
+     12.533
+    ]
+   },
    "body_below_f0_db": -52.23,
    "body_under_db": -81.95,
    "body_f0_db": -29.72,
    "peak_dbfs": -5.92,
-   "rms_dbfs": -24.2,
+   "rms_dbfs": -24.44,
    "held_peak_dbfs": -14.74,
    "onset_ms": 0.0,
    "attack_ms": 5.0,
    "attack_hf_db": -51.56,
-   "decay_span_s": 2.025,
-   "decay_db_s": -17.53,
+   "decay_span_s": 2.145,
+   "decay_db_s": -17.45,
    "decay_early_db_s": -20.48,
-   "decay_late_db_s": -15.0,
+   "decay_late_db_s": -15.26,
    "decay_knee_s": 0.414,
    "partial_decay_db_s": [
-    -17.16,
-    -17.89,
-    -19.31,
-    -16.54,
-    -16.92,
-    -19.24,
-    -18.03,
-    -17.03
+    -17.15,
+    -16.94,
+    -18.38,
+    -15.44,
+    -15.86,
+    -19.1,
+    -17.27,
+    -17.08
    ],
    "partial_clear_s": [
-    1.859,
+    1.999,
     null,
-    1.859,
-    0.139,
-    1.116,
+    1.999,
+    1.813,
+    1.952,
+    null,
     1.72,
-    1.488,
-    1.859
+    1.999
    ],
    "partial_decay_clear_db_s": [
-    -17.16,
+    -17.15,
     null,
-    -19.31,
+    -18.38,
+    -17.22,
+    -16.71,
     null,
-    -25.13,
-    -19.35,
-    -19.99,
-    -17.03
+    -18.75,
+    -17.08
    ],
    "valley_db": [
     -93.87,
     -78.02,
     -113.88,
-    -108.47,
-    -113.14,
-    -94.89,
-    -113.43,
+    -112.03,
+    -113.73,
+    -92.49,
+    -113.59,
     -99.72,
     -107.05,
-    -114.17,
-    -81.11,
-    -121.97,
-    -121.58,
-    -110.77,
-    -128.22,
-    -122.55
+    -92.24,
+    -121.96,
+    -119.77,
+    -126.89,
+    -128.71,
+    -128.24,
+    -125.44
    ],
-   "valley_slope_db_oct": -7.871,
-   "valley_ladder_coupling": 0.531,
+   "valley_slope_db_oct": -9.667,
+   "valley_ladder_coupling": 0.816,
    "floor_source": null,
    "decayed_before_note_off": false,
-   "damper_release_ms": 109.8,
-   "damper_capped": true,
    "centroid_hz": 223.8,
+   "fm": [
+    27.521,
+    8.421,
+    8.421
+   ],
+   "fm_warp": {
+    "refused": "the fundamental's phase track is not monotone"
+   },
+   "fm_coherence": 0.0,
    "tnr_mask": {
     "fm": [
      27.521,
@@ -426,131 +717,253 @@
      8.421
     ]
    },
-   "tnr_db": 9.52
+   "tnr_db": 9.52,
+   "loop": {
+    "verdict": "not",
+    "residual_db": -13.0,
+    "median_db": -11.8,
+    "frames": 4,
+    "reaching_frames": 4,
+    "reach_ms": 521.8,
+    "borderline": false,
+    "ladder_db": [
+     0.0,
+     -35.6,
+     -12.4,
+     -56.4,
+     -54.5,
+     -27.5,
+     -53.7,
+     -32.9,
+     -63.1,
+     -39.2,
+     -59.0,
+     -41.7,
+     -55.9,
+     -51.2,
+     -67.8,
+     -56.8,
+     -69.5,
+     -61.7,
+     -68.4,
+     -69.1
+    ],
+    "group": 0,
+    "group_notes": [
+     48,
+     51,
+     54,
+     57,
+     60,
+     63,
+     66,
+     69,
+     72
+    ],
+    "flagged": {
+     "register": "level read across notes that share one stored waveform: the spectrum is one fixed shape shifted with pitch, so the register curve over the group is a transposition artefact"
+    }
+   },
+   "window": {
+    "model_s": 2.217,
+    "reference_s": 2.217
+   },
+   "window_end_ms": 2217,
+   "window_rule": "recorded length",
+   "window_recorded_ms": 2217,
+   "window_end_clearance_db": 3.07,
+   "window_sound_end_ms": 2211,
+   "floor_state": {
+    "declared": false,
+    "basis": null,
+    "source": null,
+    "level_db_hz": null,
+    "stationary": {
+     "slope_db_s": -17.76,
+     "corr": 0.99,
+     "tone_slope_db_s": -17.05,
+     "floor_like": false
+    },
+    "clear_partials_tail": 3,
+    "hum_dbfs": -102.32,
+    "censors": {
+     "body": null,
+     "tnr": null
+    },
+    "body_floor_db": null,
+    "body_hum_db": -102.32
+   }
   },
   {
    "timbre": "t0",
    "note": 57,
    "velocity": 100,
-   "f0_hz": 219.517,
-   "cents_vs_et": -3.81,
-   "inharmonicity_b": 0.0001249,
-   "partials_fit": 8,
-   "inharmonicity_reliable": true,
+   "f0_hz": 219.531,
+   "cents_vs_et": -3.7,
+   "inharmonicity_b": 0.0,
+   "partials_fit": 0,
+   "inharmonicity_reliable": false,
    "partials_hz": [
     219.57,
     439.67,
     658.91,
     876.54,
     1094.85,
-    1339.0,
+    1330.15,
     1522.74,
     1753.04,
     1970.35,
     2193.39,
     2443.18,
-    2620.12,
+    2596.33,
     2892.12,
-    3135.53,
-    3344.78,
-    3574.93,
-    3779.21,
-    3974.23,
+    3117.41,
+    3312.57,
+    3561.97,
+    3719.91,
+    3946.12,
     4219.31,
-    4539.59
+    4412.51
    ],
    "partials_db": [
     0.0,
     -45.77,
-    -41.95,
-    -65.9,
-    -64.17,
-    -48.94,
-    -61.9,
-    -32.12,
-    -64.7,
+    -41.18,
+    -66.07,
+    -63.98,
+    -49.64,
+    -61.26,
+    -32.11,
+    -65.2,
     -39.11,
-    -34.2,
-    -73.13,
-    -39.96,
-    -51.23,
-    -75.44,
-    -56.3,
-    -77.17,
-    -76.84,
-    -76.92,
-    -77.2
+    -34.24,
+    -67.0,
+    -39.6,
+    -63.94,
+    -75.61,
+    -65.74,
+    -76.15,
+    -60.31,
+    -77.59,
+    -77.45
    ],
+   "modal_profile": {
+    "modal_hz": [
+     205.72,
+     212.85,
+     219.57,
+     227.08,
+     236.23,
+     563.9,
+     587.39,
+     609.06,
+     1384.13,
+     1753.04,
+     1910.07,
+     2561.36
+    ],
+    "modal_db": [
+     -38.1,
+     -33.6,
+     0.0,
+     -34.11,
+     -37.27,
+     -39.74,
+     -10.91,
+     -38.91,
+     -29.08,
+     -37.54,
+     -39.63,
+     -36.71
+    ],
+    "modal_ratio": [
+     0.9351,
+     0.9675,
+     0.998,
+     1.0322,
+     1.0738,
+     2.5632,
+     2.67,
+     2.7685,
+     6.2915,
+     7.9684,
+     8.6821,
+     11.6425
+    ]
+   },
    "body_below_f0_db": -52.34,
    "body_under_db": -82.37,
    "body_f0_db": -30.02,
    "peak_dbfs": -5.64,
-   "rms_dbfs": -24.03,
+   "rms_dbfs": -24.14,
    "held_peak_dbfs": -14.55,
    "onset_ms": 0.0,
    "attack_ms": 5.0,
    "attack_hf_db": -50.18,
-   "decay_span_s": 2.035,
-   "decay_db_s": -17.89,
+   "decay_span_s": 2.095,
+   "decay_db_s": -17.79,
    "decay_early_db_s": -22.6,
-   "decay_late_db_s": -15.31,
+   "decay_late_db_s": -15.35,
    "decay_knee_s": 0.434,
    "partial_decay_db_s": [
-    -17.4,
-    -17.31,
-    -17.23,
-    -14.85,
-    -14.2,
-    -16.39,
-    -14.56,
-    -17.76
+    -17.29,
+    -17.0,
+    -16.91,
+    -14.34,
+    -13.45,
+    -17.41,
+    -14.17,
+    -17.63
    ],
    "partial_clear_s": [
-    1.859,
+    1.906,
     null,
-    1.859,
+    1.906,
     0.744,
-    1.859,
-    1.488,
-    1.813,
-    1.859
+    1.906,
+    0.79,
+    1.906,
+    1.906
    ],
    "partial_decay_clear_db_s": [
-    -17.4,
+    -17.29,
     null,
-    -17.23,
+    -16.91,
     -36.95,
-    -14.2,
-    -18.55,
-    -15.1,
-    -17.76
+    -13.45,
+    -27.22,
+    -14.17,
+    -17.63
    ],
    "valley_db": [
     -93.95,
     -77.53,
     -113.5,
     -112.29,
-    -112.76,
-    -95.62,
-    -115.1,
+    -92.6,
     -100.68,
     -107.46,
-    -116.99,
-    -91.65,
-    -124.13,
-    -120.8,
-    -109.16,
-    -128.15,
-    -129.15,
-    -129.07
+    -93.52,
+    -124.06,
+    -119.97,
+    -127.91,
+    -129.26,
+    -129.95
    ],
-   "valley_slope_db_oct": -9.222,
-   "valley_ladder_coupling": 0.589,
+   "valley_slope_db_oct": -10.132,
+   "valley_ladder_coupling": 0.862,
    "floor_source": null,
    "decayed_before_note_off": false,
-   "damper_release_ms": 49.9,
-   "damper_capped": true,
    "centroid_hz": 261.1,
+   "fm": [
+    17.802,
+    8.421,
+    8.421
+   ],
+   "fm_warp": {
+    "w20_ratio": 0.945
+   },
+   "fm_coherence": 0.012,
    "tnr_mask": {
     "fm": [
      17.802,
@@ -558,132 +971,248 @@
      8.421
     ]
    },
-   "tnr_db": 9.84
+   "tnr_db": 9.84,
+   "loop": {
+    "verdict": "not",
+    "residual_db": -10.1,
+    "median_db": -9.6,
+    "frames": 4,
+    "reaching_frames": 3,
+    "reach_ms": 501.5,
+    "borderline": false,
+    "ladder_db": [
+     0.0,
+     -37.9,
+     -9.6,
+     -54.4,
+     -51.2,
+     -24.6,
+     -55.2,
+     -31.9,
+     -58.0,
+     -39.2,
+     -54.1,
+     -39.7,
+     -54.1,
+     -51.2,
+     -68.4,
+     -55.9,
+     -67.6,
+     -59.1,
+     -69.7,
+     -68.5
+    ],
+    "group": 0,
+    "group_notes": [
+     48,
+     51,
+     54,
+     57,
+     60,
+     63,
+     66,
+     69,
+     72
+    ],
+    "flagged": {
+     "register": "level read across notes that share one stored waveform: the spectrum is one fixed shape shifted with pitch, so the register curve over the group is a transposition artefact"
+    }
+   },
+   "window": {
+    "model_s": 2.156,
+    "reference_s": 2.156
+   },
+   "window_end_ms": 2156,
+   "window_rule": "recorded length",
+   "window_recorded_ms": 2156,
+   "window_end_clearance_db": 6.76,
+   "window_marks": {
+    "truncated": "partials stand 6.8 dB over the bed in the last 120 ms"
+   },
+   "floor_state": {
+    "declared": false,
+    "basis": null,
+    "source": null,
+    "level_db_hz": null,
+    "stationary": {
+     "slope_db_s": -14.68,
+     "corr": 0.99,
+     "tone_slope_db_s": -17.54,
+     "floor_like": false
+    },
+    "clear_partials_tail": 5,
+    "hum_dbfs": -102.32,
+    "censors": {
+     "body": null,
+     "tnr": null
+    },
+    "body_floor_db": null,
+    "body_hum_db": -102.32
+   }
   },
   {
    "timbre": "t0",
    "note": 60,
    "velocity": 100,
-   "f0_hz": 260.796,
-   "cents_vs_et": -5.5,
-   "inharmonicity_b": 5.078e-05,
-   "partials_fit": 9,
-   "inharmonicity_reliable": true,
+   "f0_hz": 260.803,
+   "cents_vs_et": -5.45,
+   "inharmonicity_b": 0.0,
+   "partials_fit": 0,
+   "inharmonicity_reliable": false,
    "partials_hz": [
     260.92,
     522.49,
     781.4,
     1050.73,
     1305.15,
-    1588.33,
+    1587.67,
     1814.3,
     2078.37,
-    2385.97,
+    2373.28,
     2600.42,
     2892.24,
-    3103.24,
+    3090.92,
     3423.78,
-    3715.82,
-    3976.83,
-    4237.58,
+    3703.37,
+    3856.49,
+    4232.53,
     4446.15,
     4699.04,
-    4987.55,
+    4891.56,
     5239.02
    ],
    "partials_db": [
     0.0,
-    -44.53,
+    -44.63,
     -41.7,
     -64.11,
-    -64.05,
-    -50.22,
-    -60.75,
+    -64.04,
+    -50.44,
+    -60.67,
     -31.84,
-    -65.19,
+    -65.84,
     -38.75,
     -40.55,
-    -65.22,
-    -45.9,
-    -52.29,
-    -74.95,
-    -56.24,
-    -76.46,
-    -60.82,
-    -75.64,
-    -75.24
+    -59.42,
+    -45.86,
+    -58.67,
+    -74.49,
+    -60.18,
+    -76.26,
+    -60.38,
+    -75.95,
+    -75.02
    ],
+   "modal_profile": {
+    "modal_hz": [
+     244.4,
+     252.93,
+     260.92,
+     269.15,
+     299.97,
+     648.83,
+     676.93,
+     697.86,
+     719.89,
+     1645.74,
+     2078.37,
+     3051.27
+    ],
+    "modal_db": [
+     -40.57,
+     -34.11,
+     0.0,
+     -28.94,
+     -40.41,
+     -42.61,
+     -37.93,
+     -14.38,
+     -38.29,
+     -32.07,
+     -37.98,
+     -39.69
+    ],
+    "modal_ratio": [
+     0.9342,
+     0.9668,
+     0.9973,
+     1.0288,
+     1.1466,
+     2.48,
+     2.5874,
+     2.6674,
+     2.7516,
+     6.2904,
+     7.9441,
+     11.6627
+    ]
+   },
    "body_below_f0_db": -50.81,
    "body_under_db": -81.12,
    "body_f0_db": -30.31,
    "peak_dbfs": -5.31,
-   "rms_dbfs": -24.21,
+   "rms_dbfs": -24.47,
    "held_peak_dbfs": -14.42,
    "onset_ms": 0.0,
    "attack_ms": 5.0,
    "attack_hf_db": -28.6,
-   "decay_span_s": 2.045,
-   "decay_db_s": -17.47,
+   "decay_span_s": 2.18,
+   "decay_db_s": -17.18,
    "decay_early_db_s": -21.09,
-   "decay_late_db_s": -14.98,
+   "decay_late_db_s": -14.95,
    "decay_knee_s": 0.399,
    "partial_decay_db_s": [
-    -17.22,
-    -16.07,
-    -16.23,
-    -14.83,
-    -13.63,
-    -18.54,
-    -15.59,
-    -16.99
+    -16.81,
+    -16.33,
+    -16.0,
+    -12.85,
+    -12.25,
+    -18.48,
+    -14.78,
+    -16.72
    ],
    "partial_clear_s": [
-    1.859,
+    1.999,
     null,
-    1.859,
-    1.813,
+    1.999,
+    1.952,
     1.673,
     1.859,
-    1.58,
-    1.859
+    1.952,
+    1.999
    ],
    "partial_decay_clear_db_s": [
-    -17.22,
+    -16.81,
     null,
-    -16.23,
-    -15.09,
+    -16.0,
+    -13.33,
     -13.61,
     -18.54,
-    -16.48,
-    -16.99
+    -15.25,
+    -16.72
    ],
    "valley_db": [
-    -95.27,
-    -78.07,
-    -114.41,
-    -114.62,
-    -115.16,
-    -96.18,
-    -116.14,
-    -88.77,
-    -107.06,
-    -117.81,
-    -100.84,
-    -125.26,
-    -121.8,
-    -122.55,
-    -128.39,
-    -130.26,
-    -129.24,
-    -129.93
+    -95.95,
+    -107.4,
+    -103.72,
+    -125.64,
+    -128.51,
+    -127.16
    ],
-   "valley_slope_db_oct": -10.219,
-   "valley_ladder_coupling": 0.778,
+   "valley_slope_db_oct": -23.548,
+   "valley_ladder_coupling": 1.504,
    "floor_source": null,
    "decayed_before_note_off": false,
-   "damper_release_ms": 124.7,
-   "damper_capped": true,
    "centroid_hz": 308.2,
+   "fm": [
+    10.379,
+    3.571,
+    8.571
+   ],
+   "fm_warp": {
+    "refused": "the fundamental's phase track is not monotone"
+   },
+   "fm_coherence": -0.001,
    "tnr_mask": {
     "fm": [
      10.379,
@@ -691,7 +1220,82 @@
      8.571
     ]
    },
-   "tnr_db": 9.92
+   "tnr_db": 9.91,
+   "loop": {
+    "verdict": "not",
+    "residual_db": -12.6,
+    "median_db": -9.5,
+    "frames": 4,
+    "reaching_frames": 4,
+    "reach_ms": 526.2,
+    "borderline": false,
+    "ladder_db": [
+     0.0,
+     -39.8,
+     -9.0,
+     -54.1,
+     -50.9,
+     -24.1,
+     -56.2,
+     -31.3,
+     -53.1,
+     -39.4,
+     -51.0,
+     -38.0,
+     -54.3,
+     -51.5,
+     -67.7,
+     -55.5,
+     -68.3,
+     -59.1,
+     -68.4,
+     -67.8
+    ],
+    "group": 0,
+    "group_notes": [
+     48,
+     51,
+     54,
+     57,
+     60,
+     63,
+     66,
+     69,
+     72
+    ],
+    "flagged": {
+     "register": "level read across notes that share one stored waveform: the spectrum is one fixed shape shifted with pitch, so the register curve over the group is a transposition artefact"
+    }
+   },
+   "window": {
+    "model_s": 2.23,
+    "reference_s": 2.23
+   },
+   "window_end_ms": 2230,
+   "window_rule": "recorded length",
+   "window_recorded_ms": 2230,
+   "window_end_clearance_db": 2.31,
+   "window_sound_end_ms": 2211,
+   "floor_state": {
+    "declared": false,
+    "basis": null,
+    "source": null,
+    "level_db_hz": null,
+    "stationary": {
+     "slope_db_s": -13.94,
+     "corr": 0.98,
+     "tone_slope_db_s": -17.12,
+     "floor_like": false
+    },
+    "clear_partials_tail": 4,
+    "hum_dbfs": -102.32,
+    "censors": {
+     "body": null,
+     "tnr": null
+    },
+    "body_floor_db": null,
+    "body_hum_db": -102.32
+   }
   },
   {
    "timbre": "t0",
@@ -700,8 +1304,8 @@
    "f0_hz": 310.352,
    "cents_vs_et": -4.32,
    "inharmonicity_b": 0.0,
-   "partials_fit": 6,
-   "inharmonicity_reliable": true,
+   "partials_fit": 0,
+   "inharmonicity_reliable": false,
    "partials_hz": [
     310.33,
     616.87,
@@ -746,49 +1350,93 @@
     -75.08,
     -75.17
    ],
+   "modal_profile": {
+    "modal_hz": [
+     290.54,
+     299.43,
+     310.33,
+     328.38,
+     356.52,
+     806.04,
+     830.23,
+     857.0,
+     1955.79,
+     2474.79,
+     3613.57,
+     3912.04
+    ],
+    "modal_db": [
+     -37.5,
+     -36.85,
+     0.0,
+     -38.88,
+     -41.58,
+     -35.59,
+     -11.86,
+     -38.87,
+     -30.11,
+     -36.85,
+     -37.93,
+     -42.49
+    ],
+    "modal_ratio": [
+     0.9338,
+     0.9624,
+     0.9974,
+     1.0555,
+     1.1459,
+     2.5907,
+     2.6685,
+     2.7545,
+     6.2861,
+     7.9543,
+     11.6145,
+     12.5738
+    ]
+   },
    "body_below_f0_db": -51.48,
    "body_under_db": -81.75,
    "body_f0_db": -30.26,
    "peak_dbfs": -4.98,
-   "rms_dbfs": -24.23,
+   "rms_dbfs": -24.51,
    "held_peak_dbfs": -14.03,
    "onset_ms": 0.0,
    "attack_ms": 5.0,
    "attack_hf_db": -14.83,
-   "decay_span_s": 2.055,
-   "decay_db_s": -17.57,
-   "decay_early_db_s": -25.51,
-   "decay_late_db_s": -15.48,
-   "decay_knee_s": 0.389,
+   "decay_span_s": 2.195,
+   "decay_db_s": -17.28,
+   "decay_early_db_s": -25.76,
+   "decay_late_db_s": -15.39,
+   "decay_knee_s": 0.394,
    "partial_decay_db_s": [
-    -17.23,
-    -16.29,
-    -16.02,
-    -13.51,
-    -12.0,
-    -18.44,
-    -16.23,
-    -16.93
+    -16.91,
+    -16.34,
+    -14.93,
+    -12.04,
+    -10.27,
+    -17.16,
+    -15.15,
+    -16.78
    ],
    "partial_clear_s": [
-    1.859,
+    1.999,
     null,
+    1.999,
     1.859,
-    1.859,
-    1.859,
-    0.046,
-    1.673,
-    1.859
+    1.999,
+    1.999,
+    1.952,
+    1.999
    ],
    "partial_decay_clear_db_s": [
-    -17.23,
+    -16.91,
     null,
-    -16.02,
+    -14.93,
     -13.51,
-    -12.0,
-    null,
-    -16.83,
-    -16.93
+    -10.27,
+    -17.16,
+    -15.51,
+    -16.78
    ],
    "valley_db": [
     -94.68,
@@ -811,9 +1459,16 @@
    "valley_ladder_coupling": 0.768,
    "floor_source": null,
    "decayed_before_note_off": false,
-   "damper_release_ms": 129.7,
-   "damper_capped": true,
    "centroid_hz": 370.7,
+   "fm": [
+    20.544,
+    8.421,
+    8.421
+   ],
+   "fm_warp": {
+    "w20_ratio": 1.046
+   },
+   "fm_coherence": 0.016,
    "tnr_mask": {
     "fm": [
      20.544,
@@ -821,7 +1476,84 @@
      8.421
     ]
    },
-   "tnr_db": 9.51
+   "tnr_db": 9.51,
+   "loop": {
+    "verdict": "not",
+    "residual_db": -11.5,
+    "median_db": -9.0,
+    "frames": 4,
+    "reaching_frames": 4,
+    "reach_ms": 528.5,
+    "borderline": false,
+    "ladder_db": [
+     0.0,
+     -37.7,
+     -9.4,
+     -54.3,
+     -50.9,
+     -24.3,
+     -54.7,
+     -31.3,
+     -57.4,
+     -38.7,
+     -52.3,
+     -38.1,
+     -54.5,
+     -50.8,
+     -67.0,
+     -55.4,
+     -67.0,
+     -59.5,
+     -67.8,
+     -67.2
+    ],
+    "group": 0,
+    "group_notes": [
+     48,
+     51,
+     54,
+     57,
+     60,
+     63,
+     66,
+     69,
+     72
+    ],
+    "flagged": {
+     "register": "level read across notes that share one stored waveform: the spectrum is one fixed shape shifted with pitch, so the register curve over the group is a transposition artefact"
+    }
+   },
+   "window": {
+    "model_s": 2.237,
+    "reference_s": 2.237
+   },
+   "window_end_ms": 2237,
+   "window_rule": "recorded length",
+   "window_recorded_ms": 2237,
+   "window_end_clearance_db": 6.97,
+   "window_marks": {
+    "truncated": "partials stand 7.0 dB over the bed in the last 120 ms"
+   },
+   "floor_state": {
+    "declared": false,
+    "basis": null,
+    "source": null,
+    "level_db_hz": null,
+    "stationary": {
+     "slope_db_s": -14.22,
+     "corr": 0.98,
+     "tone_slope_db_s": -16.93,
+     "floor_like": false
+    },
+    "clear_partials_tail": 5,
+    "hum_dbfs": -102.32,
+    "censors": {
+     "body": null,
+     "tnr": null
+    },
+    "body_floor_db": null,
+    "body_hum_db": -102.32
+   }
   },
   {
    "timbre": "t0",
@@ -830,7 +1562,7 @@
    "f0_hz": 369.472,
    "cents_vs_et": -2.44,
    "inharmonicity_b": 0.0,
-   "partials_fit": 5,
+   "partials_fit": 0,
    "inharmonicity_reliable": false,
    "partials_hz": [
     369.43,
@@ -876,49 +1608,93 @@
     -75.48,
     -75.32
    ],
+   "modal_profile": {
+    "modal_hz": [
+     353.47,
+     369.43,
+     383.16,
+     396.34,
+     424.62,
+     959.62,
+     988.25,
+     1024.41,
+     2332.04,
+     2950.94,
+     4303.26,
+     4652.65
+    ],
+    "modal_db": [
+     -39.22,
+     0.0,
+     -36.84,
+     -41.69,
+     -42.63,
+     -36.86,
+     -13.64,
+     -40.63,
+     -31.17,
+     -38.26,
+     -39.53,
+     -41.35
+    ],
+    "modal_ratio": [
+     0.9553,
+     0.9985,
+     1.0356,
+     1.0712,
+     1.1476,
+     2.5936,
+     2.671,
+     2.7687,
+     6.3029,
+     7.9756,
+     11.6306,
+     12.5749
+    ]
+   },
    "body_below_f0_db": -51.3,
    "body_under_db": -81.57,
    "body_f0_db": -30.27,
    "peak_dbfs": -4.9,
-   "rms_dbfs": -24.19,
+   "rms_dbfs": -24.41,
    "held_peak_dbfs": -13.94,
    "onset_ms": 0.0,
    "attack_ms": 5.0,
    "attack_hf_db": -8.18,
-   "decay_span_s": 2.06,
-   "decay_db_s": -17.61,
-   "decay_early_db_s": -22.15,
-   "decay_late_db_s": -15.61,
-   "decay_knee_s": 0.344,
+   "decay_span_s": 2.175,
+   "decay_db_s": -17.34,
+   "decay_early_db_s": -23.05,
+   "decay_late_db_s": -15.46,
+   "decay_knee_s": 0.354,
    "partial_decay_db_s": [
-    -17.35,
-    -16.2,
-    -15.33,
-    -14.3,
-    -12.49,
-    -16.9,
-    -15.68,
-    -17.52
+    -17.06,
+    -16.19,
+    -15.01,
+    -13.29,
+    -11.43,
+    -16.5,
+    -15.62,
+    -17.28
    ],
    "partial_clear_s": [
-    1.859,
+    1.952,
     null,
-    1.859,
+    1.952,
     1.766,
-    1.766,
+    1.952,
     null,
     1.534,
-    1.859
+    1.952
    ],
    "partial_decay_clear_db_s": [
-    -17.35,
+    -17.06,
     null,
-    -15.33,
+    -15.01,
     -14.84,
-    -12.19,
+    -11.43,
     null,
     -17.2,
-    -17.52
+    -17.28
    ],
    "valley_db": [
     -93.31,
@@ -932,9 +1708,16 @@
    "valley_ladder_coupling": 1.428,
    "floor_source": null,
    "decayed_before_note_off": false,
-   "damper_release_ms": 104.8,
-   "damper_capped": true,
    "centroid_hz": 449.2,
+   "fm": [
+    18.237,
+    7.368,
+    7.368
+   ],
+   "fm_warp": {
+    "w20_ratio": 1.033
+   },
+   "fm_coherence": -0.041,
    "tnr_mask": {
     "fm": [
      18.237,
@@ -946,7 +1729,84 @@
      3.261
     ]
    },
-   "tnr_db": 8.98
+   "tnr_db": 8.98,
+   "loop": {
+    "verdict": "not",
+    "residual_db": -9.5,
+    "median_db": -8.6,
+    "frames": 4,
+    "reaching_frames": 4,
+    "reach_ms": 519.5,
+    "borderline": false,
+    "ladder_db": [
+     0.0,
+     -36.4,
+     -9.9,
+     -54.7,
+     -51.8,
+     -24.7,
+     -53.6,
+     -31.3,
+     -54.6,
+     -38.3,
+     -54.6,
+     -35.8,
+     -53.7,
+     -50.7,
+     -66.2,
+     -56.1,
+     -66.2,
+     -59.5,
+     -66.5,
+     -67.3
+    ],
+    "group": 0,
+    "group_notes": [
+     48,
+     51,
+     54,
+     57,
+     60,
+     63,
+     66,
+     69,
+     72
+    ],
+    "flagged": {
+     "register": "level read across notes that share one stored waveform: the spectrum is one fixed shape shifted with pitch, so the register curve over the group is a transposition artefact"
+    }
+   },
+   "window": {
+    "model_s": 2.21,
+    "reference_s": 2.21
+   },
+   "window_end_ms": 2210,
+   "window_rule": "recorded length",
+   "window_recorded_ms": 2210,
+   "window_end_clearance_db": 7.27,
+   "window_marks": {
+    "truncated": "partials stand 7.3 dB over the bed in the last 120 ms"
+   },
+   "floor_state": {
+    "declared": false,
+    "basis": null,
+    "source": null,
+    "level_db_hz": null,
+    "stationary": {
+     "slope_db_s": -13.41,
+     "corr": 0.99,
+     "tone_slope_db_s": -17.06,
+     "floor_like": false
+    },
+    "clear_partials_tail": 4,
+    "hum_dbfs": -102.32,
+    "censors": {
+     "body": null,
+     "tnr": null
+    },
+    "body_floor_db": null,
+    "body_hum_db": -102.32
+   }
   },
   {
    "timbre": "t0",
@@ -955,7 +1815,7 @@
    "f0_hz": 439.166,
    "cents_vs_et": -3.28,
    "inharmonicity_b": 0.0,
-   "partials_fit": 5,
+   "partials_fit": 0,
    "inharmonicity_reliable": false,
    "partials_hz": [
     439.02,
@@ -1001,49 +1861,93 @@
     -72.38,
     -74.66
    ],
+   "modal_profile": {
+    "modal_hz": [
+     410.9,
+     423.82,
+     439.02,
+     454.07,
+     472.53,
+     1139.62,
+     1174.57,
+     1213.61,
+     2762.7,
+     3498.37,
+     5105.63,
+     5521.39
+    ],
+    "modal_db": [
+     -39.82,
+     -36.14,
+     0.0,
+     -33.28,
+     -39.88,
+     -40.19,
+     -12.63,
+     -39.44,
+     -30.02,
+     -38.14,
+     -39.33,
+     -41.05
+    ],
+    "modal_ratio": [
+     0.9339,
+     0.9632,
+     0.9978,
+     1.032,
+     1.0739,
+     2.59,
+     2.6695,
+     2.7582,
+     6.2789,
+     7.9508,
+     11.6037,
+     12.5486
+    ]
+   },
    "body_below_f0_db": -54.55,
    "body_under_db": -84.92,
    "body_f0_db": -30.38,
    "peak_dbfs": -4.81,
-   "rms_dbfs": -24.51,
+   "rms_dbfs": -24.85,
    "held_peak_dbfs": -13.81,
    "onset_ms": 0.0,
    "attack_ms": 5.0,
    "attack_hf_db": -9.86,
-   "decay_span_s": 2.065,
-   "decay_db_s": -17.57,
-   "decay_early_db_s": -28.83,
-   "decay_late_db_s": -16.02,
-   "decay_knee_s": 0.619,
+   "decay_span_s": 2.24,
+   "decay_db_s": -17.41,
+   "decay_early_db_s": -28.76,
+   "decay_late_db_s": -16.14,
+   "decay_knee_s": 0.624,
    "partial_decay_db_s": [
-    -17.0,
-    -15.79,
-    -15.6,
-    -11.9,
-    -10.87,
-    -17.03,
-    -16.24,
-    -16.66
+    -16.92,
+    -15.84,
+    -14.66,
+    -10.1,
+    -9.8,
+    -16.33,
+    -14.62,
+    -16.88
    ],
    "partial_clear_s": [
-    1.859,
+    2.045,
     null,
-    1.859,
-    0.604,
+    2.045,
+    1.999,
     1.813,
     null,
-    1.395,
-    1.859
+    1.906,
+    2.045
    ],
    "partial_decay_clear_db_s": [
-    -17.0,
+    -16.92,
     null,
-    -15.6,
-    -24.78,
+    -14.66,
+    -10.23,
     -11.42,
     null,
-    -15.61,
-    -16.66
+    -15.54,
+    -16.88
    ],
    "valley_db": [
     -97.92,
@@ -1062,9 +1966,16 @@
    "valley_ladder_coupling": 0.798,
    "floor_source": null,
    "decayed_before_note_off": false,
-   "damper_release_ms": 164.6,
-   "damper_capped": true,
    "centroid_hz": 534.5,
+   "fm": [
+    18.331,
+    8.421,
+    8.421
+   ],
+   "fm_warp": {
+    "refused": "the fundamental's phase track is not monotone"
+   },
+   "fm_coherence": 0.037,
    "tnr_mask": {
     "fm": [
      18.331,
@@ -1076,130 +1987,236 @@
      3.817
     ]
    },
-   "tnr_db": 8.93
+   "tnr_db": 8.93,
+   "loop": {
+    "verdict": "not",
+    "residual_db": -7.2,
+    "median_db": -6.7,
+    "frames": 4,
+    "reaching_frames": 4,
+    "reach_ms": 539.8,
+    "borderline": false,
+    "ladder_db": [
+     0.0,
+     -37.5,
+     -9.0,
+     -54.3,
+     -50.6,
+     -23.9,
+     -54.2,
+     -30.9,
+     -51.1,
+     -38.4,
+     -52.4,
+     -33.3,
+     -53.1,
+     -51.2,
+     -65.2,
+     -56.2,
+     -65.3,
+     -59.7,
+     -66.1,
+     -66.8
+    ],
+    "group": 0,
+    "group_notes": [
+     48,
+     51,
+     54,
+     57,
+     60,
+     63,
+     66,
+     69,
+     72
+    ],
+    "flagged": {
+     "register": "level read across notes that share one stored waveform: the spectrum is one fixed shape shifted with pitch, so the register curve over the group is a transposition artefact"
+    }
+   },
+   "window": {
+    "model_s": 2.271,
+    "reference_s": 2.271
+   },
+   "window_end_ms": 2271,
+   "window_rule": "recorded length",
+   "window_recorded_ms": 2271,
+   "window_end_clearance_db": 3.43,
+   "window_sound_end_ms": 2257,
+   "floor_state": {
+    "declared": false,
+    "basis": null,
+    "source": null,
+    "level_db_hz": null,
+    "stationary": {
+     "slope_db_s": -11.93,
+     "corr": 0.96,
+     "tone_slope_db_s": -16.83,
+     "floor_like": false
+    },
+    "clear_partials_tail": 3,
+    "hum_dbfs": -102.32,
+    "censors": {
+     "body": null,
+     "tnr": null
+    },
+    "body_floor_db": null,
+    "body_hum_db": -102.32
+   }
   },
   {
    "timbre": "t0",
    "note": 72,
    "velocity": 100,
-   "f0_hz": 522.223,
-   "cents_vs_et": -3.4,
-   "inharmonicity_b": 0.0008636,
-   "partials_fit": 6,
-   "inharmonicity_reliable": true,
+   "f0_hz": 522.448,
+   "cents_vs_et": -2.66,
+   "inharmonicity_b": 0.0,
+   "partials_fit": 0,
+   "inharmonicity_reliable": false,
    "partials_hz": [
     522.33,
     1047.06,
     1567.42,
     2094.06,
     2616.52,
-    3217.18,
-    3739.6,
-    4351.96,
-    4800.77,
-    5401.3,
-    6080.42,
-    6585.46,
-    7224.71,
-    7865.33,
-    8513.9,
+    3158.46,
+    3615.62,
+    4172.89,
+    4638.79,
+    5207.02,
+    5814.2,
+    6293.53,
+    6873.33,
+    7409.09,
+    7733.78,
+    8480.06,
+    8769.83,
     9359.69,
     10022.49,
-    10546.71,
-    11414.55,
-    12044.93
+    10546.71
    ],
    "partials_db": [
     0.0,
-    -46.24,
-    -45.97,
-    -67.92,
-    -65.83,
-    -49.24,
-    -67.15,
-    -67.44,
-    -68.44,
-    -65.74,
-    -33.22,
-    -36.76,
-    -71.03,
-    -76.02,
-    -58.01,
-    -74.44,
-    -76.47,
-    -75.48,
-    -74.15,
-    -75.35
+    -46.15,
+    -44.46,
+    -67.34,
+    -65.16,
+    -54.67,
+    -64.83,
+    -30.9,
+    -70.56,
+    -38.47,
+    -60.06,
+    -73.21,
+    -62.8,
+    -71.85,
+    -74.88,
+    -72.7,
+    -76.14,
+    -62.05,
+    -76.43,
+    -76.05
    ],
+   "modal_profile": {
+    "modal_hz": [
+     488.88,
+     504.4,
+     522.33,
+     540.51,
+     562.43,
+     1357.47,
+     1398.09,
+     1449.21,
+     3294.31,
+     4172.89,
+     6080.42,
+     6585.46
+    ],
+    "modal_db": [
+     -37.9,
+     -37.56,
+     0.0,
+     -37.99,
+     -40.37,
+     -37.0,
+     -10.61,
+     -39.7,
+     -29.2,
+     -39.09,
+     -39.66,
+     -42.38
+    ],
+    "modal_ratio": [
+     0.9343,
+     0.964,
+     0.9982,
+     1.033,
+     1.0749,
+     2.5943,
+     2.6719,
+     2.7696,
+     6.2958,
+     7.9749,
+     11.6205,
+     12.5857
+    ]
+   },
    "body_below_f0_db": -55.64,
    "body_under_db": -85.87,
    "body_f0_db": -30.23,
    "peak_dbfs": -4.57,
-   "rms_dbfs": -24.5,
+   "rms_dbfs": -24.74,
    "held_peak_dbfs": -13.54,
    "onset_ms": 0.0,
    "attack_ms": 5.0,
    "attack_hf_db": -7.56,
-   "decay_span_s": 2.065,
-   "decay_db_s": -17.55,
+   "decay_span_s": 2.19,
+   "decay_db_s": -17.4,
    "decay_early_db_s": -27.51,
-   "decay_late_db_s": -15.72,
+   "decay_late_db_s": -15.77,
    "decay_knee_s": 0.414,
    "partial_decay_db_s": [
-    -17.07,
-    -16.08,
-    -14.87,
-    -10.78,
-    -10.34,
-    -16.45,
-    -14.65,
-    -13.27
+    -16.99,
+    -16.26,
+    -13.94,
+    -9.72,
+    -9.2,
+    -16.13,
+    -15.3,
+    -17.4
    ],
    "partial_clear_s": [
-    1.859,
+    1.999,
     null,
-    1.859,
-    1.813,
-    1.766,
-    1.766,
-    0.558,
-    1.859
+    1.999,
+    1.999,
+    1.999,
+    null,
+    1.162,
+    1.999
    ],
    "partial_decay_clear_db_s": [
-    -17.07,
+    -16.99,
     null,
-    -14.87,
-    -11.02,
-    -10.47,
-    -15.83,
-    -23.5,
-    -13.27
+    -13.94,
+    -9.72,
+    -9.2,
+    null,
+    -18.92,
+    -17.4
    ],
-   "valley_db": [
-    -98.58,
-    -80.74,
-    -116.56,
-    -117.49,
-    -116.73,
-    -104.3,
-    -113.55,
-    -105.01,
-    -116.37,
-    -126.89,
-    -115.13,
-    -111.04,
-    -124.13,
-    -129.36,
-    -130.21,
-    -131.61
-   ],
-   "valley_slope_db_oct": -8.855,
-   "valley_ladder_coupling": 0.428,
    "floor_source": null,
    "decayed_before_note_off": false,
-   "damper_release_ms": 114.8,
-   "damper_capped": true,
    "centroid_hz": 639.0,
+   "fm": [
+    20.579,
+    4.211,
+    4.211
+   ],
+   "fm_warp": {
+    "refused": "the fundamental's phase track is not monotone"
+   },
+   "fm_coherence": -0.016,
    "tnr_mask": {
     "fm": [
      20.579,
@@ -1207,62 +2224,131 @@
      4.211
     ],
     "am": [
-     2.294,
+     2.293,
      4.386
     ]
    },
-   "tnr_db": 8.76
+   "tnr_db": 8.76,
+   "loop": {
+    "verdict": "not",
+    "residual_db": -8.3,
+    "median_db": -4.5,
+    "frames": 4,
+    "reaching_frames": 4,
+    "reach_ms": 522.8,
+    "borderline": false,
+    "ladder_db": [
+     0.0,
+     -37.0,
+     -8.9,
+     -53.9,
+     -50.6,
+     -23.7,
+     -54.1,
+     -30.8,
+     -59.4,
+     -38.4,
+     -52.7,
+     -41.3,
+     -56.1,
+     -51.4,
+     -64.6,
+     -56.9,
+     -65.2,
+     -60.4,
+     -64.7,
+     -65.9
+    ],
+    "group": 0,
+    "group_notes": [
+     48,
+     51,
+     54,
+     57,
+     60,
+     63,
+     66,
+     69,
+     72
+    ],
+    "flagged": {
+     "register": "level read across notes that share one stored waveform: the spectrum is one fixed shape shifted with pitch, so the register curve over the group is a transposition artefact"
+    }
+   },
+   "window": {
+    "model_s": 2.22,
+    "reference_s": 2.22
+   },
+   "window_end_ms": 2220,
+   "window_rule": "recorded length",
+   "window_recorded_ms": 2220,
+   "window_end_clearance_db": 6.08,
+   "window_marks": {
+    "truncated": "partials stand 6.1 dB over the bed in the last 120 ms"
+   },
+   "floor_state": {
+    "declared": false,
+    "basis": null,
+    "source": null,
+    "level_db_hz": null,
+    "stationary": {
+     "slope_db_s": -11.2,
+     "corr": 0.97,
+     "tone_slope_db_s": -16.76,
+     "floor_like": false
+    },
+    "clear_partials_tail": 4,
+    "hum_dbfs": -102.32,
+    "censors": {
+     "body": null,
+     "tnr": null
+    },
+    "body_floor_db": null,
+    "body_hum_db": -102.32
+   }
   }
  ],
  "summary": {
   "t0": {
    "stretch_cents": {
-    "48": -6.75,
-    "51": -8.6,
-    "54": -9.04,
-    "57": -3.81,
-    "60": -5.5,
+    "48": -6.6,
+    "51": -8.47,
+    "54": -8.93,
+    "57": -3.7,
+    "60": -5.45,
     "63": -4.32,
     "66": -2.44,
     "69": -3.28,
-    "72": -3.4
+    "72": -2.66
    },
-   "inharmonicity_b": {
-    "48": 0.0001676,
-    "51": 0.0001542,
-    "54": 0.0001266,
-    "57": 0.0001249,
-    "60": 5.078e-05,
-    "63": 0.0,
-    "72": 0.0008636
-   },
+   "inharmonicity_b": {},
    "level_dbfs": {
     "48": {
-     "100": -24.04
+     "100": -24.5
     },
     "51": {
-     "100": -24.18
+     "100": -24.54
     },
     "54": {
-     "100": -24.2
+     "100": -24.44
     },
     "57": {
-     "100": -24.03
+     "100": -24.14
     },
     "60": {
-     "100": -24.21
+     "100": -24.47
     },
     "63": {
-     "100": -24.23
-    },
-    "66": {
-     "100": -24.19
-    },
-    "69": {
      "100": -24.51
     },
+    "66": {
+     "100": -24.41
+    },
+    "69": {
+     "100": -24.85
+    },
     "72": {
-     "100": -24.5
+     "100": -24.74
     }
    },
    "centroid_hz": {
@@ -1296,65 +2382,37 @@
    },
    "decay_db_s": {
     "48": {
-     "100": -18.07
+     "100": -17.41
     },
     "51": {
-     "100": -16.98
+     "100": -16.58
     },
     "54": {
-     "100": -17.53
+     "100": -17.45
     },
     "57": {
-     "100": -17.89
+     "100": -17.79
     },
     "60": {
-     "100": -17.47
+     "100": -17.18
     },
     "63": {
-     "100": -17.57
+     "100": -17.28
     },
     "66": {
-     "100": -17.61
+     "100": -17.34
     },
     "69": {
-     "100": -17.57
+     "100": -17.41
     },
     "72": {
-     "100": -17.55
+     "100": -17.4
     }
    },
-   "damper_release_ms": {
-    "48": {
-     "100": 229.5
-    },
-    "51": {
-     "100": 169.6
-    },
-    "54": {
-     "100": 109.8
-    },
-    "57": {
-     "100": 49.9
-    },
-    "60": {
-     "100": 124.7
-    },
-    "63": {
-     "100": 129.7
-    },
-    "66": {
-     "100": 104.8
-    },
-    "69": {
-     "100": 164.6
-    },
-    "72": {
-     "100": 114.8
-    }
-   },
+   "damper_release_ms": {},
    "tnr_db": {
     "48": {
-     "100": 9.86
+     "100": 9.87
     },
     "51": {
      "100": 9.51
@@ -1366,7 +2424,7 @@
      "100": 9.84
     },
     "60": {
-     "100": 9.92
+     "100": 9.91
     },
     "63": {
      "100": 9.51
@@ -1384,14 +2442,65 @@
    "velocity_response": {}
   }
  },
- "field_measured_utc": {
-  "rows.body_f0_db": "2026-11-13T10:33:25+00:00",
-  "rows.body_under_db": "2026-11-13T10:33:25+00:00",
-  "rows.floor_source": "2026-11-13T10:33:25+00:00",
-  "rows.partial_clear_s": "2026-11-13T10:33:25+00:00",
-  "rows.partial_decay_clear_db_s": "2026-11-13T10:33:25+00:00",
-  "rows.valley_db": "2026-11-13T10:33:25+00:00",
-  "rows.valley_ladder_coupling": "2026-11-13T10:33:25+00:00",
-  "rows.valley_slope_db_oct": "2026-11-13T10:33:25+00:00"
+ "recording_floor": {
+  "t0": {
+   "declared": false,
+   "rows": 9,
+   "lines": [
+    {
+     "hz": 50.039,
+     "dbfs": -102.32,
+     "rows_present": 9,
+     "rows_observable": 9,
+     "coverage": 1.0,
+     "mains": "50Hz x1"
+    }
+   ],
+   "lines_found": 1,
+   "hum": {
+    "hz": 50.039,
+    "dbfs": -102.32,
+    "lines": [
+     50.039
+    ]
+   },
+   "note_independent": false,
+   "basis": null,
+   "level_db_hz": -118.65,
+   "slope_db_oct": -1.11,
+   "agree_share": 0.409,
+   "stationary": {
+    "verdict": false,
+    "evaluable_rows": 9,
+    "floor_like_share": 0.0,
+    "slope_db_s": -14.22,
+    "tone_slope_db_s": -17.05,
+    "corr": 0.98,
+    "hum_reference_slope_db_s": -2.63
+   },
+   "reason": "not note-independent"
+  }
+ },
+ "loop": {
+  "status": "not_looped",
+  "rows": 9,
+  "tested": 9,
+  "looped_rows": 0,
+  "borderline_rows": 0,
+  "not_testable_rows": 0,
+  "unweighted_rows": 0,
+  "groups": {
+   "0": [
+    48,
+    51,
+    54,
+    57,
+    60,
+    63,
+    66,
+    69,
+    72
+   ]
+  }
  }
 }

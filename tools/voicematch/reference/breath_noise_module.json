@@ -1,7 +1,7 @@
 {
  "id": "breath_noise_module",
  "label": "Breath Noise, the GS capital tone, read out of a module's own recordings",
- "measured_utc": "2026-10-25T19:52:24+00:00",
+ "measured_utc": "2026-11-13T19:42:11+00:00",
  "capture": {
   "program": 121,
   "params": [],
@@ -30,354 +30,550 @@
    "timbre": "t0",
    "note": 48,
    "velocity": 100,
-   "f0_hz": 132.214,
-   "cents_vs_et": 18.45,
-   "inharmonicity_b": 0.0,
+   "f0_hz": 131.706,
+   "cents_vs_et": 11.78,
+   "inharmonicity_b": 2.351e-05,
    "partials_fit": 20,
    "inharmonicity_reliable": true,
    "partials_hz": [
-    130.56,
-    264.96,
-    391.67,
-    527.12,
-    653.39,
-    790.19,
-    931.48,
-    1042.85,
-    1185.47,
-    1332.1,
-    1450.67,
-    1584.26,
-    1733.96,
-    1855.82,
-    1994.28,
-    2105.5,
-    2253.58,
-    2350.16,
-    2511.65,
-    2618.72
+    130.85,
+    261.7,
+    392.5,
+    524.17,
+    649.65,
+    784.95,
+    928.82,
+    1044.64,
+    1186.12,
+    1311.46,
+    1448.5,
+    1584.48,
+    1705.11,
+    1848.42,
+    1995.59,
+    2102.53,
+    2248.55,
+    2349.22,
+    2528.76,
+    2610.17
    ],
    "partials_db": [
     0.0,
-    -26.27,
-    -5.39,
-    -24.04,
-    8.0,
-    -10.5,
-    17.09,
-    -1.4,
-    23.07,
-    2.73,
-    26.18,
-    5.32,
-    24.4,
-    10.64,
-    25.96,
-    18.54,
-    26.02,
-    22.87,
-    26.0,
-    18.41
+    -28.42,
+    2.48,
+    -19.96,
+    4.82,
+    -14.12,
+    14.85,
+    0.1,
+    15.82,
+    -2.39,
+    17.89,
+    1.33,
+    14.3,
+    2.31,
+    20.87,
+    11.22,
+    20.63,
+    11.78,
+    21.01,
+    9.68
    ],
+   "broad_lines": {
+    "broad_ratio": 7.33,
+    "width_ratio": null
+   },
+   "b_unreliable": {
+    "reason": "unison or ensemble: lines 7.3x a still tone's and not read warped, partials 12.8 c rms off one series; stretch, balance, partial_tilt and tnr read through B or through partials located on it",
+    "dimensions": [
+     "stretch",
+     "balance",
+     "partial_tilt",
+     "tnr"
+    ]
+   },
+   "body_below_f0_db": -14.98,
+   "body_under_db": -88.63,
+   "body_f0_db": -73.65,
    "peak_dbfs": -8.17,
-   "rms_dbfs": -23.59,
+   "rms_dbfs": -26.09,
    "held_peak_dbfs": -18.25,
    "onset_ms": 0.0,
    "attack_ms": 5.0,
    "attack_hf_db": -10.47,
-   "decay_span_s": 0.289,
-   "decay_db_s": -55.59,
-   "decay_early_db_s": -42.09,
-   "decay_late_db_s": -71.81,
-   "decay_knee_s": 0.195,
-   "partial_decay_db_s": [],
-   "partial_clear_s": [],
-   "partial_decay_clear_db_s": [],
-   "valley_db": [
-    -103.62,
-    -104.5,
-    -87.0,
-    -87.79,
-    -82.56,
-    -86.86,
-    -76.64,
-    -80.27,
-    -77.16,
-    -72.61,
-    -72.24,
-    -68.5,
-    -61.28,
-    -62.71,
-    -61.61
+   "decay_span_s": 0.524,
+   "decay_db_s": -76.46,
+   "decay_early_db_s": -45.32,
+   "decay_late_db_s": -90.61,
+   "decay_knee_s": 0.17,
+   "partial_decay_db_s": [
+    -45.51,
+    -28.46,
+    4.24,
+    -31.97,
+    -88.16,
+    -70.22,
+    -94.17,
+    -52.42
    ],
-   "valley_slope_db_oct": 11.904,
-   "valley_ladder_coupling": 0.88,
+   "partial_clear_s": [
+    0.279,
+    null,
+    0.279,
+    null,
+    0.186,
+    null,
+    0.232,
+    0.232
+   ],
+   "partial_decay_clear_db_s": [
+    -45.51,
+    null,
+    4.24,
+    null,
+    -44.84,
+    null,
+    -80.27,
+    -35.55
+   ],
+   "valley_db": [
+    -84.98,
+    -85.7,
+    -69.15,
+    -70.0,
+    -67.67
+   ],
+   "valley_slope_db_oct": 14.015,
+   "valley_ladder_coupling": 1.969,
    "floor_source": null,
    "decayed_before_note_off": false,
-   "damper_release_ms": 229.5,
-   "damper_capped": true,
-   "centroid_hz": 2640.4,
+   "centroid_hz": 2651.3,
    "tnr_mask": {},
-   "tnr_db": 4.0
+   "tnr_db": 3.95,
+   "loop": {
+    "verdict": "not_testable",
+    "reason": "shorter than one template and a 100 ms lag"
+   },
+   "window": {
+    "model_s": 0.538,
+    "reference_s": 0.538
+   },
+   "window_end_ms": 538,
+   "window_rule": "recorded length",
+   "window_recorded_ms": 538,
+   "window_end_clearance_db": 7.07,
+   "window_marks": {
+    "truncated": "partials stand 7.1 dB over the bed in the last 120 ms"
+   },
+   "floor_state": {
+    "declared": false,
+    "basis": null,
+    "source": null,
+    "level_db_hz": null,
+    "stationary": null,
+    "clear_partials_tail": 4,
+    "hum_dbfs": null,
+    "censors": {
+     "body": null,
+     "tnr": null
+    },
+    "body_floor_db": null,
+    "body_hum_db": null
+   }
   },
   {
    "timbre": "t0",
    "note": 60,
    "velocity": 100,
-   "f0_hz": 263.198,
-   "cents_vs_et": 10.37,
-   "inharmonicity_b": 4.352e-05,
+   "f0_hz": 263.013,
+   "cents_vs_et": 9.16,
+   "inharmonicity_b": 4.588e-05,
    "partials_fit": 20,
    "inharmonicity_reliable": true,
    "partials_hz": [
-    262.09,
-    525.04,
-    785.98,
-    1049.2,
-    1303.36,
-    1579.85,
-    1858.31,
-    2089.4,
-    2374.33,
-    2667.14,
-    2903.88,
-    3176.31,
-    3418.48,
-    3659.39,
-    3987.6,
-    4237.18,
-    4498.9,
-    4790.48,
-    5056.24,
-    5303.87
+    261.73,
+    524.02,
+    785.07,
+    1046.78,
+    1307.74,
+    1570.7,
+    1859.06,
+    2090.97,
+    2371.77,
+    2669.73,
+    2906.06,
+    3176.11,
+    3455.37,
+    3663.87,
+    3982.29,
+    4239.13,
+    4499.56,
+    4708.79,
+    5023.78,
+    5262.9
    ],
    "partials_db": [
     0.0,
-    -25.57,
-    7.78,
-    -13.35,
-    3.28,
-    -12.86,
-    9.02,
-    1.69,
-    14.35,
-    -4.63,
-    14.4,
-    1.25,
-    8.2,
-    -1.72,
-    8.2,
-    -0.06,
+    -21.95,
+    11.7,
+    -9.36,
+    5.34,
+    -12.24,
+    8.51,
+    -2.64,
     13.4,
-    -1.88,
-    7.3,
-    -4.48
+    -8.01,
+    7.93,
+    0.22,
+    9.7,
+    -1.87,
+    9.17,
+    -0.31,
+    10.14,
+    -2.79,
+    4.23,
+    -3.29
    ],
+   "broad_lines": {
+    "broad_ratio": 3.89,
+    "width_ratio": null
+   },
+   "b_unreliable": {
+    "reason": "unison or ensemble: lines 3.9x a still tone's and not read warped, partials 11.4 c rms off one series; stretch, balance, partial_tilt and tnr read through B or through partials located on it",
+    "dimensions": [
+     "stretch",
+     "balance",
+     "partial_tilt",
+     "tnr"
+    ]
+   },
+   "body_below_f0_db": -20.08,
+   "body_under_db": -87.2,
+   "body_f0_db": -67.11,
    "peak_dbfs": -7.27,
-   "rms_dbfs": -22.94,
+   "rms_dbfs": -24.94,
    "held_peak_dbfs": -16.97,
    "onset_ms": 0.0,
    "attack_ms": 5.0,
    "attack_hf_db": -3.74,
-   "decay_span_s": 0.289,
-   "decay_db_s": -75.94,
-   "decay_early_db_s": -47.92,
-   "decay_late_db_s": -87.92,
-   "decay_knee_s": 0.175,
-   "partial_decay_db_s": [],
-   "partial_clear_s": [],
-   "partial_decay_clear_db_s": [],
-   "valley_db": [
-    -112.17,
-    -102.73,
-    -88.36,
-    -90.45,
-    -78.05,
-    -84.43,
-    -74.67,
-    -78.92,
-    -72.09,
-    -75.8,
-    -69.63,
-    -79.9,
-    -69.57,
-    -72.88,
-    -68.18,
-    -73.05,
-    -68.59,
-    -75.64,
-    -71.02
+   "decay_span_s": 0.464,
+   "decay_db_s": -91.51,
+   "decay_early_db_s": -40.97,
+   "decay_late_db_s": -102.83,
+   "decay_knee_s": 0.11,
+   "partial_decay_db_s": [
+    -82.71,
+    -53.7,
+    -49.22,
+    -23.02,
+    -49.07,
+    -38.63,
+    -100.32,
+    -141.29
    ],
-   "valley_slope_db_oct": 10.387,
-   "valley_ladder_coupling": 1.773,
+   "partial_clear_s": [
+    0.232,
+    0.232,
+    0.232,
+    0.232,
+    0.232,
+    0.232,
+    0.232,
+    0.093
+   ],
+   "partial_decay_clear_db_s": [
+    -82.71,
+    -53.7,
+    -49.22,
+    -23.02,
+    -49.07,
+    -38.63,
+    -100.32,
+    null
+   ],
+   "valley_db": [
+    -115.41,
+    -108.43,
+    -96.23,
+    -96.37,
+    -85.93,
+    -90.82,
+    -80.89,
+    -88.57,
+    -77.99,
+    -83.19,
+    -77.38,
+    -83.75,
+    -76.54,
+    -76.44,
+    -80.54,
+    -70.83,
+    -74.68
+   ],
+   "valley_slope_db_oct": 10.921,
+   "valley_ladder_coupling": 2.216,
    "floor_source": null,
    "decayed_before_note_off": false,
-   "damper_release_ms": 169.6,
-   "damper_capped": true,
-   "centroid_hz": 4003.0,
+   "centroid_hz": 3895.1,
    "tnr_mask": {},
-   "tnr_db": 4.68
+   "tnr_db": 5.05,
+   "loop": {
+    "verdict": "not_testable",
+    "reason": "shorter than one template and a 100 ms lag"
+   },
+   "window": {
+    "model_s": 0.477,
+    "reference_s": 0.477
+   },
+   "window_end_ms": 477,
+   "window_rule": "recorded length",
+   "window_recorded_ms": 477,
+   "window_end_clearance_db": 13.1,
+   "window_marks": {
+    "truncated": "partials stand 13.1 dB over the bed in the last 120 ms"
+   },
+   "floor_state": {
+    "declared": false,
+    "basis": null,
+    "source": null,
+    "level_db_hz": null,
+    "stationary": null,
+    "clear_partials_tail": 6,
+    "hum_dbfs": null,
+    "censors": {
+     "body": null,
+     "tnr": null
+    },
+    "body_floor_db": null,
+    "body_hum_db": null
+   }
   },
   {
    "timbre": "t0",
    "note": 72,
    "velocity": 100,
-   "f0_hz": 520.97,
-   "cents_vs_et": -7.56,
+   "f0_hz": 521.457,
+   "cents_vs_et": -5.95,
    "inharmonicity_b": 0.0,
    "partials_fit": 20,
    "inharmonicity_reliable": true,
    "partials_hz": [
-    523.06,
-    1047.9,
-    1568.91,
-    2090.88,
-    2614.44,
-    3144.82,
-    3607.39,
-    4128.89,
-    4663.84,
-    5215.07,
-    5672.28,
-    6285.64,
-    6761.36,
-    7200.5,
-    7721.75,
-    8449.25,
-    8760.55,
-    9357.73,
-    9836.03,
-    10563.89
+    523.01,
+    1049.25,
+    1568.8,
+    2089.22,
+    2614.61,
+    3146.87,
+    3661.01,
+    4129.13,
+    4660.63,
+    5217.77,
+    5671.36,
+    6284.8,
+    6761.04,
+    7395.44,
+    7726.77,
+    8268.83,
+    8819.01,
+    9473.24,
+    9835.16,
+    10575.72
    ],
    "partials_db": [
     0.0,
-    -15.55,
-    6.94,
-    -7.84,
-    7.62,
-    -8.13,
-    2.38,
-    -7.07,
-    1.82,
-    -7.15,
-    1.06,
-    -14.54,
-    -5.47,
-    -13.79,
-    -4.34,
-    -17.42,
-    -5.54,
-    -15.56,
-    -5.98,
-    -20.13
+    -17.01,
+    6.39,
+    -9.05,
+    8.15,
+    -9.67,
+    0.42,
+    -9.65,
+    -1.67,
+    -10.91,
+    -1.63,
+    -15.87,
+    -5.0,
+    -15.12,
+    -5.64,
+    -18.01,
+    -7.23,
+    -16.15,
+    -8.42,
+    -15.8
    ],
+   "broad_lines": {
+    "broad_ratio": 3.35,
+    "width_ratio": null
+   },
+   "b_unreliable": {
+    "reason": "unison or ensemble: lines 3.4x a still tone's and not read warped, partials 13.3 c rms off one series; stretch, balance, partial_tilt and tnr read through B or through partials located on it",
+    "dimensions": [
+     "stretch",
+     "balance",
+     "partial_tilt",
+     "tnr"
+    ]
+   },
+   "body_below_f0_db": -21.72,
+   "body_under_db": -85.29,
+   "body_f0_db": -63.56,
    "peak_dbfs": -5.04,
-   "rms_dbfs": -21.23,
+   "rms_dbfs": -22.42,
    "held_peak_dbfs": -14.24,
    "onset_ms": 0.0,
    "attack_ms": 5.0,
    "attack_hf_db": -1.66,
-   "decay_span_s": 0.284,
-   "decay_db_s": -102.19,
+   "decay_span_s": 0.379,
+   "decay_db_s": -111.33,
    "decay_early_db_s": -86.42,
-   "decay_late_db_s": -130.12,
+   "decay_late_db_s": -128.39,
    "decay_knee_s": 0.205,
    "partial_decay_db_s": [],
    "partial_clear_s": [],
    "partial_decay_clear_db_s": [],
    "valley_db": [
-    -83.91,
-    -74.79,
-    -81.67,
-    -79.91
+    -83.48,
+    -79.87,
+    -80.47,
+    -73.99,
+    -82.9
    ],
-   "valley_slope_db_oct": 2.148,
-   "valley_ladder_coupling": 0.144,
+   "valley_slope_db_oct": 2.217,
+   "valley_ladder_coupling": -0.312,
    "floor_source": null,
    "decayed_before_note_off": false,
-   "damper_release_ms": 89.8,
-   "damper_capped": true,
-   "centroid_hz": 4785.5,
+   "centroid_hz": 4760.0,
    "tnr_mask": {},
-   "tnr_db": 0.12
+   "tnr_db": -0.91,
+   "loop": {
+    "verdict": "not_testable",
+    "reason": "shorter than one template and a 100 ms lag"
+   },
+   "window": {
+    "model_s": 0.395,
+    "reference_s": 0.395
+   },
+   "window_end_ms": 395,
+   "window_rule": "recorded length",
+   "window_recorded_ms": 395,
+   "window_end_clearance_db": 7.12,
+   "window_marks": {
+    "truncated": "partials stand 7.1 dB over the bed in the last 120 ms",
+    "fade end": "the last 30 ms fall 3.5 dB under the trend"
+   },
+   "floor_state": {
+    "declared": false,
+    "basis": null,
+    "source": null,
+    "level_db_hz": null,
+    "stationary": null,
+    "clear_partials_tail": 6,
+    "hum_dbfs": null,
+    "censors": {
+     "body": null,
+     "tnr": null
+    },
+    "body_floor_db": null,
+    "body_hum_db": null
+   }
   }
  ],
  "summary": {
   "t0": {
    "stretch_cents": {
-    "48": 18.45,
-    "60": 10.37,
-    "72": -7.56
+    "48": 11.78,
+    "60": 9.16,
+    "72": -5.95
    },
    "inharmonicity_b": {
-    "48": 0.0,
-    "60": 4.352e-05,
+    "48": 2.351e-05,
+    "60": 4.588e-05,
     "72": 0.0
    },
    "level_dbfs": {
     "48": {
-     "100": -23.59
+     "100": -26.09
     },
     "60": {
-     "100": -22.94
+     "100": -24.94
     },
     "72": {
-     "100": -21.23
+     "100": -22.42
     }
    },
    "centroid_hz": {
     "48": {
-     "100": 2640.4
+     "100": 2651.3
     },
     "60": {
-     "100": 4003.0
+     "100": 3895.1
     },
     "72": {
-     "100": 4785.5
+     "100": 4760.0
     }
    },
    "decay_db_s": {
     "48": {
-     "100": -55.59
+     "100": -76.46
     },
     "60": {
-     "100": -75.94
+     "100": -91.51
     },
     "72": {
-     "100": -102.19
+     "100": -111.33
     }
    },
-   "damper_release_ms": {
-    "48": {
-     "100": 229.5
-    },
-    "60": {
-     "100": 169.6
-    },
-    "72": {
-     "100": 89.8
-    }
-   },
+   "damper_release_ms": {},
    "tnr_db": {
     "48": {
-     "100": 4.0
+     "100": 3.95
     },
     "60": {
-     "100": 4.68
+     "100": 5.05
     },
     "72": {
-     "100": 0.12
+     "100": -0.91
     }
    },
    "velocity_response": {}
   }
  },
- "field_measured_utc": {
-  "rows.floor_source": "2026-11-13T10:31:51+00:00",
-  "rows.partial_clear_s": "2026-11-13T10:31:51+00:00",
-  "rows.partial_decay_clear_db_s": "2026-11-13T10:31:51+00:00",
-  "rows.valley_db": "2026-11-13T10:31:51+00:00",
-  "rows.valley_ladder_coupling": "2026-11-13T10:31:51+00:00",
-  "rows.valley_slope_db_oct": "2026-11-13T10:31:51+00:00"
+ "tnr_unreliable": {
+  "reason": "chorus or ensemble: most rows have lines the pitch warp does not collapse, and the tone mask follows one pitch track",
+  "timbres": {
+   "t0": {
+    "rows": 3,
+    "of": 3
+   }
+  }
+ },
+ "recording_floor": {
+  "t0": {
+   "declared": false,
+   "rows": 3,
+   "lines": [],
+   "lines_found": 0,
+   "hum": null,
+   "note_independent": false,
+   "basis": null,
+   "level_db_hz": -97.46,
+   "slope_db_oct": 5.71,
+   "agree_share": 0.37,
+   "stationary": {
+    "verdict": false,
+    "evaluable_rows": 0,
+    "floor_like_share": null,
+    "slope_db_s": null,
+    "tone_slope_db_s": null,
+    "corr": null,
+    "hum_reference_slope_db_s": null
+   },
+   "reason": "not note-independent"
+  }
+ },
+ "loop": {
+  "status": "not_testable",
+  "rows": 3,
+  "tested": 0
  }
 }

@@ -1,7 +1,7 @@
 {
  "id": "steel_guitar",
  "label": "Steel-string guitar, sampled, close and dry",
- "measured_utc": "2026-10-23T19:16:42+00:00",
+ "measured_utc": "2026-11-13T19:55:18+00:00",
  "capture": {
   "program": 25,
   "params": [],
@@ -173,7 +173,91 @@
    "centroid_hz": 160.1,
    "tnr_mask": {},
    "tnr_db": 34.63,
-   "stereo_width": 0.0
+   "stereo_width": 0.0,
+   "loop": {
+    "verdict": "looped",
+    "residual_db": -63.3,
+    "median_db": -31.4,
+    "frames": 6,
+    "reaching_frames": 6,
+    "reach_ms": 1782.9,
+    "period_ms": 424.722,
+    "join_s": 1.289,
+    "period_pitch_periods": 35.0,
+    "excluded": {
+     "stretch": "reads the loop (loop period 424.722 ms = 35.0 pitch periods, exact repetition from 1.289 s, residual -63.3 dB)",
+     "tnr": "reads the loop (loop period 424.722 ms = 35.0 pitch periods, exact repetition from 1.289 s, residual -63.3 dB); periodising an unlooped note sample-exactly moved tnr -11..-14 dB and body +2..+7 dB at 100-300 ms; open: a seam statistic did not separate loop seams from arbitrary boundaries (naive loops 2.5-69, unlooped notes 1.3-6.5), so no row is granted a snapshot",
+     "decay": "time-varying past the join (loop period 424.722 ms = 35.0 pitch periods, exact repetition from 1.289 s, residual -63.3 dB)",
+     "aftersound": "time-varying past the join (loop period 424.722 ms = 35.0 pitch periods, exact repetition from 1.289 s, residual -63.3 dB)",
+     "doubling": "time-varying past the join (loop period 424.722 ms = 35.0 pitch periods, exact repetition from 1.289 s, residual -63.3 dB)",
+     "partial_tilt": "time-varying past the join (loop period 424.722 ms = 35.0 pitch periods, exact repetition from 1.289 s, residual -63.3 dB)",
+     "band_decay": "time-varying past the join (loop period 424.722 ms = 35.0 pitch periods, exact repetition from 1.289 s, residual -63.3 dB)",
+     "ring": "time-varying past the join (loop period 424.722 ms = 35.0 pitch periods, exact repetition from 1.289 s, residual -63.3 dB)",
+     "damper": "time-varying past the join (loop period 424.722 ms = 35.0 pitch periods, exact repetition from 1.289 s, residual -63.3 dB)"
+    },
+    "snapshot": {
+     "balance": {
+      "label": "snapshot of one frozen cycle",
+      "group": 0
+     },
+     "centroid_pct": {
+      "label": "snapshot of one frozen cycle",
+      "group": 0
+     },
+     "register": {
+      "label": "snapshot of one frozen cycle",
+      "group": 0
+     }
+    },
+    "ladder_db": [
+     0.0,
+     7.7,
+     -15.0,
+     -21.8,
+     -41.2,
+     -25.5,
+     -23.3,
+     -21.4,
+     -32.5,
+     -42.6,
+     -33.3,
+     -28.6,
+     -31.9,
+     -40.6,
+     -52.3,
+     -38.2,
+     -38.6,
+     -77.3,
+     -58.9,
+     -77.4
+    ],
+    "group": 0,
+    "group_notes": [
+     40
+    ]
+   },
+   "window": {
+    "model_s": 6.0,
+    "reference_s": 6.0
+   },
+   "floor_state": {
+    "declared": false,
+    "basis": null,
+    "source": "preroll",
+    "level_db_hz": null,
+    "stationary": {
+     "slope_db_s": -4.31,
+     "corr": 0.8,
+     "tone_slope_db_s": -4.77,
+     "floor_like": false
+    },
+    "clear_partials_tail": 8,
+    "hum_dbfs": null,
+    "censors": {
+     "body": null,
+     "tnr": null
+    }
+   }
   },
   {
    "timbre": "gm026",
@@ -313,7 +397,91 @@
    "centroid_hz": 162.0,
    "tnr_mask": {},
    "tnr_db": 34.59,
-   "stereo_width": 0.0
+   "stereo_width": 0.0,
+   "loop": {
+    "verdict": "looped",
+    "residual_db": -64.4,
+    "median_db": -31.0,
+    "frames": 6,
+    "reaching_frames": 6,
+    "reach_ms": 1782.9,
+    "period_ms": 424.722,
+    "join_s": 1.295,
+    "period_pitch_periods": 35.0,
+    "excluded": {
+     "stretch": "reads the loop (loop period 424.722 ms = 35.0 pitch periods, exact repetition from 1.295 s, residual -64.4 dB)",
+     "tnr": "reads the loop (loop period 424.722 ms = 35.0 pitch periods, exact repetition from 1.295 s, residual -64.4 dB); periodising an unlooped note sample-exactly moved tnr -11..-14 dB and body +2..+7 dB at 100-300 ms; open: a seam statistic did not separate loop seams from arbitrary boundaries (naive loops 2.5-69, unlooped notes 1.3-6.5), so no row is granted a snapshot",
+     "decay": "time-varying past the join (loop period 424.722 ms = 35.0 pitch periods, exact repetition from 1.295 s, residual -64.4 dB)",
+     "aftersound": "time-varying past the join (loop period 424.722 ms = 35.0 pitch periods, exact repetition from 1.295 s, residual -64.4 dB)",
+     "doubling": "time-varying past the join (loop period 424.722 ms = 35.0 pitch periods, exact repetition from 1.295 s, residual -64.4 dB)",
+     "partial_tilt": "time-varying past the join (loop period 424.722 ms = 35.0 pitch periods, exact repetition from 1.295 s, residual -64.4 dB)",
+     "band_decay": "time-varying past the join (loop period 424.722 ms = 35.0 pitch periods, exact repetition from 1.295 s, residual -64.4 dB)",
+     "ring": "time-varying past the join (loop period 424.722 ms = 35.0 pitch periods, exact repetition from 1.295 s, residual -64.4 dB)",
+     "damper": "time-varying past the join (loop period 424.722 ms = 35.0 pitch periods, exact repetition from 1.295 s, residual -64.4 dB)"
+    },
+    "snapshot": {
+     "balance": {
+      "label": "snapshot of one frozen cycle",
+      "group": 0
+     },
+     "centroid_pct": {
+      "label": "snapshot of one frozen cycle",
+      "group": 0
+     },
+     "register": {
+      "label": "snapshot of one frozen cycle",
+      "group": 0
+     }
+    },
+    "ladder_db": [
+     0.0,
+     7.8,
+     -14.9,
+     -21.6,
+     -40.8,
+     -25.0,
+     -22.6,
+     -20.5,
+     -31.4,
+     -41.2,
+     -31.7,
+     -26.7,
+     -29.7,
+     -38.1,
+     -49.5,
+     -35.1,
+     -35.2,
+     -73.8,
+     -54.9,
+     -77.8
+    ],
+    "group": 0,
+    "group_notes": [
+     40
+    ]
+   },
+   "window": {
+    "model_s": 6.0,
+    "reference_s": 6.0
+   },
+   "floor_state": {
+    "declared": false,
+    "basis": null,
+    "source": "preroll",
+    "level_db_hz": null,
+    "stationary": {
+     "slope_db_s": -5.94,
+     "corr": 0.85,
+     "tone_slope_db_s": -4.77,
+     "floor_like": false
+    },
+    "clear_partials_tail": 8,
+    "hum_dbfs": null,
+    "censors": {
+     "body": null,
+     "tnr": null
+    }
+   }
   },
   {
    "timbre": "gm026",
@@ -453,7 +621,91 @@
    "centroid_hz": 162.8,
    "tnr_mask": {},
    "tnr_db": 34.53,
-   "stereo_width": 0.0
+   "stereo_width": 0.0,
+   "loop": {
+    "verdict": "looped",
+    "residual_db": -64.7,
+    "median_db": -30.9,
+    "frames": 6,
+    "reaching_frames": 6,
+    "reach_ms": 1782.9,
+    "period_ms": 424.722,
+    "join_s": 1.299,
+    "period_pitch_periods": 35.0,
+    "excluded": {
+     "stretch": "reads the loop (loop period 424.722 ms = 35.0 pitch periods, exact repetition from 1.299 s, residual -64.7 dB)",
+     "tnr": "reads the loop (loop period 424.722 ms = 35.0 pitch periods, exact repetition from 1.299 s, residual -64.7 dB); periodising an unlooped note sample-exactly moved tnr -11..-14 dB and body +2..+7 dB at 100-300 ms; open: a seam statistic did not separate loop seams from arbitrary boundaries (naive loops 2.5-69, unlooped notes 1.3-6.5), so no row is granted a snapshot",
+     "decay": "time-varying past the join (loop period 424.722 ms = 35.0 pitch periods, exact repetition from 1.299 s, residual -64.7 dB)",
+     "aftersound": "time-varying past the join (loop period 424.722 ms = 35.0 pitch periods, exact repetition from 1.299 s, residual -64.7 dB)",
+     "doubling": "time-varying past the join (loop period 424.722 ms = 35.0 pitch periods, exact repetition from 1.299 s, residual -64.7 dB)",
+     "partial_tilt": "time-varying past the join (loop period 424.722 ms = 35.0 pitch periods, exact repetition from 1.299 s, residual -64.7 dB)",
+     "band_decay": "time-varying past the join (loop period 424.722 ms = 35.0 pitch periods, exact repetition from 1.299 s, residual -64.7 dB)",
+     "ring": "time-varying past the join (loop period 424.722 ms = 35.0 pitch periods, exact repetition from 1.299 s, residual -64.7 dB)",
+     "damper": "time-varying past the join (loop period 424.722 ms = 35.0 pitch periods, exact repetition from 1.299 s, residual -64.7 dB)"
+    },
+    "snapshot": {
+     "balance": {
+      "label": "snapshot of one frozen cycle",
+      "group": 0
+     },
+     "centroid_pct": {
+      "label": "snapshot of one frozen cycle",
+      "group": 0
+     },
+     "register": {
+      "label": "snapshot of one frozen cycle",
+      "group": 0
+     }
+    },
+    "ladder_db": [
+     0.0,
+     7.8,
+     -14.9,
+     -21.5,
+     -40.8,
+     -24.8,
+     -22.4,
+     -20.3,
+     -31.1,
+     -40.9,
+     -31.3,
+     -26.2,
+     -29.1,
+     -37.5,
+     -48.7,
+     -34.2,
+     -34.2,
+     -72.7,
+     -53.7,
+     -75.5
+    ],
+    "group": 0,
+    "group_notes": [
+     40
+    ]
+   },
+   "window": {
+    "model_s": 6.0,
+    "reference_s": 6.0
+   },
+   "floor_state": {
+    "declared": false,
+    "basis": null,
+    "source": "preroll",
+    "level_db_hz": null,
+    "stationary": {
+     "slope_db_s": -6.74,
+     "corr": 0.89,
+     "tone_slope_db_s": -4.77,
+     "floor_like": false
+    },
+    "clear_partials_tail": 8,
+    "hum_dbfs": null,
+    "censors": {
+     "body": null,
+     "tnr": null
+    }
+   }
   },
   {
    "timbre": "gm026",
@@ -593,7 +845,91 @@
    "centroid_hz": 163.0,
    "tnr_mask": {},
    "tnr_db": 34.5,
-   "stereo_width": 0.0
+   "stereo_width": 0.0,
+   "loop": {
+    "verdict": "looped",
+    "residual_db": -64.7,
+    "median_db": -30.9,
+    "frames": 6,
+    "reaching_frames": 6,
+    "reach_ms": 1782.9,
+    "period_ms": 424.722,
+    "join_s": 1.3,
+    "period_pitch_periods": 35.0,
+    "excluded": {
+     "stretch": "reads the loop (loop period 424.722 ms = 35.0 pitch periods, exact repetition from 1.3 s, residual -64.7 dB)",
+     "tnr": "reads the loop (loop period 424.722 ms = 35.0 pitch periods, exact repetition from 1.3 s, residual -64.7 dB); periodising an unlooped note sample-exactly moved tnr -11..-14 dB and body +2..+7 dB at 100-300 ms; open: a seam statistic did not separate loop seams from arbitrary boundaries (naive loops 2.5-69, unlooped notes 1.3-6.5), so no row is granted a snapshot",
+     "decay": "time-varying past the join (loop period 424.722 ms = 35.0 pitch periods, exact repetition from 1.3 s, residual -64.7 dB)",
+     "aftersound": "time-varying past the join (loop period 424.722 ms = 35.0 pitch periods, exact repetition from 1.3 s, residual -64.7 dB)",
+     "doubling": "time-varying past the join (loop period 424.722 ms = 35.0 pitch periods, exact repetition from 1.3 s, residual -64.7 dB)",
+     "partial_tilt": "time-varying past the join (loop period 424.722 ms = 35.0 pitch periods, exact repetition from 1.3 s, residual -64.7 dB)",
+     "band_decay": "time-varying past the join (loop period 424.722 ms = 35.0 pitch periods, exact repetition from 1.3 s, residual -64.7 dB)",
+     "ring": "time-varying past the join (loop period 424.722 ms = 35.0 pitch periods, exact repetition from 1.3 s, residual -64.7 dB)",
+     "damper": "time-varying past the join (loop period 424.722 ms = 35.0 pitch periods, exact repetition from 1.3 s, residual -64.7 dB)"
+    },
+    "snapshot": {
+     "balance": {
+      "label": "snapshot of one frozen cycle",
+      "group": 0
+     },
+     "centroid_pct": {
+      "label": "snapshot of one frozen cycle",
+      "group": 0
+     },
+     "register": {
+      "label": "snapshot of one frozen cycle",
+      "group": 0
+     }
+    },
+    "ladder_db": [
+     0.0,
+     7.8,
+     -14.9,
+     -21.5,
+     -40.7,
+     -24.8,
+     -22.4,
+     -20.2,
+     -31.0,
+     -40.8,
+     -31.2,
+     -26.1,
+     -28.9,
+     -37.3,
+     -48.5,
+     -34.0,
+     -34.0,
+     -72.5,
+     -53.4,
+     -75.5
+    ],
+    "group": 0,
+    "group_notes": [
+     40
+    ]
+   },
+   "window": {
+    "model_s": 6.0,
+    "reference_s": 6.0
+   },
+   "floor_state": {
+    "declared": false,
+    "basis": null,
+    "source": "preroll",
+    "level_db_hz": null,
+    "stationary": {
+     "slope_db_s": -7.12,
+     "corr": 0.9,
+     "tone_slope_db_s": -4.77,
+     "floor_like": false
+    },
+    "clear_partials_tail": 8,
+    "hum_dbfs": null,
+    "censors": {
+     "body": null,
+     "tnr": null
+    }
+   }
   },
   {
    "timbre": "gm026",
@@ -733,7 +1069,91 @@
    "centroid_hz": 163.1,
    "tnr_mask": {},
    "tnr_db": 34.49,
-   "stereo_width": 0.0
+   "stereo_width": 0.0,
+   "loop": {
+    "verdict": "looped",
+    "residual_db": -64.6,
+    "median_db": -30.8,
+    "frames": 6,
+    "reaching_frames": 6,
+    "reach_ms": 1782.9,
+    "period_ms": 424.722,
+    "join_s": 1.3,
+    "period_pitch_periods": 35.0,
+    "excluded": {
+     "stretch": "reads the loop (loop period 424.722 ms = 35.0 pitch periods, exact repetition from 1.3 s, residual -64.6 dB)",
+     "tnr": "reads the loop (loop period 424.722 ms = 35.0 pitch periods, exact repetition from 1.3 s, residual -64.6 dB); periodising an unlooped note sample-exactly moved tnr -11..-14 dB and body +2..+7 dB at 100-300 ms; open: a seam statistic did not separate loop seams from arbitrary boundaries (naive loops 2.5-69, unlooped notes 1.3-6.5), so no row is granted a snapshot",
+     "decay": "time-varying past the join (loop period 424.722 ms = 35.0 pitch periods, exact repetition from 1.3 s, residual -64.6 dB)",
+     "aftersound": "time-varying past the join (loop period 424.722 ms = 35.0 pitch periods, exact repetition from 1.3 s, residual -64.6 dB)",
+     "doubling": "time-varying past the join (loop period 424.722 ms = 35.0 pitch periods, exact repetition from 1.3 s, residual -64.6 dB)",
+     "partial_tilt": "time-varying past the join (loop period 424.722 ms = 35.0 pitch periods, exact repetition from 1.3 s, residual -64.6 dB)",
+     "band_decay": "time-varying past the join (loop period 424.722 ms = 35.0 pitch periods, exact repetition from 1.3 s, residual -64.6 dB)",
+     "ring": "time-varying past the join (loop period 424.722 ms = 35.0 pitch periods, exact repetition from 1.3 s, residual -64.6 dB)",
+     "damper": "time-varying past the join (loop period 424.722 ms = 35.0 pitch periods, exact repetition from 1.3 s, residual -64.6 dB)"
+    },
+    "snapshot": {
+     "balance": {
+      "label": "snapshot of one frozen cycle",
+      "group": 0
+     },
+     "centroid_pct": {
+      "label": "snapshot of one frozen cycle",
+      "group": 0
+     },
+     "register": {
+      "label": "snapshot of one frozen cycle",
+      "group": 0
+     }
+    },
+    "ladder_db": [
+     0.0,
+     7.8,
+     -14.9,
+     -21.5,
+     -40.7,
+     -24.8,
+     -22.4,
+     -20.2,
+     -31.0,
+     -40.8,
+     -31.2,
+     -26.1,
+     -28.9,
+     -37.3,
+     -48.5,
+     -34.0,
+     -33.9,
+     -72.4,
+     -53.3,
+     -75.5
+    ],
+    "group": 0,
+    "group_notes": [
+     40
+    ]
+   },
+   "window": {
+    "model_s": 6.0,
+    "reference_s": 6.0
+   },
+   "floor_state": {
+    "declared": false,
+    "basis": null,
+    "source": "preroll",
+    "level_db_hz": null,
+    "stationary": {
+     "slope_db_s": -7.33,
+     "corr": 0.91,
+     "tone_slope_db_s": -4.77,
+     "floor_like": false
+    },
+    "clear_partials_tail": 8,
+    "hum_dbfs": null,
+    "censors": {
+     "body": null,
+     "tnr": null
+    }
+   }
   },
   {
    "timbre": "gm026",
@@ -871,7 +1291,107 @@
    "centroid_hz": 119.0,
    "tnr_mask": {},
    "tnr_db": 37.45,
-   "stereo_width": 0.0
+   "stereo_width": 0.0,
+   "loop": {
+    "verdict": "looped",
+    "residual_db": -61.4,
+    "median_db": -54.2,
+    "frames": 6,
+    "reaching_frames": 6,
+    "reach_ms": 1782.9,
+    "period_ms": 182.998,
+    "join_s": 1.114,
+    "period_pitch_periods": 19.0,
+    "excluded": {
+     "stretch": "reads the loop (loop period 182.998 ms = 19.0 pitch periods, exact repetition from 1.114 s, residual -61.4 dB)",
+     "tnr": "reads the loop (loop period 182.998 ms = 19.0 pitch periods, exact repetition from 1.114 s, residual -61.4 dB); periodising an unlooped note sample-exactly moved tnr -11..-14 dB and body +2..+7 dB at 100-300 ms; open: a seam statistic did not separate loop seams from arbitrary boundaries (naive loops 2.5-69, unlooped notes 1.3-6.5), so no row is granted a snapshot",
+     "decay": "time-varying past the join (loop period 182.998 ms = 19.0 pitch periods, exact repetition from 1.114 s, residual -61.4 dB)",
+     "aftersound": "time-varying past the join (loop period 182.998 ms = 19.0 pitch periods, exact repetition from 1.114 s, residual -61.4 dB)",
+     "doubling": "time-varying past the join (loop period 182.998 ms = 19.0 pitch periods, exact repetition from 1.114 s, residual -61.4 dB)",
+     "partial_tilt": "time-varying past the join (loop period 182.998 ms = 19.0 pitch periods, exact repetition from 1.114 s, residual -61.4 dB)",
+     "band_decay": "time-varying past the join (loop period 182.998 ms = 19.0 pitch periods, exact repetition from 1.114 s, residual -61.4 dB)",
+     "ring": "time-varying past the join (loop period 182.998 ms = 19.0 pitch periods, exact repetition from 1.114 s, residual -61.4 dB)",
+     "onset_settle": "time-varying past the join (loop period 182.998 ms = 19.0 pitch periods, exact repetition from 1.114 s, residual -61.4 dB)",
+     "damper": "time-varying past the join (loop period 182.998 ms = 19.0 pitch periods, exact repetition from 1.114 s, residual -61.4 dB)"
+    },
+    "snapshot": {
+     "balance": {
+      "label": "snapshot of one frozen cycle",
+      "group": 1
+     },
+     "centroid_pct": {
+      "label": "snapshot of one frozen cycle",
+      "group": 1
+     },
+     "register": {
+      "label": "snapshot of one frozen cycle",
+      "group": 1
+     },
+     "crest": {
+      "label": "snapshot of one frozen cycle",
+      "group": 1
+     }
+    },
+    "ladder_db": [
+     0.0,
+     -17.9,
+     -16.8,
+     -13.4,
+     -27.4,
+     -41.3,
+     -26.9,
+     -21.0,
+     -25.7,
+     -31.3,
+     -32.6,
+     -46.3,
+     -47.3,
+     -38.2,
+     -42.1,
+     -62.6,
+     -53.8,
+     -58.5,
+     -66.1,
+     -48.1
+    ],
+    "group": 1,
+    "group_notes": [
+     44
+    ],
+    "group_uncertain": {
+     "ambiguous_with": [
+      48
+     ],
+     "loosest_inside_db": null,
+     "nearest_outside_db": 6.3,
+     "band_db": [
+      4.0,
+      8.0
+     ]
+    }
+   },
+   "window": {
+    "model_s": 6.0,
+    "reference_s": 6.0
+   },
+   "floor_state": {
+    "declared": false,
+    "basis": null,
+    "source": "preroll",
+    "level_db_hz": null,
+    "stationary": {
+     "slope_db_s": -3.38,
+     "corr": 0.92,
+     "tone_slope_db_s": -6.03,
+     "floor_like": false
+    },
+    "clear_partials_tail": 8,
+    "hum_dbfs": null,
+    "censors": {
+     "body": null,
+     "tnr": null
+    }
+   }
   },
   {
    "timbre": "gm026",
@@ -1009,7 +1529,107 @@
    "centroid_hz": 123.7,
    "tnr_mask": {},
    "tnr_db": 37.37,
-   "stereo_width": 0.0
+   "stereo_width": 0.0,
+   "loop": {
+    "verdict": "looped",
+    "residual_db": -63.6,
+    "median_db": -55.0,
+    "frames": 6,
+    "reaching_frames": 6,
+    "reach_ms": 1782.9,
+    "period_ms": 182.998,
+    "join_s": 1.125,
+    "period_pitch_periods": 19.0,
+    "excluded": {
+     "stretch": "reads the loop (loop period 182.998 ms = 19.0 pitch periods, exact repetition from 1.125 s, residual -63.6 dB)",
+     "tnr": "reads the loop (loop period 182.998 ms = 19.0 pitch periods, exact repetition from 1.125 s, residual -63.6 dB); periodising an unlooped note sample-exactly moved tnr -11..-14 dB and body +2..+7 dB at 100-300 ms; open: a seam statistic did not separate loop seams from arbitrary boundaries (naive loops 2.5-69, unlooped notes 1.3-6.5), so no row is granted a snapshot",
+     "decay": "time-varying past the join (loop period 182.998 ms = 19.0 pitch periods, exact repetition from 1.125 s, residual -63.6 dB)",
+     "aftersound": "time-varying past the join (loop period 182.998 ms = 19.0 pitch periods, exact repetition from 1.125 s, residual -63.6 dB)",
+     "doubling": "time-varying past the join (loop period 182.998 ms = 19.0 pitch periods, exact repetition from 1.125 s, residual -63.6 dB)",
+     "partial_tilt": "time-varying past the join (loop period 182.998 ms = 19.0 pitch periods, exact repetition from 1.125 s, residual -63.6 dB)",
+     "band_decay": "time-varying past the join (loop period 182.998 ms = 19.0 pitch periods, exact repetition from 1.125 s, residual -63.6 dB)",
+     "ring": "time-varying past the join (loop period 182.998 ms = 19.0 pitch periods, exact repetition from 1.125 s, residual -63.6 dB)",
+     "onset_settle": "time-varying past the join (loop period 182.998 ms = 19.0 pitch periods, exact repetition from 1.125 s, residual -63.6 dB)",
+     "damper": "time-varying past the join (loop period 182.998 ms = 19.0 pitch periods, exact repetition from 1.125 s, residual -63.6 dB)"
+    },
+    "snapshot": {
+     "balance": {
+      "label": "snapshot of one frozen cycle",
+      "group": 1
+     },
+     "centroid_pct": {
+      "label": "snapshot of one frozen cycle",
+      "group": 1
+     },
+     "register": {
+      "label": "snapshot of one frozen cycle",
+      "group": 1
+     },
+     "crest": {
+      "label": "snapshot of one frozen cycle",
+      "group": 1
+     }
+    },
+    "ladder_db": [
+     0.0,
+     -17.8,
+     -16.6,
+     -13.0,
+     -26.8,
+     -40.4,
+     -25.7,
+     -19.5,
+     -23.8,
+     -29.0,
+     -30.0,
+     -43.3,
+     -43.9,
+     -34.5,
+     -38.0,
+     -58.6,
+     -48.9,
+     -53.2,
+     -60.8,
+     -42.1
+    ],
+    "group": 1,
+    "group_notes": [
+     44
+    ],
+    "group_uncertain": {
+     "ambiguous_with": [
+      48
+     ],
+     "loosest_inside_db": null,
+     "nearest_outside_db": 6.3,
+     "band_db": [
+      4.0,
+      8.0
+     ]
+    }
+   },
+   "window": {
+    "model_s": 6.0,
+    "reference_s": 6.0
+   },
+   "floor_state": {
+    "declared": false,
+    "basis": null,
+    "source": "preroll",
+    "level_db_hz": null,
+    "stationary": {
+     "slope_db_s": -4.52,
+     "corr": 0.94,
+     "tone_slope_db_s": -6.03,
+     "floor_like": false
+    },
+    "clear_partials_tail": 8,
+    "hum_dbfs": null,
+    "censors": {
+     "body": null,
+     "tnr": null
+    }
+   }
   },
   {
    "timbre": "gm026",
@@ -1147,7 +1767,107 @@
    "centroid_hz": 125.9,
    "tnr_mask": {},
    "tnr_db": 37.09,
-   "stereo_width": 0.0
+   "stereo_width": 0.0,
+   "loop": {
+    "verdict": "looped",
+    "residual_db": -64.3,
+    "median_db": -55.2,
+    "frames": 6,
+    "reaching_frames": 6,
+    "reach_ms": 1782.9,
+    "period_ms": 182.998,
+    "join_s": 1.129,
+    "period_pitch_periods": 19.0,
+    "excluded": {
+     "stretch": "reads the loop (loop period 182.998 ms = 19.0 pitch periods, exact repetition from 1.129 s, residual -64.3 dB)",
+     "tnr": "reads the loop (loop period 182.998 ms = 19.0 pitch periods, exact repetition from 1.129 s, residual -64.3 dB); periodising an unlooped note sample-exactly moved tnr -11..-14 dB and body +2..+7 dB at 100-300 ms; open: a seam statistic did not separate loop seams from arbitrary boundaries (naive loops 2.5-69, unlooped notes 1.3-6.5), so no row is granted a snapshot",
+     "decay": "time-varying past the join (loop period 182.998 ms = 19.0 pitch periods, exact repetition from 1.129 s, residual -64.3 dB)",
+     "aftersound": "time-varying past the join (loop period 182.998 ms = 19.0 pitch periods, exact repetition from 1.129 s, residual -64.3 dB)",
+     "doubling": "time-varying past the join (loop period 182.998 ms = 19.0 pitch periods, exact repetition from 1.129 s, residual -64.3 dB)",
+     "partial_tilt": "time-varying past the join (loop period 182.998 ms = 19.0 pitch periods, exact repetition from 1.129 s, residual -64.3 dB)",
+     "band_decay": "time-varying past the join (loop period 182.998 ms = 19.0 pitch periods, exact repetition from 1.129 s, residual -64.3 dB)",
+     "ring": "time-varying past the join (loop period 182.998 ms = 19.0 pitch periods, exact repetition from 1.129 s, residual -64.3 dB)",
+     "onset_settle": "time-varying past the join (loop period 182.998 ms = 19.0 pitch periods, exact repetition from 1.129 s, residual -64.3 dB)",
+     "damper": "time-varying past the join (loop period 182.998 ms = 19.0 pitch periods, exact repetition from 1.129 s, residual -64.3 dB)"
+    },
+    "snapshot": {
+     "balance": {
+      "label": "snapshot of one frozen cycle",
+      "group": 1
+     },
+     "centroid_pct": {
+      "label": "snapshot of one frozen cycle",
+      "group": 1
+     },
+     "register": {
+      "label": "snapshot of one frozen cycle",
+      "group": 1
+     },
+     "crest": {
+      "label": "snapshot of one frozen cycle",
+      "group": 1
+     }
+    },
+    "ladder_db": [
+     0.0,
+     -17.8,
+     -16.5,
+     -12.9,
+     -26.6,
+     -40.2,
+     -25.4,
+     -19.1,
+     -23.3,
+     -28.4,
+     -29.3,
+     -42.5,
+     -42.9,
+     -33.3,
+     -36.7,
+     -57.2,
+     -47.3,
+     -51.4,
+     -58.9,
+     -39.9
+    ],
+    "group": 1,
+    "group_notes": [
+     44
+    ],
+    "group_uncertain": {
+     "ambiguous_with": [
+      48
+     ],
+     "loosest_inside_db": null,
+     "nearest_outside_db": 6.3,
+     "band_db": [
+      4.0,
+      8.0
+     ]
+    }
+   },
+   "window": {
+    "model_s": 6.0,
+    "reference_s": 6.0
+   },
+   "floor_state": {
+    "declared": false,
+    "basis": null,
+    "source": "preroll",
+    "level_db_hz": null,
+    "stationary": {
+     "slope_db_s": -5.27,
+     "corr": 0.96,
+     "tone_slope_db_s": -6.03,
+     "floor_like": false
+    },
+    "clear_partials_tail": 8,
+    "hum_dbfs": null,
+    "censors": {
+     "body": null,
+     "tnr": null
+    }
+   }
   },
   {
    "timbre": "gm026",
@@ -1285,7 +2005,107 @@
    "centroid_hz": 126.5,
    "tnr_mask": {},
    "tnr_db": 36.89,
-   "stereo_width": 0.0
+   "stereo_width": 0.0,
+   "loop": {
+    "verdict": "looped",
+    "residual_db": -64.5,
+    "median_db": -54.2,
+    "frames": 6,
+    "reaching_frames": 6,
+    "reach_ms": 1782.9,
+    "period_ms": 182.998,
+    "join_s": 1.131,
+    "period_pitch_periods": 19.0,
+    "excluded": {
+     "stretch": "reads the loop (loop period 182.998 ms = 19.0 pitch periods, exact repetition from 1.131 s, residual -64.5 dB)",
+     "tnr": "reads the loop (loop period 182.998 ms = 19.0 pitch periods, exact repetition from 1.131 s, residual -64.5 dB); periodising an unlooped note sample-exactly moved tnr -11..-14 dB and body +2..+7 dB at 100-300 ms; open: a seam statistic did not separate loop seams from arbitrary boundaries (naive loops 2.5-69, unlooped notes 1.3-6.5), so no row is granted a snapshot",
+     "decay": "time-varying past the join (loop period 182.998 ms = 19.0 pitch periods, exact repetition from 1.131 s, residual -64.5 dB)",
+     "aftersound": "time-varying past the join (loop period 182.998 ms = 19.0 pitch periods, exact repetition from 1.131 s, residual -64.5 dB)",
+     "doubling": "time-varying past the join (loop period 182.998 ms = 19.0 pitch periods, exact repetition from 1.131 s, residual -64.5 dB)",
+     "partial_tilt": "time-varying past the join (loop period 182.998 ms = 19.0 pitch periods, exact repetition from 1.131 s, residual -64.5 dB)",
+     "band_decay": "time-varying past the join (loop period 182.998 ms = 19.0 pitch periods, exact repetition from 1.131 s, residual -64.5 dB)",
+     "ring": "time-varying past the join (loop period 182.998 ms = 19.0 pitch periods, exact repetition from 1.131 s, residual -64.5 dB)",
+     "onset_settle": "time-varying past the join (loop period 182.998 ms = 19.0 pitch periods, exact repetition from 1.131 s, residual -64.5 dB)",
+     "damper": "time-varying past the join (loop period 182.998 ms = 19.0 pitch periods, exact repetition from 1.131 s, residual -64.5 dB)"
+    },
+    "snapshot": {
+     "balance": {
+      "label": "snapshot of one frozen cycle",
+      "group": 1
+     },
+     "centroid_pct": {
+      "label": "snapshot of one frozen cycle",
+      "group": 1
+     },
+     "register": {
+      "label": "snapshot of one frozen cycle",
+      "group": 1
+     },
+     "crest": {
+      "label": "snapshot of one frozen cycle",
+      "group": 1
+     }
+    },
+    "ladder_db": [
+     0.0,
+     -17.8,
+     -16.5,
+     -12.9,
+     -26.6,
+     -40.1,
+     -25.4,
+     -19.0,
+     -23.2,
+     -28.3,
+     -29.1,
+     -42.3,
+     -42.6,
+     -33.0,
+     -36.3,
+     -56.8,
+     -46.9,
+     -50.9,
+     -58.3,
+     -39.3
+    ],
+    "group": 1,
+    "group_notes": [
+     44
+    ],
+    "group_uncertain": {
+     "ambiguous_with": [
+      48
+     ],
+     "loosest_inside_db": null,
+     "nearest_outside_db": 6.3,
+     "band_db": [
+      4.0,
+      8.0
+     ]
+    }
+   },
+   "window": {
+    "model_s": 6.0,
+    "reference_s": 6.0
+   },
+   "floor_state": {
+    "declared": false,
+    "basis": null,
+    "source": "preroll",
+    "level_db_hz": null,
+    "stationary": {
+     "slope_db_s": -5.6,
+     "corr": 0.96,
+     "tone_slope_db_s": -6.03,
+     "floor_like": false
+    },
+    "clear_partials_tail": 8,
+    "hum_dbfs": null,
+    "censors": {
+     "body": null,
+     "tnr": null
+    }
+   }
   },
   {
    "timbre": "gm026",
@@ -1423,7 +2243,107 @@
    "centroid_hz": 126.7,
    "tnr_mask": {},
    "tnr_db": 36.84,
-   "stereo_width": 0.0
+   "stereo_width": 0.0,
+   "loop": {
+    "verdict": "looped",
+    "residual_db": -64.5,
+    "median_db": -54.2,
+    "frames": 6,
+    "reaching_frames": 6,
+    "reach_ms": 1782.9,
+    "period_ms": 182.998,
+    "join_s": 1.131,
+    "period_pitch_periods": 19.0,
+    "excluded": {
+     "stretch": "reads the loop (loop period 182.998 ms = 19.0 pitch periods, exact repetition from 1.131 s, residual -64.5 dB)",
+     "tnr": "reads the loop (loop period 182.998 ms = 19.0 pitch periods, exact repetition from 1.131 s, residual -64.5 dB); periodising an unlooped note sample-exactly moved tnr -11..-14 dB and body +2..+7 dB at 100-300 ms; open: a seam statistic did not separate loop seams from arbitrary boundaries (naive loops 2.5-69, unlooped notes 1.3-6.5), so no row is granted a snapshot",
+     "decay": "time-varying past the join (loop period 182.998 ms = 19.0 pitch periods, exact repetition from 1.131 s, residual -64.5 dB)",
+     "aftersound": "time-varying past the join (loop period 182.998 ms = 19.0 pitch periods, exact repetition from 1.131 s, residual -64.5 dB)",
+     "doubling": "time-varying past the join (loop period 182.998 ms = 19.0 pitch periods, exact repetition from 1.131 s, residual -64.5 dB)",
+     "partial_tilt": "time-varying past the join (loop period 182.998 ms = 19.0 pitch periods, exact repetition from 1.131 s, residual -64.5 dB)",
+     "band_decay": "time-varying past the join (loop period 182.998 ms = 19.0 pitch periods, exact repetition from 1.131 s, residual -64.5 dB)",
+     "ring": "time-varying past the join (loop period 182.998 ms = 19.0 pitch periods, exact repetition from 1.131 s, residual -64.5 dB)",
+     "onset_settle": "time-varying past the join (loop period 182.998 ms = 19.0 pitch periods, exact repetition from 1.131 s, residual -64.5 dB)",
+     "damper": "time-varying past the join (loop period 182.998 ms = 19.0 pitch periods, exact repetition from 1.131 s, residual -64.5 dB)"
+    },
+    "snapshot": {
+     "balance": {
+      "label": "snapshot of one frozen cycle",
+      "group": 1
+     },
+     "centroid_pct": {
+      "label": "snapshot of one frozen cycle",
+      "group": 1
+     },
+     "register": {
+      "label": "snapshot of one frozen cycle",
+      "group": 1
+     },
+     "crest": {
+      "label": "snapshot of one frozen cycle",
+      "group": 1
+     }
+    },
+    "ladder_db": [
+     0.0,
+     -17.8,
+     -16.5,
+     -12.9,
+     -26.6,
+     -40.1,
+     -25.4,
+     -19.0,
+     -23.2,
+     -28.3,
+     -29.1,
+     -42.2,
+     -42.6,
+     -33.0,
+     -36.3,
+     -56.7,
+     -46.8,
+     -50.8,
+     -58.3,
+     -39.2
+    ],
+    "group": 1,
+    "group_notes": [
+     44
+    ],
+    "group_uncertain": {
+     "ambiguous_with": [
+      48
+     ],
+     "loosest_inside_db": null,
+     "nearest_outside_db": 6.3,
+     "band_db": [
+      4.0,
+      8.0
+     ]
+    }
+   },
+   "window": {
+    "model_s": 6.0,
+    "reference_s": 6.0
+   },
+   "floor_state": {
+    "declared": false,
+    "basis": null,
+    "source": "preroll",
+    "level_db_hz": null,
+    "stationary": {
+     "slope_db_s": -5.77,
+     "corr": 0.96,
+     "tone_slope_db_s": -6.03,
+     "floor_like": false
+    },
+    "clear_partials_tail": 8,
+    "hum_dbfs": null,
+    "censors": {
+     "body": null,
+     "tnr": null
+    }
+   }
   },
   {
    "timbre": "gm026",
@@ -1565,7 +2485,113 @@
    "centroid_hz": 161.9,
    "tnr_mask": {},
    "tnr_db": 40.24,
-   "stereo_width": 0.0
+   "stereo_width": 0.0,
+   "loop": {
+    "verdict": "looped",
+    "residual_db": -62.9,
+    "median_db": -33.7,
+    "frames": 6,
+    "reaching_frames": 6,
+    "reach_ms": 1782.9,
+    "period_ms": 382.226,
+    "join_s": 1.259,
+    "period_pitch_periods": 50.0,
+    "body_lines": {
+     "lines_below_f0": 20,
+     "on_lines": true
+    },
+    "excluded": {
+     "stretch": "reads the loop (loop period 382.226 ms = 50.0 pitch periods, exact repetition from 1.259 s, residual -62.9 dB)",
+     "tnr": "reads the loop (loop period 382.226 ms = 50.0 pitch periods, exact repetition from 1.259 s, residual -62.9 dB); periodising an unlooped note sample-exactly moved tnr -11..-14 dB and body +2..+7 dB at 100-300 ms; open: a seam statistic did not separate loop seams from arbitrary boundaries (naive loops 2.5-69, unlooped notes 1.3-6.5), so no row is granted a snapshot",
+     "decay": "time-varying past the join (loop period 382.226 ms = 50.0 pitch periods, exact repetition from 1.259 s, residual -62.9 dB)",
+     "aftersound": "time-varying past the join (loop period 382.226 ms = 50.0 pitch periods, exact repetition from 1.259 s, residual -62.9 dB)",
+     "doubling": "time-varying past the join (loop period 382.226 ms = 50.0 pitch periods, exact repetition from 1.259 s, residual -62.9 dB)",
+     "partial_tilt": "time-varying past the join (loop period 382.226 ms = 50.0 pitch periods, exact repetition from 1.259 s, residual -62.9 dB)",
+     "band_decay": "time-varying past the join (loop period 382.226 ms = 50.0 pitch periods, exact repetition from 1.259 s, residual -62.9 dB)",
+     "ring": "time-varying past the join (loop period 382.226 ms = 50.0 pitch periods, exact repetition from 1.259 s, residual -62.9 dB)",
+     "damper": "time-varying past the join (loop period 382.226 ms = 50.0 pitch periods, exact repetition from 1.259 s, residual -62.9 dB)"
+    },
+    "snapshot": {
+     "balance": {
+      "label": "snapshot of one frozen cycle",
+      "group": 2
+     },
+     "centroid_pct": {
+      "label": "snapshot of one frozen cycle",
+      "group": 2
+     },
+     "register": {
+      "label": "snapshot of one frozen cycle",
+      "group": 2
+     }
+    },
+    "ladder_db": [
+     0.0,
+     -21.2,
+     -12.5,
+     -18.7,
+     -28.3,
+     -42.9,
+     -35.5,
+     -31.6,
+     -26.4,
+     -31.2,
+     -39.6,
+     -51.6,
+     -71.5,
+     -50.2,
+     -46.9,
+     -47.2,
+     -53.2,
+     -61.9,
+     -82.4,
+     -59.3
+    ],
+    "group": 2,
+    "group_notes": [
+     48,
+     52
+    ],
+    "group_uncertain": {
+     "ambiguous_with": [
+      44,
+      52
+     ],
+     "loosest_inside_db": 4.4,
+     "nearest_outside_db": 6.3,
+     "band_db": [
+      4.0,
+      8.0
+     ]
+    },
+    "flagged": {
+     "register": "level read across notes that share one stored waveform: the spectrum is one fixed shape shifted with pitch, so the register curve over the group is a transposition artefact"
+    }
+   },
+   "window": {
+    "model_s": 6.0,
+    "reference_s": 6.0
+   },
+   "floor_state": {
+    "declared": false,
+    "basis": null,
+    "source": "preroll",
+    "level_db_hz": null,
+    "stationary": {
+     "slope_db_s": -10.3,
+     "corr": 0.9,
+     "tone_slope_db_s": -5.87,
+     "floor_like": false
+    },
+    "clear_partials_tail": 8,
+    "hum_dbfs": null,
+    "censors": {
+     "body": null,
+     "tnr": null
+    },
+    "body_floor_db": null,
+    "body_hum_db": null
+   }
   },
   {
    "timbre": "gm026",
@@ -1707,7 +2733,113 @@
    "centroid_hz": 171.5,
    "tnr_mask": {},
    "tnr_db": 40.28,
-   "stereo_width": 0.0
+   "stereo_width": 0.0,
+   "loop": {
+    "verdict": "looped",
+    "residual_db": -64.1,
+    "median_db": -32.9,
+    "frames": 6,
+    "reaching_frames": 6,
+    "reach_ms": 1782.9,
+    "period_ms": 382.226,
+    "join_s": 1.273,
+    "period_pitch_periods": 50.0,
+    "body_lines": {
+     "lines_below_f0": 20,
+     "on_lines": true
+    },
+    "excluded": {
+     "stretch": "reads the loop (loop period 382.226 ms = 50.0 pitch periods, exact repetition from 1.273 s, residual -64.1 dB)",
+     "tnr": "reads the loop (loop period 382.226 ms = 50.0 pitch periods, exact repetition from 1.273 s, residual -64.1 dB); periodising an unlooped note sample-exactly moved tnr -11..-14 dB and body +2..+7 dB at 100-300 ms; open: a seam statistic did not separate loop seams from arbitrary boundaries (naive loops 2.5-69, unlooped notes 1.3-6.5), so no row is granted a snapshot",
+     "decay": "time-varying past the join (loop period 382.226 ms = 50.0 pitch periods, exact repetition from 1.273 s, residual -64.1 dB)",
+     "aftersound": "time-varying past the join (loop period 382.226 ms = 50.0 pitch periods, exact repetition from 1.273 s, residual -64.1 dB)",
+     "doubling": "time-varying past the join (loop period 382.226 ms = 50.0 pitch periods, exact repetition from 1.273 s, residual -64.1 dB)",
+     "partial_tilt": "time-varying past the join (loop period 382.226 ms = 50.0 pitch periods, exact repetition from 1.273 s, residual -64.1 dB)",
+     "band_decay": "time-varying past the join (loop period 382.226 ms = 50.0 pitch periods, exact repetition from 1.273 s, residual -64.1 dB)",
+     "ring": "time-varying past the join (loop period 382.226 ms = 50.0 pitch periods, exact repetition from 1.273 s, residual -64.1 dB)",
+     "damper": "time-varying past the join (loop period 382.226 ms = 50.0 pitch periods, exact repetition from 1.273 s, residual -64.1 dB)"
+    },
+    "snapshot": {
+     "balance": {
+      "label": "snapshot of one frozen cycle",
+      "group": 2
+     },
+     "centroid_pct": {
+      "label": "snapshot of one frozen cycle",
+      "group": 2
+     },
+     "register": {
+      "label": "snapshot of one frozen cycle",
+      "group": 2
+     }
+    },
+    "ladder_db": [
+     0.0,
+     -21.1,
+     -12.2,
+     -18.0,
+     -27.2,
+     -41.4,
+     -33.6,
+     -29.2,
+     -23.4,
+     -27.7,
+     -35.6,
+     -47.1,
+     -66.9,
+     -44.7,
+     -41.0,
+     -40.9,
+     -46.4,
+     -54.8,
+     -75.0,
+     -51.5
+    ],
+    "group": 2,
+    "group_notes": [
+     48,
+     52
+    ],
+    "group_uncertain": {
+     "ambiguous_with": [
+      44,
+      52
+     ],
+     "loosest_inside_db": 4.4,
+     "nearest_outside_db": 6.3,
+     "band_db": [
+      4.0,
+      8.0
+     ]
+    },
+    "flagged": {
+     "register": "level read across notes that share one stored waveform: the spectrum is one fixed shape shifted with pitch, so the register curve over the group is a transposition artefact"
+    }
+   },
+   "window": {
+    "model_s": 6.0,
+    "reference_s": 6.0
+   },
+   "floor_state": {
+    "declared": false,
+    "basis": null,
+    "source": "preroll",
+    "level_db_hz": null,
+    "stationary": {
+     "slope_db_s": -10.44,
+     "corr": 0.9,
+     "tone_slope_db_s": -5.87,
+     "floor_like": false
+    },
+    "clear_partials_tail": 8,
+    "hum_dbfs": null,
+    "censors": {
+     "body": null,
+     "tnr": null
+    },
+    "body_floor_db": null,
+    "body_hum_db": null
+   }
   },
   {
    "timbre": "gm026",
@@ -1849,7 +2981,113 @@
    "centroid_hz": 176.6,
    "tnr_mask": {},
    "tnr_db": 40.24,
-   "stereo_width": 0.0
+   "stereo_width": 0.0,
+   "loop": {
+    "verdict": "looped",
+    "residual_db": -64.4,
+    "median_db": -32.7,
+    "frames": 6,
+    "reaching_frames": 6,
+    "reach_ms": 1782.9,
+    "period_ms": 382.226,
+    "join_s": 1.274,
+    "period_pitch_periods": 50.0,
+    "body_lines": {
+     "lines_below_f0": 20,
+     "on_lines": true
+    },
+    "excluded": {
+     "stretch": "reads the loop (loop period 382.226 ms = 50.0 pitch periods, exact repetition from 1.274 s, residual -64.4 dB)",
+     "tnr": "reads the loop (loop period 382.226 ms = 50.0 pitch periods, exact repetition from 1.274 s, residual -64.4 dB); periodising an unlooped note sample-exactly moved tnr -11..-14 dB and body +2..+7 dB at 100-300 ms; open: a seam statistic did not separate loop seams from arbitrary boundaries (naive loops 2.5-69, unlooped notes 1.3-6.5), so no row is granted a snapshot",
+     "decay": "time-varying past the join (loop period 382.226 ms = 50.0 pitch periods, exact repetition from 1.274 s, residual -64.4 dB)",
+     "aftersound": "time-varying past the join (loop period 382.226 ms = 50.0 pitch periods, exact repetition from 1.274 s, residual -64.4 dB)",
+     "doubling": "time-varying past the join (loop period 382.226 ms = 50.0 pitch periods, exact repetition from 1.274 s, residual -64.4 dB)",
+     "partial_tilt": "time-varying past the join (loop period 382.226 ms = 50.0 pitch periods, exact repetition from 1.274 s, residual -64.4 dB)",
+     "band_decay": "time-varying past the join (loop period 382.226 ms = 50.0 pitch periods, exact repetition from 1.274 s, residual -64.4 dB)",
+     "ring": "time-varying past the join (loop period 382.226 ms = 50.0 pitch periods, exact repetition from 1.274 s, residual -64.4 dB)",
+     "damper": "time-varying past the join (loop period 382.226 ms = 50.0 pitch periods, exact repetition from 1.274 s, residual -64.4 dB)"
+    },
+    "snapshot": {
+     "balance": {
+      "label": "snapshot of one frozen cycle",
+      "group": 2
+     },
+     "centroid_pct": {
+      "label": "snapshot of one frozen cycle",
+      "group": 2
+     },
+     "register": {
+      "label": "snapshot of one frozen cycle",
+      "group": 2
+     }
+    },
+    "ladder_db": [
+     0.0,
+     -21.1,
+     -12.1,
+     -17.9,
+     -27.0,
+     -41.0,
+     -33.1,
+     -28.5,
+     -22.6,
+     -26.6,
+     -34.4,
+     -45.7,
+     -65.3,
+     -42.8,
+     -38.8,
+     -38.5,
+     -43.8,
+     -51.9,
+     -71.9,
+     -48.1
+    ],
+    "group": 2,
+    "group_notes": [
+     48,
+     52
+    ],
+    "group_uncertain": {
+     "ambiguous_with": [
+      44,
+      52
+     ],
+     "loosest_inside_db": 4.4,
+     "nearest_outside_db": 6.3,
+     "band_db": [
+      4.0,
+      8.0
+     ]
+    },
+    "flagged": {
+     "register": "level read across notes that share one stored waveform: the spectrum is one fixed shape shifted with pitch, so the register curve over the group is a transposition artefact"
+    }
+   },
+   "window": {
+    "model_s": 6.0,
+    "reference_s": 6.0
+   },
+   "floor_state": {
+    "declared": false,
+    "basis": null,
+    "source": "preroll",
+    "level_db_hz": null,
+    "stationary": {
+     "slope_db_s": -10.48,
+     "corr": 0.91,
+     "tone_slope_db_s": -5.88,
+     "floor_like": false
+    },
+    "clear_partials_tail": 8,
+    "hum_dbfs": null,
+    "censors": {
+     "body": null,
+     "tnr": null
+    },
+    "body_floor_db": null,
+    "body_hum_db": null
+   }
   },
   {
    "timbre": "gm026",
@@ -1991,7 +3229,113 @@
    "centroid_hz": 178.6,
    "tnr_mask": {},
    "tnr_db": 40.17,
-   "stereo_width": 0.0
+   "stereo_width": 0.0,
+   "loop": {
+    "verdict": "looped",
+    "residual_db": -64.5,
+    "median_db": -32.6,
+    "frames": 6,
+    "reaching_frames": 6,
+    "reach_ms": 1782.9,
+    "period_ms": 382.226,
+    "join_s": 1.274,
+    "period_pitch_periods": 50.0,
+    "body_lines": {
+     "lines_below_f0": 20,
+     "on_lines": true
+    },
+    "excluded": {
+     "stretch": "reads the loop (loop period 382.226 ms = 50.0 pitch periods, exact repetition from 1.274 s, residual -64.5 dB)",
+     "tnr": "reads the loop (loop period 382.226 ms = 50.0 pitch periods, exact repetition from 1.274 s, residual -64.5 dB); periodising an unlooped note sample-exactly moved tnr -11..-14 dB and body +2..+7 dB at 100-300 ms; open: a seam statistic did not separate loop seams from arbitrary boundaries (naive loops 2.5-69, unlooped notes 1.3-6.5), so no row is granted a snapshot",
+     "decay": "time-varying past the join (loop period 382.226 ms = 50.0 pitch periods, exact repetition from 1.274 s, residual -64.5 dB)",
+     "aftersound": "time-varying past the join (loop period 382.226 ms = 50.0 pitch periods, exact repetition from 1.274 s, residual -64.5 dB)",
+     "doubling": "time-varying past the join (loop period 382.226 ms = 50.0 pitch periods, exact repetition from 1.274 s, residual -64.5 dB)",
+     "partial_tilt": "time-varying past the join (loop period 382.226 ms = 50.0 pitch periods, exact repetition from 1.274 s, residual -64.5 dB)",
+     "band_decay": "time-varying past the join (loop period 382.226 ms = 50.0 pitch periods, exact repetition from 1.274 s, residual -64.5 dB)",
+     "ring": "time-varying past the join (loop period 382.226 ms = 50.0 pitch periods, exact repetition from 1.274 s, residual -64.5 dB)",
+     "damper": "time-varying past the join (loop period 382.226 ms = 50.0 pitch periods, exact repetition from 1.274 s, residual -64.5 dB)"
+    },
+    "snapshot": {
+     "balance": {
+      "label": "snapshot of one frozen cycle",
+      "group": 2
+     },
+     "centroid_pct": {
+      "label": "snapshot of one frozen cycle",
+      "group": 2
+     },
+     "register": {
+      "label": "snapshot of one frozen cycle",
+      "group": 2
+     }
+    },
+    "ladder_db": [
+     0.0,
+     -21.1,
+     -12.0,
+     -17.8,
+     -26.9,
+     -40.9,
+     -32.9,
+     -28.3,
+     -22.4,
+     -26.4,
+     -34.1,
+     -45.3,
+     -64.9,
+     -42.3,
+     -38.3,
+     -37.8,
+     -43.1,
+     -51.1,
+     -71.0,
+     -47.1
+    ],
+    "group": 2,
+    "group_notes": [
+     48,
+     52
+    ],
+    "group_uncertain": {
+     "ambiguous_with": [
+      44,
+      52
+     ],
+     "loosest_inside_db": 4.4,
+     "nearest_outside_db": 6.3,
+     "band_db": [
+      4.0,
+      8.0
+     ]
+    },
+    "flagged": {
+     "register": "level read across notes that share one stored waveform: the spectrum is one fixed shape shifted with pitch, so the register curve over the group is a transposition artefact"
+    }
+   },
+   "window": {
+    "model_s": 6.0,
+    "reference_s": 6.0
+   },
+   "floor_state": {
+    "declared": false,
+    "basis": null,
+    "source": "preroll",
+    "level_db_hz": null,
+    "stationary": {
+     "slope_db_s": -10.49,
+     "corr": 0.91,
+     "tone_slope_db_s": -5.88,
+     "floor_like": false
+    },
+    "clear_partials_tail": 8,
+    "hum_dbfs": null,
+    "censors": {
+     "body": null,
+     "tnr": null
+    },
+    "body_floor_db": null,
+    "body_hum_db": null
+   }
   },
   {
    "timbre": "gm026",
@@ -2133,7 +3477,113 @@
    "centroid_hz": 179.1,
    "tnr_mask": {},
    "tnr_db": 40.15,
-   "stereo_width": 0.0
+   "stereo_width": 0.0,
+   "loop": {
+    "verdict": "looped",
+    "residual_db": -63.9,
+    "median_db": -32.6,
+    "frames": 6,
+    "reaching_frames": 6,
+    "reach_ms": 1782.9,
+    "period_ms": 382.226,
+    "join_s": 1.273,
+    "period_pitch_periods": 50.0,
+    "body_lines": {
+     "lines_below_f0": 20,
+     "on_lines": true
+    },
+    "excluded": {
+     "stretch": "reads the loop (loop period 382.226 ms = 50.0 pitch periods, exact repetition from 1.273 s, residual -63.9 dB)",
+     "tnr": "reads the loop (loop period 382.226 ms = 50.0 pitch periods, exact repetition from 1.273 s, residual -63.9 dB); periodising an unlooped note sample-exactly moved tnr -11..-14 dB and body +2..+7 dB at 100-300 ms; open: a seam statistic did not separate loop seams from arbitrary boundaries (naive loops 2.5-69, unlooped notes 1.3-6.5), so no row is granted a snapshot",
+     "decay": "time-varying past the join (loop period 382.226 ms = 50.0 pitch periods, exact repetition from 1.273 s, residual -63.9 dB)",
+     "aftersound": "time-varying past the join (loop period 382.226 ms = 50.0 pitch periods, exact repetition from 1.273 s, residual -63.9 dB)",
+     "doubling": "time-varying past the join (loop period 382.226 ms = 50.0 pitch periods, exact repetition from 1.273 s, residual -63.9 dB)",
+     "partial_tilt": "time-varying past the join (loop period 382.226 ms = 50.0 pitch periods, exact repetition from 1.273 s, residual -63.9 dB)",
+     "band_decay": "time-varying past the join (loop period 382.226 ms = 50.0 pitch periods, exact repetition from 1.273 s, residual -63.9 dB)",
+     "ring": "time-varying past the join (loop period 382.226 ms = 50.0 pitch periods, exact repetition from 1.273 s, residual -63.9 dB)",
+     "damper": "time-varying past the join (loop period 382.226 ms = 50.0 pitch periods, exact repetition from 1.273 s, residual -63.9 dB)"
+    },
+    "snapshot": {
+     "balance": {
+      "label": "snapshot of one frozen cycle",
+      "group": 2
+     },
+     "centroid_pct": {
+      "label": "snapshot of one frozen cycle",
+      "group": 2
+     },
+     "register": {
+      "label": "snapshot of one frozen cycle",
+      "group": 2
+     }
+    },
+    "ladder_db": [
+     0.0,
+     -21.1,
+     -12.0,
+     -17.8,
+     -26.9,
+     -40.9,
+     -32.9,
+     -28.3,
+     -22.3,
+     -26.3,
+     -34.0,
+     -45.2,
+     -64.8,
+     -42.2,
+     -38.1,
+     -37.7,
+     -42.9,
+     -50.9,
+     -70.8,
+     -46.9
+    ],
+    "group": 2,
+    "group_notes": [
+     48,
+     52
+    ],
+    "group_uncertain": {
+     "ambiguous_with": [
+      44,
+      52
+     ],
+     "loosest_inside_db": 4.4,
+     "nearest_outside_db": 6.3,
+     "band_db": [
+      4.0,
+      8.0
+     ]
+    },
+    "flagged": {
+     "register": "level read across notes that share one stored waveform: the spectrum is one fixed shape shifted with pitch, so the register curve over the group is a transposition artefact"
+    }
+   },
+   "window": {
+    "model_s": 6.0,
+    "reference_s": 6.0
+   },
+   "floor_state": {
+    "declared": false,
+    "basis": null,
+    "source": "preroll",
+    "level_db_hz": null,
+    "stationary": {
+     "slope_db_s": -10.48,
+     "corr": 0.91,
+     "tone_slope_db_s": -5.88,
+     "floor_like": false
+    },
+    "clear_partials_tail": 8,
+    "hum_dbfs": null,
+    "censors": {
+     "body": null,
+     "tnr": null
+    },
+    "body_floor_db": null,
+    "body_hum_db": null
+   }
   },
   {
    "timbre": "gm026",
@@ -2275,7 +3725,117 @@
    "centroid_hz": 195.6,
    "tnr_mask": {},
    "tnr_db": 42.39,
-   "stereo_width": 0.0
+   "stereo_width": 0.0,
+   "loop": {
+    "verdict": "looped",
+    "residual_db": -63.0,
+    "median_db": -60.0,
+    "frames": 6,
+    "reaching_frames": 6,
+    "reach_ms": 1782.9,
+    "period_ms": 303.373,
+    "join_s": 0.991,
+    "period_pitch_periods": 50.0,
+    "body_lines": {
+     "lines_below_f0": 23,
+     "on_lines": true
+    },
+    "excluded": {
+     "stretch": "reads the loop (loop period 303.373 ms = 50.0 pitch periods, exact repetition from 0.991 s, residual -63.0 dB)",
+     "tnr": "reads the loop (loop period 303.373 ms = 50.0 pitch periods, exact repetition from 0.991 s, residual -63.0 dB); periodising an unlooped note sample-exactly moved tnr -11..-14 dB and body +2..+7 dB at 100-300 ms; open: a seam statistic did not separate loop seams from arbitrary boundaries (naive loops 2.5-69, unlooped notes 1.3-6.5), so no row is granted a snapshot",
+     "decay": "time-varying past the join (loop period 303.373 ms = 50.0 pitch periods, exact repetition from 0.991 s, residual -63.0 dB)",
+     "aftersound": "time-varying past the join (loop period 303.373 ms = 50.0 pitch periods, exact repetition from 0.991 s, residual -63.0 dB)",
+     "doubling": "time-varying past the join (loop period 303.373 ms = 50.0 pitch periods, exact repetition from 0.991 s, residual -63.0 dB)",
+     "partial_tilt": "time-varying past the join (loop period 303.373 ms = 50.0 pitch periods, exact repetition from 0.991 s, residual -63.0 dB)",
+     "band_decay": "time-varying past the join (loop period 303.373 ms = 50.0 pitch periods, exact repetition from 0.991 s, residual -63.0 dB)",
+     "ring": "time-varying past the join (loop period 303.373 ms = 50.0 pitch periods, exact repetition from 0.991 s, residual -63.0 dB)",
+     "onset_settle": "time-varying past the join (loop period 303.373 ms = 50.0 pitch periods, exact repetition from 0.991 s, residual -63.0 dB)",
+     "damper": "time-varying past the join (loop period 303.373 ms = 50.0 pitch periods, exact repetition from 0.991 s, residual -63.0 dB)"
+    },
+    "snapshot": {
+     "balance": {
+      "label": "snapshot of one frozen cycle",
+      "group": 2
+     },
+     "centroid_pct": {
+      "label": "snapshot of one frozen cycle",
+      "group": 2
+     },
+     "register": {
+      "label": "snapshot of one frozen cycle",
+      "group": 2
+     },
+     "crest": {
+      "label": "snapshot of one frozen cycle",
+      "group": 2
+     }
+    },
+    "ladder_db": [
+     0.0,
+     -22.2,
+     -13.2,
+     -19.7,
+     -32.1,
+     -43.5,
+     -39.0,
+     -36.0,
+     -29.3,
+     -35.4,
+     -44.0,
+     -57.5,
+     -80.1,
+     -56.2,
+     -52.5,
+     -53.8,
+     -61.2,
+     -79.6,
+     -89.8,
+     -75.9
+    ],
+    "group": 2,
+    "group_notes": [
+     48,
+     52
+    ],
+    "group_uncertain": {
+     "ambiguous_with": [
+      48
+     ],
+     "loosest_inside_db": 4.4,
+     "nearest_outside_db": 9.6,
+     "band_db": [
+      4.0,
+      8.0
+     ]
+    },
+    "flagged": {
+     "register": "level read across notes that share one stored waveform: the spectrum is one fixed shape shifted with pitch, so the register curve over the group is a transposition artefact"
+    }
+   },
+   "window": {
+    "model_s": 6.0,
+    "reference_s": 6.0
+   },
+   "floor_state": {
+    "declared": false,
+    "basis": null,
+    "source": "preroll",
+    "level_db_hz": null,
+    "stationary": {
+     "slope_db_s": -9.5,
+     "corr": 0.84,
+     "tone_slope_db_s": -6.43,
+     "floor_like": false
+    },
+    "clear_partials_tail": 8,
+    "hum_dbfs": null,
+    "censors": {
+     "body": null,
+     "tnr": null
+    },
+    "body_floor_db": null,
+    "body_hum_db": null
+   }
   },
   {
    "timbre": "gm026",
@@ -2417,7 +3977,117 @@
    "centroid_hz": 207.9,
    "tnr_mask": {},
    "tnr_db": 42.45,
-   "stereo_width": 0.0
+   "stereo_width": 0.0,
+   "loop": {
+    "verdict": "looped",
+    "residual_db": -64.0,
+    "median_db": -62.5,
+    "frames": 6,
+    "reaching_frames": 6,
+    "reach_ms": 1782.9,
+    "period_ms": 303.373,
+    "join_s": 1.002,
+    "period_pitch_periods": 50.0,
+    "body_lines": {
+     "lines_below_f0": 23,
+     "on_lines": true
+    },
+    "excluded": {
+     "stretch": "reads the loop (loop period 303.373 ms = 50.0 pitch periods, exact repetition from 1.002 s, residual -64.0 dB)",
+     "tnr": "reads the loop (loop period 303.373 ms = 50.0 pitch periods, exact repetition from 1.002 s, residual -64.0 dB); periodising an unlooped note sample-exactly moved tnr -11..-14 dB and body +2..+7 dB at 100-300 ms; open: a seam statistic did not separate loop seams from arbitrary boundaries (naive loops 2.5-69, unlooped notes 1.3-6.5), so no row is granted a snapshot",
+     "decay": "time-varying past the join (loop period 303.373 ms = 50.0 pitch periods, exact repetition from 1.002 s, residual -64.0 dB)",
+     "aftersound": "time-varying past the join (loop period 303.373 ms = 50.0 pitch periods, exact repetition from 1.002 s, residual -64.0 dB)",
+     "doubling": "time-varying past the join (loop period 303.373 ms = 50.0 pitch periods, exact repetition from 1.002 s, residual -64.0 dB)",
+     "partial_tilt": "time-varying past the join (loop period 303.373 ms = 50.0 pitch periods, exact repetition from 1.002 s, residual -64.0 dB)",
+     "band_decay": "time-varying past the join (loop period 303.373 ms = 50.0 pitch periods, exact repetition from 1.002 s, residual -64.0 dB)",
+     "ring": "time-varying past the join (loop period 303.373 ms = 50.0 pitch periods, exact repetition from 1.002 s, residual -64.0 dB)",
+     "onset_settle": "time-varying past the join (loop period 303.373 ms = 50.0 pitch periods, exact repetition from 1.002 s, residual -64.0 dB)",
+     "damper": "time-varying past the join (loop period 303.373 ms = 50.0 pitch periods, exact repetition from 1.002 s, residual -64.0 dB)"
+    },
+    "snapshot": {
+     "balance": {
+      "label": "snapshot of one frozen cycle",
+      "group": 2
+     },
+     "centroid_pct": {
+      "label": "snapshot of one frozen cycle",
+      "group": 2
+     },
+     "register": {
+      "label": "snapshot of one frozen cycle",
+      "group": 2
+     },
+     "crest": {
+      "label": "snapshot of one frozen cycle",
+      "group": 2
+     }
+    },
+    "ladder_db": [
+     0.0,
+     -22.0,
+     -12.6,
+     -18.5,
+     -30.3,
+     -41.1,
+     -35.9,
+     -32.2,
+     -24.9,
+     -30.3,
+     -38.3,
+     -51.3,
+     -80.7,
+     -49.0,
+     -44.8,
+     -45.7,
+     -52.8,
+     -71.0,
+     -87.5,
+     -66.6
+    ],
+    "group": 2,
+    "group_notes": [
+     48,
+     52
+    ],
+    "group_uncertain": {
+     "ambiguous_with": [
+      48
+     ],
+     "loosest_inside_db": 4.4,
+     "nearest_outside_db": 9.6,
+     "band_db": [
+      4.0,
+      8.0
+     ]
+    },
+    "flagged": {
+     "register": "level read across notes that share one stored waveform: the spectrum is one fixed shape shifted with pitch, so the register curve over the group is a transposition artefact"
+    }
+   },
+   "window": {
+    "model_s": 6.0,
+    "reference_s": 6.0
+   },
+   "floor_state": {
+    "declared": false,
+    "basis": null,
+    "source": "preroll",
+    "level_db_hz": null,
+    "stationary": {
+     "slope_db_s": -10.11,
+     "corr": 0.86,
+     "tone_slope_db_s": -6.44,
+     "floor_like": false
+    },
+    "clear_partials_tail": 8,
+    "hum_dbfs": null,
+    "censors": {
+     "body": null,
+     "tnr": null
+    },
+    "body_floor_db": null,
+    "body_hum_db": null
+   }
   },
   {
    "timbre": "gm026",
@@ -2559,7 +4229,117 @@
    "centroid_hz": 215.1,
    "tnr_mask": {},
    "tnr_db": 42.44,
-   "stereo_width": 0.0
+   "stereo_width": 0.0,
+   "loop": {
+    "verdict": "looped",
+    "residual_db": -64.3,
+    "median_db": -63.3,
+    "frames": 6,
+    "reaching_frames": 6,
+    "reach_ms": 1782.9,
+    "period_ms": 303.373,
+    "join_s": 1.004,
+    "period_pitch_periods": 50.0,
+    "body_lines": {
+     "lines_below_f0": 23,
+     "on_lines": true
+    },
+    "excluded": {
+     "stretch": "reads the loop (loop period 303.373 ms = 50.0 pitch periods, exact repetition from 1.004 s, residual -64.3 dB)",
+     "tnr": "reads the loop (loop period 303.373 ms = 50.0 pitch periods, exact repetition from 1.004 s, residual -64.3 dB); periodising an unlooped note sample-exactly moved tnr -11..-14 dB and body +2..+7 dB at 100-300 ms; open: a seam statistic did not separate loop seams from arbitrary boundaries (naive loops 2.5-69, unlooped notes 1.3-6.5), so no row is granted a snapshot",
+     "decay": "time-varying past the join (loop period 303.373 ms = 50.0 pitch periods, exact repetition from 1.004 s, residual -64.3 dB)",
+     "aftersound": "time-varying past the join (loop period 303.373 ms = 50.0 pitch periods, exact repetition from 1.004 s, residual -64.3 dB)",
+     "doubling": "time-varying past the join (loop period 303.373 ms = 50.0 pitch periods, exact repetition from 1.004 s, residual -64.3 dB)",
+     "partial_tilt": "time-varying past the join (loop period 303.373 ms = 50.0 pitch periods, exact repetition from 1.004 s, residual -64.3 dB)",
+     "band_decay": "time-varying past the join (loop period 303.373 ms = 50.0 pitch periods, exact repetition from 1.004 s, residual -64.3 dB)",
+     "ring": "time-varying past the join (loop period 303.373 ms = 50.0 pitch periods, exact repetition from 1.004 s, residual -64.3 dB)",
+     "onset_settle": "time-varying past the join (loop period 303.373 ms = 50.0 pitch periods, exact repetition from 1.004 s, residual -64.3 dB)",
+     "damper": "time-varying past the join (loop period 303.373 ms = 50.0 pitch periods, exact repetition from 1.004 s, residual -64.3 dB)"
+    },
+    "snapshot": {
+     "balance": {
+      "label": "snapshot of one frozen cycle",
+      "group": 2
+     },
+     "centroid_pct": {
+      "label": "snapshot of one frozen cycle",
+      "group": 2
+     },
+     "register": {
+      "label": "snapshot of one frozen cycle",
+      "group": 2
+     },
+     "crest": {
+      "label": "snapshot of one frozen cycle",
+      "group": 2
+     }
+    },
+    "ladder_db": [
+     0.0,
+     -21.9,
+     -12.4,
+     -18.2,
+     -29.8,
+     -40.4,
+     -35.0,
+     -31.1,
+     -23.4,
+     -28.6,
+     -36.2,
+     -48.9,
+     -79.2,
+     -45.9,
+     -41.4,
+     -42.0,
+     -48.7,
+     -66.5,
+     -83.2,
+     -61.5
+    ],
+    "group": 2,
+    "group_notes": [
+     48,
+     52
+    ],
+    "group_uncertain": {
+     "ambiguous_with": [
+      48
+     ],
+     "loosest_inside_db": 4.4,
+     "nearest_outside_db": 9.6,
+     "band_db": [
+      4.0,
+      8.0
+     ]
+    },
+    "flagged": {
+     "register": "level read across notes that share one stored waveform: the spectrum is one fixed shape shifted with pitch, so the register curve over the group is a transposition artefact"
+    }
+   },
+   "window": {
+    "model_s": 6.0,
+    "reference_s": 6.0
+   },
+   "floor_state": {
+    "declared": false,
+    "basis": null,
+    "source": "preroll",
+    "level_db_hz": null,
+    "stationary": {
+     "slope_db_s": -10.33,
+     "corr": 0.87,
+     "tone_slope_db_s": -6.44,
+     "floor_like": false
+    },
+    "clear_partials_tail": 8,
+    "hum_dbfs": null,
+    "censors": {
+     "body": null,
+     "tnr": null
+    },
+    "body_floor_db": null,
+    "body_hum_db": null
+   }
   },
   {
    "timbre": "gm026",
@@ -2701,7 +4481,117 @@
    "centroid_hz": 217.9,
    "tnr_mask": {},
    "tnr_db": 42.35,
-   "stereo_width": 0.0
+   "stereo_width": 0.0,
+   "loop": {
+    "verdict": "looped",
+    "residual_db": -64.4,
+    "median_db": -63.5,
+    "frames": 6,
+    "reaching_frames": 6,
+    "reach_ms": 1782.9,
+    "period_ms": 303.373,
+    "join_s": 1.006,
+    "period_pitch_periods": 50.0,
+    "body_lines": {
+     "lines_below_f0": 23,
+     "on_lines": true
+    },
+    "excluded": {
+     "stretch": "reads the loop (loop period 303.373 ms = 50.0 pitch periods, exact repetition from 1.006 s, residual -64.4 dB)",
+     "tnr": "reads the loop (loop period 303.373 ms = 50.0 pitch periods, exact repetition from 1.006 s, residual -64.4 dB); periodising an unlooped note sample-exactly moved tnr -11..-14 dB and body +2..+7 dB at 100-300 ms; open: a seam statistic did not separate loop seams from arbitrary boundaries (naive loops 2.5-69, unlooped notes 1.3-6.5), so no row is granted a snapshot",
+     "decay": "time-varying past the join (loop period 303.373 ms = 50.0 pitch periods, exact repetition from 1.006 s, residual -64.4 dB)",
+     "aftersound": "time-varying past the join (loop period 303.373 ms = 50.0 pitch periods, exact repetition from 1.006 s, residual -64.4 dB)",
+     "doubling": "time-varying past the join (loop period 303.373 ms = 50.0 pitch periods, exact repetition from 1.006 s, residual -64.4 dB)",
+     "partial_tilt": "time-varying past the join (loop period 303.373 ms = 50.0 pitch periods, exact repetition from 1.006 s, residual -64.4 dB)",
+     "band_decay": "time-varying past the join (loop period 303.373 ms = 50.0 pitch periods, exact repetition from 1.006 s, residual -64.4 dB)",
+     "ring": "time-varying past the join (loop period 303.373 ms = 50.0 pitch periods, exact repetition from 1.006 s, residual -64.4 dB)",
+     "onset_settle": "time-varying past the join (loop period 303.373 ms = 50.0 pitch periods, exact repetition from 1.006 s, residual -64.4 dB)",
+     "damper": "time-varying past the join (loop period 303.373 ms = 50.0 pitch periods, exact repetition from 1.006 s, residual -64.4 dB)"
+    },
+    "snapshot": {
+     "balance": {
+      "label": "snapshot of one frozen cycle",
+      "group": 2
+     },
+     "centroid_pct": {
+      "label": "snapshot of one frozen cycle",
+      "group": 2
+     },
+     "register": {
+      "label": "snapshot of one frozen cycle",
+      "group": 2
+     },
+     "crest": {
+      "label": "snapshot of one frozen cycle",
+      "group": 2
+     }
+    },
+    "ladder_db": [
+     0.0,
+     -21.9,
+     -12.4,
+     -18.2,
+     -29.7,
+     -40.2,
+     -34.8,
+     -30.8,
+     -23.1,
+     -28.1,
+     -35.6,
+     -48.3,
+     -78.6,
+     -45.0,
+     -40.4,
+     -40.8,
+     -47.4,
+     -65.1,
+     -81.7,
+     -59.8
+    ],
+    "group": 2,
+    "group_notes": [
+     48,
+     52
+    ],
+    "group_uncertain": {
+     "ambiguous_with": [
+      48
+     ],
+     "loosest_inside_db": 4.4,
+     "nearest_outside_db": 9.6,
+     "band_db": [
+      4.0,
+      8.0
+     ]
+    },
+    "flagged": {
+     "register": "level read across notes that share one stored waveform: the spectrum is one fixed shape shifted with pitch, so the register curve over the group is a transposition artefact"
+    }
+   },
+   "window": {
+    "model_s": 6.0,
+    "reference_s": 6.0
+   },
+   "floor_state": {
+    "declared": false,
+    "basis": null,
+    "source": "preroll",
+    "level_db_hz": null,
+    "stationary": {
+     "slope_db_s": -10.42,
+     "corr": 0.88,
+     "tone_slope_db_s": -6.44,
+     "floor_like": false
+    },
+    "clear_partials_tail": 8,
+    "hum_dbfs": null,
+    "censors": {
+     "body": null,
+     "tnr": null
+    },
+    "body_floor_db": null,
+    "body_hum_db": null
+   }
   },
   {
    "timbre": "gm026",
@@ -2843,7 +4733,117 @@
    "centroid_hz": 218.6,
    "tnr_mask": {},
    "tnr_db": 42.29,
-   "stereo_width": 0.0
+   "stereo_width": 0.0,
+   "loop": {
+    "verdict": "looped",
+    "residual_db": -63.7,
+    "median_db": -63.0,
+    "frames": 6,
+    "reaching_frames": 6,
+    "reach_ms": 1782.9,
+    "period_ms": 303.373,
+    "join_s": 1.004,
+    "period_pitch_periods": 50.0,
+    "body_lines": {
+     "lines_below_f0": 23,
+     "on_lines": true
+    },
+    "excluded": {
+     "stretch": "reads the loop (loop period 303.373 ms = 50.0 pitch periods, exact repetition from 1.004 s, residual -63.7 dB)",
+     "tnr": "reads the loop (loop period 303.373 ms = 50.0 pitch periods, exact repetition from 1.004 s, residual -63.7 dB); periodising an unlooped note sample-exactly moved tnr -11..-14 dB and body +2..+7 dB at 100-300 ms; open: a seam statistic did not separate loop seams from arbitrary boundaries (naive loops 2.5-69, unlooped notes 1.3-6.5), so no row is granted a snapshot",
+     "decay": "time-varying past the join (loop period 303.373 ms = 50.0 pitch periods, exact repetition from 1.004 s, residual -63.7 dB)",
+     "aftersound": "time-varying past the join (loop period 303.373 ms = 50.0 pitch periods, exact repetition from 1.004 s, residual -63.7 dB)",
+     "doubling": "time-varying past the join (loop period 303.373 ms = 50.0 pitch periods, exact repetition from 1.004 s, residual -63.7 dB)",
+     "partial_tilt": "time-varying past the join (loop period 303.373 ms = 50.0 pitch periods, exact repetition from 1.004 s, residual -63.7 dB)",
+     "band_decay": "time-varying past the join (loop period 303.373 ms = 50.0 pitch periods, exact repetition from 1.004 s, residual -63.7 dB)",
+     "ring": "time-varying past the join (loop period 303.373 ms = 50.0 pitch periods, exact repetition from 1.004 s, residual -63.7 dB)",
+     "onset_settle": "time-varying past the join (loop period 303.373 ms = 50.0 pitch periods, exact repetition from 1.004 s, residual -63.7 dB)",
+     "damper": "time-varying past the join (loop period 303.373 ms = 50.0 pitch periods, exact repetition from 1.004 s, residual -63.7 dB)"
+    },
+    "snapshot": {
+     "balance": {
+      "label": "snapshot of one frozen cycle",
+      "group": 2
+     },
+     "centroid_pct": {
+      "label": "snapshot of one frozen cycle",
+      "group": 2
+     },
+     "register": {
+      "label": "snapshot of one frozen cycle",
+      "group": 2
+     },
+     "crest": {
+      "label": "snapshot of one frozen cycle",
+      "group": 2
+     }
+    },
+    "ladder_db": [
+     0.0,
+     -21.9,
+     -12.4,
+     -18.2,
+     -29.7,
+     -40.2,
+     -34.8,
+     -30.7,
+     -23.0,
+     -28.0,
+     -35.5,
+     -48.1,
+     -78.5,
+     -44.9,
+     -40.2,
+     -40.6,
+     -47.2,
+     -64.8,
+     -81.4,
+     -59.4
+    ],
+    "group": 2,
+    "group_notes": [
+     48,
+     52
+    ],
+    "group_uncertain": {
+     "ambiguous_with": [
+      48
+     ],
+     "loosest_inside_db": 4.4,
+     "nearest_outside_db": 9.6,
+     "band_db": [
+      4.0,
+      8.0
+     ]
+    },
+    "flagged": {
+     "register": "level read across notes that share one stored waveform: the spectrum is one fixed shape shifted with pitch, so the register curve over the group is a transposition artefact"
+    }
+   },
+   "window": {
+    "model_s": 6.0,
+    "reference_s": 6.0
+   },
+   "floor_state": {
+    "declared": false,
+    "basis": null,
+    "source": "preroll",
+    "level_db_hz": null,
+    "stationary": {
+     "slope_db_s": -10.45,
+     "corr": 0.88,
+     "tone_slope_db_s": -6.44,
+     "floor_like": false
+    },
+    "clear_partials_tail": 8,
+    "hum_dbfs": null,
+    "censors": {
+     "body": null,
+     "tnr": null
+    },
+    "body_floor_db": null,
+    "body_hum_db": null
+   }
   },
   {
    "timbre": "gm026",
@@ -2901,6 +4901,17 @@
    "body_below_f0_db": -32.91,
    "body_under_db": -95.24,
    "body_f0_db": -62.33,
+   "body_lines": {
+    "missed": {
+     "lines": [
+      {
+       "hz": 53.0,
+       "share": 0.0776
+      }
+     ],
+     "reason": "recurs on 2 notes; N=3"
+    }
+   },
    "peak_dbfs": -31.37,
    "rms_dbfs": -52.97,
    "held_peak_dbfs": -35.87,
@@ -2983,7 +4994,102 @@
    "centroid_hz": 412.1,
    "tnr_mask": {},
    "tnr_db": 36.84,
-   "stereo_width": 0.0
+   "stereo_width": 0.0,
+   "loop": {
+    "verdict": "looped",
+    "residual_db": -55.0,
+    "median_db": -49.4,
+    "frames": 6,
+    "reaching_frames": 6,
+    "reach_ms": 1782.9,
+    "period_ms": 433.417,
+    "join_s": 1.112,
+    "period_pitch_periods": 90.0,
+    "body_lines": {
+     "lines_below_f0": 46,
+     "on_lines": true
+    },
+    "excluded": {
+     "stretch": "reads the loop (loop period 433.417 ms = 90.0 pitch periods, exact repetition from 1.112 s, residual -55.0 dB)",
+     "tnr": "reads the loop (loop period 433.417 ms = 90.0 pitch periods, exact repetition from 1.112 s, residual -55.0 dB); periodising an unlooped note sample-exactly moved tnr -11..-14 dB and body +2..+7 dB at 100-300 ms; open: a seam statistic did not separate loop seams from arbitrary boundaries (naive loops 2.5-69, unlooped notes 1.3-6.5), so no row is granted a snapshot",
+     "decay": "time-varying past the join (loop period 433.417 ms = 90.0 pitch periods, exact repetition from 1.112 s, residual -55.0 dB)",
+     "aftersound": "time-varying past the join (loop period 433.417 ms = 90.0 pitch periods, exact repetition from 1.112 s, residual -55.0 dB)",
+     "doubling": "time-varying past the join (loop period 433.417 ms = 90.0 pitch periods, exact repetition from 1.112 s, residual -55.0 dB)",
+     "partial_tilt": "time-varying past the join (loop period 433.417 ms = 90.0 pitch periods, exact repetition from 1.112 s, residual -55.0 dB)",
+     "band_decay": "time-varying past the join (loop period 433.417 ms = 90.0 pitch periods, exact repetition from 1.112 s, residual -55.0 dB)",
+     "ring": "time-varying past the join (loop period 433.417 ms = 90.0 pitch periods, exact repetition from 1.112 s, residual -55.0 dB)",
+     "onset_settle": "time-varying past the join (loop period 433.417 ms = 90.0 pitch periods, exact repetition from 1.112 s, residual -55.0 dB)",
+     "damper": "time-varying past the join (loop period 433.417 ms = 90.0 pitch periods, exact repetition from 1.112 s, residual -55.0 dB)"
+    },
+    "snapshot": {
+     "balance": {
+      "label": "snapshot of one frozen cycle",
+      "group": 3
+     },
+     "centroid_pct": {
+      "label": "snapshot of one frozen cycle",
+      "group": 3
+     },
+     "register": {
+      "label": "snapshot of one frozen cycle",
+      "group": 3
+     },
+     "crest": {
+      "label": "snapshot of one frozen cycle",
+      "group": 3
+     }
+    },
+    "ladder_db": [
+     0.0,
+     6.2,
+     -2.5,
+     -12.2,
+     -26.7,
+     -16.8,
+     -26.9,
+     -29.9,
+     -40.2,
+     -38.3,
+     -31.0,
+     -37.9,
+     -47.5,
+     -59.4,
+     -45.8,
+     -42.6,
+     -55.9,
+     -64.4,
+     -68.5,
+     -50.7
+    ],
+    "group": 3,
+    "group_notes": [
+     56
+    ]
+   },
+   "window": {
+    "model_s": 6.0,
+    "reference_s": 6.0
+   },
+   "floor_state": {
+    "declared": false,
+    "basis": null,
+    "source": "preroll",
+    "level_db_hz": null,
+    "stationary": {
+     "slope_db_s": -8.95,
+     "corr": 0.87,
+     "tone_slope_db_s": -7.36,
+     "floor_like": false
+    },
+    "clear_partials_tail": 6,
+    "hum_dbfs": null,
+    "censors": {
+     "body": null,
+     "tnr": null
+    },
+    "body_floor_db": null,
+    "body_hum_db": null
+   }
   },
   {
    "timbre": "gm026",
@@ -3041,6 +5147,17 @@
    "body_below_f0_db": -33.03,
    "body_under_db": -89.07,
    "body_f0_db": -56.03,
+   "body_lines": {
+    "missed": {
+     "lines": [
+      {
+       "hz": 53.0,
+       "share": 0.0772
+      }
+     ],
+     "reason": "recurs on 2 notes; N=3"
+    }
+   },
    "peak_dbfs": -24.9,
    "rms_dbfs": -46.47,
    "held_peak_dbfs": -29.55,
@@ -3123,7 +5240,102 @@
    "centroid_hz": 443.8,
    "tnr_mask": {},
    "tnr_db": 37.23,
-   "stereo_width": 0.0
+   "stereo_width": 0.0,
+   "loop": {
+    "verdict": "looped",
+    "residual_db": -60.2,
+    "median_db": -55.8,
+    "frames": 6,
+    "reaching_frames": 6,
+    "reach_ms": 1782.9,
+    "period_ms": 433.417,
+    "join_s": 1.113,
+    "period_pitch_periods": 90.0,
+    "body_lines": {
+     "lines_below_f0": 46,
+     "on_lines": true
+    },
+    "excluded": {
+     "stretch": "reads the loop (loop period 433.417 ms = 90.0 pitch periods, exact repetition from 1.113 s, residual -60.2 dB)",
+     "tnr": "reads the loop (loop period 433.417 ms = 90.0 pitch periods, exact repetition from 1.113 s, residual -60.2 dB); periodising an unlooped note sample-exactly moved tnr -11..-14 dB and body +2..+7 dB at 100-300 ms; open: a seam statistic did not separate loop seams from arbitrary boundaries (naive loops 2.5-69, unlooped notes 1.3-6.5), so no row is granted a snapshot",
+     "decay": "time-varying past the join (loop period 433.417 ms = 90.0 pitch periods, exact repetition from 1.113 s, residual -60.2 dB)",
+     "aftersound": "time-varying past the join (loop period 433.417 ms = 90.0 pitch periods, exact repetition from 1.113 s, residual -60.2 dB)",
+     "doubling": "time-varying past the join (loop period 433.417 ms = 90.0 pitch periods, exact repetition from 1.113 s, residual -60.2 dB)",
+     "partial_tilt": "time-varying past the join (loop period 433.417 ms = 90.0 pitch periods, exact repetition from 1.113 s, residual -60.2 dB)",
+     "band_decay": "time-varying past the join (loop period 433.417 ms = 90.0 pitch periods, exact repetition from 1.113 s, residual -60.2 dB)",
+     "ring": "time-varying past the join (loop period 433.417 ms = 90.0 pitch periods, exact repetition from 1.113 s, residual -60.2 dB)",
+     "onset_settle": "time-varying past the join (loop period 433.417 ms = 90.0 pitch periods, exact repetition from 1.113 s, residual -60.2 dB)",
+     "damper": "time-varying past the join (loop period 433.417 ms = 90.0 pitch periods, exact repetition from 1.113 s, residual -60.2 dB)"
+    },
+    "snapshot": {
+     "balance": {
+      "label": "snapshot of one frozen cycle",
+      "group": 3
+     },
+     "centroid_pct": {
+      "label": "snapshot of one frozen cycle",
+      "group": 3
+     },
+     "register": {
+      "label": "snapshot of one frozen cycle",
+      "group": 3
+     },
+     "crest": {
+      "label": "snapshot of one frozen cycle",
+      "group": 3
+     }
+    },
+    "ladder_db": [
+     0.0,
+     6.6,
+     -1.4,
+     -10.3,
+     -23.9,
+     -13.1,
+     -22.4,
+     -24.4,
+     -34.1,
+     -31.6,
+     -23.6,
+     -29.9,
+     -39.1,
+     -50.7,
+     -36.6,
+     -33.1,
+     -46.1,
+     -54.4,
+     -58.4,
+     -40.1
+    ],
+    "group": 3,
+    "group_notes": [
+     56
+    ]
+   },
+   "window": {
+    "model_s": 6.0,
+    "reference_s": 6.0
+   },
+   "floor_state": {
+    "declared": false,
+    "basis": null,
+    "source": "preroll",
+    "level_db_hz": null,
+    "stationary": {
+     "slope_db_s": -10.01,
+     "corr": 0.91,
+     "tone_slope_db_s": -7.37,
+     "floor_like": false
+    },
+    "clear_partials_tail": 8,
+    "hum_dbfs": null,
+    "censors": {
+     "body": null,
+     "tnr": null
+    },
+    "body_floor_db": null,
+    "body_hum_db": null
+   }
   },
   {
    "timbre": "gm026",
@@ -3181,6 +5393,17 @@
    "body_below_f0_db": -33.06,
    "body_under_db": -84.03,
    "body_f0_db": -50.97,
+   "body_lines": {
+    "missed": {
+     "lines": [
+      {
+       "hz": 53.0,
+       "share": 0.0771
+      }
+     ],
+     "reason": "recurs on 2 notes; N=3"
+    }
+   },
    "peak_dbfs": -19.75,
    "rms_dbfs": -41.31,
    "held_peak_dbfs": -24.46,
@@ -3263,7 +5486,102 @@
    "centroid_hz": 469.8,
    "tnr_mask": {},
    "tnr_db": 37.29,
-   "stereo_width": 0.0
+   "stereo_width": 0.0,
+   "loop": {
+    "verdict": "looped",
+    "residual_db": -63.3,
+    "median_db": -59.8,
+    "frames": 6,
+    "reaching_frames": 6,
+    "reach_ms": 1782.9,
+    "period_ms": 433.417,
+    "join_s": 1.114,
+    "period_pitch_periods": 90.0,
+    "body_lines": {
+     "lines_below_f0": 46,
+     "on_lines": true
+    },
+    "excluded": {
+     "stretch": "reads the loop (loop period 433.417 ms = 90.0 pitch periods, exact repetition from 1.114 s, residual -63.3 dB)",
+     "tnr": "reads the loop (loop period 433.417 ms = 90.0 pitch periods, exact repetition from 1.114 s, residual -63.3 dB); periodising an unlooped note sample-exactly moved tnr -11..-14 dB and body +2..+7 dB at 100-300 ms; open: a seam statistic did not separate loop seams from arbitrary boundaries (naive loops 2.5-69, unlooped notes 1.3-6.5), so no row is granted a snapshot",
+     "decay": "time-varying past the join (loop period 433.417 ms = 90.0 pitch periods, exact repetition from 1.114 s, residual -63.3 dB)",
+     "aftersound": "time-varying past the join (loop period 433.417 ms = 90.0 pitch periods, exact repetition from 1.114 s, residual -63.3 dB)",
+     "doubling": "time-varying past the join (loop period 433.417 ms = 90.0 pitch periods, exact repetition from 1.114 s, residual -63.3 dB)",
+     "partial_tilt": "time-varying past the join (loop period 433.417 ms = 90.0 pitch periods, exact repetition from 1.114 s, residual -63.3 dB)",
+     "band_decay": "time-varying past the join (loop period 433.417 ms = 90.0 pitch periods, exact repetition from 1.114 s, residual -63.3 dB)",
+     "ring": "time-varying past the join (loop period 433.417 ms = 90.0 pitch periods, exact repetition from 1.114 s, residual -63.3 dB)",
+     "onset_settle": "time-varying past the join (loop period 433.417 ms = 90.0 pitch periods, exact repetition from 1.114 s, residual -63.3 dB)",
+     "damper": "time-varying past the join (loop period 433.417 ms = 90.0 pitch periods, exact repetition from 1.114 s, residual -63.3 dB)"
+    },
+    "snapshot": {
+     "balance": {
+      "label": "snapshot of one frozen cycle",
+      "group": 3
+     },
+     "centroid_pct": {
+      "label": "snapshot of one frozen cycle",
+      "group": 3
+     },
+     "register": {
+      "label": "snapshot of one frozen cycle",
+      "group": 3
+     },
+     "crest": {
+      "label": "snapshot of one frozen cycle",
+      "group": 3
+     }
+    },
+    "ladder_db": [
+     0.0,
+     6.7,
+     -1.1,
+     -9.8,
+     -23.1,
+     -11.9,
+     -20.8,
+     -22.5,
+     -31.8,
+     -28.8,
+     -20.3,
+     -26.2,
+     -35.0,
+     -46.1,
+     -31.5,
+     -27.6,
+     -40.2,
+     -48.1,
+     -51.8,
+     -33.2
+    ],
+    "group": 3,
+    "group_notes": [
+     56
+    ]
+   },
+   "window": {
+    "model_s": 6.0,
+    "reference_s": 6.0
+   },
+   "floor_state": {
+    "declared": false,
+    "basis": null,
+    "source": "preroll",
+    "level_db_hz": null,
+    "stationary": {
+     "slope_db_s": -10.49,
+     "corr": 0.92,
+     "tone_slope_db_s": -7.38,
+     "floor_like": false
+    },
+    "clear_partials_tail": 8,
+    "hum_dbfs": null,
+    "censors": {
+     "body": null,
+     "tnr": null
+    },
+    "body_floor_db": null,
+    "body_hum_db": null
+   }
   },
   {
    "timbre": "gm026",
@@ -3321,6 +5639,17 @@
    "body_below_f0_db": -33.06,
    "body_under_db": -79.97,
    "body_f0_db": -46.91,
+   "body_lines": {
+    "missed": {
+     "lines": [
+      {
+       "hz": 53.0,
+       "share": 0.0769
+      }
+     ],
+     "reason": "recurs on 2 notes; N=3"
+    }
+   },
    "peak_dbfs": -15.58,
    "rms_dbfs": -37.21,
    "held_peak_dbfs": -20.23,
@@ -3403,7 +5732,102 @@
    "centroid_hz": 484.5,
    "tnr_mask": {},
    "tnr_db": 37.05,
-   "stereo_width": 0.0
+   "stereo_width": 0.0,
+   "loop": {
+    "verdict": "looped",
+    "residual_db": -65.0,
+    "median_db": -62.1,
+    "frames": 6,
+    "reaching_frames": 6,
+    "reach_ms": 1782.9,
+    "period_ms": 433.417,
+    "join_s": 1.115,
+    "period_pitch_periods": 90.0,
+    "body_lines": {
+     "lines_below_f0": 46,
+     "on_lines": true
+    },
+    "excluded": {
+     "stretch": "reads the loop (loop period 433.417 ms = 90.0 pitch periods, exact repetition from 1.115 s, residual -65.0 dB)",
+     "tnr": "reads the loop (loop period 433.417 ms = 90.0 pitch periods, exact repetition from 1.115 s, residual -65.0 dB); periodising an unlooped note sample-exactly moved tnr -11..-14 dB and body +2..+7 dB at 100-300 ms; open: a seam statistic did not separate loop seams from arbitrary boundaries (naive loops 2.5-69, unlooped notes 1.3-6.5), so no row is granted a snapshot",
+     "decay": "time-varying past the join (loop period 433.417 ms = 90.0 pitch periods, exact repetition from 1.115 s, residual -65.0 dB)",
+     "aftersound": "time-varying past the join (loop period 433.417 ms = 90.0 pitch periods, exact repetition from 1.115 s, residual -65.0 dB)",
+     "doubling": "time-varying past the join (loop period 433.417 ms = 90.0 pitch periods, exact repetition from 1.115 s, residual -65.0 dB)",
+     "partial_tilt": "time-varying past the join (loop period 433.417 ms = 90.0 pitch periods, exact repetition from 1.115 s, residual -65.0 dB)",
+     "band_decay": "time-varying past the join (loop period 433.417 ms = 90.0 pitch periods, exact repetition from 1.115 s, residual -65.0 dB)",
+     "ring": "time-varying past the join (loop period 433.417 ms = 90.0 pitch periods, exact repetition from 1.115 s, residual -65.0 dB)",
+     "onset_settle": "time-varying past the join (loop period 433.417 ms = 90.0 pitch periods, exact repetition from 1.115 s, residual -65.0 dB)",
+     "damper": "time-varying past the join (loop period 433.417 ms = 90.0 pitch periods, exact repetition from 1.115 s, residual -65.0 dB)"
+    },
+    "snapshot": {
+     "balance": {
+      "label": "snapshot of one frozen cycle",
+      "group": 3
+     },
+     "centroid_pct": {
+      "label": "snapshot of one frozen cycle",
+      "group": 3
+     },
+     "register": {
+      "label": "snapshot of one frozen cycle",
+      "group": 3
+     },
+     "crest": {
+      "label": "snapshot of one frozen cycle",
+      "group": 3
+     }
+    },
+    "ladder_db": [
+     0.0,
+     6.7,
+     -1.1,
+     -9.7,
+     -22.9,
+     -11.6,
+     -20.4,
+     -22.0,
+     -31.1,
+     -28.0,
+     -19.4,
+     -25.1,
+     -33.7,
+     -44.6,
+     -29.8,
+     -25.7,
+     -38.1,
+     -45.8,
+     -49.2,
+     -30.3
+    ],
+    "group": 3,
+    "group_notes": [
+     56
+    ]
+   },
+   "window": {
+    "model_s": 6.0,
+    "reference_s": 6.0
+   },
+   "floor_state": {
+    "declared": false,
+    "basis": null,
+    "source": "preroll",
+    "level_db_hz": null,
+    "stationary": {
+     "slope_db_s": -10.57,
+     "corr": 0.93,
+     "tone_slope_db_s": -7.39,
+     "floor_like": false
+    },
+    "clear_partials_tail": 8,
+    "hum_dbfs": null,
+    "censors": {
+     "body": null,
+     "tnr": null
+    },
+    "body_floor_db": null,
+    "body_hum_db": null
+   }
   },
   {
    "timbre": "gm026",
@@ -3461,6 +5885,17 @@
    "body_below_f0_db": -33.06,
    "body_under_db": -76.74,
    "body_f0_db": -43.67,
+   "body_lines": {
+    "missed": {
+     "lines": [
+      {
+       "hz": 53.0,
+       "share": 0.0769
+      }
+     ],
+     "reason": "recurs on 2 notes; N=3"
+    }
+   },
    "peak_dbfs": -12.26,
    "rms_dbfs": -33.96,
    "held_peak_dbfs": -17.0,
@@ -3543,7 +5978,102 @@
    "centroid_hz": 489.0,
    "tnr_mask": {},
    "tnr_db": 36.84,
-   "stereo_width": 0.0
+   "stereo_width": 0.0,
+   "loop": {
+    "verdict": "looped",
+    "residual_db": -66.0,
+    "median_db": -63.2,
+    "frames": 6,
+    "reaching_frames": 6,
+    "reach_ms": 1782.9,
+    "period_ms": 433.417,
+    "join_s": 1.115,
+    "period_pitch_periods": 90.0,
+    "body_lines": {
+     "lines_below_f0": 46,
+     "on_lines": true
+    },
+    "excluded": {
+     "stretch": "reads the loop (loop period 433.417 ms = 90.0 pitch periods, exact repetition from 1.115 s, residual -66.0 dB)",
+     "tnr": "reads the loop (loop period 433.417 ms = 90.0 pitch periods, exact repetition from 1.115 s, residual -66.0 dB); periodising an unlooped note sample-exactly moved tnr -11..-14 dB and body +2..+7 dB at 100-300 ms; open: a seam statistic did not separate loop seams from arbitrary boundaries (naive loops 2.5-69, unlooped notes 1.3-6.5), so no row is granted a snapshot",
+     "decay": "time-varying past the join (loop period 433.417 ms = 90.0 pitch periods, exact repetition from 1.115 s, residual -66.0 dB)",
+     "aftersound": "time-varying past the join (loop period 433.417 ms = 90.0 pitch periods, exact repetition from 1.115 s, residual -66.0 dB)",
+     "doubling": "time-varying past the join (loop period 433.417 ms = 90.0 pitch periods, exact repetition from 1.115 s, residual -66.0 dB)",
+     "partial_tilt": "time-varying past the join (loop period 433.417 ms = 90.0 pitch periods, exact repetition from 1.115 s, residual -66.0 dB)",
+     "band_decay": "time-varying past the join (loop period 433.417 ms = 90.0 pitch periods, exact repetition from 1.115 s, residual -66.0 dB)",
+     "ring": "time-varying past the join (loop period 433.417 ms = 90.0 pitch periods, exact repetition from 1.115 s, residual -66.0 dB)",
+     "onset_settle": "time-varying past the join (loop period 433.417 ms = 90.0 pitch periods, exact repetition from 1.115 s, residual -66.0 dB)",
+     "damper": "time-varying past the join (loop period 433.417 ms = 90.0 pitch periods, exact repetition from 1.115 s, residual -66.0 dB)"
+    },
+    "snapshot": {
+     "balance": {
+      "label": "snapshot of one frozen cycle",
+      "group": 3
+     },
+     "centroid_pct": {
+      "label": "snapshot of one frozen cycle",
+      "group": 3
+     },
+     "register": {
+      "label": "snapshot of one frozen cycle",
+      "group": 3
+     },
+     "crest": {
+      "label": "snapshot of one frozen cycle",
+      "group": 3
+     }
+    },
+    "ladder_db": [
+     0.0,
+     6.7,
+     -1.0,
+     -9.7,
+     -22.9,
+     -11.6,
+     -20.4,
+     -21.9,
+     -31.0,
+     -27.8,
+     -19.2,
+     -24.9,
+     -33.4,
+     -44.3,
+     -29.5,
+     -25.3,
+     -37.6,
+     -45.2,
+     -48.6,
+     -29.7
+    ],
+    "group": 3,
+    "group_notes": [
+     56
+    ]
+   },
+   "window": {
+    "model_s": 6.0,
+    "reference_s": 6.0
+   },
+   "floor_state": {
+    "declared": false,
+    "basis": null,
+    "source": "preroll",
+    "level_db_hz": null,
+    "stationary": {
+     "slope_db_s": -10.67,
+     "corr": 0.93,
+     "tone_slope_db_s": -7.39,
+     "floor_like": false
+    },
+    "clear_partials_tail": 8,
+    "hum_dbfs": null,
+    "censors": {
+     "body": null,
+     "tnr": null
+    },
+    "body_floor_db": null,
+    "body_hum_db": null
+   }
   },
   {
    "timbre": "gm026",
@@ -3601,6 +6131,17 @@
    "body_below_f0_db": -42.22,
    "body_under_db": -97.17,
    "body_f0_db": -54.95,
+   "body_lines": {
+    "missed": {
+     "lines": [
+      {
+       "hz": 53.0,
+       "share": 0.2016
+      }
+     ],
+     "reason": "recurs on 2 notes; N=3"
+    }
+   },
    "peak_dbfs": -33.1,
    "rms_dbfs": -55.39,
    "held_peak_dbfs": -39.47,
@@ -3683,7 +6224,66 @@
    "centroid_hz": 451.5,
    "tnr_mask": {},
    "tnr_db": 48.86,
-   "stereo_width": 0.0
+   "stereo_width": 0.0,
+   "loop": {
+    "verdict": "not",
+    "residual_db": -53.3,
+    "median_db": -20.6,
+    "frames": 6,
+    "reaching_frames": 6,
+    "reach_ms": 1719.8,
+    "borderline": true,
+    "ladder_db": [
+     0.0,
+     -8.6,
+     -6.0,
+     -12.0,
+     -22.7,
+     -26.4,
+     -38.3,
+     -52.8,
+     -47.1,
+     -49.5,
+     -45.8,
+     -45.7,
+     -47.7,
+     -55.5,
+     -61.8,
+     -79.2,
+     -71.5,
+     -60.8,
+     -68.7,
+     -68.2
+    ],
+    "group": 4,
+    "group_notes": [
+     60
+    ]
+   },
+   "window": {
+    "model_s": 6.0,
+    "reference_s": 6.0
+   },
+   "floor_state": {
+    "declared": false,
+    "basis": null,
+    "source": "preroll",
+    "level_db_hz": null,
+    "stationary": {
+     "slope_db_s": -8.8,
+     "corr": 0.97,
+     "tone_slope_db_s": -8.64,
+     "floor_like": false
+    },
+    "clear_partials_tail": 5,
+    "hum_dbfs": null,
+    "censors": {
+     "body": null,
+     "tnr": null
+    },
+    "body_floor_db": null,
+    "body_hum_db": null
+   }
   },
   {
    "timbre": "gm026",
@@ -3741,6 +6341,17 @@
    "body_below_f0_db": -42.45,
    "body_under_db": -90.98,
    "body_f0_db": -48.54,
+   "body_lines": {
+    "missed": {
+     "lines": [
+      {
+       "hz": 53.0,
+       "share": 0.2016
+      }
+     ],
+     "reason": "recurs on 2 notes; N=3"
+    }
+   },
    "peak_dbfs": -25.44,
    "rms_dbfs": -48.2,
    "held_peak_dbfs": -32.83,
@@ -3823,7 +6434,66 @@
    "centroid_hz": 535.9,
    "tnr_mask": {},
    "tnr_db": 49.28,
-   "stereo_width": 0.0
+   "stereo_width": 0.0,
+   "loop": {
+    "verdict": "not",
+    "residual_db": -56.8,
+    "median_db": -20.0,
+    "frames": 6,
+    "reaching_frames": 6,
+    "reach_ms": 1782.9,
+    "borderline": true,
+    "ladder_db": [
+     0.0,
+     -7.8,
+     -4.2,
+     -9.0,
+     -18.6,
+     -21.1,
+     -32.0,
+     -46.0,
+     -39.3,
+     -41.1,
+     -36.9,
+     -36.3,
+     -37.9,
+     -45.4,
+     -51.5,
+     -69.5,
+     -60.6,
+     -49.8,
+     -57.6,
+     -56.9
+    ],
+    "group": 4,
+    "group_notes": [
+     60
+    ]
+   },
+   "window": {
+    "model_s": 6.0,
+    "reference_s": 6.0
+   },
+   "floor_state": {
+    "declared": false,
+    "basis": null,
+    "source": "preroll",
+    "level_db_hz": null,
+    "stationary": {
+     "slope_db_s": -9.32,
+     "corr": 0.98,
+     "tone_slope_db_s": -8.68,
+     "floor_like": false
+    },
+    "clear_partials_tail": 7,
+    "hum_dbfs": null,
+    "censors": {
+     "body": null,
+     "tnr": null
+    },
+    "body_floor_db": null,
+    "body_hum_db": null
+   }
   },
   {
    "timbre": "gm026",
@@ -3881,6 +6551,17 @@
    "body_below_f0_db": -42.5,
    "body_under_db": -85.94,
    "body_f0_db": -43.45,
+   "body_lines": {
+    "missed": {
+     "lines": [
+      {
+       "hz": 53.0,
+       "share": 0.2012
+      }
+     ],
+     "reason": "recurs on 2 notes; N=3"
+    }
+   },
    "peak_dbfs": -19.83,
    "rms_dbfs": -42.75,
    "held_peak_dbfs": -27.54,
@@ -3963,7 +6644,66 @@
    "centroid_hz": 580.4,
    "tnr_mask": {},
    "tnr_db": 48.69,
-   "stereo_width": 0.0
+   "stereo_width": 0.0,
+   "loop": {
+    "verdict": "not",
+    "residual_db": -61.3,
+    "median_db": -19.0,
+    "frames": 6,
+    "reaching_frames": 6,
+    "reach_ms": 1782.9,
+    "borderline": true,
+    "ladder_db": [
+     0.0,
+     -7.6,
+     -3.7,
+     -8.1,
+     -17.2,
+     -19.3,
+     -29.5,
+     -43.0,
+     -35.6,
+     -36.8,
+     -32.0,
+     -30.9,
+     -32.0,
+     -39.0,
+     -44.5,
+     -62.2,
+     -52.9,
+     -41.6,
+     -49.1,
+     -48.0
+    ],
+    "group": 4,
+    "group_notes": [
+     60
+    ]
+   },
+   "window": {
+    "model_s": 6.0,
+    "reference_s": 6.0
+   },
+   "floor_state": {
+    "declared": false,
+    "basis": null,
+    "source": "preroll",
+    "level_db_hz": null,
+    "stationary": {
+     "slope_db_s": -9.55,
+     "corr": 0.98,
+     "tone_slope_db_s": -8.7,
+     "floor_like": false
+    },
+    "clear_partials_tail": 8,
+    "hum_dbfs": null,
+    "censors": {
+     "body": null,
+     "tnr": null
+    },
+    "body_floor_db": null,
+    "body_hum_db": null
+   }
   },
   {
    "timbre": "gm026",
@@ -4021,6 +6761,17 @@
    "body_below_f0_db": -42.5,
    "body_under_db": -81.88,
    "body_f0_db": -39.38,
+   "body_lines": {
+    "missed": {
+     "lines": [
+      {
+       "hz": 53.0,
+       "share": 0.2015
+      }
+     ],
+     "reason": "recurs on 2 notes; N=3"
+    }
+   },
    "peak_dbfs": -15.61,
    "rms_dbfs": -38.49,
    "held_peak_dbfs": -23.25,
@@ -4103,7 +6854,66 @@
    "centroid_hz": 605.7,
    "tnr_mask": {},
    "tnr_db": 46.38,
-   "stereo_width": 0.0
+   "stereo_width": 0.0,
+   "loop": {
+    "verdict": "not",
+    "residual_db": -64.0,
+    "median_db": -18.3,
+    "frames": 6,
+    "reaching_frames": 6,
+    "reach_ms": 1782.9,
+    "borderline": true,
+    "ladder_db": [
+     0.0,
+     -7.6,
+     -3.6,
+     -7.9,
+     -16.9,
+     -18.8,
+     -28.8,
+     -42.1,
+     -34.5,
+     -35.4,
+     -30.4,
+     -29.0,
+     -29.8,
+     -36.5,
+     -41.7,
+     -59.1,
+     -49.4,
+     -37.8,
+     -45.0,
+     -43.6
+    ],
+    "group": 4,
+    "group_notes": [
+     60
+    ]
+   },
+   "window": {
+    "model_s": 6.0,
+    "reference_s": 6.0
+   },
+   "floor_state": {
+    "declared": false,
+    "basis": null,
+    "source": "preroll",
+    "level_db_hz": null,
+    "stationary": {
+     "slope_db_s": -9.63,
+     "corr": 0.98,
+     "tone_slope_db_s": -8.7,
+     "floor_like": false
+    },
+    "clear_partials_tail": 8,
+    "hum_dbfs": null,
+    "censors": {
+     "body": null,
+     "tnr": null
+    },
+    "body_floor_db": null,
+    "body_hum_db": null
+   }
   },
   {
    "timbre": "gm026",
@@ -4161,6 +6971,17 @@
    "body_below_f0_db": -42.51,
    "body_under_db": -78.65,
    "body_f0_db": -36.15,
+   "body_lines": {
+    "missed": {
+     "lines": [
+      {
+       "hz": 53.0,
+       "share": 0.2014
+      }
+     ],
+     "reason": "recurs on 2 notes; N=3"
+    }
+   },
    "peak_dbfs": -12.17,
    "rms_dbfs": -35.16,
    "held_peak_dbfs": -19.86,
@@ -4243,7 +7064,66 @@
    "centroid_hz": 616.6,
    "tnr_mask": {},
    "tnr_db": 44.76,
-   "stereo_width": 0.0
+   "stereo_width": 0.0,
+   "loop": {
+    "verdict": "not",
+    "residual_db": -65.3,
+    "median_db": -18.2,
+    "frames": 6,
+    "reaching_frames": 6,
+    "reach_ms": 1782.9,
+    "borderline": true,
+    "ladder_db": [
+     0.0,
+     -7.6,
+     -3.6,
+     -7.8,
+     -16.8,
+     -18.6,
+     -28.7,
+     -41.9,
+     -34.3,
+     -35.1,
+     -30.0,
+     -28.5,
+     -29.3,
+     -35.9,
+     -41.0,
+     -58.3,
+     -48.5,
+     -36.8,
+     -43.8,
+     -42.3
+    ],
+    "group": 4,
+    "group_notes": [
+     60
+    ]
+   },
+   "window": {
+    "model_s": 6.0,
+    "reference_s": 6.0
+   },
+   "floor_state": {
+    "declared": false,
+    "basis": null,
+    "source": "preroll",
+    "level_db_hz": null,
+    "stationary": {
+     "slope_db_s": -9.66,
+     "corr": 0.98,
+     "tone_slope_db_s": -8.7,
+     "floor_like": false
+    },
+    "clear_partials_tail": 8,
+    "hum_dbfs": null,
+    "censors": {
+     "body": null,
+     "tnr": null
+    },
+    "body_floor_db": null,
+    "body_hum_db": null
+   }
   },
   {
    "timbre": "gm026",
@@ -4383,7 +7263,102 @@
    "centroid_hz": 727.9,
    "tnr_mask": {},
    "tnr_db": 47.24,
-   "stereo_width": 0.0
+   "stereo_width": 0.0,
+   "loop": {
+    "verdict": "looped",
+    "residual_db": -49.8,
+    "median_db": -41.9,
+    "frames": 6,
+    "reaching_frames": 6,
+    "reach_ms": 1457.6,
+    "period_ms": 54.607,
+    "join_s": 0.918,
+    "period_pitch_periods": 18.0,
+    "body_lines": {
+     "lines_below_f0": 10,
+     "on_lines": true
+    },
+    "excluded": {
+     "stretch": "reads the loop (loop period 54.607 ms = 18.0 pitch periods, exact repetition from 0.918 s, residual -49.8 dB)",
+     "tnr": "reads the loop (loop period 54.607 ms = 18.0 pitch periods, exact repetition from 0.918 s, residual -49.8 dB); periodising an unlooped note sample-exactly moved tnr -11..-14 dB and body +2..+7 dB at 100-300 ms; open: a seam statistic did not separate loop seams from arbitrary boundaries (naive loops 2.5-69, unlooped notes 1.3-6.5), so no row is granted a snapshot",
+     "decay": "time-varying past the join (loop period 54.607 ms = 18.0 pitch periods, exact repetition from 0.918 s, residual -49.8 dB)",
+     "aftersound": "time-varying past the join (loop period 54.607 ms = 18.0 pitch periods, exact repetition from 0.918 s, residual -49.8 dB)",
+     "doubling": "time-varying past the join (loop period 54.607 ms = 18.0 pitch periods, exact repetition from 0.918 s, residual -49.8 dB)",
+     "partial_tilt": "time-varying past the join (loop period 54.607 ms = 18.0 pitch periods, exact repetition from 0.918 s, residual -49.8 dB)",
+     "band_decay": "time-varying past the join (loop period 54.607 ms = 18.0 pitch periods, exact repetition from 0.918 s, residual -49.8 dB)",
+     "ring": "time-varying past the join (loop period 54.607 ms = 18.0 pitch periods, exact repetition from 0.918 s, residual -49.8 dB)",
+     "onset_settle": "time-varying past the join (loop period 54.607 ms = 18.0 pitch periods, exact repetition from 0.918 s, residual -49.8 dB)",
+     "damper": "time-varying past the join (loop period 54.607 ms = 18.0 pitch periods, exact repetition from 0.918 s, residual -49.8 dB)"
+    },
+    "snapshot": {
+     "balance": {
+      "label": "snapshot of one frozen cycle",
+      "group": 5
+     },
+     "centroid_pct": {
+      "label": "snapshot of one frozen cycle",
+      "group": 5
+     },
+     "register": {
+      "label": "snapshot of one frozen cycle",
+      "group": 5
+     },
+     "crest": {
+      "label": "snapshot of one frozen cycle",
+      "group": 5
+     }
+    },
+    "ladder_db": [
+     0.0,
+     11.2,
+     2.1,
+     4.4,
+     -2.9,
+     -15.0,
+     -24.7,
+     -28.1,
+     -22.0,
+     -35.3,
+     -33.8,
+     -31.8,
+     -63.0,
+     -41.0,
+     -48.6,
+     -62.9,
+     -45.6,
+     -48.3,
+     -45.8,
+     -60.5
+    ],
+    "group": 5,
+    "group_notes": [
+     64
+    ]
+   },
+   "window": {
+    "model_s": 6.0,
+    "reference_s": 6.0
+   },
+   "floor_state": {
+    "declared": false,
+    "basis": null,
+    "source": "preroll",
+    "level_db_hz": null,
+    "stationary": {
+     "slope_db_s": -7.96,
+     "corr": 0.95,
+     "tone_slope_db_s": -9.59,
+     "floor_like": false
+    },
+    "clear_partials_tail": 5,
+    "hum_dbfs": null,
+    "censors": {
+     "body": null,
+     "tnr": null
+    },
+    "body_floor_db": null,
+    "body_hum_db": null
+   }
   },
   {
    "timbre": "gm026",
@@ -4523,7 +7498,102 @@
    "centroid_hz": 861.3,
    "tnr_mask": {},
    "tnr_db": 48.37,
-   "stereo_width": 0.0
+   "stereo_width": 0.0,
+   "loop": {
+    "verdict": "looped",
+    "residual_db": -57.8,
+    "median_db": -49.9,
+    "frames": 6,
+    "reaching_frames": 6,
+    "reach_ms": 1650.1,
+    "period_ms": 63.708,
+    "join_s": 0.927,
+    "period_pitch_periods": 21.0,
+    "body_lines": {
+     "lines_below_f0": 12,
+     "on_lines": true
+    },
+    "excluded": {
+     "stretch": "reads the loop (loop period 63.708 ms = 21.0 pitch periods, exact repetition from 0.927 s, residual -57.8 dB)",
+     "tnr": "reads the loop (loop period 63.708 ms = 21.0 pitch periods, exact repetition from 0.927 s, residual -57.8 dB); periodising an unlooped note sample-exactly moved tnr -11..-14 dB and body +2..+7 dB at 100-300 ms; open: a seam statistic did not separate loop seams from arbitrary boundaries (naive loops 2.5-69, unlooped notes 1.3-6.5), so no row is granted a snapshot",
+     "decay": "time-varying past the join (loop period 63.708 ms = 21.0 pitch periods, exact repetition from 0.927 s, residual -57.8 dB)",
+     "aftersound": "time-varying past the join (loop period 63.708 ms = 21.0 pitch periods, exact repetition from 0.927 s, residual -57.8 dB)",
+     "doubling": "time-varying past the join (loop period 63.708 ms = 21.0 pitch periods, exact repetition from 0.927 s, residual -57.8 dB)",
+     "partial_tilt": "time-varying past the join (loop period 63.708 ms = 21.0 pitch periods, exact repetition from 0.927 s, residual -57.8 dB)",
+     "band_decay": "time-varying past the join (loop period 63.708 ms = 21.0 pitch periods, exact repetition from 0.927 s, residual -57.8 dB)",
+     "ring": "time-varying past the join (loop period 63.708 ms = 21.0 pitch periods, exact repetition from 0.927 s, residual -57.8 dB)",
+     "onset_settle": "time-varying past the join (loop period 63.708 ms = 21.0 pitch periods, exact repetition from 0.927 s, residual -57.8 dB)",
+     "damper": "time-varying past the join (loop period 63.708 ms = 21.0 pitch periods, exact repetition from 0.927 s, residual -57.8 dB)"
+    },
+    "snapshot": {
+     "balance": {
+      "label": "snapshot of one frozen cycle",
+      "group": 5
+     },
+     "centroid_pct": {
+      "label": "snapshot of one frozen cycle",
+      "group": 5
+     },
+     "register": {
+      "label": "snapshot of one frozen cycle",
+      "group": 5
+     },
+     "crest": {
+      "label": "snapshot of one frozen cycle",
+      "group": 5
+     }
+    },
+    "ladder_db": [
+     0.0,
+     12.5,
+     4.9,
+     8.7,
+     2.8,
+     -8.1,
+     -16.8,
+     -19.5,
+     -12.8,
+     -25.7,
+     -23.8,
+     -21.4,
+     -52.7,
+     -30.2,
+     -37.6,
+     -51.8,
+     -34.3,
+     -36.9,
+     -34.3,
+     -48.8
+    ],
+    "group": 5,
+    "group_notes": [
+     64
+    ]
+   },
+   "window": {
+    "model_s": 6.0,
+    "reference_s": 6.0
+   },
+   "floor_state": {
+    "declared": false,
+    "basis": null,
+    "source": "preroll",
+    "level_db_hz": null,
+    "stationary": {
+     "slope_db_s": -8.99,
+     "corr": 0.98,
+     "tone_slope_db_s": -9.57,
+     "floor_like": false
+    },
+    "clear_partials_tail": 7,
+    "hum_dbfs": null,
+    "censors": {
+     "body": null,
+     "tnr": null
+    },
+    "body_floor_db": null,
+    "body_hum_db": null
+   }
   },
   {
    "timbre": "gm026",
@@ -4663,7 +7733,102 @@
    "centroid_hz": 947.7,
    "tnr_mask": {},
    "tnr_db": 48.33,
-   "stereo_width": 0.0
+   "stereo_width": 0.0,
+   "loop": {
+    "verdict": "looped",
+    "residual_db": -62.0,
+    "median_db": -55.4,
+    "frames": 6,
+    "reaching_frames": 6,
+    "reach_ms": 1761.7,
+    "period_ms": 63.708,
+    "join_s": 0.93,
+    "period_pitch_periods": 21.0,
+    "body_lines": {
+     "lines_below_f0": 12,
+     "on_lines": true
+    },
+    "excluded": {
+     "stretch": "reads the loop (loop period 63.708 ms = 21.0 pitch periods, exact repetition from 0.93 s, residual -62.0 dB)",
+     "tnr": "reads the loop (loop period 63.708 ms = 21.0 pitch periods, exact repetition from 0.93 s, residual -62.0 dB); periodising an unlooped note sample-exactly moved tnr -11..-14 dB and body +2..+7 dB at 100-300 ms; open: a seam statistic did not separate loop seams from arbitrary boundaries (naive loops 2.5-69, unlooped notes 1.3-6.5), so no row is granted a snapshot",
+     "decay": "time-varying past the join (loop period 63.708 ms = 21.0 pitch periods, exact repetition from 0.93 s, residual -62.0 dB)",
+     "aftersound": "time-varying past the join (loop period 63.708 ms = 21.0 pitch periods, exact repetition from 0.93 s, residual -62.0 dB)",
+     "doubling": "time-varying past the join (loop period 63.708 ms = 21.0 pitch periods, exact repetition from 0.93 s, residual -62.0 dB)",
+     "partial_tilt": "time-varying past the join (loop period 63.708 ms = 21.0 pitch periods, exact repetition from 0.93 s, residual -62.0 dB)",
+     "band_decay": "time-varying past the join (loop period 63.708 ms = 21.0 pitch periods, exact repetition from 0.93 s, residual -62.0 dB)",
+     "ring": "time-varying past the join (loop period 63.708 ms = 21.0 pitch periods, exact repetition from 0.93 s, residual -62.0 dB)",
+     "onset_settle": "time-varying past the join (loop period 63.708 ms = 21.0 pitch periods, exact repetition from 0.93 s, residual -62.0 dB)",
+     "damper": "time-varying past the join (loop period 63.708 ms = 21.0 pitch periods, exact repetition from 0.93 s, residual -62.0 dB)"
+    },
+    "snapshot": {
+     "balance": {
+      "label": "snapshot of one frozen cycle",
+      "group": 5
+     },
+     "centroid_pct": {
+      "label": "snapshot of one frozen cycle",
+      "group": 5
+     },
+     "register": {
+      "label": "snapshot of one frozen cycle",
+      "group": 5
+     },
+     "crest": {
+      "label": "snapshot of one frozen cycle",
+      "group": 5
+     }
+    },
+    "ladder_db": [
+     0.0,
+     12.8,
+     5.7,
+     10.2,
+     5.0,
+     -5.1,
+     -13.0,
+     -15.0,
+     -7.4,
+     -19.7,
+     -17.1,
+     -14.2,
+     -44.9,
+     -21.9,
+     -28.9,
+     -42.7,
+     -24.9,
+     -27.2,
+     -24.3,
+     -38.6
+    ],
+    "group": 5,
+    "group_notes": [
+     64
+    ]
+   },
+   "window": {
+    "model_s": 6.0,
+    "reference_s": 6.0
+   },
+   "floor_state": {
+    "declared": false,
+    "basis": null,
+    "source": "preroll",
+    "level_db_hz": null,
+    "stationary": {
+     "slope_db_s": -9.58,
+     "corr": 0.99,
+     "tone_slope_db_s": -9.57,
+     "floor_like": false
+    },
+    "clear_partials_tail": 8,
+    "hum_dbfs": null,
+    "censors": {
+     "body": null,
+     "tnr": null
+    },
+    "body_floor_db": null,
+    "body_hum_db": null
+   }
   },
   {
    "timbre": "gm026",
@@ -4803,7 +7968,102 @@
    "centroid_hz": 998.4,
    "tnr_mask": {},
    "tnr_db": 47.25,
-   "stereo_width": 0.0
+   "stereo_width": 0.0,
+   "loop": {
+    "verdict": "looped",
+    "residual_db": -63.8,
+    "median_db": -58.8,
+    "frames": 6,
+    "reaching_frames": 6,
+    "reach_ms": 1782.9,
+    "period_ms": 63.708,
+    "join_s": 0.931,
+    "period_pitch_periods": 21.0,
+    "body_lines": {
+     "lines_below_f0": 12,
+     "on_lines": true
+    },
+    "excluded": {
+     "stretch": "reads the loop (loop period 63.708 ms = 21.0 pitch periods, exact repetition from 0.931 s, residual -63.8 dB)",
+     "tnr": "reads the loop (loop period 63.708 ms = 21.0 pitch periods, exact repetition from 0.931 s, residual -63.8 dB); periodising an unlooped note sample-exactly moved tnr -11..-14 dB and body +2..+7 dB at 100-300 ms; open: a seam statistic did not separate loop seams from arbitrary boundaries (naive loops 2.5-69, unlooped notes 1.3-6.5), so no row is granted a snapshot",
+     "decay": "time-varying past the join (loop period 63.708 ms = 21.0 pitch periods, exact repetition from 0.931 s, residual -63.8 dB)",
+     "aftersound": "time-varying past the join (loop period 63.708 ms = 21.0 pitch periods, exact repetition from 0.931 s, residual -63.8 dB)",
+     "doubling": "time-varying past the join (loop period 63.708 ms = 21.0 pitch periods, exact repetition from 0.931 s, residual -63.8 dB)",
+     "partial_tilt": "time-varying past the join (loop period 63.708 ms = 21.0 pitch periods, exact repetition from 0.931 s, residual -63.8 dB)",
+     "band_decay": "time-varying past the join (loop period 63.708 ms = 21.0 pitch periods, exact repetition from 0.931 s, residual -63.8 dB)",
+     "ring": "time-varying past the join (loop period 63.708 ms = 21.0 pitch periods, exact repetition from 0.931 s, residual -63.8 dB)",
+     "onset_settle": "time-varying past the join (loop period 63.708 ms = 21.0 pitch periods, exact repetition from 0.931 s, residual -63.8 dB)",
+     "damper": "time-varying past the join (loop period 63.708 ms = 21.0 pitch periods, exact repetition from 0.931 s, residual -63.8 dB)"
+    },
+    "snapshot": {
+     "balance": {
+      "label": "snapshot of one frozen cycle",
+      "group": 5
+     },
+     "centroid_pct": {
+      "label": "snapshot of one frozen cycle",
+      "group": 5
+     },
+     "register": {
+      "label": "snapshot of one frozen cycle",
+      "group": 5
+     },
+     "crest": {
+      "label": "snapshot of one frozen cycle",
+      "group": 5
+     }
+    },
+    "ladder_db": [
+     0.0,
+     12.9,
+     5.9,
+     10.6,
+     5.6,
+     -4.2,
+     -11.9,
+     -13.5,
+     -5.6,
+     -17.4,
+     -14.4,
+     -11.1,
+     -41.4,
+     -18.0,
+     -24.5,
+     -37.9,
+     -19.6,
+     -21.5,
+     -18.2,
+     -32.1
+    ],
+    "group": 5,
+    "group_notes": [
+     64
+    ]
+   },
+   "window": {
+    "model_s": 6.0,
+    "reference_s": 6.0
+   },
+   "floor_state": {
+    "declared": false,
+    "basis": null,
+    "source": "preroll",
+    "level_db_hz": null,
+    "stationary": {
+     "slope_db_s": -9.89,
+     "corr": 0.99,
+     "tone_slope_db_s": -9.57,
+     "floor_like": false
+    },
+    "clear_partials_tail": 8,
+    "hum_dbfs": null,
+    "censors": {
+     "body": null,
+     "tnr": null
+    },
+    "body_floor_db": null,
+    "body_hum_db": null
+   }
   },
   {
    "timbre": "gm026",
@@ -4943,7 +8203,102 @@
    "centroid_hz": 1021.1,
    "tnr_mask": {},
    "tnr_db": 46.14,
-   "stereo_width": 0.0
+   "stereo_width": 0.0,
+   "loop": {
+    "verdict": "looped",
+    "residual_db": -64.5,
+    "median_db": -60.8,
+    "frames": 6,
+    "reaching_frames": 6,
+    "reach_ms": 1782.9,
+    "period_ms": 63.708,
+    "join_s": 0.932,
+    "period_pitch_periods": 21.0,
+    "body_lines": {
+     "lines_below_f0": 12,
+     "on_lines": true
+    },
+    "excluded": {
+     "stretch": "reads the loop (loop period 63.708 ms = 21.0 pitch periods, exact repetition from 0.932 s, residual -64.5 dB)",
+     "tnr": "reads the loop (loop period 63.708 ms = 21.0 pitch periods, exact repetition from 0.932 s, residual -64.5 dB); periodising an unlooped note sample-exactly moved tnr -11..-14 dB and body +2..+7 dB at 100-300 ms; open: a seam statistic did not separate loop seams from arbitrary boundaries (naive loops 2.5-69, unlooped notes 1.3-6.5), so no row is granted a snapshot",
+     "decay": "time-varying past the join (loop period 63.708 ms = 21.0 pitch periods, exact repetition from 0.932 s, residual -64.5 dB)",
+     "aftersound": "time-varying past the join (loop period 63.708 ms = 21.0 pitch periods, exact repetition from 0.932 s, residual -64.5 dB)",
+     "doubling": "time-varying past the join (loop period 63.708 ms = 21.0 pitch periods, exact repetition from 0.932 s, residual -64.5 dB)",
+     "partial_tilt": "time-varying past the join (loop period 63.708 ms = 21.0 pitch periods, exact repetition from 0.932 s, residual -64.5 dB)",
+     "band_decay": "time-varying past the join (loop period 63.708 ms = 21.0 pitch periods, exact repetition from 0.932 s, residual -64.5 dB)",
+     "ring": "time-varying past the join (loop period 63.708 ms = 21.0 pitch periods, exact repetition from 0.932 s, residual -64.5 dB)",
+     "onset_settle": "time-varying past the join (loop period 63.708 ms = 21.0 pitch periods, exact repetition from 0.932 s, residual -64.5 dB)",
+     "damper": "time-varying past the join (loop period 63.708 ms = 21.0 pitch periods, exact repetition from 0.932 s, residual -64.5 dB)"
+    },
+    "snapshot": {
+     "balance": {
+      "label": "snapshot of one frozen cycle",
+      "group": 5
+     },
+     "centroid_pct": {
+      "label": "snapshot of one frozen cycle",
+      "group": 5
+     },
+     "register": {
+      "label": "snapshot of one frozen cycle",
+      "group": 5
+     },
+     "crest": {
+      "label": "snapshot of one frozen cycle",
+      "group": 5
+     }
+    },
+    "ladder_db": [
+     0.0,
+     12.9,
+     6.0,
+     10.7,
+     5.8,
+     -4.0,
+     -11.6,
+     -13.1,
+     -5.1,
+     -16.8,
+     -13.8,
+     -10.3,
+     -40.5,
+     -16.9,
+     -23.3,
+     -36.5,
+     -18.0,
+     -19.7,
+     -16.2,
+     -29.8
+    ],
+    "group": 5,
+    "group_notes": [
+     64
+    ]
+   },
+   "window": {
+    "model_s": 6.0,
+    "reference_s": 6.0
+   },
+   "floor_state": {
+    "declared": false,
+    "basis": null,
+    "source": "preroll",
+    "level_db_hz": null,
+    "stationary": {
+     "slope_db_s": -10.04,
+     "corr": 0.99,
+     "tone_slope_db_s": -9.57,
+     "floor_like": false
+    },
+    "clear_partials_tail": 8,
+    "hum_dbfs": null,
+    "censors": {
+     "body": null,
+     "tnr": null
+    },
+    "body_floor_db": null,
+    "body_hum_db": null
+   }
   }
  ],
  "summary": {
@@ -5232,17 +8587,113 @@
    }
   }
  },
- "field_measured_utc": {
-  "rows.body_f0_db": "2026-11-13T10:37:08+00:00",
-  "rows.body_under_db": "2026-11-13T10:37:08+00:00",
-  "rows.floor_body_db": "2026-11-13T10:37:08+00:00",
-  "rows.floor_db": "2026-11-13T10:37:08+00:00",
-  "rows.floor_octaves_db": "2026-11-13T10:37:08+00:00",
-  "rows.floor_source": "2026-11-13T10:37:08+00:00",
-  "rows.partial_clear_s": "2026-11-13T10:37:08+00:00",
-  "rows.partial_decay_clear_db_s": "2026-11-13T10:37:08+00:00",
-  "rows.valley_db": "2026-11-13T10:37:08+00:00",
-  "rows.valley_ladder_coupling": "2026-11-13T10:37:08+00:00",
-  "rows.valley_slope_db_oct": "2026-11-13T10:37:08+00:00"
+ "body_lines": {
+  "reason": "recurring fixed-frequency lines in the source",
+  "timbres": {
+   "gm026": {
+    "of": 5,
+    "lines": [],
+    "missed": [
+     {
+      "hz": 53.0,
+      "notes": 2,
+      "on_notes": [
+       56,
+       60
+      ],
+      "reason": "recurs on 2 notes; N=3"
+     }
+    ]
+   }
+  }
+ },
+ "recording_floor": {
+  "gm026": {
+   "declared": false,
+   "rows": 35,
+   "lines": [],
+   "lines_found": 0,
+   "hum": null,
+   "note_independent": false,
+   "basis": null,
+   "level_db_hz": -138.85,
+   "slope_db_oct": -9.24,
+   "agree_share": 0.185,
+   "stationary": {
+    "verdict": false,
+    "evaluable_rows": 35,
+    "floor_like_share": 0.0,
+    "slope_db_s": -9.58,
+    "tone_slope_db_s": -6.44,
+    "corr": 0.92,
+    "hum_reference_slope_db_s": null
+   },
+   "reason": "not note-independent"
+  }
+ },
+ "loop": {
+  "status": "looped",
+  "rows": 35,
+  "tested": 35,
+  "looped_rows": 30,
+  "borderline_rows": 5,
+  "not_testable_rows": 0,
+  "unweighted_rows": 30,
+  "groups": {
+   "0": [
+    40
+   ],
+   "1": [
+    44
+   ],
+   "2": [
+    48,
+    52
+   ],
+   "3": [
+    56
+   ],
+   "4": [
+    60
+   ],
+   "5": [
+    64
+   ]
+  },
+  "period_ms_median": 342.799,
+  "residual_db_median": -64.0,
+  "join_s_median": 1.115,
+  "read_to_join_rows": 0,
+  "excluded": {
+   "aftersound": "time-varying past the join (loop period 424.722 ms = 35.0 pitch periods, exact repetition from 1.289 s, residual -63.3 dB)",
+   "band_decay": "time-varying past the join (loop period 424.722 ms = 35.0 pitch periods, exact repetition from 1.289 s, residual -63.3 dB)",
+   "damper": "time-varying past the join (loop period 424.722 ms = 35.0 pitch periods, exact repetition from 1.289 s, residual -63.3 dB)",
+   "decay": "time-varying past the join (loop period 424.722 ms = 35.0 pitch periods, exact repetition from 1.289 s, residual -63.3 dB)",
+   "doubling": "time-varying past the join (loop period 424.722 ms = 35.0 pitch periods, exact repetition from 1.289 s, residual -63.3 dB)",
+   "onset_settle": "time-varying past the join (loop period 182.998 ms = 19.0 pitch periods, exact repetition from 1.114 s, residual -61.4 dB)",
+   "partial_tilt": "time-varying past the join (loop period 424.722 ms = 35.0 pitch periods, exact repetition from 1.289 s, residual -63.3 dB)",
+   "ring": "time-varying past the join (loop period 424.722 ms = 35.0 pitch periods, exact repetition from 1.289 s, residual -63.3 dB)",
+   "stretch": "reads the loop (loop period 424.722 ms = 35.0 pitch periods, exact repetition from 1.289 s, residual -63.3 dB)",
+   "tnr": "reads the loop (loop period 424.722 ms = 35.0 pitch periods, exact repetition from 1.289 s, residual -63.3 dB); periodising an unlooped note sample-exactly moved tnr -11..-14 dB and body +2..+7 dB at 100-300 ms; open: a seam statistic did not separate loop seams from arbitrary boundaries (naive loops 2.5-69, unlooped notes 1.3-6.5), so no row is granted a snapshot"
+  },
+  "snapshot": {
+   "balance": {
+    "label": "snapshot of one frozen cycle",
+    "independent_readings": 6
+   },
+   "centroid_pct": {
+    "label": "snapshot of one frozen cycle",
+    "independent_readings": 6
+   },
+   "register": {
+    "label": "snapshot of one frozen cycle",
+    "independent_readings": 6
+   },
+   "crest": {
+    "label": "snapshot of one frozen cycle",
+    "independent_readings": 6
+   }
+  },
+  "body_on_lines_rows": 0
  }
 }
