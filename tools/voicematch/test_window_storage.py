@@ -78,10 +78,57 @@ def test_a_write_stores_the_window_in_each_window_dependent_statistic(tmp_path):
 
 def test_a_kept_bound_keeps_the_window_it_was_set_on(tmp_path):
     gate = _gate(tmp_path, SHORT)
-    write_gate_file(_summary(), gate, "ref", 1.0, windows={"decay": LONG})
+    write_gate_file(_summary(), gate, "ref", 1.0, windows={"decay": SHORT})
     prov = json.loads(gate.read_text())["bounds"]["decay"]["provenance"]
     assert prov["median"]["outcome"] == "kept"
     assert prov["median"]["window"] == SHORT
+
+
+def _over(value):
+    return {"decay": {"median": value, "abs_median": value, "p90": value, "n": 10}}
+
+
+def test_a_bound_whose_window_moved_is_re_recorded_with_the_old_one_beside_it(tmp_path, capsys):
+    """The ratchet holds within one window; across two the old number bounds another quantity."""
+    gate = _gate(tmp_path, SHORT)
+    capsys.readouterr()
+    write_gate_file(_over(9.0), gate, "ref", 1.0, windows={"decay": LONG})
+    doc = json.loads(gate.read_text())
+    bound = doc["bounds"]["decay"]
+    assert bound["median"] == 9.0
+    prov = bound["provenance"]["median"]
+    assert prov["outcome"] == "rewindowed"
+    assert prov["window"] == LONG
+    assert prov["rewindowed_from"] == {"bound": 5.0, "window": SHORT}
+    out = capsys.readouterr().out
+    assert "rewindowed decay.median bound 9 (model residual 9 on the new window; was 5 on" in out
+    assert "kept the recorded bound" not in out
+    found = profile_gate.provenance_findings(doc)
+    assert ("decay", "median", 9.0) in found["rewindowed"] and not found["exceeded"]
+    assert any("re-recorded for a window change" in n for n in profile_gate.provenance_notes(doc))
+
+
+def test_a_bound_with_no_stored_window_is_judged_on_the_window_it_was_read_on(tmp_path):
+    gate = _gate(tmp_path, None)
+    write_gate_file(
+        _over(9.0), gate, "ref", 1.0, windows={"decay": LONG}, unrecorded_windows={"decay": SHORT}
+    )
+    prov = json.loads(gate.read_text())["bounds"]["decay"]["provenance"]["median"]
+    assert prov["outcome"] == "rewindowed"
+    write_gate_file(
+        _over(12.0), gate, "ref", 1.0, windows={"decay": LONG}, unrecorded_windows={"decay": SHORT}
+    )
+    prov = json.loads(gate.read_text())["bounds"]["decay"]["provenance"]["median"]
+    assert prov["outcome"] == "exceeded"
+
+
+def test_a_bound_on_the_unchanged_window_stays_tighten_only(tmp_path):
+    gate = _gate(tmp_path, None)
+    write_gate_file(
+        _over(9.0), gate, "ref", 1.0, windows={"decay": SHORT}, unrecorded_windows={"decay": SHORT}
+    )
+    b = json.loads(gate.read_text())["bounds"]["decay"]
+    assert b["median"] == 5.0 and b["provenance"]["median"]["outcome"] == "exceeded"
 
 
 def test_a_statistic_is_refused_on_a_window_other_than_the_one_it_was_recorded_on(tmp_path, capsys):

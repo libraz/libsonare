@@ -1034,11 +1034,12 @@ def check_gate(
 #: to have measured rather than tighten what it holds.
 RATCHETED_BOUND_KEYS = ("median", "abs_median", "p90")
 
-OUTCOME_NEW, OUTCOME_TIGHTENED, OUTCOME_KEPT, OUTCOME_EXCEEDED = (
+OUTCOME_NEW, OUTCOME_TIGHTENED, OUTCOME_KEPT, OUTCOME_EXCEEDED, OUTCOME_REWINDOWED = (
     "new",
     "tightened",
     "kept",
     "exceeded",
+    "rewindowed",
 )
 
 #: A computed `_unbounded` reason starts with this, which is what tells it from a
@@ -1189,6 +1190,7 @@ def _keep_the_tighter(
     now: str,
     built_utc: str | None,
     windows: dict[str, dict] | None = None,
+    unrecorded_windows: dict[str, dict] | None = None,
 ) -> list[str]:
     """Hold each bound to the tighter of the recorded one and the new one, and stamp it.
 
@@ -1206,6 +1208,13 @@ def _keep_the_tighter(
     was. A kept bound is therefore never read as freshly measured. A window-dependent
     statistic also records the `window` (see `window_spans`) its value was set on: this
     run's where the value is new, the old record's where it is kept.
+
+    The ratchet holds only within one window. A bound recorded on another window (its
+    own record, else @p unrecorded_windows: the capture-gate window every bound was read
+    on before windows were stored) bounds a different quantity, so it is re-recorded at
+    this run's value as `rewindowed`, with the old bound and window kept beside it and
+    the model's residual on the new window printed, since that bound records the error
+    rather than limiting it.
 
     Mutates `bounds` and returns (one line per bound it refused to loosen, one
     outcome line per statistic) for the caller to print — a ratchet that acts
@@ -1229,7 +1238,15 @@ def _keep_the_tighter(
             value, old, candidate = measured[dimension][key], was.get(key), row[key]
             old_prov = was_prov.get(key) or {}
             carried = (old_prov.get("set_utc"), old_prov.get("set_build"))
-            if old is None:
+            was_window = old_prov.get("window") or (unrecorded_windows or {}).get(dimension)
+            moved = (
+                window_mismatch(was_window, (windows or {}).get(dimension))
+                if old is not None
+                else None
+            )
+            if moved:
+                outcome, held, set_at = OUTCOME_REWINDOWED, now, (now, built_utc)
+            elif old is None:
                 outcome, held, set_at = OUTCOME_NEW, now, (now, built_utc)
             elif old >= candidate:
                 outcome = OUTCOME_KEPT if old == candidate else OUTCOME_TIGHTENED
@@ -1247,10 +1264,16 @@ def _keep_the_tighter(
                 declined.append(
                     f"{dimension}.{key} {candidate:g} -> {old:g} (measured {value:g}, {verdict})"
                 )
-            reported.append(
-                f"{outcome:<10} {dimension}.{key} bound {row[key]:g} (measured {value:g}"
-                + (f", was {old:g})" if old is not None and old != row[key] else ")")
-            )
+            if moved:
+                reported.append(
+                    f"{outcome:<10} {dimension}.{key} bound {row[key]:g} (model residual "
+                    f"{value:g} on the new window; was {old:g} on {format_window(was_window)})"
+                )
+            else:
+                reported.append(
+                    f"{outcome:<10} {dimension}.{key} bound {row[key]:g} (measured {value:g}"
+                    + (f", was {old:g})" if old is not None and old != row[key] else ")")
+                )
             provenance[key] = {
                 "set_utc": set_at[0],
                 "set_build": set_at[1],
@@ -1258,7 +1281,11 @@ def _keep_the_tighter(
                 "measured": round(value, 4),
                 "outcome": outcome,
             }
-            window = (windows or {}).get(dimension) if old is None or old > candidate else None
+            if moved:
+                provenance[key]["rewindowed_from"] = {"bound": old, "window": was_window}
+            window = (
+                (windows or {}).get(dimension) if old is None or moved or old > candidate else None
+            )
             window = window or old_prov.get("window")
             if window:
                 provenance[key]["window"] = window
@@ -1271,14 +1298,18 @@ def provenance_findings(gate: dict) -> dict[str, list[tuple]]:
 
     `exceeded`: (dimension, stat, held_utc) for a bound the last re-record found
     the model over and kept anyway. `unverified`: (dimension, stat, set_utc) for
-    a bound nothing records as ever having held. A gate in the older format
-    carries no provenance and reports neither.
+    a bound nothing records as ever having held. `rewindowed`: (dimension, stat,
+    residual) for a bound re-recorded because its window moved, which records the
+    model's error there rather than limiting it. A gate in the older format carries
+    no provenance and reports none of them.
     """
-    out: dict[str, list[tuple]] = {"exceeded": [], "unverified": []}
+    out: dict[str, list[tuple]] = {"exceeded": [], "unverified": [], "rewindowed": []}
     for dim, bound in (gate.get("bounds") or {}).items():
         for stat, p in (bound.get("provenance") or {}).items():
             if p.get("outcome") == OUTCOME_EXCEEDED:
                 out["exceeded"].append((dim, stat, p.get("held_utc")))
+            elif p.get("outcome") == OUTCOME_REWINDOWED:
+                out["rewindowed"].append((dim, stat, p.get("measured")))
             elif p.get("held_utc") is None:
                 out["unverified"].append((dim, stat, p.get("set_utc")))
     return out
@@ -1290,6 +1321,10 @@ def provenance_notes(gate: dict) -> list[str]:
     notes = [
         f"{dim}.{stat}: re-recorded over a kept bound, last held {held or 'unknown'}"
         for dim, stat, held in found["exceeded"]
+    ]
+    notes += [
+        f"{dim}.{stat}: re-recorded for a window change, model residual {residual}"
+        for dim, stat, residual in found["rewindowed"]
     ]
     since: dict[str, list[str]] = {}
     for dim, stat, set_utc in found["unverified"]:
@@ -1407,11 +1442,13 @@ def write_gate_file(
     censors: CensorTally | None = None,
     allow_dirty: bool = False,
     windows: dict[str, dict] | None = None,
+    unrecorded_windows: dict[str, dict] | None = None,
 ) -> int:
     """Record the current numbers as the bounds a later run is held to.
 
     @p windows (see `window_spans`) is stored in the provenance of each window-dependent
     statistic whose value this write sets, so a later run can tell it was read on another.
+    @p unrecorded_windows is the window a bound with no stored window was read on.
 
     The margin is multiplicative and deliberately not tight: a bound that fails
     on measurement noise gets switched off, and a switched-off gate catches
@@ -1472,7 +1509,7 @@ def write_gate_file(
     if tree["dirty"]:
         print(f"recording on a dirty tree ({len(tree['dirty'])} files): {', '.join(tree['dirty'])}")
     declined, reported = _keep_the_tighter(
-        bounds, measured, gate_path, now, build.get("built_utc"), windows
+        bounds, measured, gate_path, now, build.get("built_utc"), windows, unrecorded_windows
     )
     for bound in bounds.values():
         for prov in (bound.get("provenance") or {}).values():

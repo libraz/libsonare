@@ -1815,6 +1815,7 @@ def compare(
         model_windows=model_windows,
         reference_spans=reference_spans,
     )
+    unrecorded_windows = window_spans(gate_s, cap["gate_ms"], max(tails_s, default=None))
     censored = {"damper": len(damper_censored)}
     print_summary_table(summary, spread, attempted, windows, censored)
     print_vanished_dimensions(
@@ -1886,6 +1887,7 @@ def compare(
             censors=tally,
             allow_dirty=allow_dirty,
             windows=windows,
+            unrecorded_windows=unrecorded_windows,
         )
     return 0
 
