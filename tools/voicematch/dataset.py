@@ -74,10 +74,12 @@ from _repo import REPO_ROOT
 from build_lib import dylib_path
 from catalogue import dump_catalogue
 from knobs import (
+    KNOB_CLASSES_PATH,
     Knob,
     auto_spec,
     build_knobs,
     format_value,
+    load_knob_classes,
     tunable_overrides,
 )
 from render_rows import render_model_rows_subprocess
@@ -198,7 +200,9 @@ def generate(args) -> int:
     catalogue = dump_catalogue(
         args.program, args.pattern, str(dylib), sr=SR, notes=args.notes, bank=args.bank
     )
-    spec = auto_spec(args.program, catalogue, bank=args.bank)
+    # The same space a fit searches: the knob classes hold identity and measured fields out.
+    classes = load_knob_classes(KNOB_CLASSES_PATH, catalogue)
+    spec = auto_spec(args.program, catalogue, bank=args.bank, classes=classes)
     knobs = build_knobs(spec, {}, catalogue)
     runtime = [k for k in knobs if k.tunable is not None]
     if len(runtime) != len(knobs):

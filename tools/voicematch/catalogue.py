@@ -127,6 +127,9 @@ class Catalogue:
     #: programs that bind one appear; an absent program is heard as its voice
     #: alone, which is nearly all of them.
     rigs: dict[int, str] = field(default_factory=dict)
+    #: Engine constant to the interval its `SONARE_TUNABLE` declares for itself
+    #: (a `#tunable_bound` line). Not a clamp: nothing in the engine enforces it.
+    tunable_bounds: dict[str, tuple[float, float]] = field(default_factory=dict)
 
     def patch_for(self, program: int, bank: int = 0) -> str | None:
         """The patch voicing a (program, bank), falling back to the capital tone."""
@@ -145,6 +148,31 @@ class Catalogue:
         """The admissible range of the field a patch key addresses, if bounded."""
         _, _, path = key.partition(".")
         return self.bounds.get(path)
+
+
+def parse_dump(text: str) -> Catalogue:
+    """Read the text a `SONARE_TUNING_DUMP` run wrote back into a catalogue."""
+    defaults: dict[str, float] = {}
+    programs: dict[tuple[int, int], str] = {}
+    bounds: dict[str, tuple[float, float]] = {}
+    modes: dict[str, str] = {}
+    rigs: dict[int, str] = {}
+    tunable_bounds: dict[str, tuple[float, float]] = {}
+    for line in text.splitlines():
+        parts = line.split("\t")
+        if parts[0] == "#program" and len(parts) == 4:
+            programs[(int(parts[1]), int(parts[2]))] = parts[3]
+        elif parts[0] == "#mode" and len(parts) == 3:
+            modes[parts[1]] = parts[2]
+        elif parts[0] == "#rig" and len(parts) == 3:
+            rigs[int(parts[1])] = parts[2]
+        elif parts[0] == "#bound" and len(parts) == 4:
+            bounds[parts[1]] = (float(parts[2]), float(parts[3]))
+        elif parts[0] == "#tunable_bound" and len(parts) == 4:
+            tunable_bounds[parts[1]] = (float(parts[2]), float(parts[3]))
+        elif len(parts) == 2:
+            defaults[parts[0]] = float(parts[1])
+    return Catalogue(defaults, programs, bounds, modes, rigs, tunable_bounds)
 
 
 def dump_catalogue(
@@ -201,24 +229,7 @@ def dump_catalogue(
                 "the render produced no knob dump — the library was built without "
                 "BUILD_TUNING, so SONARE_TUNING_DUMP was ignored"
             )
-        defaults: dict[str, float] = {}
-        programs: dict[tuple[int, int], str] = {}
-        bounds: dict[str, tuple[float, float]] = {}
-        modes: dict[str, str] = {}
-        rigs: dict[int, str] = {}
-        for line in dump.read_text().splitlines():
-            parts = line.split("\t")
-            if parts[0] == "#program" and len(parts) == 4:
-                programs[(int(parts[1]), int(parts[2]))] = parts[3]
-            elif parts[0] == "#mode" and len(parts) == 3:
-                modes[parts[1]] = parts[2]
-            elif parts[0] == "#rig" and len(parts) == 3:
-                rigs[int(parts[1])] = parts[2]
-            elif parts[0] == "#bound" and len(parts) == 4:
-                bounds[parts[1]] = (float(parts[2]), float(parts[3]))
-            elif len(parts) == 2:
-                defaults[parts[0]] = float(parts[1])
-    return Catalogue(defaults, programs, bounds, modes, rigs)
+        return parse_dump(dump.read_text())
 
 
 # A drum note's patch is keyed by note number rather than by a name, because a

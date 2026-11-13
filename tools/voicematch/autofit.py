@@ -310,17 +310,24 @@ from diagnose import run_diagnosis
 from eval_cache import digest, file_digest, open_cache, source_digest
 from fit_quality import quality_report
 from knobs import (
+    KNOB_CLASSES_PATH,
+    TUNABLE_BOUNDS_PATH,
+    KnobClasses,
     apply_start_overrides,
     at_bound,
-    auto_spec,
+    auto_spec_report,
     build_knobs,
     check_base_overrides,
     clamp_check,
     clamp_warning,
+    declared_ranges,
     format_value,
+    hand_spec_warnings,
     head_of,
     knob_bounds,
     load_base_overrides,
+    load_declared_bounds,
+    load_knob_classes,
     load_spec,
     load_spec_weights,
     load_start_overrides,
@@ -1993,6 +2000,7 @@ def run(args, argv: list[str] | None = None) -> int:
     # builds first — the same build the run then uses.
     auto = args.spec == "auto"
     catalogue: Catalogue | None = None
+    classes: KnobClasses | None = None
     if auto or args.dump_knobs:
         catalogue = _tuning_catalogue(args, build_dir, bank=args.bank)
         print(
@@ -2025,14 +2033,17 @@ def run(args, argv: list[str] | None = None) -> int:
         # line exists: `auto_spec` drops a field the clamp leaves unbounded and
         # one whose range collapses, so anything scaled off the rows overshoots.
         try:
+            classes = load_knob_classes(KNOB_CLASSES_PATH, catalogue)
             taken = len(
-                auto_spec(
+                auto_spec_report(
                     args.program,
                     catalogue,
                     drum_note=args.drum_note,
                     bank=args.bank,
                     patch_only=args.program_only,
-                )
+                    classes=classes,
+                    open_groups=tuple(args.open_groups),
+                )[0]
             )
             print(f"# fit_knobs\t{taken}\tof {len(rows)} rows, what --spec auto takes")
         except ValueError as exc:
@@ -2045,12 +2056,15 @@ def run(args, argv: list[str] | None = None) -> int:
         return 0
 
     if auto:
-        spec = auto_spec(
+        classes = load_knob_classes(KNOB_CLASSES_PATH, catalogue)
+        spec, auto_report = auto_spec_report(
             args.program,
             catalogue,
             drum_note=args.drum_note,
             bank=args.bank,
             patch_only=args.program_only,
+            classes=classes,
+            open_groups=tuple(args.open_groups),
         )
         subject = (
             f"drum note {args.drum_note}"
@@ -2068,6 +2082,8 @@ def run(args, argv: list[str] | None = None) -> int:
             f"{' alone' if args.program_only else ' + its engine'})",
             file=sys.stderr,
         )
+        for line in auto_report.lines():
+            print(f"  {line}", file=sys.stderr)
     else:
         spec = load_spec(Path(args.spec).resolve())
         if lib:
@@ -2082,6 +2098,13 @@ def run(args, argv: list[str] | None = None) -> int:
 
     pristine: dict[Path, str] = {}
     knobs = build_knobs(spec, pristine, catalogue)
+
+    # A hand spec may name a field the table holds out of a search; it is theirs
+    # to name, and the run says what the table thinks of it.
+    if not auto and catalogue is not None:
+        classes = load_knob_classes(KNOB_CLASSES_PATH, catalogue)
+        for line in hand_spec_warnings(knobs, classes):
+            print(f"warning: {line}", file=sys.stderr)
 
     # Before the base check, so a key in both reads as that and not as a knob clash.
     args.start_overrides = apply_start_overrides(
@@ -2106,7 +2129,12 @@ def run(args, argv: list[str] | None = None) -> int:
     # Before any render: a range the engine clamps away is inert, and the run
     # would otherwise search it and write back a value the voice never uses.
     clamp_bounds = knob_bounds(knobs, catalogue)
-    clamp_entries, clamp_refusals = clamp_check(knobs, clamp_bounds)
+    declared, declared_mismatches = declared_ranges(
+        knobs, catalogue, load_declared_bounds(TUNABLE_BOUNDS_PATH)
+    )
+    clamp_entries, clamp_refusals = clamp_check(knobs, clamp_bounds, declared)
+    for line in declared_mismatches:
+        print(f"warning: declared range: {line}", file=sys.stderr)
     if clamp_refusals:
         raise ValueError(
             "knob range(s) wholly outside the engine clamp:\n  " + "\n  ".join(clamp_refusals)
@@ -2378,6 +2406,17 @@ def build_parser() -> argparse.ArgumentParser:
         "could object to a shared constant moving, and a run "
         "over a grid of voices in turn moves the ground under "
         "the ones already done",
+    )
+    parser.add_argument(
+        "--open-group",
+        action="append",
+        default=[],
+        dest="open_groups",
+        metavar="GROUP",
+        help="with --spec auto: offer every member of a compensating group "
+        "(its fields only mean something together; a group is searched whole "
+        "or not at all, and by default not at all). Repeatable; the groups "
+        "left closed are listed at start",
     )
     parser.add_argument(
         "--room",

@@ -9,16 +9,20 @@ behind a rebuild.
 `auto_spec` derives the whole list from the library's own catalogue instead of a
 spec file, and `_auto_range` is where each knob's search range comes from — the
 clamp bound the library reports where there is one, a name-and-default heuristic
-only where there is not.
+only where there is not. `knob-classes.json` says which of those fields a search
+may move at all (identity, switch, set by measurement, stage enable, compensating
+group), and `load_knob_classes` is its reader.
 """
 
 from __future__ import annotations
 
 import fnmatch
 import json
+import math
 import re
 import sys
-from dataclasses import dataclass
+from collections import defaultdict
+from dataclasses import dataclass, field
 from pathlib import Path
 
 from _repo import REPO_ROOT
@@ -31,6 +35,10 @@ from catalogue import (
     scan_tunables,
 )
 from toneclass import played_vibrato
+
+HERE = Path(__file__).resolve().parent
+KNOB_CLASSES_PATH = HERE / "knob-classes.json"
+TUNABLE_BOUNDS_PATH = HERE / "tunable-bounds.json"
 
 
 @dataclass
@@ -516,6 +524,303 @@ def _offered(key: str) -> bool:
     return not any(fnmatch.fnmatchcase(key, pattern) for pattern in PINNED_KEYS)
 
 
+#: The classes a `knob-classes.json` entry may carry. An entry without one only
+#: records a note about the field (a gate), and the field is searched as usual.
+KNOB_CLASS_NAMES = (
+    "identity",
+    "switch",
+    "set_by_measurement",
+    "stage_enable",
+    "compensating_group",
+)
+
+#: Classes `--spec auto` never offers. A hand spec may still name one, with a warning.
+NOT_SEARCHED = ("identity", "switch", "set_by_measurement")
+
+#: How far above its off value a clipped stage-enable range starts, as a fraction
+#: of the range it had: the smallest step that is still a stage that is on.
+STAGE_ENABLE_STEP = 1e-3
+
+# The catalogue spells an array element `modes0`, `ops1`, `ranks3`; the table spells it `[*]`.
+_INDEX = re.compile(r"(?<=[A-Za-z_])\d+(?=\.|$)")
+_PATTERN_TOKENS = re.compile(r"(\[\*\]|\*)")
+
+
+def _normalize_tail(tail: str) -> str:
+    return _INDEX.sub("[*]", tail)
+
+
+def _spellings(key: str) -> list[str]:
+    """The forms a catalogue key can be named by: whole, without its patch, and indexed."""
+    tail = key.partition(".")[2]
+    return [key, tail, _normalize_tail(tail)] if tail else [key]
+
+
+class _Patterns:
+    """A set of key patterns: a literal, `[*]` for an array index, `*` for a glob.
+
+    A pattern names a catalogue key whole (an engine constant, `piano_voice.kX`) or
+    without the patch prefix a patch field carries (`piano.strings`).
+    """
+
+    def __init__(self, patterns):
+        self.exact: set[str] = set()
+        self.globs: list[tuple[re.Pattern, str]] = []
+        for p in patterns:
+            if "*" in p.replace("[*]", ""):
+                regex = "".join(
+                    ".*" if t == "*" else re.escape(t) for t in _PATTERN_TOKENS.split(p) if t
+                )
+                self.globs.append((re.compile(regex), p))
+            else:
+                self.exact.add(p)
+
+    def find(self, key: str) -> str | None:
+        """The pattern naming @p key, or None."""
+        spellings = _spellings(key)
+        for s in spellings:
+            if s in self.exact:
+                return s
+        for regex, p in self.globs:
+            if any(regex.fullmatch(s) for s in spellings):
+                return p
+        return None
+
+    def unresolved(self, keys) -> list[str]:
+        """The patterns no key in @p keys is named by, sorted."""
+        seen = {s for k in keys for s in _spellings(k)}
+        missing = {p for p in self.exact if p not in seen}
+        missing |= {p for regex, p in self.globs if not any(regex.fullmatch(s) for s in seen)}
+        return sorted(missing)
+
+
+@dataclass(frozen=True)
+class KnobClass:
+    """One `knob-classes.json` entry.
+
+    `off_value` is what a stage-enable field holds while its stage is absent, and
+    `off_within` widens that to a band (a field absent at or below -119 dB is
+    `off_value=-120`, `off_within=1`). `gates` records a field another field
+    switches off. `evidence` says what a compensating-group member's membership rests on.
+    """
+
+    key: str
+    cls: str | None
+    lane: str = ""
+    basis: str = ""
+    group: str | None = None
+    evidence: str = ""
+    off_value: float = 0.0
+    off_within: float = 0.0
+    gates: str = ""
+    type: str = ""
+
+    def is_off(self, value: float) -> bool:
+        """Whether a shipped @p value leaves this stage-enable field's stage absent."""
+        return abs(value - self.off_value) <= self.off_within
+
+
+@dataclass
+class KnobClasses:
+    """The classification of the catalogue's fields, as `knob-classes.json` states it.
+
+    `entries` are keyed by pattern; `notes` explain a field the table does not
+    classify (a field no override reaches); `pending_landing` holds entries for keys
+    the library does not report yet; `switch_candidates` lists float-typed fields
+    whose shipped values are all integers, for the lanes to judge.
+    """
+
+    entries: dict[str, KnobClass]
+    notes: dict[str, str] = field(default_factory=dict)
+    pending_landing: dict[str, dict] = field(default_factory=dict)
+    switch_candidates: dict[str, dict] = field(default_factory=dict)
+
+    def __post_init__(self) -> None:
+        self._entry_patterns = _Patterns(self.entries)
+        self._note_patterns = _Patterns(self.notes)
+        self._memo: dict[str, KnobClass | None] = {}
+        self.groups: dict[str, list[str]] = defaultdict(list)
+        for key, entry in self.entries.items():
+            if entry.group:
+                self.groups[entry.group].append(key)
+
+    def classify(self, key: str) -> KnobClass | None:
+        """The entry naming a catalogue @p key, or None for a field the table leaves alone."""
+        if key not in self._memo:
+            pattern = self._entry_patterns.find(key)
+            self._memo[key] = self.entries[pattern] if pattern is not None else None
+        return self._memo[key]
+
+    def class_of(self, key: str) -> str | None:
+        """The class of a catalogue @p key, or None when it has none."""
+        entry = self.classify(key)
+        return entry.cls if entry is not None else None
+
+    def note_for(self, key: str) -> str | None:
+        """The note recorded for a catalogue @p key, if any."""
+        pattern = self._note_patterns.find(key)
+        return self.notes[pattern] if pattern is not None else None
+
+    def group_members(self, group: str, keys) -> list[str]:
+        """The keys among @p keys that belong to @p group."""
+        return [k for k in keys if (e := self.classify(k)) is not None and e.group == group]
+
+
+def load_knob_classes(path: Path, catalogue: Catalogue) -> KnobClasses:
+    """Read `knob-classes.json` and check every entry against the library's catalogue.
+
+    An entry that names no key the catalogue reports raises, naming it: a field
+    that was renamed or removed must not quietly lose its class and become
+    searchable. `pending_landing` and `notes` are exempt.
+    """
+    data = json.loads(Path(path).read_text())
+    raw = data.get("entries")
+    if not isinstance(raw, dict):
+        raise ValueError(f"{path}: no 'entries' object")  # noqa: TRY004 -- one error class per document
+    entries: dict[str, KnobClass] = {}
+    for key, e in raw.items():
+        cls = e.get("class")
+        if cls is not None and cls not in KNOB_CLASS_NAMES:
+            raise ValueError(
+                f"{path}: entry {key!r} has class {cls!r}, not one of {KNOB_CLASS_NAMES}"
+            )
+        if (cls == "compensating_group") != bool(e.get("group")):
+            raise ValueError(
+                f"{path}: entry {key!r} must carry 'group' exactly when its class is compensating_group"
+            )
+        entries[key] = KnobClass(
+            key=key,
+            cls=cls,
+            lane=e.get("lane", ""),
+            basis=e.get("basis", ""),
+            group=e.get("group"),
+            evidence=e.get("evidence", ""),
+            off_value=float(e.get("off_value", 0.0)),
+            off_within=float(e.get("off_within", 0.0)),
+            gates=e.get("gates", ""),
+            type=e.get("type", ""),
+        )
+    classes = KnobClasses(
+        entries,
+        notes=data.get("notes", {}),
+        pending_landing=data.get("pending_landing", {}),
+        switch_candidates=data.get("switch_candidates", {}),
+    )
+    missing = classes._entry_patterns.unresolved(catalogue.defaults)
+    if missing:
+        named = "; ".join(f"{k!r} (lane {entries[k].lane or '?'})" for k in missing)
+        raise ValueError(
+            f"{Path(path).name}: {len(missing)} entr{'y' if len(missing) == 1 else 'ies'} "
+            f"name no key the catalogue reports: {named}. The field was renamed or removed; "
+            f"rename or remove the entry, or it loses its class."
+        )
+    return classes
+
+
+def _patch_heads(catalogue: Catalogue) -> set[str]:
+    return set(catalogue.programs.values()) | set(catalogue.modes)
+
+
+def _is_patch_head(head: str, patches: set[str]) -> bool:
+    return (
+        head in patches or bool(DRUM_PATCH_KEY.match(head)) or bool(re.fullmatch(r"fam\d+", head))
+    )
+
+
+def switch_candidates(catalogue: Catalogue, classes: KnobClasses) -> dict[str, dict]:
+    """Patch fields typed as floats whose shipped values, bank-wide, are all integers.
+
+    Such a field may be a selector in float clothing, which a search would move
+    as a continuum. It is a list for the lanes to judge, not a classification: a
+    field the table already holds as identity, switch or set by measurement is
+    left out, and so is one that takes a single value everywhere.
+    """
+    patches = _patch_heads(catalogue)
+    values: dict[str, set[float]] = defaultdict(set)
+    sample: dict[str, str] = {}
+    integral: dict[str, bool] = {}
+    for key, v in catalogue.defaults.items():
+        head, _, tail = key.partition(".")
+        if not tail or not _is_patch_head(head, patches):
+            continue
+        norm = _normalize_tail(tail)
+        sample.setdefault(norm, key)
+        integral[norm] = integral.get(norm, True) and math.isfinite(v) and v == int(v)
+        values[norm].add(v)
+    out: dict[str, dict] = {}
+    for norm in sorted(values):
+        if not integral[norm] or len(values[norm]) < 2:
+            continue
+        entry = classes.classify(sample[norm])
+        if entry is not None and (entry.cls in NOT_SEARCHED or entry.type):
+            continue
+        out[norm] = {
+            "class": entry.cls if entry is not None else None,
+            "values": sorted(values[norm]),
+        }
+    return out
+
+
+@dataclass
+class AutoReport:
+    """What `auto_spec_report` left out of the knob list, and why.
+
+    `excluded` maps a class to the keys it kept out; `stage_off` holds the stage
+    enables whose patch ships the stage absent; `clipped` the stage enables whose
+    range was cut so it cannot reach its off value; `groups_closed` the
+    compensating groups no knob was offered for, by the number of members present.
+    """
+
+    excluded: dict[str, list[str]] = field(default_factory=dict)
+    stage_off: list[str] = field(default_factory=list)
+    clipped: list[str] = field(default_factory=list)
+    groups_closed: dict[str, int] = field(default_factory=dict)
+    groups_open: list[str] = field(default_factory=list)
+
+    def lines(self) -> list[str]:
+        """The start-up summary: counts by class, then one line per closed group."""
+        counts = [f"{c} {len(self.excluded[c])}" for c in NOT_SEARCHED if self.excluded.get(c)]
+        if self.stage_off:
+            counts.append(f"stage_enable (stage absent here) {len(self.stage_off)}")
+        if self.groups_closed:
+            counts.append(
+                f"compensating_group {sum(self.groups_closed.values())} "
+                f"({len(self.groups_closed)} groups)"
+            )
+        out = []
+        if counts:
+            out.append("--spec auto leaves out by class: " + ", ".join(counts))
+        if self.clipped:
+            out.append(
+                f"--spec auto cut the range of {len(self.clipped)} stage_enable knob(s) "
+                f"so they cannot reach their off value"
+            )
+        out.extend(
+            f"group {g} not opened (open it with --open-group {g})" for g in self.groups_closed
+        )
+        return out
+
+
+def _clip_off(
+    lo: float, hi: float, log: bool, value: float, entry: KnobClass
+) -> tuple[float, float, bool] | None:
+    """Cut a stage-enable range so it stays on the side of the off value the patch ships.
+
+    Returns None when nothing is left.
+    """
+    step = (hi - lo) * STAGE_ENABLE_STEP
+    near = entry.off_value + entry.off_within
+    far = entry.off_value - entry.off_within
+    if value > entry.off_value:
+        if lo <= near:
+            lo = near + step
+    elif hi >= far:
+        hi = far - step
+    if hi <= lo:
+        return None
+    return lo, hi, log and lo > 0.0
+
+
 def auto_spec(
     program: int,
     catalogue: Catalogue,
@@ -523,7 +828,31 @@ def auto_spec(
     drum_note: int | None = None,
     bank: int = 0,
     patch_only: bool = False,
+    classes: KnobClasses | None = None,
+    open_groups: tuple[str, ...] = (),
 ) -> list[dict]:
+    """The knob list of `auto_spec_report`, without the account of what it left out."""
+    return auto_spec_report(
+        program,
+        catalogue,
+        drum_note=drum_note,
+        bank=bank,
+        patch_only=patch_only,
+        classes=classes,
+        open_groups=open_groups,
+    )[0]
+
+
+def auto_spec_report(
+    program: int,
+    catalogue: Catalogue,
+    *,
+    drum_note: int | None = None,
+    bank: int = 0,
+    patch_only: bool = False,
+    classes: KnobClasses | None = None,
+    open_groups: tuple[str, ...] = (),
+) -> tuple[list[dict], AutoReport]:
     """Build a knob spec for `program` from the library's own catalogue.
 
     Two groups are offered: the patch fields of whichever patch voices this
@@ -546,6 +875,13 @@ def auto_spec(
     `bank` is the GS variation. It has to be here rather than only on the render
     side: a variation is its own patch, so offering the capital tone's knobs
     against a render of bank 8 fits a patch nothing played.
+
+    `classes` is the field classification (`knob-classes.json`). With it,
+    identity, switch and set-by-measurement fields are not offered; a stage-enable
+    field is decided from the value this patch ships (left out where the stage is
+    absent, its range cut clear of the off value where it is present); and a
+    compensating group is offered whole when named in `open_groups`, and not at
+    all otherwise. Without it every field the heuristics can range is offered.
     """
     defaults = catalogue.defaults
     if drum_note is not None:
@@ -582,12 +918,60 @@ def auto_spec(
         else sorted(k for k in defaults if engine and k.startswith(f"{engine}_voice."))
     )
 
+    report = AutoReport()
+    candidates = patch_keys + engine_keys
+    if open_groups and classes is None:
+        raise ValueError("--open-group needs the field classes (knob-classes.json)")
+    if classes is not None:
+        known = sorted(classes.groups)
+        for group in open_groups:
+            if group not in classes.groups:
+                raise ValueError(
+                    f"--open-group {group!r}: no such compensating group (known: {known})"
+                )
+            gone = [m for m in classes.groups[group] if _Patterns([m]).unresolved(candidates)]
+            if len(gone) == len(classes.groups[group]):
+                raise ValueError(
+                    f"--open-group {group!r}: none of its members is among this "
+                    f"{'patch' if patch_only else 'patch or engine'}'s knobs"
+                )
+            if gone:
+                raise ValueError(
+                    f"--open-group {group!r}: a group is opened whole or not at all, and "
+                    f"{', '.join(gone)} is not among this "
+                    f"{'patch' if patch_only else 'patch or engine'}'s knobs"
+                    f"{' (drop --program-only)' if patch_only else ''}"
+                )
+
     vibrato = played_vibrato(program, drum_note=drum_note)
     spec: list[dict] = []
-    for k in patch_keys + engine_keys:
+    offered_group: dict[str, set[str]] = defaultdict(set)
+    seen_group: dict[str, set[str]] = defaultdict(set)
+    for k in candidates:
         rng = _auto_range(k, defaults[k], catalogue.bound_for(k))
+        entry = classes.classify(k) if classes is not None else None
+        if entry is not None and entry.group:
+            seen_group[entry.group].add(k)
         if rng is None:
             continue
+        if entry is not None and entry.cls in NOT_SEARCHED:
+            report.excluded.setdefault(entry.cls, []).append(k)
+            continue
+        if entry is not None and entry.cls == "stage_enable":
+            if entry.is_off(defaults[k]):
+                report.stage_off.append(k)
+                continue
+            clipped = _clip_off(*rng[:2], rng[2], defaults[k], entry)
+            if clipped is None:
+                report.stage_off.append(k)
+                continue
+            if clipped != rng:
+                report.clipped.append(k)
+            rng = clipped
+        if entry is not None and entry.cls == "compensating_group":
+            if entry.group not in open_groups:
+                continue
+            offered_group[entry.group].add(k)
         if vibrato and k.endswith(".lfo_rate_hz"):
             rng = (*VIBRATO_RATE_RANGE_HZ, True)
         lo, hi, log = rng
@@ -600,7 +984,99 @@ def auto_spec(
                 "start": min(max(defaults[k], lo), hi),
             }
         )
-    return spec
+    for group, keys in seen_group.items():
+        if group in open_groups:
+            left = sorted(keys - offered_group[group])
+            if left:
+                raise ValueError(
+                    f"--open-group {group!r}: a group is opened whole or not at all, and "
+                    f"{', '.join(left)} has no search range here"
+                )
+            report.groups_open.append(group)
+        else:
+            report.groups_closed[group] = len(keys)
+    return spec, report
+
+
+def hand_spec_warnings(knobs: list[Knob], classes: KnobClasses | None) -> list[str]:
+    """One line per runtime knob a hand spec names that `--spec auto` would never offer.
+
+    The spec is explicit, so the knob stays; the line says the table holds it
+    out of a search and why.
+    """
+    if classes is None:
+        return []
+    out = []
+    for k in knobs:
+        entry = classes.classify(k.tunable) if k.tunable is not None else None
+        if entry is None or entry.cls not in NOT_SEARCHED:
+            continue
+        what = (
+            "set by measurement, not searched"
+            if entry.cls == "set_by_measurement"
+            else f"a{'n' if entry.cls == 'identity' else ''} {entry.cls} knob, not searched"
+        )
+        out.append(
+            f"{k.label}: {what} by --spec auto; searched here because the spec names it"
+            + (f" ({entry.basis})" if entry.basis else "")
+        )
+    return out
+
+
+#: How a range other than the engine's own clamp is named in a clamp check.
+DECLARED_FILE = "declared range (file)"
+DECLARED_MACRO = "declared range (macro)"
+
+
+def load_declared_bounds(path: Path) -> dict[str, tuple[float, float]]:
+    """The engine-constant ranges `tunable-bounds.json` declares, by `<file stem>.<kName>`.
+
+    Only its `bounds` block: `patch_fields_pending_clamp` proposes ranges for patch
+    fields that `patch_clamp.h` does not carry yet, and are not search bounds.
+    """
+    data = json.loads(Path(path).read_text())
+    out: dict[str, tuple[float, float]] = {}
+    for key, e in data.get("bounds", {}).items():
+        lo, hi = float(e["lo"]), float(e["hi"])
+        if lo >= hi:
+            raise ValueError(f"{Path(path).name}: {key} has lo {lo} >= hi {hi}")
+        out[key] = (lo, hi)
+    return out
+
+
+def declared_ranges(
+    knobs: list[Knob],
+    catalogue: Catalogue | None,
+    declared: dict[str, tuple[float, float]],
+) -> tuple[dict[str, tuple[float, float, str]], list[str]]:
+    """The declared range of each knob that addresses an engine constant, by label.
+
+    Two places declare one: `tunable-bounds.json` and a macro in the source, which
+    the library reports as a `#tunable_bound` line. Each is labelled with where it
+    came from. A key in both with different intervals is a mismatch, reported in
+    the second return value, and the macro is the one used because it is the code.
+    """
+    out: dict[str, tuple[float, float, str]] = {}
+    mismatches: list[str] = []
+    patches = _patch_heads(catalogue) if catalogue is not None else set()
+    for k in knobs:
+        if k.tunable is None:
+            continue
+        head = k.tunable.partition(".")[0]
+        if head in patches or DRUM_PATCH_KEY.match(head):
+            continue
+        from_file = declared.get(k.tunable)
+        from_macro = catalogue.tunable_bounds.get(k.tunable) if catalogue is not None else None
+        if from_file and from_macro and from_file != from_macro:
+            mismatches.append(
+                f"{k.label}: {DECLARED_FILE} [{from_file[0]:g}, {from_file[1]:g}] differs from "
+                f"{DECLARED_MACRO} [{from_macro[0]:g}, {from_macro[1]:g}]; the macro is checked"
+            )
+        if from_macro:
+            out[k.label] = (*from_macro, DECLARED_MACRO)
+        elif from_file:
+            out[k.label] = (*from_file, DECLARED_FILE)
+    return out, mismatches
 
 
 def knob_bounds(knobs: list[Knob], catalogue: Catalogue | None) -> dict[str, tuple[float, float]]:
@@ -627,7 +1103,9 @@ def knob_bounds(knobs: list[Knob], catalogue: Catalogue | None) -> dict[str, tup
 
 
 def clamp_check(
-    knobs: list[Knob], bounds: dict[str, tuple[float, float]]
+    knobs: list[Knob],
+    bounds: dict[str, tuple[float, float]],
+    declared: dict[str, tuple[float, float, str]] | None = None,
 ) -> tuple[list[dict], list[str]]:
     """Compare each knob's search range with its field's clamp before any render.
 
@@ -636,22 +1114,34 @@ def clamp_check(
     outside, or a start outside the clamp, gets an entry naming the inert part. A
     runtime knob with no bound gets an `unbounded` entry: no clamp was reported,
     which is not the same as the field being safe. A knob inside its clamp has none.
+
+    `declared` holds the ranges an engine constant is declared to have
+    (`declared_ranges`). Nothing clamps such a constant, so a range outside it is
+    not inert; it is a range the declaration rules out, and the entry says which
+    declaration. The clamp wins where a label has both.
     """
+    declared = declared or {}
     entries: list[dict] = []
     refusals: list[str] = []
     for k in knobs:
         if k.tunable is None:
             continue
         bound = bounds.get(k.label)
+        source = ""
+        if bound is None and k.label in declared:
+            dlo, dhi, source = declared[k.label]
+            bound = (dlo, dhi)
         if bound is None:
             entries.append({"key": k.label, "status": "unbounded", "range": [k.lo, k.hi]})
             continue
         clo, chi = bound
         if k.hi <= clo or k.lo >= chi:
-            refusals.append(
-                f"{k.label}: range [{k.lo:g}, {k.hi:g}] is wholly outside the clamp "
-                f"[{clo:g}, {chi:g}]; every value renders the same, so the knob is inert"
+            what = (
+                f"the {source} [{clo:g}, {chi:g}]"
+                if source
+                else f"the clamp [{clo:g}, {chi:g}]; every value renders the same, so the knob is inert"
             )
+            refusals.append(f"{k.label}: range [{k.lo:g}, {k.hi:g}] is wholly outside {what}")
             continue
         inert = []
         if k.lo < clo:
@@ -660,17 +1150,18 @@ def clamp_check(
             inert.append([chi, k.hi])
         start_out = not clo <= k.start_value <= chi
         if inert or start_out:
-            entries.append(
-                {
-                    "key": k.label,
-                    "status": "partly_outside",
-                    "range": [k.lo, k.hi],
-                    "clamp": [clo, chi],
-                    "inert": inert,
-                    "start": k.start_value,
-                    "start_outside_clamp": start_out,
-                }
-            )
+            entry = {
+                "key": k.label,
+                "status": "partly_outside",
+                "range": [k.lo, k.hi],
+                "clamp": [clo, chi],
+                "inert": inert,
+                "start": k.start_value,
+                "start_outside_clamp": start_out,
+            }
+            if source:
+                entry["source"] = source
+            entries.append(entry)
     return entries, refusals
 
 
@@ -679,15 +1170,20 @@ def clamp_warning(entry: dict) -> str:
     key = entry["key"]
     if entry["status"] == "unbounded":
         return f"{key}: no clamp bound reported (unbounded)"
-    inert = ", ".join(f"[{a:g}, {b:g}]" for a, b in entry["inert"])
+    source = entry.get("source")
+    outside = ", ".join(f"[{a:g}, {b:g}]" for a, b in entry["inert"])
     parts = []
-    if inert:
+    if outside:
         parts.append(
-            f"{inert} of its range [{entry['range'][0]:g}, {entry['range'][1]:g}] is inert"
+            f"{outside} of its range [{entry['range'][0]:g}, {entry['range'][1]:g}] "
+            + ("is outside it" if source else "is inert")
         )
     if entry["start_outside_clamp"]:
-        parts.append(f"start {entry['start']:g} is outside the clamp")
-    return f"{key}: clamp [{entry['clamp'][0]:g}, {entry['clamp'][1]:g}]; " + "; ".join(parts)
+        parts.append(f"start {entry['start']:g} is outside " + ("it" if source else "the clamp"))
+    return (
+        f"{key}: {source or 'clamp'} [{entry['clamp'][0]:g}, {entry['clamp'][1]:g}]; "
+        + "; ".join(parts)
+    )
 
 
 def stored_vs_effective(

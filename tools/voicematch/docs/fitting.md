@@ -37,6 +37,24 @@ Runtime knobs are set through `SONARE_TUNING_OVERRIDES`, so one tuning library s
 
 Ranges come from the clamp where the field has a meaningful bound. Small normalized intervals, and every field in decibels (`*_db`), are searched linearly over the whole bound; positive time-like ranges are searched around the default in log space; a zero-default field with no useful bound is omitted from `--spec auto` until a hand spec declares how to enable it. Fields left open by the clamp use the documented fallback range or require a hand spec. Integer, selector, count, and boolean fields are exposed through the same override layer and rounded to their declared type. `lfo_rate_hz` is the one field narrowed inside its bound: on a program that names a played instrument (`toneclass.played_vibrato`, everything but the synth and effect slots) it is searched over 3-8 Hz, a player's vibrato rates, while the engine still accepts 0-40 Hz for synth patches.
 
+### Which fields `--spec auto` offers
+
+`knob-classes.json` classifies the fields a search must not treat as ordinary amounts, and `--spec auto` reads it (`knobs.load_knob_classes`). Every entry must name a key the catalogue reports, or loading fails naming it, so a renamed field cannot lose its class unnoticed; `notes` and `pending_landing` are exempt.
+
+| class | `--spec auto` | meaning |
+|---|---|---|
+| `identity` | never offered | what the instrument is: an enumeration, a count, a geometry |
+| `switch` | never offered | a bool, a two-valued field or an integer-valued selector |
+| `set_by_measurement` | never offered | placed from measured data |
+| `stage_enable` | decided per patch | left out where the patch ships the stage absent (`off_value`, default 0, within `off_within`); where it ships present, the range is cut so it cannot reach the off value |
+| `compensating_group` | all members or none | closed by default and listed at start; `--open-group GROUP` offers every member (repeatable), and refuses a group some of whose members this patch or engine lacks |
+
+A field whose 0 is an ordinary value of an always-present stage (a signed detune, a crossfade) is not a stage enable and carries no class. A hand spec may still name a held-out field; it is kept, and a warning at start says the table holds it out of a search. The start-up summary counts what was left out by class. `--dump-knobs` reports `fit_knobs` with the same rules.
+
+`switch_candidates` in the table lists float-typed fields whose shipped values across the bank are all integers, for the lanes to judge; it is regenerated with the table by `knobs.switch_candidates`, and classifies nothing.
+
+Engine constants that have no clamp can still declare a range: `tunable-bounds.json` (`bounds` block) and a `#tunable_bound<TAB>key<TAB>lo<TAB>hi` line in the dump, emitted for a macro that states one. The clamp check labels them `declared range (file)` and `declared range (macro)`, treats a range outside them as ruled out rather than inert, and reports a mismatch when a key has both and they differ (the macro is the one checked). `patch_fields_pending_clamp` in the same file proposes ranges for patch fields `patch_clamp.h` does not carry and is not read.
+
 A best value on either range endpoint is a boundary result, including when the starting value is already there. Widen a hand range or inspect the model before calling it an optimum; a search cannot find a value outside the interval it was given.
 
 `--base-overrides` (an inline `key=value,...` string or `@file`; also on `refit.py`) holds engine constants fixed under every evaluation, for a fit that has to run on constants not yet committed to the source. It is merged into each evaluation's override string with the candidate's keys winning, and `profile.py compare` inherits the same string through `SONARE_TUNING_OVERRIDES`. A base key that a search knob also owns, or that the library does not report, is refused before the first render. The base is part of what the fit answered: `--out` records it as `base_overrides`, `fits.py record` copies it into `fits.json`, and `status.py` reads such a fit as `under_base` (never `current` or `equivalent`) and names the base, until the constants are committed and the voice is refitted without it.

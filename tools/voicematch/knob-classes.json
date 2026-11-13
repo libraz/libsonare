@@ -1,0 +1,1204 @@
+{
+  "_": "Classification of tuning-catalogue fields and engine constants for the voicematch fitter, read by knobs.load_knob_classes. Built from the four lane files .cache/voicematch/lanes/{piano,sustained,struck,synth}/identity-knobs.md plus the tuning catalogue (types read from the I/I_TYPED declarations in patch_tuning.cpp); each entry's `lane` owns it and is the one to ask before changing it. Keys are patch-field paths without the patch prefix (`brass.mute`, `waveform`) or `<file stem>.<kName>` for engine constants; `[*]` stands for the catalogue's numeric suffix (`modes0`, `ranks3`, `ops1`, `drawbars4`) and `*` in a name is a glob. Every entry must name a key the catalogue reports, or loading fails. Classes: `identity` is never searched by `--spec auto`; `switch` is a bool, a two-valued field or an integer-valued selector, never searched as a continuum; `set_by_measurement` fields are placed from measured data and never searched; `stage_enable` is decided per patch from the shipped value - left out where the patch ships the stage absent (`off_value`, default 0, within `off_within`), and searched with the off value excluded from the range where it ships present; `compensating_group` members are searched together (`--open-group <group>`) or not at all, each with the `evidence` its membership rests on. An entry without a class only records a `gates` note. `notes` explain fields no override reaches; `pending_landing` holds entries for keys the library does not report yet, exempt from the resolve check; `switch_candidates` lists float-typed fields whose shipped values across the bank are all integers, for the lanes to judge, and is regenerated with the table. `type` is `int` (I) or `switch` (I_TYPED) and is read from patch_tuning.cpp, not from a lane.",
+  "entries": {
+    "additive.drawbars[*]": {
+      "class": "identity",
+      "basis": "drawbar registration that names the organ preset",
+      "lane": "synth"
+    },
+    "additive.drawbars_b[*]": {
+      "class": "identity",
+      "basis": "drawbar registration that names the organ preset",
+      "lane": "synth"
+    },
+    "additive.percussion_harmonic": {
+      "class": "identity",
+      "basis": "which harmonic the percussion uses (int 0/2/3), or none",
+      "lane": "synth",
+      "type": "int"
+    },
+    "body": {
+      "class": "identity",
+      "basis": "BodyType enum: which resonant body is attached",
+      "lane": "synth",
+      "type": "switch"
+    },
+    "bowed_string.corpus_series": {
+      "class": "identity",
+      "basis": "BowedCorpus enum (none/violin/viola/cello/contrabass): body topology",
+      "lane": "sustained",
+      "type": "switch"
+    },
+    "bowed_string.string_length_m": {
+      "class": "identity",
+      "basis": "string geometry, as string_tension_n; borderline",
+      "lane": "sustained"
+    },
+    "bowed_string.string_tension_n": {
+      "class": "identity",
+      "basis": "string geometry the instrument is defined by (hyperbolic junction only); borderline, a measured quantity",
+      "lane": "sustained"
+    },
+    "brass.mute": {
+      "class": "identity",
+      "basis": "a mute on a patch that ships unmuted (stage_enable-like if the patch ships muted and the mute is being voiced)",
+      "lane": "sustained"
+    },
+    "filter_model": {
+      "class": "identity",
+      "basis": "filter topology / tap enum; a type, not a setting",
+      "lane": "synth",
+      "type": "switch"
+    },
+    "filter_output": {
+      "class": "identity",
+      "basis": "filter topology / tap enum; a type, not a setting",
+      "lane": "synth",
+      "type": "switch"
+    },
+    "fm.algorithm": {
+      "class": "identity",
+      "basis": "FmAlgorithm enum: operator topology",
+      "lane": "synth",
+      "type": "switch"
+    },
+    "fm.ops[*].ratio": {
+      "class": "identity",
+      "basis": "operator frequency ratio; integer or near-integer ratios define the spectrum family",
+      "lane": "synth"
+    },
+    "harpsichord.bass_foreshortening": {
+      "class": "identity",
+      "basis": "scale length geometry",
+      "lane": "struck"
+    },
+    "harpsichord.peak_velocity": {
+      "class": "identity",
+      "basis": "uint8 velocity at which the instrument tops out; unclamped",
+      "lane": "struck",
+      "type": "switch"
+    },
+    "harpsichord.scale_c5_mm": {
+      "class": "identity",
+      "basis": "scale length geometry",
+      "lane": "struck"
+    },
+    "harpsichord.undamped_from_note": {
+      "class": "identity",
+      "basis": "uint8 note above which strings have no dampers (128 = never); unclamped",
+      "lane": "struck",
+      "type": "switch"
+    },
+    "lfo_shape": {
+      "class": "identity",
+      "basis": "modulator waveform enum",
+      "lane": "synth",
+      "type": "switch"
+    },
+    "modal.modes[*].key_slope": {
+      "class": "identity",
+      "basis": "octave drift of untuned upper modes; separates a tuned from a short untuned bar",
+      "lane": "struck"
+    },
+    "modal.num_modes": {
+      "class": "identity",
+      "basis": "size of the mode set; int clamp [0,kMaxModalModes]",
+      "lane": "struck",
+      "type": "int"
+    },
+    "percussion.base_freq_hz": {
+      "class": "identity",
+      "basis": "pitch of a tuned drum/bar; free voicing only on noise-only pieces; [0,20000]",
+      "lane": "struck"
+    },
+    "percussion.exclusive_class": {
+      "class": "identity",
+      "basis": "uint8 choke group; unclamped",
+      "lane": "struck",
+      "type": "switch"
+    },
+    "percussion.mode_alpha[*]": {
+      "class": "identity",
+      "basis": "Bessel zeros of the ideal membrane, independent of mode_ratios; float [0,64]",
+      "lane": "struck"
+    },
+    "percussion.noise_burst_count": {
+      "class": "identity",
+      "basis": "number of VCA retriggers (clap vs single burst); a count of repeated attacks; override bound [0,8]",
+      "lane": "struck",
+      "type": "switch"
+    },
+    "percussion.noise_output": {
+      "class": "identity",
+      "basis": "SynthFilterOutput enum, LP/BP/HP of the noise path; unclamped",
+      "lane": "struck",
+      "type": "switch"
+    },
+    "percussion.num_modes": {
+      "class": "identity",
+      "basis": "membrane/bar/plate mode count; int clamp [0,kMaxPercussionModes]",
+      "lane": "struck",
+      "type": "int"
+    },
+    "percussion.shell_freq_hz[*]": {
+      "class": "identity",
+      "basis": "shell mode count (int clamp [0,kMaxShellModes]) and its identity frequency table",
+      "lane": "struck"
+    },
+    "percussion.shell_num_modes": {
+      "class": "identity",
+      "basis": "shell mode count (int clamp [0,kMaxShellModes]) and its identity frequency table",
+      "lane": "struck",
+      "type": "int"
+    },
+    "piano.decay_stretch": {
+      "class": "identity",
+      "basis": "tuning stretch of the decay law across the keyboard; instrument property, not touch",
+      "lane": "piano"
+    },
+    "piano.detune_cents": {
+      "class": "identity",
+      "basis": "unison mistuning; a tuning state, fit only when the reference's own beating is the target",
+      "lane": "piano"
+    },
+    "piano.dispersion": {
+      "class": "identity",
+      "basis": "string stiffness; scale design that moves every partial; fitted for the grand only, against three references",
+      "lane": "piano"
+    },
+    "piano.strike_position": {
+      "class": "identity",
+      "basis": "hammer position along the string; scale design, places the comb notch, a fit trades it for ladder error",
+      "lane": "piano"
+    },
+    "piano.strings": {
+      "class": "identity",
+      "basis": "integer string count per key; sets the unison layout, a continuous search changes what the instrument is",
+      "lane": "piano",
+      "type": "int"
+    },
+    "piano_voice.kContactPeriodsMax": {
+      "class": "identity",
+      "basis": "limit or structure bound, not voicing",
+      "lane": "piano"
+    },
+    "piano_voice.kHammerMfVel": {
+      "class": "identity",
+      "basis": "the excitation chain's pivot: the velocity every level anchor is defined against; moving it re-defines the other constants",
+      "lane": "piano"
+    },
+    "piano_voice.kStrikeNoiseMaxMs": {
+      "class": "identity",
+      "basis": "limit or structure bound, not voicing",
+      "lane": "piano"
+    },
+    "pipe_organ.rank_count": {
+      "class": "identity",
+      "basis": "integer rank count; 0 = implicit single 8' from the flat fields, above 0 gates the flat stopped/brightness/reed/radiation and all ranks.*",
+      "lane": "sustained",
+      "type": "int"
+    },
+    "pipe_organ.ranks[*].footage_mult": {
+      "class": "identity",
+      "basis": "footage (16', 8', 4'...), defines the registration",
+      "lane": "sustained"
+    },
+    "pipe_organ.ranks[*].stopped": {
+      "class": "identity",
+      "basis": "stopped vs open, per rank",
+      "lane": "sustained",
+      "type": "switch"
+    },
+    "plucked_string.inharmonicity_b": {
+      "class": "identity",
+      "basis": "stiff-string B; per-instrument constant, a fit moves it only with a reason",
+      "lane": "struck"
+    },
+    "reed.closing_pressure": {
+      "class": "identity",
+      "basis": "above 0 selects the Bernoulli valve, 0 the table valve (gate for zeta, pressure_scale); only the 0 vs non-zero switch is identity",
+      "lane": "sustained"
+    },
+    "unison": {
+      "class": "identity",
+      "basis": "oscillator stack size; lround-rounded integer, 2.78 renders as 3 on program 88",
+      "lane": "synth",
+      "type": "int"
+    },
+    "va.osc2_interval_cents": {
+      "class": "identity",
+      "basis": "interval of the layer (octave, fifth); names the patch's chord, clamped to +-2400",
+      "lane": "synth"
+    },
+    "vocal.vowel": {
+      "class": "identity",
+      "basis": "integer index into the vowel table, selects the formant set",
+      "lane": "sustained",
+      "type": "int"
+    },
+    "waveform": {
+      "class": "identity",
+      "basis": "VaWaveform enum: the oscillator family a GM synth slot names",
+      "lane": "synth",
+      "type": "switch"
+    },
+    "bowed_string.elasto_plastic": {
+      "class": "switch",
+      "basis": "selects the bristle friction model; active only when hyperbolic is off; gate for stribeck",
+      "lane": "sustained",
+      "type": "switch"
+    },
+    "bowed_string.hyperbolic_friction": {
+      "class": "switch",
+      "basis": "selects the hyperbolic friction junction (gate for string_tension_n, string_length_m, force_ratio)",
+      "lane": "sustained",
+      "type": "switch"
+    },
+    "brass.conical": {
+      "class": "switch",
+      "basis": "bore type, cylindrical vs conical",
+      "lane": "sustained",
+      "type": "switch"
+    },
+    "flute.jet_cycle_mean": {
+      "class": "switch",
+      "basis": "cycle-mean jet model; active only with jet_drive; gate for jet_deflection_limit",
+      "lane": "sustained",
+      "type": "switch"
+    },
+    "flute.jet_drive": {
+      "class": "switch",
+      "basis": "selects jet-drive source vs cubic source; gate for jet_offset, jet_receptivity_window, jet_cycle_mean, jet_deflection_limit",
+      "lane": "sustained",
+      "type": "switch"
+    },
+    "flute.loop_phase_servo": {
+      "class": "switch",
+      "basis": "servo regime of the cubic source; active only when jet_drive is false",
+      "lane": "sustained",
+      "type": "switch"
+    },
+    "free_reed.musette_flat": {
+      "class": "switch",
+      "basis": "flat musette tuning selector; active only when detune > 0",
+      "lane": "sustained",
+      "type": "switch"
+    },
+    "harpsichord.eight_a": {
+      "class": "switch",
+      "basis": "8'/8'/4' register switches (bool); unclamped",
+      "lane": "struck",
+      "type": "switch"
+    },
+    "harpsichord.eight_b": {
+      "class": "switch",
+      "basis": "8'/8'/4' register switches (bool); unclamped",
+      "lane": "struck",
+      "type": "switch"
+    },
+    "harpsichord.four": {
+      "class": "switch",
+      "basis": "8'/8'/4' register switches (bool); unclamped",
+      "lane": "struck",
+      "type": "switch"
+    },
+    "ks.harmonic_node": {
+      "class": "switch",
+      "basis": "0 = open string, above 0 = harmonic node; an integer-valued selector, [0,8]",
+      "lane": "struck"
+    },
+    "ks.mute_harmonic": {
+      "class": "switch",
+      "basis": "integer-valued selector of the muted harmonic; [0,16]",
+      "lane": "struck"
+    },
+    "ks.sympathetic": {
+      "class": "switch",
+      "basis": "bool: sympathetic string bank on/off",
+      "lane": "struck",
+      "type": "switch"
+    },
+    "modal.mallet_shape": {
+      "class": "switch",
+      "basis": "ContactShape enum, raised cosine vs Gaussian",
+      "lane": "struck",
+      "type": "switch"
+    },
+    "one_shot": {
+      "class": "switch",
+      "basis": "whether the note ignores note-off",
+      "lane": "synth",
+      "type": "switch"
+    },
+    "percussion.gm_kit": {
+      "class": "switch",
+      "basis": "bool: the patch becomes the whole GM kit; unclamped",
+      "lane": "struck",
+      "type": "switch"
+    },
+    "piano_voice.kHammerJunction": {
+      "class": "switch",
+      "basis": "engine switch, removed at junction adoption",
+      "lane": "piano"
+    },
+    "piano_voice.kInjImpulseNorm": {
+      "class": "switch",
+      "basis": "selects which quantity the injection is normalised to, 0 or 1",
+      "lane": "piano"
+    },
+    "piano_voice.kKnockUncombed": {
+      "class": "switch",
+      "basis": "0/1 routing choice written as a lerp",
+      "lane": "piano"
+    },
+    "pipe_organ.loop_phase_servo": {
+      "class": "switch",
+      "basis": "loop servo regime switch",
+      "lane": "sustained",
+      "type": "switch"
+    },
+    "pipe_organ.stopped": {
+      "class": "switch",
+      "basis": "stopped vs open pipe (flat voicing, rank_count 0)",
+      "lane": "sustained",
+      "type": "switch"
+    },
+    "pipe_organ.wind_regulated": {
+      "class": "switch",
+      "basis": "regulated vs sagging wind supply",
+      "lane": "sustained",
+      "type": "switch"
+    },
+    "reed.conical": {
+      "class": "switch",
+      "basis": "bore type; gate for cone_growth",
+      "lane": "sustained",
+      "type": "switch"
+    },
+    "reed.dynamic_reed": {
+      "class": "switch",
+      "basis": "enables the mass-spring reed valve (gate for reed_resonance); the bank's record says it must stay off",
+      "lane": "sustained",
+      "type": "switch"
+    },
+    "modal.modes[*].ratio": {
+      "class": "set_by_measurement",
+      "basis": "bar/plate partial series defines the instrument; float, not searched as a set",
+      "lane": "struck"
+    },
+    "percussion.mode_ratios[*]": {
+      "class": "set_by_measurement",
+      "basis": "partial series, the head/bar/plate identity; independent of mode_alpha",
+      "lane": "struck"
+    },
+    "pitch_offset_cents": {
+      "class": "set_by_measurement",
+      "basis": "placed from measured pitch, never searched; also in knobs.py AUTO_SKIP_SUFFIXES",
+      "lane": "bank"
+    },
+    "additive.key_click": {
+      "class": "stage_enable",
+      "basis": "additive stage, absent at 0",
+      "lane": "synth"
+    },
+    "additive.percussion_level": {
+      "class": "stage_enable",
+      "basis": "additive stage, absent at 0",
+      "lane": "synth"
+    },
+    "bit_depth": {
+      "class": "stage_enable",
+      "basis": "VA filter/colour stage, absent at 0",
+      "lane": "synth"
+    },
+    "bowed_string.bow_width_m": {
+      "class": "stage_enable",
+      "basis": "0 = point bow",
+      "lane": "sustained"
+    },
+    "bowed_string.polarization": {
+      "class": "stage_enable",
+      "basis": "0 = single polarization",
+      "lane": "sustained"
+    },
+    "bowed_string.section_spread_cents": {
+      "class": "stage_enable",
+      "basis": "non-zero turns one player into a section (gate for section_rate_hz)",
+      "lane": "sustained"
+    },
+    "bowed_string.string_loss_harmonic": {
+      "class": "stage_enable",
+      "basis": "0 = no harmonic-indexed loss stage (gate for string_loss_per_octave)",
+      "lane": "sustained"
+    },
+    "bowed_string.sympathetic": {
+      "class": "stage_enable",
+      "basis": "0 = no sympathetic strings",
+      "lane": "sustained"
+    },
+    "brass.bell_cutoff_hz": {
+      "class": "stage_enable",
+      "basis": "0 = no bell filter, radiation corner from the reflection pole; gate: switches off bell_radiation_hz",
+      "lane": "sustained"
+    },
+    "brass.bell_radiation_hz": {
+      "class": "stage_enable",
+      "basis": "output radiation highpass, absent at 0; inert while bell_cutoff_hz > 0",
+      "lane": "sustained"
+    },
+    "brass.bore_nonlinearity": {
+      "class": "stage_enable",
+      "basis": "0 = linear bore",
+      "lane": "sustained"
+    },
+    "brass.brassiness": {
+      "class": "stage_enable",
+      "basis": "0 = no brassy-shock stage",
+      "lane": "sustained"
+    },
+    "brass.cuivre_dynamics": {
+      "class": "stage_enable",
+      "basis": "0 = no cuivre dynamics stage",
+      "lane": "sustained"
+    },
+    "brass.dynamic_lip": {
+      "class": "stage_enable",
+      "basis": "0 = static lip",
+      "lane": "sustained"
+    },
+    "brass.half_valve": {
+      "class": "stage_enable",
+      "basis": "0 = no half-valve colour stage",
+      "lane": "sustained"
+    },
+    "brass.lip_aperture": {
+      "class": "stage_enable",
+      "basis": "0 = no aperture stage",
+      "lane": "sustained"
+    },
+    "brass.onset_breath_overshoot_db": {
+      "class": "stage_enable",
+      "basis": "0 = no onset overshoot; gate for onset_breath_settle_ms, onset_breath_overshoot_vel_db",
+      "lane": "sustained"
+    },
+    "drive": {
+      "class": "stage_enable",
+      "basis": "VA filter/colour stage, absent at 0",
+      "lane": "synth"
+    },
+    "flute.breath_radiation": {
+      "class": "stage_enable",
+      "basis": "0 = no breath-radiation stage",
+      "lane": "sustained"
+    },
+    "flute.edge_hysteresis": {
+      "class": "stage_enable",
+      "basis": "0 = no edge hysteresis",
+      "lane": "sustained"
+    },
+    "flute.jet_centring_per_octave": {
+      "class": "stage_enable",
+      "basis": "0 = no jet centring",
+      "lane": "sustained"
+    },
+    "flute.jet_turbulence": {
+      "class": "stage_enable",
+      "basis": "0 = no jet turbulence stage",
+      "lane": "sustained"
+    },
+    "flute.lattice_cutoff_hz": {
+      "class": "stage_enable",
+      "basis": "0 = no tonehole lattice cutoff",
+      "lane": "sustained"
+    },
+    "flute.onset_breath_overshoot_db": {
+      "class": "stage_enable",
+      "basis": "0 = no onset overshoot (gate)",
+      "lane": "sustained"
+    },
+    "flute.overblow": {
+      "class": "stage_enable",
+      "basis": "gated breath lift on the jet reflection, absent at 0; not a register selector",
+      "lane": "sustained"
+    },
+    "flute.vortex": {
+      "class": "stage_enable",
+      "basis": "0 = no vortex-shedding stage",
+      "lane": "sustained"
+    },
+    "flute.vortex_loss": {
+      "class": "stage_enable",
+      "basis": "0 = no vortex loss",
+      "lane": "sustained"
+    },
+    "fm.ops[*].feedback": {
+      "class": "stage_enable",
+      "basis": "FM operator feedback stage, absent at 0",
+      "lane": "synth"
+    },
+    "free_reed.detune": {
+      "class": "stage_enable",
+      "basis": "0 = single reed, non-zero adds the musette partner (gate for musette_flat, musette_partner_level, musette_taper)",
+      "lane": "sustained"
+    },
+    "free_reed.onset_breath_overshoot_db": {
+      "class": "stage_enable",
+      "basis": "0 = no onset overshoot (gate for settle, vel, key fields)",
+      "lane": "sustained"
+    },
+    "free_reed.slot_duty": {
+      "class": "stage_enable",
+      "basis": "0 = no reed-slot mechanism (gate for slot_return, slot_gap, slot_swing, radiation)",
+      "lane": "sustained"
+    },
+    "glide_ms": {
+      "class": "stage_enable",
+      "basis": "VA pitch stage, absent at 0",
+      "lane": "synth"
+    },
+    "harpsichord.board_diffuse_db": {
+      "class": "stage_enable",
+      "basis": "soundboard diffusion level in dB; absent at -120 (anything at or below -119)",
+      "lane": "struck",
+      "off_value": -120,
+      "off_within": 1.0
+    },
+    "harpsichord.board_radiating_from_hz": {
+      "class": "stage_enable",
+      "basis": "soundboard radiation stage",
+      "lane": "struck"
+    },
+    "harpsichord.board_tilt_db_oct": {
+      "class": "stage_enable",
+      "basis": "soundboard tilt, absent at 0",
+      "lane": "struck"
+    },
+    "harpsichord.jack_noise": {
+      "class": "stage_enable",
+      "basis": "noise stages",
+      "lane": "struck"
+    },
+    "harpsichord.pluck_noise": {
+      "class": "stage_enable",
+      "basis": "noise stages",
+      "lane": "struck"
+    },
+    "harpsichord.pol_coupling": {
+      "class": "stage_enable",
+      "basis": "second polarisation line; [0,1]",
+      "lane": "struck"
+    },
+    "harpsichord.rear_segment_mm": {
+      "class": "stage_enable",
+      "basis": "rear string segment line; [0,400]",
+      "lane": "struck"
+    },
+    "harpsichord.ripple_loss_share": {
+      "class": "stage_enable",
+      "basis": "rippled loop filter; [0,0.4]",
+      "lane": "struck"
+    },
+    "hp_cutoff_hz": {
+      "class": "stage_enable",
+      "basis": "VA filter/colour stage, absent at 0",
+      "lane": "synth"
+    },
+    "ks.body_air_hz": {
+      "class": "stage_enable",
+      "basis": "body air resonance; [0,400]",
+      "lane": "struck"
+    },
+    "ks.body_coupling": {
+      "class": "stage_enable",
+      "basis": "body stages",
+      "lane": "struck"
+    },
+    "ks.body_knock": {
+      "class": "stage_enable",
+      "basis": "body stages",
+      "lane": "struck"
+    },
+    "ks.dispersion": {
+      "class": "stage_enable",
+      "basis": "stiffness allpass, pitch-glide; unclamped",
+      "lane": "struck"
+    },
+    "ks.keyoff_noise": {
+      "class": "stage_enable",
+      "basis": "noise stages",
+      "lane": "struck"
+    },
+    "ks.nail": {
+      "class": "stage_enable",
+      "basis": "excitation model selector (finger/nail/slap); floats, unclamped",
+      "lane": "struck"
+    },
+    "ks.octave_mix": {
+      "class": "stage_enable",
+      "basis": "octave string; unclamped",
+      "lane": "struck"
+    },
+    "ks.pick_noise": {
+      "class": "stage_enable",
+      "basis": "noise stages",
+      "lane": "struck"
+    },
+    "ks.pluck_style": {
+      "class": "stage_enable",
+      "basis": "excitation model selector (finger/nail/slap); floats, unclamped",
+      "lane": "struck"
+    },
+    "ks.polarization": {
+      "class": "stage_enable",
+      "basis": "second polarisation loop; [0,1]",
+      "lane": "struck"
+    },
+    "ks.slap": {
+      "class": "stage_enable",
+      "basis": "slap stage; [0,1]",
+      "lane": "struck"
+    },
+    "ks.tension_mod": {
+      "class": "stage_enable",
+      "basis": "stiffness allpass, pitch-glide; unclamped",
+      "lane": "struck"
+    },
+    "lfo_to_pitch_cents": {
+      "class": "stage_enable",
+      "basis": "VA pitch stage, absent at 0",
+      "lane": "synth"
+    },
+    "modal.contact": {
+      "class": "stage_enable",
+      "basis": "direct-radiation mallet pulse stage",
+      "lane": "struck"
+    },
+    "modal.mallet_ms": {
+      "class": "stage_enable",
+      "basis": "swaps the hardness curve for the contact-force spectrum; retires strike_brightness and vel_to_brightness",
+      "lane": "struck"
+    },
+    "percussion.air_spring": {
+      "class": "stage_enable",
+      "basis": "0 = no cavity coupling / no geometry; [0,8],[0,2],[0,2]",
+      "lane": "struck"
+    },
+    "percussion.contact": {
+      "class": "stage_enable",
+      "basis": "same stage as modal.contact, in the kit voice",
+      "lane": "struck"
+    },
+    "percussion.head_diameter_m": {
+      "class": "stage_enable",
+      "basis": "0 = no cavity coupling / no geometry; [0,8],[0,2],[0,2]",
+      "lane": "struck"
+    },
+    "percussion.mallet_ms": {
+      "class": "stage_enable",
+      "basis": "same stage as modal.mallet_ms, in the kit voice",
+      "lane": "struck"
+    },
+    "percussion.noise_air_hz": {
+      "class": "stage_enable",
+      "basis": "radiated upper-bound stage",
+      "lane": "struck"
+    },
+    "percussion.noise_gain": {
+      "class": "stage_enable",
+      "basis": "the whole noise layer; [0,4]",
+      "lane": "struck"
+    },
+    "percussion.phisem_beans": {
+      "class": "stage_enable",
+      "basis": "particle shaker, scraper, shaker body",
+      "lane": "struck"
+    },
+    "percussion.phisem_body_gain": {
+      "class": "stage_enable",
+      "basis": "particle shaker, scraper, shaker body",
+      "lane": "struck"
+    },
+    "percussion.phisem_scrape_hz": {
+      "class": "stage_enable",
+      "basis": "particle shaker, scraper, shaker body",
+      "lane": "struck"
+    },
+    "percussion.pitch_drop": {
+      "class": "stage_enable",
+      "basis": "pitch-fall stage",
+      "lane": "struck"
+    },
+    "percussion.plate_cascade": {
+      "class": "stage_enable",
+      "basis": "FDN plate layer and its cascade",
+      "lane": "struck"
+    },
+    "percussion.plate_gain": {
+      "class": "stage_enable",
+      "basis": "FDN plate layer and its cascade",
+      "lane": "struck"
+    },
+    "percussion.shell_depth_m": {
+      "class": "stage_enable",
+      "basis": "0 = no cavity coupling / no geometry; [0,8],[0,2],[0,2]",
+      "lane": "struck"
+    },
+    "percussion.shell_mix": {
+      "class": "stage_enable",
+      "basis": "shell resonator layer",
+      "lane": "struck"
+    },
+    "percussion.shimmer": {
+      "class": "stage_enable",
+      "basis": "cymbal shimmer wash",
+      "lane": "struck"
+    },
+    "percussion.strike_r": {
+      "class": "stage_enable",
+      "basis": "above 0 turns on strike-shape weighting (0 = legacy uniform excitation); [0,1]",
+      "lane": "struck"
+    },
+    "percussion.wire_buzz": {
+      "class": "stage_enable",
+      "basis": "snare wires",
+      "lane": "struck"
+    },
+    "pipe_organ.ranks[*].level": {
+      "class": "stage_enable",
+      "basis": "0 silences the rank (sounding() predicate), so it adds or removes a rank",
+      "lane": "sustained"
+    },
+    "pipe_organ.ranks[*].reed": {
+      "class": "stage_enable",
+      "basis": "0 = flue rank, above 0 a reed stop",
+      "lane": "sustained"
+    },
+    "pipe_organ.reed": {
+      "class": "stage_enable",
+      "basis": "0 = flue pipe, above 0 adds the lingual drive (flat voicing only)",
+      "lane": "sustained"
+    },
+    "pipe_organ.swell": {
+      "class": "stage_enable",
+      "basis": "0 = no swell box",
+      "lane": "sustained"
+    },
+    "pipe_organ.tremulant_depth": {
+      "class": "stage_enable",
+      "basis": "0 = no tremulant",
+      "lane": "sustained"
+    },
+    "plucked_string.buzz": {
+      "class": "stage_enable",
+      "basis": "bridge buzz / pick noise stage",
+      "lane": "struck"
+    },
+    "plucked_string.pick_noise": {
+      "class": "stage_enable",
+      "basis": "bridge buzz / pick noise stage",
+      "lane": "struck"
+    },
+    "reed.bell_cutoff_hz": {
+      "class": "stage_enable",
+      "basis": "0 = no bell filter (same gate as brass)",
+      "lane": "sustained"
+    },
+    "reed.bell_radiation_hz": {
+      "class": "stage_enable",
+      "basis": "output radiation highpass, absent at 0; inert while bell_cutoff_hz > 0",
+      "lane": "sustained"
+    },
+    "reed.cone_growth": {
+      "class": "stage_enable",
+      "basis": "0 = no growth taper; active only when conical",
+      "lane": "sustained"
+    },
+    "reed.growl": {
+      "class": "stage_enable",
+      "basis": "0 = no growl stage",
+      "lane": "sustained"
+    },
+    "reed.register_vent": {
+      "class": "stage_enable",
+      "basis": "0 = no register vent",
+      "lane": "sustained"
+    },
+    "reed.tonehole": {
+      "class": "stage_enable",
+      "basis": "0 = no tonehole lattice",
+      "lane": "sustained"
+    },
+    "sample_hold_hz": {
+      "class": "stage_enable",
+      "basis": "VA filter/colour stage, absent at 0",
+      "lane": "synth"
+    },
+    "va.band_noise_level": {
+      "class": "stage_enable",
+      "basis": "VA layer and noise stage, absent at 0",
+      "lane": "synth"
+    },
+    "va.noise_am": {
+      "class": "stage_enable",
+      "basis": "VA layer and noise stage, absent at 0",
+      "lane": "synth"
+    },
+    "va.noise_level": {
+      "class": "stage_enable",
+      "basis": "VA layer and noise stage, absent at 0",
+      "lane": "synth"
+    },
+    "va.osc2_level": {
+      "class": "stage_enable",
+      "basis": "VA layer and noise stage, absent at 0",
+      "lane": "synth"
+    },
+    "vocal.section_detune_cents": {
+      "class": "stage_enable",
+      "basis": "0 = no ensemble detune; not gated in engine_field_gates.cpp",
+      "lane": "sustained"
+    },
+    "vocal.section_spread_cents": {
+      "class": "stage_enable",
+      "basis": "non-zero turns one voice into a choir (gate for section_rate_hz)",
+      "lane": "sustained"
+    },
+    "piano.hammer_contact_ms": {
+      "class": "compensating_group",
+      "basis": "hub of the excitation chain: the felt lowpass corner, noise spectrum and level anchor hang off it",
+      "lane": "piano",
+      "group": "piano.excitation_chain",
+      "evidence": "measured"
+    },
+    "piano.hammer_dynamics": {
+      "class": "compensating_group",
+      "basis": "member of the excitation chain (hammer contact, felt lowpass, strike-noise injection and their level anchors compensate one another); refit the whole chain or none",
+      "lane": "piano",
+      "group": "piano.excitation_chain",
+      "evidence": "code reading"
+    },
+    "piano.hammer_exponent": {
+      "class": "compensating_group",
+      "basis": "member of the excitation chain (hammer contact, felt lowpass, strike-noise injection and their level anchors compensate one another); refit the whole chain or none",
+      "lane": "piano",
+      "group": "piano.excitation_chain",
+      "evidence": "code reading"
+    },
+    "piano_voice.kContactKeytrackSemis": {
+      "class": "compensating_group",
+      "basis": "member of the excitation chain (hammer contact, felt lowpass, strike-noise injection and their level anchors compensate one another); refit the whole chain or none",
+      "lane": "piano",
+      "group": "piano.excitation_chain",
+      "evidence": "code reading"
+    },
+    "piano_voice.kContactPeriodsAtC4": {
+      "class": "compensating_group",
+      "basis": "member of the excitation chain (hammer contact, felt lowpass, strike-noise injection and their level anchors compensate one another); refit the whole chain or none",
+      "lane": "piano",
+      "group": "piano.excitation_chain",
+      "evidence": "code reading"
+    },
+    "piano_voice.kContactPeriodsPerBlowMax": {
+      "class": "compensating_group",
+      "basis": "member of the excitation chain (hammer contact, felt lowpass, strike-noise injection and their level anchors compensate one another); refit the whole chain or none",
+      "lane": "piano",
+      "group": "piano.excitation_chain",
+      "evidence": "code reading"
+    },
+    "piano_voice.kContactPeriodsPerOct": {
+      "class": "compensating_group",
+      "basis": "member of the excitation chain (hammer contact, felt lowpass, strike-noise injection and their level anchors compensate one another); refit the whole chain or none",
+      "lane": "piano",
+      "group": "piano.excitation_chain",
+      "evidence": "code reading"
+    },
+    "piano_voice.kFeltCutoffContactCycles": {
+      "class": "compensating_group",
+      "basis": "member of the excitation chain (hammer contact, felt lowpass, strike-noise injection and their level anchors compensate one another); refit the whole chain or none",
+      "lane": "piano",
+      "group": "piano.excitation_chain",
+      "evidence": "measured"
+    },
+    "piano_voice.kFeltCutoffVelOct": {
+      "class": "compensating_group",
+      "basis": "member of the excitation chain (hammer contact, felt lowpass, strike-noise injection and their level anchors compensate one another); refit the whole chain or none",
+      "lane": "piano",
+      "group": "piano.excitation_chain",
+      "evidence": "code reading"
+    },
+    "piano_voice.kHammerDynBrightOct": {
+      "class": "compensating_group",
+      "basis": "member of the excitation chain (hammer contact, felt lowpass, strike-noise injection and their level anchors compensate one another); refit the whole chain or none",
+      "lane": "piano",
+      "group": "piano.excitation_chain",
+      "evidence": "code reading"
+    },
+    "piano_voice.kHammerHysteresis": {
+      "class": "compensating_group",
+      "basis": "member of the excitation chain (hammer contact, felt lowpass, strike-noise injection and their level anchors compensate one another); refit the whole chain or none",
+      "lane": "piano",
+      "group": "piano.excitation_chain",
+      "evidence": "code reading"
+    },
+    "piano_voice.kHammerWidthHarmonics": {
+      "class": "compensating_group",
+      "basis": "member of the excitation chain (hammer contact, felt lowpass, strike-noise injection and their level anchors compensate one another); refit the whole chain or none",
+      "lane": "piano",
+      "group": "piano.excitation_chain",
+      "evidence": "code reading"
+    },
+    "piano_voice.kInjTiltDbOct": {
+      "class": "compensating_group",
+      "basis": "member of the excitation chain (hammer contact, felt lowpass, strike-noise injection and their level anchors compensate one another); refit the whole chain or none",
+      "lane": "piano",
+      "group": "piano.excitation_chain",
+      "evidence": "code reading"
+    },
+    "piano_voice.kInjTiltOctSpan": {
+      "class": "compensating_group",
+      "basis": "member of the excitation chain (hammer contact, felt lowpass, strike-noise injection and their level anchors compensate one another); refit the whole chain or none",
+      "lane": "piano",
+      "group": "piano.excitation_chain",
+      "evidence": "code reading"
+    },
+    "piano_voice.kStrikeNoiseCutoffScale": {
+      "class": "compensating_group",
+      "basis": "member of the excitation chain (hammer contact, felt lowpass, strike-noise injection and their level anchors compensate one another); refit the whole chain or none",
+      "lane": "piano",
+      "group": "piano.excitation_chain",
+      "evidence": "measured"
+    },
+    "piano_voice.kStrikeNoiseDirect": {
+      "class": "compensating_group",
+      "basis": "member of the excitation chain (hammer contact, felt lowpass, strike-noise injection and their level anchors compensate one another); refit the whole chain or none",
+      "lane": "piano",
+      "group": "piano.excitation_chain",
+      "evidence": "measured"
+    },
+    "piano_voice.kStrikeNoiseGain": {
+      "class": "compensating_group",
+      "basis": "member of the excitation chain (hammer contact, felt lowpass, strike-noise injection and their level anchors compensate one another); refit the whole chain or none",
+      "lane": "piano",
+      "group": "piano.excitation_chain",
+      "evidence": "measured"
+    },
+    "piano_voice.kStrikeNoiseInject": {
+      "class": "compensating_group",
+      "basis": "member of the excitation chain (hammer contact, felt lowpass, strike-noise injection and their level anchors compensate one another); refit the whole chain or none",
+      "lane": "piano",
+      "group": "piano.excitation_chain",
+      "evidence": "measured"
+    },
+    "piano_voice.kStrikeNoiseTauMs": {
+      "class": "compensating_group",
+      "basis": "member of the excitation chain (hammer contact, felt lowpass, strike-noise injection and their level anchors compensate one another); refit the whole chain or none",
+      "lane": "piano",
+      "group": "piano.excitation_chain",
+      "evidence": "measured"
+    },
+    "piano_voice.kStringYield": {
+      "class": "compensating_group",
+      "basis": "member of the excitation chain (hammer contact, felt lowpass, strike-noise injection and their level anchors compensate one another); refit the whole chain or none",
+      "lane": "piano",
+      "group": "piano.excitation_chain",
+      "evidence": "code reading"
+    },
+    "piano_voice.kWidthBassOct": {
+      "class": "compensating_group",
+      "basis": "member of the excitation chain (hammer contact, felt lowpass, strike-noise injection and their level anchors compensate one another); refit the whole chain or none",
+      "lane": "piano",
+      "group": "piano.excitation_chain",
+      "evidence": "code reading"
+    },
+    "piano_voice.kWidthTrebleOct": {
+      "class": "compensating_group",
+      "basis": "member of the excitation chain (hammer contact, felt lowpass, strike-noise injection and their level anchors compensate one another); refit the whole chain or none",
+      "lane": "piano",
+      "group": "piano.excitation_chain",
+      "evidence": "code reading"
+    },
+    "piano_voice.kYieldTrebleOct": {
+      "class": "compensating_group",
+      "basis": "member of the excitation chain (hammer contact, felt lowpass, strike-noise injection and their level anchors compensate one another); refit the whole chain or none",
+      "lane": "piano",
+      "group": "piano.excitation_chain",
+      "evidence": "code reading"
+    },
+    "modal.strike_brightness": {
+      "class": null,
+      "lane": "struck",
+      "gates": "live only while modal.mallet_ms == 0 (engine_field_gates.cpp)"
+    },
+    "modal.vel_to_brightness": {
+      "class": null,
+      "lane": "struck",
+      "gates": "live only while modal.mallet_ms == 0 (engine_field_gates.cpp)"
+    }
+  },
+  "notes": {
+    "piano_voice.k*Capacity": "static constexpr array size, not reachable by an override",
+    "mode": "SynthEngineMode, reported by the catalogue as a #mode line; not reachable by an override",
+    "mod_matrix.routes[*].*": "not reachable by an override; the route depth is a recorded missing reach (kLfo2 -> kAmpGain tremolo on e_piano_2, tremolo_strings, vibraphone)",
+    "percussion.mode_m[*]": "uint8 azimuthal order of each mode; not reachable by an override"
+  },
+  "pending_landing": {
+    "piano_voice.kHammerMassRatioC2": {
+      "class": "set_by_measurement",
+      "lane": "piano",
+      "basis": "literature-pinned hammer/string mass ratio per register; only kHammerMassRatioScale is a fitted handle"
+    },
+    "piano_voice.kHammerMassRatioC4": {
+      "class": "set_by_measurement",
+      "lane": "piano",
+      "basis": "literature-pinned hammer/string mass ratio per register; only kHammerMassRatioScale is a fitted handle"
+    },
+    "piano_voice.kHammerMassRatioC7": {
+      "class": "set_by_measurement",
+      "lane": "piano",
+      "basis": "literature-pinned hammer/string mass ratio per register; only kHammerMassRatioScale is a fitted handle"
+    },
+    "piano_voice.kHammerExponentC2": {
+      "class": "set_by_measurement",
+      "lane": "piano",
+      "basis": "literature-pinned felt exponent per register; only kHammerFeltScale is a fitted handle"
+    },
+    "piano_voice.kHammerExponentC4": {
+      "class": "set_by_measurement",
+      "lane": "piano",
+      "basis": "literature-pinned felt exponent per register; only kHammerFeltScale is a fitted handle"
+    },
+    "piano_voice.kHammerExponentC7": {
+      "class": "set_by_measurement",
+      "lane": "piano",
+      "basis": "literature-pinned felt exponent per register; only kHammerFeltScale is a fitted handle"
+    },
+    "piano_voice.kHammerFeltMsC2": {
+      "class": "set_by_measurement",
+      "lane": "piano",
+      "basis": "literature-pinned felt stiffness per register (rigid-wall bounce time at 2 m/s); only kHammerFeltScale is a fitted handle"
+    },
+    "piano_voice.kHammerFeltMsC4": {
+      "class": "set_by_measurement",
+      "lane": "piano",
+      "basis": "literature-pinned felt stiffness per register (rigid-wall bounce time at 2 m/s); only kHammerFeltScale is a fitted handle"
+    },
+    "piano_voice.kHammerFeltMsC7": {
+      "class": "set_by_measurement",
+      "lane": "piano",
+      "basis": "literature-pinned felt stiffness per register (rigid-wall bounce time at 2 m/s); only kHammerFeltScale is a fitted handle"
+    },
+    "piano_voice.kHammerFeltScale": {
+      "class": null,
+      "lane": "piano",
+      "basis": "the fitted handle over the per-register felt tables; classified when the junction keys land"
+    }
+  },
+  "switch_candidates": {
+    "additive.percussion_decay_ms": {
+      "class": null,
+      "values": [
+        45.0,
+        340.0
+      ]
+    },
+    "amp_env.hold_ms": {
+      "class": null,
+      "values": [
+        0.0,
+        900.0
+      ]
+    },
+    "bowed_string.section_rate_hz": {
+      "class": null,
+      "values": [
+        5.0,
+        6.0
+      ]
+    },
+    "bowed_string.section_spread_cents": {
+      "class": "stage_enable",
+      "values": [
+        0.0,
+        15.0,
+        18.0
+      ]
+    },
+    "filter_env.hold_ms": {
+      "class": null,
+      "values": [
+        0.0,
+        10.0
+      ]
+    },
+    "fm.ops[*].env.release_ms": {
+      "class": null,
+      "values": [
+        80.0,
+        120.0,
+        150.0,
+        200.0,
+        250.0,
+        500.0
+      ]
+    },
+    "free_reed.onset_breath_overshoot_key_db": {
+      "class": null,
+      "values": [
+        -3.0,
+        0.0
+      ]
+    },
+    "free_reed.onset_breath_settle_ms": {
+      "class": null,
+      "values": [
+        40.0,
+        60.0,
+        250.0
+      ]
+    },
+    "free_reed.radiation_keytrack": {
+      "class": null,
+      "values": [
+        0.0,
+        1.0
+      ]
+    },
+    "free_reed.slot_swing": {
+      "class": null,
+      "values": [
+        0.0,
+        3.0
+      ]
+    },
+    "hp_cutoff_hz": {
+      "class": "stage_enable",
+      "values": [
+        0.0,
+        20.0,
+        65.0,
+        200.0
+      ]
+    },
+    "modal.tremolo_phase_deg": {
+      "class": null,
+      "values": [
+        0.0,
+        185.0
+      ]
+    },
+    "percussion.plate_cascade_drop_db": {
+      "class": null,
+      "values": [
+        0.0,
+        10.0
+      ]
+    },
+    "percussion.plate_cascade_hz": {
+      "class": null,
+      "values": [
+        0.0,
+        1500.0
+      ]
+    }
+  }
+}
