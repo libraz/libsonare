@@ -891,6 +891,12 @@ def absent_summary(classes: KnobClasses) -> str:
 ENGINE_STEM_SUFFIX = "_voice"
 
 
+#: Engines whose shared constants a fit scoring fewer than all their voices may not name (hand
+#: spec: refused, `--spec auto`: dropped). Every other engine is warned about, and its unscored
+#: voices are for a regression check after the move, not for joint-fit coverage.
+REFUSED_ENGINES = ("brass", "reed")
+
+
 def shared_engine(key: str, catalogue: Catalogue) -> tuple[str, list[str]] | None:
     """The engine an engine constant @p key (`<stem>.<kName>`) is shared across, and its voices.
 
@@ -918,7 +924,7 @@ def _shared_uncovered(
             continue
         engine, voices = shared
         uncovered = [v for v in voices if v not in covered]
-        if uncovered:
+        if uncovered and engine in REFUSED_ENGINES:
             out.append((k.tunable, engine, voices, uncovered))
     return out
 
@@ -982,19 +988,63 @@ def refuse_absent_knobs(
         )
 
 
-def shared_lines(
+def unscored_voices(
     knobs: list[Knob], catalogue: Catalogue, covered: set[str], probe: bool
+) -> dict[str, tuple[str, list[str]]]:
+    """Per engine constant of a write-back fit, outside `REFUSED_ENGINES`, its (engine, unscored voices).
+
+    Empty for a probe, which writes nothing, and for a constant whose voices are all scored.
+    """
+    out = {}
+    for k in knobs:
+        shared = shared_engine(k.tunable, catalogue) if k.tunable is not None else None
+        if shared is None or probe or shared[0] in REFUSED_ENGINES:
+            continue
+        unscored = [v for v in shared[1] if v not in covered]
+        if unscored:
+            out[k.tunable] = (shared[0], unscored)
+    return out
+
+
+def write_unscored_voices(path: Path, unscored: dict[str, tuple[str, list[str]]]) -> None:
+    """Write each constant of @p unscored with the voices the fit does not score, one per line."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(
+        "".join(
+            f"# {key} (engine {engine})\n" + "".join(f"{v}\n" for v in voices)
+            for key, (engine, voices) in unscored.items()
+        )
+    )
+
+
+def shared_lines(
+    knobs: list[Knob],
+    catalogue: Catalogue,
+    covered: set[str],
+    probe: bool,
+    unscored_file: Path | None = None,
 ) -> list[str]:
     """One start-up line per engine constant of the fit, saying how far it reaches.
 
-    A refused fit never gets here; this is what a probe or a full-engine fit reports.
+    A refused fit never gets here. A `REFUSED_ENGINES` constant reports its coverage; any
+    other engine's, on a write-back fit, is a warning naming the file of unscored voices.
     """
     out = []
+    unscored = unscored_voices(knobs, catalogue, covered, probe)
     for k in knobs:
         shared = shared_engine(k.tunable, catalogue) if k.tunable is not None else None
         if shared is None:
             continue
         engine, voices = shared
+        if k.tunable in unscored:
+            n = len(unscored[k.tunable][1])
+            out.append(
+                f"warning: shared engine constant {k.tunable} (engine {engine!r}) is moved for all "
+                f"{len(voices)} voices; this fit does not score {n} of them, listed in {unscored_file}"
+            )
+            continue
+        if engine not in REFUSED_ENGINES:
+            continue
         uncovered = [v for v in voices if v not in covered]
         state = (
             f"covers all {len(voices)} voices"
@@ -1316,8 +1366,8 @@ def auto_spec_report(
             report.excluded.setdefault(entry.cls, []).append(k)
             continue
         if covered is not None and not probe and (shared := shared_engine(k, catalogue)):
-            voices = shared[1]
-            if any(v not in covered for v in voices):
+            engine, voices = shared
+            if engine in REFUSED_ENGINES and any(v not in covered for v in voices):
                 report.shared.append(k)
                 report.shared_cover = (sum(v in covered for v in voices), len(voices))
                 continue

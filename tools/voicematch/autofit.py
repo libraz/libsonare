@@ -353,6 +353,8 @@ from knobs import (
     shared_lines,
     start_report,
     tunable_overrides,
+    unscored_voices,
+    write_unscored_voices,
 )
 from loop_record import committed_note_groups, mark_loop_rows
 from loss import (
@@ -3025,7 +3027,16 @@ def run(args, argv: list[str] | None = None) -> int:
         covered = {p for p in (_voiced_patch(ns, catalogue) for ns in capture_args) if p}
         probe = _writes_nothing(args)
         refuse_absent_knobs(knobs, classes, catalogue=catalogue, covered=covered, probe=probe)
-        for line in shared_lines(knobs, catalogue, covered, probe):
+        unscored = unscored_voices(knobs, catalogue, covered, probe)
+        unscored_file = None
+        if unscored:
+            unscored_file = (
+                Path(args.out).with_suffix(".unscored_voices.txt")
+                if args.out
+                else CORPUS_ROOT / "autofit" / f"unscored_voices_{voiced}.txt"
+            )
+            write_unscored_voices(unscored_file, unscored)
+        for line in shared_lines(knobs, catalogue, covered, probe, unscored_file):
             print(line, file=sys.stderr)
     if not auto and classes is not None:
         gated, _ = gated_dimensions(args)

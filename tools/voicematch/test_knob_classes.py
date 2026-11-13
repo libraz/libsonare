@@ -34,6 +34,8 @@ from knobs import (
     shared_engine,
     shared_lines,
     switch_candidates,
+    unscored_voices,
+    write_unscored_voices,
 )
 
 
@@ -784,3 +786,44 @@ def test_auto_on_a_probe_offers_them_though_the_fit_covers_one_voice():
 def test_auto_without_a_coverage_argument_checks_nothing():
     names, _ = _auto_names()
     assert set(_SHARED) <= set(names)
+
+
+# --- the other engines are warned about, never refused or dropped -------------
+
+_PIANO = ["bright_piano", "bright_piano_wide", "electric_grand", "electric_grand_wide", "fam0",
+          "honky_tonk", "honky_tonk_wide", "piano_dark", "piano_wide"]  # fmt: skip
+_HAMMER = "piano_voice.kHammerJunction"
+
+
+def _piano_catalogue():
+    modes = {p: "piano" for p in _PIANO}
+    defaults = {_HAMMER: 0.5, "fam0.piano.brightness": 0.4, "fam0.piano.strings": 3.0}
+    return Catalogue(defaults, {(0, 0): "fam0"}, {}, modes)
+
+
+def test_a_piano_constant_on_a_grand_only_write_back_fit_is_warned_not_refused(tmp_path):
+    cat = _piano_catalogue()
+    _refuse([_knob(_HAMMER)], _classes(), catalogue=cat, covered={"fam0"})
+    found = unscored_voices([_knob(_HAMMER)], cat, {"fam0"}, False)
+    assert found[_HAMMER][0] == "piano" and len(found[_HAMMER][1]) == 8
+    path = tmp_path / "fit.unscored_voices.txt"
+    write_unscored_voices(path, found)
+    assert path.read_text().splitlines() == [f"# {_HAMMER} (engine piano)", *found[_HAMMER][1]]
+    assert "fam0" not in path.read_text().splitlines()
+    (line,) = shared_lines([_knob(_HAMMER)], cat, {"fam0"}, False, path)
+    assert line == (
+        f"warning: shared engine constant {_HAMMER} (engine 'piano') is moved for all 9 voices; "
+        f"this fit does not score 8 of them, listed in {path}"
+    )
+
+
+def test_the_same_piano_fit_as_a_probe_prints_no_warning():
+    cat = _piano_catalogue()
+    assert unscored_voices([_knob(_HAMMER)], cat, {"fam0"}, True) == {}
+    assert shared_lines([_knob(_HAMMER)], cat, {"fam0"}, True) == []
+
+
+def test_auto_on_the_grand_keeps_the_piano_engine_constants():
+    spec, report = auto_spec_report(0, _piano_catalogue(), classes=_classes(), covered={"fam0"})
+    assert _HAMMER in [e["tunable"] for e in spec]
+    assert report.shared == []
