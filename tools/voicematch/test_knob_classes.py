@@ -736,3 +736,51 @@ def test_the_start_up_line_says_how_far_a_shared_constant_reaches():
     (probe,) = shared_lines([_knob(_BELL)], cat, {"trombone"}, True)
     assert "probe, nothing written back; 5 of 6 voices are not scored: brass_section" in probe
     assert shared_lines([_knob("gs_effects.kTank")], cat, set(), False) == []
+
+
+# --- --spec auto drops what it may not own, a probe keeps it ------------------
+
+
+def _auto_catalogue():
+    cat = _engine_catalogue()
+    cat.defaults.update(
+        {
+            "brass_voice.kBellRadiationMakeup": 2.45,
+            "trombone.brass.bell_cutoff_hz": 900.0,
+            "trombone.brass.mute": 0.0,
+        }
+    )
+    return cat
+
+
+_SHARED = ["brass_voice.kBellRadiationMakeup", "brass_voice.kBellRadiationNorm"]
+
+
+def _auto_names(**kw):
+    spec, report = auto_spec_report(57, _auto_catalogue(), classes=_classes(), **kw)
+    return [e["tunable"] for e in spec], report
+
+
+def test_auto_on_a_single_brass_voice_drops_the_engine_constants_and_reports_them():
+    names, report = _auto_names(covered={"trombone"})
+    assert not [n for n in names if n.startswith("brass_voice.")]
+    assert "trombone.brass.bell_cutoff_hz" in names
+    assert sorted(report.shared) == _SHARED
+    assert "shared engine constant 2 (fit covers 1 of 6 voices)" in " ".join(report.lines())
+
+
+def test_auto_on_a_joint_fit_of_every_brass_voice_offers_them():
+    names, report = _auto_names(covered=set(_BRASS))
+    assert set(_SHARED) <= set(names)
+    assert report.shared == []
+
+
+def test_auto_on_a_probe_offers_them_though_the_fit_covers_one_voice():
+    names, report = _auto_names(covered={"trombone"}, probe=True)
+    assert set(_SHARED) <= set(names)
+    assert report.shared == []
+
+
+def test_auto_without_a_coverage_argument_checks_nothing():
+    names, _ = _auto_names()
+    assert set(_SHARED) <= set(names)

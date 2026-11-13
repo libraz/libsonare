@@ -2941,6 +2941,8 @@ def run(args, argv: list[str] | None = None) -> int:
                 classes=classes,
                 open_groups=tuple(args.open_groups),
                 gated=gated,
+                covered={p for p in (_voiced_patch(ns, catalogue) for ns in capture_args) if p},
+                probe=bool(args.dry_run),
             )
             print(f"# fit_knobs\t{len(taken)}\tof {len(rows)} rows, what --spec auto takes")
             for line in dump_report.reach_lines():
@@ -2968,6 +2970,8 @@ def run(args, argv: list[str] | None = None) -> int:
             classes=classes,
             open_groups=tuple(args.open_groups),
             gated=gated,
+            covered={p for p in (_voiced_patch(ns, catalogue) for ns in capture_args) if p},
+            probe=_writes_nothing(args),
         )
         subject = (
             f"drum note {args.drum_note}"

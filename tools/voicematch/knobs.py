@@ -1091,6 +1091,9 @@ class AutoReport:
     groups_open: list[str] = field(default_factory=list)
     unjudged: dict[str, list[str]] = field(default_factory=dict)
     no_gate: bool = False
+    #: Engine constants left out because the fit scores k of the engine's n voices.
+    shared: list[str] = field(default_factory=list)
+    shared_cover: tuple[int, int] = (0, 0)
 
     def reach_lines(self) -> list[str]:
         """The knobs held out for want of a gated dimension, and the gate that was read."""
@@ -1108,6 +1111,11 @@ class AutoReport:
     def lines(self) -> list[str]:
         """The start-up summary: counts by class, then one line per closed group."""
         counts = [f"{c} {len(self.excluded[c])}" for c in NOT_SEARCHED if self.excluded.get(c)]
+        if self.shared:
+            k, n = self.shared_cover
+            counts.append(
+                f"shared engine constant {len(self.shared)} (fit covers {k} of {n} voices)"
+            )
         if self.stage_off:
             counts.append(f"stage_enable (stage absent here) {len(self.stage_off)}")
         if self.groups_closed:
@@ -1160,6 +1168,8 @@ def auto_spec(
     classes: KnobClasses | None = None,
     open_groups: tuple[str, ...] = (),
     gated: Collection[str] | None = None,
+    covered: Collection[str] | None = None,
+    probe: bool = False,
 ) -> list[dict]:
     """The knob list of `auto_spec_report`, without the account of what it left out."""
     return auto_spec_report(
@@ -1171,6 +1181,8 @@ def auto_spec(
         classes=classes,
         open_groups=open_groups,
         gated=gated,
+        covered=covered,
+        probe=probe,
     )[0]
 
 
@@ -1184,6 +1196,8 @@ def auto_spec_report(
     classes: KnobClasses | None = None,
     open_groups: tuple[str, ...] = (),
     gated: Collection[str] | None = None,
+    covered: Collection[str] | None = None,
+    probe: bool = False,
 ) -> tuple[list[dict], AutoReport]:
     """Build a knob spec for `program` from the library's own catalogue.
 
@@ -1219,6 +1233,12 @@ def auto_spec_report(
     `reach` entry needs a dimension that is not among them is left out, since
     nothing would hold what the fit moves; `None` means no gate was found, which
     is read as no dimension gated and said so in the report.
+
+    `covered` is the patches the fit's objective scores. An engine constant is shared by
+    every voice of its engine, so with it given and `probe` false the constants of an
+    engine the fit does not fully cover are left out and counted in the report, where a
+    hand spec naming one is refused (`refuse_absent_knobs`). A probe writes nothing back
+    and is offered them; `None` skips the check.
     """
     defaults = catalogue.defaults
     if drum_note is not None:
@@ -1295,6 +1315,12 @@ def auto_spec_report(
         if entry is not None and entry.cls in NOT_SEARCHED:
             report.excluded.setdefault(entry.cls, []).append(k)
             continue
+        if covered is not None and not probe and (shared := shared_engine(k, catalogue)):
+            voices = shared[1]
+            if any(v not in covered for v in voices):
+                report.shared.append(k)
+                report.shared_cover = (sum(v in covered for v in voices), len(voices))
+                continue
         if entry is not None and entry.cls == "stage_enable":
             if entry.is_off(defaults[k]):
                 report.stage_off.append(k)
