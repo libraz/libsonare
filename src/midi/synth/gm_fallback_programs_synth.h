@@ -263,16 +263,33 @@ constexpr void configure_synth_programs(ProgramOverrides& o) noexcept {
   pad.stereo_spread = 0.6f;
   pad.gain = 0.5f;
 
-  // New age (GM 88): the bell-lit pad. A slow second LFO on the cutoff is the
-  // shimmer; the stack thins so the top stays clear enough to hear it.
+  // New age (GM 88): three saws through an untracked ~260 Hz corner that a
+  // filter envelope opens by an octave at the onset, a faint +2 octave layer and
+  // key-tracked band noise; against the module this took centroid 109 -> 6 %.
   o.pad_new_age = pad;
-  o.pad_new_age.unison = 5;
-  o.pad_new_age.cutoff_hz = 3400.0f;
-  o.pad_new_age.resonance_q = 1.4f;
-  o.pad_new_age.amp_env = fallback_env(350.0f, 900.0f, 0.75f, 1400.0f);
+  o.pad_new_age.unison = 3;
+  o.pad_new_age.detune_cents = 7.07385f;
+  o.pad_new_age.drift_cents = 0.547395f;
+  o.pad_new_age.cutoff_hz = 261.766f;
+  o.pad_new_age.resonance_q = 1.5832f;
+  o.pad_new_age.key_track = 0.169941f;
+  o.pad_new_age.amp_env = fallback_env(69.7101f, 899.13f, 0.839115f, 1922.43f);
+  o.pad_new_age.filter_env.attack_ms = 5.0f;
+  o.pad_new_age.filter_env.decay_ms = 1000.0f;
+  o.pad_new_age.filter_env.sustain = 0.0f;
+  o.pad_new_age.env_to_cutoff_cents = 1200.0f;
   o.pad_new_age.lfo2_rate_hz = 0.25f;
   o.pad_new_age.mod_matrix.routes[0] = {ModSource::kLfo2, ModDestination::kCutoffCents, 900.0f};
-  o.pad_new_age.gain = 0.4375f;
+  o.pad_new_age.va.osc2_interval_cents = 2400.0f;
+  o.pad_new_age.va.osc2_level = 0.0246181f;
+  o.pad_new_age.va.osc2_dry = 0.99175f;
+  o.pad_new_age.va.noise_level = 0.0137117f;
+  o.pad_new_age.va.band_noise_level = 0.0134352f;
+  o.pad_new_age.va.band_noise_low_hz = 188.088f;
+  o.pad_new_age.va.band_noise_low_key_track = 0.922346f;
+  o.pad_new_age.va.band_noise_high_hz = 1584.9f;
+  o.pad_new_age.va.band_noise_high_key_track = 0.324744f;
+  o.pad_new_age.gain = 0.166684f;
   o.pad_new_age.va.velocity_exponent = 1.05f;
 
   // Warm (GM 89): two saws 6 c apart, one each side of the field, through a
