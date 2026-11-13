@@ -49,10 +49,10 @@ def test_every_state():
 def test_an_unweighted_dimension_crossing_its_bound_is_listed():
     pre = _body(("pad:balance", "median", 9.7, 12.0), ("pad:tnr", "median", 3.0, 6.0))
     post = _body(("pad:balance", "median", 38.0, 12.0), ("pad:tnr", "median", 2.0, 6.0))
-    entries = gate_audit.audit(pre, post, {"tnr"})
+    entries = gate_audit.audit(pre, post, {"tnr": (gate_audit.WEIGHTED, ("tnr",))})
     found = gate_audit.summary(entries)["crossed"]
     assert [(e["key"], e["weighted"], e["delta"]) for e in found] == [
-        ("pad:balance", False, 38.0 - 9.7)
+        ("pad:balance", gate_audit.UNWEIGHTED, 38.0 - 9.7)
     ]
     assert "UNWEIGHTED" in "\n".join(gate_audit.format_flagged(entries))
 
@@ -65,16 +65,55 @@ def test_weighted_is_none_without_a_mapping():
 def test_a_reading_missing_on_one_side_is_unmeasured():
     pre = _body(("a", "median", 1.0, 2.0))
     post = _body(("a", "median", 1.0, 2.0), ("b", "median", 3.0, 2.0))
-    entries = {e["key"]: e for e in gate_audit.audit(pre, post, set())}
+    entries = {e["key"]: e for e in gate_audit.audit(pre, post, {})}
     assert entries["b"]["state"] == "unmeasured" and entries["b"]["missing"] == "before"
     nul = _body(("a", "median", None, 2.0))
-    (e,) = gate_audit.audit(pre, nul, set())
+    (e,) = gate_audit.audit(pre, nul, {})
     assert e["state"] == "unmeasured" and e["missing"] == "after"
 
 
-def test_the_term_table_marks_weighted_dimensions():
-    got = gate_audit.weighted_dimensions({"harm": 1.0, "tnr": 0.0}, refit.GATE_TERMS)
-    assert "balance" in got and "tnr" not in got
+def _weighing(weights):
+    return gate_audit.weighting(weights, refit.GATE_TERMS, refit.GATE_OWN_TERMS)
+
+
+def test_a_mapped_term_reading_another_quantity_is_a_proxy():
+    got = _weighing({"harm": 1.0, "tnr": 0.0})
+    assert got["balance"] == (gate_audit.PROXY, ("harm",))
+    assert got["centroid_pct"] == (gate_audit.PROXY, ("harm",))
+    assert "tnr" not in got
+
+
+def test_the_term_reading_the_dimension_itself_is_weighted():
+    got = _weighing({"tnr": 1.0, "bright": 5.0, "harm": 1.0})
+    assert got["tnr"] == (gate_audit.WEIGHTED, ("tnr",))
+    # The own term outranks the proxy mapped beside it.
+    assert got["centroid_pct"] == (gate_audit.WEIGHTED, ("bright",))
+
+
+def test_a_one_to_many_entry_names_its_term():
+    got = _weighing({"modedyn": 0.5})
+    assert got["attack_hf_swing"] == (gate_audit.PROXY, ("modedyn",))
+    got = _weighing({"hfdyn": 1.0, "modedyn": 0.5})
+    assert got["attack_hf_swing"] == (gate_audit.WEIGHTED, ("hfdyn",))
+
+
+def test_the_pad_case_reads_proxy_and_unweighted():
+    """The pad fit weighed harm and not velspan: balance went 9.7 -> 38.4, vel_range 0.6 -> 14."""
+    weights = {"harm": 1.0, "cents": 0.5, "tnr": 1.0, "mod": 1.0, "env": 0.5, "slope": 0.5}
+    pre = _body(("pad_m:balance", "median", 9.73, 12.16), ("pad:vel_range", "median", 0.58, 1.0))
+    post = _body(("pad_m:balance", "median", 38.37, 12.16), ("pad:vel_range", "median", 13.95, 1.0))
+    text = "\n".join(gate_audit.format_flagged(gate_audit.audit(pre, post, _weighing(weights))))
+    assert "pad_m:balance median: 9.73 -> 38.37 vs bound 12.16 (proxy via harm)" in text
+    assert "pad:vel_range median: 0.58 -> 13.95 vs bound 1 (UNWEIGHTED)" in text
+
+
+def test_an_unclassified_percussion_mapping_reads_unknown():
+    own = refit.PERCUSSION_GATE_OWN_TERMS
+    got = gate_audit.weighting(
+        {"band": 1.0, "velspan": 1.0}, refit.PERCUSSION_GATE_TERMS, own, classified=set(own)
+    )
+    assert got["band_tilt"] == (None, ("band",))
+    assert got["vel_range"] == (gate_audit.WEIGHTED, ("velspan",))
 
 
 def _args(tmp_path, **kw):
@@ -126,7 +165,7 @@ def test_a_finished_run_records_the_audit(tmp_path, monkeypatch):
     assert seen == ["", "p.x=1"]
     assert rec["gates"] == ["c"] and rec["lib"] == "lib.dylib"
     assert [e["key"] for e in rec["crossed"]] == ["c:balance"] and rec["worse_over"] == []
-    assert rec["entries"][0]["weighted"] is False
+    assert rec["entries"][0]["weighted"] == gate_audit.UNWEIGHTED
     assert (tmp_path / "fit.json.gate_audit").is_dir()
 
 

@@ -102,11 +102,12 @@ def _state(bound: float | None, before: float | None, after: float | None) -> st
     return "better" if after < before else "worse_within"
 
 
-def audit(pre: dict, post: dict, weighted: set[str] | None) -> list[dict]:
+def audit(pre: dict, post: dict, weighting: dict[str, tuple] | None) -> list[dict]:
     """Per-(key, stat) before/after entries over two `compare_voice` bodies.
 
-    `weighted` names the gate dimensions the objective weighs (None: unknown, so
-    each entry's flag is None). A key is `<capture>:<dimension>` or a bare dimension.
+    `weighting` is `weighting()`'s per-dimension (flag, terms); a dimension it does
+    not name is unweighted, and None means unknown, so every flag is None. A key is
+    `<capture>:<dimension>` or a bare dimension.
     A reading missing or unmeasured on one side is `unmeasured`, with `missing`
     naming the side(s), so it is never read as `unchanged`.
     """
@@ -125,23 +126,52 @@ def audit(pre: dict, post: dict, weighted: set[str] | None) -> list[dict]:
             "before": before,
             "after": after,
             "delta": None if missing else after - before,
-            "weighted": None if weighted is None else key.rpartition(":")[2] in weighted,
             "state": _state(bound, before, after),
         }
+        flag, terms = (
+            (None, ())
+            if weighting is None
+            else weighting.get(key.rpartition(":")[2], (UNWEIGHTED, ()))
+        )
+        entry["weighted"] = flag
+        if terms:
+            entry["term"] = "+".join(terms)
         if missing:
             entry["missing"] = "+".join(missing)
         out.append(entry)
     return out
 
 
-def weighted_dimensions(weights: dict[str, float], table: dict) -> set[str]:
-    """The gate dimensions whose carrying term (or any of several) has a positive weight."""
-    found = set()
-    for dim, named in table.items():
-        terms = (named,) if isinstance(named, str) else named
-        if any(weights.get(t, 0.0) > 0.0 for t in terms):
-            found.add(dim)
-    return found
+#: The objective weighs the dimension's own quantity.
+WEIGHTED = "weighted"
+#: It weighs a term mapped to the dimension that reads a different quantity.
+PROXY = "proxy"
+#: Nothing the objective weighs is mapped to the dimension.
+UNWEIGHTED = "unweighted"
+
+
+def weighting(
+    weights: dict[str, float], table: dict, own: dict[str, tuple[str, ...]], *, classified=None
+) -> dict[str, tuple[str | None, tuple[str, ...]]]:
+    """Per gate dimension: (flag, the weighted terms behind it).
+
+    `own` lists the terms reading a dimension's own quantity; `table` the terms
+    mapped to it. A weighted own term is `weighted`; else a weighted mapped term is
+    `proxy`; else `unweighted`. A dimension outside @p classified (default: every
+    one) whose only weighted term is a mapped one has an unknown flag (None).
+    """
+    out: dict[str, tuple[str | None, tuple[str, ...]]] = {}
+    for dim in table.keys() | own.keys():
+        named = table.get(dim, ())
+        mapped = (named,) if isinstance(named, str) else tuple(named)
+        hit_own = tuple(t for t in own.get(dim, ()) if weights.get(t, 0.0) > 0.0)
+        hit_map = tuple(t for t in mapped if weights.get(t, 0.0) > 0.0 and t not in hit_own)
+        if hit_own:
+            out[dim] = (WEIGHTED, hit_own)
+        elif hit_map:
+            known = classified is None or dim in classified
+            out[dim] = (PROXY if known else None, hit_map)
+    return out
 
 
 def summary(entries: list[dict]) -> dict[str, list[dict]]:
@@ -156,7 +186,14 @@ def format_flagged(entries: list[dict]) -> list[str]:
         return ["gate audit: no gated statistic crossed or moved further past its bound"]
     lines = [f"gate audit: {len(flagged)} gated statistic(s) pushed past a bound by this fit:"]
     for e in flagged:
-        flag = {True: "weighted", False: "UNWEIGHTED", None: "weighting unknown"}[e["weighted"]]
+        flag = {
+            WEIGHTED: "weighted",
+            PROXY: "proxy",
+            UNWEIGHTED: "UNWEIGHTED",
+            None: "weighting unknown",
+        }[e["weighted"]]
+        if e.get("term"):
+            flag += f" via {e['term']}"
         lines.append(
             f"  {e['state']:<10} {e['key']} {e['stat']}: "
             f"{e['before']:.4g} -> {e['after']:.4g} vs bound {e['bound']:.4g} ({flag})"

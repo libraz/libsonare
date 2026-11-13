@@ -1792,12 +1792,12 @@ def _fold_gate_audit(args, build_dir, compare=gate_audit.compare_voice) -> None:
     except RuntimeError as exc:
         return skip(f"compare failed: {exc}")
     weights = (record.get("fit_profile") or {}).get("weights") or {}
-    table = refit.PERCUSSION_GATE_TERMS if "drum_note" in voice else refit.GATE_TERMS
-    entries = gate_audit.audit(
-        json.loads(pre.read_text()),
-        json.loads(post.read_text()),
-        gate_audit.weighted_dimensions(weights, table),
-    )
+    if "drum_note" in voice:
+        table, own = refit.PERCUSSION_GATE_TERMS, refit.PERCUSSION_GATE_OWN_TERMS
+        weighing = gate_audit.weighting(weights, table, own, classified=set(own))
+    else:
+        weighing = gate_audit.weighting(weights, refit.GATE_TERMS, refit.GATE_OWN_TERMS)
+    entries = gate_audit.audit(json.loads(pre.read_text()), json.loads(post.read_text()), weighing)
     flagged = gate_audit.summary(entries)
     record["gate_audit"] = {
         "lib": str(lib),

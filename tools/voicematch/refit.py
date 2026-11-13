@@ -807,6 +807,25 @@ GATE_TERMS = {
     "attack_hf_swing": ("hfdyn", "modedyn"),
     "crest": "crest",
 }
+#: The terms whose loss reads the dimension's OWN quantity, where one exists. A
+#: GATE_TERMS entry not listed here is a proxy: `slope` and `tail` read per-harmonic
+#: skeleton slopes, `env` a sum of sustain slope, release and attack, `harm` the
+#: harmonic ladder, `lf` the attack's low bands -- none the gate's broadband reading.
+GATE_OWN_TERMS = {
+    "stretch": ("stiff",),
+    "tnr": ("tnr",),
+    "vel_range": ("velspan",),
+    "onset": ("onset",),
+    "onset_settle": ("onset",),
+    "register": ("level",),
+    "attack_hf": ("hf",),
+    "attack_hf_swing": ("hfdyn",),
+    "crest": ("crest",),
+    "centroid_pct": ("bright",),
+    "body": ("body",),
+}
+#: Own-measure terms of the percussion set; the rest of that table is unclassified.
+PERCUSSION_GATE_OWN_TERMS = {"vel_range": ("velspan",), "crest": ("crest",)}
 #: The same for a drum note, whose objective is the percussion term set. `level`
 #: and `dyn` are absent: a module note is one velocity, and both need a contrast.
 PERCUSSION_GATE_TERMS = {
