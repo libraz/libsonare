@@ -1,12 +1,12 @@
 {
-  "_": "Bounds the compare table is held to. All three are absolute limits: 'median' caps the magnitude of the signed median, 'abs_median' caps the median absolute error, which is the one that can fail when errors of opposite sign cancel, and 'p90' caps the 90th percentile of that absolute error, which is the one that can fail when a minority of rows is far out and the median is not. A dimension can sit inside both medians while nearly half its rows are outside the references' own spread. 'rows' is how many of the grid's rows survived censoring into that median, so a later run can tell whether it is comparing against the same population. Re-record only in the same change as the behaviour that justifies it.",
+  "_": "Bounds the compare table is held to. All three are absolute limits: 'median' caps the magnitude of the signed median, 'abs_median' caps the median absolute error, which is the one that can fail when errors of opposite sign cancel, and 'p90' caps the 90th percentile of that absolute error, which is the one that can fail when a minority of rows is far out and the median is not. A dimension can sit inside both medians while nearly half its rows are outside the references' own spread. 'rows' is how many of the grid's rows survived censoring into that median, so a later run can tell whether it is comparing against the same population. 'provenance' records, per statistic, when its value was set, the last re-record at which the measurement was inside it, and what that measurement was; 'recorded_utc' is only when the file was last written. Re-record only in the same change as the behaviour that justifies it.",
   "timbre": "t0",
   "margin": 1.25,
-  "reference_measured_utc": "2026-10-25T20:14:15+00:00",
-  "recorded_utc": "2026-10-25T20:14:17+00:00",
+  "reference_measured_utc": "2026-11-13T19:54:00+00:00",
+  "recorded_utc": "2026-11-13T23:13:22+00:00",
   "model_build": {
-    "built_utc": "2026-10-25T18:14:29Z",
-    "newest_source_utc": "2026-10-25T18:13:35Z",
+    "built_utc": "2026-11-13T22:56:16Z",
+    "newest_source_utc": "2026-11-13T22:43:12Z",
     "stale": false
   },
   "reference_spread": {},
@@ -22,6 +22,9 @@
         "median": {
           "set_utc": "2026-11-13T13:57:32+00:00",
           "set_build": "2026-11-13T13:21:43Z",
+          "held_utc": "2026-11-13T23:13:22+00:00",
+          "measured": 11.62,
+          "outcome": "kept",
           "set_tree": {
             "head": "82921cdd7",
             "dirty": [
@@ -35,9 +38,6 @@
               "src/midi/synth/reed_voice.cpp"
             ]
           },
-          "held_utc": "2026-11-13T13:57:32+00:00",
-          "measured": 11.62,
-          "outcome": "tightened",
           "replaced": {
             "value": 14.812,
             "set_utc": "2026-10-25T20:14:17+00:00",
@@ -47,6 +47,9 @@
         "abs_median": {
           "set_utc": "2026-11-13T13:57:32+00:00",
           "set_build": "2026-11-13T13:21:43Z",
+          "held_utc": "2026-11-13T23:13:22+00:00",
+          "measured": 11.62,
+          "outcome": "kept",
           "set_tree": {
             "head": "82921cdd7",
             "dirty": [
@@ -60,9 +63,6 @@
               "src/midi/synth/reed_voice.cpp"
             ]
           },
-          "held_utc": "2026-11-13T13:57:32+00:00",
-          "measured": 11.62,
-          "outcome": "tightened",
           "replaced": {
             "value": 14.812,
             "set_utc": "2026-10-25T20:14:17+00:00",
@@ -72,6 +72,9 @@
         "p90": {
           "set_utc": "2026-11-13T13:57:32+00:00",
           "set_build": "2026-11-13T13:21:43Z",
+          "held_utc": "2026-11-13T23:13:22+00:00",
+          "measured": 11.916,
+          "outcome": "kept",
           "set_tree": {
             "head": "82921cdd7",
             "dirty": [
@@ -85,9 +88,6 @@
               "src/midi/synth/reed_voice.cpp"
             ]
           },
-          "held_utc": "2026-11-13T13:57:32+00:00",
-          "measured": 11.916,
-          "outcome": "tightened",
           "replaced": {
             "value": 15.202,
             "set_utc": "2026-10-25T20:14:17+00:00",
@@ -107,21 +107,21 @@
         "median": {
           "set_utc": "2026-10-25T20:14:17+00:00",
           "set_build": "2026-10-25T18:14:29Z",
-          "held_utc": "2026-11-13T11:49:49+00:00",
+          "held_utc": "2026-11-13T23:13:22+00:00",
           "measured": 1067.5,
           "outcome": "kept"
         },
         "abs_median": {
           "set_utc": "2026-10-25T20:14:17+00:00",
           "set_build": "2026-10-25T18:14:29Z",
-          "held_utc": "2026-11-13T11:49:49+00:00",
+          "held_utc": "2026-11-13T23:13:22+00:00",
           "measured": 1067.5,
           "outcome": "kept"
         },
         "p90": {
           "set_utc": "2026-10-25T20:14:17+00:00",
           "set_build": "2026-10-25T18:14:29Z",
-          "held_utc": "2026-11-13T11:49:49+00:00",
+          "held_utc": "2026-11-13T23:13:22+00:00",
           "measured": 1115.42,
           "outcome": "kept"
         }
@@ -138,6 +138,9 @@
         "median": {
           "set_utc": "2026-11-13T13:57:32+00:00",
           "set_build": "2026-11-13T13:21:43Z",
+          "held_utc": "2026-11-13T23:13:22+00:00",
+          "measured": 90.4711,
+          "outcome": "kept",
           "set_tree": {
             "head": "82921cdd7",
             "dirty": [
@@ -151,9 +154,6 @@
               "src/midi/synth/reed_voice.cpp"
             ]
           },
-          "held_utc": "2026-11-13T13:57:32+00:00",
-          "measured": 90.4711,
-          "outcome": "kept",
           "replaced": {
             "value": 112.831,
             "set_utc": "2026-10-25T20:14:17+00:00",
@@ -163,6 +163,9 @@
         "abs_median": {
           "set_utc": "2026-11-13T13:57:32+00:00",
           "set_build": "2026-11-13T13:21:43Z",
+          "held_utc": "2026-11-13T23:13:22+00:00",
+          "measured": 90.4711,
+          "outcome": "kept",
           "set_tree": {
             "head": "82921cdd7",
             "dirty": [
@@ -176,9 +179,6 @@
               "src/midi/synth/reed_voice.cpp"
             ]
           },
-          "held_utc": "2026-11-13T13:57:32+00:00",
-          "measured": 90.4711,
-          "outcome": "kept",
           "replaced": {
             "value": 112.831,
             "set_utc": "2026-10-25T20:14:17+00:00",
@@ -188,6 +188,9 @@
         "p90": {
           "set_utc": "2026-11-13T13:57:32+00:00",
           "set_build": "2026-11-13T13:21:43Z",
+          "held_utc": "2026-11-13T23:13:22+00:00",
+          "measured": 113.5388,
+          "outcome": "kept",
           "set_tree": {
             "head": "82921cdd7",
             "dirty": [
@@ -201,9 +204,6 @@
               "src/midi/synth/reed_voice.cpp"
             ]
           },
-          "held_utc": "2026-11-13T13:57:32+00:00",
-          "measured": 113.5388,
-          "outcome": "tightened",
           "replaced": {
             "value": 143.179,
             "set_utc": "2026-10-25T20:14:17+00:00",

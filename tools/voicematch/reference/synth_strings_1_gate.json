@@ -1,12 +1,12 @@
 {
-  "_": "Bounds the compare table is held to. All three are absolute limits: 'median' caps the magnitude of the signed median, 'abs_median' caps the median absolute error, which is the one that can fail when errors of opposite sign cancel, and 'p90' caps the 90th percentile of that absolute error, which is the one that can fail when a minority of rows is far out and the median is not. A dimension can sit inside both medians while nearly half its rows are outside the references' own spread. 'rows' is how many of the grid's rows survived censoring into that median, so a later run can tell whether it is comparing against the same population. Re-record only in the same change as the behaviour that justifies it.",
+  "_": "Bounds the compare table is held to. All three are absolute limits: 'median' caps the magnitude of the signed median, 'abs_median' caps the median absolute error, which is the one that can fail when errors of opposite sign cancel, and 'p90' caps the 90th percentile of that absolute error, which is the one that can fail when a minority of rows is far out and the median is not. A dimension can sit inside both medians while nearly half its rows are outside the references' own spread. 'rows' is how many of the grid's rows survived censoring into that median, so a later run can tell whether it is comparing against the same population. 'provenance' records, per statistic, when its value was set, the last re-record at which the measurement was inside it, and what that measurement was; 'recorded_utc' is only when the file was last written. Re-record only in the same change as the behaviour that justifies it.",
   "timbre": "gm051",
   "margin": 1.25,
-  "reference_measured_utc": "2026-10-23T19:17:04+00:00",
-  "recorded_utc": "2026-10-24T20:59:15+00:00",
+  "reference_measured_utc": "2026-11-13T20:02:10+00:00",
+  "recorded_utc": "2026-11-13T23:14:33+00:00",
   "model_build": {
-    "built_utc": "2026-10-24T20:56:07Z",
-    "newest_source_utc": "2026-10-24T20:51:21Z",
+    "built_utc": "2026-11-13T22:56:16Z",
+    "newest_source_utc": "2026-11-13T22:43:12Z",
     "stale": false
   },
   "reference_spread": {},
@@ -16,6 +16,7 @@
   "_tnr_mask_reading": "tnr.median (was 3.90) deleted 2026-10-23 and re-recorded when the model's tone-to-noise ratio came to be read through its reference's mask: each reference row records the pitch motion and tremolo its own mask was widened by, and the model note is measured through that record rather than its own, so the same bins count as tone on both sides. The reference's own ratio did not move.",
   "_vibrato_reading": "tnr.p90 (was 15.995) deleted 2026-10-23 and re-recorded when the measurement moved on both sides at once: under a vibrato the tuning is the fundamental's mean pitch, demodulated under its own FM extent, rather than the strongest spectral line within 80 c; a partial's level is its power summed over that FM extent rather than its peak bin; and a vibrato whose rate wanders, or whose line shares the pitch track with fast FM, now widens the tone-to-noise mask and is read at the band's RMS depth over its rate span. The reference was re-measured and the model is read with the same ruler, so these bounds were recorded under a ruler that no longer exists. A still tone reads as it did.",
   "_pitch_ruler": "raised on 2026-10-24 when the held pitch moved from the strongest peak to the power centroid of each partial's lines (metrics_partials.line_centroid_pitch), and every reference was re-measured with it: tnr.median 5.44 -> 10.175. The old bounds were recorded from a reading that picked one of a partial's detuned lines by the window's beat phase, or placed the windows that the other readings take from f0 on that line.",
+  "_module_split": "Every bound but vel_range was deleted when this slot's colour and behaviour moved to `synth_strings_1_module` (stretch, tnr, attack, body, stereo, balance, centroid_pct, register); they held the voice to the library's sound, which `policy.json` does not aim a machine-defined slot at.",
   "bounds": {
     "vel_range": {
       "floor": 1.0,
@@ -28,26 +29,25 @@
         "median": {
           "set_utc": "2026-10-24T20:59:15+00:00",
           "set_build": "2026-10-24T20:56:07Z",
-          "held_utc": "2026-11-13T11:49:49+00:00",
+          "held_utc": "2026-11-13T23:14:33+00:00",
           "measured": 0.02,
           "outcome": "kept"
         },
         "abs_median": {
           "set_utc": "2026-10-24T20:59:15+00:00",
           "set_build": "2026-10-24T20:56:07Z",
-          "held_utc": "2026-11-13T11:49:49+00:00",
+          "held_utc": "2026-11-13T23:14:33+00:00",
           "measured": 0.03,
           "outcome": "kept"
         },
         "p90": {
           "set_utc": "2026-10-24T20:59:15+00:00",
           "set_build": "2026-10-24T20:56:07Z",
-          "held_utc": "2026-11-13T11:49:49+00:00",
+          "held_utc": "2026-11-13T23:14:33+00:00",
           "measured": 0.074,
           "outcome": "kept"
         }
       }
     }
-  },
-  "_module_split": "Every bound but vel_range was deleted when this slot's colour and behaviour moved to `synth_strings_1_module` (stretch, tnr, attack, body, stereo, balance, centroid_pct, register); they held the voice to the library's sound, which `policy.json` does not aim a machine-defined slot at."
+  }
 }

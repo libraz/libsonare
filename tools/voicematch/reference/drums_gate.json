@@ -1,12 +1,12 @@
 {
-  "_": "Bounds the compare table is held to. All three are absolute limits: 'median' caps the magnitude of the signed median, 'abs_median' caps the median absolute error, which is the one that can fail when errors of opposite sign cancel, and 'p90' caps the 90th percentile of that absolute error, which is the one that can fail when a minority of rows is far out and the median is not. A dimension can sit inside both medians while nearly half its rows are outside the references' own spread. 'rows' is how many of the grid's rows survived censoring into that median, so a later run can tell whether it is comparing against the same population. Re-record only in the same change as the behaviour that justifies it.",
+  "_": "Bounds the compare table is held to. All three are absolute limits: 'median' caps the magnitude of the signed median, 'abs_median' caps the median absolute error, which is the one that can fail when errors of opposite sign cancel, and 'p90' caps the 90th percentile of that absolute error, which is the one that can fail when a minority of rows is far out and the median is not. A dimension can sit inside both medians while nearly half its rows are outside the references' own spread. 'rows' is how many of the grid's rows survived censoring into that median, so a later run can tell whether it is comparing against the same population. 'provenance' records, per statistic, when its value was set, the last re-record at which the measurement was inside it, and what that measurement was; 'recorded_utc' is only when the file was last written. Re-record only in the same change as the behaviour that justifies it.",
   "timbre": "kit-b",
   "margin": 1.25,
-  "reference_measured_utc": "2026-10-15T08:16:24+00:00",
-  "recorded_utc": "2026-09-26T13:03:57+00:00",
+  "reference_measured_utc": "2026-11-13T19:45:01+00:00",
+  "recorded_utc": "2026-11-13T23:07:05+00:00",
   "model_build": {
-    "built_utc": "2026-09-26T06:41:06Z",
-    "newest_source_utc": "2026-09-26T06:24:21Z",
+    "built_utc": "2026-11-13T22:56:16Z",
+    "newest_source_utc": "2026-11-13T22:43:12Z",
     "stale": false
   },
   "reference_spread": {},
@@ -14,24 +14,32 @@
     "vel_range": {
       "floor": 1.0,
       "floor_from": "guess",
-      "median": 1.488,
-      "abs_median": 4.16,
+      "median": 1.0,
+      "abs_median": 1.0,
       "p90": 7.605,
       "rows": 47,
       "provenance": {
         "median": {
-          "set_utc": "2026-09-26T13:03:57+00:00",
-          "set_build": "2026-09-26T06:41:06Z",
-          "held_utc": "2026-11-13T11:49:49+00:00",
-          "measured": 0.13,
-          "outcome": "kept"
+          "set_utc": "2026-11-13T23:07:05+00:00",
+          "set_build": "2026-11-13T22:56:16Z",
+          "held_utc": "2026-11-13T23:07:05+00:00",
+          "measured": 0.01,
+          "outcome": "tightened",
+          "set_tree": {
+            "head": "e37d16abf",
+            "dirty": []
+          }
         },
         "abs_median": {
-          "set_utc": "2026-08-27T11:30:35+00:00",
-          "set_build": null,
-          "held_utc": "2026-11-13T11:49:49+00:00",
-          "measured": 3.74,
-          "outcome": "kept"
+          "set_utc": "2026-11-13T23:07:05+00:00",
+          "set_build": "2026-11-13T22:56:16Z",
+          "held_utc": "2026-11-13T23:07:05+00:00",
+          "measured": 0.03,
+          "outcome": "tightened",
+          "set_tree": {
+            "head": "e37d16abf",
+            "dirty": []
+          }
         },
         "p90": {
           "set_utc": "2026-09-26T13:03:57+00:00",

@@ -1,12 +1,12 @@
 {
-  "_": "Bounds the compare table is held to. All three are absolute limits: 'median' caps the magnitude of the signed median, 'abs_median' caps the median absolute error, which is the one that can fail when errors of opposite sign cancel, and 'p90' caps the 90th percentile of that absolute error, which is the one that can fail when a minority of rows is far out and the median is not. A dimension can sit inside both medians while nearly half its rows are outside the references' own spread. 'rows' is how many of the grid's rows survived censoring into that median, so a later run can tell whether it is comparing against the same population. Re-record only in the same change as the behaviour that justifies it.",
+  "_": "Bounds the compare table is held to. All three are absolute limits: 'median' caps the magnitude of the signed median, 'abs_median' caps the median absolute error, which is the one that can fail when errors of opposite sign cancel, and 'p90' caps the 90th percentile of that absolute error, which is the one that can fail when a minority of rows is far out and the median is not. A dimension can sit inside both medians while nearly half its rows are outside the references' own spread. 'rows' is how many of the grid's rows survived censoring into that median, so a later run can tell whether it is comparing against the same population. 'provenance' records, per statistic, when its value was set, the last re-record at which the measurement was inside it, and what that measurement was; 'recorded_utc' is only when the file was last written. Re-record only in the same change as the behaviour that justifies it.",
   "timbre": "plenum-a",
   "margin": 1.25,
-  "reference_measured_utc": "2026-10-23T20:06:06+00:00",
-  "recorded_utc": "2026-10-26T06:35:44+00:00",
+  "reference_measured_utc": "2026-11-13T19:53:24+00:00",
+  "recorded_utc": "2026-11-13T23:13:01+00:00",
   "model_build": {
-    "built_utc": "2026-10-26T06:34:05Z",
-    "newest_source_utc": "2026-10-26T00:12:32Z",
+    "built_utc": "2026-11-13T22:56:16Z",
+    "newest_source_utc": "2026-11-13T22:43:12Z",
     "stale": false
   },
   "reference_spread": {
@@ -14,37 +14,41 @@
     "balance": 3.948,
     "centroid_pct": 17.2306,
     "register": 2.81,
-    "stretch": 0.74
+    "stretch": 0.72
   },
   "_pitch_motion_reading": "balance.p90 (was 9.485) deleted 2026-10-23 and re-recorded when the tone-to-noise mask and the partial-level windows began widening, where no vibrato line is read, by the held excursion of the demodulated fundamental: twice the 99th percentile of its power-weighted distance from the mean pitch over the note's held part (0.3 s in to 0.15 s before the end), at the rate under which nine tenths of the motion lies, and 10 cents peak to peak at least. This reference's held pitch moves: an excursion reads on 18 of 22 rows, median 25 c at 10.6 Hz, ranks beating against each other. The held pitch is not moved by it, so a still tone, a drift, a vibrato and the tuning read as they did.",
   "bounds": {
     "stretch": {
-      "floor": 0.74,
+      "floor": 0.72,
       "floor_from": "measured spread",
       "median": 0.844,
-      "abs_median": 1.081,
+      "abs_median": 1.006,
       "p90": 2.494,
       "rows": 11,
       "provenance": {
         "median": {
           "set_utc": "2026-10-22T16:13:15+00:00",
           "set_build": "2026-10-22T15:28:03Z",
-          "held_utc": "2026-11-13T11:49:49+00:00",
-          "measured": 0.765,
+          "held_utc": "2026-11-13T23:13:01+00:00",
+          "measured": 0.755,
           "outcome": "kept"
         },
         "abs_median": {
-          "set_utc": "2026-10-26T06:35:44+00:00",
-          "set_build": "2026-10-26T06:34:05Z",
-          "held_utc": "2026-11-13T11:49:49+00:00",
-          "measured": 0.775,
-          "outcome": "kept"
+          "set_utc": "2026-11-13T23:13:01+00:00",
+          "set_build": "2026-11-13T22:56:16Z",
+          "held_utc": "2026-11-13T23:13:01+00:00",
+          "measured": 0.805,
+          "outcome": "tightened",
+          "set_tree": {
+            "head": "e37d16abf",
+            "dirty": []
+          }
         },
         "p90": {
           "set_utc": "2026-10-26T06:35:44+00:00",
           "set_build": "2026-10-26T06:34:05Z",
-          "held_utc": "2026-11-13T11:49:49+00:00",
-          "measured": 2.275,
+          "held_utc": "2026-11-13T23:13:01+00:00",
+          "measured": 2.485,
           "outcome": "kept"
         }
       }
@@ -60,21 +64,21 @@
         "median": {
           "set_utc": "2026-10-20T06:49:57+00:00",
           "set_build": "2026-10-20T06:49:48Z",
-          "held_utc": "2026-11-13T11:49:49+00:00",
+          "held_utc": "2026-11-13T23:13:01+00:00",
           "measured": 150.0,
           "outcome": "kept"
         },
         "abs_median": {
           "set_utc": "2026-10-20T06:49:57+00:00",
           "set_build": "2026-10-20T06:49:48Z",
-          "held_utc": "2026-11-13T11:49:49+00:00",
+          "held_utc": "2026-11-13T23:13:01+00:00",
           "measured": 150.0,
           "outcome": "kept"
         },
         "p90": {
           "set_utc": "2026-10-20T06:49:57+00:00",
           "set_build": "2026-10-20T06:49:48Z",
-          "held_utc": "2026-11-13T11:49:49+00:00",
+          "held_utc": "2026-11-13T23:13:01+00:00",
           "measured": 530.0,
           "outcome": "kept"
         }
@@ -91,21 +95,21 @@
         "median": {
           "set_utc": "2026-08-26T15:51:56+00:00",
           "set_build": null,
-          "held_utc": "2026-11-13T11:49:49+00:00",
+          "held_utc": "2026-11-13T23:13:01+00:00",
           "measured": 0.478,
           "outcome": "kept"
         },
         "abs_median": {
           "set_utc": "2026-10-26T06:35:44+00:00",
           "set_build": "2026-10-26T06:34:05Z",
-          "held_utc": "2026-11-13T11:49:49+00:00",
+          "held_utc": "2026-11-13T23:13:01+00:00",
           "measured": 4.788,
           "outcome": "kept"
         },
         "p90": {
           "set_utc": "2026-10-22T20:02:33+00:00",
           "set_build": "2026-10-22T16:49:49Z",
-          "held_utc": "2026-11-13T11:49:49+00:00",
+          "held_utc": "2026-11-13T23:13:01+00:00",
           "measured": 10.252,
           "outcome": "kept"
         }
@@ -122,21 +126,21 @@
         "median": {
           "set_utc": "2026-10-20T05:58:42+00:00",
           "set_build": "2026-10-20T05:58:33Z",
-          "held_utc": "2026-11-13T11:49:49+00:00",
+          "held_utc": "2026-11-13T23:13:01+00:00",
           "measured": 15.9918,
           "outcome": "kept"
         },
         "abs_median": {
           "set_utc": "2026-10-20T06:49:57+00:00",
           "set_build": "2026-10-20T06:49:48Z",
-          "held_utc": "2026-11-13T11:49:49+00:00",
+          "held_utc": "2026-11-13T23:13:01+00:00",
           "measured": 15.9918,
           "outcome": "kept"
         },
         "p90": {
           "set_utc": "2026-10-20T05:58:42+00:00",
           "set_build": "2026-10-20T05:58:33Z",
-          "held_utc": "2026-11-13T11:49:49+00:00",
+          "held_utc": "2026-11-13T23:13:01+00:00",
           "measured": 33.4349,
           "outcome": "kept"
         }
@@ -147,29 +151,33 @@
       "floor_from": "measured spread",
       "median": 2.81,
       "abs_median": 7.075,
-      "p90": 12.487,
+      "p90": 12.237,
       "rows": 11,
       "provenance": {
         "median": {
           "set_utc": "2026-10-20T05:58:42+00:00",
           "set_build": "2026-10-20T05:58:33Z",
-          "held_utc": "2026-11-13T11:49:49+00:00",
+          "held_utc": "2026-11-13T23:13:01+00:00",
           "measured": 1.69,
           "outcome": "kept"
         },
         "abs_median": {
           "set_utc": "2026-10-20T06:49:57+00:00",
           "set_build": "2026-10-20T06:49:48Z",
-          "held_utc": "2026-11-13T11:49:49+00:00",
+          "held_utc": "2026-11-13T23:13:01+00:00",
           "measured": 5.85,
           "outcome": "kept"
         },
         "p90": {
-          "set_utc": "2026-10-20T06:49:57+00:00",
-          "set_build": "2026-10-20T06:49:48Z",
-          "held_utc": "2026-11-13T11:49:49+00:00",
+          "set_utc": "2026-11-13T23:13:01+00:00",
+          "set_build": "2026-11-13T22:56:16Z",
+          "held_utc": "2026-11-13T23:13:01+00:00",
           "measured": 9.79,
-          "outcome": "kept"
+          "outcome": "tightened",
+          "set_tree": {
+            "head": "e37d16abf",
+            "dirty": []
+          }
         }
       }
     }
