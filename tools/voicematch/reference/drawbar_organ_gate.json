@@ -28,7 +28,30 @@
       "median": 0.253,
       "abs_median": 0.253,
       "p90": 0.553,
-      "rows": 22
+      "rows": 22,
+      "provenance": {
+        "median": {
+          "set_utc": "2026-10-26T06:34:40+00:00",
+          "set_build": "2026-10-26T06:34:05Z",
+          "held_utc": null,
+          "measured": null,
+          "outcome": null
+        },
+        "abs_median": {
+          "set_utc": "2026-10-26T06:34:40+00:00",
+          "set_build": "2026-10-26T06:34:05Z",
+          "held_utc": null,
+          "measured": null,
+          "outcome": null
+        },
+        "p90": {
+          "set_utc": "2026-10-26T06:34:40+00:00",
+          "set_build": "2026-10-26T06:34:05Z",
+          "held_utc": null,
+          "measured": null,
+          "outcome": null
+        }
+      }
     },
     "tnr": {
       "floor": 17.64,
@@ -36,7 +59,30 @@
       "median": 17.64,
       "abs_median": 17.64,
       "p90": 19.585,
-      "rows": 22
+      "rows": 22,
+      "provenance": {
+        "median": {
+          "set_utc": "2026-10-22T01:21:50+00:00",
+          "set_build": "2026-10-21T10:18:24Z",
+          "held_utc": null,
+          "measured": null,
+          "outcome": null
+        },
+        "abs_median": {
+          "set_utc": "2026-10-22T01:21:50+00:00",
+          "set_build": "2026-10-21T10:18:24Z",
+          "held_utc": null,
+          "measured": null,
+          "outcome": null
+        },
+        "p90": {
+          "set_utc": "2026-10-22T01:21:50+00:00",
+          "set_build": "2026-10-21T10:18:24Z",
+          "held_utc": null,
+          "measured": null,
+          "outcome": null
+        }
+      }
     },
     "damper": {
       "floor": 587.5,
@@ -44,7 +90,30 @@
       "median": 587.5,
       "abs_median": 587.5,
       "p90": 587.5,
-      "rows": 22
+      "rows": 22,
+      "provenance": {
+        "median": {
+          "set_utc": "2026-10-22T01:21:50+00:00",
+          "set_build": "2026-10-21T10:18:24Z",
+          "held_utc": null,
+          "measured": null,
+          "outcome": null
+        },
+        "abs_median": {
+          "set_utc": "2026-10-22T01:21:50+00:00",
+          "set_build": "2026-10-21T10:18:24Z",
+          "held_utc": null,
+          "measured": null,
+          "outcome": null
+        },
+        "p90": {
+          "set_utc": "2026-10-22T01:21:50+00:00",
+          "set_build": "2026-10-21T10:18:24Z",
+          "held_utc": null,
+          "measured": null,
+          "outcome": null
+        }
+      }
     },
     "attack": {
       "floor": 40.0,
@@ -52,7 +121,30 @@
       "median": 40.0,
       "abs_median": 40.0,
       "p90": 40.0,
-      "rows": 22
+      "rows": 22,
+      "provenance": {
+        "median": {
+          "set_utc": "2026-09-02T06:50:13+00:00",
+          "set_build": null,
+          "held_utc": null,
+          "measured": null,
+          "outcome": null
+        },
+        "abs_median": {
+          "set_utc": "2026-09-02T06:50:13+00:00",
+          "set_build": null,
+          "held_utc": null,
+          "measured": null,
+          "outcome": null
+        },
+        "p90": {
+          "set_utc": "2026-09-09T16:53:23+00:00",
+          "set_build": null,
+          "held_utc": null,
+          "measured": null,
+          "outcome": null
+        }
+      }
     },
     "stereo": {
       "floor": 0.1715,
@@ -60,7 +152,30 @@
       "median": 0.258,
       "abs_median": 0.258,
       "p90": 0.732,
-      "rows": 22
+      "rows": 22,
+      "provenance": {
+        "median": {
+          "set_utc": "2026-08-27T15:37:06+00:00",
+          "set_build": null,
+          "held_utc": null,
+          "measured": null,
+          "outcome": null
+        },
+        "abs_median": {
+          "set_utc": "2026-08-27T15:37:06+00:00",
+          "set_build": null,
+          "held_utc": null,
+          "measured": null,
+          "outcome": null
+        },
+        "p90": {
+          "set_utc": "2026-09-09T16:53:23+00:00",
+          "set_build": null,
+          "held_utc": null,
+          "measured": null,
+          "outcome": null
+        }
+      }
     },
     "balance": {
       "floor": 13.686,
@@ -68,7 +183,30 @@
       "median": 25.454,
       "abs_median": 25.454,
       "p90": 40.928,
-      "rows": 22
+      "rows": 22,
+      "provenance": {
+        "median": {
+          "set_utc": "2026-09-01T10:12:18+00:00",
+          "set_build": null,
+          "held_utc": null,
+          "measured": null,
+          "outcome": null
+        },
+        "abs_median": {
+          "set_utc": "2026-09-01T10:12:18+00:00",
+          "set_build": null,
+          "held_utc": null,
+          "measured": null,
+          "outcome": null
+        },
+        "p90": {
+          "set_utc": "2026-10-22T01:21:50+00:00",
+          "set_build": "2026-10-21T10:18:24Z",
+          "held_utc": null,
+          "measured": null,
+          "outcome": null
+        }
+      }
     },
     "centroid_pct": {
       "floor": 177.1716,
@@ -76,7 +214,30 @@
       "median": 177.172,
       "abs_median": 177.172,
       "p90": 177.172,
-      "rows": 22
+      "rows": 22,
+      "provenance": {
+        "median": {
+          "set_utc": "2026-08-27T15:37:06+00:00",
+          "set_build": null,
+          "held_utc": null,
+          "measured": null,
+          "outcome": null
+        },
+        "abs_median": {
+          "set_utc": "2026-08-27T15:37:06+00:00",
+          "set_build": null,
+          "held_utc": null,
+          "measured": null,
+          "outcome": null
+        },
+        "p90": {
+          "set_utc": "2026-09-09T16:53:23+00:00",
+          "set_build": null,
+          "held_utc": null,
+          "measured": null,
+          "outcome": null
+        }
+      }
     },
     "body": {
       "floor": 22.41,
@@ -84,7 +245,30 @@
       "median": 22.41,
       "abs_median": 22.41,
       "p90": 22.604,
-      "rows": 18
+      "rows": 18,
+      "provenance": {
+        "median": {
+          "set_utc": "2026-08-27T15:37:06+00:00",
+          "set_build": null,
+          "held_utc": null,
+          "measured": null,
+          "outcome": null
+        },
+        "abs_median": {
+          "set_utc": "2026-08-27T15:37:06+00:00",
+          "set_build": null,
+          "held_utc": null,
+          "measured": null,
+          "outcome": null
+        },
+        "p90": {
+          "set_utc": "2026-09-09T16:53:23+00:00",
+          "set_build": null,
+          "held_utc": null,
+          "measured": null,
+          "outcome": null
+        }
+      }
     },
     "vel_range": {
       "floor": 0.31,
@@ -92,7 +276,30 @@
       "median": 0.7,
       "abs_median": 0.7,
       "p90": 0.912,
-      "rows": 11
+      "rows": 11,
+      "provenance": {
+        "median": {
+          "set_utc": "2026-08-27T15:42:02+00:00",
+          "set_build": null,
+          "held_utc": null,
+          "measured": null,
+          "outcome": null
+        },
+        "abs_median": {
+          "set_utc": "2026-08-27T15:42:02+00:00",
+          "set_build": null,
+          "held_utc": null,
+          "measured": null,
+          "outcome": null
+        },
+        "p90": {
+          "set_utc": "2026-09-09T16:53:23+00:00",
+          "set_build": null,
+          "held_utc": null,
+          "measured": null,
+          "outcome": null
+        }
+      }
     },
     "register": {
       "floor": 1.135,
@@ -100,7 +307,30 @@
       "median": 1.135,
       "abs_median": 1.887,
       "p90": 3.699,
-      "rows": 22
+      "rows": 22,
+      "provenance": {
+        "median": {
+          "set_utc": "2026-08-28T09:43:02+00:00",
+          "set_build": null,
+          "held_utc": null,
+          "measured": null,
+          "outcome": null
+        },
+        "abs_median": {
+          "set_utc": "2026-08-28T09:43:02+00:00",
+          "set_build": null,
+          "held_utc": null,
+          "measured": null,
+          "outcome": null
+        },
+        "p90": {
+          "set_utc": "2026-09-09T16:53:23+00:00",
+          "set_build": null,
+          "held_utc": null,
+          "measured": null,
+          "outcome": null
+        }
+      }
     }
   }
 }

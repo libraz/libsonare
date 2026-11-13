@@ -17,7 +17,30 @@
       "median": 1.0,
       "abs_median": 1.062,
       "p90": 3.27,
-      "rows": 7
+      "rows": 7,
+      "provenance": {
+        "median": {
+          "set_utc": "2026-10-24T20:57:48+00:00",
+          "set_build": "2026-10-24T20:56:07Z",
+          "held_utc": null,
+          "measured": null,
+          "outcome": null
+        },
+        "abs_median": {
+          "set_utc": "2026-10-24T20:57:48+00:00",
+          "set_build": "2026-10-24T20:56:07Z",
+          "held_utc": null,
+          "measured": null,
+          "outcome": null
+        },
+        "p90": {
+          "set_utc": "2026-10-24T20:57:48+00:00",
+          "set_build": "2026-10-24T20:56:07Z",
+          "held_utc": null,
+          "measured": null,
+          "outcome": null
+        }
+      }
     }
   },
   "_module_split": "Every bound but vel_range was deleted when this slot's colour and behaviour moved to `lead_fifths_module` (stretch, tnr, damper, attack, stereo, balance, centroid_pct, body, register); they held the voice to the library's sound, which `policy.json` does not aim a machine-defined slot at."

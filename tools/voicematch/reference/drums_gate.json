@@ -17,7 +17,30 @@
       "median": 1.488,
       "abs_median": 4.16,
       "p90": 7.605,
-      "rows": 47
+      "rows": 47,
+      "provenance": {
+        "median": {
+          "set_utc": "2026-09-26T13:03:57+00:00",
+          "set_build": "2026-09-26T06:41:06Z",
+          "held_utc": null,
+          "measured": null,
+          "outcome": null
+        },
+        "abs_median": {
+          "set_utc": "2026-08-27T11:30:35+00:00",
+          "set_build": null,
+          "held_utc": null,
+          "measured": null,
+          "outcome": null
+        },
+        "p90": {
+          "set_utc": "2026-09-26T13:03:57+00:00",
+          "set_build": "2026-09-26T06:41:06Z",
+          "held_utc": null,
+          "measured": null,
+          "outcome": null
+        }
+      }
     }
   }
 }

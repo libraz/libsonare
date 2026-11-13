@@ -17,7 +17,30 @@
       "median": 1.0,
       "abs_median": 1.662,
       "p90": 2.072,
-      "rows": 3
+      "rows": 3,
+      "provenance": {
+        "median": {
+          "set_utc": "2026-10-24T20:56:11+00:00",
+          "set_build": "2026-10-24T20:56:07Z",
+          "held_utc": null,
+          "measured": null,
+          "outcome": null
+        },
+        "abs_median": {
+          "set_utc": "2026-10-24T20:56:11+00:00",
+          "set_build": "2026-10-24T20:56:07Z",
+          "held_utc": null,
+          "measured": null,
+          "outcome": null
+        },
+        "p90": {
+          "set_utc": "2026-10-24T20:56:11+00:00",
+          "set_build": "2026-10-24T20:56:07Z",
+          "held_utc": null,
+          "measured": null,
+          "outcome": null
+        }
+      }
     }
   },
   "_module_split": "Every bound but vel_range was deleted when this slot's colour and behaviour moved to `bird_tweet_module` (decay, attack, centroid_pct); they held the voice to the library's sound, which `policy.json` does not aim a machine-defined slot at."
