@@ -13,6 +13,8 @@ import subprocess
 import sys
 from pathlib import Path
 
+from knobs import merge_overrides
+
 HERE = Path(__file__).resolve().parent
 CAPTURE_DIR = HERE / "capture"
 PYTHON = [sys.executable]
@@ -29,11 +31,14 @@ STATES = (
 )
 
 
-def compare(voice: dict, out: Path, lib: Path, overrides: str = "") -> None:
+def compare(
+    voice: dict, out: Path, lib: Path, overrides: str = "", base_overrides: str = ""
+) -> None:
     # The fit's own tuning build: any other library ignores the overrides, and the
     # post-fit reading would then repeat the pre-fit one without saying so.
     env = {**os.environ, "SONARE_LIB_PATH": str(lib)}
     env.pop("SONARE_TUNING_OVERRIDES", None)
+    overrides = merge_overrides(base_overrides, overrides)
     if overrides:
         env["SONARE_TUNING_OVERRIDES"] = overrides
     cmd = PYTHON + [
@@ -56,21 +61,26 @@ def compare(voice: dict, out: Path, lib: Path, overrides: str = "") -> None:
 
 
 def compare_voice(
-    voice: dict, out: Path, lib: Path, overrides: str = "", baseline: dict | None = None
+    voice: dict,
+    out: Path,
+    lib: Path,
+    overrides: str = "",
+    baseline: dict | None = None,
+    base_overrides: str = "",
 ) -> None:
     """One voice's gate readings over every gate its patch reaches, keyed by capture.
 
     `baseline` is recorded beside the readings, so a pinned pre says what it pinned.
     """
     if "gates" not in voice:
-        compare(voice, out, lib, overrides)
+        compare(voice, out, lib, overrides, base_overrides=base_overrides)
         body = json.loads(out.read_text())
     else:
         readings = []
         for g in voice["gates"]:
             part = out.with_name(f"{out.stem}.{g['capture']}.json")
             if not part.exists():
-                compare({**voice, **g}, part, lib, overrides)
+                compare({**voice, **g}, part, lib, overrides, base_overrides=base_overrides)
             for r in json.loads(part.read_text())["gate"]["readings"]:
                 readings.append({**r, "key": f"{g['capture']}:{r['key']}"})
         body = {"gate": {"readings": readings}}

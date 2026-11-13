@@ -24,6 +24,7 @@ from autofit_resolve import _score
 from build_lib import dylib_path
 from capture import model_rig
 from corpus import Corpus, load_corpus
+from knobs import merge_overrides
 from loss import probe_rows
 from metrics import MONO_MODES, normalize_rms, to_mono
 from render_model import render_model
@@ -74,6 +75,7 @@ def render_model_rows_subprocess(
     *,
     velocities_csv: str = "",
     overrides: str = "",
+    base_overrides: str = "",
     want_audio: bool = False,
     room_ir: Path | None = None,
     corpus: Corpus | None = None,
@@ -100,6 +102,7 @@ def render_model_rows_subprocess(
         raise RuntimeError(f"no libsonare dylib found under {build_dir}")
     env = dict(os.environ)
     env["SONARE_LIB_PATH"] = str(dylib)
+    overrides = merge_overrides(base_overrides, overrides)
     if overrides:
         env["SONARE_TUNING_OVERRIDES"] = overrides
     else:

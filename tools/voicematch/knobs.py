@@ -640,3 +640,85 @@ def tunable_overrides(knobs: list[Knob], values: list[float], *, changed_only: b
         if knob.tunable is not None
         and not (changed_only and format_value(value) == format_value(knob.start_value))
     )
+
+
+def parse_overrides(text: str) -> list[tuple[str, str]]:
+    """Split a `SONARE_TUNING_OVERRIDES` string into (key, value) pairs, in order."""
+    pairs = []
+    for entry in (e.strip() for e in text.split(",")):
+        if not entry:
+            continue
+        key, eq, value = entry.partition("=")
+        if not eq or not key.strip():
+            raise ValueError(f"override {entry!r} is not key=value")
+        pairs.append((key.strip(), value.strip()))
+    return pairs
+
+
+def merge_overrides(base: str, candidate: str) -> str:
+    """The base overrides followed by the candidate's; a key the candidate sets wins.
+
+    Every evaluation's override string comes through here, so a fit run on top of
+    fixed engine constants cannot reach the library with a different merge.
+    """
+    if not base:
+        return candidate
+    taken = {k for k, _ in parse_overrides(candidate)}
+    kept = [f"{k}={v}" for k, v in parse_overrides(base) if k not in taken]
+    return ",".join([*kept, *([candidate] if candidate else [])])
+
+
+def load_base_overrides(arg: str) -> str:
+    """An inline override string, or `@file` holding one (commas or newlines between entries)."""
+    if not arg:
+        return ""
+    if arg.startswith("@"):
+        path = Path(arg[1:]).expanduser()
+        if not path.is_file():
+            raise ValueError(f"--base-overrides {arg!r}: {path} is not a file")
+        arg = ",".join(line.split("#", 1)[0].strip() for line in path.read_text().splitlines())
+    pairs = parse_overrides(arg)
+    for key, value in pairs:
+        try:
+            float(value)
+        except ValueError:
+            raise ValueError(f"base override {key}={value!r}: the value is not a number") from None
+    return ",".join(f"{k}={v}" for k, v in pairs)
+
+
+def check_base_overrides(
+    base: str, knobs: list[Knob], catalogue: Catalogue | None, tunables: dict | None = None
+) -> str:
+    """Refuse a base key a search knob owns or one that resolves to nothing; return it scoped.
+
+    A key resolves like a search knob's does: a `SONARE_TUNABLE` in src/ or a key
+    the library reported. An override that resolves to neither is accepted
+    silently by the library and changes nothing.
+    """
+    if not base:
+        return ""
+    tunables = scan_tunables() if tunables is None else tunables
+    owned = {k.tunable for k in knobs if k.tunable is not None}
+    known = catalogue.defaults if catalogue is not None else {}
+    out, seen, unresolved, clashing = [], set(), [], []
+    for key, value in parse_overrides(base):
+        name = resolve_knob_name(key, tunables)
+        if name in owned:
+            clashing.append(name)
+        elif name not in tunables and name not in known:
+            unresolved.append(key)
+        if name in seen:
+            raise ValueError(f"base override {name!r} is given twice")
+        seen.add(name)
+        out.append(f"{name}={value}")
+    if clashing:
+        raise ValueError(
+            f"base override key(s) also searched as a knob: {', '.join(clashing)}; "
+            f"one owner per key — drop it from the spec or from --base-overrides"
+        )
+    if unresolved:
+        raise ValueError(
+            f"base override key(s) the library does not know: {', '.join(unresolved)}. "
+            f"Run --dump-knobs to list what exists."
+        )
+    return ",".join(out)

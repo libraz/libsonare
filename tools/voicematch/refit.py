@@ -65,8 +65,11 @@ import gate_audit
 from _repo import REPO_ROOT
 from build_lib import _cached_option, dylib_path
 from capture import CORPUS_ROOT
-from knobs import format_value
+from catalogue import dump_catalogue
+from corpus import load_corpus
+from knobs import check_base_overrides, format_value, load_base_overrides
 from objective import objective_digest
+from render_rows import render_rate
 from writeback import (
     _STRUCT_COPY,
     PROGRAM_TABLE_FILES,
@@ -490,6 +493,9 @@ ALLOW_DIRTY_SRC = False
 #: and `--build-dir` is not consulted.
 PREBUILT_LIB = ""
 
+#: Engine constants held fixed under every fit and comparison, from --base-overrides.
+BASE_OVERRIDES = ""
+
 
 def _fit(
     voice: dict, out: Path, build_dir: str, per_knob: int, weights: dict[str, float] | None = None
@@ -537,6 +543,8 @@ def _fit(
         cmd += [f"--w-{term}", f"{weight:g}"]
     if PREBUILT_LIB:
         cmd += ["--lib", PREBUILT_LIB]
+    if BASE_OVERRIDES:
+        cmd += ["--base-overrides", BASE_OVERRIDES]
     if ALLOW_DIRTY_SRC:
         cmd.append("--allow-dirty-src")
     log = out.with_suffix(".log")
@@ -672,6 +680,21 @@ def _tuning_lib(build_dir: str) -> Path:
     return lib
 
 
+def check_base(voice: dict, lib: Path) -> None:
+    """Refuse a base key the library does not know on this voice, before its first render."""
+    if not BASE_OVERRIDES or "drum_note" in voice:  # a kit's catalogue needs its drum pattern
+        return
+    catalogue = dump_catalogue(
+        voice["program"],
+        "sustain",
+        str(lib),
+        sr=render_rate(load_corpus(voice["corpus"], voice["timbre"])),
+        notes=",".join(map(str, voice.get("notes", []))),
+        bank=voice["bank"],
+    )
+    check_base_overrides(BASE_OVERRIDES, [], catalogue)
+
+
 def run_voice(voice: dict, root: Path, build_dir: str, per_knob: int) -> dict:
     d = root / voice["slug"]
     d.mkdir(parents=True, exist_ok=True)
@@ -679,16 +702,23 @@ def run_voice(voice: dict, root: Path, build_dir: str, per_knob: int) -> dict:
     pre, fit, post, ver = d / "pre.json", d / "fit.json", d / "post.json", d / "verdict.json"
     lib = _tuning_lib(build_dir)
     if not pre.exists():
+        check_base(voice, lib)
         own_fit = json.loads(fit.read_text()) if fit.exists() else None
         units = {u for t in gate_patches(voice) for u in chain_of(t, struct_copies())}
         base = baseline_pins(voice, own_fit, registry_history(units))
-        gate_audit.compare_voice(voice, pre, lib, base["overrides"], baseline=base)
+        gate_audit.compare_voice(
+            voice, pre, lib, base["overrides"], baseline=base, base_overrides=BASE_OVERRIDES
+        )
     if not fit.exists():
         _fit(voice, fit, build_dir, per_knob)
     fit_report = json.loads(fit.read_text())
     if not post.exists():
         gate_audit.compare_voice(
-            voice, post, lib, reach_copies(fit_report.get("overrides") or "", voice)
+            voice,
+            post,
+            lib,
+            reach_copies(fit_report.get("overrides") or "", voice),
+            base_overrides=BASE_OVERRIDES,
         )
     result = {
         "slug": voice["slug"],
@@ -751,7 +781,11 @@ def along_the_path(voice: dict, d: Path, lib: Path, report: dict, tag: str) -> d
         out = d / f"path_{tag}_{path[i]['eval']}.json"
         if not out.exists():
             gate_audit.compare_voice(
-                voice, out, lib, reach_copies(overrides_for(report, values), voice)
+                voice,
+                out,
+                lib,
+                reach_copies(overrides_for(report, values), voice),
+                base_overrides=BASE_OVERRIDES,
             )
         post = json.loads(out.read_text())["gate"]["readings"]
         post_sum, post_over = _excess(post)
@@ -1074,9 +1108,23 @@ def main() -> int:
         action="store_true",
         help="pass autofit's --allow-dirty-src: fit against an uncommitted src/ edit of your own",
     )
+    ap.add_argument(
+        "--base-overrides",
+        default="",
+        dest="base_overrides",
+        metavar="K=V,...|@FILE",
+        help="engine constants held fixed under every fit and gate comparison (autofit's "
+        "--base-overrides); the fit refuses a key it also searches or one the library "
+        "does not know",
+    )
     args = ap.parse_args()
     global ALLOW_DIRTY_SRC
     ALLOW_DIRTY_SRC = args.allow_dirty_src
+    global BASE_OVERRIDES
+    try:
+        BASE_OVERRIDES = load_base_overrides(args.base_overrides)
+    except ValueError as exc:
+        ap.error(str(exc))
     global PREBUILT_LIB
     if args.lib:
         if not Path(args.lib).is_file():

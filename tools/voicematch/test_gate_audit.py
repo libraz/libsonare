@@ -132,7 +132,7 @@ def _args(tmp_path, **kw):
 
 
 def _skipped(args):
-    autofit._fold_gate_audit(args, Path("lib"), compare=lambda *a: None)
+    autofit._fold_gate_audit(args, Path("lib"), compare=lambda *a, **k: None)
     return json.loads(Path(args.out).read_text())["gate_audit"]["skipped"]
 
 
@@ -156,7 +156,7 @@ def test_a_finished_run_records_the_audit(tmp_path, monkeypatch):
     out.write_text(json.dumps({"overrides": "p.x=1", "fit_profile": {"weights": {"tnr": 1.0}}}))
     seen = []
 
-    def compare(v, path, lib, overrides=""):
+    def compare(v, path, lib, overrides="", base_overrides=""):
         seen.append(overrides)
         value = 38.0 if overrides else 9.7
         path.write_text(json.dumps(_body(("c:balance", "median", value, 12.0))))

@@ -250,7 +250,7 @@ def test_the_furthest_point_the_gate_accepts_is_found_by_bisection(
     report = {"knobs": [{"key": FLOAT, "start": -1.0}], "path": path}
     compared = []
 
-    def fake_compare(voice, out, lib, overrides):
+    def fake_compare(voice, out, lib, overrides, **_):
         i = int(float(overrides.split("=")[1]))
         compared.append(i)
         value = 0.8 - i / 100 if i <= last_good else 1.5  # past the crossing, the bound breaks
@@ -413,7 +413,7 @@ def test_struct_copies_read_the_program_tables():
 def test_every_gate_a_capital_reaches_is_read_and_keyed_by_capture(tmp_path, monkeypatch):
     import json
 
-    def fake_compare(voice, out, lib, overrides=""):
+    def fake_compare(voice, out, lib, overrides="", **_):
         reading = {"key": "decay", "stat": "p90", "value": 1.0, "limit": 2.0, "over": False}
         out.write_text(
             json.dumps({"gate": {"readings": [dict(reading, capture=voice["capture"])]}})
@@ -546,7 +546,7 @@ def _judged_dir(tmp_path, monkeypatch, *, fit_runs):
 
     seen: dict[str, str] = {}
 
-    def fake_compare(voice, out, lib, overrides=""):
+    def fake_compare(voice, out, lib, overrides="", **_):
         seen[out.name] = overrides
         over = "cap.a=9.0" in overrides
         reading = {"key": "decay", "stat": "p90", "value": 2.0 if over else 0.5, "limit": 1.0}

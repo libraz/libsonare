@@ -312,7 +312,9 @@ from knobs import (
     at_bound,
     auto_spec,
     build_knobs,
+    check_base_overrides,
     format_value,
+    load_base_overrides,
     load_spec,
     load_spec_weights,
     tunable_overrides,
@@ -776,6 +778,7 @@ class Evaluator:
                 "want_audio": self.want_audio,
                 "groups": sorted((k, sorted(v)) for k, v in self.groups.items()),
                 "knobs": [k.label for k in self.knobs],
+                "base_overrides": getattr(self.args, "base_overrides", ""),
             },
             sort_keys=True,
         ).encode()
@@ -892,6 +895,7 @@ class Evaluator:
             self.args.notes,
             velocities_csv=self.args.velocities,
             overrides=tunable_overrides(self.knobs, values),
+            base_overrides=getattr(self.args, "base_overrides", ""),
             want_audio=want_audio,
             room_ir=self.room_ir,
             corpus=self.corpus,
@@ -1282,6 +1286,7 @@ def holdout_scorer(args, build_dir, knobs, room_ir):
             holdout.notes,
             velocities_csv=holdout.velocities,
             overrides=tunable_overrides(knobs, values),
+            base_overrides=getattr(args, "base_overrides", ""),
             want_audio=want_audio,
             room_ir=room_ir,
             corpus=corpus,
@@ -1787,8 +1792,9 @@ def _fold_gate_audit(args, build_dir, compare=gate_audit.compare_voice) -> None:
     winner = refit.reach_copies(record.get("overrides") or "", voice)
     try:
         pre, post = scratch / "pre.json", scratch / "post.json"
-        compare(voice, pre, Path(lib), refit.reach_copies("", voice))
-        compare(voice, post, Path(lib), winner)
+        base = getattr(args, "base_overrides", "")
+        compare(voice, pre, Path(lib), refit.reach_copies("", voice), base_overrides=base)
+        compare(voice, post, Path(lib), winner, base_overrides=base)
     except RuntimeError as exc:
         return skip(f"compare failed: {exc}")
     weights = (record.get("fit_profile") or {}).get("weights") or {}
@@ -2004,6 +2010,17 @@ def run(args, argv: list[str] | None = None) -> int:
     pristine: dict[Path, str] = {}
     knobs = build_knobs(spec, pristine, catalogue)
 
+    # Before any render of the fit: a base key a knob owns, or one the library
+    # does not know, would otherwise run to the end and say nothing.
+    base_given = load_base_overrides(getattr(args, "base_overrides", ""))
+    if base_given:
+        if catalogue is None:
+            catalogue = _tuning_catalogue(args, build_dir)
+        args.base_overrides = check_base_overrides(base_given, knobs, catalogue)
+        print(f"base overrides: {args.base_overrides}", file=sys.stderr)
+    else:
+        args.base_overrides = ""
+
     n_runtime = sum(1 for k in knobs if k.tunable is not None)
     n_source = len(knobs) - n_runtime
     if n_source:
@@ -2056,6 +2073,7 @@ def run(args, argv: list[str] | None = None) -> int:
                 args.pattern,
                 args.notes,
                 velocities_csv=args.velocities,
+                base_overrides=getattr(args, "base_overrides", ""),
                 want_audio=True,
                 corpus=corpus,
                 gate_ms=getattr(args, "drum_gate_ms", 0),
@@ -2568,6 +2586,15 @@ def build_parser() -> argparse.ArgumentParser:
         default="build-autofit",
         dest="build_dir",
         help="isolated build dir (default: build-autofit)",
+    )
+    parser.add_argument(
+        "--base-overrides",
+        default="",
+        dest="base_overrides",
+        metavar="K=V,...|@FILE",
+        help="engine constants held fixed under every evaluation (an override string or "
+        "@file); a key the search also moves is refused, and the fit is recorded as "
+        "answered under this base",
     )
     parser.add_argument(
         "--lib",

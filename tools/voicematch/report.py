@@ -16,7 +16,7 @@ from pathlib import Path
 
 from _repo import REPO_ROOT
 from fit_quality import dropout_terms, quality_report, significant_term_regressions
-from knobs import at_bound, format_value, tunable_overrides
+from knobs import at_bound, format_value, merge_overrides, tunable_overrides
 from loss_aggregate import DEFAULT_TAIL_FRACTION
 from toneclass import fit_profile
 from writeback import (
@@ -366,7 +366,8 @@ def report_result(knobs, pristine, best_values, evaluator, args, extra=None) -> 
 
     print("\n== overrides (paste-ready, for an ad-hoc render) ==")
     overrides = tunable_overrides(knobs, best_values, changed_only=True)
-    print(f"  SONARE_TUNING_OVERRIDES='{overrides}'" if overrides else "  (nothing moved)")
+    pasted = merge_overrides(getattr(args, "base_overrides", ""), overrides)
+    print(f"  SONARE_TUNING_OVERRIDES='{pasted}'" if overrides else "  (nothing moved)")
 
     per_patch, per_drum, per_family, unnamed = patch_field_assignments(knobs, best_values)
     if unnamed:
@@ -443,6 +444,7 @@ def report_result(knobs, pristine, best_values, evaluator, args, extra=None) -> 
                 for k, b in zip(knobs, best_values)
             ],
             "overrides": overrides,
+            "base_overrides": getattr(args, "base_overrides", ""),
             "path": [
                 {
                     "eval": i,
