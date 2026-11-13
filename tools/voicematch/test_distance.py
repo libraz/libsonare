@@ -83,7 +83,8 @@ def test_ranking_separates_a_match_from_a_miss():
     )
     miss = distance.dimension_rows({"decay": _stat(3.0, 9), "stretch": _stat(4.0, 9)}, spread, 9, 3)
     assert distance.voice_distance(match) == 0.0
-    assert distance.voice_distance(miss) == pytest.approx(math.sqrt((9 + 16) / 2))
+    assert distance.voice_distance(miss) == pytest.approx(3.5)
+    assert distance.voice_rms(miss) == pytest.approx(math.sqrt((9 + 16) / 2))
     assert [d["dimension"] for d in miss] == ["stretch", "decay"]
 
 

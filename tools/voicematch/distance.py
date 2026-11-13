@@ -181,7 +181,21 @@ def dimension_rows(summary: dict, spread: dict, grid: int, notes: int) -> list[d
 
 
 def voice_distance(dims: list[dict]) -> float | None:
-    """Root mean square of the measured dimensions' floors — one number to rank by."""
+    """Median of the measured dimensions' floors — the number a capture is ranked by.
+
+    A median rather than a mean square, so one dimension on a guessed floor
+    (brightness held to 1 % of the centroid) cannot rank the whole bank alone;
+    `voice_rms` keeps the outlier-sensitive reading beside it.
+    """
+    vals = sorted(d["floors"] for d in dims if d["floors"] is not None)
+    if not vals:
+        return None
+    n = len(vals)
+    return vals[n // 2] if n % 2 else 0.5 * (vals[n // 2 - 1] + vals[n // 2])
+
+
+def voice_rms(dims: list[dict]) -> float | None:
+    """Root mean square of the measured dimensions' floors."""
     vals = [d["floors"] for d in dims if d["floors"] is not None]
     return math.sqrt(sum(v * v for v in vals) / len(vals)) if vals else None
 
@@ -259,6 +273,7 @@ def table(out_dir: Path, groups: dict[str, str]) -> dict:
                 "gate": gate_path.exists(),
                 "gate_over": gate_over,
                 "distance": voice_distance(dims),
+                "distance_rms": voice_rms(dims),
                 "measured": sum(1 for d in dims if d["n"]),
                 "censored_rows": sum(d["censored"] for d in dims),
                 "dimensions": dims,
@@ -269,7 +284,8 @@ def table(out_dir: Path, groups: dict[str, str]) -> dict:
     return {
         "_": "Per-capture residual against its own reference. `floors` is abs_median over the "
         "dimension floor (measured reference spread where the gate records one, else the gate "
-        "writer's fallback); `distance` is the RMS of a capture's floors. Censored = reference "
+        "writer's fallback); `distance` is the median of a capture's floors, `distance_rms` "
+        "their root mean square. Censored = reference "
         "grid rows minus rows that survived into the statistic.",
         "manifest": json.loads(manifest_path.read_text()) if manifest_path.exists() else {},
         "captures": entries,
@@ -291,7 +307,7 @@ def markdown(result: dict) -> str:
         f"Library: `{result['manifest'].get('lib')}` at `{result['manifest'].get('head', '')[:9]}`.",
         "",
         (
-            "`dist` = RMS over measured dimensions of abs_median / floor. Top dimensions: "
+            "`dist` = median over measured dimensions of abs_median / floor (`rms` beside it). Top dimensions: "
             "name value unit (floors, floor source; censored/expected rows)."
         ),
         "",
@@ -303,8 +319,8 @@ def markdown(result: dict) -> str:
         lines += [
             f"## {group}",
             "",
-            "| capture | voices | tier | dist | gate over | censored | top dimensions |",
-            "|---|---|---|---|---|---|---|",
+            "| capture | voices | tier | dist | rms | gate over | censored | top dimensions |",
+            "|---|---|---|---|---|---|---|---|",
         ]
         for e in by_group[group]:
             tops = []
@@ -316,7 +332,7 @@ def markdown(result: dict) -> str:
                 )
             voices = ", ".join(e["voices"][:3]) + (" …" if len(e["voices"]) > 3 else "")
             lines.append(
-                f"| {e['capture']} | {voices} | {e['tier']} | {_fmt(e['distance'])} | "
+                f"| {e['capture']} | {voices} | {e['tier']} | {_fmt(e['distance'])} | {_fmt(e['distance_rms'])} | "
                 f"{', '.join(e['gate_over']) or '-'} | {e['censored_rows']} | {'; '.join(tops)} |"
             )
         lines.append("")
