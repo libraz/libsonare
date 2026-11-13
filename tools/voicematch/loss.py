@@ -450,6 +450,9 @@ def corpus_reading(corpus, reference_dir) -> dict:
     lines = profile.get("stationary_lines", {}).get("timbres", {}).get(corpus.timbre, {})
     if lines.get("lines"):
         out["stationary_lines_hz"] = [ln["hz"] for ln in lines["lines"]]
+    body = profile.get("body_lines", {}).get("timbres", {}).get(corpus.timbre, {})
+    if body.get("lines"):
+        out["body_lines_hz"] = [ln["hz"] for ln in body["lines"]]
     return out
 
 

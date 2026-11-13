@@ -140,3 +140,110 @@ def lines_off_the_series(
     tol = LINE_ON_PARTIAL_BINS * float(freqs[1] - freqs[0])
     series = [partial_hz(f0, n, b) for n in range(1, MAX_FIT_PARTIALS + 1)]
     return [hz for hz in lines_hz if all(abs(hz - p) > tol for p in series)]
+
+
+#: Reason a row carries for the body-band lines it was read around. They follow the note's level, so
+#: they are in the source and not the recording chain; this is not a floor and not hum.
+BODY_LINES_REASON = "recurring fixed-frequency lines in the source"
+#: Height over the running median of the body band, in dB, that makes a bin a body line. Over the
+#: clarinet's notes from n54 up its lines stand 13-68 dB over it; a broadband bed has none above 12.
+BODY_LINE_PROMINENCE_DB = 12.0
+#: Half-width, in Hz, of the running median the prominence is taken against.
+BODY_LINE_FLOOR_HALF_HZ = 10.0
+#: Two notes' lines are one line within this many Hz of the first (one step of the padded grid). The
+#: clarinet's recurring lines read 0.00-0.25 Hz apart, chance neighbours in the flute and violin 0.5-1.0.
+BODY_LINE_MATCH_HZ = 0.3
+#: Fewest notes, among those whose band reaches it, a line recurs on; the clarinet's 161 Hz line stands on 3 of 10.
+BODY_LINE_MIN_NOTES = 3
+#: A line this close to the note's own f0/2, f0/3 or f0/4 is the note's, not a recurring one.
+BODY_LINE_SUBHARMONICS = (2, 3, 4)
+BODY_LINE_SUBHARMONIC_HZ = 1.0
+#: Mains multiples (50 and 60 Hz up to the eighth, within 0.12 Hz per multiple) are hum, which the
+#: floor declares, not a line in the source.
+MAINS_HZ = (50.0, 60.0)
+MAINS_MAX_MULTIPLE = 8
+MAINS_TOLERANCE_HZ = 0.12
+#: A peak this close to a line this much stronger is that line's Hann sidelobe (first sidelobes
+#: stand 2.5 and 3.5 bins out, 31 and 41 dB down), not a line.
+BODY_LINE_SIDELOBE_HZ = 4.5
+BODY_LINE_SIDELOBE_DB = 25.0
+#: Zero-padding of the body window's spectrum, so a line is placed to a fraction of a bin.
+BODY_LINE_PAD = 4
+#: A line is read at the strongest bin this close to it (half a bin of the window's halves).
+BODY_LINE_HALF_BINS_HZ = 2.0
+#: Median drift, in dB over the window, within which a recurring line is sustained. The clarinet's
+#: lines read -1.2 to +1.0 dB, the piano's soundboard modes, which decay, -8 to -34.
+BODY_LINE_MAX_DRIFT_DB = 3.0
+
+
+def _on_mains(hz: float) -> bool:
+    """Whether `hz` sits on a multiple of the mains frequency."""
+    for base in MAINS_HZ:
+        m = round(hz / base)
+        if 1 <= m <= MAINS_MAX_MULTIPLE and abs(hz - m * base) <= MAINS_TOLERANCE_HZ * m:
+            return True
+    return False
+
+
+def _line_level_db(seg: np.ndarray, sr: int, hz: float) -> float:
+    """Level of the strongest bin within `BODY_LINE_HALF_BINS_HZ` of `hz` in a padded Hann spectrum."""
+    power = np.abs(np.fft.rfft(seg * np.hanning(len(seg)), len(seg) * BODY_LINE_PAD)) ** 2
+    freqs = np.fft.rfftfreq(len(seg) * BODY_LINE_PAD, 1.0 / sr)
+    near = np.abs(freqs - hz) <= BODY_LINE_HALF_BINS_HZ
+    return float(10.0 * np.log10(power[near].max() + 1e-30))
+
+
+def body_lines_in(
+    seg: np.ndarray, sr: int, f0: float, lo_hz: float = 40.0
+) -> list[tuple[float, float]]:
+    """Narrow lines in `lo_hz` .. 0.7 f0 of a note's body window -> [(Hz, drift in dB)].
+
+    Not on the note's own subharmonics. The drift is the line's level in the window's second
+    half over its first, which is what tells a sustained line from a resonance that decays.
+    """
+    n = len(seg)
+    seg = np.asarray(seg, dtype=np.float64)
+    power = np.abs(np.fft.rfft(seg * np.hanning(n), n * BODY_LINE_PAD)) ** 2
+    freqs = np.fft.rfftfreq(n * BODY_LINE_PAD, 1.0 / sr)
+    db = 10.0 * np.log10(power + 1e-30)
+    half = int(BODY_LINE_FLOOR_HALF_HZ / float(freqs[1]))
+    peaks = np.nonzero((db[1:-1] > db[:-2]) & (db[1:-1] >= db[2:]))[0] + 1
+    peaks = peaks[(freqs[peaks] >= lo_hz) & (freqs[peaks] < 0.7 * f0)]
+    base = np.array([np.median(db[max(0, i - half) : i + half + 1]) for i in peaks])
+    peaks = peaks[db[peaks] - base >= BODY_LINE_PROMINENCE_DB] if peaks.size else peaks
+    own = [f0 / k for k in BODY_LINE_SUBHARMONICS]
+    out = []
+    for i in peaks:
+        hz = freqs[i]
+        stronger = db[peaks] - db[i] >= BODY_LINE_SIDELOBE_DB
+        if np.any(stronger & (np.abs(freqs[peaks] - hz) <= BODY_LINE_SIDELOBE_HZ)):
+            continue
+        if _on_mains(float(hz)):
+            continue
+        if all(abs(hz - s) > BODY_LINE_SUBHARMONIC_HZ for s in own):
+            drift = _line_level_db(seg[n // 2 :], sr, hz) - _line_level_db(seg[: n // 2], sr, hz)
+            out.append((float(hz), drift))
+    return out
+
+
+def recurring_body_lines(notes: list[tuple[float, list[tuple[float, float]]]]) -> list[Line]:
+    """Sustained lines standing at one absolute frequency on `BODY_LINE_MIN_NOTES` notes of any f0.
+
+    `notes` holds each note's (f0, `body_lines_in`). The count is of notes whatever their f0;
+    a line whose median drift over its notes exceeds `BODY_LINE_MAX_DRIFT_DB` is a decaying
+    resonance (a body mode), not a sustained line, and does not recur.
+    """
+    found = sorted((hz, drift, i) for i, (_, lines) in enumerate(notes) for hz, drift in lines)
+    out: list[Line] = []
+    j = 0
+    while j < len(found):
+        group = [found[j]]
+        j += 1
+        while j < len(found) and found[j][0] - group[0][0] <= BODY_LINE_MATCH_HZ:
+            group.append(found[j])
+            j += 1
+        seen = {i for _, _, i in group}
+        steady = abs(float(np.median([d for _, d, _ in group]))) <= BODY_LINE_MAX_DRIFT_DB
+        if len(seen) >= BODY_LINE_MIN_NOTES and steady:
+            out.append(Line(round(float(np.median([h for h, _, _ in group])), 1), len(seen)))
+    return out

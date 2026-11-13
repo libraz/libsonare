@@ -121,7 +121,7 @@ from metrics import (
     to_mono,
 )
 from metrics_floor import body_floor_state, tnr_floor_state
-from metrics_lines import STATIONARY_LINES_REASON
+from metrics_lines import BODY_LINES_REASON, STATIONARY_LINES_REASON
 from phrases import TAKE_SETS, build_takes
 from profile_gate import (
     DELTA_LABELS,
@@ -158,6 +158,7 @@ from profile_measure import (
     double_decay_gap,
     find_partials,
     is_percussion,
+    measure_body_lines,
     measure_hit,
     measure_note,
     measure_stationary_lines,
@@ -428,6 +429,9 @@ def measure(cfg: dict, corpus_dir: Path, out_path: Path) -> int:
         if percussion
         else measure_stationary_lines(manifest, corpus_dir, declared, preroll_s, gate_s)
     )
+    body_lines = (
+        {} if percussion else measure_body_lines(manifest, corpus_dir, declared, preroll_s, gate_s)
+    )
 
     heard: list[tuple[np.ndarray, int]] = []
 
@@ -461,6 +465,9 @@ def measure(cfg: dict, corpus_dir: Path, out_path: Path) -> int:
                     modal=modal,
                     stationary_lines_hz=[
                         ln["hz"] for ln in lines.get(rec["timbre"], {}).get("lines", [])
+                    ],
+                    body_lines_hz=[
+                        ln["hz"] for ln in body_lines.get(rec["timbre"], {}).get("lines", [])
                     ],
                 )
             )
@@ -537,6 +544,8 @@ def measure(cfg: dict, corpus_dir: Path, out_path: Path) -> int:
     }
     if lines:
         profile["stationary_lines"] = {"reason": STATIONARY_LINES_REASON, "timbres": lines}
+    if body_lines:
+        profile["body_lines"] = {"reason": BODY_LINES_REASON, "timbres": body_lines}
     unreliable = tnr_unreliable(rows)
     if unreliable:
         profile["tnr_unreliable"] = unreliable
@@ -756,6 +765,7 @@ def dynamics(
                 tnr_mask=reference_tnr_mask(ref[(note, v)]),
                 modal=not tone_class(program).stiffness_fit,
                 stationary_lines_hz=ref[(note, v)].get("stationary_lines_hz", ()),
+                body_lines_hz=(ref[(note, v)].get("body_lines") or {}).get("hz", ()),
             )
             if not m:
                 break
@@ -1487,6 +1497,7 @@ def compare(
             tnr_mask=reference_tnr_mask(r),
             modal=not tone_class(program).stiffness_fit,
             stationary_lines_hz=r.get("stationary_lines_hz", ()),
+            body_lines_hz=(r.get("body_lines") or {}).get("hz", ()),
         )
         if not m:
             print(f"{note:5d} {vel:4d} | model rendered nothing measurable")

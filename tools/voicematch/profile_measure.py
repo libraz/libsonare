@@ -36,10 +36,23 @@ from metrics import (
     tone_to_noise_db,
 )
 from metrics_floor import partial_clearance, recording_floor, valley_profile
-from metrics_lines import held_lines, lines_off_the_series, mask_lines, stationary_lines
+from metrics_lines import (
+    BODY_LINES_REASON,
+    body_lines_in,
+    held_lines,
+    lines_off_the_series,
+    mask_lines,
+    recurring_body_lines,
+    stationary_lines,
+)
 from metrics_modal import modal_profile
 from metrics_motion import CoherenceState
-from metrics_note import body_bands
+from metrics_note import (
+    BODY_MIN_F0_HZ,
+    BODY_WINDOW_S,
+    band_power_db,
+    body_bands,
+)
 from metrics_partials import series_scatter_cents
 from metrics_warp import LineStructure, line_structure
 from smf import Note
@@ -291,6 +304,68 @@ def tnr_unreliable(rows: list[dict]) -> dict | None:
     if not flagged:
         return None
     return {"reason": TNR_UNRELIABLE_REASON, "timbres": flagged}
+
+
+def body_lines_masked(
+    held: np.ndarray, sr: int, f0: float, lines_hz: list[float] | tuple[float, ...]
+) -> dict:
+    """The body lines masked on one row and the share of the band's power they held, or {}."""
+    inside = [hz for hz in lines_hz if 40.0 <= hz < f0 * 0.7]
+    seg = held[int(BODY_WINDOW_S[0] * sr) : int(BODY_WINDOW_S[1] * sr)]
+    if not inside or f0 < BODY_MIN_F0_HZ:
+        return {}
+    kept = band_power_db(seg, sr, 40.0, f0 * 0.7, inside)
+    whole = band_power_db(seg, sr, 40.0, f0 * 0.7)
+    if kept is None or whole is None:
+        return {}
+    return {
+        "hz": [round(hz, 1) for hz in inside],
+        "share_removed": round(1.0 - 10.0 ** ((kept - whole) / 10.0), 4),
+        "reason": BODY_LINES_REASON,
+    }
+
+
+def measure_body_lines(
+    manifest: dict, corpus_dir: Path, declared: set[str], preroll_s: float, gate_s: float
+) -> dict[str, dict]:
+    """The lines each declared timbre's body band carries on notes of unrelated pitch.
+
+    Read from one velocity per note (the one nearest 80), in the body window, relative to
+    each note's own spectrum, so a line that follows the note's level is found at any velocity.
+    -> {timbre: {"of": notes, "lines": [{"hz": ..., "notes": ...}]}}; absent where none recur.
+    """
+    chosen: dict[str, dict[int, dict]] = {}
+    for rec in manifest["renders"]:
+        if rec["timbre"] in declared and midi_to_hz(rec["note"]) >= BODY_MIN_F0_HZ:
+            held = chosen.setdefault(rec["timbre"], {})
+            if rec["note"] not in held or abs(rec["velocity"] - 80) < abs(
+                held[rec["note"]]["velocity"] - 80
+            ):
+                held[rec["note"]] = rec
+    out: dict[str, dict] = {}
+    for timbre, notes in chosen.items():
+        per_note = []
+        for note, rec in notes.items():
+            path = corpus_dir / rec["path"]
+            if not path.exists():
+                continue
+            audio, sr = read_wav(path)
+            mono = to_mono(audio)
+            on = int(sound_onset_s(mono, sr, preroll_s, len(mono) / sr) * sr)
+            seg = mono[on : on + int(gate_s * sr)][
+                int(BODY_WINDOW_S[0] * sr) : int(BODY_WINDOW_S[1] * sr)
+            ]
+            if seg.size < sr // 8:
+                continue
+            f0 = midi_to_hz(note)
+            per_note.append((f0, body_lines_in(seg, sr, f0)))
+        lines = recurring_body_lines(per_note)
+        if lines:
+            out[timbre] = {
+                "of": len(per_note),
+                "lines": [{"hz": ln.hz, "notes": ln.takes} for ln in lines],
+            }
+    return out
 
 
 def measure_stationary_lines(
@@ -673,6 +748,7 @@ def measure_note(
     tnr_mask: dict | None = None,
     modal: bool = False,
     stationary_lines_hz: list[float] | tuple[float, ...] = (),
+    body_lines_hz: list[float] | tuple[float, ...] = (),
 ) -> dict:
     """Every measurement this profile carries, for one captured note.
 
@@ -713,12 +789,15 @@ def measure_note(
     if stationary_lines_hz:
         row["stationary_lines_hz"] = list(stationary_lines_hz)
 
-    body = body_below_f0_db(held, sr, float(row.get("f0_hz") or 0.0))
+    body = body_below_f0_db(held, sr, float(row.get("f0_hz") or 0.0), body_lines_hz)
     if body is not None:
         row["body_below_f0_db"] = body
-        bands = body_bands(held, sr, float(row["f0_hz"]))
+        bands = body_bands(held, sr, float(row["f0_hz"]), body_lines_hz)
         if bands is not None:
             row["body_under_db"], row["body_f0_db"] = round(bands[0], 2), round(bands[1], 2)
+        masked_body = body_lines_masked(held, sr, float(row["f0_hz"]), body_lines_hz)
+        if masked_body:
+            row["body_lines"] = masked_body
 
     t_env, env = _rms_envelope(held, sr)
     env_db = np.asarray(_db(env))

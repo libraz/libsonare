@@ -59,10 +59,32 @@ def test_the_corpus_reading_comes_from_the_committed_profile(tmp_path):
     profile = {
         "capture": {"program": 14},
         "stationary_lines": {"timbres": {"t0": {"lines": [{"hz": LINE_HZ, "takes": 9}]}}},
+        "body_lines": {"timbres": {"t0": {"lines": [{"hz": 99.2, "notes": 3}]}}},
     }
     (tmp_path / "bells.json").write_text(json.dumps(profile))
-    assert corpus_reading(corpus, tmp_path) == {"modal": True, "stationary_lines_hz": [LINE_HZ]}
+    assert corpus_reading(corpus, tmp_path) == {
+        "modal": True,
+        "stationary_lines_hz": [LINE_HZ],
+        "body_lines_hz": [99.2],
+    }
     profile["capture"]["program"] = 0
-    del profile["stationary_lines"]
+    del profile["stationary_lines"], profile["body_lines"]
     (tmp_path / "bells.json").write_text(json.dumps(profile))
     assert corpus_reading(corpus, tmp_path) == {}
+
+
+def test_a_body_line_in_the_reference_is_masked_from_the_models_body():
+    """The body band under the note reads the model with the reference's recurring lines masked."""
+    t = np.arange(int(2.0 * SR)) / SR
+    x = stiff_series(370.0, 0.0, seconds=2.0, partials=6, rolloff_db=6.0)
+    x = (
+        x
+        + 3e-3 * np.sin(2 * np.pi * 99.2 * t)
+        + 3e-5 * np.random.default_rng(1).standard_normal(t.size)
+    )
+    note = Note(66, 100, PREROLL, 1.8)
+    plain = analyze_note(held(x), SR, note, 2.0, onset=PREROLL)
+    masked = analyze_note(held(x), SR, note, 2.0, onset=PREROLL, tnr_mask={"body_lines_hz": [99.2]})
+    assert masked.body_below_f0_db < plain.body_below_f0_db - 10.0
+    own = analyze_note(held(x), SR, note, 2.0, onset=PREROLL, reading={"body_lines_hz": [99.2]})
+    assert own.body_below_f0_db == masked.body_below_f0_db

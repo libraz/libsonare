@@ -200,13 +200,24 @@ def _floor_censor(ref_row: dict, dimension: str) -> str | None:
     return None if not state else (state.get("censors") or {}).get(dimension)
 
 
+#: A reference row whose body band, after its recurring source lines were masked, is the floor's.
+BELOW_FLOOR_AFTER_LINES = "reference body below the recording's floor once recurring fixed-frequency lines in the source are masked"
+
+
 def body_floor_state(ref_row: dict) -> str | None:
     """Why a reference row's body band is its recording's floor or hum, or None when it is not.
 
     Decided at measurement (`floor_declare`): the capture's floor is declared only
     where note-independent and stationary, and mains hum is counted into the band.
+    The band is read with the row's recurring source lines masked (`body_lines`), so
+    a floor censor on such a row names the masking.
     """
-    return _floor_censor(ref_row, "body")
+    from floor_declare import CENSOR_FLOOR  # floor_declare imports this module
+
+    reason = _floor_censor(ref_row, "body")
+    if reason == CENSOR_FLOOR and ref_row.get("body_lines"):
+        return BELOW_FLOOR_AFTER_LINES
+    return reason
 
 
 def body_at_floor(ref_row: dict) -> bool:
