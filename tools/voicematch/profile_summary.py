@@ -346,24 +346,92 @@ def partial_tilt_db_s(partial_decay_db_s: list[float] | None) -> float | None:
     return float(np.mean(high) - np.mean(low))
 
 
-def a4_offset_cents(rows: list[dict], timbre: str) -> float:
-    """How far the reference instrument's A4 itself sits from 440 Hz.
+#: Notes either side of A4 the ruler reads: the octave a master-tune knob is set against.
+A4_RULER_SPAN = 12
 
-    This is master tune, not stretch: an instrument tuned to A439.4 reads two
-    cents flat at every note, and subtracting it is the difference between
-    asking "is the stretch curve right" and asking "did we copy this plugin's
-    tuning knob". A model that answers yes to the second is detuned against
-    every other instrument in a mix, so the offset is reported and removed
-    rather than fitted.
-    """
-    at = {}
+#: The window's own slope is fitted with the offset where it is both resolved (|t| over
+#: this) and audible: at least `A4_RULER_SLOPE_C_PER_OCT`, the stretch floor per octave.
+A4_RULER_SLOPE_T = 2.0
+A4_RULER_SLOPE_C_PER_OCT = 1.0
+
+
+def _per_note_cents(rows: list[dict], timbre: str) -> dict[int, float]:
+    at: dict[int, list[float]] = {}
     for r in rows:
-        if r["timbre"] == timbre and "cents_vs_et" in r:
+        if r["timbre"] == timbre and r.get("cents_vs_et") is not None:
             at.setdefault(r["note"], []).append(r["cents_vs_et"])
-    if not at:
+    return {n: float(np.median(v)) for n, v in sorted(at.items())}
+
+
+def a4_ruler(rows: list[dict], timbre: str) -> dict | None:
+    """Where the reference instrument's A4 itself sits from 440 Hz, and how well that is known.
+
+    This is master tune, not stretch: an instrument tuned to A439.4 reads two cents flat
+    at every note, and the offset is removed from the stretch column rather than fitted.
+    It is the median of the per-note cents over the notes within `A4_RULER_SPAN` of A4
+    (else within it of the grid's note nearest A4), with `scatter_c` their interquartile
+    range and `n` their count. Where the window's own slope is significant (`A4_RULER_SLOPE_T` and
+    `A4_RULER_SLOPE_C_PER_OCT`) and the window spans A4, a line is fitted instead: the
+    offset is its value at A4, `slope_c_per_oct` is kept beside it and the scatter is
+    that of the residuals, so stretch inside the window is not credited to master tune.
+    A window off A4 is never extrapolated to it. None where no row reads a pitch.
+    """
+    med = _per_note_cents(rows, timbre)
+    if not med:
+        return None
+    notes = [n for n in med if abs(n - 69) <= A4_RULER_SPAN]
+    if not notes:
+        centre = min(med, key=lambda n: abs(n - 69))
+        notes = [n for n in med if abs(n - centre) <= A4_RULER_SPAN]
+    cents = np.array([med[n] for n in notes])
+    offset = float(np.median(cents))
+    residual = cents - offset
+    slope = None
+    if len(notes) >= 4 and notes[0] <= 69 <= notes[-1]:
+        x = np.array(notes, dtype=float) - 69.0
+        fit, cov = np.polyfit(x, cents, 1, cov=True)
+        se = float(np.sqrt(cov[0][0]))
+        if (
+            se > 0.0
+            and abs(fit[0]) / se > A4_RULER_SLOPE_T
+            and abs(fit[0]) * 12.0 >= A4_RULER_SLOPE_C_PER_OCT
+        ):
+            slope = float(fit[0])
+            offset = float(fit[1])
+            residual = cents - np.polyval(fit, x)
+    q75, q25 = np.percentile(residual, [75, 25])
+    ruler = {
+        "offset_c": round(offset, 3),
+        "scatter_c": round(float(q75 - q25), 3),
+        "n": len(notes),
+        "notes": [notes[0], notes[-1]],
+    }
+    if slope is not None:
+        ruler["slope_c_per_oct"] = round(slope * 12.0, 3)
+    return ruler
+
+
+def format_ruler(ruler: dict) -> str:
+    """`a4_ruler` as one phrase: the offset, then what it was read from where that is known."""
+    text = f"{ruler['offset_c']:+.2f} c from 440 Hz"
+    if "n" not in ruler:
+        return text + " (two-point interpolation)"
+    text += f" (read on n{ruler['notes'][0]}-n{ruler['notes'][1]}, n={ruler['n']}, IQR {ruler['scatter_c']:.2f} c"
+    if "slope_c_per_oct" in ruler:
+        text += f", with a window slope of {ruler['slope_c_per_oct']:+.2f} c/oct fitted beside it"
+    return text + ")"
+
+
+def a4_two_point_cents(rows: list[dict], timbre: str) -> float:
+    """The A4 offset a gate read its stretch on before `a4_ruler` was stored with it.
+
+    A linear interpolation between the two grid notes either side of A4. Kept only to
+    recognise which bounds were set on it; nothing measures with it.
+    """
+    med = _per_note_cents(rows, timbre)
+    if not med:
         return 0.0
-    notes = sorted(at)
-    med = {n: float(np.median(at[n])) for n in notes}
+    notes = sorted(med)
     below = [n for n in notes if n <= 69]
     above = [n for n in notes if n >= 69]
     if not below or not above:

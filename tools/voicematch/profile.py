@@ -197,8 +197,10 @@ from profile_status import (
 )
 from profile_summary import (
     LATE_ONSET_MS,
-    a4_offset_cents,
+    a4_ruler,
+    a4_two_point_cents,
     band_db,
+    format_ruler,
     partial_balance_db,
     partial_ladder_lines,
     partial_ratio_by_band,
@@ -232,7 +234,7 @@ from render_model import render_model
 from render_oracle import render_oracle_fluidsynth
 from room import Room, match_sends, measurable_room, place_model_in
 from smf import Note, write_smf
-from toneclass import tone_class
+from toneclass import canonical_dimensions, tone_class
 from velocity_layers import VELOCITY_SWING_DIMENSIONS, layer_summary
 from wavio import read_wav, write_wav
 
@@ -1557,12 +1559,16 @@ def compare(
     program = profile_program(profile, cfg)
     bank = profile_bank(profile, cfg)
     pairs = sorted({k for k in ref if not notes_filter or k[0] in notes_filter})
-    a4_off = a4_offset_cents(profile["rows"], timbre)
-    print(f"model vs {timbre}: {len(pairs)} notes, model on GM program {program}")
-    print(
-        f"reference A4 sits {a4_off:+.2f} c from 440 Hz; "
-        f"that offset is removed from the stretch column\n"
+    # An unpitched class reads no stretch, so it has no ruler to remove from one.
+    ruler = (
+        a4_ruler(profile["rows"], timbre) if "stretch" in canonical_dimensions(program) else None
     )
+    a4_off = ruler["offset_c"] if ruler else 0.0
+    print(f"model vs {timbre}: {len(pairs)} notes, model on GM program {program}")
+    if ruler:
+        print(
+            f"reference A4 {format_ruler(ruler)}; that offset is removed from the stretch column\n"
+        )
     place = ModelPlacer(profile, timbre, [(preroll_s, preroll_s + gate_s)])
     place.announce()
     # Every dimension the summary gates has a column here, so a bound that moves
@@ -1855,6 +1861,11 @@ def compare(
         reference_spans=reference_spans,
     )
     unrecorded_windows = window_spans(gate_s, cap["gate_ms"], max(tails_s, default=None))
+    if ruler:
+        windows["stretch"] = {"ruler": ruler}
+        unrecorded_windows["stretch"] = {
+            "ruler": {"offset_c": round(a4_two_point_cents(profile["rows"], timbre), 3)}
+        }
     censored = {"damper": len(damper_censored)}
     print_summary_table(summary, spread, attempted, windows, censored)
     print_vanished_dimensions(

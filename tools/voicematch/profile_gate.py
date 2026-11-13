@@ -15,7 +15,7 @@ import numpy as np
 from metrics_motion import motion_deltas, recording_motion
 from metrics_signal import ENVELOPE_HOP_MS
 from profile_measure import double_decay_gap, register_deltas
-from profile_summary import a4_offset_cents, partial_balance_db, partial_tilt_db_s
+from profile_summary import a4_ruler, format_ruler, partial_balance_db, partial_tilt_db_s
 
 DELTA_LABELS = {
     "stretch": "tuning vs the reference (cents)",
@@ -205,7 +205,7 @@ def timbre_pair_deltas(rows: list[dict], a: str, b: str) -> dict[str, list[float
     reader can ask what shape the disagreement has, not only how large it is.
     """
     timbres = (a, b)
-    a4 = {t: a4_offset_cents(rows, t) for t in timbres}
+    a4 = {t: (a4_ruler(rows, t) or {}).get("offset_c", 0.0) for t in timbres}
     by_key: dict[str, dict[tuple[int, int], dict]] = {}
     for r in rows:
         by_key.setdefault(r["timbre"], {})[(r["note"], r["velocity"])] = r
@@ -511,13 +511,20 @@ def window_spans(
 
 
 def format_window(window: dict) -> str:
-    """`model window / reference span`, in seconds."""
+    """`model window / reference span`, in seconds; for `stretch`, the A4 ruler it was read on."""
+    if "ruler" in window:
+        return f"A4 ruler {format_ruler(window['ruler'])}"
 
     def one(key: str) -> str:
         span = window.get(f"{key}_range_s")
         return f"{window[f'{key}_s']:g}" + (f" ({span[0]:g}-{span[1]:g})" if span else "")
 
     return f"{one('model')} s / {one('reference')} s"
+
+
+#: How far the A4 ruler may move (cents) before a stretch bound read on it bounds another
+#: quantity: a tenth of the stretch floor guess.
+RULER_MOVE_C = 0.1
 
 
 def window_mismatch(recorded: dict | None, current: dict | None) -> str | None:
@@ -528,6 +535,18 @@ def window_mismatch(recorded: dict | None, current: dict | None) -> str | None:
     """
     if not recorded or not current:
         return None
+    if "ruler" in recorded or "ruler" in current:
+        was, now = (recorded.get("ruler") or {}), (current.get("ruler") or {})
+        if (
+            "offset_c" in was
+            and "offset_c" in now
+            and abs(was["offset_c"] - now["offset_c"]) < RULER_MOVE_C
+        ):
+            return None
+        return (
+            f"stretch read on A4 ruler {format_ruler(now)} but the bound was recorded on "
+            f"{format_ruler(was) if was else 'no ruler'}"
+        )
     keys = ("model_s", "reference_s", "model_range_s", "reference_range_s")
     if all(recorded.get(k) == current.get(k) for k in keys):
         return None
@@ -1034,13 +1053,18 @@ def check_gate(
 #: to have measured rather than tighten what it holds.
 RATCHETED_BOUND_KEYS = ("median", "abs_median", "p90")
 
-OUTCOME_NEW, OUTCOME_TIGHTENED, OUTCOME_KEPT, OUTCOME_EXCEEDED, OUTCOME_REWINDOWED = (
-    "new",
-    "tightened",
-    "kept",
-    "exceeded",
-    "rewindowed",
-)
+(
+    OUTCOME_NEW,
+    OUTCOME_TIGHTENED,
+    OUTCOME_KEPT,
+    OUTCOME_EXCEEDED,
+    OUTCOME_REWINDOWED,
+    OUTCOME_FLOORED,
+) = ("new", "tightened", "kept", "exceeded", "rewindowed", "floored")
+
+#: `floor_from` of a stretch floor set by the A4 ruler's own scatter. A bound tighter than
+#: the ruler it is read on cannot be resolved, so the ratchet raises a kept one to it.
+FLOOR_FROM_RULER = "ruler scatter"
 
 #: A computed `_unbounded` reason starts with this, which is what tells it from a
 #: hand-written one: the writer regenerates the former and carries the latter.
@@ -1214,7 +1238,9 @@ def _keep_the_tighter(
     on before windows were stored) bounds a different quantity, so it is re-recorded at
     this run's value as `rewindowed`, with the old bound and window kept beside it and
     the model's residual on the new window printed, since that bound records the error
-    rather than limiting it.
+    rather than limiting it. A kept bound under a floor the A4 ruler set
+    (`FLOOR_FROM_RULER`) is raised to it as `floored` (`exceeded` where the model is over
+    even that), with the old bound kept beside it in `floored_from`.
 
     Mutates `bounds` and returns (one line per bound it refused to loosen, one
     outcome line per statistic) for the caller to print — a ratchet that acts
@@ -1236,6 +1262,7 @@ def _keep_the_tighter(
         provenance = {}
         for key in RATCHETED_BOUND_KEYS:
             value, old, candidate = measured[dimension][key], was.get(key), row[key]
+            raised = False
             old_prov = was_prov.get(key) or {}
             carried = (old_prov.get("set_utc"), old_prov.get("set_build"))
             was_window = old_prov.get("window") or (unrecorded_windows or {}).get(dimension)
@@ -1252,6 +1279,13 @@ def _keep_the_tighter(
                 outcome = OUTCOME_KEPT if old == candidate else OUTCOME_TIGHTENED
                 held = now
                 set_at = carried if old == candidate else (now, built_utc)
+            elif row.get("floor_from") == FLOOR_FROM_RULER and old < row["floor"]:
+                raised, set_at, row[key] = True, (now, built_utc), row["floor"]
+                outcome, held = (
+                    (OUTCOME_FLOORED, now)
+                    if value <= row[key]
+                    else (OUTCOME_EXCEEDED, old_prov.get("held_utc"))
+                )
             else:
                 row[key] = old
                 set_at = carried
@@ -1264,7 +1298,12 @@ def _keep_the_tighter(
                 declined.append(
                     f"{dimension}.{key} {candidate:g} -> {old:g} (measured {value:g}, {verdict})"
                 )
-            if moved:
+            if raised:
+                reported.append(
+                    f"{outcome:<10} {dimension}.{key} bound {row[key]:g} (measured {value:g}; "
+                    f"was {old:g}, under the A4 ruler's scatter)"
+                )
+            elif moved:
                 reported.append(
                     f"{outcome:<10} {dimension}.{key} bound {row[key]:g} (model residual "
                     f"{value:g} on the new window; was {old:g} on {format_window(was_window)})"
@@ -1288,8 +1327,12 @@ def _keep_the_tighter(
                         provenance[key][kept] = old_prov[kept]
             if moved:
                 provenance[key]["rewindowed_from"] = {"bound": old, "window": was_window}
+            if raised:
+                provenance[key]["floored_from"] = {"bound": old}
             window = (
-                (windows or {}).get(dimension) if old is None or moved or old > candidate else None
+                (windows or {}).get(dimension)
+                if old is None or moved or old > candidate or raised
+                else None
             )
             window = window or old_prov.get("window")
             if window:
@@ -1305,16 +1348,24 @@ def provenance_findings(gate: dict) -> dict[str, list[tuple]]:
     the model over and kept anyway. `unverified`: (dimension, stat, set_utc) for
     a bound nothing records as ever having held. `rewindowed`: (dimension, stat,
     residual) for a bound re-recorded because its window moved, which records the
-    model's error there rather than limiting it. A gate in the older format carries
+    model's error there rather than limiting it. `floored`: (dimension, stat, old bound)
+    for a bound raised to the A4 ruler's scatter. A gate in the older format carries
     no provenance and reports none of them.
     """
-    out: dict[str, list[tuple]] = {"exceeded": [], "unverified": [], "rewindowed": []}
+    out: dict[str, list[tuple]] = {
+        "exceeded": [],
+        "unverified": [],
+        "rewindowed": [],
+        "floored": [],
+    }
     for dim, bound in (gate.get("bounds") or {}).items():
         for stat, p in (bound.get("provenance") or {}).items():
             if p.get("outcome") == OUTCOME_EXCEEDED:
                 out["exceeded"].append((dim, stat, p.get("held_utc")))
             elif p.get("outcome") == OUTCOME_REWINDOWED:
                 out["rewindowed"].append((dim, stat, p.get("measured")))
+            elif p.get("outcome") == OUTCOME_FLOORED:
+                out["floored"].append((dim, stat, (p.get("floored_from") or {}).get("bound")))
             elif p.get("held_utc") is None:
                 out["unverified"].append((dim, stat, p.get("set_utc")))
     return out
@@ -1330,6 +1381,10 @@ def provenance_notes(gate: dict) -> list[str]:
     notes += [
         f"{dim}.{stat}: re-recorded for a window change, model residual {residual}"
         for dim, stat, residual in found["rewindowed"]
+    ]
+    notes += [
+        f"{dim}.{stat}: raised from {was} to the A4 ruler's scatter"
+        for dim, stat, was in found["floored"]
     ]
     since: dict[str, list[str]] = {}
     for dim, stat, set_utc in found["unverified"]:
@@ -1482,6 +1537,9 @@ def write_gate_file(
         if key in excluded:
             continue
         floor, floor_from = dimension_floor(key, spread)
+        scatter = ((windows or {}).get(key, {}).get("ruler") or {}).get("scatter_c", 0.0)
+        if scatter > floor:
+            floor, floor_from = scatter, FLOOR_FROM_RULER
         measured[key] = {
             "median": abs(row["median"]),
             "abs_median": row["abs_median"],
