@@ -62,7 +62,7 @@ SONARE_TUNABLE(kBellPoleSpan, 0.7f);
 SONARE_TUNABLE(kBellBrightOct, 2.75f);
 // Lowest coupled-bell corner, in multiples of the note, as the flute's in-loop colour filter: at
 // one harmonic the cylinder's top note sank 23 cents under the 1.5 kHz corner.
-constexpr float kBellCornerMinHarmonic = 2.0f;
+SONARE_TUNABLE(kBellCornerMinHarmonic, 2.0f);
 // Share of the radiation highpass's loss at the fundamental given back (exponent,
 // 1 = all of it), seeded at the brass engine's 0.35.
 SONARE_TUNABLE(kBellRadiationNorm, 0.35f);

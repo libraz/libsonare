@@ -69,11 +69,6 @@ SONARE_TUNABLE(kLipTuneSpan, 0.04f);  // f_lip = f0 * (1 + span*(tension - 0.5))
 // to sound continuous and over a shallow vibrato's own excursion. Not a
 // SONARE_TUNABLE: it trades CPU against pitch resolution, with no reference.
 constexpr float kLipRetuneTolerance = 0.0006f;
-// Pitch correction: an outward-striking lip oscillates just ABOVE its resonance
-// (Fletcher 1979), so the played note lands a touch sharp of the bore/lip lock;
-// the loop delay is lengthened to bring it back onto pitch. With no trim the
-// note reads +2.6 cents flat across notes 44..98 at 48 kHz; this is that 2.6.
-SONARE_TUNABLE(kPitchCorrect, 1.0015f);
 
 // Bell reflection loss from damping: < 1 so the loop is stable (the breath
 // replenishes it). Low damping = a purer, more sustained bore.
@@ -124,15 +119,15 @@ SONARE_TUNABLE(kBorePrefill, 0.03f);
 // enters the bore. A fixed low corner leaves a frequency-dependent phase LEAD
 // that sharpens the low range (a quarter-tone at the tuba pedal), so the corner
 // tracks the pitch (floored) to keep the lead a bounded fraction of the period,
-// and the residual lead is folded into the loop compensation — the same
+// and a share of that lead is folded into the loop compensation — the same
 // pitch-tracked highpass the reed cone (a full-period positive-feedback comb of
 // the same topology) uses.
 SONARE_TUNABLE(kDcCornerFracF0, 0.06f);
 SONARE_TUNABLE(kDcCornerFloorHz, 10.0f);
-// Fraction of the analytic highpass phase lead folded into comp: the nonlinear
-// lip oscillation sits between the linear loop resonance and the free lip, so
-// only part of the lead detunes the sounding pitch (probe-calibrated).
-SONARE_TUNABLE(kDcCompScale, 0.5f);
+// Share of the blocker's lead folded into comp: the lead falls as 1/k^2 and the regime locks to a
+// harmonic-weighted average, so the share is the reed cone's 0.75. On the default core 0.75 holds
+// notes 36-84 within a cent; 0.5 left them up to +5 cents sharp and 1.0 put them 6 flat.
+SONARE_TUNABLE(kDcCompScale, 0.75f);
 
 // Output trim: the driven loop settles with a raw bore peak that grows with the
 // note (~2.3 at the bottom of the range to ~7 at the top), so the output scale is
@@ -188,10 +183,9 @@ SONARE_TUNABLE(kMuteGapQ, 1.06f);
 SONARE_TUNABLE(kMuteGapDb, -16.8f);
 
 // --- 4c half-valve (only when params.half_valve > 0) ---
-// Extra in-loop loss (a stuffier, more damped bore) and a small loop detune (the
-// unstable, pitch-ambiguous half-valve wobble).
+// Extra in-loop loss (a stuffier, more damped bore). It no longer stretches the
+// period: a static stretch is no wobble, and it sat the fitted voices 2-8 cents flat.
 SONARE_TUNABLE(kHalfValveLossMax, 0.05f);
-SONARE_TUNABLE(kHalfValveDetune, 0.006f);
 
 // --- 4d dynamic (2-DOF) lip (only when params.dynamic_lip > 0) ---
 // The transverse second lip mode sits above the note; its coupling adds a
@@ -240,8 +234,8 @@ LoopBudget BrassVoiceCore::configure(const BrassPatchParams& params, double sr, 
   // brass tube radiates. The lip valve buzzes the fundamental; the tube
   // reinforces every harmonic.
   const float period = srf / std::max(1.0f, f0);
-  // Lengthen the loop a touch so the outward-striking sharpness lands on pitch.
-  bore_.period = period * kPitchCorrect;
+  // The lip's own phase is the instrument's tuning, carried by each patch's pitch_offset_cents.
+  bore_.period = period;
   sign_ = 1.0f;
 
   const float vel01 = velocity.f7() / 127.0f;
@@ -396,13 +390,9 @@ LoopBudget BrassVoiceCore::configure(const BrassPatchParams& params, double sr, 
     mute_gap_gain_ = db_to_linear(kMuteGapDb);
   }
 
-  // 4c: half-valve — extra in-loop loss and a small loop detune. Off (0) ->
-  // skipped (the loss factor stays 1 and the bore period is untouched).
+  // 4c: half-valve — extra in-loop loss. Off (0) -> the loss factor stays 1.
   half_valve_ = std::clamp(params.half_valve, 0.0f, 1.0f);
   half_valve_loss_ = 1.0f - kHalfValveLossMax * half_valve_;
-  if (half_valve_ > 0.0f) {
-    bore_.period *= (1.0f + kHalfValveDetune * half_valve_);
-  }
 
   // 4d: dynamic (2-DOF) lip — a second, higher lip resonance. Off (0) -> skipped.
   dyn_lip_ = std::clamp(params.dynamic_lip, 0.0f, 1.0f);

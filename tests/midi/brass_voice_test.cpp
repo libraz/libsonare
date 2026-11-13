@@ -1333,9 +1333,9 @@ TEST_CASE("bore nonlinearity brightens a loud note more than a soft one", "[midi
   // (1.256 on the shipping patch) and masks this term by 3.8x at ff, so the
   // shipping composite cannot separate the two. The bar is one and a half times
   // the largest cause that is not this term, in the statistic's own units:
-  // measured on the control arm before the term existed, the contrast is 1.019
-  // at note 48 and a repeat render reproduces it exactly, so everything else in
-  // the engine contributes 0.019 of contrast and the bar is 0.029.
+  // measured on the control arm before the term existed, the contrast was 1.019
+  // at note 48, so everything else in the engine contributes 0.019 of contrast
+  // and the bar is 0.029; the control now reads 0.997 and the term shows 0.034.
   NativeSynthPatch off = gm_fallback_patch(0, 56);  // Trumpet
   REQUIRE(off.mode == SynthEngineMode::kBrass);
   // The control arm zeroes the term rather than reading a patch that happens to

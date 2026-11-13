@@ -674,6 +674,9 @@ constexpr void configure_physical_programs(ProgramOverrides& o) noexcept {
   // No vibrato: the reference's f0 holds within 1.2 c; a fitted 24 Hz pitch LFO
   // read as 10 dB of sideband noise against it.
   o.trumpet.brass.bell_cutoff_hz = 461.622f;
+  // The lip's phase at the fundamental: notes 54-82 at velocity 100 read +1.07 c mean against
+  // equal temperament with the blocker lead share at 0.75 (drift and vibrato off).
+  o.trumpet.pitch_offset_cents = -1.07f;
   o.trumpet.brass.breath_pressure = 0.658586f;
   o.trumpet.brass.brightness = 0.840833f;
   o.trumpet.brass.damping = 0.290831f;
@@ -726,6 +729,9 @@ constexpr void configure_physical_programs(ProgramOverrides& o) noexcept {
   o.trombone.drift_rate_hz = 0.506794f;
   o.trombone.resonance_q = 1.30183f;
   o.trombone.brass.bell_cutoff_hz = 2450.08f;
+  // The lip's phase at the fundamental: notes 40-72 at velocity 100 read +1.44 c mean against
+  // equal temperament with the blocker lead share at 0.75 (drift and vibrato off).
+  o.trombone.pitch_offset_cents = -1.44f;
   o.trombone.brass.bore_nonlinearity = 0.381076f;
   o.trombone.gain = 16.0f;
   o.trombone.amp_env.decay_ms = 179.829f;
@@ -741,6 +747,9 @@ constexpr void configure_physical_programs(ProgramOverrides& o) noexcept {
   o.tuba.brass.cuivre_dynamics = 0.691899f;
   o.tuba.lfo_to_pitch_cents = 1.5f;
   o.tuba.brass.bell_cutoff_hz = 784.162f;
+  // The lip's phase at the fundamental: notes 28-56 at velocity 100 read -0.22 c mean against
+  // equal temperament with the blocker lead share at 0.75 (drift and vibrato off).
+  o.tuba.pitch_offset_cents = 0.22f;
   o.tuba.brass.breath_pressure = 0.591639f;
   o.tuba.brass.brightness = 0.378016f;
   o.tuba.brass.damping = 0.215189f;
@@ -795,6 +804,9 @@ constexpr void configure_physical_programs(ProgramOverrides& o) noexcept {
   o.muted_trumpet.brass.vel_to_breath = 0.616017f;
   o.muted_trumpet.resonance_q = 0.598471f;
   o.muted_trumpet.brass.bell_cutoff_hz = 429.085f;
+  // The lip's phase at the fundamental: notes 54-82 at velocity 100 read +3.39 c mean against
+  // equal temperament with the blocker lead share at 0.75 (drift and vibrato off).
+  o.muted_trumpet.pitch_offset_cents = -3.39f;
   o.muted_trumpet.brass.brightness = 0.655602f;
   o.muted_trumpet.gain = 1.51195f;
   o.muted_trumpet.brass.bore_nonlinearity = 0.0994201f;
@@ -824,6 +836,9 @@ constexpr void configure_physical_programs(ProgramOverrides& o) noexcept {
   o.french_horn.brass.cuivre_dynamics = 0.414392f;
   o.french_horn.lfo_to_pitch_cents = 1.17353f;
   o.french_horn.brass.bell_cutoff_hz = 821.625f;
+  // The lip's phase at the fundamental: notes 41-77 at velocity 100 read +2.96 c mean against
+  // equal temperament with the blocker lead share at 0.75 (drift and vibrato off).
+  o.french_horn.pitch_offset_cents = -2.96f;
   o.french_horn.brass.breath_pressure = 0.285863f;
   o.french_horn.brass.brightness = 0.370238f;
   o.french_horn.brass.damping = 0.744488f;
@@ -884,6 +899,9 @@ constexpr void configure_physical_programs(ProgramOverrides& o) noexcept {
   o.brass_section.drift_rate_hz = 4.49753f;
   o.brass_section.resonance_q = 0.506819f;
   o.brass_section.brass.bell_cutoff_hz = 3859.29f;
+  // The lip's phase at the fundamental: notes 40-76 at velocity 100 read +4.05 c mean against
+  // equal temperament with the blocker lead share at 0.75 (drift and vibrato off).
+  o.brass_section.pitch_offset_cents = -4.05f;
   o.brass_section.gain = 7.34402f;
   o.brass_section.brass.bore_nonlinearity = 0.546291f;
   o.brass_section.body_mix = 0.904415f;
