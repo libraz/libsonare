@@ -166,8 +166,15 @@ def compare_profiles(a: dict, b: dict) -> dict:
 
 
 def compare_terms(a: dict, b: dict) -> dict:
-    """Case-by-case, key-by-key comparison of two terms passes."""
+    """Case-by-case, key-by-key comparison of two terms passes.
+
+    A key only the later tree reports is an addition, by the re-extract proof's
+    rule: it passes only while every key both trees report is identical and the
+    added key carries no weight in the running tree's `loss_weights` tables, so
+    the loss a fit minimises cannot have moved.
+    """
     diffs: list[str] = []
+    added: list[str] = []
     for case in sorted(set(a) | set(b)):
         if case not in a or case not in b:
             diffs.append(f"{case}: present in only one tree")
@@ -178,11 +185,30 @@ def compare_terms(a: dict, b: dict) -> dict:
                 diffs.append(f"{case}: {x!r} -> {y!r}")
             continue
         for key in sorted(set(x) | set(y)):
-            if key not in x or key not in y:
-                diffs.append(f"{case}.{key}: present in only one tree")
+            if key not in y:
+                diffs.append(f"{case}.{key}: dropped by the later tree")
+            elif key not in x:
+                (diffs if _weighted(key) else added).append(f"{case}.{key}")
             elif not _same(x[key], y[key]):
                 diffs.append(f"{case}.{key}: {x[key]!r} -> {y[key]!r}")
-    return {"passed": not diffs, "differences": diffs[:MAX_LISTED], "different": len(diffs)}
+    if diffs:
+        diffs += [f"{k}: added" for k in added]
+        added = []
+    return {
+        "passed": not diffs,
+        "differences": diffs[:MAX_LISTED],
+        "different": len(diffs),
+        "additions": added[:MAX_LISTED],
+        "added": len(added),
+    }
+
+
+def _weighted(key: str) -> bool:
+    """Whether a terms key carries a weight in any of the objective's default profiles."""
+    import loss_weights
+
+    tables = [v for v in vars(loss_weights).values() if isinstance(v, dict)]
+    return any(key in t and isinstance(t[key], int | float) for t in tables)
 
 
 # --------------------------------------------------------------------------- #
@@ -522,7 +548,8 @@ def _summary(result: dict) -> str:
     re_line += f"{len(r['unmeasured'])} unmeasured"
     terms_line = f"  terms:      {verdict[t['passed']]} -- {t['cases']} cases, "
     terms_line += (
-        f"{t['different']} differing value(s) ({t['a_seconds']} s / {t['b_seconds']} s per tree)"
+        f"{t['different']} differing value(s), {t.get('added', 0)} unweighted key(s) added "
+        f"({t['a_seconds']} s / {t['b_seconds']} s per tree)"
     )
     lines = [head, re_line, terms_line]
     for cap, diffs in list(r["differences"].items())[:5]:

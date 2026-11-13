@@ -168,3 +168,17 @@ def test_axis_reads_the_recorded_equivalences_by_default(tmp_path, monkeypatch):
     real = equivalence.equivalent_digests
     monkeypatch.setattr(equivalence, "equivalent_digests", lambda d: real(d, path))
     assert fits.axis(["piano"], {"piano": _fit("old")}, "cur")["state"] == fits.EQUIVALENT
+
+
+def test_an_unweighted_key_the_later_tree_adds_is_an_addition():
+    a = {"tone": {"harm": 1.0, "tnr": 2.0}}
+    b = {"tone": {"harm": 1.0, "tnr": 2.0, "harm_uncapped": 1.5}}
+    got = equivalence.compare_terms(a, b)
+    assert got["passed"] and got["additions"] == ["tone.harm_uncapped"]
+    # A weighted key appearing changes the loss, so it is a difference.
+    assert not equivalence.compare_terms(a, {"tone": {**b["tone"], "bright": 3.0}})["passed"]
+    # An addition beside a moved value is not excused.
+    moved = {"tone": {"harm": 1.1, "tnr": 2.0, "harm_uncapped": 1.5}}
+    assert not equivalence.compare_terms(a, moved)["passed"]
+    # A key the later tree drops is a difference.
+    assert not equivalence.compare_terms(b, a)["passed"]
