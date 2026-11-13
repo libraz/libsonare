@@ -16,6 +16,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from knobs import merge_overrides
+from profile_gate import format_window
 
 HERE = Path(__file__).resolve().parent
 CAPTURE_DIR = HERE / "capture"
@@ -62,6 +63,15 @@ def compare(
         raise RuntimeError(f"{voice['slug']}: compare wrote nothing, see {log}")
 
 
+def _with_windows(body: dict) -> list[dict]:
+    """The body's gate readings, each window-dependent one carrying the span it was read over."""
+    windows = body.get("windows") or {}
+    return [
+        {**r, "window": windows[r["key"]]} if r["key"] in windows else r
+        for r in (body.get("gate") or {}).get("readings", [])
+    ]
+
+
 def compare_voice(
     voice: dict,
     out: Path,
@@ -77,13 +87,15 @@ def compare_voice(
     if "gates" not in voice:
         compare(voice, out, lib, overrides, base_overrides=base_overrides)
         body = json.loads(out.read_text())
+        if body.get("gate"):
+            body["gate"]["readings"] = _with_windows(body)
     else:
         readings = []
         for g in voice["gates"]:
             part = out.with_name(f"{out.stem}.{g['capture']}.json")
             if not part.exists():
                 compare({**voice, **g}, part, lib, overrides, base_overrides=base_overrides)
-            for r in json.loads(part.read_text())["gate"]["readings"]:
+            for r in _with_windows(json.loads(part.read_text())):
                 readings.append({**r, "key": f"{g['capture']}:{r['key']}"})
         body = {"gate": {"readings": readings}}
     if baseline is not None:
@@ -131,6 +143,7 @@ def audit(pre: dict, post: dict, weighting: dict[str, tuple] | None) -> list[dic
         after = rb.get("value") if rb else None
         bound = next((r.get("limit") for r in (ra, rb) if r and r.get("limit") is not None), None)
         missing = [n for n, v in (("before", before), ("after", after)) if v is None]
+        window = next((r["window"] for r in (ra, rb) if r and r.get("window")), None)
         entry = {
             "key": key,
             "stat": stat,
@@ -146,6 +159,8 @@ def audit(pre: dict, post: dict, weighting: dict[str, tuple] | None) -> list[dic
             else weighting.get(key.rpartition(":")[2], (UNWEIGHTED, ()))
         )
         entry["weighted"] = flag
+        if window:
+            entry["window"] = window
         if terms:
             entry["term"] = "+".join(terms)
         if missing:
@@ -213,8 +228,9 @@ def format_flagged(entries: list[dict]) -> list[str]:
         }[e["weighted"]]
         if e.get("term"):
             flag += f" via {e['term']}"
+        span = f" [window {format_window(e['window'])}]" if e.get("window") else ""
         lines.append(
             f"  {e['state']:<10} {e['key']} {e['stat']}: "
-            f"{e['before']:.4g} -> {e['after']:.4g} vs bound {e['bound']:.4g} ({flag})"
+            f"{e['before']:.4g} -> {e['after']:.4g} vs bound {e['bound']:.4g} ({flag}){span}"
         )
     return lines

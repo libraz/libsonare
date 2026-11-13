@@ -964,3 +964,66 @@ def test_gated_dimensions_without_a_corpus_is_the_union_of_the_voices_gates(tmp_
 def test_gated_dimensions_reports_nothing_gated_with_its_message(tmp_path, monkeypatch):
     _stub_status(tmp_path, monkeypatch, [])
     assert autofit.gated_dimensions(_gate_args()) == (None, "no gate resolves to this voice")
+
+
+# --------------------------------------------------------------------------
+# the noise-led default weight on `bright`
+
+
+def _noise_led_args(monkeypatch, tmp_path, tnr_values, *, channel=1, **given):
+    """Args for a single capture whose committed reference rows hold @p tnr_values."""
+    import autofit_resolve
+
+    (tmp_path / "reference").mkdir(exist_ok=True)
+    rows = [{"timbre": "t0", "tnr_db": v} for v in tnr_values]
+    (tmp_path / "reference" / "cap.json").write_text(json.dumps({"rows": rows}))
+    monkeypatch.setattr(autofit_resolve, "HERE", tmp_path)
+    corpus = argparse.Namespace(capture_id="cap", timbre="t0", channel=channel)
+    monkeypatch.setattr(autofit_resolve, "load_corpus", lambda path, timbre: corpus)
+    return argparse.Namespace(
+        corpus="cap-dir", corpus_timbre="t0", program=0, w_bright=None, **given
+    )
+
+
+@pytest.mark.parametrize(("tnr", "weighted"), [(5.9, True), (6.0, True), (6.1, False)])
+def test_bright_takes_a_default_weight_only_on_a_noise_led_reference(
+    monkeypatch, tmp_path, capsys, tnr, weighted
+):
+    import autofit_resolve
+
+    args = _noise_led_args(monkeypatch, tmp_path, [tnr, tnr, tnr])
+    autofit_resolve.apply_noise_led_bright(args)
+    err = capsys.readouterr().err
+    if weighted:
+        assert args.w_bright == autofit_resolve.PERCUSSION_WEIGHTS["bright"]
+        assert f"bright weighted: reference tnr {tnr:.1f} dB ≤ 6 (noise-led trigger)" in err
+    else:
+        assert args.w_bright is None and "bright weighted" not in err
+
+
+def test_a_given_bright_weight_is_never_replaced_by_the_trigger(monkeypatch, tmp_path):
+    import autofit_resolve
+
+    args = _noise_led_args(monkeypatch, tmp_path, [1.0])
+    args.w_bright = 0.0
+    autofit_resolve.apply_noise_led_bright(args)
+    assert args.w_bright == 0.0
+
+
+def test_a_kit_is_left_to_its_own_class_defaults(monkeypatch, tmp_path):
+    import autofit_resolve
+
+    args = _noise_led_args(monkeypatch, tmp_path, [1.0], channel=10)
+    autofit_resolve.apply_noise_led_bright(args)
+    assert args.w_bright is None
+
+
+def test_the_noise_led_trigger_stays_outside_the_objective():
+    import objective
+
+    modules = set(objective.objective_modules())
+    assert not modules & {"autofit_resolve", "autofit", "refit", "profile_gate", "gate_audit"}
+
+    import autofit_resolve
+
+    assert autofit_resolve.NOISE_LED_TNR_DB == 6.0

@@ -500,3 +500,37 @@ def test_a_gate_read_through_a_stale_library_says_the_pass_is_not_evidence(
     monkeypatch.setattr(profile_gate, "_model_build_state", lambda: {"stale": False})
     assert profile_module.check_gate(summary, gate, "ref") == 0
     assert "not evidence" not in capsys.readouterr().err
+
+
+# --------------------------------------------------------------------------
+# the window a window-dependent statistic was read over
+
+
+def test_the_summary_table_prints_the_window_beside_each_window_dependent_dimension(capsys):
+    row = {"median": 1.0, "abs_median": 1.0, "p90": 2.0, "n": 6}
+    summary = {"decay": row, "tnr": row, "stretch": row}
+    windows = profile_gate.window_spans(0.6, 2000)
+    windows["tnr"] = {"model_s": 2.0, "reference_s": 2.0}
+    profile_gate.print_summary_table(summary, {}, 6, windows)
+    out = capsys.readouterr().out.splitlines()
+
+    def line(dim):
+        return next(ln for ln in out if ln.lstrip().startswith(profile_gate.DELTA_LABELS[dim][:12]))
+
+    assert "0.6 s / 2 s" in line("decay")
+    assert "2 s / 2 s" in line("tnr")
+    assert " s / " not in line("stretch")
+    assert any("window (model / reference)" in ln for ln in out)
+
+
+def test_the_summary_table_has_no_window_column_without_windows(capsys):
+    row = {"median": 1.0, "abs_median": 1.0, "p90": 2.0, "n": 6}
+    profile_gate.print_summary_table({"decay": row}, {}, 6)
+    assert "window" not in capsys.readouterr().out
+
+
+def test_window_spans_take_the_tail_for_the_damper():
+    spans = profile_gate.window_spans(3.0, 3000, damper_tail_s=1.5)
+    assert spans["decay"] == {"model_s": 3.0, "reference_s": 3.0}
+    assert spans["damper"] == {"model_s": 1.5, "reference_s": 3.0}
+    assert set(spans) == set(profile_gate.WINDOW_DIMENSIONS)

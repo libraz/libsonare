@@ -452,7 +452,44 @@ def floored_axes(key: str, bound: dict, spread: dict[str, float] | None = None) 
     ]
 
 
-def print_summary_table(summary: dict[str, dict], spread: dict[str, float], attempted: int) -> None:
+#: The dimensions whose value depends on how long the note was read for.
+WINDOW_DIMENSIONS = (
+    "decay",
+    "aftersound",
+    "doubling",
+    "partial_tilt",
+    "damper",
+    "attack",
+    "tnr",
+)
+
+
+def window_spans(
+    gate_s: float, reference_gate_ms: float, damper_tail_s: float | None = None
+) -> dict[str, dict[str, float]]:
+    """Per window-dependent dimension, the held window the model was read through and the capture's.
+
+    `model_s` is the compare's gate (the tail, for the damper); `reference_s` is the
+    capture's `gate_ms` from the reference profile.
+    """
+    reference_s = round(reference_gate_ms / 1000.0, 4)
+    out = {d: {"model_s": round(gate_s, 4), "reference_s": reference_s} for d in WINDOW_DIMENSIONS}
+    if damper_tail_s is not None:
+        out["damper"]["model_s"] = round(damper_tail_s, 4)
+    return out
+
+
+def format_window(window: dict[str, float]) -> str:
+    """`model window / reference span`, in seconds."""
+    return f"{window['model_s']:g} s / {window['reference_s']:g} s"
+
+
+def print_summary_table(
+    summary: dict[str, dict],
+    spread: dict[str, float],
+    attempted: int,
+    windows: dict[str, dict[str, float]] | None = None,
+) -> None:
     """The per-dimension summary, with the population each median was taken over.
 
     `unscored` is the column the table was missing. Every dimension here reduces
@@ -466,11 +503,16 @@ def print_summary_table(summary: dict[str, dict], spread: dict[str, float], atte
     Shared by the pitched and percussion comparators so the two cannot drift;
     the prose under it is each caller's, since what the columns mean for a kit
     and for a keyboard is not the same sentence.
+
+    @p windows (see `window_spans`) adds the `window` column, `model window /
+    reference span`, beside each window-dependent dimension: two readings of one
+    dimension over different spans are not the same measurement.
     """
-    print(
+    head = (
         "\n" + f"{'':46s} {'median':>9} {'|median|':>9} {'p90':>8} {'spread':>8} "
         f"{'x spread':>9} {'rows':>5} {'unscored':>9}"
     )
+    print(head + ("  window (model / reference)" if windows else ""))
     for k, row in summary.items():
         s_k = spread.get(k)
         ratio = (row["abs_median"] / s_k) if s_k and s_k > 0 else None
@@ -484,6 +526,7 @@ def print_summary_table(summary: dict[str, dict], spread: dict[str, float], atte
             f"{(f'{s_k:8.2f}' if s_k is not None else '       -')} "
             f"{(f'{ratio:8.1f}x' if ratio is not None else '        -')} "
             f"{row['n']:5d} {missing}"
+            + (f"  {format_window(windows[k])}" if windows and k in windows else "")
         )
     if "tnr" in summary:
         print(
@@ -582,8 +625,11 @@ def write_summary_json(
     measured_utc: str,
     *,
     velocity_layers: dict | None = None,
+    windows: dict[str, dict[str, float]] | None = None,
 ) -> None:
     """Record a compare run's summary and its gate readings for a tool to read.
+
+    @p windows (see `window_spans`) is recorded beside the summary, not in the gate.
 
     @p velocity_layers is the reference's `velocity_layers.layer_summary`, recorded
     so a velocity-swing reading is read against the recordings behind the grid.
@@ -603,6 +649,8 @@ def write_summary_json(
     }
     if velocity_layers is not None:
         record["velocity_layers"] = velocity_layers
+    if windows is not None:
+        record["windows"] = windows
     out_path.write_text(json.dumps(record, indent=2, default=float) + "\n")
 
 

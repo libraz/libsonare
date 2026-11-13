@@ -184,3 +184,61 @@ def test_the_audit_block_counts_every_state_even_when_nothing_crossed():
         lines[1]
         == "  states: crossed 0, worse_over 0, cleared 0, better 1, worse_within 0, unchanged 0, unmeasured 0"
     )
+
+
+def test_a_flagged_entry_prints_its_own_window():
+    short = {"model_s": 0.6, "reference_s": 0.6}
+    long = {"model_s": 2.0, "reference_s": 2.0}
+
+    def body(a, b):
+        return {
+            "gate": {
+                "readings": [
+                    {
+                        "key": "module:decay",
+                        "stat": "p90",
+                        "value": a,
+                        "limit": 1.0,
+                        "window": short,
+                    },
+                    {
+                        "key": "library:decay",
+                        "stat": "p90",
+                        "value": b,
+                        "limit": 1.0,
+                        "window": long,
+                    },
+                    {"key": "module:stretch", "stat": "p90", "value": a, "limit": 1.0},
+                ]
+            }
+        }
+
+    entries = gate_audit.audit(body(0.5, 0.5), body(2.0, 2.0), None)
+    text = "\n".join(gate_audit.format_flagged(entries))
+    by_key = {e["key"]: e for e in entries}
+    assert by_key["module:decay"]["window"] == short
+    assert "window" not in by_key["module:stretch"]
+    assert (
+        "module:decay p90: 0.5 -> 2 vs bound 1 (weighting unknown) [window 0.6 s / 0.6 s]" in text
+    )
+    assert "library:decay p90: 0.5 -> 2 vs bound 1 (weighting unknown) [window 2 s / 2 s]" in text
+    assert "module:stretch p90: 0.5 -> 2 vs bound 1 (weighting unknown)\n" in text + "\n"
+
+
+def test_compare_voice_carries_each_gates_windows_onto_its_readings(tmp_path, monkeypatch):
+    def fake_compare(voice, out, lib, overrides="", **_):
+        span = 0.6 if voice["capture"] == "module" else 2.0
+        windows = {"decay": {"model_s": span, "reference_s": span}}
+        readings = [
+            {"key": k, "stat": "p90", "value": 1.0, "limit": 1.0, "over": False, "excess": 0.0}
+            for k in ("decay", "stretch")
+        ]
+        out.write_text(json.dumps({"gate": {"readings": readings}, "windows": windows}))
+
+    monkeypatch.setattr(gate_audit, "compare", fake_compare)
+    voice = {"slug": "v", "gates": [{"capture": "module"}, {"capture": "library"}]}
+    out = tmp_path / "pre.json"
+    gate_audit.compare_voice(voice, out, Path("lib"))
+    got = {r["key"]: r.get("window") for r in json.loads(out.read_text())["gate"]["readings"]}
+    assert got["module:decay"]["model_s"] == 0.6 and got["library:decay"]["model_s"] == 2.0
+    assert got["module:stretch"] is None

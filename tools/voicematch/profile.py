@@ -137,6 +137,7 @@ from profile_gate import (
     summarize_deltas,
     vel_range_deltas,
     velocity_swing_deltas,
+    window_spans,
     write_gate_file,
     write_model_rows,
     write_summary_json,
@@ -1015,7 +1016,8 @@ def compare_percussion(
         summarize_deltas(deltas), cfg.get("dimensions") or [], cfg.get("dimensions_na") or {}
     )
     spread = percussion_reference_spread(profile, list(summary))
-    print_summary_table(summary, spread, attempted)
+    windows = window_spans(gate_s, cap["gate_ms"])
+    print_summary_table(summary, spread, attempted, windows)
     print_vanished_dimensions(
         offered_keys, summary, cfg.get("dimensions") or [], cfg.get("dimensions_na") or {}
     )
@@ -1096,7 +1098,12 @@ def compare_percussion(
         )
     if json_out:
         write_summary_json(
-            Path(json_out), summary, gate_path, timbre, profile.get("measured_utc", "")
+            Path(json_out),
+            summary,
+            gate_path,
+            timbre,
+            profile.get("measured_utc", ""),
+            windows=windows,
         )
     if gate_path:
         return check_gate(summary, Path(gate_path), timbre, profile.get("measured_utc", ""))
@@ -1401,6 +1408,8 @@ def compare(
     # Rows that reached the per-row arithmetic at all, which is what every
     # dimension below was OFFERED — see `print_summary_table`.
     attempted = 0
+    # Each row's tail past the gate, which the damper release is read through.
+    tails_s: list[float] = []
     ladders: list[tuple[int, int, list[float] | None, list[float] | None]] = []
     offered_keys: set[str] = set()
     # Peak level per side, per note, per velocity. The dynamic range is the one
@@ -1443,6 +1452,7 @@ def compare(
             print(f"{note:5d} {vel:4d} | model rendered nothing measurable")
             continue
         attempted += 1
+        tails_s.append(window_s - preroll_s - gate_s)
         tally.begin_row()
         model_rows.append({**m, "timbre": "model", "note": note, "velocity": vel})
         ladders.append((note, vel, m.get("partials_db"), r.get("partials_db")))
@@ -1621,7 +1631,8 @@ def compare(
     if partials:
         print("\npartial ladder, model minus reference, dB, each side against its own h1:")
         print("\n".join(partial_ladder_lines(ladders, partials)))
-    print_summary_table(summary, spread, attempted)
+    windows = window_spans(gate_s, cap["gate_ms"], max(tails_s, default=None))
+    print_summary_table(summary, spread, attempted, windows)
     print_vanished_dimensions(
         offered_keys, summary, cfg.get("dimensions") or [], cfg.get("dimensions_na") or {}
     )
@@ -1665,6 +1676,7 @@ def compare(
             timbre,
             profile.get("measured_utc", ""),
             velocity_layers=layers,
+            windows=windows,
         )
     if gate_path:
         return check_gate(summary, Path(gate_path), timbre, profile.get("measured_utc", ""))

@@ -746,6 +746,88 @@ def test_prefit_weights_double_a_nonzero_term_by_the_reweighed_rule():
     assert prefit_raise(kit, pre, {"crest": 3.0})["prefit_weights"] == {}
 
 
+def _far_voice(tmp_path, monkeypatch, spread, k=10.0):
+    """A one-gate voice whose gate holds @p spread, with the bank's far threshold set to @p k."""
+    import json
+
+    import refit
+
+    gate = tmp_path / "cap_gate.json"
+    gate.write_text(json.dumps({"reference_spread": spread}))
+    units = tmp_path / "floor-units.json"
+    units.write_text(json.dumps({"p90": k}))
+    monkeypatch.setattr(refit, "FLOOR_UNITS_PATH", units)
+    return {"gates": [{"capture": "cap", "gate": str(gate)}]}
+
+
+def _far_pre(value):
+    return {"gate": {"readings": [{"key": "cap:body", "stat": "abs_median", "value": value}]}}
+
+
+def test_a_dimension_far_in_floors_raises_its_own_term(tmp_path, monkeypatch):
+    from refit import prefit_raise
+
+    voice = _far_voice(tmp_path, monkeypatch, {"body": 2.0})
+    below = prefit_raise(voice, _far_pre(9.0 * 2.0), {})
+    assert below["prefit_weights"] == {} and below["far"] == {} and below["raised_far"] == []
+    above = prefit_raise(voice, _far_pre(11.0 * 2.0), {})
+    assert above["prefit_weights"] == {"body": 1.0}
+    assert above["raised_far"] == above["raised_from_zero"] == ["body"]
+    assert above["far"] == {"body": {"floors": 11.0, "guessed": False}}
+    assert prefit_raise(voice, _far_pre(22.0), {"body": 1.0})["prefit_weights"] == {}
+
+
+def test_a_guessed_floor_is_labelled_in_the_far_line(tmp_path, monkeypatch):
+    from profile_gate import dimension_floor
+    from refit import far_line, prefit_raise
+
+    floor, source = dimension_floor("body", {})
+    assert source != "measured spread"
+    voice = _far_voice(tmp_path, monkeypatch, {})
+    far = prefit_raise(voice, _far_pre(11.0 * floor), {})["far"]["body"]
+    assert far["guessed"]
+    assert far_line("cap", "body", far, 10.0) == "cap: body far: 11 guessed floors (bank p90 10)"
+    measured = {"floors": 11.0, "guessed": False}
+    assert far_line("cap", "body", measured, 10.0) == "cap: body far: 11 floors (bank p90 10)"
+
+
+def test_the_users_zero_weight_wins_over_a_far_raise(tmp_path, monkeypatch):
+    import refit
+
+    voice = _far_voice(tmp_path, monkeypatch, {"body": 2.0})
+    monkeypatch.setattr(refit, "WEIGHTS", {"body": 0.0})
+    got = refit.prefit_raise(voice, _far_pre(22.0), {"body": 0.0})
+    assert got["prefit_weights"] == {} and got["raised_far"] == []
+    assert got["user_zero"] == ["body"] and "body" in got["far"]
+
+
+def test_the_verdict_records_raised_far(tmp_path, monkeypatch):
+    import json
+
+    refit, voice, fits_run = _prefit_dir(
+        tmp_path, monkeypatch, {"body": False}, weights={"harm": 1.0}
+    )
+    gate = tmp_path / "cap_gate.json"
+    gate.write_text(json.dumps({"reference_spread": {"body": 1.0}}))
+    units = tmp_path / "floor-units.json"
+    units.write_text(json.dumps({"p90": 10.0}))
+    monkeypatch.setattr(refit, "FLOOR_UNITS_PATH", units)
+    voice["gates"][0]["gate"] = str(gate)
+    pre = tmp_path / "cap" / "pre.json"
+    pre.parent.mkdir()
+    reading = {"key": "cap:body", "stat": "abs_median", "value": 11.0, "limit": 99.0, "over": False}
+    pre.write_text(json.dumps({"gate": {"readings": [reading]}}))
+    result = refit.run_voice(voice, tmp_path, "build", 8)
+    assert fits_run == [{"body": 1.0}]
+    assert result["raised_far"] == result["raised_from_zero"] == ["body"]
+
+
+def test_the_bank_floor_units_file_is_readable():
+    from refit import far_floors
+
+    assert far_floors() > 0.0
+
+
 def test_refit_spec_replaces_the_auto_spec(tmp_path, monkeypatch):
     import subprocess
 

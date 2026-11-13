@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import statistics
 import sys
 from dataclasses import dataclass
 from pathlib import Path
@@ -38,9 +39,15 @@ from metrics import measure_band_edge
 from metrics_skeleton import sample_count
 from patterns import build_pattern, pattern_length
 from render_oracle import check_oracle_rig
+from toneclass import PERCUSSION_WEIGHTS, default_weights
 from writeback import adoption_refusal
 
 HERE = Path(__file__).resolve().parent
+
+#: Reference median tnr_db at or under which `bright` takes a default weight. It came from
+#: the bank's distribution of reference median tnr (28 captures at or under it on 2026-11-13);
+#: it is a trigger for a weight, not a classification of the voice.
+NOISE_LED_TNR_DB = 6.0
 
 
 def _score(
@@ -615,3 +622,57 @@ def apply_spec_weights(args, argv: list[str]) -> None:
         applied.append(f"{term}={value:g}")
     if applied:
         print(f"spec weights: {' '.join(applied)}", file=sys.stderr)
+
+
+def reference_median_tnr(corpus: Corpus | None) -> float | None:
+    """The median `tnr_db` of the capture's committed reference rows for its timbre, if any."""
+    if corpus is None or not corpus.capture_id:
+        return None
+    path = HERE / "reference" / f"{corpus.capture_id}.json"
+    if not path.exists():
+        return None
+    values = [
+        r["tnr_db"]
+        for r in json.loads(path.read_text()).get("rows") or []
+        if r.get("timbre") == corpus.timbre and r.get("tnr_db") is not None
+    ]
+    return statistics.median(values) if values else None
+
+
+def noise_led_tnr(corpora: list[Corpus | None]) -> float | None:
+    """The highest reference median tnr among the captures, if every one is at or under the trigger.
+
+    One weight vector scores every capture of a joint fit, so the trigger holds only
+    when none of them is tonal. A kit is skipped: its class defaults already weigh `bright`.
+    """
+    if not corpora or any(
+        c is not None and c.channel == CORPUS_PERCUSSION_CHANNEL for c in corpora
+    ):
+        return None
+    got = [reference_median_tnr(c) for c in corpora]
+    if any(t is None or t > NOISE_LED_TNR_DB for t in got):
+        return None
+    return max(got)
+
+
+def apply_noise_led_bright(args) -> None:
+    """Weigh `bright` by default on a capture whose reference is noise-led.
+
+    Runs after `apply_spec_weights`, so a weight the command line or the spec gave
+    (including 0) is never replaced; only an unset `bright` takes the percussion
+    profile's weight. The trigger reads the reference's median tnr and says nothing
+    about what the voice is, so it licenses no noise mechanism.
+    """
+    if getattr(args, "w_bright", None) is not None:
+        return
+    specs = capture_specs(args)
+    if default_weights(getattr(args, "program", 0)).get("bright", 0.0) > 0.0:
+        return
+    tnr = noise_led_tnr([load_corpus(s.path, s.timbre) for s in specs])
+    if tnr is None:
+        return
+    args.w_bright = PERCUSSION_WEIGHTS["bright"]
+    print(
+        f"bright weighted: reference tnr {tnr:.1f} dB ≤ {NOISE_LED_TNR_DB:g} (noise-led trigger)",
+        file=sys.stderr,
+    )

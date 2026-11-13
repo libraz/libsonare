@@ -288,6 +288,7 @@ from autofit_report import (
 from autofit_resolve import (
     HERE,
     _score,
+    apply_noise_led_bright,
     apply_spec_weights,
     capture_specs,
     catalogue_pattern,
@@ -2563,6 +2564,7 @@ def run(args, argv: list[str] | None = None) -> int:
         )
 
     apply_spec_weights(args, argv if argv is not None else sys.argv[1:])
+    apply_noise_led_bright(args)
     capture_args = resolve_probes(args, resolve_probe)
     joint = len(capture_args) > 1
     if joint:
