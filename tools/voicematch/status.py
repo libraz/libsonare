@@ -68,6 +68,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 import bank
 import boundary
 import catalogue as catalogue_mod
+import equivalence
 import fits as fits_mod
 import signoff
 from _repo import REPO_ROOT
@@ -654,7 +655,8 @@ def next_action(axes: dict, stage: int, candidates: list[str]) -> str:
             f"bound that became measurable or fix what the model is missing"
         )
     fit = axes.get("fit") or {}
-    if stage in (3, 4) and fit.get("fittable") and fit.get("state") != fits_mod.CURRENT:
+    fit_ok = fit.get("state") in (fits_mod.CURRENT, fits_mod.EQUIVALENT)
+    if stage in (3, 4) and fit.get("fittable") and not fit_ok:
         when = "was never recorded" if fit["state"] == fits_mod.NONE else "predates it"
         return f"refit under the current objective (the last fit {when}): refit.py"
     if stage == 3:
@@ -703,7 +705,9 @@ def _last_step(axes: dict) -> str:
     return "settled"
 
 
-def fit_axis(voice, records: dict[str, dict], digest: str) -> dict:
+def fit_axis(
+    voice, records: dict[str, dict], digest: str, equivalents: set[str] | None = None
+) -> dict:
     """Whether the voice's patch was last fitted under the current objective.
 
     A kit has no patch, so its units are the drum notes fitted against its captures.
@@ -720,7 +724,7 @@ def fit_axis(voice, records: dict[str, dict], digest: str) -> dict:
         == boundary.BOUNDARY_INSTRUMENT
         for c in voice.captures
     )
-    return {**fits_mod.axis(units, records, digest), "fittable": fittable}
+    return {**fits_mod.axis(units, records, digest, equivalents), "fittable": fittable}
 
 
 def build(catalogue) -> list[dict]:
@@ -735,6 +739,7 @@ def build(catalogue) -> list[dict]:
     drum_gen = signoff.moved_generation(BANK_VERSIONS, {"drum"})
     fit_records = fits_mod.load()
     digest = objective_digest()
+    equivalents = equivalence.equivalent_digests(digest)
     rows = []
     for v in voices:
         cap = v.capture
@@ -772,7 +777,7 @@ def build(catalogue) -> list[dict]:
                 scope=signoff.SCOPE_INSTRUMENT,
             ),
         }
-        axes["fit"] = fit_axis(v, fit_records, digest)
+        axes["fit"] = fit_axis(v, fit_records, digest, equivalents)
         stage = stage_for(axes)
         open_here = cands.get(v.slug, [])
         rows.append(
@@ -874,10 +879,12 @@ def render_table(rows: list[dict], *, every: bool, pol: dict, goal: str | None =
     fit_states = [r["axes"]["fit"] for r in rows if r["axes"].get("fit", {}).get("fittable")]
     if fit_states:
         current = sum(f["state"] == fits_mod.CURRENT for f in fit_states)
+        equivalent = sum(f["state"] == fits_mod.EQUIVALENT for f in fit_states)
         stale = sum(f["state"] == fits_mod.STALE for f in fit_states)
         print(
             f"  fits under the current objective: {current} of {len(fit_states)} fittable "
-            f"voice(s); {stale} stale, {len(fit_states) - current - stale} never recorded"
+            f"voice(s); {equivalent} under a proven-equivalent objective, {stale} stale, "
+            f"{len(fit_states) - current - equivalent - stale} never recorded"
         )
     census = signoff_census(rows)
     if census["structure"] or census["music"]:
