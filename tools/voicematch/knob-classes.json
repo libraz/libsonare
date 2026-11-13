@@ -1057,40 +1057,11 @@
       "lane": "piano",
       "basis": "literature-pinned hammer/string mass ratio per register; only kHammerMassRatioScale is a fitted handle"
     },
-    "piano_voice.kHammerExponentC2": {
-      "class": "set_by_measurement",
-      "lane": "piano",
-      "basis": "literature-pinned felt exponent per register; only kHammerFeltScale is a fitted handle"
-    },
-    "piano_voice.kHammerExponentC4": {
-      "class": "set_by_measurement",
-      "lane": "piano",
-      "basis": "literature-pinned felt exponent per register; only kHammerFeltScale is a fitted handle"
-    },
-    "piano_voice.kHammerExponentC7": {
-      "class": "set_by_measurement",
-      "lane": "piano",
-      "basis": "literature-pinned felt exponent per register; only kHammerFeltScale is a fitted handle"
-    },
-    "piano_voice.kHammerFeltMsC2": {
-      "class": "set_by_measurement",
-      "lane": "piano",
-      "basis": "literature-pinned felt stiffness per register (rigid-wall bounce time at 2 m/s); only kHammerFeltScale is a fitted handle"
-    },
-    "piano_voice.kHammerFeltMsC4": {
-      "class": "set_by_measurement",
-      "lane": "piano",
-      "basis": "literature-pinned felt stiffness per register (rigid-wall bounce time at 2 m/s); only kHammerFeltScale is a fitted handle"
-    },
-    "piano_voice.kHammerFeltMsC7": {
-      "class": "set_by_measurement",
-      "lane": "piano",
-      "basis": "literature-pinned felt stiffness per register (rigid-wall bounce time at 2 m/s); only kHammerFeltScale is a fitted handle"
-    },
-    "piano_voice.kHammerFeltScale": {
-      "class": null,
-      "lane": "piano",
-      "basis": "the fitted handle over the per-register felt tables; classified when the junction keys land"
+    "ks.pluck_ms": {
+      "class": "stage_enable",
+      "lane": "struck",
+      "basis": "finite-duration pluck stage, absent at 0; above 0 it replaces the noise burst and retires the excitation-brightness, pluck_style and nail fields",
+      "off_value": 0.0
     }
   },
   "reach": {
