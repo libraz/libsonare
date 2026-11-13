@@ -21,6 +21,7 @@ from knobs import (
     KnobClass,
     KnobClasses,
     KnobReach,
+    absent_summary,
     auto_spec_report,
     clamp_check,
     clamp_warning,
@@ -28,6 +29,7 @@ from knobs import (
     hand_spec_warnings,
     load_declared_bounds,
     load_knob_classes,
+    refuse_absent_knobs,
     switch_candidates,
 )
 
@@ -53,7 +55,7 @@ def _write(tmp_path, entries, **blocks):
 # --- the resolve check -------------------------------------------------------
 
 
-def test_an_entry_the_catalogue_no_longer_reports_fails_the_load_naming_it(tmp_path):
+def test_strict_load_of_an_entry_the_catalogue_no_longer_reports_fails_naming_it(tmp_path):
     cat = _catalogue({"p0.brass.mute": 0.0, "p0.waveform": 1.0})
     path = _write(
         tmp_path,
@@ -63,7 +65,7 @@ def test_an_entry_the_catalogue_no_longer_reports_fails_the_load_naming_it(tmp_p
         },
     )
     with pytest.raises(ValueError, match="brass.mute_renamed") as exc:
-        load_knob_classes(path, cat)
+        load_knob_classes(path, cat, strict=True)
     assert "'brass.mute'" not in str(exc.value)
 
 
@@ -86,7 +88,7 @@ def test_a_pattern_that_matches_nothing_fails_even_when_a_glob(tmp_path):
     cat = _catalogue({"p0.waveform": 1.0})
     path = _write(tmp_path, {"piano_voice.k*Max": {"class": "identity"}})
     with pytest.raises(ValueError, match=r"piano_voice\.k\*Max"):
-        load_knob_classes(path, cat)
+        load_knob_classes(path, cat, strict=True)
 
 
 def test_pending_landing_and_notes_are_exempt_from_the_resolve_check(tmp_path):
@@ -121,7 +123,8 @@ def _shipped_keys():
 
 
 def test_the_shipped_table_loads_against_a_catalogue_naming_each_of_its_keys():
-    classes = load_knob_classes(KNOB_CLASSES_PATH, _catalogue(_shipped_keys()))
+    classes = load_knob_classes(KNOB_CLASSES_PATH, _catalogue(_shipped_keys()), strict=True)
+    assert not classes.absent
     assert {r.requires for r in classes.reach.values()} == {("motion",), ("stereo",)}
     assert set(classes.groups) == {"piano.excitation_chain"}
     for key in classes.groups["piano.excitation_chain"]:
@@ -353,7 +356,7 @@ def test_a_hand_spec_naming_an_unjudged_field_keeps_it_and_warns():
     assert "no gate found" in hand_spec_warnings(knobs, classes, None)[0]
 
 
-def test_a_reach_pattern_that_resolves_nothing_fails_the_load_naming_it(tmp_path):
+def test_strict_load_of_a_reach_pattern_that_resolves_nothing_fails_naming_it(tmp_path):
     cat = _catalogue({"p0.lfo_rate_hz": 5.0})
     path = _write(
         tmp_path,
@@ -364,7 +367,7 @@ def test_a_reach_pattern_that_resolves_nothing_fails_the_load_naming_it(tmp_path
         },
     )
     with pytest.raises(ValueError, match="lfo_renamed_hz") as exc:
-        load_knob_classes(path, cat)
+        load_knob_classes(path, cat, strict=True)
     assert "'lfo_rate_hz'" not in str(exc.value)
 
 
@@ -488,3 +491,72 @@ def test_the_declared_bounds_file_reads_only_its_bounds_block(tmp_path):
     path.write_text(json.dumps({"bounds": {"a_voice.kX": {"lo": 2, "hi": 2}}}))
     with pytest.raises(ValueError, match="a_voice.kX"):
         load_declared_bounds(path)
+
+
+# --- an absent entry is refused where a fit names it --------------------------
+
+
+def _knob(tunable):
+    return Knob(tunable, 0.0, 1.0, False, 0.5, tunable=tunable)
+
+
+def _absent_entry_classes(tmp_path):
+    cat = _catalogue({"p0.brass.mute": 0.0, "p0.waveform": 1.0})
+    path = _write(
+        tmp_path,
+        {
+            "brass.mute": {"class": "identity", "lane": "sustained"},
+            "piano_voice.kHammerJunction": {"class": "identity", "lane": "piano"},
+        },
+    )
+    return load_knob_classes(path, cat)
+
+
+def test_an_absent_entry_loads_and_is_listed_with_its_lane(tmp_path):
+    classes = _absent_entry_classes(tmp_path)
+    assert list(classes.absent) == ["piano_voice.kHammerJunction"]
+    assert classes.absent["piano_voice.kHammerJunction"].lane == "piano"
+    assert classes.class_of("p0.brass.mute") == "identity"
+    assert absent_summary(classes) == (
+        "knob classes: 1 entry not in this library "
+        "(piano: piano_voice.kHammerJunction); fits naming it are refused"
+    )
+
+
+def test_a_fit_naming_an_absent_entry_is_refused_naming_entry_and_lane(tmp_path):
+    classes = _absent_entry_classes(tmp_path)
+    with pytest.raises(ValueError, match="piano_voice.kHammerJunction") as exc:
+        refuse_absent_knobs([_knob("p0.waveform"), _knob("piano_voice.kHammerJunction")], classes)
+    assert "lane piano" in str(exc.value)
+    assert "uncommitted code" in str(exc.value)
+
+
+def test_a_fit_not_naming_an_absent_entry_proceeds(tmp_path):
+    classes = _absent_entry_classes(tmp_path)
+    refuse_absent_knobs([_knob("p0.waveform"), _knob("p0.brass.mute")], classes)
+    assert absent_summary(_classes()) == ""
+
+
+def test_a_patch_relative_absent_entry_matches_a_patch_qualified_knob(tmp_path):
+    cat = _catalogue({"p0.waveform": 1.0})
+    classes = load_knob_classes(_write(tmp_path, {"ks.pluck_ms": {"class": "identity"}}), cat)
+    with pytest.raises(ValueError, match=r"ks\.pluck_ms"):
+        refuse_absent_knobs([_knob("banjo.ks.pluck_ms")], classes)
+
+
+def test_an_absent_reach_pattern_loads_and_refuses_only_a_fit_under_it(tmp_path):
+    cat = _catalogue({"p0.lfo_rate_hz": 5.0})
+    path = _write(
+        tmp_path,
+        {},
+        reach={
+            "lfo_rate_hz": {"requires": ["motion"], "basis": "x"},
+            "drift_*": {"requires": ["motion"], "basis": "x"},
+        },
+    )
+    classes = load_knob_classes(path, cat)
+    assert list(classes.absent) == ["drift_*"]
+    assert "drift_*" not in classes.reach
+    refuse_absent_knobs([_knob("p0.lfo_rate_hz")], classes)
+    with pytest.raises(ValueError, match=r"drift_\*"):
+        refuse_absent_knobs([_knob("p0.drift_cents")], classes)

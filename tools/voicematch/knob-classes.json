@@ -336,6 +336,11 @@
       "lane": "struck",
       "type": "switch"
     },
+    "piano_voice.kHammerJunction": {
+      "class": "switch",
+      "basis": "engine switch, removed at junction adoption",
+      "lane": "piano"
+    },
     "piano_voice.kInjImpulseNorm": {
       "class": "switch",
       "basis": "selects which quantity the injection is normalised to, 0 or 1",
@@ -1062,11 +1067,6 @@
       "class": "set_by_measurement",
       "lane": "piano",
       "basis": "literature-pinned hammer/string mass ratio per register; only kHammerMassRatioScale is a fitted handle"
-    },
-    "piano_voice.kHammerJunction": {
-      "class": "switch",
-      "lane": "piano",
-      "basis": "engine switch in piano's uncommitted junction work, removed at junction adoption"
     }
   },
   "reach": {

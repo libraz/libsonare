@@ -39,7 +39,7 @@ Ranges come from the clamp where the field has a meaningful bound. Small normali
 
 ### Which fields `--spec auto` offers
 
-`knob-classes.json` classifies the fields a search must not treat as ordinary amounts, and `--spec auto` reads it (`knobs.load_knob_classes`). Every entry must name a key the catalogue reports, or loading fails naming it, so a renamed field cannot lose its class unnoticed; `notes` and `pending_landing` are exempt.
+`knob-classes.json` classifies the fields a search must not treat as ordinary amounts, and `--spec auto` reads it (`knobs.load_knob_classes`). An entry or `reach` pattern that names no key the library reports does not stop the load: it is listed as absent, each run prints one line counting them with their lanes, and a fit whose knobs include a field such an entry names is refused before its first render, naming the entry and its lane (renamed or removed, or only in uncommitted code), so a renamed field cannot lose its class unnoticed. A fit that touches none of them proceeds. `notes` and `pending_landing` are exempt.
 
 | class | `--spec auto` | meaning |
 |---|---|---|

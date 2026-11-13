@@ -326,6 +326,7 @@ from knobs import (
     KNOB_CLASSES_PATH,
     TUNABLE_BOUNDS_PATH,
     KnobClasses,
+    absent_summary,
     apply_start_overrides,
     at_bound,
     auto_spec_report,
@@ -345,6 +346,7 @@ from knobs import (
     load_spec,
     load_spec_weights,
     load_start_overrides,
+    refuse_absent_knobs,
     start_report,
     tunable_overrides,
 )
@@ -2869,6 +2871,8 @@ def run(args, argv: list[str] | None = None) -> int:
         # one whose range collapses, so anything scaled off the rows overshoots.
         try:
             classes = load_knob_classes(KNOB_CLASSES_PATH, catalogue)
+            if absent_summary(classes):
+                print(f"# {absent_summary(classes)}")
             gated, no_gate = gated_dimensions(args)
             taken, dump_report = auto_spec_report(
                 args.program,
@@ -2946,6 +2950,11 @@ def run(args, argv: list[str] | None = None) -> int:
     # to name, and the run says what the table thinks of it.
     if not auto and catalogue is not None:
         classes = load_knob_classes(KNOB_CLASSES_PATH, catalogue)
+    if classes is not None:
+        if absent_summary(classes):
+            print(absent_summary(classes), file=sys.stderr)
+        refuse_absent_knobs(knobs, classes)
+    if not auto and classes is not None:
         gated, _ = gated_dimensions(args)
         for line in hand_spec_warnings(knobs, classes, gated):
             print(f"warning: {line}", file=sys.stderr)

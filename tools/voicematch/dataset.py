@@ -76,6 +76,7 @@ from catalogue import dump_catalogue
 from knobs import (
     KNOB_CLASSES_PATH,
     Knob,
+    absent_summary,
     auto_spec,
     build_knobs,
     format_value,
@@ -202,6 +203,8 @@ def generate(args) -> int:
     )
     # The same space a fit searches: the knob classes hold identity and measured fields out.
     classes = load_knob_classes(KNOB_CLASSES_PATH, catalogue)
+    if absent_summary(classes):
+        print(absent_summary(classes), file=sys.stderr)
     spec = auto_spec(args.program, catalogue, bank=args.bank, classes=classes)
     knobs = build_knobs(spec, {}, catalogue)
     runtime = [k for k in knobs if k.tunable is not None]

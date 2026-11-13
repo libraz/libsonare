@@ -683,6 +683,19 @@ class KnobReach:
     basis: str = ""
 
 
+@dataclass(frozen=True)
+class AbsentKnob:
+    """A table entry or reach pattern naming no key the loaded library reports.
+
+    `kind` is "entry" or "reach". A fit naming a knob it matches is refused
+    (`refuse_absent_knobs`); every other fit is unaffected.
+    """
+
+    key: str
+    kind: str
+    lane: str = ""
+
+
 @dataclass
 class KnobClasses:
     """The classification of the catalogue's fields, as `knob-classes.json` states it.
@@ -691,7 +704,9 @@ class KnobClasses:
     classify (a field no override reaches); `pending_landing` holds entries for keys
     the library does not report yet; `switch_candidates` lists float-typed fields
     whose shipped values are all integers, for the lanes to judge. `reach` maps
-    a field pattern to the gated dimensions it needs (see `KnobReach`).
+    a field pattern to the gated dimensions it needs (see `KnobReach`). `absent`
+    holds the entries and reach patterns the loaded library does not report, taken
+    out of `entries` and `reach`, so they classify nothing.
     """
 
     entries: dict[str, KnobClass]
@@ -699,6 +714,7 @@ class KnobClasses:
     pending_landing: dict[str, dict] = field(default_factory=dict)
     switch_candidates: dict[str, dict] = field(default_factory=dict)
     reach: dict[str, KnobReach] = field(default_factory=dict)
+    absent: dict[str, AbsentKnob] = field(default_factory=dict)
 
     def __post_init__(self) -> None:
         self._entry_patterns = _Patterns(self.entries)
@@ -742,13 +758,15 @@ class KnobClasses:
         return [k for k in keys if (e := self.classify(k)) is not None and e.group == group]
 
 
-def load_knob_classes(path: Path, catalogue: Catalogue) -> KnobClasses:
+def load_knob_classes(path: Path, catalogue: Catalogue, *, strict: bool = False) -> KnobClasses:
     """Read `knob-classes.json` and check every entry against the library's catalogue.
 
-    An entry that names no key the catalogue reports raises, naming it: a field
-    that was renamed or removed must not quietly lose its class and become
-    searchable. A `reach` pattern is held to the same. `pending_landing` and
-    `notes` are exempt.
+    An entry or `reach` pattern that names no key the catalogue reports is returned
+    in `absent` rather than raised, so one field another lane has not landed does
+    not stop every fit: `refuse_absent_knobs` refuses the fit that names it. A
+    field that was renamed or removed therefore still cannot quietly lose its class
+    and become searchable. With @p strict the first such entry raises, naming it.
+    `pending_landing` and `notes` are exempt.
     """
     data = json.loads(Path(path).read_text())
     raw = data.get("entries")
@@ -799,21 +817,70 @@ def load_knob_classes(path: Path, catalogue: Catalogue) -> KnobClasses:
         reach=reach,
     )
     unreached = classes._reach_patterns.unresolved(catalogue.defaults)
-    if unreached:
+    missing = classes._entry_patterns.unresolved(catalogue.defaults)
+    if strict and unreached:
         raise ValueError(
             f"{Path(path).name}: {len(unreached)} reach pattern(s) name no key the catalogue "
             f"reports: {', '.join(repr(p) for p in unreached)}. The field was renamed or "
             f"removed; rename or remove the pattern, or it stops holding its knobs out."
         )
-    missing = classes._entry_patterns.unresolved(catalogue.defaults)
-    if missing:
+    if strict and missing:
         named = "; ".join(f"{k!r} (lane {entries[k].lane or '?'})" for k in missing)
         raise ValueError(
             f"{Path(path).name}: {len(missing)} entr{'y' if len(missing) == 1 else 'ies'} "
             f"name no key the catalogue reports: {named}. The field was renamed or removed; "
             f"rename or remove the entry, or it loses its class."
         )
+    if unreached or missing:
+        absent = {k: AbsentKnob(k, "entry", entries[k].lane) for k in missing}
+        absent.update({p: AbsentKnob(p, "reach") for p in unreached})
+        classes = KnobClasses(
+            {k: e for k, e in entries.items() if k not in absent},
+            notes=classes.notes,
+            pending_landing=classes.pending_landing,
+            switch_candidates=classes.switch_candidates,
+            reach={p: r for p, r in reach.items() if p not in absent},
+            absent=absent,
+        )
     return classes
+
+
+def absent_summary(classes: KnobClasses) -> str:
+    """One start-up line counting the entries the library does not report; empty if none."""
+    if not classes.absent:
+        return ""
+    n = len(classes.absent)
+    lanes: dict[str, list[str]] = {}
+    for a in classes.absent.values():
+        lanes.setdefault(a.lane or a.kind, []).append(a.key)
+    named = "; ".join(f"{lane}: {', '.join(keys)}" for lane, keys in lanes.items())
+    return (
+        f"knob classes: {n} entr{'y' if n == 1 else 'ies'} not in this library "
+        f"({named}); fits naming {'it' if n == 1 else 'them'} are refused"
+    )
+
+
+def refuse_absent_knobs(knobs: list[Knob], classes: KnobClasses) -> None:
+    """Refuse a fit whose runtime knobs include a field an absent entry or reach pattern names.
+
+    Raises ValueError naming each such knob, the entry and its lane. Entries the
+    fit does not touch are not its concern.
+    """
+    if not classes.absent:
+        return
+    hits = []
+    for a in classes.absent.values():
+        pattern = _Patterns([a.key])
+        hits += [
+            f"{k.tunable} matches {a.kind} {a.key!r}" + (f" (lane {a.lane})" if a.lane else "")
+            for k in knobs
+            if k.tunable is not None and pattern.find(k.tunable) is not None
+        ]
+    if hits:
+        raise ValueError(
+            "knob-classes.json names field(s) this library does not report (renamed or "
+            "removed, or only in uncommitted code): " + "; ".join(hits)
+        )
 
 
 def _patch_heads(catalogue: Catalogue) -> set[str]:

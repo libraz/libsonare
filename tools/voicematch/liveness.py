@@ -369,10 +369,12 @@ def census(
     because the bank takes minutes and a run that prints nothing until the end
     is indistinguishable from a hung one.
     """
-    from knobs import KNOB_CLASSES_PATH, auto_spec, load_knob_classes
+    from knobs import KNOB_CLASSES_PATH, absent_summary, auto_spec, load_knob_classes
 
     # The knobs a fit would open, so an inert one here is an axis a fit actually spends.
     classes = load_knob_classes(KNOB_CLASSES_PATH, catalogue)
+    if absent_summary(classes):
+        print(absent_summary(classes), file=sys.stderr)
     for patch, program, bank, channel, grid, drum_note in census_jobs(catalogue, notes, drums):
         try:
             entries = auto_spec(program, catalogue, drum_note=drum_note, bank=bank, classes=classes)
