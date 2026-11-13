@@ -559,6 +559,8 @@ void apply_plucked_string(NativeSynthPatch& p, const Fields& f) {
   F(plucked_string.pick_noise);
   F(plucked_string.buzz);
   F(plucked_string.velocity_exponent);
+  F(plucked_string.pluck_ms);
+  F(plucked_string.pluck_vel_exp);
 }
 
 void apply_harpsichord(NativeSynthPatch& p, const Fields& f) {

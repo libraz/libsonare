@@ -4,8 +4,8 @@
 #include <array>
 #include <cmath>
 
-#include "midi/synth/contact_force.h"
 #include "midi/synth/pitch.h"
+#include "midi/synth/pluck_release.h"
 #include "rt/dispersion.h"
 #include "rt/fractional_delay.h"
 #include "util/constants.h"
@@ -89,12 +89,6 @@ SONARE_TUNABLE(kKsMidQuoteHz, 1000.0f);
 /// Where the pick and excitation key tracks are quoted (A2): low in every compass this core
 /// plays, so a pick law capped at the midpoint can put its knee at any note above it.
 constexpr float kKsPluckQuoteHz = 110.0f;
-
-/// The softest velocity the pluck release is shortened from, so a velocity of 0 cannot drive
-/// vel01 ^ -pluck_vel_exp to infinity.
-constexpr float kKsPluckMinVelocity = 1.0f / 127.0f;
-/// The release kernel is at least this many samples long: two is a one-sample delay.
-constexpr int kKsPluckMinSpan = 2;
 
 /// How many times faster the partial at ks.mute_harmonic decays than the
 /// fundamental, when a hand is on the strings. The captured palm mute puts its
@@ -227,9 +221,7 @@ LoopBudget KsVoiceCore::configure(const KsPatchParams& params, double sr, uint8_
   pluck_span_ = 0;
   pluck_period_ = std::max(base_period, static_cast<float>(exc_total_));
   if (params.pluck_ms > 0.0f) {
-    const float tau_ms = params.pluck_ms * std::pow(std::max(vel01, kKsPluckMinVelocity),
-                                                    -std::max(0.0f, params.pluck_vel_exp));
-    pluck_span_ = std::max(kKsPluckMinSpan, contact_pulse_samples(tau_ms, sr) - 1);
+    pluck_span_ = pluck_release_samples(params.pluck_ms, params.pluck_vel_exp, vel01, sr);
   }
   // There is no draw to level under a pluck: its parabola is the same at every strike.
   exc_noise_gain_ = pluck_span_ > 0
@@ -477,7 +469,10 @@ float KsVoiceCore::excitation_source(int k) const noexcept {
 // Pick-position comb burst[n] - burst[n - pick_delay], whose delayed copy runs pick_delay
 // samples past the burst so the notches stay exact, then the two excitation poles.
 float KsVoiceCore::excitation_step(int pos, float& lp1, float& lp2) const noexcept {
-  if (pluck_span_ > 0) return pluck_step(pos);
+  if (pluck_span_ > 0) {
+    const PluckBurst burst{exc_total_, pluck_period_, pick_delay_, pluck_span_};
+    return 0.7f * pluck_release(burst, pos);  // comb headroom
+  }
   float burst = pos < exc_total_ ? excitation_source(pos) : 0.0f;
   if (pick_delay_ > 0 && pos >= pick_delay_) {
     burst -= excitation_source(pos - pick_delay_);
@@ -485,43 +480,6 @@ float KsVoiceCore::excitation_step(int pos, float& lp1, float& lp2) const noexce
   lp1 += exc_alpha_ * (burst - lp1);
   lp2 += exc_alpha_ * (lp1 - lp2);
   return 0.7f * lp2;  // comb headroom
-}
-
-// The second Bernoulli polynomial u^2 - u + 1/6 over u = k / period: zero-mean, with the series
-// sum cos(2 pi n u) / (pi^2 n^2). Scaled by pi^2 so mode n of the burst is exactly n^-2. The
-// first and last sample close the cell the fractional period leaves, as a trapezoid does.
-float KsVoiceCore::pluck_parabola(int k) const noexcept {
-  const float u = static_cast<float>(k) / pluck_period_;
-  const float edge = k == 0 || k == exc_total_ - 1
-                         ? 1.0f + 0.5f * (pluck_period_ - static_cast<float>(exc_total_))
-                         : 1.0f;
-  return edge * kPi * kPi * (u * u - u + 1.0f / 6.0f);
-}
-
-// The comb source[pos] - source[pos - pick_delay_] makes the parabola a triangle with its apex at
-// the plucking point; the release is a raised-cosine kernel of pluck_span_ taps summing to one,
-// h[j] = (1 - cos(2 pi j / span)) / span, whose spectrum is contact_spectrum(f * span / sr).
-float KsVoiceCore::pluck_step(int pos) const noexcept {
-  const int span = pluck_span_;
-  const int last = exc_total_ + pick_delay_ - 1;
-  const int j_lo = std::max(0, pos - last);
-  const int j_hi = std::min(span - 1, pos);
-  if (j_lo > j_hi) return 0.0f;
-  const double step = constants::kTwoPiD / static_cast<double>(span);
-  const double twice_cos = 2.0 * std::cos(step);
-  double c_prev = std::cos(step * (j_lo - 1));
-  double c = std::cos(step * j_lo);
-  double acc = 0.0;
-  for (int j = j_lo; j <= j_hi; ++j) {
-    const int k = pos - j;
-    float source = k < exc_total_ ? pluck_parabola(k) : 0.0f;
-    if (pick_delay_ > 0 && k >= pick_delay_) source -= pluck_parabola(k - pick_delay_);
-    acc += (1.0 - c) * static_cast<double>(source);
-    const double c_next = twice_cos * c - c_prev;
-    c_prev = c;
-    c = c_next;
-  }
-  return 0.7f * static_cast<float>(acc / static_cast<double>(span));  // comb headroom
 }
 
 float KsVoiceCore::render(float pitch_ratio) noexcept {

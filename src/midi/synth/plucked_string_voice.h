@@ -29,6 +29,7 @@
 #include <cstdint>
 
 #include "midi/control_value.h"
+#include "midi/synth/pluck_release.h"
 #include "midi/synth/string_loop.h"
 #include "midi/synth/voice_random.h"
 #include "util/constants.h"
@@ -113,6 +114,16 @@ struct PluckedStringPatchParams {
   /// Exponent of the voice-amplifier velocity curve, (velocity/127)^e; 2 is the
   /// SoundFont curve, bit-identical to it.
   float velocity_exponent = 2.0f;
+  /// Release time of a finite-duration pluck in ms (0 = off, render bit-identical). Above 0 the
+  /// burst is a string held in a triangle and let go over this time: mode n carries
+  /// |sin(n pi beta)| n^-2 W(n f0 tau), W the raised-cosine contact spectrum (contact_force.h) and
+  /// beta the plucking point. It replaces the noise source and its lowpass, and retires
+  /// @ref exc_brightness, @ref exc_brightness_per_octave and @ref vel_to_brightness; the
+  /// pick-position comb stays in series.
+  float pluck_ms = 0.0f;
+  /// How far the release shortens as the pluck hardens: tau = pluck_ms * vel01 ^ -pluck_vel_exp.
+  /// 0 = velocity-independent. Inert unless @ref pluck_ms > 0.
+  float pluck_vel_exp = 0.0f;
 };
 
 /// Per-voice plucked-string state, embedded in NativeSynthVoice. The voice's
@@ -174,6 +185,15 @@ class PluckedStringVoiceCore {
   /// Burst noise level holding its power per Hz at the internal rate.
   float exc_noise_gain_ = 1.0f;
   float exc_lp_ = 0.0f;
+  // Finite-duration pluck. pluck_span_ is the release in samples (>= 2); 0 = off, and the burst
+  // is the seeded noise above, bit-identical.
+  int pluck_span_ = 0;
+  // The string's period in samples, which the parabola spans (not exc_total_, its floor).
+  float pluck_period_ = 0.0f;
+  // Samples the burst runs for: the burst and its comb copy, plus the release kernel's tail.
+  int injection_length() const noexcept {
+    return pluck_injection_length({exc_total_, pluck_period_, pick_delay_, pluck_span_});
+  }
 
   /// Output trim bringing the raw string sample up to a musical voice level.
   float output_scale_ = 1.0f;

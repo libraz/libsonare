@@ -415,6 +415,8 @@ constexpr PluckedStringPatchParams blank_plucked_string() noexcept {
   z.pick_noise = 0.0f;
   z.buzz = 0.0f;
   z.velocity_exponent = 0.0f;
+  z.pluck_ms = 0.0f;
+  z.pluck_vel_exp = 0.0f;
   return z;
 }
 

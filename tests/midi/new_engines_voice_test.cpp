@@ -10,17 +10,20 @@
 #include <catch2/catch_approx.hpp>
 #include <catch2/catch_test_macros.hpp>
 #include <cmath>
+#include <complex>
 #include <set>
 #include <string>
 #include <vector>
 
 #include "midi/midi_event.h"
+#include "midi/synth/contact_force.h"
 #include "midi/synth/native_synth.h"
 #include "midi/synth/plucked_string_voice.h"
 #include "midi/synth/synth_presets.h"
 #include "midi/synth/vocal_voice.h"
 #include "midi/ump.h"
 #include "support/audio_fixtures.h"
+#include "support/harmonic_peak.h"
 #include "support/midi_render.h"
 #include "util/constants.h"
 
@@ -283,6 +286,83 @@ TEST_CASE("plucked-string pick and excitation key tracks are quoted at A2",
           render_plucked_core(defaults, kSampleRate, 45, 12000));
   REQUIRE(render_plucked_core(tracked, kSampleRate, 69, 12000) !=
           render_plucked_core(defaults, kSampleRate, 69, 12000));
+}
+
+namespace {
+
+/// A near-lossless string with nothing but the pluck and its comb in front of it.
+PluckedStringPatchParams pluck_only_params(float pluck_ms, float pick_position) {
+  PluckedStringPatchParams p;
+  p.brightness = 1.0f;
+  p.decay_s = 1000.0f;
+  p.decay_stretch = 0.0f;
+  p.hf_decay_s = 0.0f;
+  p.mid_decay_s = 0.0f;
+  p.pick_position = pick_position;
+  p.pluck_ms = pluck_ms;
+  return p;
+}
+
+}  // namespace
+
+TEST_CASE("plucked-string pluck_ms gives mode n the amplitude |sin(n pi beta)| n^-2 W(n f0 tau)",
+          "[midi][synth][new_engines]") {
+  constexpr uint8_t kNote = 45;  // A2, 110 Hz: 436.4 samples, a fractional period
+  constexpr double kF0 = 110.0;
+  constexpr float kPick = 0.27f;
+  // The comb is an integer delay, so beta is the rounded one the voice uses.
+  const double period = kRate / kF0;
+  const double beta = std::floor(kPick * period + 0.5) / period;
+  struct Case {
+    float pluck_ms;
+    int n_max;
+  };
+  for (const Case c : {Case{1.5f, 10}, Case{3.0f, 5}}) {
+    const double tau_s = 0.001 * c.pluck_ms;
+    const std::vector<float> out =
+        render_plucked_core(pluck_only_params(c.pluck_ms, kPick), kRate, kNote, 24000);
+    const double a1 = sonare::test::harmonic_peak(out, 3000, 12, kF0, 1, kRate);
+    const double ref1 = std::fabs(std::sin(sonare::constants::kPiD * beta)) *
+                        sonare::midi::synth::contact_spectrum(static_cast<float>(kF0 * tau_s));
+    for (int n = 2; n <= c.n_max; ++n) {
+      const double want =
+          std::fabs(std::sin(n * sonare::constants::kPiD * beta)) / (n * n) *
+          sonare::midi::synth::contact_spectrum(static_cast<float>(n * kF0 * tau_s));
+      const double got = sonare::test::harmonic_peak(out, 3000, 12, kF0, n, kRate) / a1;
+      const double err_db = 20.0 * std::log10(got / (want / ref1));
+      INFO("pluck_ms " << c.pluck_ms << " harmonic " << n << " error " << err_db << " dB");
+      CHECK(std::fabs(err_db) < 0.1);
+    }
+  }
+}
+
+TEST_CASE("plucked-string pluck_ms retires the noise burst's inputs and leaves 0 as the old burst",
+          "[midi][synth][new_engines]") {
+  PluckedStringPatchParams base;
+  base.pick_position = 0.2f;
+  const std::vector<float> noise = render_plucked_core(base, kRate, 45, 8000);
+  // At 0 the pluck fields name nothing: the render is the noise burst's, sample for sample.
+  PluckedStringPatchParams spelled = base;
+  spelled.pluck_ms = 0.0f;
+  spelled.pluck_vel_exp = 0.9f;
+  CHECK(render_plucked_core(spelled, kRate, 45, 8000) == noise);
+  // Above 0 the source is the pluck, and the noise burst's inputs reach nothing.
+  PluckedStringPatchParams plucked = base;
+  plucked.pluck_ms = 2.0f;
+  const std::vector<float> reference = render_plucked_core(plucked, kRate, 45, 8000);
+  CHECK(reference != noise);
+  PluckedStringPatchParams retired = plucked;
+  retired.exc_brightness = 0.1f;
+  retired.exc_brightness_per_octave = 1.5f;
+  retired.vel_to_brightness = 1.0f;
+  CHECK(render_plucked_core(retired, kRate, 45, 8000) == reference);
+  // The comb stays in series, and a harder pluck shortens the release.
+  PluckedStringPatchParams moved = plucked;
+  moved.pick_position = 0.35f;
+  CHECK(render_plucked_core(moved, kRate, 45, 8000) != reference);
+  PluckedStringPatchParams harder = plucked;
+  harder.pluck_vel_exp = 0.8f;
+  CHECK(render_plucked_core(harder, kRate, 45, 8000) != reference);
 }
 
 TEST_CASE("new-engine presets resolve and select their engine", "[midi][synth][new_engines]") {

@@ -23,6 +23,7 @@
 #include <cstdint>
 
 #include "midi/control_value.h"
+#include "midi/synth/pluck_release.h"
 #include "midi/synth/string_loop.h"
 #include "midi/synth/voice_random.h"
 #include "util/constants.h"
@@ -283,13 +284,9 @@ class KsVoiceCore {
   float excitation_source(int k) const noexcept;
   // The excitation injected at burst position @p pos, advancing the two poles @p lp1 / @p lp2.
   float excitation_step(int pos, float& lp1, float& lp2) const noexcept;
-  // Sample @p k of the pluck's string-in-a-triangle source, a parabola whose series is n^-2.
-  float pluck_parabola(int k) const noexcept;
-  // The pluck's combed source at burst position @p pos, then smoothed by the release kernel.
-  float pluck_step(int pos) const noexcept;
   // Samples the burst runs for: the burst and its comb copy, plus the release kernel's tail.
   int injection_length() const noexcept {
-    return exc_total_ + pick_delay_ + (pluck_span_ > 0 ? pluck_span_ - 1 : 0);
+    return pluck_injection_length({exc_total_, pluck_period_, pick_delay_, pluck_span_});
   }
   // Brings the oversampled loops back to the host rate; the identity at factor 1.
   LoopDecimator decimator_;

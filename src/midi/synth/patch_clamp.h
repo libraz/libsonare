@@ -674,6 +674,10 @@ constexpr NativeSynthPatch clamp_synth_patch(const NativeSynthPatch& patch) noex
       std::clamp(patch_clamp_detail::sanitize(p.plucked_string.buzz, 0.0f), 0.0f, 1.0f);
   p.plucked_string.velocity_exponent = std::clamp(
       patch_clamp_detail::sanitize(p.plucked_string.velocity_exponent, 2.0f), 0.0f, 4.0f);
+  p.plucked_string.pluck_ms =
+      std::clamp(patch_clamp_detail::sanitize(p.plucked_string.pluck_ms, 0.0f), 0.0f, 10.0f);
+  p.plucked_string.pluck_vel_exp =
+      std::clamp(patch_clamp_detail::sanitize(p.plucked_string.pluck_vel_exp, 0.0f), 0.0f, 1.0f);
   p.vocal.vowel = std::clamp(p.vocal.vowel, 0, kVocalVowels - 1);
   p.vocal.brightness =
       std::clamp(patch_clamp_detail::sanitize(p.vocal.brightness, 0.5f), 0.0f, 1.0f);

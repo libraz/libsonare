@@ -27,6 +27,7 @@
 #include "midi/ump.h"
 #include "support/alloc_guard.h"
 #include "support/audio_fixtures.h"
+#include "support/harmonic_peak.h"
 #include "support/midi_render.h"
 #include "util/constants.h"
 
@@ -1348,27 +1349,6 @@ TEST_CASE("the guitar body's air-mode fields at their defaults are the bank's ow
 
 namespace {
 
-/// Amplitude of the @p n th harmonic of @p f0 in @p x: a Hann window over @p periods periods,
-/// the frequency scanned across +-0.5 % so a few cents of tuning cannot move the reading.
-double harmonic_peak(const std::vector<float>& x, size_t from, int periods, double f0, int n) {
-  const size_t count = static_cast<size_t>(std::lround(periods * kRate / f0));
-  double best = 0.0;
-  for (int s = -25; s <= 25; ++s) {
-    const double hz = n * f0 * (1.0 + 0.0002 * s);
-    std::complex<double> acc = 0.0;
-    double window_sum = 0.0;
-    for (size_t i = 0; i < count; ++i) {
-      const double w = 0.5 - 0.5 * std::cos(sonare::constants::kTwoPiD * static_cast<double>(i) /
-                                            static_cast<double>(count));
-      window_sum += w;
-      acc += w * static_cast<double>(x[from + i]) *
-             std::polar(1.0, -sonare::constants::kTwoPiD * hz * static_cast<double>(i) / kRate);
-    }
-    best = std::max(best, 2.0 * std::abs(acc) / window_sum);
-  }
-  return best;
-}
-
 /// A near-lossless string with nothing but the pluck and its comb in front of it.
 KsPatchParams pluck_only_params(float pluck_ms, float pick_position) {
   KsPatchParams p;
@@ -1402,14 +1382,14 @@ TEST_CASE("pluck_ms gives mode n the amplitude |sin(n pi beta)| n^-2 W(n f0 tau)
     const double tau_s = 0.001 * c.pluck_ms;
     const std::vector<float> out =
         render_ks_core(pluck_only_params(c.pluck_ms, kPick), kNote, 1.0f, 24000);
-    const double a1 = harmonic_peak(out, 3000, 12, kF0, 1);
+    const double a1 = sonare::test::harmonic_peak(out, 3000, 12, kF0, 1, kRate);
     const double ref1 = std::fabs(std::sin(sonare::constants::kPiD * beta)) *
                         sonare::midi::synth::contact_spectrum(static_cast<float>(kF0 * tau_s));
     for (int n = 2; n <= c.n_max; ++n) {
       const double want =
           std::fabs(std::sin(n * sonare::constants::kPiD * beta)) / (n * n) *
           sonare::midi::synth::contact_spectrum(static_cast<float>(n * kF0 * tau_s));
-      const double got = harmonic_peak(out, 3000, 12, kF0, n) / a1;
+      const double got = sonare::test::harmonic_peak(out, 3000, 12, kF0, n, kRate) / a1;
       const double err_db = 20.0 * std::log10(got / (want / ref1));
       INFO("pluck_ms " << c.pluck_ms << " harmonic " << n << " error " << err_db << " dB");
       // Measured within 0.01 dB; the bound leaves room for the platform's rounding.

@@ -205,6 +205,8 @@ constexpr UnitRow kEngineUnits[] = {
     {"plucked_string.pick_noise", Unit::None},
     {"plucked_string.buzz", Unit::None},
     {"plucked_string.velocity_exponent", Unit::None},
+    {"plucked_string.pluck_ms", Unit::Ms},
+    {"plucked_string.pluck_vel_exp", Unit::None},
     {"harpsichord.eight_a", Unit::None},
     {"harpsichord.eight_b", Unit::None},
     {"harpsichord.four", Unit::None},

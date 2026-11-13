@@ -313,6 +313,13 @@ const GateRow kEngineGates[] = {
      [](const GateSite&) { return wrapper_is("body", "guitar") & wrapper_above("bodyMix", 0); }},
     {"ks.body_knock",
      [](const GateSite&) { return wrapper_is("body", "guitar") & wrapper_above("bodyMix", 0); }},
+    // Plucked string: a pluck release time replaces the noise burst and its lowpass, and its
+    // velocity law has nothing to act on without it.
+    {"plucked_string.exc_brightness", [](const GateSite&) { return equals("pluckMs", 0); }},
+    {"plucked_string.exc_brightness_per_octave",
+     [](const GateSite&) { return equals("pluckMs", 0); }},
+    {"plucked_string.vel_to_brightness", [](const GateSite&) { return equals("pluckMs", 0); }},
+    {"plucked_string.pluck_vel_exp", [](const GateSite&) { return above("pluckMs", 0); }},
     // Plucked string: the mid anchor is a second pole of the quoted loss solve, and the pick key
     // track scales a pick position that has to be there.
     {"plucked_string.mid_decay_s", [](const GateSite&) { return above("hfDecayS", 0); }},

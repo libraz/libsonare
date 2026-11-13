@@ -4,6 +4,7 @@
 #include <cmath>
 
 #include "midi/synth/pitch.h"
+#include "midi/synth/pluck_release.h"
 #include "midi/synth/string_loop.h"
 #include "rt/dispersion.h"
 #include "rt/fractional_delay.h"
@@ -159,6 +160,12 @@ LoopBudget PluckedStringVoiceCore::configure(const PluckedStringPatchParams& par
   exc_alpha_ = lowpass_alpha_at_rate(exc_cutoff, sr);
   exc_noise_gain_ = noise_gain_at_rate(sr);
   exc_lp_ = 0.0f;
+  // A pluck release time swaps the noise burst for the release of a triangle held on the string.
+  pluck_span_ = 0;
+  pluck_period_ = std::max(base_period_, static_cast<float>(exc_total_));
+  if (params.pluck_ms > 0.0f) {
+    pluck_span_ = pluck_release_samples(params.pluck_ms, params.pluck_vel_exp, vel01, sr);
+  }
 
   // Pick contact click, armed at note-on; 0 adds nothing (bit-identical).
   const float pick_level = std::clamp(params.pick_noise, 0.0f, 1.0f) * vel01;
@@ -179,20 +186,26 @@ float PluckedStringVoiceCore::render_internal(float pitch_ratio) noexcept {
   if (buffer_ == nullptr || capacity_ < 8) return 0.0f;
 
   float exc = 0.0f;
-  if (exc_pos_ < exc_total_ + pick_delay_) {
-    // Pick-position comb: burst[n] - burst[n - pick_delay]. The delayed copy
-    // runs pick_delay samples past the burst so the comb notches stay exact.
-    float burst =
-        exc_pos_ < exc_total_
-            ? exc_noise_gain_ * noise_.bipolar_at(kNoiseIndexBase + static_cast<uint64_t>(exc_pos_))
-            : 0.0f;
-    if (pick_delay_ > 0 && exc_pos_ >= pick_delay_) {
-      burst -= exc_noise_gain_ *
-               noise_.bipolar_at(kNoiseIndexBase + static_cast<uint64_t>(exc_pos_ - pick_delay_));
+  if (exc_pos_ < injection_length()) {
+    if (pluck_span_ > 0) {
+      const PluckBurst pluck{exc_total_, pluck_period_, pick_delay_, pluck_span_};
+      exc = 0.7f * pluck_release(pluck, exc_pos_);  // comb headroom
+      ++exc_pos_;
+    } else {
+      // Pick-position comb: burst[n] - burst[n - pick_delay]. The delayed copy
+      // runs pick_delay samples past the burst so the comb notches stay exact.
+      float burst = exc_pos_ < exc_total_
+                        ? exc_noise_gain_ *
+                              noise_.bipolar_at(kNoiseIndexBase + static_cast<uint64_t>(exc_pos_))
+                        : 0.0f;
+      if (pick_delay_ > 0 && exc_pos_ >= pick_delay_) {
+        burst -= exc_noise_gain_ *
+                 noise_.bipolar_at(kNoiseIndexBase + static_cast<uint64_t>(exc_pos_ - pick_delay_));
+      }
+      ++exc_pos_;
+      exc_lp_ += exc_alpha_ * (burst - exc_lp_);
+      exc = 0.7f * exc_lp_;  // comb headroom
     }
-    ++exc_pos_;
-    exc_lp_ += exc_alpha_ * (burst - exc_lp_);
-    exc = 0.7f * exc_lp_;  // comb headroom
   }
 
   // pitch_ratio scales the frequency, so it divides the loop delay.
@@ -233,7 +246,7 @@ void PluckedStringVoiceCore::release() noexcept { string_.release(); }
 void PluckedStringVoiceCore::kill() noexcept {
   killed_ = true;
   decimator_.reset();
-  exc_pos_ = exc_total_ + pick_delay_;
+  exc_pos_ = injection_length();
   string_.kill();
   pick_.pos = pick_.len;
   exc_lp_ = 0.0f;
