@@ -44,11 +44,11 @@
     "vel_range": "`velRange` is set on none of this tone's zones, so it holds one recording per note at a velocity it does not state. A grid asking for more than one would write that recording into every row of the axis a dynamics fit reads; the velocity bound stays on the library capture of this program, which is the one thing these recordings cannot answer",
     "stereo": "every recording of this tone is mono (`sampleType` 1) and no `pan` is set, so the image is absent by construction rather than by voicing",
     "register": "no `initialAttenuation` is set on this tone, so the level relation between one note and the next is not in the source; each recording sits in the headroom it was normalised into",
-    "damper": "every recording of this tone stops within 83 ms of the 5000 ms gate, so no release follows it to be read"
+    "damper": "every recording of this tone stops within 83 ms of the 5000 ms gate, so no release follows it to be read",
+    "body": "every reference row's band under the fundamental sits at mains hum under the hum censor (n48-n84 at v100), so no row is measurable; the bound needs a reference without hum"
   },
   "dimensions": [
     "stretch",
-    "body",
     "attack",
     "balance",
     "centroid_pct",

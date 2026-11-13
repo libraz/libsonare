@@ -47,12 +47,14 @@
     "damper": "the source trimmed every recording of this tone before its 5.0 s key lift -- the cells run 2.16 to 2.34 s -- so no lift is recorded for a release to be read from"
   },
   "dimensions": [
-    "stretch",
+    "decay",
+    "aftersound",
+    "doubling",
     "body",
     "attack",
-    "balance",
-    "centroid_pct",
-    "tnr"
+    "attack_hf",
+    "attack_hf_swing",
+    "centroid_pct"
   ],
   "rig": "none",
   "room": "none",
