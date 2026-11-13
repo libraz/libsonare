@@ -13,6 +13,10 @@ adopted is decided by comparing gates, which happens after the fit. `status.py`
 reads it into each voice's `fit` axis.
 
     fits.py record --report fit.json --capture <id> --timbre <t> --outcome adopted
+
+An entry carries `corpora`, the `{capture, timbre}` list the fit answered (a joint
+fit names several; one capture is a list of one), beside `capture` and `timbre`,
+which stay the first of them.
 """
 
 from __future__ import annotations
@@ -64,6 +68,24 @@ def unit_of(report: dict) -> str:
     return units.pop()
 
 
+def corpora_of(report: dict, capture: str, timbre: str) -> list[dict]:
+    """The captures a fit answered, as `{capture, timbre}` in the order it was given them.
+
+    The list is part of the fit's identity: one fitted against a patch's base
+    capture alone is not the one fitted against it and its struct copy. `capture`
+    and `timbre` stay beside it as the first, for readers of the single form. A
+    report with no list (a fit that named no corpus, or an older one) is a list of
+    the one pair the caller names.
+    """
+    named = [
+        {"capture": c.get("capture") or "", "timbre": c.get("timbre") or ""}
+        for c in report.get("corpora") or []
+    ]
+    if named and all(c["capture"] for c in named):
+        return named
+    return [{"capture": capture, "timbre": timbre}]
+
+
 def record_fit(
     report: dict,
     *,
@@ -84,6 +106,7 @@ def record_fit(
         "date": today or datetime.datetime.now(tz=datetime.UTC).date().isoformat(),
         "capture": capture,
         "timbre": timbre,
+        "corpora": corpora_of(report, capture, timbre),
         "outcome": outcome,
     }
     if reason:

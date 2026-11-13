@@ -6,10 +6,13 @@ outright, and the term weights the spec carries.
 
 from __future__ import annotations
 
+import argparse
 import json
 import sys
+from dataclasses import dataclass
 from pathlib import Path
 
+import bank
 from corpus import (
     PERCUSSION_CHANNEL as CORPUS_PERCUSSION_CHANNEL,
 )
@@ -35,6 +38,7 @@ from metrics import measure_band_edge
 from metrics_skeleton import sample_count
 from patterns import build_pattern, pattern_length
 from render_oracle import check_oracle_rig
+from writeback import adoption_refusal
 
 HERE = Path(__file__).resolve().parent
 
@@ -65,12 +69,116 @@ def _score(
     return pattern, pattern_length(pattern), pattern.analysis_notes
 
 
+@dataclass(frozen=True)
+class CaptureSpec:
+    """One `--corpus` of a fit and the cuts that belong to it alone.
+
+    A cut left empty falls back to the run-wide flag of the same name, so a fit
+    against one capture reads exactly as it always did.
+    """
+
+    path: str
+    timbre: str = ""
+    notes: str = ""
+    velocities: str = ""
+    validate_notes: str = ""
+    validate_velocities: str = ""
+
+
+#: The per-capture flags, each aligned by position with `--corpus`: attribute on
+#: the args, the field of `CaptureSpec` it fills, and the flag's spelling.
+_ALIGNED = (
+    ("corpus_timbre", "timbre", "--corpus-timbre"),
+    ("corpus_notes", "notes", "--corpus-notes"),
+    ("corpus_velocities", "velocities", "--corpus-velocities"),
+    ("corpus_validate_notes", "validate_notes", "--corpus-validate-notes"),
+    ("corpus_validate_velocities", "validate_velocities", "--corpus-validate-velocities"),
+)
+
+
+def _given(value) -> list[str]:
+    """A flag's values as a list, whether it arrived as one string, a list or not at all."""
+    if value is None:
+        return []
+    return [value] if isinstance(value, str) else list(value)
+
+
+def capture_specs(args) -> list[CaptureSpec]:
+    """The captures a run fits against, in the order they were named.
+
+    `--corpus` may be repeated. Every per-capture flag is aligned with it by
+    position and is either absent or given once per `--corpus` (`''` for "the
+    default"), because a flag given for only some of them would leave it open
+    which ones.
+    """
+    paths = [p for p in _given(getattr(args, "corpus", "")) if p]
+    if not paths:
+        return []
+    columns: dict[str, list[str]] = {}
+    for attr, field, flag in _ALIGNED:
+        got = _given(getattr(args, attr, None))
+        if got and len(got) != len(paths):
+            raise ValueError(
+                f"{flag} is given {len(got)} time(s) for {len(paths)} --corpus; give it once "
+                f"per --corpus (an empty value for the default) or not at all"
+            )
+        columns[field] = got or [""] * len(paths)
+    return [
+        CaptureSpec(path, **{field: column[i] for field, column in columns.items()})
+        for i, path in enumerate(paths)
+    ]
+
+
 def resolve_corpus(args) -> Corpus | None:
-    """Load the capture manifest a corpus run scores against, if there is one."""
-    path = getattr(args, "corpus", "")
-    if not path:
+    """Load the capture manifest a corpus run scores against, if there is one.
+
+    A run against several captures has no single corpus to answer with; its
+    per-capture namespaces (`capture_namespace`) each have one.
+    """
+    specs = capture_specs(args)
+    if not specs:
         return None
-    return load_corpus(path, getattr(args, "corpus_timbre", ""))
+    if len(specs) > 1:
+        raise ValueError("this fit names several captures; resolve each through its own namespace")
+    return load_corpus(specs[0].path, specs[0].timbre)
+
+
+def capture_program(corpus: Corpus) -> tuple[int, int] | None:
+    """The (program, bank) a capture's definition says its recording answers, if it has one."""
+    for cap in bank.captures():
+        if corpus.capture_id and cap.id == corpus.capture_id:
+            return cap.program, cap.bank
+    return None
+
+
+def capture_namespace(args, spec: CaptureSpec, *, primary: bool) -> argparse.Namespace:
+    """The args one capture is fitted and held out under: the run's, with its own cuts.
+
+    The first capture renders the run's `--program` / `--bank`. Every other one
+    renders the program its own capture definition names, because a capture of a
+    struct copy (a ukulele on the nylon patch) is sounded by the copy's program,
+    not the fitted one's.
+    """
+    ns = argparse.Namespace(**vars(args))
+    ns.corpus = spec.path
+    ns.corpus_timbre = spec.timbre
+    for attr, _, _ in _ALIGNED[1:]:
+        setattr(ns, attr, None)  # folded into the fields below
+    ns.notes = spec.notes or getattr(args, "notes", "")
+    ns.velocities = spec.velocities or getattr(args, "velocities", "")
+    ns.validate_notes = spec.validate_notes or getattr(args, "validate_notes", "")
+    ns.validate_velocities = spec.validate_velocities or getattr(args, "validate_velocities", "")
+    if not primary:
+        named = capture_program(load_corpus(spec.path, spec.timbre))
+        if named is None:
+            print(
+                f"capture {spec.path}: its definition names no program, so it is rendered "
+                f"as program {ns.program} bank {getattr(ns, 'bank', 0)}",
+                file=sys.stderr,
+            )
+        else:
+            ns.program, ns.bank = named
+    return ns
 
 
 def _committed_band_edge(corpus: Corpus | None) -> float | None:
@@ -397,6 +505,73 @@ def resolve_probe(args) -> None:
                 f"{sorted(per_note)} have nothing to measure. Weight only --w-mss, or "
                 f"pick a pattern with analysis notes."
             )
+
+
+#: What a probe says about the measurements it can take. A weight is refused or
+#: dropped on the strength of these, so across several captures a measurement
+#: counts only where every one of them can take it.
+_PROBE_FLAGS = (
+    "has_analysis_notes",
+    "has_velocity_spread",
+    "has_level_contrasts",
+    "has_onset_reference",
+    "has_tail_window",
+    "has_kit_groups",
+)
+
+
+def resolve_probes(args, resolver=None) -> list[argparse.Namespace]:
+    """Settle the probe of every capture the run names; the namespaces they fit under.
+
+    One capture is the run itself: `args` is resolved in place and returned, so
+    nothing about a single-capture fit moves. Several each get a namespace of
+    their own, resolved by the same `resolve_probe`, and the run-wide `args`
+    then carries what they agree on. Every capture is scored under one weight
+    vector, so a term one of them cannot measure is dropped from the class
+    defaults, and an explicitly asked-for one is refused, for all of them.
+
+    `resolver` is the per-capture `resolve_probe` (a caller's seam to replace it).
+    """
+    resolver = resolver or resolve_probe
+    specs = capture_specs(args)
+    if len(specs) < 2:
+        if specs:
+            # Folded back to the plain single-capture shape every reader expects.
+            only = specs[0]
+            args.corpus, args.corpus_timbre = only.path, only.timbre
+            args.notes = only.notes or getattr(args, "notes", "")
+            args.velocities = only.velocities or getattr(args, "velocities", "")
+            args.validate_notes = only.validate_notes or getattr(args, "validate_notes", "")
+            args.validate_velocities = only.validate_velocities or getattr(
+                args, "validate_velocities", ""
+            )
+        resolver(args)
+        return [args]
+    if getattr(args, "oracle_wav", ""):
+        raise ValueError(
+            "--corpus and --oracle-wav both name the reference; a corpus run assembles "
+            "its oracle from the capture, so drop one of them"
+        )
+    caps = [capture_namespace(args, spec, primary=i == 0) for i, spec in enumerate(specs)]
+    for ns in caps:
+        resolver(ns)
+    if len({ns.percussive for ns in caps}) > 1:
+        raise ValueError(
+            "the captures mix a kit with pitched notes; they are scored by different "
+            "metric sets and cannot share one fit"
+        )
+    for flag in _PROBE_FLAGS:
+        agreed = all(bool(getattr(ns, flag)) for ns in caps)
+        for ns in (args, *caps):
+            setattr(ns, flag, agreed)
+    args.pattern = "corpus"
+    args.percussive = caps[0].percussive
+    args.sample_rate = caps[0].sample_rate
+    # One assessment stands for the run, and a refusal anywhere is the one that counts.
+    assessments = [getattr(ns, "fit_assessment", None) for ns in caps]
+    refused = [a for a in assessments if a is not None and adoption_refusal(a) is not None]
+    args.fit_assessment = (refused or assessments)[0]
+    return caps
 
 
 def apply_spec_weights(args, argv: list[str]) -> None:

@@ -259,6 +259,54 @@ def capital_gates(
     return sorted(found, key=lambda g: g["capture"] != own)
 
 
+def joint_captures(voice: dict) -> tuple[list[dict], list[dict]]:
+    """The captures a joint fit of this voice is scored against, and those it had to leave out.
+
+    Every capture the voice's gates name, its own first. A capture needs its
+    corpus on this machine and notes enough to hold some out; one without is
+    dropped with the reason rather than fitted without a hold-out. Fewer than
+    two usable captures is no joint fit, so the list is empty and the voice is
+    fitted against its own capture alone.
+    """
+    usable: list[dict] = []
+    dropped: list[dict] = []
+    for gate in voice["gates"]:
+        cap = gate["capture"]
+        if cap == voice["capture"]:
+            usable.insert(
+                0,
+                {
+                    "capture": cap,
+                    "timbre": voice["timbre"],
+                    "corpus": voice["corpus"],
+                    "notes": voice["notes"],
+                    "validate_notes": voice["validate_notes"],
+                    "velocities": voice["velocities"],
+                },
+            )
+            continue
+        corpus = CORPUS_ROOT / "capture" / cap
+        if not (corpus / "manifest.json").exists():
+            dropped.append({"capture": cap, "reason": "no corpus on this machine"})
+            continue
+        raw = json.loads((CAPTURE_DIR / f"{cap}.json").read_text())
+        train, held = _split(raw["notes"])
+        if not held:
+            dropped.append({"capture": cap, "reason": "one note: nothing to hold out"})
+            continue
+        usable.append(
+            {
+                "capture": cap,
+                "timbre": gate["timbre"],
+                "corpus": str(corpus),
+                "notes": train,
+                "validate_notes": held,
+                "velocities": _three(raw["velocities"]),
+            }
+        )
+    return (usable if len(usable) > 1 else []), dropped
+
+
 def plan(banks: str) -> tuple[list[dict], list[dict]]:
     """(voices to fit, voices skipped with the reason)."""
     rows = json.loads(STATUS.read_text())["voices"]
@@ -300,23 +348,24 @@ def plan(banks: str) -> tuple[list[dict], list[dict]]:
             skipped.append({"slug": slug, "reason": "one note: nothing to hold out"})
             continue
         seen.add(patch)
-        todo.append(
-            {
-                "slug": slug,
-                "program": row["program"],
-                "bank": row["bank"],
-                "patch": patch,
-                "engine": row.get("engine"),
-                "capture": cap,
-                "timbre": json.loads(gate.read_text())["timbre"],
-                "corpus": str(corpus),
-                "gate": str(gate),
-                "notes": train,
-                "validate_notes": held,
-                "velocities": _three(raw["velocities"]),
-                "gates": capital_gates(row, rows, pool, REFERENCE_DIR),
-            }
-        )
+        voice = {
+            "slug": slug,
+            "program": row["program"],
+            "bank": row["bank"],
+            "patch": patch,
+            "engine": row.get("engine"),
+            "capture": cap,
+            "timbre": json.loads(gate.read_text())["timbre"],
+            "corpus": str(corpus),
+            "gate": str(gate),
+            "notes": train,
+            "validate_notes": held,
+            "velocities": _three(raw["velocities"]),
+            "gates": capital_gates(row, rows, pool, REFERENCE_DIR),
+        }
+        if JOINT:
+            voice["joint"], voice["joint_dropped"] = joint_captures(voice)
+        todo.append(voice)
     return todo, skipped
 
 
@@ -533,6 +582,10 @@ PREBUILT_LIB = ""
 BASE_OVERRIDES = ""
 
 
+#: Fit each voice against every capture its gates name at once (autofit's repeated
+#: --corpus), from --joint. Melodic voices only: a kit note's gates are other kits.
+JOINT = False
+
 #: A spec file for every fit (autofit's --spec) in place of `--spec auto --program-only`.
 SPEC = ""
 #: The spec's knob labels, recorded in each verdict.
@@ -552,6 +605,23 @@ def _fit(
 ) -> None:
     if "drum_note" in voice:
         grid = ["--drum-note", str(voice["drum_note"])]
+    elif voice.get("joint"):
+        # Each capture carries its own cuts; autofit reads the program a capture
+        # is sounded by off its definition.
+        grid = []
+        for part in voice["joint"]:
+            grid += [
+                "--corpus",
+                part["corpus"],
+                "--corpus-timbre",
+                part["timbre"],
+                "--corpus-notes",
+                ",".join(map(str, part["notes"])),
+                "--corpus-velocities",
+                ",".join(map(str, part["velocities"])),
+                "--corpus-validate-notes",
+                ",".join(map(str, part["validate_notes"])),
+            ]
     else:
         grid = [
             "--notes",
@@ -570,10 +640,8 @@ def _fit(
         "--bank",
         str(voice["bank"]),
         *([] if SPEC else ["--program-only"]),
-        "--corpus",
-        voice["corpus"],
-        "--corpus-timbre",
-        voice["timbre"],
+        *([] if voice.get("joint") else ["--corpus", voice["corpus"]]),
+        *([] if voice.get("joint") else ["--corpus-timbre", voice["timbre"]]),
         *grid,
         "--optimizer",
         "coord",
@@ -1281,9 +1349,17 @@ def main() -> int:
         help="where named search knobs start in every fit (autofit's --start-overrides); the "
         "pre reading and the verdict stay against the shipped values",
     )
+    ap.add_argument(
+        "--joint",
+        action="store_true",
+        help="fit each melodic voice against every capture its gates name at once "
+        "(autofit's repeated --corpus), each held out on its own notes; without it a voice "
+        "is fitted against its own capture alone. Has no effect on kits",
+    )
     args = ap.parse_args()
-    global ALLOW_DIRTY_SRC
+    global ALLOW_DIRTY_SRC, JOINT
     ALLOW_DIRTY_SRC = args.allow_dirty_src
+    JOINT = args.joint
     global BASE_OVERRIDES
     try:
         BASE_OVERRIDES = load_base_overrides(args.base_overrides)
@@ -1338,6 +1414,10 @@ def main() -> int:
                 if "drum_note" in v
                 else f"notes {v['notes']} held {v['validate_notes']} vel {v['velocities']}"
             )
+            if v.get("joint"):
+                grid += f", joint over {', '.join(p['capture'] for p in v['joint'])}"
+            for d in v.get("joint_dropped") or []:
+                grid += f"; not joint: {d['capture']} ({d['reason']})"
             print(f"fit   {v['slug']:40} {v['patch']:24} {v['capture']} {grid}")
         for s in skipped:
             print(f"skip  {s['slug']:40} {s['reason']}")

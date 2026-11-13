@@ -260,6 +260,7 @@ import subprocess
 import sys
 import tempfile
 from concurrent.futures import ThreadPoolExecutor
+from dataclasses import dataclass
 from datetime import UTC, datetime, timezone
 from pathlib import Path
 
@@ -277,16 +278,24 @@ from _repo import REPO_ROOT
 # importer reads this module by name and the tests patch attributes on it, so
 # the whole surface is re-exported here.
 # ruff: noqa: F401
-from autofit_report import report_pinned, short_of_blind, winner_or_defaults
+from autofit_report import (
+    _select,
+    _went_blind,
+    report_pinned,
+    short_of_blind,
+    winner_or_defaults,
+)
 from autofit_resolve import (
     HERE,
     _score,
     apply_spec_weights,
+    capture_specs,
     catalogue_pattern,
     check_holdout_oracle,
     reference_band_edge,
     resolve_corpus,
     resolve_probe,
+    resolve_probes,
 )
 from autofit_weight_flags import (
     _WEIGHT_FLAGS_1,
@@ -309,7 +318,7 @@ from corpus import (
 )
 from diagnose import run_diagnosis
 from eval_cache import digest, file_digest, open_cache, source_digest
-from fit_quality import quality_report
+from fit_quality import DEFAULT_TERM_TARGET_UNITS, quality_report, significant_term_regressions
 from knobs import (
     KNOB_CLASSES_PATH,
     TUNABLE_BOUNDS_PATH,
@@ -377,7 +386,7 @@ from report import _json_safe, broad_budget_warning, report_result
 from room import apply_room, estimate_room, fit_room_ir
 from smf import write_smf
 from staging import SubEvaluator, run_stages, screen_knobs
-from writeback import adoption_refusal, materialize, restore, write_edits
+from writeback import adoption_refusal, materialize, restore, struct_copies, write_edits
 
 #: Under this much inter-channel correlation, summing a stereo reference to mono
 #: comb-filters it enough to matter — a spaced close pair on a piano runs around
@@ -630,8 +639,13 @@ class Evaluator:
         room_ir=None,
         corpus=None,
         band_edge_hz=None,
+        reach=None,
     ):
         self.knobs = knobs
+        # Maps the overrides a render receives onto the patch THIS capture is
+        # sounded by (a struct copy inherits the fitted patch's values only
+        # through it). None for the fitted patch's own capture.
+        self.reach = reach
         # Resolved from the oracle once — see `oracle_reference`. Both sides
         # have to normalise their band profile over the same set of bands.
         self.band_edge_hz = band_edge_hz
@@ -766,39 +780,37 @@ class Evaluator:
         dylib = dylib_path(self.build_dir)
         oracle = json.dumps(self.oracle, sort_keys=True, default=str).encode()
         audio = self.oracle_audio.tobytes() if self.oracle_audio is not None else b""
-        spec = json.dumps(
-            {
-                "lib": file_digest(dylib) if dylib is not None else "absent",
-                "code": source_digest(Path(__file__).resolve().parent),
-                "program": getattr(self.args, "program", 0),
-                "bank": getattr(self.args, "bank", 0),
-                "pattern": self.args.pattern,
-                "notes": self.args.notes,
-                "velocities": self.args.velocities,
-                "mono_mode": getattr(self.args, "mono_mode", "mean"),
-                "gate_ms": getattr(self.args, "drum_gate_ms", 0),
-                "band_edge_hz": self.band_edge_hz,
-                "room_ir": file_digest(self.room_ir) if self.room_ir else "",
-                # The corpus by what it lays out rather than by where it lives: the
-                # model render never touches the captured audio, it plays the
-                # timeline the manifest describes, and that manifest is an editable
-                # file at a path that does not change when its grid or its gate
-                # does. Keying on the path alone would answer an edited capture with
-                # the old capture's measurements.
-                "corpus": _corpus_identity(self.corpus),
-                "n_harm": getattr(self.args, "n_harm", 0),
-                "percussive": self.percussive,
-                "flat": bool(getattr(self.args, "flat_partial_weighting", False)),
-                "loss_tail_fraction": getattr(
-                    self.args, "loss_tail_fraction", DEFAULT_TAIL_FRACTION
-                ),
-                "want_audio": self.want_audio,
-                "groups": sorted((k, sorted(v)) for k, v in self.groups.items()),
-                "knobs": [k.label for k in self.knobs],
-                "base_overrides": getattr(self.args, "base_overrides", ""),
-            },
-            sort_keys=True,
-        ).encode()
+        fields = {
+            "lib": file_digest(dylib) if dylib is not None else "absent",
+            "code": source_digest(Path(__file__).resolve().parent),
+            "program": getattr(self.args, "program", 0),
+            "bank": getattr(self.args, "bank", 0),
+            "pattern": self.args.pattern,
+            "notes": self.args.notes,
+            "velocities": self.args.velocities,
+            "mono_mode": getattr(self.args, "mono_mode", "mean"),
+            "gate_ms": getattr(self.args, "drum_gate_ms", 0),
+            "band_edge_hz": self.band_edge_hz,
+            "room_ir": file_digest(self.room_ir) if self.room_ir else "",
+            # The corpus by what it lays out rather than by where it lives: the
+            # model render never touches the captured audio, it plays the
+            # timeline the manifest describes, and that manifest is an editable
+            # file at a path that does not change when its grid or its gate
+            # does. Keying on the path alone would answer an edited capture with
+            # the old capture's measurements.
+            "corpus": _corpus_identity(self.corpus),
+            "n_harm": getattr(self.args, "n_harm", 0),
+            "percussive": self.percussive,
+            "flat": bool(getattr(self.args, "flat_partial_weighting", False)),
+            "loss_tail_fraction": getattr(self.args, "loss_tail_fraction", DEFAULT_TAIL_FRACTION),
+            "want_audio": self.want_audio,
+            "groups": sorted((k, sorted(v)) for k, v in self.groups.items()),
+            "knobs": [k.label for k in self.knobs],
+            "base_overrides": getattr(self.args, "base_overrides", ""),
+        }
+        if self.reach is not None:
+            fields["reach"] = self.reach.signature
+        spec = json.dumps(fields, sort_keys=True).encode()
         return digest(spec, oracle, audio)
 
     def _ensure_cache(self) -> None:
@@ -905,13 +917,16 @@ class Evaluator:
     def _render_terms(self, values: list[float]) -> dict[str, float] | None:
         """Render one candidate and reduce it to raw loss terms. Thread-safe."""
         want_audio = self.want_audio
+        overrides = tunable_overrides(self.knobs, values)
+        if self.reach is not None:
+            overrides = self.reach(overrides)
         model_rows, model_audio = render_model_rows_subprocess(
             self.build_dir,
             self.args.program,
             self.args.pattern,
             self.args.notes,
             velocities_csv=self.args.velocities,
-            overrides=tunable_overrides(self.knobs, values),
+            overrides=overrides,
             base_overrides=getattr(self.args, "base_overrides", ""),
             want_audio=want_audio,
             room_ir=self.room_ir,
@@ -1272,7 +1287,7 @@ class Evaluator:
         return results
 
 
-def holdout_scorer(args, build_dir, knobs, room_ir):
+def holdout_scorer(args, build_dir, knobs, room_ir, reach=None):
     """A callable that scores one knob vector on the held-out probe, or None.
 
     Split out of `validate` because the hold-out is not only an end-of-run
@@ -1284,7 +1299,11 @@ def holdout_scorer(args, build_dir, knobs, room_ir):
     grid's teeth. Both readings need the same scorer.
 
     Returns `(score, axis, held)`, or None when no hold-out was asked for or the
-    held-out probe produced nothing measurable.
+    held-out probe produced nothing measurable. `score.weight()` is what the
+    capture counts for in a joint hold-out, read off the held-out probe's own
+    start point once `score` has been called there.
+
+    `reach` is the capture's override mapping (see `Evaluator`).
     """
     percussive = getattr(args, "percussive", False)
     holdout = argparse.Namespace(**vars(args))
@@ -1317,13 +1336,16 @@ def holdout_scorer(args, build_dir, knobs, room_ir):
     corpus = resolve_corpus(holdout)
 
     def score(values: list[float]) -> float:
+        overrides = tunable_overrides(knobs, values)
+        if reach is not None:
+            overrides = reach(overrides)
         rows, audio = render_model_rows_subprocess(
             build_dir,
             args.program,
             args.pattern,
             holdout.notes,
             velocities_csv=holdout.velocities,
-            overrides=tunable_overrides(knobs, values),
+            overrides=overrides,
             base_overrides=getattr(args, "base_overrides", ""),
             want_audio=want_audio,
             room_ir=room_ir,
@@ -1352,6 +1374,7 @@ def holdout_scorer(args, build_dir, knobs, room_ir):
         score.last_quality = quality_report(terms, weights, loss=result)
         return result
 
+    score.weight = lambda: capture_weight(weights)
     return score, axis, held
 
 
@@ -1500,7 +1523,7 @@ def run_grid(evaluator, knobs, args, build_dir, room_ir) -> int:
     return 0
 
 
-def validate(args, build_dir, knobs, start_values, best_values, room_ir) -> dict | None:
+def validate(args, build_dir, knobs, start_values, best_values, room_ir, reach=None) -> dict | None:
     """Score the start and the best values on a probe the fit never saw.
 
     A fit reports its own objective, which it minimised — the one number that
@@ -1514,7 +1537,7 @@ def validate(args, build_dir, knobs, start_values, best_values, room_ir) -> dict
 
     Costs one oracle resolution plus two model renders, once, at the end.
     """
-    resolved = holdout_scorer(args, build_dir, knobs, room_ir)
+    resolved = holdout_scorer(args, build_dir, knobs, room_ir, reach)
     if resolved is None:
         return None
     score, axis, held = resolved
@@ -1529,6 +1552,490 @@ def validate(args, build_dir, knobs, start_values, best_values, room_ir) -> dict
         "start_quality": start_quality,
         "best_quality": score.last_quality,
     }
+
+
+# --------------------------------------------------------------------------- #
+# A fit against several captures at once
+# --------------------------------------------------------------------------- #
+#: A capture counts toward the joint loss in proportion to how far its start sits
+#: above this, as the weighted mean of its term residuals in perceptual units.
+#: It is the fit-quality target (one unit per term, `fit_quality`): a capture that
+#: starts inside it has nothing worth chasing, and its calibrated loss is a ratio
+#: against a start the noise of the measurement could move by that ratio.
+JOINT_START_FLOOR_UNITS = DEFAULT_TERM_TARGET_UNITS
+
+#: What a held-out loss may rise by before it is named as worse; the margin
+#: `winner_or_defaults` and the report already use for the single-capture hold-out.
+HOLDOUT_WORSE_MARGIN = 0.005
+
+
+def capture_weight(loss: LossWeights) -> float:
+    """What one capture counts for in a joint loss, in [0, 1].
+
+    Calibration already makes every capture's start score 1.0 in perceptual
+    units, so the joint loss is the mean of those scores and the floor acts on the
+    raw start: a capture whose start residual is `JOINT_START_FLOOR_UNITS` or more
+    counts fully, and one starting below it counts in proportion. That is
+    `loss_i / max(start_i, FLOOR)` with the common factor taken out so the joint
+    loss still reads 1.0 at the start point.
+    """
+    baseline = loss.baseline_terms
+    if not loss.scales or baseline is None:
+        return 1.0
+    total = sum(loss.weights[t] for t in loss.active())
+    if total <= 0.0:
+        return 1.0
+    start_units = sum(loss.term_contributions(baseline, fixed_units=True).values()) / total
+    return min(1.0, start_units / JOINT_START_FLOOR_UNITS)
+
+
+class CopyReach:
+    """Carries a fitted patch's override keys onto the patch a capture is sounded by.
+
+    A struct copy (ukulele on the nylon patch) holds the fitted patch's values only
+    where the copy does not assign the field itself, and an override addressed to
+    the fitted patch does not reach it on its own. The mapping is the one the gate
+    comparison applies to a winner (`refit.reach_copies`).
+    """
+
+    def __init__(self, fit_patch: str, patch: str):
+        import refit  # lazy: refit launches autofit as a subprocess
+
+        self.voice = {"patch": fit_patch, "gates": [{"patch": patch}]}
+        self.copies = struct_copies()
+        self.explicit = refit.explicit_fields()
+        self.signature = f"{fit_patch}->{patch}"
+        self._map = refit.reach_copies
+
+    def __call__(self, overrides: str) -> str:
+        return self._map(overrides, self.voice, self.copies, self.explicit)
+
+
+@dataclass
+class Capture:
+    """One capture of a fit: its namespace, its reference and the room it was placed in."""
+
+    label: str
+    args: argparse.Namespace
+    corpus: Corpus
+    oracle: list
+    oracle_audio: np.ndarray | None
+    room: object
+    band_edge: float | None
+    ir_path: Path | None = None
+    reach: CopyReach | None = None
+
+
+class JointEvaluator:
+    """Scores a knob vector against several captures at once.
+
+    One `Evaluator` per capture does the work and keeps what it always kept: its
+    own oracle, calibration, start point, fences and cache. This only composes
+    them. The joint loss is the mean of the captures' calibrated scores weighted
+    by `capture_weight`, plus every capture's own drift fences at full strength
+    (so a fence tripped on any capture is paid for, not averaged away). The start
+    point therefore scores 1.0, as it does for one capture.
+
+    It stands in for an `Evaluator` wherever the search, staging and the report
+    read one; the properties below answer for the first capture where a reader
+    wants a single set of terms. Per-capture readings are on `members`.
+    """
+
+    def __init__(self, members: list[Evaluator], labels: list[str], knobs, args):
+        self.members = members
+        self.labels = labels
+        self.primary = members[0]
+        self.knobs = knobs
+        self.args = args
+        self.build_dir = self.primary.build_dir
+        self.needs_rebuild = self.primary.needs_rebuild
+        self.workers = self.primary.workers
+        # One tree, so one record of what this process wrote into it; the members
+        # stay silent and the joint reports for all of them.
+        self.written = self.primary.written
+        for member in members:
+            member.written = self.written
+            member.quiet = True
+        self.quiet = False
+        self.stage = "fit"
+        self.trajectory: list[tuple[float, float, str]] = []
+        self.path: list[tuple[int, float, str, list[float]]] = []
+        self.best_loss = math.inf
+        self.best_values: list[float] | None = None
+        self.seen: set[tuple[str, ...]] = set()
+        self.selected_values: list[float] | None = None
+        self.selected_terms: dict[str, float] | None = None
+        self.selected_loss: float | None = None
+        self.selected_dropout: list[str] = []
+        self.selected_regressions: list[dict] = []
+        self.search_dropout: list[str] = []
+        self.search_regressions: list[dict] = []
+        self.write_back_refusal: str | None = None
+        self.refused_by: list[str] = []
+        self.walked_back: dict | None = None
+        self._announced = False
+
+    # What a reader that wants one set of terms gets: the first capture's.
+    @property
+    def terms_for(self):
+        return self.primary.terms_for
+
+    @property
+    def baseline_terms(self):
+        return self.primary.baseline_terms
+
+    @property
+    def loss(self):
+        return self.primary.loss
+
+    @property
+    def normalize(self) -> bool:
+        return self.primary.normalize
+
+    @property
+    def start_level_offset_db(self):
+        return self.primary.start_level_offset_db
+
+    @property
+    def best_level_offset_db(self):
+        return self.primary.best_level_offset_db
+
+    @property
+    def head_level_offset_db(self):
+        return self.primary.head_level_offset_db
+
+    @property
+    def head_level_unavailable(self):
+        return self.primary.head_level_unavailable
+
+    @property
+    def n_renders(self) -> int:
+        return max(m.n_renders for m in self.members)
+
+    @property
+    def n_builds(self) -> int:
+        return max(m.n_builds for m in self.members)
+
+    def key(self, values: list[float]) -> tuple[str, ...]:
+        return self.primary.key(values)
+
+    def restage(self, weights: dict[str, float], name: str = "fit") -> None:
+        for member in self.members:
+            member.restage(weights, name)
+        self.stage = name
+        self.best_loss = math.inf
+        self.best_values = None
+
+    def check_overrides_reach(self, knobs: list) -> None:
+        for label, member in zip(self.labels, self.members):
+            try:
+                member.check_overrides_reach(knobs)
+            except RuntimeError as exc:
+                raise RuntimeError(f"capture {label}: {exc}") from exc
+
+    def read_head_level(self, knobs) -> None:
+        for member in self.members:
+            member.read_head_level(knobs)
+
+    def capture_losses(self, values: list[float]) -> list[float]:
+        """Each capture's own loss at a point, fences included, or infinity."""
+        return [m.loss_for(values) for m in self.members]
+
+    def capture_weights(self) -> list[float]:
+        """What each capture counts for now; all 1.0 when none of them starts above the floor."""
+        weights = [capture_weight(m.loss) for m in self.members]
+        return weights if sum(weights) > 0.0 else [1.0] * len(weights)
+
+    def loss_for(self, values: list[float]) -> float:
+        """The joint loss of a point every capture has already measured, or infinity."""
+        terms = [m.terms_for(values) for m in self.members]
+        if any(t is None for t in terms):
+            return math.inf
+        weights = self.capture_weights()
+        total = sum(weights)
+        scored = sum(w * m.loss.combine(t) for w, m, t in zip(weights, self.members, terms))
+        fences = sum(
+            m._level_drift_penalty(t) + m._sustain_drift_penalty(t)
+            for m, t in zip(self.members, terms)
+        )
+        return scored / total + fences
+
+    def __call__(self, values: list[float]) -> float:
+        for member in self.members:
+            member(values)
+        return self._record(values)
+
+    def evaluate_batch(self, batch: list[list[float]]) -> list[float]:
+        for member in self.members:
+            member.evaluate_batch(batch)
+        return [self._record(values) for values in batch]
+
+    def _announce_start(self) -> None:
+        self._announced = True
+        if self.quiet:
+            return
+        for label, member in zip(self.labels, self.members):
+            if member.baseline_terms is None:
+                continue
+            print(f"capture {label}:", file=sys.stderr)
+            member.quiet = False
+            try:
+                member._report_sustain_excess(member.baseline_terms)
+            finally:
+                member.quiet = True
+
+    def _record(self, values: list[float]) -> float:
+        loss = self.loss_for(values)
+        key = self.key(values)
+        fresh = key not in self.seen
+        self.seen.add(key)
+        if not self._announced:
+            self._announce_start()
+        if loss < self.best_loss:
+            self.best_loss = loss
+            self.best_values = list(values)
+            self.path.append((len(self.trajectory) + int(fresh), loss, self.stage, list(values)))
+        if not fresh:
+            return loss
+        self.trajectory.append((self.best_loss, loss, self.stage))
+        if not self.quiet:
+            shown = (
+                "values=[" + ", ".join(f"{float(v):.5g}" for v in values) + "] "
+                if len(values) <= 8
+                else ""
+            )
+            each = " ".join(
+                f"{label}={one:.3f}" for label, one in zip(self.labels, self.capture_losses(values))
+            )
+            print(
+                f"  eval #{len(self.trajectory)} {shown}loss={loss:.4f} "
+                f"(best {self.best_loss:.4f})  [{each}]",
+                file=sys.stderr,
+            )
+        return loss
+
+    def point_members_at(self, values: list[float]) -> None:
+        """Make each capture's `best_*` readings those of `values`, the joint winner.
+
+        A member tracks the best point of its OWN loss, and the guards that read
+        `best_*` (`winner_or_defaults`, the `tnr` walk-back) are about the point
+        the joint search chose.
+        """
+        for member in self.members:
+            terms = member.terms_for(values)
+            member.best_values = list(values)
+            member.best_terms = None if terms is None else dict(terms)
+            member.best_loss = member.loss_for_terms(terms)
+            get = (lambda name: None) if terms is None else terms.get
+            member.best_level_offset_db = get("level_offset_db")
+            member.best_tnr_notes = get("tnr_notes")
+            member.best_tnr_absent = get("tnr_absent")
+            member.best_tnr_past_db = get("tnr_past_db")
+        self.best_values = list(values)
+        self.best_loss = self.loss_for(values)
+
+
+def joint_short_of_blind(best_values: list[float], joint: JointEvaluator) -> list[float]:
+    """`short_of_blind` over every capture: the point must stay clear of the guard on all of them."""
+    joint.walked_back = None
+
+    def blind(values: list[float]) -> tuple[str, str] | None:
+        for label, member in zip(joint.labels, joint.members):
+            terms = member.terms_for(values)
+            if terms is None:
+                continue
+            reading = _went_blind(member, terms.get("tnr_absent"), terms.get("tnr_past_db"))
+            if reading:
+                return label, reading
+        return None
+
+    found = blind(best_values)
+    if found is None or not joint.path:
+        return best_values
+    label, reading = found
+    for eval_no, loss, _stage, values in reversed(joint.path):
+        if loss >= 1.0:
+            break
+        if blind(values) is not None or any(m.terms_for(values) is None for m in joint.members):
+            continue
+        joint.walked_back = {
+            "reading": f"{reading} (capture {label})",
+            "from_eval": joint.path[-1][0],
+            "from_loss": joint.path[-1][1],
+            "to_eval": eval_no,
+            "to_loss": loss,
+        }
+        print(
+            f"\nthe winner {reading} on capture {label} — walking back to eval #{eval_no} "
+            f"(loss {loss:.4f}), the furthest point of the search that stayed on the "
+            f"reference's side on every capture",
+            file=sys.stderr,
+        )
+        joint.point_members_at(values)
+        return list(values)
+    return best_values
+
+
+def capture_label(corpus: Corpus) -> str:
+    """How a capture is named in every line and record of a joint fit."""
+    return f"{corpus.capture_id or Path(corpus.root).name}:{corpus.timbre}"
+
+
+def partition_joint(namespaces: list[argparse.Namespace], labels: list[str]) -> dict:
+    """Each capture's validation partition, and whether all of them are independent."""
+    parts = []
+    for ns, label in zip(namespaces, labels):
+        try:
+            parts.append(check_validation_partition(ns))
+        except ValueError as exc:
+            raise ValueError(f"capture {label}: {exc}") from exc
+    open_ = next((p for p in parts if not p["independent"]), None)
+    axes = {p["axis"] for p in parts}
+    return {
+        "status": "independent" if open_ is None else open_["status"],
+        "independent": open_ is None,
+        "axis": axes.pop() if len(axes) == 1 else "mixed",
+        "per_capture": [{"capture": label, **p} for label, p in zip(labels, parts)],
+    }
+
+
+def validate_joint(captures, build_dir, knobs, start_values, best_values) -> dict | None:
+    """The hold-out of every capture, each on its own partition, and their joint reading.
+
+    The joint start/best are the captures' held-out losses averaged with the same
+    `capture_weight` rule the fit uses, read off each hold-out's own start point.
+    A capture whose hold-out got worse past `HOLDOUT_WORSE_MARGIN` is named in
+    `worse`, whatever the joint says.
+    """
+    per: list[dict] = []
+    for cap in captures:
+        resolved = holdout_scorer(cap.args, build_dir, knobs, cap.ir_path, cap.reach)
+        if resolved is None:
+            per.append({"capture": cap.label, "scored": False})
+            continue
+        score, axis, held = resolved
+        start = score(start_values)
+        start_quality = score.last_quality
+        best = score(best_values)
+        per.append(
+            {
+                "capture": cap.label,
+                "scored": True,
+                "axis": axis,
+                "held_out": held,
+                "start": start,
+                "best": best,
+                "weight": score.weight(),
+                "start_quality": start_quality,
+                "best_quality": score.last_quality,
+                "worse": best - start > HOLDOUT_WORSE_MARGIN,
+            }
+        )
+    scored = [p for p in per if p["scored"]]
+    if not scored:
+        return None
+    total = sum(p["weight"] for p in scored)
+    weights = [p["weight"] for p in scored] if total > 0.0 else [1.0] * len(scored)
+    total = sum(weights)
+    axes = {p["axis"] for p in scored}
+    out = {
+        "axis": axes.pop() if len(axes) == 1 else "mixed",
+        "held_out": "; ".join(f"{p['capture']}: {p['held_out']}" for p in scored),
+        "start": sum(w * p["start"] for w, p in zip(weights, scored)) / total,
+        "best": sum(w * p["best"] for w, p in zip(weights, scored)) / total,
+        "start_quality": scored[0]["start_quality"],
+        "best_quality": scored[0]["best_quality"],
+        "per_capture": per,
+        "worse": [p["capture"] for p in scored if p["worse"]],
+    }
+    if len(scored) < len(captures):
+        out["independent"] = False
+        out["uncovered"] = [p["capture"] for p in per if not p["scored"]]
+    return out
+
+
+def joint_winner(
+    knobs, best_values: list[float], joint: JointEvaluator, validation: dict | None
+) -> list[float]:
+    """`winner_or_defaults` for a joint fit: the winner, unless a capture or the joint refuses it.
+
+    The per-capture guards (a term whose measurements vanished, the one-sided
+    `tnr` walk past the reference) run on each capture at the joint winner and any
+    one tripping keeps the defaults. The two readings that are trades are joint:
+    the winner losing to the start point, and the hold-out. A capture whose
+    hold-out got worse is named either way; it only refuses the fit through the
+    joint hold-out, so a gain on one capture can still pay for a loss on another.
+    """
+    start_values = [k.start_value for k in knobs]
+    joint.write_back_refusal = None
+    joint.refused_by = []
+    joint.point_members_at(best_values)
+    refusals: list[tuple[str, str]] = []
+    for label, member in zip(joint.labels, joint.members):
+        # `lost_to_start` and the hold-out are joint readings, not this capture's.
+        member.normalize, kept = False, member.normalize
+        try:
+            winner_or_defaults(knobs, best_values, member, None)
+        finally:
+            member.normalize = kept
+        if member.write_back_refusal:
+            refusals.append((label, member.write_back_refusal))
+    final = best_values
+    if refusals:
+        joint.write_back_refusal = refusals[0][1]
+        joint.refused_by = [label for label, _ in refusals]
+        print(
+            f"\ncapture {', '.join(joint.refused_by)} refused the winner "
+            f"({refusals[0][1]}) — keeping the defaults on every capture",
+            file=sys.stderr,
+        )
+        final = start_values
+    elif joint.normalize and joint.best_loss > 1.0:
+        joint.write_back_refusal = "lost_to_start"
+        print(
+            f"\nthe winner scores {joint.best_loss:.4f} against the defaults' 1.0 across the "
+            f"captures — keeping the defaults",
+            file=sys.stderr,
+        )
+        final = start_values
+    elif (
+        validation
+        and "best" in validation
+        and "start" in validation
+        and validation["best"] - validation["start"] > HOLDOUT_WORSE_MARGIN
+    ):
+        joint.write_back_refusal = "fitted_to_the_probe"
+        joint.refused_by = list(validation.get("worse") or [])
+        print(
+            f"\nthe winner scores {validation['best']:.4f} against the defaults' "
+            f"{validation['start']:.4f} on the joint held-out {validation['axis']} — keeping "
+            f"the defaults"
+            + (f" (worse on {', '.join(joint.refused_by)})" if joint.refused_by else ""),
+            file=sys.stderr,
+        )
+        final = start_values
+    for member in joint.members:
+        _select(member, final)
+    return final
+
+
+def corpora_record(captures: list[Capture]) -> list[dict]:
+    """The captures a fit answered, ids and timbres first: part of the fit's identity."""
+    return [
+        {
+            "label": cap.label,
+            "capture": cap.corpus.capture_id,
+            "timbre": cap.corpus.timbre,
+            "corpus": str(cap.corpus.root),
+            "program": cap.args.program,
+            "bank": getattr(cap.args, "bank", 0),
+            "notes": cap.args.notes,
+            "velocities": cap.args.velocities,
+            "reach": None if cap.reach is None else cap.reach.signature,
+        }
+        for cap in captures
+        if cap.corpus is not None
+    ]
 
 
 # --------------------------------------------------------------------------- #
@@ -1734,26 +2241,46 @@ def _fold_write_back_verdict(out_path: str, evaluator) -> None:
         return
     path = Path(out_path)
     record = json.loads(path.read_text())
+    # A joint fit reads the first capture here and lists every capture beneath it.
+    members = getattr(evaluator, "members", None)
+    first = getattr(evaluator, "primary", evaluator)
     record["write_back"] = {
         "refused": getattr(evaluator, "write_back_refusal", None),
         "tnr_notes": {
-            "start": getattr(evaluator, "start_tnr_notes", None),
-            "best": getattr(evaluator, "best_tnr_notes", None),
+            "start": getattr(first, "start_tnr_notes", None),
+            "best": getattr(first, "best_tnr_notes", None),
         },
         "tnr_absent": {
-            "start": getattr(evaluator, "start_tnr_absent", None),
-            "best": getattr(evaluator, "best_tnr_absent", None),
+            "start": getattr(first, "start_tnr_absent", None),
+            "best": getattr(first, "best_tnr_absent", None),
         },
         "tnr_past_db": {
-            "start": getattr(evaluator, "start_tnr_past_db", None),
-            "best": getattr(evaluator, "best_tnr_past_db", None),
+            "start": getattr(first, "start_tnr_past_db", None),
+            "best": getattr(first, "best_tnr_past_db", None),
         },
         "walked_back": getattr(evaluator, "walked_back", None),
     }
+    if members:
+        record["write_back"]["refused_by"] = list(getattr(evaluator, "refused_by", []))
+        record["write_back"]["per_capture"] = [
+            {
+                "capture": label,
+                "refused": member.write_back_refusal,
+                "tnr_notes": {"start": member.start_tnr_notes, "best": member.best_tnr_notes},
+                "tnr_absent": {"start": member.start_tnr_absent, "best": member.best_tnr_absent},
+                "tnr_past_db": {
+                    "start": member.start_tnr_past_db,
+                    "best": member.best_tnr_past_db,
+                },
+                "level_start_offset_db": member.start_level_offset_db,
+                "level_winner_offset_db": member.best_level_offset_db,
+            }
+            for label, member in zip(evaluator.labels, members)
+        ]
     # The fence's anchor is the start, which is HEAD's render with any base overrides,
     # unless --start-overrides moved it: then the anchor is that point and HEAD is read apart.
-    start = getattr(evaluator, "start_level_offset_db", None)
-    best = getattr(evaluator, "best_level_offset_db", None)
+    start = getattr(first, "start_level_offset_db", None)
+    best = getattr(first, "best_level_offset_db", None)
     moved = getattr(getattr(evaluator, "args", None), "start_overrides", "")
     anchor = {
         "anchor": (
@@ -1767,11 +2294,11 @@ def _fold_write_back_verdict(out_path: str, evaluator) -> None:
         "drift_fence_anchor": "start",
     }
     if moved:
-        head = getattr(evaluator, "head_level_offset_db", None)
+        head = getattr(first, "head_level_offset_db", None)
         anchor["head_offset_db"] = head
         if head is None:
             anchor["head_offset_unavailable"] = (
-                getattr(evaluator, "head_level_unavailable", None) or "not read"
+                getattr(first, "head_level_unavailable", None) or "not read"
             )
         anchor["winner_minus_head_db"] = (
             None if head is None or best is None else round(best - head, 2)
@@ -1831,14 +2358,20 @@ def _gate_voice(args) -> tuple[dict | None, str]:
 def gated_dimensions(args) -> tuple[frozenset[str] | None, str]:
     """The dimensions this run's capture gate holds a bound for, or (None, why not).
 
-    A corpus run names its capture; any other run asks refit's planner which gates
-    resolve to the voice and takes the union of their bounds.
+    A corpus run names its captures (every one of a joint fit); any other run asks
+    refit's planner which gates resolve to the voice. Either way it is the union of
+    their bounds.
     """
-    corpus = resolve_corpus(args)
-    if corpus is not None:
-        if not corpus.capture_id:
+    specs = capture_specs(args)
+    corpora = (
+        [load_corpus(spec.path, spec.timbre) for spec in specs]
+        if len(specs) > 1
+        else [resolve_corpus(args)]
+    )
+    if corpora[0] is not None:
+        if not all(c.capture_id for c in corpora):
             return None, "the corpus names no capture"
-        paths = [HERE / "reference" / f"{corpus.capture_id}_gate.json"]
+        paths = [HERE / "reference" / f"{c.capture_id}_gate.json" for c in corpora]
     else:
         voice, why = _gate_voice(args)
         if voice is None:
@@ -1918,6 +2451,55 @@ PER_KNOB_BUDGET_FLOOR = 400
 PER_KNOB_BUDGET_CEILING = 2000
 
 
+def _fit_room_ir(cap: Capture, build_dir: Path, lib: str, tmp: str, name: str) -> Path | None:
+    """Fit the response that places the model in the space `cap`'s oracle was recorded in.
+
+    Fitted against a dry model render at the start values, so the roomed model
+    *measures* the oracle's space rather than merely being convolved with a room
+    of the same nominal size. One extra render, once. None when the oracle is dry.
+    """
+    if cap.room is None:
+        return None
+    args = cap.args
+    if not lib:
+        build_shared(build_dir, args.cmake, args.jobs)
+    _, dry_model = render_model_rows_subprocess(
+        build_dir,
+        args.program,
+        args.pattern,
+        args.notes,
+        velocities_csv=args.velocities,
+        base_overrides=getattr(args, "base_overrides", ""),
+        want_audio=True,
+        corpus=cap.corpus,
+        gate_ms=getattr(args, "drum_gate_ms", 0),
+        bank=getattr(args, "bank", 0),
+        band_edge_hz=cap.band_edge,
+        mono_mode=getattr(args, "mono_mode", "mean"),
+    )
+    if dry_model is None:
+        raise RuntimeError("room correction needs the model render, which came back empty")
+    pattern, _, _ = _score(
+        args.program,
+        args.pattern,
+        args.notes,
+        args.velocities,
+        corpus=cap.corpus,
+        gate_ms=getattr(args, "drum_gate_ms", 0),
+    )
+    spans = [(n.start, n.start + n.dur) for n in pattern.notes]
+    ir = fit_room_ir(dry_model[:, None], render_rate(cap.corpus), spans, cap.room)
+    ir_path = Path(tmp) / name
+    np.save(ir_path, ir)
+    return ir_path
+
+
+def _assessment_status(args) -> str | None:
+    """The status of the reference assessment a capture was fitted under, if it has one."""
+    assessment = getattr(args, "fit_assessment", None)
+    return None if assessment is None else assessment.status
+
+
 def run(args, argv: list[str] | None = None) -> int:
     # The objective and harness this run answers are the code loaded now, whatever changes on disk later.
     harness = harness_lock.lock(("autofit",))
@@ -1974,7 +2556,25 @@ def run(args, argv: list[str] | None = None) -> int:
         )
 
     apply_spec_weights(args, argv if argv is not None else sys.argv[1:])
-    resolve_probe(args)
+    capture_args = resolve_probes(args, resolve_probe)
+    joint = len(capture_args) > 1
+    if joint:
+        # Refused up front: the joint loss is a mean of calibrated scores, and the
+        # two readers below look at one set of terms or one surface.
+        for flag, why in (
+            ("raw_loss", "a raw loss has no start-relative score to average"),
+            ("diagnose", "--diagnose reads one capture's terms"),
+            ("grid", "--grid enumerates one capture's surface"),
+        ):
+            if getattr(args, flag, None):
+                raise ValueError(
+                    f"--{flag.replace('_', '-')} cannot be used with several --corpus: {why}"
+                )
+        capture_labels = [capture_label(resolve_corpus(ns)) for ns in capture_args]
+        print(
+            f"joint fit over {len(capture_args)} captures: " + ", ".join(capture_labels),
+            file=sys.stderr,
+        )
     if adoption_refusal(getattr(args, "fit_assessment", None)) is not None:
         print(
             "this fit is unverified and exploratory: its values will be reported, "
@@ -1982,7 +2582,9 @@ def run(args, argv: list[str] | None = None) -> int:
             file=sys.stderr,
         )
     # Resolve the fit axis first: an overlapping hold-out is invalid even without the fit flag.
-    validation_partition = check_validation_partition(args)
+    validation_partition = (
+        partition_joint(capture_args, capture_labels) if joint else check_validation_partition(args)
+    )
     weights = cli_weights(args)
     if not weights and not getattr(args, "dump_knobs", False):
         raise ValueError(
@@ -2207,58 +2809,65 @@ def run(args, argv: list[str] | None = None) -> int:
         configure_build(build_dir, args.cmake, tuning=n_runtime > 0)
 
     print("resolving oracle (once)...", file=sys.stderr)
-    corpus = resolve_corpus(args)
-    oracle, oracle_audio, room, band_edge = oracle_reference(args)
+    captures: list[Capture] = []
+    for cap_args in capture_args:
+        corpus = resolve_corpus(cap_args)
+        if joint:
+            print(f"capture {capture_label(corpus)}:", file=sys.stderr)
+        oracle, oracle_audio, room, band_edge = oracle_reference(cap_args)
+        captures.append(
+            Capture(
+                capture_label(corpus) if corpus is not None else "",
+                cap_args,
+                corpus,
+                oracle,
+                oracle_audio,
+                room,
+                band_edge,
+            )
+        )
+    if joint:
+        reach_catalogue = catalogue if catalogue is not None else _tuning_catalogue(args, build_dir)
+        patch_of = (
+            (lambda ns: drum_patch_key(ns.drum_note))
+            if args.drum_note is not None
+            else (lambda ns: reach_catalogue.patch_for(ns.program, ns.bank))
+        )
+        fit_patch = patch_of(args)
+        for cap in captures[1:]:
+            patch = patch_of(cap.args)
+            if fit_patch and patch and patch != fit_patch:
+                cap.reach = CopyReach(fit_patch, patch)
+        for cap in captures:
+            print(
+                f"  {cap.label}: program {cap.args.program} bank {getattr(cap.args, 'bank', 0)}"
+                + (f", sounded by patch {patch_of(cap.args)!r}" if cap.reach else ""),
+                file=sys.stderr,
+            )
 
     best_values: list[float] = [k.start_value for k in knobs]
     with tempfile.TemporaryDirectory(prefix="autofit_room_") as tmp:
-        ir_path: Path | None = None
-        if room is not None:
-            # Fit the response against a dry model render at the start values,
-            # so the roomed model *measures* the oracle's space rather than
-            # merely being convolved with a room of the same nominal size. One
-            # extra render, once.
-            if not lib:
-                build_shared(build_dir, args.cmake, args.jobs)
-            _, dry_model = render_model_rows_subprocess(
+        for i, cap in enumerate(captures):
+            cap.ir_path = _fit_room_ir(
+                cap, build_dir, lib, tmp, f"room{i}.npy" if i else "room.npy"
+            )
+        members = [
+            Evaluator(
+                knobs,
+                pristine,
+                cap.oracle,
+                cap.oracle_audio,
+                cap.args,
                 build_dir,
-                args.program,
-                args.pattern,
-                args.notes,
-                velocities_csv=args.velocities,
-                base_overrides=getattr(args, "base_overrides", ""),
-                want_audio=True,
-                corpus=corpus,
-                gate_ms=getattr(args, "drum_gate_ms", 0),
-                bank=getattr(args, "bank", 0),
-                band_edge_hz=band_edge,
-                mono_mode=getattr(args, "mono_mode", "mean"),
+                room_ir=cap.ir_path,
+                corpus=cap.corpus,
+                band_edge_hz=cap.band_edge,
+                reach=cap.reach,
             )
-            if dry_model is None:
-                raise RuntimeError("room correction needs the model render, which came back empty")
-            pattern, _, _ = _score(
-                args.program,
-                args.pattern,
-                args.notes,
-                args.velocities,
-                corpus=corpus,
-                gate_ms=getattr(args, "drum_gate_ms", 0),
-            )
-            spans = [(n.start, n.start + n.dur) for n in pattern.notes]
-            ir = fit_room_ir(dry_model[:, None], render_rate(corpus), spans, room)
-            ir_path = Path(tmp) / "room.npy"
-            np.save(ir_path, ir)
-        evaluator = Evaluator(
-            knobs,
-            pristine,
-            oracle,
-            oracle_audio,
-            args,
-            build_dir,
-            room_ir=ir_path,
-            corpus=corpus,
-            band_edge_hz=band_edge,
-        )
+            for cap in captures
+        ]
+        evaluator = JointEvaluator(members, capture_labels, knobs, args) if joint else members[0]
+        room, ir_path = captures[0].room, captures[0].ir_path
         if evaluator.workers > 1:
             print(f"rendering up to {evaluator.workers} candidates concurrently", file=sys.stderr)
         if args.diagnose:
@@ -2309,11 +2918,18 @@ def run(args, argv: list[str] | None = None) -> int:
             restore(pristine, evaluator.written)
 
         if evaluator.best_values is not None:
-            best_values = short_of_blind(evaluator.best_values, evaluator)
+            best_values = (
+                joint_short_of_blind(evaluator.best_values, evaluator)
+                if joint
+                else short_of_blind(evaluator.best_values, evaluator)
+            )
         # Before the report, because the hold-out decides which values the report
         # is about: it is scored on the winner and can then refuse it.
-        validation_result = validate(
-            args, build_dir, knobs, [k.start_value for k in knobs], best_values, ir_path
+        start_values = [k.start_value for k in knobs]
+        validation_result = (
+            validate_joint(captures, build_dir, knobs, start_values, best_values)
+            if joint
+            else validate(args, build_dir, knobs, start_values, best_values, ir_path)
         )
         if validation_result is None:
             validation = validation_partition
@@ -2329,7 +2945,11 @@ def run(args, argv: list[str] | None = None) -> int:
         else:
             validation = {**validation_partition, **validation_result}
             validation_for_winner = validation
-        best_values = winner_or_defaults(knobs, best_values, evaluator, validation_for_winner)
+        best_values = (
+            joint_winner(knobs, best_values, evaluator, validation_for_winner)
+            if joint
+            else winner_or_defaults(knobs, best_values, evaluator, validation_for_winner)
+        )
 
         pinned = report_pinned(knobs, best_values)
         if pinned:
@@ -2355,6 +2975,17 @@ def run(args, argv: list[str] | None = None) -> int:
             "full_spec_budget_warning": full_spec_budget_warning,
             "clamp_check": clamp_entries,
             "clamp_bounds": clamp_bounds,
+            "corpora": corpora_record(captures),
+            "captures": [
+                {
+                    **record,
+                    "room": None if cap.room is None else cap.room.to_dict(),
+                    "assessment": _assessment_status(cap.args),
+                }
+                for record, cap in zip(corpora_record(captures), captures)
+            ]
+            if joint
+            else None,
         }
     gate_adoption(args, evaluator)
     report_result(knobs, pristine, best_values, evaluator, args, extra)
@@ -2461,20 +3092,43 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument(
         "--corpus",
-        default="",
+        action="append",
+        default=None,
         help="score against a captured single-note corpus: the directory a "
         "`capture.py corpus` run wrote (or its manifest.json). The probe "
         "is then the capture's own grid — its notes, its velocities and "
         "its gate — and the oracle is the captured audio assembled onto "
         "that timeline, so the fit and the reference profile measure the "
-        "same stimulus. Cuts down with --notes / --velocities",
+        "same stimulus. Cuts down with --notes / --velocities. Repeat it to fit "
+        "ONE set of values against several captures at once (a patch is often "
+        "reached by a base voice, a GS variation, a struct copy): each capture "
+        "keeps its own oracle, calibration, hold-out and fences, the joint loss "
+        "is their weighted mean, and the report gives every capture's loss and "
+        "terms separately. The per-capture flags below are aligned with "
+        "--corpus by position",
     )
     parser.add_argument(
         "--corpus-timbre",
-        default="",
+        action="append",
+        default=None,
         dest="corpus_timbre",
-        help="which timbre of the corpus to fit against (default: the first the manifest lists)",
+        help="which timbre of the corpus to fit against (default: the first the "
+        "manifest lists). With several --corpus, once per --corpus ('' for the default)",
     )
+    for flag, what in (
+        ("notes", "the fit notes"),
+        ("velocities", "the fit velocities"),
+        ("validate-notes", "the held-out notes"),
+        ("validate-velocities", "the held-out velocities"),
+    ):
+        parser.add_argument(
+            f"--corpus-{flag}",
+            action="append",
+            default=None,
+            dest=f"corpus_{flag.replace('-', '_')}",
+            help=f"{what} of the --corpus at the same position, in place of "
+            f"--{flag}; '' keeps the run-wide flag",
+        )
     parser.add_argument(
         "--allow-rigged-oracle",
         action="store_true",

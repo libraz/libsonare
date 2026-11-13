@@ -1,0 +1,618 @@
+"""A fit against several captures at once: the joint loss, its per-capture readings,
+the per-capture hold-out and guards, and how the capture list reaches the records.
+
+    rye run --pyproject bindings/python/pyproject.toml \\
+        python -m pytest tools/voicematch/test_autofit_joint.py -q
+"""
+
+from __future__ import annotations
+
+import argparse
+import json
+import sys
+from pathlib import Path
+
+import pytest
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+
+import autofit
+import autofit_resolve
+import fits
+import refit
+import report
+from autofit import (
+    Evaluator,
+    JointEvaluator,
+    capture_weight,
+    joint_short_of_blind,
+    joint_winner,
+    validate_joint,
+)
+from autofit_test_fixtures import _fit_args, _terms, _write_corpus
+from knobs import Knob
+from loss import LOSS_TERMS, LossWeights, cli_weights
+from loss_weights import TERM_UNITS
+
+KNOB = Knob(label="x.k", lo=0.0, hi=1.0, log=False, start_value=0.5, tunable="x.k")
+START = [0.5]
+
+
+def _args(**weights):
+    """Only the named terms weigh; everything else is zero, so a test owns its terms."""
+    zeros = {f"w_{t}": 0.0 for t in LOSS_TERMS}
+    return _fit_args(**{**zeros, **{f"w_{t}": w for t, w in weights.items()}})
+
+
+def _units(term: str, units: float) -> float:
+    return units * TERM_UNITS[term]
+
+
+def _member(tmp_path, monkeypatch, terms_of, **weights) -> Evaluator:
+    """An `Evaluator` whose renders are `terms_of(values)`, with no build behind it."""
+    monkeypatch.setattr(autofit, "build_shared", lambda *a, **k: None)
+    member = Evaluator([KNOB], {}, [{"note": 60}], None, _args(**weights), tmp_path)
+    member._render_terms = lambda values: terms_of(values)
+    return member
+
+
+def _joint(*members, labels=None) -> JointEvaluator:
+    labels = labels or [f"cap{i}" for i in range(len(members))]
+    return JointEvaluator(list(members), labels, [KNOB], members[0].args)
+
+
+def _harm(units_at):
+    """Terms whose `harm` is `units_at(value)` perceptual units."""
+    return lambda values: _terms(harm=_units("harm", units_at(values[0])))
+
+
+# --------------------------------------------------------------------------- #
+# The joint loss
+# --------------------------------------------------------------------------- #
+def test_each_capture_is_normalised_against_its_own_start(tmp_path, monkeypatch):
+    """Raw units differ by capture; the joint reads 1.0 at the start whatever they are."""
+    a = _member(tmp_path, monkeypatch, _harm(lambda v: 10.0 * abs(v - 0.2)), harm=1.0)
+    b = _member(tmp_path, monkeypatch, _harm(lambda v: 40.0 * abs(v - 0.8)), harm=1.0)
+    joint = _joint(a, b)
+    assert joint(START) == pytest.approx(1.0, abs=1e-12)
+    # a: 3 -> 0 (ratio 0), b: 12 -> 24 (ratio 2); the mean of the two ratios.
+    assert joint([0.2]) == pytest.approx(1.0)
+    assert joint.capture_losses([0.2]) == pytest.approx([0.0, 2.0])
+    assert len(joint.trajectory) == 2
+    assert joint.best_values == START
+
+
+def test_a_capture_starting_near_perfect_counts_in_proportion(tmp_path, monkeypatch):
+    """Its calibrated ratio would turn measurement noise into a large loss; the floor stops that."""
+    tiny = _member(
+        tmp_path, monkeypatch, _harm(lambda v: 0.01 * (1.0 + 1.0 * abs(v - 0.5) / 0.5)), harm=1.0
+    )
+    big = _member(tmp_path, monkeypatch, _harm(lambda v: 5.0), harm=1.0)
+    joint = _joint(tiny, big)
+    assert joint(START) == pytest.approx(1.0, abs=1e-12)
+    assert capture_weight(tiny.loss) == pytest.approx(0.01)
+    assert capture_weight(big.loss) == 1.0
+    # tiny doubles (ratio 2), big holds (ratio 1). Unfloored that is 1.5.
+    moved = joint([1.0])
+    assert tiny.loss_for([1.0]) == pytest.approx(2.0)
+    assert moved == pytest.approx((0.01 * 2.0 + 1.0) / 1.01)
+    assert moved < 1.01
+
+
+def test_every_capture_starting_perfect_still_scores(tmp_path, monkeypatch):
+    """No capture above the floor must not divide by zero: they all count equally."""
+    a = _member(tmp_path, monkeypatch, _harm(lambda v: 0.0), harm=1.0)
+    b = _member(tmp_path, monkeypatch, _harm(lambda v: 0.0), harm=1.0)
+    joint = _joint(a, b)
+    assert joint(START) == 0.0
+    assert capture_weight(a.loss) == 0.0
+    assert joint.capture_weights() == [1.0, 1.0]
+
+
+def test_a_gain_on_one_capture_bought_at_the_others_cost_shows_in_per_capture(
+    tmp_path, monkeypatch
+):
+    def gains(v):  # halves at 0.2
+        return _terms(
+            harm=_units("harm", 4.0) * (1.0 - 0.5 * (v[0] < 0.4)), cents=_units("cents", 4.0)
+        )
+
+    def loses(v):  # the same move makes cents 1.5x worse
+        return _terms(
+            harm=_units("harm", 4.0), cents=_units("cents", 4.0) * (1.0 + 0.5 * (v[0] < 0.4))
+        )
+
+    a = _member(tmp_path, monkeypatch, gains, harm=1.0, cents=1.0)
+    b = _member(tmp_path, monkeypatch, loses, harm=1.0, cents=1.0)
+    joint = _joint(a, b, labels=["nylon:t0", "ukulele:t0"])
+    joint(START)
+    moved = [0.2]
+    joint(moved)
+    # harm 4->2 and cents 4->4 on a (ratio 0.75); harm 4->4 and cents 4->6 on b (1.25).
+    assert joint.capture_losses(moved) == pytest.approx([0.75, 1.25])
+    assert joint(moved) == pytest.approx(1.0), "the joint alone cannot tell this from no change"
+
+    rows = report.per_capture_rows(joint, START, moved, moved, {})
+    by = {r["label"]: r for r in rows}
+    assert by["nylon:t0"]["loss"]["search"] == pytest.approx(0.75)
+    assert by["ukulele:t0"]["loss"]["search"] == pytest.approx(1.25)
+    assert by["nylon:t0"]["search_winner"]["worse_terms"] == []
+    assert by["ukulele:t0"]["search_winner"]["worse_terms"] == ["cents"]
+    assert (
+        by["ukulele:t0"]["terms"]["cents"]["selected_units"]
+        > by["ukulele:t0"]["terms"]["cents"]["start_units"]
+    )
+
+
+def test_a_fence_tripped_on_one_capture_is_paid_at_full_strength(tmp_path, monkeypatch):
+    def drifting(v):
+        return _terms(harm=_units("harm", 4.0), level_offset_db=10.0 * v[0])
+
+    quiet = _member(tmp_path, monkeypatch, _harm(lambda v: 4.0), harm=1.0)
+    drift = _member(tmp_path, monkeypatch, drifting, harm=1.0)
+    for member in (quiet, drift):
+        member.args.max_level_drift_db = 1.0
+    joint = _joint(quiet, drift)
+    joint(START)
+    # 5 dB of level against the 1 dB allowance: 4 dB over, 0.1 per dB on a start scoring 1.0.
+    joint([1.0])
+    penalty = drift._level_drift_penalty(drift.terms_for([1.0]))
+    assert penalty == pytest.approx(0.1 * 4.0)
+    assert joint([1.0]) == pytest.approx(1.0 + penalty)
+
+
+def test_one_capture_scores_the_same_through_the_joint_as_alone(tmp_path, monkeypatch):
+    """A single --corpus never builds a joint, so its loss is the evaluator's own."""
+    terms_of = lambda v: _terms(harm=_units("harm", 3.0 + 2.0 * v[0]), cents=_units("cents", 2.0))
+    alone = _member(tmp_path, monkeypatch, terms_of, harm=1.0, cents=1.0)
+    inside = _joint(_member(tmp_path, monkeypatch, terms_of, harm=1.0, cents=1.0))
+    reference = LossWeights(cli_weights(alone.args))
+    reference.anchor(terms_of(START))
+    reference.calibrate(terms_of(START))
+    for value in (0.5, 0.9, 0.1):
+        assert alone([value]) == reference.combine(terms_of([value]))
+        assert inside([value]) == pytest.approx(alone([value]), abs=1e-12)
+    # Pinned: harm 4 units of 4 at start, 4.8 at 0.9; cents flat, so (4.8 + 2) / (4 + 2).
+    assert alone([0.9]) == pytest.approx(6.8 / 6.0)
+
+
+# --------------------------------------------------------------------------- #
+# Hold-out, per capture
+# --------------------------------------------------------------------------- #
+class _Held:
+    """A stand-in for one capture's hold-out scorer."""
+
+    def __init__(self, best, weight=1.0, axis="notes", held="48,72"):
+        self.best, self._weight = best, weight
+        self.axis, self.held = axis, held
+        self.last_quality = {"full_known_coverage": True}
+        self.calls = 0
+
+    def __call__(self, values):
+        self.calls += 1
+        return 1.0 if self.calls == 1 else self.best
+
+    def weight(self):
+        return self._weight
+
+
+def _captures(*labels):
+    return [
+        argparse.Namespace(label=label, args=argparse.Namespace(), ir_path=None, reach=None)
+        for label in labels
+    ]
+
+
+def _serve(monkeypatch, scorers):
+    queue = iter(scorers)
+
+    def fake(args, build_dir, knobs, room_ir, reach=None):
+        scorer = next(queue)
+        return None if scorer is None else (scorer, scorer.axis, scorer.held)
+
+    monkeypatch.setattr(autofit, "holdout_scorer", fake)
+
+
+def test_each_capture_is_held_out_on_its_own_partition_and_named_if_worse(monkeypatch):
+    _serve(monkeypatch, [_Held(0.8, held="48,72"), _Held(1.2, held="50,74")])
+    result = validate_joint(_captures("nylon:t0", "ukulele:t0"), None, [KNOB], START, [0.2])
+    assert [p["held_out"] for p in result["per_capture"]] == ["48,72", "50,74"]
+    assert [p["worse"] for p in result["per_capture"]] == [False, True]
+    assert result["worse"] == ["ukulele:t0"]
+    assert result["start"] == pytest.approx(1.0)
+    assert result["best"] == pytest.approx(1.0)  # (0.8 + 1.2) / 2
+    assert "independent" not in result
+
+
+def test_the_joint_hold_out_weighs_a_near_perfect_capture_down(monkeypatch):
+    _serve(monkeypatch, [_Held(2.0, weight=0.01), _Held(0.9, weight=1.0)])
+    result = validate_joint(_captures("a", "b"), None, [KNOB], START, [0.2])
+    assert result["best"] == pytest.approx((0.01 * 2.0 + 0.9) / 1.01)
+    assert result["worse"] == ["a"]
+
+
+def test_a_capture_with_no_hold_out_makes_the_joint_one_not_independent(monkeypatch):
+    _serve(monkeypatch, [_Held(0.9), None])
+    result = validate_joint(_captures("a", "b"), None, [KNOB], START, [0.2])
+    assert result["independent"] is False
+    assert result["uncovered"] == ["b"]
+    assert result["per_capture"][1] == {"capture": "b", "scored": False}
+
+
+def test_no_hold_out_anywhere_is_no_result(monkeypatch):
+    _serve(monkeypatch, [None, None])
+    assert validate_joint(_captures("a", "b"), None, [KNOB], START, [0.2]) is None
+
+
+def test_the_partition_is_checked_per_capture_and_names_the_offender(tmp_path):
+    ok = _fit_args(corpus=str(_write_corpus(tmp_path / "a", notes=(60, 72))), validate_notes="48")
+    bad = _fit_args(corpus=str(_write_corpus(tmp_path / "b", notes=(60, 72))), validate_notes="60")
+    assert autofit.partition_joint([ok], ["a"])["independent"] is True
+    with pytest.raises(ValueError, match=r"capture b: --validate-notes overlaps"):
+        autofit.partition_joint([ok, bad], ["a", "b"])
+
+
+# --------------------------------------------------------------------------- #
+# Guards: any capture tripping trips the fit
+# --------------------------------------------------------------------------- #
+def _blind_on_second(v):
+    return _terms(harm=_units("harm", 4.0 - 2.0 * v[0]), tnr=1.0, tnr_absent=3.0 * (v[0] > 0.7))
+
+
+def _steady(v):
+    return _terms(harm=_units("harm", 4.0 - 2.0 * v[0]), tnr=1.0, tnr_absent=0.0)
+
+
+def _two(tmp_path, monkeypatch, second):
+    a = _member(tmp_path, monkeypatch, _steady, harm=1.0)
+    b = _member(tmp_path, monkeypatch, second, harm=1.0)
+    joint = _joint(a, b, labels=["a:t0", "b:t0"])
+    for value in ([0.5], [0.6], [0.9]):
+        joint(value)
+    return joint
+
+
+def test_a_guard_tripped_by_the_second_capture_keeps_the_defaults(tmp_path, monkeypatch):
+    joint = _two(tmp_path, monkeypatch, _blind_on_second)
+    assert joint.best_values == [0.9]
+    assert joint_winner([KNOB], [0.9], joint, None) == START
+    assert joint.write_back_refusal == "objective_went_blind"
+    assert joint.refused_by == ["b:t0"]
+    assert joint.members[0].write_back_refusal is None
+
+
+def test_the_same_winner_is_kept_when_no_capture_trips(tmp_path, monkeypatch):
+    joint = _two(tmp_path, monkeypatch, _steady)
+    assert joint_winner([KNOB], [0.9], joint, None) == [0.9]
+    assert joint.write_back_refusal is None
+    assert joint.members[1].selected_values == [0.9]
+
+
+def test_the_walk_back_stops_at_the_last_point_clear_on_every_capture(tmp_path, monkeypatch):
+    joint = _two(tmp_path, monkeypatch, _blind_on_second)
+    assert joint_short_of_blind([0.9], joint) == [0.6]
+    assert joint.walked_back["to_loss"] < 1.0
+    assert joint.best_values == [0.6]
+    # The members follow, so the guards read the point the fit now means to write.
+    assert joint.members[1].best_values == [0.6]
+
+
+def test_losing_to_the_start_is_a_joint_reading_not_a_capture_one(tmp_path, monkeypatch):
+    """One capture ending above its start does not refuse a fit the joint loss improves."""
+    a = _member(tmp_path, monkeypatch, _harm(lambda v: 4.0 - 3.0 * v), harm=1.0)
+    b = _member(tmp_path, monkeypatch, _harm(lambda v: 4.0 + 1.0 * v), harm=1.0)
+    joint = _joint(a, b)
+    joint(START)
+    joint([0.9])
+    assert joint.capture_losses([0.9])[1] > 1.0 > joint.best_loss
+    assert joint_winner([KNOB], [0.9], joint, None) == [0.9]
+
+
+def test_the_joint_hold_out_refuses_and_names_the_capture_that_got_worse(tmp_path, monkeypatch):
+    joint = _two(tmp_path, monkeypatch, _steady)
+    held = {
+        "axis": "notes",
+        "start": 1.0,
+        "best": 1.05,
+        "worse": ["b:t0"],
+        "per_capture": [],
+    }
+    assert joint_winner([KNOB], [0.9], joint, held) == START
+    assert joint.write_back_refusal == "fitted_to_the_probe"
+    assert joint.refused_by == ["b:t0"]
+
+
+# --------------------------------------------------------------------------- #
+# What names the captures
+# --------------------------------------------------------------------------- #
+def test_per_capture_flags_are_aligned_with_corpus_by_position(tmp_path):
+    args = argparse.Namespace(
+        corpus=["a", "b"],
+        corpus_timbre=["t0", ""],
+        corpus_notes=["36,48", "40"],
+        corpus_velocities=None,
+        corpus_validate_notes=["60", ""],
+        corpus_validate_velocities=None,
+    )
+    specs = autofit_resolve.capture_specs(args)
+    assert [(s.path, s.timbre, s.notes, s.validate_notes) for s in specs] == [
+        ("a", "t0", "36,48", "60"),
+        ("b", "", "40", ""),
+    ]
+    args.corpus_timbre = ["only-one"]
+    with pytest.raises(ValueError, match="--corpus-timbre is given 1 time"):
+        autofit_resolve.capture_specs(args)
+
+
+def test_a_single_corpus_keeps_its_plain_shape(tmp_path):
+    parser = autofit.build_parser()
+    got = parser.parse_args(
+        ["--spec", "auto", "--program", "0", "--corpus", "x", "--corpus-timbre", "t"]
+    )
+    specs = autofit_resolve.capture_specs(got)
+    assert [(s.path, s.timbre) for s in specs] == [("x", "t")]
+    assert (
+        autofit_resolve.capture_specs(parser.parse_args(["--spec", "auto", "--program", "0"])) == []
+    )
+    again = parser.parse_args(
+        ["--spec", "auto", "--program", "0", "--corpus", "x", "--corpus", "y"]
+    )
+    assert [s.path for s in autofit_resolve.capture_specs(again)] == ["x", "y"]
+
+
+def test_the_probe_flags_hold_only_where_every_capture_can_measure(tmp_path):
+    long_ = _write_corpus(tmp_path / "long", notes=(60, 72))
+    short = _write_corpus(tmp_path / "short", notes=(60, 72), gate_ms=500, seconds=1.2)
+    args = _fit_args(corpus=[str(long_), str(short)], corpus_timbre=None)
+    caps = autofit_resolve.resolve_probes(args)
+    assert len(caps) == 2
+    assert caps[0].has_tail_window is False and args.has_tail_window is False
+    with pytest.raises(ValueError, match="--w-tail"):
+        autofit_resolve.resolve_probes(
+            _fit_args(corpus=[str(long_), str(short)], corpus_timbre=None, w_tail=1.0)
+        )
+
+
+# --------------------------------------------------------------------------- #
+# The record
+# --------------------------------------------------------------------------- #
+def test_the_fit_record_carries_the_capture_list():
+    report_ = {
+        "objective": "d",
+        "knobs": [{"key": "nylon.a"}],
+        "corpora": [
+            {"capture": "nylon", "timbre": "t0"},
+            {"capture": "ukulele", "timbre": "t1"},
+        ],
+    }
+    unit, entry = fits.record_fit(report_, capture="nylon", timbre="t0", outcome="adopted")
+    assert unit == "nylon"
+    assert entry["corpora"] == [
+        {"capture": "nylon", "timbre": "t0"},
+        {"capture": "ukulele", "timbre": "t1"},
+    ]
+    assert (entry["capture"], entry["timbre"]) == ("nylon", "t0")
+
+
+def test_a_single_capture_fit_records_a_list_of_one():
+    _, entry = fits.record_fit(
+        {"objective": "d", "knobs": [{"key": "nylon.a"}]},
+        capture="nylon",
+        timbre="t0",
+        outcome="kept",
+    )
+    assert entry["corpora"] == [{"capture": "nylon", "timbre": "t0"}]
+
+
+def test_the_out_record_has_the_corpora_and_a_per_capture_block(tmp_path, monkeypatch, capsys):
+    a = _member(tmp_path, monkeypatch, _steady, harm=1.0)
+    b = _member(tmp_path, monkeypatch, _steady, harm=1.0)
+    joint = _joint(a, b, labels=["a:t0", "b:t0"])
+    for value in ([0.5], [0.9]):
+        joint(value)
+    out = tmp_path / "result.json"
+    args = _args(harm=1.0)
+    args.out, args.dry_run, args.drum_note, args.program = str(out), True, None, 0
+    joint.args = args
+    corpora = [
+        {"label": "a:t0", "capture": "a", "timbre": "t0"},
+        {"label": "b:t0", "capture": "b", "timbre": "t0"},
+    ]
+    report.report_result(
+        [KNOB],
+        {},
+        [0.9],
+        joint,
+        args,
+        {"corpora": corpora, "captures": corpora, "validation": None},
+    )
+    record = json.loads(out.read_text())
+    assert [c["capture"] for c in record["corpora"]] == ["a", "b"]
+    assert [r["label"] for r in record["per_capture"]] == ["a:t0", "b:t0"]
+    assert all({"start", "search", "selected"} <= set(r["loss"]) for r in record["per_capture"])
+    assert "== per capture" in capsys.readouterr().out
+
+
+# --------------------------------------------------------------------------- #
+# refit --joint
+# --------------------------------------------------------------------------- #
+def _voice(tmp_path):
+    return {
+        "slug": "p024",
+        "program": 24,
+        "bank": 0,
+        "patch": "nylon",
+        "capture": "nylon",
+        "timbre": "t0",
+        "corpus": str(tmp_path / "scratch" / "capture" / "nylon"),
+        "notes": [36, 60],
+        "validate_notes": [48, 72],
+        "velocities": [40, 80],
+        "gates": [
+            {"capture": "nylon", "gate": "g", "timbre": "t0", "patch": "nylon"},
+            {"capture": "ukulele", "gate": "g", "timbre": "t1", "patch": "ukulele"},
+            {"capture": "gone", "gate": "g", "timbre": "t0", "patch": "gone"},
+            {"capture": "single", "gate": "g", "timbre": "t0", "patch": "single"},
+        ],
+    }
+
+
+def _refit_world(tmp_path, monkeypatch):
+    scratch, defs = tmp_path / "scratch", tmp_path / "defs"
+    defs.mkdir()
+    monkeypatch.setattr(refit, "CORPUS_ROOT", scratch)
+    monkeypatch.setattr(refit, "CAPTURE_DIR", defs)
+    for cap, notes in (("ukulele", [40, 52, 64, 76]), ("single", [50])):
+        (scratch / "capture" / cap).mkdir(parents=True)
+        (scratch / "capture" / cap / "manifest.json").write_text("{}")
+        (defs / f"{cap}.json").write_text(
+            json.dumps({"notes": notes, "velocities": [30, 60, 90, 120]})
+        )
+
+
+def test_joint_names_every_gate_capture_it_can_fit_and_says_why_not_the_others(
+    tmp_path, monkeypatch
+):
+    _refit_world(tmp_path, monkeypatch)
+    usable, dropped = refit.joint_captures(_voice(tmp_path))
+    assert [u["capture"] for u in usable] == ["nylon", "ukulele"]
+    assert usable[1]["notes"] == [40, 64] and usable[1]["validate_notes"] == [52, 76]
+    assert usable[1]["timbre"] == "t1"
+    assert {d["capture"]: d["reason"] for d in dropped} == {
+        "gone": "no corpus on this machine",
+        "single": "one note: nothing to hold out",
+    }
+
+
+def test_a_voice_with_one_usable_capture_is_not_a_joint_fit(tmp_path, monkeypatch):
+    _refit_world(tmp_path, monkeypatch)
+    voice = _voice(tmp_path)
+    voice["gates"] = voice["gates"][:1]
+    assert refit.joint_captures(voice)[0] == []
+
+
+def test_refit_joint_passes_every_gate_capture_to_autofit(tmp_path, monkeypatch):
+    _refit_world(tmp_path, monkeypatch)
+    voice = _voice(tmp_path)
+    voice["joint"], _ = refit.joint_captures(voice)
+    seen = []
+
+    def fake_run(cmd, **kwargs):
+        seen.append(cmd)
+        (tmp_path / "fit.json").write_text("{}")
+
+    monkeypatch.setattr(refit.subprocess, "run", fake_run)
+    monkeypatch.setattr(refit, "_check_pin", lambda: None)
+    refit._fit(voice, tmp_path / "fit.json", "build", 12)
+    cmd = seen[0]
+    assert cmd.count("--corpus") == 2
+    assert [cmd[i + 1] for i, c in enumerate(cmd) if c == "--corpus"] == [
+        voice["corpus"],
+        str(tmp_path / "scratch" / "capture" / "ukulele"),
+    ]
+    assert [cmd[i + 1] for i, c in enumerate(cmd) if c == "--corpus-timbre"] == ["t0", "t1"]
+    assert [cmd[i + 1] for i, c in enumerate(cmd) if c == "--corpus-validate-notes"] == [
+        "48,72",
+        "52,76",
+    ]
+    assert "--notes" not in cmd and "--validate-notes" not in cmd
+
+
+def test_without_joint_a_fit_names_its_own_capture_only(tmp_path, monkeypatch):
+    voice = _voice(tmp_path)
+    seen = []
+    monkeypatch.setattr(
+        refit.subprocess,
+        "run",
+        lambda cmd, **k: (seen.append(cmd), (tmp_path / "fit.json").write_text("{}")),
+    )
+    monkeypatch.setattr(refit, "_check_pin", lambda: None)
+    refit._fit(voice, tmp_path / "fit.json", "build", 12)
+    cmd = seen[0]
+    assert cmd.count("--corpus") == 1 and "--notes" in cmd and "--validate-notes" in cmd
+    assert "--corpus-notes" not in cmd
+
+
+def test_the_joint_flag_is_off_unless_asked_for():
+    assert refit.JOINT is False
+
+
+# --------------------------------------------------------------------------- #
+# The whole run
+# --------------------------------------------------------------------------- #
+def test_a_joint_run_reports_each_capture_and_records_both(tmp_path, monkeypatch):
+    """Two --corpus through `run`: one value vector, a record with the capture list and a block per capture."""
+    import numpy as np
+    from catalogue import Catalogue
+
+    lib = tmp_path / "libsonare.dylib"
+    lib.write_bytes(b"lib")
+    monkeypatch.setattr(autofit, "repo_tree_state", lambda: ("deadbeef", []))
+    monkeypatch.setattr(autofit, "src_files", list)
+    monkeypatch.setattr(autofit, "CORPUS_ROOT", tmp_path / "scratch")
+    monkeypatch.setattr(autofit, "_fold_gate_audit", lambda *a, **k: None)
+    catalogue = Catalogue(
+        defaults={"nylon.gain": 0.5},
+        programs={(0, 0): "nylon", (1, 0): "ukulele"},
+        bounds={},
+        modes={},
+        rigs={},
+    )
+    monkeypatch.setattr(autofit, "_tuning_catalogue", lambda *a, **k: catalogue)
+    monkeypatch.setattr(autofit_resolve, "capture_program", lambda corpus: (1, 0))
+    monkeypatch.setattr(
+        autofit, "oracle_reference", lambda args: ([], np.zeros(4, dtype=np.float32), None, None)
+    )
+    rendered = []
+
+    def terms(self, values):
+        rendered.append((self.args.program, None if self.reach is None else self.reach.signature))
+        v = values[0] / 9.0  # the knob runs 2.5 to 9
+        if self.args.program == 0:
+            return _terms(harm=_units("harm", 14.0 - 12.0 * v), cents=_units("cents", 4.0))
+        return _terms(harm=_units("harm", 10.0), cents=_units("cents", 3.0 + 6.0 * v))
+
+    monkeypatch.setattr(Evaluator, "_render_terms", terms)
+    scorers = {0: _Held(0.7, held="48"), 1: _Held(1.3, held="50")}
+
+    def holdout(args, build_dir, knobs, room_ir, reach=None):
+        scorer = scorers[args.program]
+        return scorer, scorer.axis, scorer.held
+
+    monkeypatch.setattr(autofit, "holdout_scorer", holdout)
+
+    spec = tmp_path / "spec.json"
+    spec.write_text(json.dumps([{"tunable": "kHammerWidthHarmonics", "min": 2.5, "max": 9.0}]))
+    nylon = _write_corpus(tmp_path / "nylon", notes=(60, 72))
+    ukulele = _write_corpus(tmp_path / "ukulele", notes=(60, 72))
+    for root, name in ((nylon, "nylon"), (ukulele, "ukulele")):
+        manifest = json.loads((root / "manifest.json").read_text())
+        (root / "manifest.json").write_text(json.dumps({**manifest, "id": name}))
+    out = tmp_path / "out.json"
+    args = autofit.build_parser().parse_args(
+        [
+            *("--spec", str(spec), "--program", "0", "--lib", str(lib), "--dry-run"),
+            *("--corpus", str(nylon), "--corpus", str(ukulele)),
+            *("--corpus-validate-notes", "48", "--corpus-validate-notes", "50"),
+            *("--optimizer", "coord", "--max-evals", "12", "--no-cache"),
+            *("--w-harm", "1", "--w-cents", "1", "--out", str(out)),
+        ]
+    )
+    assert autofit.run(args, []) == 0
+
+    record = json.loads(out.read_text())
+    assert [(c["program"], c["reach"]) for c in record["corpora"]] == [
+        (0, None),
+        (1, "nylon->ukulele"),
+    ]
+    assert {r for r in rendered} >= {(0, None), (1, "nylon->ukulele")}
+    assert [r["label"] for r in record["per_capture"]] == [c["label"] for c in record["corpora"]]
+    first, second = record["per_capture"]
+    assert first["loss"]["start"] == pytest.approx(1.0)
+    assert first["loss"]["search"] < 1.0 < second["loss"]["search"]
+    assert second["search_winner"]["worse_terms"] == ["cents"]
+    assert [p["worse"] for p in record["validation"]["per_capture"]] == [False, True]
+    assert record["validation"]["worse"] == [record["corpora"][1]["label"]]
+    assert record["loss"]["start"] == pytest.approx(1.0)
+    assert len(record["write_back"]["per_capture"]) == 2

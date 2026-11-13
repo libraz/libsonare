@@ -163,7 +163,7 @@ def _anchors(start_overrides: str) -> dict:
     }
 
 
-def print_level_drift(evaluator) -> None:
+def print_level_drift(evaluator, label: str = "") -> None:
     """How far the winner moved the voice's overall level, which nothing charges for.
 
     Every loss term is either normalised by the note's own level or measured
@@ -183,7 +183,7 @@ def print_level_drift(evaluator) -> None:
     if start is None or best is None:
         return
     drift = best - start
-    print("\n== level ==")
+    print(f"\n== level{f' ({label})' if label else ''} ==")
     print(
         f"  the winner's whole-grid level sits {drift:+.1f} dB against the start point "
         f"({start:+.1f} -> {best:+.1f} dB against the reference)"
@@ -205,6 +205,122 @@ def print_level_drift(evaluator) -> None:
             f"check that the shape was not bought with loudness before keeping these "
             f"values, since every metric above is level-normalised"
         )
+
+
+def _units(loss_object, terms) -> dict[str, float] | None:
+    """Each active term's weighted residual in perceptual units, or None without terms."""
+
+    if terms is None or loss_object is None:
+        return None
+    return loss_object.term_contributions(terms, fixed_units=True)
+
+
+def per_capture_rows(evaluator, start_values, search_values, best_values, extra) -> list[dict]:
+    """One record per capture of a joint fit: its loss, its term table and what got worse.
+
+    The joint loss can fall while one capture's rises, so every capture is read
+    on its own at the start, at the search winner and at the values kept. A term is
+    `worse` when it regressed by `significant_term_regressions`' own test.
+    """
+
+    weights = evaluator.capture_weights()
+    held = {p["capture"]: p for p in (extra.get("validation") or {}).get("per_capture", [])}
+    info = {c["label"]: c for c in extra.get("captures") or []}
+    rows = []
+    for label, member, weight in zip(evaluator.labels, evaluator.members, weights):
+        loss_object = member.loss
+        base = member.baseline_terms
+        search = member.terms_for(search_values)
+        kept = member.terms_for(best_values)
+        search_loss = _finite(member.loss_for(search_values))
+        kept_loss = _finite(member.loss_for(best_values))
+        start_u, search_u, kept_u = (_units(loss_object, t) for t in (base, search, kept))
+        table = {
+            name: {
+                "start_units": start_u.get(name) if start_u else None,
+                "search_units": search_u.get(name) if search_u else None,
+                "selected_units": kept_u.get(name) if kept_u else None,
+            }
+            for name in (loss_object.active() if loss_object else ())
+        }
+        search_worse = (
+            significant_term_regressions(base, search, loss_object)
+            if base is not None and search is not None
+            else []
+        )
+        kept_worse = (
+            significant_term_regressions(base, kept, loss_object)
+            if base is not None and kept is not None
+            else []
+        )
+        rows.append(
+            {
+                **info.get(label, {"label": label}),
+                "weight": weight,
+                "loss": {
+                    "start": _finite(member.loss_for([k.start_value for k in evaluator.knobs])),
+                    "search": search_loss,
+                    "selected": kept_loss,
+                },
+                "terms": table,
+                "search_winner": {
+                    "worse_terms": [r["term"] for r in search_worse],
+                    "regressions": search_worse,
+                },
+                "selected": {
+                    "worse_terms": [r["term"] for r in kept_worse],
+                    "regressions": kept_worse,
+                    "dropout_terms": (
+                        dropout_terms(base, kept, loss_object)
+                        if base is not None and kept is not None
+                        else []
+                    ),
+                    "write_back_refusal": getattr(member, "write_back_refusal", None),
+                    "quality": quality_report(
+                        kept,
+                        loss_object,
+                        loss=kept_loss,
+                        baseline_terms=base,
+                        validation=held.get(label),
+                    ),
+                },
+                "validation": held.get(label),
+                "renders": member.n_renders,
+            }
+        )
+    return rows
+
+
+def print_per_capture(rows: list[dict], refused_by: list[str] | None = None) -> None:
+    """One line per capture: start to winner, the held-out reading, the terms that got worse."""
+
+    print("\n== per capture (start -> search winner) ==")
+    for row in rows:
+        loss = row["loss"]
+        winner = loss["search"]
+        winner_text = "unscorable" if winner is None else f"{winner:.4f}"
+        held = row.get("validation")
+        held_text = (
+            f"  held-out {held['start']:.4f} -> {held['best']:.4f}"
+            + ("  WORSE" if held.get("worse") else "")
+            if held and held.get("scored", True) and "start" in held
+            else "  held-out n/a"
+        )
+        worse = row["search_winner"]["regressions"]
+        worse_text = (
+            "  worse: "
+            + ", ".join(
+                f"{r['term']} {r['start_units']:.3f}->{r['selected_units']:.3f}" for r in worse
+            )
+            if worse
+            else "  no term worse"
+        )
+        print(
+            f"  {row['label']}  weight {row['weight']:.2f}  {loss['start']:.4f} -> "
+            f"{winner_text}{held_text}{worse_text}"
+        )
+    if refused_by:
+        print(f"  named by the refusal: {', '.join(refused_by)}")
 
 
 def report_result(knobs, pristine, best_values, evaluator, args, extra=None) -> None:
@@ -279,6 +395,13 @@ def report_result(knobs, pristine, best_values, evaluator, args, extra=None) -> 
         search_regressions = significant_term_regressions(baseline_terms, search_terms, loss_object)
     search_dropout = getattr(evaluator, "search_dropout", None) or []
 
+    members = getattr(evaluator, "members", None)
+    capture_rows = (
+        per_capture_rows(evaluator, start_values, search_values, best_values, extra)
+        if members
+        else None
+    )
+
     print("\n== loss trajectory (improvements only) ==")
     if evaluator.trajectory:
         # Only the steps that moved it, grouped by stage: a four-hundred
@@ -341,7 +464,18 @@ def report_result(knobs, pristine, best_values, evaluator, args, extra=None) -> 
                     "  the fitted values are worse than the defaults on notes the fit never "
                     "saw; treat the result as overfitted to the probe"
                 )
+            for part in v.get("per_capture") or []:
+                if part.get("scored"):
+                    print(
+                        f"    {part['capture']}: {part['axis']} {part['held_out']}  start "
+                        f"{part['start']:.4f} -> best {part['best']:.4f}"
+                        + ("  WORSE past the margin" if part["worse"] else "")
+                    )
+                else:
+                    print(f"    {part['capture']}: no held-out result")
 
+    if capture_rows is not None:
+        print_per_capture(capture_rows, getattr(evaluator, "refused_by", None))
     _quality_display(selected_quality)
     if regressions:
         print("  significant per-term regressions (review; no blanket rejection):")
@@ -371,6 +505,9 @@ def report_result(knobs, pristine, best_values, evaluator, args, extra=None) -> 
         effort["full_spec_budget_warning"] = full_spec_warning
 
     print_level_drift(evaluator)
+    for label, member in zip(getattr(evaluator, "labels", []), members or []):
+        if member is not evaluator.primary:
+            print_level_drift(member, label)
 
     print("\n== knob values (start -> best) ==")
     moved = 0
@@ -508,6 +645,8 @@ def report_result(knobs, pristine, best_values, evaluator, args, extra=None) -> 
                 }
                 for i, loss, stage, vals in getattr(evaluator, "path", [])
             ],
+            "corpora": extra.get("corpora") or [],
+            **({"per_capture": capture_rows} if capture_rows is not None else {}),
             "validation": extra.get("validation"),
             "validation_partition": extra.get("validation_partition"),
             "room": extra.get("room"),
