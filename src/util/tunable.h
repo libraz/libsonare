@@ -41,6 +41,12 @@ float tunable_value(const char* file, const char* name, float default_value);
 /// layers whose keys are not file-scoped (the per-program patch fields).
 float tunable_keyed(const char* key, float default_value);
 
+/// `tunable_value` for a key that declares its admissible range: the range is
+/// recorded for the `SONARE_TUNING_DUMP` catalogue whether or not the key is
+/// consulted, and an override outside [@p lo, @p hi] aborts with a message
+/// naming the key and the range. Only ever called from `SONARE_TUNABLE_RANGE`.
+float tunable_ranged(const char* file, const char* name, float default_value, float lo, float hi);
+
 /// Record that GM melodic program @p program is voiced by the patch addressed
 /// as @p key, for the `SONARE_TUNING_DUMP` catalogue. Which patch a program
 /// resolves to is a switch statement's business and not something an external
@@ -90,16 +96,14 @@ void note_rig(int program, const char* preset);
 /// the loss flat) and too narrow (a knob whose best value is 5x its default is
 /// unreachable).
 ///
-/// Thirteen of the fields the override layer walks have no bound to report,
+/// Twelve of the fields the override layer walks have no bound to report,
 /// because `clamp_synth_patch` does not bound them: the eight Karplus-Strong
 /// extensions (`ks.body_coupling`, `pluck_style`, `nail`, `pickup_pos`,
 /// `dispersion`, `tension_mod`, `octave_mix`, `keyoff_noise`),
 /// `bowed_string.stribeck`, `bowed_string.sympathetic`,
 /// `bowed_string.polarization` and `pipe_organ.keytrack` — each clamped instead
-/// by its own voice at `start()`, where it is read — and
-/// `percussion.strike_theta`, an angle that reaches a cosine and so only has to
-/// be finite. The audio is safe either way; the consequence is confined to the
-/// catalogue, where such a field is reported as unbounded and a fitter's
+/// by its own voice at `start()`, where it is read. The audio is safe either way; the consequence
+/// is confined to the catalogue, where such a field is reported as unbounded and a fitter's
 /// auto-range falls back to its heuristic. No-op unless a dump was requested.
 void note_bound(const char* path, float lo, float hi);
 
@@ -113,6 +117,17 @@ void note_bound(const char* path, float lo, float hi);
 #else
 /// Declare a calibration constant (normal build: a plain `constexpr float`).
 #define SONARE_TUNABLE(name, value) constexpr float name = (value)
+#endif
+
+#if defined(SONARE_TUNING) && SONARE_TUNING
+/// `SONARE_TUNABLE` that also declares its admissible range [lo, hi]. The tuning
+/// build dumps `#tunable_bound<TAB>key<TAB>lo<TAB>hi` for it, and an override
+/// outside the range is refused with the key and range named, never clamped.
+#define SONARE_TUNABLE_RANGE(name, value, lo, hi) \
+  const float name = ::sonare::tuning::tunable_ranged(__FILE__, #name, (value), (lo), (hi))
+#else
+/// Normal-build counterpart: exactly `SONARE_TUNABLE`; the range is not read.
+#define SONARE_TUNABLE_RANGE(name, value, lo, hi) constexpr float name = (value)
 #endif
 
 #if defined(SONARE_TUNING) && SONARE_TUNING

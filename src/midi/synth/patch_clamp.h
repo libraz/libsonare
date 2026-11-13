@@ -242,7 +242,9 @@ constexpr NativeSynthPatch clamp_synth_patch(const NativeSynthPatch& patch) noex
       std::clamp(patch_clamp_detail::sanitize(p.percussion.pitch_drop_ms, 40.0f), 1.0f, 2000.0f);
   p.percussion.strike_r =
       std::clamp(patch_clamp_detail::sanitize(p.percussion.strike_r, 0.0f), 0.0f, 1.0f);
-  p.percussion.strike_theta = patch_clamp_detail::sanitize(p.percussion.strike_theta, 0.0f);
+  // cos(m * theta) is even in theta, so [0, pi] holds every distinct weight.
+  p.percussion.strike_theta = std::clamp(
+      patch_clamp_detail::sanitize(p.percussion.strike_theta, 0.0f), 0.0f, sonare::constants::kPi);
   for (float& alpha : p.percussion.mode_alpha) {
     alpha = std::clamp(patch_clamp_detail::sanitize(alpha, 0.0f), 0.0f, 64.0f);
   }
@@ -268,10 +270,14 @@ constexpr NativeSynthPatch clamp_synth_patch(const NativeSynthPatch& patch) noex
       patch_clamp_detail::sanitize(p.percussion.noise_cutoff_hz, 2500.0f), 20.0f, 20000.0f);
   p.percussion.noise_q =
       std::clamp(patch_clamp_detail::sanitize(p.percussion.noise_q, 1.0f), 0.5f, 30.0f);
-  p.percussion.noise_burst_interval_ms =
-      patch_clamp_detail::sanitize(p.percussion.noise_burst_interval_ms, 10.0f);
-  p.percussion.noise_burst_decay_ms =
-      patch_clamp_detail::sanitize(p.percussion.noise_burst_decay_ms, 6.0f);
+  // A retriggered burst train: past a handful it stops reading as one gesture, a
+  // train fuses below about 5 ms and reads as separate hits above about 30 ms,
+  // and the voice already floors the decay at 1 ms.
+  p.percussion.noise_burst_count = std::clamp(p.percussion.noise_burst_count, 0, 8);
+  p.percussion.noise_burst_interval_ms = std::clamp(
+      patch_clamp_detail::sanitize(p.percussion.noise_burst_interval_ms, 10.0f), 0.5f, 50.0f);
+  p.percussion.noise_burst_decay_ms = std::clamp(
+      patch_clamp_detail::sanitize(p.percussion.noise_burst_decay_ms, 6.0f), 1.0f, 50.0f);
   p.percussion.shell_mix =
       std::clamp(patch_clamp_detail::sanitize(p.percussion.shell_mix, 0.0f), 0.0f, 1.0f);
   p.percussion.shell_num_modes = std::clamp(p.percussion.shell_num_modes, 0, kMaxShellModes);

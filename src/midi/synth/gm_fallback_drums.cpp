@@ -2152,6 +2152,77 @@ SONARE_TUNED_CONSTEXPR std::array<NativeSynthPatch, 128> build_drum_note_table()
   t[73].percussion.noise_decay_ms = 19.1165f;
   t[73].percussion.noise_q = 1.80927f;
 
+  // Per-key velocity exponent. Keys 35, 37, 38, 39, 45, 47, 48, 50, 51, 57, 58, 59, 61, 67 and 81
+  // keep the default.
+  // dynamics oracle: library kit (real strikes), zero-crossing of vel_range; timbre oracle: module
+  t[36].percussion.velocity_exponent = 1.08f;
+  // dynamics oracle: library kit (real strikes), zero-crossing of vel_range; timbre oracle: module
+  t[40].percussion.velocity_exponent = 0.66f;
+  // dynamics oracle: library kit (real strikes), zero-crossing of vel_range; timbre oracle: module
+  t[41].percussion.velocity_exponent = 0.43f;
+  // dynamics oracle: library kit (real strikes), zero-crossing of vel_range; timbre oracle: module
+  t[42].percussion.velocity_exponent = 1.19f;
+  // dynamics oracle: library kit (real strikes), zero-crossing of vel_range; timbre oracle: module
+  t[43].percussion.velocity_exponent = 0.41f;
+  // dynamics oracle: library kit (real strikes), zero-crossing of vel_range; timbre oracle: module
+  t[44].percussion.velocity_exponent = 1.04f;
+  // dynamics oracle: library kit (real strikes), zero-crossing of vel_range; timbre oracle: module
+  t[46].percussion.velocity_exponent = 0.29f;
+  // dynamics oracle: library kit (real strikes), zero-crossing of vel_range; timbre oracle: module
+  t[49].percussion.velocity_exponent = 1.29f;
+  // dynamics oracle: library kit (real strikes), zero-crossing of vel_range; timbre oracle: module
+  t[52].percussion.velocity_exponent = 0.77f;
+  // dynamics oracle: library kit (real strikes), zero-crossing of vel_range; timbre oracle: module
+  t[53].percussion.velocity_exponent = 0.29f;
+  // dynamics oracle: library kit (real strikes), zero-crossing of vel_range; timbre oracle: module
+  t[54].percussion.velocity_exponent = 1.54f;
+  // dynamics oracle: library kit (real strikes), zero-crossing of vel_range; timbre oracle: module
+  t[55].percussion.velocity_exponent = 0.50f;
+  // dynamics oracle: library kit (real strikes), zero-crossing of vel_range; timbre oracle: module
+  t[56].percussion.velocity_exponent = 1.21f;
+  // dynamics oracle: library kit (real strikes), zero-crossing of vel_range; timbre oracle: module
+  t[60].percussion.velocity_exponent = 0.76f;
+  // Exactly 3 recordings.
+  // dynamics oracle: library kit (real strikes), zero-crossing of vel_range; timbre oracle: module
+  t[62].percussion.velocity_exponent = 1.21f;
+  // dynamics oracle: library kit (real strikes), zero-crossing of vel_range; timbre oracle: module
+  t[63].percussion.velocity_exponent = 1.09f;
+  // dynamics oracle: library kit (real strikes), zero-crossing of vel_range; timbre oracle: module
+  t[64].percussion.velocity_exponent = 1.55f;
+  // dynamics oracle: library kit (real strikes), zero-crossing of vel_range; timbre oracle: module
+  t[65].percussion.velocity_exponent = 0.86f;
+  // dynamics oracle: library kit (real strikes), zero-crossing of vel_range; timbre oracle: module
+  t[66].percussion.velocity_exponent = 1.13f;
+  // dynamics oracle: library kit (real strikes), zero-crossing of vel_range; timbre oracle: module
+  t[68].percussion.velocity_exponent = 1.48f;
+  // dynamics oracle: library kit (real strikes), zero-crossing of vel_range; timbre oracle: module
+  t[69].percussion.velocity_exponent = 1.73f;
+  // dynamics oracle: library kit (real strikes), zero-crossing of vel_range; timbre oracle: module
+  t[70].percussion.velocity_exponent = 0.96f;
+  // Exactly 3 recordings.
+  // dynamics oracle: library kit (real strikes), zero-crossing of vel_range; timbre oracle: module
+  t[71].percussion.velocity_exponent = 1.60f;
+  // Exactly 3 recordings.
+  // dynamics oracle: library kit (real strikes), zero-crossing of vel_range; timbre oracle: module
+  t[72].percussion.velocity_exponent = 1.33f;
+  // dynamics oracle: library kit (real strikes), zero-crossing of vel_range; timbre oracle: module
+  t[73].percussion.velocity_exponent = 1.47f;
+  // Exactly 3 recordings.
+  // dynamics oracle: library kit (real strikes), zero-crossing of vel_range; timbre oracle: module
+  t[74].percussion.velocity_exponent = 0.59f;
+  // dynamics oracle: library kit (real strikes), zero-crossing of vel_range; timbre oracle: module
+  t[75].percussion.velocity_exponent = 1.57f;
+  // dynamics oracle: library kit (real strikes), zero-crossing of vel_range; timbre oracle: module
+  t[76].percussion.velocity_exponent = 1.58f;
+  // dynamics oracle: library kit (real strikes), zero-crossing of vel_range; timbre oracle: module
+  t[77].percussion.velocity_exponent = 1.13f;
+  // dynamics oracle: library kit (real strikes), zero-crossing of vel_range; timbre oracle: module
+  t[78].percussion.velocity_exponent = 1.49f;
+  // dynamics oracle: library kit (real strikes), zero-crossing of vel_range; timbre oracle: module
+  t[79].percussion.velocity_exponent = 1.48f;
+  // dynamics oracle: library kit (real strikes), zero-crossing of vel_range; timbre oracle: module
+  t[80].percussion.velocity_exponent = 1.77f;
+
   for (auto& p : t) p = clamp_synth_patch(p);
 
     // Development-only per-note voicing override, keyed `d000`..`d127` by drum

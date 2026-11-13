@@ -102,11 +102,13 @@ const std::unordered_map<std::string, float>& overrides() {
 /// constants appear whether the render used that engine or not. Narrow by the
 /// declaring file's stem to get one engine's, as `autofit.py` does.
 ///
-/// Four header line kinds precede the knobs: `#program<TAB>NNN<TAB>key` maps a
+/// Five header line kinds precede the knobs: `#program<TAB>NNN<TAB>key` maps a
 /// GM program to its patch, `#mode<TAB>key<TAB>engine` names the engine voicing
 /// that patch, `#rig<TAB>NNN<TAB>preset` names the amplifier a program is heard
 /// through by default, and `#bound<TAB>path<TAB>lo<TAB>hi` gives a field's
-/// admissible range. A bound is keyed by path alone, being a property of the
+/// admissible range. `#tunable_bound<TAB>key<TAB>lo<TAB>hi` is the same for an
+/// engine constant declared with `SONARE_TUNABLE_RANGE`, keyed as the constant
+/// is. A bound is keyed by path alone, being a property of the
 /// field rather than the patch; a mode is keyed by patch, being a property of
 /// the patch rather than of any one program it answers; a rig is keyed by
 /// program, being what the bank binds to the number a file selects.
@@ -143,6 +145,14 @@ class Recorder {
       out << "#bound\t" << row.first << '\t' << row.second.first << '\t' << row.second.second
           << '\n';
     }
+    std::vector<std::pair<std::string, std::pair<float, float>>> ranged(tunable_bounds_.begin(),
+                                                                        tunable_bounds_.end());
+    insertion_sort(ranged.begin(), ranged.end(),
+                   [](const auto& a, const auto& b) { return a.first < b.first; });
+    for (const auto& row : ranged) {
+      out << "#tunable_bound\t" << row.first << '\t' << row.second.first << '\t'
+          << row.second.second << '\n';
+    }
     std::vector<std::pair<std::string, float>> rows(seen_.begin(), seen_.end());
     insertion_sort(rows.begin(), rows.end(),
                    [](const auto& a, const auto& b) { return a.first < b.first; });
@@ -161,6 +171,10 @@ class Recorder {
     bounds_.emplace(path, std::make_pair(lo, hi));
   }
 
+  void note_tunable_bound(const std::string& key, float lo, float hi) {
+    tunable_bounds_.emplace(key, std::make_pair(lo, hi));
+  }
+
   static Recorder& instance() {
     static Recorder r;
     return r;
@@ -169,6 +183,7 @@ class Recorder {
  private:
   std::unordered_map<std::string, float> seen_;
   std::unordered_map<std::string, std::pair<float, float>> bounds_;
+  std::unordered_map<std::string, std::pair<float, float>> tunable_bounds_;
   std::map<std::pair<int, int>, std::string> programs_;
   std::map<std::string, std::string> modes_;
   std::map<int, std::string> rigs_;
@@ -215,6 +230,19 @@ float tunable_value(const char* file, const char* name, float default_value) {
   return it == table.end() ? default_value : it->second;
 }
 
+float tunable_ranged(const char* file, const char* name, float default_value, float lo, float hi) {
+  const std::string key = file_scope(file) + "." + name;
+  if (recording()) Recorder::instance().note_tunable_bound(key, lo, hi);
+  const float value = tunable_value(file, name, default_value);
+  if (!(value >= lo && value <= hi)) {
+    std::fprintf(stderr, "SONARE_TUNING_OVERRIDES: %s=%g is outside its range [%g, %g]\n",
+                 key.c_str(), static_cast<double>(value), static_cast<double>(lo),
+                 static_cast<double>(hi));
+    std::abort();
+  }
+  return value;
+}
+
 void note_program_key(int program, int bank, const char* key) {
   if (recording() && key != nullptr) Recorder::instance().note_program(program, bank, key);
 }
@@ -248,6 +276,10 @@ namespace tuning {
 float tunable_value(const char*, const char*, float default_value) { return default_value; }
 
 float tunable_keyed(const char*, float default_value) { return default_value; }
+
+float tunable_ranged(const char*, const char*, float default_value, float, float) {
+  return default_value;
+}
 
 void note_program_key(int, int, const char*) {}
 

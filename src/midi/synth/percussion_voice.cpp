@@ -36,7 +36,7 @@ constexpr uint64_t kPhisemNoiseIndexBase = 1ull << 31;
 /// Random bead collisions per bean per unit shake energy per second.
 /// Sounding-energy gain one collision adds, in units of the shake energy.
 constexpr float kPhisemCollisionBump = 0.6f;
-SONARE_TUNABLE(kPhisemCollisionRate, 100.0f);
+SONARE_TUNABLE_RANGE(kPhisemCollisionRate, 100.0f, 10.0f, 400.0f);
 /// Shake energy at zero velocity, as a fraction of its energy at full. The
 /// energy scales both how loud a collision is and how often one happens, so it
 /// reaches the output twice and reaches it on top of the velocity response the
@@ -45,7 +45,7 @@ SONARE_TUNABLE(kPhisemCollisionRate, 100.0f);
 /// else in the kit, which no sampled kit does — theirs swing no wider than
 /// their drums. Held high enough that what velocity still carries here is the
 /// collision rate, which is a shaker's own cue and not a level.
-SONARE_TUNABLE(kPhisemVelocityFloor, 0.9f);
+SONARE_TUNABLE_RANGE(kPhisemVelocityFloor, 0.9f, 0.0f, 1.0f);
 
 /// Pressure a compact axial dipole radiates per unit kL, against the monopole
 /// of equal displacement. Not kInvSqrt2's neighbour: it is the solid-angle

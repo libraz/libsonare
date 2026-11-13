@@ -254,6 +254,9 @@ constexpr void configure_percussion_programs(ProgramOverrides& o) noexcept {
   sy.percussion.mode_ratios[0] = 0.942332f;
   sy.percussion.noise_q = 0.704471f;
   sy.resonance_q = 3.41885f;
+  // dynamics oracle: library synth_drum capture (real strikes), zero-crossing of vel_range; timbre
+  // oracle: module
+  sy.percussion.velocity_exponent = 1.47f;
 
   // Reverse Cymbal (GM 119): the core has no reverse playback, so the swell is
   // approximated with a long attack (the wash rises over the held note) into a
