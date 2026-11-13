@@ -121,6 +121,29 @@ def test_damper_release_is_measured_from_note_off():
     assert got["damper_capped"] is False
 
 
+@pytest.mark.parametrize(("rate_db_s", "censored"), [(7.3, False), (7.6, True)])
+def test_the_already_stopped_censor_sits_at_45_db(rate_db_s, censored):
+    """Either side of the censor: 43.8 dB down at the lift is read, 45.6 dB is absent, not capped."""
+    preroll, gate, tail, note = 0.1, 6.0, 0.5, 40
+    t = np.arange(int((preroll + gate + tail) * SR)) / SR - preroll
+    tone = sum(np.sin(2 * np.pi * midi_to_hz(note) * k * t) / k for k in range(1, 9))
+    env_db = np.where(t < 0, -240.0, -rate_db_s * np.clip(t, 0, gate))
+    env_db = env_db - np.clip(t - gate, 0, None) * (40.0 / 0.070)
+    got = measure_note(
+        (0.05 * tone * 10 ** (env_db / 20)).astype(np.float32),
+        SR,
+        note,
+        preroll_s=preroll,
+        gate_s=gate,
+    )
+    assert got["decayed_before_note_off"] is censored
+    if censored:
+        assert "damper_release_ms" not in got and "damper_capped" not in got
+    else:
+        assert got["damper_release_ms"] == pytest.approx(70.0, abs=15.0)
+        assert got["damper_capped"] is False
+
+
 @pytest.mark.parametrize("note", [40, 45, 52])
 def test_a_fast_damper_is_not_read_as_filter_leakage(note):
     """A release 40 dB down in 20 ms reads as about that, not as its own stall.
