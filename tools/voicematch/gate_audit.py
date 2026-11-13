@@ -64,10 +64,19 @@ def compare(
 
 
 def _with_windows(body: dict) -> list[dict]:
-    """The body's gate readings, each window-dependent one carrying the span it was read over."""
+    """The body's gate readings, each carrying its window and the rows its dimension censored.
+
+    A window-dependent one carries the span it was read over; `damper` carries how many
+    rows its median dropped as censored, so a damper reading is not taken for the grid's.
+    """
     windows = body.get("windows") or {}
+    censored = body.get("censored") or {}
     return [
-        {**r, "window": windows[r["key"]]} if r["key"] in windows else r
+        {
+            **r,
+            **({"window": windows[r["key"]]} if r["key"] in windows else {}),
+            **({"censored": censored[r["key"]]} if r["key"] in censored else {}),
+        }
         for r in (body.get("gate") or {}).get("readings", [])
     ]
 
@@ -144,6 +153,7 @@ def audit(pre: dict, post: dict, weighting: dict[str, tuple] | None) -> list[dic
         bound = next((r.get("limit") for r in (ra, rb) if r and r.get("limit") is not None), None)
         missing = [n for n, v in (("before", before), ("after", after)) if v is None]
         window = next((r["window"] for r in (ra, rb) if r and r.get("window")), None)
+        censored = next((r["censored"] for r in (ra, rb) if r and "censored" in r), None)
         entry = {
             "key": key,
             "stat": stat,
@@ -161,6 +171,8 @@ def audit(pre: dict, post: dict, weighting: dict[str, tuple] | None) -> list[dic
         entry["weighted"] = flag
         if window:
             entry["window"] = window
+        if censored is not None:
+            entry["censored"] = censored
         if terms:
             entry["term"] = "+".join(terms)
         if missing:
@@ -229,6 +241,8 @@ def format_flagged(entries: list[dict]) -> list[str]:
         if e.get("term"):
             flag += f" via {e['term']}"
         span = f" [window {format_window(e['window'])}]" if e.get("window") else ""
+        if e.get("censored") is not None:
+            span += f" [{e['censored']} damper rows censored]"
         lines.append(
             f"  {e['state']:<10} {e['key']} {e['stat']}: "
             f"{e['before']:.4g} -> {e['after']:.4g} vs bound {e['bound']:.4g} ({flag}){span}"

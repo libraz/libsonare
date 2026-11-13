@@ -1796,7 +1796,8 @@ def compare(
         model_windows=model_windows,
         reference_spans=reference_spans,
     )
-    print_summary_table(summary, spread, attempted, windows)
+    censored = {"damper": len(damper_censored)}
+    print_summary_table(summary, spread, attempted, windows, censored)
     print_vanished_dimensions(
         offered_keys, summary, cfg.get("dimensions") or [], cfg.get("dimensions_na") or {}
     )
@@ -1846,6 +1847,7 @@ def compare(
             profile.get("measured_utc", ""),
             velocity_layers=layers,
             windows=windows,
+            censored=censored,
         )
     if gate_path:
         return check_gate(

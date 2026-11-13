@@ -529,6 +529,7 @@ def print_summary_table(
     spread: dict[str, float],
     attempted: int,
     windows: dict[str, dict] | None = None,
+    censored: dict[str, int] | None = None,
 ) -> None:
     """The per-dimension summary, with the population each median was taken over.
 
@@ -546,7 +547,9 @@ def print_summary_table(
 
     @p windows (see `window_spans`) adds the `window` column, `model window /
     reference span`, beside each window-dependent dimension: two readings of one
-    dimension over different spans are not the same measurement.
+    dimension over different spans are not the same measurement. @p censored gives, beside
+    a dimension, how many rows were dropped from its median as censored (the damper
+    releases that never fell 40 dB), which `unscored` does not tell from absent ones.
     """
     head = (
         "\n" + f"{'':46s} {'median':>9} {'|median|':>9} {'p90':>8} {'spread':>8} "
@@ -567,6 +570,7 @@ def print_summary_table(
             f"{(f'{ratio:8.1f}x' if ratio is not None else '        -')} "
             f"{row['n']:5d} {missing}"
             + (f"  {format_window(windows[k])}" if windows and k in windows else "")
+            + (f"  [{censored[k]} censored]" if censored and k in censored else "")
         )
     if "tnr" in summary:
         print(
@@ -692,11 +696,13 @@ def write_summary_json(
     *,
     velocity_layers: dict | None = None,
     windows: dict[str, dict] | None = None,
+    censored: dict[str, int] | None = None,
 ) -> None:
     """Record a compare run's summary and its gate readings for a tool to read.
 
     @p windows (see `window_spans`) is recorded beside the summary, and the gate's
-    readings are taken against it.
+    readings are taken against it. @p censored is the rows each dimension dropped as
+    censored (`damper`), recorded beside the summary the same way.
 
     @p velocity_layers is the reference's `velocity_layers.layer_summary`, recorded
     so a velocity-swing reading is read against the recordings behind the grid.
@@ -718,6 +724,8 @@ def write_summary_json(
         record["velocity_layers"] = velocity_layers
     if windows is not None:
         record["windows"] = windows
+    if censored:
+        record["censored"] = censored
     out_path.write_text(json.dumps(record, indent=2, default=float) + "\n")
 
 
