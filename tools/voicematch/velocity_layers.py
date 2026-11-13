@@ -23,8 +23,11 @@ VELOCITY_SWING_DIMENSIONS = ("vel_range", "attack_hf_swing")
 LADDER_FIELDS = ("partials_db", "bands_db")
 #: Rungs that must be read on both sides before two ladders can be called one.
 MIN_RUNGS = 4
-#: Spread of the rung-by-rung difference still read as a pure gain (the profile rounds to 0.01 dB).
-SAME_LADDER_DB = 0.02
+#: The profile stores each rung rounded to this step, so differences are compared in steps.
+LADDER_STEP_DB = 0.01
+#: Two independently rounded rungs each sit within half a step of their true value, so a
+#: pure gain's rung-by-rung difference can spread by up to two steps.
+SAME_LADDER_STEPS = 2
 
 
 def _ladder(row: dict) -> list | None:
@@ -37,11 +40,11 @@ def same_recording(a: dict, b: dict) -> bool:
     if la is None or lb is None or len(la) != len(lb):
         return False
     diffs = [
-        y - x
+        round(y / LADDER_STEP_DB) - round(x / LADDER_STEP_DB)
         for x, y in zip(la, lb, strict=True)
         if x is not None and y is not None and x > -119.0 and y > -119.0
     ]
-    return len(diffs) >= MIN_RUNGS and max(diffs) - min(diffs) <= SAME_LADDER_DB
+    return len(diffs) >= MIN_RUNGS and max(diffs) - min(diffs) <= SAME_LADDER_STEPS
 
 
 def note_layers(rows: list[dict]) -> dict[int, tuple[int, int]]:

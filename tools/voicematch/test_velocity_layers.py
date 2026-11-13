@@ -89,3 +89,13 @@ def test_a_constant_square_law_across_notes_is_the_sampler():
         for v in (32, 64, 96, 127)
     ]
     assert not V.layer_summary(varied)["sampler_law"]
+
+
+def test_a_spread_at_the_rounding_step_is_one_recording():
+    """Stored rungs are rounded to 0.01 dB; a float difference of 0.0200000000000031 is two steps."""
+    a = hit(67, 64, (-10.11, -20.0, -30.0, -40.0, 0.0))
+    b = hit(67, 88, (-12.10, -22.01, -32.01, -42.01, -2.01))
+    assert V.same_recording(a, b)
+    # Three steps apart is no longer a pure gain.
+    c = hit(67, 100, (-12.10, -22.02, -32.0, -42.0, -2.0))
+    assert not V.same_recording(a, c)
