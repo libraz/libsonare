@@ -48,7 +48,6 @@ from __future__ import annotations
 import argparse
 import functools
 import json
-import os
 import re
 import subprocess
 import sys
@@ -62,6 +61,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 import bank
 import boundary
 import fits as fits_mod
+import gate_audit
 from _repo import REPO_ROOT
 from build_lib import _cached_option, dylib_path
 from capture import CORPUS_ROOT
@@ -279,56 +279,6 @@ def plan(banks: str) -> tuple[list[dict], list[dict]]:
             }
         )
     return todo, skipped
-
-
-def _compare(voice: dict, out: Path, lib: Path, overrides: str = "") -> None:
-    # The fit's own tuning build: any other library ignores the overrides, and the
-    # post-fit reading would then repeat the pre-fit one without saying so.
-    env = {**os.environ, "SONARE_LIB_PATH": str(lib)}
-    env.pop("SONARE_TUNING_OVERRIDES", None)
-    if overrides:
-        env["SONARE_TUNING_OVERRIDES"] = overrides
-    cmd = PYTHON + [
-        str(HERE / "profile.py"),
-        "compare",
-        "--config",
-        str(CAPTURE_DIR / f"{voice['capture']}.json"),
-        "--timbre",
-        voice["timbre"],
-        "--gate",
-        voice["gate"],
-        "--json",
-        str(out),
-    ]
-    log = out.with_suffix(".log")
-    with log.open("w") as fh:
-        subprocess.run(cmd, env=env, stdout=fh, stderr=subprocess.STDOUT, check=False)
-    if not out.exists():
-        raise RuntimeError(f"{voice['slug']}: compare wrote nothing, see {log}")
-
-
-def _compare_voice(
-    voice: dict, out: Path, lib: Path, overrides: str = "", baseline: dict | None = None
-) -> None:
-    """One voice's gate readings over every gate its patch reaches, keyed by capture.
-
-    `baseline` is recorded beside the readings, so a pinned pre says what it pinned.
-    """
-    if "gates" not in voice:
-        _compare(voice, out, lib, overrides)
-        body = json.loads(out.read_text())
-    else:
-        readings = []
-        for g in voice["gates"]:
-            part = out.with_name(f"{out.stem}.{g['capture']}.json")
-            if not part.exists():
-                _compare({**voice, **g}, part, lib, overrides)
-            for r in json.loads(part.read_text())["gate"]["readings"]:
-                readings.append({**r, "key": f"{g['capture']}:{r['key']}"})
-        body = {"gate": {"readings": readings}}
-    if baseline is not None:
-        body["baseline"] = baseline
-    out.write_text(json.dumps(body, indent=2) + "\n")
 
 
 def chain_of(patch: str, copies: dict[str, str]) -> list[str]:
@@ -732,12 +682,14 @@ def run_voice(voice: dict, root: Path, build_dir: str, per_knob: int) -> dict:
         own_fit = json.loads(fit.read_text()) if fit.exists() else None
         units = {u for t in gate_patches(voice) for u in chain_of(t, struct_copies())}
         base = baseline_pins(voice, own_fit, registry_history(units))
-        _compare_voice(voice, pre, lib, base["overrides"], baseline=base)
+        gate_audit.compare_voice(voice, pre, lib, base["overrides"], baseline=base)
     if not fit.exists():
         _fit(voice, fit, build_dir, per_knob)
     fit_report = json.loads(fit.read_text())
     if not post.exists():
-        _compare_voice(voice, post, lib, reach_copies(fit_report.get("overrides") or "", voice))
+        gate_audit.compare_voice(
+            voice, post, lib, reach_copies(fit_report.get("overrides") or "", voice)
+        )
     result = {
         "slug": voice["slug"],
         **verdict(
@@ -798,7 +750,9 @@ def along_the_path(voice: dict, d: Path, lib: Path, report: dict, tag: str) -> d
         values = writable(report, path[i]["values"], unmeasured(voice))
         out = d / f"path_{tag}_{path[i]['eval']}.json"
         if not out.exists():
-            _compare_voice(voice, out, lib, reach_copies(overrides_for(report, values), voice))
+            gate_audit.compare_voice(
+                voice, out, lib, reach_copies(overrides_for(report, values), voice)
+            )
         post = json.loads(out.read_text())["gate"]["readings"]
         post_sum, post_over = _excess(post)
         ok = not post_over - pre_over and post_sum <= pre_sum + 1e-9 and gate_load(post) < pre_load

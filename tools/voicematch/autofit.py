@@ -255,6 +255,7 @@ import itertools
 import json
 import math
 import os
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -267,6 +268,8 @@ import numpy as np
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))  # tools/ for _repo
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
+import bank
+import gate_audit
 from _repo import REPO_ROOT
 
 # The split modules below hold what this file used to define inline. Every
@@ -1706,6 +1709,106 @@ def _fold_write_back_verdict(out_path: str, evaluator) -> None:
     path.write_text(json.dumps(_json_safe(record), indent=2, allow_nan=False) + "\n")
 
 
+def _gate_voice(args) -> tuple[dict | None, str]:
+    """The voice dict refit's planner builds for this run's voice, or (None, why not)."""
+    import refit  # lazy: refit launches autofit as a subprocess
+
+    rows = json.loads(refit.STATUS.read_text())["voices"]
+    if args.drum_note is not None:
+        row = next((r for r in rows if r["kit"] and r["program"] == args.program), None)
+        if row is None:
+            return None, f"no kit row for program {args.program}"
+        todo, skipped = refit.plan_kits([row])
+        voice = next((v for v in todo if v["drum_note"] == args.drum_note), None)
+        if voice is None:
+            why = skipped[0]["reason"] if skipped else "note not in a machine capture"
+            return None, f"no gate for drum note {args.drum_note}: {why}"
+        return voice, ""
+    row = next(
+        (
+            r
+            for r in rows
+            if not r["kit"] and r["program"] == args.program and r["bank"] == args.bank
+        ),
+        None,
+    )
+    if row is None or not row.get("patch"):
+        return None, f"no patch reported for program {args.program} bank {args.bank}"
+    gates = refit.capital_gates(row, rows, bank.captures(), refit.REFERENCE_DIR)
+    if not gates:
+        return None, "no gate resolves to this voice"
+    voice = {
+        "slug": row["slug"],
+        "program": row["program"],
+        "bank": row["bank"],
+        "patch": row["patch"],
+        "capture": gates[0]["capture"],
+        "timbre": gates[0]["timbre"],
+        "gates": gates,
+    }
+    return voice, ""
+
+
+def _fold_gate_audit(args, build_dir, compare=gate_audit.compare_voice) -> None:
+    """Add the before/after gate readings of the start and winner values to an --out record.
+
+    The fit's loss weighs some gated dimensions and not others; this reads all of them on
+    the full capture grid, so a win bought by wrecking an unscored axis says so in the record.
+    """
+    if not args.out or not Path(args.out).exists():
+        print("gate audit: skipped (no --out record to hold it)", file=sys.stderr)
+        return
+    path = Path(args.out)
+    record = json.loads(path.read_text())
+
+    def skip(why: str) -> None:
+        print(f"gate audit: skipped ({why})", file=sys.stderr)
+        record["gate_audit"] = {"skipped": why}
+        path.write_text(json.dumps(_json_safe(record), indent=2, allow_nan=False) + "\n")
+
+    for flag, mode in (
+        ("diagnose", "--diagnose"),
+        ("dump_knobs", "--dump-knobs"),
+        ("grid", "--grid"),
+    ):
+        if getattr(args, flag, None):
+            return skip(f"{mode} does not produce a winner")
+    voice, why = _gate_voice(args)
+    if voice is None:
+        return skip(why)
+    lib = dylib_path(build_dir)
+    if lib is None:
+        return skip("no tuning library to read the gates with")
+    import refit  # lazy: see _gate_voice
+
+    scratch = Path(f"{path}.gate_audit")
+    shutil.rmtree(scratch, ignore_errors=True)
+    scratch.mkdir(parents=True)
+    winner = refit.reach_copies(record.get("overrides") or "", voice)
+    try:
+        pre, post = scratch / "pre.json", scratch / "post.json"
+        compare(voice, pre, Path(lib), refit.reach_copies("", voice))
+        compare(voice, post, Path(lib), winner)
+    except RuntimeError as exc:
+        return skip(f"compare failed: {exc}")
+    weights = (record.get("fit_profile") or {}).get("weights") or {}
+    table = refit.PERCUSSION_GATE_TERMS if "drum_note" in voice else refit.GATE_TERMS
+    entries = gate_audit.audit(
+        json.loads(pre.read_text()),
+        json.loads(post.read_text()),
+        gate_audit.weighted_dimensions(weights, table),
+    )
+    flagged = gate_audit.summary(entries)
+    record["gate_audit"] = {
+        "lib": str(lib),
+        "gates": [g["capture"] for g in voice["gates"]],
+        "entries": entries,
+        **flagged,
+    }
+    path.write_text(json.dumps(_json_safe(record), indent=2, allow_nan=False) + "\n")
+    print("\n" + "\n".join(gate_audit.format_flagged(entries)), file=sys.stderr)
+
+
 #: The range a per-knob budget is held in. Below the floor a small spec gets fewer
 #: evaluations than one broad pass of probes needs; past the ceiling held-out loss
 #: was measured rising on an eighty-knob voice that plateaued at 400.
@@ -2000,6 +2103,7 @@ def run(args, argv: list[str] | None = None) -> int:
             finally:
                 restore(pristine, evaluator.written)
             _fold_tree_provenance(args.out, head_sha, dirty_src, library)
+            _fold_gate_audit(args, build_dir)
             return 0
         if args.grid:
             # Also instead of fitting: the point is to look at the surface the
@@ -2081,6 +2185,7 @@ def run(args, argv: list[str] | None = None) -> int:
     report_result(knobs, pristine, best_values, evaluator, args, extra)
     _fold_tree_provenance(args.out, head_sha, dirty_src, library)
     _fold_write_back_verdict(args.out, evaluator)
+    _fold_gate_audit(args, build_dir)
     _fold_assessment(args.out, args)
     return 0
 

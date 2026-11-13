@@ -13,6 +13,7 @@ import pytest
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import fits
+import gate_audit
 import objective
 from profile_gate import gate_readings
 from refit import HELD_OUT_MARGIN, verdict
@@ -263,7 +264,7 @@ def test_the_furthest_point_the_gate_accepts_is_found_by_bisection(
             )
         )
 
-    monkeypatch.setattr(refit, "_compare_voice", fake_compare)
+    monkeypatch.setattr(gate_audit, "compare_voice", fake_compare)
     found = refit.along_the_path({}, tmp_path, Path("lib"), report, "fit")
     if last_good < 0:
         assert found["accepted"] is None
@@ -412,15 +413,13 @@ def test_struct_copies_read_the_program_tables():
 def test_every_gate_a_capital_reaches_is_read_and_keyed_by_capture(tmp_path, monkeypatch):
     import json
 
-    import refit
-
     def fake_compare(voice, out, lib, overrides=""):
         reading = {"key": "decay", "stat": "p90", "value": 1.0, "limit": 2.0, "over": False}
         out.write_text(
             json.dumps({"gate": {"readings": [dict(reading, capture=voice["capture"])]}})
         )
 
-    monkeypatch.setattr(refit, "_compare", fake_compare)
+    monkeypatch.setattr(gate_audit, "compare", fake_compare)
     voice = {
         "slug": "p006-harpsichord",
         "capture": "harpsichord",
@@ -430,7 +429,7 @@ def test_every_gate_a_capital_reaches_is_read_and_keyed_by_capture(tmp_path, mon
         ],
     }
     out = tmp_path / "pre.json"
-    refit._compare_voice(voice, out, Path("lib"))
+    gate_audit.compare_voice(voice, out, Path("lib"))
     keys = [r["key"] for r in json.loads(out.read_text())["gate"]["readings"]]
     assert keys == ["harpsichord:decay", "harpsichord_alt:decay"]
 
@@ -559,7 +558,7 @@ def _judged_dir(tmp_path, monkeypatch, *, fit_runs):
         raise RuntimeError("no fit may run")
 
     monkeypatch.setattr(refit, "_tuning_lib", lambda build_dir: Path("lib"))
-    monkeypatch.setattr(refit, "_compare", fake_compare)
+    monkeypatch.setattr(gate_audit, "compare", fake_compare)
     monkeypatch.setattr(refit, "_fit", no_fit)
     monkeypatch.setattr(refit, "struct_copies", lambda: {"wide": "cap"})
     monkeypatch.setattr(refit, "explicit_fields", lambda: {"wide": frozenset({"x"})})
