@@ -1001,9 +1001,9 @@ def _keep_the_tighter(
     unpadded measurement was inside it (`held_utc`) and what that measurement
     was. A kept bound is therefore never read as freshly measured.
 
-    Mutates `bounds` and returns one line per bound it refused to loosen, for
-    the caller to print — a ratchet that acts silently is a second way to lose
-    track of what the gate is holding.
+    Mutates `bounds` and returns (one line per bound it refused to loosen, one
+    outcome line per statistic) for the caller to print — a ratchet that acts
+    silently is a second way to lose track of what the gate is holding.
     """
     recorded = json.loads(gate_path.read_text()).get("bounds", {}) if gate_path.exists() else {}
     if any("provenance" not in b for b in recorded.values()):
@@ -1013,7 +1013,8 @@ def _keep_the_tighter(
         recorded = gate_migrate.migrate({"bounds": recorded}, gate_migrate.read_history(gate_path))[
             "bounds"
         ]
-    declined = []
+    declined: list[str] = []
+    reported: list[str] = []
     for dimension, row in bounds.items():
         was = recorded.get(dimension) or {}
         was_prov = was.get("provenance") or {}
@@ -1040,6 +1041,10 @@ def _keep_the_tighter(
                 declined.append(
                     f"{dimension}.{key} {candidate:g} -> {old:g} (measured {value:g}, {verdict})"
                 )
+            reported.append(
+                f"{outcome:<10} {dimension}.{key} bound {row[key]:g} (measured {value:g}"
+                + (f", was {old:g})" if old is not None and old != row[key] else ")")
+            )
             provenance[key] = {
                 "set_utc": set_at[0],
                 "set_build": set_at[1],
@@ -1048,7 +1053,7 @@ def _keep_the_tighter(
                 "outcome": outcome,
             }
         row["provenance"] = provenance
-    return declined
+    return declined, reported
 
 
 def provenance_findings(gate: dict) -> dict[str, list[tuple]]:
@@ -1231,7 +1236,7 @@ def write_gate_file(
             # run compares against it as though the whole grid had spoken.
             "rows": int(row.get("n", 0)),
         }
-    declined = _keep_the_tighter(bounds, measured, gate_path, now, build.get("built_utc"))
+    declined, reported = _keep_the_tighter(bounds, measured, gate_path, now, build.get("built_utc"))
     carried = _carry_the_unbounded(bounds, gate_path)
     computed = _computed_unbounded(
         censors, requested, set(dimensions_na or {}) | set(excluded), bounds
@@ -1288,6 +1293,8 @@ def write_gate_file(
         + "\n"
     )
     print(f"\nwrote {gate_path} — {len(bounds)} bounds at {margin:g}x the measured values")
+    for line in reported:
+        print(f"  {line}")
     for line in declined:
         print(f"  kept the recorded bound: {line}")
     return 0

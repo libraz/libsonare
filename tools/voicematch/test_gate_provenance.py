@@ -88,6 +88,18 @@ def test_a_refused_loosening_prints_one_line_per_statistic(tmp_path, capsys):
     assert "decay.median 14 -> 10 (measured 14, over it; last held" in out
 
 
+def test_every_statistic_reports_its_outcome(tmp_path, capsys):
+    """A landing report quotes these, so a tightened bound prints as surely as a kept one."""
+    gate = tmp_path / "g.json"
+    write_gate_file(_rows(10.0), gate, "ref", 1.0)
+    first = capsys.readouterr().out
+    assert first.count("new        decay.") == 3
+    write_gate_file(_rows(8.0), gate, "ref", 1.0)
+    out = capsys.readouterr().out
+    assert "tightened  decay.median bound 8 (measured 8, was 10)" in out
+    assert out.count("tightened  decay.") == 3 and "kept the recorded bound" not in out
+
+
 def test_a_kept_bound_with_the_measurement_inside_it_reads_kept(tmp_path):
     gate = tmp_path / "g.json"
     write_gate_file(_rows(10.0), gate, "ref", 1.0)
@@ -367,7 +379,7 @@ def test_a_first_rerecord_of_an_old_gate_dates_kept_values_from_history(tmp_path
     monkeypatch.setattr(gate_migrate, "read_history", lambda _p: history)
     bounds = {"decay": {"median": 5.0, "abs_median": 5.0, "p90": 9.0, "floor": 0.1}}
     measured = {"decay": {"median": 4.0, "abs_median": 4.0, "p90": 7.0}}
-    profile_gate._keep_the_tighter(bounds, measured, gate, "2026-11-13T00:00:00+00:00", "B2")
+    profile_gate._keep_the_tighter(bounds, measured, gate, "2026-11-13T00:00:00+00:00", "B2")[0]
     prov = bounds["decay"]["provenance"]["median"]
     assert bounds["decay"]["median"] == 1.0
     assert (prov["set_utc"], prov["set_build"], prov["outcome"]) == (
