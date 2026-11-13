@@ -25,6 +25,7 @@ from corpus import (
     load_corpus,
 )
 from knobs import load_spec_weights
+from loop_record import committed_loop_cells
 from loss import (
     DYN_MIN_VELOCITY_SPREAD,
     KIT_MIN_MEMBERS,
@@ -236,23 +237,24 @@ def has_onset_reference(corpus: Corpus | None, pattern) -> bool:
     )
 
 
-def reference_loop_note(corpus: Corpus | None) -> str | None:
-    """The committed profile's statement that its reference is a bit-exact loop, or None.
+def reference_loop_note(corpus: Corpus | None, pattern) -> str | None:
+    """How many of this probe's reference rows loop and which terms they lose, or None.
 
-    None where there is no committed profile or its capture is not looped, so a capture
-    measured before the loop was recorded fits exactly as it did.
+    The weight is withdrawn per row (`loop_record.mark_loop_rows`), so a capture that is
+    only partly looped keeps the terms on its unlooped rows; this is the line that says so.
+    None where there is no committed profile or no probe row carries an exclusion.
     """
     if corpus is None or not corpus.capture_id:
         return None
-    path = HERE / "reference" / f"{corpus.capture_id}.json"
-    if not path.exists():
+    cells = committed_loop_cells(corpus.capture_id, corpus.timbre)
+    probe = {(n.note, n.velocity) for n in pattern.analysis_notes}
+    hit = {c: cells[c] for c in probe if cells.get(c)}
+    if not hit:
         return None
-    loop = json.loads(path.read_text()).get("loop") or {}
-    if loop.get("status") != "looped":
-        return None
+    terms = sorted({t for v in hit.values() for t in v})
     return (
-        f"{corpus.capture_id}: {loop['looped_rows']} of {loop['tested']} rows repeat exactly, "
-        f"period {loop['period_ms_median']} ms, residual {loop['residual_db_median']} dB"
+        f"{', '.join(terms)} carry no weight on the {len(hit)} of {len(probe)} reference rows "
+        f"of {corpus.capture_id} whose loop makes them read the loop; the other rows keep them"
     )
 
 
@@ -450,9 +452,7 @@ def resolve_probe(args) -> None:
     )
     args.has_level_contrasts = len({(n.note, n.velocity) for n in pattern.analysis_notes}) >= 2
     args.has_onset_reference = has_onset_reference(corpus, pattern)
-    # A looped reference: the terms that read the loop carry no weight (`LOOP_READ_TERMS`).
-    args.loop_note = reference_loop_note(corpus)
-    args.has_loop_free_reference = args.loop_note is None
+    args.loop_note = reference_loop_note(corpus, pattern)
     # Whether any note is held long enough for the aftersound band to have
     # frames in it. Same treatment for the fourth time, and this one is the
     # quietest of the four: `tail` reads a band that opens at 2.0 s, the default
@@ -564,7 +564,6 @@ _PROBE_FLAGS = (
     "has_onset_reference",
     "has_tail_window",
     "has_kit_groups",
-    "has_loop_free_reference",
 )
 
 

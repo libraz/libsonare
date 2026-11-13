@@ -115,7 +115,6 @@ from loss_weights import (
     LossWeights,
     cli_weights,
     dropped_weights,
-    loop_unweighted_terms,
     refused_weights,
     unmeasurable_terms,
 )
@@ -831,10 +830,13 @@ def loss_terms(
                 continue
             totals["harm"] += float(weights[i]) * abs(mh - oh)
             compared += i > 0 and present_m[i] and present_o[i]
-        totals["cents"] += abs(m["f0_cents_err"] - o["f0_cents_err"])
+        # Terms this reference row's loop makes read the loop are skipped on it alone.
+        off = o.get("loop_unweighted") or ()
+        if "cents" not in off:
+            totals["cents"] += abs(m["f0_cents_err"] - o["f0_cents_err"])
         # A model NaN (dropped out where the oracle scored) is charged the cap rather than skipped; an oracle NaN is skipped.
         m_tnr, o_tnr = m["tnr_db"], o["tnr_db"]
-        if math.isfinite(o_tnr):
+        if "tnr" not in off and math.isfinite(o_tnr):
             shortfall = TNR_ABSENT_CAP_DB if not math.isfinite(m_tnr) else max(0.0, o_tnr - m_tnr)
             totals["tnr"] += shortfall
             tnr_notes += shortfall > 0.0
@@ -854,15 +856,19 @@ def loss_terms(
                 model_skeleton.get("init_db"), oracle_skeleton.get("init_db")
             ):
                 totals["init"] += _absent_or(a, b, 12.0, cells["init"])
-            for key in ("early_db_s", "late_db_s"):
+            for key in () if "slope" in off else ("early_db_s", "late_db_s"):
                 for a, b in _reference_indexed_pairs(
                     _limited_cells(model_skeleton.get(key), HARM_REACH),
                     _limited_cells(oracle_skeleton.get(key), HARM_REACH),
                 ):
                     totals["slope"] += _absent_or(a, b, 30.0, cells["slope"], 0.1) / 10.0
-            for a, b in _reference_indexed_pairs(
-                _limited_cells(model_skeleton.get("tail_db_s"), HARM_REACH),
-                _limited_cells(oracle_skeleton.get("tail_db_s"), HARM_REACH),
+            for a, b in (
+                ()
+                if "tail" in off
+                else _reference_indexed_pairs(
+                    _limited_cells(model_skeleton.get("tail_db_s"), HARM_REACH),
+                    _limited_cells(oracle_skeleton.get("tail_db_s"), HARM_REACH),
+                )
             ):
                 totals["tail"] += _absent_or(a, b, TAIL_DELTA_CAP_DB_S, cells["tail"], 0.1) / 10.0
         for a, b in _reference_indexed_pairs(m.get("attack_hf_db"), o.get("attack_hf_db")):
@@ -896,7 +902,14 @@ def loss_terms(
     n = len(model_rows)
     out = {name: totals[name] / n for name in LOSS_TERMS}
     out["mss"] = mss
-    out["mod"], mod_notes = _mod_terms(model_rows, oracle_rows_, cells["mod"])
+    mod_pairs = [
+        (m, o)
+        for m, o in zip(model_rows, oracle_rows_, strict=True)
+        if "mod" not in (o.get("loop_unweighted") or ())
+    ]
+    out["mod"], mod_notes = _mod_terms(
+        [m for m, _ in mod_pairs], [o for _, o in mod_pairs], cells["mod"]
+    )
     out["modes"], modes_notes = _modes_terms(model_rows, oracle_rows_, cells["modes"])
     level_counts: dict[str, float] = {}
     out["level"], out["crest"], offset = _level_terms(model_rows, oracle_rows_, counts=level_counts)

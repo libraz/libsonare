@@ -92,7 +92,7 @@ from capture import (
 )
 from corpus import in_declared_grid, load_corpus
 from floor_declare import record_floors
-from loop_record import loop_summary
+from loop_record import assign_groups, independence_line, loop_summary
 from loss import KIT_MIN_MEMBERS, kit_report
 from metrics import (
     ATTACK_FLOOR_MS,
@@ -561,6 +561,7 @@ def measure(cfg: dict, corpus_dir: Path, out_path: Path) -> int:
         profile["recording_floor"] = recording_floor_by_timbre
     # Absent on a kit, which has no held note to loop; the rows carry the record itself.
     if not percussion:
+        assign_groups(rows)
         profile["loop"] = loop_summary(rows)
     # Absent rather than empty on a reference with no room, so the profile of a
     # dry capture is byte-identical to one measured before this was recorded and
@@ -1704,6 +1705,11 @@ def compare(
         offered_keys, summary, cfg.get("dimensions") or [], cfg.get("dimensions_na") or {}
     )
     layers = layer_summary([r for r in profile["rows"] if r.get("timbre") == timbre])
+    independent = independence_line(
+        [r for r in profile["rows"] if r.get("timbre") == timbre], summary
+    )
+    if independent:
+        print(f"\n  independent readings (stored-waveform groups, not rows): {independent}")
     if any(k in summary for k in VELOCITY_SWING_DIMENSIONS):
         print(
             f"\n  velocity-swing rows read {layers['independent']} independent recordings of "

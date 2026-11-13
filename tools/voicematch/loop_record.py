@@ -11,15 +11,27 @@ Contract: pure functions over a mono segment, no I/O, deterministic.
 
 from __future__ import annotations
 
+import json
+from pathlib import Path
+
 import numpy as np
 
-# Residual of the best frame at lag >= 100 ms: library winds loop at -82..-104 dB, plucked
-# loops at -37..-65, jittered natural sources read -29 dB or worse. -36 keeps the plucked
-# positives and rejects the jittered control (-36..-29 is recorded as borderline).
+# Best-frame residual at lag >= 100 ms. Rows known not to loop reach -33.6 dB at closest
+# (bass_fingered; piano -29.7, electric_guitar_di -31.5, jittered synthetic -29); loops: -36.
+# -36 sits in that 2.4 dB gap; rows in -36..-40 count as looped, -30..-36 are `borderline`.
 LOOPED_BEST_DB = -36.0
-# Median over the frames tried; a loop that only some frames show is not one.
+# Median over the frames whose lag range reaches the best period; a loop only some show is not one.
 LOOPED_MEDIAN_DB = -30.0
+# With fewer such frames a failing median may be the pre-join lead-in outvoting the loop, so it
+# cannot call the row "not". A passing one stands: clarinet n074/n082 are looped at -95..-107 dB
+# on a single reaching frame, and accordion n053 (463 ms in 3 s) has exactly three.
+MIN_REACHABLE_FRAMES = 3
 BORDERLINE_DB = -30.0
+# Between the cut and this residual a row must also repeat at one period: a stable natural
+# source can reach -36..-40 dB at one frame, a loop does at its own period in every frame.
+STRONG_LOOP_DB = -40.0
+PERIOD_AGREEMENT = 0.01
+MIN_AGREEING_FRAMES = 2
 
 TEMPLATE_S = 0.25
 LAG_MIN_S = 0.010
@@ -34,6 +46,7 @@ PERIOD_CANDIDATE_DB = 15.0
 PERIOD_CANDIDATES = 12
 ENVELOPE_FLOOR = 1e-6
 SIGNAL_FLOOR = 1e-5
+LADDER_WINDOW_S = (0.7, 1.9)
 # Join: the 50 ms sliding residual at the period holds this share of the best residual in dB,
 # 95 % of 200 ms; half keeps a -90 dB loop apart from its natural lead-in and a -40 dB one at -20.
 JOIN_DEPTH = 0.5
@@ -88,11 +101,33 @@ TIME_VARYING_DIMENSIONS = (
 SNAPSHOT_DIMENSIONS = ("balance", "centroid_pct", "register", "crest")
 SNAPSHOT_LABEL = "snapshot of one frozen cycle"
 
+#: Measured on unlooped notes (piano, oboe, alto_sax; 7 rows, seam-matched sample-exact loops):
+#: periodising a 100-300 ms stretch moves tnr by -11 to -14 dB and body by +2 to +7 dB (medians),
+#: whatever the line spacing (3 to 10 Hz alike), so long loops do not read as their note.
+PERIODISED_NOTE = (
+    "periodising an unlooped note sample-exactly moved tnr -11..-14 dB "
+    "and body +2..+7 dB at 100-300 ms; open: a seam statistic did not separate loop seams "
+    "from arbitrary boundaries (naive loops 2.5-69, unlooped notes 1.3-6.5), so no row is "
+    "granted a snapshot"
+)
 #: `body` reads 40 Hz to 0.7 f0. One loop line in it is enough: past an exact repeat the sub-f0
 #: power is the cycle-to-cycle difference frozen into the loop, not radiated content.
 BODY_BAND_BOTTOM_HZ = 40.0
 BODY_BAND_TOP = 0.7
 BODY_MIN_LINES = 1
+
+# Harmonic ladder of the cycle: power within +-0.35 f0 of each of the first 20 harmonics, re h1.
+LADDER_HARMONICS = 20
+LADDER_BAND = 0.35
+LADDER_FLOOR_DB = -80.0
+# Notes whose ladders sit this far apart (median over shared velocities, mean |dB| over the
+# harmonics both carry) share a stored waveform. Clarinet pairs read 0.9-3.8 inside a group and
+# 11.0-20.8 across; oboe 0.4-1.0 and 8.1-9.2. 6.0 sits in the empty gap of both.
+GROUP_SAME_DB = 6.0
+# A note is uncertain when any other note sits between these distances: too far to be sure it
+# shares the stored waveform, too near to be sure it does not (the cut is inside the band).
+GROUP_UNCERTAIN_DB = (4.0, 8.0)
+MIN_LADDER_HARMONICS = 4
 
 
 def _slow_envelope_normalised(x: np.ndarray, sr: int, win_s: float = 0.25):
@@ -186,7 +221,7 @@ def _frame(xn: np.ndarray, sr: int, t: int, end: int) -> dict | None:
         if _db_residual(cand_r) <= best_db + PERIOD_TOLERANCE_DB:
             lag, r_short = cand_l, cand_r
             break
-    return {"L": lag, "r": r_short, "r_long": r_long}
+    return {"L": lag, "r": r_short, "r_long": r_long, "l_long": l_long, "lmax": lmax}
 
 
 def _join_s(xn: np.ndarray, sr: int, lag: float, end: int, best_db: float) -> float | None:
@@ -225,6 +260,41 @@ def _db_residual_array(r: np.ndarray) -> np.ndarray:
     return 10 * np.log10(np.maximum(1 - r * r, 1e-12))
 
 
+def held_ladder(held: np.ndarray, sr: int, f0_hz: float) -> list[float | None] | None:
+    """The harmonic ladder of a held note, from 0.7 to 1.9 s after its onset; None if too short.
+
+    The same window and bands for a looped and an unlooped note: a loop's lines carry the
+    ladder of the stored cycle, so a note and its transposition read alike either way.
+    """
+    seg = np.asarray(held[int(LADDER_WINDOW_S[0] * sr) : int(LADDER_WINDOW_S[1] * sr)], float)
+    if seg.size < int(0.5 * sr) or f0_hz <= 0.0:
+        return None
+    power = np.abs(np.fft.rfft(seg * np.hanning(len(seg)))) ** 2
+    return ladder_db(np.fft.rfftfreq(len(seg), 1.0 / sr), power, f0_hz, sr)
+
+
+def ladder_db(freqs: np.ndarray, power: np.ndarray, f0_hz: float, sr: int) -> list[float | None]:
+    """Power around each of the first harmonics of `f0_hz`, dB re the first; None past Nyquist."""
+    out: list[float | None] = []
+    for h in range(1, LADDER_HARMONICS + 1):
+        lo, hi = (h - LADDER_BAND) * f0_hz, (h + LADDER_BAND) * f0_hz
+        p = float(power[(freqs >= lo) & (freqs < hi)].sum()) if hi <= 0.45 * sr else 0.0
+        out.append(10.0 * np.log10(p) if p > 0.0 else None)
+    if out[0] is None:
+        return [None] * LADDER_HARMONICS
+    return [None if v is None else round(v - out[0], 1) for v in out]
+
+
+def ladder_distance(a: list, b: list) -> float | None:
+    """Mean |dB| difference over the harmonics above the first that both ladders carry."""
+    diffs = [
+        abs(x - y)
+        for x, y in zip(a[1:], b[1:], strict=True)
+        if x is not None and y is not None and max(x, y) >= LADDER_FLOOR_DB
+    ]
+    return float(np.mean(diffs)) if len(diffs) >= MIN_LADDER_HARMONICS else None
+
+
 def detect_loop(held: np.ndarray, sr: int) -> dict:
     """The loop record of one held note (from its onset): verdict, period, residual, join.
 
@@ -253,13 +323,32 @@ def detect_loop(held: np.ndarray, sr: int) -> dict:
         }
     best = max(frames, key=lambda f: f["r_long"])
     best_db = _db_residual(best["r_long"])
-    median_db = _db_residual(float(np.median([f["r_long"] for f in frames])))
+    # A frame sees the loop when its lag range holds a multiple of the period of 100 ms or more.
+    need = np.ceil(LAG_LONG_S * sr / best["L"]) * best["L"]
+    reaching = [f for f in frames if f["lmax"] >= need]
+    median_db = _db_residual(float(np.median([f["r_long"] for f in (reaching or frames)])))
     looped = best_db <= LOOPED_BEST_DB and median_db <= LOOPED_MEDIAN_DB
+    if best_db <= LOOPED_BEST_DB and not looped and len(reaching) < MIN_REACHABLE_FRAMES:
+        return {
+            "verdict": VERDICT_NOT_TESTABLE,
+            "reason": f"cannot test: {len(reaching)} frame(s) reach the loop lag of "
+            f"{1000.0 * need / sr:.0f} ms and their median fails; {MIN_REACHABLE_FRAMES} "
+            "are needed to call the row not looped",
+            "residual_db": round(best_db, 1),
+        }
+    agreeing = sum(abs(f["L"] - best["L"]) <= PERIOD_AGREEMENT * best["L"] for f in reaching)
+    unconfirmed = looped and best_db > STRONG_LOOP_DB and agreeing < MIN_AGREEING_FRAMES
+    looped = looped and not unconfirmed
     rec: dict = {
         "verdict": VERDICT_LOOPED if looped else VERDICT_NOT,
         "residual_db": round(best_db, 1),
+        "median_db": round(median_db, 1),
         "frames": len(frames),
+        "reaching_frames": len(reaching),
+        "reach_ms": round(1000.0 * max(f["lmax"] for f in frames) / sr, 1),
     }
+    if unconfirmed:
+        rec["period_agreeing_frames"] = agreeing
     if not looped:
         rec["borderline"] = best_db <= BORDERLINE_DB
         return rec
@@ -296,7 +385,11 @@ def read_to_join_s(rec: dict, capture_id: str | None) -> float | None:
 
 
 def exclusions(
-    rec: dict, *, body_on_lines: bool = False, attack_ms: float | None = None
+    rec: dict,
+    *,
+    body_on_lines: bool = False,
+    attack_ms: float | None = None,
+    body_floor: str | None = None,
 ) -> tuple[dict[str, str], dict[str, dict]]:
     """(excluded, snapshot): per dimension, why a looped note cannot answer it, and what it answers.
 
@@ -311,11 +404,14 @@ def exclusions(
         return {}, {}
     join = rec.get("join_s")
     until = rec.get("read_to_join_s")
+    pitch = rec.get("period_pitch_periods")
+    period = f"loop period {rec['period_ms']} ms" + (
+        f" = {pitch} pitch periods" if pitch is not None else ""
+    )
     where = (
-        f"loop period {rec['period_ms']} ms, exact repetition from {join} s, "
-        f"residual {rec['residual_db']} dB"
+        f"{period}, exact repetition from {join} s, residual {rec['residual_db']} dB"
         if join is not None
-        else f"loop period {rec['period_ms']} ms, residual {rec['residual_db']} dB, no join found"
+        else f"{period}, residual {rec['residual_db']} dB, no join found"
     )
     excluded: dict[str, str] = {}
     snapshot: dict[str, dict] = {}
@@ -329,10 +425,16 @@ def exclusions(
         elif dim == "body":
             # Exact from the window's start, so none of what it reads is the instrument's.
             if body_on_lines and join is not None and join <= start:
-                excluded[dim] = f"sub-f0 power is the loop's subharmonics at 1/period ({where})"
+                lead = (
+                    f"{body_floor} (body-band censor); its loop lines also recur at 1/period"
+                    if body_floor
+                    else "sub-f0 power is the loop's own lines at 1/period"
+                )
+                excluded[dim] = f"{lead} ({where}); {PERIODISED_NOTE}"
         elif past:
             kind = "reads the loop" if dim in LOOP_READ_DIMENSIONS else "time-varying past the join"
-            excluded[dim] = f"{kind} ({where})"
+            note = f"; {PERIODISED_NOTE}" if dim in ("tnr", "body") else ""
+            excluded[dim] = f"{kind} ({where}){note}"
     if attack_ms is not None and (join is None or join <= attack_ms / 1000.0):
         for dim in ONSET_DIMENSIONS:
             excluded[dim] = f"onset is the envelope over the loop ({where})"
@@ -343,7 +445,7 @@ def loop_summary(rows: list[dict]) -> dict:
     """The capture-level loop statement of a reference profile's rows.
 
     `status` is `looped` where 80 % or more of the tested rows loop, `not_looped` at 20 %
-    or less, `mixed` between; the loss reads `looped` only.
+    or less, `mixed` between. Descriptive only: the objective reads each row's own record.
     """
     recs = [r["loop"] for r in rows if isinstance(r.get("loop"), dict)]
     tested = [r for r in recs if r.get("verdict") in (VERDICT_LOOPED, VERDICT_NOT)]
@@ -358,7 +460,13 @@ def loop_summary(rows: list[dict]) -> dict:
         "tested": len(tested),
         "looped_rows": len(looped),
         "borderline_rows": sum(bool(r.get("borderline")) for r in tested),
+        "not_testable_rows": sum(r.get("verdict") == VERDICT_NOT_TESTABLE for r in recs),
+        # Rows that lose objective terms; the other rows of the capture keep them.
+        "unweighted_rows": sum(bool(unweighted_terms(r)) for r in recs),
     }
+    groups = groups_of(rows)
+    if groups:
+        out["groups"] = groups
     if looped:
         joins = [r["join_s"] for r in looped if r.get("join_s") is not None]
         out["period_ms_median"] = round(float(np.median([r["period_ms"] for r in looped])), 3)
@@ -370,6 +478,233 @@ def loop_summary(rows: list[dict]) -> dict:
             for dim, why in (r.get("excluded") or {}).items():
                 union.setdefault(dim, why)
         out["excluded"] = {d: union[d] for d in sorted(union)}
-        out["snapshot"] = {d: {"label": SNAPSHOT_LABEL} for d in SNAPSHOT_DIMENSIONS}
+        # Notes of one stored waveform are one reading of a frozen cycle, so the count that
+        # stands for independent snapshot readings is the groups, not the rows.
+        independent = len(groups_of(rows)) or len(looped)
+        out["snapshot"] = {
+            d: {"label": SNAPSHOT_LABEL, "independent_readings": independent}
+            for d in SNAPSHOT_DIMENSIONS
+        }
         out["body_on_lines_rows"] = sum("body" in (r.get("excluded") or {}) for r in looped)
     return out
+
+
+#: The reference-row field each snapshot dimension is read from.
+DIMENSION_FIELD = {
+    "balance": "partials_db",
+    "centroid_pct": "centroid_hz",
+    "register": "held_peak_dbfs",
+    "stretch": "cents_vs_et",
+    "tnr": "tnr_db",
+    "body": "body_below_f0_db",
+}
+
+REGISTER_FLAG = (
+    "level read across notes that share one stored waveform: the spectrum is one fixed shape "
+    "shifted with pitch, so the register curve over the group is a transposition artefact"
+)
+
+
+def _note_distances(ladders: dict[tuple[int, int], list]) -> dict[tuple[int, int], float]:
+    """Median ladder distance between two notes over the velocities both carry."""
+    notes = sorted({n for n, _ in ladders})
+    out: dict[tuple[int, int], float] = {}
+    for i, a in enumerate(notes):
+        for b in notes[i + 1 :]:
+            shared = [v for n, v in ladders if n == a and (b, v) in ladders]
+            ds = [ladder_distance(ladders[(a, v)], ladders[(b, v)]) for v in shared]
+            ds = [d for d in ds if d is not None]
+            if ds:
+                out[(a, b)] = float(np.median(ds))
+    return out
+
+
+def _cluster_notes(notes: list[int], dist: dict[tuple[int, int], float]) -> list[list[int]]:
+    """Average-link agglomeration of notes, merging while the closest pair is within the cut."""
+    clusters = [[n] for n in notes]
+
+    def link(x: list[int], y: list[int]) -> float | None:
+        ds = [dist.get((min(a, b), max(a, b))) for a in x for b in y]
+        return None if any(d is None for d in ds) else float(np.mean(ds))
+
+    while True:
+        best = None
+        for i, x in enumerate(clusters):
+            for j in range(i + 1, len(clusters)):
+                d = link(x, clusters[j])
+                if d is not None and d <= GROUP_SAME_DB and (best is None or d < best[0]):
+                    best = (d, i, j)
+        if best is None:
+            return sorted(clusters, key=min)
+        _, i, j = best
+        clusters[i] = sorted(clusters[i] + clusters[j])
+        del clusters[j]
+
+
+def assign_groups(rows: list[dict]) -> None:
+    """Give every row that carries a ladder the id of the stored-waveform group of its note.
+
+    Notes whose ladders match (see `GROUP_SAME_DB`) are transpositions of one stored
+    waveform, so they are one reading, not several, looped or not. A note matching no other is
+    its own group. Sets `group` and `group_notes` in the row's `loop` record, a `register`
+    flag on a shared group, and `group_uncertain` (both readings) where another note's ladder
+    sits in the `GROUP_UNCERTAIN_DB` band. Ids run per capture, by lowest note within a timbre.
+    """
+    next_id = 0
+    for timbre in dict.fromkeys(r.get("timbre") for r in rows):
+        mine = [
+            r
+            for r in rows
+            if r.get("timbre") == timbre
+            and isinstance(r.get("loop"), dict)
+            and r["loop"].get("ladder_db")
+        ]
+        ladders = {(r["note"], r["velocity"]): r["loop"]["ladder_db"] for r in mine}
+        notes = sorted({r["note"] for r in mine})
+        dist = _note_distances(ladders)
+        group_of: dict[int, int] = {}
+        members: dict[int, list[int]] = {}
+        for cluster in _cluster_notes(notes, dist):
+            for n in cluster:
+                group_of[n] = next_id
+            members[next_id] = cluster
+            next_id += 1
+        lo, hi = GROUP_UNCERTAIN_DB
+        for r in mine:
+            rec, n = r["loop"], r["note"]
+            g = group_of[n]
+            rec["group"], rec["group_notes"] = g, members[g]
+            to = {m: dist[(min(n, m), max(n, m))] for m in notes if (min(n, m), max(n, m)) in dist}
+            inside = [d for m, d in to.items() if m in members[g]]
+            outside = [d for m, d in to.items() if m not in members[g]]
+            for key in ("group_uncertain", "flagged"):
+                rec.pop(key, None)
+            between = sorted(m for m, d in to.items() if lo <= d <= hi)
+            if between:
+                rec["group_uncertain"] = {
+                    "ambiguous_with": between,
+                    "loosest_inside_db": round(max(inside), 1) if inside else None,
+                    "nearest_outside_db": round(min(outside), 1) if outside else None,
+                    "band_db": list(GROUP_UNCERTAIN_DB),
+                }
+            for entry in (rec.get("snapshot") or {}).values():
+                entry["group"] = g
+            if len(members[g]) > 1:
+                rec["flagged"] = {"register": REGISTER_FLAG}
+
+
+def groups_of(rows: list[dict]) -> dict[str, list[int]]:
+    """The groups of a capture's looped rows: id -> notes."""
+    out: dict[str, list[int]] = {}
+    for r in rows:
+        rec = r.get("loop")
+        if isinstance(rec, dict) and rec.get("group") is not None:
+            out[str(rec["group"])] = rec["group_notes"]
+    return dict(sorted(out.items(), key=lambda kv: int(kv[0])))
+
+
+def independent_count(rows: list[dict], dimension: str) -> int:
+    """How many independent readings of `dimension` the rows hold.
+
+    Notes of one stored-waveform group are one reading however many notes and velocities
+    they cover; a row that is not looped, or looped but ungrouped, is its own. A row whose
+    loop record excludes the dimension carries no reading of it.
+    """
+    field = DIMENSION_FIELD.get(dimension)
+    seen: set = set()
+    alone = 0
+    for r in rows:
+        rec = r.get("loop") if isinstance(r.get("loop"), dict) else {}
+        if (field is not None and r.get(field) is None) or dimension in (rec.get("excluded") or {}):
+            continue
+        if rec.get("group") is not None:
+            seen.add((r.get("timbre"), rec["group"]))
+        else:
+            alone += 1
+    return len(seen) + alone
+
+
+def independence_line(rows: list[dict], dimensions) -> str | None:
+    """`dimension n of m` for each dimension whose reference rows share stored waveforms, else None.
+
+    `n` is `independent_count`, `m` the rows that carry the reading; a dimension is listed
+    only where grouping makes them differ.
+    """
+    parts = []
+    for dim in dimensions:
+        field = DIMENSION_FIELD.get(dim)
+        if field is None:
+            continue
+        have = sum(1 for r in rows if r.get(field) is not None)
+        n = independent_count(rows, dim)
+        if n != have:
+            parts.append(f"{dim} {n} of {have}")
+    return ", ".join(parts) or None
+
+
+def note_groups(rows: list[dict], timbre: str | None = None) -> dict[int, int]:
+    """Note -> stored-waveform group id, from reference rows; notes with no group are absent."""
+    return {
+        r["note"]: r["loop"]["group"]
+        for r in rows
+        if isinstance(r.get("loop"), dict)
+        and r["loop"].get("group") is not None
+        and (timbre is None or r.get("timbre") == timbre)
+    }
+
+
+def committed_note_groups(capture_id: str | None, timbre: str | None = None) -> dict[int, int]:
+    """`note_groups` of the committed reference profile of a capture; empty without one."""
+    if not capture_id:
+        return {}
+    path = Path(__file__).resolve().parent / "reference" / f"{capture_id}.json"
+    if not path.exists():
+        return {}
+    return note_groups(json.loads(path.read_text()).get("rows") or [], timbre)
+
+
+#: The dimension whose exclusion takes each objective term off a row: the term reads what the
+#: dimension reads (`mod` and `slope` follow the decay, `tail` the aftersound).
+LOOP_TERM_DIMENSION = {
+    "cents": "stretch",
+    "tnr": "tnr",
+    "slope": "decay",
+    "tail": "aftersound",
+    "mod": "decay",
+}
+
+
+def unweighted_terms(rec: dict | None) -> list[str]:
+    """The objective terms a row's loop record takes off it, from its own exclusions."""
+    excluded = (rec or {}).get("excluded") or {}
+    return [t for t, dim in LOOP_TERM_DIMENSION.items() if dim in excluded]
+
+
+def committed_loop_cells(capture_id: str | None, timbre: str | None = None) -> dict[tuple, list]:
+    """(note, velocity) -> unweighted terms, from the committed reference profile; empty without."""
+    if not capture_id:
+        return {}
+    path = Path(__file__).resolve().parent / "reference" / f"{capture_id}.json"
+    if not path.exists():
+        return {}
+    return {
+        (r["note"], r["velocity"]): unweighted_terms(r.get("loop"))
+        for r in json.loads(path.read_text()).get("rows") or []
+        if timbre is None or r.get("timbre") == timbre
+    }
+
+
+def mark_loop_rows(rows: list[dict], capture_id: str | None, timbre: str | None = None) -> int:
+    """Set `loop_unweighted` on the oracle rows whose reference row loops; the count marked.
+
+    The loss skips those terms on a marked row and keeps them on every other row, so a
+    capture that is only partly looped is weighted row by row.
+    """
+    cells = committed_loop_cells(capture_id, timbre)
+    marked = 0
+    for r in rows:
+        terms = cells.get((r.get("note"), r.get("velocity")))
+        if terms:
+            r["loop_unweighted"] = terms
+            marked += 1
+    return marked

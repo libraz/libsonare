@@ -351,6 +351,7 @@ from knobs import (
     start_report,
     tunable_overrides,
 )
+from loop_record import committed_note_groups, mark_loop_rows
 from loss import (
     HARM_REACH,
     KIT_MIN_MEMBERS,
@@ -360,7 +361,6 @@ from loss import (
     cli_weights,
     corpus_reading,
     dropped_weights,
-    loop_unweighted_terms,
     measured_terms,
     mss_distance,
     oracle_tnr_masks,
@@ -600,6 +600,8 @@ def oracle_reference(args) -> tuple[list[dict], np.ndarray, np.ndarray | None, f
             f"band profile on BOTH sides",
             file=sys.stderr,
         )
+    if corpus is not None and corpus.capture_id:
+        mark_loop_rows(rows, corpus.capture_id, corpus.timbre)
     return rows, mono, room, edge
 
 
@@ -1454,6 +1456,33 @@ def check_validation_partition(args, corpus=None) -> dict:
     else:
         fit_csv = getattr(args, "notes", "")
         fit = _csv_ints(fit_csv) or {int(note.note) for note in pattern.notes}
+    groups = (
+        committed_note_groups(corpus.capture_id, corpus.timbre) if corpus and not percussive else {}
+    )
+    shared = {
+        n: sorted(m for m in fit if groups.get(m) == groups[n])
+        for n in sorted(held - fit)
+        if n in groups and any(groups.get(m) == groups[n] for m in fit)
+    }
+    if shared:
+        # A note whose stored waveform also voices a fitted note is that note transposed.
+        for n, mates in shared.items():
+            print(
+                f"  held-out note {n} dropped: it shares a stored waveform with fitted "
+                f"note {', '.join(map(str, mates))}, so it is not independent of the fit",
+                file=sys.stderr,
+            )
+        held -= set(shared)
+        args.validate_notes = ",".join(str(n) for n in sorted(held))
+        if not held:
+            return {
+                "status": "independent_missing",
+                "independent": False,
+                "axis": "notes",
+                "held_out": None,
+                "reason": "every held-out note shares a stored waveform with a fitted note",
+                "dropped": shared,
+            }
     overlap = sorted(fit.intersection(held))
     if overlap:
         axis_flag = "--validate-velocities" if percussive else "--validate-notes"
@@ -1470,6 +1499,7 @@ def check_validation_partition(args, corpus=None) -> dict:
         "fit": sorted(fit),
         "held_out": sorted(held),
         "overlap": [],
+        **({"dropped": shared} if shared else {}),
     }
 
 
@@ -2835,14 +2865,8 @@ def run(args, argv: list[str] | None = None) -> int:
             file=sys.stderr,
         )
 
-    looped = loop_unweighted_terms(args)
-    if looped:
-        print(
-            f"  {', '.join(looped)}: carry no weight, because the reference is a sampler's "
-            f"bit-exact loop ({getattr(args, 'loop_note', None) or 'see the reference profile'}) "
-            f"and these read the loop rather than the instrument",
-            file=sys.stderr,
-        )
+    if getattr(args, "loop_note", None):
+        print(f"  {args.loop_note}", file=sys.stderr)
 
     # A catalogue is needed whenever a spec might name a per-program patch field
     # (which has no declaration in src/ to validate against) and always for

@@ -80,6 +80,7 @@ from knobs import (
     load_spec_weights,
     load_start_overrides,
 )
+from loop_record import committed_note_groups
 from objective import objective_digest
 from profile_gate import dimension_floor
 from render_rows import render_rate
@@ -150,10 +151,23 @@ def run_root(digest: str) -> Path:
     return CORPUS_ROOT / "refit" / digest
 
 
-def _split(values: list[int]) -> tuple[list[int], list[int]]:
-    """Alternate entries: training on the even positions, held out on the odd ones."""
+def _split(values: list[int], groups: dict[int, int] | None = None) -> tuple[list[int], list[int]]:
+    """Alternate entries: training on the even positions, held out on the odd ones.
+
+    Given the notes' stored-waveform groups (see `loop_record.assign_groups`) the
+    alternation runs over whole groups, lowest note first, because a note whose group
+    also holds a trained note is a transposition of it and is not held out. A note with
+    no group is a group of one.
+    """
     ordered = sorted(values)
-    return ordered[0::2], ordered[1::2]
+    if not groups:
+        return ordered[0::2], ordered[1::2]
+    ids = {n: groups.get(n, ("alone", n)) for n in ordered}
+    firsts: dict = {}
+    for n in ordered:
+        firsts.setdefault(ids[n], len(firsts))
+    train = [n for n in ordered if firsts[ids[n]] % 2 == 0]
+    return train, [n for n in ordered if firsts[ids[n]] % 2 == 1]
 
 
 def _three(velocities: list[int]) -> list[int]:
@@ -333,7 +347,7 @@ def fit_targets(voice: dict) -> tuple[list[dict], list[dict], bool]:
         if not (corpus / "manifest.json").exists():
             dropped.append({"capture": cap, "reason": "no corpus on this machine", **known})
             continue
-        train, held = _split(raw["notes"])
+        train, held = _split(raw["notes"], committed_note_groups(cap, gate["timbre"]))
         if not held:
             dropped.append({"capture": cap, "reason": "one note: nothing to hold out", **known})
             continue
@@ -426,7 +440,9 @@ def plan(banks: str) -> tuple[list[dict], list[dict]]:
         if not (corpus / "manifest.json").exists():
             skipped.append({"slug": slug, "reason": "no corpus on this machine"})
             continue
-        train, held = _split(raw["notes"])
+        train, held = _split(
+            raw["notes"], committed_note_groups(cap, json.loads(gate.read_text())["timbre"])
+        )
         if not held:
             skipped.append({"slug": slug, "reason": "one note: nothing to hold out"})
             continue

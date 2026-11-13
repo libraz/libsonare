@@ -4,19 +4,28 @@ from __future__ import annotations
 
 import numpy as np
 import pytest
+
 from loop_record import (
     READ_TO_JOIN_CAPTURES,
     SNAPSHOT_LABEL,
     VERDICT_LOOPED,
     VERDICT_NOT,
     VERDICT_NOT_TESTABLE,
+    assign_groups,
     body_loop_lines,
     detect_loop,
     exclusions,
+    independence_line,
+    independent_count,
+    ladder_db,
+    ladder_distance,
     loop_summary,
+    mark_loop_rows,
+    note_groups,
     read_to_join_s,
+    unweighted_terms,
 )
-from loss_weights import LOOP_READ_TERMS, cli_weights, loop_unweighted_terms
+from loss import loss_terms
 from profile_measure import measure_note, reference_loop
 
 SR = 24000
@@ -91,9 +100,17 @@ def test_looped_row_excludes_tnr_stretch_and_time_varying_and_keeps_a_labelled_s
     assert "body" not in excluded  # only where its sub-f0 power is the loop's lines
 
 
+def test_reasons_say_the_period_in_pitch_periods_and_what_periodising_did_to_the_control():
+    rec = {**LOOPED, "period_pitch_periods": 31.4}
+    excluded, _ = exclusions(rec, body_on_lines=True)
+    assert "12.0 ms = 31.4 pitch periods" in excluded["tnr"]
+    assert "tnr -11..-14 dB" in excluded["tnr"] and "body +2..+7 dB" in excluded["body"]
+    assert "pitch periods" not in exclusions(LOOPED)[0]["tnr"]
+
+
 def test_body_is_excluded_only_where_it_sits_on_the_loop_lines():
     excluded, _ = exclusions(LOOPED, body_on_lines=True)
-    assert "subharmonics at 1/period" in excluded["body"]
+    assert "own lines at 1/period" in excluded["body"]
 
 
 def test_a_dimension_read_before_the_join_is_not_excluded():
@@ -152,7 +169,7 @@ def test_a_two_cycle_exact_loop_has_its_body_excluded():
     rec = row["loop"]
     assert rec["verdict"] == VERDICT_LOOPED and rec["join_s"] <= 0.2
     assert rec["body_lines"]["lines_below_f0"] == 1
-    assert "body" in rec["excluded"] and "subharmonics" in rec["excluded"]["body"]
+    assert "body" in rec["excluded"] and "own lines" in rec["excluded"]["body"]
     assert "body_below_f0_db" in row  # still measured; the record says why it is not read
 
 
@@ -183,7 +200,9 @@ def test_capture_summary_names_status_and_the_exclusions_to_write():
     row = {"note": 60, "velocity": 64, "loop": {**LOOPED, "excluded": {"tnr": "x"}, "snapshot": {}}}
     out = loop_summary([row] * 9 + [{"loop": {"verdict": VERDICT_NOT, "residual_db": -20.0}}])
     assert out["status"] == "looped" and out["looped_rows"] == 9 and out["tested"] == 10
+    assert out["not_testable_rows"] == 0 and out["unweighted_rows"] == 9
     assert out["excluded"] == {"tnr": "x"} and out["join_s_median"] == 0.05
+    assert out["snapshot"]["register"]["independent_readings"] == 9  # no groups assigned yet
     assert (
         loop_summary([{"loop": {"verdict": VERDICT_NOT_TESTABLE}}])["status"]
         == VERDICT_NOT_TESTABLE
@@ -228,28 +247,289 @@ def test_read_to_join_stops_the_spectrum_at_the_join_and_the_model_follows_it():
         assert joined[key] == whole[key]
 
 
-class _Args:
-    program = 71
-    percussive = False
-    has_loop_free_reference = True
+def _ladder(slope: float, ripple: float = 0.0) -> list:
+    return [0.0] + [round(slope * h + (ripple if h % 2 else -ripple), 1) for h in range(2, 21)]
 
 
-def test_looped_reference_takes_the_loop_read_terms_out_of_the_objective():
-    args = _Args()
-    free = cli_weights(args)
-    assert {"cents", "tnr"} <= set(free)
-    args.has_loop_free_reference = False
-    weights = cli_weights(args)
-    assert not set(LOOP_READ_TERMS) & set(weights)
-    assert {t: w for t, w in free.items() if t not in LOOP_READ_TERMS} == weights
-    assert {"cents", "tnr"} <= set(loop_unweighted_terms(args))
+def _grouped_rows(table: dict[int, list]) -> list[dict]:
+    rows = []
+    for note, ladder in table.items():
+        for vel in (40, 100):
+            shifted = [
+                None if v is None else round(v - (3.0 if vel == 40 and i else 0.0), 1)
+                for i, v in enumerate(ladder)
+            ]
+            rows.append(
+                {
+                    "timbre": "t",
+                    "note": note,
+                    "velocity": vel,
+                    "loop": {
+                        **LOOPED,
+                        "ladder_db": shifted,
+                        "excluded": {},
+                        "snapshot": {
+                            d: {"label": SNAPSHOT_LABEL}
+                            for d in ("balance", "centroid_pct", "register")
+                        },
+                    },
+                    "held_peak_dbfs": -20.0,
+                    "partials_db": [0.0],
+                    "centroid_hz": 500.0,
+                }
+            )
+    return rows
 
 
-def test_a_named_weight_does_not_bring_a_loop_read_term_back():
-    args = _Args()
-    args.has_loop_free_reference = False
-    args.w_tnr = 3.0
-    assert "tnr" not in cli_weights(args)
-    assert "tnr" in loop_unweighted_terms(args)
-    args.has_loop_free_reference = True
-    assert cli_weights(args)["tnr"] == 3.0 and loop_unweighted_terms(args) == []
+def test_notes_with_matching_ladders_share_a_group_and_the_rest_stand_alone():
+    rows = _grouped_rows(
+        {50: _ladder(-3.0), 54: _ladder(-3.1), 58: _ladder(-3.2), 62: _ladder(-6.0, 4.0)}
+    )
+    assign_groups(rows)
+    assert note_groups(rows) == {50: 0, 54: 0, 58: 0, 62: 1}
+    first = next(r for r in rows if r["note"] == 54)["loop"]
+    assert first["group_notes"] == [50, 54, 58]
+    assert first["snapshot"]["balance"]["group"] == 0
+    assert "register" in first["flagged"] and "transposition" in first["flagged"]["register"]
+    alone = next(r for r in rows if r["note"] == 62)["loop"]
+    assert alone["group_notes"] == [62] and "flagged" not in alone
+
+
+def test_unlooped_rows_are_grouped_by_their_ladders_too():
+    rows = _grouped_rows({50: _ladder(-3.0), 54: _ladder(-3.0), 62: _ladder(-6.0, 4.0)})
+    for r in rows:
+        if r["note"] in (54, 62):
+            r["loop"] = {
+                "verdict": VERDICT_NOT,
+                "residual_db": -20.0,
+                "ladder_db": r["loop"]["ladder_db"],
+            }
+    assign_groups(rows)
+    assert note_groups(rows) == {50: 0, 54: 0, 62: 1}
+    rec = next(r for r in rows if r["note"] == 54)["loop"]
+    assert rec["verdict"] == VERDICT_NOT and rec["group_notes"] == [50, 54]
+    assert "register" in rec["flagged"]
+
+
+def test_a_row_without_a_ladder_gets_no_group():
+    rows = _grouped_rows({50: _ladder(-3.0)})
+    rows.append({"timbre": "t", "note": 70, "velocity": 40, "loop": {"verdict": VERDICT_NOT}})
+    assign_groups(rows)
+    assert note_groups(rows) == {50: 0}
+
+
+def test_a_note_with_a_neighbour_between_4_and_8_db_is_uncertain_with_both_readings():
+    near = _ladder(-3.0 - 0.38)  # mean |dB| 4.2 over h2..h20, inside the cut
+    rows = _grouped_rows({50: _ladder(-3.0), 54: near, 62: _ladder(-3.0 - 2.0)})
+    assign_groups(rows)
+    rec = next(r for r in rows if r["note"] == 54)["loop"]
+    assert rec["group"] == 0 and 50 in rec["group_uncertain"]["ambiguous_with"]
+    assert rec["group_uncertain"]["loosest_inside_db"] >= 4.0
+    assert rec["group_uncertain"]["nearest_outside_db"] > 8.0
+    assert rec["group_uncertain"]["band_db"] == [4.0, 8.0]
+
+
+def test_ladder_distance_ignores_harmonics_missing_or_below_the_floor():
+    a, b = (
+        [0.0, -5.0, -10.0, None, -90.0, -20.0, -30.0],
+        [0.0, -6.0, -12.0, -10.0, -95.0, -20.0, -31.0],
+    )
+    assert ladder_distance(a, b) == pytest.approx((1 + 2 + 0 + 1) / 4)
+
+
+def test_ladder_reads_harmonic_bands_re_the_first():
+    freqs = np.arange(0, 5000.0, 1.0)
+    power = np.zeros_like(freqs)
+    power[220] = 1.0
+    power[440] = 0.1
+    ladder = ladder_db(freqs, power, 220.0, 24000)
+    assert ladder[0] == 0.0 and ladder[1] == pytest.approx(-10.0, abs=0.1) and ladder[2] is None
+
+
+def test_independent_count_is_the_number_of_groups_not_rows():
+    rows = _grouped_rows({50: _ladder(-3.0), 54: _ladder(-3.0), 62: _ladder(-6.0, 4.0)})
+    assign_groups(rows)
+    assert len(rows) == 6
+    assert independent_count(rows, "register") == 2
+    assert independence_line(rows, ("register", "balance")) == "register 2 of 6, balance 2 of 6"
+    rows[0]["loop"]["excluded"] = {"register": "x"}
+    assert independent_count(rows[:1], "register") == 0
+    plain = [{"note": 60, "velocity": 64, "held_peak_dbfs": -20.0}] * 3
+    assert (
+        independent_count(plain, "register") == 3
+        and independence_line(plain, ("register",)) is None
+    )
+
+
+def test_refit_holds_out_whole_groups_and_keeps_the_plain_alternation_without_them():
+    from refit import _split
+
+    notes = [50, 54, 58, 62, 66, 70, 74, 78, 82, 86]
+    groups = {50: 0, 54: 0, 58: 0, 62: 1, 66: 1, 70: 2, 74: 2, 78: 3, 82: 3, 86: 3}
+    train, held = _split(notes, groups)
+    assert train == [50, 54, 58, 70, 74] and held == [62, 66, 78, 82, 86]
+    assert not {groups[n] for n in train} & {groups[n] for n in held}
+    assert _split(notes) == (notes[0::2], notes[1::2])
+    assert _split([50, 60, 70], {50: 0}) == ([50, 70], [60])  # ungrouped notes stand alone
+
+
+def test_a_held_out_note_sharing_a_group_with_a_fitted_note_is_dropped_with_its_reason(
+    monkeypatch, capsys
+):
+    import autofit
+
+    monkeypatch.setattr(autofit, "committed_note_groups", lambda *_: {50: 0, 54: 0, 62: 1})
+    corpus = type("C", (), {"capture_id": "x", "timbre": "t", "groups": {}})()
+    monkeypatch.setattr(autofit, "_score", lambda *a, **k: (None, None, None))
+    args = type("A", (), {})()
+    args.percussive, args.program, args.pattern = False, 71, "corpus"
+    args.notes, args.validate_notes = "50", "54,62"
+    args.velocities = ""
+    pattern = type("P", (), {"notes": [], "analysis_notes": []})()
+    monkeypatch.setattr(autofit, "_score", lambda *a, **k: (pattern, None, None))
+    out = autofit.check_validation_partition(args, corpus)
+    assert (
+        out["status"] == "independent" and out["held_out"] == [62] and out["dropped"] == {54: [50]}
+    )
+    assert args.validate_notes == "62"
+    assert "held-out note 54 dropped" in capsys.readouterr().err
+    args.validate_notes = "54"
+    gone = autofit.check_validation_partition(args, corpus)
+    assert gone["status"] == "independent_missing" and "stored waveform" in gone["reason"]
+
+
+def test_summary_counts_snapshot_readings_as_groups_not_rows():
+    rows = _grouped_rows({50: _ladder(-3.0), 54: _ladder(-3.0), 62: _ladder(-6.0, 4.0)})
+    assign_groups(rows)
+    out = loop_summary(rows)
+    assert out["groups"] == {"0": [50, 54], "1": [62]}
+    assert out["snapshot"]["crest"]["independent_readings"] == 2
+
+
+def _long_loop(period_s: float, join_s: float, seconds: float = 3.0) -> np.ndarray:
+    rng = np.random.default_rng(21)
+    n = int(seconds * SR)
+    cycle = sum(
+        np.sin(2 * np.pi * 220.0 * k * np.arange(int(period_s * SR)) / SR + k) / k
+        for k in range(1, 6)
+    )
+    cycle = cycle + 0.05 * rng.standard_normal(len(cycle))
+    out = np.tile(cycle, n // len(cycle) + 1)[:n]
+    head = int(join_s * SR)
+    out[:head] = rng.standard_normal(head) * 0.3
+    return 0.2 * out
+
+
+def test_a_463_ms_loop_in_a_three_second_note_is_looped_despite_frames_that_cannot_reach_it():
+    """accordion n053: -64 dB at its best frame, but only three frames reach a 463 ms lag."""
+    rec = detect_loop(_long_loop(0.463, 0.5), SR)
+    assert rec["verdict"] == VERDICT_LOOPED and rec["reaching_frames"] == 3
+    assert rec["period_ms"] == pytest.approx(463.0, abs=1.0)
+
+
+def test_one_reaching_frame_that_fails_cannot_call_the_row_not_looped():
+    rec = detect_loop(_long_loop(0.6, 0.5), SR)  # the frames that reach straddle the join
+    assert rec["verdict"] == VERDICT_NOT_TESTABLE and "cannot test" in rec["reason"]
+
+
+def test_one_reaching_frame_that_passes_is_enough_to_call_it_looped():
+    rec = detect_loop(_long_loop(0.7, 0.2), SR)
+    assert rec["verdict"] == VERDICT_LOOPED and rec["reaching_frames"] == 1
+
+
+def test_a_stable_natural_source_stays_not_with_the_reaching_median():
+    assert detect_loop(_natural(), SR)["verdict"] == VERDICT_NOT
+
+
+def test_a_row_loses_the_terms_its_own_exclusions_name():
+    assert unweighted_terms({"excluded": {"stretch": "x", "tnr": "x", "decay": "x"}}) == [
+        "cents",
+        "tnr",
+        "slope",
+        "mod",
+    ]
+    assert unweighted_terms({"excluded": {"damper": "x"}}) == []
+    assert unweighted_terms(None) == []
+
+
+def _loss_row(note: int, cents: float, tnr: float, **extra) -> dict:
+    from test_loss_sidedness import BASE, _row
+
+    row = _row(BASE, note, 64)
+    row.update(f0_cents_err=cents, tnr_db=tnr, **extra)
+    return row
+
+
+def test_the_loss_skips_the_terms_on_a_looped_row_and_keeps_them_on_an_unlooped_one():
+    model = [_loss_row(60, 0.0, 30.0), _loss_row(64, 0.0, 30.0)]
+    oracle = [_loss_row(60, 7.0, 45.0), _loss_row(64, 7.0, 45.0)]
+    both = loss_terms(model, oracle)
+    oracle[0]["loop_unweighted"] = ["cents", "tnr"]
+    one = loss_terms(model, oracle)
+    assert both["cents"] == pytest.approx(7.0) and one["cents"] == pytest.approx(3.5)
+    assert both["tnr"] == pytest.approx(15.0) and one["tnr"] == pytest.approx(7.5)
+    for o in oracle:
+        o["loop_unweighted"] = ["cents", "tnr"]
+    none = loss_terms(model, oracle)
+    assert none["cents"] == 0.0 and none["tnr"] == 0.0 and none["harm"] == both["harm"]
+
+
+def test_mark_loop_rows_marks_only_the_rows_whose_reference_loops(monkeypatch):
+    import loop_record
+
+    monkeypatch.setattr(
+        loop_record,
+        "committed_loop_cells",
+        lambda *_: {(60, 64): ["cents", "tnr"], (64, 64): []},
+    )
+    rows = [
+        {"note": 60, "velocity": 64},
+        {"note": 64, "velocity": 64},
+        {"note": 70, "velocity": 64},
+    ]
+    assert mark_loop_rows(rows, "x", "t") == 1
+    assert rows[0]["loop_unweighted"] == ["cents", "tnr"] and "loop_unweighted" not in rows[1]
+
+
+def test_a_weak_loop_must_repeat_at_one_period_in_two_frames_and_a_strong_one_need_not():
+    import loop_record as lr
+
+    def frames(periods, r_long):
+        return [
+            {"L": p, "r": r_long, "r_long": r_long, "l_long": 3000.0, "lmax": 90000, "t": 9600}
+            for p in periods
+        ]
+
+    sr = SR
+    x = np.zeros(3 * sr) + 0.1
+    for r, periods, verdict in (
+        (0.99989, (5000.0, 5020.0, 7777.0), VERDICT_LOOPED),  # -36.5 dB, two agree within 1 %
+        (0.99989, (5000.0, 6100.0, 7777.0), VERDICT_NOT),  # -36.5 dB, none agree
+        (0.99999, (5000.0, 6100.0, 7777.0), VERDICT_LOOPED),  # -47 dB, unaffected
+    ):
+        seq = iter(frames(periods, r))
+        orig = lr._frame
+        lr._frame = lambda *a, seq=seq, **k: next(seq, None)
+        try:
+            rec = detect_loop(x + 0.01 * np.random.default_rng(1).standard_normal(x.size), sr)
+        finally:
+            lr._frame = orig
+        assert rec["verdict"] == verdict, (r, periods, rec)
+        if verdict == VERDICT_NOT:
+            assert rec["borderline"] and rec["period_agreeing_frames"] == 1
+
+
+def test_the_open_seam_question_is_in_every_tnr_and_body_reason():
+    excluded, _ = exclusions({**LOOPED, "period_pitch_periods": 31.0}, body_on_lines=True)
+    for dim in ("tnr", "body"):
+        assert "open: a seam statistic did not separate" in excluded[dim]
+
+
+def test_a_body_at_the_recording_floor_keeps_the_censors_reason_first():
+    excluded, _ = exclusions(
+        LOOPED, body_on_lines=True, body_floor="reference band at its recorded floor, flat"
+    )
+    assert excluded["body"].startswith(
+        "reference band at its recorded floor, flat (body-band censor)"
+    )
+    assert "loop lines also recur" in excluded["body"]

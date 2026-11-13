@@ -12,6 +12,7 @@ from loop_record import (
     body_loop_lines,
     detect_loop,
     exclusions,
+    held_ladder,
     read_to_join_s,
 )
 from metrics import (
@@ -43,7 +44,7 @@ from metrics import (
     to_mono,
     tone_to_noise_db,
 )
-from metrics_floor import partial_clearance, recording_floor, valley_profile
+from metrics_floor import body_floor_state, partial_clearance, recording_floor, valley_profile
 from metrics_lines import (
     BODY_LINE_MISSED_REASON,
     BODY_LINES_REASON,
@@ -1000,6 +1001,9 @@ def measure_note(
     if width is not None:
         row["stereo_width"] = width
     if measured_loop and loop_rec.get("verdict") == VERDICT_LOOPED:
+        loop_rec["period_pitch_periods"] = round(
+            loop_rec["period_ms"] * float(row["f0_hz"]) / 1000.0, 1
+        )
         lines = (
             body_loop_lines(float(row["f0_hz"]), loop_rec["period_ms"])
             if body is not None
@@ -1008,8 +1012,15 @@ def measure_note(
         if lines is not None:
             loop_rec["body_lines"] = lines
         loop_rec["excluded"], loop_rec["snapshot"] = exclusions(
-            loop_rec, body_on_lines=bool(lines and lines["on_lines"]), attack_ms=row["attack_ms"]
+            loop_rec,
+            body_on_lines=bool(lines and lines["on_lines"]),
+            attack_ms=row["attack_ms"],
+            body_floor=body_floor_state(row),
         )
+    if measured_loop:
+        ladder = held_ladder(held, sr, midi_to_hz(note))
+        if ladder is not None:
+            loop_rec["ladder_db"] = ladder
     row["loop"] = loop_rec
     return row
 
