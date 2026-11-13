@@ -73,10 +73,18 @@ def save(entries: list[dict], path: Path = EQUIVALENCES_PATH) -> None:
     path.write_text(json.dumps({"_": DOC, "equivalences": entries}, indent=2) + "\n")
 
 
-def equivalent_digests(digest: str, path: Path = EQUIVALENCES_PATH) -> set[str]:
-    """Every other digest reachable from `digest` through recorded pairs."""
+def equivalent_digests(
+    digest: str, path: Path = EQUIVALENCES_PATH, weights: dict[str, float] | None = None
+) -> set[str]:
+    """Every other digest reachable from `digest` through recorded pairs.
+
+    A pair whose later tree added a terms key holds only for a fit that put no
+    weight on that key: given the fit's own @p weights, such a pair is not walked.
+    """
     edges: dict[str, set[str]] = {}
     for e in load(path):
+        if weights and any(weights.get(k, 0.0) > 0.0 for k in e.get("added_keys", ())):
+            continue
         edges.setdefault(e["a"], set()).add(e["b"])
         edges.setdefault(e["b"], set()).add(e["a"])
     seen = {digest}
@@ -102,6 +110,8 @@ def record(result: dict, path: Path = EQUIVALENCES_PATH) -> dict:
         "a_commit": result["a_commit"],
         "b_commit": result["b_commit"],
         "proved_utc": datetime.datetime.now(tz=datetime.UTC).strftime("%Y-%m-%dT%H:%M:%SZ"),
+        # Terms keys only the later tree reports: a fit weighing one is not covered.
+        "added_keys": sorted(result["terms"].get("added_keys") or []),
         "evidence": {
             "reextract": {k: v for k, v in result["reextract"].items() if k != "passed"},
             "terms": {k: v for k, v in result["terms"].items() if k != "passed"},
@@ -200,6 +210,7 @@ def compare_terms(a: dict, b: dict) -> dict:
         "different": len(diffs),
         "additions": added[:MAX_LISTED],
         "added": len(added),
+        "added_keys": sorted({k.rpartition(".")[2] for k in added}),
     }
 
 

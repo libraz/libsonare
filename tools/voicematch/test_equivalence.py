@@ -182,3 +182,30 @@ def test_an_unweighted_key_the_later_tree_adds_is_an_addition():
     assert not equivalence.compare_terms(a, moved)["passed"]
     # A key the later tree drops is a difference.
     assert not equivalence.compare_terms(b, a)["passed"]
+
+
+def test_a_fit_weighing_an_added_key_is_not_covered(monkeypatch):
+    """The addition allowance holds only for fits that put no weight on the added key."""
+    import fits
+
+    pairs = [{"a": "old", "b": "new", "added_keys": ["harm_uncapped"]}]
+    monkeypatch.setattr(equivalence, "load", lambda path=None: pairs)
+    assert equivalence.equivalent_digests("new") == {"old"}
+    assert equivalence.equivalent_digests("new", weights={"harm": 1.0}) == {"old"}
+    assert equivalence.equivalent_digests("new", weights={"harm_uncapped": 1.0}) == set()
+    plain = {"objective": "old", "date": "2026-11-01", "outcome": "kept"}
+    weighing = {**plain, "weights": {"harm_uncapped": 0.5}}
+    assert fits.axis(["u"], {"u": plain}, "new")["state"] == fits.EQUIVALENT
+    assert fits.axis(["u"], {"u": weighing}, "new")["state"] == fits.STALE
+
+
+def test_a_recorded_fit_keeps_the_weights_it_ran_under():
+    import fits
+
+    report = {
+        "objective": "d",
+        "knobs": [{"key": "piano.x"}],
+        "fit_profile": {"weights": {"harm": 1.0, "lf": 0.0}},
+    }
+    _unit, entry = fits.record_fit(report, capture="c", timbre="t", outcome="kept", today="x")
+    assert entry["weights"] == {"harm": 1.0}

@@ -88,6 +88,10 @@ def record_fit(
         entry["reason"] = reason
     if bank_generation:
         entry["bank_generation"] = bank_generation
+    # The terms the fit weighed, so an equivalence that added a key it weighs does not cover it.
+    weights = (report.get("fit_profile") or {}).get("weights")
+    if weights:
+        entry["weights"] = {k: v for k, v in sorted(weights.items()) if v}
     return unit_of(report), entry
 
 
@@ -101,12 +105,17 @@ def axis(
     """
     if not units:
         return {"state": NONE}
-    if equivalents is None:
-        equivalents = equivalence.equivalent_digests(digest)
     entries = [fits.get(u) for u in units]
+
+    def covered(e: dict) -> bool:
+        if e.get("weights"):
+            return e["objective"] in equivalence.equivalent_digests(digest, weights=e["weights"])
+        pool = equivalents if equivalents is not None else equivalence.equivalent_digests(digest)
+        return e["objective"] in pool
+
     if any(e is None for e in entries):
         state = NONE
-    elif any(e["objective"] != digest and e["objective"] not in equivalents for e in entries):
+    elif any(e["objective"] != digest and not covered(e) for e in entries):
         state = STALE
     elif any(e["objective"] != digest for e in entries):
         state = EQUIVALENT
