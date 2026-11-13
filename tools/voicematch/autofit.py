@@ -1888,35 +1888,57 @@ def capture_label(corpus: Corpus) -> str:
     return f"{corpus.capture_id or Path(corpus.root).name}:{corpus.timbre}"
 
 
+def _spec_layers(args) -> tuple[dict[str, str], list[str]]:
+    """Every named capture by label with its layer, and the labels with no `source_class` declared.
+
+    The layer is `policy.capture_layer` over the capture definition's `source_class`; a
+    capture with no definition or no declared class is unclassified, so it is off-layer
+    wherever the slot is aimed, and is the second list.
+    """
+    specs = capture_specs(args)
+    classes = {c.id: c.source_class for c in bank.captures()}
+    kit = getattr(args, "drum_note", None) is not None
+    bank_no = getattr(args, "bank", 0)
+    layers, undeclared = {}, []
+    for spec in specs:
+        corpus = load_corpus(spec.path, spec.timbre)
+        label = capture_label(corpus)
+        source_class = classes.get(corpus.capture_id)
+        layers[label] = policy.capture_layer(source_class, args.program, bank_no, kit=kit)
+        if not source_class and policy.slot_is_aimed(args.program, bank_no, kit):
+            undeclared.append(label)
+    return layers, undeclared
+
+
 def capture_layers(args) -> dict[str, str]:
     """Each capture of a joint fit by label: `wanted` or `off-layer` for the slot being fitted.
 
-    The layer is `policy.capture_layer` over the capture definition's `source_class`; a
-    capture with no definition is unclassified, so it is off-layer. Empty for a single capture.
+    Empty for a single capture.
     """
-    specs = capture_specs(args)
-    if len(specs) < 2:
-        return {}
-    classes = {c.id: c.source_class for c in bank.captures()}
-    out = {}
-    for spec in specs:
-        corpus = load_corpus(spec.path, spec.timbre)
-        out[capture_label(corpus)] = policy.capture_layer(
-            classes.get(corpus.capture_id),
-            args.program,
-            getattr(args, "bank", 0),
-            kit=getattr(args, "drum_note", None) is not None,
-        )
-    return out
+    layers, _ = _spec_layers(args)
+    return layers if len(layers) > 1 else {}
+
+
+def provisional_oracle(args) -> list[str]:
+    """The captures a fit is scored against when none of them is on the slot's wanted layer."""
+    layers, _ = _spec_layers(args)
+    if layers and all(layer == policy.LAYER_OFF for layer in layers.values()):
+        return list(layers)
+    return []
 
 
 def check_capture_layers(args) -> dict[str, str]:
     """Refuse a hand-listed joint fit over an off-layer capture unless `--allow-off-layer` is given.
 
     An off-layer capture is a comparison, not a fit target: its source class is not the one
-    `policy.json` aims this slot at. Returns the layers by capture label for the records.
+    `policy.json` aims this slot at. A capture with no declared class is named at the start.
+    Returns the layers by capture label for the records.
     """
-    layers = capture_layers(args)
+    layers, undeclared = _spec_layers(args)
+    for label in undeclared:
+        print(policy.undeclared_line(label), file=sys.stderr)
+    if len(layers) < 2:
+        return {}
     off = [label for label, layer in layers.items() if layer == policy.LAYER_OFF]
     if not off:
         return layers
@@ -1963,6 +1985,12 @@ def partition_joint(
             for label, p in zip(labels, parts)
         ],
     }
+
+
+def _provisional_record(args) -> dict:
+    """`provisional_off_layer` and its oracle when no capture of the fit is on the wanted layer."""
+    oracle = provisional_oracle(args)
+    return {"provisional_off_layer": True, "provisional_oracle": oracle} if oracle else {}
 
 
 def _layer_of(cap: Capture) -> dict:
@@ -3152,6 +3180,7 @@ def run(args, argv: list[str] | None = None) -> int:
             "clamp_bounds": clamp_bounds,
             "prefit": prefit,
             "corpora": corpora_record(captures),
+            **_provisional_record(args),
             "captures": [
                 {
                     **record,

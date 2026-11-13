@@ -686,6 +686,11 @@ def next_action(axes: dict, stage: int, candidates: list[str]) -> str:
         return "; ".join(parts)
     fit = axes.get("fit") or {}
     fit_ok = fit.get("state") in (fits_mod.CURRENT, fits_mod.EQUIVALENT)
+    if stage in (3, 4) and fit.get("fittable") and fit.get("state") == fits_mod.OFF_LAYER:
+        return (
+            f"{fit['note']} ({', '.join(fit['oracle'])}): capture the wanted layer, "
+            f"then refit: refit.py"
+        )
     if stage in (3, 4) and fit.get("fittable") and fit.get("state") == fits_mod.UNDER_BASE:
         return (
             f"the last fit stood on base overrides ({'; '.join(fit['base_overrides'])}): "
@@ -923,11 +928,14 @@ def render_table(rows: list[dict], *, every: bool, pol: dict, goal: str | None =
         equivalent = sum(f["state"] == fits_mod.EQUIVALENT for f in fit_states)
         stale = sum(f["state"] == fits_mod.STALE for f in fit_states)
         based = sum(f["state"] == fits_mod.UNDER_BASE for f in fit_states)
+        provisional = sum(f["state"] == fits_mod.OFF_LAYER for f in fit_states)
         print(
             f"  fits under the current objective: {current} of {len(fit_states)} fittable "
             f"voice(s); {equivalent} under a proven-equivalent objective, {stale} stale, "
             + (f"{based} under uncommitted base overrides, " if based else "")
-            + f"{len(fit_states) - current - equivalent - stale - based} never recorded"
+            + (f"{provisional} provisional (off-layer oracle), " if provisional else "")
+            + f"{len(fit_states) - current - equivalent - stale - based - provisional} "
+            f"never recorded"
         )
     census = signoff_census(rows)
     if census["structure"] or census["music"]:

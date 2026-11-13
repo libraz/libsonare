@@ -895,3 +895,203 @@ def test_every_per_capture_entry_carries_its_layer(tmp_path, monkeypatch):
     caps[0].layer, caps[1].layer = "wanted", "off-layer"
     result = validate_joint(caps, None, [KNOB], START, [0.2])
     assert [p["layer"] for p in result["per_capture"]] == ["wanted", "off-layer"]
+
+
+# --------------------------------------------------------------------------- #
+# a voice whose own capture is off-layer
+# --------------------------------------------------------------------------- #
+def _plan_world(tmp_path, monkeypatch, classes, *, own="own"):
+    """A one-voice status table (program 0, slot aimed at the instrument) over @p classes.
+
+    @p classes maps capture id to source class; every capture has a definition, a gate and a
+    corpus, and all of them reach the voice's patch.
+    """
+    _layer_world(tmp_path, monkeypatch, classes)
+    ref = tmp_path / "ref"
+    ref.mkdir()
+    for cap in classes:
+        (ref / f"{cap}_gate.json").write_text(json.dumps({"timbre": "t0"}))
+    status_file = tmp_path / "voice-status.json"
+    status_file.write_text(
+        json.dumps(
+            {
+                "voices": [
+                    {
+                        "slug": "p000",
+                        "program": 0,
+                        "bank": 0,
+                        "kit": False,
+                        "patch": "grand",
+                        "capture": own,
+                    }
+                ]
+            }
+        )
+    )
+    monkeypatch.setattr(refit, "STATUS", status_file)
+    monkeypatch.setattr(refit, "REFERENCE_DIR", ref)
+    monkeypatch.setattr(
+        refit.bank,
+        "captures",
+        lambda: [argparse.Namespace(id=c, source_class=s) for c, s in classes.items()],
+    )
+    monkeypatch.setattr(
+        refit.boundary, "reference_boundary", lambda *a, **k: refit.boundary.BOUNDARY_INSTRUMENT
+    )
+    monkeypatch.setattr(
+        refit,
+        "capital_gates",
+        lambda *a, **k: [
+            {"capture": c, "gate": str(ref / f"{c}_gate.json"), "timbre": "t0", "patch": "grand"}
+            for c in sorted(classes, key=lambda c: c != own)
+        ],
+    )
+    monkeypatch.setattr(refit, "JOINT", False)
+    monkeypatch.setattr(refit, "ALLOW_OFF_LAYER", False)
+
+
+def test_an_off_layer_own_capture_is_compared_and_the_on_layer_sibling_is_fitted(
+    tmp_path, monkeypatch
+):
+    _plan_world(tmp_path, monkeypatch, {"own": "module", "lib": "library"})
+    todo, skipped = refit.plan("capitals")
+    assert skipped == [] and len(todo) == 1
+    voice = todo[0]
+    assert [p["capture"] for p in voice["fit_on"]] == ["lib"]
+    assert voice["joint_dropped"][0]["capture"] == "own"
+    assert voice["joint_dropped"][0]["reason"].startswith("comparison (off-layer)")
+    assert "provisional_off_layer" not in voice
+    # The fit names the sibling's corpus and cuts; the own capture is still judged by the gates.
+    seen = []
+    monkeypatch.setattr(
+        refit.subprocess,
+        "run",
+        lambda cmd, **k: (seen.append(cmd), (tmp_path / "fit.json").write_text("{}")),
+    )
+    monkeypatch.setattr(refit, "_check_pin", lambda: None)
+    refit._fit(voice, tmp_path / "fit.json", "build", 12)
+    cmd = seen[0]
+    assert cmd[cmd.index("--corpus") + 1] == str(tmp_path / "scratch" / "capture" / "lib")
+    assert cmd[cmd.index("--notes") + 1] == ",".join(map(str, voice["fit_on"][0]["notes"]))
+    assert "--allow-off-layer" not in cmd
+    assert [g["capture"] for g in voice["gates"]] == ["own", "lib"]
+
+
+def test_joint_mode_fits_the_on_layer_siblings_together_and_compares_the_own(tmp_path, monkeypatch):
+    _plan_world(tmp_path, monkeypatch, {"own": "module", "a": "library", "b": "dedicated"})
+    monkeypatch.setattr(refit, "JOINT", True)
+    voice = refit.plan("capitals")[0][0]
+    assert (
+        [p["capture"] for p in voice["joint"]]
+        == ["a", "b"]
+        == [p["capture"] for p in voice["fit_on"]]
+    )
+    assert voice["joint_dropped"][0]["capture"] == "own"
+
+
+def test_a_voice_with_no_on_layer_capture_is_refused_and_runs_with_the_flag(tmp_path, monkeypatch):
+    _plan_world(tmp_path, monkeypatch, {"own": "module", "also": "module"})
+    todo, skipped = refit.plan("capitals")
+    assert todo == []
+    assert skipped == [
+        {
+            "slug": "p000",
+            "reason": "no on-layer reference for this voice: wanted instrument, have module",
+        }
+    ]
+    monkeypatch.setattr(refit, "ALLOW_OFF_LAYER", True)
+    todo, skipped = refit.plan("capitals")
+    assert skipped == []
+    voice = todo[0]
+    assert voice["provisional_off_layer"] is True and voice["provisional_oracle"] == ["own"]
+    seen = []
+    monkeypatch.setattr(
+        refit.subprocess,
+        "run",
+        lambda cmd, **k: (seen.append(cmd), (tmp_path / "fit.json").write_text("{}")),
+    )
+    monkeypatch.setattr(refit, "_check_pin", lambda: None)
+    refit._fit(voice, tmp_path / "fit.json", "build", 12)
+    assert "--allow-off-layer" in seen[0]
+    assert seen[0][seen[0].index("--corpus") + 1] == voice["corpus"]
+
+
+def test_an_on_layer_capture_that_cannot_be_fitted_is_not_a_license_to_fit_off_layer(
+    tmp_path, monkeypatch
+):
+    _plan_world(tmp_path, monkeypatch, {"own": "module", "lib": "library"})
+    for f in (tmp_path / "scratch" / "capture" / "lib").iterdir():
+        f.unlink()
+    monkeypatch.setattr(refit, "ALLOW_OFF_LAYER", True)
+    todo, skipped = refit.plan("capitals")
+    assert todo == [] and "cannot be fitted" in skipped[0]["reason"]
+
+
+def test_the_record_carries_the_provisional_flag_and_names_the_oracle():
+    report_ = {
+        "objective": "d",
+        "knobs": [{"key": "grand.x"}],
+        "provisional_off_layer": True,
+        "provisional_oracle": ["own:t0"],
+    }
+    unit, entry = fits.record_fit(report_, capture="own", timbre="t0", outcome="adopted")
+    assert unit == "grand"
+    assert entry["provisional_off_layer"] is True and entry["provisional_oracle"] == ["own:t0"]
+    plain = {"objective": "d", "knobs": [{"key": "grand.x"}]}
+    assert (
+        "provisional_off_layer"
+        not in fits.record_fit(plain, capture="own", timbre="t0", outcome="adopted")[1]
+    )
+
+
+def test_the_fit_axis_shows_a_provisional_fit_as_its_own_state():
+    entry = {
+        "objective": "d",
+        "date": "2026-01-01",
+        "outcome": "adopted",
+        "capture": "own",
+        "timbre": "t0",
+        "provisional_off_layer": True,
+        "provisional_oracle": ["own:t0"],
+        "base_overrides": "e.k=1",
+    }
+    got = fits.axis(["grand"], {"grand": entry}, "d", set())
+    assert got["state"] == fits.OFF_LAYER
+    assert got["note"] == "provisional: fitted against an off-layer oracle"
+    assert got["oracle"] == ["own:t0"]
+    # A fit under another objective is stale whatever it was fitted against.
+    assert fits.axis(["grand"], {"grand": entry}, "new", set())["state"] == fits.STALE
+
+
+def test_the_report_of_a_fit_against_off_layer_captures_only_is_provisional(tmp_path, monkeypatch):
+    _aim(monkeypatch)
+    _serve_definitions(monkeypatch, {"mod": "module"})
+    single = _hand_listed(tmp_path, {"mod": "module"})
+    assert autofit.provisional_oracle(single) == ["mod:t"]
+    assert autofit._provisional_record(single) == {
+        "provisional_off_layer": True,
+        "provisional_oracle": ["mod:t"],
+    }
+    _serve_definitions(monkeypatch, {"lib": "library", "mod": "module"})
+    assert autofit.provisional_oracle(_hand_listed(tmp_path, {"lib": 0, "mod": 0})) == []
+
+
+def test_a_capture_with_no_declared_class_is_named_at_the_start_of_an_autofit(
+    tmp_path, monkeypatch, capsys
+):
+    classes = {"lib": "library", "bare": None}
+    _aim(monkeypatch)
+    _serve_definitions(monkeypatch, classes)
+    args = _hand_listed(tmp_path, classes, allow_off_layer=True)
+    autofit.check_capture_layers(args)
+    assert "bare:t: no source_class declared: treated as off-layer" in capsys.readouterr().err
+    # A slot aimed at nothing leaves nothing off-layer, so nothing is said.
+    monkeypatch.setattr(policy, "load", lambda path=None: {})
+    autofit.check_capture_layers(args)
+    assert "no source_class declared" not in capsys.readouterr().err
+
+
+def test_a_capture_with_no_declared_class_is_named_at_the_start_of_a_refit(tmp_path, monkeypatch):
+    _plan_world(tmp_path, monkeypatch, {"own": "library", "bare": None, "ok": "library"})
+    todo, _ = refit.plan("capitals")
+    assert refit.undeclared_lines(todo) == ["bare: no source_class declared: treated as off-layer"]

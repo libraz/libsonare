@@ -652,6 +652,14 @@ def report_result(knobs, pristine, best_values, evaluator, args, extra=None) -> 
                 for i, loss, stage, vals in getattr(evaluator, "path", [])
             ],
             "corpora": extra.get("corpora") or [],
+            **(
+                {
+                    "provisional_off_layer": True,
+                    "provisional_oracle": extra.get("provisional_oracle") or [],
+                }
+                if extra.get("provisional_off_layer")
+                else {}
+            ),
             **({"per_capture": capture_rows} if capture_rows is not None else {}),
             "validation": extra.get("validation"),
             "validation_partition": extra.get("validation_partition"),

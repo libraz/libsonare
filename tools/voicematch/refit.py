@@ -265,18 +265,16 @@ def capital_gates(
     return sorted(found, key=lambda g: g["capture"] != own)
 
 
-def joint_captures(voice: dict) -> tuple[list[dict], list[dict]]:
-    """The captures a joint fit of this voice is scored against, and those it had to leave out.
+def fit_targets(voice: dict) -> tuple[list[dict], list[dict], bool]:
+    """The on-layer captures a voice is fitted against, those it had to leave out, and whether its own is off-layer.
 
     Every capture the voice's gates name, its own first. A capture needs its
     corpus on this machine and notes enough to hold some out; one without is
     dropped with the reason rather than fitted without a hold-out. A capture whose
     source class is not on the layer `policy.json` aims the slot at is off-layer: it
     is still judged by the gate, so it is listed as a comparison, but it is not a fit
-    target. The voice's own capture is the primary one, rendered as the voice itself,
-    so when it is off-layer there is no joint fit. Fewer than two usable captures is
-    no joint fit, so the list is empty and the voice is fitted against its own
-    capture alone.
+    target. When the voice's own capture is off-layer it is a comparison like any
+    other, and the targets are the on-layer captures that reach the same patch.
     """
     usable: list[dict] = []
     dropped: list[dict] = []
@@ -295,9 +293,10 @@ def joint_captures(voice: dict) -> tuple[list[dict], list[dict]]:
                         {
                             "capture": cap,
                             "layer": layer,
-                            "reason": f"comparison ({layer}): the voice's own capture, so no joint fit",
+                            "reason": f"comparison ({layer}): the voice's own capture",
                         }
                     )
+                    continue
             usable.insert(
                 0,
                 {
@@ -311,12 +310,14 @@ def joint_captures(voice: dict) -> tuple[list[dict], list[dict]]:
             )
             continue
         corpus = CORPUS_ROOT / "capture" / cap
-        if not (corpus / "manifest.json").exists():
-            dropped.append({"capture": cap, "reason": "no corpus on this machine"})
-            continue
-        raw = json.loads((CAPTURE_DIR / f"{cap}.json").read_text())
-        layer = policy.capture_layer(
-            raw.get("source_class"), voice["program"], voice.get("bank", 0), policy=pol
+        definition = CAPTURE_DIR / f"{cap}.json"
+        raw = json.loads(definition.read_text()) if definition.exists() else None
+        layer = (
+            policy.capture_layer(
+                raw.get("source_class"), voice["program"], voice.get("bank", 0), policy=pol
+            )
+            if raw is not None
+            else ""
         )
         if layer == policy.LAYER_OFF:
             dropped.append(
@@ -328,9 +329,13 @@ def joint_captures(voice: dict) -> tuple[list[dict], list[dict]]:
                 }
             )
             continue
+        known = {"layer": layer} if layer else {}
+        if not (corpus / "manifest.json").exists():
+            dropped.append({"capture": cap, "reason": "no corpus on this machine", **known})
+            continue
         train, held = _split(raw["notes"])
         if not held:
-            dropped.append({"capture": cap, "reason": "one note: nothing to hold out"})
+            dropped.append({"capture": cap, "reason": "one note: nothing to hold out", **known})
             continue
         usable.append(
             {
@@ -342,7 +347,47 @@ def joint_captures(voice: dict) -> tuple[list[dict], list[dict]]:
                 "velocities": _three(raw["velocities"]),
             }
         )
-    return (usable if len(usable) > 1 and not own_off else []), dropped
+    return usable, dropped, own_off
+
+
+def joint_captures(voice: dict) -> tuple[list[dict], list[dict]]:
+    """The captures a joint fit of this voice is scored against, and those it had to leave out.
+
+    The on-layer targets of `fit_targets`. Fewer than two is no joint fit, so the
+    list is empty and the voice is fitted against its one target alone.
+    """
+    usable, dropped, _ = fit_targets(voice)
+    return (usable if len(usable) > 1 else []), dropped
+
+
+def on_layer_unusable(dropped: list[dict]) -> list[dict]:
+    """The on-layer captures a voice reaches that could not be fitted, with the reason."""
+    return [d for d in dropped if d.get("layer") == policy.LAYER_WANTED]
+
+
+def no_on_layer_reason(voice: dict, dropped: list[dict]) -> str:
+    """Why a voice whose own capture is off-layer has no capture to be fitted against."""
+    want = policy.wanted_layer(policy.load(), voice["program"], False, voice.get("bank", 0))
+    have = voice.get("source_class") or "unclassified"
+    unusable = on_layer_unusable(dropped)
+    if unusable:
+        return "on-layer capture(s) cannot be fitted: " + "; ".join(
+            f"{d['capture']} ({d['reason']})" for d in unusable
+        )
+    return f"no on-layer reference for this voice: wanted {want.get('timbre')}, have {have}"
+
+
+def undeclared_lines(todo: list[dict]) -> list[str]:
+    """One line per capture the planned voices read that declares no `source_class`, where its slot is aimed."""
+    declared = {c.id: c.source_class for c in bank.captures()}
+    seen: dict[str, str] = {}
+    for v in todo:
+        if "drum_note" in v or not policy.slot_is_aimed(v["program"], v.get("bank", 0)):
+            continue
+        for cap in [v["capture"], *(g["capture"] for g in v["gates"])]:
+            if not declared.get(cap) and cap not in seen:
+                seen[cap] = policy.undeclared_line(cap)
+    return list(seen.values())
 
 
 def plan(banks: str) -> tuple[list[dict], list[dict]]:
@@ -385,7 +430,6 @@ def plan(banks: str) -> tuple[list[dict], list[dict]]:
         if not held:
             skipped.append({"slug": slug, "reason": "one note: nothing to hold out"})
             continue
-        seen.add(patch)
         voice = {
             "slug": slug,
             "program": row["program"],
@@ -402,8 +446,27 @@ def plan(banks: str) -> tuple[list[dict], list[dict]]:
             "velocities": _three(raw["velocities"]),
             "gates": capital_gates(row, rows, pool, REFERENCE_DIR),
         }
-        if JOINT:
-            voice["joint"], voice["joint_dropped"] = joint_captures(voice)
+        own_off = (
+            policy.capture_layer(voice["source_class"], row["program"], row["bank"])
+            == policy.LAYER_OFF
+        )
+        targets, dropped = [], []
+        if JOINT or own_off:
+            targets, dropped, _ = fit_targets(voice)
+        if own_off:
+            voice["joint_dropped"] = dropped
+            if targets:
+                voice["fit_on"] = targets if JOINT else targets[:1]
+                voice["joint"] = targets if JOINT and len(targets) > 1 else []
+            elif ALLOW_OFF_LAYER and not on_layer_unusable(dropped):
+                voice["provisional_off_layer"] = True
+                voice["provisional_oracle"] = [cap]
+            else:
+                skipped.append({"slug": slug, "reason": no_on_layer_reason(voice, dropped)})
+                continue
+        elif JOINT:
+            voice["joint"], voice["joint_dropped"] = (targets if len(targets) > 1 else []), dropped
+        seen.add(patch)
         todo.append(voice)
     return todo, skipped
 
@@ -624,6 +687,8 @@ BASE_OVERRIDES = ""
 #: Fit each voice against every capture its gates name at once (autofit's repeated
 #: --corpus), from --joint. Melodic voices only: a kit note's gates are other kits.
 JOINT = False
+#: Set from --allow-off-layer: a voice with no on-layer reference is fitted against its own.
+ALLOW_OFF_LAYER = False
 
 #: A spec file for every fit (autofit's --spec) in place of `--spec auto --program-only`.
 SPEC = ""
@@ -682,16 +747,24 @@ def _shipped(knob: dict) -> float:
     return knob.get("head", knob["start"])
 
 
+def fit_parts(voice: dict) -> list[dict]:
+    """The captures a fit runs on when they are not the voice's own: its on-layer sibling(s) or joint list."""
+    return voice.get("fit_on") or voice.get("joint") or []
+
+
 def _fit(
     voice: dict, out: Path, build_dir: str, per_knob: int, weights: dict[str, float] | None = None
 ) -> None:
+    parts = fit_parts(voice)
+    # The one capture a fit runs on, which is the voice's own unless that one is off-layer.
+    target = parts[0] if parts else voice
     if "drum_note" in voice:
         grid = ["--drum-note", str(voice["drum_note"])]
-    elif voice.get("joint"):
+    elif len(parts) > 1:
         # Each capture carries its own cuts; autofit reads the program a capture
         # is sounded by off its definition.
         grid = []
-        for part in voice["joint"]:
+        for part in parts:
             grid += [
                 "--corpus",
                 part["corpus"],
@@ -707,11 +780,11 @@ def _fit(
     else:
         grid = [
             "--notes",
-            ",".join(map(str, voice["notes"])),
+            ",".join(map(str, target["notes"])),
             "--velocities",
-            ",".join(map(str, voice["velocities"])),
+            ",".join(map(str, target["velocities"])),
             "--validate-notes",
-            ",".join(map(str, voice["validate_notes"])),
+            ",".join(map(str, target["validate_notes"])),
         ]
     cmd = PYTHON + [
         str(HERE / "autofit.py"),
@@ -722,8 +795,8 @@ def _fit(
         "--bank",
         str(voice["bank"]),
         *([] if SPEC else ["--program-only"]),
-        *([] if voice.get("joint") else ["--corpus", voice["corpus"]]),
-        *([] if voice.get("joint") else ["--corpus-timbre", voice["timbre"]]),
+        *([] if len(parts) > 1 else ["--corpus", target["corpus"]]),
+        *([] if len(parts) > 1 else ["--corpus-timbre", target["timbre"]]),
         *grid,
         "--optimizer",
         "coord",
@@ -750,6 +823,8 @@ def _fit(
         cmd += ["--start-overrides", START_OVERRIDES]
     if ALLOW_DIRTY_SRC:
         cmd.append("--allow-dirty-src")
+    if voice.get("provisional_off_layer"):
+        cmd.append("--allow-off-layer")
     log = out.with_suffix(".log")
     _check_pin()
     env = {**os.environ, harness_lock.ENV: _PIN} if _PIN else None
@@ -1082,7 +1157,7 @@ def profile_weights(voice: dict) -> dict[str, float]:
     pitched = "drum_note" not in voice and "bright" not in weights and voice.get("corpus")
     if pitched:
         # A joint fit scores every capture it names under one weight vector.
-        parts = voice.get("joint") or [voice]
+        parts = fit_parts(voice) or [voice]
         corpora = [load_corpus(p["corpus"], p["timbre"]) for p in parts]
         if noise_led_tnr(corpora) is not None:
             weights["bright"] = PERCUSSION_WEIGHTS["bright"]
@@ -1471,6 +1546,12 @@ def adopt(root: Path, only: set[str]) -> int:
                 per_family.setdefault(family, []).extend(fields)
             if other:
                 print(f"{voice['slug']}: reported only, no write site: {', '.join(other)}")
+        if voice.get("provisional_off_layer"):
+            report = {
+                **report,
+                "provisional_off_layer": True,
+                "provisional_oracle": voice["provisional_oracle"],
+            }
         unit, entry = fits_mod.record_fit(
             report,
             capture=voice["capture"],
@@ -1594,6 +1675,13 @@ def main() -> int:
         "is fitted against its own capture alone. Has no effect on kits",
     )
     ap.add_argument(
+        "--allow-off-layer",
+        action="store_true",
+        help="fit a voice that has no capture on the layer policy.json aims its slot at against "
+        "its own off-layer capture. By default it is refused; the fit is recorded as provisional "
+        "and names the oracle",
+    )
+    ap.add_argument(
         "--weights",
         default="",
         metavar="TERM=W,...|@FILE",
@@ -1602,9 +1690,10 @@ def main() -> int:
         "given 0 is never raised, even when its gate dimension is red. Recorded in each verdict",
     )
     args = ap.parse_args()
-    global ALLOW_DIRTY_SRC, JOINT
+    global ALLOW_DIRTY_SRC, JOINT, ALLOW_OFF_LAYER
     ALLOW_DIRTY_SRC = args.allow_dirty_src
     JOINT = args.joint
+    ALLOW_OFF_LAYER = args.allow_off_layer
     global BASE_OVERRIDES, WEIGHTS
     try:
         BASE_OVERRIDES = load_base_overrides(args.base_overrides)
@@ -1645,6 +1734,8 @@ def main() -> int:
     todo, skipped = plan(args.banks)
     if only:
         todo = [v for v in todo if v["slug"] in only]
+    for line in undeclared_lines(todo):
+        print(line, file=sys.stderr)
     if args.cmd == "rejudge":
         missing = sorted(only - {v["slug"] for v in todo})
         if not only or missing:
@@ -1660,8 +1751,12 @@ def main() -> int:
                 if "drum_note" in v
                 else f"notes {v['notes']} held {v['validate_notes']} vel {v['velocities']}"
             )
+            if v.get("fit_on"):
+                grid += f", fit on {', '.join(p['capture'] for p in v['fit_on'])}"
             if v.get("joint"):
                 grid += f", joint over {', '.join(p['capture'] for p in v['joint'])}"
+            if v.get("provisional_off_layer"):
+                grid += ", provisional: fitted against an off-layer oracle"
             for d in v.get("joint_dropped") or []:
                 grid += f"; not joint: {d['capture']} ({d['reason']})"
             print(f"fit   {v['slug']:40} {v['patch']:24} {v['capture']} {grid}")

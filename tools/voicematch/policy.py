@@ -124,6 +124,22 @@ def capture_layer(
     return LAYER_WANTED if answers_layer(source_class, want) else LAYER_OFF
 
 
+#: Why a capture with no declared `source_class` is off-layer where the slot is aimed.
+UNDECLARED_REASON = "no source_class declared: treated as off-layer"
+
+
+def undeclared_line(label: str) -> str:
+    """The start-of-run line naming a capture that has no `source_class` declared."""
+    return f"{label}: {UNDECLARED_REASON}"
+
+
+def slot_is_aimed(
+    program: int, bank: int = 0, kit: bool = False, policy: dict | None = None
+) -> bool:
+    """Whether `policy.json` aims this slot at a layer, so an unclassified capture is off-layer."""
+    return bool(wanted_layer(load() if policy is None else policy, program, kit, bank))
+
+
 def references_by_scope(
     policy: dict,
     program: int,
