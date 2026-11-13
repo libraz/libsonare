@@ -1,0 +1,52 @@
+{
+  "id": "guitar_fret_noise_module",
+  "label": "Guitar fret noise, the GS capital tone, read out of a module's own recordings",
+  "program": 120,
+  "takes": "noise",
+  "audition_title": "libsonare guitar fret noise vs the module's own recordings",
+  "_notes": "The capital of program 120, which carries no `bank` key because a variation is recognised by a non-zero bank and the capital is the absence of one. The grid is 36, 48 and 60, one octave apart and each on a recording of its own in the source, so no cell is a resampled neighbour.",
+  "notes": [
+    36,
+    48,
+    60
+  ],
+  "_velocities": "One, and 100 is a label rather than a measurement: the source sets `velRange` on none of this tone's zones, so it holds one recording per note at a velocity it does not state, and the importer refuses a grid asking for more than one layer.",
+  "velocities": [
+    100
+  ],
+  "_dry": "Nothing played this, so nothing was switched off. What the file holds is the module's own PCM with no effect in front of it, which is what `source_class: module` asks for.",
+  "dry": false,
+  "params": [],
+  "_stimulus": "The recordings run 0.97, 0.57 and 0.29 s at notes 36, 48 and 60, each a single scrape that ends on its own. The gate is the shortest recording, 290 ms, so no cell is read past its own end; the per-note window that reads each cell to its own end replaces it when the gate class lands. No gate is recorded on this window: note 36 is a slide whose loudest point comes at 320 ms, after it, so its decay would be read before the peak. Each recording ends in an editor fade rather than at silence, note 60 most steeply.",
+  "gate_ms": 290,
+  "tail": "0s",
+  "_realtime": "Read rather than played: `import_sf2.py` extracts the recorded frames, so there is no host to settle and no lead-in to strip. `preroll_ms` is 0 because a recording begins at its own first frame.",
+  "realtime": false,
+  "warmup": false,
+  "settle_ms": 0,
+  "preroll_ms": 0,
+  "sample_rate": 44100,
+  "_timbres": "One. The source holds exactly one recording per note of this tone, so there is no second of it to disagree with.",
+  "timbres": [
+    {
+      "id": "t0",
+      "label": "Guitar Fret Noise, module recording"
+    }
+  ],
+  "_dimensions": "Coverage is read against `toneclass.canonical_dimensions` for program 120. What is excused below is what this source cannot carry, each argued from what it sets on this tone rather than from its being a font.",
+  "dimensions_na": {
+    "vel_range": "`velRange` is set on none of this tone's zones, so it holds one recording per note at a velocity it does not state. A grid asking for more than one would write that recording into every row of the axis a dynamics fit reads; the velocity bound stays on the library capture of this program, which is the one thing these recordings cannot answer",
+    "stereo": "every recording of this tone is mono (`sampleType` 1) and no `pan` is set, so the image is absent by construction rather than by voicing"
+  },
+  "dimensions": [
+    "attack",
+    "centroid_pct",
+    "decay"
+  ],
+  "rig": "none",
+  "room": "none",
+  "_room": "The module is recorded with reverb, chorus, delay and the insertion effect all off, and `import_sf2.py --report` plus its own dryness check measure the imported corpus rather than taking this declaration's word for it.",
+  "source_class": "module",
+  "_identity": "Which file and which of its presets answered this timbre lives in the untracked sibling `guitar_fret_noise_module.local.json`. Everything here is the method; scoring, fitting and diagnosing read `reference/guitar_fret_noise_module.json`.",
+  "_slots": "The source flattens the GS `(program, bank)` map into sequential presets, one run per program with the capital at its head, and names each preset with the module's own tone name. This tone heads the run for this program and carries the capital's name, and the run head is the only reading of a flattened map that a position can be trusted for."
+}
