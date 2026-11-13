@@ -1281,6 +1281,11 @@ def _keep_the_tighter(
                 "measured": round(value, 4),
                 "outcome": outcome,
             }
+            if set_at == carried:
+                # A kept value keeps the record of the tree it was set on and what it replaced.
+                for kept in ("set_tree", "replaced"):
+                    if kept in old_prov:
+                        provenance[key][kept] = old_prov[kept]
             if moved:
                 provenance[key]["rewindowed_from"] = {"bound": old, "window": was_window}
             window = (

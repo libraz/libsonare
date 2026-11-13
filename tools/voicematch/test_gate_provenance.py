@@ -536,3 +536,16 @@ def test_a_dirty_tree_is_refused_unless_allowed_and_then_recorded(tmp_path, monk
     assert prov["set_tree"] == {"head": "abc1234", "dirty": ["src/x.cpp"]}
     notes = profile_gate.provenance_notes(json.loads(gate.read_text()))
     assert any(n.startswith("set on a dirty tree: decay.") for n in notes)
+
+
+def test_a_kept_bound_keeps_the_tree_it_was_set_on(tmp_path, monkeypatch):
+    monkeypatch.setattr(
+        profile_gate, "tree_state", lambda: {"head": "abc1234", "dirty": ["src/x.cpp"]}
+    )
+    gate = tmp_path / "g.json"
+    write_gate_file(_rows(10.0), gate, "ref", 1.0, allow_dirty=True)
+    monkeypatch.setattr(profile_gate, "tree_state", lambda: {"head": "def5678", "dirty": []})
+    write_gate_file(_rows(12.0), gate, "ref", 1.0)
+    prov = json.loads(gate.read_text())["bounds"]["decay"]["provenance"]["median"]
+    assert prov["outcome"] == "exceeded"
+    assert prov["set_tree"] == {"head": "abc1234", "dirty": ["src/x.cpp"]}
