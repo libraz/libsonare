@@ -289,7 +289,7 @@ constexpr void configure_synth_programs(ProgramOverrides& o) noexcept {
   o.pad_new_age.va.band_noise_low_key_track = 0.922346f;
   o.pad_new_age.va.band_noise_high_hz = 1584.9f;
   o.pad_new_age.va.band_noise_high_key_track = 0.324744f;
-  o.pad_new_age.gain = 0.166684f;
+  o.pad_new_age.gain = 0.3403f;
   o.pad_new_age.va.velocity_exponent = 1.05f;
 
   // Warm (GM 89): two saws 6 c apart, one each side of the field, through a
