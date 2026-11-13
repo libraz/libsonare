@@ -22,6 +22,7 @@ import math
 import re
 import sys
 from collections import defaultdict
+from collections.abc import Collection
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -620,6 +621,19 @@ class KnobClass:
         return abs(value - self.off_value) <= self.off_within
 
 
+@dataclass(frozen=True)
+class KnobReach:
+    """One `reach` entry: the gated dimensions a field needs before `--spec auto` opens it.
+
+    A knob whose movement no gated dimension can judge is searched with nothing to
+    hold it, so it is offered only where every dimension in `requires` is gated.
+    """
+
+    pattern: str
+    requires: tuple[str, ...]
+    basis: str = ""
+
+
 @dataclass
 class KnobClasses:
     """The classification of the catalogue's fields, as `knob-classes.json` states it.
@@ -627,16 +641,19 @@ class KnobClasses:
     `entries` are keyed by pattern; `notes` explain a field the table does not
     classify (a field no override reaches); `pending_landing` holds entries for keys
     the library does not report yet; `switch_candidates` lists float-typed fields
-    whose shipped values are all integers, for the lanes to judge.
+    whose shipped values are all integers, for the lanes to judge. `reach` maps
+    a field pattern to the gated dimensions it needs (see `KnobReach`).
     """
 
     entries: dict[str, KnobClass]
     notes: dict[str, str] = field(default_factory=dict)
     pending_landing: dict[str, dict] = field(default_factory=dict)
     switch_candidates: dict[str, dict] = field(default_factory=dict)
+    reach: dict[str, KnobReach] = field(default_factory=dict)
 
     def __post_init__(self) -> None:
         self._entry_patterns = _Patterns(self.entries)
+        self._reach_patterns = _Patterns(self.reach)
         self._note_patterns = _Patterns(self.notes)
         self._memo: dict[str, KnobClass | None] = {}
         self.groups: dict[str, list[str]] = defaultdict(list)
@@ -661,6 +678,16 @@ class KnobClasses:
         pattern = self._note_patterns.find(key)
         return self.notes[pattern] if pattern is not None else None
 
+    def reach_for(self, key: str) -> KnobReach | None:
+        """The reach entry naming a catalogue @p key, or None for a field any gate may hold."""
+        pattern = self._reach_patterns.find(key)
+        return self.reach[pattern] if pattern is not None else None
+
+    def unjudged_by(self, key: str, gated) -> list[str]:
+        """The dimensions @p key needs that @p gated lacks, in the entry's order."""
+        entry = self.reach_for(key)
+        return [d for d in entry.requires if d not in gated] if entry is not None else []
+
     def group_members(self, group: str, keys) -> list[str]:
         """The keys among @p keys that belong to @p group."""
         return [k for k in keys if (e := self.classify(k)) is not None and e.group == group]
@@ -671,7 +698,8 @@ def load_knob_classes(path: Path, catalogue: Catalogue) -> KnobClasses:
 
     An entry that names no key the catalogue reports raises, naming it: a field
     that was renamed or removed must not quietly lose its class and become
-    searchable. `pending_landing` and `notes` are exempt.
+    searchable. A `reach` pattern is held to the same. `pending_landing` and
+    `notes` are exempt.
     """
     data = json.loads(Path(path).read_text())
     raw = data.get("entries")
@@ -700,12 +728,34 @@ def load_knob_classes(path: Path, catalogue: Catalogue) -> KnobClasses:
             gates=e.get("gates", ""),
             type=e.get("type", ""),
         )
+    reach: dict[str, KnobReach] = {}
+    for pattern, e in data.get("reach", {}).items():
+        if pattern.startswith("_"):
+            continue
+        requires = e.get("requires")
+        if (
+            not isinstance(requires, list)
+            or not requires
+            or not all(isinstance(d, str) and d for d in requires)
+        ):
+            raise ValueError(
+                f"{path}: reach {pattern!r} needs a non-empty 'requires' list of dimension names"
+            )
+        reach[pattern] = KnobReach(pattern, tuple(requires), e.get("basis", ""))
     classes = KnobClasses(
         entries,
         notes=data.get("notes", {}),
         pending_landing=data.get("pending_landing", {}),
         switch_candidates=data.get("switch_candidates", {}),
+        reach=reach,
     )
+    unreached = classes._reach_patterns.unresolved(catalogue.defaults)
+    if unreached:
+        raise ValueError(
+            f"{Path(path).name}: {len(unreached)} reach pattern(s) name no key the catalogue "
+            f"reports: {', '.join(repr(p) for p in unreached)}. The field was renamed or "
+            f"removed; rename or remove the pattern, or it stops holding its knobs out."
+        )
     missing = classes._entry_patterns.unresolved(catalogue.defaults)
     if missing:
         named = "; ".join(f"{k!r} (lane {entries[k].lane or '?'})" for k in missing)
@@ -768,7 +818,9 @@ class AutoReport:
     `excluded` maps a class to the keys it kept out; `stage_off` holds the stage
     enables whose patch ships the stage absent; `clipped` the stage enables whose
     range was cut so it cannot reach its off value; `groups_closed` the
-    compensating groups no knob was offered for, by the number of members present.
+    compensating groups no knob was offered for, by the number of members present;
+    `unjudged` the knobs left out because a dimension they need is not gated, by that
+    dimension, and `no_gate` that no gate was found, so none was taken as gated.
     """
 
     excluded: dict[str, list[str]] = field(default_factory=dict)
@@ -776,6 +828,21 @@ class AutoReport:
     clipped: list[str] = field(default_factory=list)
     groups_closed: dict[str, int] = field(default_factory=dict)
     groups_open: list[str] = field(default_factory=list)
+    unjudged: dict[str, list[str]] = field(default_factory=dict)
+    no_gate: bool = False
+
+    def reach_lines(self) -> list[str]:
+        """The knobs held out for want of a gated dimension, and the gate that was read."""
+        out = []
+        if self.unjudged:
+            counts = ", ".join(f"{d} {len(ks)}" for d, ks in sorted(self.unjudged.items()))
+            out.append(
+                f"--spec auto leaves out {sum(len(k) for k in self.unjudged.values())} "
+                f"knob(s), no gated dimension can judge them (missing dimension): {counts}"
+            )
+        if self.no_gate:
+            out.append("no gate found for this voice: no dimension is taken as gated")
+        return out
 
     def lines(self) -> list[str]:
         """The start-up summary: counts by class, then one line per closed group."""
@@ -798,6 +865,7 @@ class AutoReport:
         out.extend(
             f"group {g} not opened (open it with --open-group {g})" for g in self.groups_closed
         )
+        out.extend(self.reach_lines())
         return out
 
 
@@ -830,6 +898,7 @@ def auto_spec(
     patch_only: bool = False,
     classes: KnobClasses | None = None,
     open_groups: tuple[str, ...] = (),
+    gated: Collection[str] | None = None,
 ) -> list[dict]:
     """The knob list of `auto_spec_report`, without the account of what it left out."""
     return auto_spec_report(
@@ -840,6 +909,7 @@ def auto_spec(
         patch_only=patch_only,
         classes=classes,
         open_groups=open_groups,
+        gated=gated,
     )[0]
 
 
@@ -852,6 +922,7 @@ def auto_spec_report(
     patch_only: bool = False,
     classes: KnobClasses | None = None,
     open_groups: tuple[str, ...] = (),
+    gated: Collection[str] | None = None,
 ) -> tuple[list[dict], AutoReport]:
     """Build a knob spec for `program` from the library's own catalogue.
 
@@ -882,6 +953,11 @@ def auto_spec_report(
     absent, its range cut clear of the off value where it is present); and a
     compensating group is offered whole when named in `open_groups`, and not at
     all otherwise. Without it every field the heuristics can range is offered.
+
+    `gated` is the dimensions the capture's gate holds a bound for. A field whose
+    `reach` entry needs a dimension that is not among them is left out, since
+    nothing would hold what the fit moves; `None` means no gate was found, which
+    is read as no dimension gated and said so in the report.
     """
     defaults = catalogue.defaults
     if drum_note is not None:
@@ -918,7 +994,8 @@ def auto_spec_report(
         else sorted(k for k in defaults if engine and k.startswith(f"{engine}_voice."))
     )
 
-    report = AutoReport()
+    report = AutoReport(no_gate=gated is None)
+    gated = frozenset(gated or ())
     candidates = patch_keys + engine_keys
     if open_groups and classes is None:
         raise ValueError("--open-group needs the field classes (knob-classes.json)")
@@ -968,9 +1045,19 @@ def auto_spec_report(
             if clipped != rng:
                 report.clipped.append(k)
             rng = clipped
-        if entry is not None and entry.cls == "compensating_group":
-            if entry.group not in open_groups:
+        if (
+            entry is not None
+            and entry.cls == "compensating_group"
+            and entry.group not in open_groups
+        ):
+            continue
+        if classes is not None:
+            missing = classes.unjudged_by(k, gated)
+            if missing:
+                for dim in missing:
+                    report.unjudged.setdefault(dim, []).append(k)
                 continue
+        if entry is not None and entry.cls == "compensating_group":
             offered_group[entry.group].add(k)
         if vibrato and k.endswith(".lfo_rate_hz"):
             rng = (*VIBRATO_RATE_RANGE_HZ, True)
@@ -998,17 +1085,33 @@ def auto_spec_report(
     return spec, report
 
 
-def hand_spec_warnings(knobs: list[Knob], classes: KnobClasses | None) -> list[str]:
+def hand_spec_warnings(
+    knobs: list[Knob],
+    classes: KnobClasses | None,
+    gated: Collection[str] | None = None,
+) -> list[str]:
     """One line per runtime knob a hand spec names that `--spec auto` would never offer.
 
     The spec is explicit, so the knob stays; the line says the table holds it
-    out of a search and why.
+    out of a search and why. A knob needing a dimension that is not in @p gated
+    (None: no gate found) is named too, with the dimension.
     """
     if classes is None:
         return []
     out = []
     for k in knobs:
-        entry = classes.classify(k.tunable) if k.tunable is not None else None
+        if k.tunable is None:
+            continue
+        missing = classes.unjudged_by(k.tunable, gated or ())
+        if missing:
+            reach = classes.reach_for(k.tunable)
+            out.append(
+                f"{k.label}: no gated dimension can judge it (needs {', '.join(missing)}"
+                f"{'; no gate found' if gated is None else ''}); "
+                f"searched here because the spec names it"
+                + (f" ({reach.basis})" if reach.basis else "")
+            )
+        entry = classes.classify(k.tunable)
         if entry is None or entry.cls not in NOT_SEARCHED:
             continue
         what = (

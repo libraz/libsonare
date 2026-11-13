@@ -1093,6 +1093,45 @@
       "basis": "the fitted handle over the per-register felt tables; classified when the junction keys land"
     }
   },
+  "reach": {
+    "_": "Fields whose movement only a particular gated dimension can judge. `--spec auto` opens such a field only where the capture's gate (reference/<capture>_gate.json) holds a bound for every dimension in `requires`; otherwise nothing would hold what the fit moves. A pattern follows the same rules as `entries` and must name a key the catalogue reports, or loading fails. A hand spec keeps the knob and warns.",
+    "lfo*_rate_hz": {
+      "requires": ["motion"],
+      "basis": "LFO rate of the VA and lead engines; audible only as modulation over time"
+    },
+    "lfo_to_*": {
+      "requires": ["motion"],
+      "basis": "LFO depth into pitch; audible only as modulation over time"
+    },
+    "drift_cents": {
+      "requires": ["motion"],
+      "basis": "slow pitch drift depth; audible only as movement over time"
+    },
+    "drift_rate_hz": {
+      "requires": ["motion"],
+      "basis": "slow pitch drift rate; audible only as movement over time"
+    },
+    "*.vibrato_*": {
+      "requires": ["motion"],
+      "basis": "vibrato rate and depth of the flute and vocal engines; audible only as modulation over time"
+    },
+    "vocal_voice.kVibratoMaxFrac": {
+      "requires": ["motion"],
+      "basis": "ceiling on the vocal vibrato depth"
+    },
+    "*.tremolo_*": {
+      "requires": ["motion"],
+      "basis": "phase of the modal tremolo between modes; audible only as amplitude modulation over time"
+    },
+    "stereo_spread": {
+      "requires": ["stereo"],
+      "basis": "interchannel spread; invisible to a mono measurement"
+    },
+    "va.unison_width": {
+      "requires": ["stereo"],
+      "basis": "stereo difference of the unison stack (native_synth_voice.h)"
+    }
+  },
   "switch_candidates": {
     "additive.percussion_decay_ms": {
       "class": null,

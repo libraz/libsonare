@@ -279,6 +279,7 @@ from _repo import REPO_ROOT
 # ruff: noqa: F401
 from autofit_report import report_pinned, short_of_blind, winner_or_defaults
 from autofit_resolve import (
+    HERE,
     _score,
     apply_spec_weights,
     catalogue_pattern,
@@ -1827,6 +1828,28 @@ def _gate_voice(args) -> tuple[dict | None, str]:
     return voice, ""
 
 
+def gated_dimensions(args) -> tuple[frozenset[str] | None, str]:
+    """The dimensions this run's capture gate holds a bound for, or (None, why not).
+
+    A corpus run names its capture; any other run asks refit's planner which gates
+    resolve to the voice and takes the union of their bounds.
+    """
+    corpus = resolve_corpus(args)
+    if corpus is not None:
+        if not corpus.capture_id:
+            return None, "the corpus names no capture"
+        paths = [HERE / "reference" / f"{corpus.capture_id}_gate.json"]
+    else:
+        voice, why = _gate_voice(args)
+        if voice is None:
+            return None, why
+        paths = [Path(g["gate"]) for g in voice["gates"]]
+    missing = [p.name for p in paths if not p.exists()]
+    if missing:
+        return None, f"{', '.join(missing)} does not exist"
+    return frozenset(d for p in paths for d in json.loads(p.read_text()).get("bounds", {})), ""
+
+
 def _fold_gate_audit(args, build_dir, compare=gate_audit.compare_voice) -> None:
     """Add the before/after gate readings of the start and winner values to an --out record.
 
@@ -2034,18 +2057,22 @@ def run(args, argv: list[str] | None = None) -> int:
         # one whose range collapses, so anything scaled off the rows overshoots.
         try:
             classes = load_knob_classes(KNOB_CLASSES_PATH, catalogue)
-            taken = len(
-                auto_spec_report(
-                    args.program,
-                    catalogue,
-                    drum_note=args.drum_note,
-                    bank=args.bank,
-                    patch_only=args.program_only,
-                    classes=classes,
-                    open_groups=tuple(args.open_groups),
-                )[0]
+            gated, no_gate = gated_dimensions(args)
+            taken, dump_report = auto_spec_report(
+                args.program,
+                catalogue,
+                drum_note=args.drum_note,
+                bank=args.bank,
+                patch_only=args.program_only,
+                classes=classes,
+                open_groups=tuple(args.open_groups),
+                gated=gated,
             )
-            print(f"# fit_knobs\t{taken}\tof {len(rows)} rows, what --spec auto takes")
+            print(f"# fit_knobs\t{len(taken)}\tof {len(rows)} rows, what --spec auto takes")
+            for line in dump_report.reach_lines():
+                print(f"# {line}")
+            if no_gate:
+                print(f"# gate: {no_gate}")
         except ValueError as exc:
             print(f"# fit_knobs\t0\t--spec auto refuses this one: {exc}")
         print("# key\tdefault\tmin\tmax")
@@ -2057,6 +2084,7 @@ def run(args, argv: list[str] | None = None) -> int:
 
     if auto:
         classes = load_knob_classes(KNOB_CLASSES_PATH, catalogue)
+        gated, no_gate = gated_dimensions(args)
         spec, auto_report = auto_spec_report(
             args.program,
             catalogue,
@@ -2065,6 +2093,7 @@ def run(args, argv: list[str] | None = None) -> int:
             patch_only=args.program_only,
             classes=classes,
             open_groups=tuple(args.open_groups),
+            gated=gated,
         )
         subject = (
             f"drum note {args.drum_note}"
@@ -2084,6 +2113,8 @@ def run(args, argv: list[str] | None = None) -> int:
         )
         for line in auto_report.lines():
             print(f"  {line}", file=sys.stderr)
+        if no_gate:
+            print(f"  gate: {no_gate}", file=sys.stderr)
     else:
         spec = load_spec(Path(args.spec).resolve())
         if lib:
@@ -2103,7 +2134,8 @@ def run(args, argv: list[str] | None = None) -> int:
     # to name, and the run says what the table thinks of it.
     if not auto and catalogue is not None:
         classes = load_knob_classes(KNOB_CLASSES_PATH, catalogue)
-        for line in hand_spec_warnings(knobs, classes):
+        gated, _ = gated_dimensions(args)
+        for line in hand_spec_warnings(knobs, classes, gated):
             print(f"warning: {line}", file=sys.stderr)
 
     # Before the base check, so a key in both reads as that and not as a knob clash.

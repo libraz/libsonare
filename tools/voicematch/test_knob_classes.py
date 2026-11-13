@@ -20,6 +20,7 @@ from knobs import (
     Knob,
     KnobClass,
     KnobClasses,
+    KnobReach,
     auto_spec_report,
     clamp_check,
     clamp_warning,
@@ -110,13 +111,18 @@ def test_a_group_member_without_a_group_or_an_unknown_class_is_refused(tmp_path)
         load_knob_classes(_write(tmp_path, {"waveform": {"class": "bogus"}}), cat)
 
 
-def test_the_shipped_table_loads_against_a_catalogue_naming_each_of_its_keys():
+def _shipped_keys():
     data = json.loads(KNOB_CLASSES_PATH.read_text())
     keys = {}
-    for pattern in data["entries"]:
-        concrete = pattern.replace("[*]", "0")
-        keys[concrete if concrete.startswith("piano_voice.") else f"p0.{concrete}"] = 1.0
-    classes = load_knob_classes(KNOB_CLASSES_PATH, _catalogue(keys))
+    for pattern in [*data["entries"], *(p for p in data["reach"] if not p.startswith("_"))]:
+        concrete = pattern.replace("[*]", "0").replace("*", "x")
+        keys[concrete if concrete.split(".")[0].endswith("_voice") else f"p0.{concrete}"] = 1.0
+    return keys
+
+
+def test_the_shipped_table_loads_against_a_catalogue_naming_each_of_its_keys():
+    classes = load_knob_classes(KNOB_CLASSES_PATH, _catalogue(_shipped_keys()))
+    assert {r.requires for r in classes.reach.values()} == {("motion",), ("stereo",)}
     assert set(classes.groups) == {"piano.excitation_chain"}
     for key in classes.groups["piano.excitation_chain"]:
         assert classes.entries[key].evidence in ("measured", "code reading")
@@ -277,6 +283,104 @@ def test_a_hand_spec_naming_a_held_out_field_keeps_it_and_says_so():
     assert "a switch knob, not searched" in lines[1]
     assert "set by measurement, not searched" in lines[2]
     assert hand_spec_warnings(knobs, None) == []
+
+
+# --- reach: a field only a particular gated dimension can judge ------------------
+
+
+def _reach_classes(**requires):
+    return KnobClasses(
+        {}, reach={p: KnobReach(p, tuple(r), "test basis") for p, r in requires.items()}
+    )
+
+
+_REACH_CAT = _catalogue(
+    {"p0.lfo_rate_hz": 5.0, "p0.stereo_spread": 0.2, "p0.brightness": 0.5},
+    {"lfo_rate_hz": (0.0, 40.0), "stereo_spread": (0.0, 1.0), "brightness": (0.0, 1.0)},
+)
+
+
+def test_motion_fields_are_left_out_when_no_motion_dimension_is_gated():
+    classes = _reach_classes(lfo_rate_hz=["motion"], stereo_spread=["stereo"])
+    spec, report = auto_spec_report(0, _REACH_CAT, classes=classes, gated={"attack", "tnr"})
+    assert set(_offered(spec)) == {"p0.brightness"}
+    assert report.unjudged == {"motion": ["p0.lfo_rate_hz"], "stereo": ["p0.stereo_spread"]}
+    assert not report.no_gate
+    summary = " ".join(report.lines())
+    assert "no gated dimension can judge them" in summary
+    assert "motion 1" in summary and "stereo 1" in summary
+
+
+def test_a_motion_field_is_kept_once_a_motion_dimension_is_gated():
+    classes = _reach_classes(lfo_rate_hz=["motion"])
+    spec, report = auto_spec_report(0, _REACH_CAT, classes=classes, gated={"motion"})
+    assert "p0.lfo_rate_hz" in _offered(spec)
+    assert report.unjudged == {}
+
+
+def test_a_stereo_field_is_kept_when_stereo_is_gated_and_out_when_it_is_not():
+    classes = _reach_classes(stereo_spread=["stereo"])
+    kept, _ = auto_spec_report(0, _REACH_CAT, classes=classes, gated={"stereo", "tnr"})
+    out, report = auto_spec_report(0, _REACH_CAT, classes=classes, gated={"tnr"})
+    assert "p0.stereo_spread" in _offered(kept)
+    assert "p0.stereo_spread" not in _offered(out)
+    assert report.unjudged == {"stereo": ["p0.stereo_spread"]}
+
+
+def test_every_required_dimension_must_be_gated_and_each_missing_one_is_named():
+    classes = _reach_classes(lfo_rate_hz=["motion", "stereo"])
+    spec, report = auto_spec_report(0, _REACH_CAT, classes=classes, gated={"motion"})
+    assert "p0.lfo_rate_hz" not in _offered(spec)
+    assert report.unjudged == {"stereo": ["p0.lfo_rate_hz"]}
+
+
+def test_no_gate_is_read_as_nothing_gated_and_the_report_says_so():
+    classes = _reach_classes(lfo_rate_hz=["motion"], stereo_spread=["stereo"])
+    spec, report = auto_spec_report(0, _REACH_CAT, classes=classes, gated=None)
+    assert set(_offered(spec)) == {"p0.brightness"}
+    assert report.no_gate
+    assert any("no gate found" in line for line in report.lines())
+
+
+def test_a_hand_spec_naming_an_unjudged_field_keeps_it_and_warns():
+    classes = _reach_classes(lfo_rate_hz=["motion"])
+    knobs = [_knob("p0.lfo_rate_hz"), _knob("p0.brightness")]
+    lines = hand_spec_warnings(knobs, classes, {"tnr"})
+    assert len(lines) == 1
+    assert "p0.lfo_rate_hz" in lines[0] and "needs motion" in lines[0]
+    assert "searched here because the spec names it" in lines[0] and "test basis" in lines[0]
+    assert hand_spec_warnings(knobs, classes, {"motion"}) == []
+    assert "no gate found" in hand_spec_warnings(knobs, classes, None)[0]
+
+
+def test_a_reach_pattern_that_resolves_nothing_fails_the_load_naming_it(tmp_path):
+    cat = _catalogue({"p0.lfo_rate_hz": 5.0})
+    path = _write(
+        tmp_path,
+        {},
+        reach={
+            "lfo_rate_hz": {"requires": ["motion"], "basis": "x"},
+            "lfo_renamed_hz": {"requires": ["motion"], "basis": "x"},
+        },
+    )
+    with pytest.raises(ValueError, match="lfo_renamed_hz") as exc:
+        load_knob_classes(path, cat)
+    assert "'lfo_rate_hz'" not in str(exc.value)
+
+
+def test_a_reach_entry_without_a_dimension_is_refused(tmp_path):
+    cat = _catalogue({"p0.lfo_rate_hz": 5.0})
+    path = _write(tmp_path, {}, reach={"lfo_rate_hz": {"requires": []}})
+    with pytest.raises(ValueError, match="requires"):
+        load_knob_classes(path, cat)
+
+
+def test_the_shipped_reach_table_covers_the_voicing_fields_a_trombone_refit_moved():
+    classes = load_knob_classes(KNOB_CLASSES_PATH, _catalogue(_shipped_keys()))
+    for key in ("lfo_rate_hz", "lfo_to_pitch_cents", "drift_cents", "drift_rate_hz"):
+        assert classes.unjudged_by(f"p0.{key}", {"attack", "body"}) == ["motion"]
+    assert classes.unjudged_by("p0.stereo_spread", {"attack"}) == ["stereo"]
+    assert classes.unjudged_by("p0.stereo_spread", {"stereo"}) == []
 
 
 # --- switch candidates -------------------------------------------------------
