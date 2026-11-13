@@ -524,6 +524,8 @@ void apply_ks(NativeSynthPatch& p, const Fields& f) {
   F(ks.body_coupling);
   F(ks.pluck_style);
   F(ks.nail);
+  F(ks.pluck_ms);
+  F(ks.pluck_vel_exp);
   I_TYPED(ks.sympathetic, 0, 1);
   F(ks.halo_damp_s);
   F(ks.pickup_pos);

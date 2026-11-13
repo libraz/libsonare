@@ -136,6 +136,16 @@ struct KsPatchParams {
   /// nail or pick (1, a narrow/sharp lobe, more highs — the bright release edge).
   /// Only affects the pluck doublet, so it is inert unless @ref pluck_style > 0.
   float nail = 0.0f;
+  /// Release time of a finite-duration pluck in ms (0 = off, render bit-identical). Above 0 the
+  /// burst is a string held in a triangle and let go over this time: mode n carries
+  /// |sin(n pi beta)| n^-2 W(n f0 tau), W the raised-cosine contact spectrum (contact_force.h) and
+  /// beta the plucking point. It replaces the noise source and the two excitation poles, and
+  /// retires @ref exc_brightness, @ref exc_brightness_per_octave, @ref vel_to_brightness,
+  /// @ref pluck_style and @ref nail; the pick-position comb stays in series.
+  float pluck_ms = 0.0f;
+  /// How far the release shortens as the pluck hardens: tau = pluck_ms * vel01 ^ -pluck_vel_exp.
+  /// 0 = velocity-independent. Inert unless @ref pluck_ms > 0.
+  float pluck_vel_exp = 0.0f;
   /// Enables the instrument-wide sympathetic-string bank (off-by-default; false
   /// leaves the voice render bit-identical). The played note excites a shared
   /// bank tuned to the open strings, which rings behind it — the "sound halo" of
@@ -273,6 +283,14 @@ class KsVoiceCore {
   float excitation_source(int k) const noexcept;
   // The excitation injected at burst position @p pos, advancing the two poles @p lp1 / @p lp2.
   float excitation_step(int pos, float& lp1, float& lp2) const noexcept;
+  // Sample @p k of the pluck's string-in-a-triangle source, a parabola whose series is n^-2.
+  float pluck_parabola(int k) const noexcept;
+  // The pluck's combed source at burst position @p pos, then smoothed by the release kernel.
+  float pluck_step(int pos) const noexcept;
+  // Samples the burst runs for: the burst and its comb copy, plus the release kernel's tail.
+  int injection_length() const noexcept {
+    return exc_total_ + pick_delay_ + (pluck_span_ > 0 ? pluck_span_ - 1 : 0);
+  }
   // Brings the oversampled loops back to the host rate; the identity at factor 1.
   LoopDecimator decimator_;
   /// The delay slab attach() handed over, and the span length each loop takes
@@ -320,6 +338,11 @@ class KsVoiceCore {
   float pluck_style_ = 0.0f;
   int pluck_contact_ = 0;
   float pluck_fundamental_ = 0.0f;
+  // Finite-duration pluck. pluck_span_ is the release in samples (>= 2); 0 = off, and the burst
+  // is the seeded noise above, bit-identical.
+  int pluck_span_ = 0;
+  // The string's period in samples, which the parabola spans (not exc_total_, its floor).
+  float pluck_period_ = 0.0f;
 
   // Magnetic pickup (electric). pickup_depth_ == 0 -> no pickup. pickup_fraction_
   // is the physical tap position; the tap sits that fraction of the sounding period

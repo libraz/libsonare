@@ -102,6 +102,8 @@ constexpr KsPatchParams blank_ks() noexcept {
   z.body_coupling = 0.0f;
   z.pluck_style = 0.0f;
   z.nail = 0.0f;
+  z.pluck_ms = 0.0f;
+  z.pluck_vel_exp = 0.0f;
   z.sympathetic = false;
   z.halo_damp_s = 0.0f;
   z.pickup_pos = 0.0f;

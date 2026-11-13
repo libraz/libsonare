@@ -295,6 +295,14 @@ const GateRow kEngineGates[] = {
     {"modal.modes.gain", [](const GateSite& s) { return above("numModes", s.index); }},
     {"modal.modes.decay_scale", [](const GateSite& s) { return above("numModes", s.index); }},
     {"modal.modes.key_slope", [](const GateSite& s) { return above("numModes", s.index); }},
+    // Karplus-Strong: a pluck release time replaces the noise burst, its two excitation poles and
+    // the doublet that crossfades the burst, and its velocity law has nothing to act on without it.
+    {"ks.exc_brightness", [](const GateSite&) { return equals("pluckMs", 0); }},
+    {"ks.exc_brightness_per_octave", [](const GateSite&) { return equals("pluckMs", 0); }},
+    {"ks.vel_to_brightness", [](const GateSite&) { return equals("pluckMs", 0); }},
+    {"ks.pluck_style", [](const GateSite&) { return equals("pluckMs", 0); }},
+    {"ks.nail", [](const GateSite&) { return equals("pluckMs", 0); }},
+    {"ks.pluck_vel_exp", [](const GateSite&) { return above("pluckMs", 0); }},
     // Karplus-Strong: the pick key track scales a pick position that has to be there, the hand
     // damps only the halo bank, and the air mode belongs to the guitar body the wrapper selects.
     {"ks.pick_position_per_octave", [](const GateSite&) { return above("pickPosition", 0); }},

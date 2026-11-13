@@ -173,6 +173,8 @@ constexpr UnitRow kEngineUnits[] = {
     {"ks.body_coupling", Unit::None},
     {"ks.pluck_style", Unit::None},
     {"ks.nail", Unit::None},
+    {"ks.pluck_ms", Unit::Ms},
+    {"ks.pluck_vel_exp", Unit::None},
     {"ks.sympathetic", Unit::None},
     {"ks.halo_damp_s", Unit::Seconds},
     {"ks.pickup_pos", Unit::None},

@@ -17,6 +17,7 @@
 
 #include "core/fft.h"
 #include "midi/midi_event.h"
+#include "midi/synth/contact_force.h"
 #include "midi/synth/gm_fallback_map.h"
 #include "midi/synth/native_synth.h"
 #include "midi/synth/patch_tuning.h"
@@ -1343,4 +1344,107 @@ TEST_CASE("the guitar body's air-mode fields at their defaults are the bank's ow
   NativeSynthPatch violin_knock = violin;
   violin_knock.ks.body_knock = 1.0f;
   REQUIRE(render_at_rate(violin_knock, kRate, 0.5, 0.3) == render_at_rate(violin, kRate, 0.5, 0.3));
+}
+
+namespace {
+
+/// Amplitude of the @p n th harmonic of @p f0 in @p x: a Hann window over @p periods periods,
+/// the frequency scanned across +-0.5 % so a few cents of tuning cannot move the reading.
+double harmonic_peak(const std::vector<float>& x, size_t from, int periods, double f0, int n) {
+  const size_t count = static_cast<size_t>(std::lround(periods * kRate / f0));
+  double best = 0.0;
+  for (int s = -25; s <= 25; ++s) {
+    const double hz = n * f0 * (1.0 + 0.0002 * s);
+    std::complex<double> acc = 0.0;
+    double window_sum = 0.0;
+    for (size_t i = 0; i < count; ++i) {
+      const double w = 0.5 - 0.5 * std::cos(sonare::constants::kTwoPiD * static_cast<double>(i) /
+                                            static_cast<double>(count));
+      window_sum += w;
+      acc += w * static_cast<double>(x[from + i]) *
+             std::polar(1.0, -sonare::constants::kTwoPiD * hz * static_cast<double>(i) / kRate);
+    }
+    best = std::max(best, 2.0 * std::abs(acc) / window_sum);
+  }
+  return best;
+}
+
+/// A near-lossless string with nothing but the pluck and its comb in front of it.
+KsPatchParams pluck_only_params(float pluck_ms, float pick_position) {
+  KsPatchParams p;
+  p.brightness = 1.0f;
+  p.decay_s = 1000.0f;
+  p.decay_stretch = 0.0f;
+  p.hf_decay_s = 0.0f;
+  p.mid_decay_s = 0.0f;
+  p.pick_position = pick_position;
+  p.pluck_ms = pluck_ms;
+  return p;
+}
+
+}  // namespace
+
+TEST_CASE("pluck_ms gives mode n the amplitude |sin(n pi beta)| n^-2 W(n f0 tau)",
+          "[midi][synth][ks]") {
+  constexpr uint8_t kNote = 45;  // A2, 110 Hz: 436.4 samples, a fractional period
+  constexpr double kF0 = 110.0;
+  constexpr float kPick = 0.27f;
+  // The comb is an integer delay, so beta is the rounded one the voice uses.
+  const double period = kRate / kF0;
+  const double beta = std::floor(kPick * period + 0.5) / period;
+  // Each case reads harmonics 1..n_max, every one of them; none is skipped. tau is a whole number
+  // of samples at this rate, and n_max stops short of the raised cosine's first null at 2/tau.
+  struct Case {
+    float pluck_ms;
+    int n_max;
+  };
+  for (const Case c : {Case{1.5f, 10}, Case{3.0f, 5}}) {
+    const double tau_s = 0.001 * c.pluck_ms;
+    const std::vector<float> out =
+        render_ks_core(pluck_only_params(c.pluck_ms, kPick), kNote, 1.0f, 24000);
+    const double a1 = harmonic_peak(out, 3000, 12, kF0, 1);
+    const double ref1 = std::fabs(std::sin(sonare::constants::kPiD * beta)) *
+                        sonare::midi::synth::contact_spectrum(static_cast<float>(kF0 * tau_s));
+    for (int n = 2; n <= c.n_max; ++n) {
+      const double want =
+          std::fabs(std::sin(n * sonare::constants::kPiD * beta)) / (n * n) *
+          sonare::midi::synth::contact_spectrum(static_cast<float>(n * kF0 * tau_s));
+      const double got = harmonic_peak(out, 3000, 12, kF0, n) / a1;
+      const double err_db = 20.0 * std::log10(got / (want / ref1));
+      INFO("pluck_ms " << c.pluck_ms << " harmonic " << n << " error " << err_db << " dB");
+      // Measured within 0.01 dB; the bound leaves room for the platform's rounding.
+      CHECK(std::fabs(err_db) < 0.1);
+    }
+  }
+}
+
+TEST_CASE("pluck_ms retires the noise burst's inputs and leaves 0 as the old excitation",
+          "[midi][synth][ks]") {
+  KsPatchParams base;
+  base.pick_position = 0.2f;
+  const std::vector<float> noise = render_ks_core(base, 45, 1.0f, 8000);
+  // At 0 the pluck fields name nothing: the render is the noise burst's, sample for sample.
+  KsPatchParams spelled = base;
+  spelled.pluck_ms = 0.0f;
+  spelled.pluck_vel_exp = 0.9f;
+  CHECK(render_ks_core(spelled, 45, 1.0f, 8000) == noise);
+  // Above 0 the source is the pluck, and the noise burst's inputs reach nothing.
+  KsPatchParams plucked = base;
+  plucked.pluck_ms = 2.0f;
+  const std::vector<float> reference = render_ks_core(plucked, 45, 1.0f, 8000);
+  CHECK(reference != noise);
+  KsPatchParams retired = plucked;
+  retired.exc_brightness = 0.1f;
+  retired.exc_brightness_per_octave = 1.5f;
+  retired.vel_to_brightness = 1.0f;
+  retired.pluck_style = 1.0f;
+  retired.nail = 1.0f;
+  CHECK(render_ks_core(retired, 45, 1.0f, 8000) == reference);
+  // The comb stays in series, and a harder pluck shortens the release.
+  KsPatchParams moved = plucked;
+  moved.pick_position = 0.35f;
+  CHECK(render_ks_core(moved, 45, 1.0f, 8000) != reference);
+  KsPatchParams harder = plucked;
+  harder.pluck_vel_exp = 0.8f;
+  CHECK(render_ks_core(harder, 45, 1.0f, 8000) != reference);
 }

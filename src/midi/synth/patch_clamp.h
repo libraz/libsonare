@@ -147,6 +147,9 @@ constexpr NativeSynthPatch clamp_synth_patch(const NativeSynthPatch& patch) noex
   p.ks.body_coupling = patch_clamp_detail::sanitize(p.ks.body_coupling, 0.0f);
   p.ks.pluck_style = patch_clamp_detail::sanitize(p.ks.pluck_style, 0.0f);
   p.ks.nail = patch_clamp_detail::sanitize(p.ks.nail, 0.0f);
+  p.ks.pluck_ms = std::clamp(patch_clamp_detail::sanitize(p.ks.pluck_ms, 0.0f), 0.0f, 10.0f);
+  p.ks.pluck_vel_exp =
+      std::clamp(patch_clamp_detail::sanitize(p.ks.pluck_vel_exp, 0.0f), 0.0f, 1.0f);
   p.ks.pickup_pos = patch_clamp_detail::sanitize(p.ks.pickup_pos, 0.0f);
   p.ks.dispersion = patch_clamp_detail::sanitize(p.ks.dispersion, 0.0f);
   p.ks.tension_mod = patch_clamp_detail::sanitize(p.ks.tension_mod, 0.0f);
