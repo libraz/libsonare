@@ -449,7 +449,7 @@ SONARE_TUNED_CONSTEXPR std::array<NativeSynthPatch, 128> build_drum_note_table()
   t[35].percussion.wire_cutoff_hz = 2351.83f;
   t[35].resonance_q = 3.77475f;
   t[36] = d.kick;
-  t[36].gain = 5.891f;
+  t[36].gain = 5.86291f;
   // -318 dB/s measured against -509 modelled in every matched octave: the
   // beater thud outlasts the membrane fundamental it sits under.
   t[36].percussion.noise_decay_ms = 54.0f;
@@ -574,7 +574,7 @@ SONARE_TUNED_CONSTEXPR std::array<NativeSynthPatch, 128> build_drum_note_table()
   t[41].percussion.shell_weight[1] = 1.58344f;
   t[41].percussion.strike_theta = 0.0240693f;
   t[41].resonance_q = 2.03979f;
-  t[41].gain = 5.54476f;
+  t[41].gain = 4.72427f;
   t[43] = tom_patch(kToms[1]);
   t[43].amp_env.attack_ms = 0.646207f;
   t[43].amp_env.sustain = 0.621517f;
@@ -602,7 +602,7 @@ SONARE_TUNED_CONSTEXPR std::array<NativeSynthPatch, 128> build_drum_note_table()
   t[43].percussion.shell_weight[0] = 2.2918f;
   t[43].percussion.shell_weight[1] = 3.8893f;
   t[43].resonance_q = 1.59703f;
-  t[43].gain = 2.56842f;
+  t[43].gain = 2.17792f;
   t[43].percussion.strike_theta = 0.0807373f;
   t[43].stereo_spread = 0.0954915f;
   t[45] = tom_patch(kToms[2]);
@@ -829,7 +829,7 @@ SONARE_TUNED_CONSTEXPR std::array<NativeSynthPatch, 128> build_drum_note_table()
       // `tone_f0_hz` sat within 0.3 doublings of the module before this round;
       // reading `plate_low_hz` up to the field floor moved it to 0.8 out, so it
       // is left at the unmeasured value.
-      {52, 1576.0f, 0.35f, 0.70f, 4000.0f, 246.0f, 0.5f, 260.0f, 1.70f, 0.70f, 7.5f, 0.238f},
+      {52, 1576.0f, 0.35f, 0.70f, 4000.0f, 246.0f, 0.5f, 260.0f, 1.70f, 0.70f, 7.5f, 0.219949f},
       // A 10 inch splash: the one piece whose damping is not flat, losing
       // 100 dB/s at the bottom against 45 in the middle, because a plate that
       // small barely supports its lowest modes at all.
@@ -842,7 +842,7 @@ SONARE_TUNED_CONSTEXPR std::array<NativeSynthPatch, 128> build_drum_note_table()
       // moving `plate_low_hz` there roughly halved the piece's decay (292 ms
       // to 156, against a reference of 282), so it is left at the unmeasured
       // 563 Hz this round could not improve on without breaking it.
-      {55, 3663.0f, 0.30f, 0.30f, 4000.0f, 94.0f, 0.3f, 563.0f, 0.65f, 0.75f, 2.0f, 0.760f},
+      {55, 3663.0f, 0.30f, 0.30f, 4000.0f, 94.0f, 0.3f, 563.0f, 0.65f, 0.75f, 2.0f, 0.658463f},
       // The open hi-hat: two small cymbals held apart, so it is a plate like
       // the rest and not the dark band the kit had here. The module reads its
       // centre of gravity at 8.6 kHz, higher than any other piece, and its
@@ -915,7 +915,7 @@ SONARE_TUNED_CONSTEXPR std::array<NativeSynthPatch, 128> build_drum_note_table()
   t[49].percussion.wire_cutoff_hz = 3311.22f;
   t[49].resonance_q = 1.10288f;
   t[49].stereo_spread = 0.337703f;
-  t[49].gain = 0.266164f;
+  t[49].gain = 0.27853f;
   t[57] = cymbal_patch(kCymbals[1]);
   // The stick rings the plate and its low band hands energy up until it is 10 dB
   // down: strike-to-body tilt change -20.9 -> -5.5 dB against the module, band shape
@@ -1020,7 +1020,7 @@ SONARE_TUNED_CONSTEXPR std::array<NativeSynthPatch, 128> build_drum_note_table()
   // spacing. Open: tilt +12.3 -> +3.1 dB, band shape 12.7 -> 9.0 dB, centroid +7.7 -> +4.0%.
   t[46].percussion.noise_gain = 2.22492f;
   t[46].percussion.tone_gain = 0.25f;
-  t[46].gain = 0.146583f;
+  t[46].gain = 0.120782f;
   t[46].percussion.contact = 6.02484f;
   t[46].percussion.contact_ms = 0.170637f;
   t[46].percussion.plate_low_hz = 140.0f;
@@ -1051,7 +1051,7 @@ SONARE_TUNED_CONSTEXPR std::array<NativeSynthPatch, 128> build_drum_note_table()
   // 15.4 -> 6.8 dB, centroid -14.5 -> -2.0%, tonality -6.2 -> -2.3 dB.
   t[42].percussion.noise_gain = 2.25149f;
   t[42].percussion.tone_gain = 0.145077f;
-  t[42].gain = 0.184725f;
+  t[42].gain = 0.188742f;
   t[42].percussion.contact = 0.216282f;
   t[42].percussion.contact_ms = 1.50399f;
   t[42].percussion.plate_contact = 1.4191f;
@@ -1087,7 +1087,7 @@ SONARE_TUNED_CONSTEXPR std::array<NativeSynthPatch, 128> build_drum_note_table()
   // longer contact drives the plate: tilt +23.4 -> -2.9 dB, band shape 16.8 -> 9.4 dB.
   t[44].percussion.noise_gain = 2.75016f;
   t[44].percussion.tone_gain = 0.19306f;
-  t[44].gain = 0.15208f;
+  t[44].gain = 0.149915f;
   t[44].percussion.contact = 0.703668f;
   t[44].percussion.contact_ms = 0.823679f;
   t[44].percussion.plate_contact = 0.676952f;
@@ -1170,7 +1170,7 @@ SONARE_TUNED_CONSTEXPR std::array<NativeSynthPatch, 128> build_drum_note_table()
   t[53].percussion.tone_direct = 0.779508f;
   t[53].resonance_q = 0.912155f;
   t[53].stereo_spread = 0.473975f;
-  t[53].gain = 0.16194f;
+  t[53].gain = 0.133436f;
   t[53].percussion.mode_ratios[2] = 2.87525f;
   t[53].percussion.noise_decay_ms = 342.377f;
 
@@ -1203,7 +1203,7 @@ SONARE_TUNED_CONSTEXPR std::array<NativeSynthPatch, 128> build_drum_note_table()
   t[37].percussion.wire_cutoff_hz = 1972.81f;
   t[37].percussion.wire_threshold = 0.0490133f;
   t[37].resonance_q = 0.943142f;
-  t[75] = make_wood(2500.0f, 0.0f, 0.025f, 1.3248f);  // Claves (2500 Hz, ~25 ms)
+  t[75] = make_wood(2500.0f, 0.0f, 0.025f, 1.48231f);  // Claves (2500 Hz, ~25 ms)
   t[75].amp_env.attack_ms = 0.431828f;
   t[75].amp_env.decay_ms = 30.2516f;
   t[75].amp_env.sustain = 0.00981196f;
@@ -1246,7 +1246,7 @@ SONARE_TUNED_CONSTEXPR std::array<NativeSynthPatch, 128> build_drum_note_table()
   t[76].percussion.plate_low_hz = 306.297f;
   t[76].percussion.plate_t60_s = 0.917233f;
   t[76].percussion.tone_direct = 0.795131f;
-  t[76].gain = 0.4939f;
+  t[76].gain = 0.553943f;
   // A fit with the contact law free beat one holding the mode-number law on the
   // reference's velocity range it never trained on (3.0 dB off against 3.4) and on
   // the kit's gates (one bound over, 1.77 against two, 1.83).
@@ -1277,7 +1277,7 @@ SONARE_TUNED_CONSTEXPR std::array<NativeSynthPatch, 128> build_drum_note_table()
   t[77].percussion.plate_low_hz = 439.51f;
   t[77].percussion.plate_t60_s = 0.061714f;
   t[77].percussion.tone_direct = 0.458825f;
-  t[77].gain = 1.0003f;
+  t[77].gain = 1.0075f;
   t[77].percussion.wire_buzz = 0.472136f;
   t[77].percussion.wire_cutoff_hz = 1756.44f;
   t[77].percussion.wire_threshold = 0.0793052f;
@@ -1290,7 +1290,7 @@ SONARE_TUNED_CONSTEXPR std::array<NativeSynthPatch, 128> build_drum_note_table()
   // struck through a stick-tip contact so the top partial keeps the level the recording gives it,
   // and undriven: the recording holds none of the difference tones a drive puts under 472 Hz.
   t[56] = make_metal(472.0f, {1.0f, 2.64f, 4.49f, 6.14f, 7.75f, 9.85f}, 6, 0.25f, 0.5f, 0.2f);
-  t[56].gain = 0.4614f;
+  t[56].gain = 0.473692f;
   t[56].amp_env.attack_ms = 2.24763f;
   t[56].amp_env.decay_ms = 71.5744f;
   t[56].cutoff_hz = 12351.8f;
@@ -1353,7 +1353,7 @@ SONARE_TUNED_CONSTEXPR std::array<NativeSynthPatch, 128> build_drum_note_table()
   t[68].percussion.plate_t60_s = 0.130148f;
   t[68].percussion.tone_direct = 0.743953f;
   t[68].resonance_q = 19.0001f;
-  t[68].gain = 0.2071f;
+  t[68].gain = 0.226791f;
   t[68].percussion.contact_ms = 0.234707f;
   t[68].percussion.mode_decay_exp = 0.206559f;
   t[83] =
@@ -1393,7 +1393,7 @@ SONARE_TUNED_CONSTEXPR std::array<NativeSynthPatch, 128> build_drum_note_table()
   t[80].percussion.noise_q = 0.905879f;
   t[80].resonance_q = 0.94421f;
   t[80].stereo_spread = 0.280839f;
-  t[80].gain = 1.33914f;
+  t[80].gain = 1.57172f;
   t[80].cutoff_hz = 15488.5f;
   t[81].percussion.exclusive_class = 3;
   // Not a strainer: a high-passed noise layer on a piece with no wires, and it
@@ -1464,7 +1464,7 @@ SONARE_TUNED_CONSTEXPR std::array<NativeSynthPatch, 128> build_drum_note_table()
   t[60].percussion.plate_t60_s = 1.99841f;
   t[60].percussion.tone_direct = 0.885565f;
   t[60].resonance_q = 1.40527f;
-  t[60].gain = 0.6443f;
+  t[60].gain = 0.594012f;
   t[60].percussion.mode_decay_exp = 0.192627f;
   t[61] = make_membrane(180.0f, 0.20f, 0.30f, 0.0f, 0.70f);  // Low Bongo
   t[61].amp_env.attack_ms = 4.5725f;
@@ -1541,7 +1541,7 @@ SONARE_TUNED_CONSTEXPR std::array<NativeSynthPatch, 128> build_drum_note_table()
   t[62].percussion.plate_t60_s = 0.0499273f;
   t[62].percussion.tone_direct = 0.18932f;
   t[62].resonance_q = 2.80422f;
-  t[62].gain = 0.497269f;
+  t[62].gain = 0.510517f;
   t[63] = make_membrane(200.0f, 0.25f, 0.30f, 0.0f, 1.1847f);  // Open Hi Conga
   t[63].amp_env.attack_ms = 1.31079f;
   t[63].amp_env.decay_ms = 210.879f;
@@ -1571,7 +1571,7 @@ SONARE_TUNED_CONSTEXPR std::array<NativeSynthPatch, 128> build_drum_note_table()
   t[63].percussion.plate_hf_ratio = 0.375686f;
   t[63].percussion.plate_low_hz = 140.0f;
   t[63].percussion.plate_t60_s = 0.32909f;
-  t[63].gain = 0.992202f;
+  t[63].gain = 0.989833f;
   // Not a strainer: a high-passed noise layer the fit reached for on a piece
   // with no wires, and it carries 5 dB of this conga's tonality. Converted to the
   // fractional threshold rather than deleted, because deleting it is a
@@ -1623,7 +1623,7 @@ SONARE_TUNED_CONSTEXPR std::array<NativeSynthPatch, 128> build_drum_note_table()
   t[64].percussion.contact_ms = 0.129169f;
   t[64].percussion.plate_gain = 0.00894634f;
   t[64].resonance_q = 0.855344f;
-  t[64].gain = 1.3622f;
+  t[64].gain = 1.51688f;
   t[64].percussion.plate_hf_ratio = 0.280171f;
   t[64].percussion.plate_low_hz = 347.789f;
   t[64].percussion.plate_t60_s = 0.36498f;
@@ -1665,9 +1665,9 @@ SONARE_TUNED_CONSTEXPR std::array<NativeSynthPatch, 128> build_drum_note_table()
   t[65].percussion.tone_direct = 0.907509f;
   t[65].resonance_q = 1.33548f;
   t[65].percussion.shell_num_modes = 2;
-  t[65].gain = 0.67961f;
+  t[65].gain = 0.641722f;
   t[65].percussion.mode_decay_exp = 0.381966f;
-  t[66] = make_membrane(200.0f, 0.26f, 0.20f, 550.0f, 0.70f);  // Low Timbale
+  t[66] = make_membrane(200.0f, 0.26f, 0.20f, 550.0f, 0.705037f);  // Low Timbale
   t[66].amp_env.attack_ms = 0.173843f;
   t[66].amp_env.decay_ms = 23.228f;
   t[66].amp_env.sustain = 0.191831f;
@@ -1738,7 +1738,7 @@ SONARE_TUNED_CONSTEXPR std::array<NativeSynthPatch, 128> build_drum_note_table()
   t[71].percussion.plate_t60_s = 0.150811f;
   t[71].resonance_q = 2.0616f;
   t[71].percussion.contact_ms = 0.0717354f;
-  t[71].gain = 0.415887f;
+  t[71].gain = 0.468681f;
   t[72].percussion.exclusive_class = 4;
   t[72].amp_env.attack_ms = 51.0206f;
   // Zero sustain, as the acoustic snare above: a one-shot that sustains
@@ -1765,7 +1765,7 @@ SONARE_TUNED_CONSTEXPR std::array<NativeSynthPatch, 128> build_drum_note_table()
   t[72].percussion.plate_t60_s = 9.06089f;
   t[72].resonance_q = 2.28507f;
   t[72].percussion.contact_ms = 0.0743891f;
-  t[72].gain = 0.143223f;
+  t[72].gain = 0.151317f;
   t[39] = clap;  // Hand Clap
 
   // --- radiated ceiling (mute group note) ---
@@ -1922,7 +1922,7 @@ SONARE_TUNED_CONSTEXPR std::array<NativeSynthPatch, 128> build_drum_note_table()
   t[40].percussion.wire_decay_ms = 23.8717f;
   t[40].resonance_q = 2.52748f;
   t[40].stereo_spread = 0.789902f;
-  t[40].gain = 7.7635f;  // Electric Snare
+  t[40].gain = 6.9885f;  // Electric Snare
   t[40].amp_env.attack_ms = 5.84517f;
   t[40].amp_env.decay_ms = 178.072f;
   t[40].amp_env.sustain = 0.26861f;
@@ -1986,12 +1986,12 @@ SONARE_TUNED_CONSTEXPR std::array<NativeSynthPatch, 128> build_drum_note_table()
   t[69].percussion.noise_cutoff_hz = 7492.88f;
   t[69].percussion.noise_decay_ms = 36.8246f;
   t[69].percussion.noise_q = 0.816884f;
-  t[69].gain = 0.430994f;
-  t[70] = make_shaker(20.0f, 90.0f, 3200.0f, 1.5f, 0.2173f);  // Maracas
-  t[82] = make_shaker(28.0f, 110.0f, 6000.0f, 1.0f, 0.5f);    // Shaker
+  t[69].gain = 0.501034f;
+  t[70] = make_shaker(20.0f, 90.0f, 3200.0f, 1.5f, 0.210149f);  // Maracas
+  t[82] = make_shaker(28.0f, 110.0f, 6000.0f, 1.0f, 0.5f);      // Shaker
   // Guiro (mute group 5): ratchet ridge train.
-  t[73] = make_scrape(8.0f, 120.0f, 150.0f, 2500.0f, 3.0f, 0.0f, 0.2065f);  // Short Guiro
-  t[74] = make_scrape(8.0f, 500.0f, 120.0f, 2500.0f, 3.0f, 0.0f, 0.1437f);  // Long Guiro
+  t[73] = make_scrape(8.0f, 120.0f, 150.0f, 2500.0f, 3.0f, 0.0f, 0.225594f);  // Short Guiro
+  t[74] = make_scrape(8.0f, 500.0f, 120.0f, 2500.0f, 3.0f, 0.0f, 0.1437f);    // Long Guiro
   t[73].percussion.exclusive_class = 5;
   t[74].percussion.exclusive_class = 5;
   t[74].amp_env.decay_ms = 36.7344f;
@@ -2008,7 +2008,7 @@ SONARE_TUNED_CONSTEXPR std::array<NativeSynthPatch, 128> build_drum_note_table()
   t[74].percussion.phisem_sound_ms = 1.20445f;
   t[74].percussion.plate_gain = 0.259111f;
   t[74].stereo_spread = 0.269538f;
-  t[74].gain = 0.2773f;
+  t[74].gain = 0.245477f;
   t[74].amp_env.attack_ms = 1.57715f;
   t[74].percussion.contact_ms = 0.2076f;
   t[74].percussion.noise_cutoff_hz = 3841.33f;
@@ -2040,7 +2040,7 @@ SONARE_TUNED_CONSTEXPR std::array<NativeSynthPatch, 128> build_drum_note_table()
   t[78].percussion.plate_gain = 0.876207f;
   t[78].resonance_q = 5.32606f;
   t[78].stereo_spread = 0.342513f;
-  t[78].gain = 1.12696f;
+  t[78].gain = 1.23706f;
   t[78].percussion.contact_ms = 0.62648f;
   t[78].percussion.noise_cutoff_hz = 2455.64f;
   t[78].percussion.noise_decay_ms = 432.956f;
@@ -2065,7 +2065,7 @@ SONARE_TUNED_CONSTEXPR std::array<NativeSynthPatch, 128> build_drum_note_table()
   t[79].percussion.phisem_sound_ms = 8.47193f;
   t[79].percussion.plate_gain = 0.0471479f;
   t[79].stereo_spread = 0.546511f;
-  t[79].gain = 0.989136f;
+  t[79].gain = 1.08318f;
   t[79].percussion.contact_ms = 1.89666f;
   t[79].percussion.noise_cutoff_hz = 943.037f;
   t[79].percussion.noise_decay_ms = 244.229f;
@@ -2108,7 +2108,7 @@ SONARE_TUNED_CONSTEXPR std::array<NativeSynthPatch, 128> build_drum_note_table()
   t[54].percussion.plate_t60_s = 6.61436f;
   t[54].resonance_q = 2.09996f;
   // Measured 10.9 dB quiet against the module; `level` is exact in `gain`.
-  t[54].gain = 0.513553f;
+  t[54].gain = 0.570504f;
   t[70].percussion.phisem_body_hz = 210.0f;  // Maracas
   t[70].percussion.phisem_body_q = 0.820548f;
   t[70].percussion.phisem_body_gain = 2.76066f;
@@ -2153,7 +2153,8 @@ SONARE_TUNED_CONSTEXPR std::array<NativeSynthPatch, 128> build_drum_note_table()
   t[73].percussion.noise_q = 1.80927f;
 
   // Per-key velocity exponent. Keys 35, 37, 38, 39, 45, 47, 48, 50, 51, 57, 58, 59, 61, 67 and 81
-  // keep the default.
+  // keep the default. `gain` is the level at velocity 100, the module's assumed label, so a key's
+  // gain is re-derived by (100/127)^(1.1 - p) whenever its exponent p changes.
   // dynamics oracle: library kit (real strikes), zero-crossing of vel_range; timbre oracle: module
   t[36].percussion.velocity_exponent = 1.08f;
   // dynamics oracle: library kit (real strikes), zero-crossing of vel_range; timbre oracle: module

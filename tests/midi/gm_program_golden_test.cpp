@@ -41,11 +41,17 @@
 /// its program's row above, which is what keeps the two manifests on one
 /// harness and what makes the other rows' difference the gesture rather than
 /// the subdivision.
+///
+/// The third case is the drum kit: its unit is the key and the velocity, since a
+/// kit piece is one patch under a velocity law and no program separates two of
+/// them. Kit 0 is every voiced key at two velocities; each GS kit voiced apart
+/// from it takes one velocity and one key per class apply_gs_drum_kit branches on.
 
 #include <algorithm>
 #include <catch2/catch_test_macros.hpp>
 #include <cmath>
 #include <cstdint>
+#include <cstdio>
 #include <cstdlib>
 #include <filesystem>
 #include <fstream>
@@ -58,6 +64,7 @@
 #include "midi/controller_profile.h"
 #include "midi/synth/excitation_axes.h"
 #include "midi/synth/gm_fallback_map.h"
+#include "midi/synth/gs_layer.h"
 #include "midi/synth/native_synth.h"
 #include "midi/ump.h"
 #include "support/golden_hash.h"
@@ -72,9 +79,13 @@ using sonare::midi::ControllerInput;
 using sonare::midi::ControllerProfile;
 using sonare::midi::synth::engine_axis_capability;
 using sonare::midi::synth::EngineAxisCapability;
+using sonare::midi::synth::gm_fallback_drum_kit;
 using sonare::midi::synth::gm_fallback_patch;
+using sonare::midi::synth::gs_drum_kit_is_voiced_apart;
+using sonare::midi::synth::GsDrumKit;
 using sonare::midi::synth::kAxisBrightness;
 using sonare::midi::synth::kAxisForce;
+using sonare::midi::synth::kGsDrumKits;
 using sonare::midi::synth::kSynthEngineModeMax;
 using sonare::midi::synth::NativeSynth;
 using sonare::midi::synth::NativeSynthConfig;
@@ -494,6 +505,106 @@ void write_gesture_manifest(const std::filesystem::path& path,
   }
 }
 
+/// Kit 0 rows render at these two velocities; neither is 100 (the program rows) or 127, where v^e
+/// is 1 for any exponent.
+constexpr int kKitVelocities[] = {40, 110};
+
+/// A GS kit row renders at one velocity, on one key per class apply_gs_drum_kit branches on:
+/// kick, snare, closed hat, tom, crash.
+constexpr int kGsKitVelocity = 110;
+constexpr uint8_t kGsKitKeys[] = {36, 38, 42, 45, 49};
+static_assert(kGsKitVelocity == kKitVelocities[1],
+              "a GS kit row is compared against kit 0 at its velocity");
+
+constexpr uint8_t kKitChannel = 9;
+
+/// Keys of the drum table that carry a patch of their own. Every other slot holds the generic
+/// short burst, so the voiced set is the key range the table assigns explicitly.
+std::vector<uint8_t> voiced_drum_keys() {
+  constexpr uint8_t kFirstVoicedKey = 31;
+  constexpr uint8_t kLastVoicedKey = 87;
+  std::vector<uint8_t> keys;
+  for (uint8_t note = kFirstVoicedKey; note <= kLastVoicedKey; ++note) keys.push_back(note);
+  return keys;
+}
+
+std::vector<const GsDrumKit*> voiced_apart_kits() {
+  std::vector<const GsDrumKit*> kits;
+  for (const GsDrumKit& kit : kGsDrumKits) {
+    if (gs_drum_kit_is_voiced_apart(kit.index)) kits.push_back(&kit);
+  }
+  return kits;
+}
+
+struct KitRow {
+  std::string key;
+  std::string hash;
+};
+
+std::string kit_row_key(uint8_t kit, uint8_t note, int velocity) {
+  char key[32];
+  std::snprintf(key, sizeof key, "kit%03d/k%03d/v%03d", kit, note, velocity);
+  return key;
+}
+
+/// The kit is selected by a program change on the rhythm part, which needs no bank and no GS state.
+KitRow render_kit_row(const GsDrumKit& kit, uint8_t note, int velocity) {
+  const NativeSynthConfig cfg = golden_config();
+
+  NativeSynth synth(cfg);
+  synth.prepare(kGoldenRate, kGoldenBlock);
+  synth.on_event(0, event(sonare::midi::make_midi1_program_change(0, kKitChannel, kit.program)));
+  synth.on_event(0, event(sonare::midi::make_midi1_note_on(0, kKitChannel, note,
+                                                           static_cast<uint8_t>(velocity))));
+
+  sonare::test::StereoRender held = render_stereo(synth, kHeldFrames);
+  synth.on_event(0, event(sonare::midi::make_midi1_note_off(0, kKitChannel, note, 0)));
+  const sonare::test::StereoRender tail = render_stereo(synth, kReleaseFrames);
+
+  held.left.insert(held.left.end(), tail.left.begin(), tail.left.end());
+  held.right.insert(held.right.end(), tail.right.begin(), tail.right.end());
+  return {kit_row_key(kit.index, note, velocity),
+          std::to_string(fnv1a_quantized_stereo(held.left, held.right))};
+}
+
+std::vector<KitRow> compute_kit_rows() {
+  std::vector<KitRow> rows;
+  const GsDrumKit& standard = kGsDrumKits[0];
+  for (const uint8_t note : voiced_drum_keys()) {
+    for (const int velocity : kKitVelocities)
+      rows.push_back(render_kit_row(standard, note, velocity));
+  }
+  for (const GsDrumKit* kit : voiced_apart_kits()) {
+    for (const uint8_t note : kGsKitKeys)
+      rows.push_back(render_kit_row(*kit, note, kGsKitVelocity));
+  }
+  return rows;
+}
+
+std::map<std::string, std::string> load_kit_manifest(const std::filesystem::path& path) {
+  std::ifstream file(path);
+  REQUIRE(file.is_open());
+  std::map<std::string, std::string> out;
+  std::string line;
+  while (std::getline(file, line)) {
+    if (line.empty() || line[0] == '#') continue;
+    std::stringstream stream(line);
+    std::string key;
+    std::string hash;
+    std::getline(stream, key, '\t');
+    std::getline(stream, hash, '\t');
+    out[key] = hash;
+  }
+  return out;
+}
+
+void write_kit_manifest(const std::filesystem::path& path, const std::vector<KitRow>& rows) {
+  std::filesystem::create_directories(path.parent_path());
+  std::ofstream file(path);
+  file << "# kit/key/velocity\tfnv1a_quantized_interleaved_hash\n";
+  for (const KitRow& row : rows) file << row.key << '\t' << row.hash << '\n';
+}
+
 }  // namespace
 
 TEST_CASE("NativeSynth GM program renders stay bit-identical", "[.][midi][synth][golden]") {
@@ -591,4 +702,51 @@ TEST_CASE("NativeSynth engine renders under a controller gesture stay bit-identi
   }
   INFO("gestures asserted reachable: " << reached);
   REQUIRE(reached > 0);
+}
+
+TEST_CASE("NativeSynth drum kit renders stay bit-identical", "[.][midi][synth][golden]") {
+  INFO(sonare::test::kGoldenDigestProvenance);
+  const std::filesystem::path manifest = "tests/midi/golden/gm_kit_hashes.tsv";
+  const std::vector<KitRow> rows = compute_kit_rows();
+  if (std::getenv("SONARE_UPDATE_KIT_GOLDEN") != nullptr) {
+    write_kit_manifest(manifest, rows);
+  }
+
+  const auto expected = load_kit_manifest(manifest);
+  const std::vector<const GsDrumKit*> kits = voiced_apart_kits();
+  // Un-reach is a failure rather than a clean run: a walk that stopped finding kits reports
+  // exactly what a passing tree reports.
+  REQUIRE_FALSE(kits.empty());
+  for (const GsDrumKit* kit : kits) {
+    CAPTURE(kit->name, kit->program, kit->index);
+    REQUIRE(gm_fallback_drum_kit(kit->program) == kit->index);
+  }
+  REQUIRE(rows.size() == voiced_drum_keys().size() * std::size(kKitVelocities) +
+                             kits.size() * std::size(kGsKitKeys));
+  REQUIRE(expected.size() == rows.size());
+
+  // Checked rather than required, so how far a drift spreads is visible.
+  std::map<std::string, std::string> actual;
+  for (const KitRow& row : rows) {
+    CAPTURE(row.key);
+    CHECK(expected.at(row.key) == row.hash);
+    actual[row.key] = row.hash;
+  }
+
+  // The standing proof the rows can go red: velocity must reach every key, and each kit's rows must
+  // not all collapse onto kit 0's, or the program change selected nothing.
+  for (const uint8_t note : voiced_drum_keys()) {
+    CAPTURE(static_cast<int>(note));
+    CHECK(actual.at(kit_row_key(0, note, kKitVelocities[0])) !=
+          actual.at(kit_row_key(0, note, kKitVelocities[1])));
+  }
+  for (const GsDrumKit* kit : kits) {
+    CAPTURE(kit->name);
+    bool moved = false;
+    for (const uint8_t note : kGsKitKeys) {
+      moved = moved || actual.at(kit_row_key(kit->index, note, kGsKitVelocity)) !=
+                           actual.at(kit_row_key(0, note, kGsKitVelocity));
+    }
+    CHECK(moved);
+  }
 }

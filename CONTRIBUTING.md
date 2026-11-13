@@ -140,7 +140,7 @@ This is what a change looks like by the time it is merged. The maintainer checks
 - Tag C++ cases over roughly two seconds `[.][slow]` and slow Python tests `@pytest.mark.slow`; prefer shrinking the input.
 - Run golden tests through `make test-golden` only, and confirm a golden failure is not pre-existing before attributing it to your change.
 - Never move a golden without the behavioural change that justifies it, in the same commit.
-- For any change under `src/midi/synth/`, run `make test-golden` locally and commit both synth manifests' diffs (and the regenerated value registry, if a patch field or calibration constant moved) with it.
+- For any change under `src/midi/synth/`, run `make test-golden` locally and commit the synth manifests' diffs (program, gesture and drum kit) and the regenerated value registry, if a patch field or calibration constant moved, with it; `SONARE_UPDATE_KIT_GOLDEN=1` regenerates only `tests/midi/golden/gm_kit_hashes.tsv`, and `make test-golden` ends with `make bank-versions-check`.
 - Hold MIDI values at MIDI 2.0 width (`Velocity16` / `Control32` / `Bend32`); read `f7()` / `f14()` for a float and `u7()` / `u14()` for an integer decision. Keep MIDI 1.0 renders bit-identical (`tests/midi/golden/midi1_control_hashes.tsv`).
 - Compare float results across code paths within a tolerance derived from the values' scale, never with `==`.
 - A test showing that a parameter changed a result compares every field the operation measures.
@@ -245,7 +245,7 @@ Nothing in this section asks anything of you; read it when a checklist item or a
 
 - `sonare_tests` loads reference fixtures by relative path.
 - Golden tests are excluded from the default run, and their hashes cannot match across architectures. The digests are recorded at Release, so `sonare_tests "[golden]"` from a Debug tree compares two optimization levels and fails on a small, stable subset. Each case's failure output says which kind of run produced it.
-- The instrument bank's value registry fingerprints tunable values, so an engine-code change moves no version and only the synth goldens see it. `gm_program_hashes.tsv` covers each program with no controller input; `gm_gesture_hashes.tsv` covers each engine, and each patch-gated branch, under one controller gesture per row. No CI job runs them.
+- The instrument bank's value registry fingerprints tunable values, so an engine-code change moves no version and only the synth goldens see it. `gm_program_hashes.tsv` covers each program with no controller input; `gm_gesture_hashes.tsv` covers each engine, and each patch-gated branch, under one controller gesture per row; `gm_kit_hashes.tsv` covers every voiced drum key of kit 0 at two velocities and each GS kit voiced apart from it on one key per piece class. No CI job runs them.
 - CI runs on x86_64 and aarch64 under GCC and clang, whose float rounding differs; a single field can come out bit-identical on one platform.
 - No test or tool reads documentation. README examples, counts and stated ranges are transcribed by hand, so a prose edit never turns a build red.
 

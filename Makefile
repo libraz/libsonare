@@ -151,10 +151,19 @@ test-slow: build fixtures
 # whether two optimization levels agree rather than whether the code changed.
 # And $(BUILD_DIR) is shared: depending on `build` would reconfigure whatever
 # another session has in it, mid-run, as a side effect of running a test.
+# The registry check runs last, after the digests, in its own tuning build
+# (BANK_BUILD_DIR): the digests see engine code and the registry sees values.
 test-golden: fixtures
 	$(CMAKE) -B $(GOLDEN_BUILD_DIR) -DCMAKE_BUILD_TYPE=Release
 	$(CMAKE) --build $(GOLDEN_BUILD_DIR) $(BUILD_PARALLEL) --target sonare_tests
 	$(GOLDEN_BUILD_DIR)/bin/sonare_tests "[golden]"
+	@if command -v $(RYE) >/dev/null 2>&1; then \
+	  $(MAKE) build-bank-shared || { echo "bank-versions-check: building the registry library failed"; exit 1; }; \
+	  $(MAKE) bank-versions-check || { echo "bank-versions-check: a unit's values moved without a version bump"; exit 1; }; \
+	else \
+	  echo "note: skipping bank-versions-check -- $(RYE) is not installed."; \
+	  echo "      run 'make bank-versions-check' once it is."; \
+	fi
 
 test-optional-fixtures:
 	$(CMAKE) -B $(OPTIONAL_FIXTURE_BUILD_DIR) -DCMAKE_BUILD_TYPE=Debug -DSONARE_ENABLE_OPTIONAL_FIXTURE_TESTS=ON
