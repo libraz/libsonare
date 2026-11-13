@@ -14,7 +14,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import velocity_layers as V
 
 
-def cell(note, vel, ladder=(0.0, -6.0, -12.0), span=4.2, peak=-10.0):
+def cell(note, vel, ladder=(0.0, -6.0, -12.0, -15.0, -20.0), span=4.2, peak=-10.0):
     return {
         "note": note,
         "velocity": vel,
@@ -32,14 +32,60 @@ def test_one_sample_at_three_gains_is_one_layer():
 
 def test_a_brighter_harder_layer_is_its_own_recording():
     """The control: a different recording at the top velocity must count."""
-    rows = [cell(60, 40), cell(60, 80), cell(60, 120, ladder=(0.0, -3.0, -7.0))]
+    rows = [cell(60, 40), cell(60, 80), cell(60, 120, ladder=(0.0, -3.0, -7.0, -9.0, -12.0))]
     assert V.note_layers(rows) == {60: (3, 2)}
-    s = V.layer_summary(rows + [cell(64, 40, span=3.0), cell(64, 80, span=3.5)])
+    other = (0.0, -5.0, -9.0, -14.0, -18.0)
+    s = V.layer_summary(rows + [cell(64, 40), cell(64, 80, ladder=other)])
     assert (s["velocities"], s["independent"], s["collapsed_notes"]) == (5, 4, [60])
 
 
-def test_a_missing_field_never_reads_as_the_same_recording():
+def test_a_missing_ladder_never_reads_as_the_same_recording():
     a, b = cell(60, 40), cell(60, 80)
-    b.pop("decay_span_s")
-    a.pop("decay_span_s")
+    b.pop("partials_db")
     assert V.note_layers([a, b]) == {60: (2, 2)}
+
+
+def hit(note, vel, bands, peak=-10.0):
+    return {"note": note, "velocity": vel, "bands_db": list(bands), "peak_dbfs": peak}
+
+
+BANDS = (-50.5, -4.1, 0.0, -15.6, -8.8, -11.5, -17.9)
+
+
+def test_a_kit_key_under_gain_is_one_recording():
+    """Kit rows read by their band ladder: one sample at six velocities is one layer."""
+    rows = [hit(81, v, BANDS, peak=-40.0 + v / 4) for v in (20, 40, 60, 80, 100, 127)]
+    assert V.note_layers(rows) == {81: (6, 1)}
+
+
+def test_a_constant_offset_on_every_rung_is_still_one_recording():
+    shifted = tuple(b - 3.0 for b in BANDS)
+    assert V.same_recording(hit(119, 40, BANDS), hit(119, 100, shifted))
+    # A tilt is a filter or another strike, not a gain.
+    tilted = tuple(b - 0.5 * i for i, b in enumerate(BANDS))
+    assert not V.same_recording(hit(119, 40, BANDS), hit(119, 100, tilted))
+
+
+def test_too_few_rungs_never_reads_as_one_recording():
+    short = (0.0, -6.0, -12.0)
+    assert not V.same_recording(cell(60, 40, ladder=short), cell(60, 80, ladder=short))
+
+
+def test_a_constant_square_law_across_notes_is_the_sampler():
+    """The SoundFont default: amplitude as velocity squared on every note."""
+    import math
+
+    rows = [
+        hit(n, v, BANDS, peak=-6.0 + 40.0 * math.log10(v / 127) + 0.3 * (n % 3))
+        for n in (35, 38, 42)
+        for v in (32, 64, 96, 127)
+    ]
+    s = V.layer_summary(rows)
+    assert s["sampler_law"] and all(abs(e - 2.0) < 1e-6 for e in s["exponents"].values())
+    # The control: strikes whose law differs by note are not the sampler.
+    varied = [
+        hit(n, v, BANDS, peak=20.0 * k * math.log10(v / 127))
+        for n, k in ((35, 1.0), (38, 1.6), (42, 2.0))
+        for v in (32, 64, 96, 127)
+    ]
+    assert not V.layer_summary(varied)["sampler_law"]
