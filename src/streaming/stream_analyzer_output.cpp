@@ -214,8 +214,12 @@ void StreamAnalyzer::publish_stats_snapshot() noexcept {
   unsigned target = StreamAnalyzerPublication::kStatsSlotCount;
   for (unsigned i = 0; i < StreamAnalyzerPublication::kStatsSlotCount; ++i) {
     if (i == current) continue;
-    auto expected = StreamAnalyzerPublication::StatsSlotState::kFree;
-    if (publication_->stats_slot_states[i].compare_exchange_strong(
+    // Only `current` is live, so a kPublished slot here is one a reader released
+    // after it was superseded; the reader never frees, so reclaiming is ours.
+    auto expected = publication_->stats_slot_states[i].load(std::memory_order_relaxed);
+    if ((expected == StreamAnalyzerPublication::StatsSlotState::kFree ||
+         expected == StreamAnalyzerPublication::StatsSlotState::kPublished) &&
+        publication_->stats_slot_states[i].compare_exchange_strong(
             expected, StreamAnalyzerPublication::StatsSlotState::kWriting,
             std::memory_order_acquire, std::memory_order_relaxed)) {
       target = i;
@@ -483,15 +487,10 @@ AnalyzerStats StreamAnalyzer::stats() const {
   struct ReaderPin {
     StreamAnalyzerPublication* publication;
     unsigned index;
+    // Freeing here would race the producer's slot switch; it reclaims stale slots.
     ~ReaderPin() {
       publication->stats_slot_states[index].store(
           StreamAnalyzerPublication::StatsSlotState::kPublished, std::memory_order_release);
-      if (publication->published_stats_slot.load(std::memory_order_acquire) != index) {
-        auto expected = StreamAnalyzerPublication::StatsSlotState::kPublished;
-        publication->stats_slot_states[index].compare_exchange_strong(
-            expected, StreamAnalyzerPublication::StatsSlotState::kFree, std::memory_order_release,
-            std::memory_order_relaxed);
-      }
     }
   } pin{publication_.get(), index};
 

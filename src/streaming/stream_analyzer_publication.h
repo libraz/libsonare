@@ -41,7 +41,8 @@ struct StreamAnalyzerPublication {
 
   // Slot ownership is acquired by CAS, so producer and consumer can never
   // touch the same non-atomic snapshot storage. With three slots there is
-  // always one free slot besides the current publication and one reader pin.
+  // always one slot the producer can take besides the current publication and
+  // one reader pin: only the producer reclaims a superseded slot.
   // Scalar totals mirrored out of the published snapshot. frame_count() and
   // current_time() answer from these: reading them out of a slot would mean
   // pinning it with a CAS spin and copying four progression vectors (up to
