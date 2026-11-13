@@ -137,7 +137,7 @@ DOC_PREFIX = "_"
 # added the capture, which is what this catches. Lower it in the change that
 # captures a module reference; the failure says so.
 CEILING = {
-    "machine_slots_without_a_module_reference": 1,
+    "machine_slots_without_a_module_reference": 0,
 }
 
 FLOOR = {
