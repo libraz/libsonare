@@ -465,30 +465,70 @@ WINDOW_DIMENSIONS = (
 
 
 def window_spans(
-    gate_s: float, reference_gate_ms: float, damper_tail_s: float | None = None
-) -> dict[str, dict[str, float]]:
+    gate_s: float,
+    reference_gate_ms: float,
+    damper_tail_s: float | None = None,
+    *,
+    model_windows: list[float] | None = None,
+    reference_spans: list[float | None] | None = None,
+) -> dict[str, dict]:
     """Per window-dependent dimension, the held window the model was read through and the capture's.
 
     `model_s` is the compare's gate (the tail, for the damper); `reference_s` is the
     capture's `gate_ms` from the reference profile.
+
+    A capture read per note passes each row's window and the span its reference row was
+    read on; both are then their medians, and `model_range_s` / `reference_range_s`
+    give the extremes wherever the rows differ.
     """
     reference_s = round(reference_gate_ms / 1000.0, 4)
-    out = {d: {"model_s": round(gate_s, 4), "reference_s": reference_s} for d in WINDOW_DIMENSIONS}
+    out: dict[str, dict] = {}
+    for d in WINDOW_DIMENSIONS:
+        out[d] = {"model_s": round(gate_s, 4), "reference_s": reference_s}
+        for key, values in (("model", model_windows), ("reference", reference_spans)):
+            seen = [v for v in values or () if v is not None]
+            if seen:
+                out[d][f"{key}_s"] = round(float(np.median(seen)), 4)
+                if max(seen) - min(seen) > 5e-5:
+                    out[d][f"{key}_range_s"] = [round(min(seen), 4), round(max(seen), 4)]
     if damper_tail_s is not None:
         out["damper"]["model_s"] = round(damper_tail_s, 4)
+        out["damper"].pop("model_range_s", None)
     return out
 
 
-def format_window(window: dict[str, float]) -> str:
+def format_window(window: dict) -> str:
     """`model window / reference span`, in seconds."""
-    return f"{window['model_s']:g} s / {window['reference_s']:g} s"
+
+    def one(key: str) -> str:
+        span = window.get(f"{key}_range_s")
+        return f"{window[f'{key}_s']:g}" + (f" ({span[0]:g}-{span[1]:g})" if span else "")
+
+    return f"{one('model')} s / {one('reference')} s"
+
+
+def window_mismatch(recorded: dict | None, current: dict | None) -> str | None:
+    """Why a bound recorded on one window cannot judge a reading taken on another, or None.
+
+    None as well where either side recorded no window: `check_gate` says so apart, and
+    a gate written before windows were stored is read, not refused.
+    """
+    if not recorded or not current:
+        return None
+    keys = ("model_s", "reference_s", "model_range_s", "reference_range_s")
+    if all(recorded.get(k) == current.get(k) for k in keys):
+        return None
+    return (
+        f"model window {format_window(current)} but the bound was recorded on "
+        f"{format_window(recorded)} (model / reference)"
+    )
 
 
 def print_summary_table(
     summary: dict[str, dict],
     spread: dict[str, float],
     attempted: int,
-    windows: dict[str, dict[str, float]] | None = None,
+    windows: dict[str, dict] | None = None,
 ) -> None:
     """The per-dimension summary, with the population each median was taken over.
 
@@ -575,11 +615,23 @@ def print_vanished_dimensions(
     )
 
 
-def gate_readings(summary: dict[str, dict], bounds: dict[str, dict]) -> list[dict]:
+def refused_window(bound: dict, stat: str, windows: dict[str, dict] | None, key: str) -> str | None:
+    """`window_mismatch` of one statistic's recorded window against this run's."""
+    if not windows or key not in windows:
+        return None
+    recorded = ((bound.get("provenance") or {}).get(stat) or {}).get("window")
+    return window_mismatch(recorded, windows[key])
+
+
+def gate_readings(
+    summary: dict[str, dict], bounds: dict[str, dict], windows: dict[str, dict] | None = None
+) -> list[dict]:
     """Each bounded statistic's reading beside its limit, in the form `check_gate` compares.
 
     `excess` is `(value - limit) / limit`, so readings in different units can be
     summed; it is None where the limit is zero or the dimension was not measured.
+    A statistic read on a window other than the one its bound was recorded on (see
+    `window_mismatch`) is not judged: `value` is None and `refused` says why.
     """
     out = []
     for key, bound in bounds.items():
@@ -589,6 +641,20 @@ def gate_readings(summary: dict[str, dict], bounds: dict[str, dict]) -> list[dic
         for stat in RATCHETED_BOUND_KEYS:
             limit = bound.get(stat)
             if limit is None:
+                continue
+            refused = refused_window(bound, stat, windows, key)
+            if refused is not None:
+                out.append(
+                    {
+                        "key": key,
+                        "stat": stat,
+                        "value": None,
+                        "limit": limit,
+                        "over": None,
+                        "excess": None,
+                        "refused": refused,
+                    }
+                )
                 continue
             if row is None:
                 out.append(
@@ -625,11 +691,12 @@ def write_summary_json(
     measured_utc: str,
     *,
     velocity_layers: dict | None = None,
-    windows: dict[str, dict[str, float]] | None = None,
+    windows: dict[str, dict] | None = None,
 ) -> None:
     """Record a compare run's summary and its gate readings for a tool to read.
 
-    @p windows (see `window_spans`) is recorded beside the summary, not in the gate.
+    @p windows (see `window_spans`) is recorded beside the summary, and the gate's
+    readings are taken against it.
 
     @p velocity_layers is the reference's `velocity_layers.layer_summary`, recorded
     so a velocity-swing reading is read against the recordings behind the grid.
@@ -642,7 +709,7 @@ def write_summary_json(
         "gate": {
             "path": gate_path,
             "reference_measured_utc": gate.get("reference_measured_utc"),
-            "readings": gate_readings(summary, gate.get("bounds", {})),
+            "readings": gate_readings(summary, gate.get("bounds", {}), windows),
         }
         if gate
         else None,
@@ -685,9 +752,17 @@ def write_model_rows(out_path: Path, profile: dict, rows: list[dict]) -> None:
 
 
 def check_gate(
-    summary: dict[str, dict], gate_path: Path, timbre: str, measured_utc: str = ""
+    summary: dict[str, dict],
+    gate_path: Path,
+    timbre: str,
+    measured_utc: str = "",
+    windows: dict[str, dict] | None = None,
 ) -> int:
     """Fail the run when a dimension has moved outside its recorded bound.
+
+    A statistic whose bound was recorded on another window than @p windows gives (see
+    `window_mismatch`) is refused, not judged, and the run exits 2 if nothing else failed.
+    A bound with no recorded window is read as before and named as unrecorded.
 
     What this exists to catch is not a bad voice — it is a change that improves
     one dimension by breaking another, which is the shape most of this work
@@ -728,6 +803,7 @@ def check_gate(
         )
     bounds = gate.get("bounds", {})
     failures = []
+    refusals: list[str] = []
     evidence: list[tuple[str, int, int | None]] = []
     for key, bound in bounds.items():
         row = summary.get(key)
@@ -752,12 +828,33 @@ def check_gate(
             limit = bound.get(stat)
             if limit is None:
                 continue
+            refused = refused_window(bound, stat, windows, key)
+            if refused is not None:
+                refusals.append(f"{DELTA_LABELS.get(key, key)}: {stat} not judged, {refused}")
+                continue
             value = abs(row[stat]) if stat == "median" else row[stat]
             if value > limit:
                 failures.append(
                     f"{DELTA_LABELS.get(key, key)}: {stat} {value:.2f} over its bound {limit:.2f}"
                 )
     print(f"\ngate: {gate_path.name}, {len(bounds)} dimensions")
+    unrecorded = sorted(
+        DELTA_LABELS.get(k, k)
+        for k, b in bounds.items()
+        if windows
+        and k in windows
+        and isinstance(b, dict)
+        and any(
+            not ((b.get("provenance") or {}).get(stat) or {}).get("window")
+            for stat in RATCHETED_BOUND_KEYS
+            if stat in b
+        )
+    )
+    if unrecorded:
+        print(
+            f"  window unrecorded on {', '.join(unrecorded)}: these bounds predate the stored "
+            f"window, so what they were read over is not known. The next --write-gate records it."
+        )
     # A dimension this run measured and this gate has no bound for. The loop
     # above walks the gate, so such a dimension is held to nothing and says so
     # nowhere -- which is the same silence a capture naming an unmeasured
@@ -885,6 +982,8 @@ def check_gate(
             f"source is\n  newer ({build['newest_source_utc']}). {advice}",
             file=sys.stderr,
         )
+    for line in refusals:
+        print(f"  REFUSED  {line}")
     if failures:
         for line in failures:
             print(f"  FAIL  {line}")
@@ -894,6 +993,12 @@ def check_gate(
             f"that justifies it."
         )
         return 1
+    if refusals:
+        print(
+            f"  {len(refusals)} statistic(s) were read on a window their bound was not "
+            f"recorded on and were not judged. Re-record with --write-gate on this window."
+        )
+        return 2
     print("  every recorded bound held")
     return 0
 
@@ -1056,6 +1161,7 @@ def _keep_the_tighter(
     gate_path: Path,
     now: str,
     built_utc: str | None,
+    windows: dict[str, dict] | None = None,
 ) -> list[str]:
     """Hold each bound to the tighter of the recorded one and the new one, and stamp it.
 
@@ -1070,7 +1176,9 @@ def _keep_the_tighter(
     Each statistic also gets a `provenance` record: when its value was written
     (`set_*`, carried while the value is kept), the last re-record at which the
     unpadded measurement was inside it (`held_utc`) and what that measurement
-    was. A kept bound is therefore never read as freshly measured.
+    was. A kept bound is therefore never read as freshly measured. A window-dependent
+    statistic also records the `window` (see `window_spans`) its value was set on: this
+    run's where the value is new, the old record's where it is kept.
 
     Mutates `bounds` and returns (one line per bound it refused to loosen, one
     outcome line per statistic) for the caller to print — a ratchet that acts
@@ -1123,6 +1231,10 @@ def _keep_the_tighter(
                 "measured": round(value, 4),
                 "outcome": outcome,
             }
+            window = (windows or {}).get(dimension) if old is None or old > candidate else None
+            window = window or old_prov.get("window")
+            if window:
+                provenance[key]["window"] = window
         row["provenance"] = provenance
     return declined, reported
 
@@ -1267,8 +1379,12 @@ def write_gate_file(
     dimensions_na: dict[str, str] | None = None,
     censors: CensorTally | None = None,
     allow_dirty: bool = False,
+    windows: dict[str, dict] | None = None,
 ) -> int:
     """Record the current numbers as the bounds a later run is held to.
+
+    @p windows (see `window_spans`) is stored in the provenance of each window-dependent
+    statistic whose value this write sets, so a later run can tell it was read on another.
 
     The margin is multiplicative and deliberately not tight: a bound that fails
     on measurement noise gets switched off, and a switched-off gate catches
@@ -1328,7 +1444,9 @@ def write_gate_file(
         return 2
     if tree["dirty"]:
         print(f"recording on a dirty tree ({len(tree['dirty'])} files): {', '.join(tree['dirty'])}")
-    declined, reported = _keep_the_tighter(bounds, measured, gate_path, now, build.get("built_utc"))
+    declined, reported = _keep_the_tighter(
+        bounds, measured, gate_path, now, build.get("built_utc"), windows
+    )
     for bound in bounds.values():
         for prov in (bound.get("provenance") or {}).values():
             if prov.get("set_utc") == now:

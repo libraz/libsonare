@@ -1240,7 +1240,9 @@ def compare_percussion(
             windows=windows,
         )
     if gate_path:
-        return check_gate(summary, Path(gate_path), timbre, profile.get("measured_utc", ""))
+        return check_gate(
+            summary, Path(gate_path), timbre, profile.get("measured_utc", ""), windows
+        )
     if write_gate:
         return write_gate_file(
             summary,
@@ -1253,6 +1255,7 @@ def compare_percussion(
             dimensions_na=cfg.get("dimensions_na") or {},
             censors=tally,
             allow_dirty=allow_dirty,
+            windows=windows,
         )
     return 0
 
@@ -1565,6 +1568,9 @@ def compare(
     # Per side, per note, per velocity, since the velocity law is a relation between rows.
     attack_hf: dict[str, dict[int, dict[int, float]]] = {}
     model_rows: list[dict] = []
+    # Per row, the window the model was read through and the span the reference row was read on.
+    model_windows: list[float] = []
+    reference_spans: list[float | None] = []
     for note, vel in pairs:
         window_s = window(note, vel)
         r = ref[(note, vel)]
@@ -1597,6 +1603,8 @@ def compare(
         tails_s.append(window_s - preroll_s - gate_row)
         tally.begin_row()
         model_rows.append({**m, "timbre": "model", "note": note, "velocity": vel})
+        model_windows.append(gate_row)
+        reference_spans.append(float(r["window"]["reference_s"]) if r.get("window") else None)
         ladders.append((note, vel, m.get("partials_db"), r.get("partials_db")))
 
         def d(key, scale=1.0, m=m, r=r):
@@ -1781,7 +1789,13 @@ def compare(
     if partials:
         print("\npartial ladder, model minus reference, dB, each side against its own h1:")
         print("\n".join(partial_ladder_lines(ladders, partials)))
-    windows = window_spans(gate_s, cap["gate_ms"], max(tails_s, default=None))
+    windows = window_spans(
+        gate_s,
+        cap["gate_ms"],
+        max(tails_s, default=None),
+        model_windows=model_windows,
+        reference_spans=reference_spans,
+    )
     print_summary_table(summary, spread, attempted, windows)
     print_vanished_dimensions(
         offered_keys, summary, cfg.get("dimensions") or [], cfg.get("dimensions_na") or {}
@@ -1834,7 +1848,9 @@ def compare(
             windows=windows,
         )
     if gate_path:
-        return check_gate(summary, Path(gate_path), timbre, profile.get("measured_utc", ""))
+        return check_gate(
+            summary, Path(gate_path), timbre, profile.get("measured_utc", ""), windows
+        )
     if write_gate:
         return write_gate_file(
             summary,
@@ -1847,6 +1863,7 @@ def compare(
             dimensions_na=cfg.get("dimensions_na") or {},
             censors=tally,
             allow_dirty=allow_dirty,
+            windows=windows,
         )
     return 0
 

@@ -870,7 +870,8 @@ def measure_note(
     verdict, `capture_id` deciding whether the spectral reads stop at the join.
 
     `window` is `one_shot_window`'s answer for a capture read per note; its end is then
-    the `gate_s` given, and the row records it with the rule that chose it.
+    the `gate_s` given, and the row records it with the rule that chose it. Every row
+    records the window the model is read through beside the span the recording gave.
 
     The gate window is placed on the onset the render actually has rather than
     on the one the score asked for. A capture's own guard refuses a render that
@@ -1057,6 +1058,7 @@ def measure_note(
         if ladder is not None:
             loop_rec["ladder_db"] = ladder
     row["loop"] = loop_rec
+    row["window"] = {"model_s": round(gate_s, 4), "reference_s": round(held.size / sr, 4)}
     if window is not None:
         row["window_end_ms"] = window["end_ms"]
         row["window_rule"] = window["rule"]
