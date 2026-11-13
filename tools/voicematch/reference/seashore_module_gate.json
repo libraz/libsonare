@@ -14,31 +14,85 @@
     "decay": {
       "floor": 0.5,
       "floor_from": "guess",
-      "median": 14.812,
-      "abs_median": 14.812,
-      "p90": 15.202,
+      "median": 14.525,
+      "abs_median": 14.525,
+      "p90": 14.895,
       "rows": 3,
       "provenance": {
         "median": {
-          "set_utc": "2026-10-25T20:14:17+00:00",
-          "set_build": "2026-10-25T18:14:29Z",
-          "held_utc": "2026-11-13T11:49:49+00:00",
+          "set_utc": "2026-11-13T13:57:32+00:00",
+          "set_build": "2026-11-13T13:21:43Z",
+          "set_tree": {
+            "head": "82921cdd7",
+            "dirty": [
+              "src/midi/synth/brass_voice.cpp",
+              "src/midi/synth/gm_fallback_programs_physical.h",
+              "src/midi/synth/piano_voice.cpp",
+              "src/midi/synth/piano_voice.h",
+              "src/midi/synth/piano_voice_calibration.cpp",
+              "src/midi/synth/piano_voice_calibration.h",
+              "src/midi/synth/piano_voice_start.cpp",
+              "src/midi/synth/reed_voice.cpp"
+            ]
+          },
+          "held_utc": "2026-11-13T13:57:32+00:00",
           "measured": 11.62,
-          "outcome": "kept"
+          "outcome": "tightened",
+          "replaced": {
+            "value": 14.812,
+            "set_utc": "2026-10-25T20:14:17+00:00",
+            "reason": "recorded 2026-10-25 on uncommitted values (bank-versions sfx_seashore v16-v18 snapshot, amp_env sustain 0.672047 / decay 533.84 ms) that reproduce these bounds 9/9; re-read against the shipped voice"
+          }
         },
         "abs_median": {
-          "set_utc": "2026-10-25T20:14:17+00:00",
-          "set_build": "2026-10-25T18:14:29Z",
-          "held_utc": "2026-11-13T11:49:49+00:00",
+          "set_utc": "2026-11-13T13:57:32+00:00",
+          "set_build": "2026-11-13T13:21:43Z",
+          "set_tree": {
+            "head": "82921cdd7",
+            "dirty": [
+              "src/midi/synth/brass_voice.cpp",
+              "src/midi/synth/gm_fallback_programs_physical.h",
+              "src/midi/synth/piano_voice.cpp",
+              "src/midi/synth/piano_voice.h",
+              "src/midi/synth/piano_voice_calibration.cpp",
+              "src/midi/synth/piano_voice_calibration.h",
+              "src/midi/synth/piano_voice_start.cpp",
+              "src/midi/synth/reed_voice.cpp"
+            ]
+          },
+          "held_utc": "2026-11-13T13:57:32+00:00",
           "measured": 11.62,
-          "outcome": "kept"
+          "outcome": "tightened",
+          "replaced": {
+            "value": 14.812,
+            "set_utc": "2026-10-25T20:14:17+00:00",
+            "reason": "recorded 2026-10-25 on uncommitted values (bank-versions sfx_seashore v16-v18 snapshot, amp_env sustain 0.672047 / decay 533.84 ms) that reproduce these bounds 9/9; re-read against the shipped voice"
+          }
         },
         "p90": {
-          "set_utc": "2026-10-25T20:14:17+00:00",
-          "set_build": "2026-10-25T18:14:29Z",
-          "held_utc": "2026-11-13T11:49:49+00:00",
+          "set_utc": "2026-11-13T13:57:32+00:00",
+          "set_build": "2026-11-13T13:21:43Z",
+          "set_tree": {
+            "head": "82921cdd7",
+            "dirty": [
+              "src/midi/synth/brass_voice.cpp",
+              "src/midi/synth/gm_fallback_programs_physical.h",
+              "src/midi/synth/piano_voice.cpp",
+              "src/midi/synth/piano_voice.h",
+              "src/midi/synth/piano_voice_calibration.cpp",
+              "src/midi/synth/piano_voice_calibration.h",
+              "src/midi/synth/piano_voice_start.cpp",
+              "src/midi/synth/reed_voice.cpp"
+            ]
+          },
+          "held_utc": "2026-11-13T13:57:32+00:00",
           "measured": 11.916,
-          "outcome": "kept"
+          "outcome": "tightened",
+          "replaced": {
+            "value": 15.202,
+            "set_utc": "2026-10-25T20:14:17+00:00",
+            "reason": "recorded 2026-10-25 on uncommitted values (bank-versions sfx_seashore v16-v18 snapshot, amp_env sustain 0.672047 / decay 533.84 ms) that reproduce these bounds 9/9; re-read against the shipped voice"
+          }
         }
       }
     },
@@ -78,29 +132,83 @@
       "floor_from": "guess",
       "median": 112.831,
       "abs_median": 112.831,
-      "p90": 143.179,
+      "p90": 141.923,
       "rows": 3,
       "provenance": {
         "median": {
-          "set_utc": "2026-10-25T20:14:17+00:00",
-          "set_build": "2026-10-25T18:14:29Z",
-          "held_utc": "2026-11-13T11:49:49+00:00",
+          "set_utc": "2026-11-13T13:57:32+00:00",
+          "set_build": "2026-11-13T13:21:43Z",
+          "set_tree": {
+            "head": "82921cdd7",
+            "dirty": [
+              "src/midi/synth/brass_voice.cpp",
+              "src/midi/synth/gm_fallback_programs_physical.h",
+              "src/midi/synth/piano_voice.cpp",
+              "src/midi/synth/piano_voice.h",
+              "src/midi/synth/piano_voice_calibration.cpp",
+              "src/midi/synth/piano_voice_calibration.h",
+              "src/midi/synth/piano_voice_start.cpp",
+              "src/midi/synth/reed_voice.cpp"
+            ]
+          },
+          "held_utc": "2026-11-13T13:57:32+00:00",
           "measured": 90.4711,
-          "outcome": "kept"
+          "outcome": "kept",
+          "replaced": {
+            "value": 112.831,
+            "set_utc": "2026-10-25T20:14:17+00:00",
+            "reason": "recorded 2026-10-25 on uncommitted values (bank-versions sfx_seashore v16-v18 snapshot, amp_env sustain 0.672047 / decay 533.84 ms) that reproduce these bounds 9/9; re-read against the shipped voice"
+          }
         },
         "abs_median": {
-          "set_utc": "2026-10-25T20:14:17+00:00",
-          "set_build": "2026-10-25T18:14:29Z",
-          "held_utc": "2026-11-13T11:49:49+00:00",
+          "set_utc": "2026-11-13T13:57:32+00:00",
+          "set_build": "2026-11-13T13:21:43Z",
+          "set_tree": {
+            "head": "82921cdd7",
+            "dirty": [
+              "src/midi/synth/brass_voice.cpp",
+              "src/midi/synth/gm_fallback_programs_physical.h",
+              "src/midi/synth/piano_voice.cpp",
+              "src/midi/synth/piano_voice.h",
+              "src/midi/synth/piano_voice_calibration.cpp",
+              "src/midi/synth/piano_voice_calibration.h",
+              "src/midi/synth/piano_voice_start.cpp",
+              "src/midi/synth/reed_voice.cpp"
+            ]
+          },
+          "held_utc": "2026-11-13T13:57:32+00:00",
           "measured": 90.4711,
-          "outcome": "kept"
+          "outcome": "kept",
+          "replaced": {
+            "value": 112.831,
+            "set_utc": "2026-10-25T20:14:17+00:00",
+            "reason": "recorded 2026-10-25 on uncommitted values (bank-versions sfx_seashore v16-v18 snapshot, amp_env sustain 0.672047 / decay 533.84 ms) that reproduce these bounds 9/9; re-read against the shipped voice"
+          }
         },
         "p90": {
-          "set_utc": "2026-10-25T20:14:17+00:00",
-          "set_build": "2026-10-25T18:14:29Z",
-          "held_utc": "2026-11-13T11:49:49+00:00",
+          "set_utc": "2026-11-13T13:57:32+00:00",
+          "set_build": "2026-11-13T13:21:43Z",
+          "set_tree": {
+            "head": "82921cdd7",
+            "dirty": [
+              "src/midi/synth/brass_voice.cpp",
+              "src/midi/synth/gm_fallback_programs_physical.h",
+              "src/midi/synth/piano_voice.cpp",
+              "src/midi/synth/piano_voice.h",
+              "src/midi/synth/piano_voice_calibration.cpp",
+              "src/midi/synth/piano_voice_calibration.h",
+              "src/midi/synth/piano_voice_start.cpp",
+              "src/midi/synth/reed_voice.cpp"
+            ]
+          },
+          "held_utc": "2026-11-13T13:57:32+00:00",
           "measured": 113.5388,
-          "outcome": "kept"
+          "outcome": "tightened",
+          "replaced": {
+            "value": 143.179,
+            "set_utc": "2026-10-25T20:14:17+00:00",
+            "reason": "recorded 2026-10-25 on uncommitted values (bank-versions sfx_seashore v16-v18 snapshot, amp_env sustain 0.672047 / decay 533.84 ms) that reproduce these bounds 9/9; re-read against the shipped voice"
+          }
         }
       }
     }

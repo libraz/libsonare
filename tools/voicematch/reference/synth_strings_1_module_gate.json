@@ -76,31 +76,85 @@
     "attack": {
       "floor": 40.0,
       "floor_from": "guess",
-      "median": 224.5,
-      "abs_median": 224.5,
-      "p90": 404.1,
+      "median": 255.625,
+      "abs_median": 330.5,
+      "p90": 1437.95,
       "rows": 9,
       "provenance": {
         "median": {
-          "set_utc": "2026-10-26T06:37:56+00:00",
-          "set_build": "2026-10-26T06:34:05Z",
-          "held_utc": "2026-11-13T11:49:49+00:00",
+          "set_utc": "2026-11-13T13:57:32+00:00",
+          "set_build": "2026-11-13T13:21:43Z",
+          "set_tree": {
+            "head": "82921cdd7",
+            "dirty": [
+              "src/midi/synth/brass_voice.cpp",
+              "src/midi/synth/gm_fallback_programs_physical.h",
+              "src/midi/synth/piano_voice.cpp",
+              "src/midi/synth/piano_voice.h",
+              "src/midi/synth/piano_voice_calibration.cpp",
+              "src/midi/synth/piano_voice_calibration.h",
+              "src/midi/synth/piano_voice_start.cpp",
+              "src/midi/synth/reed_voice.cpp"
+            ]
+          },
+          "held_utc": "2026-11-13T13:57:32+00:00",
           "measured": 204.5,
-          "outcome": "kept"
+          "outcome": "rerecorded_vanished",
+          "replaced": {
+            "value": 224.5,
+            "set_utc": "2026-10-26T06:37:56+00:00",
+            "reason": "recorded 2026-10-26 on an uncommitted refit (bank-versions synth_strings_1 v17) withdrawn before commit; the v17 fit values reproduce these bounds exactly and the shipped voice never met them"
+          }
         },
         "abs_median": {
-          "set_utc": "2026-10-26T06:37:56+00:00",
-          "set_build": "2026-10-26T06:34:05Z",
-          "held_utc": null,
+          "set_utc": "2026-11-13T13:57:32+00:00",
+          "set_build": "2026-11-13T13:21:43Z",
+          "set_tree": {
+            "head": "82921cdd7",
+            "dirty": [
+              "src/midi/synth/brass_voice.cpp",
+              "src/midi/synth/gm_fallback_programs_physical.h",
+              "src/midi/synth/piano_voice.cpp",
+              "src/midi/synth/piano_voice.h",
+              "src/midi/synth/piano_voice_calibration.cpp",
+              "src/midi/synth/piano_voice_calibration.h",
+              "src/midi/synth/piano_voice_start.cpp",
+              "src/midi/synth/reed_voice.cpp"
+            ]
+          },
+          "held_utc": "2026-11-13T13:57:32+00:00",
           "measured": 264.4,
-          "outcome": "exceeded"
+          "outcome": "rerecorded_vanished",
+          "replaced": {
+            "value": 224.5,
+            "set_utc": "2026-10-26T06:37:56+00:00",
+            "reason": "recorded 2026-10-26 on an uncommitted refit (bank-versions synth_strings_1 v17) withdrawn before commit; the v17 fit values reproduce these bounds exactly and the shipped voice never met them"
+          }
         },
         "p90": {
-          "set_utc": "2026-10-26T06:37:56+00:00",
-          "set_build": "2026-10-26T06:34:05Z",
-          "held_utc": null,
+          "set_utc": "2026-11-13T13:57:32+00:00",
+          "set_build": "2026-11-13T13:21:43Z",
+          "set_tree": {
+            "head": "82921cdd7",
+            "dirty": [
+              "src/midi/synth/brass_voice.cpp",
+              "src/midi/synth/gm_fallback_programs_physical.h",
+              "src/midi/synth/piano_voice.cpp",
+              "src/midi/synth/piano_voice.h",
+              "src/midi/synth/piano_voice_calibration.cpp",
+              "src/midi/synth/piano_voice_calibration.h",
+              "src/midi/synth/piano_voice_start.cpp",
+              "src/midi/synth/reed_voice.cpp"
+            ]
+          },
+          "held_utc": "2026-11-13T13:57:32+00:00",
           "measured": 1150.36,
-          "outcome": "exceeded"
+          "outcome": "rerecorded_vanished",
+          "replaced": {
+            "value": 404.1,
+            "set_utc": "2026-10-26T06:37:56+00:00",
+            "reason": "recorded 2026-10-26 on an uncommitted refit (bank-versions synth_strings_1 v17) withdrawn before commit; the v17 fit values reproduce these bounds exactly and the shipped voice never met them"
+          }
         }
       }
     },
