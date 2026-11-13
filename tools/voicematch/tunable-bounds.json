@@ -1,49 +1,5 @@
 {
   "_": "Search bounds for fields the catalogue reports no clamp for, read by knobs.load_declared_bounds. `bounds` holds only SONARE_TUNABLE engine constants, keyed <file stem>.<kName>; the clamp check labels them `declared range (file)`, and reports a mismatch with a range the source declares itself (`declared range (macro)`). Patch fields belong in patch_clamp.h (the probe then reports the bound to the catalogue), so the proposals for them are listed separately under `patch_fields_pending_clamp` and are not search bounds until patch_clamp.h carries them.",
-  "bounds": {
-    "percussion_voice.kPhisemCollisionRate": {
-      "lo": 10,
-      "hi": 400,
-      "lane": "struck",
-      "basis": "random bead collisions per bean per unit shake energy per second; per-sample probability beans*energy*rate/sr must stay <= 1 (largest bank beans 34.7 gives about 900 at worst), 400 keeps margin and is 4x the default 100; below 10/s a shaker is a few clicks per second",
-      "catalogue": "constant, default 100.0"
-    },
-    "percussion_voice.kPhisemVelocityFloor": {
-      "lo": 0,
-      "hi": 1,
-      "lane": "struck",
-      "basis": "shake energy at velocity 0 as a fraction of energy at velocity 1; used as floor + (1-floor)*vel01, a convex blend only inside [0,1]; above 1 inverts velocity, below 0 gives negative energy",
-      "catalogue": "constant, default 0.9"
-    }
-  },
-  "patch_fields_pending_clamp": {
-    "percussion.noise_burst_decay_ms": {
-      "lo": 1,
-      "hi": 50,
-      "lane": "struck",
-      "basis": "decay constant of one retriggered noise-VCA burst; voice already floors at 1 ms; above 50 ms is no longer short against noise_decay_ms (a clap burst is under about 30 ms)",
-      "catalogue": "patch field, default(s) 6.0..6.0, catalogue bound None"
-    },
-    "percussion.noise_burst_interval_ms": {
-      "lo": 0.5,
-      "hi": 50,
-      "lane": "struck",
-      "basis": "spacing between VCA retriggers; the train fuses below about 5 ms and reads as separate hits above about 30 ms; lower end stays above one sample (0.02 ms at 48 kHz)",
-      "catalogue": "patch field, default(s) 10.0..10.0, catalogue bound None"
-    },
-    "percussion.strike_theta": {
-      "lo": 0,
-      "hi": 3.141592653589793,
-      "lane": "struck",
-      "basis": "strike azimuth in radians; cos(m*theta) is even in theta, so [0,pi] covers every distinct m>=1 weight and [0,pi/2] would miss the sign flip for odd m",
-      "catalogue": "patch field, default(s) 0.0..1.34672, catalogue bound None"
-    },
-    "percussion.noise_burst_count": {
-      "lo": 0,
-      "hi": 8,
-      "lane": "struck",
-      "basis": "integer count of VCA retriggers, the range the override layer accepts (I_TYPED); the voice takes max(0,n) only; identity in knob-classes.json, so a fit does not move it",
-      "catalogue": "patch field, default(s) 0.0..0.0, catalogue bound [0.0, 8.0]"
-    }
-  }
+  "bounds": {},
+  "patch_fields_pending_clamp": {}
 }
