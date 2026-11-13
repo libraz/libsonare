@@ -350,6 +350,7 @@ from knobs import (
     pinned_lines,
     refuse_absent_knobs,
     refuse_unknown_override_keys,
+    shared_lines,
     start_report,
     tunable_overrides,
 )
@@ -2750,6 +2751,20 @@ def _assessment_status(args) -> str | None:
     return None if assessment is None else assessment.status
 
 
+def _writes_nothing(args) -> bool:
+    """Whether the run writes no value back to the tree: a probe by the CLI's own flags."""
+    return bool(
+        args.dry_run or getattr(args, "diagnose", False) or getattr(args, "dump_knobs", False)
+    )
+
+
+def _voiced_patch(ns, catalogue) -> str | None:
+    """The patch one capture's objective scores: the drum note's, else the program's."""
+    if ns.drum_note is not None:
+        return drum_patch_key(ns.drum_note)
+    return catalogue.patch_for(ns.program, ns.bank)
+
+
 def run(args, argv: list[str] | None = None) -> int:
     # The objective and harness this run answers are the code loaded now, whatever changes on disk later.
     harness = harness_lock.lock(("autofit",))
@@ -2765,10 +2780,7 @@ def run(args, argv: list[str] | None = None) -> int:
         build_dir = Path(lib).resolve()
         if not build_dir.is_file():
             raise ValueError(f"--lib {lib!r} is not a file")
-        writes = not (
-            args.dry_run or getattr(args, "diagnose", False) or getattr(args, "dump_knobs", False)
-        )
-        if writes:
+        if not _writes_nothing(args):
             # The sources a prebuilt library came from are not this run's to edit:
             # a fitted value travels as an override until it is written back
             # against the build that will ship it.
@@ -3006,7 +3018,11 @@ def run(args, argv: list[str] | None = None) -> int:
         )
         for line in pinned_lines(classes, catalogue, voiced):
             print(line, file=sys.stderr)
-        refuse_absent_knobs(knobs, classes)
+        covered = {p for p in (_voiced_patch(ns, catalogue) for ns in capture_args) if p}
+        probe = _writes_nothing(args)
+        refuse_absent_knobs(knobs, classes, catalogue=catalogue, covered=covered, probe=probe)
+        for line in shared_lines(knobs, catalogue, covered, probe):
+            print(line, file=sys.stderr)
     if not auto and classes is not None:
         gated, _ = gated_dimensions(args)
         for line in hand_spec_warnings(knobs, classes, gated):

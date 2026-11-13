@@ -31,6 +31,8 @@ from knobs import (
     load_knob_classes,
     pinned_lines,
     refuse_absent_knobs,
+    shared_engine,
+    shared_lines,
     switch_candidates,
 )
 
@@ -494,6 +496,16 @@ def test_the_declared_bounds_file_reads_only_its_bounds_block(tmp_path):
         load_declared_bounds(path)
 
 
+def _refuse(knobs, classes, *, catalogue=None, covered=(), probe=False):
+    refuse_absent_knobs(
+        knobs,
+        classes,
+        catalogue=catalogue or _catalogue({}),
+        covered=set(covered),
+        probe=probe,
+    )
+
+
 # --- an absent entry is refused where a fit names it --------------------------
 
 
@@ -527,14 +539,14 @@ def test_an_absent_entry_loads_and_is_listed_with_its_lane(tmp_path):
 def test_a_fit_naming_an_absent_entry_is_refused_naming_entry_and_lane(tmp_path):
     classes = _absent_entry_classes(tmp_path)
     with pytest.raises(ValueError, match="piano_voice.kHammerJunction") as exc:
-        refuse_absent_knobs([_knob("p0.waveform"), _knob("piano_voice.kHammerJunction")], classes)
+        _refuse([_knob("p0.waveform"), _knob("piano_voice.kHammerJunction")], classes)
     assert "lane piano" in str(exc.value)
     assert "uncommitted code" in str(exc.value)
 
 
 def test_a_fit_not_naming_an_absent_entry_proceeds(tmp_path):
     classes = _absent_entry_classes(tmp_path)
-    refuse_absent_knobs([_knob("p0.waveform"), _knob("p0.brass.mute")], classes)
+    _refuse([_knob("p0.waveform"), _knob("p0.brass.mute")], classes)
     assert absent_summary(_classes()) == ""
 
 
@@ -542,7 +554,7 @@ def test_a_patch_relative_absent_entry_matches_a_patch_qualified_knob(tmp_path):
     cat = _catalogue({"p0.waveform": 1.0})
     classes = load_knob_classes(_write(tmp_path, {"ks.pluck_ms": {"class": "identity"}}), cat)
     with pytest.raises(ValueError, match=r"ks\.pluck_ms"):
-        refuse_absent_knobs([_knob("banjo.ks.pluck_ms")], classes)
+        _refuse([_knob("banjo.ks.pluck_ms")], classes)
 
 
 def test_an_absent_reach_pattern_loads_and_refuses_only_a_fit_under_it(tmp_path):
@@ -558,9 +570,9 @@ def test_an_absent_reach_pattern_loads_and_refuses_only_a_fit_under_it(tmp_path)
     classes = load_knob_classes(path, cat)
     assert list(classes.absent) == ["drift_*"]
     assert "drift_*" not in classes.reach
-    refuse_absent_knobs([_knob("p0.lfo_rate_hz")], classes)
+    _refuse([_knob("p0.lfo_rate_hz")], classes)
     with pytest.raises(ValueError, match=r"drift_\*"):
-        refuse_absent_knobs([_knob("p0.drift_cents")], classes)
+        _refuse([_knob("p0.drift_cents")], classes)
 
 
 # --- pinned by ruling --------------------------------------------------------
@@ -596,7 +608,7 @@ def test_a_pinned_entry_is_never_offered_by_auto_and_counts_as_excluded(tmp_path
 def test_a_spec_naming_a_pinned_field_is_refused_with_key_value_and_basis(tmp_path):
     _, classes = _pinned_classes(tmp_path)
     with pytest.raises(ValueError, match=r"clarinet\.body_mix is pinned at 0\.286475") as exc:
-        refuse_absent_knobs([_knob("clarinet.gain"), _knob("clarinet.body_mix")], classes)
+        _refuse([_knob("clarinet.gain"), _knob("clarinet.body_mix")], classes)
     assert "lane sustained" in str(exc.value)
     assert "too few terms read it" in str(exc.value)
     assert hand_spec_warnings([_knob("clarinet.body_mix")], classes) == []
@@ -604,7 +616,7 @@ def test_a_spec_naming_a_pinned_field_is_refused_with_key_value_and_basis(tmp_pa
 
 def test_a_pinned_entry_is_scoped_to_its_voice(tmp_path):
     _, classes = _pinned_classes(tmp_path)
-    refuse_absent_knobs([_knob("oboe.body_mix"), _knob("clarinet.gain")], classes)
+    _refuse([_knob("oboe.body_mix"), _knob("clarinet.gain")], classes)
     assert classes.class_of("oboe.body_mix") is None
 
 
@@ -640,3 +652,87 @@ def test_a_pinned_entry_must_name_one_patch_field(tmp_path):
         load_knob_classes(_write(tmp_path, {"body_mix": _PINNED}), cat)
     with pytest.raises(ValueError, match="pinned entry"):
         load_knob_classes(_write(tmp_path, {"clar*.body_mix": _PINNED}), cat)
+
+
+# --- an engine constant is shared by every voice of its engine ---------------
+
+_BRASS = ["brass_section", "french_horn", "muted_trumpet", "trombone", "trumpet", "tuba"]
+_BELL = "brass_voice.kBellRadiationNorm"
+
+
+def _engine_catalogue():
+    modes = {p: "brass" for p in _BRASS}
+    modes.update({"clarinet": "reed", "tenor_sax": "reed", "solo": "vocal_solo"})
+    defaults = {_BELL: 0.35, "reed_voice.kBellRadiationNorm": 0.35, "gs_effects.kTank": 1.0}
+    defaults.update({"vocal_solo_voice.kGain": 1.0, "trombone.brass.bell_cutoff_hz": 900.0})
+    return Catalogue(defaults, {(57, 0): "trombone"}, {}, modes)
+
+
+def test_an_engine_stem_resolves_to_the_engines_whole_voice_list():
+    cat = _engine_catalogue()
+    assert shared_engine(_BELL, cat) == ("brass", _BRASS)
+    assert shared_engine("reed_voice.kBellRadiationNorm", cat) == (
+        "reed",
+        ["clarinet", "tenor_sax"],
+    )
+
+
+@pytest.mark.parametrize(
+    "key",
+    ["gs_effects.kTank", "trombone.brass.bell_cutoff_hz", "native_synth_voice.kX", "brass_voice"],
+)
+def test_a_key_that_is_no_reported_engines_constant_belongs_to_no_engine(key):
+    assert shared_engine(key, _engine_catalogue()) is None
+
+
+def test_a_brass_constant_is_refused_on_a_trombone_only_fit_naming_the_uncovered_voices():
+    with pytest.raises(ValueError) as exc:
+        _refuse([_knob(_BELL)], _classes(), catalogue=_engine_catalogue(), covered={"trombone"})
+    text = str(exc.value)
+    assert _BELL in text and "engine 'brass'" in text
+    assert "the fit covers trombone" in text
+    assert "uncovered: brass_section, french_horn, muted_trumpet, trumpet, tuba" in text
+    assert "--dry-run" in text and "--program-only" in text
+
+
+def test_a_brass_constant_is_allowed_when_the_fit_covers_every_brass_voice():
+    _refuse([_knob(_BELL)], _classes(), catalogue=_engine_catalogue(), covered=set(_BRASS))
+
+
+def test_a_brass_constant_is_allowed_on_a_declared_probe():
+    _refuse(
+        [_knob(_BELL)], _classes(), catalogue=_engine_catalogue(), covered={"trombone"}, probe=True
+    )
+
+
+def test_a_fit_of_one_engine_naming_another_engines_constant_is_refused():
+    with pytest.raises(ValueError, match="uncovered: clarinet, tenor_sax"):
+        _refuse(
+            [_knob("reed_voice.kBellRadiationNorm")],
+            _classes(),
+            catalogue=_engine_catalogue(),
+            covered={"trombone"},
+        )
+
+
+def test_a_one_voice_engines_constant_passes_for_a_fit_that_scores_that_voice():
+    cat = Catalogue({"vocal_solo_voice.kGain": 1.0}, {}, {}, {"solo": "vocal_solo"})
+    _refuse([_knob("vocal_solo_voice.kGain")], _classes(), catalogue=cat, covered={"solo"})
+
+
+def test_a_patch_field_and_a_non_engine_stem_are_never_refused_as_shared():
+    _refuse(
+        [_knob("trombone.brass.bell_cutoff_hz"), _knob("gs_effects.kTank")],
+        _classes(),
+        catalogue=_engine_catalogue(),
+        covered={"trombone"},
+    )
+
+
+def test_the_start_up_line_says_how_far_a_shared_constant_reaches():
+    cat = _engine_catalogue()
+    (full,) = shared_lines([_knob(_BELL)], cat, set(_BRASS), False)
+    assert full == f"shared engine constant: {_BELL} (engine 'brass') covers all 6 voices"
+    (probe,) = shared_lines([_knob(_BELL)], cat, {"trombone"}, True)
+    assert "probe, nothing written back; 5 of 6 voices are not scored: brass_section" in probe
+    assert shared_lines([_knob("gs_effects.kTank")], cat, set(), False) == []

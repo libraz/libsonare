@@ -885,12 +885,59 @@ def absent_summary(classes: KnobClasses) -> str:
     )
 
 
-def refuse_absent_knobs(knobs: list[Knob], classes: KnobClasses) -> None:
-    """Refuse a fit whose runtime knobs include a field an absent entry or reach pattern names.
+#: A tunable's file stem names its engine as `<engine>_voice`, the engine being one the
+#: catalogue reports (`brass_voice` is engine `brass`). A stem that is not that shape
+#: (`gs_effects`, `gm_fallback_map`, `native_synth_voice`) belongs to no engine here.
+ENGINE_STEM_SUFFIX = "_voice"
 
-    Raises ValueError naming each such knob, the entry and its lane. Entries the
-    fit does not touch are not its concern. The same call refuses a knob a `pinned`
-    entry holds, so a fit has one refusal point for the table.
+
+def shared_engine(key: str, catalogue: Catalogue) -> tuple[str, list[str]] | None:
+    """The engine an engine constant @p key (`<stem>.<kName>`) is shared across, and its voices.
+
+    Returns (engine, every shipped patch the catalogue reports on that engine), or None
+    for a key that is not an engine constant of a reported engine. The library does not
+    say which patches consult a constant (every `SONARE_TUNABLE` of every linked file is
+    recorded whatever the render), so the engine's whole voice list is the set it may reach.
+    """
+    stem, _, name = key.partition(".")
+    if not name or "." in name or not stem.endswith(ENGINE_STEM_SUFFIX) or stem in catalogue.modes:
+        return None
+    engine = stem.removesuffix(ENGINE_STEM_SUFFIX)
+    voices = sorted(p for p, e in catalogue.modes.items() if e == engine)
+    return (engine, voices) if voices else None
+
+
+def _shared_uncovered(
+    knobs: list[Knob], catalogue: Catalogue, covered: set[str]
+) -> list[tuple[str, str, list[str], list[str]]]:
+    """(key, engine, voices, uncovered) for each knob naming an engine constant some voice lacks."""
+    out = []
+    for k in knobs:
+        shared = shared_engine(k.tunable, catalogue) if k.tunable is not None else None
+        if shared is None:
+            continue
+        engine, voices = shared
+        uncovered = [v for v in voices if v not in covered]
+        if uncovered:
+            out.append((k.tunable, engine, voices, uncovered))
+    return out
+
+
+def refuse_absent_knobs(
+    knobs: list[Knob],
+    classes: KnobClasses,
+    *,
+    catalogue: Catalogue,
+    covered: set[str],
+    probe: bool,
+) -> None:
+    """Refuse a fit whose runtime knobs the table or the library does not allow.
+
+    Raises ValueError naming each such knob. Three refusals share this one point: a knob
+    an absent entry or reach pattern names, a knob a `pinned` entry holds, and an engine
+    constant (`brass_voice.kBellRadiationNorm`) whose engine has a voice outside
+    @p covered, the patches the fit's objective scores. A @p probe writes nothing back,
+    so it may name a shared constant. Entries the fit does not touch are not its concern.
     """
     pinned = [
         f"{k.tunable} is pinned at {e.value:g} by ruling (lane {e.lane}): {e.basis}"
@@ -903,6 +950,20 @@ def refuse_absent_knobs(knobs: list[Knob], classes: KnobClasses) -> None:
         raise ValueError(
             "knob-classes.json pins field(s) by ruling; no spec may name them, and the ruling "
             "is changed by editing the file: " + "; ".join(pinned)
+        )
+    shared = [] if probe else _shared_uncovered(knobs, catalogue, covered)
+    if shared:
+        raise ValueError(
+            "engine constant(s) are shared by every voice of their engine, and this fit would "
+            "change voices its objective does not score: "
+            + "; ".join(
+                f"{key} is shared by engine {engine!r} ({len(voices)} voices); the fit covers "
+                f"{', '.join(sorted(covered)) or 'nothing'}; uncovered: {', '.join(uncovered)}"
+                for key, engine, voices, uncovered in shared
+            )
+            + ". Cover every voice of the engine (a joint fit), drop the constant (--program-only "
+            "fits the patch's own fields), or declare the run a probe with --dry-run "
+            "(--diagnose and --dump-knobs write nothing either)."
         )
     if not classes.absent:
         return
@@ -919,6 +980,30 @@ def refuse_absent_knobs(knobs: list[Knob], classes: KnobClasses) -> None:
             "knob-classes.json names field(s) this library does not report (renamed or "
             "removed, or only in uncommitted code): " + "; ".join(hits)
         )
+
+
+def shared_lines(
+    knobs: list[Knob], catalogue: Catalogue, covered: set[str], probe: bool
+) -> list[str]:
+    """One start-up line per engine constant of the fit, saying how far it reaches.
+
+    A refused fit never gets here; this is what a probe or a full-engine fit reports.
+    """
+    out = []
+    for k in knobs:
+        shared = shared_engine(k.tunable, catalogue) if k.tunable is not None else None
+        if shared is None:
+            continue
+        engine, voices = shared
+        uncovered = [v for v in voices if v not in covered]
+        state = (
+            f"covers all {len(voices)} voices"
+            if not uncovered
+            else f"probe, nothing written back; {len(uncovered)} of {len(voices)} voices "
+            f"are not scored: {', '.join(uncovered)}"
+        )
+        out.append(f"shared engine constant: {k.tunable} (engine {engine!r}) {state}")
+    return out
 
 
 def pinned_lines(classes: KnobClasses, catalogue: Catalogue, patch: str | None) -> list[str]:
