@@ -16,7 +16,13 @@ from pathlib import Path
 
 from _repo import REPO_ROOT
 from fit_quality import dropout_terms, quality_report, significant_term_regressions
-from knobs import at_bound, format_value, merge_overrides, tunable_overrides
+from knobs import (
+    at_bound,
+    format_value,
+    merge_overrides,
+    stored_vs_effective,
+    tunable_overrides,
+)
 from loss_aggregate import DEFAULT_TAIL_FRACTION
 from toneclass import fit_profile
 from writeback import (
@@ -364,6 +370,16 @@ def report_result(knobs, pristine, best_values, evaluator, args, extra=None) -> 
         )
     print(f"  ({moved} of {len(knobs)} knobs moved; the rest stayed at their defaults)")
 
+    effective = stored_vs_effective(knobs, best_values, extra.get("clamp_bounds", {}))
+    if effective:
+        print("\n== stored vs effective (the engine clamps these) ==")
+        for row in effective:
+            print(
+                f"  {row['key']}: stored {format_value(row['stored'])}, "
+                f"effective {format_value(row['effective'])} "
+                f"(clamp [{row['clamp'][0]:g}, {row['clamp'][1]:g}])"
+            )
+
     print("\n== overrides (paste-ready, for an ad-hoc render) ==")
     overrides = tunable_overrides(knobs, best_values, changed_only=True)
     pasted = merge_overrides(getattr(args, "base_overrides", ""), overrides)
@@ -458,6 +474,8 @@ def report_result(knobs, pristine, best_values, evaluator, args, extra=None) -> 
             "validation_partition": extra.get("validation_partition"),
             "room": extra.get("room"),
             "pinned": extra.get("pinned", []),
+            "clamp_check": extra.get("clamp_check", []),
+            "stored_vs_effective": effective,
             "search": search_effort_record,
             "fit_profile": {
                 "tone_class": profile.tone_class.value,
@@ -510,3 +528,8 @@ def report_result(knobs, pristine, best_values, evaluator, args, extra=None) -> 
                 )
             path.write_text(text)
         print("\nBest values written to source.")
+        if effective:
+            print(
+                f"  {len(effective)} written value(s) differ from the effective one "
+                f"(see 'stored vs effective' above)."
+            )

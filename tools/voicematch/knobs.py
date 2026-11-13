@@ -23,6 +23,7 @@ from pathlib import Path
 
 from _repo import REPO_ROOT
 from catalogue import (
+    DRUM_PATCH_KEY,
     Catalogue,
     TunableDef,
     drum_patch_key,
@@ -592,6 +593,108 @@ def auto_spec(
             }
         )
     return spec
+
+
+def knob_bounds(knobs: list[Knob], catalogue: Catalogue | None) -> dict[str, tuple[float, float]]:
+    """The clamp interval of each knob that addresses a bounded patch field, by label.
+
+    Only a key whose first segment names a patch (or a drum note's `dNNN`) is a
+    patch field; an engine constant shares the dotted form but carries no bound,
+    so it is left out rather than matched against a same-named field path.
+    """
+    if catalogue is None:
+        return {}
+    patches = set(catalogue.programs.values()) | set(catalogue.modes)
+    out: dict[str, tuple[float, float]] = {}
+    for k in knobs:
+        if k.tunable is None:
+            continue
+        head = k.tunable.partition(".")[0]
+        if head not in patches and not DRUM_PATCH_KEY.match(head):
+            continue
+        bound = catalogue.bound_for(k.tunable)
+        if bound is not None:
+            out[k.label] = bound
+    return out
+
+
+def clamp_check(
+    knobs: list[Knob], bounds: dict[str, tuple[float, float]]
+) -> tuple[list[dict], list[str]]:
+    """Compare each knob's search range with its field's clamp before any render.
+
+    Returns (entries, refusals). A range wholly outside the clamp (or touching it
+    at one point) is inert everywhere and goes to `refusals`. A range partly
+    outside, or a start outside the clamp, gets an entry naming the inert part. A
+    runtime knob with no bound gets an `unbounded` entry: no clamp was reported,
+    which is not the same as the field being safe. A knob inside its clamp has none.
+    """
+    entries: list[dict] = []
+    refusals: list[str] = []
+    for k in knobs:
+        if k.tunable is None:
+            continue
+        bound = bounds.get(k.label)
+        if bound is None:
+            entries.append({"key": k.label, "status": "unbounded", "range": [k.lo, k.hi]})
+            continue
+        clo, chi = bound
+        if k.hi <= clo or k.lo >= chi:
+            refusals.append(
+                f"{k.label}: range [{k.lo:g}, {k.hi:g}] is wholly outside the clamp "
+                f"[{clo:g}, {chi:g}]; every value renders the same, so the knob is inert"
+            )
+            continue
+        inert = []
+        if k.lo < clo:
+            inert.append([k.lo, clo])
+        if k.hi > chi:
+            inert.append([chi, k.hi])
+        start_out = not clo <= k.start_value <= chi
+        if inert or start_out:
+            entries.append(
+                {
+                    "key": k.label,
+                    "status": "partly_outside",
+                    "range": [k.lo, k.hi],
+                    "clamp": [clo, chi],
+                    "inert": inert,
+                    "start": k.start_value,
+                    "start_outside_clamp": start_out,
+                }
+            )
+    return entries, refusals
+
+
+def clamp_warning(entry: dict) -> str:
+    """One stderr line for a `clamp_check` entry."""
+    key = entry["key"]
+    if entry["status"] == "unbounded":
+        return f"{key}: no clamp bound reported (unbounded)"
+    inert = ", ".join(f"[{a:g}, {b:g}]" for a, b in entry["inert"])
+    parts = []
+    if inert:
+        parts.append(
+            f"{inert} of its range [{entry['range'][0]:g}, {entry['range'][1]:g}] is inert"
+        )
+    if entry["start_outside_clamp"]:
+        parts.append(f"start {entry['start']:g} is outside the clamp")
+    return f"{key}: clamp [{entry['clamp'][0]:g}, {entry['clamp'][1]:g}]; " + "; ".join(parts)
+
+
+def stored_vs_effective(
+    knobs: list[Knob], values: list[float], bounds: dict[str, tuple[float, float]]
+) -> list[dict]:
+    """Knobs whose final value differs from what the engine will use (the value clamped)."""
+    out = []
+    for k, v in zip(knobs, values):
+        bound = bounds.get(k.label)
+        if bound is None:
+            continue
+        eff = min(max(v, bound[0]), bound[1])
+        if eff != v:
+            out.append({"key": k.label, "stored": v, "effective": eff, "clamp": list(bound)})
+    return out
 
 
 def at_bound(knob: Knob, value: float) -> str | None:

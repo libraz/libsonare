@@ -313,7 +313,10 @@ from knobs import (
     auto_spec,
     build_knobs,
     check_base_overrides,
+    clamp_check,
+    clamp_warning,
     format_value,
+    knob_bounds,
     load_base_overrides,
     load_spec,
     load_spec_weights,
@@ -2021,6 +2024,17 @@ def run(args, argv: list[str] | None = None) -> int:
     else:
         args.base_overrides = ""
 
+    # Before any render: a range the engine clamps away is inert, and the run
+    # would otherwise search it and write back a value the voice never uses.
+    clamp_bounds = knob_bounds(knobs, catalogue)
+    clamp_entries, clamp_refusals = clamp_check(knobs, clamp_bounds)
+    if clamp_refusals:
+        raise ValueError(
+            "knob range(s) wholly outside the engine clamp:\n  " + "\n  ".join(clamp_refusals)
+        )
+    for entry in clamp_entries:
+        print(f"warning: clamp: {clamp_warning(entry)}", file=sys.stderr)
+
     n_runtime = sum(1 for k in knobs if k.tunable is not None)
     n_source = len(knobs) - n_runtime
     if n_source:
@@ -2198,6 +2212,8 @@ def run(args, argv: list[str] | None = None) -> int:
             "search_dimension": len(fit_knobs),
             "spec_dimension": len(knobs),
             "full_spec_budget_warning": full_spec_budget_warning,
+            "clamp_check": clamp_entries,
+            "clamp_bounds": clamp_bounds,
         }
     gate_adoption(args, evaluator)
     report_result(knobs, pristine, best_values, evaluator, args, extra)
