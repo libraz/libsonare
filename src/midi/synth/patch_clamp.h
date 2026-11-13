@@ -503,6 +503,9 @@ constexpr NativeSynthPatch clamp_synth_patch(const NativeSynthPatch& patch) noex
   p.reed.damping = std::clamp(patch_clamp_detail::sanitize(p.reed.damping, 0.4f), 0.0f, 1.0f);
   p.reed.bell_radiation_hz =
       std::clamp(patch_clamp_detail::sanitize(p.reed.bell_radiation_hz, 0.0f), 0.0f, 8000.0f);
+  // The flare itself, as brass's bell_cutoff_hz below: as wide as a bore with no bell.
+  p.reed.bell_cutoff_hz =
+      std::clamp(patch_clamp_detail::sanitize(p.reed.bell_cutoff_hz, 0.0f), 0.0f, 20000.0f);
   p.reed.attack_ms =
       std::clamp(patch_clamp_detail::sanitize(p.reed.attack_ms, 40.0f), 1.0f, 2000.0f);
   p.reed.release_ms =

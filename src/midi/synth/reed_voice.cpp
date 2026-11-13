@@ -2,9 +2,11 @@
 
 #include <algorithm>
 #include <cmath>
+#include <complex>
 
 #include "midi/synth/pitch.h"
 #include "midi/synth/string_loop.h"
+#include "rt/biquad_design.h"
 #include "util/constants.h"
 #include "util/dsp_primitives.h"
 #include "util/tunable.h"
@@ -55,6 +57,12 @@ SONARE_TUNABLE(kLossCeil, 0.999f);
 // input to the frequency-referenced law below, never applied to the render
 // pole directly (a pole is a count of samples, not a brightness value).
 SONARE_TUNABLE(kBellPoleSpan, 0.7f);
+// Coupled bell: how far brightness moves the corner, in octaves. Seeded off the
+// mapping above at its midpoint, whose slope there is 2.75 octaves per unit.
+SONARE_TUNABLE(kBellBrightOct, 2.75f);
+// Lowest coupled-bell corner, in multiples of the note, as the flute's in-loop colour filter: at
+// one harmonic the cylinder's top note sank 23 cents under the 1.5 kHz corner.
+constexpr float kBellCornerMinHarmonic = 2.0f;
 // Share of the radiation highpass's loss at the fundamental given back (exponent,
 // 1 = all of it), seeded at the brass engine's 0.35.
 SONARE_TUNABLE(kBellRadiationNorm, 0.35f);
@@ -212,6 +220,8 @@ LoopBudget ReedVoiceCore::configure(const ReedPatchParams& params, double sr, ui
   breath_.releasing = false;
   breath_.level = 0.0f;
   lp_state_ = 0.0f;
+  bell_lp_.reset();
+  bell_hp_.reset();
   bore_.out = 0.0f;
   dc_x1_ = 0.0f;
   dc_y1_ = 0.0f;
@@ -301,6 +311,8 @@ LoopBudget ReedVoiceCore::configure(const ReedPatchParams& params, double sr, ui
   // inside refresh_excitation_targets() itself.
   excite_.bright01_base = std::clamp(params.brightness, 0.0f, 1.0f);
   f0_ = f0;
+  // Read before the mapping below runs, because the mapping branches on it.
+  bell_cutoff_hz_ = std::max(0.0f, params.bell_cutoff_hz);
   loss_gain_ship_ = std::clamp(kLossBase - kLossSpan * std::clamp(params.damping, 0.0f, 1.0f),
                                kLossFloor, kLossCeil);
   // Both axes are derived here and nowhere else. A note-on copy of the mapping
@@ -376,7 +388,9 @@ LoopBudget ReedVoiceCore::configure(const ReedPatchParams& params, double sr, ui
   rad_alpha_ = 0.0f;
   rad_ratio_ = 1.0f;
   rad_scale_ = 1.0f;
-  if (params.bell_radiation_hz > 0.0f) {
+  if (bell_cutoff_hz_ > 0.0f) {
+    refresh_radiation_scale();
+  } else if (params.bell_radiation_hz > 0.0f) {
     rad_alpha_ = 1.0f - std::exp(-kTwoPi * std::min(params.bell_radiation_hz, 0.45f * srf) / srf);
     refresh_radiation_scale();
   }
@@ -501,7 +515,11 @@ float ReedVoiceCore::render_internal(float pitch_ratio) noexcept {
   // Bell reflection from the previous bore output: one-pole loss lowpass, the
   // loss gain and the topology sign, then the in-loop DC blocker so the driven
   // loop sheds the breath's DC without colouring the tone.
-  lp_state_ += lp_alpha_ * (bore_.out - lp_state_);
+  if (bell_cutoff_hz_ > 0.0f) {
+    lp_state_ = bell_lp_.process(bore_.out);
+  } else {
+    lp_state_ += lp_alpha_ * (bore_.out - lp_state_);
+  }
   float refl_raw = sign_ * loss_gain_ * lp_state_;
   // Register vent (gated): subtract the tracked low band from the reflection,
   // damping the fundamental so the dominant mode rises toward the register break.
@@ -616,7 +634,14 @@ float ReedVoiceCore::render_internal(float pitch_ratio) noexcept {
   // Bell radiation (gated): outside the loop, after the throat term because that
   // term recovers the bore's pressure, which is what reaches the bell. The makeup
   // is normalized at the sounding fundamental, so it follows the live ratio.
-  if (rad_alpha_ > 0.0f) {
+  if (bell_cutoff_hz_ > 0.0f) {
+    // What the bell radiates is what it did not reflect: the power complement of the loop lowpass.
+    if (ratio != rad_ratio_) {
+      rad_ratio_ = ratio;
+      refresh_radiation_scale();
+    }
+    out = rad_scale_ * bell_hp_.process(out);
+  } else if (rad_alpha_ > 0.0f) {
     if (ratio != rad_ratio_) {
       rad_ratio_ = ratio;
       refresh_radiation_scale();
@@ -628,6 +653,13 @@ float ReedVoiceCore::render_internal(float pitch_ratio) noexcept {
 }
 
 void ReedVoiceCore::refresh_radiation_scale() noexcept {
+  if (bell_cutoff_hz_ > 0.0f) {
+    const float w0 = kTwoPi * f0_ * rad_ratio_ / static_cast<float>(sample_rate_);
+    const float gain = std::abs(rt::biquad_response(bell_hp_.c, w0));
+    rad_scale_ =
+        kBellRadiationMakeup * std::pow(1.0f / std::max(gain, 1.0e-6f), kBellRadiationNorm);
+    return;
+  }
   const float pole = 1.0f - rad_alpha_;
   const float w0 = kTwoPi * f0_ * rad_ratio_ / static_cast<float>(sample_rate_);
   const float num = pole * 2.0f * std::fabs(std::sin(0.5f * w0));
@@ -681,12 +713,32 @@ void ReedVoiceCore::refresh_excitation_targets() noexcept {
   // call here rather than only at note-on. loss_gain_ship_ (from damping, fixed
   // at note-on) is per traversal and needs no mapping.
   const float br = std::clamp(excite_.bright01_base + excite_.bright_mod01, 0.0f, 1.0f);
-  lp_alpha_target_ = 1.0f - loss_pole_at_rate((1.0f - br) * kBellPoleSpan, sample_rate_);
+  if (bell_cutoff_hz_ > 0.0f) {
+    // One corner in hertz; brightness moves it in octaves, so it means the same at every rate.
+    const float srf = static_cast<float>(sample_rate_);
+    const float f_eff = std::min(std::max(bell_cutoff_hz_ * std::exp2(kBellBrightOct * (br - 0.5f)),
+                                          kBellCornerMinHarmonic * f0_),
+                                 0.45f * srf);
+    lp_alpha_target_ = 1.0f - std::exp(-kTwoPi * f_eff / srf);
+  } else {
+    lp_alpha_target_ = 1.0f - loss_pole_at_rate((1.0f - br) * kBellPoleSpan, sample_rate_);
+  }
   loss_gain_target_ = repay_wind_loss(loss_gain_ship_, interp_gain_);
 }
 
 void ReedVoiceCore::retune_loop_comp() noexcept {
-  const float tau_lp = onepole_group_delay_samples(1.0f - lp_alpha_, comp_omega_);
+  float tau_lp = 0.0f;
+  if (bell_cutoff_hz_ > 0.0f) {
+    // The coupled pair on the corner lp_alpha_ names; its phase delay lengthens the loop.
+    const float w_c = -std::log(std::max(1.0f - lp_alpha_, 1.0e-6f));
+    bell_lp_.set(rt::rbj_lowpass(w_c, sonare::constants::kButterworthQ));
+    bell_hp_.set(rt::rbj_highpass(w_c, sonare::constants::kButterworthQ));
+    tau_lp =
+        -std::arg(rt::biquad_response(bell_lp_.c, comp_omega_)) / std::max(comp_omega_, 1.0e-6f);
+    if (f0_ > 0.0f) refresh_radiation_scale();
+  } else {
+    tau_lp = onepole_group_delay_samples(1.0f - lp_alpha_, comp_omega_);
+  }
   bore_.comp = 1.0f + tau_lp - comp_lead_scale_ * comp_lead_;
   if (comp_valve_ > 0.0f) bore_.comp += comp_valve_;
   bore_.comp += static_cast<float>(table_lag_);
@@ -718,6 +770,8 @@ void ReedVoiceCore::kill() noexcept {
   throat_state_ = 0.0f;
   hole_refl_ = 0.0f;
   rad_state_ = 0.0f;
+  bell_lp_.reset();
+  bell_hp_.reset();
   breath_.releasing = true;
 }
 

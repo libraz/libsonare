@@ -427,6 +427,7 @@ void apply_reed(NativeSynthPatch& p, const Fields& f) {
   F(reed.brightness);
   F(reed.damping);
   F(reed.bell_radiation_hz);
+  F(reed.bell_cutoff_hz);
   F(reed.attack_ms);
   F(reed.release_ms);
   F(reed.breath_noise);

@@ -20,6 +20,7 @@
 #include "midi/synth/native_synth.h"
 #include "midi/synth/synth_presets.h"
 #include "midi/ump.h"
+#include "rt/biquad_design.h"
 #include "support/alloc_guard.h"
 #include "support/audio_fixtures.h"
 #include "support/midi_render.h"
@@ -1090,4 +1091,137 @@ TEST_CASE("reed render is allocation-free", "[midi][synth][reed]") {
   sonare::test::AllocationGuard guard;
   synth.process(chans, 2, 256);
   REQUIRE(guard.count() == 0);
+}
+
+namespace {
+
+ReedPatchParams coupled_bell_params(bool conical, float bell_cutoff_hz) {
+  ReedPatchParams p = reed_base_patch().reed;
+  p.conical = conical;
+  p.breath_noise = 0.0f;
+  p.chiff = 0.0f;
+  p.bell_cutoff_hz = bell_cutoff_hz;
+  return p;
+}
+
+/// |H(e^jw)| of a biquad in the denominator form 1 + a1 z^-1 + a2 z^-2.
+double biquad_magnitude(const sonare::rt::BiquadCoeffs& c, double w) {
+  const std::complex<double> z1 = std::exp(std::complex<double>(0.0, -w));
+  const std::complex<double> z2 = z1 * z1;
+  return std::abs((static_cast<double>(c.b0) + static_cast<double>(c.b1) * z1 +
+                   static_cast<double>(c.b2) * z2) /
+                  (1.0 + static_cast<double>(c.a1) * z1 + static_cast<double>(c.a2) * z2));
+}
+
+/// Fundamental from a 1-cent scan over +-3% of @p nominal: Hann-windowed power
+/// summed over the first six harmonics, parabolically refined around the peak.
+double refined_f0(const std::vector<float>& buf, double nominal) {
+  constexpr int kHarmonics = 6;
+  const double kStepCents = 1.0;
+  const int half = 52;  // ~ +-3% in 1-cent steps
+  const size_t n = buf.size();
+  std::vector<double> window(n);
+  for (size_t i = 0; i < n; ++i) {
+    window[i] = 0.5 - 0.5 * std::cos(sonare::constants::kTwoPiD * static_cast<double>(i) /
+                                     static_cast<double>(n - 1));
+  }
+  std::vector<double> score(static_cast<size_t>(2 * half + 1), 0.0);
+  for (int s = -half; s <= half; ++s) {
+    const double f = nominal * std::pow(2.0, s * kStepCents / 1200.0);
+    double total = 0.0;
+    for (int k = 1; k <= kHarmonics; ++k) {
+      const double w = sonare::constants::kTwoPiD * k * f / kRate;
+      double re = 0.0;
+      double im = 0.0;
+      for (size_t i = 0; i < n; ++i) {
+        const double x = buf[i] * window[i];
+        re += x * std::cos(w * static_cast<double>(i));
+        im += x * std::sin(w * static_cast<double>(i));
+      }
+      total += re * re + im * im;
+    }
+    score[static_cast<size_t>(s + half)] = total;
+  }
+  size_t best = 1;
+  for (size_t i = 1; i + 1 < score.size(); ++i) {
+    if (score[i] > score[best]) best = i;
+  }
+  const double a = score[best - 1];
+  const double b = score[best];
+  const double c = score[best + 1];
+  const double denom = a - 2.0 * b + c;
+  const double delta = denom != 0.0 ? 0.5 * (a - c) / denom : 0.0;
+  const double cents = (static_cast<double>(best) - half + delta) * kStepCents;
+  return nominal * std::pow(2.0, cents / 1200.0);
+}
+
+double cents_between(double a, double b) { return 1200.0 * std::log2(a / b); }
+
+}  // namespace
+
+TEST_CASE("reed coupled bell filters are power complementary", "[midi][synth][reed]") {
+  for (const double corner_hz : {800.0, 1500.0, 4000.0}) {
+    const double w0 = sonare::constants::kTwoPiD * corner_hz / kRate;
+    const sonare::rt::BiquadCoeffs lp =
+        sonare::rt::rbj_lowpass(static_cast<float>(w0), sonare::constants::kButterworthQ);
+    const sonare::rt::BiquadCoeffs hp =
+        sonare::rt::rbj_highpass(static_cast<float>(w0), sonare::constants::kButterworthQ);
+    for (const double ratio : {0.5, 1.0, 2.0}) {
+      const double w = w0 * ratio;
+      const double l = biquad_magnitude(lp, w);
+      const double h = biquad_magnitude(hp, w);
+      INFO("corner " << corner_hz << " Hz, ratio " << ratio);
+      CHECK(std::fabs(l * l + h * h - 1.0) < 1.0e-4);
+    }
+    // Butterworth: both are 3 dB down at the corner.
+    CHECK(std::fabs(biquad_magnitude(lp, w0) - std::sqrt(0.5)) < 1.0e-3);
+    CHECK(std::fabs(biquad_magnitude(hp, w0) - std::sqrt(0.5)) < 1.0e-3);
+  }
+}
+
+TEST_CASE("reed coupled bell changes the render and keeps its measured pitch accuracy",
+          "[midi][synth][reed]") {
+  constexpr int kWarmup = 12000;
+  constexpr int kMeasured = 24000;
+  for (const bool conical : {false, true}) {
+    for (const uint8_t note :
+         {static_cast<uint8_t>(45), static_cast<uint8_t>(60), static_cast<uint8_t>(91)}) {
+      const double nominal = 440.0 * std::pow(2.0, (note - 69) / 12.0);
+      const std::vector<float> off =
+          render_reed_core(coupled_bell_params(conical, 0.0f), note, 1.0f, kWarmup, kMeasured);
+      const std::vector<float> on =
+          render_reed_core(coupled_bell_params(conical, 1500.0f), note, 1.0f, kWarmup, kMeasured);
+      INFO("conical " << conical << " note " << int(note));
+      REQUIRE(peak(off) > 0.0f);
+      REQUIRE(peak(on) > 0.0f);
+      REQUIRE(on != off);
+      const double f_off = refined_f0(off, nominal);
+      const double f_on = refined_f0(on, nominal);
+      const double off_cents = cents_between(f_off, nominal);
+      const double on_cents = cents_between(f_on, nominal);
+      CAPTURE(off_cents, on_cents);
+      // The coupled path's current accuracy: compensated at f0 alone, it reads +3.9 c where the
+      // one-pole reads +1.8 (cylinder, note 45), so the bound is the measured 4.5 c.
+      CHECK(std::fabs(on_cents) <= std::max(4.5, std::fabs(off_cents)));
+    }
+  }
+}
+
+TEST_CASE("reed coupled bell corner follows brightness", "[midi][synth][reed]") {
+  constexpr int kWarmup = 12000;
+  constexpr int kMeasured = 16384;
+  for (const bool conical : {false, true}) {
+    ReedPatchParams dim = coupled_bell_params(conical, 1500.0f);
+    dim.brightness = 0.5f;
+    ReedPatchParams bright = dim;
+    bright.brightness = 1.0f;
+    const std::vector<float> a = render_reed_core(dim, 60, 1.0f, kWarmup, kMeasured);
+    const std::vector<float> b = render_reed_core(bright, 60, 1.0f, kWarmup, kMeasured);
+    REQUIRE(peak(a) > 0.0f);
+    REQUIRE(peak(b) > 0.0f);
+    const double c_dim = swell_centroid(a, 0);
+    const double c_bright = swell_centroid(b, 0);
+    INFO("conical " << conical << " centroid " << c_dim << " -> " << c_bright);
+    CHECK(c_bright > c_dim);
+  }
 }

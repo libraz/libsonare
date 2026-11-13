@@ -86,6 +86,7 @@ constexpr UnitRow kEngineUnits[] = {
     {"reed.brightness", Unit::None},
     {"reed.damping", Unit::None},
     {"reed.bell_radiation_hz", Unit::Hz},
+    {"reed.bell_cutoff_hz", Unit::Hz},
     {"reed.attack_ms", Unit::Ms},
     {"reed.release_ms", Unit::Ms},
     {"reed.breath_noise", Unit::None},

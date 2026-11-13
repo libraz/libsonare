@@ -47,6 +47,7 @@
 #include "midi/synth/voice_random.h"
 #include "midi/synth/wind_bore.h"
 #include "midi/synth/wind_breath.h"
+#include "rt/biquad_design.h"
 #include "util/constants.h"
 
 namespace sonare::midi::synth {
@@ -109,6 +110,13 @@ struct ReedPatchParams {
   /// the throat term shapes the bore pressure before it radiates. 0 = off ->
   /// the render is bit-identical.
   float bell_radiation_hz = 0.0f;
+  /// Bell corner frequency (Hz) of the open tone-hole lattice: above 0 the loop
+  /// reflection lowpass and the radiation highpass are one Butterworth pair on
+  /// this corner, tied by |R|² + |T|² = 1, as brass's @c bell_cutoff_hz is.
+  /// @c brightness and CC74 move it in octaves; the loop compensation carries
+  /// the pair's phase delay so the pitch holds. Takes precedence over
+  /// @c bell_radiation_hz. 0 = off -> the render is bit-identical.
+  float bell_cutoff_hz = 0.0f;
   /// Breath rise on note-on (ms): the reed takes a few periods to lock into
   /// oscillation, so the mouth pressure ramps in rather than stepping.
   float attack_ms = 40.0f;
@@ -355,6 +363,11 @@ class ReedVoiceCore {
   float rad_scale_ = 1.0f;
   // Pitch ratio rad_scale_ was normalized at.
   float rad_ratio_ = 1.0f;
+  // Coupled bell (bell_cutoff_hz_ > 0): the loop reflection lowpass and its power
+  // complement on the way out, one Butterworth pair on the corner lp_alpha_ names.
+  float bell_cutoff_hz_ = 0.0f;
+  rt::BiquadState bell_lp_{};
+  rt::BiquadState bell_hp_{};
 
   // Reed table (memoryless valve): coeff = clamp(offset + slope*dp, -1, 1).
   // offset = the reed rest opening, slope < 0 = the reed stiffness.

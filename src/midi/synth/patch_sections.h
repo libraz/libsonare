@@ -308,6 +308,7 @@ constexpr ReedPatchParams blank_reed() noexcept {
   z.brightness = 0.0f;
   z.damping = 0.0f;
   z.bell_radiation_hz = 0.0f;
+  z.bell_cutoff_hz = 0.0f;
   z.attack_ms = 0.0f;
   z.release_ms = 0.0f;
   z.breath_noise = 0.0f;

@@ -255,7 +255,8 @@ const GateRow kEngineGates[] = {
     {"reed.cone_growth", [](const GateSite&) { return is("conical", true); }},
     {"reed.zeta", [](const GateSite&) { return above("closingPressure", 0); }},
     {"reed.pressure_scale", [](const GateSite&) { return above("closingPressure", 0); }},
-    // Brass: a bell cutoff takes the radiation corner from the reflection pole.
+    // Brass and reed: a bell cutoff takes the radiation corner from the reflection pole.
+    {"reed.bell_radiation_hz", [](const GateSite&) { return equals("bellCutoffHz", 0); }},
     {"brass.bell_radiation_hz", [](const GateSite&) { return equals("bellCutoffHz", 0); }},
     // Brass, flute and free reed: the settle and the velocity slope shape an overshoot
     // that has to be there.
