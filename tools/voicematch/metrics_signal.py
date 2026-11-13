@@ -104,7 +104,11 @@ def _db(x: np.ndarray | float, floor: float = DB_FLOOR) -> np.ndarray | float:
     return 20.0 * np.log10(np.maximum(x, floor))
 
 
-def _rms_envelope(y: np.ndarray, sr: int, hop_ms: float = 5.0, win_ms: float = 10.0):
+#: Hop of the RMS envelope every arrival time is read off, so `attack_ms` moves in steps of it.
+ENVELOPE_HOP_MS = 5.0
+
+
+def _rms_envelope(y: np.ndarray, sr: int, hop_ms: float = ENVELOPE_HOP_MS, win_ms: float = 10.0):
     """Frame RMS envelope; returns (times_sec, rms) arrays."""
     hop = max(1, int(sr * hop_ms / 1000.0))
     win = max(hop, int(sr * win_ms / 1000.0))

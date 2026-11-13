@@ -10,6 +10,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 import numpy as np
+from metrics_signal import ENVELOPE_HOP_MS
 from profile_measure import double_decay_gap, register_deltas
 from profile_summary import a4_offset_cents, partial_balance_db, partial_tilt_db_s
 
@@ -163,6 +164,93 @@ def select_dimensions(
     return {k: v for k, v in summary.items() if k in wanted}
 
 
+def timbre_pair_deltas(rows: list[dict], a: str, b: str) -> dict[str, list[float]]:
+    """Per-row deltas of timbre @p a minus timbre @p b, per dimension, over shared cells.
+
+    The arithmetic `reference_spread` reduces to a median; kept whole here so a
+    reader can ask what shape the disagreement has, not only how large it is.
+    """
+    timbres = (a, b)
+    a4 = {t: a4_offset_cents(rows, t) for t in timbres}
+    by_key: dict[str, dict[tuple[int, int], dict]] = {}
+    for r in rows:
+        by_key.setdefault(r["timbre"], {})[(r["note"], r["velocity"])] = r
+
+    out: dict[str, list[float]] = {}
+    shared = sorted(set(by_key.get(a, {})) & set(by_key.get(b, {})))
+    peaks: dict[str, dict[int, dict[int, float]]] = {}
+    attack_hf: dict[str, dict[int, dict[int, float]]] = {}
+    for key in shared:
+        x, y = by_key[a][key], by_key[b][key]
+
+        def diff(field, sx=x, sy=y):
+            return (
+                (sx[field] - sy[field])
+                if sx.get(field) is not None and sy.get(field) is not None
+                else None
+            )
+
+        row = {
+            "stretch": (
+                None if diff("cents_vs_et") is None else diff("cents_vs_et") + a4[a] - a4[b]
+            ),
+            "decay": diff("decay_db_s"),
+            "tnr": diff("tnr_db"),
+            "aftersound": diff("decay_late_db_s"),
+            "doubling": (
+                None
+                if double_decay_gap(x) is None or double_decay_gap(y) is None
+                else double_decay_gap(x) - double_decay_gap(y)
+            ),
+            "body": diff("body_below_f0_db"),
+            "attack": diff("attack_ms"),
+            "attack_hf": diff("attack_hf_db"),
+            "onset": diff("onset_overshoot_db"),
+            "onset_settle": diff("onset_settle_ms"),
+            "stereo": diff("stereo_width"),
+            "damper": (
+                None
+                if x.get("damper_capped") or y.get("damper_capped")
+                else diff("damper_release_ms")
+            ),
+        }
+        bal_x, bal_y = (
+            partial_balance_db(x.get("partials_db")),
+            partial_balance_db(y.get("partials_db")),
+        )
+        row["balance"] = None if bal_x is None or bal_y is None else bal_x - bal_y
+        tilt_x, tilt_y = (
+            partial_tilt_db_s(x.get("partial_decay_db_s")),
+            partial_tilt_db_s(y.get("partial_decay_db_s")),
+        )
+        row["partial_tilt"] = None if tilt_x is None or tilt_y is None else tilt_x - tilt_y
+        if x.get("centroid_hz") and y.get("centroid_hz"):
+            row["centroid_pct"] = 100.0 * (x["centroid_hz"] / y["centroid_hz"] - 1.0)
+        for k, v in row.items():
+            if v is not None and np.isfinite(v):
+                out.setdefault(k, []).append(float(v))
+        for side, src in ((a, x), (b, y)):
+            if "peak_dbfs" in src:
+                peaks.setdefault(side, {}).setdefault(key[0], {})[key[1]] = src["peak_dbfs"]
+            if src.get("attack_hf_db") is not None:
+                attack_hf.setdefault(side, {}).setdefault(key[0], {})[key[1]] = src["attack_hf_db"]
+    for note, pa in sorted(peaks.get(a, {}).items()):
+        pb = peaks.get(b, {}).get(note, {})
+        both = sorted(set(pa) & set(pb))
+        if len(both) >= 2:
+            out.setdefault("vel_range", []).append(
+                (max(pa[v] for v in both) - min(pa[v] for v in both))
+                - (max(pb[v] for v in both) - min(pb[v] for v in both))
+            )
+    swing = velocity_swing_deltas(attack_hf.get(a, {}), attack_hf.get(b, {}))
+    if swing:
+        out["attack_hf_swing"] = swing
+    register = register_deltas(register_levels(rows, a), register_levels(rows, b))
+    if register:
+        out["register"] = [d for _, _, d in register]
+    return out
+
+
 def reference_spread(profile: dict, dimensions: list[str] | None = None) -> dict[str, float]:
     """How far the references are from EACH OTHER, dimension by dimension.
 
@@ -184,92 +272,10 @@ def reference_spread(profile: dict, dimensions: list[str] | None = None) -> dict
     timbres = sorted({r["timbre"] for r in rows})
     if len(timbres) < 2:
         return {}
-    a4 = {t: a4_offset_cents(rows, t) for t in timbres}
-    by_key: dict[str, dict[tuple[int, int], dict]] = {}
-    for r in rows:
-        by_key.setdefault(r["timbre"], {})[(r["note"], r["velocity"])] = r
-
-    def pair_deltas(a: str, b: str) -> dict[str, list[float]]:
-        out: dict[str, list[float]] = {}
-        shared = sorted(set(by_key.get(a, {})) & set(by_key.get(b, {})))
-        peaks: dict[str, dict[int, dict[int, float]]] = {}
-        attack_hf: dict[str, dict[int, dict[int, float]]] = {}
-        for key in shared:
-            x, y = by_key[a][key], by_key[b][key]
-
-            def diff(field, sx=x, sy=y):
-                return (
-                    (sx[field] - sy[field])
-                    if sx.get(field) is not None and sy.get(field) is not None
-                    else None
-                )
-
-            row = {
-                "stretch": (
-                    None if diff("cents_vs_et") is None else diff("cents_vs_et") + a4[a] - a4[b]
-                ),
-                "decay": diff("decay_db_s"),
-                "tnr": diff("tnr_db"),
-                "aftersound": diff("decay_late_db_s"),
-                "doubling": (
-                    None
-                    if double_decay_gap(x) is None or double_decay_gap(y) is None
-                    else double_decay_gap(x) - double_decay_gap(y)
-                ),
-                "body": diff("body_below_f0_db"),
-                "attack": diff("attack_ms"),
-                "attack_hf": diff("attack_hf_db"),
-                "onset": diff("onset_overshoot_db"),
-                "onset_settle": diff("onset_settle_ms"),
-                "stereo": diff("stereo_width"),
-                "damper": (
-                    None
-                    if x.get("damper_capped") or y.get("damper_capped")
-                    else diff("damper_release_ms")
-                ),
-            }
-            bal_x, bal_y = (
-                partial_balance_db(x.get("partials_db")),
-                partial_balance_db(y.get("partials_db")),
-            )
-            row["balance"] = None if bal_x is None or bal_y is None else bal_x - bal_y
-            tilt_x, tilt_y = (
-                partial_tilt_db_s(x.get("partial_decay_db_s")),
-                partial_tilt_db_s(y.get("partial_decay_db_s")),
-            )
-            row["partial_tilt"] = None if tilt_x is None or tilt_y is None else tilt_x - tilt_y
-            if x.get("centroid_hz") and y.get("centroid_hz"):
-                row["centroid_pct"] = 100.0 * (x["centroid_hz"] / y["centroid_hz"] - 1.0)
-            for k, v in row.items():
-                if v is not None and np.isfinite(v):
-                    out.setdefault(k, []).append(float(v))
-            for side, src in ((a, x), (b, y)):
-                if "peak_dbfs" in src:
-                    peaks.setdefault(side, {}).setdefault(key[0], {})[key[1]] = src["peak_dbfs"]
-                if src.get("attack_hf_db") is not None:
-                    attack_hf.setdefault(side, {}).setdefault(key[0], {})[key[1]] = src[
-                        "attack_hf_db"
-                    ]
-        for note, pa in sorted(peaks.get(a, {}).items()):
-            pb = peaks.get(b, {}).get(note, {})
-            both = sorted(set(pa) & set(pb))
-            if len(both) >= 2:
-                out.setdefault("vel_range", []).append(
-                    (max(pa[v] for v in both) - min(pa[v] for v in both))
-                    - (max(pb[v] for v in both) - min(pb[v] for v in both))
-                )
-        swing = velocity_swing_deltas(attack_hf.get(a, {}), attack_hf.get(b, {}))
-        if swing:
-            out["attack_hf_swing"] = swing
-        register = register_deltas(register_levels(rows, a), register_levels(rows, b))
-        if register:
-            out["register"] = [d for _, _, d in register]
-        return out
-
     pooled: dict[str, list[float]] = {}
     for i, a in enumerate(timbres):
         for b in timbres[i + 1 :]:
-            for k, v in pair_deltas(a, b).items():
+            for k, v in timbre_pair_deltas(rows, a, b).items():
                 pooled.setdefault(k, []).extend(np.abs(v).tolist())
     spread = {k: float(np.median(v)) for k, v in pooled.items() if v}
     return {k: v for k, v in spread.items() if not dimensions or k in dimensions}
@@ -355,6 +361,29 @@ FLOOR_GUESSES = {
     # A decibel of tilt, the unit `band_tilt` is floored in.
     "tilt_rise": 1.0,
 }
+
+
+#: A spread under this share of a dimension's fallback floor is not two
+#: references disagreeing: it is one source read twice (one sample set under a
+#: second gain or room, one sampler velocity law). On p027 `vel_range` the two
+#: timbres differ by 0.00-0.06 dB per note; distinct grands differ by 0.8-1.3.
+SHARED_SOURCE_FRACTION = 0.2
+
+#: Dimensions read off a frame grid, where agreement finer than one step is not
+#: measurable at all: a one-hop spread is two sources agreeing to resolution.
+MEASUREMENT_QUANTUM = {"attack": ENVELOPE_HOP_MS}
+
+
+def shares_a_source(key: str, spread: float) -> bool:
+    """Whether a reference spread on @p key is too small to come from two sources.
+
+    Read against the fallback floor, never the measured spread, which is the
+    quantity under suspicion. A spread of exactly zero is already unjudgeable
+    for its own reason and is left to that.
+    """
+    if key in MEASUREMENT_QUANTUM:
+        return 0.0 < spread < MEASUREMENT_QUANTUM[key]
+    return 0.0 < spread < SHARED_SOURCE_FRACTION * dimension_floor(key)[0]
 
 
 def dimension_floor(key: str, spread: dict[str, float] | None = None) -> tuple[float, str]:
@@ -526,6 +555,36 @@ def write_summary_json(
         else None,
     }
     out_path.write_text(json.dumps(record, indent=2, default=float) + "\n")
+
+
+def excused_and_bounded(capture: dict, gate: dict | None) -> list[str]:
+    """Dimensions one capture both excuses and holds a bound on, in its own gate.
+
+    `dimensions_na` and the gate's `_excluded` say the dimension is not read;
+    a bound beside either says it is. The compare summary drops an excused
+    dimension, so the bound can only ever report it as not measured, while
+    coverage counts it as gated. Judged per capture: an excuse on one source
+    beside a bound on another is the normal split, not a contradiction.
+    """
+    bounds = set((gate or {}).get("bounds") or {})
+    excused = set(capture.get("dimensions_na") or {}) | set((gate or {}).get("_excluded") or {})
+    return sorted(bounds & excused)
+
+
+def write_model_rows(out_path: Path, profile: dict, rows: list[dict]) -> None:
+    """Record the model's measured rows in a reference profile's shape.
+
+    Each row is exactly what the compare table differenced against the
+    reference, so a later reading against ANOTHER reference needs no render.
+    The pitched rows were measured through this reference's tone mask.
+    """
+    record = {
+        "id": f"{profile.get('id', '')}:model",
+        "capture": profile.get("capture"),
+        "reference_measured_utc": profile.get("measured_utc", ""),
+        "rows": rows,
+    }
+    out_path.write_text(json.dumps(record, indent=1, default=float) + "\n")
 
 
 def check_gate(

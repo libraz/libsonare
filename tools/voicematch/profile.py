@@ -134,6 +134,7 @@ from profile_gate import (
     summarize_deltas,
     velocity_swing_deltas,
     write_gate_file,
+    write_model_rows,
     write_summary_json,
 )
 from profile_measure import (
@@ -785,6 +786,7 @@ def compare_percussion(
     margin: float,
     corpus_dir: Path | None = None,
     json_out: str = "",
+    rows_out: str = "",
 ) -> int:
     """Score the model against a captured kit, one instrument per note.
 
@@ -1075,6 +1077,15 @@ def compare_percussion(
 
     print_kit_relations(kit_rows, note_groups(cfg))
 
+    if rows_out:
+        write_model_rows(
+            Path(rows_out),
+            profile,
+            [
+                {**m, "timbre": "model", "note": r["note"], "velocity": r["velocity"]}
+                for m, r in kit_rows
+            ],
+        )
     if json_out:
         write_summary_json(
             Path(json_out), summary, gate_path, timbre, profile.get("measured_utc", "")
@@ -1301,6 +1312,7 @@ def compare(
     corpus_dir: Path | None = None,
     json_out: str = "",
     partials: int = 0,
+    rows_out: str = "",
 ) -> int:
     """Measure libsonare the same way and print the difference, dimension by dimension.
 
@@ -1321,6 +1333,7 @@ def compare(
             margin=margin,
             corpus_dir=corpus_dir,
             json_out=json_out,
+            rows_out=rows_out,
         )
     cap = profile["capture"]
     preroll_s = cap["preroll_ms"] / 1000.0
@@ -1383,6 +1396,7 @@ def compare(
     levels: dict[str, dict[int, dict[int, float]]] = {}
     # Per side, per note, per velocity, since the velocity law is a relation between rows.
     attack_hf: dict[str, dict[int, dict[int, float]]] = {}
+    model_rows: list[dict] = []
     for note, vel in pairs:
         window_s = window(note, vel)
         smf = write_smf(
@@ -1406,6 +1420,7 @@ def compare(
             print(f"{note:5d} {vel:4d} | model rendered nothing measurable")
             continue
         attempted += 1
+        model_rows.append({**m, "timbre": "model", "note": note, "velocity": vel})
         ladders.append((note, vel, m.get("partials_db"), r.get("partials_db")))
 
         def d(key, scale=1.0, m=m, r=r):
@@ -1591,6 +1606,8 @@ def compare(
         "next round belongs."
     )
 
+    if rows_out:
+        write_model_rows(Path(rows_out), profile, model_rows)
     if json_out:
         write_summary_json(
             Path(json_out), summary, gate_path, timbre, profile.get("measured_utc", "")
@@ -2071,6 +2088,13 @@ def main() -> int:
         help="also write the summary and each bounded reading beside its limit to this JSON",
     )
     gate_group.add_argument(
+        "--rows",
+        default="",
+        dest="rows_out",
+        help="also write the model's measured rows here, shaped like a reference profile, "
+        "so the same render can be read against another capture's reference",
+    )
+    gate_group.add_argument(
         "--partials",
         type=int,
         default=0,
@@ -2197,6 +2221,7 @@ def main() -> int:
         margin=args.margin,
         corpus_dir=corpus_dir,
         json_out=args.json_out,
+        rows_out=args.rows_out,
         partials=args.partials,
     )
 

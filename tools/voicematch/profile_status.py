@@ -8,6 +8,7 @@ from pathlib import Path
 
 from capture import load_config
 from phrases import build_takes
+from profile_gate import excused_and_bounded
 from render_evidence import ARCHIVE_HISTORICAL, archived_take_ids
 
 #: Every committed capture definition lives here. Globbed rather than listed:
@@ -190,6 +191,14 @@ def readiness(cfg: dict, *, archive: Path, reference_dir: Path) -> dict:
             )
         else:
             out["gate_stale"] = "current"
+        contradicted = excused_and_bounded(cfg, gate)
+        if contradicted:
+            out["contradicted"] = contradicted
+            out["next"].append(
+                f"excused AND bounded: {', '.join(contradicted)} — the capture says the "
+                f"dimension is not read and the gate holds a bound on it, which can only "
+                f"ever fail as not measured. Withdraw one of the two"
+            )
         missing_bounds = [d for d in wanted if d not in gate.get("bounds", {})]
         if missing_bounds:
             out["next"].append(

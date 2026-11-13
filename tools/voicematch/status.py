@@ -72,6 +72,7 @@ import fits as fits_mod
 import signoff
 from _repo import REPO_ROOT
 from objective import objective_digest
+from profile_gate import excused_and_bounded, shares_a_source
 from toneclass import canonical_dimensions
 
 HERE = Path(__file__).resolve().parent
@@ -347,6 +348,10 @@ def gate_agreement(gate: dict) -> dict:
     against and the ratio has no denominator. A tonewheel organ's arrival is one
     -- both registrations speak inside a single 5 ms envelope hop.
 
+    A spread too small to come from two sources (`shares_a_source`) is reported
+    as `shared_source` rather than as a ratio: one recording read twice has no
+    width a model could be inside or outside of.
+
     The margin comes back off the bound first. A bound is the measurement times
     the gate's slack, and that slack is there so a regression guard survives
     measurement noise — it says nothing about how close the voice is. Left in,
@@ -359,12 +364,15 @@ def gate_agreement(gate: dict) -> dict:
     if not spread:
         return {"inside": 0, "total": 0, "unjudgeable": sorted(bounds)}
     margin = float(gate.get("margin") or 1.0) or 1.0
-    inside, outside, unjudgeable = [], {}, []
+    inside, outside, unjudgeable, shared = [], {}, [], []
     for dim, b in bounds.items():
         if dim not in spread:
             continue
         if spread[dim] <= 0.0:
             unjudgeable.append(dim)
+            continue
+        if shares_a_source(dim, spread[dim]):
+            shared.append(dim)
             continue
         measured = b["median"] / margin
         if measured <= spread[dim] * 1.0001:
@@ -378,6 +386,8 @@ def gate_agreement(gate: dict) -> dict:
     }
     if unjudgeable:
         out["unjudgeable"] = sorted(unjudgeable)
+    if shared:
+        out["shared_source"] = sorted(shared)
     return out
 
 
@@ -392,6 +402,7 @@ def merged_agreement(gates: list[dict]) -> dict:
     inside = total = 0
     outside: dict = {}
     unjudgeable: list[str] = []
+    shared: list[str] = []
     for gate in gates:
         one = gate_agreement(gate)
         inside += one["inside"]
@@ -400,6 +411,7 @@ def merged_agreement(gates: list[dict]) -> dict:
         # against, and reports no `outside` at all rather than an empty one.
         outside.update(one.get("outside") or {})
         unjudgeable.extend(one.get("unjudgeable") or [])
+        shared.extend(one.get("shared_source") or [])
     out = {
         "inside": inside,
         "total": total,
@@ -407,6 +419,8 @@ def merged_agreement(gates: list[dict]) -> dict:
     }
     if unjudgeable:
         out["unjudgeable"] = sorted(set(unjudgeable))
+    if shared:
+        out["shared_source"] = sorted(set(shared))
     return out
 
 
@@ -430,6 +444,9 @@ def coverage(voice, cap_raws: list[dict], gates: list[dict]) -> dict:
     `_unbounded`: no bound recorded yet, which stays open and does not complete coverage.
     """
     canon = canonical_dimensions(voice.program, percussive=voice.kit)
+    contradicted = sorted(
+        {d for raw, gate in zip(cap_raws, gates) for d in excused_and_bounded(raw, gate)}
+    )
     gated = {d for gate in gates for d in (gate.get("bounds") or {})}
     excused = {d for raw in cap_raws for d in (raw.get("dimensions_na") or {})}
     excused |= {d for gate in gates for d in (gate.get("_excluded") or {})}
@@ -449,6 +466,11 @@ def coverage(voice, cap_raws: list[dict], gates: list[dict]) -> dict:
     }
     if unbounded & set(canon):
         out["unbounded"] = sorted(unbounded & set(canon))
+    # Excused and bounded by the same capture: the bound can never be checked, so
+    # coverage is not complete until one of the two is withdrawn.
+    if contradicted:
+        out["contradicted"] = contradicted
+        out["complete"] = False
     return out
 
 

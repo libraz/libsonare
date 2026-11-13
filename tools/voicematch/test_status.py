@@ -770,3 +770,79 @@ def test_the_check_passes_on_a_current_file(tmp_path, monkeypatch):
     monkeypatch.setattr(status.catalogue_mod, "dump_catalogue", lambda *a, **k: None)
     monkeypatch.setattr(sys, "argv", ["status.py", "--check"])
     assert status.main() == 0
+
+
+def test_a_dimension_excused_and_bounded_by_one_capture_is_a_contradiction():
+    """The bound can only ever read 'not measured', so it must not count as gated."""
+
+    class V:
+        program, kit = 0, False
+
+    canon = canonical_dimensions(0)
+    gate = {"bounds": {d: {"median": 1.0} for d in canon}}
+    raw = {"dimensions_na": {"damper": "the references disagree"}}
+    got = status.coverage(V(), [raw], [gate])
+    assert got["contradicted"] == ["damper"]
+    assert not got["complete"]
+    # A gate's own `_excluded` beside its own bound is the same contradiction.
+    got = status.coverage(V(), [{}], [{**gate, "_excluded": {"damper": "x"}}])
+    assert got["contradicted"] == ["damper"]
+
+
+def test_an_excuse_on_one_capture_beside_a_bound_on_another_is_the_normal_split():
+    class V:
+        program, kit = 0, False
+
+    canon = canonical_dimensions(0)
+    bounded = {"bounds": {d: {"median": 1.0} for d in canon}}
+    excusing = ({"dimensions_na": {"damper": "this source has no damper"}}, {"bounds": {}})
+    got = status.coverage(V(), [{}, excusing[0]], [bounded, excusing[1]])
+    assert "contradicted" not in got
+    assert got["complete"]
+
+
+def test_references_from_one_source_do_not_adjudicate():
+    """Control: two timbres built from one signal plus a gain share every
+    velocity law, so their `vel_range` spread is a quantisation residue and the
+    agreement must say so rather than divide by it."""
+    import numpy as np
+    from profile_gate import reference_spread
+
+    rng = np.random.default_rng(3)
+    rows = []
+    for note in (40, 52, 64, 76):
+        base = rng.uniform(-30.0, -10.0)
+        for vel, rise in ((56, 0.0), (80, 3.9), (104, 7.7)):
+            peak = base + rise
+            rows.append({"timbre": "a", "note": note, "velocity": vel, "peak_dbfs": peak})
+            rows.append(
+                {
+                    "timbre": "b",
+                    "note": note,
+                    "velocity": vel,
+                    "peak_dbfs": peak - 6.0 + 0.01 * vel / 104,
+                }
+            )
+    spread = reference_spread({"rows": rows})
+    assert 0.0 < spread["vel_range"] < 0.05
+    gate = {"margin": 1.0, "reference_spread": spread, "bounds": {"vel_range": {"median": 2.0}}}
+    got = status.gate_agreement(gate)
+    assert got["shared_source"] == ["vel_range"]
+    assert got["total"] == 0
+
+    # Independent references, a decibel apart on the same law, still adjudicate.
+    for r in rows:
+        if r["timbre"] == "b":
+            r["peak_dbfs"] += {56: 0.0, 80: 0.6, 104: 1.2}[r["velocity"]]
+    spread = reference_spread({"rows": rows})
+    got = status.gate_agreement({**gate, "reference_spread": spread})
+    assert "shared_source" not in got
+    assert got["total"] == 1
+
+
+def test_one_envelope_hop_of_attack_is_resolution_not_a_shared_source():
+    from metrics_signal import ENVELOPE_HOP_MS
+    from profile_gate import shares_a_source
+
+    assert not shares_a_source("attack", ENVELOPE_HOP_MS)
+    assert shares_a_source("attack", 0.5 * ENVELOPE_HOP_MS)
