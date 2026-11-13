@@ -332,6 +332,27 @@ def tail_for(cfg: dict, note: int) -> str:
     return str(cfg["tail"])
 
 
+#: The hold every held module recording was cut from: each definition's `_stimulus` says the
+#: source sustains a note 5.0 s and then lifts the key. A gate under it is a trim of the
+#: recordings themselves, not a key lift.
+SOURCE_HOLD_MS = 5000
+
+
+def is_module_one_shot(cfg: dict) -> bool:
+    """Whether each of this capture's recordings is read to its own end rather than to one gate.
+
+    A module capture whose gate sits under the source's own hold (`SOURCE_HOLD_MS`)
+    took its gate from the recordings (the shortest cell), so every longer cell is
+    cut by it. A gate at or past the hold is the key lift of a held note, with the
+    release after it in the file, and stays a single gate; so does a kit, which
+    is read per hit. Decided from the definition alone, so the importer and the
+    measurement agree before any audio exists.
+    """
+    timbres = cfg.get("timbres") or []
+    kit = bool(timbres) and all(int(t.get("channel", 1)) == PERCUSSION_CHANNEL for t in timbres)
+    return cfg.get("source_class") == "module" and not kit and int(cfg["gate_ms"]) < SOURCE_HOLD_MS
+
+
 def tail_seconds(cfg: dict, note: int) -> float:
     """`tail_for` as a number of seconds, for the sides that render rather than record.
 

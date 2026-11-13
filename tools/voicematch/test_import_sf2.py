@@ -109,10 +109,30 @@ def test_more_velocities_than_the_font_has_layers_is_refused(tmp_path: Path, fon
 
 
 def test_a_gate_longer_than_the_recordings_is_refused(tmp_path: Path, font: Path):
-    """The bursts are 50 ms; this grid promises a 4 s analysis window."""
-    cfg = _load(_definition(tmp_path, font, "test", gate_ms=4000))
+    """The bursts are 50 ms; this grid promises a 6 s analysis window, a held note's key lift."""
+    cfg = _load(_definition(tmp_path, font, "test", gate_ms=6000))
     with pytest.raises(ImportRefused, match="shorter"):
         import_corpus(cfg, tmp_path / "corpus")
+
+
+def test_a_module_one_shot_is_read_per_note_not_capped_by_its_gate(tmp_path: Path, font: Path):
+    """Under the source's own hold the gate is no window: each recording is its own."""
+    cfg = _load(_definition(tmp_path, font, "test", gate_ms=4000))
+    out = tmp_path / "corpus"
+    manifest = import_corpus(cfg, out)
+    assert [r["window_end_ms"] for r in manifest["renders"]] == [50, 50]
+    corpus = load_corpus(out)
+    assert corpus.gate_for(60, 100) == pytest.approx(0.05)
+    assert corpus.gates == {(60, 100): pytest.approx(0.05), (72, 100): pytest.approx(0.05)}
+
+
+def test_a_capture_that_is_not_a_module_one_shot_keeps_one_gate(tmp_path: Path, font: Path):
+    """Only a module one-shot is read per note: no per-row window is written for another class."""
+    cfg = _load(_definition(tmp_path, font, "test", gate_ms=40, source_class="library"))
+    out = tmp_path / "corpus"
+    manifest = import_corpus(cfg, out)
+    assert all("window_end_ms" not in r for r in manifest["renders"])
+    assert load_corpus(out).gates == {}
 
 
 def test_a_nonzero_preroll_is_refused(tmp_path: Path, font: Path):

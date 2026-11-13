@@ -83,6 +83,7 @@ from capture import (
     RIG_UNCLASSIFIED,
     ROOM_NONE,
     ROOM_UNCLASSIFIED,
+    is_module_one_shot,
     load_config,
     model_rig,
     note_groups,
@@ -163,6 +164,7 @@ from profile_measure import (
     measure_hit,
     measure_note,
     measure_stationary_lines,
+    one_shot_window,
     partial_decay,
     reference_loop,
     reference_tnr_mask,
@@ -290,6 +292,40 @@ def reference_window(
     return window
 
 
+def gate_disagreement(cfg: dict, manifest: dict) -> str | None:
+    """The refusal text where the cached manifest was cut for another gate than the definition's.
+
+    A corpus is rendered or imported for one gate, and a definition edited since then
+    describes a different measurement than the audio on disk was cut for.
+    """
+    if "gate_ms" not in manifest or "gate_ms" not in cfg:
+        return None
+    if int(manifest["gate_ms"]) == int(cfg["gate_ms"]):
+        return None
+    return (
+        f"{cfg['id']}: the cached manifest records gate_ms {manifest['gate_ms']} and the "
+        f"capture definition declares gate_ms {cfg['gate_ms']}. The corpus was written for "
+        f"another gate; re-import or re-capture it before reading it"
+    )
+
+
+def refuse_gate_disagreement(cfg: dict, corpus_dir: Path | None) -> bool:
+    """Print `gate_disagreement` for the manifest under @p corpus_dir; True where it refuses."""
+    path = None if corpus_dir is None else corpus_dir / "manifest.json"
+    if path is None or not path.exists():
+        return False
+    refusal = gate_disagreement(cfg, json.loads(path.read_text()))
+    if refusal:
+        print(refusal, file=sys.stderr)
+    return refusal is not None
+
+
+def row_gate_s(row: dict | None, gate_s: float) -> float:
+    """The gate one reference row was read to: its own window end where read per note."""
+    ms = (row or {}).get("window_end_ms")
+    return gate_s if ms is None else int(ms) / 1000.0
+
+
 # --------------------------------------------------------------------------
 # measure
 
@@ -403,9 +439,36 @@ def measure(cfg: dict, corpus_dir: Path, out_path: Path) -> int:
         print(f"no corpus at {manifest_path} — run `capture.py corpus` first", file=sys.stderr)
         return 2
     manifest = json.loads(manifest_path.read_text())
+    if refuse_gate_disagreement(cfg, corpus_dir):
+        return 2
     preroll_s = manifest["preroll_ms"] / 1000.0
     gate_s = manifest["gate_ms"] / 1000.0
     percussion = is_percussion(cfg)
+    # Rows extracted from a module's samples are each read to their own end; see
+    # `capture.is_module_one_shot`. Every other capture keeps its one gate.
+    per_note = (
+        not percussion
+        and is_module_one_shot(cfg)
+        and (manifest.get("source") or {}).get("kind") == "sf2"
+    )
+
+    def measure_note_of(audio, sr, rec, *, preroll_s, gate_s, **reading):
+        if not per_note:
+            return measure_note(
+                audio, sr, rec["note"], preroll_s=preroll_s, gate_s=gate_s, **reading
+            )
+        window = one_shot_window(
+            audio, sr, rec["note"], preroll_s=preroll_s, recorded_s=rec["seconds"]
+        )
+        return measure_note(
+            audio,
+            sr,
+            rec["note"],
+            preroll_s=preroll_s,
+            gate_s=window["end_ms"] / 1000.0,
+            window=window,
+            **reading,
+        )
 
     # What this profile is allowed to measure: the timbres the capture DECLARES,
     # and nothing else the corpus happens to hold.
@@ -458,10 +521,10 @@ def measure(cfg: dict, corpus_dir: Path, out_path: Path) -> int:
                     max_band_hz=max_band_hz,
                 )
                 if percussion
-                else measure_note(
+                else measure_note_of(
                     audio,
                     sr,
-                    rec["note"],
+                    rec,
                     preroll_s=preroll_s,
                     gate_s=gate_s,
                     modal=modal,
@@ -615,6 +678,8 @@ def render_grid(
     """
     manifest_path = corpus_dir / "manifest.json"
     manifest = json.loads(manifest_path.read_text()) if manifest_path.exists() else {}
+    if refuse_gate_disagreement(cfg, corpus_dir):
+        return 2
     preroll_s = manifest.get("preroll_ms", cfg["preroll_ms"]) / 1000.0
     gate_s = manifest.get("gate_ms", cfg["gate_ms"]) / 1000.0
     sr = int(manifest.get("sample_rate", cfg["sample_rate"]))
@@ -641,16 +706,23 @@ def render_grid(
     # reports its buffer where the reference reports the instrument.
     reference_timbre = next((t["id"] for t in cfg.get("timbres", []) if t.get("id")), "")
     window = reference_window(cfg, corpus_dir, reference_timbre, preroll_s=preroll_s, gate_s=gate_s)
+    # A capture read per note lifts the key at each row's own window end.
+    gates = {
+        (r["note"], r["velocity"]): r["window_end_ms"] / 1000.0
+        for r in manifest.get("renders", [])
+        if r.get("timbre") == reference_timbre and "window_end_ms" in r
+    }
     rows = []
     total = len(notes) * len(velocities)
     for i, (note, vel) in enumerate(((n, v) for n in notes for v in velocities), start=1):
         window_s = window(note, vel)
+        row_gate = gates.get((note, vel), gate_s)
         smf = write_smf(
-            [Note(note, vel, preroll_s, gate_s)],
+            [Note(note, vel, preroll_s, row_gate)],
             program=program,
             bank=bank,
             channel=channel,
-            end_pad=max(0.0, window_s - preroll_s - gate_s),
+            end_pad=max(0.0, window_s - preroll_s - row_gate),
         )
         audio = render_model(smf, window_s, sr, rig=rig)
         rel = Path(timbre) / f"n{note:03d}_v{vel:03d}.wav"
@@ -761,11 +833,12 @@ def dynamics(
             if (note, v) not in ref:
                 break
             window_s = window(note, v)
+            gate_row = row_gate_s(ref[(note, v)], gate_s)
             smf = write_smf(
-                [Note(note, v, preroll_s, gate_s)],
+                [Note(note, v, preroll_s, gate_row)],
                 program=program,
                 bank=bank,
-                end_pad=max(0.0, window_s - preroll_s - gate_s),
+                end_pad=max(0.0, window_s - preroll_s - gate_row),
             )
             audio = render_model(smf, window_s, cap["sample_rate"], rig=rig)
             m = measure_note(
@@ -773,7 +846,7 @@ def dynamics(
                 cap["sample_rate"],
                 note,
                 preroll_s=preroll_s,
-                gate_s=gate_s,
+                gate_s=gate_row,
                 tnr_mask=reference_tnr_mask(ref[(note, v)]),
                 modal=not tone_class(program).stiffness_fit,
                 stationary_lines_hz=ref[(note, v)].get("stationary_lines_hz", ()),
@@ -1407,6 +1480,8 @@ def compare(
     if not profile_path.exists():
         print(f"no profile at {profile_path} — run `profile.py measure` first")
         return 2
+    if refuse_gate_disagreement(cfg, corpus_dir):
+        return 2
     profile = scored_profile(profile_path, cfg)
     if is_percussion(profile["capture"]):
         return compare_percussion(
@@ -1492,21 +1567,23 @@ def compare(
     model_rows: list[dict] = []
     for note, vel in pairs:
         window_s = window(note, vel)
+        r = ref[(note, vel)]
+        # The key lifts at the row's own window end, so its release stays outside the window.
+        gate_row = row_gate_s(r, gate_s)
         smf = write_smf(
-            [Note(note, vel, preroll_s, gate_s)],
+            [Note(note, vel, preroll_s, gate_row)],
             program=program,
             bank=bank,
-            end_pad=max(0.0, window_s - preroll_s - gate_s),
+            end_pad=max(0.0, window_s - preroll_s - gate_row),
         )
         audio = render_model(smf, window_s, cap["sample_rate"], rig=rig)
         audio = place(audio, cap["sample_rate"])
-        r = ref[(note, vel)]
         m = measure_note(
             audio,
             cap["sample_rate"],
             note,
             preroll_s=preroll_s,
-            gate_s=gate_s,
+            gate_s=gate_row,
             tnr_mask=reference_tnr_mask(r),
             modal=not tone_class(program).stiffness_fit,
             stationary_lines_hz=r.get("stationary_lines_hz", ()),
@@ -1517,7 +1594,7 @@ def compare(
             print(f"{note:5d} {vel:4d} | model rendered nothing measurable")
             continue
         attempted += 1
-        tails_s.append(window_s - preroll_s - gate_s)
+        tails_s.append(window_s - preroll_s - gate_row)
         tally.begin_row()
         model_rows.append({**m, "timbre": "model", "note": note, "velocity": vel})
         ladders.append((note, vel, m.get("partials_db"), r.get("partials_db")))
@@ -1647,7 +1724,12 @@ def compare(
     if damper_censored:
         # Each censored row was rendered over its own slot's tail, so the
         # sentence names the span rather than one number it no longer has.
-        tails = sorted({round(window(n, v) - preroll_s - gate_s, 2) for n, v in damper_censored})
+        tails = sorted(
+            {
+                round(window(n, v) - preroll_s - row_gate_s(ref[(n, v)], gate_s), 2)
+                for n, v in damper_censored
+            }
+        )
         span = f"{tails[0]:.2g} s" if len(tails) == 1 else f"{tails[0]:.2g}-{tails[-1]:.2g} s"
         print(
             f"\n* {len(damper_censored)} of {len(pairs)} rows never fell 40 dB inside the "

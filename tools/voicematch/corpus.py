@@ -117,6 +117,9 @@ class Corpus:
     #: not, and a single number for both truncates the cymbals to the kick's
     #: window — which is the whole reason the longer tail was captured.
     slots: dict[tuple[int, int], float] = field(default_factory=dict)
+    #: (note, velocity) -> the key-lift time of a capture read per note (`window_end_ms` in
+    #: the manifest). Empty for a capture with one gate, which `gate_for` then answers.
+    gates: dict[tuple[int, int], float] = field(default_factory=dict)
     #: Captured note -> the model note that answers it, where the reference does
     #: not lay its instruments out the way the model does. Empty for every
     #: capture whose numbering the model already agrees with. See `_note_map`.
@@ -134,6 +137,10 @@ class Corpus:
     def slot_for(self, note: int, velocity: int) -> float:
         """The analysis window for one slot: exactly what was recorded for it."""
         return self.slots.get((note, velocity), self.slot_s)
+
+    def gate_for(self, note: int, velocity: int) -> float:
+        """How long the model is held for one slot: its own window end, else the capture's gate."""
+        return self.gates.get((note, velocity), self.gate_s)
 
     def played_notes(self) -> tuple[int, ...]:
         """The notes the MODEL is struck on, one per captured note, in its order."""
@@ -204,6 +211,13 @@ def load_corpus(manifest_path: Path | str, timbre: str = "") -> Corpus:
         for rec in manifest.get("renders", [])
         if rec.get("timbre") == chosen and "seconds" in rec and admits(rec["note"], rec["velocity"])
     }
+    gates = {
+        (int(rec["note"]), int(rec["velocity"])): float(rec["window_end_ms"]) / 1000.0
+        for rec in manifest.get("renders", [])
+        if rec.get("timbre") == chosen
+        and "window_end_ms" in rec
+        and admits(rec["note"], rec["velocity"])
+    }
     slot_s = max(slots.values()) if slots else gate_s + _tail_seconds(manifest.get("tail", "2s"))
 
     entry = next(
@@ -229,6 +243,7 @@ def load_corpus(manifest_path: Path | str, timbre: str = "") -> Corpus:
         channel=_note_channel(manifest, entry),
         groups=_groups(manifest),
         slots=slots,
+        gates=gates,
         note_map=_note_map(manifest),
         capture_id=str(manifest.get("id", "")),
     )
@@ -658,9 +673,11 @@ def corpus_pattern(
     seq = []
     t = 0.0
     last_slot = corpus.slot_s
+    last_gate = corpus.gate_s
     for n in picked_notes:
         for v in picked_vels:
-            seq.append(Note(n, v, t, corpus.gate_s))
+            last_gate = corpus.gate_for(corpus.capture_slot(n), v)
+            seq.append(Note(n, v, t, last_gate))
             # The window is the reference render's, so it is read in the
             # capture's numbering: `tail_by_note` names the notes it recorded
             # long, and those are the keys the plugin was struck on.
@@ -669,7 +686,7 @@ def corpus_pattern(
     # The trailing pad is the final slot's own, not the grid's longest: it is
     # there so the last note is not cut off, and every earlier note is spaced by
     # the slot it was captured in.
-    tail = max(0.0, last_slot - corpus.gate_s)
+    tail = max(0.0, last_slot - last_gate)
     # A kit corpus is captured on the drum channel, and the model's probe has to
     # be written on the same one or its note numbers sound pitches of program 0
     # while the oracle plays the kit. `percussive` then carries into which metric

@@ -630,6 +630,8 @@ def _corpus_identity(corpus: Corpus | None) -> list:
         list(corpus.velocities),
         sorted((list(k), v) for k, v in corpus.slots.items()),
         sorted(corpus.note_map.items()),
+        # Present only for a capture read per note, so a one-gate corpus keeps its identity.
+        *([sorted((list(k), v) for k, v in corpus.gates.items())] if corpus.gates else []),
     ]
 
 

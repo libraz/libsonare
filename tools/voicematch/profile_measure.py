@@ -69,6 +69,7 @@ from metrics_note import (
 )
 from metrics_partials import series_scatter_cents
 from metrics_warp import LineStructure, line_structure
+from profile_window import row_window
 from smf import Note
 from toneclass import LADDER_DIMENSIONS
 from wavio import read_wav
@@ -741,6 +742,36 @@ def reference_tnr_mask(row: dict) -> dict:
     return row["tnr_mask"]
 
 
+def one_shot_window(
+    audio: np.ndarray, sr: int, note: int, *, preroll_s: float, recorded_s: float
+) -> dict:
+    """The window of one recording of a module one-shot capture; see `profile_window.row_window`.
+
+    The partials the floor reading needs are found the way `measure_note` finds them, on
+    the same segment of the recording, so the window is decided before the row is read.
+    """
+    mono = to_mono(audio)
+    on = int(sound_onset_s(mono, sr, preroll_s, len(mono) / sr) * sr)
+    held = mono[on:]
+    a = int(0.12 * sr)
+    partials: list[float] = []
+    clear_end_s = None
+    if held.size > a + sr // 4:
+        partials = (
+            find_partials(held[a : min(len(held), a + int(1.5 * sr))], sr, note).get("partials_hz")
+            or []
+        )
+        clear = partial_clearance(held[a:], sr, partials).get("partial_clear_s") if partials else []
+        # The frame `partial_clearance` read ends a window after the time it reports.
+        last = max((c for c in clear or [] if c is not None), default=None)
+        if last is not None:
+            clear_end_s = a / sr + last + max(1024, int(0.093 * sr)) / sr
+    t_env, env = _rms_envelope(held, sr)
+    return row_window(
+        held, sr, int(recorded_s * 1000.0), partials, t_env, np.asarray(_db(env)), clear_end_s
+    )
+
+
 def note_gate(
     audio: np.ndarray, sr: int, preroll_s: float, gate_s: float
 ) -> tuple[np.ndarray, np.ndarray, float, int, int] | None:
@@ -821,6 +852,7 @@ def measure_note(
     body_lines_missed_hz: list[float] | tuple[float, ...] = (),
     loop: dict | None = None,
     capture_id: str | None = None,
+    window: dict | None = None,
 ) -> dict:
     """Every measurement this profile carries, for one captured note.
 
@@ -836,6 +868,9 @@ def measure_note(
     model's, so a spectrum the reference read only up to its loop join is read
     to the same time; without it the note is tested for a loop and records the
     verdict, `capture_id` deciding whether the spectral reads stop at the join.
+
+    `window` is `one_shot_window`'s answer for a capture read per note; its end is then
+    the `gate_s` given, and the row records it with the rule that chose it.
 
     The gate window is placed on the onset the render actually has rather than
     on the one the score asked for. A capture's own guard refuses a render that
@@ -1022,6 +1057,13 @@ def measure_note(
         if ladder is not None:
             loop_rec["ladder_db"] = ladder
     row["loop"] = loop_rec
+    if window is not None:
+        row["window_end_ms"] = window["end_ms"]
+        row["window_rule"] = window["rule"]
+        row["window_recorded_ms"] = window["recorded_ms"]
+        for key in ("end_clearance_db", "sound_end_ms", "marks"):
+            if key in window:
+                row[f"window_{key}"] = window[key]
     return row
 
 

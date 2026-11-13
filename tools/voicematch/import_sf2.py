@@ -19,7 +19,9 @@ that, and each exists because the thing it prevents is silent:
   writing one recording out under five velocity labels manufactures the axis a
   dynamics fit reads and every metric would still compute;
 - a grid asking for a longer gate than the font recorded is refused, naming the
-  longest it can serve, because a short window silently truncates a decay.
+  longest it can serve, because a short window silently truncates a decay. A module
+  one-shot capture (`capture.is_module_one_shot`) has no single gate to refuse: each
+  recording is its own window, written to the manifest as `window_end_ms`.
 
 Usage:
 
@@ -40,6 +42,7 @@ sys.path.insert(0, str(Path(__file__).parent))
 from capture import (
     DEFAULT_OUT_ROOT,
     ROOM_UNCLASSIFIED,
+    is_module_one_shot,
     load_config,
     note_groups,
     note_map,
@@ -101,7 +104,12 @@ def _check_velocity_axis(cfg: dict, font: SoundFont) -> int:
 
 
 def _check_gate(cfg: dict, found: dict[str, dict[int, float]]) -> None:
-    """Refuse a gate longer than the shortest recording it would be read from."""
+    """Refuse a gate longer than the shortest recording it would be read from.
+
+    Not asked of a module one-shot capture, whose recordings are each read to their own end.
+    """
+    if is_module_one_shot(cfg):
+        return
     gate_s = float(cfg["gate_ms"]) / 1000.0
     short = [
         (tid, note, seconds)
@@ -159,6 +167,11 @@ def import_corpus(cfg: dict, out: Path, *, verbose: bool = False) -> dict:
                 found[tid][note] = sample.seconds
                 renders.append(
                     {
+                        **(
+                            {"window_end_ms": int(sample.seconds * 1000.0)}
+                            if is_module_one_shot(cfg)
+                            else {}
+                        ),
                         "id": f"{tid}/n{note:03d}_v{velocity:03d}",
                         "timbre": tid,
                         "note": note,
