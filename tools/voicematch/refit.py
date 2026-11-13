@@ -682,7 +682,11 @@ def _tuning_lib(build_dir: str) -> Path:
 
 def check_base(voice: dict, lib: Path) -> None:
     """Refuse a base key the library does not know on this voice, before its first render."""
-    if not BASE_OVERRIDES or "drum_note" in voice:  # a kit's catalogue needs its drum pattern
+    if not BASE_OVERRIDES:
+        return
+    if "drum_note" in voice:
+        # A kit's catalogue needs its drum pattern; autofit checks the base when the fit starts.
+        print(f"{voice['slug']}: base overrides checked by the fit, not before its pre render")
         return
     catalogue = dump_catalogue(
         voice["program"],
@@ -707,7 +711,12 @@ def run_voice(voice: dict, root: Path, build_dir: str, per_knob: int) -> dict:
         units = {u for t in gate_patches(voice) for u in chain_of(t, struct_copies())}
         base = baseline_pins(voice, own_fit, registry_history(units))
         gate_audit.compare_voice(
-            voice, pre, lib, base["overrides"], baseline=base, base_overrides=BASE_OVERRIDES
+            voice,
+            pre,
+            lib,
+            base["overrides"],
+            baseline=base,
+            base_overrides=reach_copies(BASE_OVERRIDES, voice),
         )
     if not fit.exists():
         _fit(voice, fit, build_dir, per_knob)
@@ -718,7 +727,7 @@ def run_voice(voice: dict, root: Path, build_dir: str, per_knob: int) -> dict:
             post,
             lib,
             reach_copies(fit_report.get("overrides") or "", voice),
-            base_overrides=BASE_OVERRIDES,
+            base_overrides=reach_copies(BASE_OVERRIDES, voice),
         )
     result = {
         "slug": voice["slug"],
@@ -785,7 +794,7 @@ def along_the_path(voice: dict, d: Path, lib: Path, report: dict, tag: str) -> d
                 out,
                 lib,
                 reach_copies(overrides_for(report, values), voice),
-                base_overrides=BASE_OVERRIDES,
+                base_overrides=reach_copies(BASE_OVERRIDES, voice),
             )
         post = json.loads(out.read_text())["gate"]["readings"]
         post_sum, post_over = _excess(post)
