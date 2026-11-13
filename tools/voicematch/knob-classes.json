@@ -336,11 +336,6 @@
       "lane": "struck",
       "type": "switch"
     },
-    "piano_voice.kHammerJunction": {
-      "class": "switch",
-      "basis": "engine switch, removed at junction adoption",
-      "lane": "piano"
-    },
     "piano_voice.kInjImpulseNorm": {
       "class": "switch",
       "basis": "selects which quantity the injection is normalised to, 0 or 1",
@@ -647,6 +642,17 @@
       "class": "stage_enable",
       "basis": "excitation model selector (finger/nail/slap); floats, unclamped",
       "lane": "struck"
+    },
+    "ks.pluck_ms": {
+      "class": "stage_enable",
+      "basis": "finite-duration pluck stage, absent at 0; above 0 it replaces the noise burst and retires the excitation-brightness, pluck_style and nail fields",
+      "lane": "struck",
+      "off_value": 0.0
+    },
+    "ks.pluck_vel_exp": {
+      "class": null,
+      "lane": "struck",
+      "gates": "live only while ks.pluck_ms > 0 (engine_field_gates.cpp); a fit owns it once the stage is on, no reference row measures release time against velocity"
     },
     "ks.polarization": {
       "class": "stage_enable",
@@ -1057,11 +1063,10 @@
       "lane": "piano",
       "basis": "literature-pinned hammer/string mass ratio per register; only kHammerMassRatioScale is a fitted handle"
     },
-    "ks.pluck_ms": {
-      "class": "stage_enable",
-      "lane": "struck",
-      "basis": "finite-duration pluck stage, absent at 0; above 0 it replaces the noise burst and retires the excitation-brightness, pluck_style and nail fields",
-      "off_value": 0.0
+    "piano_voice.kHammerJunction": {
+      "class": "switch",
+      "lane": "piano",
+      "basis": "engine switch in piano's uncommitted junction work, removed at junction adoption"
     }
   },
   "reach": {
