@@ -521,3 +521,18 @@ def test_vel_range_names_single_velocity_notes():
         {36: {40: -20.0, 100: -6.0}}, {36: {40: -21.0, 100: -5.0}}, tally
     )
     assert got == [pytest.approx(14.0 - 16.0)] and tally.reason("vel_range") is None
+
+
+def test_a_dirty_tree_is_refused_unless_allowed_and_then_recorded(tmp_path, monkeypatch, capsys):
+    monkeypatch.setattr(
+        profile_gate, "tree_state", lambda: {"head": "abc1234", "dirty": ["src/x.cpp"]}
+    )
+    gate = tmp_path / "g.json"
+    assert write_gate_file(_rows(10.0), gate, "ref", 1.0) == 2
+    assert not gate.exists()
+    assert "src/x.cpp" in capsys.readouterr().err
+    assert write_gate_file(_rows(10.0), gate, "ref", 1.0, allow_dirty=True) == 0
+    prov = json.loads(gate.read_text())["bounds"]["decay"]["provenance"]["median"]
+    assert prov["set_tree"] == {"head": "abc1234", "dirty": ["src/x.cpp"]}
+    notes = profile_gate.provenance_notes(json.loads(gate.read_text()))
+    assert any(n.startswith("set on a dirty tree: decay.") for n in notes)

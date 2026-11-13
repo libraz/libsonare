@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import os
 import re
+import subprocess
 import sys
 import time
 from datetime import UTC, datetime
@@ -979,6 +980,27 @@ def _carry_the_annotations(gate_path: Path) -> dict[str, object]:
     }
 
 
+#: Where an uncommitted edit changes what a bound measures; the gates themselves are outputs.
+TREE_PATHS = ("src", "tools/voicematch")
+
+
+def tree_state() -> dict:
+    """HEAD and the uncommitted files under `TREE_PATHS` a recording was made beside."""
+    repo = Path(__file__).resolve().parents[2]
+
+    def git(*args: str) -> str:
+        return subprocess.run(
+            ["git", "-C", str(repo), *args], capture_output=True, text=True, check=False
+        ).stdout
+
+    dirty = sorted(
+        line[3:]
+        for line in git("status", "--porcelain", "--", *TREE_PATHS).splitlines()
+        if not line[3:].endswith("_gate.json")
+    )
+    return {"head": git("rev-parse", "--short", "HEAD").strip(), "dirty": dirty}
+
+
 def _keep_the_tighter(
     bounds: dict[str, dict],
     measured: dict[str, dict[str, float]],
@@ -1087,6 +1109,14 @@ def provenance_notes(gate: dict) -> list[str]:
     notes += [
         f"not verified since {when}: {', '.join(names)}" for when, names in sorted(since.items())
     ]
+    dirty = sorted(
+        f"{dim}.{stat}"
+        for dim, bound in (gate.get("bounds") or {}).items()
+        for stat, p in (bound.get("provenance") or {}).items()
+        if (p.get("set_tree") or {}).get("dirty")
+    )
+    if dirty:
+        notes.append(f"set on a dirty tree: {', '.join(dirty)}")
     return notes
 
 
@@ -1187,6 +1217,7 @@ def write_gate_file(
     requested: list[str] | None = None,
     dimensions_na: dict[str, str] | None = None,
     censors: CensorTally | None = None,
+    allow_dirty: bool = False,
 ) -> int:
     """Record the current numbers as the bounds a later run is held to.
 
@@ -1236,7 +1267,23 @@ def write_gate_file(
             # run compares against it as though the whole grid had spoken.
             "rows": int(row.get("n", 0)),
         }
+    tree = tree_state()
+    if tree["dirty"] and not allow_dirty:
+        print(
+            f"refusing to write {gate_path}: the tree is dirty under src/ or tools/voicematch/ "
+            "(pass --allow-dirty to record it deliberately):",
+            file=sys.stderr,
+        )
+        for f in tree["dirty"]:
+            print(f"  {f}", file=sys.stderr)
+        return 2
+    if tree["dirty"]:
+        print(f"recording on a dirty tree ({len(tree['dirty'])} files): {', '.join(tree['dirty'])}")
     declined, reported = _keep_the_tighter(bounds, measured, gate_path, now, build.get("built_utc"))
+    for bound in bounds.values():
+        for prov in (bound.get("provenance") or {}).values():
+            if prov.get("set_utc") == now:
+                prov["set_tree"] = tree
     carried = _carry_the_unbounded(bounds, gate_path)
     computed = _computed_unbounded(
         censors, requested, set(dimensions_na or {}) | set(excluded), bounds

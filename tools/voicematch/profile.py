@@ -797,6 +797,7 @@ def compare_percussion(
     corpus_dir: Path | None = None,
     json_out: str = "",
     rows_out: str = "",
+    allow_dirty: bool = False,
 ) -> int:
     """Score the model against a captured kit, one instrument per note.
 
@@ -1110,6 +1111,7 @@ def compare_percussion(
             requested=cfg.get("dimensions") or [],
             dimensions_na=cfg.get("dimensions_na") or {},
             censors=tally,
+            allow_dirty=allow_dirty,
         )
     return 0
 
@@ -1324,6 +1326,7 @@ def compare(
     gate_path: str = "",
     write_gate: str = "",
     margin: float = 1.25,
+    allow_dirty: bool = False,
     corpus_dir: Path | None = None,
     json_out: str = "",
     partials: int = 0,
@@ -1346,6 +1349,7 @@ def compare(
             gate_path=gate_path,
             write_gate=write_gate,
             margin=margin,
+            allow_dirty=allow_dirty,
             corpus_dir=corpus_dir,
             json_out=json_out,
             rows_out=rows_out,
@@ -1675,6 +1679,7 @@ def compare(
             requested=cfg.get("dimensions") or [],
             dimensions_na=cfg.get("dimensions_na") or {},
             censors=tally,
+            allow_dirty=allow_dirty,
         )
     return 0
 
@@ -2140,6 +2145,12 @@ def main() -> int:
         "the same change as the behaviour that justifies the new numbers",
     )
     gate_group.add_argument(
+        "--allow-dirty",
+        action="store_true",
+        help="let --write-gate record beside uncommitted files under src/ or "
+        "tools/voicematch/; the list is stored with every statistic it sets",
+    )
+    gate_group.add_argument(
         "--json",
         default="",
         dest="json_out",
@@ -2277,6 +2288,7 @@ def main() -> int:
         gate_path=args.gate,
         write_gate=args.write_gate,
         margin=args.margin,
+        allow_dirty=args.allow_dirty,
         corpus_dir=corpus_dir,
         json_out=args.json_out,
         rows_out=args.rows_out,
