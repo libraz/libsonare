@@ -15,8 +15,9 @@ import pytest
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
+import gate_verify
 import profile_gate
-from profile_gate import FLOOR_FROM_RULER, window_mismatch, write_gate_file
+from profile_gate import FLOOR_FROM_RULER, gate_readings, window_mismatch, write_gate_file
 from profile_summary import a4_ruler, a4_two_point_cents
 
 
@@ -141,3 +142,38 @@ def test_a_bound_raised_to_the_rulers_scatter_still_reads_red_where_the_model_is
     prov = bound["provenance"]["median"]
     assert bound["median"] == 3.0 and prov["outcome"] == "exceeded"
     assert prov["floored_from"] == {"bound": 1.0}
+
+
+def test_a_ruler_too_scattered_to_resolve_stretch_reads_not_adjudicable_never_inside(
+    tmp_path, capsys
+):
+    gate = tmp_path / "g.json"
+    _write(gate, 0.5, _ruler(0.5, scatter=7.2))
+    bounds = json.loads(gate.read_text())["bounds"]
+    for value in (1.0, 9.0):
+        got = gate_readings(_stretch(value), bounds, _ruler(0.5, scatter=7.2))
+        assert {(r["value"], r["over"]) for r in got} == {(value, None)}
+        assert all("scatter 7.2 c is wider than 5 c" in r["unadjudicable"] for r in got)
+        capsys.readouterr()
+        rc = profile_gate.check_gate(_stretch(value), gate, "t", windows=_ruler(0.5, scatter=7.2))
+        out = capsys.readouterr().out
+        assert rc == 0 and "(cents): median not adjudicable, measurement-limited" in out
+        assert "every recorded bound held" not in out and "3 not adjudicable" in out
+    found = profile_gate.provenance_findings(json.loads(gate.read_text()))
+    assert [(d, s) for d, s, _ in found["unadjudicable"]] == [
+        ("stretch", s) for s in ("median", "abs_median", "p90")
+    ]
+    assert not found["exceeded"] and not found["unverified"]
+    notes = profile_gate.provenance_notes(json.loads(gate.read_text()))
+    assert "stretch.median: not adjudicable, measurement-limited" in notes[0]
+    out, found = gate_verify.apply(json.loads(gate.read_text()), got, "NOW")
+    assert found["unadjudicable"] and not found["held"] and not found["exceeded"]
+    assert out == json.loads(gate.read_text())
+
+
+def test_a_ruler_inside_the_limit_is_judged_as_before(tmp_path):
+    gate = tmp_path / "g.json"
+    _write(gate, 0.5, _ruler(0.5, scatter=4.9))
+    bounds = json.loads(gate.read_text())["bounds"]
+    got = gate_readings(_stretch(9.0), bounds, _ruler(0.5, scatter=4.9))
+    assert all(r["over"] and "unadjudicable" not in r for r in got)

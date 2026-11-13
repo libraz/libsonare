@@ -556,6 +556,28 @@ def window_mismatch(recorded: dict | None, current: dict | None) -> str | None:
     )
 
 
+#: The A4 ruler scatter (cents) past which a stretch reading is not adjudicable: the
+#: reference's own notes then disagree by more than any stretch the bank models.
+RULER_ADJUDICABLE_C = 5.0
+
+
+def unadjudicable(bound: dict, stat: str, windows: dict[str, dict] | None, key: str) -> str | None:
+    """Why a statistic read against an A4 ruler too scattered to measure it is not judged, or None.
+
+    The ruler is this run's where it has one, else the one the bound was recorded on.
+    """
+    current = (windows or {}).get(key) or {}
+    recorded = ((bound.get("provenance") or {}).get(stat) or {}).get("window") or {}
+    ruler = current.get("ruler") or recorded.get("ruler") or {}
+    scatter = ruler.get("scatter_c")
+    if scatter is None or scatter <= RULER_ADJUDICABLE_C:
+        return None
+    return (
+        f"measurement-limited: the A4 ruler's scatter {scatter:g} c is wider than "
+        f"{RULER_ADJUDICABLE_C:g} c, so the reference does not resolve its stretch"
+    )
+
+
 def print_summary_table(
     summary: dict[str, dict],
     spread: dict[str, float],
@@ -667,7 +689,9 @@ def gate_readings(
     `excess` is `(value - limit) / limit`, so readings in different units can be
     summed; it is None where the limit is zero or the dimension was not measured.
     A statistic read on a window other than the one its bound was recorded on (see
-    `window_mismatch`) is not judged: `value` is None and `refused` says why.
+    `window_mismatch`) is not judged: `value` is None and `refused` says why. One read
+    against a ruler too scattered to resolve it (`unadjudicable`) keeps its value, is
+    neither inside nor over (`over` None) and `unadjudicable` says why.
     """
     out = []
     for key, bound in bounds.items():
@@ -689,6 +713,21 @@ def gate_readings(
                         "over": None,
                         "excess": None,
                         "refused": refused,
+                    }
+                )
+                continue
+            limited = unadjudicable(bound, stat, windows, key)
+            if limited is not None:
+                value = None if row is None else (abs(row[stat]) if stat == "median" else row[stat])
+                out.append(
+                    {
+                        "key": key,
+                        "stat": stat,
+                        "value": value,
+                        "limit": limit,
+                        "over": None,
+                        "excess": None,
+                        "unadjudicable": limited,
                     }
                 )
                 continue
@@ -808,6 +847,8 @@ def check_gate(
     A statistic whose bound was recorded on another window than @p windows gives (see
     `window_mismatch`) is refused, not judged, and the run exits 2 if nothing else failed.
     A bound with no recorded window is read as before and named as unrecorded.
+    A stretch statistic whose A4 ruler is too scattered to resolve it (`unadjudicable`)
+    is named as not adjudicable and neither passes nor fails.
 
     What this exists to catch is not a bad voice — it is a change that improves
     one dimension by breaking another, which is the shape most of this work
@@ -849,6 +890,7 @@ def check_gate(
     bounds = gate.get("bounds", {})
     failures = []
     refusals: list[str] = []
+    not_adjudicable: list[str] = []
     evidence: list[tuple[str, int, int | None]] = []
     for key, bound in bounds.items():
         row = summary.get(key)
@@ -877,12 +919,20 @@ def check_gate(
             if refused is not None:
                 refusals.append(f"{DELTA_LABELS.get(key, key)}: {stat} not judged, {refused}")
                 continue
+            limited = unadjudicable(bound, stat, windows, key)
+            if limited is not None:
+                not_adjudicable.append(
+                    f"{DELTA_LABELS.get(key, key)}: {stat} not adjudicable, {limited}"
+                )
+                continue
             value = abs(row[stat]) if stat == "median" else row[stat]
             if value > limit:
                 failures.append(
                     f"{DELTA_LABELS.get(key, key)}: {stat} {value:.2f} over its bound {limit:.2f}"
                 )
     print(f"\ngate: {gate_path.name}, {len(bounds)} dimensions")
+    for line in not_adjudicable:
+        print(f"  {line}")
     unrecorded = sorted(
         DELTA_LABELS.get(k, k)
         for k, b in bounds.items()
@@ -1044,6 +1094,9 @@ def check_gate(
             f"recorded on and were not judged. Re-record with --write-gate on this window."
         )
         return 2
+    if not_adjudicable:
+        print(f"  every adjudicable bound held; {len(not_adjudicable)} not adjudicable")
+        return 0
     print("  every recorded bound held")
     return 0
 
@@ -1349,7 +1402,9 @@ def provenance_findings(gate: dict) -> dict[str, list[tuple]]:
     a bound nothing records as ever having held. `rewindowed`: (dimension, stat,
     residual) for a bound re-recorded because its window moved, which records the
     model's error there rather than limiting it. `floored`: (dimension, stat, old bound)
-    for a bound raised to the A4 ruler's scatter. A gate in the older format carries
+    for a bound raised to the A4 ruler's scatter. `unadjudicable`: (dimension, stat, reason)
+    for a bound whose recorded ruler cannot resolve it (`unadjudicable`), named before any
+    other outcome since it neither held nor failed. A gate in the older format carries
     no provenance and reports none of them.
     """
     out: dict[str, list[tuple]] = {
@@ -1357,10 +1412,14 @@ def provenance_findings(gate: dict) -> dict[str, list[tuple]]:
         "unverified": [],
         "rewindowed": [],
         "floored": [],
+        "unadjudicable": [],
     }
     for dim, bound in (gate.get("bounds") or {}).items():
         for stat, p in (bound.get("provenance") or {}).items():
-            if p.get("outcome") == OUTCOME_EXCEEDED:
+            limited = unadjudicable(bound, stat, None, dim)
+            if limited is not None:
+                out["unadjudicable"].append((dim, stat, limited))
+            elif p.get("outcome") == OUTCOME_EXCEEDED:
                 out["exceeded"].append((dim, stat, p.get("held_utc")))
             elif p.get("outcome") == OUTCOME_REWINDOWED:
                 out["rewindowed"].append((dim, stat, p.get("measured")))
@@ -1386,6 +1445,7 @@ def provenance_notes(gate: dict) -> list[str]:
         f"{dim}.{stat}: raised from {was} to the A4 ruler's scatter"
         for dim, stat, was in found["floored"]
     ]
+    notes += [f"{dim}.{stat}: not adjudicable, {why}" for dim, stat, why in found["unadjudicable"]]
     since: dict[str, list[str]] = {}
     for dim, stat, set_utc in found["unverified"]:
         since.setdefault(set_utc or "unknown", []).append(f"{dim}.{stat}")

@@ -5,7 +5,7 @@ has been inside it since, and a re-record would change bounds as well as answer
 that. This applies the readings of a `profile.py compare --gate --json` run
 (as `distance.py run` writes them) to each bound statistic's provenance: the
 unpadded measurement, `held_utc` now when it is within the bound, and outcome
-`kept` or `exceeded`. Bound values, `set_*` and every other field are untouched,
+`kept` or `exceeded`; a reading `profile_gate.unadjudicable` set aside changes nothing. Bound values, `set_*` and every other field are untouched,
 and a statistic the run did not measure is left as it was.
 
     rye run --pyproject bindings/python/pyproject.toml \\
@@ -28,12 +28,20 @@ from profile_gate import OUTCOME_EXCEEDED, OUTCOME_KEPT
 def apply(gate: dict, readings: list[dict], now: str) -> tuple[dict, dict[str, list[str]]]:
     """The gate with each read statistic's provenance updated, and what was found."""
     out = json.loads(json.dumps(gate))
-    found: dict[str, list[str]] = {"held": [], "exceeded": [], "unmeasured": []}
+    found: dict[str, list[str]] = {
+        "held": [],
+        "exceeded": [],
+        "unmeasured": [],
+        "unadjudicable": [],
+    }
     for r in readings:
         bound = (out.get("bounds") or {}).get(r["key"])
         if not isinstance(bound, dict) or r["stat"] not in bound:
             continue
         name = f"{r['key']}.{r['stat']}"
+        if r.get("unadjudicable"):
+            found["unadjudicable"].append(name)
+            continue
         if r.get("value") is None:
             found["unmeasured"].append(name)
             continue
@@ -82,10 +90,13 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
     report = verify(args.runs, args.write)
     gates_over = sorted(g for g, f in report.items() if f.get("exceeded"))
-    stats = {k: sum(len(f.get(k, [])) for f in report.values()) for k in ("held", "exceeded")}
+    stats = {
+        k: sum(len(f.get(k, [])) for f in report.values())
+        for k in ("held", "exceeded", "unadjudicable")
+    }
     print(
         f"{len(report)} gates read; {stats['held']} statistics held, {stats['exceeded']} exceeded "
-        f"in {len(gates_over)} gates"
+        f"in {len(gates_over)} gates, {stats['unadjudicable']} not adjudicable"
     )
     for g in gates_over:
         print(f"  {g}: {', '.join(report[g]['exceeded'])}")

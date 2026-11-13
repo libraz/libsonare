@@ -50,6 +50,7 @@ def test_a_reading_inside_holds_and_one_outside_is_exceeded():
         "held": ["decay.median"],
         "exceeded": ["decay.p90"],
         "unmeasured": ["tnr.median"],
+        "unadjudicable": [],
     }
     # The unmeasured statistic is left exactly as it was.
     assert out["bounds"]["tnr"] == _gate()["bounds"]["tnr"]
