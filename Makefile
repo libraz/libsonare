@@ -2,7 +2,7 @@
        coverage-build coverage-clean build-shared build-node build-wasm-binding \
        test-python test-python-slow test-node test-wasm parity conformance test-gm-cross-surface test-mix-assistant-cross-surface abi-layout abi-layout-check check-abi-version \
        capability-catalog capability-catalog-check processor-types processor-types-check ci-local \
-       build-bank-shared bank-versions bank-versions-check \
+       build-bank-shared baseline bank-versions bank-versions-check \
        surface-coverage surface-coverage-check \
        gs-census gs-census-header gs-census-check gs-program-census gs-address-table-json gs-unit-archive-set gs-unit-diff gs-unit-diff-check \
        gs-efx-archive-set gs-efx-tables gs-efx-tables-check gs-efx-coverage \
@@ -467,12 +467,14 @@ capability-catalog-check: build-shared
 # scales, the fallback send weights). Read from the library's own knob dump, so
 # it cannot drift from what the render uses -- which needs a BUILD_TUNING build,
 # in its own directory, since it neither retargets the Debug `build/` that ctest
-# reads nor disturbs the shared `build-python-shared/`.
-BANK_BUILD_DIR ?= build-tuning
+# reads nor disturbs the shared `build-python-shared/`. That directory is private
+# and outside the tree: `build-tuning/` is the shared fit baseline, written only
+# by `make baseline`, so a lander's registry run never relinks what others fit.
+BANK_BUILD_DIR ?= $(patsubst %/,%,$(or $(TMPDIR),/tmp))/libsonare-bank-build
 ifeq ($(UNAME_S),Darwin)
-BANK_SHARED_LIB := $(CURDIR)/$(BANK_BUILD_DIR)/lib/libsonare.dylib
+BANK_SHARED_LIB := $(abspath $(BANK_BUILD_DIR))/lib/libsonare.dylib
 else
-BANK_SHARED_LIB := $(CURDIR)/$(BANK_BUILD_DIR)/lib/libsonare.so
+BANK_SHARED_LIB := $(abspath $(BANK_BUILD_DIR))/lib/libsonare.so
 endif
 
 FIELD_COVERAGE := $(CURDIR)/tools/voicematch/field-coverage.json
@@ -480,6 +482,18 @@ FIELD_COVERAGE := $(CURDIR)/tools/voicematch/field-coverage.json
 build-bank-shared:
 	$(CMAKE) -S . -B $(BANK_BUILD_DIR) -DCMAKE_BUILD_TYPE=Release -DBUILD_SHARED=ON -DBUILD_TUNING=ON
 	$(CMAKE) --build $(BANK_BUILD_DIR) --target sonare_shared $(BUILD_PARALLEL)
+
+# The shared fit baseline every lane's fits read. Refuses a dirty src/ unless
+# ALLOW_DIRTY=1, and records HEAD, the dirty list and the link time beside the
+# library so a fit report can name what it read.
+baseline:
+	@dirty=$$(git status --porcelain -- src); \
+	if [ -n "$$dirty" ] && [ "$(ALLOW_DIRTY)" != "1" ]; then \
+		echo "make baseline: src/ is dirty; pass ALLOW_DIRTY=1 to record it:"; echo "$$dirty"; exit 1; \
+	fi
+	$(CMAKE) -S . -B build-tuning -DCMAKE_BUILD_TYPE=Release -DBUILD_SHARED=ON -DBUILD_TUNING=ON
+	$(CMAKE) --build build-tuning --target sonare_shared $(BUILD_PARALLEL)
+	$(RYE) run --pyproject bindings/python/pyproject.toml python tools/voicematch/baseline_record.py build-tuning
 
 # NOTE is what the bump is recorded as; a run without one records "unrecorded",
 # which the version can never recover.
