@@ -16,3 +16,12 @@ def _a_clean_tree_for_gate_writes(monkeypatch):
     import profile_gate
 
     monkeypatch.setattr(profile_gate, "tree_state", lambda: {"head": "test", "dirty": []})
+
+
+@pytest.fixture(autouse=True)
+def _no_harness_lock_leak():
+    """A test that reaches a CLI entry point locks the harness; none may leave it locked."""
+    import harness_lock
+
+    yield
+    harness_lock.unlock()

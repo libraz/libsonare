@@ -270,6 +270,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import bank
 import gate_audit
+import harness_lock
 from _repo import REPO_ROOT
 
 # The split modules below hold what this file used to define inline. Every
@@ -1665,6 +1666,7 @@ def _fold_tree_provenance(
     if library is not None:
         record["library"] = library
     record["objective"] = loaded_digest()
+    record["harness_digest"] = harness_lock.locked_digest(("autofit",))
     path.write_text(json.dumps(_json_safe(record), indent=2, allow_nan=False) + "\n")
 
 
@@ -1887,8 +1889,13 @@ PER_KNOB_BUDGET_CEILING = 2000
 
 
 def run(args, argv: list[str] | None = None) -> int:
-    # The objective this run answers is the code loaded now, whatever changes on disk later.
+    # The objective and harness this run answers are the code loaded now, whatever changes on disk later.
+    harness = harness_lock.lock(("autofit",))
     loaded_digest()
+    stale = harness_lock.mismatch(harness)
+    if stale:
+        print(stale, file=sys.stderr)
+        return 2
     lib = getattr(args, "lib", "") or ""
     if lib:
         # A prebuilt library stands where the build dir does: `dylib_path` hands

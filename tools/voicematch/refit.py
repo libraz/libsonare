@@ -48,6 +48,7 @@ from __future__ import annotations
 import argparse
 import functools
 import json
+import os
 import re
 import subprocess
 import sys
@@ -62,6 +63,7 @@ import bank
 import boundary
 import fits as fits_mod
 import gate_audit
+import harness_lock
 from _repo import REPO_ROOT
 from build_lib import _cached_option, dylib_path
 from capture import CORPUS_ROOT
@@ -96,6 +98,32 @@ STATUS = REPO_ROOT / "tools" / "voice-status.json"
 CAPTURE_DIR = HERE / "capture"
 REFERENCE_DIR = HERE / "reference"
 PYTHON = [sys.executable]
+
+#: The autofit harness digest at this refit's start; every child it spawns must still match.
+_PIN: str | None = None
+#: Why the run stopped fitting, once the harness moved under it; sticky for later voices.
+_STOPPED: str | None = None
+
+
+class HarnessMoved(RuntimeError):
+    """The harness on disk is no longer the version this refit started with."""
+
+
+def _check_pin() -> None:
+    """Refuse to spawn a child on a harness that changed since this refit started."""
+    global _STOPPED
+    if _PIN is None:
+        return
+    if _STOPPED is None:
+        now = harness_lock.digest(("autofit",))
+        if now != _PIN:
+            _STOPPED = (
+                f"the harness changed on disk since this refit started ({_PIN} -> {now}); "
+                "restart it"
+            )
+    if _STOPPED is not None:
+        raise HarnessMoved(_STOPPED)
+
 
 #: Evaluations per resolved knob: held-out loss bottoms between 10 and 30 per knob on
 #: the voices measured, and 12 cost the slowest of them about one per cent.
@@ -572,8 +600,10 @@ def _fit(
     if ALLOW_DIRTY_SRC:
         cmd.append("--allow-dirty-src")
     log = out.with_suffix(".log")
+    _check_pin()
+    env = {**os.environ, harness_lock.ENV: _PIN} if _PIN else None
     with log.open("w") as fh:
-        subprocess.run(cmd, stdout=fh, stderr=subprocess.STDOUT, check=False)
+        subprocess.run(cmd, stdout=fh, stderr=subprocess.STDOUT, check=False, env=env)
     if not out.exists():
         raise RuntimeError(f"{voice['slug']}: the fit wrote no report, see {log}")
 
@@ -786,9 +816,22 @@ def run_voice(voice: dict, root: Path, build_dir: str, per_knob: int) -> dict:
     d = root / voice["slug"]
     d.mkdir(parents=True, exist_ok=True)
     (d / "voice.json").write_text(json.dumps(voice, indent=2) + "\n")
-    pre, fit, post, ver = d / "pre.json", d / "fit.json", d / "post.json", d / "verdict.json"
+    harness = harness_lock.locked_digest(("refit",))
+    try:
+        result = _judge_voice(voice, d, build_dir, per_knob)
+    except HarnessMoved as exc:
+        result = {"slug": voice["slug"], "decision": "stopped", "why": str(exc)}
+    result["harness_digest"] = harness
+    (d / "verdict.json").write_text(json.dumps(result, indent=2) + "\n")
+    return result
+
+
+def _judge_voice(voice: dict, d: Path, build_dir: str, per_knob: int) -> dict:
+    _check_pin()
+    pre, fit, post = d / "pre.json", d / "fit.json", d / "post.json"
     lib = _tuning_lib(build_dir)
     if not pre.exists():
+        _check_pin()
         check_base(voice, lib)
         own_fit = json.loads(fit.read_text()) if fit.exists() else None
         units = {u for t in gate_patches(voice) for u in chain_of(t, struct_copies())}
@@ -805,6 +848,7 @@ def run_voice(voice: dict, root: Path, build_dir: str, per_knob: int) -> dict:
         _first_fit(voice, d, build_dir, per_knob)
     fit_report = json.loads(fit.read_text())
     if not post.exists():
+        _check_pin()
         gate_audit.compare_voice(
             voice,
             post,
@@ -830,7 +874,6 @@ def run_voice(voice: dict, root: Path, build_dir: str, per_knob: int) -> dict:
                 result["red_without_own_term" if key == "no_own_term" else key] = got[key]
     if SPEC:
         result["spec"] = {"path": SPEC, "knobs": SPEC_KNOBS}
-    ver.write_text(json.dumps(result, indent=2) + "\n")
     return result
 
 
@@ -1103,7 +1146,7 @@ def adopt(root: Path, only: set[str]) -> int:
         ver = json.loads((d / "verdict.json").read_text())
         if only and ver["slug"] not in only:
             continue
-        if ver["decision"] == "trade":
+        if ver["decision"] in ("trade", "stopped"):
             continue
         voice = json.loads((d / "voice.json").read_text())
         report = json.loads((d / ver.get("fit", "fit.json")).read_text())
@@ -1147,6 +1190,9 @@ def adopt(root: Path, only: set[str]) -> int:
 def report(root: Path) -> int:
     rows = [json.loads(p.read_text()) for p in sorted(root.glob("*/verdict.json"))]
     for r in rows:
+        if r["decision"] == "stopped":
+            print(f"{r['decision']:6} {r['slug']:40} {r['why']}")
+            continue
         held = "-" if r["held_out_gain"] is None else f"{r['held_out_gain']:+.3f}"
         pre, post = r["excess"]
         zero = r.get("raised_from_zero")
@@ -1189,6 +1235,9 @@ def _drain(futures: dict, jobs: int) -> int:
 
 
 def main() -> int:
+    global _PIN
+    harness_lock.lock(("refit",))
+    _PIN = harness_lock.digest(("autofit",))
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawTextHelpFormatter)
     ap.add_argument("cmd", choices=("plan", "run", "rejudge", "resolve", "report", "adopt"))
     ap.add_argument("--banks", choices=("capitals", "variations", "kits"), default="capitals")
