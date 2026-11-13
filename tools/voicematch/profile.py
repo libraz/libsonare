@@ -295,6 +295,43 @@ def reference_window(
     return window
 
 
+def unrecorded_kit_slots(
+    cfg: dict, corpus_dir: Path | None, timbre: str, pairs: list[tuple[int, int]]
+) -> list[tuple[int, int]]:
+    """The (note, velocity) slots of a module kit whose recorded length the corpus lacks.
+
+    A module kit's reference row is read to its recording's end, not to `gate_ms`, so
+    `reference_window`'s `preroll + gate + tail` fallback would read the model on another
+    window than the row. Empty for any other capture, whose fallback is its own window.
+    """
+    if not is_percussion(cfg) or cfg.get("source_class") != "module":
+        return []
+    slots: dict[tuple[int, int], float] = {}
+    if corpus_dir is not None:
+        try:
+            slots = load_corpus(corpus_dir, timbre).slots
+        except (OSError, ValueError, KeyError):
+            slots = {}
+    return [p for p in pairs if p not in slots]
+
+
+def refuse_unrecorded_kit_slots(
+    cfg: dict, corpus_dir: Path | None, timbre: str, pairs: list[tuple[int, int]]
+) -> bool:
+    """Print `unrecorded_kit_slots` as a refusal; True where it refuses."""
+    missing = unrecorded_kit_slots(cfg, corpus_dir, timbre, pairs)
+    if missing:
+        named = ", ".join(f"n{n}/v{v}" for n, v in missing)
+        print(
+            f"{cfg['id']}: the corpus at {corpus_dir} records no length for {named}. A module "
+            f"kit's reference rows were read to each recording's end, so the model cannot be "
+            f"read on the same window without it; re-import the corpus "
+            f"(`import_sf2.py`) or point --corpus at it",
+            file=sys.stderr,
+        )
+    return bool(missing)
+
+
 def gate_disagreement(cfg: dict, manifest: dict) -> str | None:
     """The refusal text where the cached manifest was cut for another gate than the definition's.
 
@@ -967,6 +1004,8 @@ def compare_percussion(
     program = profile_program(profile, cfg)
     bank = profile_bank(profile, cfg)
     pairs = sorted({k for k in ref if not notes_filter or k[0] in notes_filter})
+    if refuse_unrecorded_kit_slots(cfg, corpus_dir, timbre, pairs):
+        return 2
     print(
         f"model vs {timbre}: {len(pairs)} hits, model on GM kit {program}, "
         f"MIDI channel {PERCUSSION_CHANNEL}"
@@ -2031,6 +2070,8 @@ def agree(
         print(f"profile has no timbre {timbre!r}", file=sys.stderr)
         return 2
     pairs = sorted({k for k in ref if not notes_filter or k[0] in notes_filter})
+    if refuse_unrecorded_kit_slots(cfg, corpus_dir, timbre, pairs):
+        return 2
     print(f"capture {timbre!r} vs fluidsynth, {len(pairs)} hits, GM kit {program}\n")
     print(f"{'note':>5} {'vel':>4} | " + " ".join(f"{k:>12}" for k in AGREEMENT_TOLERANCE))
     print("-" * (12 + 13 * len(AGREEMENT_TOLERANCE)))
