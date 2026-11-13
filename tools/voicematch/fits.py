@@ -93,6 +93,9 @@ def record_fit(
     base = report.get("base_overrides") or ""
     if base:
         entry["base_overrides"] = base
+    start = report.get("start_overrides") or ""
+    if start:
+        entry["start_overrides"] = start
     # The terms the fit weighed, so an equivalence that added a key it weighs does not cover it.
     weights = (report.get("fit_profile") or {}).get("weights")
     if weights:

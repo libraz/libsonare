@@ -67,9 +67,17 @@ from build_lib import _cached_option, dylib_path
 from capture import CORPUS_ROOT
 from catalogue import dump_catalogue
 from corpus import load_corpus
-from knobs import check_base_overrides, format_value, load_base_overrides
+from knobs import (
+    check_base_overrides,
+    format_value,
+    load_base_overrides,
+    load_spec,
+    load_spec_weights,
+    load_start_overrides,
+)
 from objective import objective_digest
 from render_rows import render_rate
+from toneclass import default_weights
 from writeback import (
     _STRUCT_COPY,
     PROGRAM_TABLE_FILES,
@@ -475,7 +483,7 @@ def baseline_pins(
             if t != unit and inherits(t, path, unit, copies, explicit)
         ]
         for key in reached:
-            pins.setdefault(key, (knob["start"], "fit.json start"))
+            pins.setdefault(key, (_shipped(knob), "fit.json start"))
     pinned = [
         {"key": k, "value": format_value(v), "source": s} for k, (v, s) in sorted(pins.items())
     ]
@@ -497,6 +505,20 @@ PREBUILT_LIB = ""
 BASE_OVERRIDES = ""
 
 
+#: A spec file for every fit (autofit's --spec) in place of `--spec auto --program-only`.
+SPEC = ""
+#: The spec's knob labels, recorded in each verdict.
+SPEC_KNOBS: list[str] = []
+
+#: Where every fit's named knobs start (autofit's --start-overrides).
+START_OVERRIDES = ""
+
+
+def _shipped(knob: dict) -> float:
+    """The value a report's knob ships at: its `head` when the search started elsewhere."""
+    return knob.get("head", knob["start"])
+
+
 def _fit(
     voice: dict, out: Path, build_dir: str, per_knob: int, weights: dict[str, float] | None = None
 ) -> None:
@@ -514,12 +536,12 @@ def _fit(
     cmd = PYTHON + [
         str(HERE / "autofit.py"),
         "--spec",
-        "auto",
+        SPEC or "auto",
         "--program",
         str(voice["program"]),
         "--bank",
         str(voice["bank"]),
-        "--program-only",
+        *([] if SPEC else ["--program-only"]),
         "--corpus",
         voice["corpus"],
         "--corpus-timbre",
@@ -545,6 +567,8 @@ def _fit(
         cmd += ["--lib", PREBUILT_LIB]
     if BASE_OVERRIDES:
         cmd += ["--base-overrides", BASE_OVERRIDES]
+    if START_OVERRIDES:
+        cmd += ["--start-overrides", START_OVERRIDES]
     if ALLOW_DIRTY_SRC:
         cmd.append("--allow-dirty-src")
     log = out.with_suffix(".log")
@@ -591,11 +615,11 @@ def _held(knob: dict, value: float, held: frozenset[str] = frozenset()) -> bool:
     """
     path = knob["key"].partition(".")[2]
     if switch_field(path) or integer_field(path):
-        return round(value) != round(knob["start"])
+        return round(value) != round(_shipped(knob))
     if path.endswith("amp_env.sustain"):
-        return (knob["start"] <= SILENT_SUSTAIN) != (value <= SILENT_SUSTAIN)
+        return (_shipped(knob) <= SILENT_SUSTAIN) != (value <= SILENT_SUSTAIN)
     if any(path.endswith(suffix) for suffix in held):
-        return format_value(value) != format_value(knob["start"])
+        return format_value(value) != format_value(_shipped(knob))
     return False
 
 
@@ -623,7 +647,7 @@ def verdict(
     moved = [
         k["key"]
         for k, v in zip(fit["knobs"], fit["selected"]["values"])
-        if format_value(v) != format_value(k["start"])
+        if format_value(v) != format_value(_shipped(k))
     ]
     val = fit.get("validation") or {}
     held = (
@@ -699,6 +723,65 @@ def check_base(voice: dict, lib: Path) -> None:
     check_base_overrides(BASE_OVERRIDES, [], catalogue)
 
 
+def _doubled(weight: float) -> float:
+    """The weight a raised term takes: twice its own, and at least 1."""
+    return max(2.0 * weight, 1.0)
+
+
+def prefit_raise(voice: dict, pre: dict, weights: dict[str, float]) -> dict:
+    """The terms the first fit weighs up because their gate dimension is already over its bound.
+
+    A dimension red in `pre` whose OWN term has no weight gets that term raised by the
+    rule `reweighed` uses; one with a weighted own term is left, and one with no own
+    term (a proxy-only mapping) is listed, not raised. `weights` is the fit's profile.
+    """
+    own = PERCUSSION_GATE_OWN_TERMS if "drum_note" in voice else GATE_OWN_TERMS
+    red = sorted({r["key"].rpartition(":")[2] for r in pre["gate"]["readings"] if r.get("over")})
+    raised: dict[str, float] = {}
+    no_own: list[str] = []
+    for dim in red:
+        terms = own.get(dim, ())
+        if not terms:
+            no_own.append(dim)
+        elif not any(weights.get(t, 0.0) > 0.0 for t in terms):
+            raised.update({t: _doubled(weights.get(t, 0.0)) for t in terms})
+    return {"prefit_weights": raised, "raised_from_zero": sorted(raised), "no_own_term": no_own}
+
+
+def profile_weights(voice: dict) -> dict[str, float]:
+    """The weights the voice's first fit starts from: its class defaults, then the spec's."""
+    weights = default_weights(
+        voice["program"],
+        drum_note=voice.get("drum_note"),
+        percussive="drum_note" in voice,
+    )
+    if SPEC:
+        weights.update(load_spec_weights(Path(SPEC)))
+    return weights
+
+
+def _first_fit(voice: dict, d: Path, build_dir: str, per_knob: int) -> None:
+    """Fit once, with the terms the pre reading shows red at zero weight raised."""
+    prefit = prefit_raise(voice, json.loads((d / "pre.json").read_text()), profile_weights(voice))
+    if prefit["no_own_term"]:
+        print(f"{voice['slug']}: red with no own term: {', '.join(prefit['no_own_term'])}")
+    if prefit["raised_from_zero"]:
+        print(
+            f"{voice['slug']}: [raised from zero weight: {', '.join(prefit['raised_from_zero'])}]"
+        )
+    weights = prefit["prefit_weights"]
+    try:
+        _fit(voice, d / "fit.json", build_dir, per_knob, weights or None)
+    except RuntimeError:
+        if not weights:
+            raise
+        # A raised term the probe cannot compute is refused by the fit itself.
+        prefit["refused"] = _refusal(d / "fit.log")
+        prefit.update(prefit_weights={}, raised_from_zero=[])
+        _fit(voice, d / "fit.json", build_dir, per_knob)
+    (d / "prefit.json").write_text(json.dumps(prefit, indent=2) + "\n")
+
+
 def run_voice(voice: dict, root: Path, build_dir: str, per_knob: int) -> dict:
     d = root / voice["slug"]
     d.mkdir(parents=True, exist_ok=True)
@@ -719,7 +802,7 @@ def run_voice(voice: dict, root: Path, build_dir: str, per_knob: int) -> dict:
             base_overrides=reach_copies(BASE_OVERRIDES, voice),
         )
     if not fit.exists():
-        _fit(voice, fit, build_dir, per_knob)
+        _first_fit(voice, d, build_dir, per_knob)
     fit_report = json.loads(fit.read_text())
     if not post.exists():
         gate_audit.compare_voice(
@@ -739,6 +822,14 @@ def run_voice(voice: dict, root: Path, build_dir: str, per_knob: int) -> dict:
             unjudged=unmeasured(voice),
         ),
     }
+    prefit = d / "prefit.json"
+    if prefit.exists():
+        got = json.loads(prefit.read_text())
+        for key in ("raised_from_zero", "prefit_weights", "no_own_term", "refused"):
+            if got.get(key):
+                result["red_without_own_term" if key == "no_own_term" else key] = got[key]
+    if SPEC:
+        result["spec"] = {"path": SPEC, "knobs": SPEC_KNOBS}
     ver.write_text(json.dumps(result, indent=2) + "\n")
     return result
 
@@ -747,7 +838,7 @@ def writable(report: dict, values: list[float], held: frozenset[str] = frozenset
     """The values as the write-back would land them: a switch is never written, and a
     value the gate cannot judge is held, so both stay at their shipped values."""
     return [
-        k["start"] if switch_field(k["key"].partition(".")[2]) or _held(k, v, held) else v
+        _shipped(k) if switch_field(k["key"].partition(".")[2]) or _held(k, v, held) else v
         for k, v in zip(report["knobs"], values)
     ]
 
@@ -756,7 +847,7 @@ def overrides_for(report: dict, values: list[float]) -> str:
     return ",".join(
         f"{k['key']}={format_value(v)}"
         for k, v in zip(report["knobs"], values)
-        if format_value(v) != format_value(k["start"])
+        if format_value(v) != format_value(_shipped(k))
     )
 
 
@@ -945,7 +1036,7 @@ def resolve_voice(d: Path, build_dir: str, per_knob: int, *, refit: bool = True)
             # dimension's own measure is raised whatever weight it started at.
             from_zero = sorted(t for t in weights if not prior.get(t, 0.0) > 0.0)
             if from_zero:
-                ver["raised_from_zero"] = from_zero
+                ver["raised_from_zero"] = sorted({*ver.get("raised_from_zero", []), *from_zero})
             if refused is not None:
                 attempts.append({"fit": "fit_r1.json", "weights": weights, "refused": refused})
             else:
@@ -1019,7 +1110,7 @@ def adopt(root: Path, only: set[str]) -> int:
         outcome = "adopted" if ver["decision"] == "adopt" else "kept"
         if outcome == "adopted":
             knobs = [
-                SimpleNamespace(tunable=k["key"], file=None, start_value=k["start"])
+                SimpleNamespace(tunable=k["key"], file=None, start_value=_shipped(k))
                 for k in report["knobs"]
             ]
             values = ver.get("values") or report["selected"]["values"]
@@ -1126,6 +1217,21 @@ def main() -> int:
         "--base-overrides); the fit refuses a key it also searches or one the library "
         "does not know",
     )
+    ap.add_argument(
+        "--spec",
+        default="",
+        metavar="FILE",
+        help="a knob spec JSON for every fit (autofit's --spec) in place of the auto spec "
+        "limited to the patch; recorded in each verdict",
+    )
+    ap.add_argument(
+        "--start-overrides",
+        default="",
+        dest="start_overrides",
+        metavar="K=V,...|@FILE",
+        help="where named search knobs start in every fit (autofit's --start-overrides); the "
+        "pre reading and the verdict stay against the shipped values",
+    )
     args = ap.parse_args()
     global ALLOW_DIRTY_SRC
     ALLOW_DIRTY_SRC = args.allow_dirty_src
@@ -1133,6 +1239,16 @@ def main() -> int:
     try:
         BASE_OVERRIDES = load_base_overrides(args.base_overrides)
     except ValueError as exc:
+        ap.error(str(exc))
+    global SPEC, SPEC_KNOBS, START_OVERRIDES
+    try:
+        START_OVERRIDES = load_start_overrides(args.start_overrides)
+        if args.spec:
+            SPEC = str(Path(args.spec).resolve())
+            SPEC_KNOBS = [
+                e.get("tunable") or f"{e['file']}:{e['pattern']}" for e in load_spec(Path(SPEC))
+            ]
+    except (ValueError, OSError) as exc:
         ap.error(str(exc))
     global PREBUILT_LIB
     if args.lib:

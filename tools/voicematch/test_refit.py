@@ -646,3 +646,148 @@ def test_a_red_dimension_raises_the_term_that_measures_it():
     report = {"fit_profile": {"weights": {"harm": 1.0, "lf": 1.0}}}
     assert reweighed(report, ["c:centroid_pct median"]) == {"bright": 1.0}
     assert reweighed(report, ["c:body abs_median"]) == {"body": 1.0}
+
+
+def _prefit_dir(tmp_path, monkeypatch, red, *, weights, refuse_weighted=False):
+    """A voice whose pre reading is red on `red` (dimension -> over), with every fit recorded."""
+    import json
+
+    import refit
+
+    fits_run: list = []
+
+    def fake_compare(voice, out, lib, overrides="", **_):
+        readings = [
+            {"key": dim, "stat": "p90", "value": 2.0 if over else 0.5, "limit": 1.0}
+            | {"over": over, "excess": 1.0 if over else -0.5}
+            for dim, over in red.items()
+        ]
+        out.write_text(json.dumps({"gate": {"readings": readings}}))
+
+    def fake_fit(voice, out, build_dir, per_knob, weights=None):
+        fits_run.append(weights)
+        if weights and refuse_weighted:
+            out.with_suffix(".log").write_text("ValueError: --w-body cannot be computed\n")
+            raise RuntimeError("the fit wrote no report")
+        out.write_text(
+            json.dumps(
+                {
+                    "knobs": [{"key": "cap.a", "start": 3.0}],
+                    "selected": {"values": [9.0]},
+                    "loss": {"selected": 0.5},
+                    "validation": {"independent": True, "start": 1.0, "best": 0.5},
+                    "overrides": "cap.a=9.0",
+                    "path": [],
+                }
+            )
+        )
+
+    monkeypatch.setattr(refit, "_tuning_lib", lambda build_dir: Path("lib"))
+    monkeypatch.setattr(gate_audit, "compare", fake_compare)
+    monkeypatch.setattr(refit, "_fit", fake_fit)
+    monkeypatch.setattr(refit, "profile_weights", lambda voice: dict(weights))
+    monkeypatch.setattr(refit, "struct_copies", dict)
+    monkeypatch.setattr(refit, "explicit_fields", dict)
+    monkeypatch.setattr(refit, "registry_history", lambda units: iter(_history()))
+    voice = {
+        "slug": "cap",
+        "program": 0,
+        "patch": "cap",
+        "capture": "cap",
+        "gates": [{"capture": "cap", "gate": "g", "timbre": "t", "patch": "cap"}],
+    }
+    return refit, voice, fits_run
+
+
+def test_prefit_raises_a_red_dimensions_zero_weight_own_term(tmp_path, monkeypatch, capsys):
+    import json
+
+    red = {"body": True, "centroid_pct": True, "stretch": True, "decay": True, "tnr": False}
+    refit, voice, fits_run = _prefit_dir(
+        tmp_path, monkeypatch, red, weights={"harm": 1.0, "stiff": 2.0}
+    )
+    result = refit.run_voice(voice, tmp_path, "build", 8)
+    assert fits_run == [{"body": 1.0, "bright": 1.0}], "stretch has a weighted own term"
+    out = capsys.readouterr().out
+    assert "[raised from zero weight: body, bright]" in out
+    assert "red with no own term: decay" in out
+    assert result["raised_from_zero"] == ["body", "bright"]
+    assert result["prefit_weights"] == {"body": 1.0, "bright": 1.0}
+    assert result["red_without_own_term"] == ["decay"], "slope is only a proxy for decay"
+    assert json.loads((tmp_path / "cap" / "verdict.json").read_text())["raised_from_zero"]
+
+
+def test_prefit_leaves_a_clean_pre_alone(tmp_path, monkeypatch):
+    refit, voice, fits_run = _prefit_dir(
+        tmp_path, monkeypatch, {"body": False, "stretch": True}, weights={"stiff": 1.0}
+    )
+    result = refit.run_voice(voice, tmp_path, "build", 8)
+    assert fits_run == [None]
+    assert "raised_from_zero" not in result and "prefit_weights" not in result
+
+
+def test_a_refused_prefit_weight_falls_back_to_the_plain_fit(tmp_path, monkeypatch):
+    refit, voice, fits_run = _prefit_dir(
+        tmp_path, monkeypatch, {"body": True}, weights={"harm": 1.0}, refuse_weighted=True
+    )
+    result = refit.run_voice(voice, tmp_path, "build", 8)
+    assert fits_run == [{"body": 1.0}, None]
+    assert "raised_from_zero" not in result and "cannot be computed" in result["refused"]
+
+
+def test_prefit_weights_double_a_nonzero_term_by_the_reweighed_rule():
+    from refit import prefit_raise
+
+    pre = {"gate": {"readings": [{"key": "cap:attack_hf", "stat": "m", "over": True}]}}
+    assert prefit_raise({}, pre, {})["prefit_weights"] == {"hf": 1.0}
+    kit = {"drum_note": 36}
+    pre = {"gate": {"readings": [{"key": "crest", "stat": "m", "over": True}]}}
+    assert prefit_raise(kit, pre, {})["prefit_weights"] == {"crest": 1.0}
+    assert prefit_raise(kit, pre, {"crest": 3.0})["prefit_weights"] == {}
+
+
+def test_refit_spec_replaces_the_auto_spec(tmp_path, monkeypatch):
+    import subprocess
+
+    import refit
+
+    seen: list = []
+
+    def fake_run(cmd, **kw):
+        seen.append(cmd)
+        Path(cmd[cmd.index("--out") + 1]).write_text("{}")
+        return subprocess.CompletedProcess(cmd, 0)
+
+    monkeypatch.setattr(refit.subprocess, "run", fake_run)
+    voice = {"slug": "v", "program": 1, "bank": 0, "corpus": "c", "timbre": "t", "notes": [60],
+             "velocities": [90], "validate_notes": [61]}  # fmt: skip
+    refit._fit(voice, tmp_path / "fit.json", "b", 8)
+    plain = seen[-1]
+    assert plain[plain.index("--spec") + 1] == "auto" and "--program-only" in plain
+    assert "--start-overrides" not in plain
+    monkeypatch.setattr(refit, "SPEC", "/x/spec.json")
+    monkeypatch.setattr(refit, "START_OVERRIDES", "cap.a=2")
+    refit._fit(voice, tmp_path / "fit.json", "b", 8)
+    cmd = seen[-1]
+    assert cmd[cmd.index("--spec") + 1] == "/x/spec.json" and "--program-only" not in cmd
+    assert cmd[cmd.index("--start-overrides") + 1] == "cap.a=2"
+
+
+def test_the_verdict_records_the_spec_and_its_knobs(tmp_path, monkeypatch):
+    refit, voice, _ = _prefit_dir(tmp_path, monkeypatch, {"stretch": False}, weights={})
+    monkeypatch.setattr(refit, "SPEC", "/x/spec.json")
+    monkeypatch.setattr(refit, "SPEC_KNOBS", ["cap.a", "cap.b"])
+    result = refit.run_voice(voice, tmp_path, "build", 8)
+    assert result["spec"] == {"path": "/x/spec.json", "knobs": ["cap.a", "cap.b"]}
+
+
+def test_a_start_override_point_does_not_change_what_ships():
+    import refit
+
+    knob = {"key": "cap.a", "start": 5.0, "head": 3.0}
+    report = {"knobs": [knob], "selected": {"values": [3.0]}}
+    assert refit.overrides_for(report, [3.0]) == ""
+    assert refit.overrides_for(report, [5.0]) == "cap.a=5.0"
+    pre = post = {"gate": {"readings": []}}
+    fit = {**report, "loss": {}, "selected": {"values": [5.0]}}
+    assert refit.verdict(pre, fit, post)["moved"] == 1, "against head, not the start point"

@@ -12,6 +12,7 @@ from __future__ import annotations
 import difflib
 import json
 import math
+from dataclasses import replace
 from pathlib import Path
 
 from _repo import REPO_ROOT
@@ -19,6 +20,7 @@ from fit_quality import dropout_terms, quality_report, significant_term_regressi
 from knobs import (
     at_bound,
     format_value,
+    head_of,
     merge_overrides,
     stored_vs_effective,
     tunable_overrides,
@@ -151,6 +153,16 @@ def search_effort(evaluator, args, dimension: int, spec_dimension: int | None = 
     }
 
 
+def _anchors(start_overrides: str) -> dict:
+    """What the report's start-relative numbers are relative to."""
+    anchor = "the start-override point" if start_overrides else "HEAD's render"
+    return {
+        "start": f"{anchor}: loss.start, the loss calibration and --max-level-drift-db "
+        f"are anchored on it",
+        "gate_audit_pre": "HEAD (shipped values plus base overrides)",
+    }
+
+
 def print_level_drift(evaluator) -> None:
     """How far the winner moved the voice's overall level, which nothing charges for.
 
@@ -176,6 +188,17 @@ def print_level_drift(evaluator) -> None:
         f"  the winner's whole-grid level sits {drift:+.1f} dB against the start point "
         f"({start:+.1f} -> {best:+.1f} dB against the reference)"
     )
+    if getattr(getattr(evaluator, "args", None), "start_overrides", ""):
+        head = getattr(evaluator, "head_level_offset_db", None)
+        why = getattr(evaluator, "head_level_unavailable", None) or "not read"
+        print(
+            "  the start point is a --start-overrides point, not HEAD's render; "
+            + (
+                f"HEAD's own level is {head:+.1f} dB, the winner {best - head:+.1f} dB from it"
+                if head is not None
+                else f"HEAD's own level is unavailable ({why})"
+            )
+        )
     if abs(drift) >= LEVEL_DRIFT_WARN_DB:
         print(
             f"  that is past {LEVEL_DRIFT_WARN_DB:.0f} dB and no term charged for it: "
@@ -352,7 +375,7 @@ def report_result(knobs, pristine, best_values, evaluator, args, extra=None) -> 
     print("\n== knob values (start -> best) ==")
     moved = 0
     for knob, best in zip(knobs, best_values):
-        if format_value(best) == format_value(knob.start_value):
+        if format_value(best) == format_value(head_of(knob)):
             continue
         moved += 1
         rel = knob.file.relative_to(REPO_ROOT) if knob.file else Path("(program table)")
@@ -366,7 +389,12 @@ def report_result(knobs, pristine, best_values, evaluator, args, extra=None) -> 
         )
         print(
             f"  [{kind}] {rel}  {knob.label}:  "
-            f"{format_value(knob.start_value)} -> {format_value(best)}{note}"
+            f"{format_value(head_of(knob))} -> {format_value(best)}{note}"
+            + (
+                f"  (searched from {format_value(knob.start_value)})"
+                if head_of(knob) != knob.start_value
+                else ""
+            )
         )
     print(f"  ({moved} of {len(knobs)} knobs moved; the rest stayed at their defaults)")
 
@@ -385,7 +413,14 @@ def report_result(knobs, pristine, best_values, evaluator, args, extra=None) -> 
     pasted = merge_overrides(getattr(args, "base_overrides", ""), overrides)
     print(f"  SONARE_TUNING_OVERRIDES='{pasted}'" if overrides else "  (nothing moved)")
 
-    per_patch, per_drum, per_family, unnamed = patch_field_assignments(knobs, best_values)
+    # Write-back compares against what ships, which differs from the start under
+    # --start-overrides.
+    shipped = (
+        [replace(k, start_value=head_of(k), head_value=None) for k in knobs]
+        if any(getattr(k, "head_value", None) is not None for k in knobs)
+        else knobs
+    )
+    per_patch, per_drum, per_family, unnamed = patch_field_assignments(shipped, best_values)
     if unnamed:
         print("\n== fields reported, not written ==")
         print("  A switch lands in a bucket rather than on a number, and a patch with no")
@@ -393,7 +428,7 @@ def report_result(knobs, pristine, best_values, evaluator, args, extra=None) -> 
         for key in sorted(unnamed):
             print(f"    {key}")
 
-    edited = materialize(knobs, best_values, pristine, source_only=False)
+    edited = materialize(shipped, best_values, pristine, source_only=False)
     baseline = dict(pristine)
     written: dict[Path, str] = {}
     # Each write-back starts from what the previous one produced, so two kinds
@@ -452,6 +487,7 @@ def report_result(knobs, pristine, best_values, evaluator, args, extra=None) -> 
                 {
                     "key": k.label,
                     "start": _finite(k.start_value),
+                    **({"head": _finite(head_of(k))} if head_of(k) != k.start_value else {}),
                     "best": _finite(b),
                     "min": _finite(k.lo),
                     "max": _finite(k.hi),
@@ -461,6 +497,8 @@ def report_result(knobs, pristine, best_values, evaluator, args, extra=None) -> 
             ],
             "overrides": overrides,
             "base_overrides": getattr(args, "base_overrides", ""),
+            "start_overrides": getattr(args, "start_overrides", ""),
+            "anchors": _anchors(getattr(args, "start_overrides", "")),
             "path": [
                 {
                     "eval": i,

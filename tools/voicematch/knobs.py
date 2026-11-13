@@ -47,11 +47,19 @@ class Knob:
     hi: float
     log: bool
     start_value: float
+    #: The shipped value, when the search starts elsewhere (`--start-overrides`); None = start.
+    head_value: float | None = None
     tunable: str | None = None
     file: Path | None = None
     pattern: str | None = None
     span_start: int = 0  # group(1) offsets in the pristine file text
     span_end: int = 0
+
+
+def head_of(knob) -> float:
+    """The value HEAD ships for a knob: what an unchanged knob is compared against."""
+    head = getattr(knob, "head_value", None)
+    return knob.start_value if head is None else head
 
 
 def _spec_document(spec_path: Path) -> dict:
@@ -733,7 +741,7 @@ def format_value(v: float) -> str:
 def tunable_overrides(knobs: list[Knob], values: list[float], *, changed_only: bool = False) -> str:
     """Format the runtime knobs as a `SONARE_TUNING_OVERRIDES` value.
 
-    `changed_only` drops the knobs still at their compiled-in default, which is
+    `changed_only` drops the knobs still at HEAD's value, which is
     what a reported result wants: a hundred-knob spec produces a string too long
     to read, and every entry equal to the default in it says nothing.
     """
@@ -741,7 +749,7 @@ def tunable_overrides(knobs: list[Knob], values: list[float], *, changed_only: b
         f"{knob.tunable}={format_value(value)}"
         for knob, value in zip(knobs, values)
         if knob.tunable is not None
-        and not (changed_only and format_value(value) == format_value(knob.start_value))
+        and not (changed_only and format_value(value) == format_value(head_of(knob)))
     )
 
 
@@ -771,22 +779,33 @@ def merge_overrides(base: str, candidate: str) -> str:
     return ",".join([*kept, *([candidate] if candidate else [])])
 
 
-def load_base_overrides(arg: str) -> str:
-    """An inline override string, or `@file` holding one (commas or newlines between entries)."""
+def _load_overrides(arg: str, flag: str, noun: str) -> str:
     if not arg:
         return ""
     if arg.startswith("@"):
         path = Path(arg[1:]).expanduser()
         if not path.is_file():
-            raise ValueError(f"--base-overrides {arg!r}: {path} is not a file")
+            raise ValueError(f"{flag} {arg!r}: {path} is not a file")
         arg = ",".join(line.split("#", 1)[0].strip() for line in path.read_text().splitlines())
     pairs = parse_overrides(arg)
     for key, value in pairs:
         try:
             float(value)
         except ValueError:
-            raise ValueError(f"base override {key}={value!r}: the value is not a number") from None
+            raise ValueError(
+                f"{noun} override {key}={value!r}: the value is not a number"
+            ) from None
     return ",".join(f"{k}={v}" for k, v in pairs)
+
+
+def load_base_overrides(arg: str) -> str:
+    """An inline override string, or `@file` holding one (commas or newlines between entries)."""
+    return _load_overrides(arg, "--base-overrides", "base")
+
+
+def load_start_overrides(arg: str) -> str:
+    """`--start-overrides` read the way `--base-overrides` is."""
+    return _load_overrides(arg, "--start-overrides", "start")
 
 
 def check_base_overrides(
@@ -825,3 +844,54 @@ def check_base_overrides(
             f"Run --dump-knobs to list what exists."
         )
     return ",".join(out)
+
+
+def apply_start_overrides(
+    knobs: list[Knob], given: str, base: str = "", tunables: dict | None = None
+) -> str:
+    """Move named search knobs' starting points without pinning them; return what was applied.
+
+    Every key must be a search knob and none may also be a base override. A start is
+    clamped into its knob's range like a spec start is. The knob keeps HEAD's value
+    in `head_value`, so write-back and the paste-ready overrides still compare against
+    what ships. The returned string carries the clamped values, scoped to knob labels.
+    """
+    if not given:
+        return ""
+    tunables = scan_tunables() if tunables is None else tunables
+    in_base = {resolve_knob_name(k, tunables) for k, _ in parse_overrides(base)}
+    by_name = {}
+    for knob in knobs:
+        by_name[knob.tunable or knob.label] = knob
+        by_name.setdefault(knob.label, knob)
+    out, seen, in_both, not_knobs = [], set(), [], []
+    for key, value in parse_overrides(given):
+        name = resolve_knob_name(key, tunables)
+        if name in seen:
+            raise ValueError(f"start override {name!r} is given twice")
+        seen.add(name)
+        if name in in_base:
+            in_both.append(name)
+        elif name not in by_name:
+            not_knobs.append(key)
+        else:
+            out.append((by_name[name], float(value)))
+    if in_both:
+        raise ValueError(
+            f"start override key(s) also in --base-overrides: {', '.join(in_both)}; "
+            f"a base value is fixed, a start value is searched from"
+        )
+    if not_knobs:
+        raise ValueError(
+            f"start override key(s) that are not search knobs: {', '.join(not_knobs)}. "
+            f"Only a knob the spec searches has a starting point."
+        )
+    applied = []
+    for knob, value in out:
+        if knob.head_value is None:
+            knob.head_value = knob.start_value
+        knob.start_value = _clamp_start(
+            value, knob.lo, knob.hi, f"{knob.label} (--start-overrides)"
+        )
+        applied.append(f"{knob.label}={format_value(knob.start_value)}")
+    return ",".join(applied)

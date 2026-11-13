@@ -309,6 +309,7 @@ from diagnose import run_diagnosis
 from eval_cache import digest, file_digest, open_cache, source_digest
 from fit_quality import quality_report
 from knobs import (
+    apply_start_overrides,
     at_bound,
     auto_spec,
     build_knobs,
@@ -316,10 +317,12 @@ from knobs import (
     clamp_check,
     clamp_warning,
     format_value,
+    head_of,
     knob_bounds,
     load_base_overrides,
     load_spec,
     load_spec_weights,
+    load_start_overrides,
     tunable_overrides,
 )
 from loss import (
@@ -684,6 +687,8 @@ class Evaluator:
         self._anchored = False
         self.fence_unit = 1.0
         self.best_level_offset_db: float | None = None
+        self.head_level_offset_db: float | None = None
+        self.head_level_unavailable: str | None = None
         # How many notes the one-sided noise term still had something to say
         # about, at the start and at the winner. `loss.py` charges `tnr` only
         # where the model is noisier, so a candidate that walks the model past
@@ -939,6 +944,27 @@ class Evaluator:
         way into the source.
         """
         return self._record(values, terms, rendered=False)
+
+    def read_head_level(self, knobs) -> None:
+        """Read HEAD's own whole-grid level when the start is a `--start-overrides` point.
+
+        One render at most, and none for a spec with a source knob (that needs the tree
+        spliced); the reason is kept when the reading is unavailable.
+        """
+        if any(k.tunable is None for k in knobs):
+            self.head_level_unavailable = "the spec has a source knob, which needs a rebuild"
+            return
+        head = [head_of(k) for k in knobs]
+        terms = self.terms_for(head)
+        try:
+            if terms is None:
+                terms = self._render_terms(head)
+        except (RuntimeError, OSError, ValueError) as exc:
+            self.head_level_unavailable = f"HEAD's render failed: {exc}"
+            return
+        self.head_level_offset_db = None if terms is None else terms.get("level_offset_db")
+        if self.head_level_offset_db is None:
+            self.head_level_unavailable = "HEAD's render carried no level reading"
 
     def terms_for(self, values: list[float]) -> dict[str, float] | None:
         """Return cached raw terms for a candidate without starting a render."""
@@ -1714,18 +1740,41 @@ def _fold_write_back_verdict(out_path: str, evaluator) -> None:
         },
         "walked_back": getattr(evaluator, "walked_back", None),
     }
-    # The fence's anchor is the start, which is HEAD's render with any base overrides:
-    # a lander quotes the winner's level against it.
+    # The fence's anchor is the start, which is HEAD's render with any base overrides,
+    # unless --start-overrides moved it: then the anchor is that point and HEAD is read apart.
     start = getattr(evaluator, "start_level_offset_db", None)
     best = getattr(evaluator, "best_level_offset_db", None)
-    record["level_anchor"] = {
-        "anchor": "start values (HEAD's render, base overrides included)",
+    moved = getattr(getattr(evaluator, "args", None), "start_overrides", "")
+    anchor = {
+        "anchor": (
+            f"start-override point ({moved}); base overrides included"
+            if moved
+            else "start values (HEAD's render, base overrides included)"
+        ),
         "start_offset_db": start,
         "winner_offset_db": best,
         "winner_minus_start_db": None if start is None or best is None else round(best - start, 2),
+        "drift_fence_anchor": "start",
     }
+    if moved:
+        head = getattr(evaluator, "head_level_offset_db", None)
+        anchor["head_offset_db"] = head
+        if head is None:
+            anchor["head_offset_unavailable"] = (
+                getattr(evaluator, "head_level_unavailable", None) or "not read"
+            )
+        anchor["winner_minus_head_db"] = (
+            None if head is None or best is None else round(best - head, 2)
+        )
+    record["level_anchor"] = anchor
     if start is not None and best is not None:
-        print(f"level: winner {best - start:+.2f} dB against HEAD's render", file=sys.stderr)
+        against = "the start-override point" if moved else "HEAD's render"
+        print(f"level: winner {best - start:+.2f} dB against {against}", file=sys.stderr)
+    if moved and anchor.get("winner_minus_head_db") is not None:
+        print(
+            f"level: winner {anchor['winner_minus_head_db']:+.2f} dB against HEAD's render",
+            file=sys.stderr,
+        )
     path.write_text(json.dumps(_json_safe(record), indent=2, allow_nan=False) + "\n")
 
 
@@ -2027,6 +2076,15 @@ def run(args, argv: list[str] | None = None) -> int:
     pristine: dict[Path, str] = {}
     knobs = build_knobs(spec, pristine, catalogue)
 
+    # Before the base check, so a key in both reads as that and not as a knob clash.
+    args.start_overrides = apply_start_overrides(
+        knobs,
+        load_start_overrides(getattr(args, "start_overrides", "")),
+        load_base_overrides(getattr(args, "base_overrides", "")),
+    )
+    if args.start_overrides:
+        print(f"start overrides: {args.start_overrides}", file=sys.stderr)
+
     # Before any render of the fit: a base key a knob owns, or one the library
     # does not know, would otherwise run to the end and say nothing.
     base_given = load_base_overrides(getattr(args, "base_overrides", ""))
@@ -2176,6 +2234,8 @@ def run(args, argv: list[str] | None = None) -> int:
                 run_stages(problem, fit_knobs, args, optimizer)
             else:
                 optimizer(problem, fit_knobs, args)
+            if args.start_overrides:
+                evaluator.read_head_level(knobs)
         finally:
             # Always undo this run's own edits, whatever happened above — and
             # only those, so a file someone else changed meanwhile survives.
@@ -2625,6 +2685,17 @@ def build_parser() -> argparse.ArgumentParser:
         help="engine constants held fixed under every evaluation (an override string or "
         "@file); a key the search also moves is refused, and the fit is recorded as "
         "answered under this base",
+    )
+    parser.add_argument(
+        "--start-overrides",
+        default="",
+        dest="start_overrides",
+        metavar="K=V,...|@FILE",
+        help="where named search knobs start (an override string or @file); they stay "
+        "searched. A key that is not a knob, or is also a base override, is refused; a "
+        "start outside the knob's range is clamped. The start loss, calibration and the "
+        "--max-level-drift-db fence are anchored on this point, not on HEAD; the report "
+        "reads HEAD's level apart. Part of the fit's identity: recorded in --out and fits.json",
     )
     parser.add_argument(
         "--lib",
