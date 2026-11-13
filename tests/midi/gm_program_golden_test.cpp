@@ -79,6 +79,7 @@ using sonare::midi::ControllerInput;
 using sonare::midi::ControllerProfile;
 using sonare::midi::synth::engine_axis_capability;
 using sonare::midi::synth::EngineAxisCapability;
+using sonare::midi::synth::gm_fallback_drum_key_is_voiced;
 using sonare::midi::synth::gm_fallback_drum_kit;
 using sonare::midi::synth::gm_fallback_patch;
 using sonare::midi::synth::gs_drum_kit_is_voiced_apart;
@@ -519,12 +520,13 @@ static_assert(kGsKitVelocity == kKitVelocities[1],
 constexpr uint8_t kKitChannel = 9;
 
 /// Keys of the drum table that carry a patch of their own. Every other slot holds the generic
-/// short burst, so the voiced set is the key range the table assigns explicitly.
+/// short burst, so the engine owns which keys count as voiced.
 std::vector<uint8_t> voiced_drum_keys() {
-  constexpr uint8_t kFirstVoicedKey = 31;
-  constexpr uint8_t kLastVoicedKey = 87;
   std::vector<uint8_t> keys;
-  for (uint8_t note = kFirstVoicedKey; note <= kLastVoicedKey; ++note) keys.push_back(note);
+  for (int note = 0; note < 128; ++note) {
+    if (gm_fallback_drum_key_is_voiced(static_cast<uint8_t>(note)))
+      keys.push_back(static_cast<uint8_t>(note));
+  }
   return keys;
 }
 
@@ -721,8 +723,13 @@ TEST_CASE("NativeSynth drum kit renders stay bit-identical", "[.][midi][synth][g
     CAPTURE(kit->name, kit->program, kit->index);
     REQUIRE(gm_fallback_drum_kit(kit->program) == kit->index);
   }
-  REQUIRE(rows.size() == voiced_drum_keys().size() * std::size(kKitVelocities) +
-                             kits.size() * std::size(kGsKitKeys));
+  const std::vector<uint8_t> keys = voiced_drum_keys();
+  // The default fill marks no key (key 0 stays out); an assigned key (36) is marked.
+  REQUIRE_FALSE(keys.empty());
+  REQUIRE(std::find(keys.begin(), keys.end(), uint8_t{36}) != keys.end());
+  REQUIRE(std::find(keys.begin(), keys.end(), uint8_t{0}) == keys.end());
+  REQUIRE(rows.size() ==
+          keys.size() * std::size(kKitVelocities) + kits.size() * std::size(kGsKitKeys));
   REQUIRE(expected.size() == rows.size());
 
   // Checked rather than required, so how far a drift spreads is visible.

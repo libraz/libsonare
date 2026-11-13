@@ -416,5 +416,7 @@ inline constexpr std::array<size_t, 4> kLiveBases = {0, 3, 4, 7};
 const std::array<NativeSynthPatch, 16>& family_patches() noexcept;
 const ProgramOverrides& program_overrides() noexcept;
 const std::array<NativeSynthPatch, 128>& drum_note_table() noexcept;
+/// True for a key the drum table assigned a patch of its own; the rest hold the generic burst.
+bool drum_key_is_voiced(uint8_t note) noexcept;
 
 }  // namespace sonare::midi::synth::detail

@@ -87,6 +87,10 @@ bool gm_program_has_dedicated_model(uint16_t bank, uint8_t program) noexcept;
 /// Standard kit; GS kit variations are applied per voice by apply_gs_drum_kit.
 const NativeSynthPatch& gm_fallback_drum_patch(uint8_t note) noexcept;
 
+/// True when the Standard kit assigns @p note a patch of its own; every other key plays the
+/// generic burst.
+bool gm_fallback_drum_key_is_voiced(uint8_t note) noexcept;
+
 /// GS drum-kit index for a rhythm-part program within @p map (mirrors
 /// gs_drum_kit_name; the numbering is kGsDrumKits, which is the single source of
 /// truth). A program the selected map defines no kit for maps to Standard,

@@ -216,7 +216,7 @@ constexpr DrumPatches build_drum_patches() noexcept {
   return d;
 }
 
-// Per-note GM/GS drum map (keys 27..87): each key is a distinct instrument
+// Per-note GM/GS drum map (keys 31..87): each key is a distinct instrument
 // built from a mechanism archetype (fixed-pitch membrane / struck wood / struck
 // metal / whistle / noise) plus a fixed tuning, on top of the shared kit
 // archetypes above. Unmapped keys fall back to the generic short burst so every
@@ -238,9 +238,26 @@ constexpr DrumPatches build_drum_patches() noexcept {
 // The lever is exact — applied after the drive, the filter and the envelope,
 // doubling it moves the rendered peak +6.02 dB at every velocity and moves no
 // other dimension of the comparison.
-SONARE_TUNED_CONSTEXPR std::array<NativeSynthPatch, 128> build_drum_note_table() noexcept {
+/// A table slot: assigning a whole patch (`t[n] = ...`) marks the key as voiced, a field edit
+/// (`t[n].gain = ...`) and `set` do not.
+struct DrumSlot : NativeSynthPatch {
+  bool voiced = false;
+  constexpr DrumSlot& operator=(const NativeSynthPatch& p) noexcept {
+    NativeSynthPatch::operator=(p);
+    voiced = true;
+    return *this;
+  }
+  constexpr void set(const NativeSynthPatch& p) noexcept { NativeSynthPatch::operator=(p); }
+};
+
+struct DrumTables {
+  std::array<NativeSynthPatch, 128> patches{};
+  std::array<bool, 128> voiced{};
+};
+
+SONARE_TUNED_CONSTEXPR DrumTables build_drum_note_table() noexcept {
   const DrumPatches d = build_drum_patches();
-  std::array<NativeSynthPatch, 128> t{};
+  std::array<DrumSlot, 128> t{};
 
   NativeSynthPatch piece{};
   piece.mode = SynthEngineMode::kPercussion;
@@ -401,7 +418,7 @@ SONARE_TUNED_CONSTEXPR std::array<NativeSynthPatch, 128> build_drum_note_table()
 
   // Default every key to the generic short burst (keeps unmapped keys audible;
   // also the current home of the not-yet-built stochastic shakers/scrapers).
-  for (auto& p : t) p = d.percussion;
+  for (auto& p : t) p.set(d.percussion);
 
   // --- kit archetypes ---
   t[35] = d.kick;
@@ -2224,7 +2241,7 @@ SONARE_TUNED_CONSTEXPR std::array<NativeSynthPatch, 128> build_drum_note_table()
   // dynamics oracle: library kit (real strikes), zero-crossing of vel_range; timbre oracle: module
   t[80].percussion.velocity_exponent = 1.77f;
 
-  for (auto& p : t) p = clamp_synth_patch(p);
+  for (auto& p : t) p.set(clamp_synth_patch(p));
 
     // Development-only per-note voicing override, keyed `d000`..`d127` by drum
     // note (`SONARE_TUNING_OVERRIDES=d038.percussion.wire_buzz=0.5`). See
@@ -2236,21 +2253,31 @@ SONARE_TUNED_CONSTEXPR std::array<NativeSynthPatch, 128> build_drum_note_table()
     apply_patch_tuning(t[static_cast<size_t>(n)], key);
   }
 #endif
-  for (auto& p : t) p = strip_unvoiced_sections(p);
-  return t;
+  DrumTables out;
+  for (size_t n = 0; n < t.size(); ++n) {
+    out.patches[n] = strip_unvoiced_sections(t[n]);
+    out.voiced[n] = t[n].voiced;
+  }
+  return out;
+}
+
+const DrumTables& drum_tables() noexcept {
+#if defined(SONARE_TUNING) && SONARE_TUNING
+  // The tuning build reads overrides from the environment, so the table can
+  // only be built once the process is running.
+  static const DrumTables kTables = build_drum_note_table();
+#else
+  static constexpr DrumTables kTables = build_drum_note_table();
+#endif
+  return kTables;
 }
 
 }  // namespace
 
 const std::array<NativeSynthPatch, 128>& drum_note_table() noexcept {
-#if defined(SONARE_TUNING) && SONARE_TUNING
-  // The tuning build reads overrides from the environment, so the table can
-  // only be built once the process is running.
-  static const std::array<NativeSynthPatch, 128> kTable = build_drum_note_table();
-#else
-  static constexpr std::array<NativeSynthPatch, 128> kTable = build_drum_note_table();
-#endif
-  return kTable;
+  return drum_tables().patches;
 }
+
+bool drum_key_is_voiced(uint8_t note) noexcept { return drum_tables().voiced[note & 0x7Fu]; }
 
 }  // namespace sonare::midi::synth::detail

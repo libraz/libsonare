@@ -700,6 +700,10 @@ const NativeSynthPatch& gm_fallback_drum_patch(uint8_t note) noexcept {
   return drum_note_table()[note & 0x7Fu];
 }
 
+bool gm_fallback_drum_key_is_voiced(uint8_t note) noexcept {
+  return detail::drum_key_is_voiced(note);
+}
+
 #if defined(SONARE_TUNING) && SONARE_TUNING
 namespace {
 
