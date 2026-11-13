@@ -126,7 +126,9 @@ class PrepareVocaditoTests(unittest.TestCase):
         )
         self.assertIn("split.json", split_file["files_sha256_excludes"][0])
         for relative_path, digest in split_file["files_sha256"].items():
-            self.assertEqual(hashlib.sha256((output / relative_path).read_bytes()).hexdigest(), digest)
+            self.assertEqual(
+                hashlib.sha256((output / relative_path).read_bytes()).hexdigest(), digest
+            )
 
     def test_malformed_or_empty_audit_annotation_fails_without_partial_output(self) -> None:
         for bad_row in (b"nan,220,0.25\n", b"0.1,-220,0.25\n", b"0.1,220,0\n", b"0.1,220\n", b""):
@@ -160,9 +162,11 @@ class PrepareVocaditoTests(unittest.TestCase):
         output = self.tmp_path / "prepared"
         stderr = io.StringIO()
 
-        with mock.patch.object(preparer, "EXPECTED_ARCHIVE_MD5", "0" * 32), redirect_stderr(
-            stderr
-        ), self.assertRaises(SystemExit) as exit_info:
+        with (
+            mock.patch.object(preparer, "EXPECTED_ARCHIVE_MD5", "0" * 32),
+            redirect_stderr(stderr),
+            self.assertRaises(SystemExit) as exit_info,
+        ):
             preparer.main(["--archive", str(archive_path), "--output", str(output)])
 
         self.assertEqual(exit_info.exception.code, 2)
