@@ -58,13 +58,13 @@
         "music": null,
         "instrument": null,
         "fit": {
-          "state": "current",
+          "state": "stale",
           "date": "2026-10-26",
           "outcome": "adopted",
           "fittable": true
         }
       },
-      "next": "judge the recorded candidate(s) — tank-3.6, felt-worn, felt-hard, decay-short, decay-long, board-forward, strike-eighth, unison-wide, treble-sings — then listen to a take and record the verdict in signoff.json"
+      "next": "refit under the current objective (the last fit predates it): refit.py"
     },
     {
       "slug": "p000b001-acoustic-grand-piano",
@@ -121,13 +121,13 @@
         "music": null,
         "instrument": null,
         "fit": {
-          "state": "current",
+          "state": "stale",
           "date": "2026-10-26",
           "outcome": "kept",
           "fittable": true
         }
       },
-      "next": "listen to a take and record the verdict in signoff.json"
+      "next": "refit under the current objective (the last fit predates it): refit.py"
     },
     {
       "slug": "p000b002-acoustic-grand-piano",
@@ -243,13 +243,13 @@
         "music": null,
         "instrument": null,
         "fit": {
-          "state": "current",
+          "state": "stale",
           "date": "2026-10-26",
           "outcome": "kept",
           "fittable": true
         }
       },
-      "next": "listen to a take and record the verdict in signoff.json"
+      "next": "refit under the current objective (the last fit predates it): refit.py"
     },
     {
       "slug": "p000b016-acoustic-grand-piano",
@@ -368,13 +368,13 @@
         },
         "instrument": null,
         "fit": {
-          "state": "current",
+          "state": "stale",
           "date": "2026-10-26",
           "outcome": "kept",
           "fittable": true
         }
       },
-      "next": "the sign-off is stale against this bank: listen again"
+      "next": "refit under the current objective (the last fit predates it): refit.py"
     },
     {
       "slug": "p001b001-bright-acoustic-piano",
@@ -431,13 +431,13 @@
         "music": null,
         "instrument": null,
         "fit": {
-          "state": "current",
+          "state": "stale",
           "date": "2026-10-26",
           "outcome": "adopted",
           "fittable": true
         }
       },
-      "next": "listen to a take and record the verdict in signoff.json"
+      "next": "refit under the current objective (the last fit predates it): refit.py"
     },
     {
       "slug": "p001b008-bright-acoustic-piano",
@@ -494,13 +494,13 @@
         "music": null,
         "instrument": null,
         "fit": {
-          "state": "current",
+          "state": "stale",
           "date": "2026-10-26",
           "outcome": "adopted",
           "fittable": true
         }
       },
-      "next": "listen to a take and record the verdict in signoff.json"
+      "next": "refit under the current objective (the last fit predates it): refit.py"
     },
     {
       "slug": "p002-electric-grand-piano",
@@ -557,13 +557,13 @@
         "music": null,
         "instrument": null,
         "fit": {
-          "state": "current",
+          "state": "stale",
           "date": "2026-10-26",
           "outcome": "kept",
           "fittable": true
         }
       },
-      "next": "listen to a take and record the verdict in signoff.json"
+      "next": "refit under the current objective (the last fit predates it): refit.py"
     },
     {
       "slug": "p002b001-electric-grand-piano",
@@ -620,13 +620,13 @@
         "music": null,
         "instrument": null,
         "fit": {
-          "state": "current",
+          "state": "stale",
           "date": "2026-10-26",
           "outcome": "kept",
           "fittable": true
         }
       },
-      "next": "listen to a take and record the verdict in signoff.json"
+      "next": "refit under the current objective (the last fit predates it): refit.py"
     },
     {
       "slug": "p002b008-electric-grand-piano",
@@ -683,13 +683,13 @@
         "music": null,
         "instrument": null,
         "fit": {
-          "state": "current",
+          "state": "stale",
           "date": "2026-10-26",
           "outcome": "kept",
           "fittable": true
         }
       },
-      "next": "listen to a take and record the verdict in signoff.json"
+      "next": "refit under the current objective (the last fit predates it): refit.py"
     },
     {
       "slug": "p003-honky-tonk-piano",
@@ -745,13 +745,13 @@
         "music": null,
         "instrument": null,
         "fit": {
-          "state": "current",
+          "state": "stale",
           "date": "2026-10-26",
           "outcome": "kept",
           "fittable": true
         }
       },
-      "next": "listen to a take and record the verdict in signoff.json"
+      "next": "refit under the current objective (the last fit predates it): refit.py"
     },
     {
       "slug": "p003b001-honky-tonk-piano",
@@ -926,13 +926,13 @@
         "music": null,
         "instrument": null,
         "fit": {
-          "state": "current",
+          "state": "stale",
           "date": "2026-10-26",
           "outcome": "adopted",
           "fittable": true
         }
       },
-      "next": "listen to a take and record the verdict in signoff.json"
+      "next": "refit under the current objective (the last fit predates it): refit.py"
     },
     {
       "slug": "p004b001-electric-piano-1",
@@ -1343,13 +1343,13 @@
         "music": null,
         "instrument": null,
         "fit": {
-          "state": "current",
+          "state": "stale",
           "date": "2026-10-26",
           "outcome": "kept",
           "fittable": true
         }
       },
-      "next": "listen to a take and record the verdict in signoff.json"
+      "next": "refit under the current objective (the last fit predates it): refit.py"
     },
     {
       "slug": "p005b001-electric-piano-2",
@@ -1406,13 +1406,13 @@
         "music": null,
         "instrument": null,
         "fit": {
-          "state": "current",
+          "state": "stale",
           "date": "2026-10-26",
           "outcome": "adopted",
           "fittable": true
         }
       },
-      "next": "listen to a take and record the verdict in signoff.json"
+      "next": "refit under the current objective (the last fit predates it): refit.py"
     },
     {
       "slug": "p005b002-electric-piano-2",
@@ -1528,13 +1528,13 @@
         "music": null,
         "instrument": null,
         "fit": {
-          "state": "current",
+          "state": "stale",
           "date": "2026-10-26",
           "outcome": "adopted",
           "fittable": true
         }
       },
-      "next": "listen to a take and record the verdict in signoff.json"
+      "next": "refit under the current objective (the last fit predates it): refit.py"
     },
     {
       "slug": "p005b016-electric-piano-2",
@@ -1617,16 +1617,17 @@
         "gate_state": "current",
         "coverage": {
           "canonical": 16,
-          "gated": 16,
-          "excused": [],
+          "gated": 15,
+          "excused": [
+            "attack_hf_swing"
+          ],
           "gaps": [],
           "complete": true
         },
         "agreement": {
           "inside": 9,
-          "total": 18,
+          "total": 17,
           "outside": {
-            "attack_hf_swing": 4.24,
             "body": 2.2,
             "partial_tilt": 2.0,
             "attack_hf": 1.69,
@@ -1647,13 +1648,13 @@
         "music": null,
         "instrument": null,
         "fit": {
-          "state": "current",
+          "state": "stale",
           "date": "2026-10-26",
           "outcome": "adopted",
           "fittable": true
         }
       },
-      "next": "listen to a take and record the verdict in signoff.json"
+      "next": "refit under the current objective (the last fit predates it): refit.py"
     },
     {
       "slug": "p006b001-harpsichord",
@@ -1710,13 +1711,13 @@
         "music": null,
         "instrument": null,
         "fit": {
-          "state": "current",
+          "state": "stale",
           "date": "2026-10-26",
           "outcome": "kept",
           "fittable": true
         }
       },
-      "next": "listen to a take and record the verdict in signoff.json"
+      "next": "refit under the current objective (the last fit predates it): refit.py"
     },
     {
       "slug": "p006b002-harpsichord",
@@ -1773,13 +1774,13 @@
         "music": null,
         "instrument": null,
         "fit": {
-          "state": "current",
+          "state": "stale",
           "date": "2026-10-26",
           "outcome": "adopted",
           "fittable": true
         }
       },
-      "next": "listen to a take and record the verdict in signoff.json"
+      "next": "refit under the current objective (the last fit predates it): refit.py"
     },
     {
       "slug": "p006b003-harpsichord",
@@ -1836,13 +1837,13 @@
         "music": null,
         "instrument": null,
         "fit": {
-          "state": "current",
+          "state": "stale",
           "date": "2026-10-26",
           "outcome": "kept",
           "fittable": true
         }
       },
-      "next": "listen to a take and record the verdict in signoff.json"
+      "next": "refit under the current objective (the last fit predates it): refit.py"
     },
     {
       "slug": "p006b008-harpsichord",
@@ -1899,13 +1900,13 @@
         "music": null,
         "instrument": null,
         "fit": {
-          "state": "current",
+          "state": "stale",
           "date": "2026-10-26",
           "outcome": "kept",
           "fittable": true
         }
       },
-      "next": "listen to a take and record the verdict in signoff.json"
+      "next": "refit under the current objective (the last fit predates it): refit.py"
     },
     {
       "slug": "p006b016-harpsichord",
@@ -1962,13 +1963,13 @@
         "music": null,
         "instrument": null,
         "fit": {
-          "state": "current",
+          "state": "stale",
           "date": "2026-10-26",
           "outcome": "adopted",
           "fittable": true
         }
       },
-      "next": "listen to a take and record the verdict in signoff.json"
+      "next": "refit under the current objective (the last fit predates it): refit.py"
     },
     {
       "slug": "p006b024-harpsichord",
@@ -2025,13 +2026,13 @@
         "music": null,
         "instrument": null,
         "fit": {
-          "state": "current",
+          "state": "stale",
           "date": "2026-10-26",
           "outcome": "kept",
           "fittable": true
         }
       },
-      "next": "listen to a take and record the verdict in signoff.json"
+      "next": "refit under the current objective (the last fit predates it): refit.py"
     },
     {
       "slug": "p007-clavinet",
@@ -2088,13 +2089,13 @@
         "music": null,
         "instrument": null,
         "fit": {
-          "state": "current",
+          "state": "stale",
           "date": "2026-10-26",
           "outcome": "kept",
           "fittable": true
         }
       },
-      "next": "listen to a take and record the verdict in signoff.json"
+      "next": "refit under the current objective (the last fit predates it): refit.py"
     },
     {
       "slug": "p008-celesta",
@@ -2150,13 +2151,13 @@
         "music": null,
         "instrument": null,
         "fit": {
-          "state": "current",
+          "state": "stale",
           "date": "2026-10-26",
           "outcome": "adopted",
           "fittable": true
         }
       },
-      "next": "listen to a take and record the verdict in signoff.json"
+      "next": "refit under the current objective (the last fit predates it): refit.py"
     },
     {
       "slug": "p009-glockenspiel",
@@ -2212,13 +2213,13 @@
         "music": null,
         "instrument": null,
         "fit": {
-          "state": "current",
+          "state": "stale",
           "date": "2026-10-26",
           "outcome": "kept",
           "fittable": true
         }
       },
-      "next": "listen to a take and record the verdict in signoff.json"
+      "next": "refit under the current objective (the last fit predates it): refit.py"
     },
     {
       "slug": "p010-music-box",
@@ -2274,13 +2275,13 @@
         "music": null,
         "instrument": null,
         "fit": {
-          "state": "current",
+          "state": "stale",
           "date": "2026-10-26",
           "outcome": "adopted",
           "fittable": true
         }
       },
-      "next": "listen to a take and record the verdict in signoff.json"
+      "next": "refit under the current objective (the last fit predates it): refit.py"
     },
     {
       "slug": "p011-vibraphone",
@@ -2336,13 +2337,13 @@
         "music": null,
         "instrument": null,
         "fit": {
-          "state": "current",
+          "state": "stale",
           "date": "2026-10-26",
           "outcome": "kept",
           "fittable": true
         }
       },
-      "next": "listen to a take and record the verdict in signoff.json"
+      "next": "refit under the current objective (the last fit predates it): refit.py"
     },
     {
       "slug": "p011b001-vibraphone",
@@ -2398,13 +2399,13 @@
         "music": null,
         "instrument": null,
         "fit": {
-          "state": "current",
+          "state": "stale",
           "date": "2026-10-26",
           "outcome": "kept",
           "fittable": true
         }
       },
-      "next": "listen to a take and record the verdict in signoff.json"
+      "next": "refit under the current objective (the last fit predates it): refit.py"
     },
     {
       "slug": "p011b008-vibraphone",
@@ -2460,13 +2461,13 @@
         "music": null,
         "instrument": null,
         "fit": {
-          "state": "current",
+          "state": "stale",
           "date": "2026-10-26",
           "outcome": "kept",
           "fittable": true
         }
       },
-      "next": "listen to a take and record the verdict in signoff.json"
+      "next": "refit under the current objective (the last fit predates it): refit.py"
     },
     {
       "slug": "p012-marimba",
@@ -2532,13 +2533,13 @@
         "music": null,
         "instrument": null,
         "fit": {
-          "state": "current",
+          "state": "stale",
           "date": "2026-10-26",
           "outcome": "kept",
           "fittable": true
         }
       },
-      "next": "judge the recorded candidate(s) — ring-2.3x, tube-open, tube-off, hard-mallet, soft-mallet, modes-two, modes-four, ring-short, bar-even — then listen to a take and record the verdict in signoff.json"
+      "next": "refit under the current objective (the last fit predates it): refit.py"
     },
     {
       "slug": "p012b001-marimba",
@@ -2594,13 +2595,13 @@
         "music": null,
         "instrument": null,
         "fit": {
-          "state": "current",
+          "state": "stale",
           "date": "2026-10-26",
           "outcome": "adopted",
           "fittable": true
         }
       },
-      "next": "listen to a take and record the verdict in signoff.json"
+      "next": "refit under the current objective (the last fit predates it): refit.py"
     },
     {
       "slug": "p012b008-marimba",
@@ -2656,13 +2657,13 @@
         "music": null,
         "instrument": null,
         "fit": {
-          "state": "current",
+          "state": "stale",
           "date": "2026-10-26",
           "outcome": "adopted",
           "fittable": true
         }
       },
-      "next": "listen to a take and record the verdict in signoff.json"
+      "next": "refit under the current objective (the last fit predates it): refit.py"
     },
     {
       "slug": "p013-xylophone",
@@ -2720,13 +2721,13 @@
         "music": null,
         "instrument": null,
         "fit": {
-          "state": "current",
+          "state": "stale",
           "date": "2026-10-26",
           "outcome": "kept",
           "fittable": true
         }
       },
-      "next": "judge the recorded candidate(s) — ring-3.4x — then listen to a take and record the verdict in signoff.json"
+      "next": "refit under the current objective (the last fit predates it): refit.py"
     },
     {
       "slug": "p014-tubular-bells",
@@ -2782,13 +2783,13 @@
         "music": null,
         "instrument": null,
         "fit": {
-          "state": "current",
+          "state": "stale",
           "date": "2026-10-26",
           "outcome": "adopted",
           "fittable": true
         }
       },
-      "next": "listen to a take and record the verdict in signoff.json"
+      "next": "refit under the current objective (the last fit predates it): refit.py"
     },
     {
       "slug": "p014b001-tubular-bells",
@@ -2844,13 +2845,13 @@
         "music": null,
         "instrument": null,
         "fit": {
-          "state": "current",
+          "state": "stale",
           "date": "2026-10-26",
           "outcome": "adopted",
           "fittable": true
         }
       },
-      "next": "listen to a take and record the verdict in signoff.json"
+      "next": "refit under the current objective (the last fit predates it): refit.py"
     },
     {
       "slug": "p014b002-tubular-bells",
@@ -2906,13 +2907,13 @@
         "music": null,
         "instrument": null,
         "fit": {
-          "state": "current",
+          "state": "stale",
           "date": "2026-10-26",
           "outcome": "adopted",
           "fittable": true
         }
       },
-      "next": "listen to a take and record the verdict in signoff.json"
+      "next": "refit under the current objective (the last fit predates it): refit.py"
     },
     {
       "slug": "p014b008-tubular-bells",
@@ -2968,13 +2969,13 @@
         "music": null,
         "instrument": null,
         "fit": {
-          "state": "current",
+          "state": "stale",
           "date": "2026-10-26",
           "outcome": "adopted",
           "fittable": true
         }
       },
-      "next": "listen to a take and record the verdict in signoff.json"
+      "next": "refit under the current objective (the last fit predates it): refit.py"
     },
     {
       "slug": "p014b009-tubular-bells",
@@ -3030,13 +3031,13 @@
         "music": null,
         "instrument": null,
         "fit": {
-          "state": "current",
+          "state": "stale",
           "date": "2026-10-26",
           "outcome": "adopted",
           "fittable": true
         }
       },
-      "next": "listen to a take and record the verdict in signoff.json"
+      "next": "refit under the current objective (the last fit predates it): refit.py"
     },
     {
       "slug": "p015-dulcimer",
@@ -3093,13 +3094,13 @@
         "music": null,
         "instrument": null,
         "fit": {
-          "state": "current",
+          "state": "stale",
           "date": "2026-10-26",
           "outcome": "adopted",
           "fittable": true
         }
       },
-      "next": "listen to a take and record the verdict in signoff.json"
+      "next": "refit under the current objective (the last fit predates it): refit.py"
     },
     {
       "slug": "p016-drawbar-organ",
@@ -3130,15 +3131,17 @@
         },
         "agreement": {
           "inside": 5,
-          "total": 9,
+          "total": 8,
           "outside": {
             "vel_range": 1.81,
-            "stretch": 1.59,
             "balance": 1.49,
             "stereo": 1.2
           },
           "unjudgeable": [
             "attack"
+          ],
+          "shared_source": [
+            "stretch"
           ]
         },
         "structure": {
@@ -3155,13 +3158,13 @@
         "music": null,
         "instrument": null,
         "fit": {
-          "state": "current",
+          "state": "stale",
           "date": "2026-10-26",
           "outcome": "kept",
           "fittable": true
         }
       },
-      "next": "listen to a take and record the verdict in signoff.json"
+      "next": "refit under the current objective (the last fit predates it): refit.py"
     },
     {
       "slug": "p016b001-drawbar-organ",
@@ -3265,13 +3268,13 @@
         "music": null,
         "instrument": null,
         "fit": {
-          "state": "current",
+          "state": "stale",
           "date": "2026-10-26",
           "outcome": "adopted",
           "fittable": true
         }
       },
-      "next": "listen to a take and record the verdict in signoff.json"
+      "next": "refit under the current objective (the last fit predates it): refit.py"
     },
     {
       "slug": "p016b003-drawbar-organ",
@@ -3428,13 +3431,13 @@
         "music": null,
         "instrument": null,
         "fit": {
-          "state": "current",
+          "state": "stale",
           "date": "2026-10-26",
           "outcome": "adopted",
           "fittable": true
         }
       },
-      "next": "listen to a take and record the verdict in signoff.json"
+      "next": "refit under the current objective (the last fit predates it): refit.py"
     },
     {
       "slug": "p016b032-drawbar-organ",
@@ -3541,13 +3544,13 @@
         "music": null,
         "instrument": null,
         "fit": {
-          "state": "current",
+          "state": "stale",
           "date": "2026-10-26",
           "outcome": "kept",
           "fittable": true
         }
       },
-      "next": "judge the recorded candidate(s) — perc-quiet, perc-loud — then listen to a take and record the verdict in signoff.json"
+      "next": "refit under the current objective (the last fit predates it): refit.py"
     },
     {
       "slug": "p017b001-percussive-organ",
@@ -3814,13 +3817,13 @@
         "music": null,
         "instrument": null,
         "fit": {
-          "state": "current",
+          "state": "stale",
           "date": "2026-10-26",
           "outcome": "adopted",
           "fittable": true
         }
       },
-      "next": "judge the recorded candidate(s) — drive-least, drive-mild, drive-hard — then listen to a take and record the verdict in signoff.json"
+      "next": "refit under the current objective (the last fit predates it): refit.py"
     },
     {
       "slug": "p019-church-organ",
@@ -3884,13 +3887,13 @@
         },
         "instrument": null,
         "fit": {
-          "state": "current",
+          "state": "stale",
           "date": "2026-10-26",
           "outcome": "adopted",
           "fittable": true
         }
       },
-      "next": "judge the recorded candidate(s) — tank-3.6, hall, no-16, foundations-only, mixtures-forward, chiff-strong, chiff-none, slow-speech, wind-unsteady — then listen to a take and record the verdict in signoff.json"
+      "next": "refit under the current objective (the last fit predates it): refit.py"
     },
     {
       "slug": "p019b001-church-organ",
@@ -3941,13 +3944,13 @@
         "music": null,
         "instrument": null,
         "fit": {
-          "state": "current",
+          "state": "stale",
           "date": "2026-10-26",
           "outcome": "adopted",
           "fittable": true
         }
       },
-      "next": "listen to a take and record the verdict in signoff.json"
+      "next": "refit under the current objective (the last fit predates it): refit.py"
     },
     {
       "slug": "p019b002-church-organ",
@@ -3998,13 +4001,13 @@
         "music": null,
         "instrument": null,
         "fit": {
-          "state": "current",
+          "state": "stale",
           "date": "2026-10-26",
           "outcome": "adopted",
           "fittable": true
         }
       },
-      "next": "listen to a take and record the verdict in signoff.json"
+      "next": "refit under the current objective (the last fit predates it): refit.py"
     },
     {
       "slug": "p019b008-church-organ",
@@ -4055,13 +4058,13 @@
         "music": null,
         "instrument": null,
         "fit": {
-          "state": "current",
+          "state": "stale",
           "date": "2026-10-26",
           "outcome": "adopted",
           "fittable": true
         }
       },
-      "next": "listen to a take and record the verdict in signoff.json"
+      "next": "refit under the current objective (the last fit predates it): refit.py"
     },
     {
       "slug": "p019b016-church-organ",
@@ -4112,13 +4115,13 @@
         "music": null,
         "instrument": null,
         "fit": {
-          "state": "current",
+          "state": "stale",
           "date": "2026-10-26",
           "outcome": "adopted",
           "fittable": true
         }
       },
-      "next": "listen to a take and record the verdict in signoff.json"
+      "next": "refit under the current objective (the last fit predates it): refit.py"
     },
     {
       "slug": "p020-reed-organ",
@@ -4170,13 +4173,13 @@
         "music": null,
         "instrument": null,
         "fit": {
-          "state": "current",
+          "state": "stale",
           "date": "2026-10-26",
           "outcome": "adopted",
           "fittable": true
         }
       },
-      "next": "listen to a take and record the verdict in signoff.json"
+      "next": "refit under the current objective (the last fit predates it): refit.py"
     },
     {
       "slug": "p021-accordion",
@@ -4228,13 +4231,13 @@
         "music": null,
         "instrument": null,
         "fit": {
-          "state": "current",
+          "state": "stale",
           "date": "2026-10-26",
           "outcome": "kept",
           "fittable": true
         }
       },
-      "next": "listen to a take and record the verdict in signoff.json"
+      "next": "refit under the current objective (the last fit predates it): refit.py"
     },
     {
       "slug": "p021b008-accordion",
@@ -4287,13 +4290,13 @@
         "music": null,
         "instrument": null,
         "fit": {
-          "state": "current",
+          "state": "stale",
           "date": "2026-10-26",
           "outcome": "kept",
           "fittable": true
         }
       },
-      "next": "listen to a take and record the verdict in signoff.json"
+      "next": "refit under the current objective (the last fit predates it): refit.py"
     },
     {
       "slug": "p022-harmonica",
@@ -4346,13 +4349,13 @@
         "music": null,
         "instrument": null,
         "fit": {
-          "state": "current",
+          "state": "stale",
           "date": "2026-10-26",
           "outcome": "kept",
           "fittable": true
         }
       },
-      "next": "listen to a take and record the verdict in signoff.json"
+      "next": "refit under the current objective (the last fit predates it): refit.py"
     },
     {
       "slug": "p023-tango-accordion",
@@ -4404,13 +4407,13 @@
         "music": null,
         "instrument": null,
         "fit": {
-          "state": "current",
+          "state": "stale",
           "date": "2026-10-26",
           "outcome": "adopted",
           "fittable": true
         }
       },
-      "next": "listen to a take and record the verdict in signoff.json"
+      "next": "refit under the current objective (the last fit predates it): refit.py"
     },
     {
       "slug": "p024-acoustic-guitar-nylon",
@@ -4470,13 +4473,13 @@
         },
         "instrument": null,
         "fit": {
-          "state": "current",
+          "state": "stale",
           "date": "2026-10-26",
           "outcome": "adopted",
           "fittable": true
         }
       },
-      "next": "the sign-off is stale against this bank: listen again"
+      "next": "refit under the current objective (the last fit predates it): refit.py"
     },
     {
       "slug": "p024b001-acoustic-guitar-nylon",
@@ -4533,13 +4536,13 @@
         "music": null,
         "instrument": null,
         "fit": {
-          "state": "current",
+          "state": "stale",
           "date": "2026-10-26",
           "outcome": "adopted",
           "fittable": true
         }
       },
-      "next": "listen to a take and record the verdict in signoff.json"
+      "next": "refit under the current objective (the last fit predates it): refit.py"
     },
     {
       "slug": "p024b002-acoustic-guitar-nylon",
@@ -4596,13 +4599,13 @@
         "music": null,
         "instrument": null,
         "fit": {
-          "state": "current",
+          "state": "stale",
           "date": "2026-10-26",
           "outcome": "adopted",
           "fittable": true
         }
       },
-      "next": "listen to a take and record the verdict in signoff.json"
+      "next": "refit under the current objective (the last fit predates it): refit.py"
     },
     {
       "slug": "p024b008-acoustic-guitar-nylon",
@@ -4659,13 +4662,13 @@
         "music": null,
         "instrument": null,
         "fit": {
-          "state": "current",
+          "state": "stale",
           "date": "2026-10-26",
           "outcome": "adopted",
           "fittable": true
         }
       },
-      "next": "listen to a take and record the verdict in signoff.json"
+      "next": "refit under the current objective (the last fit predates it): refit.py"
     },
     {
       "slug": "p024b016-acoustic-guitar-nylon",
@@ -4722,13 +4725,13 @@
         "music": null,
         "instrument": null,
         "fit": {
-          "state": "current",
+          "state": "stale",
           "date": "2026-10-26",
           "outcome": "adopted",
           "fittable": true
         }
       },
-      "next": "listen to a take and record the verdict in signoff.json"
+      "next": "refit under the current objective (the last fit predates it): refit.py"
     },
     {
       "slug": "p025-acoustic-guitar-steel",
@@ -4784,13 +4787,13 @@
         "music": null,
         "instrument": null,
         "fit": {
-          "state": "current",
+          "state": "stale",
           "date": "2026-10-26",
           "outcome": "kept",
           "fittable": true
         }
       },
-      "next": "listen to a take and record the verdict in signoff.json"
+      "next": "refit under the current objective (the last fit predates it): refit.py"
     },
     {
       "slug": "p025b001-acoustic-guitar-steel",
@@ -4847,13 +4850,13 @@
         "music": null,
         "instrument": null,
         "fit": {
-          "state": "current",
+          "state": "stale",
           "date": "2026-10-26",
           "outcome": "kept",
           "fittable": true
         }
       },
-      "next": "listen to a take and record the verdict in signoff.json"
+      "next": "refit under the current objective (the last fit predates it): refit.py"
     },
     {
       "slug": "p025b002-acoustic-guitar-steel",
@@ -4910,13 +4913,13 @@
         "music": null,
         "instrument": null,
         "fit": {
-          "state": "current",
+          "state": "stale",
           "date": "2026-10-26",
           "outcome": "kept",
           "fittable": true
         }
       },
-      "next": "listen to a take and record the verdict in signoff.json"
+      "next": "refit under the current objective (the last fit predates it): refit.py"
     },
     {
       "slug": "p025b008-acoustic-guitar-steel",
@@ -4973,13 +4976,13 @@
         "music": null,
         "instrument": null,
         "fit": {
-          "state": "current",
+          "state": "stale",
           "date": "2026-10-26",
           "outcome": "kept",
           "fittable": true
         }
       },
-      "next": "listen to a take and record the verdict in signoff.json"
+      "next": "refit under the current objective (the last fit predates it): refit.py"
     },
     {
       "slug": "p025b016-acoustic-guitar-steel",
@@ -5036,13 +5039,13 @@
         "music": null,
         "instrument": null,
         "fit": {
-          "state": "current",
+          "state": "stale",
           "date": "2026-10-26",
           "outcome": "kept",
           "fittable": true
         }
       },
-      "next": "listen to a take and record the verdict in signoff.json"
+      "next": "refit under the current objective (the last fit predates it): refit.py"
     },
     {
       "slug": "p026-electric-guitar-jazz",
@@ -5107,7 +5110,7 @@
         "music": null,
         "instrument": null,
         "fit": {
-          "state": "current",
+          "state": "stale",
           "date": "2026-10-26",
           "outcome": "kept",
           "fittable": true
@@ -5158,27 +5161,29 @@
         },
         "agreement": {
           "inside": 8,
-          "total": 14,
+          "total": 12,
           "outside": {
-            "vel_range": 27.0,
             "body": 4.28,
-            "attack_hf_swing": 3.47,
             "tnr": 2.14,
             "attack_hf": 1.8,
             "attack": 1.5
-          }
+          },
+          "shared_source": [
+            "attack_hf_swing",
+            "vel_range"
+          ]
         },
         "structure": null,
         "music": null,
         "instrument": null,
         "fit": {
-          "state": "current",
+          "state": "stale",
           "date": "2026-10-26",
           "outcome": "adopted",
           "fittable": true
         }
       },
-      "next": "judge the recorded candidate(s) — amp-cleanCombo, amp-chimeEdge, amp-classicCrunch, amp-vintageGrind, amp-crunchStack, amp-modernLead, amp-heavyChug, amp-coldBiasBuzz, amp-bassDi, amp-bassRig — then listen to a take and record the verdict in signoff.json"
+      "next": "refit under the current objective (the last fit predates it): refit.py"
     },
     {
       "slug": "p028-electric-guitar-muted",
@@ -5235,13 +5240,13 @@
         "music": null,
         "instrument": null,
         "fit": {
-          "state": "current",
+          "state": "stale",
           "date": "2026-10-26",
           "outcome": "adopted",
           "fittable": true
         }
       },
-      "next": "listen to a take and record the verdict in signoff.json"
+      "next": "refit under the current objective (the last fit predates it): refit.py"
     },
     {
       "slug": "p029-overdriven-guitar",
@@ -5479,13 +5484,13 @@
         "music": null,
         "instrument": null,
         "fit": {
-          "state": "current",
+          "state": "stale",
           "date": "2026-10-26",
           "outcome": "kept",
           "fittable": true
         }
       },
-      "next": "listen to a take and record the verdict in signoff.json"
+      "next": "refit under the current objective (the last fit predates it): refit.py"
     },
     {
       "slug": "p033-electric-bass-finger",
@@ -5542,13 +5547,13 @@
         "music": null,
         "instrument": null,
         "fit": {
-          "state": "current",
+          "state": "stale",
           "date": "2026-10-26",
           "outcome": "kept",
           "fittable": true
         }
       },
-      "next": "listen to a take and record the verdict in signoff.json"
+      "next": "refit under the current objective (the last fit predates it): refit.py"
     },
     {
       "slug": "p034-electric-bass-pick",
@@ -5605,13 +5610,13 @@
         "music": null,
         "instrument": null,
         "fit": {
-          "state": "current",
+          "state": "stale",
           "date": "2026-10-26",
           "outcome": "kept",
           "fittable": true
         }
       },
-      "next": "listen to a take and record the verdict in signoff.json"
+      "next": "refit under the current objective (the last fit predates it): refit.py"
     },
     {
       "slug": "p035-fretless-bass",
@@ -5668,13 +5673,13 @@
         "music": null,
         "instrument": null,
         "fit": {
-          "state": "current",
+          "state": "stale",
           "date": "2026-10-26",
           "outcome": "adopted",
           "fittable": true
         }
       },
-      "next": "listen to a take and record the verdict in signoff.json"
+      "next": "refit under the current objective (the last fit predates it): refit.py"
     },
     {
       "slug": "p036-slap-bass-1",
@@ -5737,13 +5742,13 @@
         "music": null,
         "instrument": null,
         "fit": {
-          "state": "current",
+          "state": "stale",
           "date": "2026-10-26",
           "outcome": "kept",
           "fittable": true
         }
       },
-      "next": "listen to a take and record the verdict in signoff.json"
+      "next": "refit under the current objective (the last fit predates it): refit.py"
     },
     {
       "slug": "p037-slap-bass-2",
@@ -5800,13 +5805,13 @@
         "music": null,
         "instrument": null,
         "fit": {
-          "state": "current",
+          "state": "stale",
           "date": "2026-10-26",
           "outcome": "kept",
           "fittable": true
         }
       },
-      "next": "listen to a take and record the verdict in signoff.json"
+      "next": "refit under the current objective (the last fit predates it): refit.py"
     },
     {
       "slug": "p038-synth-bass-1",
@@ -5863,13 +5868,13 @@
         "music": null,
         "instrument": null,
         "fit": {
-          "state": "current",
+          "state": "stale",
           "date": "2026-10-26",
           "outcome": "kept",
           "fittable": true
         }
       },
-      "next": "listen to a take and record the verdict in signoff.json"
+      "next": "refit under the current objective (the last fit predates it): refit.py"
     },
     {
       "slug": "p039-synth-bass-2",
@@ -5926,13 +5931,13 @@
         "music": null,
         "instrument": null,
         "fit": {
-          "state": "current",
+          "state": "stale",
           "date": "2026-10-26",
           "outcome": "adopted",
           "fittable": true
         }
       },
-      "next": "listen to a take and record the verdict in signoff.json"
+      "next": "refit under the current objective (the last fit predates it): refit.py"
     },
     {
       "slug": "p040-violin",
@@ -5989,13 +5994,13 @@
         "music": null,
         "instrument": null,
         "fit": {
-          "state": "current",
+          "state": "stale",
           "date": "2026-10-26",
           "outcome": "kept",
           "fittable": true
         }
       },
-      "next": "listen to a take and record the verdict in signoff.json"
+      "next": "refit under the current objective (the last fit predates it): refit.py"
     },
     {
       "slug": "p040b001-violin",
@@ -6046,13 +6051,13 @@
         "music": null,
         "instrument": null,
         "fit": {
-          "state": "current",
+          "state": "stale",
           "date": "2026-10-26",
           "outcome": "adopted",
           "fittable": true
         }
       },
-      "next": "listen to a take and record the verdict in signoff.json"
+      "next": "refit under the current objective (the last fit predates it): refit.py"
     },
     {
       "slug": "p040b008-violin",
@@ -6103,13 +6108,13 @@
         "music": null,
         "instrument": null,
         "fit": {
-          "state": "current",
+          "state": "stale",
           "date": "2026-10-26",
           "outcome": "adopted",
           "fittable": true
         }
       },
-      "next": "listen to a take and record the verdict in signoff.json"
+      "next": "refit under the current objective (the last fit predates it): refit.py"
     },
     {
       "slug": "p041-viola",
@@ -6166,13 +6171,13 @@
         "music": null,
         "instrument": null,
         "fit": {
-          "state": "current",
+          "state": "stale",
           "date": "2026-10-26",
           "outcome": "kept",
           "fittable": true
         }
       },
-      "next": "listen to a take and record the verdict in signoff.json"
+      "next": "refit under the current objective (the last fit predates it): refit.py"
     },
     {
       "slug": "p042-cello",
@@ -6229,13 +6234,13 @@
         "music": null,
         "instrument": null,
         "fit": {
-          "state": "current",
+          "state": "stale",
           "date": "2026-10-26",
           "outcome": "adopted",
           "fittable": true
         }
       },
-      "next": "listen to a take and record the verdict in signoff.json"
+      "next": "refit under the current objective (the last fit predates it): refit.py"
     },
     {
       "slug": "p043-contrabass",
@@ -6286,13 +6291,13 @@
         "music": null,
         "instrument": null,
         "fit": {
-          "state": "current",
+          "state": "stale",
           "date": "2026-10-26",
           "outcome": "adopted",
           "fittable": true
         }
       },
-      "next": "listen to a take and record the verdict in signoff.json"
+      "next": "refit under the current objective (the last fit predates it): refit.py"
     },
     {
       "slug": "p044-tremolo-strings",
@@ -6348,13 +6353,13 @@
         "music": null,
         "instrument": null,
         "fit": {
-          "state": "current",
+          "state": "stale",
           "date": "2026-10-26",
           "outcome": "kept",
           "fittable": true
         }
       },
-      "next": "listen to a take and record the verdict in signoff.json"
+      "next": "refit under the current objective (the last fit predates it): refit.py"
     },
     {
       "slug": "p045-pizzicato-strings",
@@ -6417,13 +6422,13 @@
         "music": null,
         "instrument": null,
         "fit": {
-          "state": "current",
+          "state": "stale",
           "date": "2026-10-26",
           "outcome": "adopted",
           "fittable": true
         }
       },
-      "next": "listen to a take and record the verdict in signoff.json"
+      "next": "refit under the current objective (the last fit predates it): refit.py"
     },
     {
       "slug": "p046-orchestral-harp",
@@ -6480,13 +6485,13 @@
         "music": null,
         "instrument": null,
         "fit": {
-          "state": "current",
+          "state": "stale",
           "date": "2026-10-26",
           "outcome": "kept",
           "fittable": true
         }
       },
-      "next": "listen to a take and record the verdict in signoff.json"
+      "next": "refit under the current objective (the last fit predates it): refit.py"
     },
     {
       "slug": "p047-timpani",
@@ -6549,13 +6554,13 @@
         "music": null,
         "instrument": null,
         "fit": {
-          "state": "current",
+          "state": "stale",
           "date": "2026-10-26",
           "outcome": "adopted",
           "fittable": true
         }
       },
-      "next": "listen to a take and record the verdict in signoff.json"
+      "next": "refit under the current objective (the last fit predates it): refit.py"
     },
     {
       "slug": "p048-string-ensemble-1",
@@ -6611,13 +6616,13 @@
         "music": null,
         "instrument": null,
         "fit": {
-          "state": "current",
+          "state": "stale",
           "date": "2026-10-26",
           "outcome": "kept",
           "fittable": true
         }
       },
-      "next": "listen to a take and record the verdict in signoff.json"
+      "next": "refit under the current objective (the last fit predates it): refit.py"
     },
     {
       "slug": "p049-string-ensemble-2",
@@ -6675,13 +6680,13 @@
         "music": null,
         "instrument": null,
         "fit": {
-          "state": "current",
+          "state": "stale",
           "date": "2026-10-26",
           "outcome": "kept",
           "fittable": true
         }
       },
-      "next": "judge the recorded candidate(s) — wider-section — then listen to a take and record the verdict in signoff.json"
+      "next": "refit under the current objective (the last fit predates it): refit.py"
     },
     {
       "slug": "p050-synth-strings-1",
@@ -6738,13 +6743,13 @@
         "music": null,
         "instrument": null,
         "fit": {
-          "state": "current",
+          "state": "stale",
           "date": "2026-10-26",
           "outcome": "kept",
           "fittable": true
         }
       },
-      "next": "listen to a take and record the verdict in signoff.json"
+      "next": "refit under the current objective (the last fit predates it): refit.py"
     },
     {
       "slug": "p051-synth-strings-2",
@@ -6801,13 +6806,13 @@
         "music": null,
         "instrument": null,
         "fit": {
-          "state": "current",
+          "state": "stale",
           "date": "2026-10-26",
           "outcome": "adopted",
           "fittable": true
         }
       },
-      "next": "listen to a take and record the verdict in signoff.json"
+      "next": "refit under the current objective (the last fit predates it): refit.py"
     },
     {
       "slug": "p052-choir-aahs",
@@ -6863,13 +6868,13 @@
         "music": null,
         "instrument": null,
         "fit": {
-          "state": "current",
+          "state": "stale",
           "date": "2026-10-26",
           "outcome": "kept",
           "fittable": true
         }
       },
-      "next": "listen to a take and record the verdict in signoff.json"
+      "next": "refit under the current objective (the last fit predates it): refit.py"
     },
     {
       "slug": "p053-voice-oohs",
@@ -6925,13 +6930,13 @@
         "music": null,
         "instrument": null,
         "fit": {
-          "state": "current",
+          "state": "stale",
           "date": "2026-10-26",
           "outcome": "kept",
           "fittable": true
         }
       },
-      "next": "listen to a take and record the verdict in signoff.json"
+      "next": "refit under the current objective (the last fit predates it): refit.py"
     },
     {
       "slug": "p054-synth-voice",
@@ -6990,13 +6995,13 @@
         "music": null,
         "instrument": null,
         "fit": {
-          "state": "current",
+          "state": "stale",
           "date": "2026-10-26",
           "outcome": "adopted",
           "fittable": true
         }
       },
-      "next": "judge the recorded candidate(s) — section-of-singers — then listen to a take and record the verdict in signoff.json"
+      "next": "refit under the current objective (the last fit predates it): refit.py"
     },
     {
       "slug": "p055-orchestra-hit",
@@ -7059,13 +7064,13 @@
         "music": null,
         "instrument": null,
         "fit": {
-          "state": "current",
+          "state": "stale",
           "date": "2026-10-26",
           "outcome": "kept",
           "fittable": true
         }
       },
-      "next": "listen to a take and record the verdict in signoff.json"
+      "next": "refit under the current objective (the last fit predates it): refit.py"
     },
     {
       "slug": "p056-trumpet",
@@ -7118,13 +7123,13 @@
         "music": null,
         "instrument": null,
         "fit": {
-          "state": "current",
+          "state": "stale",
           "date": "2026-10-26",
           "outcome": "kept",
           "fittable": true
         }
       },
-      "next": "listen to a take and record the verdict in signoff.json"
+      "next": "refit under the current objective (the last fit predates it): refit.py"
     },
     {
       "slug": "p057-trombone",
@@ -7177,13 +7182,13 @@
         "music": null,
         "instrument": null,
         "fit": {
-          "state": "current",
+          "state": "stale",
           "date": "2026-10-26",
           "outcome": "adopted",
           "fittable": true
         }
       },
-      "next": "listen to a take and record the verdict in signoff.json"
+      "next": "refit under the current objective (the last fit predates it): refit.py"
     },
     {
       "slug": "p058-tuba",
@@ -7242,13 +7247,13 @@
         "music": null,
         "instrument": null,
         "fit": {
-          "state": "current",
+          "state": "stale",
           "date": "2026-10-26",
           "outcome": "kept",
           "fittable": true
         }
       },
-      "next": "listen to a take and record the verdict in signoff.json"
+      "next": "refit under the current objective (the last fit predates it): refit.py"
     },
     {
       "slug": "p059-muted-trumpet",
@@ -7307,13 +7312,13 @@
         "music": null,
         "instrument": null,
         "fit": {
-          "state": "current",
+          "state": "stale",
           "date": "2026-10-26",
           "outcome": "kept",
           "fittable": true
         }
       },
-      "next": "listen to a take and record the verdict in signoff.json"
+      "next": "refit under the current objective (the last fit predates it): refit.py"
     },
     {
       "slug": "p060-french-horn",
@@ -7365,13 +7370,13 @@
         "music": null,
         "instrument": null,
         "fit": {
-          "state": "current",
+          "state": "stale",
           "date": "2026-10-26",
           "outcome": "kept",
           "fittable": true
         }
       },
-      "next": "listen to a take and record the verdict in signoff.json"
+      "next": "refit under the current objective (the last fit predates it): refit.py"
     },
     {
       "slug": "p061-brass-section",
@@ -7423,13 +7428,13 @@
         "music": null,
         "instrument": null,
         "fit": {
-          "state": "current",
+          "state": "stale",
           "date": "2026-10-26",
           "outcome": "adopted",
           "fittable": true
         }
       },
-      "next": "listen to a take and record the verdict in signoff.json"
+      "next": "refit under the current objective (the last fit predates it): refit.py"
     },
     {
       "slug": "p062-synth-brass-1",
@@ -7480,13 +7485,13 @@
         "music": null,
         "instrument": null,
         "fit": {
-          "state": "current",
+          "state": "stale",
           "date": "2026-10-26",
           "outcome": "adopted",
           "fittable": true
         }
       },
-      "next": "listen to a take and record the verdict in signoff.json"
+      "next": "refit under the current objective (the last fit predates it): refit.py"
     },
     {
       "slug": "p063-synth-brass-2",
@@ -7537,13 +7542,13 @@
         "music": null,
         "instrument": null,
         "fit": {
-          "state": "current",
+          "state": "stale",
           "date": "2026-10-26",
           "outcome": "adopted",
           "fittable": true
         }
       },
-      "next": "listen to a take and record the verdict in signoff.json"
+      "next": "refit under the current objective (the last fit predates it): refit.py"
     },
     {
       "slug": "p064-soprano-sax",
@@ -7594,13 +7599,13 @@
         "music": null,
         "instrument": null,
         "fit": {
-          "state": "current",
+          "state": "stale",
           "date": "2026-10-26",
           "outcome": "kept",
           "fittable": true
         }
       },
-      "next": "listen to a take and record the verdict in signoff.json"
+      "next": "refit under the current objective (the last fit predates it): refit.py"
     },
     {
       "slug": "p065-alto-sax",
@@ -7661,13 +7666,13 @@
         "music": null,
         "instrument": null,
         "fit": {
-          "state": "current",
+          "state": "stale",
           "date": "2026-10-26",
           "outcome": "kept",
           "fittable": true
         }
       },
-      "next": "judge the recorded candidate(s) — valve-scale-0.6, valve-scale-0.25, valve-scale-0.08 — then listen to a take and record the verdict in signoff.json"
+      "next": "refit under the current objective (the last fit predates it): refit.py"
     },
     {
       "slug": "p066-tenor-sax",
@@ -7718,13 +7723,13 @@
         "music": null,
         "instrument": null,
         "fit": {
-          "state": "current",
+          "state": "stale",
           "date": "2026-10-26",
           "outcome": "kept",
           "fittable": true
         }
       },
-      "next": "listen to a take and record the verdict in signoff.json"
+      "next": "refit under the current objective (the last fit predates it): refit.py"
     },
     {
       "slug": "p067-baritone-sax",
@@ -7779,13 +7784,13 @@
         "music": null,
         "instrument": null,
         "fit": {
-          "state": "current",
+          "state": "stale",
           "date": "2026-10-26",
           "outcome": "kept",
           "fittable": true
         }
       },
-      "next": "judge the recorded candidate(s) — valve-scale-0.6, valve-scale-0.25, valve-scale-0.08 — then listen to a take and record the verdict in signoff.json"
+      "next": "refit under the current objective (the last fit predates it): refit.py"
     },
     {
       "slug": "p068-oboe",
@@ -7836,13 +7841,13 @@
         "music": null,
         "instrument": null,
         "fit": {
-          "state": "current",
+          "state": "stale",
           "date": "2026-10-26",
           "outcome": "kept",
           "fittable": true
         }
       },
-      "next": "listen to a take and record the verdict in signoff.json"
+      "next": "refit under the current objective (the last fit predates it): refit.py"
     },
     {
       "slug": "p069-english-horn",
@@ -7893,13 +7898,13 @@
         "music": null,
         "instrument": null,
         "fit": {
-          "state": "current",
+          "state": "stale",
           "date": "2026-10-26",
           "outcome": "adopted",
           "fittable": true
         }
       },
-      "next": "listen to a take and record the verdict in signoff.json"
+      "next": "refit under the current objective (the last fit predates it): refit.py"
     },
     {
       "slug": "p070-bassoon",
@@ -7950,13 +7955,13 @@
         "music": null,
         "instrument": null,
         "fit": {
-          "state": "current",
+          "state": "stale",
           "date": "2026-10-26",
           "outcome": "kept",
           "fittable": true
         }
       },
-      "next": "listen to a take and record the verdict in signoff.json"
+      "next": "refit under the current objective (the last fit predates it): refit.py"
     },
     {
       "slug": "p071-clarinet",
@@ -8007,13 +8012,13 @@
         "music": null,
         "instrument": null,
         "fit": {
-          "state": "current",
+          "state": "stale",
           "date": "2026-10-26",
           "outcome": "adopted",
           "fittable": true
         }
       },
-      "next": "listen to a take and record the verdict in signoff.json"
+      "next": "refit under the current objective (the last fit predates it): refit.py"
     },
     {
       "slug": "p072-piccolo",
@@ -8066,13 +8071,13 @@
         "music": null,
         "instrument": null,
         "fit": {
-          "state": "current",
+          "state": "stale",
           "date": "2026-10-26",
           "outcome": "kept",
           "fittable": true
         }
       },
-      "next": "listen to a take and record the verdict in signoff.json"
+      "next": "refit under the current objective (the last fit predates it): refit.py"
     },
     {
       "slug": "p073-flute",
@@ -8125,13 +8130,13 @@
         "music": null,
         "instrument": null,
         "fit": {
-          "state": "current",
+          "state": "stale",
           "date": "2026-10-26",
           "outcome": "adopted",
           "fittable": true
         }
       },
-      "next": "listen to a take and record the verdict in signoff.json"
+      "next": "refit under the current objective (the last fit predates it): refit.py"
     },
     {
       "slug": "p074-recorder",
@@ -8184,13 +8189,13 @@
         "music": null,
         "instrument": null,
         "fit": {
-          "state": "current",
+          "state": "stale",
           "date": "2026-10-26",
           "outcome": "kept",
           "fittable": true
         }
       },
-      "next": "listen to a take and record the verdict in signoff.json"
+      "next": "refit under the current objective (the last fit predates it): refit.py"
     },
     {
       "slug": "p075-pan-flute",
@@ -8243,13 +8248,13 @@
         "music": null,
         "instrument": null,
         "fit": {
-          "state": "current",
+          "state": "stale",
           "date": "2026-10-26",
           "outcome": "adopted",
           "fittable": true
         }
       },
-      "next": "listen to a take and record the verdict in signoff.json"
+      "next": "refit under the current objective (the last fit predates it): refit.py"
     },
     {
       "slug": "p076-blown-bottle",
@@ -8302,13 +8307,13 @@
         "music": null,
         "instrument": null,
         "fit": {
-          "state": "current",
+          "state": "stale",
           "date": "2026-10-26",
           "outcome": "kept",
           "fittable": true
         }
       },
-      "next": "listen to a take and record the verdict in signoff.json"
+      "next": "refit under the current objective (the last fit predates it): refit.py"
     },
     {
       "slug": "p077-shakuhachi",
@@ -8361,13 +8366,13 @@
         "music": null,
         "instrument": null,
         "fit": {
-          "state": "current",
+          "state": "stale",
           "date": "2026-10-26",
           "outcome": "adopted",
           "fittable": true
         }
       },
-      "next": "listen to a take and record the verdict in signoff.json"
+      "next": "refit under the current objective (the last fit predates it): refit.py"
     },
     {
       "slug": "p078-whistle",
@@ -8422,13 +8427,13 @@
         "music": null,
         "instrument": null,
         "fit": {
-          "state": "current",
+          "state": "stale",
           "date": "2026-10-26",
           "outcome": "kept",
           "fittable": true
         }
       },
-      "next": "judge the recorded candidate(s) — keyed-filter — then listen to a take and record the verdict in signoff.json"
+      "next": "refit under the current objective (the last fit predates it): refit.py"
     },
     {
       "slug": "p079-ocarina",
@@ -8481,13 +8486,13 @@
         "music": null,
         "instrument": null,
         "fit": {
-          "state": "current",
+          "state": "stale",
           "date": "2026-10-26",
           "outcome": "adopted",
           "fittable": true
         }
       },
-      "next": "listen to a take and record the verdict in signoff.json"
+      "next": "refit under the current objective (the last fit predates it): refit.py"
     },
     {
       "slug": "p080-lead-1-square",
@@ -8538,13 +8543,13 @@
         "music": null,
         "instrument": null,
         "fit": {
-          "state": "current",
+          "state": "stale",
           "date": "2026-10-26",
           "outcome": "kept",
           "fittable": true
         }
       },
-      "next": "listen to a take and record the verdict in signoff.json"
+      "next": "refit under the current objective (the last fit predates it): refit.py"
     },
     {
       "slug": "p081-lead-2-sawtooth",
@@ -8595,13 +8600,13 @@
         "music": null,
         "instrument": null,
         "fit": {
-          "state": "current",
+          "state": "stale",
           "date": "2026-10-26",
           "outcome": "adopted",
           "fittable": true
         }
       },
-      "next": "listen to a take and record the verdict in signoff.json"
+      "next": "refit under the current objective (the last fit predates it): refit.py"
     },
     {
       "slug": "p082-lead-3-calliope",
@@ -8652,13 +8657,13 @@
         "music": null,
         "instrument": null,
         "fit": {
-          "state": "current",
+          "state": "stale",
           "date": "2026-10-26",
           "outcome": "adopted",
           "fittable": true
         }
       },
-      "next": "listen to a take and record the verdict in signoff.json"
+      "next": "refit under the current objective (the last fit predates it): refit.py"
     },
     {
       "slug": "p083-lead-4-chiff",
@@ -8709,13 +8714,13 @@
         "music": null,
         "instrument": null,
         "fit": {
-          "state": "current",
+          "state": "stale",
           "date": "2026-10-26",
           "outcome": "kept",
           "fittable": true
         }
       },
-      "next": "listen to a take and record the verdict in signoff.json"
+      "next": "refit under the current objective (the last fit predates it): refit.py"
     },
     {
       "slug": "p084-lead-5-charang",
@@ -8766,13 +8771,13 @@
         "music": null,
         "instrument": null,
         "fit": {
-          "state": "current",
+          "state": "stale",
           "date": "2026-10-26",
           "outcome": "adopted",
           "fittable": true
         }
       },
-      "next": "listen to a take and record the verdict in signoff.json"
+      "next": "refit under the current objective (the last fit predates it): refit.py"
     },
     {
       "slug": "p085-lead-6-voice",
@@ -8825,13 +8830,13 @@
         "music": null,
         "instrument": null,
         "fit": {
-          "state": "current",
+          "state": "stale",
           "date": "2026-10-26",
           "outcome": "adopted",
           "fittable": true
         }
       },
-      "next": "judge the recorded candidate(s) — three-voice-chorus — then listen to a take and record the verdict in signoff.json"
+      "next": "refit under the current objective (the last fit predates it): refit.py"
     },
     {
       "slug": "p086-lead-7-fifths",
@@ -8882,13 +8887,13 @@
         "music": null,
         "instrument": null,
         "fit": {
-          "state": "current",
+          "state": "stale",
           "date": "2026-10-26",
           "outcome": "kept",
           "fittable": true
         }
       },
-      "next": "listen to a take and record the verdict in signoff.json"
+      "next": "refit under the current objective (the last fit predates it): refit.py"
     },
     {
       "slug": "p087-lead-8-bass-lead",
@@ -8939,13 +8944,13 @@
         "music": null,
         "instrument": null,
         "fit": {
-          "state": "current",
+          "state": "stale",
           "date": "2026-10-26",
           "outcome": "adopted",
           "fittable": true
         }
       },
-      "next": "listen to a take and record the verdict in signoff.json"
+      "next": "refit under the current objective (the last fit predates it): refit.py"
     },
     {
       "slug": "p088-pad-1-new-age",
@@ -8996,13 +9001,13 @@
         "music": null,
         "instrument": null,
         "fit": {
-          "state": "current",
+          "state": "stale",
           "date": "2026-10-26",
           "outcome": "kept",
           "fittable": true
         }
       },
-      "next": "listen to a take and record the verdict in signoff.json"
+      "next": "refit under the current objective (the last fit predates it): refit.py"
     },
     {
       "slug": "p089-pad-2-warm",
@@ -9053,13 +9058,13 @@
         "music": null,
         "instrument": null,
         "fit": {
-          "state": "current",
+          "state": "stale",
           "date": "2026-10-26",
           "outcome": "adopted",
           "fittable": true
         }
       },
-      "next": "listen to a take and record the verdict in signoff.json"
+      "next": "refit under the current objective (the last fit predates it): refit.py"
     },
     {
       "slug": "p090-pad-3-polysynth",
@@ -9110,13 +9115,13 @@
         "music": null,
         "instrument": null,
         "fit": {
-          "state": "current",
+          "state": "stale",
           "date": "2026-10-26",
           "outcome": "adopted",
           "fittable": true
         }
       },
-      "next": "listen to a take and record the verdict in signoff.json"
+      "next": "refit under the current objective (the last fit predates it): refit.py"
     },
     {
       "slug": "p091-pad-4-choir",
@@ -9167,13 +9172,13 @@
         "music": null,
         "instrument": null,
         "fit": {
-          "state": "current",
+          "state": "stale",
           "date": "2026-10-26",
           "outcome": "kept",
           "fittable": true
         }
       },
-      "next": "listen to a take and record the verdict in signoff.json"
+      "next": "refit under the current objective (the last fit predates it): refit.py"
     },
     {
       "slug": "p092-pad-5-bowed",
@@ -9224,13 +9229,13 @@
         "music": null,
         "instrument": null,
         "fit": {
-          "state": "current",
+          "state": "stale",
           "date": "2026-10-26",
           "outcome": "kept",
           "fittable": true
         }
       },
-      "next": "listen to a take and record the verdict in signoff.json"
+      "next": "refit under the current objective (the last fit predates it): refit.py"
     },
     {
       "slug": "p093-pad-6-metallic",
@@ -9281,13 +9286,13 @@
         "music": null,
         "instrument": null,
         "fit": {
-          "state": "current",
+          "state": "stale",
           "date": "2026-10-26",
           "outcome": "adopted",
           "fittable": true
         }
       },
-      "next": "listen to a take and record the verdict in signoff.json"
+      "next": "refit under the current objective (the last fit predates it): refit.py"
     },
     {
       "slug": "p094-pad-7-halo",
@@ -9338,13 +9343,13 @@
         "music": null,
         "instrument": null,
         "fit": {
-          "state": "current",
+          "state": "stale",
           "date": "2026-10-26",
           "outcome": "kept",
           "fittable": true
         }
       },
-      "next": "listen to a take and record the verdict in signoff.json"
+      "next": "refit under the current objective (the last fit predates it): refit.py"
     },
     {
       "slug": "p095-pad-8-sweep",
@@ -9395,13 +9400,13 @@
         "music": null,
         "instrument": null,
         "fit": {
-          "state": "current",
+          "state": "stale",
           "date": "2026-10-26",
           "outcome": "adopted",
           "fittable": true
         }
       },
-      "next": "listen to a take and record the verdict in signoff.json"
+      "next": "refit under the current objective (the last fit predates it): refit.py"
     },
     {
       "slug": "p096-fx-1-rain",
@@ -9452,13 +9457,13 @@
         "music": null,
         "instrument": null,
         "fit": {
-          "state": "current",
+          "state": "stale",
           "date": "2026-10-26",
           "outcome": "adopted",
           "fittable": true
         }
       },
-      "next": "listen to a take and record the verdict in signoff.json"
+      "next": "refit under the current objective (the last fit predates it): refit.py"
     },
     {
       "slug": "p097-fx-2-soundtrack",
@@ -9509,13 +9514,13 @@
         "music": null,
         "instrument": null,
         "fit": {
-          "state": "current",
+          "state": "stale",
           "date": "2026-10-26",
           "outcome": "kept",
           "fittable": true
         }
       },
-      "next": "listen to a take and record the verdict in signoff.json"
+      "next": "refit under the current objective (the last fit predates it): refit.py"
     },
     {
       "slug": "p098-fx-3-crystal",
@@ -9566,13 +9571,13 @@
         "music": null,
         "instrument": null,
         "fit": {
-          "state": "current",
+          "state": "stale",
           "date": "2026-10-26",
           "outcome": "adopted",
           "fittable": true
         }
       },
-      "next": "listen to a take and record the verdict in signoff.json"
+      "next": "refit under the current objective (the last fit predates it): refit.py"
     },
     {
       "slug": "p099-fx-4-atmosphere",
@@ -9623,13 +9628,13 @@
         "music": null,
         "instrument": null,
         "fit": {
-          "state": "current",
+          "state": "stale",
           "date": "2026-10-26",
           "outcome": "adopted",
           "fittable": true
         }
       },
-      "next": "listen to a take and record the verdict in signoff.json"
+      "next": "refit under the current objective (the last fit predates it): refit.py"
     },
     {
       "slug": "p100-fx-5-brightness",
@@ -9680,13 +9685,13 @@
         "music": null,
         "instrument": null,
         "fit": {
-          "state": "current",
+          "state": "stale",
           "date": "2026-10-26",
           "outcome": "adopted",
           "fittable": true
         }
       },
-      "next": "listen to a take and record the verdict in signoff.json"
+      "next": "refit under the current objective (the last fit predates it): refit.py"
     },
     {
       "slug": "p101-fx-6-goblins",
@@ -9737,13 +9742,13 @@
         "music": null,
         "instrument": null,
         "fit": {
-          "state": "current",
+          "state": "stale",
           "date": "2026-10-26",
           "outcome": "adopted",
           "fittable": true
         }
       },
-      "next": "listen to a take and record the verdict in signoff.json"
+      "next": "refit under the current objective (the last fit predates it): refit.py"
     },
     {
       "slug": "p102-fx-7-echoes",
@@ -9794,13 +9799,13 @@
         "music": null,
         "instrument": null,
         "fit": {
-          "state": "current",
+          "state": "stale",
           "date": "2026-10-26",
           "outcome": "adopted",
           "fittable": true
         }
       },
-      "next": "listen to a take and record the verdict in signoff.json"
+      "next": "refit under the current objective (the last fit predates it): refit.py"
     },
     {
       "slug": "p103-fx-8-sci-fi",
@@ -9851,13 +9856,13 @@
         "music": null,
         "instrument": null,
         "fit": {
-          "state": "current",
+          "state": "stale",
           "date": "2026-10-26",
           "outcome": "adopted",
           "fittable": true
         }
       },
-      "next": "listen to a take and record the verdict in signoff.json"
+      "next": "refit under the current objective (the last fit predates it): refit.py"
     },
     {
       "slug": "p104-sitar",
@@ -9914,13 +9919,13 @@
         "music": null,
         "instrument": null,
         "fit": {
-          "state": "current",
+          "state": "stale",
           "date": "2026-10-26",
           "outcome": "kept",
           "fittable": true
         }
       },
-      "next": "listen to a take and record the verdict in signoff.json"
+      "next": "refit under the current objective (the last fit predates it): refit.py"
     },
     {
       "slug": "p105-banjo",
@@ -9977,13 +9982,13 @@
         "music": null,
         "instrument": null,
         "fit": {
-          "state": "current",
+          "state": "stale",
           "date": "2026-10-26",
           "outcome": "adopted",
           "fittable": true
         }
       },
-      "next": "listen to a take and record the verdict in signoff.json"
+      "next": "refit under the current objective (the last fit predates it): refit.py"
     },
     {
       "slug": "p106-shamisen",
@@ -10043,13 +10048,13 @@
         "music": null,
         "instrument": null,
         "fit": {
-          "state": "current",
+          "state": "stale",
           "date": "2026-10-26",
           "outcome": "kept",
           "fittable": true
         }
       },
-      "next": "judge the recorded candidate(s) — even-register, flat-velocity — then listen to a take and record the verdict in signoff.json"
+      "next": "refit under the current objective (the last fit predates it): refit.py"
     },
     {
       "slug": "p107-koto",
@@ -10106,13 +10111,13 @@
         "music": null,
         "instrument": null,
         "fit": {
-          "state": "current",
+          "state": "stale",
           "date": "2026-10-26",
           "outcome": "kept",
           "fittable": true
         }
       },
-      "next": "listen to a take and record the verdict in signoff.json"
+      "next": "refit under the current objective (the last fit predates it): refit.py"
     },
     {
       "slug": "p108-kalimba",
@@ -10169,13 +10174,13 @@
         "music": null,
         "instrument": null,
         "fit": {
-          "state": "current",
+          "state": "stale",
           "date": "2026-10-26",
           "outcome": "kept",
           "fittable": true
         }
       },
-      "next": "listen to a take and record the verdict in signoff.json"
+      "next": "refit under the current objective (the last fit predates it): refit.py"
     },
     {
       "slug": "p109-bag-pipe",
@@ -10229,13 +10234,13 @@
         "music": null,
         "instrument": null,
         "fit": {
-          "state": "current",
+          "state": "stale",
           "date": "2026-10-26",
           "outcome": "adopted",
           "fittable": true
         }
       },
-      "next": "listen to a take and record the verdict in signoff.json"
+      "next": "refit under the current objective (the last fit predates it): refit.py"
     },
     {
       "slug": "p110-fiddle",
@@ -10286,13 +10291,13 @@
         "music": null,
         "instrument": null,
         "fit": {
-          "state": "current",
+          "state": "stale",
           "date": "2026-10-26",
           "outcome": "kept",
           "fittable": true
         }
       },
-      "next": "listen to a take and record the verdict in signoff.json"
+      "next": "refit under the current objective (the last fit predates it): refit.py"
     },
     {
       "slug": "p111-shanai",
@@ -10346,13 +10351,13 @@
         "music": null,
         "instrument": null,
         "fit": {
-          "state": "current",
+          "state": "stale",
           "date": "2026-10-26",
           "outcome": "kept",
           "fittable": true
         }
       },
-      "next": "listen to a take and record the verdict in signoff.json"
+      "next": "refit under the current objective (the last fit predates it): refit.py"
     },
     {
       "slug": "p112-tinkle-bell",
@@ -10408,13 +10413,13 @@
         "music": null,
         "instrument": null,
         "fit": {
-          "state": "current",
+          "state": "stale",
           "date": "2026-10-26",
           "outcome": "kept",
           "fittable": true
         }
       },
-      "next": "listen to a take and record the verdict in signoff.json"
+      "next": "refit under the current objective (the last fit predates it): refit.py"
     },
     {
       "slug": "p113-agogo",
@@ -10470,13 +10475,13 @@
         "music": null,
         "instrument": null,
         "fit": {
-          "state": "current",
+          "state": "stale",
           "date": "2026-10-26",
           "outcome": "adopted",
           "fittable": true
         }
       },
-      "next": "listen to a take and record the verdict in signoff.json"
+      "next": "refit under the current objective (the last fit predates it): refit.py"
     },
     {
       "slug": "p114-steel-drums",
@@ -10532,13 +10537,13 @@
         "music": null,
         "instrument": null,
         "fit": {
-          "state": "current",
+          "state": "stale",
           "date": "2026-10-26",
           "outcome": "kept",
           "fittable": true
         }
       },
-      "next": "listen to a take and record the verdict in signoff.json"
+      "next": "refit under the current objective (the last fit predates it): refit.py"
     },
     {
       "slug": "p115-woodblock",
@@ -10602,7 +10607,7 @@
         "music": null,
         "instrument": null,
         "fit": {
-          "state": "current",
+          "state": "stale",
           "date": "2026-10-26",
           "outcome": "adopted",
           "fittable": true
@@ -10664,13 +10669,13 @@
         "music": null,
         "instrument": null,
         "fit": {
-          "state": "current",
+          "state": "stale",
           "date": "2026-10-26",
           "outcome": "adopted",
           "fittable": true
         }
       },
-      "next": "listen to a take and record the verdict in signoff.json"
+      "next": "refit under the current objective (the last fit predates it): refit.py"
     },
     {
       "slug": "p117-melodic-tom",
@@ -10726,13 +10731,13 @@
         "music": null,
         "instrument": null,
         "fit": {
-          "state": "current",
+          "state": "stale",
           "date": "2026-10-26",
           "outcome": "adopted",
           "fittable": true
         }
       },
-      "next": "listen to a take and record the verdict in signoff.json"
+      "next": "refit under the current objective (the last fit predates it): refit.py"
     },
     {
       "slug": "p118-synth-drum",
@@ -10788,13 +10793,13 @@
         "music": null,
         "instrument": null,
         "fit": {
-          "state": "current",
+          "state": "stale",
           "date": "2026-10-26",
           "outcome": "kept",
           "fittable": true
         }
       },
-      "next": "listen to a take and record the verdict in signoff.json"
+      "next": "refit under the current objective (the last fit predates it): refit.py"
     },
     {
       "slug": "p119-reverse-cymbal",
@@ -10848,7 +10853,7 @@
         "music": null,
         "instrument": null,
         "fit": {
-          "state": "current",
+          "state": "stale",
           "date": "2026-10-26",
           "outcome": "adopted",
           "fittable": true
@@ -10906,13 +10911,13 @@
         "music": null,
         "instrument": null,
         "fit": {
-          "state": "current",
+          "state": "stale",
           "date": "2026-10-26",
           "outcome": "adopted",
           "fittable": true
         }
       },
-      "next": "listen to a take and record the verdict in signoff.json"
+      "next": "refit under the current objective (the last fit predates it): refit.py"
     },
     {
       "slug": "p121-breath-noise",
@@ -10964,13 +10969,13 @@
         "music": null,
         "instrument": null,
         "fit": {
-          "state": "current",
+          "state": "stale",
           "date": "2026-10-26",
           "outcome": "kept",
           "fittable": true
         }
       },
-      "next": "listen to a take and record the verdict in signoff.json"
+      "next": "refit under the current objective (the last fit predates it): refit.py"
     },
     {
       "slug": "p122-seashore",
@@ -11022,13 +11027,13 @@
         "music": null,
         "instrument": null,
         "fit": {
-          "state": "current",
+          "state": "stale",
           "date": "2026-10-26",
           "outcome": "adopted",
           "fittable": true
         }
       },
-      "next": "listen to a take and record the verdict in signoff.json"
+      "next": "refit under the current objective (the last fit predates it): refit.py"
     },
     {
       "slug": "p123-bird-tweet",
@@ -11080,13 +11085,13 @@
         "music": null,
         "instrument": null,
         "fit": {
-          "state": "current",
+          "state": "stale",
           "date": "2026-10-26",
           "outcome": "adopted",
           "fittable": true
         }
       },
-      "next": "listen to a take and record the verdict in signoff.json"
+      "next": "refit under the current objective (the last fit predates it): refit.py"
     },
     {
       "slug": "p124-telephone-ring",
@@ -11138,13 +11143,13 @@
         "music": null,
         "instrument": null,
         "fit": {
-          "state": "current",
+          "state": "stale",
           "date": "2026-10-26",
           "outcome": "adopted",
           "fittable": true
         }
       },
-      "next": "listen to a take and record the verdict in signoff.json"
+      "next": "refit under the current objective (the last fit predates it): refit.py"
     },
     {
       "slug": "p125-helicopter",
@@ -11196,13 +11201,13 @@
         "music": null,
         "instrument": null,
         "fit": {
-          "state": "current",
+          "state": "stale",
           "date": "2026-10-26",
           "outcome": "adopted",
           "fittable": true
         }
       },
-      "next": "listen to a take and record the verdict in signoff.json"
+      "next": "refit under the current objective (the last fit predates it): refit.py"
     },
     {
       "slug": "p126-applause",
@@ -11254,13 +11259,13 @@
         "music": null,
         "instrument": null,
         "fit": {
-          "state": "current",
+          "state": "stale",
           "date": "2026-10-26",
           "outcome": "adopted",
           "fittable": true
         }
       },
-      "next": "listen to a take and record the verdict in signoff.json"
+      "next": "refit under the current objective (the last fit predates it): refit.py"
     },
     {
       "slug": "p127-gunshot",
@@ -11312,13 +11317,13 @@
         "music": null,
         "instrument": null,
         "fit": {
-          "state": "current",
+          "state": "stale",
           "date": "2026-10-26",
           "outcome": "adopted",
           "fittable": true
         }
       },
-      "next": "listen to a take and record the verdict in signoff.json"
+      "next": "refit under the current objective (the last fit predates it): refit.py"
     },
     {
       "slug": "kit000-standard-kit",
@@ -11387,13 +11392,13 @@
         "music": null,
         "instrument": null,
         "fit": {
-          "state": "current",
+          "state": "stale",
           "date": "2026-10-27",
           "outcome": "adopted",
           "fittable": true
         }
       },
-      "next": "judge the recorded candidate(s) — vibraslap-thinned, scrapers-speak, crash2-and-china-reopened, snare-wires-open, snare-wires-off, hats-tight, hats-washy, toms-ring, kick-deep — then listen to a take and record the verdict in signoff.json"
+      "next": "refit under the current objective (the last fit predates it): refit.py"
     }
   ]
 }
