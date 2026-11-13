@@ -613,7 +613,7 @@ def test_a_joint_run_reports_each_capture_and_records_both(tmp_path, monkeypatch
     monkeypatch.setattr(autofit, "CORPUS_ROOT", tmp_path / "scratch")
     monkeypatch.setattr(autofit, "_fold_gate_audit", lambda *a, **k: None)
     catalogue = Catalogue(
-        defaults={"nylon.gain": 0.5},
+        defaults={"nylon.gain": 0.5, "piano_voice.kHammerWidthHarmonics": 5.0},
         programs={(0, 0): "nylon", (1, 0): "ukulele"},
         bounds={},
         modes={},

@@ -3035,15 +3035,6 @@ def run(args, argv: list[str] | None = None) -> int:
     else:
         args.base_overrides = ""
 
-    # The string every evaluation sends, base merged under the knobs: one unknown key stops the run.
-    sent = merge_overrides(
-        args.base_overrides, tunable_overrides(knobs, [k.start_value for k in knobs])
-    )
-    if sent:
-        if catalogue is None:
-            catalogue = _tuning_catalogue(args, build_dir)
-        refuse_unknown_override_keys(sent, catalogue)
-
     # Before any render: a range the engine clamps away is inert, and the run
     # would otherwise search it and write back a value the voice never uses.
     clamp_bounds = knob_bounds(knobs, catalogue)
@@ -3111,6 +3102,16 @@ def run(args, argv: list[str] | None = None) -> int:
             f"over {len(knobs)} knobs",
             file=sys.stderr,
         )
+
+    # The string every evaluation sends, base merged under the knobs: one unknown key stops the run,
+    # checked after the budget so a refused budget builds nothing.
+    sent = merge_overrides(
+        args.base_overrides, tunable_overrides(knobs, [k.start_value for k in knobs])
+    )
+    if sent:
+        if catalogue is None:
+            catalogue = _tuning_catalogue(args, build_dir)
+        refuse_unknown_override_keys(sent, catalogue)
 
     if not lib:
         configure_build(build_dir, args.cmake, tuning=n_runtime > 0)

@@ -196,7 +196,7 @@ def test_a_dimension_the_model_never_measured_is_unbounded_with_side_and_counts(
         censors=_tally(7, {"model": True, "reference": False}),
     )
     un = json.loads(gate.read_text())["_unbounded"]
-    assert un == {"tnr": "measured: no rows; censored on model, 7 of 7 rows (field absent)"}
+    assert un == {"tnr": "measured: no rows; censored on model, 7 of 7 rows (tnr_at_floor)"}
     assert profile_gate.model_unmeasurable(un) == ["tnr"]
 
 
