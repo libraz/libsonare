@@ -58,6 +58,7 @@
   ],
   "_dimensions_na": "The exclusions as data, since a dimension argued only in prose reads as a gap.",
   "dimensions_na": {
+    "motion": "no single periodic motion in the reference to hold: no pitch motion read on any row",
     "stereo": "the slot renders dual mono: the two channels are bit-identical sample for sample, so the width is zero by construction rather than by voicing",
     "body": "the gated window reads the steady part, which is the library's sustain loop held to 0.1 dB over 2.4 s (-64 to -69 dB re f0, one take at every velocity); the reference's onset transient below f0 (about -54 dB at 0.2-0.5 s) is real and is not what this dimension weighs"
   },

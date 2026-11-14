@@ -49,7 +49,8 @@
     "attack",
     "balance",
     "centroid_pct",
-    "tnr"
+    "tnr",
+    "motion"
   ],
   "rig": "none",
   "room": "none",

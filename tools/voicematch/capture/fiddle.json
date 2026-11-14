@@ -53,7 +53,8 @@
     "centroid_pct",
     "tnr",
     "vel_range",
-    "register"
+    "register",
+    "motion"
   ],
   "_dimensions_na": "The exclusions as data, since a dimension argued only in prose reads as a gap. Coverage is read against `toneclass.canonical_dimensions`, so what is listed here is only what that set contains and this capture cannot hold.",
   "dimensions_na": {

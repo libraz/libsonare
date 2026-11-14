@@ -44,6 +44,7 @@
   "_dimensions": "Nine of the ten a sustained voice can be judged on. `damper` is the load-bearing one on a wind: the note stops when the breath stops, and a model whose release is a decay rather than a stop gives itself away there before anywhere else. The slot is a air jet source, and the partial ladder `balance` reads is where that shows.",
   "_dimensions_na": "The exclusions as data, since a dimension argued only in prose reads as a gap. Coverage is read against `toneclass.canonical_dimensions`, which for a sustained voice already drops `decay`, `aftersound` and `doubling` - a voice fed continuously has no free fall for them to describe - so those are not listed here.",
   "dimensions_na": {
+    "motion": "no single periodic motion in the reference to hold: pitch motion read on 15 of 35 rows",
     "stereo": "the slot renders dual mono: the two channels are bit-identical, so the width is zero by construction rather than by voicing"
   },
   "dimensions": [

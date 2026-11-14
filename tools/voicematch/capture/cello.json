@@ -60,6 +60,7 @@
   ],
   "_dimensions_na": "The exclusions as data, since a dimension argued only in prose reads as a gap.",
   "dimensions_na": {
+    "motion": "no single periodic motion in the reference to hold: pitch motion read on 15 of 50 rows",
     "stereo": "the slot renders dual mono: the two channels are bit-identical sample for sample, so the width is zero by construction rather than by voicing"
   },
   "source_class": "library",

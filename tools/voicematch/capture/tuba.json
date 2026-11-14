@@ -57,6 +57,7 @@
   ],
   "_dimensions_na": "The exclusions as data, since a dimension argued only in prose reads as a gap.",
   "dimensions_na": {
+    "motion": "no single periodic motion in the reference to hold: no pitch motion read on any row",
     "stereo": "the slot renders dual mono: the two channels are bit-identical sample for sample, so the width is zero by construction rather than by voicing",
     "body": "below f0 the v32-80 take carries a broadband floor (spectral flatness -5 dB, rumble at 20-40 Hz, -38 to -47 dB re f0) that the v104/127 take does not (-69 dB), so the dimension reads which take was recorded rather than the instrument"
   },

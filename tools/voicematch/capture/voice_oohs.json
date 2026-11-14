@@ -44,6 +44,9 @@
     }
   ],
   "_dimensions": "All 10 a sustained voice can be judged on, with none excused. `stereo` is kept and is real here rather than nominal: the two channels differ by +2.6 dB relative to the signal, which is an image rather than the render noise a dual-mono slot shows at -570.",
+  "dimensions_na": {
+    "motion": "no single periodic motion in the reference to hold: coherence 0.000 at most 0.456: the partials' tracks do not follow the fundamental's, so the motion is not one source's"
+  },
   "dimensions": [
     "stretch",
     "body",

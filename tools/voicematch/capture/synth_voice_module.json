@@ -41,6 +41,7 @@
   ],
   "_dimensions": "Coverage is read against `toneclass.canonical_dimensions` for program 54. What is excused below is what this source cannot carry, each argued from what it sets on this tone rather than from its being a font.",
   "dimensions_na": {
+    "motion": "no single periodic motion in the reference to hold: coherence 0.493 between the single-source and ensemble ranges",
     "vel_range": "`velRange` is set on none of this tone's zones, so it holds one recording per note at a velocity it does not state. A grid asking for more than one would write that recording into every row of the axis a dynamics fit reads; the velocity bound stays on the library capture of this program, which is the one thing these recordings cannot answer",
     "stereo": "every recording of this tone is mono (`sampleType` 1) and no `pan` is set, so the image is absent by construction rather than by voicing",
     "register": "no `initialAttenuation` is set on this tone, so the level relation between one note and the next is not in the source; each recording sits in the headroom it was normalised into",
