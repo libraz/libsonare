@@ -40,11 +40,32 @@
       "outcome": "adopted"
     },
     "bandoneon": {
-      "objective": "df80e5527f4fbedb",
-      "date": "2026-10-26",
+      "objective": "3bc465ccbf9a2d13",
+      "date": "2026-11-14",
       "capture": "tango_accordion",
       "timbre": "gm024",
-      "outcome": "adopted"
+      "corpora": [
+        {
+          "capture": "tango_accordion",
+          "timbre": "gm024"
+        }
+      ],
+      "outcome": "kept",
+      "reason": "held-out notes did not improve (+0.0023)",
+      "weights": {
+        "body": 1.0,
+        "cents": 0.5,
+        "crest": 1.0,
+        "dyn": 1.0,
+        "env": 0.5,
+        "harm": 1.0,
+        "level": 1.0,
+        "mod": 1.0,
+        "onset": 1.0,
+        "slope": 0.5,
+        "tnr": 1.0,
+        "velspan": 0.5
+      }
     },
     "banjo": {
       "objective": "df80e5527f4fbedb",
@@ -190,18 +211,53 @@
       "outcome": "adopted"
     },
     "church_organ_flutes": {
-      "objective": "df80e5527f4fbedb",
-      "date": "2026-10-26",
+      "objective": "3bc465ccbf9a2d13",
+      "date": "2026-11-14",
       "capture": "church_organ_flutes",
       "timbre": "t0",
-      "outcome": "adopted"
+      "corpora": [
+        {
+          "capture": "church_organ_flutes",
+          "timbre": "t0"
+        }
+      ],
+      "outcome": "kept",
+      "reason": "write-back refused: fitted_to_the_probe",
+      "weights": {
+        "bright": 1.0,
+        "cents": 0.5,
+        "crest": 1.0,
+        "env": 0.5,
+        "harm": 1.0,
+        "mod": 1.0,
+        "slope": 0.5,
+        "stiff": 1.0,
+        "tnr": 1.0
+      }
     },
     "church_organ_full": {
-      "objective": "df80e5527f4fbedb",
-      "date": "2026-10-26",
+      "objective": "3bc465ccbf9a2d13",
+      "date": "2026-11-14",
       "capture": "church_organ_full",
       "timbre": "t0",
-      "outcome": "adopted"
+      "corpora": [
+        {
+          "capture": "church_organ_full",
+          "timbre": "t0"
+        }
+      ],
+      "outcome": "kept",
+      "reason": "held-out notes did not improve (+0.0033)",
+      "weights": {
+        "bright": 1.0,
+        "cents": 0.5,
+        "crest": 1.0,
+        "env": 0.5,
+        "harm": 1.0,
+        "mod": 1.0,
+        "slope": 0.5,
+        "tnr": 1.0
+      }
     },
     "clarinet": {
       "objective": "df80e5527f4fbedb",
@@ -1051,12 +1107,31 @@
       "outcome": "adopted"
     },
     "recorder": {
-      "objective": "df80e5527f4fbedb",
-      "date": "2026-10-26",
+      "objective": "3bc465ccbf9a2d13",
+      "date": "2026-11-14",
       "capture": "recorder",
       "timbre": "gm075",
+      "corpora": [
+        {
+          "capture": "recorder",
+          "timbre": "gm075"
+        }
+      ],
       "outcome": "kept",
-      "reason": "no point of the search kept every bound (newly over its bound: recorder:body abs_median, recorder:body median, recorder:damper abs_median, recorder:damper median, recorder:damper p90, recorder:tnr median, recorder:vel_range abs_median, recorder:vel_range median)"
+      "reason": "held-out notes did not improve (-0.0044)",
+      "weights": {
+        "cents": 0.5,
+        "crest": 1.0,
+        "dyn": 1.0,
+        "env": 0.5,
+        "harm": 1.0,
+        "level": 1.0,
+        "mod": 1.0,
+        "onset": 1.0,
+        "slope": 0.5,
+        "tnr": 1.0,
+        "velspan": 0.5
+      }
     },
     "reed_organ": {
       "objective": "df80e5527f4fbedb",
@@ -1341,20 +1416,59 @@
       "outcome": "adopted"
     },
     "trumpet": {
-      "objective": "df80e5527f4fbedb",
-      "date": "2026-10-26",
+      "objective": "3bc465ccbf9a2d13",
+      "date": "2026-11-14",
       "capture": "trumpet",
       "timbre": "gm057",
+      "corpora": [
+        {
+          "capture": "trumpet",
+          "timbre": "gm057"
+        }
+      ],
       "outcome": "kept",
-      "reason": "no point of the search kept every bound (newly over its bound: trumpet:balance median, trumpet:centroid_pct median, trumpet:tnr median, trumpet:vel_range abs_median)"
+      "reason": "write-back refused: fitted_to_the_probe",
+      "weights": {
+        "cents": 0.5,
+        "crest": 1.0,
+        "dyn": 1.0,
+        "env": 0.5,
+        "harm": 1.0,
+        "level": 1.0,
+        "mod": 1.0,
+        "onset": 1.0,
+        "slope": 0.5,
+        "tnr": 1.0,
+        "velspan": 0.5
+      }
     },
     "tuba": {
-      "objective": "df80e5527f4fbedb",
-      "date": "2026-10-26",
+      "objective": "3bc465ccbf9a2d13",
+      "date": "2026-11-14",
       "capture": "tuba",
       "timbre": "gm059",
+      "corpora": [
+        {
+          "capture": "tuba",
+          "timbre": "gm059"
+        }
+      ],
       "outcome": "kept",
-      "reason": "write-back refused: fitted_to_the_probe"
+      "reason": "write-back refused: fitted_to_the_probe",
+      "weights": {
+        "bright": 1.0,
+        "cents": 0.5,
+        "crest": 1.0,
+        "dyn": 1.0,
+        "env": 0.5,
+        "harm": 1.0,
+        "level": 1.0,
+        "mod": 1.0,
+        "onset": 1.0,
+        "slope": 0.5,
+        "tnr": 1.0,
+        "velspan": 0.5
+      }
     },
     "tubular_bells": {
       "objective": "3bc465ccbf9a2d13",
@@ -1417,12 +1531,30 @@
       "reason": "write-back refused: fitted_to_the_probe"
     },
     "viola": {
-      "objective": "df80e5527f4fbedb",
-      "date": "2026-10-26",
+      "objective": "3bc465ccbf9a2d13",
+      "date": "2026-11-14",
       "capture": "viola",
       "timbre": "gm042",
+      "corpora": [
+        {
+          "capture": "viola",
+          "timbre": "gm042"
+        }
+      ],
       "outcome": "kept",
-      "reason": "no point of the search kept every bound (switch field moved: viola.body)"
+      "reason": "write-back refused: fitted_to_the_probe",
+      "weights": {
+        "cents": 0.5,
+        "crest": 1.0,
+        "dyn": 1.0,
+        "env": 0.5,
+        "harm": 1.0,
+        "level": 1.0,
+        "mod": 1.0,
+        "slope": 0.5,
+        "tnr": 1.0,
+        "velspan": 0.5
+      }
     },
     "violin": {
       "objective": "df80e5527f4fbedb",
