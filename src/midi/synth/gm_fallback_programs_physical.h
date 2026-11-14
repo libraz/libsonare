@@ -391,7 +391,9 @@ constexpr void configure_physical_programs(ProgramOverrides& o) noexcept {
   o.alto_sax.resonance_q = 1.64558f;
   o.alto_sax.stereo_spread = 0.078303f;
   o.alto_sax.reed.velocity_exponent = 1.22313f;
-  o.tenor_sax = reed(true, 0.60f, 0.50f, 0.56f, 0.36f, 20.0f, 100.0f, 0.78f, 0.36f, 0.8803f);
+  // Held level 8.6 dB over the reference's median; 1.73 dB lower than the level the refit
+  // fields alone leave it at, which put it 10.35 dB over.
+  o.tenor_sax = reed(true, 0.60f, 0.50f, 0.56f, 0.36f, 20.0f, 100.0f, 0.78f, 0.36f, 0.7212f);
   // Placed where the solved valve holds one period across the grid: at 1.27 the lowest notes
   // put lines up to 34 dB under the fundamental, at 2.0 none closer than 49 dB; 2.2 leaves the
   // note arriving 425 ms late.
@@ -432,7 +434,9 @@ constexpr void configure_physical_programs(ProgramOverrides& o) noexcept {
   o.tenor_sax.reed.vel_to_breath = 0.99f;
   o.tenor_sax.lfo_to_pitch_cents = 4.1643f;
   o.tenor_sax.amp_env.sustain = 0.629104f;
-  o.baritone_sax = reed(true, 0.60f, 0.50f, 0.5f, 0.40f, 26.0f, 120.0f, 0.78f, 0.40f, 0.2849f);
+  // Held level 12.8 dB under the reference's median; 2.51 dB higher than the level the refit
+  // fields alone leave it at, which put it 15.29 dB under.
+  o.baritone_sax = reed(true, 0.60f, 0.50f, 0.5f, 0.40f, 26.0f, 120.0f, 0.78f, 0.40f, 0.3804f);
   o.baritone_sax.lfo_rate_hz = 4.8f;
   o.baritone_sax.lfo_to_pitch_cents = 4.0f;
   o.baritone_sax.reed.growl = 0.0520812f;
