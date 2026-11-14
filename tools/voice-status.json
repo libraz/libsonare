@@ -941,7 +941,10 @@
           "date": "2026-10-26",
           "outcome": "adopted",
           "fittable": true
-        }
+        },
+        "gate_notes": [
+          "set on a dirty tree: aftersound.p90, balance.abs_median, decay.abs_median, decay.p90, partial_tilt.abs_median, partial_tilt.median, partial_tilt.p90, tnr.abs_median, tnr.p90"
+        ]
       },
       "next": "refit under the current objective (the last fit predates it): refit.py"
     },
@@ -1358,7 +1361,10 @@
           "date": "2026-10-26",
           "outcome": "kept",
           "fittable": true
-        }
+        },
+        "gate_notes": [
+          "set on a dirty tree: aftersound.abs_median, aftersound.p90, attack_hf_swing.abs_median, attack_hf_swing.median, attack_hf_swing.p90, balance.abs_median, balance.median, balance.p90, body.abs_median, body.median, centroid_pct.p90, damper.abs_median, damper.median, damper.p90, decay.abs_median, decay.p90, doubling.abs_median, partial_tilt.abs_median, partial_tilt.median, partial_tilt.p90, register.p90"
+        ]
       },
       "next": "refit under the current objective (the last fit predates it): refit.py"
     },
@@ -2826,13 +2832,13 @@
         "music": null,
         "instrument": null,
         "fit": {
-          "state": "stale",
-          "date": "2026-10-26",
+          "state": "current",
+          "date": "2026-11-14",
           "outcome": "adopted",
           "fittable": true
         }
       },
-      "next": "refit under the current objective (the last fit predates it): refit.py"
+      "next": "listen to a take and record the verdict in signoff.json"
     },
     {
       "slug": "p014b001-tubular-bells",
@@ -4860,9 +4866,9 @@
         "music": null,
         "instrument": null,
         "fit": {
-          "state": "stale",
-          "date": "2026-10-26",
-          "outcome": "kept",
+          "state": "current",
+          "date": "2026-11-14",
+          "outcome": "adopted",
           "fittable": true
         },
         "gate_notes": [
@@ -6015,7 +6021,7 @@
           "fittable": true
         },
         "gate_notes": [
-          "set on a dirty tree: attack_hf.abs_median, attack_hf.median, attack_hf.p90, balance.abs_median, balance.median, balance.p90, centroid_pct.abs_median, centroid_pct.median"
+          "set on a dirty tree: aftersound.abs_median, aftersound.median, aftersound.p90, attack_hf.abs_median, attack_hf.median, attack_hf.p90, balance.abs_median, balance.median, balance.p90, centroid_pct.abs_median, centroid_pct.median, centroid_pct.p90, decay.abs_median, decay.median, decay.p90, doubling.abs_median, doubling.median, partial_tilt.p90, stretch.abs_median, tnr.abs_median, tnr.median, tnr.p90"
         ]
       },
       "next": "refit under the current objective (the last fit predates it): refit.py"
@@ -10521,13 +10527,13 @@
         "music": null,
         "instrument": null,
         "fit": {
-          "state": "stale",
-          "date": "2026-10-26",
-          "outcome": "kept",
+          "state": "current",
+          "date": "2026-11-14",
+          "outcome": "adopted",
           "fittable": true
         }
       },
-      "next": "refit under the current objective (the last fit predates it): refit.py"
+      "next": "listen to a take and record the verdict in signoff.json"
     },
     {
       "slug": "p109-bag-pipe",
@@ -10968,8 +10974,8 @@
         "music": null,
         "instrument": null,
         "fit": {
-          "state": "stale",
-          "date": "2026-10-26",
+          "state": "current",
+          "date": "2026-11-14",
           "outcome": "adopted",
           "fittable": true
         },
