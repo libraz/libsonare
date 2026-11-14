@@ -130,6 +130,10 @@ SONARE_TUNED_CONSTEXPR void configure_keyed_programs(ProgramOverrides& o) noexce
   o.e_piano_2.amp_env.decay_ms = 8508.71f;
   o.e_piano_2.amp_env.release_ms = 83.4125f;
   o.e_piano_2.cutoff_hz = 13887.1f;
+  // The body carrier shortens 0.8 per octave: against its reference this took the
+  // aftersound from 1.62 to 0.85 dB/s off and the damper from 10 to 5 ms, the centroid
+  // moving 0.33 % the other way.
+  o.e_piano_2.fm.ops[0].key_rate_scale = 0.8f;
   // The tine voice above takes a gentler level curve; this one already meets its span on the
   // square law, so it keeps that curve and the level it had.
   o.e_piano_2.fm.velocity_exponent = 2.0f;

@@ -79,6 +79,9 @@ SONARE_TUNED_CONSTEXPR void configure_variation_programs(ProgramOverrides& o) no
   // The detuned variation keeps the shallower body index: the deeper one overshoots the
   // gap its own reference holds between the prompt decay and the aftersound.
   o.e_piano_detuned_2 = o.e_piano_2;
+  // Its own recording holds the slower carrier rate: Electric Piano 2's 0.8 overshot this
+  // one's decay on the mid-high notes, 1.9 dB/s at the 90th percentile where 0.4 holds 1.1.
+  o.e_piano_detuned_2.fm.ops[0].key_rate_scale = 0.4f;
   o.e_piano_detuned_2.fm.ops[1].level = 0.9f;
   o.e_piano_detuned_2.fm.ops[1].env.decay_ms = 3600.0f;
   o.e_piano_detuned_2.drift_cents = 4.28457f;
@@ -98,6 +101,9 @@ SONARE_TUNED_CONSTEXPR void configure_variation_programs(ProgramOverrides& o) no
   o.e_piano_velocity_1.fm.ops[1].vel_to_level = 0.85f;
   o.e_piano_velocity_1.vel_to_cutoff_cents = 2400.0f;
   o.e_piano_velocity_2 = o.e_piano_2;
+  // Keeps the slower carrier rate: on Electric Piano 2's gate, 0.8 took this one's decay
+  // median to 1.19 dB/s and its doubling to 2.38, both past that gate's bounds.
+  o.e_piano_velocity_2.fm.ops[0].key_rate_scale = 0.4f;
   o.e_piano_velocity_2.fm.ops[3].vel_to_level = 0.9f;
   o.e_piano_velocity_2.fm.ops[1].vel_to_level = 0.85f;
   o.e_piano_velocity_2.vel_to_cutoff_cents = 2400.0f;
