@@ -839,6 +839,9 @@ constexpr void configure_physical_programs(ProgramOverrides& o) noexcept {
   o.muted_trumpet.brass.brassiness = 0.595097f;
   o.muted_trumpet.brass.cuivre_dynamics = 0.90409f;
   o.muted_trumpet.brass.mute = 1.0f;
+  // Without it the held level reads 13.4 dB under the reference and falls 12 dB from F#3 to E5
+  // against the reference's 8; at 0.45 the fall reads 5 and every gated statistic holds.
+  o.muted_trumpet.brass.mute_norm = 0.45f;
   o.muted_trumpet.lfo_rate_hz = 1.14931f;
   o.muted_trumpet.lfo_to_pitch_cents = 0.0336192f;
   o.muted_trumpet.lfo_shape = LfoShape::kSine;
@@ -861,7 +864,7 @@ constexpr void configure_physical_programs(ProgramOverrides& o) noexcept {
   // equal temperament with the blocker lead share at 0.75 (drift and vibrato off).
   o.muted_trumpet.pitch_offset_cents = -3.39f;
   o.muted_trumpet.brass.brightness = 0.655602f;
-  o.muted_trumpet.gain = 8.0f;
+  o.muted_trumpet.gain = 7.19f;
   o.muted_trumpet.brass.bore_nonlinearity = 0.0994201f;
   // With the bell corner held at or above the fundamental, D5-E5 overshot their early sustain
   // 2.25 dB past the reference at p90 against a 2.05 bound; these read 1.92.

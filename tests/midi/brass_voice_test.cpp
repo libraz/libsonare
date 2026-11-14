@@ -472,10 +472,12 @@ TEST_CASE("catalog brass radiates through a bell, like the fallback voices",
     // way: a catalogue entry standing the mute up out of a darkened brightness
     // while its twin models it reads as a voicing choice and is not one.
     REQUIRE(got.brass.mute == want.brass.mute);
+    REQUIRE(got.brass.mute_norm == want.brass.mute_norm);
   }
   // Every row but one has no mute, so the equality above would hold over eight
   // pairs of zeros. One twin has to carry one for it to be asserting anything.
   REQUIRE(gm_fallback_patch(0, 59).brass.mute > 0.0f);
+  REQUIRE(gm_fallback_patch(0, 59).brass.mute_norm > 0.0f);
 }
 
 TEST_CASE("the fallback brass voices radiate from the coupled bell alone", "[midi][synth][brass]") {

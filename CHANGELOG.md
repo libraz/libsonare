@@ -93,6 +93,7 @@
 - The built-in GM programs' relative loudness moves toward their references: 45 programs whose held level, measured against each one's own reference, stood more than 2 dB from the bank's median offset are brought to it by output gain alone, and the GS variations built on them move with them. Timbre is unchanged. A mix balanced against the previous levels needs these programs' faders re-set.
 - The brass section (GM program 61) no longer applies a mute colour, which raises its held level.
 - The brass section (GM program 61) takes the trombone's bell corner, a 600 Hz voice lowpass and a stronger breath noise, which raises its held level by a further 5.85 dB.
+- The muted trumpet (GM program 59) and the `muted-trumpet` preset are about 6.4 dB louder in held level: both give back part of the level the mute costs at each note's fundamental (`muteNorm` 0.45), with their output gains lowered by 0.9 dB, and their top notes no longer fall away as steeply.
 - Drum keys 27 to 30 of the built-in kit (High Q, Slap, Scratch Push, Scratch Pull) have voices of their own, fitted to a module's recordings, instead of the shared generic burst; Scratch Push and Scratch Pull choke each other. Their velocity response is the kit's generic one, since the recordings carry a single velocity.
 
 ### New

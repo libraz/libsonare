@@ -342,7 +342,7 @@ std::array<SynthPreset, kPresetCount> build_presets() noexcept {
     auto brass = [&](const char* name, bool conical, float lip_tension, float lip_damping,
                      float brightness, float damping, float attack_ms, float release_ms,
                      float breath, float bell_mix, float gain, const BellGroup& bell,
-                     float mute = 0.0f) {
+                     float mute = 0.0f, float mute_norm = 0.0f) {
       SynthPreset& v = t[i++];
       v.name = name;
       NativeSynthPatch patch{};
@@ -371,6 +371,7 @@ std::array<SynthPreset, kPresetCount> build_presets() noexcept {
       // A mute is an object over the bell's mouth, so it is a per-row property
       // rather than part of the bell group a row inherits from its twin.
       patch.brass.mute = mute;
+      patch.brass.mute_norm = mute_norm;
       patch.brass.dynamic_lip = bell.dynamic_lip;
       // The trumpet-family bells carry the body resonator on top; large-bore and
       // mellow brass radiate through the flare alone.
@@ -391,8 +392,8 @@ std::array<SynthPreset, kPresetCount> build_presets() noexcept {
           kFrenchHornBell);
     // The mute is modelled, so the bore is voiced open like the trumpet it is:
     // a darkened brightness standing in for the mute darkens it a second time.
-    brass("muted-trumpet", false, 0.58f, 0.35f, 0.72f, 0.30f, 16.0f, 75.0f, 0.80f, 0.0f, 1.581f,
-          kMutedTrumpetBell, 1.0f);
+    brass("muted-trumpet", false, 0.58f, 0.35f, 0.72f, 0.30f, 16.0f, 75.0f, 0.80f, 0.0f, 1.421f,
+          kMutedTrumpetBell, 1.0f, 0.45f);
     // These three have no program and no reference, so each takes the class its
     // bell belongs to: cornet and flugelhorn are small B-flat bells, euphonium a
     // large low one. The bore flag cannot stand in — all three are conical.
