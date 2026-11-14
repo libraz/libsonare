@@ -11748,7 +11748,7 @@
         "engine": "percussion",
         "patch": null,
         "timbres": 1,
-        "profile_rows": 355,
+        "profile_rows": 372,
         "gate_state": "exceeded",
         "coverage": {
           "canonical": 12,
@@ -11809,6 +11809,7 @@
         "gate_notes": [
           "level.abs_median: re-recorded over a kept bound, last held unknown",
           "level.p90: re-recorded over a kept bound, last held unknown",
+          "set on a dirty tree: attack.abs_median, attack.median, attack.p90, band_decay.abs_median, band_decay.median, band_decay.p90, band_shape.abs_median, band_shape.median, band_shape.p90, band_tilt.abs_median, band_tilt.median, band_tilt.p90, centroid_pct.abs_median, centroid_pct.median, centroid_pct.p90, crest.abs_median, crest.median, crest.p90, level.abs_median, level.median, level.p90, tilt_rise.abs_median, tilt_rise.median, tilt_rise.p90, tonality.abs_median, tonality.median, tonality.p90",
           "vel_range.p90: re-recorded over a kept bound, last held unknown"
         ]
       },
