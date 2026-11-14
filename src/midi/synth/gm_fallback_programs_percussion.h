@@ -133,28 +133,29 @@ constexpr void configure_percussion_programs(ProgramOverrides& o) noexcept {
   wb.percussion.base_freq_hz = 0.0f;
   wb.percussion.mode_decay_s = 0.404242f;
   wb.percussion.tone_gain = 2.90983f;
-  wb.percussion.noise_gain = 0.795613f;
-  wb.percussion.noise_decay_ms = 12.8953f;
+  wb.percussion.noise_gain = 0.662538f;
+  wb.percussion.noise_decay_ms = 16.4826f;
   wb.percussion.noise_cutoff_hz = 2227.53f;
   wb.percussion.noise_output = SynthFilterOutput::kBandpass;
   wb.gain = 0.6f;
-  wb.amp_env.attack_ms = 0.117017f;
-  wb.amp_env.decay_ms = 11.3488f;
+  wb.amp_env.attack_ms = 0.169099f;
+  wb.amp_env.decay_ms = 10.0381f;
   wb.amp_env.release_ms = 2112.55f;
   wb.amp_env.sustain = 0.770426f;
   wb.percussion.mode_ratios[0] = 2.77762f;
-  wb.percussion.noise_q = 0.947773f;
+  wb.percussion.noise_q = 1.01877f;
   wb.percussion.plate_hf_ratio = 0.278273f;
   wb.percussion.plate_low_hz = 798.233f;
   wb.percussion.plate_t60_s = 8.16114f;
   wb.percussion.tone_direct = 0.23688f;
   wb.resonance_q = 1.63435f;
-  wb.drive = 0.108167f;
+  wb.drive = 0.122906f;
   wb.percussion.mode_decay_exp = 1.09017f;
   wb.percussion.strike_r = 0.513932f;
-  wb.percussion.wire_buzz = 0.347524f;
-  wb.percussion.wire_cutoff_hz = 878.445f;
+  wb.percussion.wire_buzz = 0.256889f;
+  wb.percussion.wire_cutoff_hz = 439.341f;
   wb.stereo_spread = 0.322949f;
+  wb.percussion.velocity_exponent = 1.04098f;
 
   // Taiko (GM 116): a large struck membrane — the full Rayleigh mode set, a
   // strong strike pitch drop and a low shell boom.
@@ -200,6 +201,8 @@ constexpr void configure_percussion_programs(ProgramOverrides& o) noexcept {
   ti.percussion.mode_ratios[4] = 2.8177f;
   ti.percussion.strike_theta = 0.39672f;
   ti.stereo_spread = 0.0625f;
+  // Velocity span fitted on v32/v80 (held v56/v104): 13 dB at the struct default, 25 wanted.
+  ti.percussion.velocity_exponent = 2.2f;
 
   // Melodic Tom (GM 117): a pitched tom — note-tracked membrane with a pitch
   // drop and a shell body, one patch for every tom size.

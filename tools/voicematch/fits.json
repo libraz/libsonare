@@ -763,12 +763,31 @@
       "reason": "write-back refused: fitted_to_the_probe"
     },
     "kalimba": {
-      "objective": "df80e5527f4fbedb",
-      "date": "2026-10-26",
+      "objective": "3bc465ccbf9a2d13",
+      "date": "2026-11-14",
       "capture": "kalimba",
       "timbre": "gm109",
-      "outcome": "kept",
-      "reason": "no point of the search kept every bound (newly over its bound: kalimba:attack_hf median, kalimba:attack_hf_swing p90)"
+      "corpora": [
+        {
+          "capture": "kalimba",
+          "timbre": "gm109"
+        }
+      ],
+      "outcome": "adopted",
+      "bank_generation": 218,
+      "weights": {
+        "body": 1.0,
+        "crest": 1.0,
+        "env": 1.0,
+        "hf": 0.5,
+        "init": 1.0,
+        "level": 1.0,
+        "mod": 1.0,
+        "modedyn": 1.0,
+        "modes": 1.0,
+        "slope": 1.0,
+        "velspan": 0.5
+      }
     },
     "koto": {
       "objective": "df80e5527f4fbedb",
@@ -1165,12 +1184,33 @@
       "reason": "no point of the search kept every bound (switch field moved: steel_drums.filter_model)"
     },
     "steel_guitar": {
-      "objective": "df80e5527f4fbedb",
-      "date": "2026-10-26",
+      "objective": "3bc465ccbf9a2d13",
+      "date": "2026-11-14",
       "capture": "steel_guitar",
       "timbre": "gm026",
-      "outcome": "kept",
-      "reason": "write-back refused: fitted_to_the_probe"
+      "corpora": [
+        {
+          "capture": "steel_guitar",
+          "timbre": "gm026"
+        }
+      ],
+      "outcome": "adopted",
+      "bank_generation": 218,
+      "weights": {
+        "cents": 0.5,
+        "crest": 1.0,
+        "dyn": 1.0,
+        "env": 1.0,
+        "harm": 1.0,
+        "hf": 0.5,
+        "init": 1.5,
+        "level": 1.0,
+        "slope": 1.0,
+        "stiff": 0.5,
+        "tail": 1.0,
+        "tnr": 0.5,
+        "velspan": 0.5
+      }
     },
     "string_ensemble_1": {
       "objective": "df80e5527f4fbedb",
@@ -1317,11 +1357,33 @@
       "reason": "write-back refused: fitted_to_the_probe"
     },
     "tubular_bells": {
-      "objective": "df80e5527f4fbedb",
-      "date": "2026-10-26",
+      "objective": "3bc465ccbf9a2d13",
+      "date": "2026-11-14",
       "capture": "tubular_bells",
       "timbre": "gm015",
-      "outcome": "adopted"
+      "corpora": [
+        {
+          "capture": "tubular_bells",
+          "timbre": "gm015"
+        }
+      ],
+      "outcome": "adopted",
+      "bank_generation": 218,
+      "weights": {
+        "body": 1.0,
+        "bright": 1.0,
+        "crest": 1.0,
+        "env": 1.0,
+        "hf": 0.5,
+        "hfdyn": 1.0,
+        "init": 1.0,
+        "level": 1.0,
+        "mod": 1.0,
+        "modedyn": 1.0,
+        "modes": 1.0,
+        "slope": 1.0,
+        "velspan": 0.5
+      }
     },
     "twelve_string_guitar": {
       "objective": "df80e5527f4fbedb",
@@ -1386,11 +1448,31 @@
       "reason": "no point of the search kept every bound (newly over its bound: voice_oohs:attack abs_median, voice_oohs:attack median, voice_oohs:damper abs_median, voice_oohs:damper median, voice_oohs:damper p90)"
     },
     "woodblock": {
-      "objective": "df80e5527f4fbedb",
-      "date": "2026-10-26",
+      "objective": "3bc465ccbf9a2d13",
+      "date": "2026-11-14",
       "capture": "woodblock",
       "timbre": "gm116",
-      "outcome": "adopted"
+      "corpora": [
+        {
+          "capture": "woodblock",
+          "timbre": "gm116"
+        }
+      ],
+      "outcome": "adopted",
+      "bank_generation": 218,
+      "weights": {
+        "bright": 1.0,
+        "crest": 1.0,
+        "env": 1.0,
+        "hf": 0.5,
+        "init": 1.0,
+        "level": 1.0,
+        "mod": 1.0,
+        "modedyn": 1.0,
+        "modes": 1.0,
+        "slope": 1.0,
+        "velspan": 0.5
+      }
     },
     "xylophone": {
       "objective": "df80e5527f4fbedb",

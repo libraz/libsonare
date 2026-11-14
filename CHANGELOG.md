@@ -95,6 +95,7 @@
 - The brass section (GM program 61) takes the trombone's bell corner, a 600 Hz voice lowpass and a stronger breath noise, which raises its held level by a further 5.85 dB.
 - The muted trumpet (GM program 59) and the `muted-trumpet` preset are about 6.4 dB louder in held level: both give back part of the level the mute costs at each note's fundamental (`muteNorm` 0.45), with their output gains lowered by 0.9 dB, and their top notes no longer fall away as steeply.
 - Drum keys 27 to 30 of the built-in kit (High Q, Slap, Scratch Push, Scratch Pull) have voices of their own, fitted to a module's recordings, instead of the shared generic burst; Scratch Push and Scratch Pull choke each other. Their velocity response is the kit's generic one, since the recordings carry a single velocity.
+- Five GM programs move toward their references in timbre: the steel-string acoustic guitar (GM program 25) takes a quicker attack and a longer, fuller body; the kalimba (108) a new attack, body, brightness and partial decay; tubular bells (14) a new decay for each partial and a longer release; the woodblock (115) a new strike noise and a slightly steeper velocity response; and the taiko (116) spans about twice as many decibels from its softest to its hardest notes, so soft taiko notes are quieter. A part balanced against the previous sound of these programs may need its level or velocities re-set.
 
 ### New
 

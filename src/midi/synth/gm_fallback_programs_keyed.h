@@ -377,6 +377,13 @@ SONARE_TUNED_CONSTEXPR void configure_keyed_programs(ProgramOverrides& o) noexce
   o.tubular_bells.amp_env.attack_ms = 0.500002f;
   o.tubular_bells.cutoff_hz = 14003.3f;
   o.tubular_bells.modal.decay_stretch = 0.301753f;
+  o.tubular_bells.modal.modes[0].decay_scale = 0.717024f;
+  o.tubular_bells.modal.modes[2].decay_scale = 1.16927f;
+  o.tubular_bells.modal.modes[3].decay_scale = 0.730961f;
+  o.tubular_bells.modal.modes[4].decay_scale = 0.666027f;
+  o.tubular_bells.modal.modes[5].decay_scale = 0.42725f;
+  o.tubular_bells.modal.modes[6].decay_scale = 0.372955f;
+  o.tubular_bells.modal.release_damp_s = 5.06501f;
 
   // Dulcimer (GM 15): a hammered string — physically a struck (not plucked)
   // steel string, so the Karplus-Strong core with a hard hammer excitation,
@@ -446,15 +453,15 @@ SONARE_TUNED_CONSTEXPR void configure_keyed_programs(ProgramOverrides& o) noexce
   // The steel string is also family 3's default, so program 25 sounded it
   // already; naming it is what lets the two move apart, and today they do not.
   o.steel_guitar = steel;
-  o.steel_guitar.amp_env.attack_ms = 2.99715f;
+  o.steel_guitar.amp_env.attack_ms = 1.0f;
   o.steel_guitar.amp_env.release_ms = 408.442f;
   // A 0.6 s air-mode ring under a 0.35 knock took body-under-the-note from -32.1 to -24.7 dB
   // (median); the stretch and body mix hold the register profile p90 at 2.60 against 2.67. The
   // halo stays undamped: damping made 12 damper rows measurable against a bound recorded from 5.
   o.steel_guitar.ks.body_knock = 0.35f;
-  o.steel_guitar.ks.body_air_t60_s = 0.6f;
+  o.steel_guitar.ks.body_air_t60_s = 0.988854f;
   o.steel_guitar.ks.decay_stretch = 0.66f;
-  o.steel_guitar.body_mix = 0.4f;
+  o.steel_guitar.body_mix = 0.556231f;
 
   // Harmonics (GM 31): a finger resting at the twelfth fret, which is the node
   // at half the string. The touch is the whole of it — the loop halves and the
@@ -895,6 +902,13 @@ SONARE_TUNED_CONSTEXPR void configure_keyed_programs(ProgramOverrides& o) noexce
   ka.amp_env.sustain = 0.690983f;
   o.kalimba.modal.velocity_exponent = 1.31f;
   o.kalimba.gain = 0.3284f;
+  o.kalimba.amp_env.attack_ms = 0.288812f;
+  o.kalimba.amp_env.sustain = 0.440983f;
+  o.kalimba.body_mix = 0.181153f;
+  o.kalimba.cutoff_hz = 6689.62f;
+  o.kalimba.modal.decay_stretch = 0.343769f;
+  o.kalimba.modal.strike_brightness = 0.274265f;
+  o.kalimba.resonance_q = 0.722503f;
 
   // Harpsichord (GM 6): the jack-and-plectrum engine, voiced as a single 8'
   // choir — one string per key at written pitch. Decay and stretch are regressed
