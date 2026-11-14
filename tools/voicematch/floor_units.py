@@ -25,6 +25,8 @@ REFERENCE_DIR = HERE / "reference"
 OUT_PATH = HERE / "floor-units.json"
 #: The quantile of the pooled readings the file records.
 QUANTILE = 0.9
+#: What the file names as its producer, so no machine-local run path lands in a tracked file.
+SOURCE = "tools/voicematch/floor_units.py"
 
 
 def run_files(runs: Path) -> list[Path]:
@@ -58,7 +60,7 @@ def quantile(values: list[float], q: float) -> float:
 
 
 def record(runs: Path) -> dict:
-    """The file's content: the quantile, how many readings it came from, and where."""
+    """The file's content: the quantile, how many readings it came from, and the tool."""
     values = floor_units(runs)
     if not values:
         raise ValueError(f"{runs} holds no summary with an abs_median")
@@ -67,7 +69,7 @@ def record(runs: Path) -> dict:
         "p90": round(quantile(values, QUANTILE), 1),
         "readings": len(values),
         "captures": len(run_files(runs)),
-        "source": str(runs),
+        "source": SOURCE,
         "run_date": datetime.fromtimestamp(newest, UTC).date().isoformat(),
         "generated": datetime.now(UTC).date().isoformat(),
     }

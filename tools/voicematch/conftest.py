@@ -12,7 +12,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 @pytest.fixture(autouse=True)
 def _a_clean_tree_for_gate_writes(monkeypatch):
-    """Gate writes refuse a dirty tree; tests write scratch gates beside other sessions' edits."""
+    """Gate writes refuse a dirty tree; tests write scratch gates beside concurrent edits."""
     import profile_gate
 
     monkeypatch.setattr(profile_gate, "tree_state", lambda: {"head": "test", "dirty": []})

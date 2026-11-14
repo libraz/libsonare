@@ -150,7 +150,7 @@ test-slow: build fixtures
 # digests come from a Release build, and comparing them against a Debug one asks
 # whether two optimization levels agree rather than whether the code changed.
 # And $(BUILD_DIR) is shared: depending on `build` would reconfigure whatever
-# another session has in it, mid-run, as a side effect of running a test.
+# another process has in it, mid-run, as a side effect of running a test.
 # The registry check runs last, after the digests, in its own tuning build
 # (BANK_BUILD_DIR): the digests see engine code and the registry sees values.
 test-golden: fixtures
@@ -507,7 +507,7 @@ build-head-shared:
 	$(CMAKE) -S $(HEAD_MIRROR) -B $(HEAD_BUILD_DIR) -DCMAKE_BUILD_TYPE=Release -DBUILD_SHARED=ON -DBUILD_TUNING=ON
 	$(CMAKE) --build $(HEAD_BUILD_DIR) --target sonare_shared $(BUILD_PARALLEL)
 
-# The shared fit baseline every lane's fits read: the HEAD build published into
+# The shared fit baseline every fit reads: the HEAD build published into
 # build-tuning/lib, with the hash it was built from recorded beside it.
 baseline: build-head-shared
 	$(RYE) run --pyproject bindings/python/pyproject.toml python tools/voicematch/baseline_record.py \
@@ -792,7 +792,7 @@ gs-efx-tables: gs-efx-archive-set
 
 # Regenerates into a scratch directory and diffs against the committed pair.
 # The scratch directory is a fresh mktemp -d rather than a fixed /tmp path,
-# because two sessions running this target at once would otherwise clobber
+# because two runs of this target at once would otherwise clobber
 # each other's output. A revision mismatch is reported on its own line
 # before the diff runs: "the archive moved on" and "the script changed" both
 # show up as a diff, and folding the two into one report sends whoever reads

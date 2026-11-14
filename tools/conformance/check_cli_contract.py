@@ -256,7 +256,7 @@ def _check_artifact_skew(
     behind, and comparing across that gap reports a difference belonging to the
     build rather than to either surface. Two equally stale artifacts still agree
     with each other, so staleness alone is reported and not rejected; what is
-    rejected is a core source change landing between the two link times.
+    rejected is a core source change arriving between the two link times.
     """
     library = _resolved_python_library(python_executable, timeout)
     if library is None:

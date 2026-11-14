@@ -4,8 +4,8 @@ The checker's failure mode is a false clean, so these tests pin three things
 separately: the shape of each rule on hand-written bodies, a floor on how many
 entry points the scan classifies, and non-vacuity -- copying the real
 translation units, removing one guard, and requiring the checker to name
-exactly that entry and nothing else.  The break happens on a copy so no session
-building the shared tree ever compiles the broken source.
+exactly that entry and nothing else.  The break happens on a copy so no concurrent
+build of the shared tree ever compiles the broken source.
 """
 
 from __future__ import annotations

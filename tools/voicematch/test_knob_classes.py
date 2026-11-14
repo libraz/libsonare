@@ -40,7 +40,7 @@ from knobs import (
 
 
 def _entry(key, cls, **kw):
-    return KnobClass(key=key, cls=cls, lane="test", **kw)
+    return KnobClass(key=key, cls=cls, family="test", **kw)
 
 
 def _classes(*entries):
@@ -65,8 +65,8 @@ def test_strict_load_of_an_entry_the_catalogue_no_longer_reports_fails_naming_it
     path = _write(
         tmp_path,
         {
-            "brass.mute": {"class": "identity", "lane": "sustained"},
-            "brass.mute_renamed": {"class": "identity", "lane": "sustained"},
+            "brass.mute": {"class": "identity", "family": "sustained"},
+            "brass.mute_renamed": {"class": "identity", "family": "sustained"},
         },
     )
     with pytest.raises(ValueError, match="brass.mute_renamed") as exc:
@@ -96,17 +96,17 @@ def test_a_pattern_that_matches_nothing_fails_even_when_a_glob(tmp_path):
         load_knob_classes(path, cat, strict=True)
 
 
-def test_pending_landing_and_notes_are_exempt_from_the_resolve_check(tmp_path):
+def test_declared_not_in_engine_and_notes_are_exempt_from_the_resolve_check(tmp_path):
     cat = _catalogue({"p0.waveform": 1.0})
     path = _write(
         tmp_path,
         {"waveform": {"class": "identity"}},
         notes={"mode": "not reachable"},
-        pending_landing={"piano_voice.kNotYet": {"class": "set_by_measurement"}},
+        declared_not_in_engine={"piano_voice.kNotYet": {"class": "set_by_measurement"}},
     )
     classes = load_knob_classes(path, cat)
     assert classes.note_for("mode") == "not reachable"
-    assert "piano_voice.kNotYet" in classes.pending_landing
+    assert "piano_voice.kNotYet" in classes.declared_not_in_engine
     assert classes.class_of("piano_voice.kNotYet") is None
 
 
@@ -559,29 +559,29 @@ def _absent_entry_classes(tmp_path):
     path = _write(
         tmp_path,
         {
-            "brass.mute": {"class": "identity", "lane": "sustained"},
-            "piano_voice.kHammerJunction": {"class": "identity", "lane": "piano"},
+            "brass.mute": {"class": "identity", "family": "sustained"},
+            "piano_voice.kHammerJunction": {"class": "identity", "family": "keyed"},
         },
     )
     return load_knob_classes(path, cat)
 
 
-def test_an_absent_entry_loads_and_is_listed_with_its_lane(tmp_path):
+def test_an_absent_entry_loads_and_is_listed_with_its_family(tmp_path):
     classes = _absent_entry_classes(tmp_path)
     assert list(classes.absent) == ["piano_voice.kHammerJunction"]
-    assert classes.absent["piano_voice.kHammerJunction"].lane == "piano"
+    assert classes.absent["piano_voice.kHammerJunction"].family == "keyed"
     assert classes.class_of("p0.brass.mute") == "identity"
     assert absent_summary(classes) == (
         "knob classes: 1 entry not in this library "
-        "(piano: piano_voice.kHammerJunction); fits naming it are refused"
+        "(keyed: piano_voice.kHammerJunction); fits naming it are refused"
     )
 
 
-def test_a_fit_naming_an_absent_entry_is_refused_naming_entry_and_lane(tmp_path):
+def test_a_fit_naming_an_absent_entry_is_refused_naming_entry_and_family(tmp_path):
     classes = _absent_entry_classes(tmp_path)
     with pytest.raises(ValueError, match="piano_voice.kHammerJunction") as exc:
         _refuse([_knob("p0.waveform"), _knob("piano_voice.kHammerJunction")], classes)
-    assert "lane piano" in str(exc.value)
+    assert "family keyed" in str(exc.value)
     assert "uncommitted code" in str(exc.value)
 
 
@@ -616,13 +616,13 @@ def test_an_absent_reach_pattern_loads_and_refuses_only_a_fit_under_it(tmp_path)
         _refuse([_knob("p0.drift_cents")], classes)
 
 
-# --- pinned by ruling --------------------------------------------------------
+# --- pinned entries --------------------------------------------------------
 
 _PINNED = {
     "class": "pinned",
     "value": 0.286475,
-    "basis": "ruled: too few terms read it",
-    "lane": "sustained",
+    "basis": "measured: too few terms read it",
+    "family": "sustained",
 }
 
 
@@ -650,7 +650,7 @@ def test_a_spec_naming_a_pinned_field_is_refused_with_key_value_and_basis(tmp_pa
     _, classes = _pinned_classes(tmp_path)
     with pytest.raises(ValueError, match=r"clarinet\.body_mix is pinned at 0\.286475") as exc:
         _refuse([_knob("clarinet.gain"), _knob("clarinet.body_mix")], classes)
-    assert "lane sustained" in str(exc.value)
+    assert "(sustained)" in str(exc.value)
     assert "too few terms read it" in str(exc.value)
     assert hand_spec_warnings([_knob("clarinet.body_mix")], classes) == []
 
@@ -664,7 +664,7 @@ def test_a_pinned_entry_is_scoped_to_its_voice(tmp_path):
 def test_the_start_up_line_prints_the_voice_pins_and_flags_a_stale_value(tmp_path):
     cat, classes = _pinned_classes(tmp_path)
     (line,) = pinned_lines(classes, cat, "clarinet")
-    assert line.startswith("pinned by ruling: clarinet.body_mix = 0.286475 (ships 0.286475;")
+    assert line.startswith("pinned: clarinet.body_mix = 0.286475 (ships 0.286475;")
     assert pinned_lines(classes, cat, "oboe") == []
     cat2, classes2 = _pinned_classes(tmp_path, {"clarinet.body_mix": 0.3})
     assert "STALE: the library ships 0.3" in pinned_lines(classes2, cat2, "clarinet")[0]
@@ -677,7 +677,7 @@ def test_the_start_up_line_prints_the_voice_pins_and_flags_a_stale_value(tmp_pat
         {**_PINNED, "class": "identity"},
         {**_PINNED, "value": "0.3"},
         {**_PINNED, "basis": ""},
-        {**_PINNED, "lane": ""},
+        {**_PINNED, "family": ""},
     ],
 )
 def test_a_malformed_pinned_entry_is_refused_at_load(tmp_path, entry):

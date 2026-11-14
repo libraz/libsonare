@@ -16,7 +16,7 @@ and again on a copy of the real tree.
 
 Both tree breaks are made on a ``shutil.copytree`` of the headers, never on the
 shared tree: a deliberately broken public header sitting in the working tree,
-however briefly, is something a parallel session can compile.
+however briefly, is something a concurrent build can compile.
 """
 
 from __future__ import annotations

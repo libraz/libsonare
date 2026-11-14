@@ -590,7 +590,7 @@ KNOB_CLASS_NAMES = (
 NOT_SEARCHED = ("identity", "switch", "set_by_measurement", "pinned")
 
 #: How far a `pinned` entry's value may sit from the catalogue's shipped value before
-#: the start-up line calls the ruling stale.
+#: the start-up line calls the pin stale.
 PINNED_VALUE_TOLERANCE = 1e-5
 
 #: How far above its off value a clipped stage-enable range starts, as a fraction
@@ -659,12 +659,12 @@ class KnobClass:
     `off_value=-120`, `off_within=1`). `gates` records a field another field
     switches off. `evidence` says what a compensating-group member's membership rests on.
     A `pinned` entry is one voice's field (`clarinet.body_mix`, the patch included)
-    held at `value` by a ruling whose reason is `basis`; no spec may name it.
+    held at `value`, `basis` stating the measurement or constraint that pins it; no spec may name it.
     """
 
     key: str
     cls: str | None
-    lane: str = ""
+    family: str = ""
     basis: str = ""
     group: str | None = None
     evidence: str = ""
@@ -702,7 +702,7 @@ class AbsentKnob:
 
     key: str
     kind: str
-    lane: str = ""
+    family: str = ""
 
 
 @dataclass
@@ -710,9 +710,9 @@ class KnobClasses:
     """The classification of the catalogue's fields, as `knob-classes.json` states it.
 
     `entries` are keyed by pattern; `notes` explain a field the table does not
-    classify (a field no override reaches); `pending_landing` holds entries for keys
-    the library does not report yet; `switch_candidates` lists float-typed fields
-    whose shipped values are all integers, for the lanes to judge. `reach` maps
+    classify (a field no override reaches); `declared_not_in_engine` holds entries for
+    keys declared but not yet in the engine; `switch_candidates` lists float-typed fields
+    whose shipped values are all integers, for a list to judge. `reach` maps
     a field pattern to the gated dimensions it needs (see `KnobReach`). `absent`
     holds the entries and reach patterns the loaded library does not report, taken
     out of `entries` and `reach`, so they classify nothing.
@@ -720,7 +720,7 @@ class KnobClasses:
 
     entries: dict[str, KnobClass]
     notes: dict[str, str] = field(default_factory=dict)
-    pending_landing: dict[str, dict] = field(default_factory=dict)
+    declared_not_in_engine: dict[str, dict] = field(default_factory=dict)
     switch_candidates: dict[str, dict] = field(default_factory=dict)
     reach: dict[str, KnobReach] = field(default_factory=dict)
     absent: dict[str, AbsentKnob] = field(default_factory=dict)
@@ -805,11 +805,11 @@ def load_knob_classes(path: Path, catalogue: Catalogue, *, strict: bool = False)
     """Read `knob-classes.json` and check every entry against the library's catalogue.
 
     An entry or `reach` pattern that names no key the catalogue reports is returned
-    in `absent` rather than raised, so one field another lane has not landed does
+    in `absent` rather than raised, so a field not yet in the engine does
     not stop every fit: `refuse_absent_knobs` refuses the fit that names it. A
     field that was renamed or removed therefore still cannot quietly lose its class
     and become searchable. With @p strict the first such entry raises, naming it.
-    `pending_landing` and `notes` are exempt.
+    `declared_not_in_engine` and `notes` are exempt.
     """
     data = json.loads(Path(path).read_text())
     raw = data.get("entries")
@@ -839,12 +839,12 @@ def load_knob_classes(path: Path, catalogue: Catalogue, *, strict: bool = False)
                 )
             if isinstance(value, bool) or not isinstance(value, (int, float)):
                 raise ValueError(f"{path}: pinned entry {key!r} needs a numeric 'value'")
-            if not e.get("basis") or not e.get("lane"):
-                raise ValueError(f"{path}: pinned entry {key!r} needs a 'basis' and a 'lane'")
+            if not e.get("basis") or not e.get("family"):
+                raise ValueError(f"{path}: pinned entry {key!r} needs a 'basis' and a 'family'")
         entries[key] = KnobClass(
             key=key,
             cls=cls,
-            lane=e.get("lane", ""),
+            family=e.get("family", ""),
             basis=e.get("basis", ""),
             group=e.get("group"),
             evidence=e.get("evidence", ""),
@@ -858,7 +858,7 @@ def load_knob_classes(path: Path, catalogue: Catalogue, *, strict: bool = False)
     classes = KnobClasses(
         entries,
         notes=data.get("notes", {}),
-        pending_landing=data.get("pending_landing", {}),
+        declared_not_in_engine=data.get("declared_not_in_engine", {}),
         switch_candidates=data.get("switch_candidates", {}),
         reach=reach,
     )
@@ -871,19 +871,19 @@ def load_knob_classes(path: Path, catalogue: Catalogue, *, strict: bool = False)
             f"removed; rename or remove the pattern, or it stops holding its knobs out."
         )
     if strict and missing:
-        named = "; ".join(f"{k!r} (lane {entries[k].lane or '?'})" for k in missing)
+        named = "; ".join(f"{k!r} (family {entries[k].family or '?'})" for k in missing)
         raise ValueError(
             f"{Path(path).name}: {len(missing)} entr{'y' if len(missing) == 1 else 'ies'} "
             f"name no key the catalogue reports: {named}. The field was renamed or removed; "
             f"rename or remove the entry, or it loses its class."
         )
     if unreached or missing:
-        absent = {k: AbsentKnob(k, "entry", entries[k].lane) for k in missing}
+        absent = {k: AbsentKnob(k, "entry", entries[k].family) for k in missing}
         absent.update({p: AbsentKnob(p, "reach") for p in unreached})
         classes = KnobClasses(
             {k: e for k, e in entries.items() if k not in absent},
             notes=classes.notes,
-            pending_landing=classes.pending_landing,
+            declared_not_in_engine=classes.declared_not_in_engine,
             switch_candidates=classes.switch_candidates,
             reach={p: r for p, r in reach.items() if p not in absent},
             absent=absent,
@@ -896,10 +896,10 @@ def absent_summary(classes: KnobClasses) -> str:
     if not classes.absent:
         return ""
     n = len(classes.absent)
-    lanes: dict[str, list[str]] = {}
+    families: dict[str, list[str]] = {}
     for a in classes.absent.values():
-        lanes.setdefault(a.lane or a.kind, []).append(a.key)
-    named = "; ".join(f"{lane}: {', '.join(keys)}" for lane, keys in lanes.items())
+        families.setdefault(a.family or a.kind, []).append(a.key)
+    named = "; ".join(f"{family}: {', '.join(keys)}" for family, keys in families.items())
     return (
         f"knob classes: {n} entr{'y' if n == 1 else 'ies'} not in this library "
         f"({named}); fits naming {'it' if n == 1 else 'them'} are refused"
@@ -967,7 +967,7 @@ def refuse_absent_knobs(
     so it may name a shared constant. Entries the fit does not touch are not its concern.
     """
     pinned = [
-        f"{k.tunable} is pinned at {e.value:g} by ruling (lane {e.lane}): {e.basis}"
+        f"{k.tunable} is pinned at {e.value:g} ({e.family}): {e.basis}"
         for k in knobs
         if k.tunable is not None
         and (e := classes.classify(k.tunable)) is not None
@@ -975,7 +975,7 @@ def refuse_absent_knobs(
     ]
     if pinned:
         raise ValueError(
-            "knob-classes.json pins field(s) by ruling; no spec may name them, and the ruling "
+            "knob-classes.json pins field(s); no spec may name them, and a pin "
             "is changed by editing the file: " + "; ".join(pinned)
         )
     shared = [] if probe else _shared_uncovered(knobs, catalogue, covered)
@@ -998,7 +998,8 @@ def refuse_absent_knobs(
     for a in classes.absent.values():
         pattern = _Patterns([a.key])
         hits += [
-            f"{k.tunable} matches {a.kind} {a.key!r}" + (f" (lane {a.lane})" if a.lane else "")
+            f"{k.tunable} matches {a.kind} {a.key!r}"
+            + (f" (family {a.family})" if a.family else "")
             for k in knobs
             if k.tunable is not None and pattern.find(k.tunable) is not None
         ]
@@ -1080,7 +1081,7 @@ def shared_lines(
 def pinned_lines(classes: KnobClasses, catalogue: Catalogue, patch: str | None) -> list[str]:
     """One start-up line per `pinned` entry of the voiced @p patch.
 
-    Says whether the catalogue still ships the value the ruling holds, since a ruling
+    Says whether the catalogue still ships the value the pin holds, since a pin
     over a value the library no longer ships holds nothing.
     """
     out = []
@@ -1095,7 +1096,7 @@ def pinned_lines(classes: KnobClasses, catalogue: Catalogue, patch: str | None) 
             if shipped is not None
             else "STALE: the library does not report it"
         )
-        out.append(f"pinned by ruling: {key} = {e.value:g} ({state}; lane {e.lane}): {e.basis}")
+        out.append(f"pinned: {key} = {e.value:g} ({state}; {e.family}): {e.basis}")
     return out
 
 
@@ -1113,7 +1114,7 @@ def switch_candidates(catalogue: Catalogue, classes: KnobClasses) -> dict[str, d
     """Patch fields typed as floats whose shipped values, bank-wide, are all integers.
 
     Such a field may be a selector in float clothing, which a search would move
-    as a continuum. It is a list for the lanes to judge, not a classification: a
+    as a continuum. It is a list to judge, not a classification: a
     field the table already holds as identity, switch or set by measurement is
     left out, and so is one that takes a single value everywhere.
     """

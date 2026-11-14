@@ -89,7 +89,7 @@ def test_a_refused_loosening_prints_one_line_per_statistic(tmp_path, capsys):
 
 
 def test_every_statistic_reports_its_outcome(tmp_path, capsys):
-    """A landing report quotes these, so a tightened bound prints as surely as a kept one."""
+    """A status report quotes these, so a tightened bound prints as surely as a kept one."""
     gate = tmp_path / "g.json"
     write_gate_file(_rows(10.0), gate, "ref", 1.0)
     first = capsys.readouterr().out

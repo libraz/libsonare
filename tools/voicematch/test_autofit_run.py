@@ -81,8 +81,8 @@ def test_fit_refuses_unusable_objectives_before_building(tmp_path, term, velocit
             "--build-dir",
             str(build_path),
             "--dry-run",
-            # The refusal under test comes after the tree check; another
-            # session's in-flight edit under src/ must not answer first.
+            # The refusal under test comes after the tree check; a concurrent
+            # in-flight edit under src/ must not answer first.
             "--allow-dirty-src",
         ],
         capture_output=True,
@@ -680,7 +680,7 @@ def test_source_digest_uses_relative_paths_so_checkout_location_does_not_matter(
 # --------------------------------------------------------------------------- #
 # The tree-state precondition: whatever is in src/ at fit startup is what
 # gets compiled and fit against, silently, and this tree routinely has several
-# sessions editing src/ at once.
+# concurrent edits to src/ at once.
 # --------------------------------------------------------------------------- #
 def _init_git_repo(root: Path) -> None:
     """A scratch git repo with a tracked src/ file, for repo_tree_state's own

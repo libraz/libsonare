@@ -119,6 +119,6 @@ The reach half is required because a missing build flag, wrong loader path, unre
 rye run --pyproject bindings/python/pyproject.toml python tools/voicematch/dataset.py --program 40 --pattern sustain --samples 1000 --build-dir build-tuning --out dataset.jsonl.gz
 ```
 
-`autofit.py --lib <dylib>` (and `refit.py --lib`) fits against a prebuilt tuning library without configuring or building anything, so a lane can run while another session owns the shared build; see [Fitting](fitting.md).
+`autofit.py --lib <dylib>` (and `refit.py --lib`) fits against a prebuilt tuning library without configuring or building anything, so a run can proceed while another process owns the shared build; see [Fitting](fitting.md).
 
 The dataset generator and recovery commands exercise measurement and search contracts with synthetic or model-generated audio. They do not decide whether a physical instrument is represented well; use the reference profile, independent validation, listening, and [Acceptance](acceptance.md) for that judgment.

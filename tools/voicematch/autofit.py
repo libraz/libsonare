@@ -242,7 +242,7 @@ is shared with other tooling.
 
 A run refuses to start with src/ dirty, since whatever is there is what gets
 compiled and fit against with nothing in the output saying so — this tree
-routinely has several sessions editing src/ at once. `--allow-dirty-src` fits
+routinely has several concurrent edits to src/ at once. `--allow-dirty-src` fits
 against it anyway (the normal case when it is your own in-flight engine edit),
 and either way `--out` records HEAD's sha and the dirty paths, if any.
 """
@@ -3758,7 +3758,7 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         dest="allow_dirty_src",
         help="fit anyway when src/ has uncommitted changes. Refused by "
-        "default: this tree routinely has several sessions working "
+        "default: this tree routinely has several concurrent edits "
         "in src/ at once, and whatever is there at build time is "
         "compiled and fit against with nothing in the output saying "
         "so. The normal reason to pass this is fitting against your "

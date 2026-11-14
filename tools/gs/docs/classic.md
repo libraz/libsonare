@@ -64,7 +64,7 @@ The stimulus, digest and state list are stated in the header lines of `tests/mid
 
 ## CPU cost
 
-One classic unit at a 48 kHz host rate, 128-sample stereo blocks, power-on bytes, a Release build on an Apple M5 Max, as a percentage of real time (the best of three 5 s runs, two sessions a few minutes apart on a loaded machine):
+One classic unit at a 48 kHz host rate, 128-sample stereo blocks, power-on bytes, a Release build on an Apple M5 Max, as a percentage of real time (the best of three 5 s runs, two runs a few minutes apart on a loaded machine):
 
 | types | % of real time |
 |---|---|

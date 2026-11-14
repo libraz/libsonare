@@ -393,7 +393,7 @@ class NonVacuityTest(unittest.TestCase):
     """Removing one enumerator's mapping must fail, naming that enumerator.
 
     Run against a copy: the break has to be in the real text to prove the check
-    reads it, and it must not be in the shared tree, where another session's
+    reads it, and it must not be in the shared tree, where a concurrent
     build would silently inherit it.
     """
 

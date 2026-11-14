@@ -11,7 +11,7 @@ the real translation units, deleting one known zero-write, and requiring the
 checker to name exactly that site and nothing else.
 
 The copy is the point: the break has to happen on the real text to prove
-anything, and it must not happen in the shared tree, where another session
+anything, and it must not happen in the shared tree, where another process
 compiling in that window would inherit a defect with no error to show for it.
 """
 
