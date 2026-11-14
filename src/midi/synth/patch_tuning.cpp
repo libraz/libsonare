@@ -433,6 +433,9 @@ void apply_reed(NativeSynthPatch& p, const Fields& f) {
   F(reed.breath_noise);
   F(reed.chiff);
   F(reed.chiff_ms);
+  F(reed.onset_breath_overshoot_db);
+  F(reed.onset_breath_settle_ms);
+  F(reed.onset_breath_overshoot_vel_db);
   F(reed.reed_resonance);
   F(reed.register_vent);
   F(reed.growl);

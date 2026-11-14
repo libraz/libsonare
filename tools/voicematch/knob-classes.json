@@ -852,6 +852,11 @@
       "basis": "0 = no growl stage",
       "lane": "sustained"
     },
+    "reed.onset_breath_overshoot_db": {
+      "class": "stage_enable",
+      "basis": "0 = no onset overshoot; gate for onset_breath_settle_ms, onset_breath_overshoot_vel_db; Bernoulli valve only",
+      "lane": "sustained"
+    },
     "reed.register_vent": {
       "class": "stage_enable",
       "basis": "0 = no register vent",

@@ -563,6 +563,7 @@ void NativeSynthVoice::hold_onset() noexcept {
   if (patch->mode == SynthEngineMode::kBrass) brass.hold_onset();
   if (patch->mode == SynthEngineMode::kFlute) flute.hold_onset();
   if (patch->mode == SynthEngineMode::kFreeReed) free_reed.hold_onset();
+  if (patch->mode == SynthEngineMode::kReed) reed.hold_onset();
 }
 
 void NativeSynthVoice::restore_excitation_base() noexcept {

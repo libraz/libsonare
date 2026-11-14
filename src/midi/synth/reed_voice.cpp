@@ -221,6 +221,7 @@ LoopBudget ReedVoiceCore::configure(const ReedPatchParams& params, double sr, ui
   drive_index_ = 0;
   breath_.releasing = false;
   breath_.level = 0.0f;
+  breath_.overshoot = 0.0f;
   lp_state_ = 0.0f;
   bell_lp_.reset();
   bell_hp_.reset();
@@ -379,6 +380,13 @@ LoopBudget ReedVoiceCore::configure(const ReedPatchParams& params, double sr, ui
   const float noise_gain = noise_gain_at_rate(sr);
   breath_.attack_coeff = ramp_coeff(params.attack_ms, sr);
   breath_.release_coeff = ramp_coeff(params.release_ms, sr);
+  // The table's operating point sits within about 2 dB of its closing clamp, where any
+  // overshoot shuts the reed for as long as it lasts, so only the valve takes one.
+  if (params.closing_pressure > 0.0f) {
+    breath_.set_overshoot_at_velocity(params.onset_breath_overshoot_db,
+                                      params.onset_breath_overshoot_vel_db, vel01,
+                                      params.onset_breath_settle_ms, sr);
+  }
   breath_noise_ = std::clamp(params.breath_noise, 0.0f, 1.0f) * kBreathNoiseDepth * noise_gain;
   chiff_level_ = std::clamp(params.chiff, 0.0f, 1.0f) * kChiffDepth * noise_gain;
   chiff_coeff_ = ramp_coeff(params.chiff_ms, sr);
@@ -689,6 +697,7 @@ float ReedVoiceCore::valve_opening(float x_rest) noexcept {
 }
 
 void ReedVoiceCore::set_excitation_base(const ExcitationAxes& base, uint32_t present) noexcept {
+  if ((present & kAxisForce) != 0u) hold_onset();
   excite_.set_base(base, present);
   refresh_excitation_targets();
 }

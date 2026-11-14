@@ -320,6 +320,9 @@ constexpr ReedPatchParams blank_reed() noexcept {
   z.breath_noise = 0.0f;
   z.chiff = 0.0f;
   z.chiff_ms = 0.0f;
+  z.onset_breath_overshoot_db = 0.0f;
+  z.onset_breath_settle_ms = 0.0f;
+  z.onset_breath_overshoot_vel_db = 0.0f;
   z.dynamic_reed = false;
   z.reed_resonance = 0.0f;
   z.register_vent = 0.0f;

@@ -134,6 +134,18 @@ struct ReedPatchParams {
   float chiff = 0.4f;
   /// Chiff decay time constant (ms).
   float chiff_ms = 12.0f;
+  /// Tongued-onset breath overshoot (dB of mouth pressure) at velocity 127: how
+  /// far the mouth pressure stands above its held level as the tongue releases
+  /// it, before it settles. On the Bernoulli valve it raises the loop gain while
+  /// it lasts, so the note grows faster rather than louder; the linearised table
+  /// has no headroom for it and ignores it. Applies only while no input streams
+  /// the breath. 0 = off -> bit-identical.
+  float onset_breath_overshoot_db = 0.0f;
+  /// Time the breath overshoot takes to settle back onto the held level (ms, ~95%).
+  float onset_breath_settle_ms = 40.0f;
+  /// Change of the breath overshoot per doubling of velocity (dB), read down from
+  /// velocity 127: positive gives a soft note less of it.
+  float onset_breath_overshoot_vel_db = 0.0f;
 
   // --- off-by-default advanced physics (Phase 4; C-ABI non-exposed, gated) ---
   /// Dynamic (mass-spring) reed: the memoryless reed table assumes a massless
@@ -283,6 +295,9 @@ class ReedVoiceCore {
   /// Jump the smoothed controls to their targets (seed a fresh note at the
   /// host's current CC positions without an audible glide).
   void snap_excitation() noexcept;
+  /// Drops the onset overshoot: the breath is driven by an input, or velocity
+  /// means nothing, so the synthesized tonguing would play over the player.
+  void hold_onset() noexcept { breath_.hold_overshoot(); }
 
   /// The dynamic reed's biquad numerator gain and denominator pair {b0, a1, a2}
   /// as start() last built them for the running sample rate.

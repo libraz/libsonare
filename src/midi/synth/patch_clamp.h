@@ -545,6 +545,12 @@ constexpr NativeSynthPatch clamp_synth_patch(const NativeSynthPatch& patch) noex
       std::clamp(patch_clamp_detail::sanitize(p.reed.pressure_scale, 1.0f), 0.0f, 4.0f);
   p.reed.zeta =
       std::clamp(patch_clamp_detail::sanitize(p.reed.zeta, 0.7f), 0.0f, PassiveCoupling::kMaxZeta);
+  p.reed.onset_breath_overshoot_db =
+      std::clamp(patch_clamp_detail::sanitize(p.reed.onset_breath_overshoot_db, 0.0f), 0.0f, 8.0f);
+  p.reed.onset_breath_settle_ms =
+      std::clamp(patch_clamp_detail::sanitize(p.reed.onset_breath_settle_ms, 40.0f), 1.0f, 500.0f);
+  p.reed.onset_breath_overshoot_vel_db = std::clamp(
+      patch_clamp_detail::sanitize(p.reed.onset_breath_overshoot_vel_db, 0.0f), -3.0f, 6.0f);
   p.reed.velocity_exponent =
       std::clamp(patch_clamp_detail::sanitize(p.reed.velocity_exponent, 2.0f), 0.0f, 4.0f);
   p.brass.breath_pressure =

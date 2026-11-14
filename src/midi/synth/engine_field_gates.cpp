@@ -260,7 +260,7 @@ const GateRow kEngineGates[] = {
     // Brass and reed: a bell cutoff takes the radiation corner from the reflection pole.
     {"reed.bell_radiation_hz", [](const GateSite&) { return equals("bellCutoffHz", 0); }},
     {"brass.bell_radiation_hz", [](const GateSite&) { return equals("bellCutoffHz", 0); }},
-    // Brass, flute and free reed: the settle and the velocity slope shape an overshoot
+    // Brass, flute, reed and free reed: the settle and the velocity slope shape an overshoot
     // that has to be there.
     {"brass.onset_breath_settle_ms",
      [](const GateSite&) { return above("onsetBreathOvershootDb", 0); }},
@@ -278,6 +278,10 @@ const GateRow kEngineGates[] = {
     {"flute.loop_phase_servo", [](const GateSite&) { return is("jetDrive", false); }},
     {"flute.jet_deflection_limit",
      [](const GateSite&) { return is("jetDrive", true) & is("jetCycleMean", true); }},
+    {"reed.onset_breath_settle_ms",
+     [](const GateSite&) { return above("onsetBreathOvershootDb", 0); }},
+    {"reed.onset_breath_overshoot_vel_db",
+     [](const GateSite&) { return above("onsetBreathOvershootDb", 0); }},
     {"free_reed.onset_breath_settle_ms",
      [](const GateSite&) { return above("onsetBreathOvershootDb", 0); }},
     {"free_reed.onset_breath_overshoot_vel_db",

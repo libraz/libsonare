@@ -1325,3 +1325,73 @@ TEST_CASE("reed coupled bell corner follows brightness", "[midi][synth][reed]") 
     CHECK(c_bright > c_dim);
   }
 }
+
+TEST_CASE("reed onset overshoot is off by default (bit-identical)", "[midi][synth][reed]") {
+  // At 0 dB the settle and the velocity slope have nothing to shape, so neither
+  // reaches the render.
+  using sonare::midi::synth::gm_fallback_patch;
+  NativeSynthPatch base = gm_fallback_patch(0, 66);  // Tenor Sax, Bernoulli valve
+  REQUIRE(base.reed.closing_pressure > 0.0f);
+  base.reed.onset_breath_overshoot_db = 0.0f;
+  NativeSynthPatch same = base;
+  same.reed.onset_breath_settle_ms = 120.0f;
+  same.reed.onset_breath_overshoot_vel_db = 4.0f;
+  REQUIRE(render_patch(base, 56, 100, 24000) == render_patch(same, 56, 100, 24000));
+}
+
+TEST_CASE(
+    "a reed onset overshoot speeds the valve's growth, more at ff when it slopes with velocity",
+    "[midi][synth][reed]") {
+  // The overshoot raises the mouth-over-closing ratio while it lasts, and with it the valve's
+  // gain: the note grows faster and settles onto the limit cycle it had without one.
+  using sonare::midi::synth::gm_fallback_patch;
+  NativeSynthPatch off = gm_fallback_patch(0, 66);  // Tenor Sax
+  // The patch's VCA decay would hide the onset the contour shapes.
+  off.amp_env.attack_ms = 5.0f;
+  off.amp_env.sustain = 1.0f;
+  off.reed.onset_breath_overshoot_db = 0.0f;
+  NativeSynthPatch on = off;
+  on.reed.onset_breath_overshoot_db = 3.0f;
+  on.reed.onset_breath_settle_ms = 100.0f;
+  on.reed.onset_breath_overshoot_vel_db = 3.0f;
+  const int n = 72000;
+  const auto cell = [&](uint8_t velocity) {
+    const std::vector<float> a = render_patch(off, 56, velocity, n);
+    const std::vector<float> b = render_patch(on, 56, velocity, n);
+    const double held = 20.0 * std::log10(rms(b, n - 24000, n) / rms(a, n - 24000, n));
+    INFO("velocity " << int(velocity) << ": 50% at " << speak_samples(a, 0.5) << " -> "
+                     << speak_samples(b, 0.5) << " samples, held level moved " << held << " dB");
+    CHECK(std::fabs(held) < 1.0);
+    return static_cast<double>(speak_samples(a, 0.5)) - static_cast<double>(speak_samples(b, 0.5));
+  };
+  const double hard = cell(127);
+  const double soft = cell(32);
+  INFO("onset brought forward by " << hard << " samples at 127, " << soft << " at 32");
+  REQUIRE(hard > 320.0);
+  REQUIRE(hard > soft);
+}
+
+TEST_CASE("the linearised reed table takes no onset overshoot", "[midi][synth][reed]") {
+  // The table's operating point sits within about 2 dB of the clamp that shuts it; an overshoot
+  // there closes the reed for as long as it lasts, so the field is inert on that path.
+  using sonare::midi::synth::gm_fallback_patch;
+  NativeSynthPatch off = gm_fallback_patch(0, 71);  // Clarinet, linearised table
+  REQUIRE(off.reed.closing_pressure == 0.0f);
+  off.reed.onset_breath_overshoot_db = 0.0f;
+  NativeSynthPatch on = off;
+  on.reed.onset_breath_overshoot_db = 6.0f;
+  REQUIRE(render_patch(on, 50, 100, 24000) == render_patch(off, 50, 100, 24000));
+}
+
+TEST_CASE("a streamed breath holds the reed onset overshoot", "[midi][synth][reed]") {
+  // CC2 seeds the force axis before the note, so the player's breath is the
+  // onset and the synthesized one must not play over it.
+  using sonare::midi::synth::gm_fallback_patch;
+  NativeSynthPatch off = gm_fallback_patch(0, 66);  // Tenor Sax
+  off.reed.onset_breath_overshoot_db = 0.0f;
+  NativeSynthPatch on = off;
+  on.reed.onset_breath_overshoot_db = 6.0f;
+  REQUIRE(render_with_initial_cc(on, 56, 100, 24000, 2, 90) ==
+          render_with_initial_cc(off, 56, 100, 24000, 2, 90));
+  REQUIRE(render_patch(on, 56, 100, 24000) != render_patch(off, 56, 100, 24000));
+}
