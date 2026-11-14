@@ -1,9 +1,8 @@
 """One condition cannot establish level balance after removing common gain."""
 
+import json
 import sys
 from pathlib import Path
-
-import json
 
 import numpy as np
 import pytest
@@ -36,7 +35,9 @@ def test_mono_shapes_and_identical_channels_read_as_the_mono_signal():
     # Pinned against the formula the mono read has always used.
     held = mono[int(0.2 * SR) : int(1.5 * SR)]
     assert want["held_rms_dbfs"] == round(float(20 * np.log10(np.sqrt(np.mean(held**2)))), 2)
-    assert want["peak_dbfs"] == round(float(20 * np.log10(np.max(np.abs(mono[: int(1.6 * SR)])))), 2)
+    assert want["peak_dbfs"] == round(
+        float(20 * np.log10(np.max(np.abs(mono[: int(1.6 * SR)])))), 2
+    )
 
 
 def test_decorrelated_channels_read_their_own_power_not_the_downmix():
@@ -71,9 +72,12 @@ def test_model_path_reaches_level_of_without_a_downmix(monkeypatch, capsys):
         return _decorrelated_stereo(int(total * rate))
 
     monkeypatch.setattr(render_rows, "render_model", fake_render)
-    assert render_rows.render_metrics_main(
-        ["--program", "0", "--pattern", "sustain", "--notes", "60", "--velocities", "80"]
-    ) == 0
+    assert (
+        render_rows.render_metrics_main(
+            ["--program", "0", "--pattern", "sustain", "--notes", "60", "--velocities", "80"]
+        )
+        == 0
+    )
     row = json.loads(capsys.readouterr().out)[0]
     assert row["held_rms_dbfs"] == pytest.approx(10.0 * np.log10(0.2**2 / 2.0), abs=0.1)
 
