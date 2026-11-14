@@ -626,6 +626,8 @@ describe('Sonare WASM NativeSynth', () => {
       'osc2IntervalCents',
       'osc2Level',
       'pulseWidth',
+      'sustainKeyBreak',
+      'sustainKeySlopeDb',
       'unisonWidth',
       'velocityExponent',
     ]);

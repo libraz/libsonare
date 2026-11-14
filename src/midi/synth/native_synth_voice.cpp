@@ -178,6 +178,10 @@ void drive_law(float drive, float* gain, float* makeup) noexcept {
   }
 }
 
+/// Lowest sustain level the key slope scales down to, a hundred times the envelope's
+/// auto-idle threshold so a high held note keeps sounding.
+constexpr float kSustainKeyFloor = 0.01f;
+
 DahdsrConfig scaled_amp_env(const DahdsrConfig& amp, float attack_scale, float decay_scale,
                             float release_scale) noexcept {
   DahdsrConfig cfg = amp;
@@ -197,6 +201,20 @@ float hold_step_for(float sample_hold_hz, double sample_rate) noexcept {
 /// Two over the level count, the signal being bipolar.
 float quant_step_for(float bit_depth) noexcept {
   return bit_depth > 0.0f ? 2.0f / std::exp2(bit_depth) : 0.0f;
+}
+
+/// The linear sustain scale of a note under the patch's key slope; exactly 1 when absent.
+float sustain_key_scale_for(const NativeSynthPatch& p, uint8_t note) noexcept {
+  const float slope = p.va.sustain_key_slope_db;
+  if (p.mode != SynthEngineMode::kSubtractive || slope == 0.0f) return 1.0f;
+  const float semitones_above = std::max(0.0f, static_cast<float>(note) - p.va.sustain_key_break);
+  return std::pow(10.0f, -slope * semitones_above / 20.0f);
+}
+
+/// Scales the sustain, never below min(sustain, kSustainKeyFloor); a scale of 1 changes nothing.
+void apply_sustain_key_scale(DahdsrConfig& cfg, float scale) noexcept {
+  if (scale == 1.0f) return;
+  cfg.sustain = std::max(cfg.sustain * scale, std::min(cfg.sustain, kSustainKeyFloor));
 }
 
 float drift_depth(float drift_cents, float seed) noexcept { return drift_cents * seed; }
@@ -448,8 +466,11 @@ void NativeSynthVoice::start(const NativeSynthPatch& p, double sample_rate, Velo
 
   // After any kit variation, so a GS part edit scales the envelope the kit
   // actually gave this note rather than the patch's own.
-  const DahdsrConfig scaled_amp =
+  // Fixed here so a legato retune and a live refresh keep this note's value.
+  sustain_key_scale = sustain_key_scale_for(p, note);
+  DahdsrConfig scaled_amp =
       scaled_amp_env(amp_cfg, part_mod.attack_scale, part_mod.decay_scale, part_mod.release_scale);
+  apply_sustain_key_scale(scaled_amp, sustain_key_scale);
   amp_env.configure(sample_rate, scaled_amp);
   harpsichord_tail_choke_multiplier = 1.0f - amp_env.release_rate();
   amp_env.note_on();
@@ -1014,8 +1035,9 @@ void NativeSynthVoice::refresh_live(const NativeSynthPatch& p, double sample_rat
   // A delay or hold length applies from the next entry of that stage.
   if (has_any({Id::kAmpDelayMs, Id::kAmpAttackMs, Id::kAmpHoldMs, Id::kAmpDecayMs, Id::kAmpSustain,
                Id::kAmpReleaseMs})) {
-    const DahdsrConfig scaled_amp =
+    DahdsrConfig scaled_amp =
         scaled_amp_env(p.amp_env, part_attack_scale, part_decay_scale, part_release_scale);
+    apply_sustain_key_scale(scaled_amp, sustain_key_scale);
     amp_env.configure(sample_rate, scaled_amp);
     harpsichord_tail_choke_multiplier = 1.0f - amp_env.release_rate();
   }

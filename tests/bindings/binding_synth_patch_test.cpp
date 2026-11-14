@@ -462,11 +462,11 @@ TEST_CASE("the subtractive section is set by key and reaches the render",
     // Every source defaults to absent.
     if (levels.count(d["name"].as_string()) != 0) REQUIRE(d["default"].as_number() == 0.0);
   }
-  REQUIRE(names == std::set<std::string>{"osc2IntervalCents", "osc2Level", "osc2Dry", "noiseLevel",
-                                         "noiseAm", "bandNoiseLevel", "bandNoiseLowHz",
-                                         "bandNoiseLowKeyTrack", "bandNoiseHighHz",
-                                         "bandNoiseHighKeyTrack", "pulseWidth", "unisonWidth",
-                                         "velocityExponent"});
+  REQUIRE(names == std::set<std::string>{
+                       "osc2IntervalCents", "osc2Level", "osc2Dry", "noiseLevel", "noiseAm",
+                       "bandNoiseLevel", "bandNoiseLowHz", "bandNoiseLowKeyTrack",
+                       "bandNoiseHighHz", "bandNoiseHighKeyTrack", "pulseWidth", "unisonWidth",
+                       "velocityExponent", "sustainKeyBreak", "sustainKeySlopeDb"});
 
   SonareProject* project = make_synth_project(3);
   SonareSynthPatch base{};

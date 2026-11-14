@@ -221,6 +221,9 @@ struct NativeSynthVoice : VoiceState {
   /// wrapper, so its control setters are worth calling each sample.
   bool has_engine_control_routes = false;
   float velocity01 = 0.0f;
+  /// Linear scale of the amp envelope's sustain from the patch's key slope, fixed
+  /// at note start from the struck key; 1 when absent.
+  float sustain_key_scale = 1.0f;
   /// Polyphonic aftertouch for this note, added to the channel's own before it
   /// reaches the matrix. Per voice because that is the granularity the message
   /// carries; cleared at note-on so a voice never inherits the last one's.

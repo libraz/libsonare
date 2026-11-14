@@ -220,6 +220,8 @@ const GateRow kEngineGates[] = {
     {"va.band_noise_low_key_track", [](const GateSite&) { return above("bandNoiseLevel", 0); }},
     {"va.band_noise_high_hz", [](const GateSite&) { return above("bandNoiseLevel", 0); }},
     {"va.band_noise_high_key_track", [](const GateSite&) { return above("bandNoiseLevel", 0); }},
+    // The break places a slope that is there only above 0 dB per semitone.
+    {"va.sustain_key_break", [](const GateSite&) { return above("sustainKeySlopeDb", 0); }},
     // Pipe organ: the flat voicing builds the implicit 8' only.
     {"pipe_organ.stopped", [](const GateSite&) { return equals("rankCount", 0); }},
     {"pipe_organ.brightness", [](const GateSite&) { return equals("rankCount", 0); }},

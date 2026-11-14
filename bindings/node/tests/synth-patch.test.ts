@@ -731,6 +731,8 @@ describe('SynthPatch.engineParams', () => {
       'osc2IntervalCents',
       'osc2Level',
       'pulseWidth',
+      'sustainKeyBreak',
+      'sustainKeySlopeDb',
       'unisonWidth',
       'velocityExponent',
     ]);

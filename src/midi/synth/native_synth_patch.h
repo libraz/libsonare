@@ -82,6 +82,13 @@ struct VaPatchParams {
   /// pans by this times its detune position, through its own copy of the filter;
   /// 0 = every oscillator centred, bit-identical.
   float unison_width = 0.0f;
+  /// Key above which the amplitude envelope's sustain level falls with pitch, as
+  /// a MIDI note number; a high held note of an analog voice sits lower than a low one.
+  float sustain_key_break = 60.0f;
+  /// How fast the sustain level falls above that key, in dB per semitone; 0 = absent.
+  /// Subtractive mode only. Nothing here is sample-rate dependent (a level, and a law in
+  /// semitones).
+  float sustain_key_slope_db = 0.0f;
 };
 
 /// One playable patch: oscillator section, filter section, envelopes and the

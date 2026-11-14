@@ -74,6 +74,8 @@ constexpr VaPatchParams blank_va() noexcept {
   z.velocity_exponent = 0.0f;
   z.pulse_width = 0.0f;
   z.unison_width = 0.0f;
+  z.sustain_key_break = 0.0f;
+  z.sustain_key_slope_db = 0.0f;
   return z;
 }
 

@@ -399,6 +399,8 @@ constexpr UnitRow kEngineUnits[] = {
     {"va.velocity_exponent", Unit::None},
     {"va.pulse_width", Unit::Ratio},
     {"va.unison_width", Unit::None},
+    {"va.sustain_key_break", Unit::None},
+    {"va.sustain_key_slope_db", Unit::Db},
     {"fm.algorithm", Unit::None},
     {"fm.velocity_exponent", Unit::None},
     {"fm.ops.ratio", Unit::Ratio},

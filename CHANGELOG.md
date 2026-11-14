@@ -105,6 +105,7 @@
 #### Synthesizer
 
 - A `singing` engine mode (`SONARE_SYNTH_ENGINE_SINGING`), reached through the `singing-voice` preset: a self-oscillating vocal-fold model sounding through a vocal tract. All four excitation axes apply — force is breath pressure, position and brightness move the vowel's constriction, morph leans the vocal register — and a measured compensation table keeps the written pitch as the breath rises. A non-slurred note opens with an alveolar tap. The pitch holds within 20 cents from D#2 to D4 at the default breath; above that the voice is drawn toward its first formant.
+- Lower a subtractive voice's held level with pitch with the `sustainKeySlopeDb` engine parameter (dB per semitone above `sustainKeyBreak`, a MIDI note; slope 0 to 6, 0 adds none): the amplitude envelope's sustain scales down but never below 0.01, so a high held note keeps sounding.
 - Give each singer of the vocal engine's section a slow pitch offset of its own with the `sectionDetuneCents` engine parameter (peak cents, 0 to 20, 0 adds none), drifting over seconds independently of the singers' vibrato, so the section beats as its voices move against each other; it sounds the section on its own when `sectionSpreadCents` is 0.
 
 ### Fixes

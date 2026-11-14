@@ -816,6 +816,9 @@ void apply_va(NativeSynthPatch& p, const Fields& f) {
   F(va.velocity_exponent);
   F(va.pulse_width);
   F(va.unison_width);
+  // The slope first: at 0 the break moves nothing.
+  F(va.sustain_key_slope_db);
+  F(va.sustain_key_break);
 }
 
 void apply_fm(NativeSynthPatch& p, const Fields& f) {

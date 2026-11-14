@@ -4957,3 +4957,163 @@ TEST_CASE("the additive velocity_exponent scales the level span between soft and
   CHECK(steep < shallow);
   CHECK(steep / shallow == Catch::Approx(std::pow(40.0 / 127.0, 3.0 - 0.5)).epsilon(0.02));
 }
+
+namespace {
+
+/// A held subtractive note whose amplitude envelope settles to its sustain well before the window.
+StereoRender render_sustain_key(float slope_db, uint8_t note, float sustain = 0.5f,
+                                float break_note = 60.0f, bool set_fields = true) {
+  NativeSynthPatch p{};
+  p.mode = SynthEngineMode::kSubtractive;
+  p.amp_env.attack_ms = 1.0f;
+  p.amp_env.decay_ms = 20.0f;
+  p.amp_env.sustain = sustain;
+  if (set_fields) {
+    p.va.sustain_key_break = break_note;
+    p.va.sustain_key_slope_db = slope_db;
+  }
+  NativeSynthConfig cfg;
+  cfg.patch = p;
+  NativeSynth synth(cfg);
+  synth.prepare(kOutRate, 256);
+  synth.on_event(0, event(sonare::midi::make_midi1_note_on(0, 0, note, 100)));
+  return render(synth, 24000);
+}
+
+constexpr size_t kSustainKeyHold = 12000;
+
+}  // namespace
+
+TEST_CASE("sustain_key_slope_db 0 renders bit-identically to a patch without the field set",
+          "[midi][synth]") {
+  const StereoRender plain = render_sustain_key(0.0f, 96, 0.5f, 60.0f, false);
+  const StereoRender zero = render_sustain_key(0.0f, 96, 0.5f, 20.0f, true);
+  REQUIRE(peak(plain.left) > 0.0f);
+  CHECK(plain.left == zero.left);
+  CHECK(plain.right == zero.right);
+}
+
+TEST_CASE("sustain_key_slope_db is continuous at 0", "[midi][synth]") {
+  const StereoRender zero = render_sustain_key(0.0f, 100);
+  const StereoRender tiny = render_sustain_key(1.0e-6f, 100);
+  // 40 semitones above the break scale the sustain by 10^(-4e-5/20) = 1 - 4.6e-6; allow four times
+  // that.
+  const float tolerance = 2.0e-5f * peak(zero.left);
+  REQUIRE(tolerance > 0.0f);
+  for (size_t i = 0; i < zero.left.size(); ++i) {
+    REQUIRE(std::fabs(zero.left[i] - tiny.left[i]) <= tolerance);
+  }
+}
+
+TEST_CASE("a nonzero sustain_key_slope_db lowers the held level above the break only",
+          "[midi][synth]") {
+  const StereoRender flat_high = render_sustain_key(0.0f, 84);
+  const StereoRender sloped_high = render_sustain_key(0.5f, 84);
+  // 24 semitones at 0.5 dB each is 12 dB on the sustain; the envelope is linear in it.
+  const double ratio = static_cast<double>(rms(sloped_high.left, kSustainKeyHold)) /
+                       static_cast<double>(rms(flat_high.left, kSustainKeyHold));
+  CHECK(ratio == Catch::Approx(std::pow(10.0, -12.0 / 20.0)).epsilon(0.03));
+
+  // At and below the break the scale is exactly 1.
+  for (const uint8_t note : {static_cast<uint8_t>(60), static_cast<uint8_t>(48)}) {
+    const StereoRender flat = render_sustain_key(0.0f, note);
+    const StereoRender sloped = render_sustain_key(0.5f, note);
+    CHECK(flat.left == sloped.left);
+  }
+}
+
+TEST_CASE("the sustain_key floor keeps a steep slope sounding at the top key", "[midi][synth]") {
+  const StereoRender flat = render_sustain_key(0.0f, 127);
+  const StereoRender steep = render_sustain_key(6.0f, 127);
+  // 67 semitones at 6 dB each scale the sustain to nothing, so the 0.01 floor holds it.
+  const double ratio = static_cast<double>(rms(steep.left, kSustainKeyHold)) /
+                       static_cast<double>(rms(flat.left, kSustainKeyHold));
+  CHECK(ratio == Catch::Approx(0.01 / 0.5).epsilon(0.05));
+  CHECK(rms(steep.left, steep.left.size() - 4800) > 0.0f);
+}
+
+TEST_CASE("a sustain under the floor is not scaled by sustain_key_slope_db", "[midi][synth]") {
+  const StereoRender flat = render_sustain_key(0.0f, 96, 0.005f);
+  const StereoRender sloped = render_sustain_key(3.0f, 96, 0.005f);
+  REQUIRE(peak(flat.left) > 0.0f);
+  CHECK(flat.left == sloped.left);
+}
+
+TEST_CASE("the sustain key fields survive clamp_synth_patch and are clamped out of range",
+          "[midi][synth]") {
+  using sonare::midi::synth::clamp_synth_patch;
+  NativeSynthPatch in;
+  in.va.sustain_key_break = 72.5f;
+  in.va.sustain_key_slope_db = 2.5f;
+  const NativeSynthPatch kept = clamp_synth_patch(in);
+  CHECK(kept.va.sustain_key_break == 72.5f);
+  CHECK(kept.va.sustain_key_slope_db == 2.5f);
+
+  NativeSynthPatch high;
+  high.va.sustain_key_break = 200.0f;
+  high.va.sustain_key_slope_db = 99.0f;
+  const NativeSynthPatch clamped_high = clamp_synth_patch(high);
+  CHECK(clamped_high.va.sustain_key_break == 127.0f);
+  CHECK(clamped_high.va.sustain_key_slope_db == 6.0f);
+
+  NativeSynthPatch low;
+  low.va.sustain_key_break = -5.0f;
+  low.va.sustain_key_slope_db = -1.0f;
+  const NativeSynthPatch clamped_low = clamp_synth_patch(low);
+  CHECK(clamped_low.va.sustain_key_break == 0.0f);
+  CHECK(clamped_low.va.sustain_key_slope_db == 0.0f);
+}
+
+TEST_CASE("a legato retune and a live refresh keep the first note's sustain key scale",
+          "[midi][synth][articulation]") {
+  NativeSynthConfig cfg = legato_config();
+  cfg.patch.mode = SynthEngineMode::kSubtractive;
+  cfg.patch.amp_env.decay_ms = 20.0f;
+  cfg.patch.amp_env.sustain = 0.5f;
+  cfg.patch.va.sustain_key_break = 48.0f;
+  cfg.patch.va.sustain_key_slope_db = 0.5f;
+  NativeSynth synth(cfg);
+  synth.prepare(kOutRate, 256);
+  synth.set_articulation(0, ArticulationMode::kMonoLegato);
+  synth.on_event(0, source_event(sonare::midi::make_midi1_note_on(0, 0, 72, 100), 101));
+  render(synth, 12000);
+  synth.on_event(0, source_event(sonare::midi::make_midi1_note_on(0, 0, 79, 100), 101));
+  render(synth, 12000);
+  const float before = rms(render(synth, 12000).left);
+  REQUIRE(before > 0.0f);
+  // Rewriting the sustain to its own value re-derives the amplitude envelope in place.
+  REQUIRE(synth.apply_parameter(
+      static_cast<unsigned int>(sonare::midi::synth::NativeSynthParamId::kAmpSustain), 0.5f));
+  const float after = rms(render(synth, 12000).left);
+  REQUIRE(synth.active_voice_count() == 1);
+  // A scale re-taken from the retuned key would be 3.5 dB (33%) lower.
+  CHECK(after == Catch::Approx(before).epsilon(0.03));
+
+  // At slope 0 the same held note, slur and refresh render exactly as with the fields untouched.
+  const auto gesture = [](bool set_fields) {
+    NativeSynthConfig flat = legato_config();
+    flat.patch.mode = SynthEngineMode::kSubtractive;
+    flat.patch.amp_env.decay_ms = 20.0f;
+    flat.patch.amp_env.sustain = 0.5f;
+    if (set_fields) {
+      flat.patch.va.sustain_key_break = 48.0f;
+      flat.patch.va.sustain_key_slope_db = 0.0f;
+    }
+    NativeSynth s(flat);
+    s.prepare(kOutRate, 256);
+    s.set_articulation(0, ArticulationMode::kMonoLegato);
+    s.on_event(0, source_event(sonare::midi::make_midi1_note_on(0, 0, 72, 100), 101));
+    std::vector<float> out = render(s, 12000).left;
+    s.on_event(0, source_event(sonare::midi::make_midi1_note_on(0, 0, 79, 100), 101));
+    const std::vector<float> slurred = render(s, 12000).left;
+    out.insert(out.end(), slurred.begin(), slurred.end());
+    s.apply_parameter(
+        static_cast<unsigned int>(sonare::midi::synth::NativeSynthParamId::kAmpSustain), 0.5f);
+    const std::vector<float> refreshed = render(s, 12000).left;
+    out.insert(out.end(), refreshed.begin(), refreshed.end());
+    return out;
+  };
+  const std::vector<float> untouched = gesture(false);
+  REQUIRE(peak(untouched) > 0.0f);
+  CHECK(gesture(true) == untouched);
+}

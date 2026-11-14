@@ -108,6 +108,10 @@ constexpr NativeSynthPatch clamp_synth_patch(const NativeSynthPatch& patch) noex
       std::clamp(patch_clamp_detail::sanitize(p.va.velocity_exponent, 2.0f), 0.0f, 4.0f);
   p.va.pulse_width = std::clamp(patch_clamp_detail::sanitize(p.va.pulse_width, 0.5f), 0.02f, 0.98f);
   p.va.unison_width = std::clamp(patch_clamp_detail::sanitize(p.va.unison_width, 0.0f), 0.0f, 1.0f);
+  p.va.sustain_key_break =
+      std::clamp(patch_clamp_detail::sanitize(p.va.sustain_key_break, 60.0f), 0.0f, 127.0f);
+  p.va.sustain_key_slope_db =
+      std::clamp(patch_clamp_detail::sanitize(p.va.sustain_key_slope_db, 0.0f), 0.0f, 6.0f);
   for (ModRoute& route : p.mod_matrix.routes) {
     route.depth = std::clamp(patch_clamp_detail::sanitize(route.depth, 0.0f), -9600.0f, 9600.0f);
   }
