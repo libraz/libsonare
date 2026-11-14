@@ -17,6 +17,12 @@
       "lane": "synth",
       "type": "int"
     },
+    "amp_env.sustain": {
+      "class": "stage_enable",
+      "basis": "0 = a one-shot: the envelope ends the note on its own; a sustain level rings until a note-off, which no gate window reaches past and a drum part never sends",
+      "lane": "struck",
+      "off_within": 0.0001
+    },
     "body": {
       "class": "identity",
       "basis": "BodyType enum: which resonant body is attached",
@@ -1156,6 +1162,10 @@
     "va.unison_width": {
       "requires": ["stereo"],
       "basis": "stereo difference of the unison stack (native_synth_voice.h)"
+    },
+    "amp_env.release_ms": {
+      "requires": ["damper"],
+      "basis": "acts after the key lift, which only damper_release_ms reads; the held-note dimensions end at note-off"
     }
   },
   "switch_candidates": {

@@ -186,7 +186,10 @@ def test_two_references_are_compared_only_when_both_are_gated():
 def test_the_knob_reach_rules_name_this_dimension():
     reach = json.loads(Path(KNOB_CLASSES_PATH).read_text())["reach"]
     needed = {d for k, r in reach.items() if not k.startswith("_") for d in r["requires"]}
-    assert DIMENSION in needed and needed <= {DIMENSION, "stereo"}
+    import toneclass
+
+    named = {d for dims in toneclass.CANONICAL_DIMENSIONS.values() for d in dims}
+    assert DIMENSION in needed and needed <= named | {DIMENSION}
 
 
 @pytest.mark.parametrize("program", [40, 41, 56, 60, 64, 68, 73, 79, 53, 54, 110])

@@ -767,6 +767,40 @@ class KnobClasses:
         return [k for k in keys if (e := self.classify(k)) is not None and e.group == group]
 
 
+def _reach_entries(data: dict, path: Path) -> dict[str, KnobReach]:
+    """The `reach` block of a loaded `knob-classes.json`, checked for shape."""
+    reach: dict[str, KnobReach] = {}
+    for pattern, e in data.get("reach", {}).items():
+        if pattern.startswith("_"):
+            continue
+        requires = e.get("requires")
+        if (
+            not isinstance(requires, list)
+            or not requires
+            or not all(isinstance(d, str) and d for d in requires)
+        ):
+            raise ValueError(
+                f"{path}: reach {pattern!r} needs a non-empty 'requires' list of dimension names"
+            )
+        reach[pattern] = KnobReach(pattern, tuple(requires), e.get("basis", ""))
+    return reach
+
+
+def unjudged_reach(gated: Collection[str], path: Path = KNOB_CLASSES_PATH) -> frozenset[str]:
+    """The `reach` patterns needing a dimension @p gated lacks, read without a catalogue.
+
+    The rule `--spec auto` applies through `KnobClasses.unjudged_by`, for a reader that
+    holds a finished fit's knobs rather than the library's catalogue.
+    """
+    reach = _reach_entries(json.loads(Path(path).read_text()), path)
+    return frozenset(p for p, r in reach.items() if any(d not in gated for d in r.requires))
+
+
+def reach_pattern_for(key: str, patterns: Collection[str]) -> str | None:
+    """The pattern among @p patterns naming a catalogue @p key, or None."""
+    return _Patterns(patterns).find(key) if patterns else None
+
+
 def load_knob_classes(path: Path, catalogue: Catalogue, *, strict: bool = False) -> KnobClasses:
     """Read `knob-classes.json` and check every entry against the library's catalogue.
 
@@ -820,20 +854,7 @@ def load_knob_classes(path: Path, catalogue: Catalogue, *, strict: bool = False)
             type=e.get("type", ""),
             value=float(value) if value is not None else None,
         )
-    reach: dict[str, KnobReach] = {}
-    for pattern, e in data.get("reach", {}).items():
-        if pattern.startswith("_"):
-            continue
-        requires = e.get("requires")
-        if (
-            not isinstance(requires, list)
-            or not requires
-            or not all(isinstance(d, str) and d for d in requires)
-        ):
-            raise ValueError(
-                f"{path}: reach {pattern!r} needs a non-empty 'requires' list of dimension names"
-            )
-        reach[pattern] = KnobReach(pattern, tuple(requires), e.get("basis", ""))
+    reach = _reach_entries(data, path)
     classes = KnobClasses(
         entries,
         notes=data.get("notes", {}),

@@ -79,6 +79,8 @@ from knobs import (
     load_spec,
     load_spec_weights,
     load_start_overrides,
+    reach_pattern_for,
+    unjudged_reach,
 )
 from loop_record import committed_note_groups
 from objective import objective_digest
@@ -863,17 +865,22 @@ def _excess(readings: list[dict]) -> tuple[float, set[tuple[str, str]]]:
 
 
 def unmeasured(voice: dict) -> frozenset[str]:
-    """Field suffixes none of the voice's gates can see move.
+    """The `knob-classes.json` `reach` patterns none of the voice's gates can judge.
 
-    A release acts after the key lift, which only the `damper` dimension reads; a
-    voice no gate of which declares it has its releases settled by nothing, so a
-    fit moving one moves it blind.
+    The rule `--spec auto` applies, over the same reading: the dimensions the voice's
+    gates hold a bound for. A release acts after the key lift, which only `damper`
+    reads, so a voice no gate of which bounds it has its releases settled by nothing.
     """
+    gated: set[str] = set()
     for gate in voice.get("gates") or [{"capture": voice.get("capture")}]:
-        path = CAPTURE_DIR / f"{gate['capture']}.json"
-        if path.exists() and "damper" in json.loads(path.read_text()).get("dimensions", []):
-            return frozenset()
-    return frozenset({"release_ms"})
+        path = (
+            Path(gate["gate"])
+            if gate.get("gate")
+            else REFERENCE_DIR / f"{gate['capture']}_gate.json"
+        )
+        if path.exists():
+            gated.update(json.loads(path.read_text()).get("bounds", {}))
+    return unjudged_reach(gated)
 
 
 def _held(knob: dict, value: float, held: frozenset[str] = frozenset()) -> bool:
@@ -883,14 +890,14 @@ def _held(knob: dict, value: float, held: frozenset[str] = frozenset()) -> bool:
     number, and a count adds or removes a resonator the gate window may never
     reach; an envelope's sustain by whether it still ends the note on its own,
     since a one-shot that gains one rings until a note-off a drum never sends; and
-    a field in `held`, which no gate of this voice measures.
+    a field a `held` pattern names, which no gate of this voice measures.
     """
     path = knob["key"].partition(".")[2]
     if switch_field(path) or integer_field(path):
         return round(value) != round(_shipped(knob))
     if path.endswith("amp_env.sustain"):
         return (_shipped(knob) <= SILENT_SUSTAIN) != (value <= SILENT_SUSTAIN)
-    if any(path.endswith(suffix) for suffix in held):
+    if reach_pattern_for(knob["key"], held) is not None:
         return format_value(value) != format_value(_shipped(knob))
     return False
 

@@ -130,7 +130,7 @@ def _shipped_keys():
 def test_the_shipped_table_loads_against_a_catalogue_naming_each_of_its_keys():
     classes = load_knob_classes(KNOB_CLASSES_PATH, _catalogue(_shipped_keys()), strict=True)
     assert not classes.absent
-    assert {r.requires for r in classes.reach.values()} == {("motion",), ("stereo",)}
+    assert {r.requires for r in classes.reach.values()} == {("motion",), ("stereo",), ("damper",)}
     assert set(classes.groups) == {"piano.excitation_chain"}
     for key in classes.groups["piano.excitation_chain"]:
         assert classes.entries[key].evidence in ("measured", "code reading")
@@ -389,6 +389,45 @@ def test_the_shipped_reach_table_covers_the_voicing_fields_a_trombone_refit_move
         assert classes.unjudged_by(f"p0.{key}", {"attack", "body"}) == ["motion"]
     assert classes.unjudged_by("p0.stereo_spread", {"attack"}) == ["stereo"]
     assert classes.unjudged_by("p0.stereo_spread", {"stereo"}) == []
+
+
+def _gate_bounds(capture: str) -> set[str]:
+    path = KNOB_CLASSES_PATH.parent / "reference" / f"{capture}_gate.json"
+    return set(json.loads(path.read_text())["bounds"])
+
+
+_ENVELOPE_CAT = _catalogue(
+    {"p0.amp_env.release_ms": 500.0, "p0.amp_env.sustain": 0.0, "p0.brightness": 0.5},
+    {"amp_env.release_ms": (1.0, 20000.0), "amp_env.sustain": (0.0, 1.0), "brightness": (0.0, 1.0)},
+)
+
+
+def test_a_release_is_offered_only_where_the_gate_bounds_the_key_lift():
+    classes = load_knob_classes(KNOB_CLASSES_PATH, _ENVELOPE_CAT)
+    # A struck capture whose key lifts on a note already decayed: no damper bound.
+    struck = _gate_bounds("music_box")
+    assert "damper" not in struck
+    spec, report = auto_spec_report(0, _ENVELOPE_CAT, classes=classes, gated=struck)
+    assert "p0.amp_env.release_ms" not in _offered(spec)
+    assert report.unjudged == {"damper": ["p0.amp_env.release_ms"]}
+    # The bright piano gate bounds damper_release_ms, so the same field stays in.
+    piano = _gate_bounds("bright_piano")
+    assert "damper" in piano
+    spec, report = auto_spec_report(0, _ENVELOPE_CAT, classes=classes, gated=piano)
+    assert "p0.amp_env.release_ms" in _offered(spec)
+    assert report.unjudged == {}
+
+
+def test_a_one_shot_sustain_is_not_offered_and_a_held_one_cannot_reach_zero():
+    classes = load_knob_classes(KNOB_CLASSES_PATH, _ENVELOPE_CAT)
+    spec, report = auto_spec_report(0, _ENVELOPE_CAT, classes=classes, gated={"damper"})
+    assert "p0.amp_env.sustain" not in _offered(spec)
+    assert report.stage_off == ["p0.amp_env.sustain"]
+    held = _catalogue({"p0.amp_env.sustain": 0.7}, {"amp_env.sustain": (0.0, 1.0)})
+    spec, report = auto_spec_report(0, held, classes=classes, gated={"damper"})
+    (entry,) = [e for e in spec if e["tunable"] == "p0.amp_env.sustain"]
+    assert entry["min"] > 1e-4
+    assert report.clipped == ["p0.amp_env.sustain"]
 
 
 # --- switch candidates -------------------------------------------------------

@@ -202,12 +202,17 @@ def test_a_count_landing_in_another_bucket_is_held():
 def test_a_release_is_held_only_where_no_gate_reads_the_key_lift(tmp_path, monkeypatch):
     import refit
 
-    monkeypatch.setattr(refit, "CAPTURE_DIR", tmp_path)
-    (tmp_path / "blind.json").write_text('{"dimensions": ["attack", "body"]}')
-    (tmp_path / "lifts.json").write_text('{"dimensions": ["attack", "damper"]}')
+    monkeypatch.setattr(refit, "REFERENCE_DIR", tmp_path)
+    (tmp_path / "blind_gate.json").write_text('{"bounds": {"attack": {}, "body": {}}}')
+    (tmp_path / "lifts_gate.json").write_text('{"bounds": {"attack": {}, "damper": {}}}')
     blind = refit.unmeasured({"gates": [{"capture": "blind"}]})
-    assert blind == {"release_ms"}
-    assert refit.unmeasured({"gates": [{"capture": "blind"}, {"capture": "lifts"}]}) == set()
+    assert "amp_env.release_ms" in blind
+    both = refit.unmeasured({"gates": [{"capture": "blind"}, {"capture": "lifts"}]})
+    assert "amp_env.release_ms" not in both
+    # A capture declaring the dimension is not enough: the gate has to bound it.
+    named = tmp_path / "named_gate.json"
+    named.write_text('{"bounds": {"attack": {}}, "dimensions": ["damper"]}')
+    assert "amp_env.release_ms" in refit.unmeasured({"gates": [{"gate": str(named)}]})
 
     knobs = [{"key": "pad.amp_env.release_ms", "start": 580.0}, {"key": FLOAT, "start": 1.0}]
     fit = {"knobs": knobs, "selected": {"values": [947.0, 2.0]}}
