@@ -246,7 +246,7 @@ constexpr void configure_synth_programs(ProgramOverrides& o) noexcept {
   // The pair's own balance, not the absolute level: the references come from
   // one rack at one setting, so the 1.7 dB this sits above its sibling is the
   // instrument, while what they share against the bank is the rack's output.
-  o.synth_strings_1.gain = 0.2494f;
+  o.synth_strings_1.gain = 0.307f;
   o.synth_strings_1.amp_env.decay_ms = 1798.29f;
   o.synth_strings_1.va.velocity_exponent = 1.82f;
 
@@ -257,7 +257,7 @@ constexpr void configure_synth_programs(ProgramOverrides& o) noexcept {
   o.synth_strings_2.cutoff_hz = 3200.0f;
   o.synth_strings_2.amp_env = fallback_env(270.0f, 500.0f, 0.8f, 700.0f);
   o.synth_strings_2.va.velocity_exponent = 1.83f;
-  o.synth_strings_2.gain = 0.2598f;
+  o.synth_strings_2.gain = 0.3062f;
   o.synth_strings_2.amp_env.attack_ms = 165.262f;
   o.synth_strings_2.amp_env.decay_ms = 1498.58f;
 
@@ -749,7 +749,7 @@ SONARE_TUNED_CONSTEXPR void configure_synth_bass_and_brass_programs(ProgramOverr
   // family's 4 c LFO read as 16 dB of sideband noise against it.
   o.synth_brass_1.lfo_to_pitch_cents = 0.0f;
   o.synth_brass_1.fm.velocity_exponent = 2.26f;
-  o.synth_brass_1.gain = 0.5321f;
+  o.synth_brass_1.gain = 0.8285f;
 
   // Synth Brass 2 (GM 63): two FM pairs, the second 20.4 c flat like the reference's layer.
   o.synth_brass_2 = fam[7];

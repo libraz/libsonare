@@ -1265,7 +1265,7 @@ SONARE_TUNED_CONSTEXPR void configure_keyed_programs(ProgramOverrides& o) noexce
   trem.amp_env.attack_ms = 98.0261f;
   trem.amp_env.decay_ms = 183.625f;
   trem.amp_env.release_ms = 183.625f;
-  o.tremolo_strings.gain = 0.107f;
+  o.tremolo_strings.gain = 0.1512f;
 
   // Pizzicato Strings (GM 45): a plucked violin-family string — short KS ring
   // into the violin corpus, mid-string finger pluck.

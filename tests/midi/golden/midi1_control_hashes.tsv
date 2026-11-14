@@ -36,7 +36,7 @@ native/p004-fm-epiano/bend	17314898766319146995
 native/p004-fm-epiano/chan-pressure	416190674174338923
 native/p004-fm-epiano/poly-pressure	416190674174338923
 native/p004-fm-epiano/rpn-bend-range	812277198139368867
-native/p004-fm-epiano/bank-program	4089934917235565248
+native/p004-fm-epiano/bank-program	1059412042754321723
 native/p004-fm-epiano+profile/none	416190674174338923
 native/p004-fm-epiano+profile/vel001	9598546549588432571
 native/p004-fm-epiano+profile/vel127	13117480114933423063
@@ -58,7 +58,7 @@ native/p011-vibraphone/bend	591279205254740395
 native/p011-vibraphone/chan-pressure	2681107437656199731
 native/p011-vibraphone/poly-pressure	2681107437656199731
 native/p011-vibraphone/rpn-bend-range	8428494352027425483
-native/p011-vibraphone/bank-program	12347950229362637372
+native/p011-vibraphone/bank-program	4802629783664746649
 native/p011-vibraphone+profile/none	2681107437656199731
 native/p011-vibraphone+profile/vel001	2691805470591818627
 native/p011-vibraphone+profile/vel127	8695970469097421823
