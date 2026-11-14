@@ -91,6 +91,7 @@
 #### Synthesizer
 
 - The built-in GM programs' relative loudness moves toward their references: 45 programs whose held level, measured against each one's own reference, stood more than 2 dB from the bank's median offset are brought to it by output gain alone, and the GS variations built on them move with them. Timbre is unchanged. A mix balanced against the previous levels needs these programs' faders re-set.
+- The brass section (GM program 61) no longer applies a mute colour, which raises its held level.
 - Drum keys 27 to 30 of the built-in kit (High Q, Slap, Scratch Push, Scratch Pull) have voices of their own, fitted to a module's recordings, instead of the shared generic burst; Scratch Push and Scratch Pull choke each other. Their velocity response is the kit's generic one, since the recordings carry a single velocity.
 
 ### New

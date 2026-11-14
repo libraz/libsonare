@@ -946,7 +946,7 @@ constexpr void configure_physical_programs(ProgramOverrides& o) noexcept {
   o.brass_section.brass.half_valve = 0.144254f;
   o.brass_section.brass.velocity_exponent = 1.81084f;
   o.brass_section.drive = 0.234498f;
-  o.brass_section.brass.mute = 0.25f;
+  o.brass_section.brass.mute = 0.0f;
   o.brass_section.brass.onset_breath_overshoot_db = 1.52786f;
   o.brass_section.brass.onset_breath_overshoot_vel_db = 2.19834f;
   o.brass_section.brass.onset_breath_settle_ms = 147.847f;
