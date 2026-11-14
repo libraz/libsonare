@@ -111,10 +111,12 @@ def velocity_law(rows: list[dict]) -> dict | None:
     pooled = [k for p in sloped for k in p["_ks"]]
     for p in pairs:
         del p["_ks"]
-    mapping = all(p["step_iqr_db"] <= VELOCITY_LAW_TOLERANCE_DB for p in pairs)
+    spread_db = max(p["step_iqr_db"] for p in pairs)
     return {
         "field": VELOCITY_LAW_FIELD,
-        "class": "mapping" if mapping else "varies by note",
+        "class": "mapping" if spread_db <= VELOCITY_LAW_TOLERANCE_DB else "varies by note",
+        # The widest pair's across-note IQR of the step: what the class is decided on.
+        "spread_db": spread_db,
         # Pooled over the sloped pairs; the IQR is the widest pair's note spread,
         # since pooling would also count the law's curvature between pairs.
         "k": round(float(np.median(pooled)), 3) if pooled else None,
@@ -137,22 +139,22 @@ def velocity_law_reading(profile: dict, timbre: str) -> tuple[dict | None, bool]
 
 
 def format_velocity_law(law: dict | None, recorded: bool = True) -> str:
-    """The one-line reading printed beside `vel_range`."""
+    """The one-line reading printed beside `vel_range`, naming the level field it read."""
+    field = law["field"] if law else VELOCITY_LAW_FIELD
     if law is None:
         text = "no reading"
     else:
-        if law["class"] == "mapping" and law["k"] is not None:
-            text = f"mapping k={law['k']:.2f} (IQR {law['k_iqr']:.2f})"
-        else:
-            text = law["class"]
         flat = [f"v{p['velocities'][0]}-v{p['velocities'][1]}" for p in law["pairs"] if p["flat"]]
+        parts = [] if law["k"] is None else [law["class"]]
+        if law["class"] == "mapping" and law["k"] is not None:
+            parts = [f"mapping k={law['k']:.2f}"]
         if flat:
-            text = (
-                f"{text}, flat at {', '.join(flat)}"
-                if law["k"] is not None
-                else f"flat at {', '.join(flat)}"
-            )
-    return f"velocity law: {text}" + ("" if recorded else " (computed, not recorded)")
+            parts.append(f"flat at {', '.join(flat)}")
+        text = f"{', '.join(parts)}, spread {law['spread_db']:.2f} dB"
+        if law["class"] == "mapping" and law["k_iqr"] is not None:
+            text += f" (IQR k {law['k_iqr']:.2f})"
+    suffix = "" if recorded else " (computed, not recorded)"
+    return f"velocity law ({field}): {text}{suffix}"
 
 
 def summarize(rows: list[dict]) -> dict:

@@ -51,13 +51,20 @@ def test_a_power_law_on_every_note_reads_as_a_mapping_with_its_exponent():
     assert law["k_iqr"] == pytest.approx(0.0, abs=1e-3)
     assert [p["velocities"] for p in law["pairs"]] == [[32, 56], [56, 80], [80, 104], [104, 127]]
     assert not any(p["flat"] for p in law["pairs"])
-    assert format_velocity_law(law) == "velocity law: mapping k=1.50 (IQR 0.00)"
+    assert law["spread_db"] == pytest.approx(0.0, abs=1e-3)
+    assert (
+        format_velocity_law(law)
+        == "velocity law (held_peak_dbfs): mapping k=1.50, spread 0.00 dB (IQR k 0.00)"
+    )
 
 
 def test_a_note_dependent_law_varies_by_note():
     law = velocity_law(rows(lambda n, v: power(0.5 + (n - 40) / 24)(n, v)))
     assert law["class"] == "varies by note"
-    assert format_velocity_law(law) == "velocity law: varies by note"
+    assert law["spread_db"] > 0.25
+    assert format_velocity_law(law) == (
+        f"velocity law (held_peak_dbfs): varies by note, spread {law['spread_db']:.2f} dB"
+    )
 
 
 def test_a_top_pair_with_no_step_reads_flat():
@@ -66,13 +73,15 @@ def test_a_top_pair_with_no_step_reads_flat():
     assert flat == [[104, 127]]
     # The flat pair stays out of the exponent rather than pulling it toward zero.
     assert law["k"] == pytest.approx(1.5, abs=1e-3)
-    assert format_velocity_law(law).endswith(", flat at v104-v127")
+    assert format_velocity_law(law) == (
+        "velocity law (held_peak_dbfs): mapping k=1.50, flat at v104-v127, spread 0.00 dB (IQR k 0.00)"
+    )
 
 
 def test_one_velocity_or_too_few_notes_gives_no_reading():
     assert velocity_law(rows(power(1.5), velocities=(80,))) is None
     assert velocity_law(rows(power(1.5), notes=(40, 52))) is None
-    assert format_velocity_law(None) == "velocity law: no reading"
+    assert format_velocity_law(None) == "velocity law (held_peak_dbfs): no reading"
 
 
 def test_the_summary_records_the_law_beside_the_velocity_response():
@@ -86,7 +95,7 @@ def test_a_profile_without_the_field_is_computed_from_its_rows_and_says_so():
     assert not recorded
     assert law["k"] == pytest.approx(1.5, abs=1e-3)
     assert format_velocity_law(law, recorded) == (
-        "velocity law: mapping k=1.50 (IQR 0.00) (computed, not recorded)"
+        "velocity law (held_peak_dbfs): mapping k=1.50, spread 0.00 dB (IQR k 0.00) (computed, not recorded)"
     )
     # A recorded field is read as recorded, even where the rows would say otherwise.
     profile["summary"]["t"]["velocity_law"] = None
@@ -101,7 +110,9 @@ def test_compare_json_and_the_gate_audit_carry_the_law(tmp_path):
     assert body["velocity_law"]["recorded"] is False
     entries = [{"key": "cap:vel_range", "stat": "median"}]
     got = gate_audit.format_velocity_laws({"cap": body["velocity_law"]}, entries)
-    assert got == ["  cap: velocity law: mapping k=1.50 (IQR 0.00) (computed, not recorded)"]
+    assert got == [
+        "  cap: velocity law (held_peak_dbfs): mapping k=1.50, spread 0.00 dB (IQR k 0.00) (computed, not recorded)"
+    ]
     # A capture whose vel_range the audit did not read prints nothing.
     assert gate_audit.format_velocity_laws({"cap": body["velocity_law"]}, []) == []
 
