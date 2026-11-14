@@ -14,6 +14,7 @@
 #include <cstdint>
 #include <memory>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include "midi/midi_event.h"
@@ -239,6 +240,7 @@ TEST_CASE("ASSIGN GROUP numbers name the groups the GS drum map prints", "[midi]
       {4, 79, 72},  // cuica / whistle
       {5, 81, 74},  // triangle / guiro
       {6, 87, 79},  // surdo / cuica
+      {7, 30, 87},  // scratch / surdo
   };
   for (const Row& r : rows) {
     CAPTURE(r.group, r.member, r.other);
@@ -246,5 +248,21 @@ TEST_CASE("ASSIGN GROUP numbers name the groups the GS drum map prints", "[midi]
     REQUIRE(ringing_alone(r.other) > 0.01f);
     CHECK(residual_after_assign(r.member, r.group) < 0.01f);
     CHECK(residual_after_assign(r.other, r.group) > 0.01f);
+  }
+}
+
+TEST_CASE("Scratch Push and Scratch Pull choke each other", "[midi][sf2][drums]") {
+  // One exclusive pair in the GS drum map, both modelled here. Both pieces are
+  // noise, whose draw differs between two renders, so the choke is read off the
+  // voice count rather than off a difference of two renders.
+  for (const auto& [first, second] : {std::pair<uint8_t, uint8_t>{30, 29}, {29, 30}}) {
+    CAPTURE(first, second);
+    Sf2Player player = make_player();
+    note_on(player, first);
+    render(player, 2048);
+    REQUIRE(player.active_voice_count() == 1);
+    note_on(player, second);
+    render(player, 2048);
+    CHECK(player.active_voice_count() == 1);
   }
 }

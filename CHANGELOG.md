@@ -88,6 +88,10 @@
 
 - Writing 16- or 24-bit WAV (`save_wav`, the command lines, bounce output) applies deterministic TPDF dither, independent per channel, to a stream that is not already on the target grid, so a fading reverb tail ends in noise instead of truncation distortion and a cut to silence. A stream already at that word length (a decoded file, a mastering-dithered master) is written code for code, and exact zeros stay digital silence. The same input still writes the same bytes on every platform and on both command lines.
 
+#### Synthesizer
+
+- Drum keys 27 to 30 of the built-in kit (High Q, Slap, Scratch Push, Scratch Pull) have voices of their own, fitted to a module's recordings, instead of the shared generic burst; Scratch Push and Scratch Pull choke each other. Their velocity response is the kit's generic one, since the recordings carry a single velocity.
+
 ### New
 
 #### Key detection

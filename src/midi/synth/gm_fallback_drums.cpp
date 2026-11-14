@@ -1199,6 +1199,54 @@ SONARE_TUNED_CONSTEXPR DrumTables build_drum_note_table() noexcept {
   t[38] = d.snare;  // Acoustic Snare
   t[40] = d.snare;  // Electric Snare
 
+  // --- keys below the GM range ---
+  // High Q: tonal blip; module reference
+  t[27] = d.percussion;
+  t[27].amp_env.attack_ms = 0.5f;
+  t[27].amp_env.decay_ms = 42.5728f;
+  t[27].percussion.num_modes = 1;
+  t[27].percussion.base_freq_hz = 181.88f;
+  t[27].percussion.mode_decay_s = 0.116449f;
+  t[27].percussion.tone_gain = 0.471443f;
+  t[27].percussion.noise_gain = 0.348462f;
+  t[27].percussion.noise_cutoff_hz = 590.216f;
+  t[27].percussion.noise_q = 0.85053f;
+  t[27].percussion.noise_decay_ms = 6.10939f;
+  t[27].gain = 2.66f;
+  // Slap: noise crack near 2.5 kHz; module reference
+  t[28] = d.percussion;
+  t[28].amp_env.attack_ms = 0.242346f;
+  t[28].amp_env.decay_ms = 182.2f;
+  t[28].percussion.num_modes = 0;
+  t[28].percussion.noise_gain = 1.36474f;
+  t[28].percussion.noise_cutoff_hz = 2474.71f;
+  t[28].percussion.noise_q = 1.53973f;
+  t[28].percussion.noise_decay_ms = 234.793f;
+  t[28].gain = 2.1f;
+  // Scratch Push: slow-swell noise band; module reference. Push and Pull are one
+  // exclusive pair in the GS drum map.
+  t[29] = d.percussion;
+  t[29].amp_env.attack_ms = 52.0f;
+  t[29].amp_env.decay_ms = 108.386f;
+  t[29].percussion.num_modes = 0;
+  t[29].percussion.exclusive_class = 7;
+  t[29].percussion.noise_gain = 1.24336f;
+  t[29].percussion.noise_cutoff_hz = 763.806f;
+  t[29].percussion.noise_q = 2.26598f;
+  t[29].percussion.noise_decay_ms = 200.0f;
+  t[29].gain = 1.97f;
+  // Scratch Pull: quicker swell, longer decay; module reference
+  t[30] = d.percussion;
+  t[30].amp_env.attack_ms = 12.7716f;
+  t[30].amp_env.decay_ms = 226.099f;
+  t[30].percussion.num_modes = 0;
+  t[30].percussion.exclusive_class = 7;
+  t[30].percussion.noise_gain = 1.25074f;
+  t[30].percussion.noise_cutoff_hz = 956.045f;
+  t[30].percussion.noise_q = 2.60339f;
+  t[30].percussion.noise_decay_ms = 238.675f;
+  t[30].gain = 1.66f;
+
   // --- wooden idiophones + clicks ---
   t[31] = make_wood(1000.0f, 0.0f, 0.03f, 0.6f);  // Sticks
   t[32] = make_wood(1000.0f, 0.0f, 0.02f, 0.5f);  // Square Click
