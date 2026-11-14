@@ -27,6 +27,8 @@ rye run --pyproject bindings/python/pyproject.toml python tools/voicematch/check
 rye run --pyproject bindings/python/pyproject.toml python tools/voicematch/liveness.py --lib build-tuning/lib/libsonare.dylib --spec tools/voicematch/specs/piano.json
 ```
 
+A model render loads the library named in `SONARE_LIB_PATH` as given, with a warning on stderr when it is older than the core sources, since measuring an older build on purpose is a legitimate control. With no library named, the render uses `build-python-shared/lib/libsonare.dylib` and refuses to start when that file is missing (the binding would otherwise fall back to another in-tree build, such as the Debug `build/`) or older than the newest file under `src/` and `include/`. The staleness rule and its opt-out, `SONARE_ALLOW_STALE_LIB=1`, are the Python test session's.
+
 Synthetic recovery separates search and objective failures from physical-model claims. The fixtures use known parameters and production measurement paths; success does not prove that a C++ voice can reproduce an instrument.
 
 ```sh

@@ -1,4 +1,4 @@
-"""Tests for the model renderer's library-staleness warning and render evidence.
+"""Tests for the model renderer's library choice, its staleness warning and render evidence.
 
 Every number the harness reports comes out of one dylib, the render carries no
 mark of which, and the default is a build directory nothing keeps current — so
@@ -87,6 +87,67 @@ def test_a_library_that_is_not_there_is_not_a_staleness_finding(tmp_path, monkey
     monkeypatch.setattr(render_model, "_newest_source_mtime", lambda: 1000.0 + HOUR)
     render_model.warn_if_stale(str(tmp_path / "absent.dylib"))
     assert capsys.readouterr().err == ""
+
+
+def _tree(tmp_path: Path, monkeypatch, *, lib_built_at: float | None) -> Path:
+    """A repository with one core source at t=1000+HOUR and, optionally, a default dylib."""
+    source = tmp_path / "src" / "voice.cpp"
+    source.parent.mkdir(parents=True)
+    source.write_text("")
+    os.utime(source, (1000.0 + HOUR, 1000.0 + HOUR))
+    lib = tmp_path / "build-python-shared" / "lib" / "libsonare.dylib"
+    if lib_built_at is not None:
+        lib.parent.mkdir(parents=True)
+        lib.write_bytes(b"")
+        os.utime(lib, (lib_built_at, lib_built_at))
+    monkeypatch.setattr(render_model, "REPO_ROOT", tmp_path)
+    monkeypatch.setattr(render_model, "DEFAULT_DYLIB", lib)
+    monkeypatch.delenv("SONARE_LIB_PATH", raising=False)
+    monkeypatch.delenv("SONARE_ALLOW_STALE_LIB", raising=False)
+    return lib
+
+
+def test_with_no_library_named_a_missing_default_is_refused_not_left_to_the_binding(
+    tmp_path, monkeypatch
+):
+    _tree(tmp_path, monkeypatch, lib_built_at=None)
+    with pytest.raises(render_model.LibraryRefused, match=r"build/ is the Debug test tree"):
+        render_model.ensure_lib_path()
+    assert "SONARE_LIB_PATH" not in os.environ
+
+
+def test_with_no_library_named_a_stale_default_is_refused_naming_the_newer_source(
+    tmp_path, monkeypatch
+):
+    _tree(tmp_path, monkeypatch, lib_built_at=1000.0)
+    with pytest.raises(render_model.LibraryRefused, match=r"older than src/voice\.cpp"):
+        render_model.ensure_lib_path()
+    assert "SONARE_LIB_PATH" not in os.environ
+
+
+def test_the_test_sessions_opt_out_lets_a_stale_default_through_with_the_warning(
+    tmp_path, monkeypatch, capsys
+):
+    lib = _tree(tmp_path, monkeypatch, lib_built_at=1000.0)
+    monkeypatch.setenv("SONARE_ALLOW_STALE_LIB", "1")
+    assert render_model.ensure_lib_path() == str(lib) == os.environ["SONARE_LIB_PATH"]
+    assert "measures the older library" in capsys.readouterr().err
+
+
+def test_a_current_default_is_used(tmp_path, monkeypatch, capsys):
+    lib = _tree(tmp_path, monkeypatch, lib_built_at=1000.0 + 2 * HOUR)
+    assert render_model.ensure_lib_path() == str(lib) == os.environ["SONARE_LIB_PATH"]
+    assert capsys.readouterr().err == ""
+
+
+def test_a_named_stale_library_is_the_callers_control_and_only_warned_about(
+    tmp_path, monkeypatch, capsys
+):
+    _tree(tmp_path, monkeypatch, lib_built_at=None)
+    named = _library(tmp_path, built_at=1000.0)
+    monkeypatch.setenv("SONARE_LIB_PATH", named)
+    assert render_model.ensure_lib_path() == named
+    assert "measures the older library" in capsys.readouterr().err
 
 
 def test_the_render_is_pinned_to_the_rate_the_capture_was_recorded_at(monkeypatch):

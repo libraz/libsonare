@@ -204,7 +204,7 @@ def main(argv: list[str] | None = None) -> int:
         program, notes = int(args.worker[0]), [int(n) for n in args.worker[1].split(",")]
         json.dump(model_metrics(program, notes), sys.stdout)
         return 0
-    print(f"library: {ensure_lib_path() or '(binding default)'}")
+    print(f"library: {ensure_lib_path()}")
     ok = True
     for program in args.program or sorted(PROGRAMS):
         ok = check_program(program, args.override) and ok
