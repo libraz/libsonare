@@ -585,7 +585,17 @@ def level_of(raw: np.ndarray, sr: int, note: Note, window_end: float) -> dict:
     whose peak is 3.9 dB over a reference while its held RMS is 8.7 dB over is
     not loud, it is a note that never falls after its attack, and that reads
     identically whatever gain either side was captured at.
+
+    `raw` may carry several channels as (frames, channels). Level is read as
+    equal power: the held RMS is the root of the mean of the channels' powers
+    and the peak is the largest sample over all channels. A (L+R)/2 downmix
+    reads decorrelated channels up to 3.5 dB low. A mono signal, as (N,) or
+    (N, 1), reads exactly as it always has.
     """
+    if raw.ndim == 2:
+        raw = np.asarray(raw, dtype=np.float64)
+        if raw.shape[1] == 1:
+            raw = raw[:, 0]
     on = int(note.start * sr)
     end = min(int(window_end * sr), len(raw))
     seg = raw[on:end]
@@ -601,7 +611,10 @@ def level_of(raw: np.ndarray, sr: int, note: Note, window_end: float) -> dict:
         held_a = int((note.start + 0.3 * note.dur) * sr)
         held_b = min(int((note.start + 0.9 * note.dur) * sr), end)
     held = raw[held_a:held_b] if held_b - held_a >= 256 else seg
-    held_rms = float(np.sqrt(np.mean(held**2)))
+    if held.ndim == 2:
+        held_rms = float(np.sqrt(np.mean(np.mean(held**2, axis=0))))
+    else:
+        held_rms = float(np.sqrt(np.mean(held**2)))
     peak_db = float(_db(peak))
     held_db = float(_db(held_rms))
     if peak_db - held_db > HELD_FLOOR_DB:

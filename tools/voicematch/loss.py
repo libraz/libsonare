@@ -477,10 +477,11 @@ def probe_rows(
     (`analysis_window_end`), so no note's release is measured through the next
     note's attack.
 
-    `raw` is the same render before RMS normalisation. Everything measured from
-    `mono` is a shape, and shapes are what normalisation is for; the level
-    fields are the one thing that cannot survive it, so they are measured from
-    the untouched signal instead. Omitting `raw` leaves those fields off the
+    `raw` is the same render before RMS normalisation, and before any downmix:
+    (frames,) or (frames, channels), read as equal power by `level_of`. Everything
+    measured from `mono` is a shape, and shapes are what normalisation is for;
+    the level fields are the one thing that cannot survive it, so they are
+    measured from the untouched signal instead. Omitting `raw` leaves those fields off the
     rows, and the level terms then have nothing to score — which is what a
     caller that has only a normalised render should get.
 

@@ -62,7 +62,7 @@ def test_child_subprocess_uses_each_mono_mode_for_rows_and_dumped_audio(tuning_b
     for mode in MONO_MODES:
         raw = to_mono(stereo, mode)
         expected_audio[mode] = normalize_rms(raw).astype(np.float32)
-        expected_rows[mode] = probe_rows(normalize_rms(raw), pattern, SR, raw=raw)
+        expected_rows[mode] = probe_rows(normalize_rms(raw), pattern, SR, raw=stereo)
         rows, audio = render_model_rows_subprocess(
             tuning_build,
             0,

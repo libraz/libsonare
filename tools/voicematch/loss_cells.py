@@ -169,15 +169,17 @@ def measure(directory: Path) -> dict | None:
     model_raw, oracle_raw = to_mono(model_wav), to_mono(oracle_wav)
     frames = min(len(model_raw), len(oracle_raw))
     model_raw, oracle_raw = model_raw[:frames], oracle_raw[:frames]
+    # Level reads the channels as given (equal power); shapes read the downmix.
+    model_levels, oracle_levels = model_wav[:frames], oracle_wav[:frames]
     pattern = rebuild_pattern(report, rows, frames / sr)
     if pattern is None:
         return {"skip": f"pattern {report['pattern']!r} cannot be rebuilt"}
     if len(pattern.analysis_notes) != len(rows):
         return {"skip": "the rebuilt pattern and the report disagree on note count"}
     model, oracle = normalize_rms(model_raw), normalize_rms(oracle_raw)
-    oracle_rows = probe_rows(oracle, pattern, sr, raw=oracle_raw, threads=2)
+    oracle_rows = probe_rows(oracle, pattern, sr, raw=oracle_levels, threads=2)
     model_rows = probe_rows(
-        model, pattern, sr, raw=model_raw, threads=2, tnr_masks=oracle_tnr_masks(oracle_rows)
+        model, pattern, sr, raw=model_levels, threads=2, tnr_masks=oracle_tnr_masks(oracle_rows)
     )
     # Did the rebuilt pattern land on the notes the render actually holds? The
     # report was measured through the same windows, so its f0 is the check: a

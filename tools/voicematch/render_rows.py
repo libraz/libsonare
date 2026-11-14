@@ -227,13 +227,14 @@ def render_metrics_main(argv: list[str]) -> int:
         # Applied here rather than in the parent so the per-note metrics and the
         # multi-scale term both see the same roomed signal.
         audio = apply_room(audio, np.load(a.room_ir))
+    # Shape metrics read the downmix; level reads `audio` as equal power.
     raw = to_mono(audio, a.mono_mode)
     mono = normalize_rms(raw)
     rows = probe_rows(
         mono,
         pattern,
         render_rate(corpus),
-        raw=raw,
+        raw=audio,
         max_band_hz=a.band_edge_hz or None,
         threads=a.metric_threads,
         tnr_masks=json.loads(a.tnr_masks) if a.tnr_masks else None,

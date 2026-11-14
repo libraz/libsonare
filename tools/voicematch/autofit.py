@@ -587,18 +587,20 @@ def oracle_reference(args) -> tuple[list[dict], np.ndarray, np.ndarray | None, f
             f"takes one channel and has no sum in it.",
             file=sys.stderr,
         )
+    # Every shape metric reads the downmix; the level fields read `audio` itself,
+    # as equal power across its channels (`level_of`).
     raw = to_mono(audio, mono_mode)
     mono = normalize_rms(raw)
     threads = resolve_metric_threads(args)
     reading = None if corpus is None else corpus_reading(corpus, HERE / "reference")
-    rows = probe_rows(mono, pattern, sr, raw=raw, threads=threads, reading=reading)
+    rows = probe_rows(mono, pattern, sr, raw=audio, threads=threads, reading=reading)
     edge = reference_band_edge(corpus, rows) if pattern.percussive else None
     if edge is not None:
         # Re-measured rather than patched. The band profile is normalised to the
         # loudest band inside the edge, and that is not a scaling that can be
         # applied to an already-floored profile without inventing the values the
         # floor took away.
-        rows = probe_rows(mono, pattern, sr, raw=raw, max_band_hz=edge, threads=threads)
+        rows = probe_rows(mono, pattern, sr, raw=audio, max_band_hz=edge, threads=threads)
         print(
             f"reference bandwidth: {edge / 1000.0:.1f} kHz — bands above it are "
             f"the capture chain rather than the kit, and are excluded from the "
