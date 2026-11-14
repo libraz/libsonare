@@ -3,10 +3,10 @@
   "timbre": "t0",
   "margin": 1.25,
   "reference_measured_utc": "2026-11-13T19:42:11+00:00",
-  "recorded_utc": "2026-11-13T23:04:18+00:00",
+  "recorded_utc": "2026-11-14T00:39:50+00:00",
   "model_build": {
-    "built_utc": "2026-11-13T22:56:16Z",
-    "newest_source_utc": "2026-11-13T22:43:12Z",
+    "built_utc": "2026-11-14T00:38:54Z",
+    "newest_source_utc": "2026-11-14T00:38:14Z",
     "stale": false
   },
   "reference_spread": {},
@@ -22,21 +22,21 @@
         "median": {
           "set_utc": "2026-10-25T20:14:20+00:00",
           "set_build": "2026-10-25T18:14:29Z",
-          "held_utc": "2026-11-13T23:04:18+00:00",
+          "held_utc": "2026-11-14T00:39:50+00:00",
           "measured": 9.08,
           "outcome": "kept"
         },
         "abs_median": {
           "set_utc": "2026-10-25T20:14:20+00:00",
           "set_build": "2026-10-25T18:14:29Z",
-          "held_utc": "2026-11-13T23:04:18+00:00",
+          "held_utc": "2026-11-14T00:39:50+00:00",
           "measured": 9.08,
           "outcome": "kept"
         },
         "p90": {
           "set_utc": "2026-10-25T20:14:20+00:00",
           "set_build": "2026-10-25T18:14:29Z",
-          "held_utc": "2026-11-13T23:04:18+00:00",
+          "held_utc": "2026-11-14T00:39:50+00:00",
           "measured": 9.224,
           "outcome": "kept"
         }
@@ -53,37 +53,37 @@
         "median": {
           "set_utc": "2026-11-13T23:04:18+00:00",
           "set_build": "2026-11-13T22:56:16Z",
-          "held_utc": "2026-11-13T23:04:18+00:00",
+          "held_utc": "2026-11-14T00:39:50+00:00",
           "measured": 94.8,
-          "outcome": "tightened",
-          "window": {
-            "model_s": 5.0,
-            "reference_s": 5.0
-          },
+          "outcome": "kept",
           "set_tree": {
             "head": "e37d16abf",
             "dirty": []
+          },
+          "window": {
+            "model_s": 5.0,
+            "reference_s": 5.0
           }
         },
         "abs_median": {
           "set_utc": "2026-11-13T23:04:18+00:00",
           "set_build": "2026-11-13T22:56:16Z",
-          "held_utc": "2026-11-13T23:04:18+00:00",
+          "held_utc": "2026-11-14T00:39:50+00:00",
           "measured": 94.8,
-          "outcome": "tightened",
-          "window": {
-            "model_s": 5.0,
-            "reference_s": 5.0
-          },
+          "outcome": "kept",
           "set_tree": {
             "head": "e37d16abf",
             "dirty": []
+          },
+          "window": {
+            "model_s": 5.0,
+            "reference_s": 5.0
           }
         },
         "p90": {
           "set_utc": "2026-10-25T20:14:20+00:00",
           "set_build": "2026-10-25T18:14:29Z",
-          "held_utc": "2026-11-13T23:04:18+00:00",
+          "held_utc": "2026-11-14T00:39:50+00:00",
           "measured": 114.72,
           "outcome": "kept"
         }
@@ -100,9 +100,9 @@
         "median": {
           "set_utc": "2026-11-13T23:04:18+00:00",
           "set_build": "2026-11-13T22:56:16Z",
-          "held_utc": "2026-11-13T23:04:18+00:00",
+          "held_utc": "2026-11-14T00:39:50+00:00",
           "measured": 86.617,
-          "outcome": "tightened",
+          "outcome": "kept",
           "set_tree": {
             "head": "e37d16abf",
             "dirty": []
@@ -111,9 +111,9 @@
         "abs_median": {
           "set_utc": "2026-11-13T23:04:18+00:00",
           "set_build": "2026-11-13T22:56:16Z",
-          "held_utc": "2026-11-13T23:04:18+00:00",
+          "held_utc": "2026-11-14T00:39:50+00:00",
           "measured": 86.617,
-          "outcome": "tightened",
+          "outcome": "kept",
           "set_tree": {
             "head": "e37d16abf",
             "dirty": []
@@ -122,9 +122,9 @@
         "p90": {
           "set_utc": "2026-11-13T23:04:18+00:00",
           "set_build": "2026-11-13T22:56:16Z",
-          "held_utc": "2026-11-13T23:04:18+00:00",
+          "held_utc": "2026-11-14T00:39:50+00:00",
           "measured": 89.6671,
-          "outcome": "tightened",
+          "outcome": "kept",
           "set_tree": {
             "head": "e37d16abf",
             "dirty": []

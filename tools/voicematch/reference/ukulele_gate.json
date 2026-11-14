@@ -3,10 +3,10 @@
   "timbre": "t0",
   "margin": 1.25,
   "reference_measured_utc": "2026-11-13T20:04:10+00:00",
-  "recorded_utc": "2026-11-13T23:15:08+00:00",
+  "recorded_utc": "2026-11-14T00:45:12+00:00",
   "model_build": {
-    "built_utc": "2026-11-13T22:56:16Z",
-    "newest_source_utc": "2026-11-13T22:43:12Z",
+    "built_utc": "2026-11-14T00:38:54Z",
+    "newest_source_utc": "2026-11-14T00:38:14Z",
     "stale": false
   },
   "reference_spread": {},
@@ -16,29 +16,101 @@
       "floor_from": "guess",
       "median": 1.0,
       "abs_median": 1.0,
-      "p90": 1.0,
+      "p90": 1.08,
       "rows": 6,
       "provenance": {
         "median": {
-          "set_utc": "2026-09-20T19:34:17+00:00",
-          "set_build": null,
-          "held_utc": "2026-11-13T23:15:08+00:00",
-          "measured": 0.145,
-          "outcome": "kept"
+          "set_utc": "2026-11-14T00:45:12+00:00",
+          "set_build": "2026-11-14T00:38:54Z",
+          "held_utc": "2026-11-14T00:45:12+00:00",
+          "measured": 0.039,
+          "outcome": "rewindowed",
+          "rewindowed_from": {
+            "bound": 1.0,
+            "window": {
+              "ruler": {
+                "offset_c": -0.75
+              }
+            }
+          },
+          "window": {
+            "ruler": {
+              "offset_c": -0.856,
+              "scatter_c": 0.129,
+              "n": 6,
+              "notes": [
+                60,
+                75
+              ],
+              "slope_c_per_oct": 1.215
+            }
+          },
+          "set_tree": {
+            "head": "38241a661",
+            "dirty": []
+          }
         },
         "abs_median": {
-          "set_utc": "2026-09-20T19:34:17+00:00",
-          "set_build": null,
-          "held_utc": "2026-11-13T23:15:08+00:00",
-          "measured": 0.31,
-          "outcome": "kept"
+          "set_utc": "2026-11-14T00:45:12+00:00",
+          "set_build": "2026-11-14T00:38:54Z",
+          "held_utc": "2026-11-14T00:45:12+00:00",
+          "measured": 0.316,
+          "outcome": "rewindowed",
+          "rewindowed_from": {
+            "bound": 1.0,
+            "window": {
+              "ruler": {
+                "offset_c": -0.75
+              }
+            }
+          },
+          "window": {
+            "ruler": {
+              "offset_c": -0.856,
+              "scatter_c": 0.129,
+              "n": 6,
+              "notes": [
+                60,
+                75
+              ],
+              "slope_c_per_oct": 1.215
+            }
+          },
+          "set_tree": {
+            "head": "38241a661",
+            "dirty": []
+          }
         },
         "p90": {
-          "set_utc": "2026-10-26T06:36:30+00:00",
-          "set_build": "2026-10-26T06:34:05Z",
-          "held_utc": "2026-11-13T23:15:08+00:00",
-          "measured": 0.97,
-          "outcome": "kept"
+          "set_utc": "2026-11-14T00:45:12+00:00",
+          "set_build": "2026-11-14T00:38:54Z",
+          "held_utc": "2026-11-14T00:45:12+00:00",
+          "measured": 0.864,
+          "outcome": "rewindowed",
+          "rewindowed_from": {
+            "bound": 1.0,
+            "window": {
+              "ruler": {
+                "offset_c": -0.75
+              }
+            }
+          },
+          "window": {
+            "ruler": {
+              "offset_c": -0.856,
+              "scatter_c": 0.129,
+              "n": 6,
+              "notes": [
+                60,
+                75
+              ],
+              "slope_c_per_oct": 1.215
+            }
+          },
+          "set_tree": {
+            "head": "38241a661",
+            "dirty": []
+          }
         }
       }
     },
@@ -53,15 +125,12 @@
         "median": {
           "set_utc": "2026-11-13T23:15:08+00:00",
           "set_build": "2026-11-13T22:56:16Z",
-          "held_utc": "2026-11-13T23:15:08+00:00",
+          "held_utc": "2026-11-14T00:45:12+00:00",
           "measured": 17.64,
-          "outcome": "rewindowed",
-          "rewindowed_from": {
-            "bound": 23.006,
-            "window": {
-              "model_s": 0.68,
-              "reference_s": 0.68
-            }
+          "outcome": "kept",
+          "set_tree": {
+            "head": "e37d16abf",
+            "dirty": []
           },
           "window": {
             "model_s": 0.7615,
@@ -74,24 +143,17 @@
               0.68,
               1.122
             ]
-          },
-          "set_tree": {
-            "head": "e37d16abf",
-            "dirty": []
           }
         },
         "abs_median": {
           "set_utc": "2026-11-13T23:15:08+00:00",
           "set_build": "2026-11-13T22:56:16Z",
-          "held_utc": "2026-11-13T23:15:08+00:00",
+          "held_utc": "2026-11-14T00:45:12+00:00",
           "measured": 17.64,
-          "outcome": "rewindowed",
-          "rewindowed_from": {
-            "bound": 23.006,
-            "window": {
-              "model_s": 0.68,
-              "reference_s": 0.68
-            }
+          "outcome": "kept",
+          "set_tree": {
+            "head": "e37d16abf",
+            "dirty": []
           },
           "window": {
             "model_s": 0.7615,
@@ -104,24 +166,17 @@
               0.68,
               1.122
             ]
-          },
-          "set_tree": {
-            "head": "e37d16abf",
-            "dirty": []
           }
         },
         "p90": {
           "set_utc": "2026-11-13T23:15:08+00:00",
           "set_build": "2026-11-13T22:56:16Z",
-          "held_utc": "2026-11-13T23:15:08+00:00",
+          "held_utc": "2026-11-14T00:45:12+00:00",
           "measured": 18.255,
-          "outcome": "rewindowed",
-          "rewindowed_from": {
-            "bound": 26.906,
-            "window": {
-              "model_s": 0.68,
-              "reference_s": 0.68
-            }
+          "outcome": "kept",
+          "set_tree": {
+            "head": "e37d16abf",
+            "dirty": []
           },
           "window": {
             "model_s": 0.7615,
@@ -134,10 +189,6 @@
               0.68,
               1.122
             ]
-          },
-          "set_tree": {
-            "head": "e37d16abf",
-            "dirty": []
           }
         }
       }
@@ -153,15 +204,12 @@
         "median": {
           "set_utc": "2026-11-13T23:15:08+00:00",
           "set_build": "2026-11-13T22:56:16Z",
-          "held_utc": "2026-11-13T23:15:08+00:00",
+          "held_utc": "2026-11-14T00:45:12+00:00",
           "measured": 5.375,
-          "outcome": "rewindowed",
-          "rewindowed_from": {
-            "bound": 4.781,
-            "window": {
-              "model_s": 0.68,
-              "reference_s": 0.68
-            }
+          "outcome": "kept",
+          "set_tree": {
+            "head": "e37d16abf",
+            "dirty": []
           },
           "window": {
             "model_s": 0.7615,
@@ -174,24 +222,17 @@
               0.68,
               1.122
             ]
-          },
-          "set_tree": {
-            "head": "e37d16abf",
-            "dirty": []
           }
         },
         "abs_median": {
           "set_utc": "2026-11-13T23:15:08+00:00",
           "set_build": "2026-11-13T22:56:16Z",
-          "held_utc": "2026-11-13T23:15:08+00:00",
+          "held_utc": "2026-11-14T00:45:12+00:00",
           "measured": 5.375,
-          "outcome": "rewindowed",
-          "rewindowed_from": {
-            "bound": 4.781,
-            "window": {
-              "model_s": 0.68,
-              "reference_s": 0.68
-            }
+          "outcome": "kept",
+          "set_tree": {
+            "head": "e37d16abf",
+            "dirty": []
           },
           "window": {
             "model_s": 0.7615,
@@ -204,24 +245,17 @@
               0.68,
               1.122
             ]
-          },
-          "set_tree": {
-            "head": "e37d16abf",
-            "dirty": []
           }
         },
         "p90": {
           "set_utc": "2026-11-13T23:15:08+00:00",
           "set_build": "2026-11-13T22:56:16Z",
-          "held_utc": "2026-11-13T23:15:08+00:00",
+          "held_utc": "2026-11-14T00:45:12+00:00",
           "measured": 6.86,
-          "outcome": "rewindowed",
-          "rewindowed_from": {
-            "bound": 9.262,
-            "window": {
-              "model_s": 0.68,
-              "reference_s": 0.68
-            }
+          "outcome": "kept",
+          "set_tree": {
+            "head": "e37d16abf",
+            "dirty": []
           },
           "window": {
             "model_s": 0.7615,
@@ -234,10 +268,6 @@
               0.68,
               1.122
             ]
-          },
-          "set_tree": {
-            "head": "e37d16abf",
-            "dirty": []
           }
         }
       }
@@ -253,15 +283,12 @@
         "median": {
           "set_utc": "2026-11-13T23:15:08+00:00",
           "set_build": "2026-11-13T22:56:16Z",
-          "held_utc": "2026-11-13T23:15:08+00:00",
+          "held_utc": "2026-11-14T00:45:12+00:00",
           "measured": 0.0,
-          "outcome": "rewindowed",
-          "rewindowed_from": {
-            "bound": 40.0,
-            "window": {
-              "model_s": 0.68,
-              "reference_s": 0.68
-            }
+          "outcome": "kept",
+          "set_tree": {
+            "head": "e37d16abf",
+            "dirty": []
           },
           "window": {
             "model_s": 0.7615,
@@ -274,24 +301,17 @@
               0.68,
               1.122
             ]
-          },
-          "set_tree": {
-            "head": "e37d16abf",
-            "dirty": []
           }
         },
         "abs_median": {
           "set_utc": "2026-11-13T23:15:08+00:00",
           "set_build": "2026-11-13T22:56:16Z",
-          "held_utc": "2026-11-13T23:15:08+00:00",
+          "held_utc": "2026-11-14T00:45:12+00:00",
           "measured": 0.0,
-          "outcome": "rewindowed",
-          "rewindowed_from": {
-            "bound": 40.0,
-            "window": {
-              "model_s": 0.68,
-              "reference_s": 0.68
-            }
+          "outcome": "kept",
+          "set_tree": {
+            "head": "e37d16abf",
+            "dirty": []
           },
           "window": {
             "model_s": 0.7615,
@@ -304,24 +324,17 @@
               0.68,
               1.122
             ]
-          },
-          "set_tree": {
-            "head": "e37d16abf",
-            "dirty": []
           }
         },
         "p90": {
           "set_utc": "2026-11-13T23:15:08+00:00",
           "set_build": "2026-11-13T22:56:16Z",
-          "held_utc": "2026-11-13T23:15:08+00:00",
+          "held_utc": "2026-11-14T00:45:12+00:00",
           "measured": 5.0,
-          "outcome": "rewindowed",
-          "rewindowed_from": {
-            "bound": 40.0,
-            "window": {
-              "model_s": 0.68,
-              "reference_s": 0.68
-            }
+          "outcome": "kept",
+          "set_tree": {
+            "head": "e37d16abf",
+            "dirty": []
           },
           "window": {
             "model_s": 0.7615,
@@ -334,10 +347,6 @@
               0.68,
               1.122
             ]
-          },
-          "set_tree": {
-            "head": "e37d16abf",
-            "dirty": []
           }
         }
       }
@@ -353,21 +362,21 @@
         "median": {
           "set_utc": "2026-09-25T20:35:41+00:00",
           "set_build": "2026-09-25T20:30:56Z",
-          "held_utc": "2026-11-13T23:15:08+00:00",
+          "held_utc": "2026-11-14T00:45:12+00:00",
           "measured": 41.075,
           "outcome": "kept"
         },
         "abs_median": {
           "set_utc": "2026-09-25T20:35:41+00:00",
           "set_build": "2026-09-25T20:30:56Z",
-          "held_utc": "2026-11-13T23:15:08+00:00",
+          "held_utc": "2026-11-14T00:45:12+00:00",
           "measured": 41.075,
           "outcome": "kept"
         },
         "p90": {
           "set_utc": "2026-10-22T01:25:34+00:00",
           "set_build": "2026-10-21T10:18:24Z",
-          "held_utc": "2026-11-13T23:15:08+00:00",
+          "held_utc": "2026-11-14T00:45:12+00:00",
           "measured": 44.26,
           "outcome": "kept"
         }
@@ -384,15 +393,12 @@
         "median": {
           "set_utc": "2026-11-13T23:15:08+00:00",
           "set_build": "2026-11-13T22:56:16Z",
-          "held_utc": "2026-11-13T23:15:08+00:00",
+          "held_utc": "2026-11-14T00:45:12+00:00",
           "measured": 15.66,
-          "outcome": "rewindowed",
-          "rewindowed_from": {
-            "bound": 19.269,
-            "window": {
-              "model_s": 0.68,
-              "reference_s": 0.68
-            }
+          "outcome": "kept",
+          "set_tree": {
+            "head": "e37d16abf",
+            "dirty": []
           },
           "window": {
             "model_s": 0.7615,
@@ -405,24 +411,17 @@
               0.68,
               1.122
             ]
-          },
-          "set_tree": {
-            "head": "e37d16abf",
-            "dirty": []
           }
         },
         "abs_median": {
           "set_utc": "2026-11-13T23:15:08+00:00",
           "set_build": "2026-11-13T22:56:16Z",
-          "held_utc": "2026-11-13T23:15:08+00:00",
+          "held_utc": "2026-11-14T00:45:12+00:00",
           "measured": 15.66,
-          "outcome": "rewindowed",
-          "rewindowed_from": {
-            "bound": 19.269,
-            "window": {
-              "model_s": 0.68,
-              "reference_s": 0.68
-            }
+          "outcome": "kept",
+          "set_tree": {
+            "head": "e37d16abf",
+            "dirty": []
           },
           "window": {
             "model_s": 0.7615,
@@ -435,24 +434,17 @@
               0.68,
               1.122
             ]
-          },
-          "set_tree": {
-            "head": "e37d16abf",
-            "dirty": []
           }
         },
         "p90": {
           "set_utc": "2026-11-13T23:15:08+00:00",
           "set_build": "2026-11-13T22:56:16Z",
-          "held_utc": "2026-11-13T23:15:08+00:00",
+          "held_utc": "2026-11-14T00:45:12+00:00",
           "measured": 15.835,
-          "outcome": "rewindowed",
-          "rewindowed_from": {
-            "bound": 21.725,
-            "window": {
-              "model_s": 0.68,
-              "reference_s": 0.68
-            }
+          "outcome": "kept",
+          "set_tree": {
+            "head": "e37d16abf",
+            "dirty": []
           },
           "window": {
             "model_s": 0.7615,
@@ -465,10 +457,6 @@
               0.68,
               1.122
             ]
-          },
-          "set_tree": {
-            "head": "e37d16abf",
-            "dirty": []
           }
         }
       }
@@ -484,15 +472,12 @@
         "median": {
           "set_utc": "2026-11-13T23:15:08+00:00",
           "set_build": "2026-11-13T22:56:16Z",
-          "held_utc": "2026-11-13T23:15:08+00:00",
+          "held_utc": "2026-11-14T00:45:12+00:00",
           "measured": 14.395,
-          "outcome": "rewindowed",
-          "rewindowed_from": {
-            "bound": 1.437,
-            "window": {
-              "model_s": 0.68,
-              "reference_s": 0.68
-            }
+          "outcome": "kept",
+          "set_tree": {
+            "head": "e37d16abf",
+            "dirty": []
           },
           "window": {
             "model_s": 0.7615,
@@ -505,24 +490,17 @@
               0.68,
               1.122
             ]
-          },
-          "set_tree": {
-            "head": "e37d16abf",
-            "dirty": []
           }
         },
         "abs_median": {
           "set_utc": "2026-11-13T23:15:08+00:00",
           "set_build": "2026-11-13T22:56:16Z",
-          "held_utc": "2026-11-13T23:15:08+00:00",
+          "held_utc": "2026-11-14T00:45:12+00:00",
           "measured": 21.45,
-          "outcome": "rewindowed",
-          "rewindowed_from": {
-            "bound": 39.106,
-            "window": {
-              "model_s": 0.68,
-              "reference_s": 0.68
-            }
+          "outcome": "kept",
+          "set_tree": {
+            "head": "e37d16abf",
+            "dirty": []
           },
           "window": {
             "model_s": 0.7615,
@@ -535,24 +513,17 @@
               0.68,
               1.122
             ]
-          },
-          "set_tree": {
-            "head": "e37d16abf",
-            "dirty": []
           }
         },
         "p90": {
           "set_utc": "2026-11-13T23:15:08+00:00",
           "set_build": "2026-11-13T22:56:16Z",
-          "held_utc": "2026-11-13T23:15:08+00:00",
+          "held_utc": "2026-11-14T00:45:12+00:00",
           "measured": 43.16,
-          "outcome": "rewindowed",
-          "rewindowed_from": {
-            "bound": 54.375,
-            "window": {
-              "model_s": 0.68,
-              "reference_s": 0.68
-            }
+          "outcome": "kept",
+          "set_tree": {
+            "head": "e37d16abf",
+            "dirty": []
           },
           "window": {
             "model_s": 0.7615,
@@ -565,10 +536,6 @@
               0.68,
               1.122
             ]
-          },
-          "set_tree": {
-            "head": "e37d16abf",
-            "dirty": []
           }
         }
       }
@@ -584,21 +551,21 @@
         "median": {
           "set_utc": "2026-10-22T01:25:34+00:00",
           "set_build": "2026-10-21T10:18:24Z",
-          "held_utc": "2026-11-13T23:15:08+00:00",
+          "held_utc": "2026-11-14T00:45:12+00:00",
           "measured": 14.0787,
           "outcome": "kept"
         },
         "abs_median": {
           "set_utc": "2026-10-22T01:25:34+00:00",
           "set_build": "2026-10-21T10:18:24Z",
-          "held_utc": "2026-11-13T23:15:08+00:00",
+          "held_utc": "2026-11-14T00:45:12+00:00",
           "measured": 14.0787,
           "outcome": "kept"
         },
         "p90": {
           "set_utc": "2026-10-22T01:25:34+00:00",
           "set_build": "2026-10-21T10:18:24Z",
-          "held_utc": "2026-11-13T23:15:08+00:00",
+          "held_utc": "2026-11-14T00:45:12+00:00",
           "measured": 19.5787,
           "outcome": "kept"
         }
@@ -615,15 +582,12 @@
         "median": {
           "set_utc": "2026-11-13T23:15:08+00:00",
           "set_build": "2026-11-13T22:56:16Z",
-          "held_utc": "2026-11-13T23:15:08+00:00",
+          "held_utc": "2026-11-14T00:45:12+00:00",
           "measured": 119.535,
-          "outcome": "rewindowed",
-          "rewindowed_from": {
-            "bound": 148.225,
-            "window": {
-              "model_s": 0.68,
-              "reference_s": 0.68
-            }
+          "outcome": "kept",
+          "set_tree": {
+            "head": "e37d16abf",
+            "dirty": []
           },
           "window": {
             "model_s": 0.7615,
@@ -636,24 +600,17 @@
               0.68,
               1.122
             ]
-          },
-          "set_tree": {
-            "head": "e37d16abf",
-            "dirty": []
           }
         },
         "abs_median": {
           "set_utc": "2026-11-13T23:15:08+00:00",
           "set_build": "2026-11-13T22:56:16Z",
-          "held_utc": "2026-11-13T23:15:08+00:00",
+          "held_utc": "2026-11-14T00:45:12+00:00",
           "measured": 119.535,
-          "outcome": "rewindowed",
-          "rewindowed_from": {
-            "bound": 148.225,
-            "window": {
-              "model_s": 0.68,
-              "reference_s": 0.68
-            }
+          "outcome": "kept",
+          "set_tree": {
+            "head": "e37d16abf",
+            "dirty": []
           },
           "window": {
             "model_s": 0.7615,
@@ -666,24 +623,17 @@
               0.68,
               1.122
             ]
-          },
-          "set_tree": {
-            "head": "e37d16abf",
-            "dirty": []
           }
         },
         "p90": {
           "set_utc": "2026-11-13T23:15:08+00:00",
           "set_build": "2026-11-13T22:56:16Z",
-          "held_utc": "2026-11-13T23:15:08+00:00",
+          "held_utc": "2026-11-14T00:45:12+00:00",
           "measured": 175.108,
-          "outcome": "rewindowed",
-          "rewindowed_from": {
-            "bound": 205.778,
-            "window": {
-              "model_s": 0.68,
-              "reference_s": 0.68
-            }
+          "outcome": "kept",
+          "set_tree": {
+            "head": "e37d16abf",
+            "dirty": []
           },
           "window": {
             "model_s": 0.7615,
@@ -696,10 +646,6 @@
               0.68,
               1.122
             ]
-          },
-          "set_tree": {
-            "head": "e37d16abf",
-            "dirty": []
           }
         }
       }
@@ -715,21 +661,21 @@
         "median": {
           "set_utc": "2026-10-22T01:25:34+00:00",
           "set_build": "2026-10-21T10:18:24Z",
-          "held_utc": "2026-11-13T23:15:08+00:00",
+          "held_utc": "2026-11-14T00:45:12+00:00",
           "measured": 18.6468,
           "outcome": "kept"
         },
         "abs_median": {
           "set_utc": "2026-10-22T01:25:34+00:00",
           "set_build": "2026-10-21T10:18:24Z",
-          "held_utc": "2026-11-13T23:15:08+00:00",
+          "held_utc": "2026-11-14T00:45:12+00:00",
           "measured": 18.6468,
           "outcome": "kept"
         },
         "p90": {
           "set_utc": "2026-10-22T01:25:34+00:00",
           "set_build": "2026-10-21T10:18:24Z",
-          "held_utc": "2026-11-13T23:15:08+00:00",
+          "held_utc": "2026-11-14T00:45:12+00:00",
           "measured": 35.7605,
           "outcome": "kept"
         }
