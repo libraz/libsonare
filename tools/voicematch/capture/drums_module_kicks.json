@@ -1,0 +1,79 @@
+{
+  "id": "drums_module_kicks",
+  "label": "Standard kit, the kick variants below the GM range (0-16), every piece at the shortest gate they all fill, read out of a module's own recordings",
+  "program": 0,
+  "takes": "drums",
+  "audition_title": "libsonare drums vs the module's own recordings, the kick variants",
+  "_why": "Keys 0-16 are kick variants mapped on the Standard kit and carry no voice of their own. Seventeen instruments, each with a reference row of its own.",
+  "_notes": "Seventeen keys, one source, one gate. The recordings run 96 to 361 ms.",
+  "_gate": "Ninety-six, set by key 4, whose recording is 96.2 ms. Nothing is padded to reach a longer window.",
+  "_fit": "The kit's keys 0-16 were fitted at v100 against these rows alone, in-sample: one recording per key, nothing held out. Their velocity law is the kit's generic exponent 1.1 and is not measured.",
+  "_decay_exceeded": "band_decay is exceeded on the five long keys at the voicing that set the gate: the model's bands fall faster than the recording's by 246 (key 4), 264 (5), 210 (8), 212 (9) and 217 (16) dB/s. Hypothesis, not a cause: one noise band with one decay cannot hold a bright onset and a slow upper-octave tail together. The gate's bound was set at this voicing; it holds the regression from growing and does not accept it.",
+  "notes": [
+    0,
+    1,
+    2,
+    3,
+    4,
+    5,
+    6,
+    7,
+    8,
+    9,
+    10,
+    11,
+    12,
+    13,
+    14,
+    15,
+    16
+  ],
+  "_groups": "None: no kick variant is a mute-group member.",
+  "groups": {},
+  "_velocities": "One, and 100 is a label rather than a measurement: the source sets no velocity range on any zone, so it holds one recording per note at a velocity it does not state.",
+  "velocities": [
+    100
+  ],
+  "_stimulus": "Nothing played this. The recordings are read out of the source, so there is no preroll to strip, no settle to wait out and no warmup to play in.",
+  "tail": "0s",
+  "warmup": false,
+  "realtime": false,
+  "settle_ms": 0,
+  "preroll_ms": 0,
+  "onset_slack_ms": 0,
+  "sample_rate": 44100,
+  "params": [],
+  "_dry": "Nothing played this, so nothing was switched off. What the file holds is the module's own PCM with no effect in front of it, which the importer re-measures rather than trusts.",
+  "dry": false,
+  "rig": "none",
+  "room": "none",
+  "gate_ms": 96,
+  "_note_map": "There is deliberately none. The source is the GS kit map, so its keys are the kit's own.",
+  "_dimensions": "The hit grid's reads: how hard each piece strikes, how peaked, how loud against the rest, the colour of the strike, and how fast each band falls over the window. Ninety-six milliseconds holds the strike and the start of the body; the longer recordings run on past it.",
+  "dimensions": [
+    "attack",
+    "crest",
+    "level",
+    "band_tilt",
+    "band_shape",
+    "band_decay",
+    "centroid_pct",
+    "tonality",
+    "tilt_rise"
+  ],
+  "dimensions_na": {
+    "ring": "the window ends at 96 ms, before the longer recordings (up to 361 ms) have rung out, so a ring read here would be cut off by the window rather than by the piece.",
+    "vel_range": "the source declares no velocity layers at all - no velocity range is set on any of its zones, so it holds one recording per note at a velocity it does not state.",
+    "stereo": "the recordings are single-channel, so a width is zero by construction rather than by voicing."
+  },
+  "_identity": "Which file and which of its presets answered this timbre lives in the untracked sibling `drums_module_kicks.local.json`.",
+  "source_class": "module",
+  "_timbres": "`channel` is what makes a note number select an instrument rather than a pitch, and it is what `profile.py` reads to choose the percussion metric set over the pitched one.",
+  "timbres": [
+    {
+      "id": "t0",
+      "label": "Standard kit, module recording",
+      "channel": 10
+    }
+  ]
+}

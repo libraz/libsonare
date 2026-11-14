@@ -1,0 +1,495 @@
+{
+  "_": "Bounds the compare table is held to. All three are absolute limits: 'median' caps the magnitude of the signed median, 'abs_median' caps the median absolute error, which is the one that can fail when errors of opposite sign cancel, and 'p90' caps the 90th percentile of that absolute error, which is the one that can fail when a minority of rows is far out and the median is not. A dimension can sit inside both medians while nearly half its rows are outside the references' own spread. 'rows' is how many of the grid's rows survived censoring into that median, so a later run can tell whether it is comparing against the same population. 'provenance' records, per statistic, when its value was set, the last re-record at which the measurement was inside it, and what that measurement was; 'recorded_utc' is only when the file was last written. Re-record only in the same change as the behaviour that justifies it.",
+  "timbre": "t0",
+  "margin": 1.25,
+  "reference_measured_utc": "2026-11-14T19:56:40+00:00",
+  "recorded_utc": "2026-11-14T21:40:04+00:00",
+  "model_build": {
+    "built_utc": "2026-11-14T21:38:20Z",
+    "newest_source_utc": "2026-11-14T21:40:02Z",
+    "stale": true
+  },
+  "reference_spread": {},
+  "bounds": {
+    "band_tilt": {
+      "floor": 1.0,
+      "floor_from": "default",
+      "median": 1.0,
+      "abs_median": 1.903,
+      "p90": 9.1,
+      "rows": 17,
+      "provenance": {
+        "median": {
+          "set_utc": "2026-11-14T21:40:04+00:00",
+          "set_build": "2026-11-14T21:38:20Z",
+          "held_utc": "2026-11-14T21:40:04+00:00",
+          "measured": 0.5492,
+          "outcome": "new",
+          "set_tree": {
+            "head": "9d3f10450",
+            "dirty": [
+              "tools/voicematch/capture/drums_module_kicks.json",
+              "tools/voicematch/reference/drums_module_kicks.json"
+            ]
+          }
+        },
+        "abs_median": {
+          "set_utc": "2026-11-14T21:40:04+00:00",
+          "set_build": "2026-11-14T21:38:20Z",
+          "held_utc": "2026-11-14T21:40:04+00:00",
+          "measured": 1.5225,
+          "outcome": "new",
+          "set_tree": {
+            "head": "9d3f10450",
+            "dirty": [
+              "tools/voicematch/capture/drums_module_kicks.json",
+              "tools/voicematch/reference/drums_module_kicks.json"
+            ]
+          }
+        },
+        "p90": {
+          "set_utc": "2026-11-14T21:40:04+00:00",
+          "set_build": "2026-11-14T21:38:20Z",
+          "held_utc": "2026-11-14T21:40:04+00:00",
+          "measured": 7.2797,
+          "outcome": "new",
+          "set_tree": {
+            "head": "9d3f10450",
+            "dirty": [
+              "tools/voicematch/capture/drums_module_kicks.json",
+              "tools/voicematch/reference/drums_module_kicks.json"
+            ]
+          }
+        }
+      }
+    },
+    "band_shape": {
+      "floor": 1.0,
+      "floor_from": "default",
+      "median": 13.009,
+      "abs_median": 13.009,
+      "p90": 14.938,
+      "rows": 17,
+      "provenance": {
+        "median": {
+          "set_utc": "2026-11-14T21:40:04+00:00",
+          "set_build": "2026-11-14T21:38:20Z",
+          "held_utc": "2026-11-14T21:40:04+00:00",
+          "measured": 10.4075,
+          "outcome": "new",
+          "set_tree": {
+            "head": "9d3f10450",
+            "dirty": [
+              "tools/voicematch/capture/drums_module_kicks.json",
+              "tools/voicematch/reference/drums_module_kicks.json"
+            ]
+          }
+        },
+        "abs_median": {
+          "set_utc": "2026-11-14T21:40:04+00:00",
+          "set_build": "2026-11-14T21:38:20Z",
+          "held_utc": "2026-11-14T21:40:04+00:00",
+          "measured": 10.4075,
+          "outcome": "new",
+          "set_tree": {
+            "head": "9d3f10450",
+            "dirty": [
+              "tools/voicematch/capture/drums_module_kicks.json",
+              "tools/voicematch/reference/drums_module_kicks.json"
+            ]
+          }
+        },
+        "p90": {
+          "set_utc": "2026-11-14T21:40:04+00:00",
+          "set_build": "2026-11-14T21:38:20Z",
+          "held_utc": "2026-11-14T21:40:04+00:00",
+          "measured": 11.9505,
+          "outcome": "new",
+          "set_tree": {
+            "head": "9d3f10450",
+            "dirty": [
+              "tools/voicematch/capture/drums_module_kicks.json",
+              "tools/voicematch/reference/drums_module_kicks.json"
+            ]
+          }
+        }
+      }
+    },
+    "band_decay": {
+      "floor": 1.0,
+      "floor_from": "default",
+      "median": 116.62,
+      "abs_median": 183.775,
+      "p90": 285.574,
+      "rows": 17,
+      "provenance": {
+        "median": {
+          "set_utc": "2026-11-14T21:40:04+00:00",
+          "set_build": "2026-11-14T21:38:20Z",
+          "held_utc": "2026-11-14T21:40:04+00:00",
+          "measured": 93.2963,
+          "outcome": "new",
+          "set_tree": {
+            "head": "9d3f10450",
+            "dirty": [
+              "tools/voicematch/capture/drums_module_kicks.json",
+              "tools/voicematch/reference/drums_module_kicks.json"
+            ]
+          }
+        },
+        "abs_median": {
+          "set_utc": "2026-11-14T21:40:04+00:00",
+          "set_build": "2026-11-14T21:38:20Z",
+          "held_utc": "2026-11-14T21:40:04+00:00",
+          "measured": 147.02,
+          "outcome": "new",
+          "set_tree": {
+            "head": "9d3f10450",
+            "dirty": [
+              "tools/voicematch/capture/drums_module_kicks.json",
+              "tools/voicematch/reference/drums_module_kicks.json"
+            ]
+          }
+        },
+        "p90": {
+          "set_utc": "2026-11-14T21:40:04+00:00",
+          "set_build": "2026-11-14T21:38:20Z",
+          "held_utc": "2026-11-14T21:40:04+00:00",
+          "measured": 228.4595,
+          "outcome": "new",
+          "set_tree": {
+            "head": "9d3f10450",
+            "dirty": [
+              "tools/voicematch/capture/drums_module_kicks.json",
+              "tools/voicematch/reference/drums_module_kicks.json"
+            ]
+          }
+        }
+      }
+    },
+    "attack": {
+      "floor": 40.0,
+      "floor_from": "guess",
+      "median": 40.0,
+      "abs_median": 40.0,
+      "p90": 40.0,
+      "rows": 17,
+      "provenance": {
+        "median": {
+          "set_utc": "2026-11-14T21:40:04+00:00",
+          "set_build": "2026-11-14T21:38:20Z",
+          "held_utc": "2026-11-14T21:40:04+00:00",
+          "measured": 0.0,
+          "outcome": "new",
+          "window": {
+            "model_s": 0.096,
+            "reference_s": 0.096
+          },
+          "set_tree": {
+            "head": "9d3f10450",
+            "dirty": [
+              "tools/voicematch/capture/drums_module_kicks.json",
+              "tools/voicematch/reference/drums_module_kicks.json"
+            ]
+          }
+        },
+        "abs_median": {
+          "set_utc": "2026-11-14T21:40:04+00:00",
+          "set_build": "2026-11-14T21:38:20Z",
+          "held_utc": "2026-11-14T21:40:04+00:00",
+          "measured": 1.49,
+          "outcome": "new",
+          "window": {
+            "model_s": 0.096,
+            "reference_s": 0.096
+          },
+          "set_tree": {
+            "head": "9d3f10450",
+            "dirty": [
+              "tools/voicematch/capture/drums_module_kicks.json",
+              "tools/voicematch/reference/drums_module_kicks.json"
+            ]
+          }
+        },
+        "p90": {
+          "set_utc": "2026-11-14T21:40:04+00:00",
+          "set_build": "2026-11-14T21:38:20Z",
+          "held_utc": "2026-11-14T21:40:04+00:00",
+          "measured": 3.0,
+          "outcome": "new",
+          "window": {
+            "model_s": 0.096,
+            "reference_s": 0.096
+          },
+          "set_tree": {
+            "head": "9d3f10450",
+            "dirty": [
+              "tools/voicematch/capture/drums_module_kicks.json",
+              "tools/voicematch/reference/drums_module_kicks.json"
+            ]
+          }
+        }
+      }
+    },
+    "crest": {
+      "floor": 2.12,
+      "floor_from": "guess",
+      "median": 2.12,
+      "abs_median": 2.12,
+      "p90": 5.313,
+      "rows": 17,
+      "provenance": {
+        "median": {
+          "set_utc": "2026-11-14T21:40:04+00:00",
+          "set_build": "2026-11-14T21:38:20Z",
+          "held_utc": "2026-11-14T21:40:04+00:00",
+          "measured": 1.6,
+          "outcome": "new",
+          "set_tree": {
+            "head": "9d3f10450",
+            "dirty": [
+              "tools/voicematch/capture/drums_module_kicks.json",
+              "tools/voicematch/reference/drums_module_kicks.json"
+            ]
+          }
+        },
+        "abs_median": {
+          "set_utc": "2026-11-14T21:40:04+00:00",
+          "set_build": "2026-11-14T21:38:20Z",
+          "held_utc": "2026-11-14T21:40:04+00:00",
+          "measured": 1.64,
+          "outcome": "new",
+          "set_tree": {
+            "head": "9d3f10450",
+            "dirty": [
+              "tools/voicematch/capture/drums_module_kicks.json",
+              "tools/voicematch/reference/drums_module_kicks.json"
+            ]
+          }
+        },
+        "p90": {
+          "set_utc": "2026-11-14T21:40:04+00:00",
+          "set_build": "2026-11-14T21:38:20Z",
+          "held_utc": "2026-11-14T21:40:04+00:00",
+          "measured": 4.25,
+          "outcome": "new",
+          "set_tree": {
+            "head": "9d3f10450",
+            "dirty": [
+              "tools/voicematch/capture/drums_module_kicks.json",
+              "tools/voicematch/reference/drums_module_kicks.json"
+            ]
+          }
+        }
+      }
+    },
+    "centroid_pct": {
+      "floor": 1.0,
+      "floor_from": "guess",
+      "median": 1.0,
+      "abs_median": 1.0,
+      "p90": 16.81,
+      "rows": 17,
+      "provenance": {
+        "median": {
+          "set_utc": "2026-11-14T21:40:04+00:00",
+          "set_build": "2026-11-14T21:38:20Z",
+          "held_utc": "2026-11-14T21:40:04+00:00",
+          "measured": 0.0983,
+          "outcome": "new",
+          "set_tree": {
+            "head": "9d3f10450",
+            "dirty": [
+              "tools/voicematch/capture/drums_module_kicks.json",
+              "tools/voicematch/reference/drums_module_kicks.json"
+            ]
+          }
+        },
+        "abs_median": {
+          "set_utc": "2026-11-14T21:40:04+00:00",
+          "set_build": "2026-11-14T21:38:20Z",
+          "held_utc": "2026-11-14T21:40:04+00:00",
+          "measured": 0.4607,
+          "outcome": "new",
+          "set_tree": {
+            "head": "9d3f10450",
+            "dirty": [
+              "tools/voicematch/capture/drums_module_kicks.json",
+              "tools/voicematch/reference/drums_module_kicks.json"
+            ]
+          }
+        },
+        "p90": {
+          "set_utc": "2026-11-14T21:40:04+00:00",
+          "set_build": "2026-11-14T21:38:20Z",
+          "held_utc": "2026-11-14T21:40:04+00:00",
+          "measured": 13.4478,
+          "outcome": "new",
+          "set_tree": {
+            "head": "9d3f10450",
+            "dirty": [
+              "tools/voicematch/capture/drums_module_kicks.json",
+              "tools/voicematch/reference/drums_module_kicks.json"
+            ]
+          }
+        }
+      }
+    },
+    "tonality": {
+      "floor": 1.0,
+      "floor_from": "guess",
+      "median": 1.0,
+      "abs_median": 1.0,
+      "p90": 2.497,
+      "rows": 17,
+      "provenance": {
+        "median": {
+          "set_utc": "2026-11-14T21:40:04+00:00",
+          "set_build": "2026-11-14T21:38:20Z",
+          "held_utc": "2026-11-14T21:40:04+00:00",
+          "measured": 0.38,
+          "outcome": "new",
+          "set_tree": {
+            "head": "9d3f10450",
+            "dirty": [
+              "tools/voicematch/capture/drums_module_kicks.json",
+              "tools/voicematch/reference/drums_module_kicks.json"
+            ]
+          }
+        },
+        "abs_median": {
+          "set_utc": "2026-11-14T21:40:04+00:00",
+          "set_build": "2026-11-14T21:38:20Z",
+          "held_utc": "2026-11-14T21:40:04+00:00",
+          "measured": 0.43,
+          "outcome": "new",
+          "set_tree": {
+            "head": "9d3f10450",
+            "dirty": [
+              "tools/voicematch/capture/drums_module_kicks.json",
+              "tools/voicematch/reference/drums_module_kicks.json"
+            ]
+          }
+        },
+        "p90": {
+          "set_utc": "2026-11-14T21:40:04+00:00",
+          "set_build": "2026-11-14T21:38:20Z",
+          "held_utc": "2026-11-14T21:40:04+00:00",
+          "measured": 1.998,
+          "outcome": "new",
+          "set_tree": {
+            "head": "9d3f10450",
+            "dirty": [
+              "tools/voicematch/capture/drums_module_kicks.json",
+              "tools/voicematch/reference/drums_module_kicks.json"
+            ]
+          }
+        }
+      }
+    },
+    "tilt_rise": {
+      "floor": 1.0,
+      "floor_from": "guess",
+      "median": 6.7,
+      "abs_median": 6.7,
+      "p90": 17.515,
+      "rows": 17,
+      "provenance": {
+        "median": {
+          "set_utc": "2026-11-14T21:40:04+00:00",
+          "set_build": "2026-11-14T21:38:20Z",
+          "held_utc": "2026-11-14T21:40:04+00:00",
+          "measured": 5.36,
+          "outcome": "new",
+          "set_tree": {
+            "head": "9d3f10450",
+            "dirty": [
+              "tools/voicematch/capture/drums_module_kicks.json",
+              "tools/voicematch/reference/drums_module_kicks.json"
+            ]
+          }
+        },
+        "abs_median": {
+          "set_utc": "2026-11-14T21:40:04+00:00",
+          "set_build": "2026-11-14T21:38:20Z",
+          "held_utc": "2026-11-14T21:40:04+00:00",
+          "measured": 5.36,
+          "outcome": "new",
+          "set_tree": {
+            "head": "9d3f10450",
+            "dirty": [
+              "tools/voicematch/capture/drums_module_kicks.json",
+              "tools/voicematch/reference/drums_module_kicks.json"
+            ]
+          }
+        },
+        "p90": {
+          "set_utc": "2026-11-14T21:40:04+00:00",
+          "set_build": "2026-11-14T21:38:20Z",
+          "held_utc": "2026-11-14T21:40:04+00:00",
+          "measured": 14.012,
+          "outcome": "new",
+          "set_tree": {
+            "head": "9d3f10450",
+            "dirty": [
+              "tools/voicematch/capture/drums_module_kicks.json",
+              "tools/voicematch/reference/drums_module_kicks.json"
+            ]
+          }
+        }
+      }
+    },
+    "level": {
+      "floor": 1.0,
+      "floor_from": "default",
+      "median": 1.0,
+      "abs_median": 1.0,
+      "p90": 1.0,
+      "rows": 17,
+      "provenance": {
+        "median": {
+          "set_utc": "2026-11-14T21:40:04+00:00",
+          "set_build": "2026-11-14T21:38:20Z",
+          "held_utc": "2026-11-14T21:40:04+00:00",
+          "measured": 0.01,
+          "outcome": "new",
+          "set_tree": {
+            "head": "9d3f10450",
+            "dirty": [
+              "tools/voicematch/capture/drums_module_kicks.json",
+              "tools/voicematch/reference/drums_module_kicks.json"
+            ]
+          }
+        },
+        "abs_median": {
+          "set_utc": "2026-11-14T21:40:04+00:00",
+          "set_build": "2026-11-14T21:38:20Z",
+          "held_utc": "2026-11-14T21:40:04+00:00",
+          "measured": 0.03,
+          "outcome": "new",
+          "set_tree": {
+            "head": "9d3f10450",
+            "dirty": [
+              "tools/voicematch/capture/drums_module_kicks.json",
+              "tools/voicematch/reference/drums_module_kicks.json"
+            ]
+          }
+        },
+        "p90": {
+          "set_utc": "2026-11-14T21:40:04+00:00",
+          "set_build": "2026-11-14T21:38:20Z",
+          "held_utc": "2026-11-14T21:40:04+00:00",
+          "measured": 0.05,
+          "outcome": "new",
+          "set_tree": {
+            "head": "9d3f10450",
+            "dirty": [
+              "tools/voicematch/capture/drums_module_kicks.json",
+              "tools/voicematch/reference/drums_module_kicks.json"
+            ]
+          }
+        }
+      }
+    }
+  }
+}
