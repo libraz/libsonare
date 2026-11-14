@@ -278,10 +278,16 @@ const GateRow kEngineGates[] = {
     {"flute.loop_phase_servo", [](const GateSite&) { return is("jetDrive", false); }},
     {"flute.jet_deflection_limit",
      [](const GateSite&) { return is("jetDrive", true) & is("jetCycleMean", true); }},
+    // Reed: the overshoot acts through the Bernoulli valve's loop gain; the table has no headroom.
+    {"reed.onset_breath_overshoot_db", [](const GateSite&) { return above("closingPressure", 0); }},
     {"reed.onset_breath_settle_ms",
-     [](const GateSite&) { return above("onsetBreathOvershootDb", 0); }},
+     [](const GateSite&) {
+       return above("onsetBreathOvershootDb", 0) & above("closingPressure", 0);
+     }},
     {"reed.onset_breath_overshoot_vel_db",
-     [](const GateSite&) { return above("onsetBreathOvershootDb", 0); }},
+     [](const GateSite&) {
+       return above("onsetBreathOvershootDb", 0) & above("closingPressure", 0);
+     }},
     {"free_reed.onset_breath_settle_ms",
      [](const GateSite&) { return above("onsetBreathOvershootDb", 0); }},
     {"free_reed.onset_breath_overshoot_vel_db",
