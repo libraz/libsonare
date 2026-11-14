@@ -99,6 +99,7 @@
 - A GS drum kit with voices of its own sounds only the keys its tone map's table lists: a key the table prints as no sound, or does not print, starts no voice, on the built-in synth and on the SoundFont player's synthesized drum fallback alike. Among keys that sounded before, this silences the CM-64/32L kit's keys 27 to 34, 52, 53, 55, 57 to 59 and 74 and Kick & Snare's keys 27 to 39 under the SC-88 map. A kit not yet voiced apart still falls back to Standard whole, its listing included.
 - Synth Bass 1 (GM program 38) is a pluck that dies away within about 1.8 s instead of a held tone, its filter sweep opens wider and closes within a quarter second, and its output gain is 2.9 dB lower, set against the module reference. A part balanced against its previous sound may need its level re-set.
 - Electric Piano 2 (GM program 5) decays faster the higher the note and slower below middle C, its body carrier's decay scaling 0.8 per octave instead of 0.4; its detuned and velocity-mix variations keep the previous rate.
+- Electric Piano 1 (GM program 4) decays faster the higher the note and slower below middle C, its body carrier's decay scaling 0.8 per octave instead of 0.4; its detuned and velocity-mix variations follow it, and its 60's variation keeps the previous rate.
 
 ### New
 

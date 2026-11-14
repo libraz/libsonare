@@ -94,7 +94,10 @@ SONARE_TUNED_CONSTEXPR void configure_keyed_programs(ProgramOverrides& o) noexce
   ep.fm.ops[0].ratio = 1.0f;  // body carrier
   ep.fm.ops[0].level = 1.0f;
   ep.fm.ops[0].env = fallback_env(1.0f, 9000.0f, 0.0f, 250.0f);
-  ep.fm.ops[0].key_rate_scale = 0.4f;
+  // The body carrier shortens 0.8 per octave, the rate fitted on Electric Piano 2: against
+  // this voice's own reference it took the decay from 1.27 to 0.51 dB/s off and the
+  // aftersound from 1.20 to 0.49.
+  ep.fm.ops[0].key_rate_scale = 0.8f;
   ep.fm.ops[1].ratio = 1.0f;  // body modulator (warmth -> velocity)
   ep.fm.ops[1].level = 0.9f;
   ep.fm.ops[1].env = fallback_env(1.0f, 3600.0f, 0.0f, 250.0f);

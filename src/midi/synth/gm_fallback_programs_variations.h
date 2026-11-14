@@ -112,6 +112,9 @@ SONARE_TUNED_CONSTEXPR void configure_variation_programs(ProgramOverrides& o) no
   // has no long-ringing tine ping over it, so the "ping" operator drops back
   // and the body carries a harder, more odd-harmonic bark that dies faster.
   o.e_piano_sixties = o.e_piano;
+  // Keeps the slower carrier rate: no decay is read on it, and on Electric Piano 1's gate,
+  // the only one it is read against, 0.8 took its balance past the bound.
+  o.e_piano_sixties.fm.ops[0].key_rate_scale = 0.4f;
   o.e_piano_sixties.fm.ops[1].ratio = 2.0f;
   o.e_piano_sixties.fm.ops[1].level = 1.4f;
   o.e_piano_sixties.fm.ops[3].level = 0.5f;
