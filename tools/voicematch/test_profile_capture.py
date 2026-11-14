@@ -534,12 +534,21 @@ def test_every_shipped_capture_reads_as_one_kind_of_instrument():
         if profile_module.is_percussion(load_config(here / f"{name}.json"))
     )
     assert len(shipped_captures()) >= 70
-    # Four, and they are one kit read on two reference axes: `drums` is the
-    # modern recording that answers its colour, and the three `drums_module`
-    # grids the module that answers how it rings, damps and sits against
+    # Five, and they are one kit: `drums` is a library recording that answers
+    # only how the strokes differ with velocity, which the module's one
+    # recording per note cannot, and the four `drums_module` grids are the
+    # module answering its colour and how it rings, damps and sits against
     # itself — one per gate, because a gate is what the analysis window is
     # promised to be and the kit's pieces do not all fill the same one.
-    assert percussion == ["drums", "drums_module", "drums_module_hit", "drums_module_mid"]
+    # `drums_module_kicks` holds the kick variants below the GM range, at the
+    # gate the shortest of them fills.
+    assert percussion == [
+        "drums",
+        "drums_module",
+        "drums_module_hit",
+        "drums_module_kicks",
+        "drums_module_mid",
+    ]
 
 
 def _corpus_manifest(root: Path, timbres: list[dict], *, config: str = "") -> Path:
