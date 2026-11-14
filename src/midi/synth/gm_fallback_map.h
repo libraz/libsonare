@@ -116,6 +116,13 @@ float apply_gs_drum_kit(PercussionPatchParams& perc, DahdsrConfig& amp, uint8_t 
 /// 26 presents four choices that change nothing.
 bool gs_drum_kit_is_voiced_apart(uint8_t kit) noexcept;
 
+/// True when @p note makes no sound on @p kit under @p map. A kit is either
+/// realised with its own listing (Standard and every kit voiced apart) or falls
+/// back to Standard whole, its listing included. A key the listing prints as no
+/// sound, or does not print, is silent; a map that prints no column for a
+/// realised kit reads the listing of the map that defines it.
+bool gm_fallback_drum_key_is_silent(uint8_t kit, GsToneMap map, uint8_t note) noexcept;
+
 /// True when melodic @p bank on @p program resolves to a patch of its own
 /// rather than to the capital tone. Derived from gm_fallback_patch by identity,
 /// which is exactly the question — a variation the table does not voice returns

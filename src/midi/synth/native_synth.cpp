@@ -617,16 +617,21 @@ void NativeSynth::note_on(uint8_t channel, uint8_t note, Velocity16 velocity,
     const uint16_t bank = gs_effective_bank(st.bank_msb, st.bank_lsb, st.drums);
     const GsToneMap map = gs_effective_tone_map(st.bank_msb, st.bank_lsb);
     if (bank == kDrumBank) {
-      patch = &gm_fallback_drum_patch(drum_lookup_note);
       drum_kit = gm_fallback_drum_kit(st.program, map);
+      // A key the kit's own listing prints as no sound starts nothing and chokes nothing.
+      if (gm_fallback_drum_key_is_silent(drum_kit, map, drum_lookup_note)) return;
+      patch = &gm_fallback_drum_patch(drum_lookup_note);
       observe_tail_patch(*patch, drum_kit, drum_lookup_note);
     } else {
       patch = &gm_fallback_patch(bank, st.program, map);
       observe_tail_patch(*patch, kNoTailKit, note);
     }
   } else if (patch->mode == SynthEngineMode::kPercussion && patch->percussion.gm_kit) {
-    patch = &gm_fallback_drum_patch(drum_lookup_note);
     drum_kit = gm_fallback_drum_kit(st.program);
+    if (gm_fallback_drum_key_is_silent(drum_kit, GsToneMap::kModuleDefault, drum_lookup_note)) {
+      return;
+    }
+    patch = &gm_fallback_drum_patch(drum_lookup_note);
     observe_tail_patch(*patch, drum_kit, drum_lookup_note);
   }
   // GM kit exclusive/mute groups: a new hi-hat / triangle / whistle / surdo

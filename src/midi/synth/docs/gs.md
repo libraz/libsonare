@@ -46,6 +46,8 @@ The two Parameter Address Maps agree on every address they share — size, data 
 
 A tone map is audible exactly where it fails to reach a kit: sixteen of the twenty-six rhythm sets were introduced by a later map, while every melodic variation voiced so far is an SC-55 tone that all maps reach. Both voice banks read it through the same rule, because a parameter must not do something different depending on which bank answered.
 
+A kit is either realised with its own map or falls back to Standard whole. A realised kit (Standard, and every kit voiced apart from it) is silent on each key its listing under the selected map prints as no sound or does not print, and under a map that prints no column for it reads the listing of the map that defines it; a kit not yet voiced sounds as Standard on every key, listing included, until it is voiced and its own listing arrives with it.
+
 The SC-8850 also answers GM2, which the SC-88Pro does not. GM2's additions are all second addresses onto GS mechanisms already present (Controller Destination onto `40 2x`, Key-Based Instrument Control onto `41 mn rr`, Scale/Octave Tuning onto `40 1x 40`–`4B`, Modulation Depth Range onto `40 2x 04` and RPN `00 05`). They are covered by the one-storage rule below rather than by new state. CC#71–78 arrive with the same machine but are not GM2's doing — the SC-8850's own GS map prints them in the `40 1x 30`–`37` rows, which is why they are a line in the table above.
 
 ## The bulk-dump space is a second address space, and none of it is rowed

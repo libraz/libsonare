@@ -59,6 +59,14 @@ void Sf2Player::fallback_note_on(uint8_t channel, uint8_t note, Velocity16 veloc
     per_note.zone_key = sound_note;
   }
   per_note.cents = per_note_cents(per_note, note_pitch);
+  // GS drum-kit variation: the drum channel's program picks the kit (Room /
+  // Power / TR-808 / ...); melodic fallback voices pass 0 (no kit).
+  // A user drum set names the kit per note, so the program that picks the
+  // variation is the note's source rather than the part's.
+  const uint8_t kit_program = us != nullptr ? us->program : ch.program;
+  const uint8_t drum_kit = is_drum ? gm_fallback_drum_kit(kit_program, tone_map) : 0;
+  // A key the kit's own listing prints as no sound starts nothing and chokes nothing.
+  if (is_drum && gm_fallback_drum_key_is_silent(drum_kit, tone_map, sound_note)) return;
   const NativeSynthPatch& patch =
       is_drum ? gm_fallback_drum_patch(sound_note) : gm_fallback_patch(bank, ch.program, tone_map);
   uint8_t exclusive_class = is_drum ? patch.percussion.exclusive_class : 0;
@@ -104,12 +112,6 @@ void Sf2Player::fallback_note_on(uint8_t channel, uint8_t note, Velocity16 veloc
               slot * fallback_plucked_string_capacity_, fallback_plucked_string_capacity_);
   attach_slab(voice->harpsichord, fallback_harpsichord_buffers_,
               slot * fallback_harpsichord_stride_, fallback_harpsichord_capacity_);
-  // GS drum-kit variation: the drum channel's program picks the kit (Room /
-  // Power / TR-808 / ...); melodic fallback voices pass 0 (no kit).
-  // A user drum set names the kit per note, so the program that picks the
-  // variation is the note's source rather than the part's.
-  const uint8_t kit_program = us != nullptr ? us->program : ch.program;
-  const uint8_t drum_kit = is_drum ? gm_fallback_drum_kit(kit_program, tone_map) : 0;
   // GS per-note drum edits (pitch coarse / TVA level / absolute pan / the three
   // send multiplicands), mirroring apply_gs_drum_params for the model floor: a
   // parameter must not do something different because this bank answered.

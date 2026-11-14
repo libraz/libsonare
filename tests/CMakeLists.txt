@@ -821,6 +821,7 @@ if(BUILD_ARRANGEMENT)
     midi/gs_system_effects_test.cpp
     midi/gs_cc_rpn_test.cpp
     midi/drum_exclusive_group_test.cpp
+    midi/drum_unlisted_key_test.cpp
     midi/gs_efx_send_routing_test.cpp
     midi/gs_efx_convert_test.cpp
     midi/gs_efx_binding_value_test.cpp

@@ -1,4 +1,5 @@
 #include <algorithm>
+#include <array>
 #include <cstdint>
 #include <cstring>
 #include <type_traits>
@@ -340,6 +341,179 @@ bool gs_drum_kit_is_voiced_apart(uint8_t kit) noexcept {
     if (gain != 1.0f) return true;
     if (std::memcmp(&perc, &standard.percussion, sizeof(perc)) != 0) return true;
     if (std::memcmp(&amp, &standard.amp_env, sizeof(amp)) != 0) return true;
+  }
+  return false;
+}
+
+namespace {
+
+/// A run of keys a kit's own listing under one map prints as no sound ("---")
+/// or does not print at all, read from the owner's manual drum set tables.
+struct UnlistedKeys {
+  uint8_t kit;
+  GsToneMap map;
+  uint8_t first;
+  uint8_t last;
+};
+
+// clang-format off
+constexpr UnlistedKeys kUnlistedKeys[] = {
+    {0, GsToneMap::kSc55, 0, 26},  // Standard, p.211
+    {0, GsToneMap::kSc55, 88, 127},  // Standard, p.211
+    {0, GsToneMap::kSc88, 0, 24},  // Standard, p.208
+    {0, GsToneMap::kSc88, 88, 127},  // Standard, p.208
+    {0, GsToneMap::kSc88Pro, 20, 21},  // Standard, p.201
+    {0, GsToneMap::kSc88Pro, 89, 96},  // Standard, p.201
+    {0, GsToneMap::kSc8850, 89, 94},  // Standard, p.188
+    {1, GsToneMap::kSc55, 0, 26},  // Room, p.211
+    {1, GsToneMap::kSc55, 88, 127},  // Room, p.211
+    {1, GsToneMap::kSc88, 0, 24},  // Room, p.208
+    {1, GsToneMap::kSc88, 88, 127},  // Room, p.208
+    {1, GsToneMap::kSc88Pro, 20, 21},  // Room, p.201
+    {1, GsToneMap::kSc88Pro, 89, 96},  // Room, p.201
+    {1, GsToneMap::kSc8850, 89, 94},  // Room, p.188
+    {2, GsToneMap::kSc55, 0, 26},  // Power, p.211
+    {2, GsToneMap::kSc55, 88, 127},  // Power, p.211
+    {2, GsToneMap::kSc88, 0, 24},  // Power, p.208
+    {2, GsToneMap::kSc88, 88, 127},  // Power, p.208
+    {2, GsToneMap::kSc88Pro, 20, 21},  // Power, p.202
+    {2, GsToneMap::kSc88Pro, 89, 96},  // Power, p.202
+    {2, GsToneMap::kSc8850, 20, 21},  // Power, p.189
+    {2, GsToneMap::kSc8850, 89, 96},  // Power, p.189
+    {3, GsToneMap::kSc55, 0, 26},  // Electronic, p.211
+    {3, GsToneMap::kSc55, 88, 127},  // Electronic, p.211
+    {3, GsToneMap::kSc88, 0, 24},  // Electronic, p.208
+    {3, GsToneMap::kSc88, 88, 127},  // Electronic, p.208
+    {3, GsToneMap::kSc88Pro, 20, 21},  // Electronic, p.202
+    {3, GsToneMap::kSc88Pro, 89, 96},  // Electronic, p.202
+    {3, GsToneMap::kSc8850, 20, 21},  // Electronic, p.190
+    {3, GsToneMap::kSc8850, 89, 96},  // Electronic, p.190
+    {4, GsToneMap::kSc55, 0, 26},  // TR-808, p.211
+    {4, GsToneMap::kSc55, 88, 127},  // TR-808, p.211
+    {4, GsToneMap::kSc88, 0, 24},  // TR-808, p.209
+    {4, GsToneMap::kSc88, 88, 127},  // TR-808, p.209
+    {4, GsToneMap::kSc88Pro, 20, 21},  // TR-808, p.202
+    {4, GsToneMap::kSc88Pro, 89, 96},  // TR-808, p.202
+    {4, GsToneMap::kSc8850, 20, 21},  // TR-808, p.190
+    {4, GsToneMap::kSc8850, 89, 96},  // TR-808, p.190
+    {5, GsToneMap::kSc55, 0, 26},  // Jazz, p.211
+    {5, GsToneMap::kSc55, 88, 127},  // Jazz, p.211
+    {5, GsToneMap::kSc88, 0, 24},  // Jazz, p.209
+    {5, GsToneMap::kSc88, 88, 127},  // Jazz, p.209
+    {5, GsToneMap::kSc88Pro, 20, 21},  // Jazz, p.204
+    {5, GsToneMap::kSc88Pro, 89, 99},  // Jazz, p.204
+    {5, GsToneMap::kSc8850, 89, 97},  // Jazz, p.191
+    {6, GsToneMap::kSc55, 0, 26},  // Brush, p.211
+    {6, GsToneMap::kSc55, 88, 127},  // Brush, p.211
+    {6, GsToneMap::kSc88, 0, 24},  // Brush, p.209
+    {6, GsToneMap::kSc88, 88, 127},  // Brush, p.209
+    {6, GsToneMap::kSc88Pro, 20, 21},  // Brush, p.204
+    {6, GsToneMap::kSc88Pro, 89, 99},  // Brush, p.204
+    {6, GsToneMap::kSc8850, 20, 21},  // Brush, p.191
+    {6, GsToneMap::kSc8850, 89, 99},  // Brush, p.191
+    {7, GsToneMap::kSc55, 0, 26},  // Orchestra, p.211
+    {7, GsToneMap::kSc55, 89, 127},  // Orchestra, p.211
+    {7, GsToneMap::kSc88, 0, 24},  // Orchestra, p.209
+    {7, GsToneMap::kSc88, 89, 127},  // Orchestra, p.209
+    {7, GsToneMap::kSc88Pro, 20, 21},  // Orchestra, p.204
+    {7, GsToneMap::kSc88Pro, 89, 96},  // Orchestra, p.204
+    {7, GsToneMap::kSc88Pro, 114, 127},  // Orchestra, p.204
+    {7, GsToneMap::kSc8850, 20, 21},  // Orchestra, p.192
+    {7, GsToneMap::kSc8850, 89, 96},  // Orchestra, p.192
+    {7, GsToneMap::kSc8850, 114, 127},  // Orchestra, p.192
+    {9, GsToneMap::kSc55, 0, 34},  // CM-64/32L, p.212
+    {9, GsToneMap::kSc55, 52, 53},  // CM-64/32L, p.212
+    {9, GsToneMap::kSc55, 55, 55},  // CM-64/32L, p.212
+    {9, GsToneMap::kSc55, 57, 59},  // CM-64/32L, p.212
+    {9, GsToneMap::kSc55, 74, 74},  // CM-64/32L, p.212
+    {9, GsToneMap::kSc55, 109, 127},  // CM-64/32L, p.212
+    {10, GsToneMap::kSc88, 0, 24},  // Standard 2, p.208
+    {10, GsToneMap::kSc88, 88, 127},  // Standard 2, p.208
+    {10, GsToneMap::kSc88Pro, 20, 21},  // Standard 2, p.201
+    {10, GsToneMap::kSc88Pro, 89, 96},  // Standard 2, p.201
+    {10, GsToneMap::kSc8850, 20, 21},  // Standard 2, p.188
+    {10, GsToneMap::kSc8850, 89, 96},  // Standard 2, p.188
+    {11, GsToneMap::kSc88, 0, 24},  // Dance, p.209
+    {11, GsToneMap::kSc88, 88, 127},  // Dance, p.209
+    {11, GsToneMap::kSc88Pro, 20, 21},  // Dance, p.203
+    {11, GsToneMap::kSc88Pro, 89, 96},  // Dance, p.203
+    {12, GsToneMap::kSc88, 0, 24},  // Ethnic, p.210
+    {12, GsToneMap::kSc88, 100, 127},  // Ethnic, p.210
+    {12, GsToneMap::kSc88Pro, 0, 24},  // Ethnic, p.205
+    {12, GsToneMap::kSc88Pro, 100, 127},  // Ethnic, p.205
+    {12, GsToneMap::kSc8850, 0, 24},  // Ethnic, p.192
+    {12, GsToneMap::kSc8850, 100, 127},  // Ethnic, p.192
+    {13, GsToneMap::kSc88, 0, 39},  // Kick & Snare, p.210
+    {13, GsToneMap::kSc88, 92, 127},  // Kick & Snare, p.210
+    {13, GsToneMap::kSc88Pro, 0, 24},  // Kick & Snare, p.205
+    {13, GsToneMap::kSc88Pro, 112, 127},  // Kick & Snare, p.205
+    {13, GsToneMap::kSc8850, 0, 24},  // Kick & Snare, p.192
+    {13, GsToneMap::kSc8850, 112, 127},  // Kick & Snare, p.192
+    {15, GsToneMap::kSc88Pro, 20, 21},  // Standard 3, p.201
+    {15, GsToneMap::kSc88Pro, 89, 96},  // Standard 3, p.201
+    {15, GsToneMap::kSc8850, 0, 16},  // Standard 3, p.188
+    {15, GsToneMap::kSc8850, 20, 21},  // Standard 3, p.188
+    {15, GsToneMap::kSc8850, 89, 94},  // Standard 3, p.188
+    {15, GsToneMap::kSc8850, 119, 127},  // Standard 3, p.188
+    {16, GsToneMap::kSc88Pro, 20, 21},  // Hip Hop, p.201
+    {16, GsToneMap::kSc88Pro, 89, 96},  // Hip Hop, p.201
+    {17, GsToneMap::kSc88Pro, 20, 21},  // Jungle, p.202
+    {17, GsToneMap::kSc88Pro, 89, 96},  // Jungle, p.202
+    {18, GsToneMap::kSc88Pro, 20, 21},  // Techno, p.202
+    {18, GsToneMap::kSc88Pro, 89, 96},  // Techno, p.202
+    {19, GsToneMap::kSc88Pro, 20, 21},  // CR-78, p.203
+    {19, GsToneMap::kSc88Pro, 89, 96},  // CR-78, p.203
+    {19, GsToneMap::kSc8850, 20, 21},  // CR-78, p.190
+    {19, GsToneMap::kSc8850, 89, 96},  // CR-78, p.190
+    {20, GsToneMap::kSc88Pro, 20, 21},  // TR-606, p.203
+    {20, GsToneMap::kSc88Pro, 89, 96},  // TR-606, p.203
+    {20, GsToneMap::kSc8850, 20, 21},  // TR-606, p.190
+    {20, GsToneMap::kSc8850, 89, 96},  // TR-606, p.190
+    {21, GsToneMap::kSc88Pro, 20, 21},  // TR-707, p.203
+    {21, GsToneMap::kSc88Pro, 89, 96},  // TR-707, p.203
+    {21, GsToneMap::kSc8850, 20, 21},  // TR-707, p.191
+    {21, GsToneMap::kSc8850, 89, 96},  // TR-707, p.191
+    {22, GsToneMap::kSc88Pro, 20, 21},  // TR-909, p.204
+    {22, GsToneMap::kSc88Pro, 89, 96},  // TR-909, p.204
+    {22, GsToneMap::kSc8850, 20, 21},  // TR-909, p.191
+    {22, GsToneMap::kSc8850, 89, 96},  // TR-909, p.191
+    {23, GsToneMap::kSc88Pro, 0, 24},  // Asia, p.205
+    {23, GsToneMap::kSc88Pro, 89, 127},  // Asia, p.205
+    {23, GsToneMap::kSc8850, 0, 24},  // Asia, p.193
+    {23, GsToneMap::kSc8850, 91, 127},  // Asia, p.193
+};
+// clang-format on
+
+constexpr uint8_t kit_index_of(uint8_t program) noexcept {
+  for (const GsDrumKit& kit : kGsDrumKits) {
+    if (kit.program == program) return kit.index;
+  }
+  return 0;
+}
+
+/// CM-64/32L has a column on the SC-55 map's pages only (p.187 prints none for it on the others).
+constexpr uint8_t kCm64Kit = kit_index_of(127);
+
+bool kit_is_realised(uint8_t kit) noexcept {
+  static const std::array<bool, kGsDrumKits.size()> realised = [] {
+    std::array<bool, kGsDrumKits.size()> r{};
+    for (size_t k = 0; k < r.size(); ++k) {
+      r[k] = k == 0 || gs_drum_kit_is_voiced_apart(static_cast<uint8_t>(k));
+    }
+    return r;
+  }();
+  return kit < realised.size() && realised[kit];
+}
+
+}  // namespace
+
+bool gm_fallback_drum_key_is_silent(uint8_t kit, GsToneMap map, uint8_t note) noexcept {
+  const uint8_t listed = kit_is_realised(kit) ? kit : 0;
+  GsToneMap from = map == GsToneMap::kModuleDefault ? GsToneMap::kSc8850 : map;
+  if (listed == kCm64Kit) from = GsToneMap::kSc55;
+  const uint8_t key = note & 0x7Fu;
+  for (const UnlistedKeys& r : kUnlistedKeys) {
+    if (r.kit == listed && r.map == from && key >= r.first && key <= r.last) return true;
   }
   return false;
 }
