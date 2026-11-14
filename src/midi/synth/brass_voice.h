@@ -331,7 +331,7 @@ class BrassVoiceCore {
   void refresh_excitation_targets() noexcept;
   // Recomputes the fundamental makeup for the current radiation pole.
   void refresh_radiation_scale(float rad_alpha) noexcept;
-  // Re-solves bore_.comp from the pole lp_alpha_ now holds.
+  // Re-solves bore_.comp and loss_cap_ from the pole lp_alpha_ now holds.
   void retune_loop_comp() noexcept;
 
   // Bore delay line (host-owned): the travelling-wave air column. period is
@@ -363,6 +363,9 @@ class BrassVoiceCore {
   rt::BiquadState bell_hp_{};
   rt::BiquadState bell_hp_dry_{};
   float loss_gain_ = 0.95f;
+  // Largest bell loss gain the loop carries: the reciprocal of the peak of the bell lowpass
+  // times the DC blocker, whose passband rises to 2/(1+r) at Nyquist.
+  float loss_cap_ = 1.0f;
   // Bell radiation: the complement of the reflection, a one-pole highpass on the
   // way out. Its own state, so the loop is untouched.
   float rad_alpha_ = 0.0f;

@@ -6,6 +6,7 @@
 
 #include "midi/synth/pitch.h"
 #include "midi/synth/string_loop.h"
+#include "midi/synth/wind_loop_peak.h"
 #include "rt/biquad_design.h"
 #include "util/constants.h"
 #include "util/db.h"
@@ -512,7 +513,7 @@ float BrassVoiceCore::render_internal(float pitch_ratio) noexcept {
   } else {
     lp_state_ += lp_alpha_ * (bore_.out - lp_state_);
   }
-  float refl = sign_ * loss_gain_ * lp_state_;
+  float refl = sign_ * std::min(loss_gain_, loss_cap_) * lp_state_;
   // Half-valve (gated): a stuffier, lossier bore.
   if (half_valve_ > 0.0f) refl *= half_valve_loss_;
 
@@ -769,6 +770,7 @@ float BrassVoiceCore::bell_alpha_for_brightness(float bright01) const noexcept {
 
 void BrassVoiceCore::retune_loop_comp() noexcept {
   float tau_lp = 0.0f;
+  double peak = 1.0;
   if (bell_cutoff_hz_ > 0.0f) {
     // The coupled bell is a second-order pair on the corner lp_alpha_ names; its
     // phase delay at the fundamental lengthens the loop as the one-pole's does.
@@ -778,9 +780,15 @@ void BrassVoiceCore::retune_loop_comp() noexcept {
     bell_hp_dry_.set(bell_hp_.c);
     tau_lp =
         -std::arg(rt::biquad_response(bell_lp_.c, comp_omega_)) / std::max(comp_omega_, 1.0e-6f);
+    const double w_lp = rt::clamp_design_domain(w_c, sonare::constants::kButterworthQ).w0;
+    peak = blocker_butterworth_peak(std::tan(0.5 * w_lp), dc_r_);
   } else {
     tau_lp = onepole_group_delay_samples(1.0f - lp_alpha_, comp_omega_);
+    peak = blocker_onepole_peak(lp_alpha_, dc_r_);
   }
+  // Rounded down, so the realised gain times the peak stays at or under unity.
+  loss_cap_ = static_cast<float>(1.0 / peak);
+  if (static_cast<double>(loss_cap_) * peak > 1.0) loss_cap_ = std::nextafter(loss_cap_, 0.0f);
   bore_.comp = 1.0f + tau_lp - kDcCompScale * comp_lead_;
   comp_alpha_ = lp_alpha_;
 }

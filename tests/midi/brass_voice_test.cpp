@@ -375,6 +375,45 @@ TEST_CASE("brass CC74 preserves the conical darkening on the live path", "[midi]
   REQUIRE(spectral_centroid(cyl_live, 16000) > spectral_centroid(con_live, 16000));
 }
 
+TEST_CASE("the brass bore only loses energy after the tongue-off, with the bell open at the top",
+          "[midi][synth][brass]") {
+  // The in-loop DC blocker's passband rises above unity toward Nyquist, and its corner follows
+  // the note, so at the least bell loss and the brightest bell the top notes are where it would
+  // outrun the loss. Tongued off, the valve passes the reflection through and the level can only
+  // fall. The speed law is held off: a pressure-driven delay is not part of the linear loop.
+  constexpr size_t kWindow = 12000;
+  for (const float bell_cutoff_hz : {0.0f, 20000.0f}) {
+    for (uint8_t note = 100; note <= 108; note += 4) {
+      BrassPatchParams params = gm_fallback_patch(0, 56).brass;
+      REQUIRE(params.lip_aperture > 0.0f);  // the branch whose release gates the valve off
+      params.damping = 0.0f;
+      params.brightness = 1.0f;
+      params.bell_cutoff_hz = bell_cutoff_hz;
+      params.bore_nonlinearity = 0.0f;
+      params.release_ms = 1.0f;
+      std::vector<float> bore(
+          static_cast<size_t>(sonare::midi::synth::brass_buffer_capacity(kRate)));
+      BrassVoiceCore core;
+      core.attach(bore.data(), static_cast<int>(bore.size()));
+      core.start(params, kRate, note, Velocity16::from7(80), 0x62726173ULL);
+      for (size_t i = 0; i < kWindow; ++i) static_cast<void>(core.render(1.0f));
+      core.release();
+      for (size_t i = 0; i < kWindow / 4; ++i) static_cast<void>(core.render(1.0f));
+      std::vector<float> ring(6 * kWindow);
+      for (float& sample : ring) sample = core.render(1.0f);
+      float previous = rms(ring, 0, kWindow);
+      INFO("note " << int(note) << " bell corner " << bell_cutoff_hz);
+      REQUIRE(previous > 1.0e-9f);
+      for (size_t w = 1; w < 6; ++w) {
+        const float level = rms(ring, w * kWindow, (w + 1) * kWindow);
+        INFO("window " << w << " level " << level << " previous " << previous);
+        REQUIRE(level <= previous);
+        previous = level;
+      }
+    }
+  }
+}
+
 TEST_CASE("brass presets speak and stay bounded", "[midi][synth][brass]") {
   // Every catalog brass preset must resolve, sound at F3, and stay bounded. The
   // shipped GM brass compasses are swept in wind_rate_law_test.cpp.
