@@ -639,11 +639,34 @@
       "reason": "no point of the search kept every bound (newly over its bound: e_piano_detuned_2:aftersound abs_median, e_piano_detuned_2:aftersound median, e_piano_detuned_2:aftersound p90, e_piano_detuned_2:balance abs_median, e_piano_detuned_2:balance median, e_piano_detuned_2:decay abs_median, e_piano_detuned_2:decay median, e_piano_detuned_2:decay p90, e_piano_detuned_2:doubling abs_median, e_piano_detuned_2:doubling median, e_piano_detuned_2:doubling p90, e_piano_detuned_2:partial_tilt abs_median, e_piano_detuned_2:partial_tilt median, e_piano_detuned_2:partial_tilt p90, electric_piano_2:aftersound abs_median, electric_piano_2:aftersound median, electric_piano_2:aftersound p90, electric_piano_2:damper p90, electric_piano_2:decay abs_median, electric_piano_2:decay median, electric_piano_2:decay p90, electric_piano_2:doubling abs_median, electric_piano_2:doubling median, electric_piano_2:doubling p90, electric_piano_2:vel_range abs_median)"
     },
     "e_piano_detuned_2": {
-      "objective": "df80e5527f4fbedb",
-      "date": "2026-10-26",
+      "objective": "3bc465ccbf9a2d13",
+      "date": "2026-11-14",
       "capture": "e_piano_detuned_2",
       "timbre": "t0",
-      "outcome": "adopted"
+      "corpora": [
+        {
+          "capture": "e_piano_detuned_2",
+          "timbre": "t0"
+        }
+      ],
+      "outcome": "kept",
+      "reason": "resolve point is a cutoff move against centroid; a patch of its own is owed. The full fit improved the held-out notes 1.00 to 0.58 only by newly breaking centroid p90, decay abs_median, doubling and stretch median",
+      "weights": {
+        "body": 1.0,
+        "bright": 1.0,
+        "cents": 0.5,
+        "crest": 1.0,
+        "env": 1.0,
+        "harm": 1.0,
+        "hf": 0.5,
+        "init": 1.0,
+        "level": 1.0,
+        "lf": 0.5,
+        "slope": 1.0,
+        "stiff": 0.5,
+        "tail": 1.0,
+        "tnr": 0.5
+      }
     },
     "electric_grand": {
       "objective": "df80e5527f4fbedb",
@@ -868,11 +891,31 @@
       "outcome": "adopted"
     },
     "lead_charang": {
-      "objective": "df80e5527f4fbedb",
-      "date": "2026-10-26",
+      "objective": "3bc465ccbf9a2d13",
+      "date": "2026-11-14",
       "capture": "lead_charang_module",
       "timbre": "t0",
-      "outcome": "adopted"
+      "corpora": [
+        {
+          "capture": "lead_charang_module",
+          "timbre": "t0"
+        }
+      ],
+      "outcome": "adopted",
+      "reason": "the adopted point is refit.py resolve's furthest gate-accepted point along the search (eval 3): the start cutoff 1000 Hz and Q 8 plus amp attack 8.17 ms; filter model SVF, key_track 1 and gain 0.2086 were fixed by rule before the search as base overrides, not chosen by it, and body carried weight 0",
+      "bank_generation": 224,
+      "base_overrides": "lead_charang.filter_model=0,lead_charang.key_track=1,lead_charang.gain=0.2086",
+      "start_overrides": "lead_charang.cutoff_hz=1000.0,lead_charang.resonance_q=8.0",
+      "weights": {
+        "bright": 1.0,
+        "cents": 0.5,
+        "crest": 1.0,
+        "env": 0.5,
+        "harm": 1.0,
+        "mod": 1.0,
+        "slope": 0.5,
+        "tnr": 1.0
+      }
     },
     "lead_chiff": {
       "objective": "df80e5527f4fbedb",

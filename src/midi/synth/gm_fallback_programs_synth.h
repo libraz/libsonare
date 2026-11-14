@@ -136,17 +136,19 @@ constexpr void configure_synth_programs(ProgramOverrides& o) noexcept {
   o.lead_chiff.amp_env.release_ms = 91.8123f;
   o.lead_chiff.va.velocity_exponent = 1.11f;
 
-  // Charang (GM 84): the hard, guitar-edged lead. The diode ladder saturates
-  // asymmetrically, so the drive is where the character sits and the cutoff
-  // comes down under it.
+  // Charang (GM 84): the hard, guitar-edged lead. A resonant state-variable peak at 1 kHz
+  // that tracks the key note for note: against the module this took the register balance
+  // from 10.9 to 4.3 dB off and tone-to-noise from 23.0 to 22.2; the gain holds its slot level.
   o.lead_charang = lead;
   o.lead_charang.unison = 2;
   o.lead_charang.detune_cents = 6.0f;
-  o.lead_charang.filter_model = SynthFilterModel::kDiodeLadder;
+  o.lead_charang.filter_model = SynthFilterModel::kSvf;
   o.lead_charang.drive = 0.55f;
-  o.lead_charang.resonance_q = 2.0f;
-  o.lead_charang.cutoff_hz = 4247.8f;
-  o.lead_charang.gain = 0.7591f;
+  o.lead_charang.resonance_q = 8.0f;
+  o.lead_charang.cutoff_hz = 1000.0f;
+  o.lead_charang.key_track = 1.0f;
+  o.lead_charang.gain = 0.2086f;
+  o.lead_charang.amp_env.attack_ms = 8.16884f;
   o.lead_charang.amp_env.release_ms = 91.8123f;
   o.lead_charang.va.velocity_exponent = 1.01f;
   o.lead_charang.amp_env.sustain = 0.465248f;
