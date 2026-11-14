@@ -331,9 +331,9 @@ constexpr void configure_physical_programs(ProgramOverrides& o) noexcept {
   };
   // The Bernoulli valve goes only to the voices whose references it improves on
   // every dimension at once: the low saxes and the bassoon, all of which the
-  // linearised table left more than an octave dark. The double reeds and the
-  // clarinet reach their brightness through it too, and pay for it in
-  // tone-to-noise and in the band under the note, so they keep the table. Each
+  // linearised table left more than an octave dark. The double reeds reach their
+  // brightness through it too, and pay for it in tone-to-noise and in the band under
+  // the note, so they keep the table; the clarinet takes it for its onset. Each
   // fitted gain holds the sustained level the table had, so only timbre moves.
   o.soprano_sax = reed(true, 0.55f, 0.55f, 0.64f, 0.32f, 16.0f, 80.0f, 0.78f, 0.30f, 0.772954f);
   o.soprano_sax.cutoff_hz = 5495.18f;
@@ -587,12 +587,29 @@ constexpr void configure_physical_programs(ProgramOverrides& o) noexcept {
   o.clarinet.reed.velocity_exponent = 2.80f;
   o.clarinet.amp_env.attack_ms = 9.18123f;
   o.clarinet.amp_env.release_ms = 269.744f;
-  // Tongue step fitted on the reference grid: onset 34.4 -> 17.2 periods (reference 8.2),
-  // arrival 85 -> 42 ms; body.median moves 0.36 dB, under its 1 dB floor.
-  o.clarinet.reed.tongue_step = 0.0920085f;
+  // Step at release 0.05 x the held mouth pressure (the tongue lets go at half the breath):
+  // onset 9.3 periods and 22.5 ms on the reference grid (reference 8.2 and 20).
+  o.clarinet.reed.tongue_step = 0.102f;
   o.clarinet.amp_env.sustain = 0.809017f;
   o.clarinet.body_mix = 0.286475f;
   o.clarinet.gain = 0.4337f;
+  // Mouth pressure over closing pressure 0.83-0.91 across the breath range. Notes 50-86 hold
+  // at velocity 1-127 under CC2 and pressure; the grid holds down to 0.84, falls silent at 0.82.
+  o.clarinet.reed.closing_pressure = 0.9855f;
+  // Onset against the band under the note at closing pressure 1.09: 0.15 -> 11.7 periods and
+  // -3.3 dB, 0.20 -> 9.0 and +2.6, 0.25 -> 7.4 and +7.0 (reference 8.2).
+  o.clarinet.reed.zeta = 0.2f;
+  // Holds the table valve's held level: median 0.00 dB, p90 0.13 over the grid.
+  o.clarinet.reed.pressure_scale = 1.606f;
+  // Tuning against the reference: median +1.9 cents, p90 4.0 (n86 +5.1).
+  o.clarinet.reed.brightness = 0.522f;
+  // Passive loop gain -0.45 dB at most over notes 24-108.
+  o.clarinet.reed.damping = 0.444f;
+  // Band under the note against the reference, median / absolute median / p90: +2.14 / 5.45 /
+  // 12.76 dB at 0 and +2.26 / 6.02 / 11.67 dB here; at the table's 0.12 the valve reads +22 dB.
+  o.clarinet.reed.breath_noise = 0.005f;
+  // Breath at its held value within 3 ms of note-on, so the tongue releases at full pressure.
+  o.clarinet.reed.attack_ms = 1.0f;
 
   // Bag pipe (GM 109): the chanter — a stiff double reed on a conical bore fed
   // from the bag, so the pressure never varies and the note is never tongued.

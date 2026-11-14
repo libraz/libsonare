@@ -1376,12 +1376,12 @@ TEST_CASE("the linearised reed table takes no onset overshoot", "[midi][synth][r
   // The table's operating point sits within about 2 dB of the clamp that shuts it; an overshoot
   // there closes the reed for as long as it lasts, so the field is inert on that path.
   using sonare::midi::synth::gm_fallback_patch;
-  NativeSynthPatch off = gm_fallback_patch(0, 71);  // Clarinet, linearised table
+  NativeSynthPatch off = gm_fallback_patch(0, 68);  // Oboe, linearised table
   REQUIRE(off.reed.closing_pressure == 0.0f);
   off.reed.onset_breath_overshoot_db = 0.0f;
   NativeSynthPatch on = off;
   on.reed.onset_breath_overshoot_db = 6.0f;
-  REQUIRE(render_patch(on, 50, 100, 24000) == render_patch(off, 50, 100, 24000));
+  REQUIRE(render_patch(on, 70, 100, 24000) == render_patch(off, 70, 100, 24000));
 }
 
 TEST_CASE("a streamed breath holds the reed onset overshoot", "[midi][synth][reed]") {
@@ -1403,7 +1403,7 @@ TEST_CASE("a reed tongue step speaks the note sooner on either valve and leaves 
   // the limit cycle it had without one. Chiff and breath noise are off on both arms, so the
   // only other start the column has is the bore's seed.
   using sonare::midi::synth::gm_fallback_patch;
-  for (uint8_t program : {71, 66}) {  // Clarinet (table), Tenor Sax (Bernoulli valve)
+  for (uint8_t program : {68, 66}) {  // Oboe (table), Tenor Sax (Bernoulli valve)
     NativeSynthPatch off = gm_fallback_patch(0, program);
     off.amp_env.attack_ms = 5.0f;
     off.amp_env.sustain = 1.0f;
@@ -1412,7 +1412,7 @@ TEST_CASE("a reed tongue step speaks the note sooner on either valve and leaves 
     off.reed.breath_noise = 0.0f;
     NativeSynthPatch on = off;
     on.reed.tongue_step = 0.25f;
-    const uint8_t note = program == 71 ? 50 : 56;
+    const uint8_t note = program == 68 ? 70 : 56;
     const int n = 72000;
     const std::vector<float> a = render_patch(off, note, 100, n);
     const std::vector<float> b = render_patch(on, note, 100, n);
