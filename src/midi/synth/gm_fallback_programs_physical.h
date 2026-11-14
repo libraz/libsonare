@@ -928,7 +928,7 @@ constexpr void configure_physical_programs(ProgramOverrides& o) noexcept {
   o.brass_section = brass(false, 0.50f, 0.42f, 0.72f, 0.32f, 45.0f, 130.0f, 0.85f, 0.35f, 0.85f);
   o.brass_section.brass.lip_aperture = 0.842372f;
   o.brass_section.amp_env.attack_ms = 36.6655f;
-  o.brass_section.cutoff_hz = 570.505f;
+  o.brass_section.cutoff_hz = 600.0f;
   o.brass_section.brass.brassiness = 0.228995f;
   o.brass_section.brass.cuivre_dynamics = 0.772108f;
   o.brass_section.brass.chiff = 0.203084f;
@@ -951,14 +951,14 @@ constexpr void configure_physical_programs(ProgramOverrides& o) noexcept {
   o.brass_section.brass.vel_to_breath = 0.201144f;
   o.brass_section.drift_rate_hz = 4.49753f;
   o.brass_section.resonance_q = 0.506819f;
-  o.brass_section.brass.bell_cutoff_hz = 3859.29f;
+  o.brass_section.brass.bell_cutoff_hz = 2450.08f;
   // The lip's phase at the fundamental: notes 40-76 at velocity 100 read +4.05 c mean against
   // equal temperament with the blocker lead share at 0.75 (drift and vibrato off).
   o.brass_section.pitch_offset_cents = -4.05f;
   o.brass_section.gain = 8.0f;
   o.brass_section.brass.bore_nonlinearity = 0.546291f;
   o.brass_section.body_mix = 0.904415f;
-  o.brass_section.brass.breath_noise = 0.22248f;
+  o.brass_section.brass.breath_noise = 0.44f;
   o.brass_section.brass.dynamic_lip = 0.706799f;
   o.brass_section.brass.half_valve = 0.144254f;
   o.brass_section.brass.velocity_exponent = 1.81084f;
