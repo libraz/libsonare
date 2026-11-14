@@ -445,6 +445,7 @@ void apply_reed(NativeSynthPatch& p, const Fields& f) {
   F(reed.zeta);
   F(reed.pressure_scale);
   F(reed.velocity_exponent);
+  F(reed.tongue_step);
 }
 
 void apply_brass(NativeSynthPatch& p, const Fields& f) {

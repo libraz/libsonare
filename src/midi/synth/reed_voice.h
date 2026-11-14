@@ -199,6 +199,12 @@ struct ReedPatchParams {
   /// Exponent of the voice-amplifier velocity curve, (velocity/127)^e; 2 is the
   /// SoundFont curve, bit-identical to it.
   float velocity_exponent = 2.0f;
+  /// Tongue-release pressure step, as a ratio of the mouth pressure at release. Non-zero,
+  /// the tongue holds the reed against the lay until the breath has risen, and the flow
+  /// that starts when it lets go launches this step into the bore for one traversal: the
+  /// amplitude the note grows from (measured at 0.036 on a clarinet), not the rate it
+  /// grows at. Either valve. 0 = off -> bit-identical.
+  float tongue_step = 0.0f;
   /// @note With the Bernoulli valve on, reed_stiffness and reed_opening address
   /// the table it replaces and stop reaching the sound. dynamic_reed does not:
   /// it turns the valve's own opening into a state (see its field above).
@@ -387,11 +393,17 @@ class ReedVoiceCore {
   float pressure_scale_ = 1.0f;
   float zeta_ = 0.0f;
   PassiveCoupling valve_;
-  // Tonguing (dynamic valve only): the reed is pinned shut until the mouth
-  // pressure reaches tongue_release_, so it starts its swing from a closed
-  // channel. Held false for the static valve, which has nothing to start.
+  // Tonguing (dynamic valve, or a tongue step on either valve): the reed is pinned shut
+  // until the mouth pressure reaches tongue_release_. Held false otherwise.
   bool tongue_held_ = false;
   float tongue_release_ = 0.0f;
+  // Tongue step: the ratio, the step's size at release, the samples of its traversal
+  // still to inject (a linear fall to zero) and the reciprocal of that traversal.
+  float tongue_step_ = 0.0f;
+  float tongue_step_amp_ = 0.0f;
+  int tongue_step_left_ = 0;
+  int tongue_step_span_ = 1;
+  float tongue_step_inv_span_ = 1.0f;
 
   // Breath contour: a one-pole ramp of the mouth pressure toward the target
   // level (1 while blowing, 0 once tongued off). breath_target_ is the steady

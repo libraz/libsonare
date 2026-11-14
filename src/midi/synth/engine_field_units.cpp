@@ -104,6 +104,7 @@ constexpr UnitRow kEngineUnits[] = {
     {"reed.zeta", Unit::None},
     {"reed.pressure_scale", Unit::Ratio},
     {"reed.velocity_exponent", Unit::None},
+    {"reed.tongue_step", Unit::Ratio},
     {"brass.conical", Unit::None},
     {"brass.breath_pressure", Unit::None},
     {"brass.vel_to_breath", Unit::None},

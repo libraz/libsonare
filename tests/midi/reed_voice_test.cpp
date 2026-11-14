@@ -873,6 +873,7 @@ TEST_CASE("advanced reed gates are off by default (bit-identical)", "[midi][synt
   same.reed.tonehole = 0.0f;
   same.reed.closing_pressure = 0.0f;
   same.reed.zeta = 0.8f;  // ignored while the closing pressure is zero
+  same.reed.tongue_step = 0.0f;
   const std::vector<float> a = render_patch(base, 58, 110, 12000);
   const std::vector<float> b = render_patch(same, 58, 110, 12000);
   REQUIRE(a == b);
@@ -1394,4 +1395,31 @@ TEST_CASE("a streamed breath holds the reed onset overshoot", "[midi][synth][ree
   REQUIRE(render_with_initial_cc(on, 56, 100, 24000, 2, 90) ==
           render_with_initial_cc(off, 56, 100, 24000, 2, 90));
   REQUIRE(render_patch(on, 56, 100, 24000) != render_patch(off, 56, 100, 24000));
+}
+
+TEST_CASE("a reed tongue step speaks the note sooner on either valve and leaves the held level",
+          "[midi][synth][reed]") {
+  // The step sets the amplitude the note grows from, so the growth starts higher and ends on
+  // the limit cycle it had without one. Chiff and breath noise are off on both arms, so the
+  // only other start the column has is the bore's seed.
+  using sonare::midi::synth::gm_fallback_patch;
+  for (uint8_t program : {71, 66}) {  // Clarinet (table), Tenor Sax (Bernoulli valve)
+    NativeSynthPatch off = gm_fallback_patch(0, program);
+    off.amp_env.attack_ms = 5.0f;
+    off.amp_env.sustain = 1.0f;
+    off.reed.tongue_step = 0.0f;
+    off.reed.chiff = 0.0f;
+    off.reed.breath_noise = 0.0f;
+    NativeSynthPatch on = off;
+    on.reed.tongue_step = 0.25f;
+    const uint8_t note = program == 71 ? 50 : 56;
+    const int n = 72000;
+    const std::vector<float> a = render_patch(off, note, 100, n);
+    const std::vector<float> b = render_patch(on, note, 100, n);
+    const double held = 20.0 * std::log10(rms(b, n - 24000, n) / rms(a, n - 24000, n));
+    INFO("program " << int(program) << ": 50% at " << speak_samples(a, 0.5) << " -> "
+                    << speak_samples(b, 0.5) << " samples, held level moved " << held << " dB");
+    CHECK(speak_samples(b, 0.5) + 576 < speak_samples(a, 0.5));
+    CHECK(std::fabs(held) < 1.0);
+  }
 }

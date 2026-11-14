@@ -867,6 +867,11 @@
       "basis": "0 = no tonehole lattice",
       "lane": "sustained"
     },
+    "reed.tongue_step": {
+      "class": "stage_enable",
+      "basis": "0 = no tongue hold and no release step",
+      "lane": "sustained"
+    },
     "sample_hold_hz": {
       "class": "stage_enable",
       "basis": "VA filter/colour stage, absent at 0",

@@ -553,6 +553,10 @@ constexpr NativeSynthPatch clamp_synth_patch(const NativeSynthPatch& patch) noex
       patch_clamp_detail::sanitize(p.reed.onset_breath_overshoot_vel_db, 0.0f), -3.0f, 6.0f);
   p.reed.velocity_exponent =
       std::clamp(patch_clamp_detail::sanitize(p.reed.velocity_exponent, 2.0f), 0.0f, 4.0f);
+  // On the passive tonehole every reed note holds over 8 s (bassoon n34 over 24 s) up to 0.25,
+  // with the tenor's held level within 1 dB; at 0.3 it drops 2.3 dB onto another limit cycle.
+  p.reed.tongue_step =
+      std::clamp(patch_clamp_detail::sanitize(p.reed.tongue_step, 0.0f), 0.0f, 0.25f);
   p.brass.breath_pressure =
       std::clamp(patch_clamp_detail::sanitize(p.brass.breath_pressure, 0.7f), 0.0f, 1.0f);
   p.brass.vel_to_breath =

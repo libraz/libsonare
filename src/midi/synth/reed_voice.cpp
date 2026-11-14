@@ -305,6 +305,17 @@ LoopBudget ReedVoiceCore::configure(const ReedPatchParams& params, double sr, ui
     const float topology = params.conical ? 1.0f : 4.0f;
     valve_tau = kReedValveCompScale * topology * qr * srf / (kTwoPi * f_reed);
   }
+  // Tongue step: the tongue holds the reed for either valve, and its release launches
+  // the step over one traversal of the bore.
+  tongue_step_ = std::max(params.tongue_step, 0.0f);
+  tongue_step_amp_ = 0.0f;
+  tongue_step_left_ = 0;
+  tongue_step_span_ = std::max(1, static_cast<int>(std::lround(bore_.period)));
+  tongue_step_inv_span_ = 1.0f / static_cast<float>(tongue_step_span_);
+  if (tongue_step_ > 0.0f) {
+    tongue_release_ = std::clamp(kTongueReleaseLevel, 0.0f, 0.99f);
+    tongue_held_ = true;
+  }
 
   // Bell loop lowpass: brightness -> the SHIPPED pole a (y += (1-a)(x - y)) and
   // damping -> the shipped flat loss gain, kept only to anchor the
@@ -559,6 +570,10 @@ float ReedVoiceCore::render_internal(float pitch_ratio) noexcept {
   if (reed > 1.0f) reed = 1.0f;
   if (reed < -1.0f) reed = -1.0f;
   float inj = breath + dp * reed;
+  // Tonguing: the reed is pinned shut against the lay until the mouth pressure has risen
+  // through the release level.
+  const bool tongue_was_held = tongue_held_;
+  if (tongue_held_) tongue_held_ = breath_.level < tongue_release_;
   // Bernoulli valve (gated): the channel's Bernoulli flow replaces the linearised
   // table above. The opening closes toward zero as the mouth outruns the bore and
   // the flow follows the square root of that drop, so the drive saturates on a
@@ -570,11 +585,9 @@ float ReedVoiceCore::render_internal(float pitch_ratio) noexcept {
   if (closing_pressure_ > 0.0f) {
     const float mouth = pressure_scale_ * breath;
     const float pc = pressure_scale_ * closing_pressure_;
-    // Tonguing (dynamic valve only): the tongue pins the reed shut against the
-    // lay, so the channel passes nothing at all, until the mouth pressure has
-    // risen through the release level. What speaks the note is the swing from a
-    // closed channel that follows — an initial condition, not reed inertia.
-    if (tongue_held_) tongue_held_ = breath_.level < tongue_release_;
+    // A held tongue shuts the channel, so it passes nothing at all. With the dynamic valve
+    // what speaks the note is the swing from a closed channel that follows — an initial
+    // condition, not reed inertia.
     if (tongue_held_) {
       inj = refl;
     } else {
@@ -598,6 +611,19 @@ float ReedVoiceCore::render_internal(float pitch_ratio) noexcept {
       // The gate rides on zeta, so this is WindBore::injection(refl, active, gate) already.
       inj = junction.injection;
     }
+  } else if (tongue_held_) {
+    inj = refl;
+  }
+  // Tongue step (gated): the flow that starts at the release launches a pressure step
+  // (Almeida et al. 2017, dp = Zc du), taken in the bore's own pressure units.
+  if (tongue_was_held && !tongue_held_ && tongue_step_ > 0.0f) {
+    const float units = closing_pressure_ > 0.0f ? pressure_scale_ : 1.0f;
+    tongue_step_amp_ = tongue_step_ * units * breath_target_ * breath_.level;
+    tongue_step_left_ = tongue_step_span_;
+  }
+  if (tongue_step_left_ > 0) {
+    inj += tongue_step_amp_ * static_cast<float>(tongue_step_left_) * tongue_step_inv_span_;
+    --tongue_step_left_;
   }
 
   // Advance the bore delay line: write the reed injection, read the delayed
@@ -774,6 +800,7 @@ void ReedVoiceCore::kill() noexcept {
   dc_x1_ = 0.0f;
   dc_y1_ = 0.0f;
   chiff_level_ = 0.0f;
+  tongue_step_left_ = 0;
   reed_z1_ = 0.0f;
   reed_z2_ = 0.0f;
   dp_lag_.fill(0.0f);

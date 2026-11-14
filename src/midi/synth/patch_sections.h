@@ -333,6 +333,7 @@ constexpr ReedPatchParams blank_reed() noexcept {
   z.zeta = 0.0f;
   z.pressure_scale = 0.0f;
   z.velocity_exponent = 0.0f;
+  z.tongue_step = 0.0f;
   return z;
 }
 
