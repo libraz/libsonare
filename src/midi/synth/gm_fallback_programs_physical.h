@@ -361,6 +361,9 @@ constexpr void configure_physical_programs(ProgramOverrides& o) noexcept {
   o.soprano_sax.reed.reed_stiffness = 0.70138f;
   o.soprano_sax.reed.release_ms = 478.75f;
   o.soprano_sax.reed.vel_to_breath = 0.768676f;
+  // Tongue step fitted on the reference grid: onset 37.4 -> 35.3 periods (reference 9.9),
+  // arrival 90 -> 80 ms; held level and h1 share unchanged. 0.11 puts vel_range over its bound.
+  o.soprano_sax.reed.tongue_step = 0.0772542f;
   o.soprano_sax.resonance_q = 3.00697f;
   o.soprano_sax.body_mix = 0.120715f;
   o.soprano_sax.reed.velocity_exponent = 0.73f;
@@ -490,6 +493,9 @@ constexpr void configure_physical_programs(ProgramOverrides& o) noexcept {
   o.oboe.reed.reed_stiffness = 0.924031f;
   o.oboe.reed.release_ms = 42.3337f;
   o.oboe.reed.vel_to_breath = 1.0f;
+  // Tongue step fitted on the reference grid: onset 29.4 -> 26.4 periods (reference 7.4),
+  // arrival 50 -> 45 ms; held level and h1 share unchanged.
+  o.oboe.reed.tongue_step = 0.052051f;
   o.oboe.resonance_q = 2.96294f;
   o.oboe.amp_env.decay_ms = 98.0261f;
   o.oboe.reed.velocity_exponent = 0.93f;
@@ -581,6 +587,9 @@ constexpr void configure_physical_programs(ProgramOverrides& o) noexcept {
   o.clarinet.reed.velocity_exponent = 2.80f;
   o.clarinet.amp_env.attack_ms = 9.18123f;
   o.clarinet.amp_env.release_ms = 269.744f;
+  // Tongue step fitted on the reference grid: onset 34.4 -> 17.2 periods (reference 8.2),
+  // arrival 85 -> 42 ms; body.median moves 0.36 dB, under its 1 dB floor.
+  o.clarinet.reed.tongue_step = 0.0920085f;
   o.clarinet.amp_env.sustain = 0.809017f;
   o.clarinet.body_mix = 0.286475f;
   o.clarinet.gain = 0.4337f;
