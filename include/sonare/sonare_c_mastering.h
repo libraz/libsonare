@@ -575,7 +575,7 @@ const char* sonare_mastering_insert_param_names(const char* name);
 ///   processor reads the key, not measured. `unit` is null for a non-number and,
 ///   for a number, one of `dB`, `dBFS`, `LUFS`, `Hz`, `ms`, `s`, `samples`, `m`,
 ///   `cm`, `mm`, `deg`, `percent`, `degC`, `V`, `inPerSec`, `dBPerOct`, `semitones`,
-///   `cents`, `ratio`, `bits`, `count` or `none` (a fraction, a selector index or
+///   `cents`, `ratio`, `bits`, `count`, `N`, `midiNote` or `none` (a fraction, a selector index or
 ///   a seed). `uiMin` and `uiMax` are a display range inside `[min, max]`, or null
 ///   where the accepted range is also the display range. `scale` is `"linear"` or
 ///   `"log"`, the axis a control draws the key on. `dependsOn` lists

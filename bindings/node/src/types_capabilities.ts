@@ -75,6 +75,7 @@ export type MasteringInsertParamUnit =
   | 'bits'
   | 'count'
   | 'N'
+  | 'midiNote'
   | 'none';
 
 /** Axis a control draws an insert parameter on. */

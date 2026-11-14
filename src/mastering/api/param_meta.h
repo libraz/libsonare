@@ -40,6 +40,7 @@ enum class Unit : std::uint8_t {
   Bits,
   Count,
   Newtons,
+  MidiNote,
 };
 
 /// @brief Axis a control draws the parameter on.
@@ -97,6 +98,8 @@ constexpr const char* unit_name(Unit unit) {
       return "count";
     case Unit::Newtons:
       return "N";
+    case Unit::MidiNote:
+      return "midiNote";
   }
   return nullptr;
 }

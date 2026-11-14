@@ -32,6 +32,7 @@ PARAMETER_UNITS = {
     "bits",
     "count",
     "N",
+    "midiNote",
     "none",
 }
 DEPENDENCY_RELATIONS = {"lt", "le", "gt", "ge"}

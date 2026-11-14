@@ -2501,8 +2501,10 @@ TEST_CASE("every engine-section field carries a unit its member name agrees with
     EngineUnit unit;
   };
   static const SuffixUnit kSuffixes[] = {
-      {"_hz", EngineUnit::Hz}, {"_ms", EngineUnit::Ms},       {"_s", EngineUnit::Seconds},
-      {"_db", EngineUnit::Db}, {"_cents", EngineUnit::Cents}, {"_mm", EngineUnit::Millimeters},
+      {"_hz", EngineUnit::Hz},         {"_ms", EngineUnit::Ms},
+      {"_s", EngineUnit::Seconds},     {"_db", EngineUnit::Db},
+      {"_cents", EngineUnit::Cents},   {"_mm", EngineUnit::Millimeters},
+      {"_note", EngineUnit::MidiNote},
   };
   size_t suffixed = 0;
   for (const NativeSynthPatch& base : one_patch_per_engine_mode()) {
@@ -2553,6 +2555,20 @@ TEST_CASE("every engine-section field carries a unit its member name agrees with
   const EngineParamDescriptor* rear = descriptor_named(harpsichord_descriptors, "rearSegmentMm");
   REQUIRE(rear != nullptr);
   REQUIRE(std::string(sonare::mastering::api::detail::unit_name(rear->unit)) == "mm");
+
+  // A key position is a MIDI note number whether or not its name says so.
+  const EngineParamDescriptor* undamped =
+      descriptor_named(harpsichord_descriptors, "undampedFromNote");
+  REQUIRE(undamped != nullptr);
+  REQUIRE(undamped->unit == EngineUnit::MidiNote);
+  NativeSynthPatch subtractive;
+  subtractive.mode = SynthEngineMode::kSubtractive;
+  const std::vector<EngineParamDescriptor> subtractive_descriptors =
+      engine_param_descriptors(subtractive);
+  const EngineParamDescriptor* key_break =
+      descriptor_named(subtractive_descriptors, "sustainKeyBreak");
+  REQUIRE(key_break != nullptr);
+  REQUIRE(std::string(sonare::mastering::api::detail::unit_name(key_break->unit)) == "midiNote");
 }
 
 TEST_CASE("every engine with a section has a base preset of that engine", "[midi][synth]") {

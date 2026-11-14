@@ -38,6 +38,7 @@ MasteringInsertParamUnit = Literal[
     "bits",
     "count",
     "N",
+    "midiNote",
     "none",
 ]
 MasteringInsertParamScale = Literal["linear", "log"]
