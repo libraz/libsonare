@@ -3,10 +3,10 @@
   "timbre": "gm104",
   "margin": 1.25,
   "reference_measured_utc": "2026-11-13T19:45:56+00:00",
-  "recorded_utc": "2026-11-14T00:41:47+00:00",
+  "recorded_utc": "2026-11-14T03:21:12+00:00",
   "model_build": {
-    "built_utc": "2026-11-14T00:38:54Z",
-    "newest_source_utc": "2026-11-14T00:38:14Z",
+    "built_utc": "2026-11-14T03:16:48Z",
+    "newest_source_utc": "2026-11-14T03:15:44Z",
     "stale": false
   },
   "reference_spread": {},
@@ -18,29 +18,33 @@
       "floor_from": "guess",
       "median": 1.0,
       "abs_median": 1.0,
-      "p90": 1.778,
+      "p90": 1.777,
       "rows": 7,
       "provenance": {
         "median": {
           "set_utc": "2026-10-24T20:57:13+00:00",
           "set_build": "2026-10-24T20:56:07Z",
-          "held_utc": "2026-11-14T00:41:47+00:00",
+          "held_utc": "2026-11-14T03:21:12+00:00",
           "measured": 0.03,
           "outcome": "kept"
         },
         "abs_median": {
           "set_utc": "2026-10-24T20:57:13+00:00",
           "set_build": "2026-10-24T20:56:07Z",
-          "held_utc": "2026-11-14T00:41:47+00:00",
+          "held_utc": "2026-11-14T03:21:12+00:00",
           "measured": 0.34,
           "outcome": "kept"
         },
         "p90": {
-          "set_utc": "2026-10-24T20:57:13+00:00",
-          "set_build": "2026-10-24T20:56:07Z",
-          "held_utc": "2026-11-14T00:41:47+00:00",
+          "set_utc": "2026-11-14T03:21:12+00:00",
+          "set_build": "2026-11-14T03:16:48Z",
+          "held_utc": "2026-11-14T03:21:12+00:00",
           "measured": 1.422,
-          "outcome": "kept"
+          "outcome": "tightened",
+          "set_tree": {
+            "head": "15abf0d08",
+            "dirty": []
+          }
         }
       }
     }
