@@ -198,23 +198,30 @@ constexpr void configure_synth_programs(ProgramOverrides& o) noexcept {
   o.lead_bass_lead.filter_model = SynthFilterModel::kSvf;
   o.lead_bass_lead.resonance_q = 1.97462f;
   o.lead_bass_lead.drive = 0.0f;
-  o.lead_bass_lead.cutoff_hz = 1195.0f;
+  o.lead_bass_lead.cutoff_hz = 1160.0f;
   o.lead_bass_lead.key_track = 0.32f;
   o.lead_bass_lead.vel_to_cutoff_cents = 2200.0f;
   o.lead_bass_lead.env_to_cutoff_cents = 2701.6f;
   o.lead_bass_lead.filter_env = fallback_env(1.0f, 900.0f, 0.0f, 150.0f);
-  o.lead_bass_lead.gain = 0.6992f;
-  o.lead_bass_lead.amp_env = fallback_env(8.16884f, 0.0f, 1.0f, 10.0f);
+  // Set against the module's slot level once the held note took its decay: C4 v96 reads
+  // within 0.02 dB of the balance over 0.5-2 s, its fall matching the module on both windows.
+  o.lead_bass_lead.gain = 0.5067f;
+  o.lead_bass_lead.amp_env = fallback_env(8.16884f, 2500.0f, 1.0f, 10.0f);
   o.lead_bass_lead.va.velocity_exponent = 0.91f;
   o.lead_bass_lead.amp_env.attack_ms = 5.0f;
-  o.lead_bass_lead.amp_env.sustain = 0.618034f;
+  // The held note falls to a plateau that deepens 1 dB per semitone above n62: against the
+  // module the late fall n66-84 sits within 2 dB where the flat hold was 4.4 to 18.8 dB short,
+  // and C4 stays flat as the module's does.
+  o.lead_bass_lead.amp_env.sustain = 0.8f;
+  o.lead_bass_lead.va.sustain_key_break = 62.0f;
+  o.lead_bass_lead.va.sustain_key_slope_db = 1.0f;
   o.lead_bass_lead.filter_env.attack_ms = 0.33365f;
   o.lead_bass_lead.stereo_spread = 0.309017f;
-  // A faint noise floor with a narrow band at ~340 Hz between the partials: against the
-  // module this took tone-to-noise from 25.6 to 8.0 dB off and the band under f0 from 62 to
-  // 8.8 dB off, leaving the partial stack, the centroid and the level unchanged.
-  o.lead_bass_lead.va.noise_level = 0.00182408f;
-  o.lead_bass_lead.va.band_noise_level = 0.0012967f;
+  // A noise floor with a narrow band at ~340 Hz between the partials: against the module this
+  // took tone-to-noise from 8.0 to 0.9 dB off and the band under f0 from 8.8 to 0.9 dB off. It
+  // pairs with the sustain slope above, since this floor is what the high notes fall into.
+  o.lead_bass_lead.va.noise_level = 0.0042f;
+  o.lead_bass_lead.va.band_noise_level = 0.0078f;
   o.lead_bass_lead.va.band_noise_low_hz = 314.999f;
   o.lead_bass_lead.va.band_noise_low_key_track = 0.722838f;
   o.lead_bass_lead.va.band_noise_high_hz = 365.197f;
