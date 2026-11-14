@@ -9265,7 +9265,7 @@
           "fittable": true
         },
         "gate_notes": [
-          "set on a dirty tree: balance.abs_median, balance.median, balance.p90, body.abs_median, body.median, centroid_pct.abs_median, centroid_pct.median, centroid_pct.p90, tnr.abs_median, tnr.median, tnr.p90"
+          "set on a dirty tree: balance.abs_median, balance.median, balance.p90, body.abs_median, body.median, body.p90, centroid_pct.abs_median, centroid_pct.median, centroid_pct.p90, stretch.abs_median, stretch.p90, tnr.abs_median, tnr.median, tnr.p90"
         ]
       },
       "next": "refit under the current objective (the last fit predates it): refit.py"
