@@ -1423,16 +1423,16 @@
         "music": null,
         "instrument": null,
         "fit": {
-          "state": "stale",
-          "date": "2026-10-26",
-          "outcome": "adopted",
+          "state": "current",
+          "date": "2026-11-14",
+          "outcome": "kept",
           "fittable": true
         },
         "gate_notes": [
           "set on a dirty tree: stretch.abs_median"
         ]
       },
-      "next": "refit under the current objective (the last fit predates it): refit.py"
+      "next": "listen to a take and record the verdict in signoff.json"
     },
     {
       "slug": "p005b002-electric-piano-2",
@@ -1548,16 +1548,16 @@
         "music": null,
         "instrument": null,
         "fit": {
-          "state": "stale",
-          "date": "2026-10-26",
-          "outcome": "adopted",
+          "state": "current",
+          "date": "2026-11-14",
+          "outcome": "kept",
           "fittable": true
         },
         "gate_notes": [
           "set on a dirty tree: stretch.abs_median"
         ]
       },
-      "next": "refit under the current objective (the last fit predates it): refit.py"
+      "next": "listen to a take and record the verdict in signoff.json"
     },
     {
       "slug": "p005b016-electric-piano-2",
@@ -9048,15 +9048,15 @@
       "patch": "lead_charang",
       "engine": "subtractive",
       "capture": "lead_charang_module",
-      "stage": 0.6,
-      "stage_name": "fitted",
+      "stage": 0.4,
+      "stage_name": "targeted",
       "open_candidates": [],
       "axes": {
         "engine": "subtractive",
         "patch": "lead_charang",
         "timbres": 1,
         "profile_rows": 37,
-        "gate_state": "current",
+        "gate_state": "exceeded",
         "coverage": {
           "canonical": 10,
           "gated": 6,
@@ -9086,13 +9086,23 @@
         "music": null,
         "instrument": null,
         "fit": {
-          "state": "stale",
-          "date": "2026-10-26",
+          "state": "under_base",
+          "date": "2026-11-14",
           "outcome": "adopted",
+          "base_overrides": [
+            "lead_charang.filter_model=0,lead_charang.key_track=1,lead_charang.gain=0.2086"
+          ],
           "fittable": true
-        }
+        },
+        "gate_notes": [
+          "tnr.median: re-recorded over a kept bound, last held 2026-11-14T03:22:34+00:00",
+          "tnr.abs_median: re-recorded over a kept bound, last held 2026-11-14T03:22:34+00:00",
+          "tnr.p90: re-recorded over a kept bound, last held 2026-11-14T03:22:34+00:00",
+          "set on a dirty tree: balance.abs_median, balance.median, balance.p90, centroid_pct.abs_median, centroid_pct.median, stretch.median, stretch.p90",
+          "vel_range.p90: re-recorded over a kept bound, last held 2026-11-14T03:22:36+00:00"
+        ]
       },
-      "next": "refit under the current objective (the last fit predates it): refit.py"
+      "next": "the gate is red: tnr.median: re-recorded over a kept bound, last held 2026-11-14T03:22:34+00:00; tnr.abs_median: re-recorded over a kept bound, last held 2026-11-14T03:22:34+00:00; tnr.p90: re-recorded over a kept bound, last held 2026-11-14T03:22:34+00:00; vel_range.p90: re-recorded over a kept bound, last held 2026-11-14T03:22:36+00:00"
     },
     {
       "slug": "p085-lead-6-voice",
