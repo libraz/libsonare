@@ -127,6 +127,7 @@
 #### Synthesizer
 
 - Changing one part's rig, a GS insertion effect's send, EFX CONTROL source or depth, or a part's EFX assignment no longer resets the other parts' rigs and the insertion units the change does not reach: their delay, reverb and amplifier tails keep ringing. Only the part chain or unit the edit reaches is rebuilt; a parameter edit queued just before such a change is no longer lost. The SF2 player's direct publication of an insertion-effect message still rebuilds every unit.
+- A GS ASSIGN GROUP write (`41 m3 rr`) on the built-in drum kit chokes the pair the GS drum map gives that number: group 2 is the whistles, 3 the guiros, 4 the cuicas and 5 the triangles, which were numbered 4, 5, 2 and 3. Files that write no ASSIGN GROUP sound the same.
 
 #### Vocal editing
 

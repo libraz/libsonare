@@ -8,6 +8,7 @@
 /// of the comparison. These cases assert presence and silence rather than a
 /// timbre: there is no reference recording for a choke.
 
+#include <algorithm>
 #include <catch2/catch_test_macros.hpp>
 #include <cmath>
 #include <cstdint>
@@ -178,4 +179,72 @@ TEST_CASE("Same-pool choking still works in both pools", "[midi][sf2][drums]") {
   render(player, 2048);
   note_on(player, kClosedHat);
   REQUIRE(peak_abs(render(player, 2048)) > 0.0f);
+}
+
+namespace {
+
+/// A framed Roland DT1 write of @p data at @p addr, with the checksum.
+std::vector<uint8_t> dt1(uint32_t addr, const std::vector<uint8_t>& data) {
+  const uint8_t a0 = static_cast<uint8_t>((addr >> 16) & 0x7Fu);
+  const uint8_t a1 = static_cast<uint8_t>((addr >> 8) & 0x7Fu);
+  const uint8_t a2 = static_cast<uint8_t>(addr & 0x7Fu);
+  std::vector<uint8_t> msg{0xF0, 0x41, 0x10, 0x42, 0x12, a0, a1, a2};
+  msg.insert(msg.end(), data.begin(), data.end());
+  int sum = a0 + a1 + a2;
+  for (const uint8_t b : data) sum += b;
+  msg.push_back(static_cast<uint8_t>((128 - (sum % 128)) & 0x7F));
+  msg.push_back(0xF7);
+  return msg;
+}
+
+/// A modelled key in no group of its own, which the cases move into one.
+constexpr uint8_t kGroupedKey = 75;  // Claves
+
+/// What @p first still contributes once kGroupedKey, written into @p group by
+/// `41 03 rr` ASSIGN GROUP, is struck over it; the same measure as `residual`.
+float residual_after_assign(uint8_t first, uint8_t group) {
+  auto run = [group](int ringing) {
+    Sf2Player player = make_player();
+    const std::vector<uint8_t> msg = dt1(0x410300u | kGroupedKey, {group});
+    REQUIRE(player.handle_sysex(msg.data(), msg.size()));
+    if (ringing >= 0) note_on(player, static_cast<uint8_t>(ringing));
+    render(player, 2048);
+    note_on(player, kGroupedKey);
+    return render(player, 2048);
+  };
+  const std::vector<float> over = run(first);
+  const std::vector<float> alone = run(-1);
+  const size_t settled = over.size() / 2;
+  std::vector<float> difference(over.size() - settled, 0.0f);
+  for (size_t i = settled; i < over.size(); ++i) difference[i - settled] = over[i] - alone[i];
+  return peak_abs(difference) / std::max(peak_abs(alone), 1e-9f);
+}
+
+}  // namespace
+
+TEST_CASE("ASSIGN GROUP numbers name the groups the GS drum map prints", "[midi][sf2][drums]") {
+  // The write is a raw group number, so a kit whose pairs are right but
+  // numbered differently chokes the wrong pair. Each row strikes the pair's
+  // sustaining member, then a key written into the map's number for it, and
+  // requires the choke; the pair that owned that number before is the control.
+  struct Row {
+    uint8_t group;
+    uint8_t member;  ///< The map's pair for this number.
+    uint8_t other;   ///< A pair in a different group.
+  };
+  const Row rows[] = {
+      {1, 46, 72},  // hi-hat / whistle
+      {2, 72, 79},  // whistle / cuica
+      {3, 74, 81},  // guiro / triangle
+      {4, 79, 72},  // cuica / whistle
+      {5, 81, 74},  // triangle / guiro
+      {6, 87, 79},  // surdo / cuica
+  };
+  for (const Row& r : rows) {
+    CAPTURE(r.group, r.member, r.other);
+    REQUIRE(ringing_alone(r.member) > 0.01f);
+    REQUIRE(ringing_alone(r.other) > 0.01f);
+    CHECK(residual_after_assign(r.member, r.group) < 0.01f);
+    CHECK(residual_after_assign(r.other, r.group) > 0.01f);
+  }
 }

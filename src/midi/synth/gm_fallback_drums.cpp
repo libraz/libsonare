@@ -1377,7 +1377,7 @@ SONARE_TUNED_CONSTEXPR DrumTables build_drum_note_table() noexcept {
       make_metal(2500.0f, {1.0f, 1.7f, 2.4f, 0.0f, 0.0f, 0.0f}, 3, 0.40f, 0.35f);  // Jingle Bell
   t[84] = make_metal(3000.0f, {1.0f, 1.6f, 2.3f, 3.1f, 0.0f, 0.0f}, 4, 1.50f, 0.30f);  // Belltree
 
-  // Triangle: high inharmonic modes; mute short, open long (mute group 3).
+  // Triangle: high inharmonic modes; mute short, open long (mute group 5).
   // The module reads one bar under both keys, with partials at 1692, 3112,
   // 5494 and 8552 Hz - the 5.5 kHz one standing 7 dB over the rest, which is
   // what makes a triangle a pitch rather than a shimmer. Written against 3112
@@ -1396,7 +1396,7 @@ SONARE_TUNED_CONSTEXPR DrumTables build_drum_note_table() noexcept {
   // it stops in a tenth of that.
   t[80] = make_metal(3112.0f, triangle_ratios, 4, 0.22f, 1.610f);  // Mute Triangle
   t[81] = make_metal(3112.0f, triangle_ratios, 4, 2.20f, 0.742f);  // Open Triangle
-  t[80].percussion.exclusive_class = 3;
+  t[80].percussion.exclusive_class = 5;
   t[80].amp_env.attack_ms = 0.538303f;
   t[80].amp_env.decay_ms = 42.688f;
   t[80].amp_env.sustain = 0.397229f;
@@ -1412,7 +1412,7 @@ SONARE_TUNED_CONSTEXPR DrumTables build_drum_note_table() noexcept {
   t[80].stereo_spread = 0.280839f;
   t[80].gain = 1.57172f;
   t[80].cutoff_hz = 15488.5f;
-  t[81].percussion.exclusive_class = 3;
+  t[81].percussion.exclusive_class = 5;
   // Not a strainer: a high-passed noise layer on a piece with no wires, and it
   // is the only thing here that fills the gaps between the four partials. What
   // it costs is measured, so it is set by that rather than deleted. At 3.7 it
@@ -1729,10 +1729,10 @@ SONARE_TUNED_CONSTEXPR DrumTables build_drum_note_table() noexcept {
   t[86].percussion.exclusive_class = 6;
   t[87].percussion.exclusive_class = 6;
 
-  // --- whistles (mute group 4) + hand clap ---
+  // --- whistles (mute group 2) + hand clap ---
   t[71] = make_whistle(1400.0f, 0.12f, 0.7473f);  // Short Whistle
   t[72] = make_whistle(1400.0f, 0.50f, 0.5f);     // Long Whistle
-  t[71].percussion.exclusive_class = 4;
+  t[71].percussion.exclusive_class = 2;
   t[71].amp_env.attack_ms = 60.9987f;
   t[71].amp_env.decay_ms = 65.2085f;
   t[71].amp_env.sustain = 0.0f;
@@ -1756,7 +1756,7 @@ SONARE_TUNED_CONSTEXPR DrumTables build_drum_note_table() noexcept {
   t[71].resonance_q = 2.0616f;
   t[71].percussion.contact_ms = 0.0717354f;
   t[71].gain = 0.468681f;
-  t[72].percussion.exclusive_class = 4;
+  t[72].percussion.exclusive_class = 2;
   t[72].amp_env.attack_ms = 51.0206f;
   // Zero sustain, as the acoustic snare above: a one-shot that sustains
   // plateaus rather than falls, and never loses 20 dB inside the window.
@@ -2006,11 +2006,11 @@ SONARE_TUNED_CONSTEXPR DrumTables build_drum_note_table() noexcept {
   t[69].gain = 0.501034f;
   t[70] = make_shaker(20.0f, 90.0f, 3200.0f, 1.5f, 0.210149f);  // Maracas
   t[82] = make_shaker(28.0f, 110.0f, 6000.0f, 1.0f, 0.5f);      // Shaker
-  // Guiro (mute group 5): ratchet ridge train.
+  // Guiro (mute group 3): ratchet ridge train.
   t[73] = make_scrape(8.0f, 120.0f, 150.0f, 2500.0f, 3.0f, 0.0f, 0.225594f);  // Short Guiro
   t[74] = make_scrape(8.0f, 500.0f, 120.0f, 2500.0f, 3.0f, 0.0f, 0.1437f);    // Long Guiro
-  t[73].percussion.exclusive_class = 5;
-  t[74].percussion.exclusive_class = 5;
+  t[73].percussion.exclusive_class = 3;
+  t[74].percussion.exclusive_class = 3;
   t[74].amp_env.decay_ms = 36.7344f;
   t[74].amp_env.sustain = 0.224123f;
   t[74].cutoff_hz = 10854.2f;
@@ -2035,10 +2035,10 @@ SONARE_TUNED_CONSTEXPR DrumTables build_drum_note_table() noexcept {
   t[74].percussion.plate_low_hz = 195.601f;
   t[74].percussion.plate_t60_s = 0.957732f;
   t[74].resonance_q = 1.52352f;
-  // Cuica (mute group 2): friction drum with a resonance pitch glide.
+  // Cuica (mute group 4): friction drum with a resonance pitch glide.
   t[78] = make_scrape(6.0f, 120.0f, 40.0f, 400.0f, 3.0f, -0.3f, 1.7655f);  // Mute Cuica (down)
   t[79] = make_scrape(6.0f, 250.0f, 40.0f, 500.0f, 3.0f, 0.5f, 0.55f);     // Open Cuica (up)
-  t[78].percussion.exclusive_class = 2;
+  t[78].percussion.exclusive_class = 4;
   // The module falls at 289 to 553 dB/s in half the octaves it resolves, a
   // rate one envelope stage cannot reach without flattening the strike; 95 ms
   // is the closest it comes while crest and ring hold.
@@ -2064,7 +2064,7 @@ SONARE_TUNED_CONSTEXPR DrumTables build_drum_note_table() noexcept {
   t[78].percussion.noise_q = 1.23521f;
   t[78].percussion.plate_hf_ratio = 0.953941f;
   t[78].percussion.plate_t60_s = 0.374442f;
-  t[79].percussion.exclusive_class = 2;
+  t[79].percussion.exclusive_class = 4;
   // The module reads a 30.43 ms attack against the fitted near-zero rise.
   t[79].amp_env.attack_ms = 103.112f;
   t[79].amp_env.decay_ms = 145.805f;
