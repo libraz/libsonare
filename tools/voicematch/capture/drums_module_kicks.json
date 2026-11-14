@@ -8,7 +8,7 @@
   "_notes": "Seventeen keys, one source, one gate. The recordings run 96 to 361 ms.",
   "_gate": "Ninety-six, set by key 4, whose recording is 96.2 ms. Nothing is padded to reach a longer window.",
   "_fit": "The kit's keys 0-16 were fitted at v100 against these rows alone, in-sample: one recording per key, nothing held out. Their velocity law is the kit's generic exponent 1.1 and is not measured.",
-  "_decay_exceeded": "band_decay is exceeded on the five long keys at the voicing that set the gate: the model's bands fall faster than the recording's by 246 (key 4), 264 (5), 210 (8), 212 (9) and 217 (16) dB/s. Hypothesis, not a cause: one noise band with one decay cannot hold a bright onset and a slow upper-octave tail together. The gate's bound was set at this voicing; it holds the regression from growing and does not accept it.",
+  "_decay_exceeded": "band_decay at this 96 ms gate reads more than body decay on the five long keys. Read again with the strike left out (from where the reference's power above 1 kHz has fallen 20 dB, to the end of the recording; model and recording through the same window): keys 8 and 16 decay too fast above the fundamental's band - key 16 by 2.8 and 3.4 times at 250 and 500 Hz, and on key 8 the recording does not fall 12 dB between 500 Hz and 2 kHz where the model falls at 259 to 453 dB/s. On keys 5 and 9 most of the excess is the strike's fall read as decay; 1.2 to 1.7 times is left, one band at 2.1. Key 4's 96 ms recording leaves no body window to read. The gate's bound was set at this voicing; it holds the regression from growing and does not accept it.",
   "notes": [
     0,
     1,
