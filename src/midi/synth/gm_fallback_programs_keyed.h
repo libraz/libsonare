@@ -1141,7 +1141,6 @@ SONARE_TUNED_CONSTEXPR void configure_keyed_programs(ProgramOverrides& o) noexce
   o.accordion.free_reed.musette_flat = true;
   o.accordion.free_reed.musette_taper = 0.23f;
   o.accordion.free_reed.musette_partner_level = 0.5f;
-  o.accordion.pitch_offset_cents = 2.5f;
   o.accordion.free_reed.slot_duty = 0.349017f;
   o.accordion.free_reed.slot_return = 0.59139f;
   o.accordion.free_reed.slot_gap = 0.0382149f;
@@ -1174,7 +1173,6 @@ SONARE_TUNED_CONSTEXPR void configure_keyed_programs(ProgramOverrides& o) noexce
   o.harmonica.free_reed.slot_swing = 0.0f;
   o.harmonica.free_reed.radiation_keytrack = 0.0f;
   o.harmonica.free_reed.onset_breath_overshoot_db = 0.0f;
-  o.harmonica.pitch_offset_cents = 0.0f;
   o.harmonica.amp_env = fallback_env(12.0f, 0.0f, 1.0f, 90.0f);
   o.harmonica.free_reed.brightness = 0.86f;
   o.harmonica.free_reed.reed_stiffness = 0.65f;
@@ -1206,7 +1204,6 @@ SONARE_TUNED_CONSTEXPR void configure_keyed_programs(ProgramOverrides& o) noexce
   o.bandoneon.free_reed.slot_swing = 0.0f;
   o.bandoneon.free_reed.radiation_keytrack = 0.0f;
   o.bandoneon.free_reed.onset_breath_overshoot_db = 0.0f;
-  o.bandoneon.pitch_offset_cents = 0.0f;
   o.bandoneon.amp_env = fallback_env(24.0f, 0.0f, 1.0f, 120.0f);
   o.bandoneon.free_reed.brightness = 0.55f;
   o.bandoneon.free_reed.reed_stiffness = 0.45f;

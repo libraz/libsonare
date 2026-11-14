@@ -374,7 +374,6 @@ SONARE_TUNED_CONSTEXPR void configure_variation_programs(ProgramOverrides& o) no
   o.accordion_italian.free_reed.musette_taper = 1.0f;
   o.accordion_italian.free_reed.musette_partner_level = 0.35f;
   o.accordion_italian.free_reed.slot_swing = 0.0f;
-  o.accordion_italian.pitch_offset_cents = 0.0f;
   o.accordion_italian.free_reed.onset_breath_overshoot_db = 3.0f;
   o.accordion_italian.free_reed.onset_breath_settle_ms = 60.0f;
   o.accordion_italian.free_reed.brightness = 0.58f;
