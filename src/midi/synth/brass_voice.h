@@ -202,6 +202,14 @@ struct BrassPatchParams {
   /// 0 = off -> render is bit-identical (the mute path is skipped).
   float mute = 0.0f;
 
+  /// Mute level normalisation in [0,1]: how much of the mute pair's loss at the
+  /// fundamental is given back, as an exponent on that loss. The cavity leak is
+  /// unity at DC and every playable fundamental sits on its skirt, so a seated
+  /// mute costs 15 to 24 dB, more the higher the note; 1 restores the
+  /// fundamental exactly and a fraction keeps part of that register tilt.
+  /// 0 = off -> render is bit-identical (the scale is never applied).
+  float mute_norm = 0.0f;
+
   /// Half-valve in [0,1]: pressing a valve half-way (or a slide between
   /// positions) leaves the air path partly obstructed, so the bore is lossy and
   /// stuffy and the pitch is unstable — the "half-valve" effect. Modelled as a
@@ -317,6 +325,10 @@ class BrassVoiceCore {
   }
   /// The fundamental makeup gain for the current radiation pole.
   float radiation_scale() const noexcept { return rad_scale_; }
+  /// Level the mute normalisation adds at the fundamental sounding at
+  /// @p pitch_ratio, against the same voice without it; 1 when it is off. What
+  /// the host refers a level-dependent stage after the core back by.
+  float mute_level_gain(float pitch_ratio) const noexcept;
 
  private:
   // Builds the whole voice for a loop running at @p sr (the host rate times the oversampling
@@ -331,6 +343,8 @@ class BrassVoiceCore {
   void refresh_excitation_targets() noexcept;
   // Recomputes the fundamental makeup for the current radiation pole.
   void refresh_radiation_scale(float rad_alpha) noexcept;
+  // The mute normalisation's gain on the muted path at pitch factor @p ratio.
+  float mute_scale_at(float ratio) const noexcept;
   // Re-solves bore_.comp and loss_cap_ from the pole lp_alpha_ now holds.
   void retune_loop_comp() noexcept;
 
@@ -501,6 +515,10 @@ class BrassVoiceCore {
   rt::BiquadState mute_cavity_{};
   rt::BiquadState mute_gap_{};
   float mute_gap_gain_ = 0.0f;
+  // mute_norm_ == 0 -> the scale is never applied (bit-identical).
+  float mute_norm_ = 0.0f;
+  float mute_scale_ = 1.0f;
+  float mute_ratio_ = 1.0f;
 
   // 4c: half-valve. half_valve_ == 0 -> skipped (bit-identical). Extra in-loop
   // loss (a stuffier, more damped bore) plus a small detune of the loop delay.

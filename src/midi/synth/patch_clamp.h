@@ -593,6 +593,7 @@ constexpr NativeSynthPatch clamp_synth_patch(const NativeSynthPatch& patch) noex
   p.brass.bore_nonlinearity =
       std::clamp(patch_clamp_detail::sanitize(p.brass.bore_nonlinearity, 0.0f), 0.0f, 1.0f);
   p.brass.mute = std::clamp(patch_clamp_detail::sanitize(p.brass.mute, 0.0f), 0.0f, 1.0f);
+  p.brass.mute_norm = std::clamp(patch_clamp_detail::sanitize(p.brass.mute_norm, 0.0f), 0.0f, 1.0f);
   p.brass.half_valve =
       std::clamp(patch_clamp_detail::sanitize(p.brass.half_valve, 0.0f), 0.0f, 1.0f);
   p.brass.dynamic_lip =

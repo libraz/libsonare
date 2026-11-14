@@ -124,6 +124,7 @@ constexpr UnitRow kEngineUnits[] = {
     {"brass.cuivre_dynamics", Unit::None},
     {"brass.bore_nonlinearity", Unit::None},
     {"brass.mute", Unit::None},
+    {"brass.mute_norm", Unit::None},
     {"brass.half_valve", Unit::None},
     {"brass.dynamic_lip", Unit::None},
     {"brass.onset_breath_overshoot_db", Unit::Db},

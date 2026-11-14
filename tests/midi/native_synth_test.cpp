@@ -2081,6 +2081,7 @@ TEST_CASE("the tuning field table reaches every gated brass physics field",
   REQUIRE(has("brass.brassiness"));
   REQUIRE(has("brass.cuivre_dynamics"));
   REQUIRE(has("brass.mute"));
+  REQUIRE(has("brass.mute_norm"));
   REQUIRE(has("brass.half_valve"));
   REQUIRE(has("brass.dynamic_lip"));
   // Negative control: without one, a lookup that answered yes to everything

@@ -134,6 +134,9 @@ struct NativeSynthVoice : VoiceState {
   /// Pre-filter drive gain / makeup (precomputed from patch->drive; 0 = off).
   float drive_gain = 0.0f;
   float drive_makeup = 1.0f;
+  /// Level the source's own make-up adds at the note's fundamental (1 = none). The drive is
+  /// referred back by it, so the tanh sees the level it was voiced at.
+  float drive_source_gain = 1.0f;
   /// The drive law being faded out after a change across 0 (gain 0 = bypass).
   float drive_fade_gain = 0.0f;
   float drive_fade_makeup = 1.0f;

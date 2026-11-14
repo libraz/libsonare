@@ -358,6 +358,7 @@ constexpr BrassPatchParams blank_brass() noexcept {
   z.cuivre_dynamics = 0.0f;
   z.bore_nonlinearity = 0.0f;
   z.mute = 0.0f;
+  z.mute_norm = 0.0f;
   z.half_valve = 0.0f;
   z.dynamic_lip = 0.0f;
   z.onset_breath_overshoot_db = 0.0f;

@@ -195,6 +195,12 @@ SONARE_TUNABLE(kLip2Mult, 2.0f);
 SONARE_TUNABLE(kLip2Q, 7.0f);
 SONARE_TUNABLE(kLip2Couple, 1.5f);
 
+// The mute's radiated response: the cavity leak and the gap in antiphase.
+std::complex<float> mute_pair_response(const rt::BiquadCoeffs& cavity, const rt::BiquadCoeffs& gap,
+                                       float gap_gain, float omega) noexcept {
+  return rt::biquad_response(cavity, omega) - gap_gain * rt::biquad_response(gap, omega);
+}
+
 }  // namespace
 
 void BrassVoiceCore::start(const BrassPatchParams& params, double sample_rate, uint8_t note,
@@ -390,6 +396,9 @@ LoopBudget BrassVoiceCore::configure(const BrassPatchParams& params, double sr, 
     mute_gap_.set(rt::rbj_highpass(w_gap, kMuteGapQ));
     mute_gap_gain_ = db_to_linear(kMuteGapDb);
   }
+  mute_norm_ = std::clamp(params.mute_norm, 0.0f, 1.0f);
+  mute_ratio_ = 1.0f;
+  mute_scale_ = mute_scale_at(mute_ratio_);
 
   // 4c: half-valve — extra in-loop loss. Off (0) -> the loss factor stays 1.
   half_valve_ = std::clamp(params.half_valve, 0.0f, 1.0f);
@@ -672,7 +681,15 @@ float BrassVoiceCore::render_internal(float pitch_ratio) noexcept {
   // Mute (gated): the cavity leaks the fundamentals and the gap radiates the
   // top; they arrive in antiphase, which is the dip between the two.
   if (mute_ > 0.0f) {
-    const float muted = mute_cavity_.process(outp) - mute_gap_gain_ * mute_gap_.process(outp);
+    float muted = mute_cavity_.process(outp) - mute_gap_gain_ * mute_gap_.process(outp);
+    if (mute_norm_ > 0.0f) {
+      // Normalised at the sounding fundamental, so it follows the live ratio.
+      if (ratio != mute_ratio_) {
+        mute_ratio_ = ratio;
+        mute_scale_ = mute_scale_at(ratio);
+      }
+      muted *= mute_scale_;
+    }
     outp += mute_ * (muted - outp);
   }
 
@@ -742,6 +759,23 @@ void BrassVoiceCore::refresh_radiation_scale(float rad_alpha) noexcept {
   const float num = pole * 2.0f * std::fabs(std::sin(0.5f * w0));
   const float den = std::sqrt(1.0f - 2.0f * pole * std::cos(w0) + pole * pole);
   rad_scale_ = kBellRadiationMakeup * std::pow(den / std::max(num, 1.0e-6f), kBellRadiationNorm);
+}
+
+float BrassVoiceCore::mute_scale_at(float ratio) const noexcept {
+  if (mute_ <= 0.0f || mute_norm_ <= 0.0f) return 1.0f;
+  const float w0 = kTwoPi * bore_f0_ * ratio / lip_srf_;
+  const float loss = std::abs(mute_pair_response(mute_cavity_.c, mute_gap_.c, mute_gap_gain_, w0));
+  return std::pow(1.0f / std::max(loss, 1.0e-6f), mute_norm_);
+}
+
+float BrassVoiceCore::mute_level_gain(float pitch_ratio) const noexcept {
+  if (mute_ <= 0.0f || mute_norm_ <= 0.0f) return 1.0f;
+  const float ratio = pitch_ratio > 0.01f ? pitch_ratio : 0.01f;
+  const float w0 = kTwoPi * bore_f0_ * ratio / lip_srf_;
+  const std::complex<float> muted =
+      mute_ * mute_pair_response(mute_cavity_.c, mute_gap_.c, mute_gap_gain_, w0);
+  const std::complex<float> open(1.0f - mute_, 0.0f);
+  return std::abs(open + mute_scale_at(ratio) * muted) / std::max(std::abs(open + muted), 1.0e-6f);
 }
 
 float BrassVoiceCore::bell_alpha_for_brightness(float bright01) const noexcept {

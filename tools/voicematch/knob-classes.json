@@ -44,6 +44,11 @@
       "basis": "a mute on a patch that ships unmuted (stage_enable-like if the patch ships muted and the mute is being voiced)",
       "lane": "sustained"
     },
+    "brass.mute_norm": {
+      "class": "stage_enable",
+      "basis": "0 = the mute pair stays normalised at DC, with no level given back at the fundamental",
+      "lane": "sustained"
+    },
     "clarinet.body_mix": {
       "class": "pinned",
       "value": 0.286475,

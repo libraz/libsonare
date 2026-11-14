@@ -178,6 +178,14 @@ void drive_law(float drive, float* gain, float* makeup) noexcept {
   }
 }
 
+/// Refers a drive law to a source @p source_gain louder than the one it was voiced against: the
+/// tanh is fed the level it was voiced at and the make-up carries the difference past it.
+void refer_drive(float source_gain, float* gain, float* makeup) noexcept {
+  if (source_gain == 1.0f || *gain <= 0.0f) return;
+  *gain /= source_gain;
+  *makeup *= source_gain;
+}
+
 /// Lowest sustain level the key slope scales down to, a hundred times the envelope's
 /// auto-idle threshold so a high held note keeps sounding.
 constexpr float kSustainKeyFloor = 0.01f;
@@ -463,6 +471,8 @@ void NativeSynthVoice::start(const NativeSynthPatch& p, double sample_rate, Velo
   static_cutoff_cents =
       static_cutoff_offset_cents(p, velocity01, note_offset_semitones, part_cutoff_cents);
   drive_law(p.drive, &drive_gain, &drive_makeup);
+  drive_source_gain = p.mode == SynthEngineMode::kBrass ? brass.mute_level_gain(1.0f) : 1.0f;
+  refer_drive(drive_source_gain, &drive_gain, &drive_makeup);
 
   // After any kit variation, so a GS part edit scales the envelope the kit
   // actually gave this note rather than the patch's own.
@@ -984,7 +994,15 @@ void NativeSynthVoice::retune(uint8_t new_note, uint8_t voiced_note, float per_n
   // lip resonance is a filter tuned at note-on and has to be moved with it, or
   // it pulls the sounding pitch back toward the note that is over.
   if (patch->mode == SynthEngineMode::kBrass) {
-    brass.retune(std::exp2(voiced_shift_cents() * (1.0f / kCentsPerOctave)));
+    const float ratio = std::exp2(voiced_shift_cents() * (1.0f / kCentsPerOctave));
+    brass.retune(ratio);
+    // The mute's make-up is normalised at the fundamental, so the drive's reference moves with it.
+    const float source_gain = brass.mute_level_gain(ratio);
+    if (source_gain != drive_source_gain) {
+      drive_source_gain = source_gain;
+      drive_law(patch->drive, &drive_gain, &drive_makeup);
+      refer_drive(drive_source_gain, &drive_gain, &drive_makeup);
+    }
   }
   if (patch->glide_ms > 0.0f) {
     glide_cents = sounding - target - per_note_shift_cents;
@@ -1063,6 +1081,7 @@ void NativeSynthVoice::refresh_live(const NativeSynthPatch& p, double sample_rat
     float gain = 0.0f;
     float makeup = 1.0f;
     drive_law(p.drive, &gain, &makeup);
+    refer_drive(drive_source_gain, &gain, &makeup);
     // Across 0 the law jumps (bypass vs a tanh with gain >= 1), so crossfade.
     if ((gain > 0.0f) != (drive_gain > 0.0f)) {
       begin_law_fade(drive_fade, sample_rate);

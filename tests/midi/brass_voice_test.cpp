@@ -635,6 +635,42 @@ TEST_CASE("mute hollows the low-mid and passes the top", "[midi][synth][brass]")
   REQUIRE(top_on > top_off + 6.0);
 }
 
+TEST_CASE("mute normalisation gives the level back and leaves the drive where it was voiced",
+          "[midi][synth][brass]") {
+  // The mute pair is unity at DC, so a trumpet's fundamental sits far down the
+  // cavity's skirt. Normalised, the voice is the plain one times a single gain:
+  // the drive is referred back by the make-up, so its tanh sees the level it
+  // was voiced at. Pitch is held still, since the make-up follows the sounding
+  // fundamental and the drive's reference is the note's own.
+  NativeSynthPatch plain = gm_fallback_patch(0, 59);
+  plain.brass.mute_norm = 0.0f;
+  plain.drift_cents = 0.0f;
+  plain.lfo_to_pitch_cents = 0.0f;
+  REQUIRE(plain.brass.mute == 1.0f);
+  REQUIRE(plain.drive > 0.0f);  // the stage the reference exists for
+  NativeSynthPatch normed = plain;
+  normed.brass.mute_norm = 1.0f;
+  const std::vector<float> off = render_patch(plain, 66, 120, 40000);
+  const std::vector<float> on = render_patch(normed, 66, 120, 40000);
+  REQUIRE(std::isfinite(on.back()));
+  const double gain = rms(on, 24000, 40000) / rms(off, 24000, 40000);
+  CAPTURE(gain);
+  REQUIRE(gain > 5.0);  // 14 dB and more at F#4
+  double worst = 0.0;
+  for (std::size_t i = 24000; i < 40000; ++i) {
+    worst = std::max(worst, std::fabs(static_cast<double>(on[i]) - gain * off[i]));
+  }
+  CAPTURE(worst, peak(on));
+  REQUIRE(worst < 1.0e-3 * peak(on));
+
+  // Half of the loss given back is half of it in decibels.
+  NativeSynthPatch half = plain;
+  half.brass.mute_norm = 0.5f;
+  const std::vector<float> mid = render_patch(half, 66, 120, 40000);
+  const double half_gain = rms(mid, 24000, 40000) / rms(off, 24000, 40000);
+  REQUIRE(std::fabs(half_gain / std::sqrt(gain) - 1.0) < 0.02);
+}
+
 TEST_CASE("brass bell body brightens the tone", "[midi][synth][brass]") {
   // The kBrassBell radiation formant lifts the ~1.2 kHz region over the round
   // linear bore, raising the spectral centroid while staying bounded.

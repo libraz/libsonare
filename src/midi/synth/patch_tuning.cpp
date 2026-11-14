@@ -469,6 +469,7 @@ void apply_brass(NativeSynthPatch& p, const Fields& f) {
   F(brass.cuivre_dynamics);
   F(brass.bore_nonlinearity);
   F(brass.mute);
+  F(brass.mute_norm);
   F(brass.half_valve);
   F(brass.dynamic_lip);
   F(brass.onset_breath_overshoot_db);

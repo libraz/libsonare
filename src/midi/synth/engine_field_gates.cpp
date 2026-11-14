@@ -260,6 +260,8 @@ const GateRow kEngineGates[] = {
     // Brass and reed: a bell cutoff takes the radiation corner from the reflection pole.
     {"reed.bell_radiation_hz", [](const GateSite&) { return equals("bellCutoffHz", 0); }},
     {"brass.bell_radiation_hz", [](const GateSite&) { return equals("bellCutoffHz", 0); }},
+    // Brass: the normalisation scales the muted path, which a seated mute has to open.
+    {"brass.mute_norm", [](const GateSite&) { return above("mute", 0); }},
     // Brass, flute, reed and free reed: the settle and the velocity slope shape an overshoot
     // that has to be there.
     {"brass.onset_breath_settle_ms",
