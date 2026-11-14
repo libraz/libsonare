@@ -291,6 +291,7 @@ def test_room_dry_probe_passes_mode_to_the_real_child_process(tmp_path, tuning_b
     )
     monkeypatch.setattr(autofit, "fit_room_ir", lambda *_args, **_kwargs: np.ones(1))
     monkeypatch.setattr(autofit.Evaluator, "check_overrides_reach", lambda *_args: None)
+    monkeypatch.setattr(autofit, "refuse_unknown_override_keys", lambda *_args: None)
     monkeypatch.setattr(autofit, "run_diagnosis", lambda *_args, **_kwargs: None)
     monkeypatch.setattr(autofit, "_fold_tree_provenance", lambda *_args, **_kwargs: None)
     monkeypatch.setattr(
