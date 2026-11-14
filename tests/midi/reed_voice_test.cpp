@@ -1426,8 +1426,8 @@ TEST_CASE("a streamed breath holds the reed onset overshoot", "[midi][synth][ree
 TEST_CASE("a reed tongue step speaks the note sooner on either valve and leaves the held level",
           "[midi][synth][reed]") {
   // The step sets the amplitude the note grows from, so the growth starts higher and ends on
-  // the limit cycle it had without one. Chiff and breath noise are off on both arms, so the
-  // only other start the column has is the bore's seed.
+  // the limit cycle it had without one. Chiff, breath noise and vibrato are off on both arms,
+  // so the only other start the column has is the bore's seed.
   using sonare::midi::synth::gm_fallback_patch;
   for (uint8_t program : {68, 66}) {  // Oboe (table), Tenor Sax (Bernoulli valve)
     NativeSynthPatch off = gm_fallback_patch(0, program);
@@ -1436,6 +1436,7 @@ TEST_CASE("a reed tongue step speaks the note sooner on either valve and leaves 
     off.reed.tongue_step = 0.0f;
     off.reed.chiff = 0.0f;
     off.reed.breath_noise = 0.0f;
+    off.lfo_to_pitch_cents = 0.0f;
     NativeSynthPatch on = off;
     on.reed.tongue_step = 0.25f;
     const uint8_t note = program == 68 ? 70 : 56;

@@ -337,11 +337,11 @@ constexpr void configure_physical_programs(ProgramOverrides& o) noexcept {
   // fitted gain holds the sustained level the table had, so only timbre moves.
   o.soprano_sax = reed(true, 0.55f, 0.55f, 0.64f, 0.32f, 16.0f, 80.0f, 0.78f, 0.30f, 0.772954f);
   o.soprano_sax.cutoff_hz = 5495.18f;
-  // The reference holds a 4.79 Hz, 10.5 c sine vibrato (third harmonic -31 dB) and no
-  // growl: at 0.15 the 28 Hz sidebands sat 48 dB under each partial where the
+  // The reference holds a 4.81 Hz, 12.8 c peak-to-peak sine vibrato (third harmonic -29 dB)
+  // and no growl: at 0.15 the 28 Hz sidebands sat 48 dB under each partial where the
   // reference carries nothing above -86 dB, and tone-to-noise read 15 dB noisier.
-  o.soprano_sax.lfo_rate_hz = 4.79f;
-  o.soprano_sax.lfo_to_pitch_cents = 5.25f;
+  o.soprano_sax.lfo_rate_hz = 4.81f;
+  o.soprano_sax.lfo_to_pitch_cents = 6.61f;
   o.soprano_sax.lfo_shape = LfoShape::kSine;
   o.soprano_sax.reed.growl = 0.0f;
   o.soprano_sax.reed.cone_growth = 0.00601161f;
@@ -405,8 +405,10 @@ constexpr void configure_physical_programs(ProgramOverrides& o) noexcept {
   // put lines up to 34 dB under the fundamental, at 2.0 none closer than 49 dB; 2.2 leaves the
   // note arriving 425 ms late.
   o.tenor_sax.reed.closing_pressure = 2.0f;
-  // Depth fitted against the reference's 5 Hz vibrato; tone-to-noise reads its sidebands as tone.
-  o.tenor_sax.lfo_rate_hz = 4.68214f;
+  // The reference's vibrato is a 4.81 Hz sine of 12.8 c peak to peak; the velocity-range bound
+  // is crossed above 4.8, which reads 9.3 c.
+  o.tenor_sax.lfo_rate_hz = 4.81f;
+  o.tenor_sax.lfo_shape = LfoShape::kSine;
   o.tenor_sax.reed.growl = 0.0541918f;
   o.tenor_sax.amp_env.attack_ms = 106.412f;
   o.tenor_sax.amp_env.release_ms = 44.3496f;
@@ -439,7 +441,7 @@ constexpr void configure_physical_programs(ProgramOverrides& o) noexcept {
   o.tenor_sax.reed.register_vent = 0.0182458f;
   o.tenor_sax.reed.breath_noise = 0.448762f;
   o.tenor_sax.reed.vel_to_breath = 0.99f;
-  o.tenor_sax.lfo_to_pitch_cents = 4.1643f;
+  o.tenor_sax.lfo_to_pitch_cents = 4.8f;
   o.tenor_sax.amp_env.sustain = 0.629104f;
   o.tenor_sax.gain = 0.1049f;
   // Held level 12.8 dB under the reference's median; 2.51 dB higher than the level the refit
@@ -476,8 +478,11 @@ constexpr void configure_physical_programs(ProgramOverrides& o) noexcept {
   o.baritone_sax.gain = 0.5808f;
   o.oboe = reed(true, 0.80f, 0.35f, 0.74f, 0.30f, 18.0f, 70.0f, 0.62f, 0.30f, 0.6f);
   o.oboe.cutoff_hz = 3143.15f;
-  o.oboe.lfo_rate_hz = 4.87846f;
-  o.oboe.lfo_to_pitch_cents = 0.818501f;
+  // The reference's vibrato: a 4.81 Hz sine of 12.8 c peak to peak, third harmonic -29 dB in
+  // phase, starting about 0.3 s into the note. The motion meter's grid reads 4.81 Hz as 4.646.
+  o.oboe.lfo_rate_hz = 4.81f;
+  o.oboe.lfo_to_pitch_cents = 6.61f;
+  o.oboe.lfo_shape = LfoShape::kSine;
   o.oboe.amp_env.attack_ms = 44.7151f;
   o.oboe.amp_env.release_ms = 560.0f;
   o.oboe.amp_env.sustain = 0.462463f;
@@ -504,12 +509,10 @@ constexpr void configure_physical_programs(ProgramOverrides& o) noexcept {
   o.oboe.pitch_offset_cents = 2.61f;
   o.oboe.gain = 0.3899f;
   o.english_horn = reed(true, 0.70f, 0.40f, 0.64f, 0.34f, 24.0f, 90.0f, 0.64f, 0.34f, 0.6f);
-  // The reference carries a 5 Hz, 6.1 c vibrato (7.8 c here reads the same);
-  // 5 c keeps the partial stack inside its bound, which 7.8 c does not.
-  // The reference's vibrato is a 4.79 Hz sine of 10.4 c peak to peak; at that depth
-  // the partial stack leaves its bound, and 7 c holds it.
-  o.english_horn.lfo_rate_hz = 4.79f;
-  o.english_horn.lfo_to_pitch_cents = 3.5f;
+  // The reference's vibrato is a 4.81 Hz sine of 12.8 c peak to peak; the body bound
+  // (7.29 dB) is crossed above 5.4, which reads 10.3 c.
+  o.english_horn.lfo_rate_hz = 4.81f;
+  o.english_horn.lfo_to_pitch_cents = 5.4f;
   o.english_horn.lfo_shape = LfoShape::kSine;
   o.english_horn.amp_env.decay_ms = 812.385f;
   o.english_horn.amp_env.sustain = 0.347453f;
