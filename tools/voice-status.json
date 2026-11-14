@@ -4007,13 +4007,13 @@
         "music": null,
         "instrument": null,
         "fit": {
-          "state": "stale",
-          "date": "2026-10-26",
-          "outcome": "adopted",
+          "state": "current",
+          "date": "2026-11-14",
+          "outcome": "kept",
           "fittable": true
         }
       },
-      "next": "refit under the current objective (the last fit predates it): refit.py"
+      "next": "listen to a take and record the verdict in signoff.json"
     },
     {
       "slug": "p019b002-church-organ",
@@ -4064,9 +4064,9 @@
         "music": null,
         "instrument": null,
         "fit": {
-          "state": "stale",
-          "date": "2026-10-26",
-          "outcome": "adopted",
+          "state": "current",
+          "date": "2026-11-14",
+          "outcome": "kept",
           "fittable": true
         },
         "gate_notes": [
@@ -4124,13 +4124,13 @@
         "music": null,
         "instrument": null,
         "fit": {
-          "state": "stale",
-          "date": "2026-10-26",
-          "outcome": "adopted",
+          "state": "current",
+          "date": "2026-11-14",
+          "outcome": "kept",
           "fittable": true
         }
       },
-      "next": "refit under the current objective (the last fit predates it): refit.py"
+      "next": "listen to a take and record the verdict in signoff.json"
     },
     {
       "slug": "p019b016-church-organ",
@@ -4181,9 +4181,9 @@
         "music": null,
         "instrument": null,
         "fit": {
-          "state": "stale",
-          "date": "2026-10-26",
-          "outcome": "adopted",
+          "state": "current",
+          "date": "2026-11-14",
+          "outcome": "kept",
           "fittable": true
         },
         "gate_notes": [
@@ -4479,9 +4479,9 @@
         "music": null,
         "instrument": null,
         "fit": {
-          "state": "stale",
-          "date": "2026-10-26",
-          "outcome": "adopted",
+          "state": "current",
+          "date": "2026-11-14",
+          "outcome": "kept",
           "fittable": true
         },
         "gate_notes": [
@@ -6330,8 +6330,8 @@
         "music": null,
         "instrument": null,
         "fit": {
-          "state": "stale",
-          "date": "2026-10-26",
+          "state": "current",
+          "date": "2026-11-14",
           "outcome": "kept",
           "fittable": true
         },
@@ -7331,8 +7331,8 @@
         "music": null,
         "instrument": null,
         "fit": {
-          "state": "stale",
-          "date": "2026-10-26",
+          "state": "current",
+          "date": "2026-11-14",
           "outcome": "kept",
           "fittable": true
         },
@@ -7469,8 +7469,8 @@
         "music": null,
         "instrument": null,
         "fit": {
-          "state": "stale",
-          "date": "2026-10-26",
+          "state": "current",
+          "date": "2026-11-14",
           "outcome": "kept",
           "fittable": true
         },
@@ -8492,13 +8492,13 @@
         "music": null,
         "instrument": null,
         "fit": {
-          "state": "stale",
-          "date": "2026-10-26",
+          "state": "current",
+          "date": "2026-11-14",
           "outcome": "kept",
           "fittable": true
         }
       },
-      "next": "refit under the current objective (the last fit predates it): refit.py"
+      "next": "listen to a take and record the verdict in signoff.json"
     },
     {
       "slug": "p075-pan-flute",
