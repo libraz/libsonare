@@ -3,10 +3,10 @@
   "timbre": "gm085",
   "margin": 1.25,
   "reference_measured_utc": "2026-11-13T19:25:09+00:00",
-  "recorded_utc": "2026-11-14T03:22:36+00:00",
+  "recorded_utc": "2026-11-14T21:59:11+00:00",
   "model_build": {
-    "built_utc": "2026-11-14T03:16:48Z",
-    "newest_source_utc": "2026-11-14T03:15:44Z",
+    "built_utc": "2026-11-14T21:48:10Z",
+    "newest_source_utc": "2026-11-14T21:44:00Z",
     "stale": false
   },
   "reference_spread": {},
@@ -23,23 +23,23 @@
         "median": {
           "set_utc": "2026-10-24T20:57:40+00:00",
           "set_build": "2026-10-24T20:56:07Z",
-          "held_utc": "2026-11-14T03:22:36+00:00",
-          "measured": 0.63,
+          "held_utc": "2026-11-14T21:59:11+00:00",
+          "measured": 0.77,
           "outcome": "kept"
         },
         "abs_median": {
           "set_utc": "2026-10-24T20:57:40+00:00",
           "set_build": "2026-10-24T20:56:07Z",
-          "held_utc": "2026-11-14T03:22:36+00:00",
-          "measured": 0.63,
+          "held_utc": "2026-11-14T21:59:11+00:00",
+          "measured": 0.77,
           "outcome": "kept"
         },
         "p90": {
           "set_utc": "2026-11-13T23:10:17+00:00",
           "set_build": "2026-11-13T22:56:16Z",
           "held_utc": "2026-11-14T03:22:36+00:00",
-          "measured": 0.954,
-          "outcome": "kept",
+          "measured": 3.03,
+          "outcome": "exceeded",
           "set_tree": {
             "head": "e37d16abf",
             "dirty": []
