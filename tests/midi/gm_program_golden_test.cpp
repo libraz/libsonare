@@ -724,10 +724,11 @@ TEST_CASE("NativeSynth drum kit renders stay bit-identical", "[.][midi][synth][g
     REQUIRE(gm_fallback_drum_kit(kit->program) == kit->index);
   }
   const std::vector<uint8_t> keys = voiced_drum_keys();
-  // The default fill marks no key (key 0 stays out); an assigned key (36) is marked.
+  // The default fill marks no key (key 17, a spoken voice, stays out); an assigned key (36) is
+  // marked.
   REQUIRE_FALSE(keys.empty());
   REQUIRE(std::find(keys.begin(), keys.end(), uint8_t{36}) != keys.end());
-  REQUIRE(std::find(keys.begin(), keys.end(), uint8_t{0}) == keys.end());
+  REQUIRE(std::find(keys.begin(), keys.end(), uint8_t{17}) == keys.end());
   REQUIRE(rows.size() ==
           keys.size() * std::size(kKitVelocities) + kits.size() * std::size(kGsKitKeys));
   REQUIRE(expected.size() == rows.size());

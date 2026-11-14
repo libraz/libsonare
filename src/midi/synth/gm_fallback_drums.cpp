@@ -1199,6 +1199,331 @@ SONARE_TUNED_CONSTEXPR DrumTables build_drum_note_table() noexcept {
   t[38] = d.snare;  // Acoustic Snare
   t[40] = d.snare;  // Electric Snare
 
+  // --- kick variants below the GM range ---
+  // Standard 1 Kick 1: from key 36; 65.8 Hz, pitch x1.24 over 10 ms,
+  // t60 0.23 s in the lowest band; module recordings
+  t[0] = t[36];
+  t[0].amp_env.attack_ms = 7.71021f;
+  t[0].amp_env.decay_ms = 234.47f;
+  t[0].percussion.base_freq_hz = 65.79f;
+  t[0].percussion.mode_decay_s = 0.225f;
+  t[0].percussion.noise_cutoff_hz = 1279.75f;
+  t[0].percussion.noise_decay_ms = 16.5891f;
+  t[0].percussion.noise_gain = 0.793088f;
+  t[0].percussion.noise_q = 0.507408f;
+  t[0].percussion.pitch_drop = 0.2424f;
+  t[0].percussion.pitch_drop_ms = 10.0f;
+  t[0].percussion.shell_freq_hz[0] = 138.813f;
+  t[0].percussion.shell_mix = 0.184097f;
+  t[0].percussion.strike_r = 0.488557f;
+  t[0].percussion.tone_gain = 0.772121f;
+  t[0].gain = 4.447f;
+  // Standard 1 Kick 2: from key 36; 75.0 Hz, pitch x1.40 over 20 ms,
+  // t60 0.14 s in the lowest band; module recordings
+  t[1] = t[36];
+  t[1].amp_env.attack_ms = 10.4591f;
+  t[1].amp_env.decay_ms = 874.009f;
+  t[1].percussion.base_freq_hz = 74.98f;
+  t[1].percussion.mode_decay_s = 0.141f;
+  t[1].percussion.noise_cutoff_hz = 1085.95f;
+  t[1].percussion.noise_decay_ms = 13.2289f;
+  t[1].percussion.noise_gain = 0.713378f;
+  t[1].percussion.noise_q = 0.500454f;
+  t[1].percussion.pitch_drop = 0.4035f;
+  t[1].percussion.pitch_drop_ms = 20.0f;
+  t[1].percussion.shell_freq_hz[0] = 84.5193f;
+  t[1].percussion.shell_mix = 0.244952f;
+  t[1].percussion.strike_r = 0.532105f;
+  t[1].percussion.tone_gain = 0.572673f;
+  t[1].gain = 10.426f;
+  // Standard 2 Kick 1: from key 36 with the Standard 2 shell; 62.6 Hz, pitch x1.48 over 10 ms,
+  // t60 0.31 s in the lowest band; module recordings
+  t[2] = t[36];
+  t[2].amp_env.attack_ms = 8.98051f;
+  t[2].amp_env.decay_ms = 192.424f;
+  t[2].percussion.base_freq_hz = 62.58f;
+  t[2].percussion.mallet_ms = 0.251644f;
+  t[2].percussion.mode_decay_s = 0.312f;
+  t[2].percussion.noise_cutoff_hz = 930.198f;
+  t[2].percussion.noise_decay_ms = 62.3793f;
+  t[2].percussion.noise_gain = 0.446571f;
+  t[2].percussion.noise_q = 0.500454f;
+  t[2].percussion.pitch_drop = 0.4848f;
+  t[2].percussion.pitch_drop_ms = 10.0f;
+  t[2].percussion.shell_freq_hz[0] = 80.9271f;
+  t[2].percussion.shell_mix = 0.201885f;
+  t[2].percussion.shell_t60_s[0] = 0.126f;
+  t[2].percussion.strike_r = 0.210639f;
+  t[2].percussion.tone_gain = 0.869313f;
+  t[2].gain = 4.499f;
+  // Standard 2 Kick 2: from key 36 with the Standard 2 shell; 85.2 Hz, pitch x1.13 over 5 ms,
+  // t60 0.23 s in the lowest band; module recordings
+  t[3] = t[36];
+  t[3].amp_env.attack_ms = 9.5f;
+  t[3].amp_env.decay_ms = 314.334f;
+  t[3].percussion.base_freq_hz = 85.21f;
+  t[3].percussion.mallet_ms = 4.2588f;
+  t[3].percussion.mode_decay_s = 0.235f;
+  t[3].percussion.noise_cutoff_hz = 938.968f;
+  t[3].percussion.noise_decay_ms = 42.858f;
+  t[3].percussion.noise_gain = 0.720392f;
+  t[3].percussion.noise_q = 0.500454f;
+  t[3].percussion.pitch_drop = 0.129f;
+  t[3].percussion.pitch_drop_ms = 5.0f;
+  t[3].percussion.shell_freq_hz[0] = 86.4185f;
+  t[3].percussion.shell_mix = 0.149891f;
+  t[3].percussion.shell_t60_s[0] = 0.126f;
+  t[3].percussion.strike_r = 0.381972f;
+  t[3].percussion.tone_gain = 0.925452f;
+  t[3].gain = 3.007f;
+  // Kick Drum 1 (SC-55): from key 36; 80.5 Hz, pitch x1.46 over 10 ms,
+  // t60 0.19 s in the lowest band; module recordings
+  t[4] = t[36];
+  t[4].amp_env.attack_ms = 2.76425f;
+  t[4].amp_env.decay_ms = 422.356f;
+  t[4].percussion.base_freq_hz = 80.51f;
+  t[4].percussion.mallet_ms = 1.23358f;
+  t[4].percussion.mode_decay_s = 0.188f;
+  t[4].percussion.noise_cutoff_hz = 1473.45f;
+  t[4].percussion.noise_decay_ms = 13.1995f;
+  t[4].percussion.noise_gain = 0.806995f;
+  t[4].percussion.noise_q = 0.579829f;
+  t[4].percussion.pitch_drop = 0.4583f;
+  t[4].percussion.pitch_drop_ms = 10.0f;
+  t[4].percussion.shell_freq_hz[0] = 77.904f;
+  t[4].percussion.shell_mix = 0.184765f;
+  t[4].percussion.strike_r = 0.226509f;
+  t[4].percussion.tone_gain = 0.471273f;
+  t[4].gain = 5.796f;
+  // Kick Drum 2 (SC-55): from key 36; 67.1 Hz, pitch x1.17 over 5 ms,
+  // t60 0.23 s in the lowest band; module recordings
+  t[5] = t[36];
+  t[5].amp_env.attack_ms = 5.14696f;
+  t[5].amp_env.decay_ms = 138.373f;
+  t[5].percussion.base_freq_hz = 67.07f;
+  t[5].percussion.mode_decay_s = 0.225f;
+  t[5].percussion.noise_cutoff_hz = 1218.65f;
+  t[5].percussion.noise_decay_ms = 21.2945f;
+  t[5].percussion.noise_gain = 0.929792f;
+  t[5].percussion.noise_q = 0.500909f;
+  t[5].percussion.pitch_drop = 0.1714f;
+  t[5].percussion.pitch_drop_ms = 5.0f;
+  t[5].percussion.shell_freq_hz[0] = 64.3821f;
+  t[5].percussion.shell_mix = 0.53497f;
+  t[5].percussion.strike_r = 0.184386f;
+  t[5].percussion.tone_gain = 0.445765f;
+  t[5].gain = 3.829f;
+  // Jazz Kick 1: from key 36 with the Jazz decay; 71.7 Hz, pitch x1.21 over 10 ms,
+  // t60 0.43 s in the lowest band; module recordings
+  t[6] = t[36];
+  t[6].amp_env.attack_ms = 0.743763f;
+  t[6].amp_env.decay_ms = 1029.21f;
+  t[6].percussion.base_freq_hz = 71.71f;
+  t[6].percussion.mallet_ms = 6.74255f;
+  t[6].percussion.mode_decay_s = 0.429f;
+  t[6].percussion.noise_cutoff_hz = 981.127f;
+  t[6].percussion.noise_decay_ms = 37.5648f;
+  t[6].percussion.noise_gain = 1.94125f;
+  t[6].percussion.noise_q = 0.517483f;
+  t[6].percussion.pitch_drop = 0.2121f;
+  t[6].percussion.pitch_drop_ms = 10.0f;
+  t[6].percussion.shell_freq_hz[0] = 122.165f;
+  t[6].percussion.shell_mix = 0.670064f;
+  t[6].percussion.strike_r = 0.83309f;
+  t[6].percussion.tone_gain = 1.63807f;
+  t[6].gain = 5.286f;
+  // Jazz Kick 2: from key 36 with the Jazz decay; 67.1 Hz, pitch x1.50 over 10 ms,
+  // t60 0.12 s in the lowest band; module recordings
+  t[7] = t[36];
+  t[7].amp_env.attack_ms = 7.86833f;
+  t[7].amp_env.decay_ms = 149.526f;
+  t[7].percussion.base_freq_hz = 67.12f;
+  t[7].percussion.mode_decay_s = 0.12f;
+  t[7].percussion.noise_cutoff_hz = 635.545f;
+  t[7].percussion.noise_decay_ms = 74.454f;
+  t[7].percussion.noise_q = 0.526206f;
+  t[7].percussion.pitch_drop = 0.5f;
+  t[7].percussion.pitch_drop_ms = 10.0f;
+  t[7].percussion.shell_freq_hz[0] = 66.4324f;
+  t[7].percussion.shell_mix = 0.185506f;
+  t[7].percussion.strike_r = 0.0565364f;
+  t[7].percussion.tone_gain = 1.5567f;
+  t[7].gain = 2.649f;
+  // Room Kick 1: from key 36 with the Room shell; 60.7 Hz, pitch x1.32 over 10 ms,
+  // t60 0.48 s in the lowest band; module recordings
+  t[8] = t[36];
+  t[8].amp_env.attack_ms = 13.5f;
+  t[8].amp_env.decay_ms = 1051.45f;
+  t[8].percussion.base_freq_hz = 60.71f;
+  t[8].percussion.mode_decay_s = 0.484f;
+  t[8].percussion.noise_cutoff_hz = 3827.02f;
+  t[8].percussion.noise_decay_ms = 21.8161f;
+  t[8].percussion.noise_gain = 1.40221f;
+  t[8].percussion.noise_q = 1.16116f;
+  t[8].percussion.pitch_drop = 0.3171f;
+  t[8].percussion.pitch_drop_ms = 10.0f;
+  t[8].percussion.shell_freq_hz[0] = 74.6952f;
+  t[8].percussion.shell_mix = 0.858582f;
+  t[8].percussion.shell_t60_s[0] = 0.224f;
+  t[8].percussion.strike_r = 0.353894f;
+  t[8].percussion.tone_gain = 1.42414f;
+  t[8].gain = 2.057f;
+  // Room Kick 2: from key 36 with the Room shell; 83.2 Hz, pitch x1.19 over 5 ms,
+  // t60 0.63 s in the lowest band; module recordings
+  t[9] = t[36];
+  t[9].amp_env.attack_ms = 6.42192f;
+  t[9].amp_env.decay_ms = 320.789f;
+  t[9].percussion.base_freq_hz = 83.23f;
+  t[9].percussion.mode_decay_s = 0.633f;
+  t[9].percussion.noise_cutoff_hz = 1981.17f;
+  t[9].percussion.noise_decay_ms = 23.0152f;
+  t[9].percussion.noise_gain = 1.43264f;
+  t[9].percussion.noise_q = 0.501818f;
+  t[9].percussion.pitch_drop = 0.1935f;
+  t[9].percussion.pitch_drop_ms = 5.0f;
+  t[9].percussion.shell_freq_hz[0] = 78.1227f;
+  t[9].percussion.shell_mix = 0.135563f;
+  t[9].percussion.shell_t60_s[0] = 0.224f;
+  t[9].percussion.strike_r = 0.561728f;
+  t[9].percussion.tone_gain = 1.04545f;
+  t[9].gain = 2.255f;
+  // Power Kick 1: from key 36 with the Power decay; 79.2 Hz, pitch x1.27 over 10 ms,
+  // t60 0.69 s in the lowest band; module recordings
+  t[10] = t[36];
+  t[10].amp_env.attack_ms = 2.60632f;
+  t[10].amp_env.decay_ms = 1184.93f;
+  t[10].percussion.base_freq_hz = 79.25f;
+  t[10].percussion.mallet_ms = 1.59416f;
+  t[10].percussion.mode_decay_s = 0.689f;
+  t[10].percussion.noise_cutoff_hz = 3828.99f;
+  t[10].percussion.noise_decay_ms = 60.966f;
+  t[10].percussion.noise_gain = 1.28049f;
+  t[10].percussion.noise_q = 1.25391f;
+  t[10].percussion.pitch_drop = 0.2667f;
+  t[10].percussion.pitch_drop_ms = 10.0f;
+  t[10].percussion.shell_freq_hz[0] = 101.286f;
+  t[10].percussion.shell_mix = 0.441456f;
+  t[10].percussion.strike_r = 0.34296f;
+  t[10].percussion.tone_gain = 0.878704f;
+  t[10].gain = 1.328f;
+  // Power Kick 2: from key 36 with the Power decay; 62.8 Hz, pitch x1.12 over 5 ms,
+  // t60 0.62 s in the lowest band; module recordings
+  t[11] = t[36];
+  t[11].amp_env.attack_ms = 10.7825f;
+  t[11].amp_env.decay_ms = 910.752f;
+  t[11].percussion.base_freq_hz = 62.82f;
+  t[11].percussion.mallet_ms = 2.46557f;
+  t[11].percussion.mode_decay_s = 0.621f;
+  t[11].percussion.noise_cutoff_hz = 1551.27f;
+  t[11].percussion.noise_decay_ms = 54.183f;
+  t[11].percussion.noise_gain = 1.64012f;
+  t[11].percussion.noise_q = 0.501818f;
+  t[11].percussion.pitch_drop = 0.1209f;
+  t[11].percussion.pitch_drop_ms = 5.0f;
+  t[11].percussion.shell_freq_hz[0] = 74.3569f;
+  t[11].percussion.shell_mix = 0.496729f;
+  t[11].percussion.strike_r = 0.27918f;
+  t[11].percussion.tone_gain = 1.06679f;
+  t[11].gain = 0.857f;
+  // Electric Kick 2: from key 36 with the Electronic single mode; 81.0 Hz, pitch x1.97 over 10 ms,
+  // t60 0.54 s in the lowest band; module recordings
+  t[12] = t[36];
+  // Slow rise: the recording's attack reads 27.9 ms; set at 40 ms it reads 8.5 ms early, at 45 3.0.
+  t[12].amp_env.attack_ms = 45.0f;
+  t[12].amp_env.decay_ms = 1355.87f;
+  t[12].percussion.base_freq_hz = 80.96f;
+  t[12].percussion.mallet_ms = 2.49427f;
+  t[12].percussion.mode_decay_s = 0.543f;
+  t[12].percussion.noise_cutoff_hz = 4189.82f;
+  t[12].percussion.noise_decay_ms = 33.6908f;
+  t[12].percussion.noise_gain = 1.28235f;
+  t[12].percussion.noise_q = 0.521249f;
+  t[12].percussion.num_modes = 1;
+  t[12].percussion.pitch_drop = 0.9667f;
+  t[12].percussion.pitch_drop_ms = 10.0f;
+  t[12].percussion.shell_freq_hz[0] = 87.9713f;
+  t[12].percussion.shell_mix = 0.453255f;
+  t[12].percussion.strike_r = 0.505615f;
+  t[12].gain = 3.533f;
+  // Electric Kick 1: from key 36 with the Electronic single mode; 109.2 Hz, no pitch drop,
+  // t60 0.46 s in the lowest band; module recordings
+  t[13] = t[36];
+  t[13].amp_env.attack_ms = 1.65199f;
+  t[13].amp_env.decay_ms = 120.623f;
+  t[13].percussion.base_freq_hz = 109.2f;
+  t[13].percussion.mallet_ms = 3.12317f;
+  t[13].percussion.mode_decay_s = 0.458f;
+  t[13].percussion.noise_cutoff_hz = 3012.08f;
+  t[13].percussion.noise_decay_ms = 39.7079f;
+  t[13].percussion.noise_gain = 2.05901f;
+  t[13].percussion.noise_q = 0.502322f;
+  t[13].percussion.num_modes = 1;
+  t[13].percussion.pitch_drop = 0.0f;
+  t[13].percussion.shell_freq_hz[0] = 72.9011f;
+  t[13].percussion.shell_mix = 0.702209f;
+  t[13].percussion.strike_r = 0.355599f;
+  t[13].gain = 2.68f;
+  // TR-808 Kick: from key 36 with the 808 single mode; 46.9 Hz, pitch x1.68 over 25 ms,
+  // t60 0.63 s in the lowest band; module recordings
+  t[14] = t[36];
+  t[14].amp_env.attack_ms = 1.0f;
+  t[14].amp_env.decay_ms = 1029.21f;
+  t[14].percussion.base_freq_hz = 46.86f;
+  t[14].percussion.mallet_ms = 4.8746f;
+  t[14].percussion.mode_decay_s = 0.627f;
+  t[14].percussion.noise_cutoff_hz = 213.835f;
+  t[14].percussion.noise_decay_ms = 160.424f;
+  t[14].percussion.noise_gain = 1.3683f;
+  t[14].percussion.noise_q = 1.13585f;
+  t[14].percussion.num_modes = 1;
+  t[14].percussion.pitch_drop = 0.6774f;
+  t[14].percussion.pitch_drop_ms = 25.0f;
+  t[14].percussion.shell_freq_hz[0] = 84.9453f;
+  t[14].percussion.shell_mix = 0.898044f;
+  t[14].percussion.strike_r = 0.458475f;
+  t[14].percussion.tone_gain = 2.50159f;
+  t[14].gain = 1.104f;
+  // TR-909 Kick: from key 36 with the 909 single mode; 49.4 Hz, pitch x2.36 over 20 ms,
+  // t60 0.81 s in the lowest band; module recordings
+  t[15] = t[36];
+  t[15].amp_env.attack_ms = 1.5f;
+  t[15].amp_env.decay_ms = 493.192f;
+  t[15].percussion.base_freq_hz = 49.42f;
+  t[15].percussion.mallet_ms = 6.38157f;
+  t[15].percussion.mode_decay_s = 0.806f;
+  t[15].percussion.noise_cutoff_hz = 176.544f;
+  t[15].percussion.noise_decay_ms = 185.168f;
+  t[15].percussion.noise_gain = 1.76419f;
+  t[15].percussion.noise_q = 1.28416f;
+  t[15].percussion.num_modes = 1;
+  t[15].percussion.pitch_drop = 1.3636f;
+  t[15].percussion.pitch_drop_ms = 20.0f;
+  t[15].percussion.shell_freq_hz[0] = 95.5275f;
+  t[15].percussion.shell_mix = 0.898044f;
+  t[15].percussion.strike_r = 0.51159f;
+  t[15].percussion.tone_gain = 1.63807f;
+  t[15].gain = 3.222f;
+  // Dance Kick: from key 36 with the Dance single mode; 65.0 Hz, pitch x2.52 over 25 ms,
+  // t60 0.73 s in the lowest band; module recordings
+  t[16] = t[36];
+  t[16].amp_env.attack_ms = 3.57834f;
+  t[16].amp_env.decay_ms = 177.633f;
+  t[16].percussion.base_freq_hz = 64.98f;
+  t[16].percussion.mallet_ms = 0.961881f;
+  t[16].percussion.mode_decay_s = 0.731f;
+  t[16].percussion.noise_cutoff_hz = 692.572f;
+  t[16].percussion.noise_decay_ms = 49.2549f;
+  t[16].percussion.noise_gain = 0.135602f;
+  t[16].percussion.noise_q = 1.74046f;
+  t[16].percussion.num_modes = 1;
+  t[16].percussion.pitch_drop = 1.52f;
+  t[16].percussion.pitch_drop_ms = 25.0f;
+  t[16].percussion.shell_freq_hz[0] = 92.4613f;
+  t[16].percussion.shell_mix = 0.296698f;
+  t[16].percussion.strike_r = 0.156122f;
+  t[16].percussion.tone_gain = 0.972482f;
+  t[16].gain = 3.964f;
+
   // --- keys below the GM range ---
   // High Q: tonal blip; module reference
   t[27] = d.percussion;
