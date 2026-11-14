@@ -2695,6 +2695,9 @@ def _fold_gate_audit(args, build_dir, compare=gate_audit.compare_voice) -> None:
     print("\n" + "\n".join(gate_audit.format_flagged(entries)), file=sys.stderr)
     if motion_states:
         print("\n".join(gate_audit.format_motion_states(motion_states)), file=sys.stderr)
+    laws = gate_audit.format_velocity_laws(post_body.get("velocity_laws") or {}, entries)
+    if laws:
+        print("\n".join(laws), file=sys.stderr)
 
 
 #: The range a per-knob budget is held in. Below the floor a small spec gets fewer

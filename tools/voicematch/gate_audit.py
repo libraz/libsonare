@@ -17,6 +17,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from knobs import merge_overrides
 from profile_gate import format_window
+from profile_summary import format_velocity_law
 
 HERE = Path(__file__).resolve().parent
 CAPTURE_DIR = HERE / "capture"
@@ -100,9 +101,12 @@ def compare_voice(
             body["gate"]["readings"] = _with_windows(body)
         if (body.get("motion") or {}).get("states"):
             body["motion_states"] = {voice["capture"]: body["motion"]["states"]}
+        if body.get("velocity_law"):
+            body["velocity_laws"] = {voice["capture"]: body["velocity_law"]}
     else:
         readings = []
         motion_states = {}
+        velocity_laws = {}
         for g in voice["gates"]:
             part = out.with_name(f"{out.stem}.{g['capture']}.json")
             if not part.exists():
@@ -112,9 +116,13 @@ def compare_voice(
                 readings.append({**r, "key": f"{g['capture']}:{r['key']}"})
             if (record.get("motion") or {}).get("states"):
                 motion_states[g["capture"]] = record["motion"]["states"]
+            if record.get("velocity_law"):
+                velocity_laws[g["capture"]] = record["velocity_law"]
         body = {"gate": {"readings": readings}}
         if motion_states:
             body["motion_states"] = motion_states
+        if velocity_laws:
+            body["velocity_laws"] = velocity_laws
     if baseline is not None:
         body["baseline"] = baseline
     out.write_text(json.dumps(body, indent=2) + "\n")
@@ -231,6 +239,19 @@ def format_motion_states(states: dict[str, dict[str, int]]) -> list[str]:
     return [
         f"  motion coherence {capture}: " + ", ".join(f"{state} {n}" for state, n in counts.items())
         for capture, counts in sorted(states.items())
+    ]
+
+
+def format_velocity_laws(laws: dict[str, dict], entries: list[dict]) -> list[str]:
+    """One line per capture whose `vel_range` the audit read: the reference's velocity law.
+
+    @p laws is by capture, each `{"reading": ..., "recorded": bool}` as compare records it.
+    """
+    read = {e["key"] for e in entries}
+    return [
+        f"  {capture}: {format_velocity_law(law.get('reading'), bool(law.get('recorded')))}"
+        for capture, law in sorted(laws.items())
+        if "vel_range" in read or f"{capture}:vel_range" in read
     ]
 
 

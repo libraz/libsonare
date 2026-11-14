@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import sys
+from itertools import pairwise
 
 import numpy as np
 from metrics import ladder_present
@@ -45,6 +46,115 @@ def velocity_response(rows: list[dict]) -> dict:
     return out
 
 
+#: The level the velocity law reads: the held body, not the strike, whose per-note
+#: transient widens a mapping's across-note spread (contrabass 0.13 -> 0.53 dB IQR).
+VELOCITY_LAW_FIELD = "held_peak_dbfs"
+#: The committed references whose steps read as a mapping hold every pair's across-note
+#: IQR at 0.0-0.2 dB to one decimal, i.e. under 0.25; the rest run on from 0.26 to 4.4 dB
+#: with no gap, so the line is that rounding edge, not a valley in the distribution.
+VELOCITY_LAW_TOLERANCE_DB = 0.25
+#: A pair is flat when no note's step exceeds this: below the 0.1 dB the reading prints.
+VELOCITY_LAW_FLAT_DB = 0.1
+#: Notes a pair needs before its across-note spread is a spread.
+VELOCITY_LAW_MIN_NOTES = 3
+
+
+def _quartiles(values: list[float]) -> tuple[float, float]:
+    """Median and interquartile range."""
+    q1, med, q3 = np.percentile(values, [25, 50, 75])
+    return float(med), float(q3 - q1)
+
+
+def velocity_law(rows: list[dict]) -> dict | None:
+    """The level-to-velocity law of one timbre: gain proportional to velocity^k.
+
+    Per adjacent grid pair, every note's step in `VELOCITY_LAW_FIELD` and its
+    k = step / (20 log10(v2/v1)); across notes, the median and IQR of each. Where
+    every pair's step spread stays within `VELOCITY_LAW_TOLERANCE_DB` the steps do
+    not depend on the note, so the source applies a mapping table and `vel_range`
+    reads that table rather than a playing dynamic. None without two velocities
+    and a pair read on `VELOCITY_LAW_MIN_NOTES` notes.
+    """
+    level = {
+        (int(r["note"]), int(r["velocity"])): float(r[VELOCITY_LAW_FIELD])
+        for r in rows
+        if r.get(VELOCITY_LAW_FIELD) is not None
+    }
+    velocities = sorted({v for _, v in level})
+    notes = sorted({n for n, _ in level})
+    pairs = []
+    for v1, v2 in pairwise(velocities):
+        steps = [
+            level[(n, v2)] - level[(n, v1)] for n in notes if (n, v1) in level and (n, v2) in level
+        ]
+        if len(steps) < VELOCITY_LAW_MIN_NOTES:
+            continue
+        span_db = 20.0 * float(np.log10(v2 / v1))
+        ks = [s / span_db for s in steps]
+        step_med, step_iqr = _quartiles(steps)
+        k_med, k_iqr = _quartiles(ks)
+        pairs.append(
+            {
+                "velocities": [v1, v2],
+                "notes": len(steps),
+                "step_db": round(step_med, 3),
+                "step_iqr_db": round(step_iqr, 3),
+                "k": round(k_med, 3),
+                "k_iqr": round(k_iqr, 3),
+                "flat": max(abs(s) for s in steps) <= VELOCITY_LAW_FLAT_DB,
+                "_ks": ks,
+            }
+        )
+    if not pairs:
+        return None
+    sloped = [p for p in pairs if not p["flat"]]
+    pooled = [k for p in sloped for k in p["_ks"]]
+    for p in pairs:
+        del p["_ks"]
+    mapping = all(p["step_iqr_db"] <= VELOCITY_LAW_TOLERANCE_DB for p in pairs)
+    return {
+        "field": VELOCITY_LAW_FIELD,
+        "class": "mapping" if mapping else "varies by note",
+        # Pooled over the sloped pairs; the IQR is the widest pair's note spread,
+        # since pooling would also count the law's curvature between pairs.
+        "k": round(float(np.median(pooled)), 3) if pooled else None,
+        "k_iqr": max((p["k_iqr"] for p in sloped), default=None),
+        "pairs": pairs,
+    }
+
+
+def velocity_law_reading(profile: dict, timbre: str) -> tuple[dict | None, bool]:
+    """(law, recorded): the profile's recorded law, else one computed from its rows.
+
+    A reference measured before the law was recorded carries no field, so the law
+    is computed on the fly from the rows and `recorded` is False.
+    """
+    summary = (profile.get("summary") or {}).get(timbre) or {}
+    if "velocity_law" in summary:
+        return summary["velocity_law"], True
+    rows = [r for r in profile.get("rows", []) if r.get("timbre") == timbre]
+    return velocity_law(rows), False
+
+
+def format_velocity_law(law: dict | None, recorded: bool = True) -> str:
+    """The one-line reading printed beside `vel_range`."""
+    if law is None:
+        text = "no reading"
+    else:
+        if law["class"] == "mapping" and law["k"] is not None:
+            text = f"mapping k={law['k']:.2f} (IQR {law['k_iqr']:.2f})"
+        else:
+            text = law["class"]
+        flat = [f"v{p['velocities'][0]}-v{p['velocities'][1]}" for p in law["pairs"] if p["flat"]]
+        if flat:
+            text = (
+                f"{text}, flat at {', '.join(flat)}"
+                if law["k"] is not None
+                else f"flat at {', '.join(flat)}"
+            )
+    return f"velocity law: {text}" + ("" if recorded else " (computed, not recorded)")
+
+
 def summarize(rows: list[dict]) -> dict:
     """The per-timbre curves: what a voice is fitted to rather than a table of takes."""
     out: dict = {}
@@ -84,7 +194,9 @@ def summarize(rows: list[dict]) -> dict:
                 n: round(float(np.median(vals)), 4 if key == "stretch_cents" else 8)
                 for n, vals in sorted(t[key].items(), key=lambda kv: int(kv[0]))
             }
-        t["velocity_response"] = velocity_response([r for r in rows if r["timbre"] == timbre])
+        own = [r for r in rows if r["timbre"] == timbre]
+        t["velocity_response"] = velocity_response(own)
+        t["velocity_law"] = velocity_law(own)
     return out
 
 

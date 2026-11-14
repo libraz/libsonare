@@ -769,6 +769,7 @@ def write_summary_json(
     windows: dict[str, dict] | None = None,
     censored: dict[str, int] | None = None,
     motion: dict | None = None,
+    velocity_law: dict | None = None,
 ) -> None:
     """Record a compare run's summary and its gate readings for a tool to read.
 
@@ -780,6 +781,9 @@ def write_summary_json(
 
     @p velocity_layers is the reference's `velocity_layers.layer_summary`, recorded
     so a velocity-swing reading is read against the recordings behind the grid.
+
+    @p velocity_law is `{"reading": <velocity_law>, "recorded": bool}`, the
+    reference's level-to-velocity law and whether the profile recorded it.
     """
     gate = json.loads(Path(gate_path).read_text()) if gate_path and Path(gate_path).exists() else {}
     record = {
@@ -802,6 +806,8 @@ def write_summary_json(
         record["censored"] = censored
     if motion and motion.get("moving"):
         record["motion"] = motion
+    if velocity_law is not None:
+        record["velocity_law"] = velocity_law
     out_path.write_text(json.dumps(record, indent=2, default=float) + "\n")
 
 

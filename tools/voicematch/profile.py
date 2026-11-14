@@ -201,6 +201,7 @@ from profile_summary import (
     a4_two_point_cents,
     band_db,
     format_ruler,
+    format_velocity_law,
     partial_balance_db,
     partial_ladder_lines,
     partial_ratio_by_band,
@@ -211,6 +212,7 @@ from profile_summary import (
     profile_program,
     summarize,
     summarize_percussion,
+    velocity_law_reading,
     velocity_response,
 )
 from profile_take import (
@@ -1887,6 +1889,9 @@ def compare(
                 else ""
             )
         )
+    law, law_recorded = velocity_law_reading(profile, timbre)
+    if "vel_range" in summary:
+        print(f"  {format_velocity_law(law, law_recorded)}")
     print(
         "\n  The signed median is what the voice is doing on average and the absolute one "
         "is\n  how far any given note is from the reference. They part company exactly where "
@@ -1919,6 +1924,7 @@ def compare(
             windows=windows,
             censored=censored,
             motion=reference_motion,
+            velocity_law={"reading": law, "recorded": law_recorded},
         )
     if gate_path:
         return check_gate(
