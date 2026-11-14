@@ -44,7 +44,7 @@
           "inside": 12,
           "total": 14,
           "outside": {
-            "stereo": 1.46,
+            "stereo": 1.44,
             "aftersound": 1.17
           }
         },
@@ -77,15 +77,15 @@
       "patch": "piano_wide",
       "engine": "piano",
       "capture": "piano_wide",
-      "stage": 0.4,
-      "stage_name": "targeted",
+      "stage": 0.6,
+      "stage_name": "fitted",
       "open_candidates": [],
       "axes": {
         "engine": "piano",
         "patch": "piano_wide",
         "timbres": 1,
         "profile_rows": 13,
-        "gate_state": "exceeded",
+        "gate_state": "current",
         "coverage": {
           "canonical": 16,
           "gated": 11,
@@ -125,13 +125,9 @@
           "date": "2026-10-26",
           "outcome": "kept",
           "fittable": true
-        },
-        "gate_notes": [
-          "aftersound.abs_median: re-recorded over a kept bound, last held unknown",
-          "aftersound.p90: re-recorded over a kept bound, last held unknown"
-        ]
+        }
       },
-      "next": "the gate is red: aftersound.abs_median: re-recorded over a kept bound, last held unknown; aftersound.p90: re-recorded over a kept bound, last held unknown"
+      "next": "refit under the current objective (the last fit predates it): refit.py"
     },
     {
       "slug": "p000b002-acoustic-grand-piano",
@@ -203,15 +199,15 @@
       "patch": "piano_wide",
       "engine": "piano",
       "capture": "piano_wide",
-      "stage": 0.4,
-      "stage_name": "targeted",
+      "stage": 0.6,
+      "stage_name": "fitted",
       "open_candidates": [],
       "axes": {
         "engine": "piano",
         "patch": "piano_wide",
         "timbres": 1,
         "profile_rows": 13,
-        "gate_state": "exceeded",
+        "gate_state": "current",
         "coverage": {
           "canonical": 16,
           "gated": 11,
@@ -251,13 +247,9 @@
           "date": "2026-10-26",
           "outcome": "kept",
           "fittable": true
-        },
-        "gate_notes": [
-          "aftersound.abs_median: re-recorded over a kept bound, last held unknown",
-          "aftersound.p90: re-recorded over a kept bound, last held unknown"
-        ]
+        }
       },
-      "next": "the gate is red: aftersound.abs_median: re-recorded over a kept bound, last held unknown; aftersound.p90: re-recorded over a kept bound, last held unknown"
+      "next": "refit under the current objective (the last fit predates it): refit.py"
     },
     {
       "slug": "p000b016-acoustic-grand-piano",
@@ -398,15 +390,15 @@
       "patch": "bright_piano_wide",
       "engine": "piano",
       "capture": "bright_piano_wide",
-      "stage": 0.4,
-      "stage_name": "targeted",
+      "stage": 0.6,
+      "stage_name": "fitted",
       "open_candidates": [],
       "axes": {
         "engine": "piano",
         "patch": "bright_piano_wide",
         "timbres": 1,
         "profile_rows": 9,
-        "gate_state": "exceeded",
+        "gate_state": "current",
         "coverage": {
           "canonical": 16,
           "gated": 11,
@@ -446,12 +438,9 @@
           "date": "2026-10-26",
           "outcome": "adopted",
           "fittable": true
-        },
-        "gate_notes": [
-          "decay.median: re-recorded over a kept bound, last held unknown"
-        ]
+        }
       },
-      "next": "the gate is red: decay.median: re-recorded over a kept bound, last held unknown"
+      "next": "refit under the current objective (the last fit predates it): refit.py"
     },
     {
       "slug": "p001b008-bright-acoustic-piano",
@@ -464,15 +453,15 @@
       "patch": "bright_piano_wide",
       "engine": "piano",
       "capture": "bright_piano_wide",
-      "stage": 0.4,
-      "stage_name": "targeted",
+      "stage": 0.6,
+      "stage_name": "fitted",
       "open_candidates": [],
       "axes": {
         "engine": "piano",
         "patch": "bright_piano_wide",
         "timbres": 1,
         "profile_rows": 9,
-        "gate_state": "exceeded",
+        "gate_state": "current",
         "coverage": {
           "canonical": 16,
           "gated": 11,
@@ -512,12 +501,9 @@
           "date": "2026-10-26",
           "outcome": "adopted",
           "fittable": true
-        },
-        "gate_notes": [
-          "decay.median: re-recorded over a kept bound, last held unknown"
-        ]
+        }
       },
-      "next": "the gate is red: decay.median: re-recorded over a kept bound, last held unknown"
+      "next": "refit under the current objective (the last fit predates it): refit.py"
     },
     {
       "slug": "p002-electric-grand-piano",
@@ -530,14 +516,80 @@
       "patch": "electric_grand",
       "engine": "piano",
       "capture": "electric_grand_module",
-      "stage": 0.6,
-      "stage_name": "fitted",
+      "stage": 0.4,
+      "stage_name": "targeted",
       "open_candidates": [],
       "axes": {
         "engine": "piano",
         "patch": "electric_grand",
         "timbres": 1,
         "profile_rows": 53,
+        "gate_state": "exceeded",
+        "coverage": {
+          "canonical": 16,
+          "gated": 11,
+          "excused": [
+            "attack_hf_swing",
+            "damper",
+            "register",
+            "stereo",
+            "vel_range"
+          ],
+          "gaps": [],
+          "complete": true
+        },
+        "agreement": {
+          "inside": 0,
+          "total": 0,
+          "outside": {},
+          "unjudgeable": [
+            "aftersound",
+            "attack",
+            "attack_hf",
+            "balance",
+            "body",
+            "centroid_pct",
+            "decay",
+            "doubling",
+            "partial_tilt",
+            "stretch",
+            "tnr"
+          ]
+        },
+        "structure": null,
+        "music": null,
+        "instrument": null,
+        "fit": {
+          "state": "stale",
+          "date": "2026-10-26",
+          "outcome": "kept",
+          "fittable": true
+        },
+        "gate_notes": [
+          "balance.p90: re-recorded over a kept bound, last held 2026-11-13T11:49:49+00:00"
+        ]
+      },
+      "next": "the gate is red: balance.p90: re-recorded over a kept bound, last held 2026-11-13T11:49:49+00:00"
+    },
+    {
+      "slug": "p002b001-electric-grand-piano",
+      "program": 2,
+      "bank": 1,
+      "kit": false,
+      "name": "Electric Grand Piano",
+      "group": "0-7 Piano",
+      "tone_class": "struck-string",
+      "patch": "electric_grand_wide",
+      "engine": "piano",
+      "capture": "electric_grand_wide",
+      "stage": 0.6,
+      "stage_name": "fitted",
+      "open_candidates": [],
+      "axes": {
+        "engine": "piano",
+        "patch": "electric_grand_wide",
+        "timbres": 1,
+        "profile_rows": 9,
         "gate_state": "current",
         "coverage": {
           "canonical": 16,
@@ -583,75 +635,6 @@
       "next": "refit under the current objective (the last fit predates it): refit.py"
     },
     {
-      "slug": "p002b001-electric-grand-piano",
-      "program": 2,
-      "bank": 1,
-      "kit": false,
-      "name": "Electric Grand Piano",
-      "group": "0-7 Piano",
-      "tone_class": "struck-string",
-      "patch": "electric_grand_wide",
-      "engine": "piano",
-      "capture": "electric_grand_wide",
-      "stage": 0.4,
-      "stage_name": "targeted",
-      "open_candidates": [],
-      "axes": {
-        "engine": "piano",
-        "patch": "electric_grand_wide",
-        "timbres": 1,
-        "profile_rows": 9,
-        "gate_state": "exceeded",
-        "coverage": {
-          "canonical": 16,
-          "gated": 11,
-          "excused": [
-            "attack_hf_swing",
-            "damper",
-            "register",
-            "stereo",
-            "vel_range"
-          ],
-          "gaps": [],
-          "complete": true
-        },
-        "agreement": {
-          "inside": 0,
-          "total": 0,
-          "outside": {},
-          "unjudgeable": [
-            "aftersound",
-            "attack",
-            "attack_hf",
-            "balance",
-            "body",
-            "centroid_pct",
-            "decay",
-            "doubling",
-            "partial_tilt",
-            "stretch",
-            "tnr"
-          ]
-        },
-        "structure": null,
-        "music": null,
-        "instrument": null,
-        "fit": {
-          "state": "stale",
-          "date": "2026-10-26",
-          "outcome": "kept",
-          "fittable": true
-        },
-        "gate_notes": [
-          "decay.median: re-recorded over a kept bound, last held unknown",
-          "decay.abs_median: re-recorded over a kept bound, last held unknown",
-          "aftersound.abs_median: re-recorded over a kept bound, last held unknown",
-          "aftersound.p90: re-recorded over a kept bound, last held unknown"
-        ]
-      },
-      "next": "the gate is red: decay.median: re-recorded over a kept bound, last held unknown; decay.abs_median: re-recorded over a kept bound, last held unknown; aftersound.abs_median: re-recorded over a kept bound, last held unknown; aftersound.p90: re-recorded over a kept bound, last held unknown"
-    },
-    {
       "slug": "p002b008-electric-grand-piano",
       "program": 2,
       "bank": 8,
@@ -662,15 +645,15 @@
       "patch": "electric_grand_wide",
       "engine": "piano",
       "capture": "electric_grand_wide",
-      "stage": 0.4,
-      "stage_name": "targeted",
+      "stage": 0.6,
+      "stage_name": "fitted",
       "open_candidates": [],
       "axes": {
         "engine": "piano",
         "patch": "electric_grand_wide",
         "timbres": 1,
         "profile_rows": 9,
-        "gate_state": "exceeded",
+        "gate_state": "current",
         "coverage": {
           "canonical": 16,
           "gated": 11,
@@ -710,15 +693,9 @@
           "date": "2026-10-26",
           "outcome": "kept",
           "fittable": true
-        },
-        "gate_notes": [
-          "decay.median: re-recorded over a kept bound, last held unknown",
-          "decay.abs_median: re-recorded over a kept bound, last held unknown",
-          "aftersound.abs_median: re-recorded over a kept bound, last held unknown",
-          "aftersound.p90: re-recorded over a kept bound, last held unknown"
-        ]
+        }
       },
-      "next": "the gate is red: decay.median: re-recorded over a kept bound, last held unknown; decay.abs_median: re-recorded over a kept bound, last held unknown; aftersound.abs_median: re-recorded over a kept bound, last held unknown; aftersound.p90: re-recorded over a kept bound, last held unknown"
+      "next": "refit under the current objective (the last fit predates it): refit.py"
     },
     {
       "slug": "p003-honky-tonk-piano",
@@ -731,15 +708,15 @@
       "patch": "honky_tonk",
       "engine": "piano",
       "capture": "honky_tonk",
-      "stage": 0.6,
-      "stage_name": "fitted",
+      "stage": 0.4,
+      "stage_name": "targeted",
       "open_candidates": [],
       "axes": {
         "engine": "piano",
         "patch": "honky_tonk",
         "timbres": 1,
         "profile_rows": 45,
-        "gate_state": "current",
+        "gate_state": "exceeded",
         "coverage": {
           "canonical": 16,
           "gated": 16,
@@ -778,9 +755,14 @@
           "date": "2026-10-26",
           "outcome": "kept",
           "fittable": true
-        }
+        },
+        "gate_notes": [
+          "tnr.median: re-recorded over a kept bound, last held 2026-11-13T11:49:49+00:00",
+          "tnr.abs_median: re-recorded over a kept bound, last held 2026-11-13T11:49:49+00:00",
+          "tnr.p90: re-recorded over a kept bound, last held 2026-11-13T11:49:49+00:00"
+        ]
       },
-      "next": "refit under the current objective (the last fit predates it): refit.py"
+      "next": "the gate is red: tnr.median: re-recorded over a kept bound, last held 2026-11-13T11:49:49+00:00; tnr.abs_median: re-recorded over a kept bound, last held 2026-11-13T11:49:49+00:00; tnr.p90: re-recorded over a kept bound, last held 2026-11-13T11:49:49+00:00"
     },
     {
       "slug": "p003b001-honky-tonk-piano",
@@ -1441,7 +1423,7 @@
           "fittable": true
         },
         "gate_notes": [
-          "set on a dirty tree: stretch.abs_median, tnr.p90"
+          "set on a dirty tree: stretch.abs_median"
         ]
       },
       "next": "refit under the current objective (the last fit predates it): refit.py"
@@ -1566,7 +1548,7 @@
           "fittable": true
         },
         "gate_notes": [
-          "set on a dirty tree: stretch.abs_median, tnr.p90"
+          "set on a dirty tree: stretch.abs_median"
         ]
       },
       "next": "refit under the current objective (the last fit predates it): refit.py"
@@ -1663,8 +1645,8 @@
           "inside": 9,
           "total": 17,
           "outside": {
-            "body": 2.2,
             "partial_tilt": 2.0,
+            "body": 2.0,
             "attack_hf": 1.69,
             "tnr": 1.67,
             "balance": 1.29,
@@ -1702,15 +1684,15 @@
       "patch": "harpsichord_octave",
       "engine": "harpsichord",
       "capture": "harpsichord_octave",
-      "stage": 0.6,
-      "stage_name": "fitted",
+      "stage": 0.4,
+      "stage_name": "targeted",
       "open_candidates": [],
       "axes": {
         "engine": "harpsichord",
         "patch": "harpsichord_octave",
         "timbres": 1,
         "profile_rows": 10,
-        "gate_state": "current",
+        "gate_state": "exceeded",
         "coverage": {
           "canonical": 16,
           "gated": 11,
@@ -1750,9 +1732,13 @@
           "date": "2026-10-26",
           "outcome": "kept",
           "fittable": true
-        }
+        },
+        "gate_notes": [
+          "body.median: re-recorded over a kept bound, last held 2026-11-13T11:49:49+00:00",
+          "body.abs_median: re-recorded over a kept bound, last held 2026-11-13T11:49:49+00:00"
+        ]
       },
-      "next": "refit under the current objective (the last fit predates it): refit.py"
+      "next": "the gate is red: body.median: re-recorded over a kept bound, last held 2026-11-13T11:49:49+00:00; body.abs_median: re-recorded over a kept bound, last held 2026-11-13T11:49:49+00:00"
     },
     {
       "slug": "p006b002-harpsichord",
@@ -1765,15 +1751,15 @@
       "patch": "harpsichord_wide",
       "engine": "harpsichord",
       "capture": "harpsichord_wide",
-      "stage": 0.6,
-      "stage_name": "fitted",
+      "stage": 0.4,
+      "stage_name": "targeted",
       "open_candidates": [],
       "axes": {
         "engine": "harpsichord",
         "patch": "harpsichord_wide",
         "timbres": 1,
         "profile_rows": 10,
-        "gate_state": "current",
+        "gate_state": "exceeded",
         "coverage": {
           "canonical": 16,
           "gated": 11,
@@ -1813,9 +1799,13 @@
           "date": "2026-10-26",
           "outcome": "adopted",
           "fittable": true
-        }
+        },
+        "gate_notes": [
+          "body.median: re-recorded over a kept bound, last held 2026-11-13T11:49:49+00:00",
+          "body.abs_median: re-recorded over a kept bound, last held 2026-11-13T11:49:49+00:00"
+        ]
       },
-      "next": "refit under the current objective (the last fit predates it): refit.py"
+      "next": "the gate is red: body.median: re-recorded over a kept bound, last held 2026-11-13T11:49:49+00:00; body.abs_median: re-recorded over a kept bound, last held 2026-11-13T11:49:49+00:00"
     },
     {
       "slug": "p006b003-harpsichord",
@@ -1828,15 +1818,15 @@
       "patch": "harpsichord_keyoff",
       "engine": "harpsichord",
       "capture": "harpsichord_keyoff",
-      "stage": 0.6,
-      "stage_name": "fitted",
+      "stage": 0.4,
+      "stage_name": "targeted",
       "open_candidates": [],
       "axes": {
         "engine": "harpsichord",
         "patch": "harpsichord_keyoff",
         "timbres": 1,
         "profile_rows": 10,
-        "gate_state": "current",
+        "gate_state": "exceeded",
         "coverage": {
           "canonical": 16,
           "gated": 11,
@@ -1876,9 +1866,14 @@
           "date": "2026-10-26",
           "outcome": "kept",
           "fittable": true
-        }
+        },
+        "gate_notes": [
+          "tnr.median: re-recorded over a kept bound, last held 2026-11-13T11:49:49+00:00",
+          "body.median: re-recorded over a kept bound, last held 2026-11-13T11:49:49+00:00",
+          "body.abs_median: re-recorded over a kept bound, last held 2026-11-13T11:49:49+00:00"
+        ]
       },
-      "next": "refit under the current objective (the last fit predates it): refit.py"
+      "next": "the gate is red: tnr.median: re-recorded over a kept bound, last held 2026-11-13T11:49:49+00:00; body.median: re-recorded over a kept bound, last held 2026-11-13T11:49:49+00:00; body.abs_median: re-recorded over a kept bound, last held 2026-11-13T11:49:49+00:00"
     },
     {
       "slug": "p006b008-harpsichord",
@@ -1891,15 +1886,15 @@
       "patch": "harpsichord_octave",
       "engine": "harpsichord",
       "capture": "harpsichord_octave",
-      "stage": 0.6,
-      "stage_name": "fitted",
+      "stage": 0.4,
+      "stage_name": "targeted",
       "open_candidates": [],
       "axes": {
         "engine": "harpsichord",
         "patch": "harpsichord_octave",
         "timbres": 1,
         "profile_rows": 10,
-        "gate_state": "current",
+        "gate_state": "exceeded",
         "coverage": {
           "canonical": 16,
           "gated": 11,
@@ -1939,9 +1934,13 @@
           "date": "2026-10-26",
           "outcome": "kept",
           "fittable": true
-        }
+        },
+        "gate_notes": [
+          "body.median: re-recorded over a kept bound, last held 2026-11-13T11:49:49+00:00",
+          "body.abs_median: re-recorded over a kept bound, last held 2026-11-13T11:49:49+00:00"
+        ]
       },
-      "next": "refit under the current objective (the last fit predates it): refit.py"
+      "next": "the gate is red: body.median: re-recorded over a kept bound, last held 2026-11-13T11:49:49+00:00; body.abs_median: re-recorded over a kept bound, last held 2026-11-13T11:49:49+00:00"
     },
     {
       "slug": "p006b016-harpsichord",
@@ -1954,15 +1953,15 @@
       "patch": "harpsichord_wide",
       "engine": "harpsichord",
       "capture": "harpsichord_wide",
-      "stage": 0.6,
-      "stage_name": "fitted",
+      "stage": 0.4,
+      "stage_name": "targeted",
       "open_candidates": [],
       "axes": {
         "engine": "harpsichord",
         "patch": "harpsichord_wide",
         "timbres": 1,
         "profile_rows": 10,
-        "gate_state": "current",
+        "gate_state": "exceeded",
         "coverage": {
           "canonical": 16,
           "gated": 11,
@@ -2002,9 +2001,13 @@
           "date": "2026-10-26",
           "outcome": "adopted",
           "fittable": true
-        }
+        },
+        "gate_notes": [
+          "body.median: re-recorded over a kept bound, last held 2026-11-13T11:49:49+00:00",
+          "body.abs_median: re-recorded over a kept bound, last held 2026-11-13T11:49:49+00:00"
+        ]
       },
-      "next": "refit under the current objective (the last fit predates it): refit.py"
+      "next": "the gate is red: body.median: re-recorded over a kept bound, last held 2026-11-13T11:49:49+00:00; body.abs_median: re-recorded over a kept bound, last held 2026-11-13T11:49:49+00:00"
     },
     {
       "slug": "p006b024-harpsichord",
@@ -2017,15 +2020,15 @@
       "patch": "harpsichord_keyoff",
       "engine": "harpsichord",
       "capture": "harpsichord_keyoff",
-      "stage": 0.6,
-      "stage_name": "fitted",
+      "stage": 0.4,
+      "stage_name": "targeted",
       "open_candidates": [],
       "axes": {
         "engine": "harpsichord",
         "patch": "harpsichord_keyoff",
         "timbres": 1,
         "profile_rows": 10,
-        "gate_state": "current",
+        "gate_state": "exceeded",
         "coverage": {
           "canonical": 16,
           "gated": 11,
@@ -2065,9 +2068,14 @@
           "date": "2026-10-26",
           "outcome": "kept",
           "fittable": true
-        }
+        },
+        "gate_notes": [
+          "tnr.median: re-recorded over a kept bound, last held 2026-11-13T11:49:49+00:00",
+          "body.median: re-recorded over a kept bound, last held 2026-11-13T11:49:49+00:00",
+          "body.abs_median: re-recorded over a kept bound, last held 2026-11-13T11:49:49+00:00"
+        ]
       },
-      "next": "refit under the current objective (the last fit predates it): refit.py"
+      "next": "the gate is red: tnr.median: re-recorded over a kept bound, last held 2026-11-13T11:49:49+00:00; body.median: re-recorded over a kept bound, last held 2026-11-13T11:49:49+00:00; body.abs_median: re-recorded over a kept bound, last held 2026-11-13T11:49:49+00:00"
     },
     {
       "slug": "p007-clavinet",
@@ -2899,15 +2907,15 @@
       "patch": "carillon",
       "engine": "modal",
       "capture": "carillon",
-      "stage": 0.6,
-      "stage_name": "fitted",
+      "stage": 0.4,
+      "stage_name": "targeted",
       "open_candidates": [],
       "axes": {
         "engine": "modal",
         "patch": "carillon",
         "timbres": 1,
         "profile_rows": 5,
-        "gate_state": "current",
+        "gate_state": "exceeded",
         "coverage": {
           "canonical": 12,
           "gated": 7,
@@ -2946,9 +2954,12 @@
           "date": "2026-10-26",
           "outcome": "adopted",
           "fittable": true
-        }
+        },
+        "gate_notes": [
+          "centroid_pct.median: re-recorded over a kept bound, last held 2026-11-13T11:49:49+00:00"
+        ]
       },
-      "next": "refit under the current objective (the last fit predates it): refit.py"
+      "next": "the gate is red: centroid_pct.median: re-recorded over a kept bound, last held 2026-11-13T11:49:49+00:00"
     },
     {
       "slug": "p014b008-tubular-bells",
@@ -3023,15 +3034,15 @@
       "patch": "carillon",
       "engine": "modal",
       "capture": "carillon",
-      "stage": 0.6,
-      "stage_name": "fitted",
+      "stage": 0.4,
+      "stage_name": "targeted",
       "open_candidates": [],
       "axes": {
         "engine": "modal",
         "patch": "carillon",
         "timbres": 1,
         "profile_rows": 5,
-        "gate_state": "current",
+        "gate_state": "exceeded",
         "coverage": {
           "canonical": 12,
           "gated": 7,
@@ -3070,9 +3081,12 @@
           "date": "2026-10-26",
           "outcome": "adopted",
           "fittable": true
-        }
+        },
+        "gate_notes": [
+          "centroid_pct.median: re-recorded over a kept bound, last held 2026-11-13T11:49:49+00:00"
+        ]
       },
-      "next": "refit under the current objective (the last fit predates it): refit.py"
+      "next": "the gate is red: centroid_pct.median: re-recorded over a kept bound, last held 2026-11-13T11:49:49+00:00"
     },
     {
       "slug": "p015-dulcimer",
@@ -3265,15 +3279,15 @@
       "patch": "organ_sixties",
       "engine": "additive",
       "capture": "organ_sixties",
-      "stage": 0.6,
-      "stage_name": "fitted",
+      "stage": 0.4,
+      "stage_name": "targeted",
       "open_candidates": [],
       "axes": {
         "engine": "additive",
         "patch": "organ_sixties",
         "timbres": 1,
         "profile_rows": 11,
-        "gate_state": "current",
+        "gate_state": "exceeded",
         "coverage": {
           "canonical": 10,
           "gated": 5,
@@ -3307,9 +3321,13 @@
           "date": "2026-10-26",
           "outcome": "adopted",
           "fittable": true
-        }
+        },
+        "gate_notes": [
+          "tnr.median: re-recorded over a kept bound, last held 2026-11-13T11:49:49+00:00",
+          "tnr.abs_median: re-recorded over a kept bound, last held 2026-11-13T11:49:49+00:00"
+        ]
       },
-      "next": "refit under the current objective (the last fit predates it): refit.py"
+      "next": "the gate is red: tnr.median: re-recorded over a kept bound, last held 2026-11-13T11:49:49+00:00; tnr.abs_median: re-recorded over a kept bound, last held 2026-11-13T11:49:49+00:00"
     },
     {
       "slug": "p016b003-drawbar-organ",
@@ -3428,15 +3446,15 @@
       "patch": "organ_sixties",
       "engine": "additive",
       "capture": "organ_sixties",
-      "stage": 0.6,
-      "stage_name": "fitted",
+      "stage": 0.4,
+      "stage_name": "targeted",
       "open_candidates": [],
       "axes": {
         "engine": "additive",
         "patch": "organ_sixties",
         "timbres": 1,
         "profile_rows": 11,
-        "gate_state": "current",
+        "gate_state": "exceeded",
         "coverage": {
           "canonical": 10,
           "gated": 5,
@@ -3470,9 +3488,13 @@
           "date": "2026-10-26",
           "outcome": "adopted",
           "fittable": true
-        }
+        },
+        "gate_notes": [
+          "tnr.median: re-recorded over a kept bound, last held 2026-11-13T11:49:49+00:00",
+          "tnr.abs_median: re-recorded over a kept bound, last held 2026-11-13T11:49:49+00:00"
+        ]
       },
-      "next": "refit under the current objective (the last fit predates it): refit.py"
+      "next": "the gate is red: tnr.median: re-recorded over a kept bound, last held 2026-11-13T11:49:49+00:00; tnr.abs_median: re-recorded over a kept bound, last held 2026-11-13T11:49:49+00:00"
     },
     {
       "slug": "p016b032-drawbar-organ",
@@ -4276,7 +4298,10 @@
           "date": "2026-10-26",
           "outcome": "kept",
           "fittable": true
-        }
+        },
+        "gate_notes": [
+          "set on a dirty tree: balance.abs_median, balance.median, centroid_pct.abs_median, centroid_pct.median, centroid_pct.p90, onset_settle.abs_median, register.p90, stretch.abs_median, stretch.median, stretch.p90, tnr.p90"
+        ]
       },
       "next": "refit under the current objective (the last fit predates it): refit.py"
     },
@@ -4409,15 +4434,15 @@
       "patch": "bandoneon",
       "engine": "free_reed",
       "capture": "tango_accordion",
-      "stage": 0.6,
-      "stage_name": "fitted",
+      "stage": 0.4,
+      "stage_name": "targeted",
       "open_candidates": [],
       "axes": {
         "engine": "free_reed",
         "patch": "bandoneon",
         "timbres": 1,
         "profile_rows": 35,
-        "gate_state": "current",
+        "gate_state": "exceeded",
         "coverage": {
           "canonical": 12,
           "gated": 12,
@@ -4452,9 +4477,12 @@
           "date": "2026-10-26",
           "outcome": "adopted",
           "fittable": true
-        }
+        },
+        "gate_notes": [
+          "body.p90: re-recorded over a kept bound, last held 2026-11-13T11:49:49+00:00"
+        ]
       },
-      "next": "refit under the current objective (the last fit predates it): refit.py"
+      "next": "the gate is red: body.p90: re-recorded over a kept bound, last held 2026-11-13T11:49:49+00:00"
     },
     {
       "slug": "p024-acoustic-guitar-nylon",
@@ -5121,10 +5149,11 @@
           "canonical": 16,
           "gated": 15,
           "excused": [],
-          "gaps": [
+          "gaps": [],
+          "complete": false,
+          "unbounded": [
             "damper"
-          ],
-          "complete": false
+          ]
         },
         "agreement": {
           "inside": 0,
@@ -5221,7 +5250,7 @@
           "inside": 8,
           "total": 12,
           "outside": {
-            "body": 4.28,
+            "body": 4.36,
             "tnr": 2.14,
             "attack_hf": 1.8,
             "attack": 1.5
@@ -5444,6 +5473,7 @@
           "fittable": false
         },
         "gate_notes": [
+          "tnr.median: re-recorded over a kept bound, last held 2026-11-13T11:49:49+00:00",
           "attack_hf.median: re-recorded over a kept bound, last held unknown",
           "attack_hf.abs_median: re-recorded over a kept bound, last held unknown",
           "attack_hf.p90: re-recorded over a kept bound, last held unknown",
@@ -5467,7 +5497,7 @@
           "register.p90: re-recorded over a kept bound, last held unknown"
         ]
       },
-      "next": "the gate is red: attack_hf.median: re-recorded over a kept bound, last held unknown; attack_hf.abs_median: re-recorded over a kept bound, last held unknown; attack_hf.p90: re-recorded over a kept bound, last held unknown; aftersound.median: re-recorded over a kept bound, last held unknown; aftersound.abs_median: re-recorded over a kept bound, last held unknown; aftersound.p90: re-recorded over a kept bound, last held unknown; balance.median: re-recorded over a kept bound, last held unknown; balance.abs_median: re-recorded over a kept bound, last held unknown; balance.p90: re-recorded over a kept bound, last held unknown; centroid_pct.median: re-recorded over a kept bound, last held unknown; centroid_pct.abs_median: re-recorded over a kept bound, last held unknown; centroid_pct.p90: re-recorded over a kept bound, last held unknown; body.median: re-recorded over a kept bound, last held unknown; vel_range.median: re-recorded over a kept bound, last held unknown; vel_range.abs_median: re-recorded over a kept bound, last held unknown; vel_range.p90: re-recorded over a kept bound, last held unknown; attack_hf_swing.median: re-recorded over a kept bound, last held unknown; attack_hf_swing.abs_median: re-recorded over a kept bound, last held unknown; attack_hf_swing.p90: re-recorded over a kept bound, last held unknown; register.abs_median: re-recorded over a kept bound, last held unknown; register.p90: re-recorded over a kept bound, last held unknown"
+      "next": "the gate is red: tnr.median: re-recorded over a kept bound, last held 2026-11-13T11:49:49+00:00; attack_hf.median: re-recorded over a kept bound, last held unknown; attack_hf.abs_median: re-recorded over a kept bound, last held unknown; attack_hf.p90: re-recorded over a kept bound, last held unknown; aftersound.median: re-recorded over a kept bound, last held unknown; aftersound.abs_median: re-recorded over a kept bound, last held unknown; aftersound.p90: re-recorded over a kept bound, last held unknown; balance.median: re-recorded over a kept bound, last held unknown; balance.abs_median: re-recorded over a kept bound, last held unknown; balance.p90: re-recorded over a kept bound, last held unknown; centroid_pct.median: re-recorded over a kept bound, last held unknown; centroid_pct.abs_median: re-recorded over a kept bound, last held unknown; centroid_pct.p90: re-recorded over a kept bound, last held unknown; body.median: re-recorded over a kept bound, last held unknown; vel_range.median: re-recorded over a kept bound, last held unknown; vel_range.abs_median: re-recorded over a kept bound, last held unknown; vel_range.p90: re-recorded over a kept bound, last held unknown; attack_hf_swing.median: re-recorded over a kept bound, last held unknown; attack_hf_swing.abs_median: re-recorded over a kept bound, last held unknown; attack_hf_swing.p90: re-recorded over a kept bound, last held unknown; register.abs_median: re-recorded over a kept bound, last held unknown; register.p90: re-recorded over a kept bound, last held unknown"
     },
     {
       "slug": "p031-guitar-harmonics",
@@ -5985,7 +6015,7 @@
           "fittable": true
         },
         "gate_notes": [
-          "set on a dirty tree: aftersound.abs_median, aftersound.median, attack_hf.abs_median, attack_hf.median, attack_hf.p90, balance.abs_median, balance.median, balance.p90, body.abs_median, body.median, body.p90, centroid_pct.abs_median, centroid_pct.median, centroid_pct.p90, partial_tilt.abs_median, partial_tilt.median, partial_tilt.p90, stretch.abs_median, stretch.median, stretch.p90, tnr.abs_median, tnr.median, tnr.p90"
+          "set on a dirty tree: attack_hf.abs_median, attack_hf.median, attack_hf.p90, balance.abs_median, balance.median, balance.p90, centroid_pct.abs_median, centroid_pct.median"
         ]
       },
       "next": "refit under the current objective (the last fit predates it): refit.py"
@@ -6064,23 +6094,25 @@
       "patch": "violin",
       "engine": "bowed_string",
       "capture": "violin",
-      "stage": 0.6,
-      "stage_name": "fitted",
+      "stage": 0.4,
+      "stage_name": "targeted",
       "open_candidates": [],
       "axes": {
         "engine": "bowed_string",
         "patch": "violin",
         "timbres": 1,
         "profile_rows": 35,
-        "gate_state": "current",
+        "gate_state": "exceeded",
         "coverage": {
-          "canonical": 10,
+          "canonical": 11,
           "gated": 9,
           "excused": [
             "stereo"
           ],
-          "gaps": [],
-          "complete": true
+          "gaps": [
+            "motion"
+          ],
+          "complete": false
         },
         "agreement": {
           "inside": 0,
@@ -6112,9 +6144,14 @@
           "date": "2026-10-26",
           "outcome": "kept",
           "fittable": true
-        }
+        },
+        "gate_notes": [
+          "tnr.median: re-recorded over a kept bound, last held 2026-11-13T11:49:49+00:00",
+          "tnr.abs_median: re-recorded over a kept bound, last held 2026-11-13T11:49:49+00:00",
+          "tnr.p90: re-recorded over a kept bound, last held 2026-11-13T11:49:49+00:00"
+        ]
       },
-      "next": "refit under the current objective (the last fit predates it): refit.py"
+      "next": "the gate is red: tnr.median: re-recorded over a kept bound, last held 2026-11-13T11:49:49+00:00; tnr.abs_median: re-recorded over a kept bound, last held 2026-11-13T11:49:49+00:00; tnr.p90: re-recorded over a kept bound, last held 2026-11-13T11:49:49+00:00"
     },
     {
       "slug": "p040b001-violin",
@@ -6127,8 +6164,8 @@
       "patch": "violin_slow",
       "engine": "bowed_string",
       "capture": "violin_slow",
-      "stage": 0.6,
-      "stage_name": "fitted",
+      "stage": 0.4,
+      "stage_name": "targeted",
       "open_candidates": [],
       "axes": {
         "engine": "bowed_string",
@@ -6137,7 +6174,7 @@
         "profile_rows": 5,
         "gate_state": "current",
         "coverage": {
-          "canonical": 10,
+          "canonical": 11,
           "gated": 6,
           "excused": [
             "damper",
@@ -6145,8 +6182,10 @@
             "stereo",
             "vel_range"
           ],
-          "gaps": [],
-          "complete": true
+          "gaps": [
+            "motion"
+          ],
+          "complete": false
         },
         "agreement": {
           "inside": 0,
@@ -6171,7 +6210,7 @@
           "fittable": true
         }
       },
-      "next": "refit under the current objective (the last fit predates it): refit.py"
+      "next": "1 canonical dimension(s) neither gated nor excused: motion"
     },
     {
       "slug": "p040b008-violin",
@@ -6184,8 +6223,8 @@
       "patch": "violin_slow",
       "engine": "bowed_string",
       "capture": "violin_slow",
-      "stage": 0.6,
-      "stage_name": "fitted",
+      "stage": 0.4,
+      "stage_name": "targeted",
       "open_candidates": [],
       "axes": {
         "engine": "bowed_string",
@@ -6194,7 +6233,7 @@
         "profile_rows": 5,
         "gate_state": "current",
         "coverage": {
-          "canonical": 10,
+          "canonical": 11,
           "gated": 6,
           "excused": [
             "damper",
@@ -6202,8 +6241,10 @@
             "stereo",
             "vel_range"
           ],
-          "gaps": [],
-          "complete": true
+          "gaps": [
+            "motion"
+          ],
+          "complete": false
         },
         "agreement": {
           "inside": 0,
@@ -6228,7 +6269,7 @@
           "fittable": true
         }
       },
-      "next": "refit under the current objective (the last fit predates it): refit.py"
+      "next": "1 canonical dimension(s) neither gated nor excused: motion"
     },
     {
       "slug": "p041-viola",
@@ -6241,23 +6282,25 @@
       "patch": "viola",
       "engine": "bowed_string",
       "capture": "viola",
-      "stage": 0.6,
-      "stage_name": "fitted",
+      "stage": 0.4,
+      "stage_name": "targeted",
       "open_candidates": [],
       "axes": {
         "engine": "bowed_string",
         "patch": "viola",
         "timbres": 1,
         "profile_rows": 35,
-        "gate_state": "current",
+        "gate_state": "exceeded",
         "coverage": {
-          "canonical": 10,
+          "canonical": 11,
           "gated": 9,
           "excused": [
             "stereo"
           ],
-          "gaps": [],
-          "complete": true
+          "gaps": [
+            "motion"
+          ],
+          "complete": false
         },
         "agreement": {
           "inside": 0,
@@ -6289,9 +6332,15 @@
           "date": "2026-10-26",
           "outcome": "kept",
           "fittable": true
-        }
+        },
+        "gate_notes": [
+          "tnr.median: re-recorded over a kept bound, last held 2026-11-13T11:49:49+00:00",
+          "tnr.abs_median: re-recorded over a kept bound, last held 2026-11-13T11:49:49+00:00",
+          "stretch.median: not adjudicable, measurement-limited: the A4 ruler's scatter 7.228 c is wider than 5 c, so the reference does not resolve its stretch",
+          "stretch.abs_median: not adjudicable, measurement-limited: the A4 ruler's scatter 7.228 c is wider than 5 c, so the reference does not resolve its stretch"
+        ]
       },
-      "next": "refit under the current objective (the last fit predates it): refit.py"
+      "next": "the gate is red: tnr.median: re-recorded over a kept bound, last held 2026-11-13T11:49:49+00:00; tnr.abs_median: re-recorded over a kept bound, last held 2026-11-13T11:49:49+00:00"
     },
     {
       "slug": "p042-cello",
@@ -6304,23 +6353,25 @@
       "patch": "cello",
       "engine": "bowed_string",
       "capture": "cello",
-      "stage": 0.6,
-      "stage_name": "fitted",
+      "stage": 0.4,
+      "stage_name": "targeted",
       "open_candidates": [],
       "axes": {
         "engine": "bowed_string",
         "patch": "cello",
         "timbres": 1,
         "profile_rows": 50,
-        "gate_state": "current",
+        "gate_state": "exceeded",
         "coverage": {
-          "canonical": 10,
+          "canonical": 11,
           "gated": 9,
           "excused": [
             "stereo"
           ],
-          "gaps": [],
-          "complete": true
+          "gaps": [
+            "motion"
+          ],
+          "complete": false
         },
         "agreement": {
           "inside": 0,
@@ -6352,9 +6403,16 @@
           "date": "2026-10-26",
           "outcome": "adopted",
           "fittable": true
-        }
+        },
+        "gate_notes": [
+          "stretch.median: re-recorded over a kept bound, last held 2026-11-13T11:49:49+00:00",
+          "stretch.abs_median: re-recorded over a kept bound, last held 2026-11-13T11:49:49+00:00",
+          "stretch.p90: re-recorded over a kept bound, last held 2026-11-13T11:49:49+00:00",
+          "centroid_pct.median: re-recorded over a kept bound, last held 2026-11-13T11:49:49+00:00",
+          "centroid_pct.abs_median: re-recorded over a kept bound, last held 2026-11-13T11:49:49+00:00"
+        ]
       },
-      "next": "refit under the current objective (the last fit predates it): refit.py"
+      "next": "the gate is red: stretch.median: re-recorded over a kept bound, last held 2026-11-13T11:49:49+00:00; stretch.abs_median: re-recorded over a kept bound, last held 2026-11-13T11:49:49+00:00; stretch.p90: re-recorded over a kept bound, last held 2026-11-13T11:49:49+00:00; centroid_pct.median: re-recorded over a kept bound, last held 2026-11-13T11:49:49+00:00; centroid_pct.abs_median: re-recorded over a kept bound, last held 2026-11-13T11:49:49+00:00"
     },
     {
       "slug": "p043-contrabass",
@@ -6367,23 +6425,25 @@
       "patch": "contrabass",
       "engine": "bowed_string",
       "capture": "contrabass",
-      "stage": 0.6,
-      "stage_name": "fitted",
+      "stage": 0.4,
+      "stage_name": "targeted",
       "open_candidates": [],
       "axes": {
         "engine": "bowed_string",
         "patch": "contrabass",
         "timbres": 1,
         "profile_rows": 35,
-        "gate_state": "current",
+        "gate_state": "exceeded",
         "coverage": {
-          "canonical": 10,
+          "canonical": 11,
           "gated": 9,
           "excused": [
             "stereo"
           ],
-          "gaps": [],
-          "complete": true
+          "gaps": [
+            "motion"
+          ],
+          "complete": false
         },
         "agreement": {
           "inside": 0,
@@ -6409,9 +6469,13 @@
           "date": "2026-10-26",
           "outcome": "adopted",
           "fittable": true
-        }
+        },
+        "gate_notes": [
+          "stretch.p90: re-recorded over a kept bound, last held 2026-11-13T11:49:49+00:00",
+          "tnr.median: re-recorded over a kept bound, last held 2026-11-13T11:49:49+00:00"
+        ]
       },
-      "next": "refit under the current objective (the last fit predates it): refit.py"
+      "next": "the gate is red: stretch.p90: re-recorded over a kept bound, last held 2026-11-13T11:49:49+00:00; tnr.median: re-recorded over a kept bound, last held 2026-11-13T11:49:49+00:00"
     },
     {
       "slug": "p044-tremolo-strings",
@@ -6863,11 +6927,7 @@
           "fittable": true
         },
         "gate_notes": [
-          "stretch.median: re-recorded over a kept bound, last held unknown",
-          "stretch.abs_median: re-recorded over a kept bound, last held unknown",
-          "stretch.p90: re-recorded over a kept bound, last held unknown",
           "tnr.abs_median: re-recorded over a kept bound, last held unknown",
-          "tnr.p90: re-recorded over a kept bound, last held unknown",
           "body.median: re-recorded over a kept bound, last held unknown",
           "body.abs_median: re-recorded over a kept bound, last held unknown",
           "body.p90: re-recorded over a kept bound, last held unknown",
@@ -6878,7 +6938,7 @@
           "set on a dirty tree: attack.abs_median, attack.median, attack.p90"
         ]
       },
-      "next": "the gate is red: stretch.median: re-recorded over a kept bound, last held unknown; stretch.abs_median: re-recorded over a kept bound, last held unknown; stretch.p90: re-recorded over a kept bound, last held unknown; tnr.abs_median: re-recorded over a kept bound, last held unknown; tnr.p90: re-recorded over a kept bound, last held unknown; body.median: re-recorded over a kept bound, last held unknown; body.abs_median: re-recorded over a kept bound, last held unknown; body.p90: re-recorded over a kept bound, last held unknown; balance.median: re-recorded over a kept bound, last held unknown; centroid_pct.median: re-recorded over a kept bound, last held unknown; centroid_pct.abs_median: re-recorded over a kept bound, last held unknown; centroid_pct.p90: re-recorded over a kept bound, last held unknown"
+      "next": "the gate is red: tnr.abs_median: re-recorded over a kept bound, last held unknown; body.median: re-recorded over a kept bound, last held unknown; body.abs_median: re-recorded over a kept bound, last held unknown; body.p90: re-recorded over a kept bound, last held unknown; balance.median: re-recorded over a kept bound, last held unknown; centroid_pct.median: re-recorded over a kept bound, last held unknown; centroid_pct.abs_median: re-recorded over a kept bound, last held unknown; centroid_pct.p90: re-recorded over a kept bound, last held unknown"
     },
     {
       "slug": "p051-synth-strings-2",
@@ -7033,11 +7093,13 @@
         "profile_rows": 35,
         "gate_state": "exceeded",
         "coverage": {
-          "canonical": 10,
+          "canonical": 11,
           "gated": 10,
           "excused": [],
-          "gaps": [],
-          "complete": true
+          "gaps": [
+            "motion"
+          ],
+          "complete": false
         },
         "agreement": {
           "inside": 0,
@@ -7093,8 +7155,8 @@
       "patch": "synth_voice",
       "engine": "vocal",
       "capture": "synth_voice_module",
-      "stage": 0.6,
-      "stage_name": "fitted",
+      "stage": 0.4,
+      "stage_name": "targeted",
       "open_candidates": [
         "section-of-singers"
       ],
@@ -7105,15 +7167,17 @@
         "profile_rows": 44,
         "gate_state": "current",
         "coverage": {
-          "canonical": 10,
+          "canonical": 11,
           "gated": 7,
           "excused": [
             "damper",
             "register",
             "stereo"
           ],
-          "gaps": [],
-          "complete": true
+          "gaps": [
+            "motion"
+          ],
+          "complete": false
         },
         "agreement": {
           "inside": 0,
@@ -7145,7 +7209,7 @@
           "fittable": true
         }
       },
-      "next": "refit under the current objective (the last fit predates it): refit.py"
+      "next": "1 canonical dimension(s) neither gated nor excused: motion"
     },
     {
       "slug": "p055-orchestra-hit",
@@ -7237,14 +7301,16 @@
         "profile_rows": 35,
         "gate_state": "exceeded",
         "coverage": {
-          "canonical": 12,
+          "canonical": 13,
           "gated": 10,
           "excused": [
             "body",
             "stereo"
           ],
-          "gaps": [],
-          "complete": true
+          "gaps": [
+            "motion"
+          ],
+          "complete": false
         },
         "agreement": {
           "inside": 0,
@@ -7275,7 +7341,7 @@
         "gate_notes": [
           "vel_range.median: re-recorded over a kept bound, last held unknown",
           "vel_range.p90: re-recorded over a kept bound, last held unknown",
-          "set on a dirty tree: balance.abs_median, balance.median, onset.abs_median, onset.p90, stretch.abs_median, stretch.median, stretch.p90, tnr.median, tnr.p90, vel_range.abs_median"
+          "set on a dirty tree: balance.abs_median, balance.median, onset.abs_median, onset.p90, stretch.median, stretch.p90, tnr.median, tnr.p90, vel_range.abs_median"
         ]
       },
       "next": "the gate is red: vel_range.median: re-recorded over a kept bound, last held unknown; vel_range.p90: re-recorded over a kept bound, last held unknown"
@@ -7301,13 +7367,15 @@
         "profile_rows": 35,
         "gate_state": "exceeded",
         "coverage": {
-          "canonical": 12,
+          "canonical": 13,
           "gated": 11,
           "excused": [
             "stereo"
           ],
-          "gaps": [],
-          "complete": true
+          "gaps": [
+            "motion"
+          ],
+          "complete": false
         },
         "agreement": {
           "inside": 0,
@@ -7341,7 +7409,7 @@
           "register.median: re-recorded over a kept bound, last held unknown",
           "register.abs_median: re-recorded over a kept bound, last held unknown",
           "register.p90: re-recorded over a kept bound, last held unknown",
-          "set on a dirty tree: balance.abs_median, balance.median, body.abs_median, body.median, body.p90, centroid_pct.median, centroid_pct.p90, onset.abs_median, onset.median, onset.p90, onset_settle.p90, stretch.abs_median, stretch.median, stretch.p90, vel_range.abs_median, vel_range.p90"
+          "set on a dirty tree: balance.abs_median, balance.median, body.abs_median, body.median, body.p90, centroid_pct.median, centroid_pct.p90, onset.abs_median, onset.median, onset.p90, onset_settle.p90, stretch.abs_median, stretch.median, stretch.p90"
         ]
       },
       "next": "the gate is red: attack.p90: re-recorded over a kept bound, last held unknown; register.median: re-recorded over a kept bound, last held unknown; register.abs_median: re-recorded over a kept bound, last held unknown; register.p90: re-recorded over a kept bound, last held unknown"
@@ -7367,14 +7435,16 @@
         "profile_rows": 30,
         "gate_state": "exceeded",
         "coverage": {
-          "canonical": 12,
+          "canonical": 13,
           "gated": 10,
           "excused": [
             "body",
             "stereo"
           ],
-          "gaps": [],
-          "complete": true
+          "gaps": [
+            "motion"
+          ],
+          "complete": false
         },
         "agreement": {
           "inside": 0,
@@ -7437,14 +7507,16 @@
         "profile_rows": 35,
         "gate_state": "exceeded",
         "coverage": {
-          "canonical": 12,
+          "canonical": 13,
           "gated": 10,
           "excused": [
             "body",
             "stereo"
           ],
-          "gaps": [],
-          "complete": true
+          "gaps": [
+            "motion"
+          ],
+          "complete": false
         },
         "agreement": {
           "inside": 0,
@@ -7480,7 +7552,7 @@
         },
         "gate_notes": [
           "centroid_pct.median: re-recorded over a kept bound, last held unknown",
-          "set on a dirty tree: centroid_pct.p90, damper.p90, register.abs_median, register.p90, stretch.abs_median, stretch.p90, tnr.abs_median, tnr.median, tnr.p90, vel_range.p90"
+          "set on a dirty tree: centroid_pct.p90, damper.p90, register.abs_median, stretch.abs_median, stretch.p90, tnr.abs_median, tnr.median, tnr.p90, vel_range.p90"
         ]
       },
       "next": "the gate is red: centroid_pct.median: re-recorded over a kept bound, last held unknown"
@@ -7496,8 +7568,8 @@
       "patch": "french_horn",
       "engine": "brass",
       "capture": "french_horn",
-      "stage": 0.6,
-      "stage_name": "fitted",
+      "stage": 0.4,
+      "stage_name": "targeted",
       "open_candidates": [],
       "axes": {
         "engine": "brass",
@@ -7506,11 +7578,13 @@
         "profile_rows": 35,
         "gate_state": "current",
         "coverage": {
-          "canonical": 12,
+          "canonical": 13,
           "gated": 12,
           "excused": [],
-          "gaps": [],
-          "complete": true
+          "gaps": [
+            "motion"
+          ],
+          "complete": false
         },
         "agreement": {
           "inside": 0,
@@ -7541,10 +7615,10 @@
           "fittable": true
         },
         "gate_notes": [
-          "set on a dirty tree: body.abs_median, body.median, body.p90, centroid_pct.median, centroid_pct.p90, damper.abs_median, onset.p90, register.abs_median, stretch.abs_median, stretch.median, stretch.p90, tnr.abs_median, tnr.median"
+          "set on a dirty tree: body.abs_median, body.median, body.p90, centroid_pct.median, centroid_pct.p90, damper.abs_median, onset.p90, register.abs_median, stretch.abs_median, stretch.median, tnr.abs_median, tnr.median"
         ]
       },
-      "next": "refit under the current objective (the last fit predates it): refit.py"
+      "next": "1 canonical dimension(s) neither gated nor excused: motion"
     },
     {
       "slug": "p061-brass-section",
@@ -7557,21 +7631,23 @@
       "patch": "brass_section",
       "engine": "brass",
       "capture": "brass_section",
-      "stage": 0.6,
-      "stage_name": "fitted",
+      "stage": 0.4,
+      "stage_name": "targeted",
       "open_candidates": [],
       "axes": {
         "engine": "brass",
         "patch": "brass_section",
         "timbres": 1,
         "profile_rows": 35,
-        "gate_state": "current",
+        "gate_state": "exceeded",
         "coverage": {
-          "canonical": 12,
+          "canonical": 13,
           "gated": 12,
           "excused": [],
-          "gaps": [],
-          "complete": true
+          "gaps": [
+            "motion"
+          ],
+          "complete": false
         },
         "agreement": {
           "inside": 0,
@@ -7602,10 +7678,11 @@
           "fittable": true
         },
         "gate_notes": [
-          "set on a dirty tree: balance.abs_median, balance.median, balance.p90, body.median, body.p90, centroid_pct.abs_median, centroid_pct.median, damper.abs_median, damper.p90, onset_settle.abs_median, onset_settle.median, register.p90, stretch.abs_median, stretch.median, stretch.p90, tnr.abs_median, tnr.median, tnr.p90, vel_range.abs_median, vel_range.median, vel_range.p90"
+          "onset.abs_median: re-recorded over a kept bound, last held 2026-11-14T04:53:20+00:00",
+          "set on a dirty tree: body.median, centroid_pct.abs_median, damper.abs_median, onset_settle.abs_median, onset_settle.median, register.p90"
         ]
       },
-      "next": "refit under the current objective (the last fit predates it): refit.py"
+      "next": "the gate is red: onset.abs_median: re-recorded over a kept bound, last held 2026-11-14T04:53:20+00:00"
     },
     {
       "slug": "p062-synth-brass-1",
@@ -7675,15 +7752,15 @@
       "patch": "synth_brass_2",
       "engine": "fm",
       "capture": "synth_brass_2_module",
-      "stage": 0.6,
-      "stage_name": "fitted",
+      "stage": 0.4,
+      "stage_name": "targeted",
       "open_candidates": [],
       "axes": {
         "engine": "fm",
         "patch": "synth_brass_2",
         "timbres": 1,
         "profile_rows": 44,
-        "gate_state": "current",
+        "gate_state": "exceeded",
         "coverage": {
           "canonical": 10,
           "gated": 7,
@@ -7717,9 +7794,12 @@
           "date": "2026-10-26",
           "outcome": "adopted",
           "fittable": true
-        }
+        },
+        "gate_notes": [
+          "body.median: re-recorded over a kept bound, last held 2026-11-13T11:49:49+00:00"
+        ]
       },
-      "next": "refit under the current objective (the last fit predates it): refit.py"
+      "next": "the gate is red: body.median: re-recorded over a kept bound, last held 2026-11-13T11:49:49+00:00"
     },
     {
       "slug": "p064-soprano-sax",
@@ -7732,8 +7812,8 @@
       "patch": "soprano_sax",
       "engine": "reed",
       "capture": "soprano_sax",
-      "stage": 0.6,
-      "stage_name": "fitted",
+      "stage": 0.4,
+      "stage_name": "targeted",
       "open_candidates": [],
       "axes": {
         "engine": "reed",
@@ -7742,13 +7822,15 @@
         "profile_rows": 35,
         "gate_state": "current",
         "coverage": {
-          "canonical": 10,
+          "canonical": 11,
           "gated": 9,
           "excused": [
             "stereo"
           ],
-          "gaps": [],
-          "complete": true
+          "gaps": [
+            "motion"
+          ],
+          "complete": false
         },
         "agreement": {
           "inside": 0,
@@ -7774,9 +7856,12 @@
           "date": "2026-10-26",
           "outcome": "kept",
           "fittable": true
-        }
+        },
+        "gate_notes": [
+          "set on a dirty tree: attack.abs_median, attack.median, attack.p90, balance.p90, tnr.p90"
+        ]
       },
-      "next": "refit under the current objective (the last fit predates it): refit.py"
+      "next": "1 canonical dimension(s) neither gated nor excused: motion"
     },
     {
       "slug": "p065-alto-sax",
@@ -7789,8 +7874,8 @@
       "patch": "alto_sax",
       "engine": "reed",
       "capture": "alto_sax",
-      "stage": 0.6,
-      "stage_name": "fitted",
+      "stage": 0.4,
+      "stage_name": "targeted",
       "open_candidates": [
         "valve-scale-0.6",
         "valve-scale-0.25",
@@ -7803,13 +7888,15 @@
         "profile_rows": 35,
         "gate_state": "current",
         "coverage": {
-          "canonical": 10,
+          "canonical": 11,
           "gated": 9,
           "excused": [
             "stereo"
           ],
-          "gaps": [],
-          "complete": true
+          "gaps": [
+            "motion"
+          ],
+          "complete": false
         },
         "agreement": {
           "inside": 0,
@@ -7843,7 +7930,7 @@
           "fittable": true
         }
       },
-      "next": "refit under the current objective (the last fit predates it): refit.py"
+      "next": "1 canonical dimension(s) neither gated nor excused: motion"
     },
     {
       "slug": "p066-tenor-sax",
@@ -7866,13 +7953,15 @@
         "profile_rows": 35,
         "gate_state": "exceeded",
         "coverage": {
-          "canonical": 10,
+          "canonical": 11,
           "gated": 9,
           "excused": [
             "stereo"
           ],
-          "gaps": [],
-          "complete": true
+          "gaps": [
+            "motion"
+          ],
+          "complete": false
         },
         "agreement": {
           "inside": 0,
@@ -7900,13 +7989,16 @@
           "fittable": true
         },
         "gate_notes": [
+          "tnr.median: re-recorded over a kept bound, last held 2026-11-13T11:49:49+00:00",
+          "tnr.abs_median: re-recorded over a kept bound, last held 2026-11-13T11:49:49+00:00",
+          "tnr.p90: re-recorded over a kept bound, last held 2026-11-13T11:49:49+00:00",
           "attack.median: re-recorded over a kept bound, last held unknown",
           "attack.abs_median: re-recorded over a kept bound, last held unknown",
           "attack.p90: re-recorded over a kept bound, last held unknown",
-          "centroid_pct.p90: re-recorded over a kept bound, last held unknown"
+          "set on a dirty tree: balance.abs_median, balance.median, balance.p90, body.median, body.p90, centroid_pct.abs_median, centroid_pct.median, damper.abs_median, damper.median, damper.p90, register.p90, stretch.p90"
         ]
       },
-      "next": "the gate is red: attack.median: re-recorded over a kept bound, last held unknown; attack.abs_median: re-recorded over a kept bound, last held unknown; attack.p90: re-recorded over a kept bound, last held unknown; centroid_pct.p90: re-recorded over a kept bound, last held unknown"
+      "next": "the gate is red: tnr.median: re-recorded over a kept bound, last held 2026-11-13T11:49:49+00:00; tnr.abs_median: re-recorded over a kept bound, last held 2026-11-13T11:49:49+00:00; tnr.p90: re-recorded over a kept bound, last held 2026-11-13T11:49:49+00:00; attack.median: re-recorded over a kept bound, last held unknown; attack.abs_median: re-recorded over a kept bound, last held unknown; attack.p90: re-recorded over a kept bound, last held unknown"
     },
     {
       "slug": "p067-baritone-sax",
@@ -7933,13 +8025,15 @@
         "profile_rows": 35,
         "gate_state": "exceeded",
         "coverage": {
-          "canonical": 10,
+          "canonical": 11,
           "gated": 9,
           "excused": [
             "stereo"
           ],
-          "gaps": [],
-          "complete": true
+          "gaps": [
+            "motion"
+          ],
+          "complete": false
         },
         "agreement": {
           "inside": 0,
@@ -7970,10 +8064,12 @@
           "attack.median: re-recorded over a kept bound, last held unknown",
           "attack.abs_median: re-recorded over a kept bound, last held unknown",
           "attack.p90: re-recorded over a kept bound, last held unknown",
-          "balance.abs_median: re-recorded over a kept bound, last held unknown"
+          "balance.abs_median: re-recorded over a kept bound, last held unknown",
+          "tnr.median: re-recorded over a kept bound, last held 2026-11-13T11:49:49+00:00",
+          "set on a dirty tree: balance.median, body.median, centroid_pct.median, centroid_pct.p90, damper.abs_median, damper.median, damper.p90, stretch.p90, tnr.abs_median"
         ]
       },
-      "next": "the gate is red: attack.median: re-recorded over a kept bound, last held unknown; attack.abs_median: re-recorded over a kept bound, last held unknown; attack.p90: re-recorded over a kept bound, last held unknown; balance.abs_median: re-recorded over a kept bound, last held unknown"
+      "next": "the gate is red: attack.median: re-recorded over a kept bound, last held unknown; attack.abs_median: re-recorded over a kept bound, last held unknown; attack.p90: re-recorded over a kept bound, last held unknown; balance.abs_median: re-recorded over a kept bound, last held unknown; tnr.median: re-recorded over a kept bound, last held 2026-11-13T11:49:49+00:00"
     },
     {
       "slug": "p068-oboe",
@@ -7996,13 +8092,15 @@
         "profile_rows": 35,
         "gate_state": "exceeded",
         "coverage": {
-          "canonical": 10,
+          "canonical": 11,
           "gated": 9,
           "excused": [
             "stereo"
           ],
-          "gaps": [],
-          "complete": true
+          "gaps": [
+            "motion"
+          ],
+          "complete": false
         },
         "agreement": {
           "inside": 0,
@@ -8030,12 +8128,11 @@
           "fittable": true
         },
         "gate_notes": [
-          "stretch.median: re-recorded over a kept bound, last held unknown",
-          "stretch.abs_median: re-recorded over a kept bound, last held unknown",
-          "stretch.p90: re-recorded over a kept bound, last held unknown"
+          "tnr.abs_median: re-recorded over a kept bound, last held 2026-11-13T11:49:49+00:00",
+          "set on a dirty tree: attack.p90, body.abs_median, body.median, body.p90, stretch.abs_median, stretch.median, stretch.p90, vel_range.p90"
         ]
       },
-      "next": "the gate is red: stretch.median: re-recorded over a kept bound, last held unknown; stretch.abs_median: re-recorded over a kept bound, last held unknown; stretch.p90: re-recorded over a kept bound, last held unknown"
+      "next": "the gate is red: tnr.abs_median: re-recorded over a kept bound, last held 2026-11-13T11:49:49+00:00"
     },
     {
       "slug": "p069-english-horn",
@@ -8048,8 +8145,8 @@
       "patch": "english_horn",
       "engine": "reed",
       "capture": "english_horn",
-      "stage": 0.6,
-      "stage_name": "fitted",
+      "stage": 0.4,
+      "stage_name": "targeted",
       "open_candidates": [],
       "axes": {
         "engine": "reed",
@@ -8058,13 +8155,15 @@
         "profile_rows": 35,
         "gate_state": "current",
         "coverage": {
-          "canonical": 10,
+          "canonical": 11,
           "gated": 9,
           "excused": [
             "stereo"
           ],
-          "gaps": [],
-          "complete": true
+          "gaps": [
+            "motion"
+          ],
+          "complete": false
         },
         "agreement": {
           "inside": 0,
@@ -8090,9 +8189,12 @@
           "date": "2026-10-26",
           "outcome": "adopted",
           "fittable": true
-        }
+        },
+        "gate_notes": [
+          "set on a dirty tree: balance.abs_median, balance.median, centroid_pct.abs_median, centroid_pct.median, centroid_pct.p90, damper.abs_median, damper.median, damper.p90, tnr.abs_median, tnr.p90"
+        ]
       },
-      "next": "refit under the current objective (the last fit predates it): refit.py"
+      "next": "1 canonical dimension(s) neither gated nor excused: motion"
     },
     {
       "slug": "p070-bassoon",
@@ -8115,13 +8217,15 @@
         "profile_rows": 35,
         "gate_state": "exceeded",
         "coverage": {
-          "canonical": 10,
+          "canonical": 11,
           "gated": 9,
           "excused": [
             "stereo"
           ],
-          "gaps": [],
-          "complete": true
+          "gaps": [
+            "motion"
+          ],
+          "complete": false
         },
         "agreement": {
           "inside": 0,
@@ -8154,7 +8258,8 @@
           "attack.p90: re-recorded over a kept bound, last held unknown",
           "balance.median: re-recorded over a kept bound, last held unknown",
           "balance.abs_median: re-recorded over a kept bound, last held unknown",
-          "balance.p90: re-recorded over a kept bound, last held unknown"
+          "balance.p90: re-recorded over a kept bound, last held unknown",
+          "set on a dirty tree: centroid_pct.abs_median, centroid_pct.median, centroid_pct.p90, register.abs_median, stretch.p90"
         ]
       },
       "next": "the gate is red: attack.median: re-recorded over a kept bound, last held unknown; attack.abs_median: re-recorded over a kept bound, last held unknown; attack.p90: re-recorded over a kept bound, last held unknown; balance.median: re-recorded over a kept bound, last held unknown; balance.abs_median: re-recorded over a kept bound, last held unknown; balance.p90: re-recorded over a kept bound, last held unknown"
@@ -8170,23 +8275,25 @@
       "patch": "clarinet",
       "engine": "reed",
       "capture": "clarinet",
-      "stage": 0.6,
-      "stage_name": "fitted",
+      "stage": 0.4,
+      "stage_name": "targeted",
       "open_candidates": [],
       "axes": {
         "engine": "reed",
         "patch": "clarinet",
         "timbres": 1,
         "profile_rows": 50,
-        "gate_state": "current",
+        "gate_state": "exceeded",
         "coverage": {
-          "canonical": 10,
+          "canonical": 11,
           "gated": 9,
           "excused": [
             "stereo"
           ],
-          "gaps": [],
-          "complete": true
+          "gaps": [
+            "motion"
+          ],
+          "complete": false
         },
         "agreement": {
           "inside": 0,
@@ -8212,9 +8319,14 @@
           "date": "2026-10-26",
           "outcome": "adopted",
           "fittable": true
-        }
+        },
+        "gate_notes": [
+          "tnr.median: re-recorded over a kept bound, last held 2026-11-14T03:45:36+00:00",
+          "body.median: re-recorded over a kept bound, last held 2026-11-13T11:49:49+00:00",
+          "set on a dirty tree: attack.abs_median, attack.median, attack.p90, body.abs_median, body.p90, centroid_pct.p90, damper.abs_median, damper.median, damper.p90, register.abs_median, register.p90, stretch.abs_median, stretch.median, tnr.abs_median, tnr.median, tnr.p90, vel_range.abs_median, vel_range.p90"
+        ]
       },
-      "next": "refit under the current objective (the last fit predates it): refit.py"
+      "next": "the gate is red: tnr.median: re-recorded over a kept bound, last held 2026-11-14T03:45:36+00:00; body.median: re-recorded over a kept bound, last held 2026-11-13T11:49:49+00:00"
     },
     {
       "slug": "p072-piccolo",
@@ -8227,8 +8339,8 @@
       "patch": "piccolo",
       "engine": "flute",
       "capture": "piccolo",
-      "stage": 0.6,
-      "stage_name": "fitted",
+      "stage": 0.4,
+      "stage_name": "targeted",
       "open_candidates": [],
       "axes": {
         "engine": "flute",
@@ -8237,13 +8349,15 @@
         "profile_rows": 25,
         "gate_state": "current",
         "coverage": {
-          "canonical": 12,
+          "canonical": 13,
           "gated": 11,
           "excused": [
             "stereo"
           ],
-          "gaps": [],
-          "complete": true
+          "gaps": [
+            "motion"
+          ],
+          "complete": false
         },
         "agreement": {
           "inside": 0,
@@ -8273,7 +8387,7 @@
           "fittable": true
         }
       },
-      "next": "refit under the current objective (the last fit predates it): refit.py"
+      "next": "1 canonical dimension(s) neither gated nor excused: motion"
     },
     {
       "slug": "p073-flute",
@@ -8286,23 +8400,25 @@
       "patch": "concert_flute",
       "engine": "flute",
       "capture": "concert_flute",
-      "stage": 0.6,
-      "stage_name": "fitted",
+      "stage": 0.4,
+      "stage_name": "targeted",
       "open_candidates": [],
       "axes": {
         "engine": "flute",
         "patch": "concert_flute",
         "timbres": 1,
         "profile_rows": 35,
-        "gate_state": "current",
+        "gate_state": "exceeded",
         "coverage": {
-          "canonical": 12,
+          "canonical": 13,
           "gated": 11,
           "excused": [
             "stereo"
           ],
-          "gaps": [],
-          "complete": true
+          "gaps": [
+            "motion"
+          ],
+          "complete": false
         },
         "agreement": {
           "inside": 0,
@@ -8330,9 +8446,12 @@
           "date": "2026-10-26",
           "outcome": "adopted",
           "fittable": true
-        }
+        },
+        "gate_notes": [
+          "body.p90: re-recorded over a kept bound, last held 2026-11-13T11:49:49+00:00"
+        ]
       },
-      "next": "refit under the current objective (the last fit predates it): refit.py"
+      "next": "the gate is red: body.p90: re-recorded over a kept bound, last held 2026-11-13T11:49:49+00:00"
     },
     {
       "slug": "p074-recorder",
@@ -8345,8 +8464,8 @@
       "patch": "recorder",
       "engine": "flute",
       "capture": "recorder",
-      "stage": 0.6,
-      "stage_name": "fitted",
+      "stage": 0.4,
+      "stage_name": "targeted",
       "open_candidates": [],
       "axes": {
         "engine": "flute",
@@ -8355,13 +8474,15 @@
         "profile_rows": 35,
         "gate_state": "current",
         "coverage": {
-          "canonical": 12,
+          "canonical": 13,
           "gated": 11,
           "excused": [
             "stereo"
           ],
-          "gaps": [],
-          "complete": true
+          "gaps": [
+            "motion"
+          ],
+          "complete": false
         },
         "agreement": {
           "inside": 0,
@@ -8391,7 +8512,7 @@
           "fittable": true
         }
       },
-      "next": "refit under the current objective (the last fit predates it): refit.py"
+      "next": "1 canonical dimension(s) neither gated nor excused: motion"
     },
     {
       "slug": "p075-pan-flute",
@@ -8404,8 +8525,8 @@
       "patch": "pan_flute",
       "engine": "flute",
       "capture": "pan_flute",
-      "stage": 0.6,
-      "stage_name": "fitted",
+      "stage": 0.4,
+      "stage_name": "targeted",
       "open_candidates": [],
       "axes": {
         "engine": "flute",
@@ -8414,13 +8535,15 @@
         "profile_rows": 35,
         "gate_state": "current",
         "coverage": {
-          "canonical": 12,
+          "canonical": 13,
           "gated": 11,
           "excused": [
             "stereo"
           ],
-          "gaps": [],
-          "complete": true
+          "gaps": [
+            "motion"
+          ],
+          "complete": false
         },
         "agreement": {
           "inside": 0,
@@ -8450,7 +8573,7 @@
           "fittable": true
         }
       },
-      "next": "refit under the current objective (the last fit predates it): refit.py"
+      "next": "1 canonical dimension(s) neither gated nor excused: motion"
     },
     {
       "slug": "p076-blown-bottle",
@@ -8463,8 +8586,8 @@
       "patch": "blown_bottle",
       "engine": "flute",
       "capture": "blown_bottle",
-      "stage": 0.6,
-      "stage_name": "fitted",
+      "stage": 0.4,
+      "stage_name": "targeted",
       "open_candidates": [],
       "axes": {
         "engine": "flute",
@@ -8473,13 +8596,15 @@
         "profile_rows": 35,
         "gate_state": "current",
         "coverage": {
-          "canonical": 12,
+          "canonical": 13,
           "gated": 11,
           "excused": [
             "stereo"
           ],
-          "gaps": [],
-          "complete": true
+          "gaps": [
+            "motion"
+          ],
+          "complete": false
         },
         "agreement": {
           "inside": 0,
@@ -8509,7 +8634,7 @@
           "fittable": true
         }
       },
-      "next": "refit under the current objective (the last fit predates it): refit.py"
+      "next": "1 canonical dimension(s) neither gated nor excused: motion"
     },
     {
       "slug": "p077-shakuhachi",
@@ -8522,23 +8647,25 @@
       "patch": "shakuhachi",
       "engine": "flute",
       "capture": "shakuhachi",
-      "stage": 0.6,
-      "stage_name": "fitted",
+      "stage": 0.4,
+      "stage_name": "targeted",
       "open_candidates": [],
       "axes": {
         "engine": "flute",
         "patch": "shakuhachi",
         "timbres": 1,
         "profile_rows": 35,
-        "gate_state": "current",
+        "gate_state": "exceeded",
         "coverage": {
-          "canonical": 12,
+          "canonical": 13,
           "gated": 11,
           "excused": [
             "stereo"
           ],
-          "gaps": [],
-          "complete": true
+          "gaps": [
+            "motion"
+          ],
+          "complete": false
         },
         "agreement": {
           "inside": 0,
@@ -8566,9 +8693,12 @@
           "date": "2026-10-26",
           "outcome": "adopted",
           "fittable": true
-        }
+        },
+        "gate_notes": [
+          "tnr.p90: re-recorded over a kept bound, last held 2026-11-13T11:49:49+00:00"
+        ]
       },
-      "next": "refit under the current objective (the last fit predates it): refit.py"
+      "next": "the gate is red: tnr.p90: re-recorded over a kept bound, last held 2026-11-13T11:49:49+00:00"
     },
     {
       "slug": "p078-whistle",
@@ -8581,8 +8711,8 @@
       "patch": "tin_whistle",
       "engine": "flute",
       "capture": "whistle",
-      "stage": 0.6,
-      "stage_name": "fitted",
+      "stage": 0.4,
+      "stage_name": "targeted",
       "open_candidates": [
         "keyed-filter"
       ],
@@ -8593,13 +8723,15 @@
         "profile_rows": 25,
         "gate_state": "current",
         "coverage": {
-          "canonical": 12,
+          "canonical": 13,
           "gated": 11,
           "excused": [
             "stereo"
           ],
-          "gaps": [],
-          "complete": true
+          "gaps": [
+            "motion"
+          ],
+          "complete": false
         },
         "agreement": {
           "inside": 0,
@@ -8629,7 +8761,7 @@
           "fittable": true
         }
       },
-      "next": "refit under the current objective (the last fit predates it): refit.py"
+      "next": "1 canonical dimension(s) neither gated nor excused: motion"
     },
     {
       "slug": "p079-ocarina",
@@ -8642,23 +8774,25 @@
       "patch": "ocarina",
       "engine": "flute",
       "capture": "ocarina",
-      "stage": 0.6,
-      "stage_name": "fitted",
+      "stage": 0.4,
+      "stage_name": "targeted",
       "open_candidates": [],
       "axes": {
         "engine": "flute",
         "patch": "ocarina",
         "timbres": 1,
         "profile_rows": 35,
-        "gate_state": "current",
+        "gate_state": "exceeded",
         "coverage": {
-          "canonical": 12,
+          "canonical": 13,
           "gated": 11,
           "excused": [
             "stereo"
           ],
-          "gaps": [],
-          "complete": true
+          "gaps": [
+            "motion"
+          ],
+          "complete": false
         },
         "agreement": {
           "inside": 0,
@@ -8686,9 +8820,13 @@
           "date": "2026-10-26",
           "outcome": "adopted",
           "fittable": true
-        }
+        },
+        "gate_notes": [
+          "body.median: re-recorded over a kept bound, last held 2026-11-13T11:49:49+00:00",
+          "body.abs_median: re-recorded over a kept bound, last held 2026-11-13T11:49:49+00:00"
+        ]
       },
-      "next": "refit under the current objective (the last fit predates it): refit.py"
+      "next": "the gate is red: body.median: re-recorded over a kept bound, last held 2026-11-13T11:49:49+00:00; body.abs_median: re-recorded over a kept bound, last held 2026-11-13T11:49:49+00:00"
     },
     {
       "slug": "p080-lead-1-square",
@@ -8940,8 +9078,9 @@
         "gate_state": "current",
         "coverage": {
           "canonical": 10,
-          "gated": 7,
+          "gated": 6,
           "excused": [
+            "body",
             "damper",
             "register",
             "stereo"
@@ -8956,7 +9095,6 @@
           "unjudgeable": [
             "attack",
             "balance",
-            "body",
             "centroid_pct",
             "stretch",
             "tnr",
@@ -9146,7 +9284,7 @@
           "fittable": true
         },
         "gate_notes": [
-          "set on a dirty tree: balance.abs_median, balance.median, balance.p90, body.abs_median, body.median, body.p90, centroid_pct.abs_median, centroid_pct.median, centroid_pct.p90, stretch.abs_median, stretch.p90, tnr.abs_median, tnr.median, tnr.p90"
+          "set on a dirty tree: balance.abs_median, balance.median, balance.p90, body.abs_median, body.median, centroid_pct.abs_median, centroid_pct.median, centroid_pct.p90, tnr.abs_median, tnr.median, tnr.p90"
         ]
       },
       "next": "refit under the current objective (the last fit predates it): refit.py"
@@ -9162,15 +9300,15 @@
       "patch": "pad_new_age",
       "engine": "subtractive",
       "capture": "pad_new_age_module",
-      "stage": 0.6,
-      "stage_name": "fitted",
+      "stage": 0.4,
+      "stage_name": "targeted",
       "open_candidates": [],
       "axes": {
         "engine": "subtractive",
         "patch": "pad_new_age",
         "timbres": 1,
         "profile_rows": 37,
-        "gate_state": "current",
+        "gate_state": "exceeded",
         "coverage": {
           "canonical": 10,
           "gated": 7,
@@ -9204,9 +9342,13 @@
           "date": "2026-10-26",
           "outcome": "kept",
           "fittable": true
-        }
+        },
+        "gate_notes": [
+          "tnr.median: re-recorded over a kept bound, last held 2026-11-13T11:49:49+00:00",
+          "tnr.abs_median: re-recorded over a kept bound, last held 2026-11-13T11:49:49+00:00"
+        ]
       },
-      "next": "refit under the current objective (the last fit predates it): refit.py"
+      "next": "the gate is red: tnr.median: re-recorded over a kept bound, last held 2026-11-13T11:49:49+00:00; tnr.abs_median: re-recorded over a kept bound, last held 2026-11-13T11:49:49+00:00"
     },
     {
       "slug": "p089-pad-2-warm",
@@ -9393,15 +9535,15 @@
       "patch": "pad_bowed",
       "engine": "modal",
       "capture": "pad_bowed_module",
-      "stage": 0.6,
-      "stage_name": "fitted",
+      "stage": 0.4,
+      "stage_name": "targeted",
       "open_candidates": [],
       "axes": {
         "engine": "modal",
         "patch": "pad_bowed",
         "timbres": 1,
         "profile_rows": 37,
-        "gate_state": "current",
+        "gate_state": "exceeded",
         "coverage": {
           "canonical": 10,
           "gated": 7,
@@ -9435,9 +9577,13 @@
           "date": "2026-10-26",
           "outcome": "kept",
           "fittable": true
-        }
+        },
+        "gate_notes": [
+          "body.median: re-recorded over a kept bound, last held 2026-11-13T11:49:49+00:00",
+          "body.abs_median: re-recorded over a kept bound, last held 2026-11-13T11:49:49+00:00"
+        ]
       },
-      "next": "refit under the current objective (the last fit predates it): refit.py"
+      "next": "the gate is red: body.median: re-recorded over a kept bound, last held 2026-11-13T11:49:49+00:00; body.abs_median: re-recorded over a kept bound, last held 2026-11-13T11:49:49+00:00"
     },
     {
       "slug": "p093-pad-6-metallic",
@@ -9735,12 +9881,12 @@
       "kit": false,
       "name": "FX 3 (crystal)",
       "group": "96-103 Synth effects",
-      "tone_class": "sustained",
+      "tone_class": "modal",
       "patch": "fx_crystal",
       "engine": "fm",
       "capture": "fx_crystal_module",
-      "stage": 0.6,
-      "stage_name": "fitted",
+      "stage": 0.4,
+      "stage_name": "targeted",
       "open_candidates": [],
       "axes": {
         "engine": "fm",
@@ -9749,27 +9895,33 @@
         "profile_rows": 44,
         "gate_state": "current",
         "coverage": {
-          "canonical": 10,
-          "gated": 7,
+          "canonical": 12,
+          "gated": 8,
           "excused": [
+            "balance",
             "damper",
             "register",
-            "stereo"
+            "stereo",
+            "stretch",
+            "tnr"
           ],
-          "gaps": [],
-          "complete": true
+          "gaps": [
+            "attack_hf_swing"
+          ],
+          "complete": false
         },
         "agreement": {
           "inside": 0,
           "total": 0,
           "outside": {},
           "unjudgeable": [
+            "aftersound",
             "attack",
-            "balance",
+            "attack_hf",
             "body",
             "centroid_pct",
-            "stretch",
-            "tnr",
+            "decay",
+            "doubling",
             "vel_range"
           ]
         },
@@ -9781,9 +9933,12 @@
           "date": "2026-10-26",
           "outcome": "adopted",
           "fittable": true
-        }
+        },
+        "gate_notes": [
+          "set on a dirty tree: aftersound.abs_median, aftersound.median, aftersound.p90, attack_hf.abs_median, attack_hf.median, attack_hf.p90, decay.abs_median, decay.median, decay.p90, doubling.abs_median, doubling.median, doubling.p90"
+        ]
       },
-      "next": "refit under the current objective (the last fit predates it): refit.py"
+      "next": "1 canonical dimension(s) neither gated nor excused: attack_hf_swing"
     },
     {
       "slug": "p099-fx-4-atmosphere",
@@ -10009,7 +10164,12 @@
           "date": "2026-10-26",
           "outcome": "adopted",
           "fittable": true
-        }
+        },
+        "gate_notes": [
+          "stretch.median: not adjudicable, measurement-limited: the A4 ruler's scatter 12.509 c is wider than 5 c, so the reference does not resolve its stretch",
+          "stretch.abs_median: not adjudicable, measurement-limited: the A4 ruler's scatter 12.509 c is wider than 5 c, so the reference does not resolve its stretch",
+          "stretch.p90: not adjudicable, measurement-limited: the A4 ruler's scatter 12.509 c is wider than 5 c, so the reference does not resolve its stretch"
+        ]
       },
       "next": "refit under the current objective (the last fit predates it): refit.py"
     },
@@ -10450,7 +10610,10 @@
           "date": "2026-10-26",
           "outcome": "adopted",
           "fittable": true
-        }
+        },
+        "gate_notes": [
+          "set on a dirty tree: centroid_pct.p90, damper.abs_median, damper.median, damper.p90, stretch.abs_median, stretch.median, stretch.p90, tnr.abs_median, tnr.median, tnr.p90"
+        ]
       },
       "next": "refit under the current objective (the last fit predates it): refit.py"
     },
@@ -10475,13 +10638,15 @@
         "profile_rows": 35,
         "gate_state": "exceeded",
         "coverage": {
-          "canonical": 10,
+          "canonical": 11,
           "gated": 9,
           "excused": [
             "stereo"
           ],
-          "gaps": [],
-          "complete": true
+          "gaps": [
+            "motion"
+          ],
+          "complete": false
         },
         "agreement": {
           "inside": 0,
@@ -10509,11 +10674,13 @@
           "fittable": true
         },
         "gate_notes": [
+          "tnr.median: re-recorded over a kept bound, last held 2026-11-13T11:49:49+00:00",
+          "tnr.abs_median: re-recorded over a kept bound, last held 2026-11-13T11:49:49+00:00",
           "attack.p90: re-recorded over a kept bound, last held unknown",
           "centroid_pct.abs_median: re-recorded over a kept bound, last held unknown"
         ]
       },
-      "next": "the gate is red: attack.p90: re-recorded over a kept bound, last held unknown; centroid_pct.abs_median: re-recorded over a kept bound, last held unknown"
+      "next": "the gate is red: tnr.median: re-recorded over a kept bound, last held 2026-11-13T11:49:49+00:00; tnr.abs_median: re-recorded over a kept bound, last held 2026-11-13T11:49:49+00:00; attack.p90: re-recorded over a kept bound, last held unknown; centroid_pct.abs_median: re-recorded over a kept bound, last held unknown"
     },
     {
       "slug": "p111-shanai",
@@ -10648,15 +10815,15 @@
       "patch": "agogo",
       "engine": "modal",
       "capture": "agogo",
-      "stage": 0.6,
-      "stage_name": "fitted",
+      "stage": 0.4,
+      "stage_name": "targeted",
       "open_candidates": [],
       "axes": {
         "engine": "modal",
         "patch": "agogo",
         "timbres": 1,
         "profile_rows": 25,
-        "gate_state": "current",
+        "gate_state": "exceeded",
         "coverage": {
           "canonical": 12,
           "gated": 10,
@@ -10695,9 +10862,13 @@
           "date": "2026-10-26",
           "outcome": "adopted",
           "fittable": true
-        }
+        },
+        "gate_notes": [
+          "body.median: re-recorded over a kept bound, last held 2026-11-13T11:49:49+00:00",
+          "body.p90: re-recorded over a kept bound, last held 2026-11-13T11:49:49+00:00"
+        ]
       },
-      "next": "refit under the current objective (the last fit predates it): refit.py"
+      "next": "the gate is red: body.median: re-recorded over a kept bound, last held 2026-11-13T11:49:49+00:00; body.p90: re-recorded over a kept bound, last held 2026-11-13T11:49:49+00:00"
     },
     {
       "slug": "p114-steel-drums",
@@ -11562,12 +11733,12 @@
           "fittable": true
         },
         "gate_notes": [
-          "decay.median: re-recorded over a kept bound, last held unknown",
-          "decay.abs_median: re-recorded over a kept bound, last held unknown",
-          "decay.p90: re-recorded over a kept bound, last held unknown"
+          "centroid_pct.median: re-recorded over a kept bound, last held 2026-11-13T11:49:49+00:00",
+          "centroid_pct.abs_median: re-recorded over a kept bound, last held 2026-11-13T11:49:49+00:00",
+          "centroid_pct.p90: re-recorded over a kept bound, last held 2026-11-13T11:49:49+00:00"
         ]
       },
-      "next": "the gate is red: decay.median: re-recorded over a kept bound, last held unknown; decay.abs_median: re-recorded over a kept bound, last held unknown; decay.p90: re-recorded over a kept bound, last held unknown"
+      "next": "the gate is red: centroid_pct.median: re-recorded over a kept bound, last held 2026-11-13T11:49:49+00:00; centroid_pct.abs_median: re-recorded over a kept bound, last held 2026-11-13T11:49:49+00:00; centroid_pct.p90: re-recorded over a kept bound, last held 2026-11-13T11:49:49+00:00"
     },
     {
       "slug": "kit000-standard-kit",
