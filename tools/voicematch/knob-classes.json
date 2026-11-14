@@ -887,6 +887,17 @@
       "basis": "VA layer and noise stage, absent at 0",
       "lane": "synth"
     },
+    "va.sustain_key_break": {
+      "class": null,
+      "lane": "synth",
+      "gates": "live only while va.sustain_key_slope_db > 0 (engine_field_gates.cpp); a fit owns it once the slope is on"
+    },
+    "va.sustain_key_slope_db": {
+      "class": "stage_enable",
+      "basis": "key-scaled held level, absent at 0; on lead_bass_lead it trades against va.noise_level, so fit the two together there",
+      "lane": "synth",
+      "off_value": 0.0
+    },
     "vocal.section_detune_cents": {
       "class": "stage_enable",
       "basis": "0 = no ensemble detune; not gated in engine_field_gates.cpp",
