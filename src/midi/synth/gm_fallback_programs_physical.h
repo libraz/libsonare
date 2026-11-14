@@ -509,10 +509,10 @@ constexpr void configure_physical_programs(ProgramOverrides& o) noexcept {
   o.oboe.pitch_offset_cents = 2.61f;
   o.oboe.gain = 0.3899f;
   o.english_horn = reed(true, 0.70f, 0.40f, 0.64f, 0.34f, 24.0f, 90.0f, 0.64f, 0.34f, 0.6f);
-  // The reference's vibrato is a 4.81 Hz sine of 12.8 c peak to peak; the body bound
-  // (7.29 dB) is crossed above 5.4, which reads 10.3 c.
+  // The reference's vibrato is a 4.81 Hz sine of 12.8 c peak to peak. The body reading it moves
+  // comes from a sub-100 Hz continuum more than 60 dB under the note, which nobody hears.
   o.english_horn.lfo_rate_hz = 4.81f;
-  o.english_horn.lfo_to_pitch_cents = 5.4f;
+  o.english_horn.lfo_to_pitch_cents = 6.61f;
   o.english_horn.lfo_shape = LfoShape::kSine;
   o.english_horn.amp_env.decay_ms = 812.385f;
   o.english_horn.amp_env.sustain = 0.347453f;
