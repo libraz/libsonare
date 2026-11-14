@@ -848,7 +848,11 @@ def loss_terms(
         totals["env"] += _absent_or(
             m["sustain_slope_db_s"], o["sustain_slope_db_s"], SUSTAIN_SLOPE_CAP_DB_S, cells["env"]
         )
-        totals["env"] += abs(m["release_ms"] - o["release_ms"]) / 100.0
+        # A reference that never fell 40 dB after note-off read its floor, not a release.
+        if o.get("release_capped"):
+            cells["env"].skipped += 1
+        else:
+            totals["env"] += abs(m["release_ms"] - o["release_ms"]) / 100.0
         totals["env"] += _attack_delta_ms(m, o) / 10.0
         oracle_skeleton = o.get("skeleton")
         if isinstance(oracle_skeleton, dict):

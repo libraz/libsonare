@@ -94,6 +94,24 @@ def test_fm_cap_still_binds_both_ways():
     assert _terms(model={"fms": 0.0}, oracle={"fms": 500.0})["mod"] == pytest.approx(12.0)
 
 
+# --- env release: a reference that never fell 40 dB has no release to compare ---
+
+
+def test_a_capped_reference_release_is_skipped_and_an_uncapped_one_is_charged():
+    def release(capped: bool) -> dict:
+        def mutate(mr, orr):
+            _set(mr, release_ms=400.0)
+            _set(orr, release_ms=300.0, release_capped=capped)
+
+        return _terms(mutate=mutate)
+
+    free, capped = release(False), release(True)
+    cells = len(NOTES) * len(VELS)
+    assert capped["env_skipped"] - free["env_skipped"] == cells
+    # |400 - 300| / 100 per uncapped cell is the whole difference between the runs.
+    assert free["env"] - capped["env"] == pytest.approx(1.0)
+
+
 # --- absent model reading is charged the cap, absent oracle reading is skipped ---
 
 
