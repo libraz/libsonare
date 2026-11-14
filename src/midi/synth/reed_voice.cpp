@@ -193,6 +193,30 @@ SONARE_TUNABLE(kToneholeAreaRatio, 0.5f);
 // Samples the hole keeps clear of the bore read, whose stencil has to lie past both shunts.
 constexpr float kToneholeReadMargin = 4.0f;
 
+/// Peak over frequency of the one-pole bell y += a(x - y) times the blocker (1 - z^-1)/(1 - r
+/// z^-1). With u = 1 - cos(w) the squared product is u / ((A + B u)(C + D u)), whose maximum sits
+/// at u = sqrt(AC/BD) when that is inside [0, 2] and at Nyquist otherwise.
+double blocker_onepole_peak(double a, double r) noexcept {
+  const double b = 1.0 - a;
+  if (b <= 0.0 || a * (1.0 - r) >= 4.0 * std::sqrt(b * r)) return a / (2.0 - a) * 2.0 / (1.0 + r);
+  return a / (a * std::sqrt(r) + (1.0 - r) * std::sqrt(b));
+}
+
+/// The same peak for the Butterworth bell prewarped at k = tan(w_c/2). With x = tan^2(w/2) the
+/// blocker is 4x/((1+r)^2 (p^2 + x)), p = (1-r)/(1+r), and the bell 1/(1 + x^2/k^4); the product
+/// peaks at the one positive root of 2x^3 + p^2 x^2 - p^2 k^4, which Newton reaches from above.
+double blocker_butterworth_peak(double k, double r) noexcept {
+  const double p2 = (1.0 - r) * (1.0 - r) / ((1.0 + r) * (1.0 + r));
+  const double q2 = k * k * k * k;
+  double x = std::cbrt(0.5 * p2 * q2);
+  for (int i = 0; i < 64; ++i) {
+    const double next = x - ((2.0 * x + p2) * x * x - p2 * q2) / ((6.0 * x + 2.0 * p2) * x);
+    if (!(next < x)) break;
+    x = next;
+  }
+  return 2.0 / (1.0 + r) * std::sqrt(x / ((p2 + x) * (1.0 + x * x / q2)));
+}
+
 /// The reed's own natural frequency (Hz) from the patch knob, held below
 /// Nyquist. Shared by the two roles the reed plays so they cannot drift apart.
 float reed_natural_hz(float resonance01, float srf) noexcept {
@@ -532,7 +556,7 @@ float ReedVoiceCore::render_internal(float pitch_ratio) noexcept {
   } else {
     lp_state_ += lp_alpha_ * (bore_.out - lp_state_);
   }
-  float refl_raw = sign_ * loss_gain_ * lp_state_;
+  float refl_raw = sign_ * std::min(loss_gain_, loss_cap_) * lp_state_;
   // Register vent (gated): subtract the tracked low band from the reflection,
   // damping the fundamental so the dominant mode rises toward the register break.
   if (reg_vent_ > 0.0f) {
@@ -763,10 +787,13 @@ void ReedVoiceCore::refresh_excitation_targets() noexcept {
 
 void ReedVoiceCore::retune_loop_comp() noexcept {
   float tau_lp = 0.0f;
+  double peak = 1.0;
   if (bell_cutoff_hz_ > 0.0f) {
     // The reflection lowpass on the corner lp_alpha_ names; its phase delay lengthens the loop.
     const float w_c = -std::log(std::max(1.0f - lp_alpha_, 1.0e-6f));
     bell_lp_.set(rt::rbj_lowpass(w_c, sonare::constants::kButterworthQ));
+    const double w_lp = rt::clamp_design_domain(w_c, sonare::constants::kButterworthQ).w0;
+    peak = blocker_butterworth_peak(std::tan(0.5 * w_lp), dc_r_);
     // Open holes radiate as a small source below the lattice cutoff (Benade): 6 dB per octave,
     // first order. The second-order complement left the clarinet's n50-58 fundamental 6-11 dB
     // short of its share of the note; first order brings it within 1 dB.
@@ -776,7 +803,11 @@ void ReedVoiceCore::retune_loop_comp() noexcept {
     if (f0_ > 0.0f) refresh_radiation_scale();
   } else {
     tau_lp = onepole_group_delay_samples(1.0f - lp_alpha_, comp_omega_);
+    peak = blocker_onepole_peak(lp_alpha_, dc_r_);
   }
+  // Rounded down, so the realised gain times the peak stays at or under unity.
+  loss_cap_ = static_cast<float>(1.0 / peak);
+  if (static_cast<double>(loss_cap_) * peak > 1.0) loss_cap_ = std::nextafter(loss_cap_, 0.0f);
   bore_.comp = 1.0f + tau_lp - comp_lead_scale_ * comp_lead_;
   if (comp_valve_ > 0.0f) bore_.comp += comp_valve_;
   bore_.comp += static_cast<float>(table_lag_);

@@ -750,6 +750,32 @@ TEST_CASE("the reed's passive loop only loses energy at an open tonehole", "[mid
   }
 }
 
+TEST_CASE("the reed's closed cone only loses energy with the bell open at the top",
+          "[midi][synth][reed]") {
+  // The in-loop DC blocker's passband rises above unity toward Nyquist, and its corner follows
+  // the note, so at the least bell loss and the brightest bell the top notes of a closed cone
+  // are where it would outrun the loss. With the valve's flow gain at zero the level can only fall.
+  constexpr size_t kWindow = 12000;
+  for (uint8_t note = 105; note <= 108; ++note) {
+    ReedPatchParams params = sonare::midi::synth::gm_fallback_patch(0, 70).reed;
+    params.conical = true;
+    params.tonehole = 0.0f;
+    params.damping = 0.0f;
+    params.brightness = 1.0f;
+    params.zeta = 0.0f;
+    const std::vector<float> ring = render_reed_hold(params, note, 80, 6 * kWindow);
+    float previous = rms(ring, 0, kWindow);
+    INFO("note " << int(note));
+    REQUIRE(previous > 1.0e-7f);
+    for (size_t w = 1; w < 6; ++w) {
+      const float level = rms(ring, w * kWindow, (w + 1) * kWindow);
+      INFO("window " << w << " level " << level << " previous " << previous);
+      REQUIRE(level <= previous);
+      previous = level;
+    }
+  }
+}
+
 TEST_CASE("a reed release rings down at the longest breath fall", "[midi][synth][reed]") {
   // Note-off walks the valve's flow gain to zero with the breath, so the tail
   // crosses every gain between the held one and the passive loop's. At the

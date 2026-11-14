@@ -29,8 +29,9 @@
 /// voice slot before start(). The core emits raw bore pressure unless
 /// @c bell_radiation_hz names the bell's radiation corner, in which case it
 /// emits what the bell radiates. Both valves are bounded (the table to [-1,1],
-/// the flow by an opening that closes to zero), the bell loss gain is < 1, and
-/// the tonehole junction is contractive, so it adds no gain to the loop.
+/// the flow by an opening that closes to zero), the bell loss gain is held
+/// under what the bell lowpass and the DC blocker leave below unity, and the
+/// tonehole junction is contractive, so it adds no gain to the loop.
 ///
 /// RT contract: attach()/start()/render() are allocation-free. Determinism:
 /// breath turbulence and onset chiff come from the counter-based
@@ -320,7 +321,7 @@ class ReedVoiceCore {
   float render_internal(float pitch_ratio) noexcept;
   // Recomposes the two smoothing targets from their bases and the offsets.
   void refresh_excitation_targets() noexcept;
-  // Re-solves bore_.comp from the pole lp_alpha_ now holds.
+  // Re-solves bore_.comp and loss_cap_ from the pole lp_alpha_ now holds.
   void retune_loop_comp() noexcept;
   // Recomputes the radiation gain for the pole rad_alpha_ holds and the sounding pitch.
   void refresh_radiation_scale() noexcept;
@@ -368,6 +369,9 @@ class ReedVoiceCore {
   float dc_x1_ = 0.0f;
   float dc_y1_ = 0.0f;
   float dc_r_ = 0.0f;
+  // Largest bell loss gain the loop carries: the reciprocal of the peak of the bell lowpass
+  // times the DC blocker, whose passband rises to 2/(1+r) at Nyquist.
+  float loss_cap_ = 1.0f;
 
   // Bell radiation highpass (gated on rad_alpha_ > 0) and its fundamental makeup.
   float f0_ = 0.0f;
