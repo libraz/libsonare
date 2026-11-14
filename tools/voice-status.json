@@ -8129,15 +8129,15 @@
       "patch": "english_horn",
       "engine": "reed",
       "capture": "english_horn",
-      "stage": 0.6,
-      "stage_name": "fitted",
+      "stage": 0.4,
+      "stage_name": "targeted",
       "open_candidates": [],
       "axes": {
         "engine": "reed",
         "patch": "english_horn",
         "timbres": 1,
         "profile_rows": 35,
-        "gate_state": "current",
+        "gate_state": "exceeded",
         "coverage": {
           "canonical": 11,
           "gated": 10,
@@ -8174,10 +8174,12 @@
           "fittable": true
         },
         "gate_notes": [
-          "set on a dirty tree: balance.abs_median, balance.median, centroid_pct.abs_median, centroid_pct.median, centroid_pct.p90, damper.abs_median, damper.median, damper.p90, motion.abs_median, motion.median, motion.p90, tnr.abs_median, tnr.median, tnr.p90"
+          "body.median: re-recorded over a kept bound, last held 2026-11-14T07:49:42+00:00",
+          "body.abs_median: re-recorded over a kept bound, last held 2026-11-14T07:49:42+00:00",
+          "set on a dirty tree: balance.abs_median, balance.median, body.p90, centroid_pct.abs_median, centroid_pct.median, centroid_pct.p90, damper.abs_median, damper.median, damper.p90, motion.abs_median, motion.median, motion.p90, tnr.abs_median, tnr.median, tnr.p90"
         ]
       },
-      "next": "refit under the current objective (the last fit predates it): refit.py"
+      "next": "the gate is red: body.median: re-recorded over a kept bound, last held 2026-11-14T07:49:42+00:00; body.abs_median: re-recorded over a kept bound, last held 2026-11-14T07:49:42+00:00"
     },
     {
       "slug": "p070-bassoon",
