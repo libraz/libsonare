@@ -6105,14 +6105,12 @@
         "gate_state": "exceeded",
         "coverage": {
           "canonical": 11,
-          "gated": 9,
+          "gated": 10,
           "excused": [
             "stereo"
           ],
-          "gaps": [
-            "motion"
-          ],
-          "complete": false
+          "gaps": [],
+          "complete": true
         },
         "agreement": {
           "inside": 0,
@@ -6124,6 +6122,7 @@
             "body",
             "centroid_pct",
             "damper",
+            "motion",
             "register",
             "stretch",
             "tnr",
@@ -6164,8 +6163,8 @@
       "patch": "violin_slow",
       "engine": "bowed_string",
       "capture": "violin_slow",
-      "stage": 0.4,
-      "stage_name": "targeted",
+      "stage": 0.6,
+      "stage_name": "fitted",
       "open_candidates": [],
       "axes": {
         "engine": "bowed_string",
@@ -6175,17 +6174,15 @@
         "gate_state": "current",
         "coverage": {
           "canonical": 11,
-          "gated": 6,
+          "gated": 7,
           "excused": [
             "damper",
             "register",
             "stereo",
             "vel_range"
           ],
-          "gaps": [
-            "motion"
-          ],
-          "complete": false
+          "gaps": [],
+          "complete": true
         },
         "agreement": {
           "inside": 0,
@@ -6196,6 +6193,7 @@
             "balance",
             "body",
             "centroid_pct",
+            "motion",
             "stretch",
             "tnr"
           ]
@@ -6210,7 +6208,7 @@
           "fittable": true
         }
       },
-      "next": "1 canonical dimension(s) neither gated nor excused: motion"
+      "next": "refit under the current objective (the last fit predates it): refit.py"
     },
     {
       "slug": "p040b008-violin",
@@ -6223,8 +6221,8 @@
       "patch": "violin_slow",
       "engine": "bowed_string",
       "capture": "violin_slow",
-      "stage": 0.4,
-      "stage_name": "targeted",
+      "stage": 0.6,
+      "stage_name": "fitted",
       "open_candidates": [],
       "axes": {
         "engine": "bowed_string",
@@ -6234,17 +6232,15 @@
         "gate_state": "current",
         "coverage": {
           "canonical": 11,
-          "gated": 6,
+          "gated": 7,
           "excused": [
             "damper",
             "register",
             "stereo",
             "vel_range"
           ],
-          "gaps": [
-            "motion"
-          ],
-          "complete": false
+          "gaps": [],
+          "complete": true
         },
         "agreement": {
           "inside": 0,
@@ -6255,6 +6251,7 @@
             "balance",
             "body",
             "centroid_pct",
+            "motion",
             "stretch",
             "tnr"
           ]
@@ -6269,7 +6266,7 @@
           "fittable": true
         }
       },
-      "next": "1 canonical dimension(s) neither gated nor excused: motion"
+      "next": "refit under the current objective (the last fit predates it): refit.py"
     },
     {
       "slug": "p041-viola",
@@ -6293,14 +6290,12 @@
         "gate_state": "exceeded",
         "coverage": {
           "canonical": 11,
-          "gated": 9,
+          "gated": 10,
           "excused": [
             "stereo"
           ],
-          "gaps": [
-            "motion"
-          ],
-          "complete": false
+          "gaps": [],
+          "complete": true
         },
         "agreement": {
           "inside": 0,
@@ -6312,6 +6307,7 @@
             "body",
             "centroid_pct",
             "damper",
+            "motion",
             "register",
             "stretch",
             "tnr",
@@ -6366,12 +6362,11 @@
           "canonical": 11,
           "gated": 9,
           "excused": [
+            "motion",
             "stereo"
           ],
-          "gaps": [
-            "motion"
-          ],
-          "complete": false
+          "gaps": [],
+          "complete": true
         },
         "agreement": {
           "inside": 0,
@@ -6436,14 +6431,12 @@
         "gate_state": "exceeded",
         "coverage": {
           "canonical": 11,
-          "gated": 9,
+          "gated": 10,
           "excused": [
             "stereo"
           ],
-          "gaps": [
-            "motion"
-          ],
-          "complete": false
+          "gaps": [],
+          "complete": true
         },
         "agreement": {
           "inside": 0,
@@ -6455,6 +6448,7 @@
             "body",
             "centroid_pct",
             "damper",
+            "motion",
             "register",
             "stretch",
             "tnr",
@@ -7095,11 +7089,11 @@
         "coverage": {
           "canonical": 11,
           "gated": 10,
-          "excused": [],
-          "gaps": [
+          "excused": [
             "motion"
           ],
-          "complete": false
+          "gaps": [],
+          "complete": true
         },
         "agreement": {
           "inside": 0,
@@ -7155,8 +7149,8 @@
       "patch": "synth_voice",
       "engine": "vocal",
       "capture": "synth_voice_module",
-      "stage": 0.4,
-      "stage_name": "targeted",
+      "stage": 0.6,
+      "stage_name": "fitted",
       "open_candidates": [
         "section-of-singers"
       ],
@@ -7171,13 +7165,12 @@
           "gated": 7,
           "excused": [
             "damper",
+            "motion",
             "register",
             "stereo"
           ],
-          "gaps": [
-            "motion"
-          ],
-          "complete": false
+          "gaps": [],
+          "complete": true
         },
         "agreement": {
           "inside": 0,
@@ -7209,7 +7202,7 @@
           "fittable": true
         }
       },
-      "next": "1 canonical dimension(s) neither gated nor excused: motion"
+      "next": "refit under the current objective (the last fit predates it): refit.py"
     },
     {
       "slug": "p055-orchestra-hit",
@@ -7305,12 +7298,11 @@
           "gated": 10,
           "excused": [
             "body",
+            "motion",
             "stereo"
           ],
-          "gaps": [
-            "motion"
-          ],
-          "complete": false
+          "gaps": [],
+          "complete": true
         },
         "agreement": {
           "inside": 0,
@@ -7370,12 +7362,11 @@
           "canonical": 13,
           "gated": 11,
           "excused": [
+            "motion",
             "stereo"
           ],
-          "gaps": [
-            "motion"
-          ],
-          "complete": false
+          "gaps": [],
+          "complete": true
         },
         "agreement": {
           "inside": 0,
@@ -7439,12 +7430,11 @@
           "gated": 10,
           "excused": [
             "body",
+            "motion",
             "stereo"
           ],
-          "gaps": [
-            "motion"
-          ],
-          "complete": false
+          "gaps": [],
+          "complete": true
         },
         "agreement": {
           "inside": 0,
@@ -7511,12 +7501,11 @@
           "gated": 10,
           "excused": [
             "body",
+            "motion",
             "stereo"
           ],
-          "gaps": [
-            "motion"
-          ],
-          "complete": false
+          "gaps": [],
+          "complete": true
         },
         "agreement": {
           "inside": 0,
@@ -7568,8 +7557,8 @@
       "patch": "french_horn",
       "engine": "brass",
       "capture": "french_horn",
-      "stage": 0.4,
-      "stage_name": "targeted",
+      "stage": 0.6,
+      "stage_name": "fitted",
       "open_candidates": [],
       "axes": {
         "engine": "brass",
@@ -7580,11 +7569,11 @@
         "coverage": {
           "canonical": 13,
           "gated": 12,
-          "excused": [],
-          "gaps": [
+          "excused": [
             "motion"
           ],
-          "complete": false
+          "gaps": [],
+          "complete": true
         },
         "agreement": {
           "inside": 0,
@@ -7618,7 +7607,7 @@
           "set on a dirty tree: body.abs_median, body.median, body.p90, centroid_pct.median, centroid_pct.p90, damper.abs_median, onset.p90, register.abs_median, stretch.abs_median, stretch.median, tnr.abs_median, tnr.median"
         ]
       },
-      "next": "1 canonical dimension(s) neither gated nor excused: motion"
+      "next": "refit under the current objective (the last fit predates it): refit.py"
     },
     {
       "slug": "p061-brass-section",
@@ -7643,11 +7632,11 @@
         "coverage": {
           "canonical": 13,
           "gated": 12,
-          "excused": [],
-          "gaps": [
+          "excused": [
             "motion"
           ],
-          "complete": false
+          "gaps": [],
+          "complete": true
         },
         "agreement": {
           "inside": 0,
@@ -7812,8 +7801,8 @@
       "patch": "soprano_sax",
       "engine": "reed",
       "capture": "soprano_sax",
-      "stage": 0.4,
-      "stage_name": "targeted",
+      "stage": 0.6,
+      "stage_name": "fitted",
       "open_candidates": [],
       "axes": {
         "engine": "reed",
@@ -7823,14 +7812,12 @@
         "gate_state": "current",
         "coverage": {
           "canonical": 11,
-          "gated": 9,
+          "gated": 10,
           "excused": [
             "stereo"
           ],
-          "gaps": [
-            "motion"
-          ],
-          "complete": false
+          "gaps": [],
+          "complete": true
         },
         "agreement": {
           "inside": 0,
@@ -7842,6 +7829,7 @@
             "body",
             "centroid_pct",
             "damper",
+            "motion",
             "register",
             "stretch",
             "tnr",
@@ -7861,7 +7849,7 @@
           "set on a dirty tree: attack.abs_median, attack.median, attack.p90, balance.p90, tnr.p90"
         ]
       },
-      "next": "1 canonical dimension(s) neither gated nor excused: motion"
+      "next": "refit under the current objective (the last fit predates it): refit.py"
     },
     {
       "slug": "p065-alto-sax",
@@ -7874,8 +7862,8 @@
       "patch": "alto_sax",
       "engine": "reed",
       "capture": "alto_sax",
-      "stage": 0.4,
-      "stage_name": "targeted",
+      "stage": 0.6,
+      "stage_name": "fitted",
       "open_candidates": [
         "valve-scale-0.6",
         "valve-scale-0.25",
@@ -7889,14 +7877,12 @@
         "gate_state": "current",
         "coverage": {
           "canonical": 11,
-          "gated": 9,
+          "gated": 10,
           "excused": [
             "stereo"
           ],
-          "gaps": [
-            "motion"
-          ],
-          "complete": false
+          "gaps": [],
+          "complete": true
         },
         "agreement": {
           "inside": 0,
@@ -7908,6 +7894,7 @@
             "body",
             "centroid_pct",
             "damper",
+            "motion",
             "register",
             "stretch",
             "tnr",
@@ -7930,7 +7917,7 @@
           "fittable": true
         }
       },
-      "next": "1 canonical dimension(s) neither gated nor excused: motion"
+      "next": "refit under the current objective (the last fit predates it): refit.py"
     },
     {
       "slug": "p066-tenor-sax",
@@ -7954,14 +7941,12 @@
         "gate_state": "exceeded",
         "coverage": {
           "canonical": 11,
-          "gated": 9,
+          "gated": 10,
           "excused": [
             "stereo"
           ],
-          "gaps": [
-            "motion"
-          ],
-          "complete": false
+          "gaps": [],
+          "complete": true
         },
         "agreement": {
           "inside": 0,
@@ -7973,6 +7958,7 @@
             "body",
             "centroid_pct",
             "damper",
+            "motion",
             "register",
             "stretch",
             "tnr",
@@ -8026,14 +8012,12 @@
         "gate_state": "exceeded",
         "coverage": {
           "canonical": 11,
-          "gated": 9,
+          "gated": 10,
           "excused": [
             "stereo"
           ],
-          "gaps": [
-            "motion"
-          ],
-          "complete": false
+          "gaps": [],
+          "complete": true
         },
         "agreement": {
           "inside": 0,
@@ -8045,6 +8029,7 @@
             "body",
             "centroid_pct",
             "damper",
+            "motion",
             "register",
             "stretch",
             "tnr",
@@ -8093,14 +8078,12 @@
         "gate_state": "exceeded",
         "coverage": {
           "canonical": 11,
-          "gated": 9,
+          "gated": 10,
           "excused": [
             "stereo"
           ],
-          "gaps": [
-            "motion"
-          ],
-          "complete": false
+          "gaps": [],
+          "complete": true
         },
         "agreement": {
           "inside": 0,
@@ -8112,6 +8095,7 @@
             "body",
             "centroid_pct",
             "damper",
+            "motion",
             "register",
             "stretch",
             "tnr",
@@ -8145,8 +8129,8 @@
       "patch": "english_horn",
       "engine": "reed",
       "capture": "english_horn",
-      "stage": 0.4,
-      "stage_name": "targeted",
+      "stage": 0.6,
+      "stage_name": "fitted",
       "open_candidates": [],
       "axes": {
         "engine": "reed",
@@ -8156,14 +8140,12 @@
         "gate_state": "current",
         "coverage": {
           "canonical": 11,
-          "gated": 9,
+          "gated": 10,
           "excused": [
             "stereo"
           ],
-          "gaps": [
-            "motion"
-          ],
-          "complete": false
+          "gaps": [],
+          "complete": true
         },
         "agreement": {
           "inside": 0,
@@ -8175,6 +8157,7 @@
             "body",
             "centroid_pct",
             "damper",
+            "motion",
             "register",
             "stretch",
             "tnr",
@@ -8194,7 +8177,7 @@
           "set on a dirty tree: balance.abs_median, balance.median, centroid_pct.abs_median, centroid_pct.median, centroid_pct.p90, damper.abs_median, damper.median, damper.p90, tnr.abs_median, tnr.p90"
         ]
       },
-      "next": "1 canonical dimension(s) neither gated nor excused: motion"
+      "next": "refit under the current objective (the last fit predates it): refit.py"
     },
     {
       "slug": "p070-bassoon",
@@ -8220,12 +8203,11 @@
           "canonical": 11,
           "gated": 9,
           "excused": [
+            "motion",
             "stereo"
           ],
-          "gaps": [
-            "motion"
-          ],
-          "complete": false
+          "gaps": [],
+          "complete": true
         },
         "agreement": {
           "inside": 0,
@@ -8288,12 +8270,11 @@
           "canonical": 11,
           "gated": 9,
           "excused": [
+            "motion",
             "stereo"
           ],
-          "gaps": [
-            "motion"
-          ],
-          "complete": false
+          "gaps": [],
+          "complete": true
         },
         "agreement": {
           "inside": 0,
@@ -8339,8 +8320,8 @@
       "patch": "piccolo",
       "engine": "flute",
       "capture": "piccolo",
-      "stage": 0.4,
-      "stage_name": "targeted",
+      "stage": 0.6,
+      "stage_name": "fitted",
       "open_candidates": [],
       "axes": {
         "engine": "flute",
@@ -8352,12 +8333,11 @@
           "canonical": 13,
           "gated": 11,
           "excused": [
+            "motion",
             "stereo"
           ],
-          "gaps": [
-            "motion"
-          ],
-          "complete": false
+          "gaps": [],
+          "complete": true
         },
         "agreement": {
           "inside": 0,
@@ -8387,7 +8367,7 @@
           "fittable": true
         }
       },
-      "next": "1 canonical dimension(s) neither gated nor excused: motion"
+      "next": "refit under the current objective (the last fit predates it): refit.py"
     },
     {
       "slug": "p073-flute",
@@ -8413,12 +8393,11 @@
           "canonical": 13,
           "gated": 11,
           "excused": [
+            "motion",
             "stereo"
           ],
-          "gaps": [
-            "motion"
-          ],
-          "complete": false
+          "gaps": [],
+          "complete": true
         },
         "agreement": {
           "inside": 0,
@@ -8464,8 +8443,8 @@
       "patch": "recorder",
       "engine": "flute",
       "capture": "recorder",
-      "stage": 0.4,
-      "stage_name": "targeted",
+      "stage": 0.6,
+      "stage_name": "fitted",
       "open_candidates": [],
       "axes": {
         "engine": "flute",
@@ -8477,12 +8456,11 @@
           "canonical": 13,
           "gated": 11,
           "excused": [
+            "motion",
             "stereo"
           ],
-          "gaps": [
-            "motion"
-          ],
-          "complete": false
+          "gaps": [],
+          "complete": true
         },
         "agreement": {
           "inside": 0,
@@ -8512,7 +8490,7 @@
           "fittable": true
         }
       },
-      "next": "1 canonical dimension(s) neither gated nor excused: motion"
+      "next": "refit under the current objective (the last fit predates it): refit.py"
     },
     {
       "slug": "p075-pan-flute",
@@ -8525,8 +8503,8 @@
       "patch": "pan_flute",
       "engine": "flute",
       "capture": "pan_flute",
-      "stage": 0.4,
-      "stage_name": "targeted",
+      "stage": 0.6,
+      "stage_name": "fitted",
       "open_candidates": [],
       "axes": {
         "engine": "flute",
@@ -8538,12 +8516,11 @@
           "canonical": 13,
           "gated": 11,
           "excused": [
+            "motion",
             "stereo"
           ],
-          "gaps": [
-            "motion"
-          ],
-          "complete": false
+          "gaps": [],
+          "complete": true
         },
         "agreement": {
           "inside": 0,
@@ -8573,7 +8550,7 @@
           "fittable": true
         }
       },
-      "next": "1 canonical dimension(s) neither gated nor excused: motion"
+      "next": "refit under the current objective (the last fit predates it): refit.py"
     },
     {
       "slug": "p076-blown-bottle",
@@ -8586,8 +8563,8 @@
       "patch": "blown_bottle",
       "engine": "flute",
       "capture": "blown_bottle",
-      "stage": 0.4,
-      "stage_name": "targeted",
+      "stage": 0.6,
+      "stage_name": "fitted",
       "open_candidates": [],
       "axes": {
         "engine": "flute",
@@ -8599,12 +8576,11 @@
           "canonical": 13,
           "gated": 11,
           "excused": [
+            "motion",
             "stereo"
           ],
-          "gaps": [
-            "motion"
-          ],
-          "complete": false
+          "gaps": [],
+          "complete": true
         },
         "agreement": {
           "inside": 0,
@@ -8634,7 +8610,7 @@
           "fittable": true
         }
       },
-      "next": "1 canonical dimension(s) neither gated nor excused: motion"
+      "next": "refit under the current objective (the last fit predates it): refit.py"
     },
     {
       "slug": "p077-shakuhachi",
@@ -8660,12 +8636,11 @@
           "canonical": 13,
           "gated": 11,
           "excused": [
+            "motion",
             "stereo"
           ],
-          "gaps": [
-            "motion"
-          ],
-          "complete": false
+          "gaps": [],
+          "complete": true
         },
         "agreement": {
           "inside": 0,
@@ -8711,8 +8686,8 @@
       "patch": "tin_whistle",
       "engine": "flute",
       "capture": "whistle",
-      "stage": 0.4,
-      "stage_name": "targeted",
+      "stage": 0.6,
+      "stage_name": "fitted",
       "open_candidates": [
         "keyed-filter"
       ],
@@ -8726,12 +8701,11 @@
           "canonical": 13,
           "gated": 11,
           "excused": [
+            "motion",
             "stereo"
           ],
-          "gaps": [
-            "motion"
-          ],
-          "complete": false
+          "gaps": [],
+          "complete": true
         },
         "agreement": {
           "inside": 0,
@@ -8761,7 +8735,7 @@
           "fittable": true
         }
       },
-      "next": "1 canonical dimension(s) neither gated nor excused: motion"
+      "next": "refit under the current objective (the last fit predates it): refit.py"
     },
     {
       "slug": "p079-ocarina",
@@ -8787,12 +8761,11 @@
           "canonical": 13,
           "gated": 11,
           "excused": [
+            "motion",
             "stereo"
           ],
-          "gaps": [
-            "motion"
-          ],
-          "complete": false
+          "gaps": [],
+          "complete": true
         },
         "agreement": {
           "inside": 0,
@@ -10639,14 +10612,12 @@
         "gate_state": "exceeded",
         "coverage": {
           "canonical": 11,
-          "gated": 9,
+          "gated": 10,
           "excused": [
             "stereo"
           ],
-          "gaps": [
-            "motion"
-          ],
-          "complete": false
+          "gaps": [],
+          "complete": true
         },
         "agreement": {
           "inside": 0,
@@ -10658,6 +10629,7 @@
             "body",
             "centroid_pct",
             "damper",
+            "motion",
             "register",
             "stretch",
             "tnr",
