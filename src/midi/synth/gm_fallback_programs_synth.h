@@ -246,7 +246,7 @@ constexpr void configure_synth_programs(ProgramOverrides& o) noexcept {
   // The pair's own balance, not the absolute level: the references come from
   // one rack at one setting, so the 1.7 dB this sits above its sibling is the
   // instrument, while what they share against the bank is the rack's output.
-  o.synth_strings_1.gain = 0.5077f;
+  o.synth_strings_1.gain = 0.2494f;
   o.synth_strings_1.amp_env.decay_ms = 1798.29f;
   o.synth_strings_1.va.velocity_exponent = 1.82f;
 
@@ -257,7 +257,7 @@ constexpr void configure_synth_programs(ProgramOverrides& o) noexcept {
   o.synth_strings_2.cutoff_hz = 3200.0f;
   o.synth_strings_2.amp_env = fallback_env(270.0f, 500.0f, 0.8f, 700.0f);
   o.synth_strings_2.va.velocity_exponent = 1.83f;
-  o.synth_strings_2.gain = 0.4801f;
+  o.synth_strings_2.gain = 0.2598f;
   o.synth_strings_2.amp_env.attack_ms = 165.262f;
   o.synth_strings_2.amp_env.decay_ms = 1498.58f;
 
@@ -438,7 +438,7 @@ constexpr void configure_synth_programs(ProgramOverrides& o) noexcept {
   o.fx_rain.filter_output = SynthFilterOutput::kHighpass;
   o.fx_rain.cutoff_hz = 6200.0f;
   o.fx_rain.resonance_q = 1.16852f;
-  o.fx_rain.gain = 0.5617f;
+  o.fx_rain.gain = 0.6693f;
   o.fx_rain.va.velocity_exponent = 1.2f;
   o.fx_rain.amp_env.attack_ms = 0.6673f;
   o.fx_rain.amp_env.decay_ms = 424.78f;
@@ -454,7 +454,7 @@ constexpr void configure_synth_programs(ProgramOverrides& o) noexcept {
   o.fx_soundtrack.cutoff_hz = 2400.0f;
   o.fx_soundtrack.resonance_q = 1.2f;
   o.fx_soundtrack.stereo_spread = 0.6f;
-  o.fx_soundtrack.gain = 0.3394f;
+  o.fx_soundtrack.gain = 0.4623f;
   o.fx_soundtrack.va.velocity_exponent = 1.01f;
 
   // FX 3 Crystal: a sine under a quiet fourth harmonic that velocity raises (its f0 modulation
@@ -480,7 +480,7 @@ constexpr void configure_synth_programs(ProgramOverrides& o) noexcept {
   o.fx_crystal.fm.ops[3].level = 0.18f;
   o.fx_crystal.fm.ops[3].vel_to_level = 1.0f;
   o.fx_crystal.fm.ops[3].env = fallback_env(1.0f, 0.0f, 1.0f, 500.0f);
-  o.fx_crystal.gain = 0.4567f;
+  o.fx_crystal.gain = 0.6337f;
   o.fx_crystal.fm.velocity_exponent = 1.0f;
 
   // FX 4 Atmosphere: wide drift supplies the motion possible in a one-note voice. The
@@ -495,7 +495,7 @@ constexpr void configure_synth_programs(ProgramOverrides& o) noexcept {
   o.fx_atmosphere.cutoff_hz = 512.731f;
   o.fx_atmosphere.resonance_q = 0.572042f;
   o.fx_atmosphere.stereo_spread = 0.626456f;
-  o.fx_atmosphere.gain = 0.4484f;
+  o.fx_atmosphere.gain = 0.8678f;
   o.fx_atmosphere.amp_env.attack_ms = 15.944f;
   o.fx_atmosphere.amp_env.decay_ms = 16.1922f;
   o.fx_atmosphere.amp_env.release_ms = 714.758f;
@@ -543,7 +543,7 @@ constexpr void configure_synth_programs(ProgramOverrides& o) noexcept {
   o.fx_goblins.resonance_q = 0.539422f;
   o.fx_goblins.filter_env = fallback_env(2.0f, 160.0f, 0.1f, 200.0f);
   o.fx_goblins.env_to_cutoff_cents = 981.231f;
-  o.fx_goblins.gain = 0.3445f;
+  o.fx_goblins.gain = 0.5199f;
   o.fx_goblins.amp_env.attack_ms = 432.123f;
   o.fx_goblins.amp_env.decay_ms = 294.51f;
   o.fx_goblins.amp_env.release_ms = 750.351f;
@@ -599,7 +599,7 @@ constexpr void configure_synth_programs(ProgramOverrides& o) noexcept {
   o.fx_sci_fi.env_to_cutoff_cents = 61.0453f;
   o.fx_sci_fi.lfo2_rate_hz = 1.1f;
   o.fx_sci_fi.mod_matrix.routes[0] = {ModSource::kLfo2, ModDestination::kCutoffCents, 800.0f};
-  o.fx_sci_fi.gain = 0.485f;
+  o.fx_sci_fi.gain = 1.482f;
   o.fx_sci_fi.amp_env.attack_ms = 43.2837f;
   o.fx_sci_fi.amp_env.decay_ms = 60.7827f;
   o.fx_sci_fi.amp_env.release_ms = 765.605f;
@@ -700,7 +700,7 @@ SONARE_TUNED_CONSTEXPR void configure_synth_bass_and_brass_programs(ProgramOverr
   // Levelled to its sibling, not to anything outside the pair: the two came out
   // 6.6 dB apart in held RMS at E2 and are the only same-envelope comparison
   // either of them has, so each moves half of it off the family's 0.5.
-  o.synth_bass_1.gain = 0.2693f;
+  o.synth_bass_1.gain = 0.4932f;
   o.synth_bass_1.amp_env.attack_ms = 4.49064f;
   o.synth_bass_1.amp_env.decay_ms = 2294.75f;
   o.synth_bass_1.amp_env.release_ms = 15.7903f;
@@ -718,7 +718,7 @@ SONARE_TUNED_CONSTEXPR void configure_synth_bass_and_brass_programs(ProgramOverr
   o.synth_bass_2.env_to_cutoff_cents = 94.7009f;
   o.synth_bass_2.amp_env = fallback_env(16.7184f, 0.0f, 1.0f, 36.9329f);
   o.synth_bass_2.filter_env = fallback_env(120.0f, 400.0f, 1.0f, 150.0f);
-  o.synth_bass_2.gain = 0.562f;
+  o.synth_bass_2.gain = 2.377f;
   o.synth_bass_2.amp_env.attack_ms = 9.15904f;
   o.synth_bass_2.amp_env.release_ms = 32.6151f;
   o.synth_bass_2.filter_env.attack_ms = 74.1225f;
@@ -767,7 +767,7 @@ SONARE_TUNED_CONSTEXPR void configure_synth_bass_and_brass_programs(ProgramOverr
   o.synth_brass_2.fm.ops[3].feedback = 0.0f;
   o.synth_brass_2.fm.ops[3].detune_cents = -20.4f;
   o.synth_brass_2.cutoff_hz = 3683.5f;
-  o.synth_brass_2.gain = 0.98f;
+  o.synth_brass_2.gain = 1.285f;
   o.synth_brass_2.amp_env = fallback_env(40.0f, 200.0f, 0.85f, 150.0f);
   o.synth_brass_2.stereo_spread = 0.3f;
   o.synth_brass_2.amp_env.decay_ms = 200.0f;

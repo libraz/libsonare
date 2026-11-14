@@ -109,6 +109,7 @@ constexpr void configure_physical_programs(ProgramOverrides& o) noexcept {
   // The body radiates little below its air mode: the reference's C3 and F#3 carry
   // h2-h6 within 3 dB of h1, the sawtooth 12 dB under it.
   o.viola.hp_cutoff_hz = 200.0f;
+  o.viola.gain = 0.0968f;
   o.cello = bowed(0.14f, 0.60f, 0.44f, 0.38f, 70.0f, 140.0f, 0.40f, 0.28f);
   o.cello.lfo_rate_hz = 4.3315f;
   o.cello.lfo_to_pitch_cents = 4.43038f;
@@ -135,6 +136,7 @@ constexpr void configure_physical_programs(ProgramOverrides& o) noexcept {
   o.cello.bowed_string.corpus_scale = 0.37f;
   o.cello.amp_env.decay_ms = 98.026f;
   o.cello.body_mix = 0.272136f;
+  o.cello.gain = 0.1853f;
   // Contrabass (GM 43): fitted to its reference on the hyperbolic bow junction.
   // The bridge reflection filter is fixed in Hz, so at these pitches its whole
   // range sits above every partial and the darkening has to come from the string.
@@ -184,6 +186,7 @@ constexpr void configure_physical_programs(ProgramOverrides& o) noexcept {
   // variation is the hand, so this derives from the violin rather than
   // restating it.
   o.fiddle = o.violin;
+  o.violin.gain = 0.1778f;
   // Still bowed on the bristle friction, with the violin's former values.
   o.fiddle.bowed_string.elasto_plastic = true;
   o.fiddle.bowed_string.bow_speed = 0.689765f;
@@ -361,6 +364,7 @@ constexpr void configure_physical_programs(ProgramOverrides& o) noexcept {
   o.soprano_sax.resonance_q = 3.00697f;
   o.soprano_sax.body_mix = 0.120715f;
   o.soprano_sax.reed.velocity_exponent = 0.73f;
+  o.soprano_sax.gain = 0.3345f;
   o.alto_sax = reed(true, 0.55f, 0.55f, 0.62f, 0.34f, 16.0f, 90.0f, 0.78f, 0.32f, 0.1882f);
   // Fitted with the pressure held inside the valve's oscillating band, which
   // reed_voice.cpp states; the worst of 35 captured notes then holds within
@@ -434,6 +438,7 @@ constexpr void configure_physical_programs(ProgramOverrides& o) noexcept {
   o.tenor_sax.reed.vel_to_breath = 0.99f;
   o.tenor_sax.lfo_to_pitch_cents = 4.1643f;
   o.tenor_sax.amp_env.sustain = 0.629104f;
+  o.tenor_sax.gain = 0.1049f;
   // Held level 12.8 dB under the reference's median; 2.51 dB higher than the level the refit
   // fields alone leave it at, which put it 15.29 dB under.
   o.baritone_sax = reed(true, 0.60f, 0.50f, 0.5f, 0.40f, 26.0f, 120.0f, 0.78f, 0.40f, 0.3804f);
@@ -465,6 +470,7 @@ constexpr void configure_physical_programs(ProgramOverrides& o) noexcept {
   o.baritone_sax.reed.vel_to_breath = 0.181796f;
   o.baritone_sax.amp_env.sustain = 0.389043f;
   o.baritone_sax.reed.breath_noise = 0.02f;
+  o.baritone_sax.gain = 0.5808f;
   o.oboe = reed(true, 0.80f, 0.35f, 0.74f, 0.30f, 18.0f, 70.0f, 0.62f, 0.30f, 0.6f);
   o.oboe.cutoff_hz = 3143.15f;
   o.oboe.lfo_rate_hz = 4.87846f;
@@ -490,6 +496,7 @@ constexpr void configure_physical_programs(ProgramOverrides& o) noexcept {
   // The reed's phase at the fundamental: notes 58-82 at velocity 80 read -2.61 c mean against
   // equal temperament, nearly flat across the range (+0.9 c per octave).
   o.oboe.pitch_offset_cents = 2.61f;
+  o.oboe.gain = 0.3899f;
   o.english_horn = reed(true, 0.70f, 0.40f, 0.64f, 0.34f, 24.0f, 90.0f, 0.64f, 0.34f, 0.6f);
   // The reference carries a 5 Hz, 6.1 c vibrato (7.8 c here reads the same);
   // 5 c keeps the partial stack inside its bound, which 7.8 c does not.
@@ -525,6 +532,7 @@ constexpr void configure_physical_programs(ProgramOverrides& o) noexcept {
   o.english_horn.reed.release_ms = 16.1089f;
   o.english_horn.cutoff_hz = 3788.4f;
   o.english_horn.body_mix = 0.466169f;
+  o.english_horn.gain = 0.442f;
   o.bassoon = reed(true, 0.65f, 0.45f, 0.5f, 0.40f, 30.0f, 120.0f, 0.68f, 0.40f, 0.4554f);
   // Placed where the solved valve holds one period: at 1.07 the reed sat closed 30% of the
   // cycle and the loop ran period-doubled, half-integer lines 42-48 dB under the fundamental;
@@ -565,6 +573,7 @@ constexpr void configure_physical_programs(ProgramOverrides& o) noexcept {
   // reference; at 0.3 the tone is 4 dB cleaner and the band 8 dB short. No setting meets both.
   o.bassoon.reed.breath_noise = 0.83f;
   o.bassoon.amp_env.sustain = 0.704887f;
+  o.bassoon.gain = 0.3052f;
   o.clarinet = reed(false, 0.40f, 0.50f, 0.54f, 0.30f, 25.0f, 90.0f, 0.72f, 0.25f, 0.6f);
   o.clarinet.cutoff_hz = 4800.0f;
   // No vibrato: the reference's f0 holds within 0.1 c peak to peak; a 2.5 c LFO
@@ -574,6 +583,7 @@ constexpr void configure_physical_programs(ProgramOverrides& o) noexcept {
   o.clarinet.amp_env.release_ms = 269.744f;
   o.clarinet.amp_env.sustain = 0.809017f;
   o.clarinet.body_mix = 0.286475f;
+  o.clarinet.gain = 0.4337f;
 
   // Bag pipe (GM 109): the chanter — a stiff double reed on a conical bore fed
   // from the bag, so the pressure never varies and the note is never tongued.
@@ -606,6 +616,7 @@ constexpr void configure_physical_programs(ProgramOverrides& o) noexcept {
   o.bag_pipe.reed.chiff = 0.646025f;
   o.bag_pipe.amp_env.release_ms = 87.1563f;
   o.bag_pipe.reed.release_ms = 27.9214f;
+  o.bag_pipe.gain = 0.1913f;
 
   // Shanai (GM 111): a double reed on a wooden cone into a flared METAL bell,
   // which is where its edge comes from and why it is the one reed here on the
@@ -639,6 +650,7 @@ constexpr void configure_physical_programs(ProgramOverrides& o) noexcept {
   o.shanai.reed.vel_to_breath = 0.715248f;
   o.shanai.stereo_spread = 0.269934f;
   o.shanai.reed.velocity_exponent = 0.96f;
+  o.shanai.gain = 0.2591f;
 
   // Brass / lip reed (GM 56-60): one lip-reed waveguide voiced across the
   // trumpets, horns and low brass. Small-bore bells (trumpet family) get the
@@ -748,7 +760,7 @@ constexpr void configure_physical_programs(ProgramOverrides& o) noexcept {
   // equal temperament with the blocker lead share at 0.75 (drift and vibrato off).
   o.trombone.pitch_offset_cents = -1.44f;
   o.trombone.brass.bore_nonlinearity = 0.381076f;
-  o.trombone.gain = 16.0f;
+  o.trombone.gain = 11.69f;
   o.trombone.amp_env.decay_ms = 179.829f;
   o.trombone.brass.dynamic_lip = 0.177051f;
   o.trombone.brass.half_valve = 0.190983f;
@@ -823,7 +835,7 @@ constexpr void configure_physical_programs(ProgramOverrides& o) noexcept {
   // equal temperament with the blocker lead share at 0.75 (drift and vibrato off).
   o.muted_trumpet.pitch_offset_cents = -3.39f;
   o.muted_trumpet.brass.brightness = 0.655602f;
-  o.muted_trumpet.gain = 1.51195f;
+  o.muted_trumpet.gain = 8.0f;
   o.muted_trumpet.brass.bore_nonlinearity = 0.0994201f;
   // With the bell corner held at or above the fundamental, D5-E5 overshot their early sustain
   // 2.25 dB past the reference at p90 against a 2.05 bound; these read 1.92.
@@ -917,7 +929,7 @@ constexpr void configure_physical_programs(ProgramOverrides& o) noexcept {
   // The lip's phase at the fundamental: notes 40-76 at velocity 100 read +4.05 c mean against
   // equal temperament with the blocker lead share at 0.75 (drift and vibrato off).
   o.brass_section.pitch_offset_cents = -4.05f;
-  o.brass_section.gain = 7.34402f;
+  o.brass_section.gain = 8.0f;
   o.brass_section.brass.bore_nonlinearity = 0.546291f;
   o.brass_section.body_mix = 0.904415f;
   o.brass_section.brass.breath_noise = 0.22248f;
@@ -1004,6 +1016,7 @@ constexpr void configure_physical_programs(ProgramOverrides& o) noexcept {
   o.concert_flute.flute.breath_radiation = 0.08f;
   o.concert_flute.flute.release_ms = 184.428f;
   o.concert_flute.flute.onset_breath_overshoot_db = 3.549f;
+  o.concert_flute.gain = 0.1989f;
   o.recorder = flute(0.50f, 0.50f, 0.35f, 0.14f, 0.55f, 0.05f, 0.55f, 0.85f);
   o.recorder.flute.loop_phase_servo = true;
   o.recorder.body = BodyType::kWoodTube;
@@ -1032,6 +1045,7 @@ constexpr void configure_physical_programs(ProgramOverrides& o) noexcept {
   o.recorder.flute.onset_breath_overshoot_vel_db = 1.63525f;
   o.recorder.flute.onset_breath_settle_ms = 24.4833f;
   o.recorder.flute.velocity_exponent = 1.67f;
+  o.recorder.gain = 0.5884f;
   // Jet delay on the half period: 0.52 pulled the pitch 4.4 cents flat and brightened the stack.
   o.pan_flute = flute(0.50f, 0.42f, 0.40f, 0.40f, 0.30f, 0.08f, 0.55f, 0.85f);
   o.pan_flute.flute.loop_phase_servo = true;
@@ -1042,6 +1056,7 @@ constexpr void configure_physical_programs(ProgramOverrides& o) noexcept {
   o.pan_flute.flute.velocity_exponent = 1.39f;
   // The reference stops 85-95 ms after the key lifts; the breath ramp sets that, not the VCA.
   o.pan_flute.flute.release_ms = 400.0f;
+  o.pan_flute.gain = 0.5154f;
   o.blown_bottle = flute(0.50f, 0.35f, 0.50f, 0.35f, 0.25f, 0.0f, 0.55f, 0.85f);
   o.blown_bottle.flute.loop_phase_servo = true;
   o.blown_bottle.amp_env.release_ms = 45.2492f;
@@ -1059,6 +1074,7 @@ constexpr void configure_physical_programs(ProgramOverrides& o) noexcept {
   o.blown_bottle.flute.breath_noise = 0.314996f;
   o.blown_bottle.flute.breath_pressure = 0.775735f;
   o.blown_bottle.flute.velocity_exponent = 1.21f;
+  o.blown_bottle.gain = 1.137f;
   o.shakuhachi = flute(0.52f, 0.48f, 0.35f, 0.55f, 0.30f, 0.20f, 0.58f, 0.85f);
   o.shakuhachi.flute.loop_phase_servo = true;
   o.shakuhachi.flute.vortex = 0.104581f;
@@ -1085,6 +1101,7 @@ constexpr void configure_physical_programs(ProgramOverrides& o) noexcept {
   o.shakuhachi.resonance_q = 0.5f;
   o.shakuhachi.amp_env.decay_ms = 179.829f;
   o.shakuhachi.flute.velocity_exponent = 0.80f;
+  o.shakuhachi.gain = 0.3743f;
   o.tin_whistle = flute(0.48f, 0.70f, 0.28f, 0.10f, 0.45f, 0.04f, 0.62f, 0.80f);
   o.tin_whistle.flute.loop_phase_servo = true;
   o.tin_whistle.flute.overblow = 0.25f;
@@ -1123,6 +1140,7 @@ constexpr void configure_physical_programs(ProgramOverrides& o) noexcept {
   o.ocarina.flute.vibrato_rate_hz = 1.82255f;
   o.ocarina.stereo_spread = 0.339801f;
   o.ocarina.flute.velocity_exponent = 0.72f;
+  o.ocarina.gain = 2.436f;
 }
 
 }  // namespace sonare::midi::synth::detail

@@ -198,6 +198,7 @@ SONARE_TUNED_CONSTEXPR void configure_keyed_programs(ProgramOverrides& o) noexce
   gl.modal.contact = 0.7639f;
   gl.modal.contact_ms = 0.5f;
   o.glockenspiel.modal.velocity_exponent = 1.53f;
+  o.glockenspiel.gain = 0.2115f;
 
   NativeSynthPatch& vb = o.vibraphone;
   vb = bar;
@@ -242,7 +243,7 @@ SONARE_TUNED_CONSTEXPR void configure_keyed_programs(ProgramOverrides& o) noexce
   // The upper modes widen the peak span at full velocity; 1.88 puts it back on
   // the reference's, the gain holding the velocity-100 level.
   vb.modal.velocity_exponent = 1.88f;
-  vb.gain = 0.6802f;
+  vb.gain = 0.2027f;
 
   NativeSynthPatch& mr = o.marimba;
   mr = bar;
@@ -266,6 +267,7 @@ SONARE_TUNED_CONSTEXPR void configure_keyed_programs(ProgramOverrides& o) noexce
   mr.stereo_spread = 0.177051f;
   mr.modal.modes[2].decay_scale = 0.290331f;
   o.marimba.modal.velocity_exponent = 1.69f;
+  o.marimba.gain = 0.2857f;
 
   NativeSynthPatch& xy = o.xylophone;
   xy = bar;
@@ -306,7 +308,7 @@ SONARE_TUNED_CONSTEXPR void configure_keyed_programs(ProgramOverrides& o) noexce
   ce.modal.contact_ms = 1.6859f;
   ce.body = BodyType::kWoodTube;
   ce.body_mix = 0.432624f;
-  ce.gain = 0.6f;
+  ce.gain = 0.177f;
   ce.amp_env.attack_ms = 0.306041f;
   ce.amp_env.sustain = 0.618034f;
   ce.modal.modes[2].ratio = 16.1966f;
@@ -369,7 +371,7 @@ SONARE_TUNED_CONSTEXPR void configure_keyed_programs(ProgramOverrides& o) noexce
   tb.modal.release_damp_s = 8.0f;  // the bell rings on after note-off
   tb.amp_env.sustain = 0.690983f;
   tb.amp_env.release_ms = 6744.85f;
-  tb.gain = 0.6f;
+  tb.gain = 0.239f;
   tb.amp_env.attack_ms = 1.49858f;
   o.tubular_bells.modal.velocity_exponent = 1.69f;
   o.tubular_bells.amp_env.attack_ms = 0.500002f;
@@ -718,6 +720,7 @@ SONARE_TUNED_CONSTEXPR void configure_keyed_programs(ProgramOverrides& o) noexce
   // Slap Bass 2 (GM 37, pull/pop): a sharper, brighter pop with a harder fret
   // slap and a shorter ring.
   o.bass_pop = o.bass_slap;
+  o.bass_slap.gain = 5.492f;
   o.bass_pop.ks.brightness = 0.68f;
   o.bass_pop.ks.exc_brightness = 0.98f;
   o.bass_pop.ks.decay_s = 4.13f;  // 6.3 dB/s against the reference, from 8.1
@@ -891,6 +894,7 @@ SONARE_TUNED_CONSTEXPR void configure_keyed_programs(ProgramOverrides& o) noexce
   ka.amp_env.attack_ms = 0.166825f;
   ka.amp_env.sustain = 0.690983f;
   o.kalimba.modal.velocity_exponent = 1.31f;
+  o.kalimba.gain = 0.3284f;
 
   // Harpsichord (GM 6): the jack-and-plectrum engine, voiced as a single 8'
   // choir — one string per key at written pitch. Decay and stretch are regressed
@@ -1021,6 +1025,7 @@ SONARE_TUNED_CONSTEXPR void configure_keyed_programs(ProgramOverrides& o) noexce
   o.rock_organ.additive.drawbars = {8.0f, 8.0f, 8.0f, 6.0f, 4.0f, 4.0f, 2.0f, 2.0f, 6.0f};
   o.rock_organ.additive.key_click = 0.6f;
   o.rock_organ.gain = dr.gain * 0.85f;  // nine drawbars sounding, not six
+  o.drawbar_organ.gain = 0.3794f;
   o.rock_organ.additive.click_decay_ms = 42.6137f;
 
   // Church organ: a principal chorus of self-oscillating jet flue pipes. Each
@@ -1129,6 +1134,7 @@ SONARE_TUNED_CONSTEXPR void configure_keyed_programs(ProgramOverrides& o) noexce
   // sits an octave higher, which is a slot half the width, and no single duty
   // put both inside their references.
   o.accordion = o.reed_organ;
+  o.reed_organ.gain = 1.104f;
   // A three-reed musette, measured: the centre on the note, the sides 14 c
   // either way at A4 with the beat rate growing as f0^0.77, at half the level.
   o.accordion.free_reed.detune = 0.9f;
@@ -1185,7 +1191,7 @@ SONARE_TUNED_CONSTEXPR void configure_keyed_programs(ProgramOverrides& o) noexce
   o.harmonica.free_reed.slot_return = 1.5f;
   o.harmonica.free_reed.slot_gap = 0.02f;
   o.harmonica.stereo_spread = 0.12f;
-  o.harmonica.gain = 0.44f;
+  o.harmonica.gain = 0.2607f;
   o.harmonica.amp_env.attack_ms = 58.7598f;
   o.harmonica.amp_env.release_ms = 55.0874f;
   o.harmonica.cutoff_hz = 5500.0f;
@@ -1195,6 +1201,7 @@ SONARE_TUNED_CONSTEXPR void configure_keyed_programs(ProgramOverrides& o) noexce
   // reed line per note, so there is no musette; a darker plate and a harder
   // bellows are what set it apart from the accordion.
   o.bandoneon = o.accordion;
+  o.accordion.gain = 0.6816f;
   // The accordion's musette, swing, register law and bellows swell stay behind.
   o.bandoneon.free_reed.slot_swing = 0.0f;
   o.bandoneon.free_reed.radiation_keytrack = 0.0f;
@@ -1261,6 +1268,7 @@ SONARE_TUNED_CONSTEXPR void configure_keyed_programs(ProgramOverrides& o) noexce
   trem.amp_env.attack_ms = 98.0261f;
   trem.amp_env.decay_ms = 183.625f;
   trem.amp_env.release_ms = 183.625f;
+  o.tremolo_strings.gain = 0.107f;
 
   // Pizzicato Strings (GM 45): a plucked violin-family string — short KS ring
   // into the violin corpus, mid-string finger pluck.

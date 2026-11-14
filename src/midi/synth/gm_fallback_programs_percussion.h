@@ -39,7 +39,7 @@ constexpr void configure_percussion_programs(ProgramOverrides& o) noexcept {
   tk.percussion.noise_decay_ms = 900.0f;
   tk.percussion.noise_cutoff_hz = 2500.0f;
   tk.percussion.noise_output = SynthFilterOutput::kBandpass;
-  tk.gain = 1.18f;
+  tk.gain = 0.6062f;
   tk.amp_env.attack_ms = 0.306041f;
 
   // Agogo (GM 113): a two-tone metal bell, and the second program here that is
