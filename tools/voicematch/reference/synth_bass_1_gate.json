@@ -3,11 +3,11 @@
   "timbre": "gm039",
   "margin": 1.25,
   "reference_measured_utc": "2026-11-13T20:01:16+00:00",
-  "recorded_utc": "2026-11-14T03:27:17+00:00",
+  "recorded_utc": "2026-11-14T19:52:26+00:00",
   "model_build": {
-    "built_utc": "2026-11-14T03:16:48Z",
-    "newest_source_utc": "2026-11-14T03:15:44Z",
-    "stale": false
+    "built_utc": "2026-11-14T19:23:34Z",
+    "newest_source_utc": "2026-11-14T19:24:53Z",
+    "stale": true
   },
   "reference_spread": {},
   "_module_split": "Every bound but vel_range was deleted when this slot's colour and behaviour moved to `synth_bass_1_module` (stretch, tnr, damper, attack, attack_hf, balance, partial_tilt, centroid_pct, body, attack_hf_swing, register); they held the voice to the library's sound, which `policy.json` does not aim a machine-defined slot at.",
@@ -23,21 +23,21 @@
         "median": {
           "set_utc": "2026-10-24T20:58:53+00:00",
           "set_build": "2026-10-24T20:56:07Z",
-          "held_utc": "2026-11-14T03:27:17+00:00",
+          "held_utc": "2026-11-14T19:52:26+00:00",
           "measured": 0.05,
           "outcome": "kept"
         },
         "abs_median": {
           "set_utc": "2026-10-24T20:58:53+00:00",
           "set_build": "2026-10-24T20:56:07Z",
-          "held_utc": "2026-11-14T03:27:17+00:00",
+          "held_utc": "2026-11-14T19:52:26+00:00",
           "measured": 0.05,
           "outcome": "kept"
         },
         "p90": {
           "set_utc": "2026-10-24T20:58:53+00:00",
           "set_build": "2026-10-24T20:56:07Z",
-          "held_utc": "2026-11-14T03:27:17+00:00",
+          "held_utc": "2026-11-14T19:52:26+00:00",
           "measured": 0.05,
           "outcome": "kept"
         }
