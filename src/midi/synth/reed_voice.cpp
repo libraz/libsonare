@@ -180,17 +180,18 @@ SONARE_TUNABLE(kConeThroatMult, 1.6f);
 // tuning and stability are unchanged by construction.
 SONARE_TUNABLE(kConeGrowthGain, 1.4f);
 
-// --- 4e tonehole scattering (only when params.tonehole > 0) ---
-// Hole position as a fraction of the bore length (reed->hole over reed->bell), at the pressure
-// node of the register the open hole selects: a cylinder's twelfth (3*f0) has its node a third
-// of the way down, a cone's octave (2*f0) half-way. At the bell (1.0) the hole selects nothing.
+// --- 4e tonehole junction (only when params.tonehole > 0) ---
+// Hole position as a fraction of the bore length (reed->hole over reed->bell). A third of the way
+// down is the node of a cylinder's twelfth; half-way is the node of the odd modes of the cone's
+// full-period comb, so the hole there takes from the even ones. At the bell it selects nothing.
 SONARE_TUNABLE(kToneholeFracCylinder, 0.333333f);
 SONARE_TUNABLE(kToneholeFracCone, 0.5f);
-// Maximum scattering-reflection strength at a fully open hole (the pressure
-// release is partial — a real hole is a finite, radiating branch, not a perfect
-// short). Kept < 1 so the reed<->hole sub-loop stays bounded alongside the main
-// reed<->bell loop.
-SONARE_TUNABLE(kToneholeGainMax, 0.5f);
+// Hole area over bore area at a fully open hole (ratio). The junction reflects -d/(2+d), passive
+// for any d >= 0. At 0.5 the cone's even modes keep 0.73 of a round trip at the baritone's
+// opening, the even-to-odd contrast that voice was fitted with.
+SONARE_TUNABLE(kToneholeAreaRatio, 0.5f);
+// Samples the hole keeps clear of the bore read, whose stencil has to lie past both shunts.
+constexpr float kToneholeReadMargin = 4.0f;
 
 /// The reed's own natural frequency (Hz) from the patch knob, held below
 /// Nyquist. Shared by the two roles the reed plays so they cannot drift apart.
@@ -454,20 +455,11 @@ LoopBudget ReedVoiceCore::configure(const ReedPatchParams& params, double sr, ui
     }
   }
 
-  // 4e: tonehole scattering — an inline reflection tapped from the bore at the
-  // reed<->hole round trip. Off (0) -> the tap is skipped (bit-identical). The
-  // hole sits kToneholeFrac of the way down the bore, so its round trip is that
-  // fraction of the bore's own; the tap depth is clamped inside the used span.
-  hole_gain_ = 0.0f;
-  hole_delay_samples_ = 0;
-  hole_refl_ = 0.0f;
-  const float hole = std::clamp(params.tonehole, 0.0f, 1.0f);
-  if (hole > 0.0f) {
-    hole_gain_ = kToneholeGainMax * hole;
-    const float frac = params.conical ? kToneholeFracCone : kToneholeFracCylinder;
-    const int round_trip = static_cast<int>(frac * bore_.period);
-    hole_delay_samples_ = std::clamp(round_trip, 1, bore_.prefill_span - 1);
-  }
+  // 4e: tonehole junction. Off (0) -> skipped (bit-identical). The hole sits
+  // kToneholeFrac of the way down the bore, so its round trip is that fraction
+  // of the bore's own.
+  hole_area_ = std::max(kToneholeAreaRatio, 0.0f) * std::clamp(params.tonehole, 0.0f, 1.0f);
+  hole_delay_ = (params.conical ? kToneholeFracCone : kToneholeFracCylinder) * bore_.period;
   return budget;
 }
 
@@ -528,14 +520,17 @@ float ReedVoiceCore::render_internal(float pitch_ratio) noexcept {
     reg_lp_state_ += reg_lp_alpha_ * (refl_raw - reg_lp_state_);
     refl_raw -= reg_vent_ * reg_lp_state_;
   }
-  // Tonehole scattering (gated): fold in the reflection scattered off the open
-  // side hole one round trip ago, imposing a pressure node at the hole so the
-  // bore's fundamental gives way to the register above.
-  if (hole_delay_samples_ > 0) refl_raw += hole_refl_;
   const float dc = refl_raw - dc_x1_ + dc_r_ * dc_y1_;
   dc_x1_ = refl_raw;
   dc_y1_ = dc;
-  const float refl = dc;
+  float refl = dc;
+  // Tonehole (gated): the bell's wave meets the reed's at the hole, inside the line's read span.
+  if (hole_area_ > 0.0f) {
+    const float line =
+        std::min(bore_.period / ratio - bore_.comp, static_cast<float>(bore_.capacity - 4));
+    const float reach = line - kToneholeReadMargin;
+    if (reach >= 1.0f) refl = scatter_tonehole(dc, std::clamp(hole_delay_ / ratio, 1.0f, reach));
+  }
 
   // Reed valve (memoryless reed table): the pressure difference across the reed
   // drives its opening. coeff = clamp(offset + slope*dp, -1, 1). As the bore
@@ -602,21 +597,6 @@ float ReedVoiceCore::render_internal(float pitch_ratio) noexcept {
   bore_.advance(inj, ratio);
   ++drive_index_;
 
-  // Tonehole scattering (gated): read the bore (read-only) at the reed<->hole
-  // round trip and store the open hole's inverting partial reflection for the
-  // next sample's loop reflection. The hole tap follows the bore's pitch ratio
-  // through a fractional read over the ratio-1 delay, exact at ratio 1. bore_.write
-  // points past the just-written injection, so the tap's reference is the last sample.
-  if (hole_delay_samples_ > 0) {
-    const float delay = std::clamp(static_cast<float>(hole_delay_samples_) / ratio, 1.0f,
-                                   static_cast<float>(bore_.capacity - 4));
-    const int delay_q8 = static_cast<int>(delay * 256.0f);
-    const size_t last_write = (bore_.write + static_cast<size_t>(bore_.capacity - 1)) %
-                              static_cast<size_t>(bore_.capacity);
-    hole_refl_ = -hole_gain_ * rt::lagrange3_read(bore_.buffer, static_cast<size_t>(bore_.capacity),
-                                                  last_write, delay_q8);
-  }
-
   // Growth cone (gated, conical only): the bore delay line carries the
   // travelling-wave variable u = r*p (which propagates cylindrically); the
   // radiated pressure of a truncated cone recovers p = u/r, and near the apex
@@ -666,6 +646,25 @@ void ReedVoiceCore::refresh_radiation_scale() noexcept {
   const float num = pole * 2.0f * std::fabs(std::sin(0.5f * w0));
   const float den = std::sqrt(1.0f - 2.0f * pole * std::cos(w0) + pole * pole);
   rad_scale_ = kBellRadiationMakeup * std::pow(den / std::max(num, 1.0e-6f), kBellRadiationNorm);
+}
+
+// The matched-branch pressure junction: both outgoing waves gain rho * (the two incoming ones
+// summed), rho = -d / (2 + d) in (-1, 0], which returns no more energy than arrived. Two shunts
+// on neighbouring samples share the hole's area, so a hole between samples glides with the pitch.
+float ReedVoiceCore::scatter_tonehole(float from_bell, float age) noexcept {
+  const size_t size = static_cast<size_t>(bore_.capacity);
+  const size_t whole = static_cast<size_t>(age);
+  const float far_share = age - static_cast<float>(whole);
+  const size_t far = (bore_.write + size - (whole + 1) % size) % size;
+  const size_t sites[2] = {far, (far + 1) % size};
+  const float areas[2] = {far_share * hole_area_, (1.0f - far_share) * hole_area_};
+  float wave = from_bell;
+  for (int i = 0; i < 2; ++i) {
+    const float taken = -areas[i] / (2.0f + areas[i]) * (bore_.buffer[sites[i]] + wave);
+    bore_.buffer[sites[i]] += taken;
+    wave += taken;
+  }
+  return wave;
 }
 
 float ReedVoiceCore::reed_resonator(float dp) noexcept {
@@ -772,7 +771,6 @@ void ReedVoiceCore::kill() noexcept {
   table_lag_pos_ = 0;
   reg_lp_state_ = 0.0f;
   throat_state_ = 0.0f;
-  hole_refl_ = 0.0f;
   rad_state_ = 0.0f;
   bell_lp_.reset();
   bell_hp_.reset();

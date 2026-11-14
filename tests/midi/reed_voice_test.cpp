@@ -145,6 +145,22 @@ std::vector<float> render_live_reed_ratio(const ReedPatchParams& params, uint8_t
   return out;
 }
 
+/// The bare core held at ratio 1 for @p num_samples, released at @p release_at when it is not
+/// negative. No voice wraps it, so no saturator stands between the loop and the reading.
+std::vector<float> render_reed_hold(const ReedPatchParams& params, uint8_t note, uint8_t velocity,
+                                    int num_samples, int release_at = -1) {
+  std::vector<float> bore(static_cast<size_t>(sonare::midi::synth::reed_slab_capacity(kRate)));
+  ReedVoiceCore core;
+  core.attach(bore.data(), sonare::midi::synth::reed_buffer_capacity(kRate));
+  core.start(params, kRate, note, Velocity16::from7(velocity), 0x52454544ULL);
+  std::vector<float> out(static_cast<size_t>(num_samples));
+  for (int i = 0; i < num_samples; ++i) {
+    if (i == release_at) core.release();
+    out[static_cast<size_t>(i)] = core.render(1.0f);
+  }
+  return out;
+}
+
 float rms(const std::vector<float>& buf, size_t from, size_t to) {
   double acc = 0.0;
   size_t n = 0;
@@ -688,11 +704,11 @@ TEST_CASE("tonehole scattering jumps the cylinder to its twelfth", "[midi][synth
   REQUIRE(harmonic_power(pso, f0, 3) > harmonic_power(pso, f0, 1));
 }
 
-TEST_CASE("tonehole scattering lifts the cone register", "[midi][synth][reed]") {
-  // A cone overblows to the octave, not the twelfth, so its tonehole sits
-  // half-way down the bore, at the octave's pressure node. The open hole lifts
-  // the upper register — the tone brightens measurably — and stays bounded (the
-  // sub-loop cannot run away).
+TEST_CASE("tonehole scattering takes the cone's even modes", "[midi][synth][reed]") {
+  // Half-way down the cone's full-period comb is the pressure node of the odd
+  // modes, so an open hole there damps the even ones and leaves the odd alone:
+  // the octave falls against the fundamental, and the hole adds nothing.
+  const double f0 = 233.0819;  // A#3 (note 58)
   NativeSynthPatch closed = reed_base_patch();
   closed.reed.conical = true;
   NativeSynthPatch open = reed_base_patch();
@@ -702,8 +718,79 @@ TEST_CASE("tonehole scattering lifts the cone register", "[midi][synth][reed]") 
   const std::vector<float> to = render_patch(open, 58, 110, 24000);
   REQUIRE(peak(to) < 4.0f);
   REQUIRE(std::isfinite(to.back()));
-  REQUIRE(tc != to);
-  REQUIRE(swell_centroid(to, 8000) > 1.2 * swell_centroid(tc, 8000));
+  const std::vector<double> psc = power_spectrum(tc, 8000);
+  const std::vector<double> pso = power_spectrum(to, 8000);
+  const double even_closed = harmonic_power(psc, f0, 2) / harmonic_power(psc, f0, 1);
+  const double even_open = harmonic_power(pso, f0, 2) / harmonic_power(pso, f0, 1);
+  REQUIRE(even_open < 0.5 * even_closed);
+}
+TEST_CASE("the reed's passive loop only loses energy at an open tonehole", "[midi][synth][reed]") {
+  // With the valve's flow gain at zero nothing feeds the bore but its onset
+  // seed, so the level can only fall, on the two shipped voices whose hole is
+  // widest and at the widest hole the patch admits.
+  constexpr size_t kWindow = 12000;
+  for (uint8_t program : {uint8_t{67}, uint8_t{70}}) {
+    for (float tonehole : {-1.0f, 1.0f}) {
+      for (uint8_t note : {uint8_t{34}, uint8_t{48}}) {
+        ReedPatchParams params = sonare::midi::synth::gm_fallback_patch(0, program).reed;
+        params.zeta = 0.0f;
+        if (tonehole >= 0.0f) params.tonehole = tonehole;
+        const std::vector<float> ring = render_reed_hold(params, note, 80, 6 * kWindow);
+        float previous = rms(ring, 0, kWindow);
+        INFO("program " << int(program) << " note " << int(note) << " tonehole "
+                        << params.tonehole);
+        REQUIRE(previous > 1.0e-7f);
+        for (size_t w = 1; w < 6; ++w) {
+          const float level = rms(ring, w * kWindow, (w + 1) * kWindow);
+          REQUIRE(level <= previous);
+          previous = level;
+        }
+      }
+    }
+  }
+}
+
+TEST_CASE("a reed release rings down at the longest breath fall", "[midi][synth][reed]") {
+  // Note-off walks the valve's flow gain to zero with the breath, so the tail
+  // crosses every gain between the held one and the passive loop's. At the
+  // release clamp's 5 s that crossing is slow enough for a loop above unity to
+  // overtake the held level.
+  constexpr int kHold = 48000;
+  constexpr size_t kWindow = 24000;
+  for (uint8_t program : {uint8_t{67}, uint8_t{70}}) {
+    ReedPatchParams params = sonare::midi::synth::gm_fallback_patch(0, program).reed;
+    params.release_ms = 5000.0f;
+    const std::vector<float> tone = render_reed_hold(params, 34, 80, kHold + 16 * 24000, kHold);
+    const float held = rms(tone, kHold - kWindow, kHold);
+    INFO("program " << int(program) << " held " << held);
+    REQUIRE(held > 0.01f);
+    float previous = held;
+    for (size_t from = kHold; from + kWindow <= tone.size(); from += kWindow) {
+      const float level = rms(tone, from, from + kWindow);
+      REQUIRE(level <= 1.05f * previous);
+      previous = level;
+    }
+    REQUIRE(previous < 0.05f * held);
+  }
+}
+
+TEST_CASE("the bassoon's lowest note holds for thirty seconds", "[midi][synth][reed]") {
+  // A long hold of the lowest B flat has to stay the note it settled into,
+  // neither climbing out of the valve's limit cycle nor dying away. Played soft,
+  // where a loop above unity leaves the cycle soonest.
+  const ReedPatchParams params = sonare::midi::synth::gm_fallback_patch(0, 70).reed;
+  const std::vector<float> tone = render_reed_hold(params, 34, 40, 30 * 48000);
+  const float settled = rms(tone, 2 * 48000, 3 * 48000);
+  INFO("settled " << settled);
+  for (size_t second = 3; second < 30; ++second) {
+    const float level = rms(tone, second * 48000, (second + 1) * 48000);
+    INFO("second " << second << " level " << level);
+    REQUIRE(level > 0.84f * settled);
+    REQUIRE(level < 1.19f * settled);
+  }
+  // The bore pressure the valve's limit cycle holds, within 2 dB.
+  REQUIRE(settled > 0.8f);
+  REQUIRE(settled < 1.27f);
 }
 
 TEST_CASE("tonehole scattering stays bounded across the keyboard", "[midi][synth][reed]") {

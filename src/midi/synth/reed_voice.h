@@ -28,9 +28,9 @@
 /// The delay buffer is not owned here — the host attaches one bore span per
 /// voice slot before start(). The core emits raw bore pressure unless
 /// @c bell_radiation_hz names the bell's radiation corner, in which case it
-/// emits what the bell radiates. Unconditionally stable:
-/// both valves are bounded (the table to [-1,1], the flow by an opening that
-/// closes to zero) and the bell loss gain is < 1.
+/// emits what the bell radiates. Both valves are bounded (the table to [-1,1],
+/// the flow by an opening that closes to zero), the bell loss gain is < 1, and
+/// the tonehole junction is contractive, so it adds no gain to the loop.
 ///
 /// RT contract: attach()/start()/render() are allocation-free. Determinism:
 /// breath turbulence and onset chiff come from the counter-based
@@ -182,15 +182,7 @@ struct ReedPatchParams {
   /// valve has two states to choose between and chatters. Clamped to
   /// PassiveCoupling::kMaxZeta.
   float zeta = 0.7f;
-  /// Pressure scale the valve works in (only when closing_pressure > 0). The
-  /// flow follows a square root, so this is a LOOP GAIN and not a level:
-  /// multiplying every pressure by it scales the injection by its square root
-  /// against a reflection scaling by itself, leaving the mouth-over-closing
-  /// ratio — and so the oscillating band — exactly where it was. Smaller means
-  /// a steeper valve, so the note reaches its steady amplitude in fewer bore
-  /// round trips, at the cost of a harder-edged tone. 1 = the linearised
-  /// table's own scale, which the valve inherited and where the note needs
-  /// tens of round trips to speak.
+  /// Valve pressure scale (closing_pressure > 0): a level, +6 dB per doubling; growth unchanged.
   float pressure_scale = 1.0f;
   /// Exponent of the voice-amplifier velocity curve, (velocity/127)^e; 2 is the
   /// SoundFont curve, bit-identical to it.
@@ -227,17 +219,16 @@ struct ReedPatchParams {
   /// render is bit-identical (the throat integrator is skipped).
   float cone_growth = 0.0f;
 
-  /// Tonehole / register key in [0,1] (the open-ness of a side hole): where
-  /// register_vent damps the fundamental from OUTSIDE the loop (an output-side
-  /// approximation), a real tonehole is an IN-BORE scattering junction. An open
-  /// hole is a pressure release at a point along the bore, imposing a pressure
-  /// NODE there: modes with an antinode at the hole (the fundamental) are
-  /// reflected/damped while modes with a node there (the register above) survive,
-  /// so the bore itself resonates a register higher (a clarinet's twelfth, a
-  /// cone's octave) — an actual pitch jump, not a spectral tilt. Modelled
-  /// STK-BlowHole style as an inline two-port scattering reflection tapped from
-  /// the bore at the reed<->hole round trip (an open hole = an inverting partial
-  /// reflection). 0 = off -> render is bit-identical (the tonehole is skipped).
+  /// Open side hole in [0,1]: its area over the bore's, as a share of the widest
+  /// hole the engine voices. A three-port pressure junction on the bore whose
+  /// branch radiates and returns nothing (Keefe 1982; Scavone & Smith 1997), so
+  /// it only takes energy: modes with pressure at the hole are damped and partly
+  /// reflected, modes with a node there pass untouched. On the cylinder the hole
+  /// sits at the twelfth's node, so the fundamental gives way to it; on the cone
+  /// it sits at the odd modes' node and takes from the even ones. It adds no
+  /// loop gain at any frequency, so it cannot support a mode: what a fit wants
+  /// held up is the valve's (@c zeta) and the bell loss's (@c damping) to give.
+  /// 0 = off -> render is bit-identical (the junction is skipped).
   float tonehole = 0.0f;
 };
 
@@ -472,16 +463,15 @@ class ReedVoiceCore {
   float throat_pole_ = 0.0f;
   float throat_state_ = 0.0f;
 
-  // 4e: tonehole scattering. hole_gain_ == 0 -> skipped (bit-identical). An
-  // inline two-port scattering junction: the open hole's inverting partial
-  // reflection is tapped from the bore at the reed<->hole round trip and folded
-  // back into the loop reflection, imposing a pressure node at the hole so the
-  // bore resonates a register higher.
-  float hole_gain_ = 0.0f;
-  // Ratio-1 reed<->hole round trip in samples. render() divides this by the
-  // live pitch ratio and reads the resulting fractional delay.
-  int hole_delay_samples_ = 0;
-  float hole_refl_ = 0.0f;
+  // 4e: tonehole junction. hole_area_ == 0 -> skipped (bit-identical). The
+  // hole's area over the bore's, and the ratio-1 reed<->hole round trip in
+  // samples, which render() divides by the live pitch ratio.
+  float hole_area_ = 0.0f;
+  float hole_delay_ = 0.0f;
+  // Scatters the wave arriving from the bell (@p from_bell) against the one in
+  // the line @p age samples after the reed launched it; returns the wave that
+  // reaches the reed and leaves the transmitted one in the line.
+  float scatter_tonehole(float from_bell, float age) noexcept;
 };
 
 }  // namespace sonare::midi::synth
