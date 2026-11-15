@@ -12,6 +12,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 import numpy as np
+import profile_measure
 from metrics_motion import motion_deltas, recording_motion
 from metrics_signal import ENVELOPE_HOP_MS
 from profile_measure import double_decay_gap, register_deltas
@@ -673,6 +674,19 @@ def print_vanished_dimensions(
     )
 
 
+def reader_mismatch(provenance: dict | None, dimension: str) -> tuple[int, int] | None:
+    """(set, current) reader versions where a bound's value was set under another, else None.
+
+    A dimension `profile_measure.READER_VERSIONS` does not list is not versioned; a bound
+    that records no `set_reader` was set under version 1.
+    """
+    current = profile_measure.READER_VERSIONS.get(dimension)
+    if current is None:
+        return None
+    was = (provenance or {}).get("set_reader", 1)
+    return None if was == current else (was, current)
+
+
 def refused_window(bound: dict, stat: str, windows: dict[str, dict] | None, key: str) -> str | None:
     """`window_mismatch` of one statistic's recorded window against this run's."""
     if not windows or key not in windows:
@@ -852,6 +866,7 @@ def check_gate(
 
     A statistic whose bound was recorded on another window than @p windows gives (see
     `window_mismatch`) is refused, not judged, and the run exits 2 if nothing else failed.
+    A bound set under another reader version still judges, and a failure says which.
     A bound with no recorded window is read as before and named as unrecorded.
     A stretch statistic whose A4 ruler is too scattered to resolve it (`unadjudicable`)
     is named as not adjudicable and neither passes nor fails.
@@ -933,8 +948,10 @@ def check_gate(
                 continue
             value = abs(row[stat]) if stat == "median" else row[stat]
             if value > limit:
+                other = reader_mismatch((bound.get("provenance") or {}).get(stat), key)
                 failures.append(
                     f"{DELTA_LABELS.get(key, key)}: {stat} {value:.2f} over its bound {limit:.2f}"
+                    + (f" (set under reader {other[0]}, read by {other[1]})" if other else "")
                 )
     print(f"\ngate: {gate_path.name}, {len(bounds)} dimensions")
     for line in not_adjudicable:
@@ -1183,6 +1200,46 @@ def _carry_the_unbounded(bounds: dict[str, dict], gate_path: Path) -> dict[str, 
     }
 
 
+#: A side reads as a detuned unison when this share of its rows is coherence `ensemble`
+#: and the median of its rows' unwarp width ratio is at least `UNISON_WIDTH_RATIO`.
+UNISON_ENSEMBLE_SHARE = 0.2
+UNISON_WIDTH_RATIO = 1.5
+
+
+def unison_hold(reference_rows: list[dict], model_rows: list[dict]) -> str | None:
+    """The `_no_tighten` reason for `balance` where either side is a detuned unison, else None.
+
+    Two or three lines a few cents apart under each partial beat slower than the window
+    on the low notes, so one window's h1, and the stack read against it, is set by the
+    beat phase it falls on: a known two-line ladder of stack -11.43 dB reads -8.8 to
+    -13.6 dB across phases. A bound tightened from one such reading is not a measurement
+    of the voice.
+    """
+    for side, rows in (("reference", reference_rows), ("model", model_rows)):
+        unwarp = [r.get("unwarp") or {} for r in rows]
+        ensemble = sum(u.get("state") == "ensemble" for u in unwarp)
+        widths = [u["width_ratio"] for u in unwarp if u.get("width_ratio") is not None]
+        if not rows or not widths or ensemble < UNISON_ENSEMBLE_SHARE * len(rows):
+            continue
+        width = float(np.median(widths))
+        if width >= UNISON_WIDTH_RATIO:
+            return (
+                f"{COMPUTED_UNBOUNDED_PREFIX} detuned unison on the {side} ({ensemble} of "
+                f"{len(rows)} rows ensemble, median line width {width:.2f}x): one window's "
+                "stack is set by the beat phase it falls on, -8.8 to -13.6 dB for a two-line "
+                "ladder of -11.43, so balance is not tightened from a single-window reading"
+            )
+    return None
+
+
+def _carry_the_holds(gate_path: Path) -> dict[str, str]:
+    """The hand-written `_no_tighten` reasons; a computed one is regenerated each write."""
+    if not gate_path.exists():
+        return {}
+    recorded = json.loads(gate_path.read_text()).get("_no_tighten") or {}
+    return {k: v for k, v in recorded.items() if not str(v).startswith(COMPUTED_UNBOUNDED_PREFIX)}
+
+
 def _carry_the_excluded(gate_path: Path) -> dict[str, str]:
     """Carry forward the recorded reasons a dimension must NEVER be bounded.
 
@@ -1241,7 +1298,7 @@ def _carry_the_annotations(gate_path: Path) -> dict[str, object]:
     return {
         k: v
         for k, v in recorded.items()
-        if k.startswith("_") and k not in ("_", "_unbounded", "_excluded")
+        if k.startswith("_") and k not in ("_", "_unbounded", "_excluded", "_no_tighten")
     }
 
 
@@ -1274,6 +1331,7 @@ def _keep_the_tighter(
     built_utc: str | None,
     windows: dict[str, dict] | None = None,
     unrecorded_windows: dict[str, dict] | None = None,
+    holds: dict[str, str] | None = None,
 ) -> list[str]:
     """Hold each bound to the tighter of the recorded one and the new one, and stamp it.
 
@@ -1297,7 +1355,15 @@ def _keep_the_tighter(
     on before windows were stored) bounds a different quantity, so it is re-recorded at
     this run's value as `rewindowed`, with the old bound and window kept beside it and
     the model's residual on the new window printed, since that bound records the error
-    rather than limiting it. A kept bound under a floor the A4 ruler set
+    rather than limiting it. A bound set under another reader version (`reader_mismatch`)
+    that this run's reading exceeds, where the last re-record found it held, is re-recorded
+    the same way, with the old version in
+    `rewindowed_from`; one the reading stays inside still limits it and ratchets. A
+    versioned dimension's statistic records in `set_reader` the version its value was set
+    under, carried with the value. A dimension in @p holds (the gate's `_no_tighten`) keeps its
+    bound where this run would tighten it, since that bound is not yet a measurement of
+    the voice; a new window, or a reader the bound fails, still moves it.
+    A kept bound under a floor the A4 ruler set
     (`FLOOR_FROM_RULER`) is raised to it as `floored` (`exceeded` where the model is over
     even that), with the old bound kept beside it in `floored_from`.
 
@@ -1306,6 +1372,7 @@ def _keep_the_tighter(
     silently is a second way to lose track of what the gate is holding.
     """
     recorded = json.loads(gate_path.read_text()).get("bounds", {}) if gate_path.exists() else {}
+    holds = holds or {}
     if any("provenance" not in b for b in recorded.values()):
         # A gate written before provenance: date its kept values from its history.
         import gate_migrate
@@ -1330,8 +1397,27 @@ def _keep_the_tighter(
                 if old is not None
                 else None
             )
-            if moved:
+            # Only a bound the old reader's reading held: one the voice already failed is
+            # not made to fail by the reader, and rewinding it would erase that record.
+            reader_moved = (
+                reader_mismatch(old_prov, dimension)
+                if old is not None and value > old and old_prov.get("outcome") != OUTCOME_EXCEEDED
+                else None
+            )
+            held_back = (
+                not (moved or reader_moved)
+                and old is not None
+                and old > candidate
+                and dimension in holds
+            )
+            if moved or reader_moved:
                 outcome, held, set_at = OUTCOME_REWINDOWED, now, (now, built_utc)
+            elif held_back:
+                row[key], set_at, outcome, held = old, carried, OUTCOME_KEPT, now
+                declined.append(
+                    f"{dimension}.{key} {candidate:g} -> {old:g} "
+                    f"(held untightened: {holds[dimension]})"
+                )
             elif old is None:
                 outcome, held, set_at = OUTCOME_NEW, now, (now, built_utc)
             elif old >= candidate:
@@ -1362,6 +1448,12 @@ def _keep_the_tighter(
                     f"{outcome:<10} {dimension}.{key} bound {row[key]:g} (measured {value:g}; "
                     f"was {old:g}, under the A4 ruler's scatter)"
                 )
+            elif reader_moved:
+                reported.append(
+                    f"{outcome:<10} {dimension}.{key} bound {row[key]:g} (model residual "
+                    f"{value:g} under reader {reader_moved[1]}; was {old:g} under reader "
+                    f"{reader_moved[0]})"
+                )
             elif moved:
                 reported.append(
                     f"{outcome:<10} {dimension}.{key} bound {row[key]:g} (model residual "
@@ -1387,13 +1479,22 @@ def _keep_the_tighter(
                         provenance[key][kept] = old_prov[kept]
             if held is not None and held == old_prov.get("held_utc") and "held_tree" in old_prov:
                 provenance[key]["held_tree"] = old_prov["held_tree"]
-            if moved:
-                provenance[key]["rewindowed_from"] = {"bound": old, "window": was_window}
+            if moved or reader_moved:
+                provenance[key]["rewindowed_from"] = {"bound": old}
+                if moved:
+                    provenance[key]["rewindowed_from"]["window"] = was_window
+                if reader_moved:
+                    provenance[key]["rewindowed_from"]["reader"] = reader_moved[0]
+            reader = profile_measure.READER_VERSIONS.get(dimension)
+            if reader is not None:
+                provenance[key]["set_reader"] = (
+                    old_prov.get("set_reader", 1) if set_at is carried else reader
+                )
             if raised:
                 provenance[key]["floored_from"] = {"bound": old}
             window = (
                 (windows or {}).get(dimension)
-                if old is None or moved or old > candidate or raised
+                if old is None or moved or (old > candidate and not held_back) or raised
                 else None
             )
             window = window or old_prov.get("window")
@@ -1439,6 +1540,11 @@ def provenance_findings(gate: dict) -> dict[str, list[tuple]]:
     return out
 
 
+def _rewindowed_from(gate: dict, dim: str, stat: str) -> dict:
+    prov = ((gate.get("bounds") or {}).get(dim) or {}).get("provenance") or {}
+    return (prov.get(stat) or {}).get("rewindowed_from") or {}
+
+
 def provenance_notes(gate: dict) -> list[str]:
     """`provenance_findings` as the lines a status report prints."""
     found = provenance_findings(gate)
@@ -1447,7 +1553,9 @@ def provenance_notes(gate: dict) -> list[str]:
         for dim, stat, held in found["exceeded"]
     ]
     notes += [
-        f"{dim}.{stat}: re-recorded for a window change, model residual {residual}"
+        f"{dim}.{stat}: re-recorded for a "
+        f"{'reader' if 'reader' in _rewindowed_from(gate, dim, stat) else 'window'} change, "
+        f"model residual {residual}"
         for dim, stat, residual in found["rewindowed"]
     ]
     notes += [
@@ -1572,12 +1680,15 @@ def write_gate_file(
     allow_dirty: bool = False,
     windows: dict[str, dict] | None = None,
     unrecorded_windows: dict[str, dict] | None = None,
+    held: dict[str, str] | None = None,
 ) -> int:
     """Record the current numbers as the bounds a later run is held to.
 
     @p windows (see `window_spans`) is stored in the provenance of each window-dependent
     statistic whose value this write sets, so a later run can tell it was read on another.
     @p unrecorded_windows is the window a bound with no stored window was read on.
+    @p held is this run's computed `_no_tighten` reasons (see `unison_hold`), written over
+    the hand-written ones the gate carries.
 
     The margin is multiplicative and deliberately not tight: a bound that fails
     on measurement noise gets switched off, and a switched-off gate catches
@@ -1640,8 +1751,16 @@ def write_gate_file(
         return 2
     if tree["dirty"]:
         print(f"recording on a dirty tree ({len(tree['dirty'])} files): {', '.join(tree['dirty'])}")
+    holds = {**_carry_the_holds(gate_path), **(held or {})}
     declined, reported = _keep_the_tighter(
-        bounds, measured, gate_path, now, build.get("built_utc"), windows, unrecorded_windows
+        bounds,
+        measured,
+        gate_path,
+        now,
+        build.get("built_utc"),
+        windows,
+        unrecorded_windows,
+        holds,
     )
     for bound in bounds.values():
         for prov in (bound.get("provenance") or {}).values():
@@ -1697,6 +1816,9 @@ def write_gate_file(
                 # Why a dimension must NEVER carry a bound, even once one can be
                 # computed. Hand-written and carried unconditionally, unlike `_unbounded`.
                 **({"_excluded": excluded} if excluded else {}),
+                # Why a dimension's bound may not tighten yet: hand-written and carried, or
+                # computed (`measured:`) and regenerated by each write.
+                **({"_no_tighten": holds} if holds else {}),
                 # Any other hand-written note recorded beside these bounds. Nothing
                 # computes one, so the writer preserves rather than regenerates it.
                 **annotations,

@@ -139,6 +139,12 @@ B_SCATTER_MIN_PARTIALS = 5
 UNRESOLVED_WITHHELD = ("inharmonicity_b", "tnr_db", "valley_db")
 
 
+#: Per gate dimension, the version of the reader it is read with; one not listed is version 1.
+#: Bump an entry when `read_partials` changes what that dimension reads: a bound set under
+#: another version then bounds another quantity and is re-recorded, not ratcheted.
+READER_VERSIONS = {"balance": 2}
+
+
 def find_partials(
     seg: np.ndarray,
     sr: int,

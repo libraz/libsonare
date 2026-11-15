@@ -142,6 +142,7 @@ from profile_gate import (
     register_spread_by_note,
     select_dimensions,
     summarize_deltas,
+    unison_hold,
     vel_range_deltas,
     velocity_swing_deltas,
     window_spans,
@@ -1507,6 +1508,12 @@ class ModelPlacer:
         return placed.astype(np.float32)
 
 
+def _unison_held(ref: dict, pairs: list, model_rows: list[dict]) -> dict[str, str] | None:
+    """`balance`'s computed `_no_tighten` reason where either side reads as a detuned unison."""
+    reason = unison_hold([ref[p] for p in pairs], model_rows)
+    return {"balance": reason} if reason else None
+
+
 def compare(
     cfg: dict,
     profile_path: Path,
@@ -1944,6 +1951,7 @@ def compare(
             allow_dirty=allow_dirty,
             windows=windows,
             unrecorded_windows=unrecorded_windows,
+            held=_unison_held(ref, pairs, model_rows),
         )
     return 0
 

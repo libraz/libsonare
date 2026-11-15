@@ -101,6 +101,8 @@ The shape objective is a separate spectrogram path. `shape fit` and `shape prune
 
 The report distinguishes `search_winner` from `selected`. Inspect `selected.loss`, `selected.quality`, absolute residuals, measurement coverage, target attainment, and the independent validation result before writing anything. A validation refusal may select the defaults even when the search winner improves the training probe. An unavailable validation set is reported as unavailable, not as a pass.
 
+The objective reads a still partial's level as its bare spectral peak (`metrics_note.analyze_note`), while the gate's `balance` reads the power over the partial's lobe ([Measurements](measurements.md)); the two differ by at most about 1.4 dB on a partial within 40 dB of h1, so a fit and its gate can disagree on the stack by that much.
+
 Level balance needs at least two distinct note or velocity conditions with finite reference levels. A single usable condition cannot establish a relative level response; the default weight is dropped and an explicit level weight is refused or reported unknown as appropriate. Held-out quality retains the same coverage requirement.
 
 `--dry-run` restores the pristine source and skips write-back while still producing the report and diff. Use it with `--out` when reviewing selected values. Numerical target attainment is an engineering result; it does not grant listening acceptance or change bank status. Follow [Acceptance](acceptance.md#numerical-quality) for those decisions.
