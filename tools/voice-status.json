@@ -438,7 +438,10 @@
           "date": "2026-10-26",
           "outcome": "adopted",
           "fittable": true
-        }
+        },
+        "gate_notes": [
+          "balance.abs_median: re-recorded for a reader change, model residual 9.22"
+        ]
       },
       "next": "refit under the current objective (the last fit predates it): refit.py"
     },
@@ -501,7 +504,10 @@
           "date": "2026-10-26",
           "outcome": "adopted",
           "fittable": true
-        }
+        },
+        "gate_notes": [
+          "balance.abs_median: re-recorded for a reader change, model residual 9.22"
+        ]
       },
       "next": "refit under the current objective (the last fit predates it): refit.py"
     },
@@ -630,7 +636,10 @@
           "date": "2026-10-26",
           "outcome": "kept",
           "fittable": true
-        }
+        },
+        "gate_notes": [
+          "balance.median: re-recorded for a reader change, model residual 5.868"
+        ]
       },
       "next": "refit under the current objective (the last fit predates it): refit.py"
     },
@@ -693,7 +702,10 @@
           "date": "2026-10-26",
           "outcome": "kept",
           "fittable": true
-        }
+        },
+        "gate_notes": [
+          "balance.median: re-recorded for a reader change, model residual 5.868"
+        ]
       },
       "next": "refit under the current objective (the last fit predates it): refit.py"
     },
@@ -941,10 +953,7 @@
           "date": "2026-10-26",
           "outcome": "adopted",
           "fittable": true
-        },
-        "gate_notes": [
-          "set on a dirty tree: aftersound.p90, balance.abs_median, decay.abs_median, decay.p90, partial_tilt.abs_median, partial_tilt.median, partial_tilt.p90, tnr.abs_median, tnr.p90"
-        ]
+        }
       },
       "next": "refit under the current objective (the last fit predates it): refit.py"
     },
@@ -1361,10 +1370,7 @@
           "date": "2026-10-26",
           "outcome": "kept",
           "fittable": true
-        },
-        "gate_notes": [
-          "set on a dirty tree: aftersound.abs_median, aftersound.p90, attack_hf_swing.abs_median, attack_hf_swing.median, attack_hf_swing.p90, balance.abs_median, balance.median, balance.p90, body.abs_median, body.median, centroid_pct.p90, damper.abs_median, damper.median, damper.p90, decay.abs_median, decay.p90, doubling.abs_median, partial_tilt.abs_median, partial_tilt.median, partial_tilt.p90, register.p90"
-        ]
+        }
       },
       "next": "refit under the current objective (the last fit predates it): refit.py"
     },
@@ -1427,10 +1433,7 @@
           "date": "2026-11-14",
           "outcome": "kept",
           "fittable": true
-        },
-        "gate_notes": [
-          "set on a dirty tree: stretch.abs_median"
-        ]
+        }
       },
       "next": "listen to a take and record the verdict in signoff.json"
     },
@@ -1552,10 +1555,7 @@
           "date": "2026-11-14",
           "outcome": "kept",
           "fittable": true
-        },
-        "gate_notes": [
-          "set on a dirty tree: stretch.abs_median"
-        ]
+        }
       },
       "next": "listen to a take and record the verdict in signoff.json"
     },
@@ -1655,7 +1655,7 @@
             "body": 2.0,
             "attack_hf": 1.69,
             "tnr": 1.67,
-            "balance": 1.29,
+            "balance": 1.3,
             "vel_range": 1.29,
             "onset_settle": 1.04,
             "onset": 1.01
@@ -3189,7 +3189,7 @@
           "total": 8,
           "outside": {
             "vel_range": 1.81,
-            "balance": 1.49,
+            "balance": 1.52,
             "stereo": 1.2
           },
           "unjudgeable": [
@@ -3330,7 +3330,8 @@
         },
         "gate_notes": [
           "tnr.median: re-recorded over a kept bound, last held 2026-11-13T11:49:49+00:00",
-          "tnr.abs_median: re-recorded over a kept bound, last held 2026-11-13T11:49:49+00:00"
+          "tnr.abs_median: re-recorded over a kept bound, last held 2026-11-13T11:49:49+00:00",
+          "balance.median: re-recorded for a reader change, model residual 0.74"
         ]
       },
       "next": "the gate is red: tnr.median: re-recorded over a kept bound, last held 2026-11-13T11:49:49+00:00; tnr.abs_median: re-recorded over a kept bound, last held 2026-11-13T11:49:49+00:00"
@@ -3497,7 +3498,8 @@
         },
         "gate_notes": [
           "tnr.median: re-recorded over a kept bound, last held 2026-11-13T11:49:49+00:00",
-          "tnr.abs_median: re-recorded over a kept bound, last held 2026-11-13T11:49:49+00:00"
+          "tnr.abs_median: re-recorded over a kept bound, last held 2026-11-13T11:49:49+00:00",
+          "balance.median: re-recorded for a reader change, model residual 0.74"
         ]
       },
       "next": "the gate is red: tnr.median: re-recorded over a kept bound, last held 2026-11-13T11:49:49+00:00; tnr.abs_median: re-recorded over a kept bound, last held 2026-11-13T11:49:49+00:00"
@@ -4304,10 +4306,7 @@
           "date": "2026-10-26",
           "outcome": "kept",
           "fittable": true
-        },
-        "gate_notes": [
-          "set on a dirty tree: balance.abs_median, balance.median, centroid_pct.abs_median, centroid_pct.median, centroid_pct.p90, onset_settle.abs_median, register.p90, stretch.abs_median, stretch.median, stretch.p90, tnr.p90"
-        ]
+        }
       },
       "next": "refit under the current objective (the last fit predates it): refit.py"
     },
@@ -5628,7 +5627,10 @@
           "date": "2026-10-26",
           "outcome": "kept",
           "fittable": true
-        }
+        },
+        "gate_notes": [
+          "balance.median: re-recorded for a reader change, model residual 1.096"
+        ]
       },
       "next": "refit under the current objective (the last fit predates it): refit.py"
     },
@@ -5754,7 +5756,10 @@
           "date": "2026-10-26",
           "outcome": "kept",
           "fittable": true
-        }
+        },
+        "gate_notes": [
+          "balance.median: re-recorded for a reader change, model residual 2.622"
+        ]
       },
       "next": "refit under the current objective (the last fit predates it): refit.py"
     },
@@ -5954,11 +5959,10 @@
           "fittable": true
         },
         "gate_notes": [
-          "balance.median: re-recorded over a kept bound, last held unknown",
           "centroid_pct.median: re-recorded over a kept bound, last held unknown"
         ]
       },
-      "next": "the gate is red: balance.median: re-recorded over a kept bound, last held unknown; centroid_pct.median: re-recorded over a kept bound, last held unknown"
+      "next": "the gate is red: centroid_pct.median: re-recorded over a kept bound, last held unknown"
     },
     {
       "slug": "p038-synth-bass-1",
@@ -6019,10 +6023,7 @@
           "date": "2026-10-26",
           "outcome": "kept",
           "fittable": true
-        },
-        "gate_notes": [
-          "set on a dirty tree: aftersound.abs_median, aftersound.median, aftersound.p90, attack_hf.abs_median, attack_hf.median, attack_hf.p90, balance.abs_median, balance.median, balance.p90, centroid_pct.abs_median, centroid_pct.median, centroid_pct.p90, decay.abs_median, decay.median, decay.p90, doubling.abs_median, doubling.median, partial_tilt.p90, stretch.abs_median, tnr.abs_median, tnr.median, tnr.p90"
-        ]
+        }
       },
       "next": "refit under the current objective (the last fit predates it): refit.py"
     },
@@ -6604,7 +6605,10 @@
           "date": "2026-10-26",
           "outcome": "adopted",
           "fittable": true
-        }
+        },
+        "gate_notes": [
+          "balance.abs_median: re-recorded for a reader change, model residual 5.692"
+        ]
       },
       "next": "refit under the current objective (the last fit predates it): refit.py"
     },
@@ -6934,8 +6938,7 @@
           "balance.median: re-recorded over a kept bound, last held unknown",
           "centroid_pct.median: re-recorded over a kept bound, last held unknown",
           "centroid_pct.abs_median: re-recorded over a kept bound, last held unknown",
-          "centroid_pct.p90: re-recorded over a kept bound, last held unknown",
-          "set on a dirty tree: attack.abs_median, attack.median, attack.p90"
+          "centroid_pct.p90: re-recorded over a kept bound, last held unknown"
         ]
       },
       "next": "the gate is red: tnr.abs_median: re-recorded over a kept bound, last held unknown; body.median: re-recorded over a kept bound, last held unknown; body.abs_median: re-recorded over a kept bound, last held unknown; body.p90: re-recorded over a kept bound, last held unknown; balance.median: re-recorded over a kept bound, last held unknown; centroid_pct.median: re-recorded over a kept bound, last held unknown; centroid_pct.abs_median: re-recorded over a kept bound, last held unknown; centroid_pct.p90: re-recorded over a kept bound, last held unknown"
@@ -7275,7 +7278,11 @@
           "date": "2026-10-26",
           "outcome": "kept",
           "fittable": true
-        }
+        },
+        "gate_notes": [
+          "balance.median: re-recorded for a reader change, model residual 1.77",
+          "balance.abs_median: re-recorded for a reader change, model residual 1.988"
+        ]
       },
       "next": "refit under the current objective (the last fit predates it): refit.py"
     },
@@ -7338,8 +7345,7 @@
         },
         "gate_notes": [
           "vel_range.median: re-recorded over a kept bound, last held unknown",
-          "vel_range.p90: re-recorded over a kept bound, last held unknown",
-          "set on a dirty tree: balance.abs_median, balance.median, onset.abs_median, onset.p90, stretch.median, stretch.p90, tnr.median, tnr.p90, vel_range.abs_median"
+          "vel_range.p90: re-recorded over a kept bound, last held unknown"
         ]
       },
       "next": "the gate is red: vel_range.median: re-recorded over a kept bound, last held unknown; vel_range.p90: re-recorded over a kept bound, last held unknown"
@@ -7405,8 +7411,7 @@
           "attack.p90: re-recorded over a kept bound, last held unknown",
           "register.median: re-recorded over a kept bound, last held unknown",
           "register.abs_median: re-recorded over a kept bound, last held unknown",
-          "register.p90: re-recorded over a kept bound, last held unknown",
-          "set on a dirty tree: balance.abs_median, balance.median, body.abs_median, body.median, body.p90, centroid_pct.median, centroid_pct.p90, onset.abs_median, onset.median, onset.p90, onset_settle.p90, stretch.abs_median, stretch.median, stretch.p90"
+          "register.p90: re-recorded over a kept bound, last held unknown"
         ]
       },
       "next": "the gate is red: attack.p90: re-recorded over a kept bound, last held unknown; register.median: re-recorded over a kept bound, last held unknown; register.abs_median: re-recorded over a kept bound, last held unknown; register.p90: re-recorded over a kept bound, last held unknown"
@@ -7476,8 +7481,7 @@
         },
         "gate_notes": [
           "centroid_pct.p90: re-recorded over a kept bound, last held unknown",
-          "register.p90: re-recorded over a kept bound, last held unknown",
-          "set on a dirty tree: attack.p90, balance.p90, centroid_pct.abs_median, centroid_pct.median, damper.abs_median, damper.median, stretch.abs_median, stretch.median, stretch.p90, tnr.abs_median, tnr.median, tnr.p90"
+          "register.p90: re-recorded over a kept bound, last held unknown"
         ]
       },
       "next": "the gate is red: centroid_pct.p90: re-recorded over a kept bound, last held unknown; register.p90: re-recorded over a kept bound, last held unknown"
@@ -7546,8 +7550,7 @@
           "fittable": true
         },
         "gate_notes": [
-          "centroid_pct.median: re-recorded over a kept bound, last held unknown",
-          "set on a dirty tree: centroid_pct.p90, damper.p90, register.abs_median, stretch.abs_median, stretch.p90, tnr.abs_median, tnr.median, tnr.p90, vel_range.p90"
+          "centroid_pct.median: re-recorded over a kept bound, last held unknown"
         ]
       },
       "next": "the gate is red: centroid_pct.median: re-recorded over a kept bound, last held unknown"
@@ -7608,10 +7611,7 @@
           "date": "2026-10-26",
           "outcome": "kept",
           "fittable": true
-        },
-        "gate_notes": [
-          "set on a dirty tree: body.abs_median, body.median, body.p90, centroid_pct.median, centroid_pct.p90, damper.abs_median, onset.p90, register.abs_median, stretch.abs_median, stretch.median, tnr.abs_median, tnr.median"
-        ]
+        }
       },
       "next": "refit under the current objective (the last fit predates it): refit.py"
     },
@@ -7673,8 +7673,7 @@
           "fittable": true
         },
         "gate_notes": [
-          "onset.abs_median: re-recorded over a kept bound, last held 2026-11-14T04:53:20+00:00",
-          "set on a dirty tree: body.median, centroid_pct.abs_median, damper.abs_median, onset_settle.abs_median, onset_settle.median, register.p90"
+          "onset.abs_median: re-recorded over a kept bound, last held 2026-11-14T04:53:20+00:00"
         ]
       },
       "next": "the gate is red: onset.abs_median: re-recorded over a kept bound, last held 2026-11-14T04:53:20+00:00"
@@ -7850,10 +7849,7 @@
           "date": "2026-10-26",
           "outcome": "kept",
           "fittable": true
-        },
-        "gate_notes": [
-          "set on a dirty tree: attack.abs_median, attack.median, attack.p90, balance.abs_median, balance.p90, motion.abs_median, motion.median, motion.p90, tnr.p90"
-        ]
+        }
       },
       "next": "refit under the current objective (the last fit predates it): refit.py"
     },
@@ -7986,8 +7982,7 @@
           "tnr.p90: re-recorded over a kept bound, last held 2026-11-13T11:49:49+00:00",
           "attack.median: re-recorded over a kept bound, last held unknown",
           "attack.abs_median: re-recorded over a kept bound, last held unknown",
-          "attack.p90: re-recorded over a kept bound, last held unknown",
-          "set on a dirty tree: balance.abs_median, balance.median, balance.p90, body.median, body.p90, centroid_pct.abs_median, centroid_pct.median, damper.abs_median, damper.median, damper.p90, motion.abs_median, motion.median, motion.p90, register.p90, stretch.p90"
+          "attack.p90: re-recorded over a kept bound, last held unknown"
         ]
       },
       "next": "the gate is red: tnr.median: re-recorded over a kept bound, last held 2026-11-13T11:49:49+00:00; tnr.abs_median: re-recorded over a kept bound, last held 2026-11-13T11:49:49+00:00; tnr.p90: re-recorded over a kept bound, last held 2026-11-13T11:49:49+00:00; attack.median: re-recorded over a kept bound, last held unknown; attack.abs_median: re-recorded over a kept bound, last held unknown; attack.p90: re-recorded over a kept bound, last held unknown"
@@ -8056,8 +8051,7 @@
           "attack.abs_median: re-recorded over a kept bound, last held unknown",
           "attack.p90: re-recorded over a kept bound, last held unknown",
           "balance.abs_median: re-recorded over a kept bound, last held unknown",
-          "tnr.median: re-recorded over a kept bound, last held 2026-11-13T11:49:49+00:00",
-          "set on a dirty tree: balance.median, body.median, centroid_pct.median, centroid_pct.p90, damper.abs_median, damper.median, damper.p90, stretch.p90, tnr.abs_median"
+          "tnr.median: re-recorded over a kept bound, last held 2026-11-13T11:49:49+00:00"
         ]
       },
       "next": "the gate is red: attack.median: re-recorded over a kept bound, last held unknown; attack.abs_median: re-recorded over a kept bound, last held unknown; attack.p90: re-recorded over a kept bound, last held unknown; balance.abs_median: re-recorded over a kept bound, last held unknown; tnr.median: re-recorded over a kept bound, last held 2026-11-13T11:49:49+00:00"
@@ -8118,8 +8112,7 @@
           "fittable": true
         },
         "gate_notes": [
-          "tnr.abs_median: re-recorded over a kept bound, last held 2026-11-13T11:49:49+00:00",
-          "set on a dirty tree: attack.p90, body.abs_median, body.median, body.p90, motion.abs_median, motion.median, motion.p90, stretch.abs_median, stretch.median, stretch.p90, vel_range.p90"
+          "tnr.abs_median: re-recorded over a kept bound, last held 2026-11-13T11:49:49+00:00"
         ]
       },
       "next": "the gate is red: tnr.abs_median: re-recorded over a kept bound, last held 2026-11-13T11:49:49+00:00"
@@ -8181,8 +8174,7 @@
         },
         "gate_notes": [
           "body.median: re-recorded over a kept bound, last held 2026-11-14T07:49:42+00:00",
-          "body.abs_median: re-recorded over a kept bound, last held 2026-11-14T07:49:42+00:00",
-          "set on a dirty tree: balance.abs_median, balance.median, body.p90, centroid_pct.abs_median, centroid_pct.median, centroid_pct.p90, damper.abs_median, damper.median, damper.p90, motion.abs_median, motion.median, motion.p90, tnr.abs_median, tnr.median, tnr.p90"
+          "body.abs_median: re-recorded over a kept bound, last held 2026-11-14T07:49:42+00:00"
         ]
       },
       "next": "the gate is red: body.median: re-recorded over a kept bound, last held 2026-11-14T07:49:42+00:00; body.abs_median: re-recorded over a kept bound, last held 2026-11-14T07:49:42+00:00"
@@ -8248,8 +8240,7 @@
           "attack.p90: re-recorded over a kept bound, last held unknown",
           "balance.median: re-recorded over a kept bound, last held unknown",
           "balance.abs_median: re-recorded over a kept bound, last held unknown",
-          "balance.p90: re-recorded over a kept bound, last held unknown",
-          "set on a dirty tree: centroid_pct.abs_median, centroid_pct.median, centroid_pct.p90, register.abs_median, stretch.p90"
+          "balance.p90: re-recorded over a kept bound, last held unknown"
         ]
       },
       "next": "the gate is red: attack.median: re-recorded over a kept bound, last held unknown; attack.abs_median: re-recorded over a kept bound, last held unknown; attack.p90: re-recorded over a kept bound, last held unknown; balance.median: re-recorded over a kept bound, last held unknown; balance.abs_median: re-recorded over a kept bound, last held unknown; balance.p90: re-recorded over a kept bound, last held unknown"
@@ -8312,7 +8303,7 @@
         "gate_notes": [
           "tnr.median: re-recorded over a kept bound, last held 2026-11-14T03:45:36+00:00",
           "body.median: re-recorded over a kept bound, last held 2026-11-13T11:49:49+00:00",
-          "set on a dirty tree: attack.abs_median, attack.median, attack.p90, body.abs_median, body.p90, centroid_pct.p90, damper.abs_median, damper.median, damper.p90, register.abs_median, register.p90, stretch.abs_median, stretch.median, tnr.abs_median, tnr.median, tnr.p90, vel_range.abs_median, vel_range.p90"
+          "set on a dirty tree: tnr.median"
         ]
       },
       "next": "the gate is red: tnr.median: re-recorded over a kept bound, last held 2026-11-14T03:45:36+00:00; body.median: re-recorded over a kept bound, last held 2026-11-13T11:49:49+00:00"
@@ -8373,7 +8364,10 @@
           "date": "2026-10-26",
           "outcome": "kept",
           "fittable": true
-        }
+        },
+        "gate_notes": [
+          "balance.median: re-recorded for a reader change, model residual 0.546"
+        ]
       },
       "next": "refit under the current objective (the last fit predates it): refit.py"
     },
@@ -8919,7 +8913,10 @@
           "date": "2026-10-26",
           "outcome": "adopted",
           "fittable": true
-        }
+        },
+        "gate_notes": [
+          "balance.abs_median: re-recorded for a reader change, model residual 3.466"
+        ]
       },
       "next": "refit under the current objective (the last fit predates it): refit.py"
     },
@@ -9033,7 +9030,10 @@
           "date": "2026-10-26",
           "outcome": "kept",
           "fittable": true
-        }
+        },
+        "gate_notes": [
+          "balance.p90: re-recorded for a reader change, model residual 6.2192"
+        ]
       },
       "next": "refit under the current objective (the last fit predates it): refit.py"
     },
@@ -9086,19 +9086,15 @@
         "music": null,
         "instrument": null,
         "fit": {
-          "state": "under_base",
+          "state": "current",
           "date": "2026-11-14",
           "outcome": "adopted",
-          "base_overrides": [
-            "lead_charang.filter_model=0,lead_charang.key_track=1,lead_charang.gain=0.2086"
-          ],
           "fittable": true
         },
         "gate_notes": [
           "tnr.median: re-recorded over a kept bound, last held 2026-11-14T03:22:34+00:00",
           "tnr.abs_median: re-recorded over a kept bound, last held 2026-11-14T03:22:34+00:00",
           "tnr.p90: re-recorded over a kept bound, last held 2026-11-14T03:22:34+00:00",
-          "set on a dirty tree: balance.abs_median, balance.median, balance.p90, centroid_pct.abs_median, centroid_pct.median, stretch.median, stretch.p90",
           "vel_range.p90: re-recorded over a kept bound, last held 2026-11-14T03:22:36+00:00"
         ]
       },
@@ -9273,10 +9269,7 @@
           "date": "2026-10-26",
           "outcome": "adopted",
           "fittable": true
-        },
-        "gate_notes": [
-          "set on a dirty tree: balance.abs_median, balance.median, balance.p90, body.abs_median, body.median, body.p90, centroid_pct.abs_median, centroid_pct.median, centroid_pct.p90, stretch.abs_median, stretch.p90, tnr.abs_median, tnr.median, tnr.p90"
-        ]
+        }
       },
       "next": "refit under the current objective (the last fit predates it): refit.py"
     },
@@ -9336,7 +9329,8 @@
         },
         "gate_notes": [
           "tnr.median: re-recorded over a kept bound, last held 2026-11-13T11:49:49+00:00",
-          "tnr.abs_median: re-recorded over a kept bound, last held 2026-11-13T11:49:49+00:00"
+          "tnr.abs_median: re-recorded over a kept bound, last held 2026-11-13T11:49:49+00:00",
+          "balance.median: re-recorded for a reader change, model residual 1.952"
         ]
       },
       "next": "the gate is red: tnr.median: re-recorded over a kept bound, last held 2026-11-13T11:49:49+00:00; tnr.abs_median: re-recorded over a kept bound, last held 2026-11-13T11:49:49+00:00"
@@ -9451,7 +9445,11 @@
           "date": "2026-10-26",
           "outcome": "adopted",
           "fittable": true
-        }
+        },
+        "gate_notes": [
+          "balance.median: re-recorded for a reader change, model residual 1.294",
+          "balance.abs_median: re-recorded for a reader change, model residual 1.294"
+        ]
       },
       "next": "refit under the current objective (the last fit predates it): refit.py"
     },
@@ -9629,7 +9627,10 @@
           "date": "2026-10-26",
           "outcome": "adopted",
           "fittable": true
-        }
+        },
+        "gate_notes": [
+          "balance.median: re-recorded for a reader change, model residual 5.54"
+        ]
       },
       "next": "refit under the current objective (the last fit predates it): refit.py"
     },
@@ -9746,7 +9747,9 @@
         },
         "gate_notes": [
           "attack.median: re-recorded over a kept bound, last held unknown",
-          "attack.abs_median: re-recorded over a kept bound, last held unknown"
+          "attack.abs_median: re-recorded over a kept bound, last held unknown",
+          "balance.median: re-recorded for a reader change, model residual 2.138",
+          "balance.abs_median: re-recorded for a reader change, model residual 3.946"
         ]
       },
       "next": "the gate is red: attack.median: re-recorded over a kept bound, last held unknown; attack.abs_median: re-recorded over a kept bound, last held unknown"
@@ -9924,10 +9927,7 @@
           "date": "2026-10-26",
           "outcome": "adopted",
           "fittable": true
-        },
-        "gate_notes": [
-          "set on a dirty tree: aftersound.abs_median, aftersound.median, aftersound.p90, attack_hf.abs_median, attack_hf.median, attack_hf.p90, decay.abs_median, decay.median, decay.p90, doubling.abs_median, doubling.median, doubling.p90"
-        ]
+        }
       },
       "next": "1 canonical dimension(s) neither gated nor excused: attack_hf_swing"
     },
@@ -10098,7 +10098,11 @@
           "date": "2026-10-26",
           "outcome": "adopted",
           "fittable": true
-        }
+        },
+        "gate_notes": [
+          "balance.median: re-recorded for a reader change, model residual 19.076",
+          "balance.abs_median: re-recorded for a reader change, model residual 19.076"
+        ]
       },
       "next": "refit under the current objective (the last fit predates it): refit.py"
     },
@@ -10217,7 +10221,12 @@
           "date": "2026-10-26",
           "outcome": "adopted",
           "fittable": true
-        }
+        },
+        "gate_notes": [
+          "balance.median: re-recorded for a reader change, model residual 2.214",
+          "balance.abs_median: re-recorded for a reader change, model residual 2.214",
+          "balance.p90: re-recorded for a reader change, model residual 5.2692"
+        ]
       },
       "next": "refit under the current objective (the last fit predates it): refit.py"
     },
@@ -10280,7 +10289,10 @@
           "date": "2026-10-26",
           "outcome": "kept",
           "fittable": true
-        }
+        },
+        "gate_notes": [
+          "balance.median: re-recorded for a reader change, model residual 4.744"
+        ]
       },
       "next": "refit under the current objective (the last fit predates it): refit.py"
     },
@@ -10601,10 +10613,7 @@
           "date": "2026-10-26",
           "outcome": "adopted",
           "fittable": true
-        },
-        "gate_notes": [
-          "set on a dirty tree: centroid_pct.p90, damper.abs_median, damper.median, damper.p90, stretch.abs_median, stretch.median, stretch.p90, tnr.abs_median, tnr.median, tnr.p90"
-        ]
+        }
       },
       "next": "refit under the current objective (the last fit predates it): refit.py"
     },
@@ -11428,10 +11437,7 @@
           "date": "2026-10-26",
           "outcome": "adopted",
           "fittable": true
-        },
-        "gate_notes": [
-          "set on a dirty tree: centroid_pct.abs_median, centroid_pct.median, centroid_pct.p90, decay.abs_median, decay.median, decay.p90"
-        ]
+        }
       },
       "next": "refit under the current objective (the last fit predates it): refit.py"
     },
@@ -11819,7 +11825,6 @@
         "gate_notes": [
           "level.abs_median: re-recorded over a kept bound, last held unknown",
           "level.p90: re-recorded over a kept bound, last held unknown",
-          "set on a dirty tree: attack.abs_median, attack.median, attack.p90, band_decay.abs_median, band_decay.median, band_decay.p90, band_shape.abs_median, band_shape.median, band_shape.p90, band_tilt.abs_median, band_tilt.median, band_tilt.p90, centroid_pct.abs_median, centroid_pct.median, centroid_pct.p90, crest.abs_median, crest.median, crest.p90, level.abs_median, level.median, level.p90, tilt_rise.abs_median, tilt_rise.median, tilt_rise.p90, tonality.abs_median, tonality.median, tonality.p90",
           "vel_range.p90: re-recorded over a kept bound, last held unknown"
         ]
       },
