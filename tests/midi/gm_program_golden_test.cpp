@@ -69,6 +69,7 @@
 #include "midi/ump.h"
 #include "support/golden_hash.h"
 #include "support/midi_render.h"
+#include "util/numeric_validation.h"
 
 namespace {
 
@@ -103,9 +104,15 @@ constexpr int kGoldenVelocity = 100;
 
 /// Frames rendered while the key is held, then again after note-off. The tail
 /// covers the slowest fallback release, so a program whose ring-down changes is
-/// caught rather than trimmed away.
+/// caught rather than trimmed away. A program whose delay + attack + hold outlasts
+/// kHeldFrames is held kHeldFrames past that onset instead, so its decay is rendered.
 constexpr int kHeldFrames = 12000;
 constexpr int kReleaseFrames = 12000;
+
+/// Chunks the held frames are rendered in, so a controller message lands inside
+/// the note instead of only at its start.
+constexpr int kGestureSteps = 8;
+static_assert(kHeldFrames % kGestureSteps == 0, "a ramp step must be a whole number of frames");
 
 constexpr int kProgramCount = 128;
 
@@ -119,6 +126,23 @@ NativeSynthConfig golden_config() {
   return cfg;
 }
 
+/// Frames of delay + attack + hold of the program's amplitude envelope.
+int64_t onset_frames(int program) {
+  const sonare::midi::synth::DahdsrConfig& env =
+      gm_fallback_patch(0, static_cast<uint8_t>(program)).amp_env;
+  const double onset_ms = static_cast<double>(env.delay_ms) + static_cast<double>(env.attack_ms) +
+                          static_cast<double>(env.hold_ms);
+  return sonare::numeric::ceil_sample_count(onset_ms * kGoldenRate * 0.001);
+}
+
+/// Held span of a program: kHeldFrames, or kHeldFrames past its onset when that is longer.
+/// Rounded up to whole gesture steps; kHeldFrames is already one, so fast programs are unchanged.
+int held_frames(int program) {
+  const int64_t onset = onset_frames(program);
+  const int64_t held = onset > kHeldFrames ? onset + kHeldFrames : kHeldFrames;
+  return static_cast<int>((held + kGestureSteps - 1) / kGestureSteps * kGestureSteps);
+}
+
 std::string render_program(int program) {
   const NativeSynthConfig cfg = golden_config();
 
@@ -128,7 +152,7 @@ std::string render_program(int program) {
       0, event(sonare::midi::make_midi1_program_change(0, 0, static_cast<uint8_t>(program))));
   synth.on_event(0, event(sonare::midi::make_midi1_note_on(0, 0, kGoldenNote, kGoldenVelocity)));
 
-  sonare::test::StereoRender held = render_stereo(synth, kHeldFrames);
+  sonare::test::StereoRender held = render_stereo(synth, held_frames(program));
   synth.on_event(0, event(sonare::midi::make_midi1_note_off(0, 0, kGoldenNote, 0)));
   const sonare::test::StereoRender tail = render_stereo(synth, kReleaseFrames);
 
@@ -145,11 +169,6 @@ std::vector<std::pair<int, std::string>> compute_rows() {
   }
   return rows;
 }
-
-/// Chunks the held frames are rendered in, so a controller message lands inside
-/// the note instead of only at its start.
-constexpr int kGestureSteps = 8;
-static_assert(kHeldFrames % kGestureSteps == 0, "a ramp step must be a whole number of frames");
 
 /// The note the legato row slurs to, and the bend row's two depths in cents.
 constexpr uint8_t kSlurNote = 67;
@@ -420,7 +439,8 @@ std::string render_gesture(int program, Gesture gesture) {
   sonare::test::StereoRender out;
   for (int step = 0; step < kGestureSteps; ++step) {
     send_step(synth, gesture, step);
-    const sonare::test::StereoRender chunk = render_stereo(synth, kHeldFrames / kGestureSteps);
+    const sonare::test::StereoRender chunk =
+        render_stereo(synth, held_frames(program) / kGestureSteps);
     out.left.insert(out.left.end(), chunk.left.begin(), chunk.left.end());
     out.right.insert(out.right.end(), chunk.right.begin(), chunk.right.end());
   }
@@ -608,6 +628,21 @@ void write_kit_manifest(const std::filesystem::path& path, const std::vector<Kit
 }
 
 }  // namespace
+
+TEST_CASE("GM program note-off lands after the amplitude envelope onset", "[midi][synth]") {
+  for (int program = 0; program < kProgramCount; ++program) {
+    const auto& env = gm_fallback_patch(0, static_cast<uint8_t>(program)).amp_env;
+    const double onset_ms = static_cast<double>(env.delay_ms) + static_cast<double>(env.attack_ms) +
+                            static_cast<double>(env.hold_ms);
+    const double onset = std::ceil(onset_ms * kGoldenRate * 0.001);
+    const double held = static_cast<double>(held_frames(program));
+    INFO("program " << program << " onset " << onset << " held " << held);
+    // A slow onset is held kHeldFrames past its end; a fast one is held kHeldFrames.
+    CHECK(held >= kHeldFrames);
+    if (onset > kHeldFrames) CHECK(held - onset >= kHeldFrames);
+    CHECK(held > onset);
+  }
+}
 
 TEST_CASE("NativeSynth GM program renders stay bit-identical", "[.][midi][synth][golden]") {
   INFO(sonare::test::kGoldenDigestProvenance);
