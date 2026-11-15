@@ -2,14 +2,17 @@
   "_": "Bounds the compare table is held to. All three are absolute limits: 'median' caps the magnitude of the signed median, 'abs_median' caps the median absolute error, which is the one that can fail when errors of opposite sign cancel, and 'p90' caps the 90th percentile of that absolute error, which is the one that can fail when a minority of rows is far out and the median is not. A dimension can sit inside both medians while nearly half its rows are outside the references' own spread. 'rows' is how many of the grid's rows survived censoring into that median, so a later run can tell whether it is comparing against the same population. 'provenance' records, per statistic, when its value was set, the last re-record at which the measurement was inside it, and what that measurement was; 'recorded_utc' is only when the file was last written. Re-record only in the same change as the behaviour that justifies it.",
   "timbre": "gm096",
   "margin": 1.25,
-  "reference_measured_utc": "2026-11-13T19:54:05+00:00",
-  "recorded_utc": "2026-11-14T03:25:08+00:00",
+  "reference_measured_utc": "2026-11-15T01:23:50+00:00",
+  "recorded_utc": "2026-11-15T01:51:22+00:00",
   "model_build": {
-    "built_utc": "2026-11-14T03:16:48Z",
-    "newest_source_utc": "2026-11-14T03:15:44Z",
+    "built_utc": "2026-11-14T22:10:25Z",
+    "newest_source_utc": "2026-11-14T22:08:56Z",
     "stale": false
   },
   "reference_spread": {},
+  "_no_tighten": {
+    "balance": "measured: detuned unison on the model (16 of 28 rows ensemble, median line width 1.99x): one window's stack is set by the beat phase it falls on, -8.8 to -13.6 dB for a two-line ladder of -11.43, so balance is not tightened from a single-window reading"
+  },
   "_module_split": "Every bound but vel_range was deleted when this slot's colour and behaviour moved to `pad_sweep_module` (stretch, tnr, damper, attack, stereo, balance, centroid_pct, body, register); they held the voice to the library's sound, which `policy.json` does not aim a machine-defined slot at.",
   "bounds": {
     "vel_range": {
@@ -23,23 +26,38 @@
         "median": {
           "set_utc": "2026-10-24T20:58:37+00:00",
           "set_build": "2026-10-24T20:56:07Z",
-          "held_utc": "2026-11-14T03:25:08+00:00",
+          "held_utc": "2026-11-15T01:51:22+00:00",
           "measured": 0.03,
-          "outcome": "kept"
+          "outcome": "kept",
+          "held_tree": {
+            "head": "d6029d545",
+            "dirty": []
+          },
+          "clean_held_utc": "2026-11-15T01:51:22+00:00"
         },
         "abs_median": {
           "set_utc": "2026-10-24T20:58:37+00:00",
           "set_build": "2026-10-24T20:56:07Z",
-          "held_utc": "2026-11-14T03:25:08+00:00",
+          "held_utc": "2026-11-15T01:51:22+00:00",
           "measured": 0.03,
-          "outcome": "kept"
+          "outcome": "kept",
+          "held_tree": {
+            "head": "d6029d545",
+            "dirty": []
+          },
+          "clean_held_utc": "2026-11-15T01:51:22+00:00"
         },
         "p90": {
           "set_utc": "2026-10-24T20:58:37+00:00",
           "set_build": "2026-10-24T20:56:07Z",
-          "held_utc": "2026-11-14T03:25:08+00:00",
+          "held_utc": "2026-11-15T01:51:22+00:00",
           "measured": 0.03,
-          "outcome": "kept"
+          "outcome": "kept",
+          "held_tree": {
+            "head": "d6029d545",
+            "dirty": []
+          },
+          "clean_held_utc": "2026-11-15T01:51:22+00:00"
         }
       }
     }

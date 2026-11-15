@@ -2,14 +2,17 @@
   "_": "Bounds the compare table is held to. All three are absolute limits: 'median' caps the magnitude of the signed median, 'abs_median' caps the median absolute error, which is the one that can fail when errors of opposite sign cancel, and 'p90' caps the 90th percentile of that absolute error, which is the one that can fail when a minority of rows is far out and the median is not. A dimension can sit inside both medians while nearly half its rows are outside the references' own spread. 'rows' is how many of the grid's rows survived censoring into that median, so a later run can tell whether it is comparing against the same population. 'provenance' records, per statistic, when its value was set, the last re-record at which the measurement was inside it, and what that measurement was; 'recorded_utc' is only when the file was last written. Re-record only in the same change as the behaviour that justifies it.",
   "timbre": "gm006",
   "margin": 1.25,
-  "reference_measured_utc": "2026-11-13T19:17:06+00:00",
-  "recorded_utc": "2026-11-14T19:52:15+00:00",
+  "reference_measured_utc": "2026-11-15T01:12:00+00:00",
+  "recorded_utc": "2026-11-15T01:48:30+00:00",
   "model_build": {
-    "built_utc": "2026-11-14T19:23:34Z",
-    "newest_source_utc": "2026-11-14T19:24:53Z",
-    "stale": true
+    "built_utc": "2026-11-14T22:10:25Z",
+    "newest_source_utc": "2026-11-14T22:08:56Z",
+    "stale": false
   },
   "reference_spread": {},
+  "_no_tighten": {
+    "balance": "measured: detuned unison on the reference (22 of 45 rows ensemble, median line width 2.65x): one window's stack is set by the beat phase it falls on, -8.8 to -13.6 dB for a two-line ladder of -11.43, so balance is not tightened from a single-window reading"
+  },
   "_tnr_mask_reading": "tnr.median (was 15.20), tnr.abs_median (was 15.20) deleted 2026-10-23 and re-recorded when the model's tone-to-noise ratio came to be read through its reference's mask: each reference row records the pitch motion and tremolo its own mask was widened by, and the model note is measured through that record rather than its own, so the same bins count as tone on both sides. The reference's own ratio did not move.",
   "_recorded_while_stale": "model_build.stale is true and does not apply to this voice. The flag is whole-tree: it compares the dylib against the newest source anywhere in src/, and at recording time that was concurrent work on the wind engines, the Karplus-Strong sympathetic path and the effects inserts. This voice renders through fm_voice.{cpp,h} and gm_fallback_programs_variations.h, all three older than the dylib, and the FM path never enters the branch the sympathetic edit touches. The bound it replaces was a genuine fossil: recorded through a library that predated 2babd0d2, it read tnr 12.475/12.75/32.992 where the same voice measures 18.66/18.66/36.51 today. Re-recording required deleting the old tnr bound by hand first, because _keep_the_tighter keeps whichever bound is numerically tighter and a fossil recorded through a quieter library is always the tighter one.",
   "_vibrato_reading": "stretch.abs_median (was 1.725) deleted 2026-10-23 and re-recorded when the measurement moved on both sides at once: under a vibrato the tuning is the fundamental's mean pitch, demodulated under its own FM extent, rather than the strongest spectral line within 80 c; a partial's level is its power summed over that FM extent rather than its peak bin; and a vibrato whose rate wanders, or whose line shares the pitch track with fast FM, now widens the tone-to-noise mask and is read at the band's RMS depth over its rate span. The reference was re-measured and the model is read with the same ruler, so these bounds were recorded under a ruler that no longer exists. A still tone reads as it did.",
@@ -26,23 +29,38 @@
         "median": {
           "set_utc": "2026-09-09T16:49:22+00:00",
           "set_build": null,
-          "held_utc": "2026-11-14T19:52:15+00:00",
+          "held_utc": "2026-11-15T01:48:30+00:00",
           "measured": 0.475,
-          "outcome": "kept"
+          "outcome": "kept",
+          "held_tree": {
+            "head": "d6029d545",
+            "dirty": []
+          },
+          "clean_held_utc": "2026-11-15T01:48:30+00:00"
         },
         "abs_median": {
           "set_utc": "2026-10-23T20:31:28+00:00",
           "set_build": "2026-10-23T15:19:39Z",
-          "held_utc": "2026-11-14T19:52:15+00:00",
+          "held_utc": "2026-11-15T01:48:30+00:00",
           "measured": 1.365,
-          "outcome": "kept"
+          "outcome": "kept",
+          "held_tree": {
+            "head": "d6029d545",
+            "dirty": []
+          },
+          "clean_held_utc": "2026-11-15T01:48:30+00:00"
         },
         "p90": {
           "set_utc": "2026-10-23T20:31:28+00:00",
           "set_build": "2026-10-23T15:19:39Z",
-          "held_utc": "2026-11-14T19:52:15+00:00",
+          "held_utc": "2026-11-15T01:48:30+00:00",
           "measured": 5.079,
-          "outcome": "kept"
+          "outcome": "kept",
+          "held_tree": {
+            "head": "d6029d545",
+            "dirty": []
+          },
+          "clean_held_utc": "2026-11-15T01:48:30+00:00"
         }
       }
     },
@@ -57,20 +75,21 @@
         "median": {
           "set_utc": "2026-09-20T20:59:45+00:00",
           "set_build": null,
-          "held_utc": "2026-11-14T19:52:15+00:00",
+          "held_utc": "2026-11-15T01:48:30+00:00",
           "measured": 1.16,
-          "outcome": "kept"
+          "outcome": "kept",
+          "held_tree": {
+            "head": "d6029d545",
+            "dirty": []
+          },
+          "clean_held_utc": "2026-11-15T01:48:30+00:00"
         },
         "abs_median": {
           "set_utc": "2026-11-14T19:52:15+00:00",
           "set_build": "2026-11-14T19:23:34Z",
-          "held_utc": "2026-11-14T19:52:15+00:00",
+          "held_utc": "2026-11-15T01:48:30+00:00",
           "measured": 1.16,
-          "outcome": "tightened",
-          "window": {
-            "model_s": 8.0,
-            "reference_s": 8.0
-          },
+          "outcome": "kept",
           "set_tree": {
             "head": "5950e7f0e",
             "dirty": [
@@ -80,18 +99,23 @@
               "src/midi/synth/piano_voice_calibration.h",
               "src/midi/synth/piano_voice_start.cpp"
             ]
-          }
+          },
+          "window": {
+            "model_s": 8.0,
+            "reference_s": 8.0
+          },
+          "held_tree": {
+            "head": "d6029d545",
+            "dirty": []
+          },
+          "clean_held_utc": "2026-11-15T01:48:30+00:00"
         },
         "p90": {
           "set_utc": "2026-11-14T19:52:15+00:00",
           "set_build": "2026-11-14T19:23:34Z",
-          "held_utc": "2026-11-14T19:52:15+00:00",
+          "held_utc": "2026-11-15T01:48:30+00:00",
           "measured": 1.754,
-          "outcome": "tightened",
-          "window": {
-            "model_s": 8.0,
-            "reference_s": 8.0
-          },
+          "outcome": "kept",
           "set_tree": {
             "head": "5950e7f0e",
             "dirty": [
@@ -101,7 +125,16 @@
               "src/midi/synth/piano_voice_calibration.h",
               "src/midi/synth/piano_voice_start.cpp"
             ]
-          }
+          },
+          "window": {
+            "model_s": 8.0,
+            "reference_s": 8.0
+          },
+          "held_tree": {
+            "head": "d6029d545",
+            "dirty": []
+          },
+          "clean_held_utc": "2026-11-15T01:48:30+00:00"
         }
       }
     },
@@ -116,23 +149,38 @@
         "median": {
           "set_utc": "2026-10-23T07:23:52+00:00",
           "set_build": "2026-10-23T06:18:37Z",
-          "held_utc": "2026-11-14T19:52:15+00:00",
+          "held_utc": "2026-11-15T01:48:30+00:00",
           "measured": 19.87,
-          "outcome": "kept"
+          "outcome": "kept",
+          "held_tree": {
+            "head": "d6029d545",
+            "dirty": []
+          },
+          "clean_held_utc": "2026-11-15T01:48:30+00:00"
         },
         "abs_median": {
           "set_utc": "2026-10-23T07:23:52+00:00",
           "set_build": "2026-10-23T06:18:37Z",
-          "held_utc": "2026-11-14T19:52:15+00:00",
+          "held_utc": "2026-11-15T01:48:30+00:00",
           "measured": 19.87,
-          "outcome": "kept"
+          "outcome": "kept",
+          "held_tree": {
+            "head": "d6029d545",
+            "dirty": []
+          },
+          "clean_held_utc": "2026-11-15T01:48:30+00:00"
         },
         "p90": {
           "set_utc": "2026-10-22T01:49:17+00:00",
           "set_build": "2026-10-21T10:18:24Z",
-          "held_utc": "2026-11-14T19:52:15+00:00",
+          "held_utc": "2026-11-15T01:48:30+00:00",
           "measured": 37.27,
-          "outcome": "kept"
+          "outcome": "kept",
+          "held_tree": {
+            "head": "d6029d545",
+            "dirty": []
+          },
+          "clean_held_utc": "2026-11-15T01:48:30+00:00"
         }
       }
     },
@@ -147,13 +195,9 @@
         "median": {
           "set_utc": "2026-11-14T19:52:15+00:00",
           "set_build": "2026-11-14T19:23:34Z",
-          "held_utc": "2026-11-14T19:52:15+00:00",
+          "held_utc": "2026-11-15T01:48:30+00:00",
           "measured": 5.0,
-          "outcome": "tightened",
-          "window": {
-            "model_s": 0.5,
-            "reference_s": 8.0
-          },
+          "outcome": "kept",
           "set_tree": {
             "head": "5950e7f0e",
             "dirty": [
@@ -163,18 +207,23 @@
               "src/midi/synth/piano_voice_calibration.h",
               "src/midi/synth/piano_voice_start.cpp"
             ]
-          }
+          },
+          "window": {
+            "model_s": 0.5,
+            "reference_s": 8.0
+          },
+          "held_tree": {
+            "head": "d6029d545",
+            "dirty": []
+          },
+          "clean_held_utc": "2026-11-15T01:48:30+00:00"
         },
         "abs_median": {
           "set_utc": "2026-11-14T19:52:15+00:00",
           "set_build": "2026-11-14T19:23:34Z",
-          "held_utc": "2026-11-14T19:52:15+00:00",
+          "held_utc": "2026-11-15T01:48:30+00:00",
           "measured": 5.0,
-          "outcome": "tightened",
-          "window": {
-            "model_s": 0.5,
-            "reference_s": 8.0
-          },
+          "outcome": "kept",
           "set_tree": {
             "head": "5950e7f0e",
             "dirty": [
@@ -184,18 +233,23 @@
               "src/midi/synth/piano_voice_calibration.h",
               "src/midi/synth/piano_voice_start.cpp"
             ]
-          }
+          },
+          "window": {
+            "model_s": 0.5,
+            "reference_s": 8.0
+          },
+          "held_tree": {
+            "head": "d6029d545",
+            "dirty": []
+          },
+          "clean_held_utc": "2026-11-15T01:48:30+00:00"
         },
         "p90": {
           "set_utc": "2026-11-14T19:52:15+00:00",
           "set_build": "2026-11-14T19:23:34Z",
-          "held_utc": "2026-11-14T19:52:15+00:00",
+          "held_utc": "2026-11-15T01:48:30+00:00",
           "measured": 10.0,
-          "outcome": "tightened",
-          "window": {
-            "model_s": 0.5,
-            "reference_s": 8.0
-          },
+          "outcome": "kept",
           "set_tree": {
             "head": "5950e7f0e",
             "dirty": [
@@ -205,7 +259,16 @@
               "src/midi/synth/piano_voice_calibration.h",
               "src/midi/synth/piano_voice_start.cpp"
             ]
-          }
+          },
+          "window": {
+            "model_s": 0.5,
+            "reference_s": 8.0
+          },
+          "held_tree": {
+            "head": "d6029d545",
+            "dirty": []
+          },
+          "clean_held_utc": "2026-11-15T01:48:30+00:00"
         }
       }
     },
@@ -220,23 +283,38 @@
         "median": {
           "set_utc": "2026-09-09T16:49:22+00:00",
           "set_build": null,
-          "held_utc": "2026-11-14T19:52:15+00:00",
+          "held_utc": "2026-11-15T01:48:30+00:00",
           "measured": 0.0,
-          "outcome": "kept"
+          "outcome": "kept",
+          "held_tree": {
+            "head": "d6029d545",
+            "dirty": []
+          },
+          "clean_held_utc": "2026-11-15T01:48:30+00:00"
         },
         "abs_median": {
           "set_utc": "2026-09-09T16:49:22+00:00",
           "set_build": null,
-          "held_utc": "2026-11-14T19:52:15+00:00",
+          "held_utc": "2026-11-15T01:48:30+00:00",
           "measured": 0.0,
-          "outcome": "kept"
+          "outcome": "kept",
+          "held_tree": {
+            "head": "d6029d545",
+            "dirty": []
+          },
+          "clean_held_utc": "2026-11-15T01:48:30+00:00"
         },
         "p90": {
           "set_utc": "2026-09-09T16:49:22+00:00",
           "set_build": null,
-          "held_utc": "2026-11-14T19:52:15+00:00",
+          "held_utc": "2026-11-15T01:48:30+00:00",
           "measured": 5.0,
-          "outcome": "kept"
+          "outcome": "kept",
+          "held_tree": {
+            "head": "d6029d545",
+            "dirty": []
+          },
+          "clean_held_utc": "2026-11-15T01:48:30+00:00"
         }
       }
     },
@@ -251,23 +329,38 @@
         "median": {
           "set_utc": "2026-10-23T15:12:25+00:00",
           "set_build": "2026-10-23T15:11:54Z",
-          "held_utc": "2026-11-14T19:52:15+00:00",
+          "held_utc": "2026-11-15T01:48:30+00:00",
           "measured": 18.59,
-          "outcome": "kept"
+          "outcome": "kept",
+          "held_tree": {
+            "head": "d6029d545",
+            "dirty": []
+          },
+          "clean_held_utc": "2026-11-15T01:48:30+00:00"
         },
         "abs_median": {
           "set_utc": "2026-10-23T15:12:25+00:00",
           "set_build": "2026-10-23T15:11:54Z",
-          "held_utc": "2026-11-14T19:52:15+00:00",
+          "held_utc": "2026-11-15T01:48:30+00:00",
           "measured": 18.59,
-          "outcome": "kept"
+          "outcome": "kept",
+          "held_tree": {
+            "head": "d6029d545",
+            "dirty": []
+          },
+          "clean_held_utc": "2026-11-15T01:48:30+00:00"
         },
         "p90": {
           "set_utc": "2026-10-23T15:12:25+00:00",
           "set_build": "2026-10-23T15:11:54Z",
-          "held_utc": "2026-11-14T19:52:15+00:00",
+          "held_utc": "2026-11-15T01:48:30+00:00",
           "measured": 41.442,
-          "outcome": "kept"
+          "outcome": "kept",
+          "held_tree": {
+            "head": "d6029d545",
+            "dirty": []
+          },
+          "clean_held_utc": "2026-11-15T01:48:30+00:00"
         }
       }
     },
@@ -282,20 +375,21 @@
         "median": {
           "set_utc": "2026-09-20T20:59:45+00:00",
           "set_build": null,
-          "held_utc": "2026-11-14T19:52:15+00:00",
+          "held_utc": "2026-11-15T01:48:30+00:00",
           "measured": 0.65,
-          "outcome": "kept"
+          "outcome": "kept",
+          "held_tree": {
+            "head": "d6029d545",
+            "dirty": []
+          },
+          "clean_held_utc": "2026-11-15T01:48:30+00:00"
         },
         "abs_median": {
           "set_utc": "2026-11-14T19:52:15+00:00",
           "set_build": "2026-11-14T19:23:34Z",
-          "held_utc": "2026-11-14T19:52:15+00:00",
+          "held_utc": "2026-11-15T01:48:30+00:00",
           "measured": 0.85,
-          "outcome": "tightened",
-          "window": {
-            "model_s": 8.0,
-            "reference_s": 8.0
-          },
+          "outcome": "kept",
           "set_tree": {
             "head": "5950e7f0e",
             "dirty": [
@@ -305,18 +399,23 @@
               "src/midi/synth/piano_voice_calibration.h",
               "src/midi/synth/piano_voice_start.cpp"
             ]
-          }
+          },
+          "window": {
+            "model_s": 8.0,
+            "reference_s": 8.0
+          },
+          "held_tree": {
+            "head": "d6029d545",
+            "dirty": []
+          },
+          "clean_held_utc": "2026-11-15T01:48:30+00:00"
         },
         "p90": {
           "set_utc": "2026-11-14T19:52:15+00:00",
           "set_build": "2026-11-14T19:23:34Z",
-          "held_utc": "2026-11-14T19:52:15+00:00",
+          "held_utc": "2026-11-15T01:48:30+00:00",
           "measured": 1.384,
-          "outcome": "tightened",
-          "window": {
-            "model_s": 8.0,
-            "reference_s": 8.0
-          },
+          "outcome": "kept",
           "set_tree": {
             "head": "5950e7f0e",
             "dirty": [
@@ -326,7 +425,16 @@
               "src/midi/synth/piano_voice_calibration.h",
               "src/midi/synth/piano_voice_start.cpp"
             ]
-          }
+          },
+          "window": {
+            "model_s": 8.0,
+            "reference_s": 8.0
+          },
+          "held_tree": {
+            "head": "d6029d545",
+            "dirty": []
+          },
+          "clean_held_utc": "2026-11-15T01:48:30+00:00"
         }
       }
     },
@@ -341,20 +449,21 @@
         "median": {
           "set_utc": "2026-10-23T15:12:25+00:00",
           "set_build": "2026-10-23T15:11:54Z",
-          "held_utc": "2026-11-14T19:52:15+00:00",
+          "held_utc": "2026-11-15T01:48:30+00:00",
           "measured": 0.87,
-          "outcome": "kept"
+          "outcome": "kept",
+          "held_tree": {
+            "head": "d6029d545",
+            "dirty": []
+          },
+          "clean_held_utc": "2026-11-15T01:48:30+00:00"
         },
         "abs_median": {
           "set_utc": "2026-11-14T19:52:15+00:00",
           "set_build": "2026-11-14T19:23:34Z",
-          "held_utc": "2026-11-14T19:52:15+00:00",
+          "held_utc": "2026-11-15T01:48:30+00:00",
           "measured": 1.63,
-          "outcome": "tightened",
-          "window": {
-            "model_s": 8.0,
-            "reference_s": 8.0
-          },
+          "outcome": "kept",
           "set_tree": {
             "head": "5950e7f0e",
             "dirty": [
@@ -364,14 +473,28 @@
               "src/midi/synth/piano_voice_calibration.h",
               "src/midi/synth/piano_voice_start.cpp"
             ]
-          }
+          },
+          "window": {
+            "model_s": 8.0,
+            "reference_s": 8.0
+          },
+          "held_tree": {
+            "head": "d6029d545",
+            "dirty": []
+          },
+          "clean_held_utc": "2026-11-15T01:48:30+00:00"
         },
         "p90": {
           "set_utc": "2026-09-20T20:59:45+00:00",
           "set_build": null,
-          "held_utc": "2026-11-14T19:52:15+00:00",
+          "held_utc": "2026-11-15T01:48:30+00:00",
           "measured": 5.536,
-          "outcome": "kept"
+          "outcome": "kept",
+          "held_tree": {
+            "head": "d6029d545",
+            "dirty": []
+          },
+          "clean_held_utc": "2026-11-15T01:48:30+00:00"
         }
       }
     },
@@ -386,9 +509,9 @@
         "median": {
           "set_utc": "2026-11-14T19:52:15+00:00",
           "set_build": "2026-11-14T19:23:34Z",
-          "held_utc": "2026-11-14T19:52:15+00:00",
-          "measured": 12.37,
-          "outcome": "tightened",
+          "held_utc": "2026-11-15T01:48:30+00:00",
+          "measured": 12.768,
+          "outcome": "kept",
           "set_tree": {
             "head": "5950e7f0e",
             "dirty": [
@@ -398,14 +521,20 @@
               "src/midi/synth/piano_voice_calibration.h",
               "src/midi/synth/piano_voice_start.cpp"
             ]
-          }
+          },
+          "set_reader": 1,
+          "held_tree": {
+            "head": "d6029d545",
+            "dirty": []
+          },
+          "clean_held_utc": "2026-11-15T01:48:30+00:00"
         },
         "abs_median": {
           "set_utc": "2026-11-14T19:52:15+00:00",
           "set_build": "2026-11-14T19:23:34Z",
-          "held_utc": "2026-11-14T19:52:15+00:00",
-          "measured": 12.37,
-          "outcome": "tightened",
+          "held_utc": "2026-11-15T01:48:30+00:00",
+          "measured": 12.768,
+          "outcome": "kept",
           "set_tree": {
             "head": "5950e7f0e",
             "dirty": [
@@ -415,14 +544,20 @@
               "src/midi/synth/piano_voice_calibration.h",
               "src/midi/synth/piano_voice_start.cpp"
             ]
-          }
+          },
+          "set_reader": 1,
+          "held_tree": {
+            "head": "d6029d545",
+            "dirty": []
+          },
+          "clean_held_utc": "2026-11-15T01:48:30+00:00"
         },
         "p90": {
           "set_utc": "2026-11-14T19:52:15+00:00",
           "set_build": "2026-11-14T19:23:34Z",
-          "held_utc": "2026-11-14T19:52:15+00:00",
-          "measured": 19.6472,
-          "outcome": "tightened",
+          "held_utc": "2026-11-15T01:48:30+00:00",
+          "measured": 20.2648,
+          "outcome": "kept",
           "set_tree": {
             "head": "5950e7f0e",
             "dirty": [
@@ -432,7 +567,13 @@
               "src/midi/synth/piano_voice_calibration.h",
               "src/midi/synth/piano_voice_start.cpp"
             ]
-          }
+          },
+          "set_reader": 1,
+          "held_tree": {
+            "head": "d6029d545",
+            "dirty": []
+          },
+          "clean_held_utc": "2026-11-15T01:48:30+00:00"
         }
       }
     },
@@ -447,13 +588,9 @@
         "median": {
           "set_utc": "2026-11-14T19:52:15+00:00",
           "set_build": "2026-11-14T19:23:34Z",
-          "held_utc": "2026-11-14T19:52:15+00:00",
+          "held_utc": "2026-11-15T01:48:30+00:00",
           "measured": 3.5725,
-          "outcome": "tightened",
-          "window": {
-            "model_s": 8.0,
-            "reference_s": 8.0
-          },
+          "outcome": "kept",
           "set_tree": {
             "head": "5950e7f0e",
             "dirty": [
@@ -463,18 +600,23 @@
               "src/midi/synth/piano_voice_calibration.h",
               "src/midi/synth/piano_voice_start.cpp"
             ]
-          }
+          },
+          "window": {
+            "model_s": 8.0,
+            "reference_s": 8.0
+          },
+          "held_tree": {
+            "head": "d6029d545",
+            "dirty": []
+          },
+          "clean_held_utc": "2026-11-15T01:48:30+00:00"
         },
         "abs_median": {
           "set_utc": "2026-11-14T19:52:15+00:00",
           "set_build": "2026-11-14T19:23:34Z",
-          "held_utc": "2026-11-14T19:52:15+00:00",
+          "held_utc": "2026-11-15T01:48:30+00:00",
           "measured": 3.6025,
-          "outcome": "tightened",
-          "window": {
-            "model_s": 8.0,
-            "reference_s": 8.0
-          },
+          "outcome": "kept",
           "set_tree": {
             "head": "5950e7f0e",
             "dirty": [
@@ -484,18 +626,23 @@
               "src/midi/synth/piano_voice_calibration.h",
               "src/midi/synth/piano_voice_start.cpp"
             ]
-          }
+          },
+          "window": {
+            "model_s": 8.0,
+            "reference_s": 8.0
+          },
+          "held_tree": {
+            "head": "d6029d545",
+            "dirty": []
+          },
+          "clean_held_utc": "2026-11-15T01:48:30+00:00"
         },
         "p90": {
           "set_utc": "2026-11-14T19:52:15+00:00",
           "set_build": "2026-11-14T19:23:34Z",
-          "held_utc": "2026-11-14T19:52:15+00:00",
+          "held_utc": "2026-11-15T01:48:30+00:00",
           "measured": 12.054,
-          "outcome": "tightened",
-          "window": {
-            "model_s": 8.0,
-            "reference_s": 8.0
-          },
+          "outcome": "kept",
           "set_tree": {
             "head": "5950e7f0e",
             "dirty": [
@@ -505,7 +652,16 @@
               "src/midi/synth/piano_voice_calibration.h",
               "src/midi/synth/piano_voice_start.cpp"
             ]
-          }
+          },
+          "window": {
+            "model_s": 8.0,
+            "reference_s": 8.0
+          },
+          "held_tree": {
+            "head": "d6029d545",
+            "dirty": []
+          },
+          "clean_held_utc": "2026-11-15T01:48:30+00:00"
         }
       }
     },
@@ -520,23 +676,33 @@
         "median": {
           "set_utc": "2026-10-23T15:12:25+00:00",
           "set_build": "2026-10-23T15:11:54Z",
-          "held_utc": "2026-11-14T19:52:15+00:00",
+          "held_utc": "2026-11-15T01:48:30+00:00",
           "measured": 0.0333,
-          "outcome": "kept"
+          "outcome": "kept",
+          "held_tree": {
+            "head": "d6029d545",
+            "dirty": []
+          },
+          "clean_held_utc": "2026-11-15T01:48:30+00:00"
         },
         "abs_median": {
           "set_utc": "2026-10-23T15:12:25+00:00",
           "set_build": "2026-10-23T15:11:54Z",
-          "held_utc": "2026-11-14T19:52:15+00:00",
+          "held_utc": "2026-11-15T01:48:30+00:00",
           "measured": 9.6336,
-          "outcome": "kept"
+          "outcome": "kept",
+          "held_tree": {
+            "head": "d6029d545",
+            "dirty": []
+          },
+          "clean_held_utc": "2026-11-15T01:48:30+00:00"
         },
         "p90": {
           "set_utc": "2026-11-14T19:52:15+00:00",
           "set_build": "2026-11-14T19:23:34Z",
-          "held_utc": "2026-11-14T19:52:15+00:00",
+          "held_utc": "2026-11-15T01:48:30+00:00",
           "measured": 46.0404,
-          "outcome": "tightened",
+          "outcome": "kept",
           "set_tree": {
             "head": "5950e7f0e",
             "dirty": [
@@ -546,7 +712,12 @@
               "src/midi/synth/piano_voice_calibration.h",
               "src/midi/synth/piano_voice_start.cpp"
             ]
-          }
+          },
+          "held_tree": {
+            "head": "d6029d545",
+            "dirty": []
+          },
+          "clean_held_utc": "2026-11-15T01:48:30+00:00"
         }
       }
     },
@@ -561,9 +732,9 @@
         "median": {
           "set_utc": "2026-11-14T19:52:15+00:00",
           "set_build": "2026-11-14T19:23:34Z",
-          "held_utc": "2026-11-14T19:52:15+00:00",
+          "held_utc": "2026-11-15T01:48:30+00:00",
           "measured": 41.68,
-          "outcome": "tightened",
+          "outcome": "kept",
           "set_tree": {
             "head": "5950e7f0e",
             "dirty": [
@@ -573,14 +744,19 @@
               "src/midi/synth/piano_voice_calibration.h",
               "src/midi/synth/piano_voice_start.cpp"
             ]
-          }
+          },
+          "held_tree": {
+            "head": "d6029d545",
+            "dirty": []
+          },
+          "clean_held_utc": "2026-11-15T01:48:30+00:00"
         },
         "abs_median": {
           "set_utc": "2026-11-14T19:52:15+00:00",
           "set_build": "2026-11-14T19:23:34Z",
-          "held_utc": "2026-11-14T19:52:15+00:00",
+          "held_utc": "2026-11-15T01:48:30+00:00",
           "measured": 41.68,
-          "outcome": "tightened",
+          "outcome": "kept",
           "set_tree": {
             "head": "5950e7f0e",
             "dirty": [
@@ -590,14 +766,24 @@
               "src/midi/synth/piano_voice_calibration.h",
               "src/midi/synth/piano_voice_start.cpp"
             ]
-          }
+          },
+          "held_tree": {
+            "head": "d6029d545",
+            "dirty": []
+          },
+          "clean_held_utc": "2026-11-15T01:48:30+00:00"
         },
         "p90": {
           "set_utc": "2026-09-09T16:49:22+00:00",
           "set_build": null,
-          "held_utc": "2026-11-14T19:52:15+00:00",
+          "held_utc": "2026-11-15T01:48:30+00:00",
           "measured": 68.048,
-          "outcome": "kept"
+          "outcome": "kept",
+          "held_tree": {
+            "head": "d6029d545",
+            "dirty": []
+          },
+          "clean_held_utc": "2026-11-15T01:48:30+00:00"
         }
       }
     },
@@ -612,23 +798,38 @@
         "median": {
           "set_utc": "2026-09-20T20:59:45+00:00",
           "set_build": null,
-          "held_utc": "2026-11-14T19:52:15+00:00",
+          "held_utc": "2026-11-15T01:48:30+00:00",
           "measured": 1.23,
-          "outcome": "kept"
+          "outcome": "kept",
+          "held_tree": {
+            "head": "d6029d545",
+            "dirty": []
+          },
+          "clean_held_utc": "2026-11-15T01:48:30+00:00"
         },
         "abs_median": {
           "set_utc": "2026-10-23T15:12:25+00:00",
           "set_build": "2026-10-23T15:11:54Z",
-          "held_utc": "2026-11-14T19:52:15+00:00",
+          "held_utc": "2026-11-15T01:48:30+00:00",
           "measured": 2.24,
-          "outcome": "kept"
+          "outcome": "kept",
+          "held_tree": {
+            "head": "d6029d545",
+            "dirty": []
+          },
+          "clean_held_utc": "2026-11-15T01:48:30+00:00"
         },
         "p90": {
           "set_utc": "2026-10-22T01:49:17+00:00",
           "set_build": "2026-10-21T10:18:24Z",
-          "held_utc": "2026-11-14T19:52:15+00:00",
+          "held_utc": "2026-11-15T01:48:30+00:00",
           "measured": 6.416,
-          "outcome": "kept"
+          "outcome": "kept",
+          "held_tree": {
+            "head": "d6029d545",
+            "dirty": []
+          },
+          "clean_held_utc": "2026-11-15T01:48:30+00:00"
         }
       }
     },
@@ -643,9 +844,9 @@
         "median": {
           "set_utc": "2026-11-14T19:52:15+00:00",
           "set_build": "2026-11-14T19:23:34Z",
-          "held_utc": "2026-11-14T19:52:15+00:00",
+          "held_utc": "2026-11-15T01:48:30+00:00",
           "measured": 19.59,
-          "outcome": "tightened",
+          "outcome": "kept",
           "set_tree": {
             "head": "5950e7f0e",
             "dirty": [
@@ -655,14 +856,19 @@
               "src/midi/synth/piano_voice_calibration.h",
               "src/midi/synth/piano_voice_start.cpp"
             ]
-          }
+          },
+          "held_tree": {
+            "head": "d6029d545",
+            "dirty": []
+          },
+          "clean_held_utc": "2026-11-15T01:48:30+00:00"
         },
         "abs_median": {
           "set_utc": "2026-11-14T19:52:15+00:00",
           "set_build": "2026-11-14T19:23:34Z",
-          "held_utc": "2026-11-14T19:52:15+00:00",
+          "held_utc": "2026-11-15T01:48:30+00:00",
           "measured": 19.59,
-          "outcome": "tightened",
+          "outcome": "kept",
           "set_tree": {
             "head": "5950e7f0e",
             "dirty": [
@@ -672,14 +878,19 @@
               "src/midi/synth/piano_voice_calibration.h",
               "src/midi/synth/piano_voice_start.cpp"
             ]
-          }
+          },
+          "held_tree": {
+            "head": "d6029d545",
+            "dirty": []
+          },
+          "clean_held_utc": "2026-11-15T01:48:30+00:00"
         },
         "p90": {
           "set_utc": "2026-11-14T19:52:15+00:00",
           "set_build": "2026-11-14T19:23:34Z",
-          "held_utc": "2026-11-14T19:52:15+00:00",
+          "held_utc": "2026-11-15T01:48:30+00:00",
           "measured": 28.03,
-          "outcome": "tightened",
+          "outcome": "kept",
           "set_tree": {
             "head": "5950e7f0e",
             "dirty": [
@@ -689,7 +900,12 @@
               "src/midi/synth/piano_voice_calibration.h",
               "src/midi/synth/piano_voice_start.cpp"
             ]
-          }
+          },
+          "held_tree": {
+            "head": "d6029d545",
+            "dirty": []
+          },
+          "clean_held_utc": "2026-11-15T01:48:30+00:00"
         }
       }
     },
@@ -704,23 +920,33 @@
         "median": {
           "set_utc": "2026-09-09T16:49:22+00:00",
           "set_build": null,
-          "held_utc": "2026-11-14T19:52:15+00:00",
+          "held_utc": "2026-11-15T01:48:30+00:00",
           "measured": 0.04,
-          "outcome": "kept"
+          "outcome": "kept",
+          "held_tree": {
+            "head": "d6029d545",
+            "dirty": []
+          },
+          "clean_held_utc": "2026-11-15T01:48:30+00:00"
         },
         "abs_median": {
           "set_utc": "2026-09-20T20:59:45+00:00",
           "set_build": null,
-          "held_utc": "2026-11-14T19:52:15+00:00",
+          "held_utc": "2026-11-15T01:48:30+00:00",
           "measured": 0.8,
-          "outcome": "kept"
+          "outcome": "kept",
+          "held_tree": {
+            "head": "d6029d545",
+            "dirty": []
+          },
+          "clean_held_utc": "2026-11-15T01:48:30+00:00"
         },
         "p90": {
           "set_utc": "2026-11-14T19:52:15+00:00",
           "set_build": "2026-11-14T19:23:34Z",
-          "held_utc": "2026-11-14T19:52:15+00:00",
+          "held_utc": "2026-11-15T01:48:30+00:00",
           "measured": 3.92,
-          "outcome": "tightened",
+          "outcome": "kept",
           "set_tree": {
             "head": "5950e7f0e",
             "dirty": [
@@ -730,7 +956,12 @@
               "src/midi/synth/piano_voice_calibration.h",
               "src/midi/synth/piano_voice_start.cpp"
             ]
-          }
+          },
+          "held_tree": {
+            "head": "d6029d545",
+            "dirty": []
+          },
+          "clean_held_utc": "2026-11-15T01:48:30+00:00"
         }
       }
     }

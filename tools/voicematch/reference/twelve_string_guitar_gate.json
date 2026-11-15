@@ -2,16 +2,19 @@
   "_": "Bounds the compare table is held to. All three are absolute limits: 'median' caps the magnitude of the signed median, 'abs_median' caps the median absolute error, which is the one that can fail when errors of opposite sign cancel, and 'p90' caps the 90th percentile of that absolute error, which is the one that can fail when a minority of rows is far out and the median is not. A dimension can sit inside both medians while nearly half its rows are outside the references' own spread. 'rows' is how many of the grid's rows survived censoring into that median, so a later run can tell whether it is comparing against the same population. 'provenance' records, per statistic, when its value was set, the last re-record at which the measurement was inside it, and what that measurement was; 'recorded_utc' is only when the file was last written. Re-record only in the same change as the behaviour that justifies it.",
   "timbre": "t0",
   "margin": 1.25,
-  "reference_measured_utc": "2026-11-13T19:58:30+00:00",
-  "recorded_utc": "2026-11-14T03:28:45+00:00",
+  "reference_measured_utc": "2026-11-15T01:33:51+00:00",
+  "recorded_utc": "2026-11-15T01:53:32+00:00",
   "model_build": {
-    "built_utc": "2026-11-14T03:16:48Z",
-    "newest_source_utc": "2026-11-14T03:15:44Z",
+    "built_utc": "2026-11-14T22:10:25Z",
+    "newest_source_utc": "2026-11-14T22:08:56Z",
     "stale": false
   },
   "reference_spread": {},
   "_excluded": {
     "body": "the 40 Hz-0.7 f0 band holds a fixed ratio to the note from the first 50 ms (n48: -38.7, -36.0, -36.4, -36.6, -37.2 dB re f0 at 0.05-2.0 s while the fundamental falls 18 dB; n60: -24.8 to -28.1) and falls against it after the pluck on 1 of 4 rows, so what the -25 to -40 dB reading measures is a layer baked into the sample, not a body excited by the pluck"
+  },
+  "_no_tighten": {
+    "balance": "measured: detuned unison on the reference (1 of 5 rows ensemble, median line width 2.54x): one window's stack is set by the beat phase it falls on, -8.8 to -13.6 dB for a two-line ladder of -11.43, so balance is not tightened from a single-window reading"
   },
   "_tnr_mask_reading": "tnr.p90 (was 38.43) deleted 2026-10-23 and re-recorded when the model's tone-to-noise ratio came to be read through its reference's mask: each reference row records the pitch motion and tremolo its own mask was widened by, and the model note is measured through that record rather than its own, so the same bins count as tone on both sides. The reference's own ratio did not move.",
   "bounds": {
@@ -26,7 +29,7 @@
         "median": {
           "set_utc": "2026-11-14T00:45:11+00:00",
           "set_build": "2026-11-14T00:38:54Z",
-          "held_utc": "2026-11-14T03:28:45+00:00",
+          "held_utc": "2026-11-15T01:53:32+00:00",
           "measured": 0.74,
           "outcome": "kept",
           "set_tree": {
@@ -43,12 +46,17 @@
                 66
               ]
             }
-          }
+          },
+          "held_tree": {
+            "head": "d6029d545",
+            "dirty": []
+          },
+          "clean_held_utc": "2026-11-15T01:53:32+00:00"
         },
         "abs_median": {
           "set_utc": "2026-11-14T00:45:11+00:00",
           "set_build": "2026-11-14T00:38:54Z",
-          "held_utc": "2026-11-14T03:28:45+00:00",
+          "held_utc": "2026-11-15T01:53:32+00:00",
           "measured": 1.26,
           "outcome": "kept",
           "set_tree": {
@@ -65,12 +73,17 @@
                 66
               ]
             }
-          }
+          },
+          "held_tree": {
+            "head": "d6029d545",
+            "dirty": []
+          },
+          "clean_held_utc": "2026-11-15T01:53:32+00:00"
         },
         "p90": {
           "set_utc": "2026-11-14T00:45:11+00:00",
           "set_build": "2026-11-14T00:38:54Z",
-          "held_utc": "2026-11-14T03:28:45+00:00",
+          "held_utc": "2026-11-15T01:53:32+00:00",
           "measured": 2.984,
           "outcome": "kept",
           "set_tree": {
@@ -87,7 +100,12 @@
                 66
               ]
             }
-          }
+          },
+          "held_tree": {
+            "head": "d6029d545",
+            "dirty": []
+          },
+          "clean_held_utc": "2026-11-15T01:53:32+00:00"
         }
       }
     },
@@ -102,7 +120,7 @@
         "median": {
           "set_utc": "2026-11-13T23:15:07+00:00",
           "set_build": "2026-11-13T22:56:16Z",
-          "held_utc": "2026-11-14T03:28:45+00:00",
+          "held_utc": "2026-11-15T01:53:32+00:00",
           "measured": 1.36,
           "outcome": "kept",
           "set_tree": {
@@ -120,12 +138,17 @@
               2.84,
               3.833
             ]
-          }
+          },
+          "held_tree": {
+            "head": "d6029d545",
+            "dirty": []
+          },
+          "clean_held_utc": "2026-11-15T01:53:32+00:00"
         },
         "abs_median": {
           "set_utc": "2026-11-13T23:15:07+00:00",
           "set_build": "2026-11-13T22:56:16Z",
-          "held_utc": "2026-11-14T03:28:45+00:00",
+          "held_utc": "2026-11-15T01:53:32+00:00",
           "measured": 1.6,
           "outcome": "kept",
           "set_tree": {
@@ -143,12 +166,17 @@
               2.84,
               3.833
             ]
-          }
+          },
+          "held_tree": {
+            "head": "d6029d545",
+            "dirty": []
+          },
+          "clean_held_utc": "2026-11-15T01:53:32+00:00"
         },
         "p90": {
           "set_utc": "2026-11-13T23:15:07+00:00",
           "set_build": "2026-11-13T22:56:16Z",
-          "held_utc": "2026-11-14T03:28:45+00:00",
+          "held_utc": "2026-11-15T01:53:32+00:00",
           "measured": 3.312,
           "outcome": "kept",
           "set_tree": {
@@ -166,7 +194,12 @@
               2.84,
               3.833
             ]
-          }
+          },
+          "held_tree": {
+            "head": "d6029d545",
+            "dirty": []
+          },
+          "clean_held_utc": "2026-11-15T01:53:32+00:00"
         }
       }
     },
@@ -181,7 +214,7 @@
         "median": {
           "set_utc": "2026-11-13T23:15:07+00:00",
           "set_build": "2026-11-13T22:56:16Z",
-          "held_utc": "2026-11-14T03:28:45+00:00",
+          "held_utc": "2026-11-15T01:53:32+00:00",
           "measured": 30.39,
           "outcome": "kept",
           "set_tree": {
@@ -199,12 +232,17 @@
               2.84,
               3.833
             ]
-          }
+          },
+          "held_tree": {
+            "head": "d6029d545",
+            "dirty": []
+          },
+          "clean_held_utc": "2026-11-15T01:53:32+00:00"
         },
         "abs_median": {
           "set_utc": "2026-11-13T23:15:07+00:00",
           "set_build": "2026-11-13T22:56:16Z",
-          "held_utc": "2026-11-14T03:28:45+00:00",
+          "held_utc": "2026-11-15T01:53:32+00:00",
           "measured": 30.39,
           "outcome": "kept",
           "set_tree": {
@@ -222,12 +260,17 @@
               2.84,
               3.833
             ]
-          }
+          },
+          "held_tree": {
+            "head": "d6029d545",
+            "dirty": []
+          },
+          "clean_held_utc": "2026-11-15T01:53:32+00:00"
         },
         "p90": {
           "set_utc": "2026-11-13T23:15:07+00:00",
           "set_build": "2026-11-13T22:56:16Z",
-          "held_utc": "2026-11-14T03:28:45+00:00",
+          "held_utc": "2026-11-15T01:53:32+00:00",
           "measured": 32.68,
           "outcome": "kept",
           "set_tree": {
@@ -245,7 +288,12 @@
               2.84,
               3.833
             ]
-          }
+          },
+          "held_tree": {
+            "head": "d6029d545",
+            "dirty": []
+          },
+          "clean_held_utc": "2026-11-15T01:53:32+00:00"
         }
       }
     },
@@ -260,7 +308,7 @@
         "median": {
           "set_utc": "2026-11-13T23:15:07+00:00",
           "set_build": "2026-11-13T22:56:16Z",
-          "held_utc": "2026-11-14T03:28:45+00:00",
+          "held_utc": "2026-11-15T01:53:32+00:00",
           "measured": 0.0,
           "outcome": "kept",
           "set_tree": {
@@ -278,12 +326,17 @@
               2.84,
               3.833
             ]
-          }
+          },
+          "held_tree": {
+            "head": "d6029d545",
+            "dirty": []
+          },
+          "clean_held_utc": "2026-11-15T01:53:32+00:00"
         },
         "abs_median": {
           "set_utc": "2026-11-13T23:15:07+00:00",
           "set_build": "2026-11-13T22:56:16Z",
-          "held_utc": "2026-11-14T03:28:45+00:00",
+          "held_utc": "2026-11-15T01:53:32+00:00",
           "measured": 0.0,
           "outcome": "kept",
           "set_tree": {
@@ -301,12 +354,17 @@
               2.84,
               3.833
             ]
-          }
+          },
+          "held_tree": {
+            "head": "d6029d545",
+            "dirty": []
+          },
+          "clean_held_utc": "2026-11-15T01:53:32+00:00"
         },
         "p90": {
           "set_utc": "2026-11-13T23:15:07+00:00",
           "set_build": "2026-11-13T22:56:16Z",
-          "held_utc": "2026-11-14T03:28:45+00:00",
+          "held_utc": "2026-11-15T01:53:32+00:00",
           "measured": 6.0,
           "outcome": "kept",
           "set_tree": {
@@ -324,7 +382,12 @@
               2.84,
               3.833
             ]
-          }
+          },
+          "held_tree": {
+            "head": "d6029d545",
+            "dirty": []
+          },
+          "clean_held_utc": "2026-11-15T01:53:32+00:00"
         }
       }
     },
@@ -339,23 +402,38 @@
         "median": {
           "set_utc": "2026-09-25T20:35:41+00:00",
           "set_build": "2026-09-25T20:30:56Z",
-          "held_utc": "2026-11-14T03:28:45+00:00",
+          "held_utc": "2026-11-15T01:53:32+00:00",
           "measured": 40.72,
-          "outcome": "kept"
+          "outcome": "kept",
+          "held_tree": {
+            "head": "d6029d545",
+            "dirty": []
+          },
+          "clean_held_utc": "2026-11-15T01:53:32+00:00"
         },
         "abs_median": {
           "set_utc": "2026-09-25T20:35:41+00:00",
           "set_build": "2026-09-25T20:30:56Z",
-          "held_utc": "2026-11-14T03:28:45+00:00",
+          "held_utc": "2026-11-15T01:53:32+00:00",
           "measured": 40.72,
-          "outcome": "kept"
+          "outcome": "kept",
+          "held_tree": {
+            "head": "d6029d545",
+            "dirty": []
+          },
+          "clean_held_utc": "2026-11-15T01:53:32+00:00"
         },
         "p90": {
           "set_utc": "2026-09-25T20:35:41+00:00",
           "set_build": "2026-09-25T20:30:56Z",
-          "held_utc": "2026-11-14T03:28:45+00:00",
+          "held_utc": "2026-11-15T01:53:32+00:00",
           "measured": 48.738,
-          "outcome": "kept"
+          "outcome": "kept",
+          "held_tree": {
+            "head": "d6029d545",
+            "dirty": []
+          },
+          "clean_held_utc": "2026-11-15T01:53:32+00:00"
         }
       }
     },
@@ -370,7 +448,7 @@
         "median": {
           "set_utc": "2026-11-13T23:15:07+00:00",
           "set_build": "2026-11-13T22:56:16Z",
-          "held_utc": "2026-11-14T03:28:45+00:00",
+          "held_utc": "2026-11-15T01:53:32+00:00",
           "measured": 1.5,
           "outcome": "kept",
           "set_tree": {
@@ -388,12 +466,17 @@
               2.84,
               3.833
             ]
-          }
+          },
+          "held_tree": {
+            "head": "d6029d545",
+            "dirty": []
+          },
+          "clean_held_utc": "2026-11-15T01:53:32+00:00"
         },
         "abs_median": {
           "set_utc": "2026-11-13T23:15:07+00:00",
           "set_build": "2026-11-13T22:56:16Z",
-          "held_utc": "2026-11-14T03:28:45+00:00",
+          "held_utc": "2026-11-15T01:53:32+00:00",
           "measured": 1.5,
           "outcome": "kept",
           "set_tree": {
@@ -411,12 +494,17 @@
               2.84,
               3.833
             ]
-          }
+          },
+          "held_tree": {
+            "head": "d6029d545",
+            "dirty": []
+          },
+          "clean_held_utc": "2026-11-15T01:53:32+00:00"
         },
         "p90": {
           "set_utc": "2026-11-13T23:15:07+00:00",
           "set_build": "2026-11-13T22:56:16Z",
-          "held_utc": "2026-11-14T03:28:45+00:00",
+          "held_utc": "2026-11-15T01:53:32+00:00",
           "measured": 3.604,
           "outcome": "kept",
           "set_tree": {
@@ -434,7 +522,12 @@
               2.84,
               3.833
             ]
-          }
+          },
+          "held_tree": {
+            "head": "d6029d545",
+            "dirty": []
+          },
+          "clean_held_utc": "2026-11-15T01:53:32+00:00"
         }
       }
     },
@@ -449,7 +542,7 @@
         "median": {
           "set_utc": "2026-11-13T23:15:07+00:00",
           "set_build": "2026-11-13T22:56:16Z",
-          "held_utc": "2026-11-14T03:28:45+00:00",
+          "held_utc": "2026-11-15T01:53:32+00:00",
           "measured": 2.14,
           "outcome": "kept",
           "set_tree": {
@@ -467,12 +560,17 @@
               2.84,
               3.833
             ]
-          }
+          },
+          "held_tree": {
+            "head": "d6029d545",
+            "dirty": []
+          },
+          "clean_held_utc": "2026-11-15T01:53:32+00:00"
         },
         "abs_median": {
           "set_utc": "2026-11-13T23:15:07+00:00",
           "set_build": "2026-11-13T22:56:16Z",
-          "held_utc": "2026-11-14T03:28:45+00:00",
+          "held_utc": "2026-11-15T01:53:32+00:00",
           "measured": 4.96,
           "outcome": "kept",
           "set_tree": {
@@ -490,12 +588,17 @@
               2.84,
               3.833
             ]
-          }
+          },
+          "held_tree": {
+            "head": "d6029d545",
+            "dirty": []
+          },
+          "clean_held_utc": "2026-11-15T01:53:32+00:00"
         },
         "p90": {
           "set_utc": "2026-11-13T23:15:07+00:00",
           "set_build": "2026-11-13T22:56:16Z",
-          "held_utc": "2026-11-14T03:28:45+00:00",
+          "held_utc": "2026-11-15T01:53:32+00:00",
           "measured": 13.144,
           "outcome": "kept",
           "set_tree": {
@@ -513,7 +616,12 @@
               2.84,
               3.833
             ]
-          }
+          },
+          "held_tree": {
+            "head": "d6029d545",
+            "dirty": []
+          },
+          "clean_held_utc": "2026-11-15T01:53:32+00:00"
         }
       }
     },
@@ -528,23 +636,41 @@
         "median": {
           "set_utc": "2026-10-22T05:56:56+00:00",
           "set_build": "2026-10-22T04:22:37Z",
-          "held_utc": "2026-11-14T03:28:45+00:00",
-          "measured": 11.942,
-          "outcome": "kept"
+          "held_utc": "2026-11-15T01:53:32+00:00",
+          "measured": 10.948,
+          "outcome": "kept",
+          "set_reader": 1,
+          "held_tree": {
+            "head": "d6029d545",
+            "dirty": []
+          },
+          "clean_held_utc": "2026-11-15T01:53:32+00:00"
         },
         "abs_median": {
           "set_utc": "2026-10-22T05:56:56+00:00",
           "set_build": "2026-10-22T04:22:37Z",
-          "held_utc": "2026-11-14T03:28:45+00:00",
-          "measured": 11.942,
-          "outcome": "kept"
+          "held_utc": "2026-11-15T01:53:32+00:00",
+          "measured": 10.948,
+          "outcome": "kept",
+          "set_reader": 1,
+          "held_tree": {
+            "head": "d6029d545",
+            "dirty": []
+          },
+          "clean_held_utc": "2026-11-15T01:53:32+00:00"
         },
         "p90": {
           "set_utc": "2026-10-22T01:25:33+00:00",
           "set_build": "2026-10-21T10:18:24Z",
-          "held_utc": "2026-11-14T03:28:45+00:00",
-          "measured": 21.4224,
-          "outcome": "kept"
+          "held_utc": "2026-11-15T01:53:32+00:00",
+          "measured": 21.082,
+          "outcome": "kept",
+          "set_reader": 1,
+          "held_tree": {
+            "head": "d6029d545",
+            "dirty": []
+          },
+          "clean_held_utc": "2026-11-15T01:53:32+00:00"
         }
       }
     },
@@ -559,7 +685,7 @@
         "median": {
           "set_utc": "2026-11-13T23:15:07+00:00",
           "set_build": "2026-11-13T22:56:16Z",
-          "held_utc": "2026-11-14T03:28:45+00:00",
+          "held_utc": "2026-11-15T01:53:32+00:00",
           "measured": 91.26,
           "outcome": "kept",
           "set_tree": {
@@ -577,12 +703,17 @@
               2.84,
               3.833
             ]
-          }
+          },
+          "held_tree": {
+            "head": "d6029d545",
+            "dirty": []
+          },
+          "clean_held_utc": "2026-11-15T01:53:32+00:00"
         },
         "abs_median": {
           "set_utc": "2026-11-13T23:15:07+00:00",
           "set_build": "2026-11-13T22:56:16Z",
-          "held_utc": "2026-11-14T03:28:45+00:00",
+          "held_utc": "2026-11-15T01:53:32+00:00",
           "measured": 91.26,
           "outcome": "kept",
           "set_tree": {
@@ -600,12 +731,17 @@
               2.84,
               3.833
             ]
-          }
+          },
+          "held_tree": {
+            "head": "d6029d545",
+            "dirty": []
+          },
+          "clean_held_utc": "2026-11-15T01:53:32+00:00"
         },
         "p90": {
           "set_utc": "2026-11-13T23:15:07+00:00",
           "set_build": "2026-11-13T22:56:16Z",
-          "held_utc": "2026-11-14T03:28:45+00:00",
+          "held_utc": "2026-11-15T01:53:32+00:00",
           "measured": 146.919,
           "outcome": "kept",
           "set_tree": {
@@ -623,7 +759,12 @@
               2.84,
               3.833
             ]
-          }
+          },
+          "held_tree": {
+            "head": "d6029d545",
+            "dirty": []
+          },
+          "clean_held_utc": "2026-11-15T01:53:32+00:00"
         }
       }
     },
@@ -638,23 +779,38 @@
         "median": {
           "set_utc": "2026-09-20T19:34:16+00:00",
           "set_build": null,
-          "held_utc": "2026-11-14T03:28:45+00:00",
+          "held_utc": "2026-11-15T01:53:32+00:00",
           "measured": 35.7123,
-          "outcome": "kept"
+          "outcome": "kept",
+          "held_tree": {
+            "head": "d6029d545",
+            "dirty": []
+          },
+          "clean_held_utc": "2026-11-15T01:53:32+00:00"
         },
         "abs_median": {
           "set_utc": "2026-09-20T19:34:16+00:00",
           "set_build": null,
-          "held_utc": "2026-11-14T03:28:45+00:00",
+          "held_utc": "2026-11-15T01:53:32+00:00",
           "measured": 35.7123,
-          "outcome": "kept"
+          "outcome": "kept",
+          "held_tree": {
+            "head": "d6029d545",
+            "dirty": []
+          },
+          "clean_held_utc": "2026-11-15T01:53:32+00:00"
         },
         "p90": {
           "set_utc": "2026-10-22T01:25:33+00:00",
           "set_build": "2026-10-21T10:18:24Z",
-          "held_utc": "2026-11-14T03:28:45+00:00",
+          "held_utc": "2026-11-15T01:53:32+00:00",
           "measured": 47.7347,
-          "outcome": "kept"
+          "outcome": "kept",
+          "held_tree": {
+            "head": "d6029d545",
+            "dirty": []
+          },
+          "clean_held_utc": "2026-11-15T01:53:32+00:00"
         }
       }
     }

@@ -2,14 +2,17 @@
   "_": "Bounds the compare table is held to. All three are absolute limits: 'median' caps the magnitude of the signed median, 'abs_median' caps the median absolute error, which is the one that can fail when errors of opposite sign cancel, and 'p90' caps the 90th percentile of that absolute error, which is the one that can fail when a minority of rows is far out and the median is not. A dimension can sit inside both medians while nearly half its rows are outside the references' own spread. 'rows' is how many of the grid's rows survived censoring into that median, so a later run can tell whether it is comparing against the same population. 'provenance' records, per statistic, when its value was set, the last re-record at which the measurement was inside it, and what that measurement was; 'recorded_utc' is only when the file was last written. Re-record only in the same change as the behaviour that justifies it.",
   "timbre": "gm089",
   "margin": 1.25,
-  "reference_measured_utc": "2026-11-13T19:52:14+00:00",
-  "recorded_utc": "2026-11-14T03:24:52+00:00",
+  "reference_measured_utc": "2026-11-15T01:23:27+00:00",
+  "recorded_utc": "2026-11-15T01:51:14+00:00",
   "model_build": {
-    "built_utc": "2026-11-14T03:16:48Z",
-    "newest_source_utc": "2026-11-14T03:15:44Z",
+    "built_utc": "2026-11-14T22:10:25Z",
+    "newest_source_utc": "2026-11-14T22:08:56Z",
     "stale": false
   },
   "reference_spread": {},
+  "_no_tighten": {
+    "balance": "measured: detuned unison on the model (8 of 28 rows ensemble, median line width 3.39x): one window's stack is set by the beat phase it falls on, -8.8 to -13.6 dB for a two-line ladder of -11.43, so balance is not tightened from a single-window reading"
+  },
   "_pitch_ruler": "raised on 2026-10-24 when the held pitch moved from the strongest peak to the power centroid of each partial's lines (metrics_partials.line_centroid_pitch), and every reference was re-measured with it: tnr.median 12.32 -> 24.762. The old bounds were recorded from a reading that picked one of a partial's detuned lines by the window's beat phase, or placed the windows that the other readings take from f0 on that line.",
   "_module_split": "Every bound but vel_range was deleted when this slot's colour and behaviour moved to `pad_new_age_module` (stretch, tnr, attack, balance, centroid_pct, body, damper, register); they held the voice to the library's sound, which `policy.json` does not aim a machine-defined slot at.",
   "bounds": {
@@ -24,27 +27,42 @@
         "median": {
           "set_utc": "2026-10-24T20:58:26+00:00",
           "set_build": "2026-10-24T20:56:07Z",
-          "held_utc": "2026-11-14T03:24:52+00:00",
+          "held_utc": "2026-11-15T01:51:14+00:00",
           "measured": 0.07,
-          "outcome": "kept"
+          "outcome": "kept",
+          "held_tree": {
+            "head": "d6029d545",
+            "dirty": []
+          },
+          "clean_held_utc": "2026-11-15T01:51:14+00:00"
         },
         "abs_median": {
           "set_utc": "2026-10-24T20:58:26+00:00",
           "set_build": "2026-10-24T20:56:07Z",
-          "held_utc": "2026-11-14T03:24:52+00:00",
+          "held_utc": "2026-11-15T01:51:14+00:00",
           "measured": 0.58,
-          "outcome": "kept"
+          "outcome": "kept",
+          "held_tree": {
+            "head": "d6029d545",
+            "dirty": []
+          },
+          "clean_held_utc": "2026-11-15T01:51:14+00:00"
         },
         "p90": {
           "set_utc": "2026-11-13T23:12:22+00:00",
           "set_build": "2026-11-13T22:56:16Z",
-          "held_utc": "2026-11-14T03:24:52+00:00",
+          "held_utc": "2026-11-15T01:51:14+00:00",
           "measured": 0.966,
           "outcome": "kept",
           "set_tree": {
             "head": "e37d16abf",
             "dirty": []
-          }
+          },
+          "held_tree": {
+            "head": "d6029d545",
+            "dirty": []
+          },
+          "clean_held_utc": "2026-11-15T01:51:14+00:00"
         }
       }
     }

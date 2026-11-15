@@ -3,10 +3,10 @@
   "timbre": "kit-b",
   "margin": 1.25,
   "reference_measured_utc": "2026-11-13T19:45:01+00:00",
-  "recorded_utc": "2026-11-14T03:19:36+00:00",
+  "recorded_utc": "2026-11-15T01:48:06+00:00",
   "model_build": {
-    "built_utc": "2026-11-14T03:16:48Z",
-    "newest_source_utc": "2026-11-14T03:15:44Z",
+    "built_utc": "2026-11-14T22:10:25Z",
+    "newest_source_utc": "2026-11-14T22:08:56Z",
     "stale": false
   },
   "reference_spread": {},
@@ -22,24 +22,34 @@
         "median": {
           "set_utc": "2026-11-13T23:07:05+00:00",
           "set_build": "2026-11-13T22:56:16Z",
-          "held_utc": "2026-11-14T03:19:36+00:00",
+          "held_utc": "2026-11-15T01:48:06+00:00",
           "measured": 0.01,
           "outcome": "kept",
           "set_tree": {
             "head": "e37d16abf",
             "dirty": []
-          }
+          },
+          "held_tree": {
+            "head": "d6029d545",
+            "dirty": []
+          },
+          "clean_held_utc": "2026-11-15T01:48:06+00:00"
         },
         "abs_median": {
           "set_utc": "2026-11-13T23:07:05+00:00",
           "set_build": "2026-11-13T22:56:16Z",
-          "held_utc": "2026-11-14T03:19:36+00:00",
+          "held_utc": "2026-11-15T01:48:06+00:00",
           "measured": 0.03,
           "outcome": "kept",
           "set_tree": {
             "head": "e37d16abf",
             "dirty": []
-          }
+          },
+          "held_tree": {
+            "head": "d6029d545",
+            "dirty": []
+          },
+          "clean_held_utc": "2026-11-15T01:48:06+00:00"
         },
         "p90": {
           "set_utc": "2026-09-26T13:03:57+00:00",

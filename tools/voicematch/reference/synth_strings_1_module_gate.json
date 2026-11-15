@@ -2,14 +2,17 @@
   "_": "Bounds the compare table is held to. All three are absolute limits: 'median' caps the magnitude of the signed median, 'abs_median' caps the median absolute error, which is the one that can fail when errors of opposite sign cancel, and 'p90' caps the 90th percentile of that absolute error, which is the one that can fail when a minority of rows is far out and the median is not. A dimension can sit inside both medians while nearly half its rows are outside the references' own spread. 'rows' is how many of the grid's rows survived censoring into that median, so a later run can tell whether it is comparing against the same population. 'provenance' records, per statistic, when its value was set, the last re-record at which the measurement was inside it, and what that measurement was; 'recorded_utc' is only when the file was last written. Re-record only in the same change as the behaviour that justifies it.",
   "timbre": "t0",
   "margin": 1.25,
-  "reference_measured_utc": "2026-11-13T19:56:20+00:00",
-  "recorded_utc": "2026-11-14T17:06:33+00:00",
+  "reference_measured_utc": "2026-11-15T01:30:36+00:00",
+  "recorded_utc": "2026-11-15T01:52:55+00:00",
   "model_build": {
-    "built_utc": "2026-11-14T16:59:25Z",
-    "newest_source_utc": "2026-11-14T15:59:35Z",
+    "built_utc": "2026-11-14T22:10:25Z",
+    "newest_source_utc": "2026-11-14T22:08:56Z",
     "stale": false
   },
   "reference_spread": {},
+  "_no_tighten": {
+    "balance": "measured: detuned unison on the model (8 of 9 rows ensemble, median line width 1.60x): one window's stack is set by the beat phase it falls on, -8.8 to -13.6 dB for a two-line ladder of -11.43, so balance is not tightened from a single-window reading"
+  },
   "bounds": {
     "stretch": {
       "floor": 3.435,
@@ -22,7 +25,7 @@
         "median": {
           "set_utc": "2026-11-14T00:44:40+00:00",
           "set_build": "2026-11-14T00:38:54Z",
-          "held_utc": "2026-11-14T17:06:33+00:00",
+          "held_utc": "2026-11-15T01:52:55+00:00",
           "measured": 0.415,
           "outcome": "kept",
           "set_tree": {
@@ -39,12 +42,17 @@
                 72
               ]
             }
-          }
+          },
+          "held_tree": {
+            "head": "d6029d545",
+            "dirty": []
+          },
+          "clean_held_utc": "2026-11-15T01:52:55+00:00"
         },
         "abs_median": {
           "set_utc": "2026-11-14T00:44:40+00:00",
           "set_build": "2026-11-14T00:38:54Z",
-          "held_utc": "2026-11-14T17:06:33+00:00",
+          "held_utc": "2026-11-15T01:52:55+00:00",
           "measured": 2.495,
           "outcome": "kept",
           "set_tree": {
@@ -61,12 +69,17 @@
                 72
               ]
             }
-          }
+          },
+          "held_tree": {
+            "head": "d6029d545",
+            "dirty": []
+          },
+          "clean_held_utc": "2026-11-15T01:52:55+00:00"
         },
         "p90": {
           "set_utc": "2026-11-14T00:44:40+00:00",
           "set_build": "2026-11-14T00:38:54Z",
-          "held_utc": "2026-11-14T17:06:33+00:00",
+          "held_utc": "2026-11-15T01:52:55+00:00",
           "measured": 5.791,
           "outcome": "kept",
           "set_tree": {
@@ -83,7 +96,12 @@
                 72
               ]
             }
-          }
+          },
+          "held_tree": {
+            "head": "d6029d545",
+            "dirty": []
+          },
+          "clean_held_utc": "2026-11-15T01:52:55+00:00"
         }
       }
     },
@@ -98,9 +116,14 @@
         "median": {
           "set_utc": "2026-10-26T06:37:56+00:00",
           "set_build": "2026-10-26T06:34:05Z",
-          "held_utc": "2026-11-14T17:06:33+00:00",
+          "held_utc": "2026-11-15T01:52:55+00:00",
           "measured": 3.95,
-          "outcome": "kept"
+          "outcome": "kept",
+          "held_tree": {
+            "head": "d6029d545",
+            "dirty": []
+          },
+          "clean_held_utc": "2026-11-15T01:52:55+00:00"
         },
         "abs_median": {
           "set_utc": "2026-10-26T06:37:56+00:00",
@@ -112,9 +135,14 @@
         "p90": {
           "set_utc": "2026-10-26T06:37:56+00:00",
           "set_build": "2026-10-26T06:34:05Z",
-          "held_utc": "2026-11-14T17:06:33+00:00",
+          "held_utc": "2026-11-15T01:52:55+00:00",
           "measured": 10.52,
-          "outcome": "kept"
+          "outcome": "kept",
+          "held_tree": {
+            "head": "d6029d545",
+            "dirty": []
+          },
+          "clean_held_utc": "2026-11-15T01:52:55+00:00"
         }
       }
     },
@@ -129,7 +157,7 @@
         "median": {
           "set_utc": "2026-11-13T13:57:32+00:00",
           "set_build": "2026-11-13T13:21:43Z",
-          "held_utc": "2026-11-14T17:06:33+00:00",
+          "held_utc": "2026-11-15T01:52:55+00:00",
           "measured": 204.5,
           "outcome": "kept",
           "set_tree": {
@@ -149,12 +177,17 @@
             "value": 224.5,
             "set_utc": "2026-10-26T06:37:56+00:00",
             "reason": "recorded 2026-10-26 on an uncommitted refit (bank-versions synth_strings_1 v17) withdrawn before commit; the v17 fit values reproduce these bounds exactly and the shipped voice never met them"
-          }
+          },
+          "held_tree": {
+            "head": "d6029d545",
+            "dirty": []
+          },
+          "clean_held_utc": "2026-11-15T01:52:55+00:00"
         },
         "abs_median": {
           "set_utc": "2026-11-13T13:57:32+00:00",
           "set_build": "2026-11-13T13:21:43Z",
-          "held_utc": "2026-11-14T17:06:33+00:00",
+          "held_utc": "2026-11-15T01:52:55+00:00",
           "measured": 264.4,
           "outcome": "kept",
           "set_tree": {
@@ -174,12 +207,17 @@
             "value": 224.5,
             "set_utc": "2026-10-26T06:37:56+00:00",
             "reason": "recorded 2026-10-26 on an uncommitted refit (bank-versions synth_strings_1 v17) withdrawn before commit; the v17 fit values reproduce these bounds exactly and the shipped voice never met them"
-          }
+          },
+          "held_tree": {
+            "head": "d6029d545",
+            "dirty": []
+          },
+          "clean_held_utc": "2026-11-15T01:52:55+00:00"
         },
         "p90": {
           "set_utc": "2026-11-13T13:57:32+00:00",
           "set_build": "2026-11-13T13:21:43Z",
-          "held_utc": "2026-11-14T17:06:33+00:00",
+          "held_utc": "2026-11-15T01:52:55+00:00",
           "measured": 1150.36,
           "outcome": "kept",
           "set_tree": {
@@ -199,7 +237,12 @@
             "value": 404.1,
             "set_utc": "2026-10-26T06:37:56+00:00",
             "reason": "recorded 2026-10-26 on an uncommitted refit (bank-versions synth_strings_1 v17) withdrawn before commit; the v17 fit values reproduce these bounds exactly and the shipped voice never met them"
-          }
+          },
+          "held_tree": {
+            "head": "d6029d545",
+            "dirty": []
+          },
+          "clean_held_utc": "2026-11-15T01:52:55+00:00"
         }
       }
     },
@@ -247,21 +290,34 @@
           "set_build": "2026-10-26T06:34:05Z",
           "held_utc": null,
           "measured": 2.748,
-          "outcome": "exceeded"
+          "outcome": "exceeded",
+          "set_reader": 1
         },
         "abs_median": {
           "set_utc": "2026-10-26T06:37:56+00:00",
           "set_build": "2026-10-26T06:34:05Z",
-          "held_utc": "2026-11-14T17:06:33+00:00",
+          "held_utc": "2026-11-15T01:52:55+00:00",
           "measured": 2.748,
-          "outcome": "kept"
+          "outcome": "kept",
+          "set_reader": 1,
+          "held_tree": {
+            "head": "d6029d545",
+            "dirty": []
+          },
+          "clean_held_utc": "2026-11-15T01:52:55+00:00"
         },
         "p90": {
           "set_utc": "2026-10-26T06:37:56+00:00",
           "set_build": "2026-10-26T06:34:05Z",
-          "held_utc": "2026-11-14T17:06:33+00:00",
+          "held_utc": "2026-11-15T01:52:55+00:00",
           "measured": 7.1004,
-          "outcome": "kept"
+          "outcome": "kept",
+          "set_reader": 1,
+          "held_tree": {
+            "head": "d6029d545",
+            "dirty": []
+          },
+          "clean_held_utc": "2026-11-15T01:52:55+00:00"
         }
       }
     },
