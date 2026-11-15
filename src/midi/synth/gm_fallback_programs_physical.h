@@ -1172,7 +1172,8 @@ constexpr void configure_physical_programs(ProgramOverrides& o) noexcept {
   o.ocarina.flute.edge_hysteresis = 0.0780765f;
   o.ocarina.flute.jet_turbulence = 0.0274937f;
   o.ocarina.flute.overblow = 0.0568644f;
-  o.ocarina.flute.vibrato_depth = 0.114336f;
+  // No vibrato: the reference carries no periodic pitch motion.
+  o.ocarina.flute.vibrato_depth = 0.0f;
   o.ocarina.flute.vibrato_rate_hz = 1.82255f;
   o.ocarina.stereo_spread = 0.339801f;
   o.ocarina.flute.velocity_exponent = 0.72f;

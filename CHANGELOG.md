@@ -108,6 +108,7 @@
 - The flute (GM program 73) carries no vibrato of its own, since its reference holds a still pitch; the modulation wheel still adds vibrato.
 - The recorder (GM program 74) no longer wanders slowly in pitch; its reference carries no such motion.
 - The whistle (GM program 78) takes the vibrato its reference holds, 14 cents peak to peak at 4.84 Hz, in place of a 2.4-cent one at 5 Hz.
+- The ocarina (GM program 79) no longer wanders slowly in pitch; its reference carries no such motion.
 
 ### New
 
