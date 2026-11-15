@@ -1199,7 +1199,7 @@ SONARE_TUNED_CONSTEXPR void configure_keyed_programs(ProgramOverrides& o) noexce
   o.harmonica.free_reed.reed_stiffness = 0.65f;
   // One reed per note: the reference's partials carry no second line.
   o.harmonica.free_reed.detune = 0.0f;
-  o.harmonica.free_reed.attack_ms = 12.0f;
+  o.harmonica.free_reed.attack_ms = 4.0038f;
   o.harmonica.free_reed.release_ms = 90.0f;
   o.harmonica.free_reed.radiation = 0.35f;
   o.harmonica.free_reed.breath_noise = 0.05f;
@@ -1211,10 +1211,11 @@ SONARE_TUNED_CONSTEXPR void configure_keyed_programs(ProgramOverrides& o) noexce
   o.harmonica.free_reed.slot_gap = 0.02f;
   o.harmonica.stereo_spread = 0.12f;
   o.harmonica.gain = 0.2607f;
-  o.harmonica.amp_env.attack_ms = 58.7598f;
+  o.harmonica.amp_env.attack_ms = 35.9658f;
   o.harmonica.amp_env.release_ms = 55.0874f;
-  o.harmonica.cutoff_hz = 5500.0f;
+  o.harmonica.cutoff_hz = 10535.1f;
   o.harmonica.free_reed.velocity_exponent = 0.84f;
+  o.harmonica.free_reed.breath_pressure = 0.666441f;
 
   // Bandoneon (GM 23): the tango free reed, dry-tuned — the reference holds one
   // reed line per note, so there is no musette; a darker plate and a harder

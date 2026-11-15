@@ -104,6 +104,7 @@
 - Electric Piano 2 (GM program 5) decays faster the higher the note and slower below middle C, its body carrier's decay scaling 0.8 per octave instead of 0.4; its detuned and velocity-mix variations keep the previous rate.
 - Electric Piano 1 (GM program 4) decays faster the higher the note and slower below middle C, its body carrier's decay scaling 0.8 per octave instead of 0.4; its detuned and velocity-mix variations follow it, and its 60's variation keeps the previous rate.
 - The French horn (GM program 60) and the `french-horn` preset speak sooner and with less bore distortion: the lip attack shortens from 3.0 to 1.9 ms, the voice's attack from 59 to 20 ms, and the bore nonlinearity eases from 0.208 to 0.168, set against the reference.
+- The harmonica (GM program 22) speaks sooner and brighter: a 4 ms reed attack and a 36 ms voice attack in place of 12 and 59 ms, its lowpass opens from 5.5 to 10.5 kHz, and its breath pressure is set to 0.67, against the reference.
 
 ### New
 
