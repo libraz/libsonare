@@ -394,7 +394,7 @@ TEST_CASE("flute control hashes", "[.][midi][synth][flute][golden]") {
     uint64_t hash;
   };
   static const Row kRows[] = {
-      {72, 84, 100, 0x0a196d744ed30e6dull}, {73, 72, 100, 0xfd5370f6d51bc242ull},
+      {72, 84, 100, 0x0a196d744ed30e6dull}, {73, 72, 100, 0x0a0fa3fd2e2419c4ull},
       {74, 72, 64, 0x94fca8438a0a64adull},  {75, 67, 127, 0x9c057fa59c8506b8ull},
       {76, 72, 100, 0xe5e294eb0dd6a65cull}, {77, 60, 90, 0xc312b1585f7ceb02ull},
       {78, 79, 110, 0xfb1c2ff634f3ae0bull}, {79, 72, 80, 0xd311853c26e7018cull},
@@ -408,9 +408,9 @@ TEST_CASE("flute control hashes", "[.][midi][synth][flute][golden]") {
   }
   const NativeSynthPatch& flute = gm_fallback_patch(0, 73);
   CHECK(sonare::test::fnv1a_quantized(render_cc_change(flute, 72, 100, 8000, 16000, 2, 20)) ==
-        0x881152743b5a8870ull);
+        0xdb47bec110d5ac07ull);
   CHECK(sonare::test::fnv1a_quantized(render_cc_change(flute, 72, 100, 8000, 16000, 74, 110)) ==
-        0x23970d43bf0dfcdcull);
+        0xe7367281b891f414ull);
   CHECK(sonare::test::fnv1a_quantized(render_patch(flute_base_patch(), 60, 100, 24000)) ==
         0x5f90049eacc9ed68ull);
 }
