@@ -3,7 +3,7 @@
 Renders via `Project.import_smf` + `bounce_with_sf2_instrument` with NO
 SoundFont loaded, which forces every program through the built-in synthesizer
 GM fallback (`gm_fallback_map` -> NativeSynth physical voices) — exactly the
-code path being tuned. The dylib is resolved through SONARE_LIB_PATH, and
+code path being tuned. The shared library is resolved through SONARE_LIB_PATH, and
 nothing rebuilds it — a render measures whatever that file happens to hold. A
 library named in SONARE_LIB_PATH is the caller's choice and is only warned about
 when older than the sources; with none named, `ensure_lib_path` refuses a missing
@@ -35,11 +35,11 @@ import numpy as np
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))  # tools/ for _repo
 
 import _repo
-from _repo import REPO_ROOT
+from _repo import REPO_ROOT, shared_library_file
 from boundary import RenderRequest, canonical_digest
 from render_evidence import file_digest
 
-DEFAULT_DYLIB = REPO_ROOT / "build-python-shared" / "lib" / "libsonare.dylib"
+DEFAULT_LIBRARY = shared_library_file(REPO_ROOT / "build-python-shared")
 REFRESH_HINT = "cmake --build build-python-shared --target sonare_shared -j"
 
 _staleness_checked = False
@@ -89,7 +89,7 @@ class RenderedAudio:
 
 
 def _newest_source_mtime() -> float:
-    """Most recent edit under the C++ tree the dylib is compiled from."""
+    """Most recent edit under the C++ tree the shared library is compiled from."""
     newest = _freshness().newest_source(REPO_ROOT)
     return newest[0] if newest else 0.0
 
@@ -124,19 +124,19 @@ def warn_if_stale(lib: str) -> None:
 
 
 def default_library_refusal() -> str | None:
-    """Why the default dylib may not be used when no library was named, or None."""
-    if not DEFAULT_DYLIB.exists():
+    """Why the default shared library may not be used when no library was named, or None."""
+    if not DEFAULT_LIBRARY.exists():
         return (
-            f"no library named and none at {DEFAULT_DYLIB}; the binding would fall back "
+            f"no library named and none at {DEFAULT_LIBRARY}; the binding would fall back "
             f"to another in-tree build (build/ is the Debug test tree). Build it with: "
             f"{REFRESH_HINT}, or name one in SONARE_LIB_PATH"
         )
-    stale = _freshness().stale_library_message(str(DEFAULT_DYLIB), REPO_ROOT)
+    stale = _freshness().stale_library_message(str(DEFAULT_LIBRARY), REPO_ROOT)
     return f"{stale} Refresh with: {REFRESH_HINT}" if stale else None
 
 
 def ensure_lib_path() -> str:
-    """Point the Python binding at the working-tree dylib unless a library is named.
+    """Point the Python binding at the working-tree shared library unless a library is named.
 
     A named library is used as given and only warned about when stale, since
     measuring an older build on purpose is a legitimate control. With none named,
@@ -148,7 +148,7 @@ def ensure_lib_path() -> str:
         refusal = default_library_refusal()
         if refusal is not None:
             raise LibraryRefused(refusal)
-        lib = os.environ["SONARE_LIB_PATH"] = str(DEFAULT_DYLIB)
+        lib = os.environ["SONARE_LIB_PATH"] = str(DEFAULT_LIBRARY)
     warn_if_stale(lib)
     return lib
 
@@ -279,7 +279,7 @@ def render_model_rendered(
             }
         )
     ensure_lib_path()
-    import libsonare  # deferred so SONARE_LIB_PATH is set before the dylib loads
+    import libsonare  # deferred so SONARE_LIB_PATH is set before the shared library loads
 
     with path_record_dump() as dump:
         audio, manifest = _bounce(libsonare, smf_bytes, total_seconds, sr, rig=rig, preset=preset)

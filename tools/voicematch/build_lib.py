@@ -13,7 +13,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-from _repo import REPO_ROOT
+from _repo import REPO_ROOT, shared_library_file, shared_library_name
 
 
 def _cached_option(build_dir: Path, name: str) -> str | None:
@@ -81,18 +81,18 @@ def build_shared(build_dir: Path, cmake: str, jobs: int) -> None:
         raise RuntimeError(
             f"build failed (rc={proc.returncode}):\n{proc.stdout[-2000:]}\n{proc.stderr[-2000:]}"
         )
-    # Ensure the freshly built dylib is loadable by ctypes on macOS.
-    dylib = dylib_path(build_dir)
-    if sys.platform == "darwin" and dylib is not None and shutil.which("install_name_tool"):
+    # macOS only: make the freshly built library loadable by ctypes (Linux loads it by path).
+    library = library_path(build_dir)
+    if sys.platform == "darwin" and library is not None and shutil.which("install_name_tool"):
         subprocess.run(
-            ["install_name_tool", "-id", "@loader_path/libsonare.dylib", str(dylib)],
+            ["install_name_tool", "-id", f"@loader_path/{shared_library_name()}", str(library)],
             capture_output=True,
             check=False,
             text=True,
         )
 
 
-def dylib_path(build_dir: Path) -> Path | None:
+def library_path(build_dir: Path) -> Path | None:
     """Locate the built libsonare shared library in the isolated build dir.
 
     A path that is itself a file is a prebuilt library (`autofit.py --lib`) and
@@ -100,11 +100,9 @@ def dylib_path(build_dir: Path) -> Path | None:
     """
     if build_dir.is_file():
         return build_dir
-    direct = build_dir / "lib" / "libsonare.dylib"
+    direct = shared_library_file(build_dir)
     if direct.exists():
         return direct
-    for cand in build_dir.rglob("libsonare.dylib"):
-        return cand
-    for cand in build_dir.rglob("libsonare.so"):
+    for cand in build_dir.rglob(shared_library_name()):
         return cand
     return None

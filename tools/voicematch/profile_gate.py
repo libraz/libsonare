@@ -1257,7 +1257,7 @@ def _model_build_state() -> dict[str, object]:
 
     A gate records where the REFERENCE came from and when it was written, and
     nothing at all about the model side — so a `--write-gate` run against a
-    dylib older than the sources bakes the previous generation's numbers into a
+    shared library older than the sources bakes the previous generation's numbers into a
     bound that then looks like every other. `render_model.warn_if_stale` already
     detects it and says so on stderr once per process, which is gone by the time
     anyone reads the file. Recorded here so the question is a field rather than
@@ -1265,7 +1265,7 @@ def _model_build_state() -> dict[str, object]:
     """
     import render_model
 
-    lib = os.environ.get("SONARE_LIB_PATH", "") or str(render_model.DEFAULT_DYLIB)
+    lib = os.environ.get("SONARE_LIB_PATH", "") or str(render_model.DEFAULT_LIBRARY)
     try:
         built = Path(lib).stat().st_mtime
     except OSError:
@@ -1802,7 +1802,7 @@ def write_gate_file(
                 "reference_measured_utc": measured_utc,
                 "recorded_utc": now,
                 # And which library produced the MODEL side. Without it a gate recorded
-                # through a dylib older than the sources is indistinguishable from one
+                # through a shared library older than the sources is indistinguishable from one
                 # recorded through the shipped build, and its bounds are a photograph of
                 # a generation that no longer exists.
                 "model_build": build,

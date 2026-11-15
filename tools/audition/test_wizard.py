@@ -18,6 +18,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import heard
 import wizard
+from _repo import shared_library_file
 
 POLICY = {
     "tiers": [
@@ -136,12 +137,12 @@ def test_the_renderer_runs_each_job_once_and_reports_a_failure():
 
 
 def test_the_render_command_names_the_slot_and_the_library():
-    r = wizard.Renderer(lib=Path("/lib/libsonare.dylib"), runner=["py"])
+    r = wizard.Renderer(lib=shared_library_file(Path("/lib")), runner=["py"])
     assert r.command(_voice("kit", 0, kit=True))[-4:] == [
         "--kits",
         "0",
         "--lib",
-        "/lib/libsonare.dylib",
+        str(shared_library_file(Path("/lib"))),
     ]
     cmd = r.command(_voice("p", 19))
     assert cmd[cmd.index("--program") + 1] == "19"

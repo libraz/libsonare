@@ -71,7 +71,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from _repo import REPO_ROOT
-from build_lib import dylib_path
+from build_lib import library_path
 from catalogue import dump_catalogue
 from knobs import (
     KNOB_CLASSES_PATH,
@@ -189,17 +189,17 @@ def existing_rows(path: Path) -> int:
 
 def generate(args) -> int:
     build_dir = Path(args.build_dir)
-    dylib = dylib_path(build_dir)
-    if dylib is None:
+    library = library_path(build_dir)
+    if library is None:
         raise SystemExit(
-            f"no libsonare dylib under {build_dir} — configure it with BUILD_TUNING=ON "
+            f"no libsonare shared library under {build_dir} — configure it with BUILD_TUNING=ON "
             f"first (autofit.py does this; see build_lib.configure_build)"
         )
     # The library reports its own knob space, defaults and clamp bounds, so the
     # generator's ranges are the same ones a fit would search rather than a
     # second list that can drift from them.
     catalogue = dump_catalogue(
-        args.program, args.pattern, str(dylib), sr=SR, notes=args.notes, bank=args.bank
+        args.program, args.pattern, str(library), sr=SR, notes=args.notes, bank=args.bank
     )
     # The same space a fit searches: the knob classes hold identity and measured fields out.
     classes = load_knob_classes(KNOB_CLASSES_PATH, catalogue)

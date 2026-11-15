@@ -3,7 +3,7 @@
 Answers two separate questions, one per requested representative GM program:
 
   (a) reproducible  -- render the same single note twice, in two separate
-      Python processes (two fresh `render_model` calls, two fresh dylib
+      Python processes (two fresh `render_model` calls, two fresh shared library
       loads), and byte-compare the audio.
   (b) machine-gun    -- render one hit and two hits of the same note, subtract
       to isolate the second hit's own output, and compare it against the

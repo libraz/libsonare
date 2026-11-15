@@ -14,12 +14,15 @@ from dataclasses import dataclass
 from pathlib import Path
 
 import bank
+import oracle_cache
 from corpus import (
     PERCUSSION_CHANNEL as CORPUS_PERCUSSION_CHANNEL,
 )
 from corpus import (
     Corpus,
+    check_against_slot_table,
     check_rig,
+    corpus_from_descriptor,
     corpus_pattern,
     describe,
     load_corpus,
@@ -137,6 +140,42 @@ def capture_specs(args) -> list[CaptureSpec]:
     ]
 
 
+def manifest_of(path: str) -> Path:
+    """The manifest file a `--corpus` names: the path itself, or `manifest.json` beside its WAVs."""
+    p = Path(path).expanduser()
+    return p if p.suffix == ".json" else p / "manifest.json"
+
+
+def corpus_present(path: str) -> bool:
+    """Whether the capture manifest a `--corpus` names is on this host."""
+    return manifest_of(path).exists()
+
+
+def cache_role(args) -> str:
+    return getattr(args, "oracle_cache_role", "fit")
+
+
+def cache_file_for(args, spec: CaptureSpec) -> Path:
+    """The cache `--oracle-cache` holds for one capture, timbre and role (fit or holdout)."""
+    return oracle_cache.cache_file(
+        args.oracle_cache, oracle_cache.capture_key(spec.path), spec.timbre, cache_role(args)
+    )
+
+
+def open_corpus(args, spec: CaptureSpec) -> Corpus:
+    """One capture's `Corpus`: from its manifest, or from the cache's descriptor without one.
+
+    The descriptor is checked against the whitelist and the tracked slot table
+    here; whether the cache may stand in for the oracle is `oracle_reference`'s.
+    """
+    if not getattr(args, "oracle_cache", "") or corpus_present(spec.path):
+        return load_corpus(spec.path, spec.timbre)
+    path = cache_file_for(args, spec)
+    desc = oracle_cache.read(path).descriptor
+    check_against_slot_table(desc, desc["capture_id"])
+    return corpus_from_descriptor(desc, spec.path, cache_file=path)
+
+
 def resolve_corpus(args) -> Corpus | None:
     """Load the capture manifest a corpus run scores against, if there is one.
 
@@ -148,7 +187,7 @@ def resolve_corpus(args) -> Corpus | None:
         return None
     if len(specs) > 1:
         raise ValueError("this fit names several captures; resolve each through its own namespace")
-    return load_corpus(specs[0].path, specs[0].timbre)
+    return open_corpus(args, specs[0])
 
 
 def primary_corpus(args) -> Corpus | None:
@@ -158,7 +197,35 @@ def primary_corpus(args) -> Corpus | None:
     capture's render rate; a single capture is its own primary.
     """
     specs = capture_specs(args)
-    return load_corpus(specs[0].path, specs[0].timbre) if specs else None
+    return open_corpus(args, specs[0]) if specs else None
+
+
+def oracle_cache_plan(args, corpus: Corpus | None) -> dict | None:
+    """What `--oracle-cache` asks of this oracle: its file, identity and direction, or None.
+
+    The cache is read when the manifest is not on this host or `--oracle-cache-only`
+    forces it, and written (replacing any earlier one) when it is.
+    """
+    directory = getattr(args, "oracle_cache", "")
+    only = getattr(args, "oracle_cache_only", False)
+    if not directory:
+        for flag, given in (("only", only), ("write", getattr(args, "oracle_cache_write", False))):
+            if given:
+                raise ValueError(f"--oracle-cache-{flag} needs --oracle-cache DIR")
+        return None
+    specs = capture_specs(args)
+    if corpus is None or len(specs) != 1:
+        raise ValueError("--oracle-cache applies to a corpus oracle, one capture at a time")
+    spec = specs[0]
+    return {
+        "file": cache_file_for(args, spec),
+        "identity": oracle_cache.identity_of(
+            args, oracle_cache.capture_key(spec.path), spec.timbre, cache_role(args)
+        ),
+        "read": only or corpus.cache_file is not None,
+        "present": corpus_present(spec.path),
+        "manifest": manifest_of(spec.path),
+    }
 
 
 def capture_program(corpus: Corpus) -> tuple[int, int] | None:
@@ -187,7 +254,7 @@ def capture_namespace(args, spec: CaptureSpec, *, primary: bool) -> argparse.Nam
     ns.validate_notes = spec.validate_notes or getattr(args, "validate_notes", "")
     ns.validate_velocities = spec.validate_velocities or getattr(args, "validate_velocities", "")
     if not primary:
-        named = capture_program(load_corpus(spec.path, spec.timbre))
+        named = capture_program(open_corpus(args, spec))
         if named is None:
             print(
                 f"capture {spec.path}: its definition names no program, so it is rendered "
@@ -706,7 +773,7 @@ def apply_noise_led_bright(args) -> None:
     specs = capture_specs(args)
     if default_weights(getattr(args, "program", 0)).get("bright", 0.0) > 0.0:
         return
-    led = noise_led_tnr([load_corpus(s.path, s.timbre) for s in specs])
+    led = noise_led_tnr([open_corpus(args, s) for s in specs])
     if led is None:
         return
     capture, tnr = led

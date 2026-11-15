@@ -14,7 +14,7 @@ from types import SimpleNamespace
 
 import numpy as np
 from autofit_resolve import resolve_probe
-from build_lib import dylib_path
+from build_lib import library_path
 from fit_quality import quality_report
 from loss_aggregate import robust_score_terms
 from loss_weights import LossWeights, cli_weights
@@ -37,7 +37,7 @@ def probe(build_dir, drum_note=38, velocities="64,100"):
     )
     resolve_probe(args)
     build_dir = Path(build_dir).resolve()
-    library = dylib_path(build_dir)
+    library = library_path(build_dir)
     if library is None:
         raise RuntimeError(f"No native library under {build_dir}")
     library_hash = hashlib.sha256(library.read_bytes()).hexdigest()

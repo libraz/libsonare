@@ -180,8 +180,8 @@ def test_a_deleted_worker_file_counts_as_moved(tmp_path):
 def test_no_lock_means_no_check(tmp_path, monkeypatch):
     harness_lock.unlock()
     harness_lock.check_workers()
-    monkeypatch.setattr(render_rows, "dylib_path", lambda b: None)
-    with pytest.raises(RuntimeError, match="no libsonare dylib"):
+    monkeypatch.setattr(render_rows, "library_path", lambda b: None)
+    with pytest.raises(RuntimeError, match="no libsonare shared library"):
         render_rows.render_model_rows_subprocess(tmp_path, 0, "p", "60")
 
 

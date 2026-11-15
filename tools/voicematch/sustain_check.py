@@ -112,7 +112,11 @@ def rms_db(x: np.ndarray) -> float:
     return float(20.0 * np.log10(float(np.sqrt(np.mean(np.square(x)))) + 1e-15))
 
 
-def render_held(program: int, note: int, velocity: int, out: Path) -> np.ndarray | None:
+class RenderFailed(RuntimeError):
+    """The render process exited non-zero or wrote nothing; the message is its stderr tail."""
+
+
+def render_held(program: int, note: int, velocity: int, out: Path) -> np.ndarray:
     """One held note through the GM bank, in a fresh process."""
     code = _RENDER.format(
         tools=str(HERE),
@@ -127,7 +131,7 @@ def render_held(program: int, note: int, velocity: int, out: Path) -> np.ndarray
     )
     done = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True, check=False)
     if done.returncode != 0 or not out.exists():
-        return None
+        raise RenderFailed(done.stderr.strip()[-2000:] or f"exit {done.returncode}, no output")
     return np.fromfile(out, dtype="<f4").reshape(-1, 2).astype(np.float64).mean(axis=1)
 
 
@@ -164,9 +168,10 @@ def check_one(cap_id: str, scratch: Path) -> dict:
     velocities = sorted({r["velocity"] for r in rows if r.get("note") == note and "velocity" in r})
     velocity = velocities[-1] if velocities else 100
 
-    audio = render_held(program, note, velocity, scratch / f"{cap_id}.f32")
-    if audio is None:
-        return {"id": cap_id, "status": "render-failed"}
+    try:
+        audio = render_held(program, note, velocity, scratch / f"{cap_id}.f32")
+    except RenderFailed as exc:
+        return {"id": cap_id, "status": "render-failed", "error": str(exc)}
 
     def at(t: float) -> float:
         i = int(t * SR)
@@ -228,6 +233,8 @@ def main(argv: list[str] | None = None) -> int:
             r = check_one(cap_id, scratch)
             results.append(r)
             note = f" excess {r['excess_db']:+.1f} dB" if r["status"] == "compared" else ""
+            if "error" in r:
+                note = f"\n  {r['error'].splitlines()[-1]}"
             print(f"[{i}/{len(ids)}] {cap_id}: {r['status']}{note}", file=sys.stderr)
 
     if args.json:

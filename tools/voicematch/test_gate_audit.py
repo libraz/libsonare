@@ -151,7 +151,7 @@ def test_skip_reasons(tmp_path, monkeypatch):
 def test_a_finished_run_records_the_audit(tmp_path, monkeypatch):
     voice = {"slug": "v", "patch": "p", "gates": [{"capture": "c", "gate": "g", "timbre": "t"}]}
     monkeypatch.setattr(autofit, "_gate_voice", lambda a: (voice, ""))
-    monkeypatch.setattr(autofit, "dylib_path", lambda b: Path("lib.dylib"))
+    monkeypatch.setattr(autofit, "library_path", lambda b: Path("lib.dylib"))
     out = tmp_path / "fit.json"
     out.write_text(json.dumps({"overrides": "p.x=1", "fit_profile": {"weights": {"tnr": 1.0}}}))
     seen = []

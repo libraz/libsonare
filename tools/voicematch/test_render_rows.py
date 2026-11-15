@@ -14,7 +14,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import autofit
 import render_rows
-from _repo import REPO_ROOT
+from _repo import REPO_ROOT, shared_library_name
 from autofit import Evaluator, holdout_scorer
 from autofit_test_fixtures import _fit_args, _write_corpus
 from corpus import Corpus, corpus_oracle
@@ -32,10 +32,10 @@ TUNING_BUILD = REPO_ROOT / "build-tuning"
 
 @pytest.fixture(scope="module")
 def tuning_build():
-    from build_lib import dylib_path
+    from build_lib import library_path
 
-    if dylib_path(TUNING_BUILD) is None:
-        pytest.skip("build-tuning/lib/libsonare.dylib is unavailable")
+    if library_path(TUNING_BUILD) is None:
+        pytest.skip("build-tuning shared library is unavailable")
     return TUNING_BUILD
 
 
@@ -49,9 +49,9 @@ def _stereo_piano_reference(build_dir: Path):
 
 
 def test_child_subprocess_uses_each_mono_mode_for_rows_and_dumped_audio(tuning_build, monkeypatch):
-    from build_lib import dylib_path
+    from build_lib import library_path
 
-    library = dylib_path(tuning_build)
+    library = library_path(tuning_build)
     assert library is not None
     monkeypatch.setenv("SONARE_LIB_PATH", str(library))
     pattern, stereo = _stereo_piano_reference(tuning_build)
@@ -137,7 +137,7 @@ def test_cache_identity_includes_mono_mode(tmp_path):
     build_dir = tmp_path / "build"
     library_dir = build_dir / "lib"
     library_dir.mkdir(parents=True)
-    (library_dir / "libsonare.dylib").write_bytes(b"test-library")
+    (library_dir / shared_library_name()).write_bytes(b"test-library")
     knob = _bounded_knob("x.k", 0.0, 1.0, 0.5)
 
     def signature(mode):
@@ -176,9 +176,9 @@ def test_new_fit_record_names_its_mono_mode(tmp_path, mode, expected):
 
 
 def test_training_render_passes_mode_to_the_real_child_process(tuning_build, monkeypatch):
-    from build_lib import dylib_path
+    from build_lib import library_path
 
-    library = dylib_path(tuning_build)
+    library = library_path(tuning_build)
     assert library is not None
     monkeypatch.setenv("SONARE_LIB_PATH", str(library))
     original = render_rows.render_model_rows_subprocess
@@ -213,9 +213,9 @@ def test_training_render_passes_mode_to_the_real_child_process(tuning_build, mon
 
 
 def test_holdout_render_passes_mode_to_the_real_child_process(tmp_path, tuning_build, monkeypatch):
-    from build_lib import dylib_path
+    from build_lib import library_path
 
-    library = dylib_path(tuning_build)
+    library = library_path(tuning_build)
     assert library is not None
     monkeypatch.setenv("SONARE_LIB_PATH", str(library))
     corpus_path = _write_corpus(
@@ -256,10 +256,10 @@ def test_holdout_render_passes_mode_to_the_real_child_process(tmp_path, tuning_b
 def test_room_dry_probe_passes_mode_to_the_real_child_process(tmp_path, tuning_build, monkeypatch):
     from types import SimpleNamespace
 
-    from build_lib import dylib_path
+    from build_lib import library_path
     from knobs import Knob
 
-    library = dylib_path(tuning_build)
+    library = library_path(tuning_build)
     assert library is not None
     monkeypatch.setenv("SONARE_LIB_PATH", str(library))
     spec = tmp_path / "spec.json"
@@ -319,3 +319,77 @@ def test_room_dry_probe_passes_mode_to_the_real_child_process(tmp_path, tuning_b
 
     assert autofit.main() == 0
     assert seen == ["left"]
+
+
+def test_rows_are_cut_into_even_contiguous_runs():
+    assert render_rows._chunks(12, 12) == [[i] for i in range(12)]
+    assert render_rows._chunks(5, 2) == [[0, 1, 2], [3, 4]]
+    assert render_rows._chunks(2, 4) == [[0], [1]]
+
+
+def _three_tones():
+    notes = [Note(60 + 7 * k, 80, 0.6 * k, 0.4) for k in range(3)]
+    pattern = Pattern("tones", notes, analysis_notes=notes, tail=0.2)
+    t = np.arange(int(SR * 1.8)) / SR
+    raw = np.zeros_like(t, dtype=np.float32)
+    for n in notes:
+        on = (t >= n.start) & (t < n.start + n.dur)
+        f = 440.0 * 2 ** ((n.note - 69) / 12)
+        raw[on] += (0.3 * np.sin(2 * np.pi * f * t[on]) * np.exp(-3 * (t[on] - n.start))).astype(
+            np.float32
+        )
+    return pattern, raw
+
+
+def test_rows_measured_in_runs_are_the_rows_measured_together(tmp_path):
+    pattern, raw = _three_tones()
+    mono = normalize_rms(raw)
+    whole = probe_rows(mono, pattern, SR, raw=raw)
+    np.save(tmp_path / "raw.npy", raw)
+    np.save(tmp_path / "mono.npy", mono)
+    parts = [
+        render_rows._measure_chunk(
+            str(tmp_path / "raw.npy"), str(tmp_path / "mono.npy"), pattern, c, SR, None, None
+        )
+        for c in render_rows._chunks(3, 2)
+    ]
+    assert json.dumps([row for p in parts for row in json.loads(p)]) == json.dumps(whole)
+
+
+def test_rows_measured_on_the_row_pool_are_the_rows_measured_together(tmp_path):
+    pattern, raw = _three_tones()
+    mono = normalize_rms(raw)
+    np.save(tmp_path / "raw.npy", raw)
+    np.save(tmp_path / "mono.npy", mono)
+    pool = render_rows.row_pool(2)
+    got = [
+        pool.submit(
+            render_rows._measure_chunk,
+            str(tmp_path / "raw.npy"),
+            str(tmp_path / "mono.npy"),
+            pattern,
+            c,
+            SR,
+            None,
+            None,
+        ).result()
+        for c in render_rows._chunks(3, 2)
+    ]
+    whole = probe_rows(mono, pattern, SR, raw=raw)
+    assert json.dumps([row for p in got for row in json.loads(p)]) == json.dumps(whole)
+
+
+def test_a_split_render_returns_the_rows_and_audio_of_a_whole_one(tuning_build):
+    kw = {"velocities_csv": "100", "want_audio": True}
+    whole = render_model_rows_subprocess(tuning_build, 12, "sustain", "48,60,72", **kw)
+    split = render_model_rows_subprocess(
+        tuning_build,
+        12,
+        "sustain",
+        "48,60,72",
+        rows_on=render_rows.row_pool(3),
+        row_workers=3,
+        **kw,
+    )
+    assert json.dumps(split[0]) == json.dumps(whole[0]), "NaN rows compare by their JSON"
+    assert split[1].dtype == whole[1].dtype and np.array_equal(split[1], whole[1])

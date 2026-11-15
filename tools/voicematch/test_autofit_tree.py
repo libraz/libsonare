@@ -33,7 +33,7 @@ from autofit_test_fixtures import (
 )
 from build_lib import configure_build
 from knobs import Knob, format_value
-from render_model import DEFAULT_DYLIB, check_gm_fallback
+from render_model import DEFAULT_LIBRARY, check_gm_fallback
 from report import report_result
 from writeback import (
     TUNING_LAYER_FILE,
@@ -239,7 +239,7 @@ def test_every_source_file_matches_the_candidate_being_rendered(tmp_path, monkey
 
     on_disk: list[tuple[str, str]] = []
 
-    def capture(values):
+    def capture(values, **_):
         on_disk.append((a_path.read_text(), b_path.read_text()))
         return _terms(harm=1.0)
 
@@ -255,7 +255,7 @@ def test_a_cached_point_still_decides_the_best(tmp_path, monkeypatch):
     evaluator = Evaluator([knob], {}, [], None, _fit_args(), tmp_path / "build")
     monkeypatch.setattr(autofit, "build_shared", lambda *a, **k: None)
     scores = {"0.5": 10.0, "0.9": 40.0}
-    evaluator._render_terms = lambda values: _terms(harm=scores[format_value(values[0])])
+    evaluator._render_terms = lambda values, **_: _terms(harm=scores[format_value(values[0])])
 
     evaluator([0.5])
     evaluator.restage({"harm": 1.0}, "decay")
@@ -421,9 +421,9 @@ _NATIVE_PROBE = (
 
 @functools.lru_cache(maxsize=1)
 def _native_library_loads() -> bool:
-    """Whether a libsonare dylib is available to load at all."""
+    """Whether a libsonare shared library is available to load at all."""
     proc = subprocess.run(
-        [sys.executable, "-c", _NATIVE_PROBE, str(DEFAULT_DYLIB)],
+        [sys.executable, "-c", _NATIVE_PROBE, str(DEFAULT_LIBRARY)],
         capture_output=True,
         check=False,
         text=True,
@@ -469,7 +469,7 @@ def test_a_cli_entry_point_imports_as_shipped(script, tmp_path):
             f"{script} imports libsonare at module scope and no shared library is "
             f"available: set SONARE_LIB_PATH, or build one with "
             f"`cmake --build build-python-shared --target sonare_shared` "
-            f"(expected at {DEFAULT_DYLIB})"
+            f"(expected at {DEFAULT_LIBRARY})"
         )
     env = os.environ.copy()
     env.pop("PYTHONPATH", None)  # never let an ambient path answer the question

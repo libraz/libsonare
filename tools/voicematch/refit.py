@@ -66,12 +66,11 @@ import gate_audit
 import harness_lock
 import policy
 from _repo import REPO_ROOT
-from autofit_resolve import noise_led_tnr
+from autofit_resolve import CaptureSpec, noise_led_tnr, open_corpus
 from autofit_weight_flags import _WEIGHT_FLAGS_1, _WEIGHT_FLAGS_2
-from build_lib import _cached_option, dylib_path
+from build_lib import _cached_option, library_path
 from capture import CORPUS_ROOT
 from catalogue import dump_catalogue
-from corpus import load_corpus
 from knobs import (
     check_base_overrides,
     format_value,
@@ -694,7 +693,7 @@ def baseline_pins(
 #: Forwarded to every autofit run; set from --allow-dirty-src in main().
 ALLOW_DIRTY_SRC = False
 
-#: A prebuilt tuning dylib from --lib; when set, every fit and comparison uses it
+#: A prebuilt tuning shared library from --lib; when set, every fit and comparison uses it
 #: and `--build-dir` is not consulted.
 PREBUILT_LIB = ""
 
@@ -721,6 +720,14 @@ WEIGHT_TERMS = frozenset(flag[len("--w-") :] for flag, _ in _WEIGHT_FLAGS_1 + _W
 
 #: Term weights given to every fit as its own `--w-<term>` flags, from --weights.
 WEIGHTS: dict[str, float] = {}
+
+#: A directory of numeric oracle caches (autofit's --oracle-cache), from --oracle-cache.
+ORACLE_CACHE = ""
+
+
+def _corpus(path: str, timbre: str):
+    """A voice's capture: from its manifest, or from its oracle cache on a host without one."""
+    return open_corpus(argparse.Namespace(oracle_cache=ORACLE_CACHE), CaptureSpec(path, timbre))
 
 
 def load_weights(arg: str) -> dict[str, float]:
@@ -839,6 +846,8 @@ def _fit(
         cmd += ["--base-overrides", BASE_OVERRIDES]
     if START_OVERRIDES:
         cmd += ["--start-overrides", START_OVERRIDES]
+    if ORACLE_CACHE:
+        cmd += ["--oracle-cache", ORACLE_CACHE]
     if ALLOW_DIRTY_SRC:
         cmd.append("--allow-dirty-src")
     if voice.get("provisional_off_layer"):
@@ -977,7 +986,7 @@ def _tuning_lib(build_dir: str) -> Path:
         # Whether it honours the overrides is autofit's probe to make, per fit.
         return Path(PREBUILT_LIB)
     path = (REPO_ROOT / build_dir).resolve()
-    lib = dylib_path(path)
+    lib = library_path(path)
     if lib is None or _cached_option(path, "BUILD_TUNING") != "ON":
         raise RuntimeError(f"{build_dir} holds no BUILD_TUNING=ON library to apply overrides with")
     return lib
@@ -991,15 +1000,34 @@ def check_base(voice: dict, lib: Path) -> None:
         # A kit's catalogue needs its drum pattern; autofit checks the base when the fit starts.
         print(f"{voice['slug']}: base overrides checked by the fit, not before its pre render")
         return
-    catalogue = dump_catalogue(
+    check_base_overrides(BASE_OVERRIDES, [], _catalogue(voice, lib))
+
+
+def _catalogue(voice: dict, lib: Path):
+    """The library's knob space as it sounds this voice."""
+    drum = "drum_note" in voice
+    return dump_catalogue(
         voice["program"],
-        "sustain",
+        "drum" if drum else "sustain",
         str(lib),
-        sr=render_rate(load_corpus(voice["corpus"], voice["timbre"])),
-        notes=",".join(map(str, voice.get("notes", []))),
+        sr=render_rate(_corpus(voice["corpus"], voice["timbre"])),
+        notes=str(voice["drum_note"]) if drum else ",".join(map(str, voice.get("notes", []))),
         bank=voice["bank"],
     )
-    check_base_overrides(BASE_OVERRIDES, [], catalogue)
+
+
+def stale_starts(reports: Iterable[dict], shipped: dict[str, float]) -> list[str]:
+    """The knobs of these fits whose value at fit time is not what the library ships now."""
+    out = []
+    for report in reports:
+        for knob in report.get("knobs", []):
+            now = shipped.get(knob["key"])
+            then = format_value(_shipped(knob))
+            if now is None or format_value(now) != then:
+                out.append(
+                    f"{knob['key']} {then} -> {'absent' if now is None else format_value(now)}"
+                )
+    return sorted(set(out))
 
 
 def _doubled(weight: float) -> float:
@@ -1181,7 +1209,7 @@ def profile_weights(voice: dict) -> dict[str, float]:
     if pitched:
         # A joint fit scores every capture it names under one weight vector.
         parts = fit_parts(voice) or [voice]
-        corpora = [load_corpus(p["corpus"], p["timbre"]) for p in parts]
+        corpora = [_corpus(p["corpus"], p["timbre"]) for p in parts]
         if noise_led_tnr(corpora) is not None:
             weights["bright"] = PERCUSSION_WEIGHTS["bright"]
     return weights
@@ -1304,14 +1332,85 @@ def gate_load(readings: list[dict]) -> float:
     return sum(ratios) / len(ratios) if ratios else float("inf")
 
 
+def gate_floors(voice: dict):
+    """A function from a reading's key (`<capture>:<dimension>`) to the floor under its bound.
+
+    The gate's own `floor` for the dimension when it carries the key (a stored 0 is a floor
+    of 0), else `dimension_floor` over the gate's `reference_spread`.
+    """
+    gates = {g.get("capture"): g for g in voice.get("gates") or []}
+    loaded: dict[str, dict] = {}
+
+    def gate_of(capture: str) -> dict:
+        capture = capture or voice.get("capture") or ""
+        if not capture:
+            return {}
+        if capture not in loaded:
+            g = gates.get(capture) or {}
+            path = Path(g["gate"]) if g.get("gate") else REFERENCE_DIR / f"{capture}_gate.json"
+            loaded[capture] = json.loads(path.read_text())
+        return loaded[capture]
+
+    def floor_of(key: str) -> float:
+        capture, _, dim = key.rpartition(":")
+        gate = gate_of(capture)
+        bound = (gate.get("bounds") or {}).get(dim) or {}
+        if "floor" in bound:
+            return bound["floor"]
+        return dimension_floor(dim, gate.get("reference_spread"))[0]
+
+    return floor_of
+
+
+def floor_movement(pre: list[dict], post: list[dict], floor_of) -> list[dict]:
+    """Each gated statistic read in both compares: its readings, floor and |pre| - |post|.
+
+    A positive `moved` is an improvement; rows with no reading on either side are skipped.
+    """
+    before = {(r["key"], r["stat"]): r for r in pre}
+    out = []
+    for r in post:
+        b = before.get((r["key"], r["stat"]))
+        if b is None or b["value"] is None or r["value"] is None:
+            continue
+        out.append(
+            {
+                "key": r["key"],
+                "stat": r["stat"],
+                "before": b["value"],
+                "after": r["value"],
+                "floor": floor_of(r["key"]),
+                "moved": abs(b["value"]) - abs(r["value"]),
+            }
+        )
+    return out
+
+
+def _worse_rows(moves: list[dict]) -> list[dict]:
+    """The statistics that worsened past their floor, as the rows a verdict records."""
+    return [
+        {
+            "key": m["key"],
+            "stat": m["stat"],
+            "before": round(m["before"], 4),
+            "after": round(m["after"], 4),
+            "floor": round(m["floor"], 4),
+        }
+        for m in moves
+        if -m["moved"] > m["floor"]
+    ]
+
+
 def along_the_path(voice: dict, d: Path, lib: Path, report: dict, tag: str) -> dict | None:
     """The furthest point of the search the gate accepts, found by bisection.
 
     The search walks away from the shipped values one improvement at a time, and a
     bound the objective does not weigh is crossed somewhere along that walk; the
     points before it are the loss's improvements the gate allows. A point is
-    accepted when no bound is newly exceeded, the summed excess did not grow and
-    the gate load fell.
+    accepted when no bound is newly exceeded, the summed excess did not grow, the
+    gate load fell and no gated statistic worsened past its floor. The point the
+    bisection returns must also improve one statistic past its floor, or the
+    result says `improves: False`; `refused_point` is the nearest visited point past it.
     """
     path = report.get("path") or []
     if not path:
@@ -1319,6 +1418,7 @@ def along_the_path(voice: dict, d: Path, lib: Path, report: dict, tag: str) -> d
     pre = json.loads((d / "pre.json").read_text())["gate"]["readings"]
     pre_sum, pre_over = _excess(pre)
     pre_load = gate_load(pre)
+    floor_of = gate_floors(voice)
     checked: dict[int, dict] = {}
 
     def accepted(i: int) -> bool:
@@ -1334,13 +1434,26 @@ def along_the_path(voice: dict, d: Path, lib: Path, report: dict, tag: str) -> d
             )
         post = json.loads(out.read_text())["gate"]["readings"]
         post_sum, post_over = _excess(post)
-        ok = not post_over - pre_over and post_sum <= pre_sum + 1e-9 and gate_load(post) < pre_load
+        moves = floor_movement(pre, post, floor_of)
+        worse = _worse_rows(moves)
+        newly = post_over - pre_over
+        grew = bool(newly) or post_sum > pre_sum + 1e-9
+        load_fell = gate_load(post) < pre_load
+        within = not grew and load_fell
+        ok = within and not worse
         checked[i] = {
             "eval": path[i]["eval"],
             "loss": path[i]["loss"],
             "accepted": ok,
             "load": gate_load(post),
             "values": values,
+            "file": out.name,
+            "newly_over": sorted(f"{k} {s}" for k, s in newly),
+            "bounds_ok": within,
+            "excess_grew": grew,
+            "load_fell": load_fell,
+            "worse": worse,
+            "better_count": sum(m["moved"] > m["floor"] for m in moves),
         }
         return ok
 
@@ -1356,9 +1469,15 @@ def along_the_path(voice: dict, d: Path, lib: Path, report: dict, tag: str) -> d
             else:
                 hi = mid
     tried = [checked[i] | {"values": None} for i in sorted(checked)]
-    if lo < 0:
-        return {"accepted": None, "tried": tried, "pre_load": pre_load}
-    return {"accepted": checked[lo], "tried": tried, "pre_load": pre_load}
+    refused = None
+    if hi < len(path):
+        assert hi in checked, "the nearest refused point was never visited"
+        refused = checked[hi] | {"values": None}
+    found = {"accepted": None, "tried": tried, "pre_load": pre_load, "refused_point": refused}
+    if lo >= 0:
+        found["accepted"] = checked[lo]
+        found["improves"] = checked[lo]["better_count"] > 0
+    return found
 
 
 #: The fit term that carries each gated dimension. A dimension the gate holds and the
@@ -1442,6 +1561,30 @@ def reweighed(
     return {t: max(2.0 * weights.get(t, 0.0), 1.0) for t in terms}
 
 
+def _improves(found: dict | None) -> bool:
+    """Whether the search found an accepted point that moves a statistic past its floor."""
+    return bool(found and found["accepted"] and found["improves"])
+
+
+def _kept_for(found: dict | None) -> tuple[str, dict | None]:
+    """Why a settled trade was kept, and the nearest refused point whose evidence says so.
+
+    `refused_point` is None when the search had no path, so the fit's own endpoint is the only
+    point there is.
+    """
+    if found is None:
+        return "bound", None
+    if found["accepted"]:
+        return "under_floor", found.get("refused_point")
+    refused = found.get("refused_point")
+    if refused and refused["bounds_ok"] and refused["worse"]:
+        return "floor", refused
+    if refused and not refused["excess_grew"] and not refused["worse"]:
+        # Refused only because the gate load did not fall: no move worth counting.
+        return "under_floor", refused
+    return "bound", refused
+
+
 def resolve_voice(d: Path, build_dir: str, per_knob: int, *, refit: bool = True) -> dict | None:
     """Settle a trade by the furthest point along the search the gate accepts.
 
@@ -1459,7 +1602,8 @@ def resolve_voice(d: Path, build_dir: str, per_knob: int, *, refit: bool = True)
     attempts = []
     found = along_the_path(voice, d, lib, report, "fit")
     attempts.append({"fit": "fit.json", **(found or {"accepted": None})})
-    chosen = ("fit.json", found) if found and found["accepted"] else None
+    chosen = ("fit.json", found) if _improves(found) else None
+    last = found
     if chosen is None:
         weights = reweighed(report, ver["newly_over"], percussive="drum_note" in voice)
         prior = report.get("fit_profile", {}).get("weights") or {}
@@ -1491,10 +1635,26 @@ def resolve_voice(d: Path, build_dir: str, per_knob: int, *, refit: bool = True)
                 attempts.append(
                     {"fit": "fit_r1.json", "weights": weights, **(found or {"accepted": None})}
                 )
-                if found and found["accepted"]:
+                last = found or last
+                if _improves(found):
                     chosen = ("fit_r1.json", found)
     if chosen is None:
-        ver.update(decision="kept", why=f"no point of the search kept every bound ({ver['why']})")
+        kept_for, refused = _kept_for(last)
+        if kept_for == "floor":
+            why = (
+                f"the next point of the search (eval {refused['eval']}) worsens a statistic "
+                f"past its floor ({ver['why']})"
+            )
+        elif kept_for == "under_floor" and (last or {}).get("accepted"):
+            why = "no statistic past its floor: the furthest point the gate accepts moves none"
+        elif kept_for == "under_floor":
+            why = (
+                f"gate load not lower: the nearest point of the search (eval {refused['eval']}) "
+                "grows no row and worsens none past its floor, but its mean load does not fall"
+            )
+        else:
+            why = f"no point of the search kept every bound ({ver['why']})"
+        ver.update(decision="kept", kept_for=kept_for, refused_point=refused, why=why)
     else:
         name, found = chosen
         point = found["accepted"]
@@ -1524,6 +1684,14 @@ def rejudge_voice(voice: dict, root: Path, build_dir: str) -> dict:
     d = root / voice["slug"]
     if not (d / "fit.json").exists():
         raise RuntimeError(f"{voice['slug']}: no fit.json under {root} to re-judge")
+    fits = [json.loads(p.read_text()) for p in (d / "fit.json", d / "fit_r1.json") if p.exists()]
+    stale = stale_starts(fits, _catalogue(voice, _tuning_lib(build_dir)).defaults)
+    if stale:
+        # Pre pins each knob at its fit-time value, so the verdict would judge a past start.
+        raise RuntimeError(
+            f"{voice['slug']}: its fits started from values the library no longer ships "
+            f"({'; '.join(stale)}); refit it rather than re-judging"
+        )
     ver = d / "verdict.json"
     was = json.loads(ver.read_text())["decision"] if ver.exists() else "unjudged"
     for path in d.iterdir():
@@ -1538,42 +1706,51 @@ def rejudge_voice(voice: dict, root: Path, build_dir: str) -> dict:
     return {**result, "why": why}
 
 
-def blocking_rows(d: Path, voice: dict, ver: dict) -> list[dict]:
-    """The gated rows a settled trade's fit pushed over, read from its pre and post compares.
+def _by_row(path: Path) -> dict[tuple[str, str], dict]:
+    return {(r["key"], r["stat"]): r for r in json.loads(path.read_text())["gate"]["readings"]}
 
-    Each names its gate, dimension and statistic, the reading before and after the fit, the
-    bound, and the floor under that bound (the gate's own, else `dimension_floor`).
+
+def blocking_rows(d: Path, voice: dict, ver: dict) -> list[dict]:
+    """The gated rows that stopped a settled trade, read from its pre compare and the refused point.
+
+    The refused point is the nearest point of the search past the accepted one, recorded in the
+    verdict; a search with no path has only the fit's own endpoint (`post.json`). A `bound`
+    verdict names the rows that point pushed over or further over (`why: "bound"`), a `floor` verdict the
+    rows it worsened past their floor (`why: "floor"`). Each names its gate, dimension and
+    statistic, the readings before and after, the bound, and the floor under it.
     """
-    pre = {
-        (r["key"], r["stat"]): r
-        for r in json.loads((d / "pre.json").read_text())["gate"]["readings"]
-    }
-    post = {
-        (r["key"], r["stat"]): r
-        for r in json.loads((d / "post.json").read_text())["gate"]["readings"]
-    }
-    gates = {g.get("capture"): g for g in voice.get("gates") or []}
+    refused = ver.get("refused_point")
+    pre = _by_row(d / "pre.json")
+    post = _by_row(d / (refused["file"] if refused else "post.json"))
+    if ver["kept_for"] == "floor":
+        names, why = [f"{w['key']} {w['stat']}" for w in refused["worse"]], "floor"
+    elif refused:
+        # Over at the refused point and further over than at pre: newly over, or grown past it.
+        grew = [
+            f"{k} {s}"
+            for (k, s), r in post.items()
+            if r.get("over")
+            and r.get("excess", 0.0) > (pre.get((k, s)) or {}).get("excess", 0.0) + 1e-9
+        ]
+        names, why = sorted(grew), "bound"
+    else:
+        names, why = ver["newly_over"], "bound"
+    floor_of = gate_floors(voice)
     rows = []
-    for name in ver["newly_over"]:
+    for name in names:
         key, stat = name.rsplit(" ", 1)
         capture, _, dim = key.rpartition(":")
-        capture = capture or voice["capture"]
-        g = gates.get(capture) or {}
-        path = Path(g["gate"]) if g.get("gate") else REFERENCE_DIR / f"{capture}_gate.json"
-        gate = json.loads(path.read_text())
-        floor = gate["bounds"][dim].get("floor")
-        if floor is None:
-            floor = dimension_floor(dim, gate.get("reference_spread"))[0]
         before, after = pre.get((key, stat)) or {}, post[(key, stat)]
         rows.append(
             {
-                "gate": capture,
+                "gate": capture or voice["capture"],
                 "dimension": dim,
                 "statistic": stat,
                 "before": None if before.get("value") is None else round(before["value"], 4),
                 "after": round(after["value"], 4),
                 "bound": after["limit"],
-                "floor": round(floor, 4),
+                "floor": round(floor_of(key), 4),
+                "why": why,
             }
         )
     return rows
@@ -1582,8 +1759,9 @@ def blocking_rows(d: Path, voice: dict, ver: dict) -> list[dict]:
 def adopt(root: Path, only: set[str]) -> int:
     """Write every `adopt` verdict's values into the program tables; record every fit.
 
-    A trade `resolve` settled as kept is recorded `blocked`, with the rows that blocked it;
-    a trade not yet resolved, and a stopped voice, are not recorded.
+    A trade `resolve` kept for a bound or a floor is recorded `blocked`, with the rows that
+    blocked it; one kept for moving nothing past its floor is recorded `kept`; a trade not
+    yet resolved, and a stopped voice, are not recorded.
     """
     records = fits_mod.load()
     per_patch: dict[str, list[tuple[str, float]]] = {}
@@ -1598,7 +1776,13 @@ def adopt(root: Path, only: set[str]) -> int:
             continue
         voice = json.loads((d / "voice.json").read_text())
         report = json.loads((d / ver.get("fit", "fit.json")).read_text())
-        blocked = ver["decision"] == "kept" and ver.get("resolved")
+        settled = ver["decision"] == "kept" and ver.get("resolved")
+        if settled and "kept_for" not in ver:
+            raise RuntimeError(
+                f"{ver['slug']}: the verdict predates the floor rule (no kept_for); "
+                f"run rejudge --only {ver['slug']}, then resolve"
+            )
+        blocked = settled and ver["kept_for"] != "under_floor"
         outcome = "adopted" if ver["decision"] == "adopt" else "blocked" if blocked else "kept"
         if outcome == "adopted":
             knobs = [
@@ -1705,7 +1889,7 @@ def main() -> int:
     ap.add_argument(
         "--lib",
         default="",
-        help="fit and compare against this prebuilt BUILD_TUNING=ON dylib (autofit's --lib) "
+        help="fit and compare against this prebuilt BUILD_TUNING=ON shared library (autofit's --lib) "
         "instead of --build-dir",
     )
     ap.add_argument(
@@ -1759,8 +1943,16 @@ def main() -> int:
         "first fit's reweighing starts from them instead of the class defaults, and a term "
         "given 0 is never raised, even when its gate dimension is red. Recorded in each verdict",
     )
+    ap.add_argument(
+        "--oracle-cache",
+        default="",
+        metavar="DIR",
+        help="numeric oracle caches for every fit (autofit's --oracle-cache): written where the "
+        "corpus is present, read in its place on a host that holds no capture audio",
+    )
     args = ap.parse_args()
-    global ALLOW_DIRTY_SRC, JOINT, ALLOW_OFF_LAYER
+    global ALLOW_DIRTY_SRC, JOINT, ALLOW_OFF_LAYER, ORACLE_CACHE
+    ORACLE_CACHE = str(Path(args.oracle_cache).resolve()) if args.oracle_cache else ""
     ALLOW_DIRTY_SRC = args.allow_dirty_src
     JOINT = args.joint
     ALLOW_OFF_LAYER = args.allow_off_layer

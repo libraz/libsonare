@@ -23,6 +23,7 @@ import pytest
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import render_model
+from _repo import shared_library_name
 from boundary import canonical_digest
 
 HOUR = 3600.0
@@ -39,7 +40,7 @@ def _fresh_process(monkeypatch):
 
 
 def _library(tmp_path: Path, *, built_at: float) -> str:
-    lib = tmp_path / "libsonare.dylib"
+    lib = tmp_path / shared_library_name()
     lib.write_bytes(b"")
     os.utime(lib, (built_at, built_at))
     return str(lib)
@@ -95,15 +96,17 @@ def _tree(tmp_path: Path, monkeypatch, *, lib_built_at: float | None) -> Path:
     source.parent.mkdir(parents=True)
     source.write_text("")
     os.utime(source, (1000.0 + HOUR, 1000.0 + HOUR))
-    lib = tmp_path / "build-python-shared" / "lib" / "libsonare.dylib"
+    lib = tmp_path / "build-python-shared" / "lib" / shared_library_name()
     if lib_built_at is not None:
         lib.parent.mkdir(parents=True)
         lib.write_bytes(b"")
         os.utime(lib, (lib_built_at, lib_built_at))
     monkeypatch.setattr(render_model, "REPO_ROOT", tmp_path)
-    monkeypatch.setattr(render_model, "DEFAULT_DYLIB", lib)
-    monkeypatch.delenv("SONARE_LIB_PATH", raising=False)
-    monkeypatch.delenv("SONARE_ALLOW_STALE_LIB", raising=False)
+    monkeypatch.setattr(render_model, "DEFAULT_LIBRARY", lib)
+    for name in ("SONARE_LIB_PATH", "SONARE_ALLOW_STALE_LIB"):
+        # Set before deleting, so teardown also removes what `ensure_lib_path` writes.
+        monkeypatch.setenv(name, "")
+        monkeypatch.delenv(name)
     return lib
 
 
@@ -255,7 +258,7 @@ def _fake_bounce_library(monkeypatch, tmp_path, *, record: dict | None):
     monkeypatch.setattr(render_model, "ensure_lib_path", lambda: None)
     monkeypatch.setattr(render_model, "check_gm_fallback", lambda _m: None)
     monkeypatch.delenv(render_model.PATH_DUMP_ENV, raising=False)
-    lib = tmp_path / "libsonare.dylib"
+    lib = tmp_path / shared_library_name()
     lib.write_bytes(b"a library binary")
     monkeypatch.setattr(render_model, "loaded_library_path", lambda: str(lib))
     return seen, hashlib.sha256(lib.read_bytes()).hexdigest()

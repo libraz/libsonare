@@ -138,7 +138,7 @@ def test_head_is_rendered_once_and_only_for_runtime_knobs():
         head_level_offset_db=None,
         head_level_unavailable=None,
         terms_for=lambda values: None,
-        _render_terms=lambda values: renders.append(values) or {"level_offset_db": -1.5},
+        _render_terms=lambda values, **_: renders.append(values) or {"level_offset_db": -1.5},
     )
     knobs = [_knob("a.x")]
     apply_start_overrides(knobs, "a.x=7", tunables={})

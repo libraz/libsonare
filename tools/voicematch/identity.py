@@ -23,7 +23,7 @@ first half cannot tell any of them from success. What it would be confirming is
 that nothing happened -- which is exactly what it was written to rule out.
 
     python tools/voicematch/identity.py \\
-        --base /tmp/base/lib/libsonare.dylib --head build-tuning/lib/libsonare.dylib \\
+        --base /tmp/base/lib/libsonare.<dylib|so> --head build-tuning/lib/libsonare.<dylib|so> \\
         --programs 0,19,40,56,73 --drums 35,36,38,47 \\
         --reach 36:d036.percussion.plate_gain=1.0
 
@@ -38,7 +38,7 @@ under the whole string and under just the keys addressed to it, requiring the
 bytes to match -- and separately requiring each piece to hear its own key, since
 a string nothing reads passes the first half perfectly.
 
-    python tools/voicematch/identity.py --head build-tuning/lib/libsonare.dylib \\
+    python tools/voicematch/identity.py --head build-tuning/lib/libsonare.<dylib|so> \\
         --isolate d042.percussion.strike_r=0.4,d049.percussion.plate_gain=2.0
 
 That independence is what the shape search's per-note render cache is keyed on:
@@ -251,8 +251,8 @@ def main(argv=None) -> int:
     p = argparse.ArgumentParser(
         description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
     )
-    p.add_argument("--base", default="", help="dylib built before the mechanism")
-    p.add_argument("--head", required=True, help="dylib built with it")
+    p.add_argument("--base", default="", help="shared library built before the mechanism")
+    p.add_argument("--head", required=True, help="shared library built with it")
     p.add_argument(
         "--isolate",
         default="",

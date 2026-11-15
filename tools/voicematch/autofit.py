@@ -195,6 +195,10 @@ which is mostly the partial refinement inside `skeleton_note`.
                     rather than answering from a scorer that no longer exists. A
                     rebuilding spec keeps no store at all: its library is
                     different for every candidate.
+    --cache-dir DIR keep the store under DIR instead of the scratch root. A
+                    search killed partway and started again with the same
+                    arguments replays what it finished as `stored` lines and
+                    renders on from the first evaluation it had not.
 
 Cutting the problem down
 ------------------------
@@ -236,7 +240,7 @@ additionally records the whole result as JSON.
 Build isolation: a dedicated build dir (default `build-autofit`) is configured
 with `-DBUILD_SHARED=ON`, plus `-DBUILD_TUNING=ON` when the spec has runtime
 knobs. Each model render runs in a fresh subprocess with SONARE_LIB_PATH
-pointed at that dir's dylib, so a rebuilding run never reads a dylib already
+pointed at that dir's shared library, so a rebuilding run never reads a shared library already
 mapped into this process. Do not point this at build-python-shared — that dir
 is shared with other tooling.
 
@@ -265,6 +269,7 @@ from datetime import UTC, datetime, timezone
 from pathlib import Path
 
 import numpy as np
+import oracle_cache
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))  # tools/ for _repo
 sys.path.insert(0, str(Path(__file__).resolve().parent))
@@ -294,6 +299,8 @@ from autofit_resolve import (
     capture_specs,
     catalogue_pattern,
     check_holdout_oracle,
+    open_corpus,
+    oracle_cache_plan,
     primary_corpus,
     reference_band_edge,
     resolve_corpus,
@@ -305,7 +312,7 @@ from autofit_weight_flags import (
     _WEIGHT_FLAGS_2,
     _add_weight_flags,
 )
-from build_lib import build_shared, configure_build, dylib_path
+from build_lib import build_shared, configure_build, library_path
 from capture import CORPUS_ROOT, ROOM_NONE, model_rig
 from catalogue import Catalogue, drum_patch_key, dump_catalogue
 from corpus import (
@@ -314,10 +321,10 @@ from corpus import (
 from corpus import (
     Corpus,
     check_rig,
+    corpus_descriptor,
     corpus_oracle,
     corpus_pattern,
     describe,
-    load_corpus,
 )
 from diagnose import run_diagnosis
 from eval_cache import digest, file_digest, open_cache, source_digest
@@ -398,6 +405,7 @@ from render_rows import (
     render_model_rows_subprocess,
     render_rate,
     resolve_metric_threads,
+    row_pool,
 )
 from report import (
     _json_safe,
@@ -409,6 +417,7 @@ from report import (
 from room import apply_room, estimate_room, fit_room_ir
 from smf import write_smf
 from staging import SubEvaluator, run_stages, screen_knobs
+from toneclass import default_weights
 from writeback import adoption_refusal, materialize, restore, struct_copies, write_edits
 
 #: Under this much inter-channel correlation, summing a stereo reference to mono
@@ -496,6 +505,9 @@ def oracle_reference(args) -> tuple[list[dict], np.ndarray, np.ndarray | None, f
     every band reading would move.
     """
     corpus = resolve_corpus(args)
+    plan = oracle_cache_plan(args, corpus)
+    if plan is not None and plan["read"]:
+        return _oracle_from_cache(args, corpus, plan)
     sr = render_rate(corpus)
     mono_mode = getattr(args, "mono_mode", "mean")
     pattern, total, _ = _score(
@@ -609,7 +621,72 @@ def oracle_reference(args) -> tuple[list[dict], np.ndarray, np.ndarray | None, f
         )
     if corpus is not None and corpus.capture_id:
         mark_loop_rows(rows, corpus.capture_id, corpus.timbre)
+    if plan is not None:
+        rows = _write_oracle_cache(corpus, plan, pattern, rows, room, edge, corr)
     return rows, mono, room, edge
+
+
+def _corpus_digest(corpus: Corpus, pattern, manifest: Path) -> str:
+    """The digest of the manifest and of every WAV `corpus_oracle` reads for `pattern`."""
+    wavs = {
+        corpus.renders[key]
+        for n in pattern.notes
+        if (key := (corpus.capture_slot(n.note), n.velocity)) in corpus.renders
+    }
+    return oracle_cache.corpus_digest(manifest, sorted(wavs), corpus.root)
+
+
+def _write_oracle_cache(corpus: Corpus, plan: dict, pattern, rows, room, edge, corr) -> list[dict]:
+    """Write this oracle's cache; the rows come back in the plain form a read returns."""
+    descriptor = corpus_descriptor(corpus)
+    oracle_cache.write(
+        plan["file"],
+        identity=plan["identity"],
+        digests={
+            "corpus": _corpus_digest(corpus, pattern, plan["manifest"]),
+            "code": oracle_cache.code_digest(),
+            "reference": oracle_cache.reference_digest(corpus.capture_id),
+            "objective": loaded_digest(),
+        },
+        descriptor=descriptor,
+        rows=rows,
+        room=room,
+        band_edge=edge,
+        channel_correlation=corr,
+    )
+    print(f"oracle cache written: {plan['file']}", file=sys.stderr)
+    return oracle_cache.plain(rows)
+
+
+def _oracle_from_cache(args, corpus: Corpus, plan: dict):
+    """`oracle_reference` for a host that holds no capture audio: rows, no audio, room, edge.
+
+    The multi-scale term compares against the oracle's audio, which a cache never
+    holds, so a run that weighs it is refused rather than scored without it.
+    """
+    if cli_weights(args).get("mss", 0.0) > 0.0:
+        raise ValueError(
+            "the multi-scale STFT term (mss) needs the corpus audio, which an oracle cache "
+            "never holds; set its weight to 0 explicitly (--w-mss 0) to fit from a cache"
+        )
+    expect = {
+        "identity": plan["identity"],
+        "reference_digest": oracle_cache.reference_digest(corpus.capture_id),
+        "corpus_digest": None,
+    }
+    if plan["present"]:
+        pattern, _, _ = _score(
+            args.program,
+            args.pattern,
+            args.notes,
+            getattr(args, "velocities", ""),
+            corpus=corpus,
+            gate_ms=getattr(args, "drum_gate_ms", 0),
+        )
+        expect["corpus_digest"] = _corpus_digest(corpus, pattern, plan["manifest"])
+    cached = oracle_cache.read(plan["file"], expect)
+    print(f"oracle: read from {plan['file'].name} (digest {cached.digest[:12]})", file=sys.stderr)
+    return cached.rows, None, cached.room, cached.band_edge
 
 
 def _corpus_identity(corpus: Corpus | None) -> list:
@@ -807,11 +884,11 @@ class Evaluator:
         knob LABELS are in it and their values are not — the values are the key
         within the file, and two specs over different knobs must not share one.
         """
-        dylib = dylib_path(self.build_dir)
+        library = library_path(self.build_dir)
         oracle = json.dumps(self.oracle, sort_keys=True, default=str).encode()
         audio = self.oracle_audio.tobytes() if self.oracle_audio is not None else b""
         fields = {
-            "lib": file_digest(dylib) if dylib is not None else "absent",
+            "lib": file_digest(library) if library is not None else "absent",
             "code": source_digest(Path(__file__).resolve().parent),
             "program": getattr(self.args, "program", 0),
             "bank": getattr(self.args, "bank", 0),
@@ -853,7 +930,7 @@ class Evaluator:
             # so its signature changes underneath each one and no key it could
             # write would ever be read back.
             return
-        self.disk = open_cache(CORPUS_ROOT, self.cache_signature())
+        self.disk = open_cache(getattr(self.args, "cache_dir", CORPUS_ROOT), self.cache_signature())
         self.cache.update(self.disk.entries)
         if self.disk.dropped:
             print(
@@ -881,7 +958,7 @@ class Evaluator:
         `render_model_rows_subprocess` puts `SONARE_TUNING_OVERRIDES` in the
         child's environment and takes it on faith from there. A library built
         without `BUILD_TUNING` ignores the variable entirely, and so does a run
-        that loaded a different dylib than the one just built — in both cases
+        that loaded a different shared library than the one just built — in both cases
         every candidate renders the compiled-in defaults, every evaluation
         returns the same loss, and the fit reports the start point as the winner
         of a search it never actually ran. Nothing about that reads as a failure.
@@ -938,14 +1015,18 @@ class Evaluator:
                 f"{n_runtime} runtime knobs were pushed {how} and not one "
                 f"measurement moved. The overrides are "
                 f"not reaching the library: either it was built without "
-                f"BUILD_TUNING, or the dylib being loaded is not the one that was "
+                f"BUILD_TUNING, or the shared library being loaded is not the one that was "
                 f"just built (check SONARE_LIB_PATH against {self.build_dir}). "
                 f"A fit run in this state searches nothing and reports the start "
                 f"point as its winner."
             )
 
-    def _render_terms(self, values: list[float]) -> dict[str, float] | None:
-        """Render one candidate and reduce it to raw loss terms. Thread-safe."""
+    def _render_terms(self, values: list[float], *, split: bool = False) -> dict[str, float] | None:
+        """Render one candidate and reduce it to raw loss terms. Thread-safe.
+
+        `split` measures its rows over the run's row pool: for a candidate scored
+        alone, where `workers` would otherwise sit idle.
+        """
         want_audio = self.want_audio
         overrides = tunable_overrides(self.knobs, values)
         if self.reach is not None:
@@ -967,6 +1048,8 @@ class Evaluator:
             metric_threads=self.metric_threads,
             tnr_masks=oracle_tnr_masks(self.oracle),
             mono_mode=getattr(self.args, "mono_mode", "mean"),
+            rows_on=row_pool(self.workers) if split else None,
+            row_workers=self.workers if split else 1,
         )
         mss = 0.0
         if want_audio and model_audio is not None:
@@ -1277,7 +1360,7 @@ class Evaluator:
             self._ensure_built()
             if key in self.cache:
                 return self._score_cached(values, self.cache[key])
-        terms = self._render_terms(values)
+        terms = self._render_terms(values, split=self.workers > 1)
         self.cache[key] = terms
         self.disk.put(key, terms)
         return self._record(values, terms)
@@ -1317,6 +1400,24 @@ class Evaluator:
         return results
 
 
+def holdout_args(args) -> tuple[argparse.Namespace, str, str] | None:
+    """The held-out probe's arguments, the axis it holds out and its values, or None."""
+    holdout = argparse.Namespace(**vars(args))
+    holdout.oracle_cache_role = "holdout"
+    # A fixed WAV is one rendering of one probe, so the hold-out gets its own.
+    # `check_holdout_oracle` has already refused the combination without it.
+    holdout.oracle_wav = getattr(args, "validate_oracle_wav", "")
+    if getattr(args, "percussive", False):
+        if not args.validate_velocities:
+            return None
+        holdout.velocities = args.validate_velocities
+        return holdout, "velocities", args.validate_velocities
+    if not args.validate_notes:
+        return None
+    holdout.notes = args.validate_notes
+    return holdout, "notes", args.validate_notes
+
+
 def holdout_scorer(args, build_dir, knobs, room_ir, reach=None):
     """A callable that scores one knob vector on the held-out probe, or None.
 
@@ -1336,20 +1437,10 @@ def holdout_scorer(args, build_dir, knobs, room_ir, reach=None):
     `reach` is the capture's override mapping (see `Evaluator`).
     """
     percussive = getattr(args, "percussive", False)
-    holdout = argparse.Namespace(**vars(args))
-    # A fixed WAV is one rendering of one probe, so the hold-out gets its own.
-    # `check_holdout_oracle` has already refused the combination without it.
-    holdout.oracle_wav = getattr(args, "validate_oracle_wav", "")
-    if percussive:
-        if not args.validate_velocities:
-            return None
-        holdout.velocities = args.validate_velocities
-        axis, held = "velocities", args.validate_velocities
-    else:
-        if not args.validate_notes:
-            return None
-        holdout.notes = args.validate_notes
-        axis, held = "notes", args.validate_notes
+    asked = holdout_args(args)
+    if asked is None:
+        return None
+    holdout, axis, held = asked
     print(f"resolving held-out {axis} {held}...", file=sys.stderr)
     oracle_rows, oracle_audio, _, band_edge = oracle_reference(holdout)
     if not oracle_rows:
@@ -1386,6 +1477,8 @@ def holdout_scorer(args, build_dir, knobs, room_ir, reach=None):
             metric_threads=resolve_metric_threads(args),
             tnr_masks=oracle_tnr_masks(oracle_rows),
             mono_mode=getattr(holdout, "mono_mode", "mean"),
+            rows_on=row_pool(args.workers) if args.workers > 1 else None,
+            row_workers=args.workers,
         )
         mss = mss_distance(audio, oracle_audio) if want_audio and audio is not None else 0.0
         terms = robust_score_terms(
@@ -1954,7 +2047,7 @@ def _spec_layers(args) -> tuple[dict[str, str], list[str]]:
     bank_no = getattr(args, "bank", 0)
     layers, undeclared = {}, []
     for spec in specs:
-        corpus = load_corpus(spec.path, spec.timbre)
+        corpus = open_corpus(args, spec)
         label = capture_label(corpus)
         source_class = classes.get(corpus.capture_id)
         layers[label] = policy.capture_layer(source_class, args.program, bank_no, kit=kit)
@@ -2179,6 +2272,29 @@ def joint_winner(
     return final
 
 
+def oracle_source_record(args) -> dict:
+    """The report keys for a run whose oracle came from a cache, else nothing.
+
+    `scored_without` names the `mss` term only where the class weighs it and the
+    run switched it off; a class that never weighed it scores the same objective.
+    """
+    source = oracle_cache.source_record()
+    if source is None:
+        return {}
+    out: dict = {"oracle": source}
+    class_weighs = (
+        default_weights(
+            getattr(args, "program", 0),
+            drum_note=getattr(args, "drum_note", None),
+            percussive=getattr(args, "percussive", False),
+        ).get("mss", 0.0)
+        > 0.0
+    )
+    if class_weighs and cli_weights(args).get("mss", 0.0) == 0.0:
+        out["scored_without"] = ["mss"]
+    return out
+
+
 def corpora_record(captures: list[Capture]) -> list[dict]:
     """The captures a fit answered, ids and timbres first: part of the fit's identity."""
     return [
@@ -2265,15 +2381,15 @@ def _tuning_catalogue(args, build_dir: Path, **kw) -> Catalogue:
     """
     lib = getattr(args, "lib", "")
     if lib:
-        dylib = dylib_path(build_dir)
+        library = library_path(build_dir)
     else:
         configure_build(build_dir, args.cmake, tuning=True)
         build_shared(build_dir, args.cmake, args.jobs)
-        dylib = dylib_path(build_dir)
+        library = library_path(build_dir)
     catalogue = dump_catalogue(
         args.program,
         catalogue_pattern(args),
-        str(dylib) if dylib else None,
+        str(library) if library else None,
         sr=render_rate(primary_corpus(args)),
         notes=args.notes,
         **kw,
@@ -2526,9 +2642,7 @@ def gate_sources(args) -> tuple[dict | None, str]:
     """
     specs = capture_specs(args)
     corpora = (
-        [load_corpus(spec.path, spec.timbre) for spec in specs]
-        if len(specs) > 1
-        else [resolve_corpus(args)]
+        [open_corpus(args, spec) for spec in specs] if len(specs) > 1 else [resolve_corpus(args)]
     )
     if corpora[0] is not None:
         if not all(c.capture_id for c in corpora):
@@ -2646,7 +2760,7 @@ def _fold_gate_audit(args, build_dir, compare=gate_audit.compare_voice) -> None:
     voice, why = _gate_voice(args)
     if voice is None:
         return skip(why)
-    lib = dylib_path(build_dir)
+    lib = library_path(build_dir)
     if lib is None:
         return skip("no tuning library to read the gates with")
     import refit  # lazy: see _gate_voice
@@ -2776,13 +2890,14 @@ def run(args, argv: list[str] | None = None) -> int:
     # The objective and harness this run answers are the code loaded now, whatever changes on disk later.
     harness = harness_lock.lock(("autofit",))
     loaded_digest()
+    oracle_cache.reset_consumed()
     stale = harness_lock.mismatch(harness)
     if stale:
         print(stale, file=sys.stderr)
         return 2
     lib = getattr(args, "lib", "") or ""
     if lib:
-        # A prebuilt library stands where the build dir does: `dylib_path` hands
+        # A prebuilt library stands where the build dir does: `library_path` hands
         # a file straight back, and nothing derives another path from it.
         build_dir = Path(lib).resolve()
         if not build_dir.is_file():
@@ -3190,6 +3305,14 @@ def run(args, argv: list[str] | None = None) -> int:
                 file=sys.stderr,
             )
 
+    if getattr(args, "oracle_cache_write", False):
+        for cap in captures:
+            asked = holdout_args(cap.args)
+            if asked is not None:
+                oracle_reference(asked[0])
+        print("oracle caches written; nothing rendered (--oracle-cache-write)", file=sys.stderr)
+        return 0
+
     best_values: list[float] = [k.start_value for k in knobs]
     with tempfile.TemporaryDirectory(prefix="autofit_room_") as tmp:
         for i, cap in enumerate(captures):
@@ -3322,6 +3445,7 @@ def run(args, argv: list[str] | None = None) -> int:
             "clamp_bounds": clamp_bounds,
             "prefit": prefit,
             "corpora": corpora_record(captures),
+            **oracle_source_record(args),
             **_provisional_record(args),
             "captures": [
                 {
@@ -3437,6 +3561,31 @@ def build_parser() -> argparse.ArgumentParser:
         "every model render in a matching space before scoring, so a "
         "reference recorded in a hall does not read as timbre; "
         "none: score as rendered",
+    )
+    parser.add_argument(
+        "--oracle-cache",
+        default="",
+        metavar="DIR",
+        dest="oracle_cache",
+        help="a directory of numeric oracle caches, one per capture, timbre and role "
+        "(<capture>__<timbre or default>__<fit|holdout>.json.gz, <capture> being the "
+        "--corpus directory's name). Written there when the corpus is present; read in "
+        "its place when the manifest is not on this host. The multi-scale term needs the "
+        "corpus audio, so a cached run needs --w-mss 0 wherever the class weighs it",
+    )
+    parser.add_argument(
+        "--oracle-cache-write",
+        action="store_true",
+        dest="oracle_cache_write",
+        help="write every --oracle-cache file this command would read (fit and hold-out) "
+        "from the corpus, then stop before the first render",
+    )
+    parser.add_argument(
+        "--oracle-cache-only",
+        action="store_true",
+        dest="oracle_cache_only",
+        help="read the oracle from --oracle-cache even where the corpus is present, "
+        "refusing a cache whose corpus digest differs from it",
     )
     parser.add_argument(
         "--corpus",
@@ -3560,9 +3709,9 @@ def build_parser() -> argparse.ArgumentParser:
         "--workers",
         type=int,
         default=1,
-        help="model renders to run concurrently (default: 1). Only helps "
-        "--optimizer cmaes, whose population is independent; a "
-        "rebuilding spec is forced back to 1",
+        help="processes one evaluation may use (default: 1): a --optimizer cmaes "
+        "batch renders that many candidates at once, and a candidate scored alone "
+        "measures its rows over that many; a rebuilding spec is forced back to 1",
     )
     parser.add_argument(
         "--metric-threads",
@@ -3585,6 +3734,14 @@ def build_parser() -> argparse.ArgumentParser:
         "library's bytes, the harness source, the probe and the "
         "oracle, so a hit stands for the render it replaces; this "
         "is for proving that rather than assuming it",
+    )
+    parser.add_argument(
+        "--cache-dir",
+        type=Path,
+        default=CORPUS_ROOT,
+        metavar="DIR",
+        help="keep the measured-candidate store under DIR instead of the scratch root; "
+        "a search restarted with the same arguments replays what it finished from there",
     )
     parser.add_argument(
         "--diagnose",
@@ -3796,7 +3953,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--lib",
         default="",
-        help="fit against this prebuilt BUILD_TUNING=ON libsonare dylib instead of "
+        help="fit against this prebuilt BUILD_TUNING=ON libsonare shared library instead of "
         "configuring and building --build-dir: nothing is built or written beside "
         "the library. Only runtime (tunable) knobs can be fitted this way; a "
         "dirty src/ is reported against the library's mtime rather than refused, "

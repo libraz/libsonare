@@ -13,7 +13,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import profile as profile_module
 
 from _repo import REPO_ROOT
-from build_lib import dylib_path
+from build_lib import library_path
 from catalogue import Catalogue, dump_catalogue
 from knobs import refuse_unknown_override_keys
 
@@ -52,9 +52,9 @@ def test_profile_refuses_the_environments_unknown_key_before_rendering(monkeypat
 
 
 def test_the_librarys_own_catalogue_refuses_a_bogus_electric_guitar_key():
-    lib = dylib_path(TUNING_BUILD)
+    lib = library_path(TUNING_BUILD)
     if lib is None:
-        pytest.skip("build-tuning/lib/libsonare.dylib is unavailable")
+        pytest.skip("build-tuning shared library is unavailable")
     cat = dump_catalogue(27, "sustain", str(lib), sr=48000)
     patch = cat.patch_for(27)
     real = next(k for k in cat.defaults if k.startswith(f"{patch}."))

@@ -26,6 +26,7 @@ import autofit_report
 import build_lib
 import eval_cache
 import render_rows
+from _repo import shared_library_name
 from autofit import Evaluator, winner_or_defaults
 from autofit_test_fixtures import (
     _fit_args,
@@ -310,7 +311,7 @@ def test_the_fit_refuses_a_library_that_ignores_the_override_table(monkeypatch):
     ev = Evaluator.__new__(Evaluator)
     ev.build_dir = Path("build")
     monkeypatch.setattr(
-        ev, "_render_terms", lambda values: {t: 1.0 for t in LOSS_TERMS}, raising=False
+        ev, "_render_terms", lambda values, **_: {t: 1.0 for t in LOSS_TERMS}, raising=False
     )
     with pytest.raises(RuntimeError, match="not reaching the library"):
         ev.check_overrides_reach([_reach_knob("a", 0.0, 1.0, 0.5)])
@@ -366,7 +367,7 @@ def test_a_probe_that_measures_nothing_as_shipped_says_so_rather_than_blaming_ov
     environment — a message about BUILD_TUNING would send the reader nowhere."""
     ev = Evaluator.__new__(Evaluator)
     ev.build_dir = Path("build")
-    monkeypatch.setattr(ev, "_render_terms", lambda values: None, raising=False)
+    monkeypatch.setattr(ev, "_render_terms", lambda values, **_: None, raising=False)
     with pytest.raises(RuntimeError, match="own start values"):
         ev.check_overrides_reach([_reach_knob("a", 0.0, 1.0, 0.25)])
 
@@ -394,7 +395,7 @@ def test_a_source_only_spec_has_no_override_plumbing_to_check(monkeypatch):
     monkeypatch.setattr(
         ev,
         "_render_terms",
-        lambda values: pytest.fail("a source knob needs no reach check"),
+        lambda values, **_: pytest.fail("a source knob needs no reach check"),
         raising=False,
     )
     ev.check_overrides_reach(
@@ -422,7 +423,7 @@ def _refuse_to_render(values):
 def _stub_build(tmp_path: Path, contents: bytes = b"lib") -> Path:
     build = tmp_path / "build"
     (build / "lib").mkdir(parents=True, exist_ok=True)
-    (build / "lib" / "libsonare.dylib").write_bytes(contents)
+    (build / "lib" / shared_library_name()).write_bytes(contents)
     return build
 
 
@@ -487,7 +488,7 @@ def test_the_signature_moves_with_everything_a_stored_value_depends_on(
     )
     before = ev.cache_signature()
     if change == "library":
-        (ev.build_dir / "lib" / "libsonare.dylib").write_bytes(b"rebuilt")
+        (ev.build_dir / "lib" / shared_library_name()).write_bytes(b"rebuilt")
     elif change == "harness":
         monkeypatch.setattr(autofit, "source_digest", lambda d: "edited")
     elif change == "oracle":
@@ -507,7 +508,7 @@ def test_the_signature_moves_with_everything_a_stored_value_depends_on(
 
 def test_a_second_run_reads_what_the_first_one_measured(tmp_path, monkeypatch):
     first = _cached_evaluator(tmp_path, monkeypatch)
-    first._render_terms = lambda values: _terms(harm=float(values[0]))
+    first._render_terms = lambda values, **_: _terms(harm=float(values[0]))
     first([0.25])
     first([0.75])
     assert len(first.trajectory) == 2
@@ -534,7 +535,7 @@ def test_a_run_that_starts_from_the_store_still_normalises_against_its_start(
     sum instead — the same search, over a different quantity, silently.
     """
     first = _cached_evaluator(tmp_path, monkeypatch)
-    first._render_terms = lambda values: _terms(harm=float(values[0]))
+    first._render_terms = lambda values, **_: _terms(harm=float(values[0]))
     start, other = first([0.25]), first([0.75])
 
     second = _cached_evaluator(tmp_path, monkeypatch)
@@ -546,12 +547,12 @@ def test_a_run_that_starts_from_the_store_still_normalises_against_its_start(
 def test_a_run_whose_library_was_rebuilt_measures_again(tmp_path, monkeypatch):
     """The C++ moved, so every stored number describes a voice that is gone."""
     first = _cached_evaluator(tmp_path, monkeypatch)
-    first._render_terms = lambda values: _terms(harm=float(values[0]))
+    first._render_terms = lambda values, **_: _terms(harm=float(values[0]))
     first([0.25])
 
     second = _cached_evaluator(tmp_path, monkeypatch)
-    (second.build_dir / "lib" / "libsonare.dylib").write_bytes(b"rebuilt")
-    second._render_terms = lambda values: _terms(harm=float(values[0]))
+    (second.build_dir / "lib" / shared_library_name()).write_bytes(b"rebuilt")
+    second._render_terms = lambda values, **_: _terms(harm=float(values[0]))
     second([0.25])
     assert len(second.trajectory) == 1
 
@@ -564,7 +565,7 @@ def test_a_rebuilding_fit_keeps_no_store(tmp_path, monkeypatch):
     ev = Evaluator(
         [knob], {path: path.read_text()}, [], None, _fit_args(no_cache=False), _stub_build(tmp_path)
     )
-    ev._render_terms = lambda values: _terms(harm=1.0)
+    ev._render_terms = lambda values, **_: _terms(harm=1.0)
     ev([2.0])
     assert ev.disk.path is None
     assert not (tmp_path / "scratch").exists()
@@ -1068,11 +1069,9 @@ def test_a_joint_fit_of_tonal_captures_only_is_left_alone(monkeypatch, tmp_path,
 
 
 def test_refit_reads_the_same_noise_led_trigger_over_a_joint_voice(monkeypatch, tmp_path):
-    import autofit_resolve
     import refit
 
     args = _joint_noise_args(monkeypatch, tmp_path, {"tonal": 25.0, "airy": 4.5})
-    monkeypatch.setattr(refit, "load_corpus", autofit_resolve.load_corpus)
     voice = {
         "program": 0,
         "corpus": "dir-tonal",

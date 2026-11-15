@@ -19,6 +19,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import autofit
 import catalogue as catalogue_module
+from _repo import shared_library_name
 from catalogue import Catalogue
 
 
@@ -27,7 +28,7 @@ def _boom(*a, **k):
 
 
 def _lib(tmp_path: Path) -> Path:
-    lib = tmp_path / "libsonare.dylib"
+    lib = tmp_path / shared_library_name()
     lib.write_bytes(b"not a real library")
     return lib
 
@@ -144,4 +145,4 @@ def test_the_library_record_is_folded_into_out(tmp_path):
 
 def test_the_dylib_of_a_prebuilt_path_is_the_path(tmp_path):
     lib = _lib(tmp_path)
-    assert autofit.dylib_path(lib) == lib
+    assert autofit.library_path(lib) == lib

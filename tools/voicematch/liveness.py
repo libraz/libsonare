@@ -50,7 +50,7 @@ for a patch names the patch that voices a program, and a knob named for an
 engine file names the engine, which the same catalogue maps back to a patch.
 A spec neither of those reaches is skipped and said to be skipped.
 
-    python tools/voicematch/liveness.py --lib build-tuning/lib/libsonare.dylib
+    python tools/voicematch/liveness.py --lib build-tuning/lib/libsonare.<dylib|so>
 
 A note at which NO knob in a spec moves anything is reported too. That is the
 positive control: a note the voice does not sound renders silence at both ends
@@ -75,6 +75,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 import catalogue as catalogue_mod
+from _repo import shared_library_file
 from catalogue import drum_patch_key, resolve_knob_name, scan_tunables
 from check_specs import SPEC_DIR
 from identity import PERCUSSION_CHANNEL, render_batch
@@ -536,7 +537,9 @@ def run_census(args, catalogue, velocities: tuple[int, ...]) -> int:
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument(
-        "--lib", default="build-tuning/lib/libsonare.dylib", help="a -DBUILD_TUNING=ON library"
+        "--lib",
+        default=str(shared_library_file(Path("build-tuning"))),
+        help="a -DBUILD_TUNING=ON library",
     )
     ap.add_argument("--spec", default=None, help="one spec file, else all of them")
     ap.add_argument(

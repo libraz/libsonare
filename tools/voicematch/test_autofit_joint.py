@@ -23,6 +23,7 @@ import fits
 import policy
 import refit
 import report
+from _repo import shared_library_name
 from autofit import (
     Evaluator,
     JointEvaluator,
@@ -68,7 +69,7 @@ def _member(tmp_path, monkeypatch, terms_of, **weights) -> Evaluator:
     """An `Evaluator` whose renders are `terms_of(values)`, with no build behind it."""
     monkeypatch.setattr(autofit, "build_shared", lambda *a, **k: None)
     member = Evaluator([KNOB], {}, [{"note": 60}], None, _args(**weights), tmp_path)
-    member._render_terms = lambda values: terms_of(values)
+    member._render_terms = lambda values, **_: terms_of(values)
     return member
 
 
@@ -79,7 +80,7 @@ def _joint(*members, labels=None) -> JointEvaluator:
 
 def _harm(units_at):
     """Terms whose `harm` is `units_at(value)` perceptual units."""
-    return lambda values: _terms(harm=_units("harm", units_at(values[0])))
+    return lambda values, **_: _terms(harm=_units("harm", units_at(values[0])))
 
 
 # --------------------------------------------------------------------------- #
@@ -606,7 +607,7 @@ def test_a_joint_run_reports_each_capture_and_records_both(tmp_path, monkeypatch
     import numpy as np
     from catalogue import Catalogue
 
-    lib = tmp_path / "libsonare.dylib"
+    lib = tmp_path / shared_library_name()
     lib.write_bytes(b"lib")
     monkeypatch.setattr(autofit, "repo_tree_state", lambda: ("deadbeef", []))
     monkeypatch.setattr(autofit, "src_files", list)
@@ -626,7 +627,7 @@ def test_a_joint_run_reports_each_capture_and_records_both(tmp_path, monkeypatch
     )
     rendered = []
 
-    def terms(self, values):
+    def terms(self, values, **_):
         rendered.append((self.args.program, None if self.reach is None else self.reach.signature))
         v = values[0] / 9.0  # the knob runs 2.5 to 9
         if self.args.program == 0:
@@ -683,7 +684,7 @@ def test_a_joint_run_dumps_the_catalogue_once_at_the_primary_rate(tmp_path, monk
     import numpy as np
     from catalogue import Catalogue
 
-    lib = tmp_path / "libsonare.dylib"
+    lib = tmp_path / shared_library_name()
     lib.write_bytes(b"lib")
     monkeypatch.setattr(autofit, "repo_tree_state", lambda: ("deadbeef", []))
     monkeypatch.setattr(autofit, "src_files", list)
@@ -711,7 +712,7 @@ def test_a_joint_run_dumps_the_catalogue_once_at_the_primary_rate(tmp_path, monk
     monkeypatch.setattr(
         Evaluator,
         "_render_terms",
-        lambda self, values: _terms(harm=_units("harm", 14.0 - 12.0 * values[0])),
+        lambda self, values, **_: _terms(harm=_units("harm", 14.0 - 12.0 * values[0])),
     )
     scorers = {0: _Held(0.7, held="48"), 1: _Held(0.7, held="50")}
     monkeypatch.setattr(
@@ -844,9 +845,9 @@ def _serve_definitions(monkeypatch, classes):
     )
     monkeypatch.setattr(
         autofit,
-        "load_corpus",
-        lambda path, timbre: argparse.Namespace(
-            capture_id=Path(path).name, timbre="t", root=Path(path)
+        "open_corpus",
+        lambda args, spec: argparse.Namespace(
+            capture_id=Path(spec.path).name, timbre="t", root=Path(spec.path)
         ),
     )
 

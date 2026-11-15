@@ -99,6 +99,7 @@ def records(monkeypatch):
 
 _SETTLED = {
     "decision": "kept",
+    "kept_for": "bound",
     "resolved": True,
     "why": "no point of the search kept every bound (newly over ...)",
     "newly_over": ["violin:decay median", "violin:tnr p90"],
@@ -120,6 +121,7 @@ def test_a_trade_resolve_settled_as_kept_is_recorded_blocked_with_its_rows(tmp_p
             "after": 1.3,
             "bound": 1.0,
             "floor": 0.4,
+            "why": "bound",
         },
         {
             "gate": "violin",
@@ -129,6 +131,7 @@ def test_a_trade_resolve_settled_as_kept_is_recorded_blocked_with_its_rows(tmp_p
             "after": 6.6,
             "bound": 6.0,
             "floor": 1.5,
+            "why": "bound",
         },
     ]
 

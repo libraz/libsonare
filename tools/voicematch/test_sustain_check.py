@@ -141,9 +141,9 @@ def test_both_reed_branches_reach_a_verdict_and_hold_their_note():
     """
     import tempfile
 
-    from render_model import DEFAULT_DYLIB
+    from render_model import DEFAULT_LIBRARY
 
-    if not DEFAULT_DYLIB.exists():
+    if not DEFAULT_LIBRARY.exists():
         pytest.skip("no built library in this checkout, so nothing can be rendered")
 
     with tempfile.TemporaryDirectory(prefix="sustain-control-") as tmp:
@@ -164,3 +164,16 @@ def test_both_reed_branches_reach_a_verdict_and_hold_their_note():
         f"the reeds reach {worst:.1f} dB against a {EXCESS_TOLERANCE_DB:.0f} dB "
         f"tolerance — too close to call one of them a pass"
     )
+
+
+def test_a_failed_render_carries_the_child_stderr(tmp_path, monkeypatch):
+    def broken(*a, **k):
+        raise sustain_check.RenderFailed("OSError: cannot load libsonare")
+
+    monkeypatch.setattr(sustain_check, "render_held", broken)
+    got = check_one(SPECIMEN_ID, tmp_path)
+    assert got == {
+        "id": SPECIMEN_ID,
+        "status": "render-failed",
+        "error": "OSError: cannot load libsonare",
+    }

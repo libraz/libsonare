@@ -17,13 +17,17 @@ import sys
 import time
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))  # tools/ for _repo
+
+from _repo import shared_library_file
+
 REPO = Path(__file__).resolve().parents[2]
 
 
 def library(build_dir: Path) -> Path:
-    for name in ("libsonare.dylib", "libsonare.so"):
-        if (build_dir / "lib" / name).exists():
-            return build_dir / "lib" / name
+    found = shared_library_file(build_dir)
+    if found.exists():
+        return found
     raise FileNotFoundError(f"no libsonare under {build_dir / 'lib'}")
 
 
@@ -36,7 +40,7 @@ def publish(built: Path, dest: Path) -> Path:
     tmp = out / f".{real.name}.tmp"
     shutil.copy2(real, tmp)
     os.replace(tmp, out / real.name)
-    # The symlink chain (libsonare.dylib -> libsonare.1.dylib -> the versioned file).
+    # The symlink chain (libsonare.dylib -> libsonare.1.dylib -> libsonare.1.10.0.dylib; .so, .so.1, .so.1.10.0 on Linux).
     for link in sorted(src_lib.parent.glob("libsonare*")):
         if link.is_symlink():
             tmp = out / f".{link.name}.tmp"
@@ -47,12 +51,12 @@ def publish(built: Path, dest: Path) -> Path:
     return library(dest).resolve()
 
 
-def record(dylib: Path, head: str) -> dict:
+def record(library: Path, head: str) -> dict:
     return {
         "head": head,
         "source": "head mirror",
-        "linked_utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(dylib.stat().st_mtime)),
-        "dylib": str(dylib),
+        "linked_utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(library.stat().st_mtime)),
+        "library": str(library),
     }
 
 
@@ -70,7 +74,7 @@ def main(argv: list[str]) -> int:
     head = (mirror / ".HEAD").read_text().strip()
     rec = record(publish(built, dest), head)
     (dest / "BASELINE").write_text(json.dumps(rec, indent=1) + "\n")
-    print(f"baseline {rec['head']} (HEAD mirror) linked {rec['linked_utc']} -> {rec['dylib']}")
+    print(f"baseline {rec['head']} (HEAD mirror) linked {rec['linked_utc']} -> {rec['library']}")
     return 0
 
 

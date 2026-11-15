@@ -8,7 +8,7 @@ Run from the repo root through the bindings' rye environment:
         python tools/voicematch/voicematch.py compare --programs 40
 
 Outputs land under tools/voicematch/out/p<NNN>_<pattern>/ as model.wav,
-oracle.wav, notes.mid, report.txt and report.json. Rebuild the dylib first
+oracle.wav, notes.mid, report.txt and report.json. Rebuild the shared library first
 when the synth code changed:
 
     cmake --build build-python-shared --target sonare_shared -j8
@@ -537,7 +537,7 @@ def require_live_tunable(program: int, pattern: str, key: str) -> None:
             f"{exc}\n"
             f"room-match sweeps {key} through that table, so every render would come "
             f"back identical. Build with -DBUILD_TUNING=ON and point SONARE_LIB_PATH at "
-            f"that dylib."
+            f"that shared library."
         ) from None
     if key not in catalogue.defaults:
         raise SystemExit(

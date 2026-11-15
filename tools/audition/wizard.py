@@ -23,11 +23,11 @@ import threading
 from pathlib import Path
 
 import heard
-from _repo import REPO_ROOT
+from _repo import REPO_ROOT, shared_library_file
 
 #: The library a render loads. A tuning build is what names the patch and
 #: records the render path, without which no note on the page can be dated.
-DEFAULT_LIB = REPO_ROOT / "build-tuning" / "lib" / "libsonare.dylib"
+DEFAULT_LIB = shared_library_file(REPO_ROOT / "build-tuning")
 MAKE_AUDITION = REPO_ROOT / "tools" / "voicematch" / "make_audition.py"
 PYPROJECT = REPO_ROOT / "bindings" / "python" / "pyproject.toml"
 

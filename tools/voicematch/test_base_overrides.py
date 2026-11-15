@@ -17,7 +17,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import fits
 import render_rows
 from _repo import REPO_ROOT
-from build_lib import dylib_path
+from build_lib import library_path
 from catalogue import Catalogue
 from knobs import (
     Knob,
@@ -75,7 +75,7 @@ def test_every_render_goes_through_the_merge(monkeypatch, tmp_path):
         seen["env"] = kw["env"].get("SONARE_TUNING_OVERRIDES")
         return subprocess.CompletedProcess(cmd, 0, stdout="[]", stderr="")
 
-    monkeypatch.setattr(render_rows, "dylib_path", lambda b: Path("lib"))
+    monkeypatch.setattr(render_rows, "library_path", lambda b: Path("lib"))
     monkeypatch.setattr(render_rows.subprocess, "run", fake_run)
     render_rows.render_model_rows_subprocess(
         tmp_path, 0, "sustain", "60", overrides="a.y=5", base_overrides="a.x=1,a.y=2"
@@ -104,9 +104,9 @@ def _render(lib: Path, overrides: str) -> np.ndarray:
 
 @pytest.fixture(scope="module")
 def tuning_lib():
-    lib = dylib_path(TUNING_BUILD)
+    lib = library_path(TUNING_BUILD)
     if lib is None:
-        pytest.skip("build-tuning/lib/libsonare.dylib is unavailable")
+        pytest.skip("build-tuning shared library is unavailable")
     newest = max(p.stat().st_mtime for p in (REPO_ROOT / "src").rglob("*") if p.is_file())
     if Path(lib).resolve().stat().st_mtime < newest:
         pytest.skip("build-tuning library is older than its sources")

@@ -23,7 +23,7 @@ printing the adopted numbers twice.
 Local measurement, read-only, not gated. Exits 1 when a program misses either
 bound or the control is not beaten, 0 otherwise.
 
-    SONARE_LIB_PATH=build-tuning/lib/libsonare.dylib \\
+    SONARE_LIB_PATH=build-tuning/lib/libsonare.<dylib|so> \\
         rye run --pyproject bindings/python/pyproject.toml \\
         python tools/voicematch/rig_band_check.py
 """

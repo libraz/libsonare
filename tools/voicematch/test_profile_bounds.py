@@ -19,6 +19,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import profile as profile_module
 
 import profile_gate
+from _repo import shared_library_name
 
 # --------------------------------------------------------------------------
 # which dimensions an instrument is judged on
@@ -242,7 +243,7 @@ def test_a_gate_records_which_library_measured_its_model_side(tmp_path, monkeypa
     `warn_if_stale` already detects it and says so on stderr, which is gone by
     the time anyone opens the file.
     """
-    lib = tmp_path / "libsonare.dylib"
+    lib = tmp_path / shared_library_name()
     lib.write_bytes(b"")
     monkeypatch.setenv("SONARE_LIB_PATH", str(lib))
     import render_model

@@ -21,6 +21,7 @@ changes every evaluation, so no key could ever repeat.
 from __future__ import annotations
 
 import json
+import os
 import threading
 from hashlib import blake2b
 from pathlib import Path
@@ -116,6 +117,9 @@ class EvalCache:
             self.path.parent.mkdir(parents=True, exist_ok=True)
             with self.path.open("a") as fh:
                 fh.write(json.dumps({"k": list(key), "t": terms}) + "\n")
+                # On disk before the next render starts, so a kill loses at most the one in flight.
+                fh.flush()
+                os.fsync(fh.fileno())
 
 
 def _read(path: Path) -> list[tuple[tuple[str, ...], dict | None]]:

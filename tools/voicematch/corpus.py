@@ -61,6 +61,8 @@ from wavio import read_wav
 #: One-based MIDI channel 10, the GM drum channel. `write_smf` counts from zero.
 PERCUSSION_CHANNEL = 10
 
+HERE = Path(__file__).resolve().parent
+
 
 @dataclass(frozen=True)
 class Corpus:
@@ -130,6 +132,9 @@ class Corpus:
     #: component is the id only by convention and would silently name the wrong
     #: profile once it is not.
     capture_id: str = ""
+    #: The oracle cache this corpus was built from when its manifest is not on
+    #: this host; None for a corpus read from a manifest. Not part of equality.
+    cache_file: Path | None = field(default=None, compare=False)
 
     def slot_count(self) -> int:
         return len(self.notes) * len(self.velocities)
@@ -773,3 +778,120 @@ def describe(corpus: Corpus, pattern: Pattern) -> str:
         f"{len({n.velocity for n in pattern.notes})} velocities), "
         f"{corpus.gate_s:g} s gate, {seconds / 60.0:.1f} min of audio per render"
     )
+
+
+# --------------------------------------------------------------------------- #
+# The numeric descriptor a host without the capture stands on
+# --------------------------------------------------------------------------- #
+def tracked_definition(capture_id: str, directory: Path | None = None) -> dict | None:
+    """The tracked capture definition `capture/<id>.json`, or None where there is none."""
+    import json
+
+    path = (directory or HERE / "capture") / f"{capture_id}.json"
+    try:
+        return json.loads(path.read_text())
+    except (OSError, ValueError):
+        return None
+
+
+def corpus_descriptor(corpus: Corpus, capture_dir: Path | None = None) -> dict:
+    """Every field a fit reads off `corpus`, as plain numbers, ids and enum values.
+
+    No path, no render location and nothing the manifest says about the source,
+    the plugin or its settings. The label and the id come from the tracked
+    capture definition, because the manifest's timbre label can name a product.
+    """
+    definition = tracked_definition(corpus.capture_id, capture_dir)
+    label = corpus.timbre
+    if definition is not None:
+        for entry in definition.get("timbres") or []:
+            if isinstance(entry, dict) and entry.get("id") == corpus.timbre and "label" in entry:
+                label = str(entry["label"])
+    capture_id = str(definition["id"]) if definition and "id" in definition else corpus.capture_id
+    return {
+        "capture_id": capture_id,
+        "timbre": corpus.timbre,
+        "label": label,
+        "sample_rate": corpus.sample_rate,
+        "gate_s": corpus.gate_s,
+        "preroll_s": corpus.preroll_s,
+        "slot_s": corpus.slot_s,
+        "notes": list(corpus.notes),
+        "velocities": list(corpus.velocities),
+        "render_keys": sorted([n, v] for n, v in corpus.renders),
+        "dry": corpus.dry,
+        "room": corpus.room,
+        "rig": corpus.rig,
+        "rig_evidence": corpus.rig_evidence,
+        "channel": corpus.channel,
+        "groups": [{"name": k, "notes": list(v)} for k, v in sorted(corpus.groups.items())],
+        "slots": sorted([n, v, s] for (n, v), s in corpus.slots.items()),
+        "gates": sorted([n, v, g] for (n, v), g in corpus.gates.items()),
+        "note_map": sorted([a, b] for a, b in corpus.note_map.items()),
+    }
+
+
+def corpus_from_descriptor(desc: dict, root: Path | str, cache_file: Path | None = None) -> Corpus:
+    """The `Corpus` a descriptor stands for; `root` is only the path the run was given.
+
+    Equal to the manifest-built corpus on every field a fit uses except `label`
+    (the tracked definition's) and `root` / `renders` values, which name files
+    this host does not hold (`renders` keeps its keys).
+    """
+    nowhere = Path(root)
+    return Corpus(
+        root=nowhere,
+        timbre=desc["timbre"],
+        sample_rate=int(desc["sample_rate"]),
+        gate_s=float(desc["gate_s"]),
+        preroll_s=float(desc["preroll_s"]),
+        slot_s=float(desc["slot_s"]),
+        renders={(int(n), int(v)): nowhere for n, v in desc["render_keys"]},
+        notes=tuple(int(n) for n in desc["notes"]),
+        velocities=tuple(int(v) for v in desc["velocities"]),
+        label=desc["label"],
+        dry=bool(desc["dry"]),
+        room=desc["room"],
+        rig=desc["rig"],
+        rig_evidence=desc["rig_evidence"],
+        channel=int(desc["channel"]),
+        groups={g["name"]: tuple(int(n) for n in g["notes"]) for g in desc["groups"]},
+        slots={(int(n), int(v)): float(s) for n, v, s in desc["slots"]},
+        gates={(int(n), int(v)): float(g) for n, v, g in desc["gates"]},
+        note_map={int(a): int(b) for a, b in desc["note_map"]},
+        capture_id=desc["capture_id"],
+        cache_file=cache_file,
+    )
+
+
+def check_against_slot_table(desc: dict, capture_id: str, directory: Path | None = None) -> None:
+    """Refuse a descriptor whose slot lengths differ from the tracked table, where one exists.
+
+    The table is `reference/<id>_slots.json`: rows of exactly timbre, note,
+    velocity and seconds (a list, or an object holding it under `rows`). With no
+    table the check passes, since there is nothing tracked to compare against.
+    """
+    import json
+
+    path = (directory or HERE / "reference") / f"{capture_id}_slots.json"
+    if not path.exists():
+        return
+    table = json.loads(path.read_text())
+    rows = table.get("rows", []) if isinstance(table, dict) else table
+    tracked = {
+        (int(r["note"]), int(r["velocity"])): float(r["seconds"])
+        for r in rows
+        if r.get("timbre") == desc["timbre"]
+    }
+    held = {(int(n), int(v)): float(s) + float(desc["preroll_s"]) for n, v, s in desc["slots"]}
+    wrong = sorted(
+        k
+        for k in tracked.keys() | held.keys()
+        if k not in tracked or k not in held or abs(tracked[k] - held[k]) > 1e-6
+    )
+    if wrong:
+        shown = ", ".join(f"n{n}/v{v}" for n, v in wrong[:6])
+        raise ValueError(
+            f"the slot lengths of {capture_id}/{desc['timbre']} differ from {path.name} "
+            f"on {len(wrong)} slot(s) ({shown}{', ...' if len(wrong) > 6 else ''})"
+        )

@@ -85,11 +85,11 @@ def code_text(text: str) -> str:
     return re.sub(r"\s+", "", "".join(kept))
 
 
-def objective_modules(directory: Path = HERE) -> list[str]:
-    """Every local module the objective's roots reach, sorted."""
+def objective_modules(directory: Path = HERE, roots: tuple[str, ...] = ROOTS) -> list[str]:
+    """Every local module the given roots (the objective's by default) reach, sorted."""
     local = {p.stem for p in directory.glob("*.py")}
     seen: set[str] = set()
-    pending = [r for r in ROOTS if r in local]
+    pending = [r for r in roots if r in local]
     while pending:
         name = pending.pop()
         if name in seen:
@@ -115,10 +115,10 @@ def loaded_digest(directory: Path = HERE) -> str:
     return _LOADED[directory]
 
 
-def objective_digest(directory: Path = HERE) -> str:
-    """The fingerprint: sha256 over each objective module's code text."""
+def objective_digest(directory: Path = HERE, roots: tuple[str, ...] = ROOTS) -> str:
+    """The fingerprint: sha256 over each reached module's code text."""
     h = hashlib.sha256()
-    for name in objective_modules(directory):
+    for name in objective_modules(directory, roots):
         h.update(name.encode() + b"\0" + code_text((directory / f"{name}.py").read_text()).encode())
         h.update(b"\0")
     return h.hexdigest()[:16]
