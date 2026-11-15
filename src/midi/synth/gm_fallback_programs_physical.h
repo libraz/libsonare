@@ -1027,8 +1027,7 @@ constexpr void configure_physical_programs(ProgramOverrides& o) noexcept {
   o.piccolo.flute.breath_noise = 0.155929f;
   o.piccolo.amp_env.decay_ms = 98.0261f;
   o.piccolo.flute.velocity_exponent = 2.17f;
-  // The reference holds a still pitch, so the patch carries no vibrato of its own; CC1 still adds
-  // it.
+  // The reference holds a still pitch, so the patch carries no vibrato of its own; CC1 still adds it.
   o.concert_flute = flute(0.50f, 0.55f, 0.30f, 0.35f, 0.2f, 0.0f, 0.60f, 0.85f);
   o.concert_flute.cutoff_hz = 5961.8f;
   o.concert_flute.amp_env.attack_ms = 30.0285f;
@@ -1051,7 +1050,8 @@ constexpr void configure_physical_programs(ProgramOverrides& o) noexcept {
   o.concert_flute.flute.release_ms = 184.428f;
   o.concert_flute.flute.onset_breath_overshoot_db = 3.549f;
   o.concert_flute.gain = 0.1989f;
-  o.recorder = flute(0.50f, 0.50f, 0.35f, 0.14f, 0.55f, 0.05f, 0.55f, 0.85f);
+  // No vibrato: the reference carries no periodic pitch motion.
+  o.recorder = flute(0.50f, 0.50f, 0.35f, 0.14f, 0.55f, 0.0f, 0.55f, 0.85f);
   o.recorder.flute.loop_phase_servo = true;
   o.recorder.body = BodyType::kWoodTube;
   o.recorder.body_mix = 0.972592f;

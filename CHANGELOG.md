@@ -106,6 +106,7 @@
 - The French horn (GM program 60) and the `french-horn` preset speak sooner and with less bore distortion: the lip attack shortens from 3.0 to 1.9 ms, the voice's attack from 59 to 20 ms, and the bore nonlinearity eases from 0.208 to 0.168, set against the reference.
 - The harmonica (GM program 22) speaks sooner and brighter: a 4 ms reed attack and a 36 ms voice attack in place of 12 and 59 ms, its lowpass opens from 5.5 to 10.5 kHz, and its breath pressure is set to 0.67, against the reference.
 - The flute (GM program 73) carries no vibrato of its own, since its reference holds a still pitch; the modulation wheel still adds vibrato.
+- The recorder (GM program 74) no longer wanders slowly in pitch; its reference carries no such motion.
 
 ### New
 
