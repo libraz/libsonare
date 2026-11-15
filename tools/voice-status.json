@@ -3213,13 +3213,13 @@
         "music": null,
         "instrument": null,
         "fit": {
-          "state": "stale",
-          "date": "2026-10-26",
+          "state": "current",
+          "date": "2026-11-15",
           "outcome": "kept",
           "fittable": true
         }
       },
-      "next": "refit under the current objective (the last fit predates it): refit.py"
+      "next": "listen to a take and record the verdict in signoff.json"
     },
     {
       "slug": "p016b001-drawbar-organ",
@@ -3609,13 +3609,13 @@
         "music": null,
         "instrument": null,
         "fit": {
-          "state": "stale",
-          "date": "2026-10-26",
+          "state": "current",
+          "date": "2026-11-15",
           "outcome": "kept",
           "fittable": true
         }
       },
-      "next": "refit under the current objective (the last fit predates it): refit.py"
+      "next": "judge the recorded candidate(s) — perc-quiet, perc-loud — then listen to a take and record the verdict in signoff.json"
     },
     {
       "slug": "p017b001-percussive-organ",
@@ -3882,13 +3882,13 @@
         "music": null,
         "instrument": null,
         "fit": {
-          "state": "stale",
-          "date": "2026-10-26",
-          "outcome": "adopted",
+          "state": "current",
+          "date": "2026-11-15",
+          "outcome": "kept",
           "fittable": true
         }
       },
-      "next": "refit under the current objective (the last fit predates it): refit.py"
+      "next": "judge the recorded candidate(s) — drive-least, drive-mild, drive-hard — then listen to a take and record the verdict in signoff.json"
     },
     {
       "slug": "p019-church-organ",
@@ -6215,13 +6215,13 @@
         "music": null,
         "instrument": null,
         "fit": {
-          "state": "stale",
-          "date": "2026-10-26",
-          "outcome": "adopted",
+          "state": "current",
+          "date": "2026-11-15",
+          "outcome": "kept",
           "fittable": true
         }
       },
-      "next": "refit under the current objective (the last fit predates it): refit.py"
+      "next": "listen to a take and record the verdict in signoff.json"
     },
     {
       "slug": "p040-violin",
@@ -7676,13 +7676,13 @@
         "music": null,
         "instrument": null,
         "fit": {
-          "state": "stale",
-          "date": "2026-10-26",
-          "outcome": "adopted",
+          "state": "current",
+          "date": "2026-11-15",
+          "outcome": "kept",
           "fittable": true
         }
       },
-      "next": "refit under the current objective (the last fit predates it): refit.py"
+      "next": "listen to a take and record the verdict in signoff.json"
     },
     {
       "slug": "p052-choir-aahs",
@@ -9886,13 +9886,13 @@
         "music": null,
         "instrument": null,
         "fit": {
-          "state": "stale",
-          "date": "2026-10-26",
+          "state": "current",
+          "date": "2026-11-15",
           "outcome": "kept",
           "fittable": true
         }
       },
-      "next": "refit under the current objective (the last fit predates it): refit.py"
+      "next": "listen to a take and record the verdict in signoff.json"
     },
     {
       "slug": "p081-lead-2-sawtooth",
@@ -10003,13 +10003,13 @@
         "music": null,
         "instrument": null,
         "fit": {
-          "state": "stale",
-          "date": "2026-10-26",
-          "outcome": "adopted",
+          "state": "current",
+          "date": "2026-11-15",
+          "outcome": "kept",
           "fittable": true
         }
       },
-      "next": "refit under the current objective (the last fit predates it): refit.py"
+      "next": "listen to a take and record the verdict in signoff.json"
     },
     {
       "slug": "p083-lead-4-chiff",
@@ -10060,8 +10060,8 @@
         "music": null,
         "instrument": null,
         "fit": {
-          "state": "stale",
-          "date": "2026-10-26",
+          "state": "current",
+          "date": "2026-11-15",
           "outcome": "kept",
           "fittable": true
         },
@@ -10069,7 +10069,7 @@
           "balance.p90: re-recorded for a reader change, model residual 6.2192"
         ]
       },
-      "next": "refit under the current objective (the last fit predates it): refit.py"
+      "next": "listen to a take and record the verdict in signoff.json"
     },
     {
       "slug": "p084-lead-5-charang",
@@ -10299,13 +10299,13 @@
         "music": null,
         "instrument": null,
         "fit": {
-          "state": "stale",
-          "date": "2026-10-26",
-          "outcome": "adopted",
+          "state": "current",
+          "date": "2026-11-15",
+          "outcome": "kept",
           "fittable": true
         }
       },
-      "next": "refit under the current objective (the last fit predates it): refit.py"
+      "next": "listen to a take and record the verdict in signoff.json"
     },
     {
       "slug": "p088-pad-1-new-age",
@@ -10356,8 +10356,8 @@
         "music": null,
         "instrument": null,
         "fit": {
-          "state": "stale",
-          "date": "2026-10-26",
+          "state": "current",
+          "date": "2026-11-15",
           "outcome": "kept",
           "fittable": true
         },
@@ -10657,16 +10657,16 @@
         "music": null,
         "instrument": null,
         "fit": {
-          "state": "stale",
-          "date": "2026-10-26",
-          "outcome": "adopted",
+          "state": "current",
+          "date": "2026-11-15",
+          "outcome": "kept",
           "fittable": true
         },
         "gate_notes": [
           "balance.median: re-recorded for a reader change, model residual 5.54"
         ]
       },
-      "next": "refit under the current objective (the last fit predates it): refit.py"
+      "next": "listen to a take and record the verdict in signoff.json"
     },
     {
       "slug": "p094-pad-7-halo",
@@ -10717,13 +10717,13 @@
         "music": null,
         "instrument": null,
         "fit": {
-          "state": "stale",
-          "date": "2026-10-26",
+          "state": "current",
+          "date": "2026-11-15",
           "outcome": "kept",
           "fittable": true
         }
       },
-      "next": "refit under the current objective (the last fit predates it): refit.py"
+      "next": "listen to a take and record the verdict in signoff.json"
     },
     {
       "slug": "p095-pad-8-sweep",
@@ -10774,9 +10774,9 @@
         "music": null,
         "instrument": null,
         "fit": {
-          "state": "stale",
-          "date": "2026-10-26",
-          "outcome": "adopted",
+          "state": "current",
+          "date": "2026-11-15",
+          "outcome": "kept",
           "fittable": true
         },
         "gate_notes": [
@@ -10837,13 +10837,13 @@
         "music": null,
         "instrument": null,
         "fit": {
-          "state": "stale",
-          "date": "2026-10-26",
-          "outcome": "adopted",
+          "state": "current",
+          "date": "2026-11-15",
+          "outcome": "kept",
           "fittable": true
         }
       },
-      "next": "refit under the current objective (the last fit predates it): refit.py"
+      "next": "listen to a take and record the verdict in signoff.json"
     },
     {
       "slug": "p097-fx-2-soundtrack",
@@ -11128,17 +11128,16 @@
         "music": null,
         "instrument": null,
         "fit": {
-          "state": "stale",
-          "date": "2026-10-26",
+          "state": "current",
+          "date": "2026-11-15",
           "outcome": "adopted",
           "fittable": true
         },
         "gate_notes": [
-          "balance.median: re-recorded for a reader change, model residual 19.076",
-          "balance.abs_median: re-recorded for a reader change, model residual 19.076"
+          "set on a dirty tree: body.abs_median, body.median, body.p90, tnr.abs_median, tnr.median, tnr.p90"
         ]
       },
-      "next": "refit under the current objective (the last fit predates it): refit.py"
+      "next": "listen to a take and record the verdict in signoff.json"
     },
     {
       "slug": "p102-fx-7-echoes",
@@ -11251,9 +11250,9 @@
         "music": null,
         "instrument": null,
         "fit": {
-          "state": "stale",
-          "date": "2026-10-26",
-          "outcome": "adopted",
+          "state": "current",
+          "date": "2026-11-15",
+          "outcome": "kept",
           "fittable": true
         },
         "gate_notes": [
@@ -11262,7 +11261,7 @@
           "balance.p90: re-recorded for a reader change, model residual 5.2692"
         ]
       },
-      "next": "refit under the current objective (the last fit predates it): refit.py"
+      "next": "listen to a take and record the verdict in signoff.json"
     },
     {
       "slug": "p104-sitar",
@@ -12510,13 +12509,13 @@
         "music": null,
         "instrument": null,
         "fit": {
-          "state": "stale",
-          "date": "2026-10-26",
+          "state": "current",
+          "date": "2026-11-15",
           "outcome": "kept",
           "fittable": true
         }
       },
-      "next": "refit under the current objective (the last fit predates it): refit.py"
+      "next": "listen to a take and record the verdict in signoff.json"
     },
     {
       "slug": "p122-seashore",
@@ -12568,13 +12567,16 @@
         "music": null,
         "instrument": null,
         "fit": {
-          "state": "stale",
-          "date": "2026-10-26",
+          "state": "current",
+          "date": "2026-11-15",
           "outcome": "adopted",
           "fittable": true
-        }
+        },
+        "gate_notes": [
+          "set on a dirty tree: centroid_pct.p90, decay.abs_median, decay.median, decay.p90"
+        ]
       },
-      "next": "refit under the current objective (the last fit predates it): refit.py"
+      "next": "listen to a take and record the verdict in signoff.json"
     },
     {
       "slug": "p123-bird-tweet",
@@ -12684,13 +12686,13 @@
         "music": null,
         "instrument": null,
         "fit": {
-          "state": "stale",
-          "date": "2026-10-26",
-          "outcome": "adopted",
+          "state": "current",
+          "date": "2026-11-15",
+          "outcome": "kept",
           "fittable": true
         }
       },
-      "next": "refit under the current objective (the last fit predates it): refit.py"
+      "next": "listen to a take and record the verdict in signoff.json"
     },
     {
       "slug": "p125-helicopter",
@@ -12800,13 +12802,13 @@
         "music": null,
         "instrument": null,
         "fit": {
-          "state": "stale",
-          "date": "2026-10-26",
-          "outcome": "adopted",
+          "state": "current",
+          "date": "2026-11-15",
+          "outcome": "kept",
           "fittable": true
         }
       },
-      "next": "refit under the current objective (the last fit predates it): refit.py"
+      "next": "listen to a take and record the verdict in signoff.json"
     },
     {
       "slug": "p127-gunshot",
@@ -12858,15 +12860,16 @@
         "music": null,
         "instrument": null,
         "fit": {
-          "state": "stale",
-          "date": "2026-10-26",
+          "state": "current",
+          "date": "2026-11-15",
           "outcome": "adopted",
           "fittable": true
         },
         "gate_notes": [
           "centroid_pct.median: re-recorded over a kept bound, last held 2026-11-13T11:49:49+00:00",
           "centroid_pct.abs_median: re-recorded over a kept bound, last held 2026-11-13T11:49:49+00:00",
-          "centroid_pct.p90: re-recorded over a kept bound, last held 2026-11-13T11:49:49+00:00"
+          "centroid_pct.p90: re-recorded over a kept bound, last held 2026-11-13T11:49:49+00:00",
+          "set on a dirty tree: decay.abs_median, decay.median, decay.p90"
         ]
       },
       "next": "the gate is red: centroid_pct.median: re-recorded over a kept bound, last held 2026-11-13T11:49:49+00:00; centroid_pct.abs_median: re-recorded over a kept bound, last held 2026-11-13T11:49:49+00:00; centroid_pct.p90: re-recorded over a kept bound, last held 2026-11-13T11:49:49+00:00"
