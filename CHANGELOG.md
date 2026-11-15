@@ -109,6 +109,7 @@
 - The recorder (GM program 74) no longer wanders slowly in pitch; its reference carries no such motion.
 - The whistle (GM program 78) takes the vibrato its reference holds, 14 cents peak to peak at 4.84 Hz, in place of a 2.4-cent one at 5 Hz.
 - Two kicks of the built-in kit move toward their module references: Room Kick 1 (drum key 8) gains ten upper body partials between 16 and 63 times its pitch, and Dance Kick (drum key 16) sounds its first ten harmonics over a three-mode shell ringing 1.5 to 2 s, in place of one short mode.
+- Goblins (GM program 101) falls from its swell to its held level within about 0.1 s instead of 0.3 s and holds slightly lower, set against the module reference.
 - The ocarina (GM program 79) no longer wanders slowly in pitch; its reference carries no such motion.
 
 ### New

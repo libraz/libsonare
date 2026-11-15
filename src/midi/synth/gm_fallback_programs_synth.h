@@ -554,9 +554,9 @@ constexpr void configure_synth_programs(ProgramOverrides& o) noexcept {
   o.fx_goblins.env_to_cutoff_cents = 981.231f;
   o.fx_goblins.gain = 0.5199f;
   o.fx_goblins.amp_env.attack_ms = 432.123f;
-  o.fx_goblins.amp_env.decay_ms = 294.51f;
+  o.fx_goblins.amp_env.decay_ms = 98.2633f;
   o.fx_goblins.amp_env.release_ms = 750.351f;
-  o.fx_goblins.amp_env.sustain = 0.38131f;
+  o.fx_goblins.amp_env.sustain = 0.3371f;
   o.fx_goblins.drive = 0.0f;
   o.fx_goblins.filter_env.attack_ms = 15.4188f;
   o.fx_goblins.filter_env.decay_ms = 2326.59f;

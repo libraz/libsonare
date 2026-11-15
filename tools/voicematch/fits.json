@@ -1030,12 +1030,30 @@
       "outcome": "adopted"
     },
     "drawbar_organ": {
-      "objective": "df80e5527f4fbedb",
-      "date": "2026-10-26",
+      "objective": "3bc465ccbf9a2d13",
+      "date": "2026-11-15",
       "capture": "drawbar_organ",
       "timbre": "drawbar-dark",
+      "corpora": [
+        {
+          "capture": "drawbar_organ",
+          "timbre": "drawbar-dark"
+        }
+      ],
       "outcome": "kept",
-      "reason": "no point of the search kept every bound (newly over its bound: drawbar_organ:vel_range abs_median, drawbar_organ:vel_range median)"
+      "reason": "candidate build fails \"the drawbar organ barely moves with velocity\": velocity span 3.16 dB under the 3.4 dB floor the two reference registrations set",
+      "weights": {
+        "bright": 1.0,
+        "cents": 0.5,
+        "crest": 1.0,
+        "dyn": 1.0,
+        "env": 0.5,
+        "harm": 1.0,
+        "mod": 1.0,
+        "slope": 0.5,
+        "tnr": 1.0,
+        "velspan": 0.5
+      }
     },
     "dulcimer": {
       "objective": "df80e5527f4fbedb",
@@ -1310,25 +1328,77 @@
       "outcome": "adopted"
     },
     "fx_goblins": {
-      "objective": "df80e5527f4fbedb",
-      "date": "2026-10-26",
+      "objective": "3bc465ccbf9a2d13",
+      "date": "2026-11-15",
       "capture": "fx_goblins_module",
       "timbre": "t0",
-      "outcome": "adopted"
+      "corpora": [
+        {
+          "capture": "fx_goblins_module",
+          "timbre": "t0"
+        }
+      ],
+      "outcome": "adopted",
+      "weights": {
+        "cents": 0.5,
+        "crest": 1.0,
+        "env": 0.5,
+        "harm": 1.0,
+        "mod": 1.0,
+        "slope": 0.5,
+        "tnr": 1.0
+      }
     },
     "fx_rain": {
-      "objective": "df80e5527f4fbedb",
-      "date": "2026-10-26",
+      "objective": "3bc465ccbf9a2d13",
+      "date": "2026-11-15",
       "capture": "fx_rain_module",
       "timbre": "t0",
-      "outcome": "adopted"
+      "corpora": [
+        {
+          "capture": "fx_rain_module",
+          "timbre": "t0"
+        }
+      ],
+      "outcome": "kept",
+      "reason": "path point worsens fx_rain_module tnr median and abs_median 33.91->34.92, more than the floor (1)",
+      "weights": {
+        "body": 1.0,
+        "bright": 1.0,
+        "cents": 0.5,
+        "crest": 1.0,
+        "env": 0.5,
+        "harm": 1.0,
+        "mod": 1.0,
+        "slope": 0.5,
+        "stiff": 1.0,
+        "tnr": 1.0
+      }
     },
     "fx_sci_fi": {
-      "objective": "df80e5527f4fbedb",
-      "date": "2026-10-26",
+      "objective": "3bc465ccbf9a2d13",
+      "date": "2026-11-15",
       "capture": "fx_sci_fi_module",
       "timbre": "t0",
-      "outcome": "adopted"
+      "corpora": [
+        {
+          "capture": "fx_sci_fi_module",
+          "timbre": "t0"
+        }
+      ],
+      "outcome": "kept",
+      "reason": "held-out notes did not improve (+0.0016)",
+      "weights": {
+        "body": 1.0,
+        "bright": 1.0,
+        "cents": 0.5,
+        "crest": 1.0,
+        "env": 0.5,
+        "harm": 1.0,
+        "mod": 1.0,
+        "slope": 0.5,
+        "tnr": 1.0
+      }
     },
     "fx_soundtrack": {
       "objective": "df80e5527f4fbedb",
@@ -1454,18 +1524,50 @@
       "reason": "no point of the search kept every bound (newly over its bound: koto:aftersound abs_median, koto:aftersound median, koto:aftersound p90, koto:centroid_pct abs_median, koto:centroid_pct median, koto:centroid_pct p90, koto:register p90, koto:vel_range abs_median, koto:vel_range median, koto:vel_range p90)"
     },
     "lead_bass_lead": {
-      "objective": "df80e5527f4fbedb",
-      "date": "2026-10-26",
+      "objective": "3bc465ccbf9a2d13",
+      "date": "2026-11-15",
       "capture": "lead_bass_lead_module",
       "timbre": "t0",
-      "outcome": "adopted"
+      "corpora": [
+        {
+          "capture": "lead_bass_lead_module",
+          "timbre": "t0"
+        }
+      ],
+      "outcome": "kept",
+      "reason": "path point does not move (eval 3, loss 0.9989); shipped values stand",
+      "weights": {
+        "cents": 0.5,
+        "crest": 1.0,
+        "env": 0.5,
+        "harm": 1.0,
+        "mod": 1.0,
+        "slope": 0.5,
+        "tnr": 1.0
+      }
     },
     "lead_calliope": {
-      "objective": "df80e5527f4fbedb",
-      "date": "2026-10-26",
+      "objective": "3bc465ccbf9a2d13",
+      "date": "2026-11-15",
       "capture": "lead_calliope_module",
       "timbre": "t0",
-      "outcome": "adopted"
+      "corpora": [
+        {
+          "capture": "lead_calliope_module",
+          "timbre": "t0"
+        }
+      ],
+      "outcome": "kept",
+      "reason": "write-back refused: fitted_to_the_probe",
+      "weights": {
+        "cents": 0.5,
+        "crest": 1.0,
+        "env": 0.5,
+        "harm": 1.0,
+        "mod": 1.0,
+        "slope": 0.5,
+        "tnr": 1.0
+      }
     },
     "lead_charang": {
       "objective": "3bc465ccbf9a2d13",
@@ -1495,12 +1597,27 @@
       }
     },
     "lead_chiff": {
-      "objective": "df80e5527f4fbedb",
-      "date": "2026-10-26",
+      "objective": "3bc465ccbf9a2d13",
+      "date": "2026-11-15",
       "capture": "lead_chiff_module",
       "timbre": "t0",
+      "corpora": [
+        {
+          "capture": "lead_chiff_module",
+          "timbre": "t0"
+        }
+      ],
       "outcome": "kept",
-      "reason": "no point of the search kept every bound (newly over its bound: lead_chiff:vel_range abs_median, lead_chiff:vel_range median, lead_chiff:vel_range p90, lead_chiff_module:balance abs_median, lead_chiff_module:balance median, lead_chiff_module:balance p90, lead_chiff_module:centroid_pct abs_median, lead_chiff_module:centroid_pct median, lead_chiff_module:centroid_pct p90, lead_chiff_module:stretch median)"
+      "reason": "no gated statistic moves by more than its floor",
+      "weights": {
+        "cents": 0.5,
+        "crest": 1.0,
+        "env": 0.5,
+        "harm": 1.0,
+        "mod": 1.0,
+        "slope": 0.5,
+        "tnr": 1.0
+      }
     },
     "lead_fifths": {
       "objective": "df80e5527f4fbedb",
@@ -1518,12 +1635,27 @@
       "outcome": "adopted"
     },
     "lead_square": {
-      "objective": "df80e5527f4fbedb",
-      "date": "2026-10-26",
+      "objective": "3bc465ccbf9a2d13",
+      "date": "2026-11-15",
       "capture": "lead_square_module",
       "timbre": "t0",
+      "corpora": [
+        {
+          "capture": "lead_square_module",
+          "timbre": "t0"
+        }
+      ],
       "outcome": "kept",
-      "reason": "no point of the search kept every bound (newly over its bound: lead_square:vel_range abs_median, lead_square:vel_range median, lead_square:vel_range p90, lead_square_module:body abs_median, lead_square_module:body median, lead_square_module:body p90)"
+      "reason": "write-back refused: fitted_to_the_probe",
+      "weights": {
+        "cents": 0.5,
+        "crest": 1.0,
+        "env": 0.5,
+        "harm": 1.0,
+        "mod": 1.0,
+        "slope": 0.5,
+        "tnr": 1.0
+      }
     },
     "lead_voice": {
       "objective": "df80e5527f4fbedb",
@@ -1731,27 +1863,75 @@
       "reason": "no point of the search kept every bound (newly over its bound: pad_choir:vel_range abs_median, pad_choir:vel_range median, pad_choir:vel_range p90, pad_choir_module:centroid_pct abs_median, pad_choir_module:centroid_pct median)"
     },
     "pad_halo": {
-      "objective": "df80e5527f4fbedb",
-      "date": "2026-10-26",
+      "objective": "3bc465ccbf9a2d13",
+      "date": "2026-11-15",
       "capture": "pad_halo_module",
       "timbre": "t0",
+      "corpora": [
+        {
+          "capture": "pad_halo_module",
+          "timbre": "t0"
+        }
+      ],
       "outcome": "kept",
-      "reason": "write-back refused: fitted_to_the_probe"
+      "reason": "path point worsens pad_halo_module centroid_pct p90 83.0->85.4, more than the floor (1)",
+      "weights": {
+        "body": 1.0,
+        "cents": 0.5,
+        "crest": 1.0,
+        "env": 0.5,
+        "harm": 1.0,
+        "mod": 1.0,
+        "slope": 0.5,
+        "tnr": 1.0
+      }
     },
     "pad_metallic": {
-      "objective": "df80e5527f4fbedb",
-      "date": "2026-10-26",
+      "objective": "3bc465ccbf9a2d13",
+      "date": "2026-11-15",
       "capture": "pad_metallic_module",
       "timbre": "t0",
-      "outcome": "adopted"
+      "corpora": [
+        {
+          "capture": "pad_metallic_module",
+          "timbre": "t0"
+        }
+      ],
+      "outcome": "kept",
+      "reason": "pad_metallic_module centroid_pct median 9.31->10.65 and abs_median 13.18->14.20 worsen by more than the floor (1)",
+      "weights": {
+        "body": 1.0,
+        "cents": 0.5,
+        "crest": 1.0,
+        "env": 0.5,
+        "harm": 1.0,
+        "mod": 1.0,
+        "slope": 0.5,
+        "tnr": 1.0
+      }
     },
     "pad_new_age": {
-      "objective": "df80e5527f4fbedb",
-      "date": "2026-10-26",
+      "objective": "3bc465ccbf9a2d13",
+      "date": "2026-11-15",
       "capture": "pad_new_age_module",
       "timbre": "t0",
+      "corpora": [
+        {
+          "capture": "pad_new_age_module",
+          "timbre": "t0"
+        }
+      ],
       "outcome": "kept",
-      "reason": "held-out notes did not improve (+0.0005)"
+      "reason": "write-back refused: fitted_to_the_probe",
+      "weights": {
+        "cents": 0.5,
+        "crest": 1.0,
+        "env": 0.5,
+        "harm": 1.0,
+        "mod": 1.0,
+        "slope": 0.5,
+        "tnr": 1.0
+      }
     },
     "pad_polysynth": {
       "objective": "df80e5527f4fbedb",
@@ -1761,11 +1941,29 @@
       "outcome": "adopted"
     },
     "pad_sweep": {
-      "objective": "df80e5527f4fbedb",
-      "date": "2026-10-26",
+      "objective": "3bc465ccbf9a2d13",
+      "date": "2026-11-15",
       "capture": "pad_sweep_module",
       "timbre": "t0",
-      "outcome": "adopted"
+      "corpora": [
+        {
+          "capture": "pad_sweep_module",
+          "timbre": "t0"
+        }
+      ],
+      "outcome": "kept",
+      "reason": "write-back refused: fitted_to_the_probe",
+      "weights": {
+        "body": 1.0,
+        "bright": 1.0,
+        "cents": 0.5,
+        "crest": 1.0,
+        "env": 0.5,
+        "harm": 1.0,
+        "mod": 1.0,
+        "slope": 0.5,
+        "tnr": 1.0
+      }
     },
     "pad_warm": {
       "objective": "df80e5527f4fbedb",
@@ -1802,12 +2000,27 @@
       }
     },
     "percussive_organ": {
-      "objective": "df80e5527f4fbedb",
-      "date": "2026-10-26",
+      "objective": "3bc465ccbf9a2d13",
+      "date": "2026-11-15",
       "capture": "percussive_organ",
       "timbre": "gm018",
+      "corpora": [
+        {
+          "capture": "percussive_organ",
+          "timbre": "gm018"
+        }
+      ],
       "outcome": "kept",
-      "reason": "withdrawn after adoption: the fitted ping outlasts the reference's, breaking `the shipped percussive organ's ping is spent inside a beat`"
+      "reason": "candidate build fails \"the shipped percussive organ's ping is spent inside a beat\": percussion_decay_ms 45 -> 95.6 keeps the ping above 5% of its start at 200 ms",
+      "weights": {
+        "cents": 0.5,
+        "crest": 1.0,
+        "env": 0.5,
+        "harm": 1.0,
+        "mod": 1.0,
+        "slope": 0.5,
+        "tnr": 1.0
+      }
     },
     "piano_wide": {
       "objective": "df80e5527f4fbedb",
@@ -1972,18 +2185,50 @@
       "outcome": "adopted"
     },
     "rock_organ": {
-      "objective": "df80e5527f4fbedb",
-      "date": "2026-10-26",
+      "objective": "3bc465ccbf9a2d13",
+      "date": "2026-11-15",
       "capture": "rock_organ",
       "timbre": "gm019",
-      "outcome": "adopted"
+      "corpora": [
+        {
+          "capture": "rock_organ",
+          "timbre": "gm019"
+        }
+      ],
+      "outcome": "kept",
+      "reason": "path point does not move (eval 3, loss 1.0000); shipped values stand",
+      "weights": {
+        "bright": 1.0,
+        "cents": 0.5,
+        "crest": 1.0,
+        "dyn": 1.0,
+        "env": 0.5,
+        "harm": 1.0,
+        "mod": 1.0,
+        "slope": 0.5,
+        "tnr": 1.0,
+        "velspan": 0.5
+      }
     },
     "sfx_applause": {
-      "objective": "df80e5527f4fbedb",
-      "date": "2026-10-26",
+      "objective": "3bc465ccbf9a2d13",
+      "date": "2026-11-15",
       "capture": "applause_module",
       "timbre": "t0",
-      "outcome": "adopted"
+      "corpora": [
+        {
+          "capture": "applause_module",
+          "timbre": "t0"
+        }
+      ],
+      "outcome": "kept",
+      "reason": "held-out notes did not improve (+0.0017)",
+      "weights": {
+        "bright": 1.0,
+        "crest": 1.0,
+        "env": 1.0,
+        "mss": 1.0
+      }
     },
     "sfx_bird_tweet": {
       "objective": "df80e5527f4fbedb",
@@ -1993,12 +2238,24 @@
       "outcome": "adopted"
     },
     "sfx_breath": {
-      "objective": "df80e5527f4fbedb",
-      "date": "2026-10-26",
+      "objective": "3bc465ccbf9a2d13",
+      "date": "2026-11-15",
       "capture": "breath_noise_module",
       "timbre": "t0",
+      "corpora": [
+        {
+          "capture": "breath_noise_module",
+          "timbre": "t0"
+        }
+      ],
       "outcome": "kept",
-      "reason": "no point of the search kept every bound (newly over its bound: breath_noise:vel_range abs_median, breath_noise:vel_range median, breath_noise:vel_range p90, breath_noise_module:centroid_pct abs_median, breath_noise_module:centroid_pct median, breath_noise_module:centroid_pct p90)"
+      "reason": "held-out notes did not improve (-0.0028)",
+      "weights": {
+        "bright": 1.0,
+        "crest": 1.0,
+        "env": 1.0,
+        "mss": 1.0
+      }
     },
     "sfx_guitar_fret": {
       "objective": "df80e5527f4fbedb",
@@ -2029,11 +2286,24 @@
       "outcome": "adopted"
     },
     "sfx_telephone_ring": {
-      "objective": "df80e5527f4fbedb",
-      "date": "2026-10-26",
+      "objective": "3bc465ccbf9a2d13",
+      "date": "2026-11-15",
       "capture": "telephone_ring_module",
       "timbre": "t0",
-      "outcome": "adopted"
+      "corpora": [
+        {
+          "capture": "telephone_ring_module",
+          "timbre": "t0"
+        }
+      ],
+      "outcome": "kept",
+      "reason": "held-out notes did not improve (-0.0046)",
+      "weights": {
+        "bright": 1.0,
+        "crest": 1.0,
+        "env": 1.0,
+        "mss": 1.0
+      }
     },
     "shakuhachi": {
       "objective": "3bc465ccbf9a2d13",
@@ -2414,11 +2684,30 @@
       "reason": "no point of the search kept every bound (newly over its bound: synth_bass_1:vel_range abs_median, synth_bass_1:vel_range median, synth_bass_1:vel_range p90, synth_bass_1_module:doubling abs_median, synth_bass_1_module:doubling median, synth_bass_1_module:doubling p90)"
     },
     "synth_bass_2": {
-      "objective": "df80e5527f4fbedb",
-      "date": "2026-10-26",
+      "objective": "3bc465ccbf9a2d13",
+      "date": "2026-11-15",
       "capture": "synth_bass_2_module",
       "timbre": "t0",
-      "outcome": "adopted"
+      "corpora": [
+        {
+          "capture": "synth_bass_2_module",
+          "timbre": "t0"
+        }
+      ],
+      "outcome": "kept",
+      "reason": "write-back refused: fitted_to_the_probe",
+      "weights": {
+        "cents": 0.5,
+        "crest": 1.0,
+        "env": 1.0,
+        "harm": 1.0,
+        "hf": 0.5,
+        "init": 1.5,
+        "slope": 1.0,
+        "stiff": 0.5,
+        "tail": 1.0,
+        "tnr": 0.5
+      }
     },
     "synth_brass_1": {
       "objective": "df80e5527f4fbedb",
@@ -2451,11 +2740,27 @@
       "reason": "no point of the search kept every bound (a field the gate cannot judge moved: synth_strings_1.amp_env.release_ms, synth_strings_1.filter_model, synth_strings_1.lfo_shape, synth_strings_1.unison)"
     },
     "synth_strings_2": {
-      "objective": "df80e5527f4fbedb",
-      "date": "2026-10-26",
+      "objective": "3bc465ccbf9a2d13",
+      "date": "2026-11-15",
       "capture": "synth_strings_2_module",
       "timbre": "t0",
-      "outcome": "adopted"
+      "corpora": [
+        {
+          "capture": "synth_strings_2_module",
+          "timbre": "t0"
+        }
+      ],
+      "outcome": "kept",
+      "reason": "write-back refused: fitted_to_the_probe",
+      "weights": {
+        "cents": 0.5,
+        "crest": 1.0,
+        "env": 0.5,
+        "harm": 1.0,
+        "mod": 1.0,
+        "slope": 0.5,
+        "tnr": 1.0
+      }
     },
     "synth_voice": {
       "objective": "df80e5527f4fbedb",
