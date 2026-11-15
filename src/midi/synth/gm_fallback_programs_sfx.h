@@ -60,13 +60,13 @@ constexpr void configure_sfx_programs(ProgramOverrides& o) noexcept {
   o.sfx_seashore.gain = 0.5367f;
   o.sfx_seashore.amp_env.attack_ms = 845.17f;
   o.sfx_seashore.amp_env.release_ms = 3404.28f;
-  o.sfx_seashore.amp_env.sustain = 0.68375f;
+  o.sfx_seashore.amp_env.sustain = 0.376861f;
   o.sfx_seashore.filter_env.attack_ms = 866.014f;
   o.sfx_seashore.filter_env.decay_ms = 59.0997f;
   o.sfx_seashore.filter_env.release_ms = 14443.3f;
   o.sfx_seashore.filter_env.sustain = 0.320674f;
   o.sfx_seashore.unison = 2;
-  o.sfx_seashore.amp_env.decay_ms = 1600.0f;
+  o.sfx_seashore.amp_env.decay_ms = 4795.44f;
   o.sfx_seashore.va.velocity_exponent = 1.01f;
 
   // Bird Tweet (GM 123): AmpEnv -> PitchCents sweeps the triangle upward as the call opens.
@@ -172,22 +172,23 @@ constexpr void configure_sfx_programs(ProgramOverrides& o) noexcept {
   o.sfx_gunshot = sfx;
   o.sfx_gunshot.waveform = VaWaveform::kNoise;
   o.sfx_gunshot.amp_env = fallback_env(0.2f, 300.0f, 0.0f, 80.0f);
-  o.sfx_gunshot.cutoff_hz = 6934.18f;
-  o.sfx_gunshot.resonance_q = 4.16925f;
+  o.sfx_gunshot.cutoff_hz = 6618.76f;
+  o.sfx_gunshot.resonance_q = 5.41928f;
   o.sfx_gunshot.filter_env = fallback_env(0.2f, 100.0f, 0.0f, 70.0f);
-  o.sfx_gunshot.env_to_cutoff_cents = 3144.8f;
-  o.sfx_gunshot.drive = 0.911798f;
+  o.sfx_gunshot.env_to_cutoff_cents = 3683.58f;
+  o.sfx_gunshot.drive = 0.983758f;
   o.sfx_gunshot.gain = 0.6405f;
-  o.sfx_gunshot.amp_env.attack_ms = 6.27013f;
-  o.sfx_gunshot.amp_env.decay_ms = 410.849f;
-  o.sfx_gunshot.filter_env.decay_ms = 829.113f;
-  o.sfx_gunshot.filter_env.sustain = 0.511342f;
-  o.sfx_gunshot.filter_env.attack_ms = 0.117123f;
+  o.sfx_gunshot.amp_env.attack_ms = 34.538f;
+  o.sfx_gunshot.amp_env.decay_ms = 567.007f;
+  o.sfx_gunshot.filter_env.decay_ms = 1145.34f;
+  o.sfx_gunshot.filter_env.sustain = 0.562776f;
+  o.sfx_gunshot.filter_env.attack_ms = 0.13146f;
   o.sfx_gunshot.stereo_spread = 0.086526f;
   o.sfx_gunshot.unison = 2;
-  o.sfx_gunshot.va.velocity_exponent = 1.07f;
-  o.sfx_gunshot.va.noise_am = 0.0295085f;
+  o.sfx_gunshot.va.velocity_exponent = 1.12058f;
+  o.sfx_gunshot.va.noise_am = 0.340645f;
   o.sfx_gunshot.va.unison_width = 0.0745935f;
+  o.sfx_gunshot.filter_env.release_ms = 9.00836f;
 }
 
 }  // namespace sonare::midi::synth::detail

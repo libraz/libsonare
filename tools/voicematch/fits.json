@@ -2265,11 +2265,23 @@
       "outcome": "adopted"
     },
     "sfx_gunshot": {
-      "objective": "df80e5527f4fbedb",
-      "date": "2026-10-26",
+      "objective": "3bc465ccbf9a2d13",
+      "date": "2026-11-15",
       "capture": "gunshot_module",
       "timbre": "t0",
-      "outcome": "adopted"
+      "corpora": [
+        {
+          "capture": "gunshot_module",
+          "timbre": "t0"
+        }
+      ],
+      "outcome": "adopted",
+      "weights": {
+        "bright": 1.0,
+        "crest": 1.0,
+        "env": 1.0,
+        "mss": 1.0
+      }
     },
     "sfx_helicopter": {
       "objective": "df80e5527f4fbedb",
@@ -2279,11 +2291,23 @@
       "outcome": "adopted"
     },
     "sfx_seashore": {
-      "objective": "df80e5527f4fbedb",
-      "date": "2026-10-26",
+      "objective": "3bc465ccbf9a2d13",
+      "date": "2026-11-15",
       "capture": "seashore_module",
       "timbre": "t0",
-      "outcome": "adopted"
+      "corpora": [
+        {
+          "capture": "seashore_module",
+          "timbre": "t0"
+        }
+      ],
+      "outcome": "adopted",
+      "weights": {
+        "bright": 1.0,
+        "crest": 1.0,
+        "env": 1.0,
+        "mss": 1.0
+      }
     },
     "sfx_telephone_ring": {
       "objective": "3bc465ccbf9a2d13",

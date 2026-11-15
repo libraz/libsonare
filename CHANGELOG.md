@@ -110,6 +110,8 @@
 - The whistle (GM program 78) takes the vibrato its reference holds, 14 cents peak to peak at 4.84 Hz, in place of a 2.4-cent one at 5 Hz.
 - Two kicks of the built-in kit move toward their module references: Room Kick 1 (drum key 8) gains ten upper body partials between 16 and 63 times its pitch, and Dance Kick (drum key 16) sounds its first ten harmonics over a three-mode shell ringing 1.5 to 2 s, in place of one short mode.
 - Goblins (GM program 101) falls from its swell to its held level within about 0.1 s instead of 0.3 s and holds slightly lower, set against the module reference.
+- Seashore (GM program 122) takes about 4.8 s instead of 1.6 s to fall from its swell to its held level, which is 5 dB lower, set against the module reference.
+- Gunshot (GM program 127) opens over 35 ms instead of 6 ms and dies over about 0.57 s instead of 0.41 s, its filter sweep reaches higher and closes more slowly, and its noise carries a stronger amplitude flutter, set against the module reference.
 - The ocarina (GM program 79) no longer wanders slowly in pitch; its reference carries no such motion.
 
 ### New
