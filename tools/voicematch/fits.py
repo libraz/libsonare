@@ -5,7 +5,9 @@ family or a `dNNN` drum note, the same keys `bank-versions.json` uses — saying
 which objective fingerprint (`objective.py`) the last completed fit answered,
 against which capture and timbre, and whether its values were adopted or the
 shipped values kept. A kept outcome is a fit too: it says the current objective
-was asked and the shipped values stood.
+was asked and the shipped values stood. A blocked outcome is a refit whose trade
+`refit.py resolve` could not settle: the shipped values stand because every point
+of the search broke a gated row, and the entry names those rows in `blocking`.
 
 The record is written by `record` from a fit's `--out` report, after the
 adoption decision rather than by `autofit.py` itself, because whether a fit is
@@ -33,8 +35,12 @@ import objective
 HERE = Path(__file__).resolve().parent
 FITS_PATH = HERE / "fits.json"
 
-OUTCOMES = ("adopted", "kept")
+OUTCOMES = ("adopted", "kept", "blocked")
+#: Only `refit.py adopt` writes `blocked`, since it carries the rows read from the refit's files.
+BY_HAND = ("adopted", "kept")
 CURRENT, EQUIVALENT, STALE, NONE = "current", "equivalent", "stale", "none"
+#: A refit under this objective whose best point trades gated rows: mechanism work, not a refit.
+BLOCKED = "blocked"
 #: Fitted on top of engine constants not yet committed: never `current` until they are.
 UNDER_BASE = "under_base"
 #: Fitted against a capture off the layer the slot is aimed at, because no capture on it exists.
@@ -108,9 +114,12 @@ def record_fit(
     reason: str = "",
     bank_generation: int = 0,
     today: str | None = None,
+    blocking: list[dict] | None = None,
 ) -> tuple[str, dict]:
     if outcome not in OUTCOMES:
         raise ValueError(f"outcome is one of {', '.join(OUTCOMES)}, not {outcome!r}")
+    if (outcome == BLOCKED) != bool(blocking):
+        raise ValueError("a blocked outcome, and only a blocked one, names its blocking rows")
     digest = report.get("objective")
     if not digest:
         raise ValueError("the report carries no objective fingerprint; re-run the fit")
@@ -124,6 +133,8 @@ def record_fit(
     }
     if reason:
         entry["reason"] = reason
+    if blocking:
+        entry["blocking"] = blocking
     if bank_generation:
         entry["bank_generation"] = bank_generation
     base = report.get("base_overrides") or ""
@@ -153,6 +164,8 @@ def axis(
     `oracle`: likewise never `current` or `equivalent`, and it outranks `under_base`.
     `equivalent` is a fit recorded under a digest proven to answer the same question as
     `digest` (`equivalence.py`); it names the recorded digests in `fitted_under`.
+    `blocked` is a fit under `digest` (or an equivalent) whose trade did not settle; it
+    names the gated rows in `blocking`. A later objective turns it `stale` like any record.
     """
     if not units:
         return {"state": NONE}
@@ -172,6 +185,8 @@ def axis(
         state = OFF_LAYER
     elif any(e.get("base_overrides") for e in entries):
         state = UNDER_BASE
+    elif any(e.get("outcome") == BLOCKED for e in entries):
+        state = BLOCKED
     elif any(e["objective"] != digest for e in entries):
         state = EQUIVALENT
     else:
@@ -197,6 +212,8 @@ def axis(
         out["base_overrides"] = sorted(
             {e["base_overrides"] for e in recorded if e.get("base_overrides")}
         )
+    if state == BLOCKED:
+        out["blocking"] = [r for e in recorded for r in e.get("blocking") or []]
     if state == EQUIVALENT:
         out["fitted_under"] = sorted({e["objective"] for e in recorded if e["objective"] != digest})
     return out
@@ -209,7 +226,7 @@ def main() -> int:
     rec.add_argument("--report", required=True)
     rec.add_argument("--capture", required=True)
     rec.add_argument("--timbre", required=True)
-    rec.add_argument("--outcome", required=True, choices=OUTCOMES)
+    rec.add_argument("--outcome", required=True, choices=BY_HAND)
     rec.add_argument("--reason", default="")
     rec.add_argument("--bank-generation", type=int, default=0)
     sub.add_parser("digest", help="print the current objective fingerprint")

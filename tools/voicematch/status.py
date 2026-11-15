@@ -696,6 +696,12 @@ def next_action(axes: dict, stage: int, candidates: list[str]) -> str:
             f"the last fit stood on base overrides ({'; '.join(fit['base_overrides'])}): "
             f"commit those constants, then refit without them: refit.py"
         )
+    if stage in (3, 4) and fit.get("fittable") and fit.get("state") == fits_mod.BLOCKED:
+        rows = sorted({f"{r['gate']}:{r['dimension']}" for r in fit["blocking"]})
+        return (
+            f"the refit under the current objective is blocked: every point of its search "
+            f"breaks a gated row ({', '.join(rows)}) — work on the mechanism behind those rows"
+        )
     if stage in (3, 4) and fit.get("fittable") and not fit_ok:
         when = "was never recorded" if fit["state"] == fits_mod.NONE else "predates it"
         return f"refit under the current objective (the last fit {when}): refit.py"
@@ -929,12 +935,14 @@ def render_table(rows: list[dict], *, every: bool, pol: dict, goal: str | None =
         stale = sum(f["state"] == fits_mod.STALE for f in fit_states)
         based = sum(f["state"] == fits_mod.UNDER_BASE for f in fit_states)
         provisional = sum(f["state"] == fits_mod.OFF_LAYER for f in fit_states)
+        blocked = sum(f["state"] == fits_mod.BLOCKED for f in fit_states)
         print(
             f"  fits under the current objective: {current} of {len(fit_states)} fittable "
             f"voice(s); {equivalent} under a proven-equivalent objective, {stale} stale, "
             + (f"{based} under uncommitted base overrides, " if based else "")
             + (f"{provisional} provisional (off-layer oracle), " if provisional else "")
-            + f"{len(fit_states) - current - equivalent - stale - based - provisional} "
+            + (f"{blocked} blocked by gated rows, " if blocked else "")
+            + f"{len(fit_states) - current - equivalent - stale - based - provisional - blocked} "
             f"never recorded"
         )
     census = signoff_census(rows)

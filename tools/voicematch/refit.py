@@ -1538,8 +1538,53 @@ def rejudge_voice(voice: dict, root: Path, build_dir: str) -> dict:
     return {**result, "why": why}
 
 
+def blocking_rows(d: Path, voice: dict, ver: dict) -> list[dict]:
+    """The gated rows a settled trade's fit pushed over, read from its pre and post compares.
+
+    Each names its gate, dimension and statistic, the reading before and after the fit, the
+    bound, and the floor under that bound (the gate's own, else `dimension_floor`).
+    """
+    pre = {
+        (r["key"], r["stat"]): r
+        for r in json.loads((d / "pre.json").read_text())["gate"]["readings"]
+    }
+    post = {
+        (r["key"], r["stat"]): r
+        for r in json.loads((d / "post.json").read_text())["gate"]["readings"]
+    }
+    gates = {g.get("capture"): g for g in voice.get("gates") or []}
+    rows = []
+    for name in ver["newly_over"]:
+        key, stat = name.rsplit(" ", 1)
+        capture, _, dim = key.rpartition(":")
+        capture = capture or voice["capture"]
+        g = gates.get(capture) or {}
+        path = Path(g["gate"]) if g.get("gate") else REFERENCE_DIR / f"{capture}_gate.json"
+        gate = json.loads(path.read_text())
+        floor = gate["bounds"][dim].get("floor")
+        if floor is None:
+            floor = dimension_floor(dim, gate.get("reference_spread"))[0]
+        before, after = pre.get((key, stat)) or {}, post[(key, stat)]
+        rows.append(
+            {
+                "gate": capture,
+                "dimension": dim,
+                "statistic": stat,
+                "before": None if before.get("value") is None else round(before["value"], 4),
+                "after": round(after["value"], 4),
+                "bound": after["limit"],
+                "floor": round(floor, 4),
+            }
+        )
+    return rows
+
+
 def adopt(root: Path, only: set[str]) -> int:
-    """Write every `adopt` verdict's values into the program tables; record every fit."""
+    """Write every `adopt` verdict's values into the program tables; record every fit.
+
+    A trade `resolve` settled as kept is recorded `blocked`, with the rows that blocked it;
+    a trade not yet resolved, and a stopped voice, are not recorded.
+    """
     records = fits_mod.load()
     per_patch: dict[str, list[tuple[str, float]]] = {}
     per_family: dict[int, list[tuple[str, float]]] = {}
@@ -1553,7 +1598,8 @@ def adopt(root: Path, only: set[str]) -> int:
             continue
         voice = json.loads((d / "voice.json").read_text())
         report = json.loads((d / ver.get("fit", "fit.json")).read_text())
-        outcome = "adopted" if ver["decision"] == "adopt" else "kept"
+        blocked = ver["decision"] == "kept" and ver.get("resolved")
+        outcome = "adopted" if ver["decision"] == "adopt" else "blocked" if blocked else "kept"
         if outcome == "adopted":
             knobs = [
                 SimpleNamespace(tunable=k["key"], file=None, start_value=_shipped(k))
@@ -1581,6 +1627,7 @@ def adopt(root: Path, only: set[str]) -> int:
             timbre=voice["timbre"],
             outcome=outcome,
             reason="" if outcome == "adopted" else ver["why"],
+            blocking=blocking_rows(d, voice, ver) if blocked else None,
         )
         records[unit] = entry
         recorded += 1
