@@ -549,3 +549,102 @@ def test_a_kept_bound_keeps_the_tree_it_was_set_on(tmp_path, monkeypatch):
     prov = json.loads(gate.read_text())["bounds"]["decay"]["provenance"]["median"]
     assert prov["outcome"] == "exceeded"
     assert prov["set_tree"] == {"head": "abc1234", "dirty": ["src/x.cpp"]}
+
+
+def _dirty_note(gate):
+    return [n for n in profile_gate.provenance_notes(json.loads(gate.read_text())) if "dirty" in n]
+
+
+def test_a_dirty_set_held_equal_on_a_clean_tree_leaves_the_note(tmp_path, monkeypatch):
+    gate = tmp_path / "g.json"
+    monkeypatch.setattr(profile_gate, "tree_state", lambda: {"head": "a", "dirty": ["src/x.cpp"]})
+    _record(gate, 10.0, allow_dirty=True)
+    assert _dirty_note(gate)
+    monkeypatch.setattr(profile_gate, "tree_state", lambda: {"head": "b", "dirty": []})
+    p = _record(gate, 10.0)
+    assert p["set_tree"] == {"head": "a", "dirty": ["src/x.cpp"]}
+    assert p["held_tree"] == {"head": "b", "dirty": []}
+    assert p["clean_held_utc"] == p["held_utc"]
+    assert _dirty_note(gate) == []
+    # A later dirty hold keeps the clean one it already earned.
+    monkeypatch.setattr(profile_gate, "tree_state", lambda: {"head": "c", "dirty": ["src/y.cpp"]})
+    p = _record(gate, 10.0, allow_dirty=True)
+    assert p["held_tree"]["dirty"] == ["src/y.cpp"] and "clean_held_utc" in p
+    assert _dirty_note(gate) == []
+
+
+def test_a_dirty_hold_earns_no_clean_stamp(tmp_path, monkeypatch):
+    gate = tmp_path / "g.json"
+    monkeypatch.setattr(profile_gate, "tree_state", lambda: {"head": "a", "dirty": ["src/x.cpp"]})
+    _record(gate, 10.0, allow_dirty=True)
+    p = _record(gate, 10.0, allow_dirty=True)
+    assert p["outcome"] == "kept" and "clean_held_utc" not in p
+    assert p["held_tree"] == {"head": "a", "dirty": ["src/x.cpp"]}
+    assert _dirty_note(gate) == ["set on a dirty tree: decay.abs_median, decay.median, decay.p90"]
+
+
+def test_a_value_set_again_on_a_dirty_tree_loses_its_clean_hold(tmp_path, monkeypatch):
+    gate = tmp_path / "g.json"
+    monkeypatch.setattr(profile_gate, "tree_state", lambda: {"head": "a", "dirty": ["src/x.cpp"]})
+    _record(gate, 10.0, allow_dirty=True)
+    monkeypatch.setattr(profile_gate, "tree_state", lambda: {"head": "b", "dirty": []})
+    _record(gate, 10.0)
+    monkeypatch.setattr(profile_gate, "tree_state", lambda: {"head": "c", "dirty": ["src/y.cpp"]})
+    p = _record(gate, 8.0, allow_dirty=True)
+    assert p["outcome"] == "tightened" and "clean_held_utc" not in p
+    assert _dirty_note(gate)
+
+
+def test_an_exceeded_bound_keeps_the_tree_of_its_last_hold(tmp_path, monkeypatch):
+    gate = tmp_path / "g.json"
+    monkeypatch.setattr(profile_gate, "tree_state", lambda: {"head": "a", "dirty": []})
+    _record(gate, 10.0)
+    monkeypatch.setattr(profile_gate, "tree_state", lambda: {"head": "b", "dirty": ["src/x.cpp"]})
+    p = _record(gate, 12.0, allow_dirty=True)
+    assert p["outcome"] == "exceeded"
+    assert p["held_tree"] == {"head": "a", "dirty": []}
+
+
+def test_a_gate_without_hold_trees_reads_as_before():
+    gate = {
+        "bounds": {
+            "decay": {
+                "median": 1.0,
+                "provenance": {
+                    "median": {
+                        "set_utc": "t",
+                        "held_utc": "u",
+                        "outcome": "kept",
+                        "set_tree": {"head": "a", "dirty": ["src/x.cpp"]},
+                    }
+                },
+            }
+        }
+    }
+    assert "set on a dirty tree: decay.median" in profile_gate.provenance_notes(gate)
+
+
+def test_a_verified_hold_names_no_tree_and_earns_no_clean_stamp():
+    import gate_verify
+
+    gate = {
+        "bounds": {
+            "decay": {
+                "median": 1.0,
+                "provenance": {
+                    "median": {
+                        "set_utc": "t",
+                        "held_utc": "u",
+                        "outcome": "kept",
+                        "set_tree": {"head": "a", "dirty": ["src/x.cpp"]},
+                        "held_tree": {"head": "a", "dirty": ["src/x.cpp"]},
+                    }
+                },
+            }
+        }
+    }
+    out, found = gate_verify.apply(gate, [{"key": "decay", "stat": "median", "value": 0.5}], "v")
+    p = out["bounds"]["decay"]["provenance"]["median"]
+    assert found["held"] == ["decay.median"] and p["held_utc"] == "v"
+    assert "held_tree" not in p and "clean_held_utc" not in p
+    assert "set on a dirty tree: decay.median" in profile_gate.provenance_notes(out)

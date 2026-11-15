@@ -5,7 +5,7 @@ has been inside it since, and a re-record would change bounds as well as answer
 that. This applies the readings of a `profile.py compare --gate --json` run
 (as `distance.py run` writes them) to each bound statistic's provenance: the
 unpadded measurement, `held_utc` now when it is within the bound, and outcome
-`kept` or `exceeded`; a reading `profile_gate.unadjudicable` set aside changes nothing. Bound values, `set_*` and every other field are untouched,
+`kept` or `exceeded`; a hold drops `held_tree`, since the run's tree is not known here; a reading `profile_gate.unadjudicable` set aside changes nothing. Bound values, `set_*` and every other field are untouched,
 and a statistic the run did not measure is left as it was.
 
     rye run --pyproject bindings/python/pyproject.toml \\
@@ -49,6 +49,8 @@ def apply(gate: dict, readings: list[dict], now: str) -> tuple[dict, dict[str, l
         prov["measured"] = round(float(r["value"]), 4)
         if r["value"] <= bound[r["stat"]]:
             prov["held_utc"], prov["outcome"] = now, OUTCOME_KEPT
+            # The run's tree is not known here, so this hold names none and earns no clean stamp.
+            prov.pop("held_tree", None)
             found["held"].append(name)
         else:
             prov.setdefault("held_utc", None)

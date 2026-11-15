@@ -1380,10 +1380,13 @@ def _keep_the_tighter(
                 "outcome": outcome,
             }
             if set_at == carried:
-                # A kept value keeps the record of the tree it was set on and what it replaced.
-                for kept in ("set_tree", "replaced"):
+                # A kept value keeps the record of the tree it was set on, what it replaced,
+                # and whether a clean tree has held it since.
+                for kept in ("set_tree", "replaced", "clean_held_utc"):
                     if kept in old_prov:
                         provenance[key][kept] = old_prov[kept]
+            if held is not None and held == old_prov.get("held_utc") and "held_tree" in old_prov:
+                provenance[key]["held_tree"] = old_prov["held_tree"]
             if moved:
                 provenance[key]["rewindowed_from"] = {"bound": old, "window": was_window}
             if raised:
@@ -1462,7 +1465,7 @@ def provenance_notes(gate: dict) -> list[str]:
         f"{dim}.{stat}"
         for dim, bound in (gate.get("bounds") or {}).items()
         for stat, p in (bound.get("provenance") or {}).items()
-        if (p.get("set_tree") or {}).get("dirty")
+        if (p.get("set_tree") or {}).get("dirty") and not p.get("clean_held_utc")
     )
     if dirty:
         notes.append(f"set on a dirty tree: {', '.join(dirty)}")
@@ -1644,6 +1647,10 @@ def write_gate_file(
         for prov in (bound.get("provenance") or {}).values():
             if prov.get("set_utc") == now:
                 prov["set_tree"] = tree
+            if prov.get("held_utc") == now:
+                prov["held_tree"] = tree
+                if not tree["dirty"]:
+                    prov["clean_held_utc"] = now
     carried = _carry_the_unbounded(bounds, gate_path)
     computed = _computed_unbounded(
         censors, requested, set(dimensions_na or {}) | set(excluded), bounds
