@@ -1,7 +1,7 @@
 {
  "id": "fx_brightness_module",
  "label": "FX 5 (brightness), the GS capital tone, read out of a module's own recordings",
- "measured_utc": "2026-11-13T19:17:51+00:00",
+ "measured_utc": "2026-11-15T01:12:56+00:00",
  "capture": {
   "program": 100,
   "params": [],
@@ -2283,7 +2283,8 @@
      "100": 20.97
     }
    },
-   "velocity_response": {}
+   "velocity_response": {},
+   "velocity_law": null
   }
  },
  "tnr_unreliable": {

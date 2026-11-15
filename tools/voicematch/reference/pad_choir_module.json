@@ -1,7 +1,7 @@
 {
  "id": "pad_choir_module",
  "label": "Pad 4 (choir), the GS capital tone, read out of a module's own recordings",
- "measured_utc": "2026-11-13T19:49:52+00:00",
+ "measured_utc": "2026-11-15T01:22:37+00:00",
  "capture": {
   "program": 91,
   "params": [],
@@ -2261,7 +2261,8 @@
      "100": 20.38
     }
    },
-   "velocity_response": {}
+   "velocity_response": {},
+   "velocity_law": null
   }
  },
  "tnr_unreliable": {

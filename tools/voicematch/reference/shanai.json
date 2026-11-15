@@ -1,7 +1,7 @@
 {
  "id": "shanai",
  "label": "Shanai, sampled, close and dry",
- "measured_utc": "2026-11-13T19:59:37+00:00",
+ "measured_utc": "2026-11-15T01:27:43+00:00",
  "capture": {
   "program": 111,
   "params": [],
@@ -7363,6 +7363,63 @@
      "range_db": 12.06,
      "monotonic": true
     }
+   },
+   "velocity_law": {
+    "field": "held_peak_dbfs",
+    "class": "varies by note",
+    "spread_db": 0.875,
+    "k": 1.023,
+    "k_iqr": 0.18,
+    "pairs": [
+     {
+      "velocities": [
+       32,
+       56
+      ],
+      "notes": 6,
+      "step_db": 2.66,
+      "step_iqr_db": 0.875,
+      "k": 0.547,
+      "k_iqr": 0.18,
+      "flat": false
+     },
+     {
+      "velocities": [
+       56,
+       80
+      ],
+      "notes": 6,
+      "step_db": 3.03,
+      "step_iqr_db": 0.23,
+      "k": 0.978,
+      "k_iqr": 0.074,
+      "flat": false
+     },
+     {
+      "velocities": [
+       80,
+       104
+      ],
+      "notes": 6,
+      "step_db": 2.78,
+      "step_iqr_db": 0.237,
+      "k": 1.22,
+      "k_iqr": 0.104,
+      "flat": false
+     },
+     {
+      "velocities": [
+       104,
+       127
+      ],
+      "notes": 6,
+      "step_db": 2.285,
+      "step_iqr_db": 0.305,
+      "k": 1.317,
+      "k_iqr": 0.176,
+      "flat": false
+     }
+    ]
    }
   }
  },

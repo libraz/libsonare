@@ -1,7 +1,7 @@
 {
  "id": "voice_oohs",
  "label": "Voice Oohs, sampled, close and dry",
- "measured_utc": "2026-11-13T20:05:11+00:00",
+ "measured_utc": "2026-11-15T01:35:29+00:00",
  "capture": {
   "program": 53,
   "params": [],
@@ -8941,6 +8941,63 @@
      "range_db": 18.1,
      "monotonic": true
     }
+   },
+   "velocity_law": {
+    "field": "held_peak_dbfs",
+    "class": "mapping",
+    "spread_db": 0.2,
+    "k": 1.691,
+    "k_iqr": 0.115,
+    "pairs": [
+     {
+      "velocities": [
+       32,
+       56
+      ],
+      "notes": 7,
+      "step_db": 6.05,
+      "step_iqr_db": 0.185,
+      "k": 1.245,
+      "k_iqr": 0.038,
+      "flat": false
+     },
+     {
+      "velocities": [
+       56,
+       80
+      ],
+      "notes": 7,
+      "step_db": 4.97,
+      "step_iqr_db": 0.12,
+      "k": 1.604,
+      "k_iqr": 0.039,
+      "flat": false
+     },
+     {
+      "velocities": [
+       80,
+       104
+      ],
+      "notes": 7,
+      "step_db": 4.02,
+      "step_iqr_db": 0.14,
+      "k": 1.764,
+      "k_iqr": 0.061,
+      "flat": false
+     },
+     {
+      "velocities": [
+       104,
+       127
+      ],
+      "notes": 7,
+      "step_db": 3.35,
+      "step_iqr_db": 0.2,
+      "k": 1.93,
+      "k_iqr": 0.115,
+      "flat": false
+     }
+    ]
    }
   }
  },

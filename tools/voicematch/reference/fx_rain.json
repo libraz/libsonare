@@ -1,7 +1,7 @@
 {
  "id": "fx_rain",
  "label": "FX 1 (rain), sampled, close and dry",
- "measured_utc": "2026-11-13T19:19:18+00:00",
+ "measured_utc": "2026-11-15T01:14:03+00:00",
  "capture": {
   "program": 96,
   "params": [],
@@ -9078,6 +9078,63 @@
      "range_db": 15.07,
      "monotonic": true
     }
+   },
+   "velocity_law": {
+    "field": "held_peak_dbfs",
+    "class": "varies by note",
+    "spread_db": 1.145,
+    "k": 1.138,
+    "k_iqr": 0.236,
+    "pairs": [
+     {
+      "velocities": [
+       32,
+       56
+      ],
+      "notes": 7,
+      "step_db": 5.65,
+      "step_iqr_db": 1.145,
+      "k": 1.162,
+      "k_iqr": 0.236,
+      "flat": false
+     },
+     {
+      "velocities": [
+       56,
+       80
+      ],
+      "notes": 7,
+      "step_db": 3.56,
+      "step_iqr_db": 0.54,
+      "k": 1.149,
+      "k_iqr": 0.174,
+      "flat": false
+     },
+     {
+      "velocities": [
+       80,
+       104
+      ],
+      "notes": 7,
+      "step_db": 2.65,
+      "step_iqr_db": 0.26,
+      "k": 1.163,
+      "k_iqr": 0.114,
+      "flat": false
+     },
+     {
+      "velocities": [
+       104,
+       127
+      ],
+      "notes": 7,
+      "step_db": 1.94,
+      "step_iqr_db": 0.14,
+      "k": 1.118,
+      "k_iqr": 0.081,
+      "flat": false
+     }
+    ]
    }
   }
  },

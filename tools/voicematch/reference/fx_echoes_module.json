@@ -1,7 +1,7 @@
 {
  "id": "fx_echoes_module",
  "label": "FX 7 (echoes), the GS capital tone, read out of a module's own recordings",
- "measured_utc": "2026-11-13T19:46:41+00:00",
+ "measured_utc": "2026-11-15T01:13:28+00:00",
  "capture": {
   "program": 102,
   "params": [],
@@ -2296,7 +2296,8 @@
      "100": 30.33
     }
    },
-   "velocity_response": {}
+   "velocity_response": {},
+   "velocity_law": null
   }
  },
  "tnr_unreliable": {

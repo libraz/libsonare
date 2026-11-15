@@ -1,7 +1,7 @@
 {
  "id": "fx_crystal_module",
  "label": "FX 3 (crystal), the GS capital tone, read out of a module's own recordings",
- "measured_utc": "2026-11-13T19:45:04+00:00",
+ "measured_utc": "2026-11-15T01:13:02+00:00",
  "capture": {
   "program": 98,
   "params": [],
@@ -2439,7 +2439,8 @@
      "100": 8.76
     }
    },
-   "velocity_response": {}
+   "velocity_response": {},
+   "velocity_law": null
   }
  },
  "recording_floor": {

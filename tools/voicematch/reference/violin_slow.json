@@ -1,7 +1,7 @@
 {
  "id": "violin_slow",
  "label": "Slow Violin, the GS variation tone, read out of a module's own recordings",
- "measured_utc": "2026-11-13T19:58:27+00:00",
+ "measured_utc": "2026-11-15T01:35:07+00:00",
  "capture": {
   "program": 40,
   "params": [],
@@ -1402,7 +1402,8 @@
      "100": 42.3
     }
    },
-   "velocity_response": {}
+   "velocity_response": {},
+   "velocity_law": null
   }
  },
  "stationary_lines": {

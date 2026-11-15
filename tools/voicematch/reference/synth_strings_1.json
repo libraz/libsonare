@@ -1,7 +1,7 @@
 {
  "id": "synth_strings_1",
  "label": "Synth Strings 1, sampled, close and dry",
- "measured_utc": "2026-11-13T20:02:10+00:00",
+ "measured_utc": "2026-11-15T01:30:58+00:00",
  "capture": {
   "program": 50,
   "params": [],
@@ -9402,6 +9402,63 @@
      "range_db": 21.71,
      "monotonic": true
     }
+   },
+   "velocity_law": {
+    "field": "held_peak_dbfs",
+    "class": "mapping",
+    "spread_db": 0.01,
+    "k": 1.892,
+    "k_iqr": 0.004,
+    "pairs": [
+     {
+      "velocities": [
+       32,
+       56
+      ],
+      "notes": 7,
+      "step_db": 8.17,
+      "step_iqr_db": 0.0,
+      "k": 1.681,
+      "k_iqr": 0.0,
+      "flat": false
+     },
+     {
+      "velocities": [
+       56,
+       80
+      ],
+      "notes": 7,
+      "step_db": 5.77,
+      "step_iqr_db": 0.0,
+      "k": 1.862,
+      "k_iqr": 0.0,
+      "flat": false
+     },
+     {
+      "velocities": [
+       80,
+       104
+      ],
+      "notes": 7,
+      "step_db": 4.39,
+      "step_iqr_db": 0.01,
+      "k": 1.926,
+      "k_iqr": 0.004,
+      "flat": false
+     },
+     {
+      "velocities": [
+       104,
+       127
+      ],
+      "notes": 7,
+      "step_db": 3.39,
+      "step_iqr_db": 0.005,
+      "k": 1.953,
+      "k_iqr": 0.003,
+      "flat": false
+     }
+    ]
    }
   }
  },

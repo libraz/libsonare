@@ -1,7 +1,7 @@
 {
  "id": "lead_fifths_module",
  "label": "Lead 7 (fifths), the GS capital tone, read out of a module's own recordings",
- "measured_utc": "2026-11-13T19:25:21+00:00",
+ "measured_utc": "2026-11-15T01:18:35+00:00",
  "capture": {
   "program": 86,
   "params": [],
@@ -65,25 +65,25 @@
    ],
    "partials_db": [
     0.0,
-    -10.91,
-    -18.94,
-    -24.54,
-    -22.21,
-    -23.59,
-    -25.59,
-    -29.22,
-    -32.04,
-    -35.33,
-    -37.73,
-    -38.32,
-    -39.27,
-    -40.74,
-    -42.08,
-    -42.22,
-    -42.96,
-    -45.29,
-    -47.34,
-    -47.73
+    -10.39,
+    -16.07,
+    -20.27,
+    -20.18,
+    -21.61,
+    -23.67,
+    -26.84,
+    -29.04,
+    -32.23,
+    -34.24,
+    -35.86,
+    -37.54,
+    -38.69,
+    -39.9,
+    -40.5,
+    -41.76,
+    -43.92,
+    -44.83,
+    -46.3
    ],
    "broad_lines": {
     "broad_ratio": 7.76,
@@ -154,7 +154,7 @@
     -81.83
    ],
    "valley_slope_db_oct": -7.568,
-   "valley_ladder_coupling": 0.659,
+   "valley_ladder_coupling": 0.641,
    "floor_source": null,
    "decayed_before_note_off": false,
    "damper_release_ms": 234.5,
@@ -2252,7 +2252,8 @@
      "100": 4.29
     }
    },
-   "velocity_response": {}
+   "velocity_response": {},
+   "velocity_law": null
   }
  },
  "tnr_unreliable": {

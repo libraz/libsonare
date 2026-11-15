@@ -1,7 +1,7 @@
 {
  "id": "fx_atmosphere",
  "label": "FX 4 (atmosphere), sampled, close and dry",
- "measured_utc": "2026-11-13T19:46:27+00:00",
+ "measured_utc": "2026-11-15T01:12:49+00:00",
  "capture": {
   "program": 99,
   "params": [],
@@ -9003,6 +9003,63 @@
      "range_db": 17.98,
      "monotonic": true
     }
+   },
+   "velocity_law": {
+    "field": "held_peak_dbfs",
+    "class": "mapping",
+    "spread_db": 0.175,
+    "k": 1.45,
+    "k_iqr": 0.089,
+    "pairs": [
+     {
+      "velocities": [
+       32,
+       56
+      ],
+      "notes": 7,
+      "step_db": 5.53,
+      "step_iqr_db": 0.15,
+      "k": 1.138,
+      "k_iqr": 0.031,
+      "flat": false
+     },
+     {
+      "velocities": [
+       56,
+       80
+      ],
+      "notes": 7,
+      "step_db": 4.24,
+      "step_iqr_db": 0.175,
+      "k": 1.369,
+      "k_iqr": 0.056,
+      "flat": false
+     },
+     {
+      "velocities": [
+       80,
+       104
+      ],
+      "notes": 7,
+      "step_db": 3.43,
+      "step_iqr_db": 0.105,
+      "k": 1.505,
+      "k_iqr": 0.046,
+      "flat": false
+     },
+     {
+      "velocities": [
+       104,
+       127
+      ],
+      "notes": 7,
+      "step_db": 2.81,
+      "step_iqr_db": 0.155,
+      "k": 1.619,
+      "k_iqr": 0.089,
+      "flat": false
+     }
+    ]
    }
   }
  },

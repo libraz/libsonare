@@ -1,7 +1,7 @@
 {
  "id": "pad_sweep_module",
  "label": "Pad 8 (sweep), the GS capital tone, read out of a module's own recordings",
- "measured_utc": "2026-11-13T19:52:27+00:00",
+ "measured_utc": "2026-11-15T01:23:46+00:00",
  "capture": {
   "program": 95,
   "params": [],
@@ -2334,7 +2334,8 @@
      "100": 38.73
     }
    },
-   "velocity_response": {}
+   "velocity_response": {},
+   "velocity_law": null
   }
  },
  "stationary_lines": {

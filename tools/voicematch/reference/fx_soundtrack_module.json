@@ -1,7 +1,7 @@
 {
  "id": "fx_soundtrack_module",
  "label": "FX 2 (soundtrack), the GS capital tone, read out of a module's own recordings",
- "measured_utc": "2026-11-13T19:19:29+00:00",
+ "measured_utc": "2026-11-15T01:14:26+00:00",
  "capture": {
   "program": 97,
   "params": [],
@@ -2325,7 +2325,8 @@
      "100": 1.76
     }
    },
-   "velocity_response": {}
+   "velocity_response": {},
+   "velocity_law": null
   }
  },
  "tnr_unreliable": {

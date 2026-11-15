@@ -1,7 +1,7 @@
 {
  "id": "tenor_sax",
  "label": "Tenor saxophone, sampled, close and dry",
- "measured_utc": "2026-11-13T20:03:29+00:00",
+ "measured_utc": "2026-11-15T01:32:40+00:00",
  "capture": {
   "program": 66,
   "params": [],
@@ -8840,6 +8840,63 @@
      "range_db": 8.72,
      "monotonic": true
     }
+   },
+   "velocity_law": {
+    "field": "held_peak_dbfs",
+    "class": "varies by note",
+    "spread_db": 0.51,
+    "k": 0.728,
+    "k_iqr": 0.294,
+    "pairs": [
+     {
+      "velocities": [
+       32,
+       56
+      ],
+      "notes": 7,
+      "step_db": 2.16,
+      "step_iqr_db": 0.13,
+      "k": 0.444,
+      "k_iqr": 0.027,
+      "flat": false
+     },
+     {
+      "velocities": [
+       56,
+       80
+      ],
+      "notes": 7,
+      "step_db": 2.25,
+      "step_iqr_db": 0.135,
+      "k": 0.726,
+      "k_iqr": 0.044,
+      "flat": false
+     },
+     {
+      "velocities": [
+       80,
+       104
+      ],
+      "notes": 7,
+      "step_db": 1.96,
+      "step_iqr_db": 0.49,
+      "k": 0.86,
+      "k_iqr": 0.215,
+      "flat": false
+     },
+     {
+      "velocities": [
+       104,
+       127
+      ],
+      "notes": 7,
+      "step_db": 1.88,
+      "step_iqr_db": 0.51,
+      "k": 1.083,
+      "k_iqr": 0.294,
+      "flat": false
+     }
+    ]
    }
   }
  },

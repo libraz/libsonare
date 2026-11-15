@@ -1,7 +1,7 @@
 {
  "id": "synth_strings_1_module",
  "label": "Synth Strings 1, the GS capital tone, read out of a module's own recordings",
- "measured_utc": "2026-11-13T19:56:20+00:00",
+ "measured_utc": "2026-11-15T01:30:36+00:00",
  "capture": {
   "program": 50,
   "params": [],
@@ -2359,7 +2359,8 @@
      "100": 43.48
     }
    },
-   "velocity_response": {}
+   "velocity_response": {},
+   "velocity_law": null
   }
  },
  "stationary_lines": {

@@ -1,7 +1,7 @@
 {
  "id": "viola",
  "label": "Viola, sampled, close and dry",
- "measured_utc": "2026-11-13T20:04:44+00:00",
+ "measured_utc": "2026-11-15T01:34:59+00:00",
  "capture": {
   "program": 41,
   "params": [],
@@ -10349,6 +10349,63 @@
      "range_db": 20.99,
      "monotonic": true
     }
+   },
+   "velocity_law": {
+    "field": "held_peak_dbfs",
+    "class": "varies by note",
+    "spread_db": 0.575,
+    "k": 1.806,
+    "k_iqr": 0.118,
+    "pairs": [
+     {
+      "velocities": [
+       32,
+       56
+      ],
+      "notes": 7,
+      "step_db": 6.61,
+      "step_iqr_db": 0.575,
+      "k": 1.36,
+      "k_iqr": 0.118,
+      "flat": false
+     },
+     {
+      "velocities": [
+       56,
+       80
+      ],
+      "notes": 7,
+      "step_db": 5.2,
+      "step_iqr_db": 0.285,
+      "k": 1.678,
+      "k_iqr": 0.092,
+      "flat": false
+     },
+     {
+      "velocities": [
+       80,
+       104
+      ],
+      "notes": 7,
+      "step_db": 4.23,
+      "step_iqr_db": 0.14,
+      "k": 1.856,
+      "k_iqr": 0.061,
+      "flat": false
+     },
+     {
+      "velocities": [
+       104,
+       127
+      ],
+      "notes": 7,
+      "step_db": 3.27,
+      "step_iqr_db": 0.035,
+      "k": 1.884,
+      "k_iqr": 0.02,
+      "flat": false
+     }
+    ]
    }
   }
  },

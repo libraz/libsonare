@@ -1,7 +1,7 @@
 {
  "id": "lead_voice",
  "label": "Lead 6 (voice), sampled, close and dry",
- "measured_utc": "2026-11-13T19:50:39+00:00",
+ "measured_utc": "2026-11-15T01:19:28+00:00",
  "capture": {
   "program": 85,
   "params": [],
@@ -6673,6 +6673,51 @@
      "range_db": 12.18,
      "monotonic": true
     }
+   },
+   "velocity_law": {
+    "field": "held_peak_dbfs",
+    "class": "varies by note",
+    "spread_db": 0.54,
+    "k": 0.926,
+    "k_iqr": 0.09,
+    "pairs": [
+     {
+      "velocities": [
+       32,
+       64
+      ],
+      "notes": 7,
+      "step_db": 5.24,
+      "step_iqr_db": 0.54,
+      "k": 0.87,
+      "k_iqr": 0.09,
+      "flat": false
+     },
+     {
+      "velocities": [
+       64,
+       96
+      ],
+      "notes": 7,
+      "step_db": 3.29,
+      "step_iqr_db": 0.23,
+      "k": 0.934,
+      "k_iqr": 0.065,
+      "flat": false
+     },
+     {
+      "velocities": [
+       96,
+       127
+      ],
+      "notes": 7,
+      "step_db": 2.27,
+      "step_iqr_db": 0.11,
+      "k": 0.934,
+      "k_iqr": 0.045,
+      "flat": false
+     }
+    ]
    }
   }
  },

@@ -1,7 +1,7 @@
 {
  "id": "shakuhachi",
  "label": "Shakuhachi, sampled, close and dry",
- "measured_utc": "2026-11-13T19:53:31+00:00",
+ "measured_utc": "2026-11-15T01:27:49+00:00",
  "capture": {
   "program": 77,
   "params": [],
@@ -8405,6 +8405,63 @@
      "range_db": 9.49,
      "monotonic": true
     }
+   },
+   "velocity_law": {
+    "field": "held_peak_dbfs",
+    "class": "varies by note",
+    "spread_db": 0.33,
+    "k": 0.91,
+    "k_iqr": 0.19,
+    "pairs": [
+     {
+      "velocities": [
+       32,
+       56
+      ],
+      "notes": 7,
+      "step_db": 2.23,
+      "step_iqr_db": 0.035,
+      "k": 0.459,
+      "k_iqr": 0.007,
+      "flat": false
+     },
+     {
+      "velocities": [
+       56,
+       80
+      ],
+      "notes": 7,
+      "step_db": 2.61,
+      "step_iqr_db": 0.04,
+      "k": 0.842,
+      "k_iqr": 0.013,
+      "flat": false
+     },
+     {
+      "velocities": [
+       80,
+       104
+      ],
+      "notes": 7,
+      "step_db": 2.61,
+      "step_iqr_db": 0.01,
+      "k": 1.145,
+      "k_iqr": 0.004,
+      "flat": false
+     },
+     {
+      "velocities": [
+       104,
+       127
+      ],
+      "notes": 7,
+      "step_db": 1.81,
+      "step_iqr_db": 0.33,
+      "k": 1.043,
+      "k_iqr": 0.19,
+      "flat": false
+     }
+    ]
    }
   }
  },

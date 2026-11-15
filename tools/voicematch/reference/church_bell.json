@@ -1,7 +1,7 @@
 {
  "id": "church_bell",
  "label": "Church Bell, the GS variation tone, read out of a module's own recordings",
- "measured_utc": "2026-11-13T19:43:36+00:00",
+ "measured_utc": "2026-11-15T01:07:48+00:00",
  "capture": {
   "program": 14,
   "params": [],
@@ -61,25 +61,25 @@
    ],
    "partials_db": [
     0.0,
-    14.18,
-    13.22,
-    -32.57,
-    -36.57,
-    -39.05,
-    -3.11,
-    14.68,
-    -24.29,
-    -11.61,
-    0.32,
-    -17.55,
-    -19.84,
-    -11.41,
-    -22.62,
-    -42.59,
-    -24.75,
-    -27.48,
-    -30.87,
-    -26.06
+    15.58,
+    14.58,
+    -30.98,
+    -35.95,
+    -38.15,
+    -1.36,
+    16.67,
+    -24.07,
+    -12.0,
+    2.2,
+    -13.94,
+    -20.11,
+    -11.21,
+    -21.35,
+    -40.04,
+    -23.51,
+    -26.72,
+    -29.76,
+    -24.56
    ],
    "modal_profile": {
     "modal_hz": [
@@ -182,7 +182,7 @@
     -94.28
    ],
    "valley_slope_db_oct": -13.093,
-   "valley_ladder_coupling": 0.643,
+   "valley_ladder_coupling": 0.61,
    "floor_source": null,
    "decayed_before_note_off": false,
    "centroid_hz": 934.5,
@@ -1378,7 +1378,8 @@
      "100": -3.21
     }
    },
-   "velocity_response": {}
+   "velocity_response": {},
+   "velocity_law": null
   }
  },
  "recording_floor": {

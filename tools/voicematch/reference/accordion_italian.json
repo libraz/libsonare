@@ -1,7 +1,7 @@
 {
  "id": "accordion_italian",
  "label": "Accordion It, the GS variation tone, read out of a module's own recordings",
- "measured_utc": "2026-11-13T19:09:27+00:00",
+ "measured_utc": "2026-11-15T01:03:46+00:00",
  "capture": {
   "program": 21,
   "params": [],
@@ -1441,23 +1441,23 @@
    ],
    "partials_db": [
     0.0,
-    -6.76,
-    0.37,
-    -14.94,
-    -7.59,
-    -16.81,
-    -22.75,
-    -25.82,
-    -31.61,
-    -49.14,
-    -43.66,
-    -50.77,
-    -61.65,
-    -60.85,
-    -71.66,
-    -62.41,
-    -64.25,
-    -83.66
+    -6.46,
+    0.23,
+    -14.09,
+    -7.48,
+    -16.87,
+    -22.84,
+    -25.84,
+    -31.65,
+    -47.96,
+    -43.47,
+    -50.6,
+    -59.51,
+    -60.46,
+    -70.09,
+    -62.17,
+    -64.05,
+    -83.35
    ],
    "broad_lines": {
     "broad_ratio": 7.32,
@@ -1558,7 +1558,7 @@
     -108.95
    ],
    "valley_slope_db_oct": -8.004,
-   "valley_ladder_coupling": 0.302,
+   "valley_ladder_coupling": 0.306,
    "floor_source": "clearance",
    "decayed_before_note_off": false,
    "centroid_hz": 2409.1,
@@ -1724,7 +1724,8 @@
      "100": 37.72
     }
    },
-   "velocity_response": {}
+   "velocity_response": {},
+   "velocity_law": null
   }
  },
  "stationary_lines": {

@@ -1,7 +1,7 @@
 {
  "id": "fx_goblins_module",
  "label": "FX 6 (goblins), the GS capital tone, read out of a module's own recordings",
- "measured_utc": "2026-11-13T19:18:29+00:00",
+ "measured_utc": "2026-11-15T01:13:36+00:00",
  "capture": {
   "program": 101,
   "params": [],
@@ -543,25 +543,25 @@
    ],
    "partials_db": [
     0.0,
-    -22.32,
-    -25.37,
-    -44.01,
-    -45.07,
-    -43.05,
-    -35.33,
-    -36.84,
-    -28.89,
-    -47.85,
-    -46.95,
-    -58.37,
-    -52.17,
-    -54.97,
-    -58.97,
-    -48.82,
-    -59.51,
-    -61.14,
-    -61.68,
-    -59.62
+    -20.67,
+    -24.03,
+    -40.9,
+    -43.78,
+    -39.3,
+    -32.09,
+    -32.37,
+    -24.71,
+    -44.12,
+    -42.75,
+    -58.04,
+    -49.16,
+    -52.34,
+    -57.84,
+    -46.03,
+    -58.14,
+    -60.92,
+    -60.64,
+    -59.87
    ],
    "broad_lines": {
     "broad_ratio": 7.44,
@@ -653,7 +653,7 @@
     -94.08
    ],
    "valley_slope_db_oct": 4.177,
-   "valley_ladder_coupling": -0.17,
+   "valley_ladder_coupling": -0.131,
    "floor_source": null,
    "decayed_before_note_off": false,
    "damper_release_ms": 1127.4,
@@ -2346,7 +2346,8 @@
      "100": 27.89
     }
    },
-   "velocity_response": {}
+   "velocity_response": {},
+   "velocity_law": null
   }
  },
  "body_lines": {

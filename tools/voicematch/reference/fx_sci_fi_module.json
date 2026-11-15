@@ -1,7 +1,7 @@
 {
  "id": "fx_sci_fi_module",
  "label": "FX 8 (sci-fi), the GS capital tone, read out of a module's own recordings",
- "measured_utc": "2026-11-13T19:48:10+00:00",
+ "measured_utc": "2026-11-15T01:14:11+00:00",
  "capture": {
   "program": 103,
   "params": [],
@@ -2284,7 +2284,8 @@
      "100": 44.3
     }
    },
-   "velocity_response": {}
+   "velocity_response": {},
+   "velocity_law": null
   }
  },
  "tnr_unreliable": {

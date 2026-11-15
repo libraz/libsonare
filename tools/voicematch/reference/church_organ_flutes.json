@@ -1,7 +1,7 @@
 {
  "id": "church_organ_flutes",
  "label": "Church Org.2, the GS variation tone, read out of a module's own recordings",
- "measured_utc": "2026-11-13T19:43:05+00:00",
+ "measured_utc": "2026-11-15T01:07:57+00:00",
  "capture": {
   "program": 19,
   "params": [],
@@ -1033,25 +1033,25 @@
    ],
    "partials_db": [
     0.0,
-    4.8,
-    -2.19,
-    -5.06,
-    -17.84,
-    -5.07,
-    -19.34,
-    -11.6,
-    -27.68,
-    -21.2,
-    -30.04,
-    -16.37,
-    -29.07,
-    -41.1,
-    -29.29,
-    -13.84,
-    -43.95,
-    -22.13,
-    -45.87,
-    -35.3
+    4.36,
+    -2.11,
+    -5.97,
+    -18.38,
+    -5.35,
+    -19.51,
+    -12.0,
+    -28.07,
+    -21.3,
+    -30.73,
+    -17.13,
+    -28.61,
+    -40.3,
+    -29.35,
+    -14.22,
+    -42.83,
+    -22.73,
+    -46.59,
+    -36.02
    ],
    "broad_lines": {
     "broad_ratio": 3.58,
@@ -1128,7 +1128,7 @@
     -91.8
    ],
    "valley_slope_db_oct": -12.353,
-   "valley_ladder_coupling": 1.039,
+   "valley_ladder_coupling": 1.046,
    "floor_source": null,
    "decayed_before_note_off": false,
    "damper_release_ms": 79.8,
@@ -2793,7 +2793,8 @@
      "100": 9.67
     }
    },
-   "velocity_response": {}
+   "velocity_response": {},
+   "velocity_law": null
   }
  },
  "stationary_lines": {

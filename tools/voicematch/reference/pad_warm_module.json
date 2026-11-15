@@ -1,7 +1,7 @@
 {
  "id": "pad_warm_module",
  "label": "Pad 2 (warm), the GS capital tone, read out of a module's own recordings",
- "measured_utc": "2026-11-13T19:50:56+00:00",
+ "measured_utc": "2026-11-15T01:23:59+00:00",
  "capture": {
   "program": 89,
   "params": [],
@@ -2584,7 +2584,8 @@
      "100": 42.06
     }
    },
-   "velocity_response": {}
+   "velocity_response": {},
+   "velocity_law": null
   }
  },
  "tnr_unreliable": {

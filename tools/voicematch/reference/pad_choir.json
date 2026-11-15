@@ -1,7 +1,7 @@
 {
  "id": "pad_choir",
  "label": "Pad 4 (choir), sampled, close and dry",
- "measured_utc": "2026-11-13T19:51:35+00:00",
+ "measured_utc": "2026-11-15T01:22:42+00:00",
  "capture": {
   "program": 91,
   "params": [],
@@ -6859,6 +6859,51 @@
      "range_db": 10.04,
      "monotonic": true
     }
+   },
+   "velocity_law": {
+    "field": "held_peak_dbfs",
+    "class": "varies by note",
+    "spread_db": 0.29,
+    "k": 0.71,
+    "k_iqr": 0.048,
+    "pairs": [
+     {
+      "velocities": [
+       32,
+       64
+      ],
+      "notes": 7,
+      "step_db": 3.51,
+      "step_iqr_db": 0.29,
+      "k": 0.583,
+      "k_iqr": 0.048,
+      "flat": false
+     },
+     {
+      "velocities": [
+       64,
+       96
+      ],
+      "notes": 7,
+      "step_db": 2.5,
+      "step_iqr_db": 0.04,
+      "k": 0.71,
+      "k_iqr": 0.011,
+      "flat": false
+     },
+     {
+      "velocities": [
+       96,
+       127
+      ],
+      "notes": 7,
+      "step_db": 1.86,
+      "step_iqr_db": 0.075,
+      "k": 0.765,
+      "k_iqr": 0.031,
+      "flat": false
+     }
+    ]
    }
   }
  },

@@ -1,7 +1,7 @@
 {
  "id": "violin",
  "label": "Violin, sampled, close and dry",
- "measured_utc": "2026-11-13T19:59:59+00:00",
+ "measured_utc": "2026-11-15T01:35:06+00:00",
  "capture": {
   "program": 40,
   "params": [],
@@ -10617,6 +10617,63 @@
      "range_db": 20.9,
      "monotonic": true
     }
+   },
+   "velocity_law": {
+    "field": "held_peak_dbfs",
+    "class": "varies by note",
+    "spread_db": 0.44,
+    "k": 1.807,
+    "k_iqr": 0.091,
+    "pairs": [
+     {
+      "velocities": [
+       32,
+       56
+      ],
+      "notes": 7,
+      "step_db": 6.78,
+      "step_iqr_db": 0.44,
+      "k": 1.395,
+      "k_iqr": 0.091,
+      "flat": false
+     },
+     {
+      "velocities": [
+       56,
+       80
+      ],
+      "notes": 7,
+      "step_db": 5.27,
+      "step_iqr_db": 0.255,
+      "k": 1.701,
+      "k_iqr": 0.082,
+      "flat": false
+     },
+     {
+      "velocities": [
+       80,
+       104
+      ],
+      "notes": 7,
+      "step_db": 4.18,
+      "step_iqr_db": 0.12,
+      "k": 1.834,
+      "k_iqr": 0.053,
+      "flat": false
+     },
+     {
+      "velocities": [
+       104,
+       127
+      ],
+      "notes": 7,
+      "step_db": 3.28,
+      "step_iqr_db": 0.05,
+      "k": 1.89,
+      "k_iqr": 0.029,
+      "flat": false
+     }
+    ]
    }
   }
  },

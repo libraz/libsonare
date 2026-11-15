@@ -1,7 +1,7 @@
 {
  "id": "string_ensemble_2",
  "label": "String Ensemble 2, sampled, close and dry",
- "measured_utc": "2026-11-13T19:54:49+00:00",
+ "measured_utc": "2026-11-15T01:29:21+00:00",
  "capture": {
   "program": 49,
   "params": [],
@@ -13353,6 +13353,63 @@
      "range_db": 22.1,
      "monotonic": true
     }
+   },
+   "velocity_law": {
+    "field": "held_peak_dbfs",
+    "class": "mapping",
+    "spread_db": 0.06,
+    "k": 1.871,
+    "k_iqr": 0.012,
+    "pairs": [
+     {
+      "velocities": [
+       32,
+       56
+      ],
+      "notes": 10,
+      "step_db": 8.215,
+      "step_iqr_db": 0.06,
+      "k": 1.69,
+      "k_iqr": 0.012,
+      "flat": false
+     },
+     {
+      "velocities": [
+       56,
+       80
+      ],
+      "notes": 10,
+      "step_db": 5.77,
+      "step_iqr_db": 0.02,
+      "k": 1.862,
+      "k_iqr": 0.006,
+      "flat": false
+     },
+     {
+      "velocities": [
+       80,
+       104
+      ],
+      "notes": 10,
+      "step_db": 4.39,
+      "step_iqr_db": 0.028,
+      "k": 1.926,
+      "k_iqr": 0.012,
+      "flat": false
+     },
+     {
+      "velocities": [
+       104,
+       127
+      ],
+      "notes": 10,
+      "step_db": 3.4,
+      "step_iqr_db": 0.018,
+      "k": 1.959,
+      "k_iqr": 0.01,
+      "flat": false
+     }
+    ]
    }
   }
  },

@@ -1,7 +1,7 @@
 {
  "id": "pipe_organ",
  "label": "Church organ, principal chorus, recorded in its building",
- "measured_utc": "2026-11-13T19:53:24+00:00",
+ "measured_utc": "2026-11-15T01:25:18+00:00",
  "capture": {
   "program": 19,
   "params": [],
@@ -292,25 +292,25 @@
    ],
    "partials_db": [
     0.0,
-    -5.66,
-    -8.37,
-    2.22,
-    -20.36,
-    -6.52,
-    -2.51,
-    -0.58,
-    -15.92,
-    -11.55,
-    -24.18,
-    -13.05,
-    -19.97,
-    -6.61,
-    -26.85,
-    -5.39,
-    -29.07,
-    -16.35,
-    -43.31,
-    -18.32
+    -5.15,
+    -7.76,
+    2.53,
+    -21.0,
+    -3.6,
+    -1.76,
+    0.96,
+    -14.81,
+    -9.99,
+    -24.13,
+    -11.52,
+    -19.74,
+    -7.21,
+    -25.65,
+    -4.42,
+    -28.22,
+    -16.22,
+    -41.69,
+    -15.93
    ],
    "broad_lines": {
     "broad_ratio": 2.99,
@@ -381,7 +381,7 @@
     -103.63
    ],
    "valley_slope_db_oct": -7.756,
-   "valley_ladder_coupling": 0.8,
+   "valley_ladder_coupling": 0.783,
    "floor_source": "preroll",
    "floor_db": -104.73,
    "floor_octaves_db": [
@@ -5571,7 +5571,8 @@
      "100": 26.61
     }
    },
-   "velocity_response": {}
+   "velocity_response": {},
+   "velocity_law": null
   },
   "plenum-b": {
    "stretch_cents": {
@@ -5775,7 +5776,8 @@
      "100": 26.75
     }
    },
-   "velocity_response": {}
+   "velocity_response": {},
+   "velocity_law": null
   }
  },
  "tnr_unreliable": {

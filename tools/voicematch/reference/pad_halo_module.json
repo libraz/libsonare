@@ -1,7 +1,7 @@
 {
  "id": "pad_halo_module",
  "label": "Pad 7 (halo), the GS capital tone, read out of a module's own recordings",
- "measured_utc": "2026-11-13T19:53:12+00:00",
+ "measured_utc": "2026-11-15T01:22:51+00:00",
  "capture": {
   "program": 94,
   "params": [],
@@ -2294,7 +2294,8 @@
      "100": 36.52
     }
    },
-   "velocity_response": {}
+   "velocity_response": {},
+   "velocity_law": null
   }
  },
  "tnr_unreliable": {

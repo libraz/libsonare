@@ -1,7 +1,7 @@
 {
  "id": "carillon",
  "label": "Carillon, the GS variation tone, read out of a module's own recordings",
- "measured_utc": "2026-11-13T19:12:18+00:00",
+ "measured_utc": "2026-11-15T01:06:49+00:00",
  "capture": {
   "program": 14,
   "params": [],
@@ -61,25 +61,25 @@
    ],
    "partials_db": [
     0.0,
-    14.37,
-    13.39,
-    -30.93,
-    -34.63,
-    -34.48,
-    -2.46,
-    15.1,
-    -24.39,
-    -11.51,
-    0.84,
-    -17.2,
-    -19.79,
-    -11.07,
-    -22.69,
-    -40.44,
-    -25.53,
-    -26.53,
-    -29.76,
-    -23.98
+    15.65,
+    14.79,
+    -31.5,
+    -33.64,
+    -32.24,
+    -1.04,
+    17.12,
+    -24.48,
+    -11.97,
+    2.53,
+    -14.15,
+    -20.02,
+    -9.76,
+    -21.46,
+    -37.75,
+    -23.68,
+    -25.89,
+    -29.26,
+    -22.52
    ],
    "modal_profile": {
     "modal_hz": [
@@ -182,7 +182,7 @@
     -91.05
    ],
    "valley_slope_db_oct": -12.361,
-   "valley_ladder_coupling": 0.686,
+   "valley_ladder_coupling": 0.657,
    "floor_source": null,
    "decayed_before_note_off": false,
    "centroid_hz": 929.3,
@@ -979,24 +979,24 @@
    "partials_db": [
     0.0,
     8.45,
-    5.88,
-    -38.54,
-    -46.13,
-    -49.11,
-    -21.7,
-    0.3,
-    -33.68,
-    -27.15,
-    -18.51,
-    -32.9,
-    -40.6,
-    -34.17,
-    -48.3,
-    -59.05,
-    -45.0,
-    -57.23,
-    -59.24,
-    -48.37
+    6.48,
+    -38.62,
+    -44.65,
+    -49.07,
+    -21.75,
+    -0.97,
+    -34.0,
+    -29.0,
+    -18.71,
+    -33.7,
+    -41.25,
+    -34.05,
+    -47.79,
+    -58.28,
+    -46.66,
+    -57.98,
+    -58.03,
+    -48.57
    ],
    "modal_profile": {
     "modal_hz": [
@@ -1101,7 +1101,7 @@
     -127.03
    ],
    "valley_slope_db_oct": -15.751,
-   "valley_ladder_coupling": 0.722,
+   "valley_ladder_coupling": 0.726,
    "floor_source": null,
    "decayed_before_note_off": false,
    "centroid_hz": 3106.9,
@@ -1228,7 +1228,8 @@
      "100": -1.91
     }
    },
-   "velocity_response": {}
+   "velocity_response": {},
+   "velocity_law": null
   }
  },
  "recording_floor": {

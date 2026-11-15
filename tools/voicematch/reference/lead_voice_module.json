@@ -1,7 +1,7 @@
 {
  "id": "lead_voice_module",
  "label": "Lead 6 (voice), the GS capital tone, read out of a module's own recordings",
- "measured_utc": "2026-11-13T19:25:59+00:00",
+ "measured_utc": "2026-11-15T01:19:16+00:00",
  "capture": {
   "program": 85,
   "params": [],
@@ -766,25 +766,25 @@
    ],
    "partials_db": [
     0.0,
-    -6.1,
-    -8.57,
-    -34.85,
-    -18.79,
-    -39.27,
-    -30.76,
-    -55.64,
-    -37.91,
-    -53.16,
-    -34.16,
-    -55.11,
-    -37.9,
-    -59.15,
-    -42.73,
-    -49.99,
-    -42.5,
-    -45.85,
-    -43.41,
-    -58.71
+    -7.48,
+    -9.5,
+    -35.66,
+    -19.82,
+    -39.87,
+    -31.21,
+    -57.05,
+    -38.84,
+    -52.74,
+    -33.37,
+    -54.73,
+    -37.37,
+    -58.45,
+    -42.19,
+    -51.37,
+    -42.55,
+    -44.46,
+    -43.88,
+    -57.37
    ],
    "broad_lines": {
     "broad_ratio": 13.22,
@@ -864,7 +864,7 @@
     -83.8
    ],
    "valley_slope_db_oct": 1.949,
-   "valley_ladder_coupling": -0.104,
+   "valley_ladder_coupling": -0.105,
    "floor_source": null,
    "decayed_before_note_off": false,
    "damper_release_ms": 119.7,
@@ -2269,7 +2269,8 @@
      "100": 14.15
     }
    },
-   "velocity_response": {}
+   "velocity_response": {},
+   "velocity_law": null
   }
  },
  "tnr_unreliable": {

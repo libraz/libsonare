@@ -1,7 +1,7 @@
 {
  "id": "lead_calliope_module",
  "label": "Lead 3 (calliope), the GS capital tone, read out of a module's own recordings",
- "measured_utc": "2026-11-13T19:24:40+00:00",
+ "measured_utc": "2026-11-15T01:17:51+00:00",
  "capture": {
   "program": 82,
   "params": [],
@@ -2239,7 +2239,8 @@
      "100": 34.54
     }
    },
-   "velocity_response": {}
+   "velocity_response": {},
+   "velocity_law": null
   }
  },
  "body_lines": {

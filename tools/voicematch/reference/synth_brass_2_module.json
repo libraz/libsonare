@@ -1,7 +1,7 @@
 {
  "id": "synth_brass_2_module",
  "label": "Synth brass 2, the GS capital tone, read out of a module's own recordings",
- "measured_utc": "2026-11-13T19:56:11+00:00",
+ "measured_utc": "2026-11-15T01:30:20+00:00",
  "capture": {
   "program": 63,
   "params": [],
@@ -2232,7 +2232,8 @@
      "100": 49.06
     }
    },
-   "velocity_response": {}
+   "velocity_response": {},
+   "velocity_law": null
   }
  },
  "tnr_unreliable": {

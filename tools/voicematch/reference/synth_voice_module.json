@@ -1,7 +1,7 @@
 {
  "id": "synth_voice_module",
  "label": "Synth Voice, the GS capital tone, read out of a module's own recordings",
- "measured_utc": "2026-11-13T20:02:16+00:00",
+ "measured_utc": "2026-11-15T01:31:16+00:00",
  "capture": {
   "program": 54,
   "params": [],
@@ -2143,7 +2143,8 @@
      "100": 39.1
     }
    },
-   "velocity_response": {}
+   "velocity_response": {},
+   "velocity_law": null
   }
  },
  "body_lines": {

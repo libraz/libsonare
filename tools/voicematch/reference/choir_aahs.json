@@ -1,7 +1,7 @@
 {
  "id": "choir_aahs",
  "label": "Choir Aahs, sampled, close and dry",
- "measured_utc": "2026-11-13T19:12:52+00:00",
+ "measured_utc": "2026-11-15T01:07:44+00:00",
  "capture": {
   "program": 52,
   "params": [],
@@ -9044,6 +9044,63 @@
      "range_db": 19.25,
      "monotonic": true
     }
+   },
+   "velocity_law": {
+    "field": "held_peak_dbfs",
+    "class": "mapping",
+    "spread_db": 0.13,
+    "k": 1.706,
+    "k_iqr": 0.035,
+    "pairs": [
+     {
+      "velocities": [
+       32,
+       56
+      ],
+      "notes": 7,
+      "step_db": 6.21,
+      "step_iqr_db": 0.13,
+      "k": 1.278,
+      "k_iqr": 0.027,
+      "flat": false
+     },
+     {
+      "velocities": [
+       56,
+       80
+      ],
+      "notes": 7,
+      "step_db": 5.06,
+      "step_iqr_db": 0.045,
+      "k": 1.633,
+      "k_iqr": 0.015,
+      "flat": false
+     },
+     {
+      "velocities": [
+       80,
+       104
+      ],
+      "notes": 7,
+      "step_db": 4.07,
+      "step_iqr_db": 0.08,
+      "k": 1.786,
+      "k_iqr": 0.035,
+      "flat": false
+     },
+     {
+      "velocities": [
+       104,
+       127
+      ],
+      "notes": 7,
+      "step_db": 3.22,
+      "step_iqr_db": 0.005,
+      "k": 1.855,
+      "k_iqr": 0.003,
+      "flat": false
+     }
+    ]
    }
   }
  },

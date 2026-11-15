@@ -1,7 +1,7 @@
 {
  "id": "fx_sci_fi",
  "label": "FX 8 (sci-fi), sampled, close and dry",
- "measured_utc": "2026-11-13T19:45:56+00:00",
+ "measured_utc": "2026-11-15T01:14:18+00:00",
  "capture": {
   "program": 103,
   "params": [],
@@ -9144,6 +9144,63 @@
      "range_db": 13.49,
      "monotonic": true
     }
+   },
+   "velocity_law": {
+    "field": "held_peak_dbfs",
+    "class": "mapping",
+    "spread_db": 0.23,
+    "k": 0.956,
+    "k_iqr": 0.133,
+    "pairs": [
+     {
+      "velocities": [
+       32,
+       56
+      ],
+      "notes": 7,
+      "step_db": 4.23,
+      "step_iqr_db": 0.03,
+      "k": 0.87,
+      "k_iqr": 0.006,
+      "flat": false
+     },
+     {
+      "velocities": [
+       56,
+       80
+      ],
+      "notes": 7,
+      "step_db": 2.89,
+      "step_iqr_db": 0.055,
+      "k": 0.933,
+      "k_iqr": 0.018,
+      "flat": false
+     },
+     {
+      "velocities": [
+       80,
+       104
+      ],
+      "notes": 7,
+      "step_db": 2.18,
+      "step_iqr_db": 0.035,
+      "k": 0.957,
+      "k_iqr": 0.015,
+      "flat": false
+     },
+     {
+      "velocities": [
+       104,
+       127
+      ],
+      "notes": 7,
+      "step_db": 1.95,
+      "step_iqr_db": 0.23,
+      "k": 1.124,
+      "k_iqr": 0.133,
+      "flat": false
+     }
+    ]
    }
   }
  },

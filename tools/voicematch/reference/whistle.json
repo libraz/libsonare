@@ -1,7 +1,7 @@
 {
  "id": "whistle",
  "label": "Whistle, sampled, close and dry",
- "measured_utc": "2026-11-13T19:59:07+00:00",
+ "measured_utc": "2026-11-15T01:35:34+00:00",
  "capture": {
   "program": 78,
   "params": [],
@@ -6971,6 +6971,63 @@
      "range_db": 6.06,
      "monotonic": true
     }
+   },
+   "velocity_law": {
+    "field": "held_peak_dbfs",
+    "class": "mapping",
+    "spread_db": 0.01,
+    "k": 0.556,
+    "k_iqr": 0.004,
+    "pairs": [
+     {
+      "velocities": [
+       32,
+       56
+      ],
+      "notes": 5,
+      "step_db": 1.96,
+      "step_iqr_db": 0.01,
+      "k": 0.403,
+      "k_iqr": 0.002,
+      "flat": false
+     },
+     {
+      "velocities": [
+       56,
+       80
+      ],
+      "notes": 5,
+      "step_db": 1.6,
+      "step_iqr_db": 0.0,
+      "k": 0.516,
+      "k_iqr": 0.0,
+      "flat": false
+     },
+     {
+      "velocities": [
+       80,
+       104
+      ],
+      "notes": 5,
+      "step_db": 1.35,
+      "step_iqr_db": 0.01,
+      "k": 0.592,
+      "k_iqr": 0.004,
+      "flat": false
+     },
+     {
+      "velocities": [
+       104,
+       127
+      ],
+      "notes": 5,
+      "step_db": 1.12,
+      "step_iqr_db": 0.0,
+      "k": 0.645,
+      "k_iqr": 0.0,
+      "flat": false
+     }
+    ]
    }
   }
  },

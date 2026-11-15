@@ -1,7 +1,7 @@
 {
  "id": "fx_soundtrack",
  "label": "FX 2 (soundtrack), sampled, close and dry",
- "measured_utc": "2026-11-13T19:47:17+00:00",
+ "measured_utc": "2026-11-15T01:14:34+00:00",
  "capture": {
   "program": 97,
   "params": [],
@@ -8578,6 +8578,63 @@
      "range_db": 12.12,
      "monotonic": true
     }
+   },
+   "velocity_law": {
+    "field": "held_peak_dbfs",
+    "class": "mapping",
+    "spread_db": 0.015,
+    "k": 1.004,
+    "k_iqr": 0.007,
+    "pairs": [
+     {
+      "velocities": [
+       32,
+       56
+      ],
+      "notes": 7,
+      "step_db": 4.87,
+      "step_iqr_db": 0.015,
+      "k": 1.002,
+      "k_iqr": 0.003,
+      "flat": false
+     },
+     {
+      "velocities": [
+       56,
+       80
+      ],
+      "notes": 7,
+      "step_db": 3.11,
+      "step_iqr_db": 0.01,
+      "k": 1.004,
+      "k_iqr": 0.003,
+      "flat": false
+     },
+     {
+      "velocities": [
+       80,
+       104
+      ],
+      "notes": 7,
+      "step_db": 2.29,
+      "step_iqr_db": 0.015,
+      "k": 1.005,
+      "k_iqr": 0.007,
+      "flat": false
+     },
+     {
+      "velocities": [
+       104,
+       127
+      ],
+      "notes": 7,
+      "step_db": 1.75,
+      "step_iqr_db": 0.01,
+      "k": 1.008,
+      "k_iqr": 0.006,
+      "flat": false
+     }
+    ]
    }
   }
  },

@@ -1,7 +1,7 @@
 {
  "id": "fx_brightness",
  "label": "FX 5 (brightness), sampled, close and dry",
- "measured_utc": "2026-11-13T19:47:38+00:00",
+ "measured_utc": "2026-11-15T01:12:57+00:00",
  "capture": {
   "program": 100,
   "params": [],
@@ -9017,6 +9017,63 @@
      "range_db": 8.02,
      "monotonic": true
     }
+   },
+   "velocity_law": {
+    "field": "held_peak_dbfs",
+    "class": "mapping",
+    "spread_db": 0.01,
+    "k": 0.713,
+    "k_iqr": 0.003,
+    "pairs": [
+     {
+      "velocities": [
+       32,
+       56
+      ],
+      "notes": 7,
+      "step_db": 2.79,
+      "step_iqr_db": 0.01,
+      "k": 0.574,
+      "k_iqr": 0.002,
+      "flat": false
+     },
+     {
+      "velocities": [
+       56,
+       80
+      ],
+      "notes": 7,
+      "step_db": 2.1,
+      "step_iqr_db": 0.01,
+      "k": 0.678,
+      "k_iqr": 0.003,
+      "flat": false
+     },
+     {
+      "velocities": [
+       80,
+       104
+      ],
+      "notes": 7,
+      "step_db": 1.69,
+      "step_iqr_db": 0.005,
+      "k": 0.742,
+      "k_iqr": 0.002,
+      "flat": false
+     },
+     {
+      "velocities": [
+       104,
+       127
+      ],
+      "notes": 7,
+      "step_db": 1.36,
+      "step_iqr_db": 0.0,
+      "k": 0.784,
+      "k_iqr": 0.0,
+      "flat": false
+     }
+    ]
    }
   }
  },

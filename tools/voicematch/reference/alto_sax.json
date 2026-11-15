@@ -1,7 +1,7 @@
 {
  "id": "alto_sax",
  "label": "Alto Sax, sampled, close and dry",
- "measured_utc": "2026-11-13T19:10:45+00:00",
+ "measured_utc": "2026-11-15T01:04:37+00:00",
  "capture": {
   "program": 65,
   "params": [],
@@ -8986,6 +8986,63 @@
      "range_db": 13.31,
      "monotonic": true
     }
+   },
+   "velocity_law": {
+    "field": "held_peak_dbfs",
+    "class": "varies by note",
+    "spread_db": 1.19,
+    "k": 0.943,
+    "k_iqr": 0.276,
+    "pairs": [
+     {
+      "velocities": [
+       32,
+       56
+      ],
+      "notes": 7,
+      "step_db": 3.45,
+      "step_iqr_db": 1.19,
+      "k": 0.71,
+      "k_iqr": 0.245,
+      "flat": false
+     },
+     {
+      "velocities": [
+       56,
+       80
+      ],
+      "notes": 7,
+      "step_db": 2.8,
+      "step_iqr_db": 0.855,
+      "k": 0.904,
+      "k_iqr": 0.276,
+      "flat": false
+     },
+     {
+      "velocities": [
+       80,
+       104
+      ],
+      "notes": 7,
+      "step_db": 2.23,
+      "step_iqr_db": 0.48,
+      "k": 0.979,
+      "k_iqr": 0.211,
+      "flat": false
+     },
+     {
+      "velocities": [
+       104,
+       127
+      ],
+      "notes": 7,
+      "step_db": 1.81,
+      "step_iqr_db": 0.23,
+      "k": 1.043,
+      "k_iqr": 0.133,
+      "flat": false
+     }
+    ]
    }
   }
  },

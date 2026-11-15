@@ -1,7 +1,7 @@
 {
  "id": "fiddle",
  "label": "Fiddle, sampled, close and dry",
- "measured_utc": "2026-11-13T19:47:12+00:00",
+ "measured_utc": "2026-11-15T01:12:28+00:00",
  "capture": {
   "program": 110,
   "params": [],
@@ -10600,6 +10600,63 @@
      "range_db": 18.77,
      "monotonic": true
     }
+   },
+   "velocity_law": {
+    "field": "held_peak_dbfs",
+    "class": "varies by note",
+    "spread_db": 0.99,
+    "k": 1.533,
+    "k_iqr": 0.342,
+    "pairs": [
+     {
+      "velocities": [
+       32,
+       56
+      ],
+      "notes": 7,
+      "step_db": 3.35,
+      "step_iqr_db": 0.99,
+      "k": 0.689,
+      "k_iqr": 0.204,
+      "flat": false
+     },
+     {
+      "velocities": [
+       56,
+       80
+      ],
+      "notes": 7,
+      "step_db": 3.83,
+      "step_iqr_db": 0.925,
+      "k": 1.236,
+      "k_iqr": 0.299,
+      "flat": false
+     },
+     {
+      "velocities": [
+       80,
+       104
+      ],
+      "notes": 7,
+      "step_db": 4.38,
+      "step_iqr_db": 0.78,
+      "k": 1.922,
+      "k_iqr": 0.342,
+      "flat": false
+     },
+     {
+      "velocities": [
+       104,
+       127
+      ],
+      "notes": 7,
+      "step_db": 3.09,
+      "step_iqr_db": 0.475,
+      "k": 1.781,
+      "k_iqr": 0.274,
+      "flat": false
+     }
+    ]
    }
   }
  },

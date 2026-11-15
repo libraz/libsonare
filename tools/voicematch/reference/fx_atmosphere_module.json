@@ -1,7 +1,7 @@
 {
  "id": "fx_atmosphere_module",
  "label": "FX 4 (atmosphere), the GS capital tone, read out of a module's own recordings",
- "measured_utc": "2026-11-13T19:44:58+00:00",
+ "measured_utc": "2026-11-15T01:12:35+00:00",
  "capture": {
   "program": 99,
   "params": [],
@@ -2014,25 +2014,25 @@
    ],
    "partials_db": [
     0.0,
-    -1.47,
-    -13.46,
-    -20.1,
-    -15.61,
-    -30.83,
-    -30.31,
-    -38.21,
-    -46.82,
-    -49.62,
-    -49.01,
-    -55.54,
-    -58.63,
-    -62.47,
-    -63.14,
-    -68.01,
-    -67.61,
-    -72.85,
-    -75.28,
-    -77.08
+    -2.53,
+    -14.56,
+    -21.65,
+    -18.29,
+    -32.85,
+    -31.87,
+    -40.08,
+    -49.63,
+    -52.02,
+    -51.72,
+    -58.26,
+    -61.74,
+    -65.2,
+    -65.19,
+    -70.69,
+    -70.13,
+    -75.85,
+    -78.42,
+    -78.91
    ],
    "broad_lines": {
     "broad_ratio": 15.16,
@@ -2107,7 +2107,7 @@
     -134.98
    ],
    "valley_slope_db_oct": -6.443,
-   "valley_ladder_coupling": 0.277,
+   "valley_ladder_coupling": 0.271,
    "floor_source": null,
    "decayed_before_note_off": false,
    "damper_release_ms": 488.9,
@@ -2357,7 +2357,8 @@
      "100": 28.72
     }
    },
-   "velocity_response": {}
+   "velocity_response": {},
+   "velocity_law": null
   }
  },
  "stationary_lines": {

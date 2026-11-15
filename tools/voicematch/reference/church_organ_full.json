@@ -1,7 +1,7 @@
 {
  "id": "church_organ_full",
  "label": "Church Org.3, the GS variation tone, read out of a module's own recordings",
- "measured_utc": "2026-11-13T19:13:10+00:00",
+ "measured_utc": "2026-11-15T01:08:03+00:00",
  "capture": {
   "program": 19,
   "params": [],
@@ -2779,7 +2779,8 @@
      "100": 14.21
     }
    },
-   "velocity_response": {}
+   "velocity_response": {},
+   "velocity_law": null
   }
  },
  "stationary_lines": {

@@ -1,7 +1,7 @@
 {
  "id": "fx_rain_module",
  "label": "FX 1 (rain), the GS capital tone, read out of a module's own recordings",
- "measured_utc": "2026-11-13T19:46:50+00:00",
+ "measured_utc": "2026-11-15T01:13:54+00:00",
  "capture": {
   "program": 96,
   "params": [],
@@ -2365,7 +2365,8 @@
      "100": 29.87
     }
    },
-   "velocity_response": {}
+   "velocity_response": {},
+   "velocity_law": null
   }
  },
  "tnr_unreliable": {
