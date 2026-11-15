@@ -115,8 +115,9 @@ struct FlutePatchParams {
   /// Vibrato rate (Hz) for the voice-local LFO (a solo flute's own vibrato, not a
   /// shared wind tremulant). Read at note-on.
   float vibrato_rate_hz = 5.0f;
-  /// Vibrato depth in [0,1] (0 = no vibrato). Live-controllable (CC1). At 0 the
-  /// LFO is skipped, so the render is bit-identical to a vibrato-free note.
+  /// Vibrato depth in [0,1] (0 = no vibrato), read at note-on. At 0 the LFO is skipped, so the
+  /// render is bit-identical to a vibrato-free note. CC1 adds vibrato through the voice-level pitch
+  /// LFO, not through this depth.
   float vibrato_depth = 0.0f;
 
   // --- off-by-default advanced physics (Phase 4; C-ABI non-exposed, gated) ---
@@ -258,10 +259,6 @@ class FluteVoiceCore {
   /// Drops the onset overshoot: the breath is driven by an input, or velocity
   /// means nothing, so the synthesized tonguing would play over the player.
   void hold_onset() noexcept { breath_.hold_overshoot(); }
-  /// Vibrato depth in [0,1] (CC1 modulation wheel): the voice-local pitch/level
-  /// vibrato. 0 = off (the LFO is skipped). Not an excitation axis — it is the
-  /// preset's own vibrato rather than anything the exciter does.
-  void set_vibrato(float depth01) noexcept;
   /// Mod-matrix offsets on the same axes, in the same normalized units. Held
   /// apart from the base so the two compose rather than overwrite, and applied
   /// through the same smoothing ramp: this is a control-rate destination, not an
@@ -381,7 +378,6 @@ class FluteVoiceCore {
   // Voice-local vibrato LFO (a solo flute's own vibrato). depth_ == 0 -> skipped
   // (bit-identical). Modulates the loop delay (pitch) and a touch of level.
   float vib_depth_ = 0.0f;
-  float vib_depth_target_ = 0.0f;
   float vib_phase_ = 0.0f;
   float vib_inc_ = 0.0f;
 

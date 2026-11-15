@@ -357,7 +357,6 @@ LoopBudget FluteVoiceCore::configure(const FlutePatchParams& params, double sr, 
 
   // Voice-local vibrato LFO.
   vib_depth_ = std::clamp(params.vibrato_depth, 0.0f, 1.0f);
-  vib_depth_target_ = vib_depth_;
   const float vib_rate = std::clamp(params.vibrato_rate_hz, 0.1f, 12.0f);
   vib_inc_ = kTwoPi * vib_rate / srf;
 
@@ -414,7 +413,6 @@ float FluteVoiceCore::render_internal(float pitch_ratio) noexcept {
   lp_alpha_ += ctrl_coeff_ * (lp_alpha_target_ - lp_alpha_);
   if (lp_alpha_ != comp_alpha_) retune_loop_comp();
   loss_gain_ += ctrl_coeff_ * (loss_gain_target_ - loss_gain_);
-  vib_depth_ += ctrl_coeff_ * (vib_depth_target_ - vib_depth_);
 
   // Mouth-pressure contour: ramp toward the target (1 while blowing, 0 once
   // released), then the steady breath plus its turbulence and the onset chiff.
@@ -662,15 +660,10 @@ void FluteVoiceCore::retune_loop_comp() noexcept {
   comp_alpha_ = lp_alpha_;
 }
 
-void FluteVoiceCore::set_vibrato(float depth01) noexcept {
-  vib_depth_target_ = depth01 < 0.0f ? 0.0f : (depth01 > 1.0f ? 1.0f : depth01);
-}
-
 void FluteVoiceCore::snap_excitation() noexcept {
   breath_target_ = breath_ctrl_target_;
   lp_alpha_ = lp_alpha_target_;
   loss_gain_ = loss_gain_target_;
-  vib_depth_ = vib_depth_target_;
 }
 
 void FluteVoiceCore::release() noexcept { breath_.release(); }

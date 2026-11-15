@@ -1027,7 +1027,7 @@ constexpr void configure_physical_programs(ProgramOverrides& o) noexcept {
   o.piccolo.flute.breath_noise = 0.155929f;
   o.piccolo.amp_env.decay_ms = 98.0261f;
   o.piccolo.flute.velocity_exponent = 2.17f;
-  // The reference holds a still pitch, so the patch carries no vibrato of its own; CC1 still adds it.
+  // The reference holds a still pitch, so the patch has no vibrato of its own; CC1 still adds it.
   o.concert_flute = flute(0.50f, 0.55f, 0.30f, 0.35f, 0.2f, 0.0f, 0.60f, 0.85f);
   o.concert_flute.cutoff_hz = 5961.8f;
   o.concert_flute.amp_env.attack_ms = 30.0285f;
