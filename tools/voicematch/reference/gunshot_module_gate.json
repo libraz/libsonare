@@ -3,10 +3,10 @@
   "timbre": "t0",
   "margin": 1.25,
   "reference_measured_utc": "2026-11-15T01:15:03+00:00",
-  "recorded_utc": "2026-11-15T01:49:19+00:00",
+  "recorded_utc": "2026-11-15T06:50:21+00:00",
   "model_build": {
-    "built_utc": "2026-11-14T22:10:25Z",
-    "newest_source_utc": "2026-11-14T22:08:56Z",
+    "built_utc": "2026-11-15T06:50:10Z",
+    "newest_source_utc": "2026-11-15T06:48:35Z",
     "stale": false
   },
   "reference_spread": {},
@@ -14,21 +14,17 @@
     "decay": {
       "floor": 0.5,
       "floor_from": "guess",
-      "median": 54.763,
-      "abs_median": 54.763,
-      "p90": 58.582,
+      "median": 36.413,
+      "abs_median": 36.413,
+      "p90": 40.912,
       "rows": 3,
       "provenance": {
         "median": {
-          "set_utc": "2026-11-13T23:09:11+00:00",
-          "set_build": "2026-11-13T22:56:16Z",
-          "held_utc": "2026-11-15T01:49:19+00:00",
-          "measured": 43.81,
-          "outcome": "kept",
-          "set_tree": {
-            "head": "e37d16abf",
-            "dirty": []
-          },
+          "set_utc": "2026-11-15T06:50:21+00:00",
+          "set_build": "2026-11-15T06:50:10Z",
+          "held_utc": "2026-11-15T06:50:21+00:00",
+          "measured": 29.13,
+          "outcome": "tightened",
           "window": {
             "model_s": 0.884,
             "reference_s": 0.884,
@@ -41,22 +37,33 @@
               1.227
             ]
           },
-          "held_tree": {
-            "head": "d6029d545",
-            "dirty": []
+          "set_tree": {
+            "head": "04354514b",
+            "dirty": [
+              "src/midi/synth/piano_voice.cpp",
+              "src/midi/synth/piano_voice.h",
+              "src/midi/synth/piano_voice_calibration.cpp",
+              "src/midi/synth/piano_voice_calibration.h",
+              "src/midi/synth/piano_voice_start.cpp"
+            ]
           },
-          "clean_held_utc": "2026-11-15T01:49:19+00:00"
+          "held_tree": {
+            "head": "04354514b",
+            "dirty": [
+              "src/midi/synth/piano_voice.cpp",
+              "src/midi/synth/piano_voice.h",
+              "src/midi/synth/piano_voice_calibration.cpp",
+              "src/midi/synth/piano_voice_calibration.h",
+              "src/midi/synth/piano_voice_start.cpp"
+            ]
+          }
         },
         "abs_median": {
-          "set_utc": "2026-11-13T23:09:11+00:00",
-          "set_build": "2026-11-13T22:56:16Z",
-          "held_utc": "2026-11-15T01:49:19+00:00",
-          "measured": 43.81,
-          "outcome": "kept",
-          "set_tree": {
-            "head": "e37d16abf",
-            "dirty": []
-          },
+          "set_utc": "2026-11-15T06:50:21+00:00",
+          "set_build": "2026-11-15T06:50:10Z",
+          "held_utc": "2026-11-15T06:50:21+00:00",
+          "measured": 29.13,
+          "outcome": "tightened",
           "window": {
             "model_s": 0.884,
             "reference_s": 0.884,
@@ -69,22 +76,33 @@
               1.227
             ]
           },
-          "held_tree": {
-            "head": "d6029d545",
-            "dirty": []
+          "set_tree": {
+            "head": "04354514b",
+            "dirty": [
+              "src/midi/synth/piano_voice.cpp",
+              "src/midi/synth/piano_voice.h",
+              "src/midi/synth/piano_voice_calibration.cpp",
+              "src/midi/synth/piano_voice_calibration.h",
+              "src/midi/synth/piano_voice_start.cpp"
+            ]
           },
-          "clean_held_utc": "2026-11-15T01:49:19+00:00"
+          "held_tree": {
+            "head": "04354514b",
+            "dirty": [
+              "src/midi/synth/piano_voice.cpp",
+              "src/midi/synth/piano_voice.h",
+              "src/midi/synth/piano_voice_calibration.cpp",
+              "src/midi/synth/piano_voice_calibration.h",
+              "src/midi/synth/piano_voice_start.cpp"
+            ]
+          }
         },
         "p90": {
-          "set_utc": "2026-11-13T23:09:11+00:00",
-          "set_build": "2026-11-13T22:56:16Z",
-          "held_utc": "2026-11-15T01:49:19+00:00",
-          "measured": 46.866,
-          "outcome": "kept",
-          "set_tree": {
-            "head": "e37d16abf",
-            "dirty": []
-          },
+          "set_utc": "2026-11-15T06:50:21+00:00",
+          "set_build": "2026-11-15T06:50:10Z",
+          "held_utc": "2026-11-15T06:50:21+00:00",
+          "measured": 32.73,
+          "outcome": "tightened",
           "window": {
             "model_s": 0.884,
             "reference_s": 0.884,
@@ -97,11 +115,26 @@
               1.227
             ]
           },
-          "held_tree": {
-            "head": "d6029d545",
-            "dirty": []
+          "set_tree": {
+            "head": "04354514b",
+            "dirty": [
+              "src/midi/synth/piano_voice.cpp",
+              "src/midi/synth/piano_voice.h",
+              "src/midi/synth/piano_voice_calibration.cpp",
+              "src/midi/synth/piano_voice_calibration.h",
+              "src/midi/synth/piano_voice_start.cpp"
+            ]
           },
-          "clean_held_utc": "2026-11-15T01:49:19+00:00"
+          "held_tree": {
+            "head": "04354514b",
+            "dirty": [
+              "src/midi/synth/piano_voice.cpp",
+              "src/midi/synth/piano_voice.h",
+              "src/midi/synth/piano_voice_calibration.cpp",
+              "src/midi/synth/piano_voice_calibration.h",
+              "src/midi/synth/piano_voice_start.cpp"
+            ]
+          }
         }
       }
     },
@@ -116,13 +149,14 @@
         "median": {
           "set_utc": "2026-11-13T23:09:11+00:00",
           "set_build": "2026-11-13T22:56:16Z",
-          "held_utc": "2026-11-15T01:49:19+00:00",
-          "measured": 0.0,
+          "held_utc": "2026-11-15T06:50:21+00:00",
+          "measured": 15.0,
           "outcome": "kept",
           "set_tree": {
             "head": "e37d16abf",
             "dirty": []
           },
+          "clean_held_utc": "2026-11-15T01:49:19+00:00",
           "window": {
             "model_s": 0.884,
             "reference_s": 0.884,
@@ -136,21 +170,27 @@
             ]
           },
           "held_tree": {
-            "head": "d6029d545",
-            "dirty": []
-          },
-          "clean_held_utc": "2026-11-15T01:49:19+00:00"
+            "head": "04354514b",
+            "dirty": [
+              "src/midi/synth/piano_voice.cpp",
+              "src/midi/synth/piano_voice.h",
+              "src/midi/synth/piano_voice_calibration.cpp",
+              "src/midi/synth/piano_voice_calibration.h",
+              "src/midi/synth/piano_voice_start.cpp"
+            ]
+          }
         },
         "abs_median": {
           "set_utc": "2026-11-13T23:09:11+00:00",
           "set_build": "2026-11-13T22:56:16Z",
-          "held_utc": "2026-11-15T01:49:19+00:00",
-          "measured": 0.0,
+          "held_utc": "2026-11-15T06:50:21+00:00",
+          "measured": 15.0,
           "outcome": "kept",
           "set_tree": {
             "head": "e37d16abf",
             "dirty": []
           },
+          "clean_held_utc": "2026-11-15T01:49:19+00:00",
           "window": {
             "model_s": 0.884,
             "reference_s": 0.884,
@@ -164,21 +204,27 @@
             ]
           },
           "held_tree": {
-            "head": "d6029d545",
-            "dirty": []
-          },
-          "clean_held_utc": "2026-11-15T01:49:19+00:00"
+            "head": "04354514b",
+            "dirty": [
+              "src/midi/synth/piano_voice.cpp",
+              "src/midi/synth/piano_voice.h",
+              "src/midi/synth/piano_voice_calibration.cpp",
+              "src/midi/synth/piano_voice_calibration.h",
+              "src/midi/synth/piano_voice_start.cpp"
+            ]
+          }
         },
         "p90": {
           "set_utc": "2026-11-13T23:09:11+00:00",
           "set_build": "2026-11-13T22:56:16Z",
-          "held_utc": "2026-11-15T01:49:19+00:00",
-          "measured": 0.0,
+          "held_utc": "2026-11-15T06:50:21+00:00",
+          "measured": 15.0,
           "outcome": "kept",
           "set_tree": {
             "head": "e37d16abf",
             "dirty": []
           },
+          "clean_held_utc": "2026-11-15T01:49:19+00:00",
           "window": {
             "model_s": 0.884,
             "reference_s": 0.884,
@@ -192,10 +238,15 @@
             ]
           },
           "held_tree": {
-            "head": "d6029d545",
-            "dirty": []
-          },
-          "clean_held_utc": "2026-11-15T01:49:19+00:00"
+            "head": "04354514b",
+            "dirty": [
+              "src/midi/synth/piano_voice.cpp",
+              "src/midi/synth/piano_voice.h",
+              "src/midi/synth/piano_voice_calibration.cpp",
+              "src/midi/synth/piano_voice_calibration.h",
+              "src/midi/synth/piano_voice_start.cpp"
+            ]
+          }
         }
       }
     },
@@ -211,21 +262,21 @@
           "set_utc": "2026-10-26T06:37:51+00:00",
           "set_build": "2026-10-26T06:34:05Z",
           "held_utc": "2026-11-13T11:49:49+00:00",
-          "measured": 264.7783,
+          "measured": 256.747,
           "outcome": "exceeded"
         },
         "abs_median": {
           "set_utc": "2026-10-26T06:37:51+00:00",
           "set_build": "2026-10-26T06:34:05Z",
           "held_utc": "2026-11-13T11:49:49+00:00",
-          "measured": 264.7783,
+          "measured": 256.747,
           "outcome": "exceeded"
         },
         "p90": {
           "set_utc": "2026-10-26T06:37:51+00:00",
           "set_build": "2026-10-26T06:34:05Z",
           "held_utc": "2026-11-13T11:49:49+00:00",
-          "measured": 384.3553,
+          "measured": 358.1458,
           "outcome": "exceeded"
         }
       }
