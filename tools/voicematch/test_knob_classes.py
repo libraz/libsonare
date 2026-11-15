@@ -181,7 +181,7 @@ def test_a_stage_enable_that_ships_present_is_cut_clear_of_zero():
     (knob,) = auto_spec_report(0, cat, classes=classes)[0]
     assert knob["min"] > 0.0
     assert knob["max"] == 1.0
-    assert knob["start"] == 0.4
+    assert "start" not in knob  # the shipped 0.4 is inside the range, so the knob starts at HEAD
     plain = auto_spec_report(0, cat)[0][0]
     assert plain["min"] == 0.0
 
@@ -866,3 +866,20 @@ def test_auto_on_the_grand_keeps_the_piano_engine_constants():
     spec, report = auto_spec_report(0, _piano_catalogue(), classes=_classes(), covered={"fam0"})
     assert _HAMMER in [e["tunable"] for e in spec]
     assert report.shared == []
+
+
+def test_an_auto_knob_at_its_shipped_value_starts_at_head_and_takes_a_start_override():
+    import knobs
+
+    cat = _catalogue({"p0.vibrato": 0.5}, {"vibrato": (0.0, 1.0)})
+    (entry,) = auto_spec_report(0, cat)[0]
+    assert "start" not in entry
+    assert knobs._started(entry, 0.5, entry["min"], entry["max"], "p0.vibrato")[2] == "head"
+    knob = knobs.Knob(label="p0.vibrato", lo=0.0, hi=1.0, log=False, start_value=0.5)
+    assert knobs.apply_start_overrides([knob], "p0.vibrato=0.8", tunables={}) == "p0.vibrato=0.8"
+
+
+def test_an_auto_knob_shipped_outside_its_range_states_the_clamped_start():
+    cat = _catalogue({"p0.vibrato": 3.0}, {"vibrato": (0.0, 1.0)})
+    (entry,) = auto_spec_report(0, cat)[0]
+    assert entry["start"] == entry["max"]

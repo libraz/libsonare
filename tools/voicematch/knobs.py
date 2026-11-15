@@ -1421,15 +1421,18 @@ def auto_spec_report(
         if vibrato and k.endswith(".lfo_rate_hz"):
             rng = (*VIBRATO_RATE_RANGE_HZ, True)
         lo, hi, log = rng
-        spec.append(
-            {
-                "tunable": k,
-                "min": round(lo, 6),
-                "max": round(hi, 6),
-                "scale": "log" if log else "linear",
-                "start": min(max(defaults[k], lo), hi),
-            }
-        )
+        entry = {
+            "tunable": k,
+            "min": round(lo, 6),
+            "max": round(hi, 6),
+            "scale": "log" if log else "linear",
+        }
+        # A start is stated only where the range moves it off the shipped value, so a
+        # knob left at HEAD still takes a --start-overrides value.
+        start = min(max(defaults[k], lo), hi)
+        if start != defaults[k]:
+            entry["start"] = start
+        spec.append(entry)
     for group, keys in seen_group.items():
         if group in open_groups:
             left = sorted(keys - offered_group[group])
