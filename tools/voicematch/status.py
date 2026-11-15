@@ -752,7 +752,11 @@ def _last_step(axes: dict) -> str:
 
 
 def fit_axis(
-    voice, records: dict[str, dict], digest: str, equivalents: set[str] | None = None
+    voice,
+    records: dict[str, dict],
+    digest: str,
+    equivalents: set[str] | None = None,
+    shipped: dict[str, float] | None = None,
 ) -> dict:
     """Whether the voice's patch was last fitted under the current objective.
 
@@ -774,7 +778,7 @@ def fit_axis(
         == boundary.BOUNDARY_INSTRUMENT
         for c in voice.captures
     )
-    return {**fits_mod.axis(units, records, digest, equivalents), "fittable": fittable}
+    return {**fits_mod.axis(units, records, digest, equivalents, shipped), "fittable": fittable}
 
 
 def build(catalogue) -> list[dict]:
@@ -788,6 +792,7 @@ def build(catalogue) -> list[dict]:
     shared_gen = signoff.moved_generation(BANK_VERSIONS, {"shared"})
     drum_gen = signoff.moved_generation(BANK_VERSIONS, {"drum"})
     fit_records = fits_mod.load()
+    shipped = fits_mod.shipped_values(BANK_VERSIONS)
     digest = objective_digest()
     equivalents = equivalence.equivalent_digests(digest)
     rows = []
@@ -827,7 +832,7 @@ def build(catalogue) -> list[dict]:
                 scope=signoff.SCOPE_INSTRUMENT,
             ),
         }
-        axes["fit"] = fit_axis(v, fit_records, digest, equivalents)
+        axes["fit"] = fit_axis(v, fit_records, digest, equivalents, shipped)
         if facts["gate_notes"]:
             axes["gate_notes"] = facts["gate_notes"]
         stage = stage_for(axes)

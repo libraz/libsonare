@@ -26,14 +26,19 @@ from __future__ import annotations
 import argparse
 import datetime
 import json
+import math
 import sys
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))  # tools/, for knobs' _repo
+
 import equivalence
 import objective
+from knobs import parse_overrides
 
 HERE = Path(__file__).resolve().parent
 FITS_PATH = HERE / "fits.json"
+BANK_VERSIONS_PATH = HERE.parents[1] / "tools" / "bank-versions.json"
 
 OUTCOMES = ("adopted", "kept", "blocked")
 #: Only `refit.py adopt` writes `blocked`, since it carries the rows read from the refit's files.
@@ -153,13 +158,40 @@ def record_fit(
     return unit_of(report), entry
 
 
+def shipped_values(path: Path = BANK_VERSIONS_PATH) -> dict[str, float]:
+    """Every value the tree ships, keyed `<unit>.<field>` as an override names it."""
+    units = json.loads(path.read_text())["units"]
+    return {
+        f"{unit}.{field}": value
+        for unit, body in units.items()
+        for field, value in (body.get("values") or {}).items()
+        if isinstance(value, (int, float))
+    }
+
+
+def base_is_shipped(base: str, shipped: dict[str, float]) -> bool:
+    """Whether every base override names a value the tree now ships, so the fit stood on HEAD."""
+    for key, value in parse_overrides(base):
+        held = shipped.get(key)
+        if held is None or not math.isclose(float(value), held, rel_tol=1e-6, abs_tol=1e-9):
+            return False
+    return True
+
+
 def axis(
-    units: list[str], fits: dict[str, dict], digest: str, equivalents: set[str] | None = None
+    units: list[str],
+    fits: dict[str, dict],
+    digest: str,
+    equivalents: set[str] | None = None,
+    shipped: dict[str, float] | None = None,
 ) -> dict:
     """A voice's fit state over its units: the worst of them, `none` if any has no record.
 
-    `under_base` is a fit recorded with base overrides: the constants it stood on are not
-    in the tree, so it is never `current` or `equivalent`; a stale one stays `stale`.
+    `under_base` is a fit recorded with base overrides the tree does not ship: the constants
+    it stood on are not in the tree, so it is never `current` or `equivalent`; a stale one
+    stays `stale`. Base overrides every one of which equals a `shipped` value (`shipped_values`)
+    are the tree's own constants, and such a fit reads as if it had none; with no `shipped`
+    given, any base override reads `under_base`.
     `provisional_off_layer` is a fit against an oracle off the slot's wanted layer, named in
     `oracle`: likewise never `current` or `equivalent`, and it outranks `under_base`.
     `equivalent` is a fit recorded under a digest proven to answer the same question as
@@ -177,13 +209,17 @@ def axis(
         pool = equivalents if equivalents is not None else equivalence.equivalent_digests(digest)
         return e["objective"] in pool
 
+    def off_base(e: dict) -> bool:
+        base = e.get("base_overrides")
+        return bool(base) and (shipped is None or not base_is_shipped(base, shipped))
+
     if any(e is None for e in entries):
         state = NONE
     elif any(e["objective"] != digest and not covered(e) for e in entries):
         state = STALE
     elif any(e.get("provisional_off_layer") for e in entries):
         state = OFF_LAYER
-    elif any(e.get("base_overrides") for e in entries):
+    elif any(off_base(e) for e in entries):
         state = UNDER_BASE
     elif any(e.get("outcome") == BLOCKED for e in entries):
         state = BLOCKED
@@ -209,9 +245,7 @@ def axis(
             {c for e in recorded if e.get("provisional_off_layer") for c in e["provisional_oracle"]}
         )
     if state == UNDER_BASE:
-        out["base_overrides"] = sorted(
-            {e["base_overrides"] for e in recorded if e.get("base_overrides")}
-        )
+        out["base_overrides"] = sorted({e["base_overrides"] for e in recorded if off_base(e)})
     if state == BLOCKED:
         out["blocking"] = [r for e in recorded for r in e.get("blocking") or []]
     if state == EQUIVALENT:

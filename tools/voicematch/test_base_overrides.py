@@ -139,3 +139,41 @@ def test_a_fit_record_carries_the_base_and_reads_under_base():
     assert fits.axis(["brass"], {"brass": plain}, "d", set())["state"] == fits.CURRENT
     # A fit under another objective is stale whatever it stood on.
     assert fits.axis(["brass"], {"brass": based}, "new", set())["state"] == fits.STALE
+
+
+def test_a_base_the_tree_now_ships_reads_current_and_one_it_does_not_stays_under_base():
+    import fits
+
+    entry = {
+        "objective": "o",
+        "date": "2026-11-15",
+        "outcome": "adopted",
+        "capture": "lead_charang",
+        "base_overrides": "lead_charang.filter_model=0,lead_charang.gain=0.2086",
+    }
+    shipped = {"lead_charang.filter_model": 0.0, "lead_charang.gain": 0.2086}
+    landed = fits.axis(["lead_charang"], {"lead_charang": entry}, "o", set(), shipped)
+    assert landed["state"] == fits.CURRENT and "base_overrides" not in landed
+    moved = {**shipped, "lead_charang.gain": 0.25}
+    off = fits.axis(["lead_charang"], {"lead_charang": entry}, "o", set(), moved)
+    assert off["state"] == fits.UNDER_BASE and off["base_overrides"] == [entry["base_overrides"]]
+    # A base key the registry does not carry cannot be shown shipped.
+    unknown = {k: v for k, v in shipped.items() if k != "lead_charang.gain"}
+    assert fits.axis(["lead_charang"], {"lead_charang": entry}, "o", set(), unknown)["state"] == (
+        fits.UNDER_BASE
+    )
+    # Without the registry the reading is as before.
+    assert fits.axis(["lead_charang"], {"lead_charang": entry}, "o", set())["state"] == (
+        fits.UNDER_BASE
+    )
+
+
+def test_the_shipped_values_are_keyed_as_an_override_names_them(tmp_path):
+    import fits
+
+    reg = tmp_path / "bank-versions.json"
+    reg.write_text(
+        '{"units": {"lead_charang": {"values": {"gain": 0.2086, "name": "x"}},'
+        ' "brass_voice": {"values": {"kLipQ": 3.0}}}}'
+    )
+    assert fits.shipped_values(reg) == {"lead_charang.gain": 0.2086, "brass_voice.kLipQ": 3.0}
