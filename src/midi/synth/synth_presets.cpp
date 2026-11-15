@@ -337,7 +337,7 @@ std::array<SynthPreset, kPresetCount> build_presets() noexcept {
     constexpr BellGroup kMutedTrumpetBell{3530.56f, 429.085f,   0.684851f, 0.595097f,
                                           0.90409f, 0.0994201f, 0.606152f};
     constexpr BellGroup kFrenchHornBell{637.0f,    821.625f,  0.73703f, 0.606392f,
-                                        0.414392f, 0.208044f, 0.293441f};
+                                        0.414392f, 0.167792f, 0.293441f};
 
     auto brass = [&](const char* name, bool conical, float lip_tension, float lip_damping,
                      float brightness, float damping, float attack_ms, float release_ms,

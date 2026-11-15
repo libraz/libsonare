@@ -904,12 +904,12 @@ constexpr void configure_physical_programs(ProgramOverrides& o) noexcept {
   o.french_horn.brass.lip_damping = 0.895683f;
   o.french_horn.brass.lip_tension = 0.5f;
   o.french_horn.gain = 2.18181f;
-  o.french_horn.brass.bore_nonlinearity = 0.208044f;
-  o.french_horn.amp_env.attack_ms = 58.7598f;
+  o.french_horn.brass.bore_nonlinearity = 0.167792f;
+  o.french_horn.amp_env.attack_ms = 19.6052f;
   o.french_horn.amp_env.decay_ms = 128.979f;
   o.french_horn.amp_env.release_ms = 67.329f;
   o.french_horn.amp_env.sustain = 0.663119f;
-  o.french_horn.brass.attack_ms = 2.95397f;
+  o.french_horn.brass.attack_ms = 1.87572f;
   o.french_horn.brass.breath_noise = 0.212374f;
   o.french_horn.brass.chiff = 0.0277836f;
   o.french_horn.brass.chiff_ms = 34.3792f;
