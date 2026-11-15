@@ -248,3 +248,51 @@ def test_a_stationary_line_that_is_also_a_partial_of_the_note_is_not_masked():
     on_series, off_series = 16 * f0, 7777.0
     _, _, masked = read_partials(x, SR, 66, stationary_lines_hz=[on_series, off_series])
     assert masked == [off_series]
+
+
+def test_a_still_ladder_reads_the_same_level_wherever_its_partials_fall_in_a_bin():
+    # A fixed 1/k ladder at f0s a fraction of a bin apart: a bare Hann peak scallops by up to
+    # ~1 dB with the offset, a lobe's power does not. The truth is -20 log10(k) per partial.
+    bin_hz = 1.0 / 1.5
+    f0s = [220.0 + bin_hz * frac for frac in (0.0, 0.17, 0.33, 0.5, 0.67, 0.83)]
+    truth = np.array([-20.0 * np.log10(n) for n in range(1, 9)])
+    for f0 in f0s:
+        t = np.arange(int(1.5 * SR)) / SR
+        x = sum(np.sin(2 * np.pi * n * f0 * t) / n for n in range(1, 21))
+        row, _, _ = read_partials(x, SR, 57)
+        got = np.array(row["partials_db"][:8])
+        assert got == pytest.approx(truth, abs=0.2), f0
+
+
+def _ladder_balance(cents_spread=0.0, snr_db=None, power=1, seed=3):
+    """partial_balance_db of a 1/k^power ladder off-bin, each partial detuned off the series."""
+    from profile_summary import partial_balance_db
+
+    rng = np.random.default_rng(seed)
+    t = np.arange(int(1.5 * SR)) / SR
+    f0 = 220.0 + 0.37 / 1.5
+    dev = rng.uniform(-cents_spread, cents_spread, 21)
+    dev[1] = 0.0
+    x = sum(
+        np.sin(2 * np.pi * n * f0 * 2 ** (dev[n] / 1200) * t + rng.uniform(0, 2 * np.pi)) / n**power
+        for n in range(1, 21)
+    )
+    if snr_db is not None:
+        x = x + rng.normal(0.0, np.std(x) * 10 ** (-snr_db / 20), x.size)
+    row, _, _ = read_partials(x, SR, 57)
+    truth = partial_balance_db([-20.0 * power * np.log10(n) for n in range(1, 9)])
+    return partial_balance_db(row["partials_db"]), truth
+
+
+@pytest.mark.parametrize("cents", [5.0, 10.0, 20.0])
+def test_a_still_partial_off_its_series_is_read_at_the_peak_found(cents):
+    # Partials a few cents off the fitted series: a lobe centred on the series misses the
+    # peak by more than its own width and reads the noise beside it, 9 dB dark at 10 cents.
+    got, truth = _ladder_balance(cents_spread=cents, snr_db=60.0)
+    assert got == pytest.approx(truth, abs=0.2)
+
+
+@pytest.mark.parametrize("snr_db", [40.0, 10.0, 0.0])
+def test_a_still_ladder_over_white_noise_keeps_its_balance(snr_db):
+    got, truth = _ladder_balance(snr_db=snr_db, power=2, seed=11)
+    assert got == pytest.approx(truth, abs=0.4)

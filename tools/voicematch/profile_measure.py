@@ -160,9 +160,9 @@ def find_partials(
     were found at the fitted series, how strong each was, and whether there
     were enough of them for B to mean anything.
 
-    Under a pitch motion the fundamental is `held_pitch`'s demodulated mean and each
-    level is `partial_level`'s power over the partial's FM extent, the ruler
-    `metrics_note.analyze_note` reads the fit's ladder with.
+    Under a pitch motion the fundamental is `held_pitch`'s demodulated mean. Every
+    level is `partial_level`'s power over the partial's lobe (its FM extent under a
+    motion), which does not scallop with the partial's offset from its bin.
     """
     return read_partials(seg, sr, note, modal=modal, stationary_lines_hz=stationary_lines_hz)[0]
 
@@ -218,9 +218,10 @@ def read_partials(
             break
         fn, an = _peak_near(freqs, mag, predicted, INHARMONICITY_TOLERANCES[-1])
         if an > 0.0:
-            found.append(
-                (n, fn, an if motion is None else partial_level(freqs, mag, predicted, f0, motion))
-            )
+            # The lobe's power, not the bare peak, which scallops with the bin offset. A still
+            # lobe centres on the peak found; a moving one on the series, its carrier.
+            centre = predicted if motion is not None else fn
+            found.append((n, fn, partial_level(freqs, mag, centre, f0, motion)))
 
     if not found:
         return {}, structure, lines
