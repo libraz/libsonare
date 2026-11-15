@@ -107,6 +107,7 @@
 - The harmonica (GM program 22) speaks sooner and brighter: a 4 ms reed attack and a 36 ms voice attack in place of 12 and 59 ms, its lowpass opens from 5.5 to 10.5 kHz, and its breath pressure is set to 0.67, against the reference.
 - The flute (GM program 73) carries no vibrato of its own, since its reference holds a still pitch; the modulation wheel still adds vibrato.
 - The recorder (GM program 74) no longer wanders slowly in pitch; its reference carries no such motion.
+- The whistle (GM program 78) takes the vibrato its reference holds, 14 cents peak to peak at 4.84 Hz, in place of a 2.4-cent one at 5 Hz.
 
 ### New
 

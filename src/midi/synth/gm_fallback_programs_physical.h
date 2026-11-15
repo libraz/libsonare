@@ -1136,7 +1136,9 @@ constexpr void configure_physical_programs(ProgramOverrides& o) noexcept {
   o.shakuhachi.amp_env.decay_ms = 179.829f;
   o.shakuhachi.flute.velocity_exponent = 0.80f;
   o.shakuhachi.gain = 0.3743f;
-  o.tin_whistle = flute(0.48f, 0.70f, 0.28f, 0.10f, 0.45f, 0.04f, 0.62f, 0.80f);
+  // Vibrato read off the reference: 14 c peak to peak at 4.84 Hz, the same depth on every note.
+  o.tin_whistle = flute(0.48f, 0.70f, 0.28f, 0.10f, 0.45f, 0.234f, 0.62f, 0.80f);
+  o.tin_whistle.flute.vibrato_rate_hz = 4.84f;
   o.tin_whistle.flute.loop_phase_servo = true;
   o.tin_whistle.flute.overblow = 0.25f;
   o.tin_whistle.flute.velocity_exponent = 0.50f;

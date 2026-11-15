@@ -397,7 +397,7 @@ TEST_CASE("flute control hashes", "[.][midi][synth][flute][golden]") {
       {72, 84, 100, 0x0a196d744ed30e6dull}, {73, 72, 100, 0x0a0fa3fd2e2419c4ull},
       {74, 72, 64, 0x6439aa9d0fd98d7eull},  {75, 67, 127, 0x9c057fa59c8506b8ull},
       {76, 72, 100, 0xe5e294eb0dd6a65cull}, {77, 60, 90, 0xc312b1585f7ceb02ull},
-      {78, 79, 110, 0xfb1c2ff634f3ae0bull}, {79, 72, 80, 0xd311853c26e7018cull},
+      {78, 79, 110, 0x1c1a94c0020b5b51ull}, {79, 72, 80, 0xd311853c26e7018cull},
   };
   for (const Row& r : kRows) {
     const NativeSynthPatch& patch = gm_fallback_patch(0, r.program);
