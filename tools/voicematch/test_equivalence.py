@@ -208,7 +208,8 @@ def test_a_recorded_fit_keeps_the_weights_it_ran_under():
         "fit_profile": {"weights": {"harm": 1.0, "lf": 0.0}},
     }
     _unit, entry = fits.record_fit(report, capture="c", timbre="t", outcome="kept", today="x")
-    assert entry["weights"] == {"harm": 1.0}
+    # An explicit zero is recorded: equivalence reads only weights above zero, so it covers the same.
+    assert entry["weights"] == {"harm": 1.0, "lf": 0.0}
 
 
 def test_the_recorded_digest_is_the_one_the_process_loaded(tmp_path):

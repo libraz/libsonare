@@ -686,6 +686,11 @@ def next_action(axes: dict, stage: int, candidates: list[str]) -> str:
         return "; ".join(parts)
     fit = axes.get("fit") or {}
     fit_ok = fit.get("state") in (fits_mod.CURRENT, fits_mod.EQUIVALENT)
+    if stage in (3, 4) and fit.get("fittable") and fit.get("state") == fits_mod.SCORED_WITHOUT:
+        return (
+            f"the last fit was scored without {', '.join(fit['terms'])}: score its point under "
+            f"the full objective against the corpus, then record it: refit.py"
+        )
     if stage in (3, 4) and fit.get("fittable") and fit.get("state") == fits_mod.OFF_LAYER:
         return (
             f"{fit['note']} ({', '.join(fit['oracle'])}): capture the wanted layer, "
@@ -700,7 +705,7 @@ def next_action(axes: dict, stage: int, candidates: list[str]) -> str:
         rows = sorted({f"{r['gate']}:{r['dimension']}" for r in fit["blocking"]})
         return (
             f"the refit under the current objective is blocked: every point of its search "
-            f"breaks a gated row ({', '.join(rows)}) — work on the mechanism behind those rows"
+            f"breaks a gated row or worsens one past its floor ({', '.join(rows)}) — work on the mechanism behind those rows"
         )
     if stage in (3, 4) and fit.get("fittable") and not fit_ok:
         when = "was never recorded" if fit["state"] == fits_mod.NONE else "predates it"
@@ -940,14 +945,16 @@ def render_table(rows: list[dict], *, every: bool, pol: dict, goal: str | None =
         stale = sum(f["state"] == fits_mod.STALE for f in fit_states)
         based = sum(f["state"] == fits_mod.UNDER_BASE for f in fit_states)
         provisional = sum(f["state"] == fits_mod.OFF_LAYER for f in fit_states)
+        partial = sum(f["state"] == fits_mod.SCORED_WITHOUT for f in fit_states)
         blocked = sum(f["state"] == fits_mod.BLOCKED for f in fit_states)
         print(
             f"  fits under the current objective: {current} of {len(fit_states)} fittable "
             f"voice(s); {equivalent} under a proven-equivalent objective, {stale} stale, "
             + (f"{based} under uncommitted base overrides, " if based else "")
             + (f"{provisional} provisional (off-layer oracle), " if provisional else "")
+            + (f"{partial} scored without a weighed term, " if partial else "")
             + (f"{blocked} blocked by gated rows, " if blocked else "")
-            + f"{len(fit_states) - current - equivalent - stale - based - provisional - blocked} "
+            + f"{len(fit_states) - current - equivalent - stale - based - provisional - partial - blocked} "
             f"never recorded"
         )
     census = signoff_census(rows)
