@@ -11,7 +11,7 @@
   },
   "reference_spread": {},
   "_no_tighten": {
-    "balance": "the stack sits on ladder_present's 80 dB presence margin: n60's h6, 80.7 dB under the loudest partial under reader 1 and 79.3 under reader 2, which turns the row's stack from -31.0 to -47.5 dB; n60 is the nine-row median. A bound set on that cliff is not a measurement of the voice, so balance is not tightened until presence is judged against the window's own leakage floor"
+    "balance": "the stack sits on ladder_present's 80 dB presence margin: n60's h6, 80.7 dB under the loudest partial under reader 1 and 79.3 under reader 2, which turns the row's stack from -31.0 to -47.5 dB; n60 is the nine-row median. A bound set on that cliff is not a measurement of the voice, so balance is not tightened until presence is judged by the partial's clearance over its valley bed"
   },
   "bounds": {
     "stretch": {

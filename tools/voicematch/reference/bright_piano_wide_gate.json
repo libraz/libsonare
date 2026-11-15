@@ -11,7 +11,7 @@
   },
   "reference_spread": {},
   "_no_tighten": {
-    "balance": "the stack sits on ladder_present's 80 dB presence margin: n84's h5, 80.7 dB under the loudest partial under reader 1 and 78.8 under reader 2, which turns the row's stack from -36.2 to -46.4 dB. A bound set on that cliff is not a measurement of the voice, so balance is not tightened until presence is judged against the window's own leakage floor"
+    "balance": "the stack sits on ladder_present's 80 dB presence margin: n84's h5, 80.7 dB under the loudest partial under reader 1 and 78.8 under reader 2, which turns the row's stack from -36.2 to -46.4 dB. A bound set on that cliff is not a measurement of the voice, so balance is not tightened until presence is judged by the partial's clearance over its valley bed"
   },
   "_pitch_ruler": "raised on 2026-10-24 when the held pitch moved from the strongest peak to the power centroid of each partial's lines (metrics_partials.line_centroid_pitch), and every reference was re-measured with it: stretch.abs_median 1.74 -> 2.188, stretch.median 1.74 -> 2.188. The old bounds were recorded from a reading that picked one of a partial's detuned lines by the window's beat phase, or placed the windows that the other readings take from f0 on that line.",
   "bounds": {
