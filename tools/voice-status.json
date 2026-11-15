@@ -3952,13 +3952,87 @@
         },
         "instrument": null,
         "fit": {
-          "state": "stale",
-          "date": "2026-10-26",
-          "outcome": "adopted",
+          "state": "blocked",
+          "date": "2026-11-15",
+          "outcome": "blocked",
+          "blocking": [
+            {
+              "gate": "church_organ_flutes",
+              "dimension": "stretch",
+              "statistic": "abs_median",
+              "before": 1.27,
+              "after": 2.42,
+              "bound": 1.575,
+              "floor": 1.02
+            },
+            {
+              "gate": "church_organ_flutes",
+              "dimension": "stretch",
+              "statistic": "median",
+              "before": 1.27,
+              "after": 2.42,
+              "bound": 1.575,
+              "floor": 1.02
+            },
+            {
+              "gate": "church_organ_flutes",
+              "dimension": "stretch",
+              "statistic": "p90",
+              "before": 5.26,
+              "after": 6.74,
+              "bound": 5.769,
+              "floor": 1.02
+            },
+            {
+              "gate": "church_organ_full",
+              "dimension": "balance",
+              "statistic": "abs_median",
+              "before": 3.364,
+              "after": 5.178,
+              "bound": 3.465,
+              "floor": 0.5
+            },
+            {
+              "gate": "church_organ_full",
+              "dimension": "centroid_pct",
+              "statistic": "abs_median",
+              "before": 23.4546,
+              "after": 26.1757,
+              "bound": 25.008,
+              "floor": 1.0
+            },
+            {
+              "gate": "church_organ_full",
+              "dimension": "centroid_pct",
+              "statistic": "median",
+              "before": 23.4546,
+              "after": 26.1757,
+              "bound": 25.008,
+              "floor": 1.0
+            },
+            {
+              "gate": "church_organ_full",
+              "dimension": "stretch",
+              "statistic": "abs_median",
+              "before": 1.645,
+              "after": 1.955,
+              "bound": 1.919,
+              "floor": 1.0
+            },
+            {
+              "gate": "pipe_organ",
+              "dimension": "stretch",
+              "statistic": "p90",
+              "before": 1.945,
+              "after": 4.535,
+              "bound": 3.868,
+              "floor": 3.868
+            }
+          ],
           "fittable": true
         }
       },
-      "next": "refit under the current objective (the last fit predates it): refit.py"
+      "next": "the refit under the current objective is blocked: every point of its search breaks a gated row (church_organ_flutes:stretch, church_organ_full:balance, church_organ_full:centroid_pct, church_organ_full:stretch, pipe_organ:stretch) — work on the mechanism behind those rows"
     },
     {
       "slug": "p019b001-church-organ",
@@ -4244,13 +4318,69 @@
         "music": null,
         "instrument": null,
         "fit": {
-          "state": "stale",
-          "date": "2026-10-26",
-          "outcome": "adopted",
+          "state": "blocked",
+          "date": "2026-11-15",
+          "outcome": "blocked",
+          "blocking": [
+            {
+              "gate": "reed_organ",
+              "dimension": "balance",
+              "statistic": "abs_median",
+              "before": 1.352,
+              "after": 2.524,
+              "bound": 1.69,
+              "floor": 0.5
+            },
+            {
+              "gate": "reed_organ",
+              "dimension": "balance",
+              "statistic": "median",
+              "before": 0.879,
+              "after": 2.413,
+              "bound": 0.912,
+              "floor": 0.5
+            },
+            {
+              "gate": "reed_organ",
+              "dimension": "tnr",
+              "statistic": "abs_median",
+              "before": 4.885,
+              "after": 7.93,
+              "bound": 6.106,
+              "floor": 1.0
+            },
+            {
+              "gate": "reed_organ",
+              "dimension": "tnr",
+              "statistic": "median",
+              "before": 0.39,
+              "after": 7.93,
+              "bound": 1.0,
+              "floor": 1.0
+            },
+            {
+              "gate": "reed_organ",
+              "dimension": "tnr",
+              "statistic": "p90",
+              "before": 13.71,
+              "after": 17.67,
+              "bound": 17.138,
+              "floor": 1.0
+            },
+            {
+              "gate": "reed_organ",
+              "dimension": "vel_range",
+              "statistic": "abs_median",
+              "before": 0.865,
+              "after": 1.39,
+              "bound": 1.081,
+              "floor": 1.0
+            }
+          ],
           "fittable": true
         }
       },
-      "next": "refit under the current objective (the last fit predates it): refit.py"
+      "next": "the refit under the current objective is blocked: every point of its search breaks a gated row (reed_organ:balance, reed_organ:tnr, reed_organ:vel_range) — work on the mechanism behind those rows"
     },
     {
       "slug": "p021-accordion",
@@ -4420,13 +4550,16 @@
         "music": null,
         "instrument": null,
         "fit": {
-          "state": "stale",
-          "date": "2026-10-26",
-          "outcome": "kept",
+          "state": "current",
+          "date": "2026-11-15",
+          "outcome": "adopted",
           "fittable": true
-        }
+        },
+        "gate_notes": [
+          "set on a dirty tree: balance.abs_median, balance.median, balance.p90, tnr.abs_median, tnr.median, tnr.p90, vel_range.p90"
+        ]
       },
-      "next": "refit under the current objective (the last fit predates it): refit.py"
+      "next": "listen to a take and record the verdict in signoff.json"
     },
     {
       "slug": "p023-tango-accordion",
@@ -6146,9 +6279,164 @@
         "music": null,
         "instrument": null,
         "fit": {
-          "state": "stale",
-          "date": "2026-10-26",
-          "outcome": "kept",
+          "state": "blocked",
+          "date": "2026-11-15",
+          "outcome": "blocked",
+          "blocking": [
+            {
+              "gate": "fiddle",
+              "dimension": "centroid_pct",
+              "statistic": "median",
+              "before": 2.5057,
+              "after": 5.1019,
+              "bound": 2.755,
+              "floor": 1.0
+            },
+            {
+              "gate": "fiddle",
+              "dimension": "register",
+              "statistic": "p90",
+              "before": 1.178,
+              "after": 1.818,
+              "bound": 1.422,
+              "floor": 1.0
+            },
+            {
+              "gate": "fiddle",
+              "dimension": "vel_range",
+              "statistic": "abs_median",
+              "before": 0.57,
+              "after": 1.14,
+              "bound": 1.0,
+              "floor": 1.0
+            },
+            {
+              "gate": "violin",
+              "dimension": "attack",
+              "statistic": "abs_median",
+              "before": 75.0,
+              "after": 95.0,
+              "bound": 93.75,
+              "floor": 40.0
+            },
+            {
+              "gate": "violin",
+              "dimension": "attack",
+              "statistic": "median",
+              "before": 0.0,
+              "after": 80.0,
+              "bound": 40.0,
+              "floor": 40.0
+            },
+            {
+              "gate": "violin",
+              "dimension": "balance",
+              "statistic": "abs_median",
+              "before": 1.63,
+              "after": 2.64,
+              "bound": 2.038,
+              "floor": 0.5
+            },
+            {
+              "gate": "violin",
+              "dimension": "balance",
+              "statistic": "median",
+              "before": 0.136,
+              "after": 2.64,
+              "bound": 0.5,
+              "floor": 0.5
+            },
+            {
+              "gate": "violin",
+              "dimension": "balance",
+              "statistic": "p90",
+              "before": 3.7416,
+              "after": 9.7456,
+              "bound": 4.677,
+              "floor": 0.5
+            },
+            {
+              "gate": "violin",
+              "dimension": "body",
+              "statistic": "median",
+              "before": 0.21,
+              "after": 4.14,
+              "bound": 1.0,
+              "floor": 1.0
+            },
+            {
+              "gate": "violin",
+              "dimension": "centroid_pct",
+              "statistic": "median",
+              "before": 4.5134,
+              "after": 8.6319,
+              "bound": 5.642,
+              "floor": 1.0
+            },
+            {
+              "gate": "violin",
+              "dimension": "centroid_pct",
+              "statistic": "p90",
+              "before": 24.7406,
+              "after": 31.4265,
+              "bound": 30.926,
+              "floor": 1.0
+            },
+            {
+              "gate": "violin_slow",
+              "dimension": "balance",
+              "statistic": "abs_median",
+              "before": 2.646,
+              "after": 5.192,
+              "bound": 3.307,
+              "floor": 0.5
+            },
+            {
+              "gate": "violin_slow",
+              "dimension": "balance",
+              "statistic": "median",
+              "before": 1.038,
+              "after": 5.192,
+              "bound": 1.297,
+              "floor": 0.5
+            },
+            {
+              "gate": "violin_slow",
+              "dimension": "balance",
+              "statistic": "p90",
+              "before": 3.594,
+              "after": 6.1372,
+              "bound": 4.493,
+              "floor": 0.5
+            },
+            {
+              "gate": "violin_slow",
+              "dimension": "centroid_pct",
+              "statistic": "abs_median",
+              "before": 30.8224,
+              "after": 44.3827,
+              "bound": 38.528,
+              "floor": 1.0
+            },
+            {
+              "gate": "violin_slow",
+              "dimension": "centroid_pct",
+              "statistic": "median",
+              "before": 30.8224,
+              "after": 44.3827,
+              "bound": 38.528,
+              "floor": 1.0
+            },
+            {
+              "gate": "violin_slow",
+              "dimension": "stretch",
+              "statistic": "p90",
+              "before": 3.426,
+              "after": 4.414,
+              "bound": 4.283,
+              "floor": 1.655
+            }
+          ],
           "fittable": true
         },
         "gate_notes": [
@@ -6209,13 +6497,60 @@
         "music": null,
         "instrument": null,
         "fit": {
-          "state": "stale",
-          "date": "2026-10-26",
-          "outcome": "adopted",
+          "state": "blocked",
+          "date": "2026-11-15",
+          "outcome": "blocked",
+          "blocking": [
+            {
+              "gate": "violin_slow",
+              "dimension": "attack",
+              "statistic": "p90",
+              "before": 44.9,
+              "after": 57.84,
+              "bound": 56.125,
+              "floor": 40.0
+            },
+            {
+              "gate": "violin_slow",
+              "dimension": "balance",
+              "statistic": "median",
+              "before": 1.038,
+              "after": 2.802,
+              "bound": 1.297,
+              "floor": 0.5
+            },
+            {
+              "gate": "violin_slow",
+              "dimension": "balance",
+              "statistic": "p90",
+              "before": 3.594,
+              "after": 7.9064,
+              "bound": 4.493,
+              "floor": 0.5
+            },
+            {
+              "gate": "violin_slow",
+              "dimension": "centroid_pct",
+              "statistic": "abs_median",
+              "before": 30.8224,
+              "after": 43.5752,
+              "bound": 38.528,
+              "floor": 1.0
+            },
+            {
+              "gate": "violin_slow",
+              "dimension": "centroid_pct",
+              "statistic": "median",
+              "before": 30.8224,
+              "after": 43.5752,
+              "bound": 38.528,
+              "floor": 1.0
+            }
+          ],
           "fittable": true
         }
       },
-      "next": "refit under the current objective (the last fit predates it): refit.py"
+      "next": "the refit under the current objective is blocked: every point of its search breaks a gated row (violin_slow:attack, violin_slow:balance, violin_slow:centroid_pct) — work on the mechanism behind those rows"
     },
     {
       "slug": "p040b008-violin",
@@ -6267,13 +6602,60 @@
         "music": null,
         "instrument": null,
         "fit": {
-          "state": "stale",
-          "date": "2026-10-26",
-          "outcome": "adopted",
+          "state": "blocked",
+          "date": "2026-11-15",
+          "outcome": "blocked",
+          "blocking": [
+            {
+              "gate": "violin_slow",
+              "dimension": "attack",
+              "statistic": "p90",
+              "before": 44.9,
+              "after": 57.84,
+              "bound": 56.125,
+              "floor": 40.0
+            },
+            {
+              "gate": "violin_slow",
+              "dimension": "balance",
+              "statistic": "median",
+              "before": 1.038,
+              "after": 2.802,
+              "bound": 1.297,
+              "floor": 0.5
+            },
+            {
+              "gate": "violin_slow",
+              "dimension": "balance",
+              "statistic": "p90",
+              "before": 3.594,
+              "after": 7.9064,
+              "bound": 4.493,
+              "floor": 0.5
+            },
+            {
+              "gate": "violin_slow",
+              "dimension": "centroid_pct",
+              "statistic": "abs_median",
+              "before": 30.8224,
+              "after": 43.5752,
+              "bound": 38.528,
+              "floor": 1.0
+            },
+            {
+              "gate": "violin_slow",
+              "dimension": "centroid_pct",
+              "statistic": "median",
+              "before": 30.8224,
+              "after": 43.5752,
+              "bound": 38.528,
+              "floor": 1.0
+            }
+          ],
           "fittable": true
         }
       },
-      "next": "refit under the current objective (the last fit predates it): refit.py"
+      "next": "the refit under the current objective is blocked: every point of its search breaks a gated row (violin_slow:attack, violin_slow:balance, violin_slow:centroid_pct) — work on the mechanism behind those rows"
     },
     {
       "slug": "p041-viola",
@@ -6401,9 +6783,119 @@
         "music": null,
         "instrument": null,
         "fit": {
-          "state": "stale",
-          "date": "2026-10-26",
-          "outcome": "adopted",
+          "state": "blocked",
+          "date": "2026-11-15",
+          "outcome": "blocked",
+          "blocking": [
+            {
+              "gate": "cello",
+              "dimension": "attack",
+              "statistic": "median",
+              "before": 22.5,
+              "after": 110.0,
+              "bound": 40.0,
+              "floor": 40.0
+            },
+            {
+              "gate": "cello",
+              "dimension": "attack",
+              "statistic": "p90",
+              "before": 220.5,
+              "after": 395.5,
+              "bound": 256.875,
+              "floor": 40.0
+            },
+            {
+              "gate": "cello",
+              "dimension": "balance",
+              "statistic": "abs_median",
+              "before": 2.003,
+              "after": 2.845,
+              "bound": 2.504,
+              "floor": 0.5
+            },
+            {
+              "gate": "cello",
+              "dimension": "body",
+              "statistic": "abs_median",
+              "before": 4.21,
+              "after": 6.21,
+              "bound": 5.263,
+              "floor": 1.0
+            },
+            {
+              "gate": "cello",
+              "dimension": "body",
+              "statistic": "median",
+              "before": 0.56,
+              "after": 1.89,
+              "bound": 1.0,
+              "floor": 1.0
+            },
+            {
+              "gate": "cello",
+              "dimension": "body",
+              "statistic": "p90",
+              "before": 7.916,
+              "after": 16.182,
+              "bound": 9.895,
+              "floor": 1.0
+            },
+            {
+              "gate": "cello",
+              "dimension": "centroid_pct",
+              "statistic": "p90",
+              "before": 43.9175,
+              "after": 54.3811,
+              "bound": 45.385,
+              "floor": 1.0
+            },
+            {
+              "gate": "cello",
+              "dimension": "damper",
+              "statistic": "median",
+              "before": 25.0,
+              "after": 35.0,
+              "bound": 31.25,
+              "floor": 5.0
+            },
+            {
+              "gate": "cello",
+              "dimension": "damper",
+              "statistic": "p90",
+              "before": 91.5,
+              "after": 182.0,
+              "bound": 112.5,
+              "floor": 5.0
+            },
+            {
+              "gate": "cello",
+              "dimension": "register",
+              "statistic": "abs_median",
+              "before": 0.695,
+              "after": 1.0575,
+              "bound": 1.0,
+              "floor": 1.0
+            },
+            {
+              "gate": "cello",
+              "dimension": "tnr",
+              "statistic": "abs_median",
+              "before": 3.87,
+              "after": 6.53,
+              "bound": 4.837,
+              "floor": 1.0
+            },
+            {
+              "gate": "cello",
+              "dimension": "vel_range",
+              "statistic": "p90",
+              "before": 1.563,
+              "after": 2.958,
+              "bound": 1.951,
+              "floor": 1.0
+            }
+          ],
           "fittable": true
         },
         "gate_notes": [
@@ -6466,9 +6958,20 @@
         "music": null,
         "instrument": null,
         "fit": {
-          "state": "stale",
-          "date": "2026-10-26",
-          "outcome": "adopted",
+          "state": "blocked",
+          "date": "2026-11-15",
+          "outcome": "blocked",
+          "blocking": [
+            {
+              "gate": "contrabass",
+              "dimension": "attack",
+              "statistic": "p90",
+              "before": 95.0,
+              "after": 152.0,
+              "bound": 118.75,
+              "floor": 40.0
+            }
+          ],
           "fittable": true
         },
         "gate_notes": [
@@ -6798,13 +7301,96 @@
         "music": null,
         "instrument": null,
         "fit": {
-          "state": "stale",
-          "date": "2026-10-26",
-          "outcome": "kept",
+          "state": "blocked",
+          "date": "2026-11-15",
+          "outcome": "blocked",
+          "blocking": [
+            {
+              "gate": "string_ensemble_1",
+              "dimension": "balance",
+              "statistic": "p90",
+              "before": 10.5668,
+              "after": 12.8794,
+              "bound": 11.035,
+              "floor": 0.5
+            },
+            {
+              "gate": "string_ensemble_1",
+              "dimension": "body",
+              "statistic": "median",
+              "before": 0.8,
+              "after": 1.8,
+              "bound": 1.0,
+              "floor": 1.0
+            },
+            {
+              "gate": "string_ensemble_1",
+              "dimension": "tnr",
+              "statistic": "abs_median",
+              "before": 2.16,
+              "after": 2.87,
+              "bound": 2.7,
+              "floor": 1.0
+            },
+            {
+              "gate": "string_ensemble_1",
+              "dimension": "vel_range",
+              "statistic": "p90",
+              "before": 0.932,
+              "after": 1.37,
+              "bound": 1.165,
+              "floor": 1.0
+            },
+            {
+              "gate": "string_ensemble_2",
+              "dimension": "balance",
+              "statistic": "median",
+              "before": 1.44,
+              "after": 1.912,
+              "bound": 1.8,
+              "floor": 0.5
+            },
+            {
+              "gate": "string_ensemble_2",
+              "dimension": "balance",
+              "statistic": "p90",
+              "before": 5.4586,
+              "after": 8.8324,
+              "bound": 6.79,
+              "floor": 0.5
+            },
+            {
+              "gate": "string_ensemble_2",
+              "dimension": "body",
+              "statistic": "median",
+              "before": 0.0,
+              "after": 3.43,
+              "bound": 1.0,
+              "floor": 1.0
+            },
+            {
+              "gate": "string_ensemble_2",
+              "dimension": "body",
+              "statistic": "p90",
+              "before": 7.956,
+              "after": 10.74,
+              "bound": 9.945,
+              "floor": 1.0
+            },
+            {
+              "gate": "string_ensemble_2",
+              "dimension": "vel_range",
+              "statistic": "p90",
+              "before": 0.987,
+              "after": 1.384,
+              "bound": 1.151,
+              "floor": 1.0
+            }
+          ],
           "fittable": true
         }
       },
-      "next": "refit under the current objective (the last fit predates it): refit.py"
+      "next": "the refit under the current objective is blocked: every point of its search breaks a gated row (string_ensemble_1:balance, string_ensemble_1:body, string_ensemble_1:tnr, string_ensemble_1:vel_range, string_ensemble_2:balance, string_ensemble_2:body, string_ensemble_2:vel_range) — work on the mechanism behind those rows"
     },
     {
       "slug": "p049-string-ensemble-2",
@@ -6862,13 +7448,105 @@
         "music": null,
         "instrument": null,
         "fit": {
-          "state": "stale",
-          "date": "2026-10-26",
-          "outcome": "kept",
+          "state": "blocked",
+          "date": "2026-11-15",
+          "outcome": "blocked",
+          "blocking": [
+            {
+              "gate": "string_ensemble_2",
+              "dimension": "attack",
+              "statistic": "abs_median",
+              "before": 145.0,
+              "after": 377.5,
+              "bound": 181.25,
+              "floor": 40.0
+            },
+            {
+              "gate": "string_ensemble_2",
+              "dimension": "attack",
+              "statistic": "median",
+              "before": 50.0,
+              "after": 300.0,
+              "bound": 62.5,
+              "floor": 40.0
+            },
+            {
+              "gate": "string_ensemble_2",
+              "dimension": "balance",
+              "statistic": "median",
+              "before": 1.44,
+              "after": 2.097,
+              "bound": 1.8,
+              "floor": 0.5
+            },
+            {
+              "gate": "string_ensemble_2",
+              "dimension": "body",
+              "statistic": "abs_median",
+              "before": 4.97,
+              "after": 6.67,
+              "bound": 6.213,
+              "floor": 1.0
+            },
+            {
+              "gate": "string_ensemble_2",
+              "dimension": "body",
+              "statistic": "median",
+              "before": 0.0,
+              "after": 6.05,
+              "bound": 1.0,
+              "floor": 1.0
+            },
+            {
+              "gate": "string_ensemble_2",
+              "dimension": "body",
+              "statistic": "p90",
+              "before": 7.956,
+              "after": 11.604,
+              "bound": 9.945,
+              "floor": 1.0
+            },
+            {
+              "gate": "string_ensemble_2",
+              "dimension": "tnr",
+              "statistic": "abs_median",
+              "before": 2.515,
+              "after": 4.245,
+              "bound": 3.144,
+              "floor": 1.0
+            },
+            {
+              "gate": "string_ensemble_2",
+              "dimension": "tnr",
+              "statistic": "median",
+              "before": 0.095,
+              "after": 4.075,
+              "bound": 1.0,
+              "floor": 1.0
+            },
+            {
+              "gate": "string_ensemble_2",
+              "dimension": "tnr",
+              "statistic": "p90",
+              "before": 7.04,
+              "after": 9.345,
+              "bound": 8.141,
+              "floor": 1.0
+            },
+            {
+              "gate": "string_ensemble_2",
+              "dimension": "vel_range",
+              "statistic": "p90",
+              "before": 0.987,
+              "after": 1.357,
+              "bound": 1.151,
+              "floor": 1.0
+            }
+          ],
           "fittable": true
         }
       },
-      "next": "refit under the current objective (the last fit predates it): refit.py"
+      "next": "the refit under the current objective is blocked: every point of its search breaks a gated row (string_ensemble_2:attack, string_ensemble_2:balance, string_ensemble_2:body, string_ensemble_2:tnr, string_ensemble_2:vel_range) — work on the mechanism behind those rows"
     },
     {
       "slug": "p050-synth-strings-1",
@@ -7131,9 +7809,29 @@
         "music": null,
         "instrument": null,
         "fit": {
-          "state": "stale",
-          "date": "2026-10-26",
-          "outcome": "kept",
+          "state": "blocked",
+          "date": "2026-11-15",
+          "outcome": "blocked",
+          "blocking": [
+            {
+              "gate": "voice_oohs",
+              "dimension": "attack",
+              "statistic": "abs_median",
+              "before": 40.0,
+              "after": 60.0,
+              "bound": 50.0,
+              "floor": 40.0
+            },
+            {
+              "gate": "voice_oohs",
+              "dimension": "attack",
+              "statistic": "median",
+              "before": 40.0,
+              "after": 60.0,
+              "bound": 50.0,
+              "floor": 40.0
+            }
+          ],
           "fittable": true
         },
         "gate_notes": [
@@ -7402,9 +8100,92 @@
         "music": null,
         "instrument": null,
         "fit": {
-          "state": "stale",
-          "date": "2026-10-26",
-          "outcome": "adopted",
+          "state": "blocked",
+          "date": "2026-11-15",
+          "outcome": "blocked",
+          "blocking": [
+            {
+              "gate": "trombone",
+              "dimension": "balance",
+              "statistic": "abs_median",
+              "before": 1.232,
+              "after": 3.188,
+              "bound": 1.54,
+              "floor": 0.5
+            },
+            {
+              "gate": "trombone",
+              "dimension": "balance",
+              "statistic": "median",
+              "before": 0.13,
+              "after": 1.774,
+              "bound": 0.5,
+              "floor": 0.5
+            },
+            {
+              "gate": "trombone",
+              "dimension": "body",
+              "statistic": "abs_median",
+              "before": 3.5,
+              "after": 12.96,
+              "bound": 4.375,
+              "floor": 1.0
+            },
+            {
+              "gate": "trombone",
+              "dimension": "body",
+              "statistic": "median",
+              "before": 1.73,
+              "after": 12.96,
+              "bound": 2.163,
+              "floor": 1.0
+            },
+            {
+              "gate": "trombone",
+              "dimension": "body",
+              "statistic": "p90",
+              "before": 6.25,
+              "after": 20.67,
+              "bound": 7.812,
+              "floor": 1.0
+            },
+            {
+              "gate": "trombone",
+              "dimension": "centroid_pct",
+              "statistic": "median",
+              "before": 1.454,
+              "after": 2.092,
+              "bound": 1.818,
+              "floor": 1.0
+            },
+            {
+              "gate": "trombone",
+              "dimension": "onset",
+              "statistic": "abs_median",
+              "before": 1.52,
+              "after": 2.39,
+              "bound": 1.9,
+              "floor": 1.0
+            },
+            {
+              "gate": "trombone",
+              "dimension": "onset",
+              "statistic": "median",
+              "before": 1.52,
+              "after": 2.39,
+              "bound": 1.9,
+              "floor": 1.0
+            },
+            {
+              "gate": "trombone",
+              "dimension": "vel_range",
+              "statistic": "abs_median",
+              "before": 1.12,
+              "after": 1.5,
+              "bound": 1.4,
+              "floor": 1.0
+            }
+          ],
           "fittable": true
         },
         "gate_notes": [
@@ -7607,13 +8388,16 @@
         "music": null,
         "instrument": null,
         "fit": {
-          "state": "stale",
-          "date": "2026-10-26",
-          "outcome": "kept",
+          "state": "current",
+          "date": "2026-11-15",
+          "outcome": "adopted",
           "fittable": true
-        }
+        },
+        "gate_notes": [
+          "set on a dirty tree: balance.p90, body.abs_median, body.median, onset.p90, onset_settle.abs_median, register.abs_median, stretch.p90, tnr.abs_median, tnr.median, tnr.p90"
+        ]
       },
-      "next": "refit under the current objective (the last fit predates it): refit.py"
+      "next": "listen to a take and record the verdict in signoff.json"
     },
     {
       "slug": "p061-brass-section",
@@ -8360,8 +9144,8 @@
         "music": null,
         "instrument": null,
         "fit": {
-          "state": "stale",
-          "date": "2026-10-26",
+          "state": "current",
+          "date": "2026-11-15",
           "outcome": "kept",
           "fittable": true
         },
@@ -8369,7 +9153,7 @@
           "balance.median: re-recorded for a reader change, model residual 0.546"
         ]
       },
-      "next": "refit under the current objective (the last fit predates it): refit.py"
+      "next": "listen to a take and record the verdict in signoff.json"
     },
     {
       "slug": "p073-flute",
@@ -8423,13 +9207,142 @@
         "music": null,
         "instrument": null,
         "fit": {
-          "state": "stale",
-          "date": "2026-10-26",
-          "outcome": "adopted",
+          "state": "blocked",
+          "date": "2026-11-15",
+          "outcome": "blocked",
+          "blocking": [
+            {
+              "gate": "concert_flute",
+              "dimension": "attack",
+              "statistic": "p90",
+              "before": 30.0,
+              "after": 68.0,
+              "bound": 40.0,
+              "floor": 40.0
+            },
+            {
+              "gate": "concert_flute",
+              "dimension": "body",
+              "statistic": "abs_median",
+              "before": 4.89,
+              "after": 6.24,
+              "bound": 5.975,
+              "floor": 1.0
+            },
+            {
+              "gate": "concert_flute",
+              "dimension": "centroid_pct",
+              "statistic": "abs_median",
+              "before": 4.3751,
+              "after": 13.6211,
+              "bound": 5.469,
+              "floor": 1.0
+            },
+            {
+              "gate": "concert_flute",
+              "dimension": "centroid_pct",
+              "statistic": "median",
+              "before": 4.1033,
+              "after": 13.6211,
+              "bound": 5.129,
+              "floor": 1.0
+            },
+            {
+              "gate": "concert_flute",
+              "dimension": "centroid_pct",
+              "statistic": "p90",
+              "before": 9.6863,
+              "after": 21.5997,
+              "bound": 12.108,
+              "floor": 1.0
+            },
+            {
+              "gate": "concert_flute",
+              "dimension": "damper",
+              "statistic": "abs_median",
+              "before": 10.0,
+              "after": 20.0,
+              "bound": 12.5,
+              "floor": 5.0
+            },
+            {
+              "gate": "concert_flute",
+              "dimension": "damper",
+              "statistic": "median",
+              "before": 5.0,
+              "after": 20.0,
+              "bound": 6.25,
+              "floor": 5.0
+            },
+            {
+              "gate": "concert_flute",
+              "dimension": "damper",
+              "statistic": "p90",
+              "before": 25.0,
+              "after": 40.0,
+              "bound": 31.25,
+              "floor": 5.0
+            },
+            {
+              "gate": "concert_flute",
+              "dimension": "register",
+              "statistic": "abs_median",
+              "before": 0.65,
+              "after": 1.16,
+              "bound": 1.0,
+              "floor": 1.0
+            },
+            {
+              "gate": "concert_flute",
+              "dimension": "stretch",
+              "statistic": "abs_median",
+              "before": 1.14,
+              "after": 39.06,
+              "bound": 1.425,
+              "floor": 1.0
+            },
+            {
+              "gate": "concert_flute",
+              "dimension": "stretch",
+              "statistic": "median",
+              "before": 0.89,
+              "after": 39.06,
+              "bound": 1.0,
+              "floor": 1.0
+            },
+            {
+              "gate": "concert_flute",
+              "dimension": "stretch",
+              "statistic": "p90",
+              "before": 1.622,
+              "after": 40.952,
+              "bound": 2.027,
+              "floor": 1.0
+            },
+            {
+              "gate": "concert_flute",
+              "dimension": "tnr",
+              "statistic": "abs_median",
+              "before": 8.49,
+              "after": 15.37,
+              "bound": 10.613,
+              "floor": 1.0
+            },
+            {
+              "gate": "concert_flute",
+              "dimension": "tnr",
+              "statistic": "median",
+              "before": 8.49,
+              "after": 15.37,
+              "bound": 10.613,
+              "floor": 1.0
+            }
+          ],
           "fittable": true
         },
         "gate_notes": [
-          "body.p90: re-recorded over a kept bound, last held 2026-11-13T11:49:49+00:00"
+          "body.p90: re-recorded over a kept bound, last held 2026-11-13T11:49:49+00:00",
+          "set on a dirty tree: balance.abs_median, balance.median, balance.p90, centroid_pct.p90, stretch.abs_median, tnr.abs_median, tnr.median, tnr.p90"
         ]
       },
       "next": "the gate is red: body.p90: re-recorded over a kept bound, last held 2026-11-13T11:49:49+00:00"
@@ -8490,7 +9403,10 @@
           "date": "2026-11-14",
           "outcome": "kept",
           "fittable": true
-        }
+        },
+        "gate_notes": [
+          "set on a dirty tree: balance.abs_median, balance.median, balance.p90, tnr.abs_median, tnr.p90, vel_range.abs_median"
+        ]
       },
       "next": "listen to a take and record the verdict in signoff.json"
     },
@@ -8546,13 +9462,13 @@
         "music": null,
         "instrument": null,
         "fit": {
-          "state": "stale",
-          "date": "2026-10-26",
-          "outcome": "adopted",
+          "state": "current",
+          "date": "2026-11-15",
+          "outcome": "kept",
           "fittable": true
         }
       },
-      "next": "refit under the current objective (the last fit predates it): refit.py"
+      "next": "listen to a take and record the verdict in signoff.json"
     },
     {
       "slug": "p076-blown-bottle",
@@ -8606,13 +9522,13 @@
         "music": null,
         "instrument": null,
         "fit": {
-          "state": "stale",
-          "date": "2026-10-26",
+          "state": "current",
+          "date": "2026-11-15",
           "outcome": "kept",
           "fittable": true
         }
       },
-      "next": "refit under the current objective (the last fit predates it): refit.py"
+      "next": "listen to a take and record the verdict in signoff.json"
     },
     {
       "slug": "p077-shakuhachi",
@@ -8666,9 +9582,56 @@
         "music": null,
         "instrument": null,
         "fit": {
-          "state": "stale",
-          "date": "2026-10-26",
-          "outcome": "adopted",
+          "state": "blocked",
+          "date": "2026-11-15",
+          "outcome": "blocked",
+          "blocking": [
+            {
+              "gate": "shakuhachi",
+              "dimension": "balance",
+              "statistic": "abs_median",
+              "before": 1.532,
+              "after": 2.834,
+              "bound": 1.77,
+              "floor": 0.5
+            },
+            {
+              "gate": "shakuhachi",
+              "dimension": "balance",
+              "statistic": "median",
+              "before": 0.9,
+              "after": 1.316,
+              "bound": 0.993,
+              "floor": 0.5
+            },
+            {
+              "gate": "shakuhachi",
+              "dimension": "balance",
+              "statistic": "p90",
+              "before": 3.2732,
+              "after": 4.2628,
+              "bound": 4.092,
+              "floor": 0.5
+            },
+            {
+              "gate": "shakuhachi",
+              "dimension": "centroid_pct",
+              "statistic": "abs_median",
+              "before": 1.1911,
+              "after": 2.4118,
+              "bound": 1.392,
+              "floor": 1.0
+            },
+            {
+              "gate": "shakuhachi",
+              "dimension": "centroid_pct",
+              "statistic": "median",
+              "before": 0.0368,
+              "after": 1.5055,
+              "bound": 1.0,
+              "floor": 1.0
+            }
+          ],
           "fittable": true
         },
         "gate_notes": [
@@ -8735,7 +9698,10 @@
           "date": "2026-10-26",
           "outcome": "kept",
           "fittable": true
-        }
+        },
+        "gate_notes": [
+          "set on a dirty tree: balance.abs_median, balance.median, balance.p90, onset.abs_median, onset.median, register.p90, stretch.abs_median, stretch.median, stretch.p90"
+        ]
       },
       "next": "refit under the current objective (the last fit predates it): refit.py"
     },
@@ -8791,17 +9757,85 @@
         "music": null,
         "instrument": null,
         "fit": {
-          "state": "stale",
-          "date": "2026-10-26",
-          "outcome": "adopted",
+          "state": "blocked",
+          "date": "2026-11-15",
+          "outcome": "blocked",
+          "blocking": [
+            {
+              "gate": "ocarina",
+              "dimension": "centroid_pct",
+              "statistic": "abs_median",
+              "before": 3.2406,
+              "after": 8.6733,
+              "bound": 4.027,
+              "floor": 1.0
+            },
+            {
+              "gate": "ocarina",
+              "dimension": "centroid_pct",
+              "statistic": "median",
+              "before": 3.2406,
+              "after": 8.6733,
+              "bound": 4.027,
+              "floor": 1.0
+            },
+            {
+              "gate": "ocarina",
+              "dimension": "centroid_pct",
+              "statistic": "p90",
+              "before": 13.2044,
+              "after": 24.0121,
+              "bound": 16.117,
+              "floor": 1.0
+            },
+            {
+              "gate": "ocarina",
+              "dimension": "damper",
+              "statistic": "abs_median",
+              "before": 5.0,
+              "after": 10.0,
+              "bound": 6.25,
+              "floor": 5.0
+            },
+            {
+              "gate": "ocarina",
+              "dimension": "damper",
+              "statistic": "median",
+              "before": 5.0,
+              "after": 10.0,
+              "bound": 6.25,
+              "floor": 5.0
+            },
+            {
+              "gate": "ocarina",
+              "dimension": "damper",
+              "statistic": "p90",
+              "before": 10.0,
+              "after": 15.0,
+              "bound": 12.5,
+              "floor": 5.0
+            },
+            {
+              "gate": "ocarina",
+              "dimension": "register",
+              "statistic": "median",
+              "before": 0.24,
+              "after": 1.0,
+              "bound": 1.0,
+              "floor": 1.0
+            }
+          ],
           "fittable": true
         },
         "gate_notes": [
+          "balance.median: re-recorded over a kept bound, last held 2026-11-15T01:50:42+00:00",
+          "balance.abs_median: re-recorded over a kept bound, last held 2026-11-15T01:50:42+00:00",
           "body.median: re-recorded over a kept bound, last held 2026-11-13T11:49:49+00:00",
-          "body.abs_median: re-recorded over a kept bound, last held 2026-11-13T11:49:49+00:00"
+          "body.abs_median: re-recorded over a kept bound, last held 2026-11-13T11:49:49+00:00",
+          "set on a dirty tree: tnr.p90"
         ]
       },
-      "next": "the gate is red: body.median: re-recorded over a kept bound, last held 2026-11-13T11:49:49+00:00; body.abs_median: re-recorded over a kept bound, last held 2026-11-13T11:49:49+00:00"
+      "next": "the gate is red: balance.median: re-recorded over a kept bound, last held 2026-11-15T01:50:42+00:00; balance.abs_median: re-recorded over a kept bound, last held 2026-11-15T01:50:42+00:00; body.median: re-recorded over a kept bound, last held 2026-11-13T11:49:49+00:00; body.abs_median: re-recorded over a kept bound, last held 2026-11-13T11:49:49+00:00"
     },
     {
       "slug": "p080-lead-1-square",
@@ -10667,9 +11701,110 @@
         "music": null,
         "instrument": null,
         "fit": {
-          "state": "stale",
-          "date": "2026-10-26",
-          "outcome": "kept",
+          "state": "blocked",
+          "date": "2026-11-15",
+          "outcome": "blocked",
+          "blocking": [
+            {
+              "gate": "fiddle",
+              "dimension": "balance",
+              "statistic": "abs_median",
+              "before": 2.628,
+              "after": 3.878,
+              "bound": 3.285,
+              "floor": 0.5
+            },
+            {
+              "gate": "fiddle",
+              "dimension": "balance",
+              "statistic": "median",
+              "before": 1.308,
+              "after": 3.878,
+              "bound": 1.635,
+              "floor": 0.5
+            },
+            {
+              "gate": "fiddle",
+              "dimension": "centroid_pct",
+              "statistic": "median",
+              "before": 2.5057,
+              "after": 21.5047,
+              "bound": 2.755,
+              "floor": 1.0
+            },
+            {
+              "gate": "fiddle",
+              "dimension": "centroid_pct",
+              "statistic": "p90",
+              "before": 26.6729,
+              "after": 34.9451,
+              "bound": 29.854,
+              "floor": 1.0
+            },
+            {
+              "gate": "fiddle",
+              "dimension": "register",
+              "statistic": "p90",
+              "before": 1.178,
+              "after": 1.9,
+              "bound": 1.422,
+              "floor": 1.0
+            },
+            {
+              "gate": "fiddle",
+              "dimension": "stretch",
+              "statistic": "abs_median",
+              "before": 0.975,
+              "after": 1.675,
+              "bound": 1.181,
+              "floor": 1.0
+            },
+            {
+              "gate": "fiddle",
+              "dimension": "stretch",
+              "statistic": "median",
+              "before": 0.885,
+              "after": 1.515,
+              "bound": 1.0,
+              "floor": 1.0
+            },
+            {
+              "gate": "fiddle",
+              "dimension": "tnr",
+              "statistic": "p90",
+              "before": 8.8,
+              "after": 14.804,
+              "bound": 8.975,
+              "floor": 1.0
+            },
+            {
+              "gate": "fiddle",
+              "dimension": "vel_range",
+              "statistic": "abs_median",
+              "before": 0.57,
+              "after": 1.53,
+              "bound": 1.0,
+              "floor": 1.0
+            },
+            {
+              "gate": "fiddle",
+              "dimension": "vel_range",
+              "statistic": "median",
+              "before": 0.29,
+              "after": 1.14,
+              "bound": 1.0,
+              "floor": 1.0
+            },
+            {
+              "gate": "fiddle",
+              "dimension": "vel_range",
+              "statistic": "p90",
+              "before": 2.354,
+              "after": 3.442,
+              "bound": 2.942,
+              "floor": 1.0
+            }
+          ],
           "fittable": true
         },
         "gate_notes": [
