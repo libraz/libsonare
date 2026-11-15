@@ -1366,8 +1366,30 @@ SONARE_TUNED_CONSTEXPR DrumTables build_drum_note_table() noexcept {
   t[8].percussion.shell_mix = 0.858582f;
   t[8].percussion.shell_t60_s[0] = 0.224f;
   t[8].percussion.strike_r = 0.353894f;
-  t[8].percussion.tone_gain = 1.42414f;
-  t[8].gain = 2.057f;
+  t[8].percussion.tone_gain = 4.1037f;
+  t[8].gain = 2.0102f;
+  t[8].percussion.mode_decay_exp = 0.2f;
+  t[8].percussion.num_modes = 12;
+  t[8].percussion.mode_alpha[0] = 5.3437f;
+  t[8].percussion.mode_alpha[1] = 1.0655f;
+  t[8].percussion.mode_ratios[2] = 16.315f;
+  t[8].percussion.mode_alpha[2] = 1.2651f;
+  t[8].percussion.mode_ratios[4] = 17.379f;
+  t[8].percussion.mode_alpha[4] = 3.866f;
+  t[8].percussion.mode_ratios[5] = 22.7f;
+  t[8].percussion.mode_alpha[5] = 0.48342f;
+  t[8].percussion.mode_ratios[6] = 25.538f;
+  t[8].percussion.mode_alpha[6] = 8.4071f;
+  t[8].percussion.mode_ratios[7] = 36.888f;
+  t[8].percussion.mode_alpha[7] = 5.2442f;
+  t[8].percussion.mode_ratios[9] = 46.464f;
+  t[8].percussion.mode_alpha[9] = 15.999f;
+  t[8].percussion.mode_ratios[10] = 51.076f;
+  t[8].percussion.mode_alpha[10] = 4.7294f;
+  t[8].percussion.mode_ratios[11] = 63.135f;
+  t[8].percussion.mode_alpha[11] = 4.2733f;
+  t[8].percussion.mode_ratios[3] = 0.0f;
+  t[8].percussion.mode_ratios[8] = 0.0f;
   // Room Kick 2: from key 36 with the Room shell; 83.2 Hz, pitch x1.19 over 5 ms,
   // t60 0.63 s in the lowest band; module recordings
   t[9] = t[36];
@@ -1503,26 +1525,57 @@ SONARE_TUNED_CONSTEXPR DrumTables build_drum_note_table() noexcept {
   t[15].percussion.strike_r = 0.51159f;
   t[15].percussion.tone_gain = 1.63807f;
   t[15].gain = 3.222f;
-  // Dance Kick: from key 36 with the Dance single mode; 65.0 Hz, pitch x2.52 over 25 ms,
-  // t60 0.73 s in the lowest band; module recordings
+  // Dance Kick: from key 36; 65.0 Hz harmonics 1-10, pitch x2.52 over 25 ms, mode t60
+  // 0.45 s, over a 92/300/520 Hz shell ringing 1.5-2 s; module recordings
   t[16] = t[36];
   t[16].amp_env.attack_ms = 3.57834f;
-  t[16].amp_env.decay_ms = 177.633f;
+  t[16].amp_env.decay_ms = 2000.0f;
   t[16].percussion.base_freq_hz = 64.98f;
   t[16].percussion.mallet_ms = 0.961881f;
-  t[16].percussion.mode_decay_s = 0.731f;
-  t[16].percussion.noise_cutoff_hz = 692.572f;
-  t[16].percussion.noise_decay_ms = 49.2549f;
-  t[16].percussion.noise_gain = 0.135602f;
-  t[16].percussion.noise_q = 1.74046f;
-  t[16].percussion.num_modes = 1;
+  t[16].percussion.mode_decay_s = 0.45f;
+  t[16].percussion.noise_cutoff_hz = 692.6f;
+  t[16].percussion.noise_decay_ms = 49.25f;
+  t[16].percussion.noise_gain = 0.1695f;
+  t[16].percussion.noise_q = 0.5f;
+  t[16].percussion.num_modes = 12;
   t[16].percussion.pitch_drop = 1.52f;
   t[16].percussion.pitch_drop_ms = 25.0f;
   t[16].percussion.shell_freq_hz[0] = 92.4613f;
-  t[16].percussion.shell_mix = 0.296698f;
+  t[16].percussion.shell_mix = 1.0f;
   t[16].percussion.strike_r = 0.156122f;
-  t[16].percussion.tone_gain = 0.972482f;
-  t[16].gain = 3.964f;
+  t[16].percussion.tone_gain = 0.9725f;
+  t[16].gain = 2.561f;
+  t[16].percussion.mode_decay_exp = 0.01f;
+  t[16].percussion.mode_ratios[0] = 1.0f;
+  t[16].percussion.mode_alpha[0] = 6.7682f;
+  t[16].percussion.mode_ratios[3] = 2.0f;
+  t[16].percussion.mode_alpha[3] = 0.0010f;
+  t[16].percussion.mode_ratios[8] = 3.0f;
+  t[16].percussion.mode_alpha[8] = 14.5220f;
+  t[16].percussion.mode_ratios[10] = 4.0f;
+  t[16].percussion.mode_alpha[10] = 15.1029f;
+  t[16].percussion.mode_ratios[11] = 5.0f;
+  t[16].percussion.mode_alpha[11] = 15.2649f;
+  t[16].percussion.mode_ratios[1] = 6.0f;
+  t[16].percussion.mode_alpha[1] = 0.1289f;
+  t[16].percussion.mode_ratios[5] = 7.0f;
+  t[16].percussion.mode_alpha[5] = 0.1534f;
+  t[16].percussion.mode_ratios[2] = 8.0f;
+  t[16].percussion.mode_alpha[2] = 1.5709f;
+  t[16].percussion.mode_ratios[7] = 9.0f;
+  t[16].percussion.mode_alpha[7] = 2.2066f;
+  t[16].percussion.mode_ratios[4] = 10.0f;
+  t[16].percussion.mode_alpha[4] = 5.0061f;
+  t[16].percussion.mode_ratios[6] = 0.0f;
+  t[16].percussion.mode_ratios[9] = 0.0f;
+  t[16].percussion.shell_num_modes = 3;
+  t[16].percussion.shell_freq_hz[1] = 300.0f;
+  t[16].percussion.shell_t60_s[1] = 2.0f;
+  t[16].percussion.shell_freq_hz[2] = 520.0f;
+  t[16].percussion.shell_t60_s[2] = 1.5f;
+  t[16].percussion.shell_weight[0] = 0.133333f;
+  t[16].percussion.shell_weight[1] = 2.13333f;
+  t[16].percussion.shell_weight[2] = 2.22222f;
 
   // --- keys below the GM range ---
   // High Q: tonal blip; module reference
