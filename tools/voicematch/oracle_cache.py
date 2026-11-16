@@ -34,6 +34,12 @@ SCHEMA_VERSION = 1
 #: Longest flat numeric list a cache may hold; a partial ladder is tens, a spectrum is thousands.
 MAX_ARRAY = 128
 
+#: Keys whose list may run past `MAX_ARRAY`, with what bounds an entry; any other key takes the cap.
+ARRAY_BOUNDS = {
+    # One [Hz, dB-over-baseline] pair per isolated peak of one 120 ms attack spectrum, not bins.
+    "attack_peaks": 256,
+}
+
 #: Longest table of fixed-width rows (oracle rows, slot lengths); each row is itself bounded.
 MAX_TABLE = 4096
 
@@ -275,9 +281,10 @@ def _check_datum(v, path: str) -> None:
         raise CacheError(
             f"{path}: {type(v).__name__} may not leave; a number, a bool, None or a list of them"
         )
-    if len(v) > MAX_ARRAY:
+    cap = ARRAY_BOUNDS.get(path.rsplit(".", 1)[-1], MAX_ARRAY)
+    if len(v) > cap:
         raise CacheError(
-            f"{path}: array too large to leave (could be a spectrum): {len(v)} entries, the cap is {MAX_ARRAY}"
+            f"{path}: array too large to leave (could be a spectrum): {len(v)} entries, the cap is {cap}"
         )
     for i, item in enumerate(v):
         if isinstance(item, list):

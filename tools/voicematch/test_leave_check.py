@@ -69,6 +69,15 @@ def test_a_cache_with_an_unlisted_field_or_a_long_list_is_refused(tmp_path, caps
     assert "REFUSED" in capsys.readouterr().out
 
 
+def test_a_cache_s_attack_peaks_pass_to_their_own_bound_and_not_past_it(tmp_path, capsys):
+    cache = _cache(tmp_path)
+    _rewrite(cache, lambda b: b["oracle"]["rows"][0].update(attack_peaks=[[100.0, 20.0]] * 130))
+    assert leave_check.main(["--cache", str(cache)]) == 0
+    _rewrite(cache, lambda b: b["oracle"]["rows"][0].update(attack_peaks=[[100.0, 20.0]] * 257))
+    assert leave_check.main(["--cache", str(cache)]) == 1
+    assert "257 entries, the cap is 256" in capsys.readouterr().out
+
+
 def test_a_file_that_is_not_a_gzip_cache_is_refused(tmp_path, capsys):
     other = tmp_path / "rows.json"
     other.write_text("{}")

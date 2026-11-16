@@ -137,6 +137,23 @@ def test_the_whitelist_refuses_a_long_array_and_anything_that_is_not_a_number(tm
     _write(path, desc, rows=[{"note": 60, "bands_db": [0.0] * oracle_cache.MAX_ARRAY}])
 
 
+def test_attack_peaks_take_their_own_bound_and_every_other_key_the_cap(tmp_path):
+    desc = _descriptor(tmp_path)
+    path = tmp_path / "x.json.gz"
+    for n in (130, 256):
+        _write(
+            path, desc, rows=[{"note": 36, "attack_peaks": [[100.0 + i, 20.0] for i in range(n)]}]
+        )
+    with pytest.raises(CacheError, match="257 entries, the cap is 256"):
+        _write(
+            path, desc, rows=[{"note": 36, "attack_peaks": [[100.0 + i, 20.0] for i in range(257)]}]
+        )
+    with pytest.raises(CacheError, match="129 entries, the cap is 128"):
+        _write(path, desc, rows=[{"note": 36, "bands_db": [0.0] * 129}])
+    with pytest.raises(CacheError, match="the cap is 128"):
+        _write(path, desc, rows=[{"note": 36, "attack_peaks": [[0.0] * 129]}])
+
+
 def test_the_row_whitelist_is_the_measurement_records_plus_what_the_probe_adds():
     from metrics_hit import HitMetrics
     from metrics_note import NoteMetrics
