@@ -457,6 +457,14 @@ class PianoVoiceCore {
   float scrub_hf_gain_ = 1.0f;
   rt::BiquadState scrub_hi_[2]{};
   uint32_t noise_rng_ = 1u;
+  // What the strings are injected with: an impulse through the noise's poles and seeded allpass
+  // delays.
+  static constexpr int kInjectAllpassStages = 3;
+  static constexpr int kInjectAllpassCapacity = 1024;
+  float inject_area_ = 0.0f;
+  float inject_lp_[3]{};
+  int inject_delay_[kInjectAllpassStages]{};
+  std::array<std::array<float, kInjectAllpassCapacity>, kInjectAllpassStages> inject_hist_{};
 };
 
 }  // namespace sonare::midi::synth

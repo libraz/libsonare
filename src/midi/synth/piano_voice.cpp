@@ -208,13 +208,28 @@ float PianoVoiceCore::render_internal(float pitch_ratio) noexcept {
     // brightness. Two poles put the same corner 45 dB down at 16 kHz against a
     // measured 44, and cost nothing — the tap already exists for the cascade.
     noise_direct = noise_env_ * noise_lp2_;
-    noise_low_ += noise_hp_a_ * (noise - noise_low_);
+    // The strings take the burst's expected spectrum from one impulse: no partial's level is drawn.
+    inject_lp_[0] += noise_alpha_ * ((noise_pos_ == 1 ? inject_area_ : 0.0f) - inject_lp_[0]);
+    inject_lp_[1] += noise_alpha_ * (inject_lp_[0] - inject_lp_[1]);
+    inject_lp_[2] += noise_alpha3_ * (inject_lp_[1] - inject_lp_[2]);
+    float seq = inject_lp_[2];
+    const size_t seq_at = static_cast<size_t>((noise_pos_ - 1) % kInjectAllpassCapacity);
+    for (int i = 0; i < kInjectAllpassStages; ++i) {
+      const size_t from =
+          (seq_at + kInjectAllpassCapacity - static_cast<size_t>(inject_delay_[i])) %
+          kInjectAllpassCapacity;
+      const float held = inject_hist_[i][from];
+      const float in = seq + kInjectAllpassGain * held;
+      inject_hist_[i][seq_at] = in;
+      seq = held - kInjectAllpassGain * in;
+    }
+    noise_low_ += noise_hp_a_ * (seq - noise_low_);
     // The scrub noise is generated AT the strike point, so it sees the same
     // near-end reflection as the force pulse: comb it by the strike position
     // (its own history — the force comb carries different units/lifetime).
     // Without this the noise fills in the comb's h8-region notch, the
     // reference bass ladder's signature dip.
-    float scrub = noise_inject_ * (noise - noise_low_);
+    float scrub = noise_inject_ * (seq - noise_low_);
     if (scrub_hf_gain_ != 1.0f) {
       scrub = scrub_hi_[1].process(scrub_hi_[0].process(scrub));
     }

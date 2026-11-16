@@ -53,12 +53,12 @@ SONARE_TUNED_CONSTEXPR void configure_keyed_programs(ProgramOverrides& o) noexce
   o.electric_grand.stereo_spread = 0.15f;
   // The only one of the four that is levelled. An amplified instrument has no
   // acoustic output level -- the player sets it at the amp -- so leaving it
-  // 4.4 dB under its siblings would be keeping a number nobody chose. The other
+  // 4.7 dB under its siblings would be keeping a number nobody chose. The other
   // three keep whatever the physics gives them: a hard-voiced grand really does
-  // project more and a small upright really is quieter. Matched on a held C4;
-  // the low register is still 1.3 dB under, because the board it lost carried
-  // more there.
-  o.electric_grand.gain = fam[0].gain * 1.66f;
+  // project more and a small upright really is quieter. On a held C4 its mean
+  // peak over eight strikes is 0.97 of the grand's with the aftersound under 0.6
+  // of it; the low register is still 1.3 dB under, the board having carried more there.
+  o.electric_grand.gain = fam[0].gain * 1.71f;
   o.electric_grand.amp_env.release_ms = 1530.2f;
 
   // Honky-tonk Piano (GM 3): the detune is the instrument. The unison strings

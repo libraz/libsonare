@@ -670,6 +670,21 @@ LoopBudget PianoVoiceCore::configure(const PianoPatchParams& params, double sr, 
   noise_lp2_ = 0.0f;
   noise_lp3_ = 0.0f;
   noise_low_ = 0.0f;
+  // An impulse of the burst's expected energy: the uniform draw's variance times the envelope's
+  // energy.
+  const float env_step = noise_decay_ * noise_decay_;
+  inject_area_ = kInjectSequenceLevel * noise_env_ *
+                 std::sqrt((1.0f - std::pow(env_step, static_cast<float>(noise_samples_))) /
+                           (3.0f * std::max(1.0f - env_step, 1.0e-9f)));
+  for (float& pole : inject_lp_) pole = 0.0f;
+  for (int i = 0; i < kInjectAllpassStages; ++i) {
+    const float u = voice_random_unipolar(seed + 0x85EBCA6Bu * static_cast<uint64_t>(i + 1));
+    const float ms = kInjectAllpassMs * kInjectAllpassRatio[i] * (1.0f + kInjectAllpassSpread * u);
+    inject_delay_[i] =
+        std::clamp(static_cast<int>(std::lround(ms * 0.001f * static_cast<float>(sr))), 1,
+                   kInjectAllpassCapacity - 1);
+    inject_hist_[i].fill(0.0f);
+  }
   // The string-injected share is highpassed above the fundamental: the scrub
   // noise seeds the upper partials at random phase (the desired sheen), but a
   // random-phase component ON h1 vector-cancels against the coherent pulse —

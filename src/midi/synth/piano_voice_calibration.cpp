@@ -314,6 +314,12 @@ SONARE_TUNABLE_SCOPED("piano_voice", kUnisonRadSpread, 0.5f);
 SONARE_TUNABLE_SCOPED("piano_voice", kStrikeNoiseGain, 0.75f);
 SONARE_TUNABLE_SCOPED("piano_voice", kStrikeNoiseTauMs, 8.0f);
 SONARE_TUNABLE_SCOPED("piano_voice", kStrikeNoiseMaxMs, 30.0f);
+/// The string-injected sequence: its level against the burst's expected energy, and the
+/// allpass delays that spread it in time (feedback gain, shortest delay, each delay's drawn part).
+SONARE_TUNABLE_SCOPED("piano_voice", kInjectSequenceLevel, 1.0f);
+SONARE_TUNABLE_SCOPED("piano_voice", kInjectAllpassGain, 0.5f);
+SONARE_TUNABLE_SCOPED("piano_voice", kInjectAllpassMs, 0.9f);
+SONARE_TUNABLE_SCOPED("piano_voice", kInjectAllpassSpread, 0.5f);
 /// The impact noise radiates through a darker path than the string pulse: a
 /// felt hammer lands as a 0.5-2 kHz thud, not a pick click — the noise gets
 /// its own lowpass at this fraction of the felt-stiffness cutoff.
