@@ -2015,11 +2015,6 @@ AGREEMENT_TOLERANCE = {
 }
 
 
-def _delta(a: float | None, b: float | None) -> float | None:
-    """`a - b`, or None where either side did not measure."""
-    return None if a is None or b is None else float(a) - float(b)
-
-
 def agreement_row(second: dict, r: dict) -> dict:
     """One grid cell's second-reference-minus-reference delta, per dimension.
 
@@ -2040,7 +2035,9 @@ def agreement_row(second: dict, r: dict) -> dict:
         ),
         "attack": second["attack_ms"] - r["attack_ms"],
         "crest": second["crest_db"] - r["crest_db"],
-        "band_decay": _delta(second.get("band_decay_db_s"), r.get("band_decay_db_s")),
+        "band_decay": mean_band_decay_delta(
+            second.get("band_decay_db_s"), r.get("band_decay_db_s")
+        ),
         # A capped decay is the analysis window, not the hit, so a ratio taken
         # against one compares a window with an instrument.
         "ring": (

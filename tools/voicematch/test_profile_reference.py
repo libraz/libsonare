@@ -27,7 +27,7 @@ def _hit(**kw) -> dict:
         "centroid_hz": 400.0,
         "attack_ms": 5.0,
         "crest_db": 12.0,
-        "band_decay_db_s": -40.0,
+        "band_decay_db_s": [-40.0] * 8,
         "decay_ms": 200.0,
         "decay_capped": False,
     }
@@ -53,9 +53,21 @@ def test_the_two_percussion_dimensions_are_measured_and_bounded():
     """
     assert profile_module.AGREEMENT_TOLERANCE["ring"] == 0.69
     assert profile_module.AGREEMENT_TOLERANCE["band_decay"] == 41.7
-    row = profile_module.agreement_row(_hit(decay_ms=400.0, band_decay_db_s=-10.0), _hit())
+    row = profile_module.agreement_row(_hit(decay_ms=400.0, band_decay_db_s=[-10.0] * 8), _hit())
     assert row["ring"] == pytest.approx(1.0)
     assert row["band_decay"] == pytest.approx(30.0)
+
+
+def test_a_committed_hit_row_reads_its_band_decay_as_the_gate_does():
+    """A measured hit carries one decay rate per octave band, which the gate averages over shared bands."""
+    rows = json.loads((profile_module.REFERENCE_DIR / "drums_module.json").read_text())["rows"]
+    a, b = rows[0], rows[1]
+    assert isinstance(a["band_decay_db_s"], list)
+    row = profile_module.agreement_row(a, b)
+    assert row["band_decay"] == pytest.approx(
+        profile_module.mean_band_decay_delta(a["band_decay_db_s"], b["band_decay_db_s"])
+    )
+    assert profile_module.agreement_row(a, a)["band_decay"] == 0.0
 
 
 def test_a_capped_decay_yields_no_ring_on_either_side():
