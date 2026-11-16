@@ -1060,6 +1060,7 @@ def compare_percussion(
     # and `tail_by_note` are written in the capture's own numbering.
     window = reference_window(cfg, corpus_dir, timbre, preroll_s=preroll_s, gate_s=gate_s)
     kit_rows: list[tuple[dict, dict]] = []
+    note_rows: list[dict] = []
     decay_censored: list[tuple[int, int, bool, bool]] = []
     ring_gone: list[tuple[int, int, str]] = []
     # Rows that reached the per-row arithmetic at all, which is what every
@@ -1122,9 +1123,10 @@ def compare_percussion(
         tally.begin_row()
         tally_row_absence(tally, row, m, r)
         offered_keys |= set(row)
-        for k, v in row.items():
-            if v is not None and np.isfinite(v):
-                deltas.setdefault(k, []).append(float(v))
+        finite = {k: float(v) for k, v in row.items() if v is not None and np.isfinite(v)}
+        for k, v in finite.items():
+            deltas.setdefault(k, []).append(v)
+        note_rows.append({"note": note, "velocity": vel, **finite})
         for side, src in (("m", m), ("r", r)):
             if src.get("peak_dbfs") is not None:
                 peaks.setdefault(side, {}).setdefault(note, {})[vel] = src["peak_dbfs"]
@@ -1285,6 +1287,7 @@ def compare_percussion(
             timbre,
             profile.get("measured_utc", ""),
             windows=windows,
+            rows=note_rows,
         )
     if gate_path:
         return check_gate(

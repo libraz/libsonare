@@ -784,8 +784,12 @@ def write_summary_json(
     censored: dict[str, int] | None = None,
     motion: dict | None = None,
     velocity_law: dict | None = None,
+    rows: list[dict] | None = None,
 ) -> None:
     """Record a compare run's summary and its gate readings for a tool to read.
+
+    @p rows, where given, are the per-row deltas the summary reduces (`note`, `velocity`
+    and one signed delta per dimension), so a judge can read one note's own row.
 
     @p windows (see `window_spans`) is recorded beside the summary, and the gate's
     readings are taken against it. @p censored is the rows each dimension dropped as
@@ -822,6 +826,8 @@ def write_summary_json(
         record["motion"] = motion
     if velocity_law is not None:
         record["velocity_law"] = velocity_law
+    if rows is not None:
+        record["rows"] = rows
     out_path.write_text(json.dumps(record, indent=2, default=float) + "\n")
 
 

@@ -1419,3 +1419,62 @@ def test_the_onset_dimensions_are_differenced_per_row_and_skipped_where_either_s
     assert dims["onset"]["n"] == 2 and dims["onset_settle"]["n"] == 2
     assert dims["onset"]["median"] == pytest.approx((2.2 + 1.0) / 2)
     assert dims["onset_settle"]["median"] == pytest.approx((182.0 + 10.0) / 2)
+
+
+def test_a_kit_compare_records_each_rows_own_deltas_for_a_judge(tmp_path, monkeypatch):
+    """A kit statistic reduces over every hit, so the JSON keeps each row a judge can read alone."""
+    rows = {
+        41: _hit_row(decay_ms=300.0, decay_capped=False),
+        49: _hit_row(decay_ms=2000.0, decay_capped=True, band_decay_db_s=[-1.0] * 8),
+    }
+    corpus = _recorded_corpus(
+        tmp_path / "c",
+        timbre="t",
+        gate_ms=400,
+        preroll_ms=0,
+        tail="0s",
+        seconds={41: 0.66, 49: 2.09},
+    )
+    profile = {
+        "id": "w",
+        "label": "W",
+        "capture": {
+            "program": 0,
+            "gate_ms": 400,
+            "preroll_ms": 0,
+            "sample_rate": 48000,
+            "channel": 10,
+        },
+        "rows": [
+            {"timbre": "t", "note": n, "velocity": 100, **_hit_row(decay_ms=400.0)}
+            for n in (41, 49)
+        ],
+    }
+    cfg = {
+        "id": "w",
+        "notes": [41, 49],
+        "velocities": [100],
+        "gate_ms": 400,
+        "preroll_ms": 0,
+        "tail": "0s",
+        "program": 0,
+        "dimensions": ["band_decay", "ring"],
+        "timbres": [{"id": "t", "channel": 10}],
+    }
+    _spy_render(monkeypatch, rows=rows)
+    out = tmp_path / "cmp.json"
+    profile_module.compare_percussion(
+        cfg,
+        profile,
+        timbre="t",
+        notes_filter=set(),
+        gate_path="",
+        write_gate="",
+        margin=1.25,
+        corpus_dir=corpus,
+        json_out=str(out),
+    )
+    got = {(r["note"], r["velocity"]): r for r in json.loads(out.read_text())["rows"]}
+    assert set(got) == {(41, 100), (49, 100)}
+    # The censored decay is absent from its own row, as it is from the column.
+    assert "band_decay" in got[(41, 100)] and "band_decay" not in got[(49, 100)]
