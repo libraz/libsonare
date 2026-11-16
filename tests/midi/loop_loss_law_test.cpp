@@ -624,23 +624,72 @@ TEST_CASE("the KS brightness pole keeps its corner across rates where no HF targ
   CHECK(spread < 1.5);
 }
 
-TEST_CASE("the piano string-loop pole keeps its corner across rates", "[midi][synth][loss_law]") {
-  // The dark end of the shipped grand at A0, where the pole is strongest, read
-  // after the strike noise has died so only the loop filter shapes the tilt.
-  // Measured spread: 8.64 dB/oct with the pole unmapped, 0.28 mapped.
+/// Decay rate (dB/s) of the partial of @p x nearest @p near_hz, read at the partial's own
+/// frequency in quarter-second Hann windows from 0.3 s, as a straight-line slope.
+double partial_decay_db_s(const std::vector<float>& x, double near_hz, double sr) {
+  const size_t from = static_cast<size_t>(0.3 * sr);
+  const size_t win = static_cast<size_t>(0.25 * sr);
+  auto level_db = [&](size_t at, size_t n, double hz) {
+    double re = 0.0, im = 0.0;
+    for (size_t i = 0; i < n; ++i) {
+      const double w =
+          0.5 - 0.5 * std::cos(kTwoPi * static_cast<double>(i) / static_cast<double>(n));
+      const double ph = kTwoPi * hz * static_cast<double>(i) / sr;
+      re += w * x[at + i] * std::cos(ph);
+      im -= w * x[at + i] * std::sin(ph);
+    }
+    return 10.0 * std::log10(std::max(1.0e-30, re * re + im * im));
+  };
+  // The partial sits within the stretch of its harmonic number: scan for it, coarse then fine.
+  const size_t span = x.size() - from;
+  double hz = near_hz, best = -1.0e9;
+  for (double step : {1.0, 0.125}) {
+    const double lo = step == 1.0 ? 0.985 * near_hz : hz - 1.0;
+    const double hi = step == 1.0 ? 1.03 * near_hz : hz + 1.0;
+    for (double f = lo; f <= hi; f += step) {
+      const double v = level_db(from, span, f);
+      if (v > best) {
+        best = v;
+        hz = f;
+      }
+    }
+  }
+  double st = 0.0, sl = 0.0, stt = 0.0, stl = 0.0;
+  int n = 0;
+  for (size_t at = from; at + win <= x.size(); at += win / 2) {
+    const double t = static_cast<double>(at) / sr;
+    const double l = level_db(at, win, hz);
+    st += t;
+    sl += l;
+    stt += t * t;
+    stl += t * l;
+    ++n;
+  }
+  REQUIRE(n >= 8);
+  return (n * stl - st * sl) / (n * stt - st * st);
+}
+
+TEST_CASE("the piano string-loop pole keeps a partial's decay rate across rates",
+          "[midi][synth][loss_law]") {
+  // A partial's level is drawn with the strike noise; its decay rate is the loop's, and its
+  // spread over noise seeds is 1 to 3 % of its value. Measured against 48 kHz: at most 9.5 %
+  // with the pole mapped, 26 to 123 % unmapped (dark end of the shipped grand, note 28).
   sonare::midi::synth::PianoPatchParams dark = gm_fallback_patch(0, 0).piano;
   dark.brightness = 0.0f;
-  std::ostringstream report;
-  const double spread = spread_across_rates(
-      [&](double sr) {
-        const int samples = window_samples(sr);
-        const int skip = static_cast<int>(0.5 * sr);
-        const std::vector<float> tone = render_piano(dark, 28, sr, skip + samples);
-        return tilt_of(std::vector<float>(tone.begin() + skip, tone.end()), sr);
-      },
-      report);
-  INFO(report.str());
-  CHECK(spread < 1.5);
+  const double f0 = 41.2;
+  for (int k : {6, 9, 12, 16, 20}) {
+    auto slope = [&](double sr) {
+      return partial_decay_db_s(render_piano(dark, 28, sr, static_cast<int>(2.3 * sr)), k * f0, sr);
+    };
+    const double voiced = slope(48000.0);
+    INFO("partial " << k << " at 48 kHz " << voiced << " dB/s");
+    REQUIRE(voiced < -1.0);
+    for (double sr : {24000.0, 96000.0}) {
+      const double s = slope(sr);
+      INFO("sr " << sr << " " << s << " dB/s");
+      CHECK(std::fabs(s - voiced) < 0.15 * std::fabs(voiced));
+    }
+  }
 }
 
 TEST_CASE("the piano strike noise keeps its power per Hz across rates", "[midi][synth][loss_law]") {
