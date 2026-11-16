@@ -114,8 +114,7 @@
 - Gunshot (GM program 127) opens over 35 ms instead of 6 ms and dies over about 0.57 s instead of 0.41 s, its filter sweep reaches higher and closes more slowly, and its noise carries a stronger amplitude flutter, set against the module reference.
 - The ocarina (GM program 79) no longer wanders slowly in pitch; its reference carries no such motion.
 - The clavinet (GM program 7) no longer beats: its string's two polarizations are mistuned by 0.5 cent instead of 11, which removes the 3 to 7 Hz tremolo on its held partials.
-- Eight pieces of the built-in Standard kit move toward their module references in attack, ring and colour, each at its previous level: Chinese Cymbal (drum key 52), Ride Bell (53), Splash Cymbal (55), Crash Cymbal 2 (57), Low Bongo (61), Mute Hi Conga (62), Open Hi Conga (63) and Low Conga (64).
-- Eighteen more pieces of the built-in Standard kit move toward their module references in attack, ring and colour, each at its previous level: Electric Snare (drum key 40), High Floor Tom (43), Open Hi-Hat (46), Low-Mid Tom (47), Hi-Mid Tom (48), Cowbell (56), Hi Bongo (60), High Timbale (65), Low Timbale (66), Low Agogo (68), Cabasa (69), Short Whistle (71), Long Guiro (74), Hi Wood Block (76), Low Wood Block (77), Open Cuica (79), Mute Triangle (80) and Open Triangle (81).
+- Eighteen pieces of the built-in Standard kit move toward their module references in attack, ring and colour, each at its previous level: Electric Snare (drum key 40), High Floor Tom (43), Open Hi-Hat (46), Low-Mid Tom (47), Splash Cymbal (55), Cowbell (56), Crash Cymbal 2 (57), Low Bongo (61), Open Hi Conga (63), Low Conga (64), High Timbale (65), Low Agogo (68), Cabasa (69), Long Guiro (74), Low Wood Block (77), Open Cuica (79), Mute Triangle (80) and Open Triangle (81).
 
 ### New
 

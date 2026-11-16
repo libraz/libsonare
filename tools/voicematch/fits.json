@@ -919,8 +919,8 @@
           "timbre": "t0"
         }
       ],
-      "outcome": "adopted",
-      "in_sample": true,
+      "outcome": "kept",
+      "reason": "own row centroid_pct n48v100 worsened past its floor (3.5101->10.8617, floor 1)",
       "weights": {
         "band": 1.0,
         "bdecay": 1.0,
@@ -974,8 +974,8 @@
           "timbre": "t0"
         }
       ],
-      "outcome": "adopted",
-      "in_sample": true,
+      "outcome": "kept",
+      "reason": "own row centroid_pct n52v100 worsened past its floor (2.7509->4.0105, floor 1)",
       "weights": {
         "band": 1.0,
         "bdecay": 1.0,
@@ -1006,8 +1006,8 @@
           "timbre": "t0"
         }
       ],
-      "outcome": "adopted",
-      "in_sample": true,
+      "outcome": "kept",
+      "reason": "own row band_tilt n53v100 worsened past its floor (-0.7677->-2.7117, floor 1)",
       "weights": {
         "band": 1.0,
         "bdecay": 1.0,
@@ -1156,8 +1156,8 @@
           "timbre": "t0"
         }
       ],
-      "outcome": "adopted",
-      "in_sample": true,
+      "outcome": "kept",
+      "reason": "own row band_shape n60v100 worsened past its floor (6.9381->9.3577, floor 1)",
       "weights": {
         "band": 1.0,
         "bdecay": 1.0,
@@ -1220,8 +1220,8 @@
           "timbre": "t0"
         }
       ],
-      "outcome": "adopted",
-      "in_sample": true,
+      "outcome": "kept",
+      "reason": "own row centroid_pct n62v100 worsened past its floor (5.5621->7.5813, floor 1)",
       "weights": {
         "band": 1.0,
         "bdecay": 1.0,
@@ -1348,8 +1348,8 @@
           "timbre": "t0"
         }
       ],
-      "outcome": "adopted",
-      "in_sample": true,
+      "outcome": "kept",
+      "reason": "own row band_decay n66v100 worsened past its floor (34.4343->36.1437, floor 1)",
       "weights": {
         "band": 1.0,
         "bdecay": 1.0,
@@ -1451,8 +1451,8 @@
           "timbre": "t0"
         }
       ],
-      "outcome": "adopted",
-      "in_sample": true,
+      "outcome": "kept",
+      "reason": "own row centroid_pct n71v100 worsened past its floor (14.6594->24.9272, floor 1)",
       "weights": {
         "band": 1.0,
         "bdecay": 1.0,
@@ -1522,8 +1522,8 @@
           "timbre": "t0"
         }
       ],
-      "outcome": "adopted",
-      "in_sample": true,
+      "outcome": "kept",
+      "reason": "own row band_tilt n76v100 worsened past its floor (-4.6106->-6.3952, floor 1)",
       "weights": {
         "band": 1.0,
         "bdecay": 1.0,
