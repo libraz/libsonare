@@ -943,28 +943,28 @@ SONARE_TUNED_CONSTEXPR DrumTables build_drum_note_table() noexcept {
   t[57].percussion.plate_cascade_hz = 1500.0f;
   t[57].percussion.plate_cascade_drop_db = 10.0f;
   t[57].percussion.plate_t60_s = 3.4f;
-  t[57].gain = 0.2032f;
-  t[57].amp_env.attack_ms = 0.565742f;
-  t[57].amp_env.sustain = 0.959534f;
-  t[57].cutoff_hz = 19121.3f;
-  t[57].percussion.contact = 2.72913f;
-  t[57].percussion.mode_decay_exp = 0.11459f;
+  t[57].gain = 0.237096f;
+  t[57].amp_env.attack_ms = 0.0894855f;
+  t[57].amp_env.sustain = 0.867019f;
+  t[57].cutoff_hz = 10886.0f;
+  t[57].percussion.contact = 2.43618f;
+  t[57].percussion.mode_decay_exp = 0.278522f;
   t[57].percussion.mode_decay_s = 1.0726f;
   t[57].percussion.mode_ratios[1] = 1.932f;
   t[57].percussion.noise_cutoff_hz = 6565.14f;
-  t[57].percussion.noise_decay_ms = 280.953f;
+  t[57].percussion.noise_decay_ms = 248.506f;
   t[57].percussion.noise_gain = 1.1077f;
   t[57].percussion.noise_q = 1.10642f;
-  t[57].percussion.plate_gain = 0.634442f;
-  t[57].percussion.plate_hf_ratio = 0.61287f;
+  t[57].percussion.plate_gain = 0.622591f;
+  t[57].percussion.plate_hf_ratio = 0.671297f;
   t[57].percussion.shimmer = 0.847723f;
   t[57].percussion.shimmer_attack_ms = 46.9414f;
   t[57].percussion.shimmer_cutoff_hz = 8508.71f;
-  t[57].percussion.strike_r = 0.0954915f;
+  t[57].percussion.strike_r = 0.168581f;
   t[57].percussion.strike_theta = 0.168441f;
-  t[57].percussion.tone_direct = 0.974991f;
-  t[57].percussion.wire_buzz = 0.673762f;
-  t[57].resonance_q = 0.719516f;
+  t[57].percussion.tone_direct = 0.959002f;
+  t[57].percussion.wire_buzz = 1.03535f;
+  t[57].resonance_q = 0.77331f;
   t[57].stereo_spread = 0.264754f;
   t[51] = cymbal_patch(kCymbals[2]);
   t[51].amp_env.attack_ms = 0.312637f;
@@ -1000,28 +1000,28 @@ SONARE_TUNED_CONSTEXPR DrumTables build_drum_note_table() noexcept {
   // than the plate: strike-to-body tilt change -11.3 -> -0.4 dB.
   t[55].percussion.contact_ms = 0.979331f;
   t[55].percussion.contact = 0.261033f;
-  t[55].cutoff_hz = 15591.6f;
+  t[55].cutoff_hz = 12494.2f;
   t[55].percussion.mode_ratios[3] = 2.15f;
-  t[55].percussion.noise_q = 0.852052f;
-  t[55].percussion.plate_gain = 0.743422f;
-  t[55].percussion.plate_hf_ratio = 0.302965f;
-  t[55].amp_env.attack_ms = 3.13508f;
-  t[55].amp_env.sustain = 0.976127f;
-  t[55].percussion.mode_decay_exp = 0.442376f;
-  t[55].percussion.mode_decay_s = 0.183625f;
+  t[55].percussion.noise_q = 0.716996f;
+  t[55].percussion.plate_gain = 0.632417f;
+  t[55].percussion.plate_hf_ratio = 0.354796f;
+  t[55].amp_env.attack_ms = 9.39631f;
+  t[55].amp_env.sustain = 0.623256f;
+  t[55].percussion.mode_decay_exp = 1.52728f;
+  t[55].percussion.mode_decay_s = 0.091837f;
   t[55].percussion.mode_ratios[1] = 1.13774f;
-  t[55].percussion.noise_cutoff_hz = 4223.74f;
-  t[55].percussion.noise_decay_ms = 120.15f;
-  t[55].percussion.noise_gain = 1.01803f;
-  t[55].percussion.plate_t60_s = 0.285353f;
-  t[55].percussion.shimmer = 1.67355f;
-  t[55].percussion.shimmer_attack_ms = 20.019f;
-  t[55].percussion.shimmer_cutoff_hz = 7710.52f;
-  t[55].percussion.tone_direct = 0.823383f;
-  t[55].percussion.wire_buzz = 0.190983f;
-  t[55].percussion.wire_cutoff_hz = 4460.0f;
+  t[55].percussion.noise_cutoff_hz = 3794.2f;
+  t[55].percussion.noise_decay_ms = 135.838f;
+  t[55].percussion.noise_gain = 1.39032f;
+  t[55].percussion.plate_t60_s = 0.252397f;
+  t[55].percussion.shimmer = 6.57718f;
+  t[55].percussion.shimmer_attack_ms = 48.4867f;
+  t[55].percussion.shimmer_cutoff_hz = 7373.13f;
+  t[55].percussion.tone_direct = 0.606259f;
+  t[55].percussion.wire_buzz = 0.301732f;
+  t[55].percussion.wire_cutoff_hz = 5550.56f;
   t[55].percussion.wire_threshold = 0.0531153f;
-  t[55].resonance_q = 0.669811f;
+  t[55].resonance_q = 0.677077f;
   t[55].stereo_spread = 0.0238729f;
   t[46] = cymbal_patch(kCymbals[7]);
   t[42] = cymbal_patch(kCymbals[8]);
@@ -1142,50 +1142,50 @@ SONARE_TUNED_CONSTEXPR DrumTables build_drum_note_table() noexcept {
   // corner. Its partials are pulled off the plate ratios the others share until
   // nothing in the sound reads as a pitch.
   t[52].percussion.noise_output = SynthFilterOutput::kBandpass;
-  t[52].percussion.noise_q = 3.572f;
+  t[52].percussion.noise_q = 2.98635f;
   t[52].percussion.mode_ratios = {1.0f, 1.19f, 1.51f, 1.83f, 0.0f, 0.0f};
   // Fitted against the module's china: a denser, longer plate carrying more of
   // the tail than the strike layer took decay -1.97 -> -1.18 dB/s, ring +0.18 ->
   // +0.03 doublings and crest +3.2 -> +0.4 dB.
-  t[52].percussion.mode_decay_s = 0.44853f;
-  t[52].percussion.noise_decay_ms = 180.368f;
-  t[52].percussion.plate_gain = 1.13524f;
-  t[52].percussion.plate_hf_ratio = 0.184319f;
-  t[52].percussion.plate_t60_s = 2.04106f;
-  t[52].percussion.shimmer = 3.66157f;
+  t[52].percussion.mode_decay_s = 0.476914f;
+  t[52].percussion.noise_decay_ms = 216.823f;
+  t[52].percussion.plate_gain = 1.07628f;
+  t[52].percussion.plate_hf_ratio = 0.155106f;
+  t[52].percussion.plate_t60_s = 2.17022f;
+  t[52].percussion.shimmer = 3.8587f;
   t[52].amp_env.attack_ms = 2.04366f;
-  t[52].cutoff_hz = 7930.63f;
-  t[52].percussion.mode_decay_exp = 0.578319f;
+  t[52].cutoff_hz = 7874.14f;
+  t[52].percussion.mode_decay_exp = 0.607827f;
   t[52].percussion.mode_ratios[1] = 1.40156f;
   t[52].percussion.mode_ratios[2] = 2.27899f;
   t[52].percussion.mode_ratios[3] = 1.55377f;
   t[52].percussion.noise_gain = 0.659172f;
-  t[52].percussion.shimmer_attack_ms = 56.429f;
-  t[52].percussion.shimmer_cutoff_hz = 6573.27f;
-  t[52].percussion.tone_direct = 0.836373f;
+  t[52].percussion.shimmer_attack_ms = 60.0f;
+  t[52].percussion.shimmer_cutoff_hz = 7570.85f;
+  t[52].percussion.tone_direct = 0.880636f;
   t[52].percussion.tone_gain = 0.972291f;
-  t[52].resonance_q = 0.784932f;
+  t[52].resonance_q = 0.87796f;
   t[52].percussion.contact = 7.19253f;
   t[52].stereo_spread = 0.0772542f;
   // The bell is the one piece carried by its modes, so its ring is narrow
   // rather than dense and its wash is only the stick.
   t[53].percussion.mode_ratios = {1.0f, 1.40f, 2.76f, 3.27f, 0.0f, 0.0f};
   t[53].percussion.num_modes = 4;
-  t[53].percussion.noise_gain = 0.314996f;
-  t[53].amp_env.attack_ms = 0.565742f;
+  t[53].percussion.noise_gain = 0.313582f;
+  t[53].amp_env.attack_ms = 0.620286f;
   t[53].cutoff_hz = 12373.9f;
   t[53].drive = 0.118034f;
   t[53].percussion.contact = 10.523f;
   t[53].percussion.contact_ms = 0.14366f;
   t[53].percussion.mode_decay_exp = 0.254819f;
-  t[53].percussion.mode_decay_s = 1.35882f;
+  t[53].percussion.mode_decay_s = 1.27795f;
   t[53].percussion.mode_ratios[1] = 1.64889f;
-  t[53].percussion.noise_cutoff_hz = 704.459f;
-  t[53].percussion.noise_q = 0.529118f;
+  t[53].percussion.noise_cutoff_hz = 543.212f;
+  t[53].percussion.noise_q = 0.52295f;
   t[53].percussion.plate_gain = 0.308706f;
-  t[53].percussion.plate_hf_ratio = 0.979659f;
+  t[53].percussion.plate_hf_ratio = 0.980591f;
   t[53].percussion.tone_direct = 0.779508f;
-  t[53].resonance_q = 0.912155f;
+  t[53].resonance_q = 0.987239f;
   t[53].stereo_spread = 0.473975f;
   t[53].gain = 0.133436f;
   t[53].percussion.mode_ratios[2] = 2.87525f;
@@ -1911,10 +1911,10 @@ SONARE_TUNED_CONSTEXPR DrumTables build_drum_note_table() noexcept {
   t[60].percussion.mode_decay_exp = 0.192627f;
   t[61] = make_membrane(180.0f, 0.20f, 0.30f, 0.0f, 0.70f);  // Low Bongo
   t[61].amp_env.attack_ms = 4.5725f;
-  t[61].amp_env.decay_ms = 15.4839f;
+  t[61].amp_env.decay_ms = 21.0438f;
   t[61].amp_env.sustain = 0.267705f;
-  t[61].cutoff_hz = 13643.0f;
-  t[61].drive = 0.167789f;
+  t[61].cutoff_hz = 13137.8f;
+  t[61].drive = 0.160104f;
   t[61].percussion.contact = 1.42293f;
   t[61].percussion.mode_decay_s = 0.0541491f;
   t[61].percussion.mode_ratios[0] = 0.613928f;
@@ -1922,14 +1922,14 @@ SONARE_TUNED_CONSTEXPR DrumTables build_drum_note_table() noexcept {
   t[61].percussion.mode_ratios[2] = 1.65349f;
   t[61].percussion.mode_ratios[3] = 21.6188f;
   t[61].percussion.mode_ratios[4] = 0.536416f;
-  t[61].percussion.noise_cutoff_hz = 29.3743f;
+  t[61].percussion.noise_cutoff_hz = 28.2303f;
   t[61].percussion.noise_decay_ms = 16.6137f;
   t[61].percussion.noise_gain = 2.09272f;
   t[61].percussion.noise_q = 3.2125f;
   t[61].percussion.pitch_drop = 2.63273f;
   t[61].percussion.pitch_drop_ms = 4.12633f;
-  t[61].percussion.plate_gain = 2.41085f;
-  t[61].percussion.strike_r = 0.692402f;
+  t[61].percussion.plate_gain = 2.46981f;
+  t[61].percussion.strike_r = 0.691716f;
   t[61].percussion.strike_theta = 1.34672f;
   t[61].percussion.tone_gain = 2.23551f;
   t[61].stereo_spread = 0.418339f;
@@ -1939,91 +1939,91 @@ SONARE_TUNED_CONSTEXPR DrumTables build_drum_note_table() noexcept {
   t[61].percussion.plate_low_hz = 295.289f;
   t[61].percussion.plate_t60_s = 0.306712f;
   t[61].percussion.tone_direct = 0.900732f;
-  t[61].resonance_q = 1.3525f;
+  t[61].resonance_q = 1.41527f;
   t[61].gain = 0.759613f;
-  t[61].percussion.mode_decay_exp = 0.185661f;
+  t[61].percussion.mode_decay_exp = 0.156153f;
   // base_hz and the five ratios are read from the reference's measured
   // modal_hz/modal_ratio (drums_module_hit.json note 62): the old 220 Hz base
   // put every mode at or below 45 Hz, where the reference has no energy.
   t[62] = make_membrane(117.5f, 0.08f, 0.20f, 0.0f, 0.70f);  // Mute Hi Conga
-  t[62].amp_env.attack_ms = 0.552082f;
-  t[62].amp_env.decay_ms = 396.02f;
+  t[62].amp_env.attack_ms = 0.481299f;
+  t[62].amp_env.decay_ms = 329.436f;
   t[62].cutoff_hz = 7420.92f;
-  t[62].drive = 0.972951f;
-  t[62].percussion.contact = 2.09208f;
+  t[62].drive = 0.978875f;
+  t[62].percussion.contact = 1.85292f;
   // mode_decay_exp 0.5 is the membrane-in-air value already used for note 38.
   // mode_decay_s matches the reference's own extrapolated decay rate (fitted
   // on n062_v100.wav, R^2 0.88): -60 dB at 171-174 ms against this render's
   // 195.6 ms, -100 dB at 330-338 ms against 362.2 ms.
-  t[62].percussion.mode_decay_exp = 0.148947f;
+  t[62].percussion.mode_decay_exp = 0.0517411f;
   t[62].percussion.mode_decay_s = 0.155959f;
   t[62].percussion.mode_ratios[0] = 1.0f;
   t[62].percussion.mode_ratios[1] = 1.95549f;
   t[62].percussion.mode_ratios[2] = 1.60684f;
   t[62].percussion.mode_ratios[3] = 1.79254f;
   t[62].percussion.mode_ratios[4] = 7.50692f;
-  t[62].percussion.noise_cutoff_hz = 785.897f;
+  t[62].percussion.noise_cutoff_hz = 695.133f;
   t[62].percussion.noise_decay_ms = 22.2714f;
-  t[62].percussion.noise_gain = 1.26024f;
-  t[62].percussion.noise_q = 2.33267f;
+  t[62].percussion.noise_gain = 1.37816f;
+  t[62].percussion.noise_q = 2.59561f;
   t[62].percussion.pitch_drop = 0.462799f;
   t[62].percussion.pitch_drop_ms = 6.73865f;
   t[62].percussion.plate_gain = 0.747417f;
-  t[62].percussion.strike_r = 0.669184f;
-  t[62].percussion.strike_theta = 1.2783f;
-  t[62].percussion.tone_gain = 1.67327f;
+  t[62].percussion.strike_r = 0.712326f;
+  t[62].percussion.strike_theta = 0.949202f;
+  t[62].percussion.tone_gain = 1.49622f;
   t[62].stereo_spread = 0.148505f;
-  t[62].amp_env.sustain = 0.342222f;
+  t[62].amp_env.sustain = 0.336908f;
   // Lengthened from 2.07 (this is the period of a one-cycle sine burst, so
   // longer = lower-frequency): band_tilt read +9.1 dB there and now +0.3,
   // moving the tilt fix off mode_decay_s so the tail stays at the rate above.
   t[62].percussion.contact_ms = 14.0294f;
   t[62].percussion.num_modes = 5;
-  t[62].percussion.plate_hf_ratio = 0.256359f;
+  t[62].percussion.plate_hf_ratio = 0.321682f;
   t[62].percussion.plate_low_hz = 459.58f;
-  t[62].percussion.plate_t60_s = 0.0499273f;
+  t[62].percussion.plate_t60_s = 0.022588f;
   t[62].percussion.tone_direct = 0.18932f;
-  t[62].resonance_q = 2.80422f;
-  t[62].gain = 0.510517f;
+  t[62].resonance_q = 3.13731f;
+  t[62].gain = 0.518812f;
   t[63] = make_membrane(200.0f, 0.25f, 0.30f, 0.0f, 1.1847f);  // Open Hi Conga
-  t[63].amp_env.attack_ms = 1.31079f;
-  t[63].amp_env.decay_ms = 210.879f;
-  t[63].amp_env.sustain = 0.669539f;
+  t[63].amp_env.attack_ms = 1.23278f;
+  t[63].amp_env.decay_ms = 724.988f;
+  t[63].amp_env.sustain = 0.83704f;
   t[63].percussion.mode_decay_s = 0.166094f;
   t[63].percussion.noise_cutoff_hz = 227.798f;
-  t[63].percussion.noise_decay_ms = 1.52618f;
-  t[63].percussion.noise_gain = 1.01895f;
-  t[63].percussion.noise_q = 22.5225f;
+  t[63].percussion.noise_decay_ms = 1.54858f;
+  t[63].percussion.noise_gain = 0.7692f;
+  t[63].percussion.noise_q = 28.1698f;
   t[63].percussion.pitch_drop = 0.184921f;
-  t[63].percussion.pitch_drop_ms = 534.205f;
+  t[63].percussion.pitch_drop_ms = 437.094f;
   t[63].percussion.strike_r = 0.789245f;
   t[63].percussion.strike_theta = 0.843178f;
   t[63].cutoff_hz = 1770.38f;
-  t[63].drive = 0.16818f;
-  t[63].percussion.contact = 1.67052f;
+  t[63].drive = 0.197659f;
+  t[63].percussion.contact = 1.5711f;
   t[63].percussion.mode_ratios[0] = 2.24933f;
   t[63].percussion.mode_ratios[1] = 7.95707f;
   t[63].percussion.mode_ratios[2] = 6.58453f;
   t[63].percussion.mode_ratios[3] = 3.82169f;
   t[63].percussion.mode_ratios[4] = 4.69038f;
   t[63].percussion.num_modes = 3;
-  t[63].percussion.plate_gain = 0.789905f;
-  t[63].percussion.tone_gain = 2.9487f;
+  t[63].percussion.plate_gain = 0.671989f;
+  t[63].percussion.tone_gain = 2.77165f;
   t[63].resonance_q = 0.530797f;
   t[63].stereo_spread = 0.475025f;
-  t[63].percussion.plate_hf_ratio = 0.375686f;
+  t[63].percussion.plate_hf_ratio = 0.404899f;
   t[63].percussion.plate_low_hz = 140.0f;
-  t[63].percussion.plate_t60_s = 0.32909f;
-  t[63].gain = 0.989833f;
+  t[63].percussion.plate_t60_s = 0.257466f;
+  t[63].gain = 1.05211f;
   // Not a strainer: a high-passed noise layer the fit reached for on a piece
   // with no wires, and it carries 5 dB of this conga's tonality. Converted to the
   // fractional threshold rather than deleted, because deleting it is a
   // re-voicing and the piece was heard as it stands.
   t[63].percussion.wire_buzz = 2.91312f;
   t[63].percussion.wire_threshold = 0.4f;
-  t[63].percussion.contact_ms = 0.183625f;
+  t[63].percussion.contact_ms = 0.180984f;
   t[63].percussion.mode_decay_exp = 0.367258f;
-  t[63].percussion.tone_direct = 0.683315f;
+  t[63].percussion.tone_direct = 0.6733f;
   t[63].percussion.wire_cutoff_hz = 5346.64f;
   // base_hz is the reference's loudest partial (222.11 Hz): with contact > 0
   // the excitation is monotonic in frequency, so the lowest placed mode is
@@ -2031,18 +2031,18 @@ SONARE_TUNED_CONSTEXPR DrumTables build_drum_note_table() noexcept {
   // under peak) cannot be placed without becoming the loudest. Left out.
   t[64] = make_membrane(222.11f, 0.30f, 0.35f, 0.0f, 1.4014f);  // Low Conga
   // The module reads a 6.98 ms attack against the fitted envelope's 0.1.
-  t[64].amp_env.attack_ms = 21.4615f;
-  t[64].amp_env.decay_ms = 70.3119f;
+  t[64].amp_env.attack_ms = 20.1842f;
+  t[64].amp_env.decay_ms = 74.7614f;
   // Lowered from 0.467 measuring decay_ms on drums_module_hit's 360.77 ms
   // window (module: 169.6 ms): 0.18 reads 166.1 ms against the same target.
-  t[64].amp_env.sustain = 0.194754f;
+  t[64].amp_env.sustain = 0.238968f;
   t[64].cutoff_hz = 6691.74f;
   t[64].drive = 0.571386f;
-  t[64].percussion.contact = 1.27999f;
+  t[64].percussion.contact = 1.36099f;
   // mode_decay_exp 0.5 is the membrane-in-air value already used for note 38.
   // mode_decay_s measured against band_tilt on drums_module_hit: 0.45 with
   // the sustain above reads +2.1 dB there (pre-re-base: +8.4).
-  t[64].percussion.mode_decay_exp = 0.560661f;
+  t[64].percussion.mode_decay_exp = 0.494678f;
   t[64].percussion.mode_decay_s = 0.508757f;
   t[64].percussion.mode_ratios[0] = 1.0f;
   t[64].percussion.mode_ratios[1] = 1.1346f;
@@ -2051,8 +2051,8 @@ SONARE_TUNED_CONSTEXPR DrumTables build_drum_note_table() noexcept {
   t[64].percussion.mode_ratios[4] = 2.07313f;
   t[64].percussion.noise_cutoff_hz = 400.224f;
   // This is the RC time constant `noise_level_` decays by, not a t60.
-  t[64].percussion.noise_decay_ms = 45.0f;
-  t[64].percussion.noise_gain = 2.44799f;
+  t[64].percussion.noise_decay_ms = 42.3218f;
+  t[64].percussion.noise_gain = 2.62486f;
   t[64].percussion.noise_q = 8.15195f;
   // All 5 slots now carry a real measured partial rather than 2 of them going
   // unused: see the ratio comment above.
@@ -2065,11 +2065,11 @@ SONARE_TUNED_CONSTEXPR DrumTables build_drum_note_table() noexcept {
   t[64].stereo_spread = 0.871977f;
   t[64].percussion.contact_ms = 0.129169f;
   t[64].percussion.plate_gain = 0.00894634f;
-  t[64].resonance_q = 0.855344f;
-  t[64].gain = 1.51688f;
-  t[64].percussion.plate_hf_ratio = 0.280171f;
+  t[64].resonance_q = 0.960362f;
+  t[64].gain = 1.47554f;
+  t[64].percussion.plate_hf_ratio = 0.312833f;
   t[64].percussion.plate_low_hz = 347.789f;
-  t[64].percussion.plate_t60_s = 0.36498f;
+  t[64].percussion.plate_t60_s = 0.480226f;
   t[64].percussion.tone_direct = 0.964856f;
   t[65] = make_membrane(250.0f, 0.22f, 0.20f, 700.0f, 1.1120f);  // High Timbale
   t[65].amp_env.attack_ms = 0.0703342f;
@@ -2618,10 +2618,15 @@ SONARE_TUNED_CONSTEXPR DrumTables build_drum_note_table() noexcept {
   t[52].percussion.velocity_exponent = 0.77f;
   // dynamics oracle: library kit (real strikes), zero-crossing of vel_range; timbre oracle: module
   t[53].percussion.velocity_exponent = 0.29f;
+  t[53].amp_env.sustain = 0.978968f;
+  t[53].percussion.plate_t60_s = 1.96361f;
   // dynamics oracle: library kit (real strikes), zero-crossing of vel_range; timbre oracle: module
   t[54].percussion.velocity_exponent = 1.54f;
   // dynamics oracle: library kit (real strikes), zero-crossing of vel_range; timbre oracle: module
   t[55].percussion.velocity_exponent = 0.50f;
+  t[55].gain = 1.1927f;
+  t[55].percussion.plate_low_hz = 1458.65f;
+  t[55].percussion.tone_gain = 0.103599f;
   // dynamics oracle: library kit (real strikes), zero-crossing of vel_range; timbre oracle: module
   t[56].percussion.velocity_exponent = 1.21f;
   // dynamics oracle: library kit (real strikes), zero-crossing of vel_range; timbre oracle: module

@@ -840,18 +840,68 @@
       "reason": "withdrawn after adoption: the fitted mode decay (3.82 -> 4.95 s) lifts the drum table's tail bound to the whole bank's, breaking `a drum-kit patch bounds its tail by the drum table alone`"
     },
     "d052": {
-      "objective": "df80e5527f4fbedb",
-      "date": "2026-10-27",
+      "objective": "3bc465ccbf9a2d13",
+      "date": "2026-11-16",
       "capture": "drums_module",
       "timbre": "t0",
-      "outcome": "adopted"
+      "corpora": [
+        {
+          "capture": "drums_module",
+          "timbre": "t0"
+        }
+      ],
+      "outcome": "adopted",
+      "in_sample": true,
+      "weights": {
+        "band": 1.0,
+        "bdecay": 1.0,
+        "bright": 1.0,
+        "crest": 0.5,
+        "density": 1.0,
+        "diffuse": 1.0,
+        "env": 1.0,
+        "evolve": 1.0,
+        "lf": 1.0,
+        "modes": 0.5,
+        "prompt": 1.0,
+        "ring": 1.0,
+        "rise": 1.0,
+        "strike": 1.0,
+        "tilt": 1.0,
+        "tonal": 1.0
+      }
     },
     "d053": {
-      "objective": "df80e5527f4fbedb",
-      "date": "2026-10-27",
+      "objective": "3bc465ccbf9a2d13",
+      "date": "2026-11-16",
       "capture": "drums_module",
       "timbre": "t0",
-      "outcome": "adopted"
+      "corpora": [
+        {
+          "capture": "drums_module",
+          "timbre": "t0"
+        }
+      ],
+      "outcome": "adopted",
+      "in_sample": true,
+      "weights": {
+        "band": 1.0,
+        "bdecay": 1.0,
+        "bright": 1.0,
+        "crest": 0.5,
+        "density": 1.0,
+        "diffuse": 1.0,
+        "env": 1.0,
+        "evolve": 1.0,
+        "lf": 1.0,
+        "modes": 0.5,
+        "prompt": 1.0,
+        "ring": 1.0,
+        "rise": 1.0,
+        "strike": 1.0,
+        "tilt": 1.0,
+        "tonal": 1.0
+      }
     },
     "d054": {
       "objective": "df80e5527f4fbedb",
@@ -861,11 +911,36 @@
       "outcome": "adopted"
     },
     "d055": {
-      "objective": "df80e5527f4fbedb",
-      "date": "2026-10-27",
+      "objective": "3bc465ccbf9a2d13",
+      "date": "2026-11-16",
       "capture": "drums_module",
       "timbre": "t0",
-      "outcome": "adopted"
+      "corpora": [
+        {
+          "capture": "drums_module",
+          "timbre": "t0"
+        }
+      ],
+      "outcome": "adopted",
+      "in_sample": true,
+      "weights": {
+        "band": 1.0,
+        "bdecay": 1.0,
+        "bright": 1.0,
+        "crest": 0.5,
+        "density": 1.0,
+        "diffuse": 1.0,
+        "env": 1.0,
+        "evolve": 1.0,
+        "lf": 1.0,
+        "modes": 0.5,
+        "prompt": 1.0,
+        "ring": 1.0,
+        "rise": 1.0,
+        "strike": 1.0,
+        "tilt": 1.0,
+        "tonal": 1.0
+      }
     },
     "d056": {
       "objective": "df80e5527f4fbedb",
@@ -875,11 +950,36 @@
       "outcome": "adopted"
     },
     "d057": {
-      "objective": "df80e5527f4fbedb",
-      "date": "2026-10-27",
+      "objective": "3bc465ccbf9a2d13",
+      "date": "2026-11-16",
       "capture": "drums_module",
       "timbre": "t0",
-      "outcome": "adopted"
+      "corpora": [
+        {
+          "capture": "drums_module",
+          "timbre": "t0"
+        }
+      ],
+      "outcome": "adopted",
+      "in_sample": true,
+      "weights": {
+        "band": 1.0,
+        "bdecay": 1.0,
+        "bright": 1.0,
+        "crest": 0.5,
+        "density": 1.0,
+        "diffuse": 1.0,
+        "env": 1.0,
+        "evolve": 1.0,
+        "lf": 1.0,
+        "modes": 0.5,
+        "prompt": 1.0,
+        "ring": 1.0,
+        "rise": 1.0,
+        "strike": 1.0,
+        "tilt": 1.0,
+        "tonal": 1.0
+      }
     },
     "d058": {
       "objective": "df80e5527f4fbedb",
@@ -904,32 +1004,132 @@
       "outcome": "adopted"
     },
     "d061": {
-      "objective": "df80e5527f4fbedb",
-      "date": "2026-10-27",
+      "objective": "3bc465ccbf9a2d13",
+      "date": "2026-11-16",
       "capture": "drums_module_hit",
       "timbre": "t0",
-      "outcome": "adopted"
+      "corpora": [
+        {
+          "capture": "drums_module_hit",
+          "timbre": "t0"
+        }
+      ],
+      "outcome": "adopted",
+      "in_sample": true,
+      "weights": {
+        "band": 1.0,
+        "bdecay": 1.0,
+        "bright": 1.0,
+        "crest": 0.5,
+        "density": 1.0,
+        "diffuse": 1.0,
+        "env": 1.0,
+        "evolve": 1.0,
+        "lf": 1.0,
+        "modes": 0.5,
+        "prompt": 1.0,
+        "ring": 1.0,
+        "rise": 1.0,
+        "strike": 1.0,
+        "tilt": 1.0,
+        "tonal": 1.0
+      }
     },
     "d062": {
-      "objective": "df80e5527f4fbedb",
-      "date": "2026-10-27",
+      "objective": "3bc465ccbf9a2d13",
+      "date": "2026-11-16",
       "capture": "drums_module_hit",
       "timbre": "t0",
-      "outcome": "adopted"
+      "corpora": [
+        {
+          "capture": "drums_module_hit",
+          "timbre": "t0"
+        }
+      ],
+      "outcome": "adopted",
+      "in_sample": true,
+      "weights": {
+        "band": 1.0,
+        "bdecay": 1.0,
+        "bright": 1.0,
+        "crest": 0.5,
+        "density": 1.0,
+        "diffuse": 1.0,
+        "env": 1.0,
+        "evolve": 1.0,
+        "lf": 1.0,
+        "modes": 0.5,
+        "prompt": 1.0,
+        "ring": 1.0,
+        "rise": 1.0,
+        "strike": 1.0,
+        "tilt": 1.0,
+        "tonal": 1.0
+      }
     },
     "d063": {
-      "objective": "df80e5527f4fbedb",
-      "date": "2026-10-27",
+      "objective": "3bc465ccbf9a2d13",
+      "date": "2026-11-16",
       "capture": "drums_module_hit",
       "timbre": "t0",
-      "outcome": "adopted"
+      "corpora": [
+        {
+          "capture": "drums_module_hit",
+          "timbre": "t0"
+        }
+      ],
+      "outcome": "adopted",
+      "in_sample": true,
+      "weights": {
+        "band": 1.0,
+        "bdecay": 1.0,
+        "bright": 1.0,
+        "crest": 0.5,
+        "density": 1.0,
+        "diffuse": 1.0,
+        "env": 1.0,
+        "evolve": 1.0,
+        "lf": 1.0,
+        "modes": 0.5,
+        "prompt": 1.0,
+        "ring": 1.0,
+        "rise": 1.0,
+        "strike": 1.0,
+        "tilt": 1.0,
+        "tonal": 1.0
+      }
     },
     "d064": {
-      "objective": "df80e5527f4fbedb",
-      "date": "2026-10-27",
+      "objective": "3bc465ccbf9a2d13",
+      "date": "2026-11-16",
       "capture": "drums_module_mid",
       "timbre": "t0",
-      "outcome": "adopted"
+      "corpora": [
+        {
+          "capture": "drums_module_mid",
+          "timbre": "t0"
+        }
+      ],
+      "outcome": "adopted",
+      "in_sample": true,
+      "weights": {
+        "band": 1.0,
+        "bdecay": 1.0,
+        "bright": 1.0,
+        "crest": 0.5,
+        "density": 1.0,
+        "diffuse": 1.0,
+        "env": 1.0,
+        "evolve": 1.0,
+        "lf": 1.0,
+        "modes": 0.5,
+        "prompt": 1.0,
+        "ring": 1.0,
+        "rise": 1.0,
+        "strike": 1.0,
+        "tilt": 1.0,
+        "tonal": 1.0
+      }
     },
     "d065": {
       "objective": "df80e5527f4fbedb",
