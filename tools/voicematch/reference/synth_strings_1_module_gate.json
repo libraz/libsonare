@@ -109,7 +109,7 @@
       "floor": 1.0,
       "floor_from": "guess",
       "median": 4.937,
-      "abs_median": 5.362,
+      "abs_median": 7.875,
       "p90": 11.165,
       "rows": 9,
       "provenance": {
@@ -126,11 +126,20 @@
           "clean_held_utc": "2026-11-15T01:52:55+00:00"
         },
         "abs_median": {
-          "set_utc": "2026-10-26T06:37:56+00:00",
-          "set_build": "2026-10-26T06:34:05Z",
-          "held_utc": null,
+          "set_utc": "2026-11-16T22:19:19+00:00",
+          "set_build": "2026-11-16T21:49:27Z",
+          "set_tree": {
+            "head": "ac3438c83",
+            "dirty": []
+          },
+          "held_utc": "2026-11-16T22:19:19+00:00",
           "measured": 6.3,
-          "outcome": "exceeded"
+          "outcome": "rerecorded_vanished",
+          "replaced": {
+            "value": 5.362,
+            "set_utc": "2026-10-26T06:37:56+00:00",
+            "reason": "recorded 2026-10-26 on a search candidate of the withdrawn module refit; the shipped voice read the current values then and now, and never met these bounds"
+          }
         },
         "p90": {
           "set_utc": "2026-10-26T06:37:56+00:00",
@@ -249,49 +258,85 @@
     "body": {
       "floor": 1.0,
       "floor_from": "default",
-      "median": 1.0,
-      "abs_median": 2.387,
-      "p90": 8.855,
+      "median": 11.9875,
+      "abs_median": 11.9875,
+      "p90": 17.7425,
       "rows": 9,
       "provenance": {
         "median": {
-          "set_utc": "2026-10-26T06:37:56+00:00",
-          "set_build": "2026-10-26T06:34:05Z",
-          "held_utc": null,
+          "set_utc": "2026-11-16T22:19:19+00:00",
+          "set_build": "2026-11-16T21:49:27Z",
+          "set_tree": {
+            "head": "ac3438c83",
+            "dirty": []
+          },
+          "held_utc": "2026-11-16T22:19:19+00:00",
           "measured": 9.59,
-          "outcome": "exceeded"
+          "outcome": "rerecorded_vanished",
+          "replaced": {
+            "value": 1.0,
+            "set_utc": "2026-10-26T06:37:56+00:00",
+            "reason": "recorded 2026-10-26 on a search candidate of the withdrawn module refit; the shipped voice read the current values then and now, and never met these bounds"
+          }
         },
         "abs_median": {
-          "set_utc": "2026-10-26T06:37:56+00:00",
-          "set_build": "2026-10-26T06:34:05Z",
-          "held_utc": null,
+          "set_utc": "2026-11-16T22:19:19+00:00",
+          "set_build": "2026-11-16T21:49:27Z",
+          "set_tree": {
+            "head": "ac3438c83",
+            "dirty": []
+          },
+          "held_utc": "2026-11-16T22:19:19+00:00",
           "measured": 9.59,
-          "outcome": "exceeded"
+          "outcome": "rerecorded_vanished",
+          "replaced": {
+            "value": 2.387,
+            "set_utc": "2026-10-26T06:37:56+00:00",
+            "reason": "recorded 2026-10-26 on a search candidate of the withdrawn module refit; the shipped voice read the current values then and now, and never met these bounds"
+          }
         },
         "p90": {
-          "set_utc": "2026-10-26T06:37:56+00:00",
-          "set_build": "2026-10-26T06:34:05Z",
-          "held_utc": null,
+          "set_utc": "2026-11-16T22:19:19+00:00",
+          "set_build": "2026-11-16T21:49:27Z",
+          "set_tree": {
+            "head": "ac3438c83",
+            "dirty": []
+          },
+          "held_utc": "2026-11-16T22:19:19+00:00",
           "measured": 14.194,
-          "outcome": "exceeded"
+          "outcome": "rerecorded_vanished",
+          "replaced": {
+            "value": 8.855,
+            "set_utc": "2026-10-26T06:37:56+00:00",
+            "reason": "recorded 2026-10-26 on a search candidate of the withdrawn module refit; the shipped voice read the current values then and now, and never met these bounds"
+          }
         }
       }
     },
     "balance": {
       "floor": 0.5,
       "floor_from": "guess",
-      "median": 2.47,
+      "median": 3.435,
       "abs_median": 3.435,
       "p90": 8.876,
       "rows": 9,
       "provenance": {
         "median": {
-          "set_utc": "2026-10-26T06:37:56+00:00",
-          "set_build": "2026-10-26T06:34:05Z",
-          "held_utc": null,
+          "set_utc": "2026-11-16T22:19:19+00:00",
+          "set_build": "2026-11-16T21:49:27Z",
+          "set_tree": {
+            "head": "ac3438c83",
+            "dirty": []
+          },
+          "held_utc": "2026-11-16T22:19:19+00:00",
           "measured": 2.748,
-          "outcome": "exceeded",
-          "set_reader": 1
+          "outcome": "rerecorded_vanished",
+          "replaced": {
+            "value": 2.47,
+            "set_utc": "2026-10-26T06:37:56+00:00",
+            "reason": "recorded 2026-10-26 on a search candidate of the withdrawn module refit; the shipped voice read the current values then and now, and never met these bounds"
+          },
+          "set_reader": 2
         },
         "abs_median": {
           "set_utc": "2026-10-26T06:37:56+00:00",
@@ -324,31 +369,58 @@
     "centroid_pct": {
       "floor": 1.0,
       "floor_from": "guess",
-      "median": 36.465,
-      "abs_median": 36.465,
-      "p90": 108.779,
+      "median": 54.112,
+      "abs_median": 54.112,
+      "p90": 144.3166,
       "rows": 9,
       "provenance": {
         "median": {
-          "set_utc": "2026-10-26T06:37:56+00:00",
-          "set_build": "2026-10-26T06:34:05Z",
-          "held_utc": null,
+          "set_utc": "2026-11-16T22:19:19+00:00",
+          "set_build": "2026-11-16T21:49:27Z",
+          "set_tree": {
+            "head": "ac3438c83",
+            "dirty": []
+          },
+          "held_utc": "2026-11-16T22:19:19+00:00",
           "measured": 43.2896,
-          "outcome": "exceeded"
+          "outcome": "rerecorded_vanished",
+          "replaced": {
+            "value": 36.465,
+            "set_utc": "2026-10-26T06:37:56+00:00",
+            "reason": "recorded 2026-10-26 on a search candidate of the withdrawn module refit; the shipped voice read the current values then and now, and never met these bounds"
+          }
         },
         "abs_median": {
-          "set_utc": "2026-10-26T06:37:56+00:00",
-          "set_build": "2026-10-26T06:34:05Z",
-          "held_utc": null,
+          "set_utc": "2026-11-16T22:19:19+00:00",
+          "set_build": "2026-11-16T21:49:27Z",
+          "set_tree": {
+            "head": "ac3438c83",
+            "dirty": []
+          },
+          "held_utc": "2026-11-16T22:19:19+00:00",
           "measured": 43.2896,
-          "outcome": "exceeded"
+          "outcome": "rerecorded_vanished",
+          "replaced": {
+            "value": 36.465,
+            "set_utc": "2026-10-26T06:37:56+00:00",
+            "reason": "recorded 2026-10-26 on a search candidate of the withdrawn module refit; the shipped voice read the current values then and now, and never met these bounds"
+          }
         },
         "p90": {
-          "set_utc": "2026-10-26T06:37:56+00:00",
-          "set_build": "2026-10-26T06:34:05Z",
-          "held_utc": null,
+          "set_utc": "2026-11-16T22:19:19+00:00",
+          "set_build": "2026-11-16T21:49:27Z",
+          "set_tree": {
+            "head": "ac3438c83",
+            "dirty": []
+          },
+          "held_utc": "2026-11-16T22:19:19+00:00",
           "measured": 115.4533,
-          "outcome": "exceeded"
+          "outcome": "rerecorded_vanished",
+          "replaced": {
+            "value": 108.779,
+            "set_utc": "2026-10-26T06:37:56+00:00",
+            "reason": "recorded 2026-10-26 on a search candidate of the withdrawn module refit; the shipped voice read the current values then and now, and never met these bounds"
+          }
         }
       }
     }
