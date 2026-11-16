@@ -920,6 +920,23 @@ def test_a_one_velocity_probe_leaves_velocity_axis_knobs_out_and_records_them():
     )
 
 
+def test_held_knobs_stay_out_of_the_search_and_are_counted():
+    spec, report = auto_spec_report(0, _VEL_CAT, hold={"p0.brightness"})
+    assert "p0.brightness" not in set(_offered(spec))
+    assert report.held == ["p0.brightness"]
+    assert "1 knob(s) held at their start by --hold" in report.lines()
+
+
+def test_a_hold_naming_a_key_the_library_lacks_is_refused():
+    from types import SimpleNamespace
+
+    from autofit import _held_keys
+
+    assert _held_keys(SimpleNamespace(hold="p0.brightness"), _VEL_CAT) == {"p0.brightness"}
+    with pytest.raises(ValueError, match="does not report: p0.nope"):
+        _held_keys(SimpleNamespace(hold="p0.brightness,p0.nope"), _VEL_CAT)
+
+
 def test_a_probe_with_a_velocity_spread_keeps_velocity_axis_knobs():
     spec, report = auto_spec_report(0, _VEL_CAT, velocity_spread=True)
     assert {"p0.velocity_exponent", "p0.mallet_vel_exp"} <= set(_offered(spec))

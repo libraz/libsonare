@@ -1164,7 +1164,7 @@ class AutoReport:
     `unjudged` the knobs left out because a dimension they need is not gated, by that
     dimension, and `no_gate` that no gate was found, so none was taken as gated.
     `velocity_held` the velocity-axis knobs left out because the probe sounds one
-    velocity per pitch.
+    velocity per pitch, and `held` the knobs a caller named to stay at their start.
     """
 
     excluded: dict[str, list[str]] = field(default_factory=dict)
@@ -1175,6 +1175,7 @@ class AutoReport:
     unjudged: dict[str, list[str]] = field(default_factory=dict)
     no_gate: bool = False
     velocity_held: list[str] = field(default_factory=list)
+    held: list[str] = field(default_factory=list)
     #: Engine constants left out because the fit scores k of the engine's n voices.
     shared: list[str] = field(default_factory=list)
     shared_cover: tuple[int, int] = (0, 0)
@@ -1188,6 +1189,8 @@ class AutoReport:
                 f"--spec auto leaves out {sum(len(k) for k in self.unjudged.values())} "
                 f"knob(s), no gated dimension can judge them (missing dimension): {counts}"
             )
+        if self.held:
+            out.append(f"{len(self.held)} knob(s) held at their start by --hold")
         if self.velocity_held:
             out.append(
                 f"{len(self.velocity_held)} velocity-axis knob(s) held: "
@@ -1260,6 +1263,7 @@ def auto_spec(
     covered: Collection[str] | None = None,
     probe: bool = False,
     velocity_spread: bool = True,
+    hold: Collection[str] = (),
 ) -> list[dict]:
     """The knob list of `auto_spec_report`, without the account of what it left out."""
     return auto_spec_report(
@@ -1274,6 +1278,7 @@ def auto_spec(
         covered=covered,
         probe=probe,
         velocity_spread=velocity_spread,
+        hold=hold,
     )[0]
 
 
@@ -1290,6 +1295,7 @@ def auto_spec_report(
     covered: Collection[str] | None = None,
     probe: bool = False,
     velocity_spread: bool = True,
+    hold: Collection[str] = (),
 ) -> tuple[list[dict], AutoReport]:
     """Build a knob spec for `program` from the library's own catalogue.
 
@@ -1334,7 +1340,7 @@ def auto_spec_report(
 
     `velocity_spread` is whether the probe sounds any pitch at two velocities. Without
     it nothing scores a velocity-axis field (`is_velocity_axis`), so it is left out and
-    stays at its start.
+    stays at its start. `hold` names catalogue keys left out the same way.
     """
     defaults = catalogue.defaults
     if drum_note is not None:
@@ -1433,6 +1439,9 @@ def auto_spec_report(
             and entry.cls == "compensating_group"
             and entry.group not in open_groups
         ):
+            continue
+        if k in hold:
+            report.held.append(k)
             continue
         if not velocity_spread and is_velocity_axis(k):
             report.velocity_held.append(k)

@@ -2461,14 +2461,37 @@ def _fold_tree_provenance(
     path.write_text(json.dumps(_json_safe(record), indent=2, allow_nan=False) + "\n")
 
 
+def _held_keys(args, catalogue) -> frozenset[str]:
+    """The `--hold` keys, each one the catalogue reports; an unknown key is refused."""
+    keys = frozenset(k for k in (getattr(args, "hold", "") or "").split(",") if k)
+    unknown = sorted(keys - set(catalogue.defaults))
+    if unknown:
+        raise ValueError(f"--hold names key(s) the library does not report: {', '.join(unknown)}")
+    return keys
+
+
 def _fold_held_velocity_axis(out_path: str, args) -> None:
-    """Add the velocity-axis knobs `--spec auto` held at their start to an --out record."""
-    held = getattr(args, "held_velocity_axis", None)
+    """Add the knobs `--spec auto` held at their start (velocity axis, `--hold`) to --out."""
+    held = {
+        "held_velocity_axis": getattr(args, "held_velocity_axis", None),
+        "held_knobs": getattr(args, "held_knobs", None),
+    }
+    held = {k: v for k, v in held.items() if v}
     if not held or not out_path or not Path(out_path).exists():
         return
     path = Path(out_path)
     record = json.loads(path.read_text())
-    record["held_velocity_axis"] = held
+    record.update(held)
+    path.write_text(json.dumps(_json_safe(record), indent=2, allow_nan=False) + "\n")
+
+
+def _fold_level_unscored(out_path: str, args) -> None:
+    """Mark an --out record whose probe has no level contrast, so its absolute level was never scored."""
+    if getattr(args, "has_level_contrasts", True) or not out_path or not Path(out_path).exists():
+        return
+    path = Path(out_path)
+    record = json.loads(path.read_text())
+    record["level_unscored"] = True
     path.write_text(json.dumps(_json_safe(record), indent=2, allow_nan=False) + "\n")
 
 
@@ -3027,6 +3050,8 @@ def run(args, argv: list[str] | None = None) -> int:
     # --spec auto. Producing it needs a tuning build, so it configures and
     # builds first — the same build the run then uses.
     auto = args.spec == "auto"
+    if getattr(args, "hold", "") and not auto:
+        raise ValueError("--hold leaves knobs out of --spec auto; a hand spec lists its own")
     catalogue: Catalogue | None = None
     classes: KnobClasses | None = None
     if auto or args.dump_knobs:
@@ -3077,9 +3102,10 @@ def run(args, argv: list[str] | None = None) -> int:
                 covered={p for p in (_voiced_patch(ns, catalogue) for ns in capture_args) if p},
                 probe=bool(args.dry_run),
                 velocity_spread=args.has_velocity_spread,
+                hold=_held_keys(args, catalogue),
             )
             print(f"# fit_knobs\t{len(taken)}\tof {len(rows)} rows, what --spec auto takes")
-            for held in dump_report.velocity_held:
+            for held in dump_report.held + dump_report.velocity_held:
                 print(f"# held\t{held}")
             for line in dump_report.reach_lines():
                 print(f"# {line}")
@@ -3109,8 +3135,10 @@ def run(args, argv: list[str] | None = None) -> int:
             covered={p for p in (_voiced_patch(ns, catalogue) for ns in capture_args) if p},
             probe=_writes_nothing(args),
             velocity_spread=args.has_velocity_spread,
+            hold=_held_keys(args, catalogue),
         )
         args.held_velocity_axis = list(auto_report.velocity_held)
+        args.held_knobs = list(auto_report.held)
         subject = (
             f"drum note {args.drum_note}"
             if args.drum_note is not None
@@ -3370,6 +3398,7 @@ def run(args, argv: list[str] | None = None) -> int:
                 restore(pristine, evaluator.written)
             _fold_tree_provenance(args.out, head_sha, dirty_src, library)
             _fold_held_velocity_axis(args.out, args)
+            _fold_level_unscored(args.out, args)
             _fold_gate_audit(args, build_dir)
             return 0
         if args.grid:
@@ -3485,6 +3514,7 @@ def run(args, argv: list[str] | None = None) -> int:
     _fold_gate_audit(args, build_dir)
     _fold_assessment(args.out, args)
     _fold_held_velocity_axis(args.out, args)
+    _fold_level_unscored(args.out, args)
     return 0
 
 
@@ -3958,6 +3988,13 @@ def build_parser() -> argparse.ArgumentParser:
         help="engine constants held fixed under every evaluation (an override string or "
         "@file); a key the search also moves is refused, and the fit is recorded as "
         "answered under this base",
+    )
+    parser.add_argument(
+        "--hold",
+        default="",
+        metavar="K,...",
+        help="--spec auto: catalogue keys left out of the search, at their start. Part of "
+        "the fit's identity: recorded in --out as held_knobs",
     )
     parser.add_argument(
         "--start-overrides",
