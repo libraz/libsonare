@@ -159,6 +159,7 @@
 #### Synthesizer
 
 - Changing one part's rig, a GS insertion effect's send, EFX CONTROL source or depth, or a part's EFX assignment no longer resets the other parts' rigs and the insertion units the change does not reach: their delay, reverb and amplifier tails keep ringing. Only the part chain or unit the edit reaches is rebuilt; a parameter edit queued just before such a change is no longer lost. The SF2 player's direct publication of an insertion-effect message still rebuilds every unit.
+- The acoustic pianos (GM programs 0 to 3 and their variations) no longer ring out at the strike on certain middle-register notes under a hard blow, G3, G#3 and F4 most of all: the string's longitudinal modes are driven by the pairs of partials that can reach each one instead of by all of them at once. From A0 to C3 the attack brightens slightly less between a soft and a hard blow. Bright Piano (GM program 1) and the wide variations of the Piano and Bright Piano have their brightening with a harder blow re-set so their attack sits where it did.
 - A GS ASSIGN GROUP write (`41 m3 rr`) on the built-in drum kit chokes the pair the GS drum map gives that number: group 2 is the whistles, 3 the guiros, 4 the cuicas and 5 the triangles, which were numbered 4, 5, 2 and 3. Files that write no ASSIGN GROUP sound the same.
 
 #### Vocal editing

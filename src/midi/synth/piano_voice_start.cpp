@@ -232,6 +232,7 @@ LoopBudget PianoVoiceCore::configure(const PianoPatchParams& params, double sr, 
   strike_mean /= static_cast<float>(num_strings_);
   for (int i = 0; i < num_strings_; ++i) {
     String& s = strings_[static_cast<size_t>(i)];
+    s.half_tap = 0.0f;
     s.buffer = slab_ != nullptr ? slab_ + static_cast<size_t>(i) * string_capacity_ : nullptr;
     // Micro-detune: symmetric spread plus seeded jitter.
     float offset = 0.0f;
@@ -630,6 +631,18 @@ LoopBudget PianoVoiceCore::configure(const PianoPatchParams& params, double sr, 
       std::clamp(1.0f - std::exp(-kTwoPi * kLongDriveHpHz / static_cast<float>(sr)), 0.0f, 1.0f);
   long_x1_ = 0.0f;
   long_x2_ = 0.0f;
+  // Above the floor's note the routed and whole-square drives differ by under -45 dB of the note.
+  long_split_ = modal_mix_ <= 0.0f && long_level_ >= kLongSplitLevelFloor * kLongLevel;
+  // Half of what the loop holds outside the line: the feedback sample and the loss pole's delay.
+  long_half_offset_ = 0.5f - 0.5f * (1.0f - loop_alpha_) / std::max(loop_alpha_, 1.0e-6f);
+  {
+    // The split holds to about 0.3 of the sample rate; the edge never sits above that.
+    const float w = kTwoPi * std::min(kLongSplitLpHz / static_cast<float>(sr), kLongSplitMaxRate);
+    const rt::BiquadCoeffs c = rt::rbj_lowpass(w, kButterworthQ);
+    long_lp_ = LongLowpass{c.b0, c.b1, c.a1, c.a2};
+  }
+  long_odd_ = LongPart{};
+  long_even_ = LongPart{};
   for (int i = 0; i < kLongitudinalModes; ++i) {
     LongMode& m = long_modes_[static_cast<size_t>(i)];
     m = LongMode{};

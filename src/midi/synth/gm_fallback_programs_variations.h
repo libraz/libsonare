@@ -38,6 +38,9 @@ SONARE_TUNED_CONSTEXPR void configure_variation_programs(ProgramOverrides& o) no
   o.piano_wide = fam[0];
   o.piano_wide.stereo_spread = 0.55f;
   o.piano_wide.piano.detune_cents = fam[0].piano.detune_cents * 2.2f;
+  // Re-centred when the longitudinal drive was split by parity: the attack band at the
+  // capture's one velocity read 1.6 dB under its previous level, and this returns it.
+  o.piano_wide.piano.attack_hf_dynamics = 2.9f;
 
   // Piano 1d (GM2: "dark"): the lid down. A softer, longer felt contact loses
   // the upper partials at the hammer instead of filtering them off afterwards,
@@ -54,6 +57,8 @@ SONARE_TUNED_CONSTEXPR void configure_variation_programs(ProgramOverrides& o) no
   o.bright_piano_wide = o.bright_piano;
   o.bright_piano_wide.stereo_spread = 0.55f;
   o.bright_piano_wide.piano.detune_cents = o.bright_piano.piano.detune_cents * 2.2f;
+  // Re-centred with the parity split of the longitudinal drive: attack band 1.0 dB down, returned.
+  o.bright_piano_wide.piano.attack_hf_dynamics = 1.2f;
   o.electric_grand_wide = o.electric_grand;
   o.electric_grand_wide.stereo_spread = 0.45f;
   o.electric_grand_wide.piano.detune_cents = o.electric_grand.piano.detune_cents * 2.2f;

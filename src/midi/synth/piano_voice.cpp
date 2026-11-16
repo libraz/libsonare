@@ -237,6 +237,8 @@ float PianoVoiceCore::render_internal(float pitch_ratio) noexcept {
   if (ratio != modal_cached_ratio_) refresh_modal_coefficients(ratio);
   float sum = 0.0f;
   float lp_sum = 0.0f;
+  float sum_odd = 0.0f;
+  float sum_even = 0.0f;
   // Fully past the crossover the loop contributes nothing, so it is not run:
   // the modal bank is meant to be the cheaper path up there, and leaving four
   // allpasses and an interpolator per string spinning behind a zero weight
@@ -256,14 +258,32 @@ float PianoVoiceCore::render_internal(float pitch_ratio) noexcept {
         static_cast<int>(delay * 256.0f), exc * s.strike_weight + fb);
     // Dispersion allpass cascade then the loop lowpass.
     float v = out;
+    float mid = out;
+    int stage = 0;
     for (float& state : s.ap_state) {
       const float y = s.ap_a * v + state;
       state = v - s.ap_a * y;
       v = y;
+      if (++stage == kPianoDispersionStages / 2) mid = v;
     }
     s.lp_state += loop_alpha_ * (v - s.lp_state);
     lp_sum += s.lp_state;
     sum += out * s.radiate_weight;
+    if (long_split_) {
+      // Half a round trip turns partial n by n*pi against the cascade's midpoint.
+      const float d = 0.5f * delay + long_half_offset_;
+      const int whole = static_cast<int>(d - 0.1f);
+      const float mu = d - static_cast<float>(whole);
+      const float eta = (1.0f - mu) / (1.0f + mu);
+      int i0 = static_cast<int>(s.write_index) - whole;
+      if (i0 < 0) i0 += string_capacity_;
+      int i1 = i0 - 1;
+      if (i1 < 0) i1 += string_capacity_;
+      const float half = eta * (s.buffer[i0] - s.half_tap) + s.buffer[i1];
+      s.half_tap = half;
+      sum_odd += 0.5f * (mid - half) * s.radiate_weight;
+      sum_even += 0.5f * (mid + half) * s.radiate_weight;
+    }
   }
   bridge_ = lp_sum / static_cast<float>(num_strings_);
   // Band-limited copy for the drain only. `bridge_` itself stays broadband:
@@ -315,7 +335,39 @@ float PianoVoiceCore::render_internal(float pitch_ratio) noexcept {
   // which the squared drive's large DC component would be re-radiated as the
   // very bass rumble this bank is here to replace.
   float longitudinal = 0.0f;
-  if (long_level_ > 0.0f) {
+  if (long_level_ > 0.0f && long_split_) {
+    // A pair of partials reaches a mode only when their numbers sum to its parity.
+    const auto band = [this](LongPart& part, float in) {
+      const float lp = long_lp_.b0 * (in + part.lx2) + long_lp_.b1 * part.lx1 -
+                       long_lp_.a1 * part.ly1 - long_lp_.a2 * part.ly2;
+      part.lx2 = part.lx1;
+      part.lx1 = in;
+      part.ly2 = part.ly1;
+      part.ly1 = lp;
+      part.hp += long_hp_a_ * (lp - part.hp);
+    };
+    band(long_odd_, sum_odd);
+    band(long_even_, sum_even);
+    const float d_odd = long_odd_.ly1 - long_odd_.hp;
+    const float d_even = long_even_.ly1 - long_even_.hp;
+    const float t_odd = 2.0f * d_odd * d_even;
+    const float t_even = d_odd * d_odd + d_even * d_even;
+    const float bp_odd = t_odd - long_odd_.x2;
+    const float bp_even = t_even - long_even_.x2;
+    long_odd_.x2 = long_odd_.x1;
+    long_odd_.x1 = t_odd;
+    long_even_.x2 = long_even_.x1;
+    long_even_.x1 = t_even;
+    for (size_t i = 0; i < long_modes_.size(); ++i) {
+      LongMode& m = long_modes_[i];
+      const float y = m.gain * (i % 2 == 0 ? bp_odd : bp_even) + m.a1 * m.y1 + m.a2 * m.y2;
+      m.y2 = m.y1;
+      m.y1 = y;
+      longitudinal += y;
+    }
+    longitudinal *= long_level_;
+  } else if (long_level_ > 0.0f) {
+    // No half tap where the loop is being crossfaded out: every mode takes the whole square.
     // The tension follows the string's SLOPE, not its displacement, so the
     // drive is differenced before it is squared. It matters for the envelope
     // rather than the spectrum: the slope is carried by the upper transverse

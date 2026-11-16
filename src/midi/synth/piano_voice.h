@@ -198,7 +198,8 @@ class PianoVoiceCore {
     float radiate_weight = 1.0f;  // uneven bridge coupling across the unison
     float lp_state = 0.0f;
     std::array<float, kPianoDispersionStages> ap_state{};
-    float ap_a = 0.0f;  // shared first-order allpass coefficient
+    float ap_a = 0.0f;      // shared first-order allpass coefficient
+    float half_tap = 0.0f;  // allpass state of the half-line read (parity split)
     float g_slow = 0.0f;
     float g_fast = 0.0f;
     // The two gains as start() set them: what a partial damper interpolates from.
@@ -371,7 +372,8 @@ class PianoVoiceCore {
   // almost nothing, and they are the metallic growl that tells the ear a low
   // note came from a piano rather than from a string. The drive is the squared
   // string sum, so the v^2 amplitude law and the doubled decay rate both come
-  // out of the mechanism rather than being prescribed.
+  // out of the mechanism rather than being prescribed. Below the modal
+  // crossover the square is split by the parity of the partial pair's sum.
   static constexpr int kLongitudinalModes = 5;
   struct LongMode {
     float a1 = 0.0f;
@@ -386,6 +388,27 @@ class PianoVoiceCore {
   float long_hp_a_ = 1.0f;
   float long_x1_ = 0.0f;
   float long_x2_ = 0.0f;
+  /// One parity's share of the drive: band limit, slope highpass and difference states.
+  struct LongPart {
+    float lx1 = 0.0f;
+    float lx2 = 0.0f;
+    float ly1 = 0.0f;
+    float ly2 = 0.0f;
+    float hp = 0.0f;
+    float x1 = 0.0f;
+    float x2 = 0.0f;
+  };
+  LongPart long_odd_{};
+  LongPart long_even_{};
+  bool long_split_ = false;  // off where the modal bank mixes in
+  float long_half_offset_ = 0.0f;
+  struct LongLowpass {
+    float b0 = 1.0f;
+    float b1 = 0.0f;
+    float a1 = 0.0f;
+    float a2 = 0.0f;
+  };
+  LongLowpass long_lp_{};
 
   // Soundboard radiation highpass: two biquad sections (b2 == b0 in each)
   // forming a fourth-order Butterworth. The measured radiation transition of a

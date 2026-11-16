@@ -28,8 +28,9 @@ SONARE_TUNED_CONSTEXPR void configure_keyed_programs(ProgramOverrides& o) noexce
   // a released note is 40 dB down in 280 ms here against the grand's 1432, and
   // each follows the recording it is aimed at rather than the family value.
   o.bright_piano.piano.release_damp_s = fam[0].piano.release_damp_s * 0.15f;
-  // Against its reference the attack's 4-8 kHz swing runs 6.55 dB short at zero, 0.75 here.
-  o.bright_piano.piano.attack_hf_dynamics = 0.655f;
+  // Against its reference the attack's 4-8 kHz swing runs 6.55 dB short at zero, 0.88 here
+  // with the longitudinal drive split by parity.
+  o.bright_piano.piano.attack_hf_dynamics = 0.68f;
 
   // Electric Grand Piano (GM 2): the CP-style short-string grand, whose whole
   // difference is that a piezo under the bridge takes the string directly.

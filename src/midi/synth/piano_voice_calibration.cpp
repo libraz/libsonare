@@ -750,6 +750,14 @@ SONARE_TUNABLE_SCOPED("piano_voice", kLongT60S, 0.35f);
 /// the same reason: it is 38 dB down at 100 Hz, which takes the drive away in
 /// exactly the register the bank exists for.
 SONARE_TUNABLE_SCOPED("piano_voice", kLongDriveHpHz, 4000.0f);
+/// Upper edge of the parity-split drive, and the fraction of the sample rate it may not
+/// pass: in the attack the split reads 20 dB or better to 11 kHz at 48 kHz and to about
+/// 7 kHz at 24 kHz, and fails above that.
+SONARE_TUNABLE_SCOPED("piano_voice", kLongSplitLpHz, 11000.0f);
+SONARE_TUNABLE_SCOPED("piano_voice", kLongSplitMaxRate, 0.3f);
+/// Share of the bank's level under which the drive is not split: 0.22 is the taper between
+/// notes 77 and 78, where the first mode is past 9 kHz and the bank 13 dB down.
+SONARE_TUNABLE_SCOPED("piano_voice", kLongSplitLevelFloor, 0.22f);
 /// Soundboard radiation highpass (fourth order; see kRadiationHpSections).
 /// The board radiates poorly
 /// below its first body modes, so a piano's low fundamentals barely reach
