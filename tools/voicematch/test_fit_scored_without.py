@@ -42,3 +42,36 @@ def test_a_later_objective_still_reads_stale_first():
         _report(scored_without=["mss"]), capture="seashore", timbre="t0", outcome="adopted"
     )
     assert fits.axis([unit], {unit: entry}, "o2", equivalents=set())["state"] == fits.STALE
+
+
+def test_a_confirmed_cached_search_reads_current_and_an_unconfirmed_one_does_not():
+    passed = {"agrees": True, "improves": True, "objective": "o1"}
+    unit, entry = fits.record_fit(
+        _report(scored_without=["mss"], confirm=passed),
+        capture="seashore",
+        timbre="t0",
+        outcome="adopted",
+    )
+    got = fits.axis([unit], {unit: entry}, "o1")
+    assert got["state"] == fits.CURRENT and got["searched_without"] == ["mss"]
+    for confirm in (None, {**passed, "improves": False}, {**passed, "agrees": False}):
+        unit, entry = fits.record_fit(
+            _report(scored_without=["mss"], confirm=confirm),
+            capture="seashore",
+            timbre="t0",
+            outcome="adopted",
+        )
+        got = fits.axis([unit], {unit: entry}, "o1")
+        assert got["state"] == fits.SCORED_WITHOUT and "searched_without" not in got
+
+
+def test_a_confirm_under_an_older_objective_is_stale():
+    passed = {"agrees": True, "improves": True, "objective": "o1"}
+    unit, entry = fits.record_fit(
+        _report(scored_without=["mss"], confirm=passed),
+        capture="seashore",
+        timbre="t0",
+        outcome="adopted",
+    )
+    got = fits.axis([unit], {unit: entry}, "o2", equivalents=set())
+    assert got["state"] == fits.STALE and "searched_without" not in got

@@ -953,6 +953,7 @@ def render_table(rows: list[dict], *, every: bool, pol: dict, goal: str | None =
         in_sample = sum(f["state"] == fits_mod.IN_SAMPLE for f in fit_states)
         partial = sum(f["state"] == fits_mod.SCORED_WITHOUT for f in fit_states)
         blocked = sum(f["state"] == fits_mod.BLOCKED for f in fit_states)
+        searched = sum(bool(f.get("searched_without")) for f in fit_states)
         print(
             f"  fits under the current objective: {current} of {len(fit_states)} fittable "
             f"voice(s); {equivalent} under a proven-equivalent objective, {stale} stale, "
@@ -963,6 +964,11 @@ def render_table(rows: list[dict], *, every: bool, pol: dict, goal: str | None =
             + (f"{blocked} blocked by gated rows, " if blocked else "")
             + f"{len(fit_states) - current - equivalent - stale - based - provisional - in_sample - partial - blocked} "
             f"never recorded"
+            + (
+                f"; {searched} searched without a weighed term and confirmed with it"
+                if searched
+                else ""
+            )
         )
     census = signoff_census(rows)
     if census["structure"] or census["music"]:

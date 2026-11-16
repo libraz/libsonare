@@ -165,6 +165,9 @@ def record_fit(
     without = report.get("scored_without") or []
     if without:
         entry["scored_without"] = sorted(without)
+        confirm = report.get("confirm") or {}
+        if confirm.get("agrees") and confirm.get("improves") and confirm.get("objective"):
+            entry["confirmed_under"] = confirm["objective"]
     return unit_of(report), entry
 
 
@@ -204,7 +207,10 @@ def axis(
     given, any base override reads `under_base`.
     `scored_without` is a fit scored with a term its class weighs switched off, named in
     `terms` (a search run from an oracle cache): never `current` or `equivalent` until a
-    full-objective score records it again; it outranks `provisional_off_layer`.
+    full-objective score records it again; it outranks `provisional_off_layer`. One whose
+    confirm pair passed with the term on, under its own objective (`confirmed_under`), owes
+    no refit, since a cached search can never include the term: it takes the state it would
+    otherwise have and names the term in `searched_without`.
     `provisional_off_layer` is a fit against an oracle off the slot's wanted layer, named in
     `oracle`: likewise never `current` or `equivalent`, and it outranks `in_sample`.
     `in_sample` is a fit adopted on an in-sample gain with no held-out condition: likewise
@@ -224,6 +230,9 @@ def axis(
         pool = equivalents if equivalents is not None else equivalence.equivalent_digests(digest)
         return e["objective"] in pool
 
+    def confirmed(e: dict) -> bool:
+        return e.get("confirmed_under") == e["objective"]
+
     def off_base(e: dict) -> bool:
         base = e.get("base_overrides")
         return bool(base) and (shipped is None or not base_is_shipped(base, shipped))
@@ -232,7 +241,7 @@ def axis(
         state = NONE
     elif any(e["objective"] != digest and not covered(e) for e in entries):
         state = STALE
-    elif any(e.get("scored_without") for e in entries):
+    elif any(e.get("scored_without") and not confirmed(e) for e in entries):
         state = SCORED_WITHOUT
     elif any(e.get("provisional_off_layer") for e in entries):
         state = OFF_LAYER
@@ -260,6 +269,8 @@ def axis(
         out["corpora"] = corpora
     if state == SCORED_WITHOUT:
         out["terms"] = sorted({t for e in recorded for t in e.get("scored_without") or []})
+    elif state != STALE and any(e.get("scored_without") for e in recorded):
+        out["searched_without"] = sorted({t for e in recorded for t in e["scored_without"]})
     if state == OFF_LAYER:
         out["note"] = "provisional: fitted against an off-layer oracle"
         out["oracle"] = sorted(
