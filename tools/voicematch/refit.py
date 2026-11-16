@@ -9,8 +9,9 @@ voice runs the same four steps, recorded under `<scratch>/refit/<objective>/`:
               capture's corpus, training on alternate notes and three velocities
               and holding the other notes out
     post      the same compare with the fit's overrides applied
-    verdict   adopt only when values moved, the held-out notes improved, no gated
-              statistic newly exceeds its bound and the summed excess over the
+    verdict   adopt only when values moved, the held-out notes improved, no note
+              rings past its scored window longer than shipped or reference (`tail_check`),
+              no gated statistic newly exceeds its bound and the summed excess over the
               bounds did not grow
 
 `plan` lists the voices, `run` executes the steps (resuming wherever a step's
@@ -48,14 +49,18 @@ from __future__ import annotations
 import argparse
 import functools
 import json
+import math
 import os
 import re
 import subprocess
 import sys
+import tempfile
 from collections.abc import Iterable, Iterator
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 from types import SimpleNamespace
+
+import numpy as np
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
@@ -69,7 +74,7 @@ from _repo import REPO_ROOT
 from autofit_resolve import CaptureSpec, noise_led_tnr, open_corpus
 from autofit_weight_flags import _WEIGHT_FLAGS_1, _WEIGHT_FLAGS_2
 from build_lib import _cached_option, library_path
-from capture import CORPUS_ROOT
+from capture import CORPUS_ROOT, model_rig
 from catalogue import dump_catalogue
 from knobs import (
     check_base_overrides,
@@ -78,14 +83,20 @@ from knobs import (
     load_spec,
     load_spec_weights,
     load_start_overrides,
+    merge_overrides,
+    parse_overrides,
     reach_pattern_for,
     unjudged_reach,
 )
 from loop_record import committed_note_groups
+from metrics_floor import BODY_FLOOR_MARGIN_DB, FLOOR_GUARD_S, MIN_FLOOR_S
+from metrics_signal import _db, _rms_envelope, to_mono
 from objective import objective_digest
 from profile_gate import dimension_floor
+from profile_measure import DECAY_RANGE_DB, decay_origin_index, usable_decay_end
 from render_rows import render_rate
 from toneclass import PERCUSSION_WEIGHTS, default_weights
+from wavio import read_wav
 from writeback import (
     _STRUCT_COPY,
     PROGRAM_TABLE_FILES,
@@ -140,6 +151,23 @@ EVALS_PER_KNOB = 12
 HELD_OUT_MARGIN = 0.005
 #: Relative full-objective gain a gate-only fit must show on its own notes.
 IN_SAMPLE_MARGIN = 0.005
+#: The fit-report key holding the output-gain anchor of a fit whose probe could not score level.
+GAIN_ANCHOR_KEY = "gain_anchor"
+#: The model-level agreement a gain anchor solves to, and the renders it may spend doing so.
+ANCHOR_TOLERANCE_DB = 0.05
+ANCHOR_RENDERS = 4
+#: The fit-report key holding the post-fit check of the decay past each capture's scored window.
+TAIL_CHECK_KEY = "tail_check"
+#: How far a candidate's late decay may sit above the slower of shipped and reference (dB/s).
+TAIL_SLOPE_TOLERANCE_DB_S = 1.0
+#: How far, relatively, a candidate's time to -60 dB may exceed the slower of the two.
+TAIL_T60_TOLERANCE = 0.10
+#: The longest a tail render runs past the note-on, when the note has not reached -60 dB.
+TAIL_RENDER_CAP_S = 12.0
+#: The share of the reference's usable decay its last observed slope is fitted over.
+TAIL_LAST_FRACTION = 1.0 / 3.0
+#: The fewest envelope points a tail slope is fitted through.
+TAIL_MIN_POINTS = 3
 #: `DahdsrEnvelope::kSilenceLevel`: a sustain at or under it makes the envelope end
 #: itself when the decay lands, so leaving it is a branch, not a value.
 SILENT_SUSTAIN = 1.0e-4
@@ -779,9 +807,10 @@ def fit_parts(voice: dict) -> list[dict]:
     return voice.get("fit_on") or voice.get("joint") or []
 
 
-def _fit(
+def _fit_cmd(
     voice: dict, out: Path, build_dir: str, per_knob: int, weights: dict[str, float] | None = None
-) -> None:
+) -> list[str]:
+    """The autofit command line one voice's fit runs."""
     parts = fit_parts(voice)
     # The one capture a fit runs on, which is the voice's own unless that one is off-layer.
     target = parts[0] if parts else voice
@@ -854,6 +883,13 @@ def _fit(
         cmd.append("--allow-dirty-src")
     if voice.get("provisional_off_layer"):
         cmd.append("--allow-off-layer")
+    return cmd
+
+
+def _fit(
+    voice: dict, out: Path, build_dir: str, per_knob: int, weights: dict[str, float] | None = None
+) -> None:
+    cmd = _fit_cmd(voice, out, build_dir, per_knob, weights)
     log = out.with_suffix(".log")
     _check_pin()
     env = {**os.environ, harness_lock.ENV: _PIN} if _PIN else None
@@ -924,7 +960,8 @@ def switch_moves(report: dict, held: frozenset[str] = frozenset()) -> list[str]:
 def in_sample_gain(fit: dict) -> float | None:
     """Relative full-objective gain of a fit on its own notes, or None when none can be read.
 
-    A `confirm` block (the local pair under the full objective) outranks the fit's own numbers.
+    A `confirm` block (the local pair under the full objective) outranks the fit's own numbers,
+    and a gain anchor that held replaces the best loss with the anchored point's.
     """
     local = (fit.get("confirm") or {}).get("local")
     try:
@@ -934,6 +971,7 @@ def in_sample_gain(fit: dict) -> float | None:
             quality = fit["selected"]["quality"]
             start = quality["baseline"]["absolute_weighted_mean_units"]
             best = quality["absolute_weighted_mean_units"]
+        best = (fit.get(GAIN_ANCHOR_KEY) or {}).get("loss_after", best)
         return (start - best) / start
     except (KeyError, TypeError, ZeroDivisionError):
         return None
@@ -952,7 +990,8 @@ def verdict(
     `gate_only` is for a grid with one condition per note, a drum module's single
     velocity, where no held-out condition exists and the gate is the whole judgement; its
     fit must also show an in-sample gain over `IN_SAMPLE_MARGIN`, and an adoption on it is
-    marked `in_sample`.
+    marked `in_sample`. A fit whose `TAIL_CHECK_KEY` record found a note ringing past its
+    bound is kept.
     """
     moved = [
         k["key"]
@@ -978,11 +1017,15 @@ def verdict(
         "newly_over": newly,
         "switches": switch_moves(fit, unjudged),
         "refused": (fit.get("write_back") or {}).get("refused"),
+        "tail_check": fit.get(TAIL_CHECK_KEY),
     }
+    ringing = tail_violation(fit.get(TAIL_CHECK_KEY))
     if out["refused"]:
         out["decision"], out["why"] = "kept", f"write-back refused: {out['refused']}"
     elif not moved:
         out["decision"], out["why"] = "kept", "no value moved"
+    elif ringing:
+        out["decision"], out["why"] = "kept", ringing
     elif held is None and not gate_only:
         out["decision"], out["why"] = "kept", "no independent held-out result"
     elif held is not None and held <= HELD_OUT_MARGIN:
@@ -1263,6 +1306,478 @@ def _first_fit(voice: dict, d: Path, build_dir: str, per_knob: int) -> None:
     (d / "prefit.json").write_text(json.dumps(prefit, indent=2) + "\n")
 
 
+def _set_override(overrides: str, key: str, value: float) -> str:
+    """The overrides with `key` set to `value`, replacing an entry for it or appending one."""
+    kept = [f"{k}={v}" for k, v in parse_overrides(overrides) if k != key]
+    return ",".join([*kept, f"{key}={format_value(value)}"])
+
+
+def model_level_db(voice: dict, overrides: str, lib: Path) -> float | None:
+    """Mean model level over the voice's fitted notes, read as the profile's level dimension reads it.
+
+    A kit hit reads `peak_dbfs`, the field `percussion_row_deltas` differences; a pitched note reads
+    the `held_peak_dbfs` body level the register profile uses. None when no row measured one.
+    """
+    drum = "drum_note" in voice
+    notes = [voice["drum_note"]] if drum else voice.get("notes", [])
+    env = {**os.environ, "SONARE_LIB_PATH": str(lib)}
+    env.pop("SONARE_TUNING_OVERRIDES", None)
+    if overrides:
+        env["SONARE_TUNING_OVERRIDES"] = overrides
+    _check_pin()
+    with tempfile.TemporaryDirectory() as tmp:
+        rows = Path(tmp) / "rows.json"
+        cmd = PYTHON + [
+            str(HERE / "profile.py"),
+            "compare",
+            "--config",
+            str(CAPTURE_DIR / f"{voice['capture']}.json"),
+            "--timbre",
+            voice["timbre"],
+            "--notes",
+            ",".join(map(str, notes)),
+            "--rows",
+            str(rows),
+        ]
+        proc = subprocess.run(cmd, env=env, capture_output=True, text=True, check=False)
+        if not rows.exists():
+            raise RuntimeError(
+                f"{voice['slug']}: the level read wrote no rows: {proc.stdout[-300:]}"
+            )
+        got = json.loads(rows.read_text())["rows"]
+    field = "peak_dbfs" if drum else "held_peak_dbfs"
+    levels = [r[field] for r in got if r.get(field) is not None]
+    return sum(levels) / len(levels) if levels else None
+
+
+def solve_gain(diff_at, gain: float, lo: float, hi: float) -> tuple[float, float, float]:
+    """The gain whose level difference `diff_at(gain)` (dB) is within tolerance of zero.
+
+    Secant steps in dB of gain from a unit-slope start, at most `ANCHOR_RENDERS` after the
+    first read, since drive or saturation makes the level nonlinear in gain. Returns the best
+    gain seen, its difference, and the difference at the starting gain.
+    """
+    x, d = 20.0 * math.log10(gain), diff_at(gain)
+    first, best, prev = d, (gain, d), None
+    for _ in range(ANCHOR_RENDERS):
+        if abs(best[1]) <= ANCHOR_TOLERANCE_DB:
+            break
+        slope = 1.0
+        if prev is not None and abs(x - prev[0]) > 1e-9 and abs(d - prev[1]) > 1e-9:
+            slope = (d - prev[1]) / (x - prev[0])
+        nxt = min(max(10.0 ** ((x - d / slope) / 20.0), lo), hi)
+        if nxt == gain:
+            break
+        prev, gain = (x, d), nxt
+        x, d = 20.0 * math.log10(gain), diff_at(gain)
+        if abs(d) < abs(best[1]):
+            best = (gain, d)
+    return best[0], best[1], first
+
+
+def anchor_gain(
+    voice: dict, d: Path, build_dir: str, report: dict, lib: Path, per_knob: int = EVALS_PER_KNOB
+) -> dict:
+    """Re-solve the voice patch's output gain alone, so the fit leaves the shipped level.
+
+    A probe with no note/velocity level contrast cannot score level, so the fit's absolute
+    level is arbitrary and the gate would read that drift. The gain is solved after the fit
+    rather than held in the search because drive, envelope, filter and mode levels also move
+    absolute level. The model's mean level over the fitted notes is brought to its shipped
+    value, and the point is kept only when the full objective stays within `IN_SAMPLE_MARGIN`
+    of the candidate's. The outcome is recorded under `GAIN_ANCHOR_KEY`, and the report is
+    rewritten at the anchored point on success.
+    """
+    from remote_fit import _without, score_once, start_overrides
+
+    key = f"{voice['patch']}.gain"
+    knobs, values = report["knobs"], list(report["selected"]["values"])
+    idx = next((i for i, k in enumerate(knobs) if k["key"] == key), None)
+    if idx is not None:
+        shipped, current = _shipped(knobs[idx]), values[idx]
+        lo, hi = knobs[idx]["min"], knobs[idx]["max"]
+    else:
+        cat = _catalogue(voice, lib)
+        bounds = cat.bounds.get("gain")
+        if key not in cat.defaults or bounds is None:
+            return _write_anchor(d, report, {"knob": key, "skipped": "no gain field"})
+        shipped = float(dict(parse_overrides(BASE_OVERRIDES)).get(key, cat.defaults[key]))
+        current, (lo, hi) = shipped, bounds
+    if current <= 0.0:
+        return _write_anchor(d, report, {"knob": key, "skipped": "gain is not positive"})
+    base = reach_copies(BASE_OVERRIDES, voice)
+    renders = 0
+
+    def level(overrides: str) -> float:
+        nonlocal renders
+        renders += 1
+        got = model_level_db(voice, overrides, lib)
+        if got is None:
+            raise RuntimeError("no level reading")
+        return got
+
+    def diff_at(gain: float) -> float:
+        over = reach_copies(_set_override(report.get("overrides") or "", key, gain), voice)
+        return level(merge_overrides(base, over)) - reference
+
+    try:
+        reference = level(base)
+        gain, left, offset = solve_gain(diff_at, current, lo, hi)
+    except RuntimeError as exc:
+        return _write_anchor(d, report, {"knob": key, "skipped": str(exc)})
+    record = {
+        "knob": key,
+        "before": current,
+        "after": gain,
+        "level_before_db": offset,
+        "level_after_db": left,
+        "renders": renders,
+    }
+    if gain == current:
+        return _write_anchor(d, report, {**record, "skipped": "level within tolerance"})
+    prefit = d / "prefit.json"
+    weights = json.loads(prefit.read_text()).get("prefit_weights") if prefit.exists() else None
+    argv = _fit_cmd(voice, d / "fit.json", build_dir, per_knob, weights or None)[len(PYTHON) + 1 :]
+    moved = list(values)
+    anchored_argv = argv
+    if idx is not None:
+        moved[idx] = gain
+    else:
+        pinned = merge_overrides(BASE_OVERRIDES, f"{key}={format_value(gain)}")
+        anchored_argv = [*_without(argv, "--base-overrides"), "--base-overrides", pinned]
+    try:
+        scored = score_once(
+            argv, lib, d / "anchor_before.json", start_overrides(_at(knobs, values))
+        )
+        rescored = score_once(
+            anchored_argv, lib, d / "anchor_after.json", start_overrides(_at(knobs, moved))
+        )
+    except RuntimeError as exc:
+        return _write_anchor(d, report, {**record, "skipped": str(exc)})
+    before = scored["selected"]["quality"]["absolute_weighted_mean_units"]
+    after = rescored["selected"]["quality"]["absolute_weighted_mean_units"]
+    if abs(after - before) / before > IN_SAMPLE_MARGIN:
+        return _write_anchor(
+            d, report, {**record, "failed": {"loss_before": before, "loss_after": after}}
+        )
+    if idx is None:
+        knobs.append(
+            {
+                "key": key,
+                "start": shipped,
+                "best": gain,
+                "min": lo,
+                "max": hi,
+                "scale": "log",
+                "start_source": "gain_anchor",
+            }
+        )
+        moved = [*values, gain]
+    else:
+        knobs[idx]["best"] = gain
+    report["selected"]["values"] = moved
+    report["overrides"] = _set_override(report.get("overrides") or "", key, gain)
+    return _write_anchor(d, report, {**record, "loss_before": before, "loss_after": after})
+
+
+def _at(knobs: list[dict], values: list[float]) -> dict:
+    """A report-shaped point of the knobs moved off their start, for `remote_fit.start_overrides`.
+
+    A knob at its start needs no override, and one the search now holds (a velocity-axis
+    knob on a one-velocity probe) is refused as a start override.
+    """
+    moved = [(k, v) for k, v in zip(knobs, values, strict=True) if v != k["start"]]
+    return {"knobs": [k for k, _ in moved], "selected": {"values": [v for _, v in moved]}}
+
+
+def _write_anchor(d: Path, report: dict, record: dict) -> dict:
+    report[GAIN_ANCHOR_KEY] = record
+    (d / "fit.json").write_text(json.dumps(report, indent=2) + "\n")
+    return report
+
+
+def _round(v: float | None, digits: int = 3) -> float | None:
+    return None if v is None else round(v, digits)
+
+
+def _decay_db(mono: np.ndarray, sr: int) -> tuple[np.ndarray, np.ndarray]:
+    """The RMS envelope every arrival and decay in the profile is read from, in dB."""
+    t, env = _rms_envelope(np.asarray(mono, dtype=np.float64), sr)
+    return t, np.asarray(_db(env))
+
+
+def _slope(t: np.ndarray, db: np.ndarray) -> float | None:
+    if t.size < TAIL_MIN_POINTS or float(np.ptp(t)) <= 0.0:
+        return None
+    return float(np.polyfit(t, db, 1)[0])
+
+
+def _peak(t: np.ndarray, db: np.ndarray) -> int:
+    return decay_origin_index(db, float(t[1] - t[0]) if t.size > 1 else 0.005)
+
+
+def model_tail(mono: np.ndarray, sr: int, window_end_s: float) -> dict:
+    """A rendered note's time from its peak to -60 dB re peak, and its slope past the window.
+
+    `t60_s` runs to the first envelope point past the last one within `DECAY_RANGE_DB` of the
+    peak, `reached` false where the render ended first. `late_slope_db_s` fits dB from
+    @p window_end_s (render time) to there; None where the note is gone inside the window.
+    """
+    t, db = _decay_db(mono, sr)
+    peak = _peak(t, db)
+    end = usable_decay_end(db, peak)
+    late = (t >= window_end_s) & (np.arange(t.size) < end)
+    return {
+        "t60_s": round(float(t[min(end, t.size - 1)] - t[peak]), 3),
+        "reached": bool(end < t.size),
+        "late_slope_db_s": _round(_slope(t[late], db[late]), 2),
+    }
+
+
+def reference_tail(mono: np.ndarray, sr: int, preroll_s: float) -> dict:
+    """The reference's last observed decay slope, and its time to -60 dB projected along it.
+
+    The slope is fitted over the last `TAIL_LAST_FRACTION` of the decay that stays within
+    `DECAY_RANGE_DB` of the peak and, where a preroll holds a floor, `BODY_FLOOR_MARGIN_DB`
+    above it. `t60_s` is None where that slope does not fall.
+    """
+    mono = np.asarray(mono, dtype=np.float64)
+    t, db = _decay_db(mono, sr)
+    peak = _peak(t, db)
+    end = usable_decay_end(db, peak)
+    floor = None
+    n_pre = int((preroll_s - FLOOR_GUARD_S) * sr)
+    if n_pre >= int(MIN_FLOOR_S * sr):
+        floor = float(_db(float(np.sqrt(np.mean(mono[:n_pre] ** 2)))))
+        above = np.where(db[peak:end] > floor + BODY_FLOOR_MARGIN_DB)[0]
+        end = peak + int(above[-1]) + 1 if above.size else peak + 1
+    n = end - peak
+    if n < TAIL_MIN_POINTS:
+        raise ValueError("the reference decays over too few envelope points to read a slope")
+    a = end - max(TAIL_MIN_POINTS, round(n * TAIL_LAST_FRACTION))
+    slope, icept = np.polyfit(t[a:end], db[a:end], 1)
+    t60 = None if slope >= 0.0 else (db[peak] - DECAY_RANGE_DB - icept) / slope - t[peak]
+    return {
+        "last_slope_db_s": round(float(slope), 2),
+        "t60_s": _round(None if t60 is None else float(t60)),
+        "fit_from_s": round(float(t[a]), 3),
+        "fit_to_s": round(float(t[end - 1]), 3),
+        "recorded_s": round(len(mono) / sr, 3),
+        "floor_db": _round(floor, 1),
+    }
+
+
+def tail_bound(shipped: dict, reference: dict) -> dict:
+    """The slower of the shipped model's decay past the window and the reference's projected one.
+
+    Slopes are negative dB/s, so the larger is the slower. A reference whose last slope does
+    not fall projects no end, and then bounds no t60.
+    """
+    slopes = [
+        s for s in (shipped["late_slope_db_s"], reference["last_slope_db_s"]) if s is not None
+    ]
+    ref_t60 = reference["t60_s"]
+    return {
+        "slope_db_s": max(slopes) if slopes else None,
+        "t60_s": None if ref_t60 is None else max(shipped["t60_s"], ref_t60),
+    }
+
+
+def judge_tail(shipped: dict, candidate: dict, reference: dict) -> dict:
+    """One note's tail reading: the three sides, the bound, and what the candidate broke."""
+    bound = tail_bound(shipped, reference)
+    late, slope, t60 = candidate["late_slope_db_s"], bound["slope_db_s"], bound["t60_s"]
+    broke = []
+    if late is not None and slope is not None and late > slope + TAIL_SLOPE_TOLERANCE_DB_S:
+        broke.append("slope")
+    if t60 is not None and candidate["t60_s"] > t60 * (1.0 + TAIL_T60_TOLERANCE):
+        broke.append("t60")
+    return {
+        "shipped": shipped,
+        "candidate": candidate,
+        "reference": reference,
+        "bound": bound,
+        "violation": broke,
+    }
+
+
+def _csv_ints(text) -> list[int]:
+    return [int(x) for x in str(text or "").split(",") if x.strip()]
+
+
+def _tail_targets(voice: dict, fit: dict) -> list[dict]:
+    """The notes the fit was scored on, each with its render placement and reference audio.
+
+    The window end is the corpus slot the reference row is read over (`Corpus.slot_for`),
+    so a module kit's is its recording's own length rather than the capture's `gate_ms`.
+    """
+    parts = fit.get("corpora") or [
+        {
+            "capture": voice["capture"],
+            "timbre": voice["timbre"],
+            "corpus": voice["corpus"],
+            "notes": fit.get("notes", ""),
+            "velocities": fit.get("velocities", ""),
+        }
+    ]
+    out = []
+    for part in parts:
+        corpus = _corpus(part["corpus"], part["timbre"])
+        notes = _csv_ints(part.get("notes")) or (
+            [voice["drum_note"]] if "drum_note" in voice else list(corpus.notes)
+        )
+        for note in notes:
+            for vel in _csv_ints(part.get("velocities")) or list(corpus.velocities):
+                path = corpus.renders.get((note, vel))
+                if path is None:
+                    continue
+                if not Path(path).exists():
+                    raise ValueError(f"no reference audio for {part['capture']} n{note}v{vel}")
+                out.append(
+                    {
+                        "capture": part["capture"],
+                        "note": note,
+                        "velocity": vel,
+                        "played": corpus.note_map.get(note, note),
+                        "program": int(part.get("program", voice.get("program", 0))),
+                        "bank": int(part.get("bank", voice.get("bank", 0)) or 0),
+                        "channel": corpus.channel - 1,
+                        "rig": model_rig(corpus.rig),
+                        "sr": corpus.sample_rate,
+                        "onset_s": corpus.preroll_s,
+                        "gate_s": corpus.gate_for(note, vel),
+                        "window_s": corpus.slot_for(note, vel),
+                        "reference": str(path),
+                    }
+                )
+    if not out:
+        raise ValueError("no reference audio for the fitted notes")
+    return out
+
+
+#: What the tail render child needs of a target.
+_RENDER_KEYS = (
+    "played",
+    "velocity",
+    "program",
+    "bank",
+    "channel",
+    "rig",
+    "sr",
+    "onset_s",
+    "gate_s",
+)
+
+
+def render_tails(targets: list[dict], overrides: str, lib: Path) -> list[np.ndarray]:
+    """Each target rendered mono to `TAIL_RENDER_CAP_S` past its note-on, under @p overrides.
+
+    A child process, since the library reads its tuning overrides when it loads.
+    """
+    _check_pin()
+    env = {**os.environ, "SONARE_LIB_PATH": str(lib)}
+    env.pop("SONARE_TUNING_OVERRIDES", None)
+    if overrides:
+        env["SONARE_TUNING_OVERRIDES"] = overrides
+    with tempfile.TemporaryDirectory(prefix="tail_") as tmp:
+        spec, out = Path(tmp) / "spec.json", Path(tmp) / "tails.npz"
+        spec.write_text(json.dumps([{k: t[k] for k in _RENDER_KEYS} for t in targets]))
+        cmd = PYTHON + [str(Path(__file__).resolve()), "_tail_render", str(spec), str(out)]
+        proc = subprocess.run(cmd, env=env, capture_output=True, text=True, check=False)
+        if proc.returncode != 0 or not out.exists():
+            raise RuntimeError(f"tail render failed: {proc.stderr.strip()[-500:]}")
+        with np.load(out) as got:
+            return [got[f"r{i}"] for i in range(len(targets))]
+
+
+def tail_render_main(spec: str, out: str) -> int:
+    """The `render_tails` child: render each job in the spec file and save them as one npz."""
+    from render_model import render_model
+    from smf import Note, write_smf
+
+    arrays = {}
+    for i, job in enumerate(json.loads(Path(spec).read_text())):
+        seconds = job["onset_s"] + TAIL_RENDER_CAP_S
+        smf = write_smf(
+            [Note(job["played"], job["velocity"], job["onset_s"], job["gate_s"])],
+            program=job["program"],
+            bank=job["bank"],
+            channel=job["channel"],
+            end_pad=max(0.0, seconds - job["onset_s"] - job["gate_s"]),
+        )
+        audio = render_model(smf, seconds, job["sr"], rig=job["rig"])
+        arrays[f"r{i}"] = to_mono(audio).astype(np.float32)
+    np.savez(out, **arrays)
+    return 0
+
+
+def _reference_mono(path: str) -> tuple[np.ndarray, int]:
+    audio, sr = read_wav(path)
+    return to_mono(audio), sr
+
+
+def tail_check(voice: dict, fit: dict, lib: Path) -> dict:
+    """Whether the fit made a note ring past its scored window longer than anything observed.
+
+    Past each capture's scored window the candidate's decay may be no slower than the slower
+    of the shipped model's there and the reference's last slope projected forward. The check
+    is post-fit rather than a hold in the search because the ring knobs act inside the window
+    too. A measurement that cannot be made is recorded as `skipped` and blocks nothing.
+    """
+    if not fit.get("overrides"):
+        return {"skipped": "no value moved"}
+    try:
+        targets = _tail_targets(voice, fit)
+        base = reach_copies(BASE_OVERRIDES, voice)
+        candidate = merge_overrides(base, reach_copies(fit["overrides"], voice))
+        shipped_audio = render_tails(targets, base, lib)
+        candidate_audio = render_tails(targets, candidate, lib)
+        rows = []
+        for target, s, c in zip(targets, shipped_audio, candidate_audio, strict=True):
+            ref, ref_sr = _reference_mono(target["reference"])
+            end = target["onset_s"] + target["window_s"]
+            rows.append(
+                {
+                    "capture": target["capture"],
+                    "note": target["note"],
+                    "velocity": target["velocity"],
+                    "window_end_s": round(target["window_s"], 4),
+                    **judge_tail(
+                        model_tail(s, target["sr"], end),
+                        model_tail(c, target["sr"], end),
+                        reference_tail(ref, ref_sr, target["onset_s"]),
+                    ),
+                }
+            )
+    except HarnessMoved:
+        raise
+    except (RuntimeError, OSError, ValueError, KeyError) as exc:
+        return {"skipped": str(exc)}
+    return {
+        "window_source": "corpus slot",
+        "cap_s": TAIL_RENDER_CAP_S,
+        "violated": any(r["violation"] for r in rows),
+        "rows": rows,
+    }
+
+
+def _fmt(v: float | None, spec: str) -> str:
+    return "n/a" if v is None else format(v, spec)
+
+
+def tail_violation(record: dict | None) -> str | None:
+    """The verdict's reason for a tail check that found a note ringing past its bound."""
+    row = next((r for r in (record or {}).get("rows", []) if r["violation"]), None)
+    if row is None:
+        return None
+    c, b = row["candidate"], row["bound"]
+    return (
+        f"ring past the observed window ({row['capture']} n{row['note']}v{row['velocity']}: "
+        f"slope {_fmt(c['late_slope_db_s'], '+.1f')} vs bound {_fmt(b['slope_db_s'], '+.1f')} "
+        f"dB/s, t60 {c['t60_s']:.2f} vs {_fmt(b['t60_s'], '.2f')} s)"
+    )
+
+
 def run_voice(voice: dict, root: Path, build_dir: str, per_knob: int) -> dict:
     d = root / voice["slug"]
     d.mkdir(parents=True, exist_ok=True)
@@ -1299,6 +1814,12 @@ def _judge_voice(voice: dict, d: Path, build_dir: str, per_knob: int) -> dict:
         _first_fit(voice, d, build_dir, per_knob)
     fit_report = json.loads(fit.read_text())
     if not post.exists():
+        if fit_report.get("level_unscored") and GAIN_ANCHOR_KEY not in fit_report:
+            fit_report = anchor_gain(voice, d, build_dir, fit_report, lib, per_knob)
+            if "loss_after" in fit_report.get(GAIN_ANCHOR_KEY, {}):
+                # Per-capture parts kept to resume an audit were measured before the rewrite.
+                for part in d.glob(f"{post.stem}.*.json"):
+                    part.unlink()
         _check_pin()
         gate_audit.compare_voice(
             voice,
@@ -1307,6 +1828,9 @@ def _judge_voice(voice: dict, d: Path, build_dir: str, per_knob: int) -> dict:
             reach_copies(fit_report.get("overrides") or "", voice),
             base_overrides=reach_copies(BASE_OVERRIDES, voice),
         )
+    if TAIL_CHECK_KEY not in fit_report:
+        fit_report[TAIL_CHECK_KEY] = tail_check(voice, fit_report, lib)
+        fit.write_text(json.dumps(fit_report, indent=2) + "\n")
     result = {
         "slug": voice["slug"],
         **verdict(
@@ -1907,6 +2431,8 @@ def _drain(futures: dict, jobs: int) -> int:
 
 
 def main() -> int:
+    if sys.argv[1:2] == ["_tail_render"]:
+        return tail_render_main(*sys.argv[2:4])
     global _PIN
     harness_lock.lock(("refit",))
     _PIN = harness_lock.digest(("autofit",))

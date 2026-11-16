@@ -1292,3 +1292,342 @@ def test_a_stored_zero_floor_is_a_floor_of_zero_and_a_missing_one_is_computed(tm
     assert refit._worse_rows(moves)
     moves = refit.floor_movement(pre, post, floor_with({"tnr": {"floor": 0.1}}))
     assert not refit._worse_rows(moves)
+
+
+# --------------------------------------------------------------------------
+# gain anchor for a probe that cannot score level
+
+GAIN = "d065.gain"
+DRIVE = "d065.drive"
+
+
+def _level_model(extra_db=4.0, curve=lambda x: x):
+    """A stub of `model_level_db`: gain in dB (through `curve`), plus a drift when the fit's knob is set."""
+    import math
+
+    from knobs import parse_overrides
+
+    def read(voice, overrides, lib):
+        got = dict(parse_overrides(overrides))
+        gain = float(got.get(GAIN, 1.0))
+        return curve(20.0 * math.log10(gain)) + (extra_db if DRIVE in got else 0.0)
+
+    return read
+
+
+def _anchor_setup(monkeypatch, tmp_path, *, level=None, after_loss=1.0, bounds=(0.0, 4.0)):
+    import refit
+    import remote_fit
+
+    monkeypatch.setattr(refit, "BASE_OVERRIDES", "")
+    monkeypatch.setattr(refit, "reach_copies", lambda overrides, voice: overrides)
+    monkeypatch.setattr(refit, "_check_pin", lambda: None)
+    monkeypatch.setattr(refit, "model_level_db", level or _level_model())
+    monkeypatch.setattr(
+        refit,
+        "_catalogue",
+        lambda voice, lib: SimpleNamespace(defaults={GAIN: 1.0}, bounds={"gain": bounds}),
+    )
+    monkeypatch.setattr(refit, "_fit_cmd", lambda *a, **k: ["py", "autofit.py", "--spec", "auto"])
+    losses = iter([1.0, after_loss])
+    monkeypatch.setattr(
+        remote_fit,
+        "score_once",
+        lambda argv, lib, out, start: {
+            "selected": {"quality": {"absolute_weighted_mean_units": next(losses)}}
+        },
+    )
+    report = {
+        "knobs": [{"key": DRIVE, "start": 0.0, "best": 0.5}],
+        "selected": {"values": [0.5]},
+        "overrides": f"{DRIVE}=0.5",
+        "level_unscored": True,
+    }
+    voice = {"slug": "kit-n065", "patch": "d065", "drum_note": 65}
+    (tmp_path / "fit.json").write_text("{}")
+    return refit, voice, report
+
+
+def test_the_gain_solve_converges_on_a_linear_level():
+    from refit import ANCHOR_TOLERANCE_DB, solve_gain
+
+    gain, left, first = solve_gain(
+        lambda g: 20.0 * __import__("math").log10(g) + 4.0, 1.0, 0.0, 4.0
+    )
+    assert first == pytest.approx(4.0)
+    assert abs(left) <= ANCHOR_TOLERANCE_DB and gain == pytest.approx(10 ** (-4.0 / 20), rel=1e-3)
+
+
+def test_the_gain_solve_converges_on_a_mildly_saturating_level():
+    import math
+
+    from refit import ANCHOR_TOLERANCE_DB, solve_gain
+
+    def diff(g):
+        x = 20.0 * math.log10(g)
+        return 0.8 * x + 0.01 * x * x + 3.0
+
+    gain, left, _ = solve_gain(diff, 1.0, 0.0, 4.0)
+    assert abs(left) <= ANCHOR_TOLERANCE_DB and gain < 1.0
+
+
+def test_the_gain_solve_stays_inside_the_catalogue_range():
+    from refit import solve_gain
+
+    gain, _, _ = solve_gain(lambda g: 20.0 * __import__("math").log10(g) - 12.0, 1.0, 0.0, 2.0)
+    assert gain == 2.0
+
+
+def test_a_gain_anchor_is_recorded_and_rewrites_the_fit(monkeypatch, tmp_path):
+    import json
+
+    refit, voice, report = _anchor_setup(monkeypatch, tmp_path)
+    got = refit.anchor_gain(voice, tmp_path, "build", report, Path("lib"))
+    block = got[refit.GAIN_ANCHOR_KEY]
+    assert block["knob"] == GAIN and block["level_before_db"] == pytest.approx(4.0)
+    assert abs(block["level_after_db"]) <= refit.ANCHOR_TOLERANCE_DB
+    assert block["after"] == pytest.approx(10 ** (-4.0 / 20), rel=1e-2)
+    assert block["loss_before"] == 1.0 and block["loss_after"] == 1.0 and block["renders"] >= 3
+    assert got["selected"]["values"] == [0.5, block["after"]]
+    assert got["knobs"][-1]["key"] == GAIN and got["knobs"][-1]["start"] == 1.0
+    assert f"{GAIN}=" in got["overrides"] and f"{DRIVE}=0.5" in got["overrides"]
+    assert json.loads((tmp_path / "fit.json").read_text())[refit.GAIN_ANCHOR_KEY] == block
+
+
+def test_a_gain_anchor_moves_a_gain_the_search_carries(monkeypatch, tmp_path):
+    refit, voice, report = _anchor_setup(monkeypatch, tmp_path)
+    report["knobs"].append({"key": GAIN, "start": 1.0, "best": 1.0, "min": 0.0, "max": 4.0})
+    report["selected"]["values"].append(1.0)
+    got = refit.anchor_gain(voice, tmp_path, "build", report, Path("lib"))
+    assert len(got["knobs"]) == 2 and got["knobs"][1]["best"] == got["selected"]["values"][1]
+    assert got["selected"]["values"][1] < 1.0
+
+
+def test_a_loss_change_over_the_margin_leaves_the_values_and_records_failed(monkeypatch, tmp_path):
+    refit, voice, report = _anchor_setup(
+        monkeypatch, tmp_path, after_loss=1.0 + 2 * IN_SAMPLE_MARGIN
+    )
+    got = refit.anchor_gain(voice, tmp_path, "build", report, Path("lib"))
+    assert got["selected"]["values"] == [0.5] and got["overrides"] == f"{DRIVE}=0.5"
+    block = got[refit.GAIN_ANCHOR_KEY]
+    assert block["failed"] == {"loss_before": 1.0, "loss_after": 1.0 + 2 * IN_SAMPLE_MARGIN}
+    assert "loss_after" not in block
+
+
+def test_a_patch_with_no_gain_field_is_recorded_and_left_alone(monkeypatch, tmp_path):
+    refit, voice, report = _anchor_setup(monkeypatch, tmp_path)
+    monkeypatch.setattr(refit, "_catalogue", lambda v, lib: SimpleNamespace(defaults={}, bounds={}))
+    got = refit.anchor_gain(voice, tmp_path, "build", report, Path("lib"))
+    assert got[refit.GAIN_ANCHOR_KEY]["skipped"] == "no gain field"
+    assert got["selected"]["values"] == [0.5]
+
+
+def test_the_in_sample_gain_uses_the_anchored_loss():
+    pre, fit, post = _case(False, True, "none", False, False, False)
+    _own_notes(fit, 1.0, 0.9)
+    assert verdict(pre, fit, post, gate_only=True)["in_sample_gain"] == pytest.approx(0.1)
+    fit["gain_anchor"] = {"loss_before": 0.9, "loss_after": 0.85}
+    assert verdict(pre, fit, post, gate_only=True)["in_sample_gain"] == pytest.approx(0.15)
+    fit["gain_anchor"] = {"failed": {"loss_before": 0.9, "loss_after": 0.7}}
+    assert verdict(pre, fit, post, gate_only=True)["in_sample_gain"] == pytest.approx(0.1)
+
+
+@pytest.mark.parametrize("unscored", [True, False])
+def test_the_anchor_runs_only_when_the_report_says_level_went_unscored(
+    monkeypatch, tmp_path, unscored
+):
+    import json
+
+    import refit
+
+    (tmp_path / "pre.json").write_text("{}")
+    (tmp_path / "fit.json").write_text(json.dumps({"level_unscored": True} if unscored else {}))
+    calls = []
+    monkeypatch.setattr(refit, "_check_pin", lambda: None)
+    monkeypatch.setattr(refit, "_tuning_lib", lambda build_dir: Path("lib"))
+    monkeypatch.setattr(refit, "unmeasured", lambda voice: frozenset())
+    monkeypatch.setattr(refit, "verdict", lambda *a, **k: {"decision": "kept"})
+    monkeypatch.setattr(
+        gate_audit, "compare_voice", lambda voice, out, *a, **k: out.write_text("{}")
+    )
+
+    def anchor(voice, d, build_dir, report, lib, per_knob):
+        calls.append(voice["slug"])
+        return report
+
+    monkeypatch.setattr(refit, "anchor_gain", anchor)
+    refit._judge_voice({"slug": "v"}, tmp_path, "build", 8)
+    assert calls == (["v"] if unscored else [])
+
+
+def test_an_anchor_that_rewrote_the_fit_drops_the_stale_per_capture_audits(monkeypatch, tmp_path):
+    import json
+
+    import refit
+
+    (tmp_path / "pre.json").write_text("{}")
+    (tmp_path / "fit.json").write_text(json.dumps({"level_unscored": True}))
+    (tmp_path / "post.hit.json").write_text('{"stale": true}')
+    seen = []
+    monkeypatch.setattr(refit, "_check_pin", lambda: None)
+    monkeypatch.setattr(refit, "_tuning_lib", lambda build_dir: Path("lib"))
+    monkeypatch.setattr(refit, "unmeasured", lambda voice: frozenset())
+    monkeypatch.setattr(refit, "verdict", lambda *a, **k: {"decision": "kept"})
+
+    def audit(voice, out, *a, **k):
+        seen.append((tmp_path / "post.hit.json").exists())
+        out.write_text("{}")
+
+    monkeypatch.setattr(gate_audit, "compare_voice", audit)
+    monkeypatch.setattr(
+        refit,
+        "anchor_gain",
+        lambda voice, d, b, report, lib, k: {**report, refit.GAIN_ANCHOR_KEY: {"loss_after": 1.0}},
+    )
+    refit._judge_voice({"slug": "v"}, tmp_path, "build", 8)
+    assert seen == [False]
+
+
+def test_autofit_records_a_probe_with_no_level_contrast(tmp_path):
+    import json
+
+    from autofit import _fold_level_unscored
+
+    out = tmp_path / "fit.json"
+    out.write_text("{}")
+    _fold_level_unscored(str(out), SimpleNamespace(has_level_contrasts=True))
+    assert "level_unscored" not in json.loads(out.read_text())
+    _fold_level_unscored(str(out), SimpleNamespace(has_level_contrasts=False))
+    assert json.loads(out.read_text())["level_unscored"] is True
+
+
+# --------------------------------------------------------------------------- #
+# tail check: the decay past the scored window
+# --------------------------------------------------------------------------- #
+TAIL_SR = 8000
+
+
+def _decaying(seconds, slopes, knee=None, onset_s=0.0):
+    """A 1 kHz tone falling at `slopes[0]` dB/s, then `slopes[1]` past `knee` seconds."""
+    import numpy as np
+
+    t = np.arange(int(seconds * TAIL_SR)) / TAIL_SR - onset_s
+    db = slopes[0] * t
+    if knee is not None:
+        db = np.where(t < knee, db, slopes[0] * knee + slopes[1] * (t - knee))
+    y = np.sin(2 * np.pi * 1000.0 * t) * 10.0 ** (db / 20.0)
+    return np.where(t >= 0.0, y, 0.0)
+
+
+def test_the_tail_measurement_reads_slope_and_time_to_minus_60_db():
+    from refit import model_tail, reference_tail
+
+    got = model_tail(_decaying(4.0, (-30.0,)), TAIL_SR, window_end_s=0.5)
+    assert got["reached"] and got["t60_s"] == pytest.approx(2.0, abs=0.03)
+    assert got["late_slope_db_s"] == pytest.approx(-30.0, abs=0.5)
+    gone = model_tail(_decaying(4.0, (-200.0,)), TAIL_SR, window_end_s=0.5)
+    assert gone["late_slope_db_s"] is None, "nothing rings past the window"
+    # Fast then slow: the last slope is the slow one, projected from the peak to -60 dB.
+    ref = reference_tail(_decaying(1.0, (-100.0, -20.0), knee=0.2), TAIL_SR, preroll_s=0.0)
+    assert ref["last_slope_db_s"] == pytest.approx(-20.0, abs=0.5)
+    assert ref["t60_s"] == pytest.approx(0.2 + 40.0 / 20.0, rel=0.03)
+
+
+def test_the_tail_bound_is_the_slower_of_shipped_and_reference():
+    from refit import tail_bound
+
+    shipped = {"late_slope_db_s": -30.0, "t60_s": 2.0}
+    reference = {"last_slope_db_s": -16.4, "t60_s": 3.0}
+    assert tail_bound(shipped, reference) == {"slope_db_s": -16.4, "t60_s": 3.0}
+    slow = {"late_slope_db_s": -10.0, "t60_s": 5.0}
+    assert tail_bound(slow, reference) == {"slope_db_s": -10.0, "t60_s": 5.0}
+    gone = {"late_slope_db_s": None, "t60_s": 0.1}
+    assert tail_bound(gone, {"last_slope_db_s": -16.4, "t60_s": None}) == {
+        "slope_db_s": -16.4,
+        "t60_s": None,
+    }
+
+
+def _tail_voice(monkeypatch, tmp_path, candidate_slope, *, ref_exists=True):
+    import refit
+
+    ref = tmp_path / "n060_v100.wav"
+    if ref_exists:
+        ref.write_bytes(b"")
+    corpus = SimpleNamespace(
+        notes=(60,),
+        velocities=(100,),
+        renders={(60, 100): ref},
+        note_map={},
+        channel=10,
+        rig="none",
+        sample_rate=TAIL_SR,
+        preroll_s=0.0,
+        gate_for=lambda n, v: 0.06,
+        slot_for=lambda n, v: 0.068,
+    )
+    rendered = []
+
+    def render(targets, overrides, lib):
+        rendered.append(overrides)
+        slope = candidate_slope if "d060.x" in overrides else -30.0
+        return [_decaying(4.0, (slope,)) for _ in targets]
+
+    monkeypatch.setattr(refit, "_check_pin", lambda: None)
+    monkeypatch.setattr(refit, "_corpus", lambda path, timbre: corpus)
+    monkeypatch.setattr(refit, "render_tails", render)
+    monkeypatch.setattr(refit, "_reference_mono", lambda path: (_decaying(1.0, (-20.0,)), TAIL_SR))
+    monkeypatch.setattr(refit, "struct_copies", dict)
+    monkeypatch.setattr(refit, "explicit_fields", dict)
+    voice = {
+        "slug": "kit-n060",
+        "patch": "d060",
+        "capture": "hit",
+        "timbre": "t0",
+        "corpus": str(tmp_path),
+        "drum_note": 60,
+    }
+    fit = {
+        "knobs": [{"key": FLOAT, "start": 1.0}],
+        "selected": {"values": [2.0]},
+        "loss": {"selected": 0.5},
+        "validation": {"independent": True, "start": 1.0, "best": 0.5},
+        "overrides": "d060.x=2.0",
+    }
+    return refit, voice, fit, rendered
+
+
+def _tail_verdict(refit, fit):
+    empty = {"gate": {"readings": []}}
+    return refit.verdict(empty, fit, empty)
+
+
+def test_a_fit_ringing_past_the_window_is_kept_with_the_reason(monkeypatch, tmp_path):
+    refit, voice, fit, rendered = _tail_voice(monkeypatch, tmp_path, candidate_slope=-10.0)
+    assert _tail_verdict(refit, fit)["decision"] == "adopt", "adoptable without the check"
+    record = refit.tail_check(voice, fit, Path("lib"))
+    assert rendered == ["", "d060.x=2.0"], "shipped at the base, the candidate on top of it"
+    assert record["violated"] and record["rows"][0]["violation"] == ["slope", "t60"]
+    assert record["rows"][0]["window_end_s"] == 0.068
+    out = _tail_verdict(refit, {**fit, refit.TAIL_CHECK_KEY: record})
+    assert out["decision"] == "kept"
+    assert out["why"].startswith("ring past the observed window (hit n60v100: slope -10.0 vs")
+    assert out["tail_check"] is record
+
+
+def test_a_fit_within_the_tail_bound_passes(monkeypatch, tmp_path):
+    refit, voice, fit, _ = _tail_voice(monkeypatch, tmp_path, candidate_slope=-25.0)
+    record = refit.tail_check(voice, fit, Path("lib"))
+    assert not record["violated"]
+    bound = record["rows"][0]["bound"]
+    assert bound["slope_db_s"] == pytest.approx(-20.0, abs=0.5), "the reference is the slower"
+    assert _tail_verdict(refit, {**fit, refit.TAIL_CHECK_KEY: record})["decision"] == "adopt"
+
+
+def test_a_tail_check_without_reference_audio_is_skipped_and_blocks_nothing(monkeypatch, tmp_path):
+    refit, voice, fit, rendered = _tail_voice(
+        monkeypatch, tmp_path, candidate_slope=-10.0, ref_exists=False
+    )
+    record = refit.tail_check(voice, fit, Path("lib"))
+    assert "no reference audio" in record["skipped"] and rendered == []
+    assert _tail_verdict(refit, {**fit, refit.TAIL_CHECK_KEY: record})["decision"] == "adopt"
