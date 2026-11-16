@@ -148,6 +148,8 @@ constexpr NativeSynthPatch clamp_synth_patch(const NativeSynthPatch& patch) noex
       std::clamp(patch_clamp_detail::sanitize(p.ks.mute_harmonic, 0.0f), 0.0f, 16.0f);
   p.ks.slap = std::clamp(patch_clamp_detail::sanitize(p.ks.slap, 0.0f), 0.0f, 1.0f);
   p.ks.polarization = std::clamp(patch_clamp_detail::sanitize(p.ks.polarization, 0.0f), 0.0f, 1.0f);
+  p.ks.pol_detune_cents = std::clamp(
+      patch_clamp_detail::sanitize(p.ks.pol_detune_cents, kKsPolDetuneCents), -50.0f, 50.0f);
   p.ks.body_coupling = patch_clamp_detail::sanitize(p.ks.body_coupling, 0.0f);
   p.ks.pluck_style = patch_clamp_detail::sanitize(p.ks.pluck_style, 0.0f);
   p.ks.nail = patch_clamp_detail::sanitize(p.ks.nail, 0.0f);

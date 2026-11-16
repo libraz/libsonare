@@ -157,6 +157,63 @@ double peak_freq_near(const std::vector<double>& power, double target_hz, double
   return (static_cast<double>(best) + delta) * kRate / kFft;
 }
 
+/// Largest detrended peak-to-peak, in dB, of harmonics 2-4 of a held note's envelopes: each
+/// envelope is read every 10 ms over 16 periods and a quadratic fit taken off, so what remains
+/// is the beat a second string line puts on the partial rather than the note's own decay.
+double partial_am_depth_db(const std::vector<float>& x, double f0, double from_s, double to_s) {
+  constexpr int kPeriods = 16;
+  const size_t window = static_cast<size_t>(std::lround(kPeriods * kRate / f0));
+  const size_t hop = static_cast<size_t>(kRate / 100.0);
+  double worst = 0.0;
+  for (int n = 2; n <= 4; ++n) {
+    std::vector<double> t, db;
+    const auto end = static_cast<size_t>(to_s * kRate);
+    for (auto at = static_cast<size_t>(from_s * kRate); at + window <= end; at += hop) {
+      // Centred time keeps the quadratic's normal equations well conditioned.
+      t.push_back(static_cast<double>(at) / kRate - 0.5 * (from_s + to_s));
+      const double amp = sonare::test::harmonic_peak(x, at, kPeriods, f0, n, kRate);
+      db.push_back(20.0 * std::log10(std::max(1.0e-12, amp)));
+    }
+    // Least-squares quadratic through (t, db), solved by Cramer's rule on the normal equations.
+    double s[5] = {}, r[3] = {};
+    for (size_t i = 0; i < t.size(); ++i) {
+      double p = 1.0;
+      for (int k = 0; k < 5; ++k) {
+        s[k] += p;
+        if (k < 3) r[k] += p * db[i];
+        p *= t[i];
+      }
+    }
+    const double m[3][3] = {{s[0], s[1], s[2]}, {s[1], s[2], s[3]}, {s[2], s[3], s[4]}};
+    auto det3 = [](const double a[3][3]) {
+      return a[0][0] * (a[1][1] * a[2][2] - a[1][2] * a[2][1]) -
+             a[0][1] * (a[1][0] * a[2][2] - a[1][2] * a[2][0]) +
+             a[0][2] * (a[1][0] * a[2][1] - a[1][1] * a[2][0]);
+    };
+    const double d = det3(m);
+    double c[3];
+    for (int k = 0; k < 3; ++k) {
+      double mk[3][3];
+      for (int i = 0; i < 3; ++i) {
+        for (int j = 0; j < 3; ++j) mk[i][j] = j == k ? r[i] : m[i][j];
+      }
+      c[k] = det3(mk) / d;
+    }
+    double lo = 1.0e30, hi = -1.0e30;
+    for (size_t i = 0; i < t.size(); ++i) {
+      const double e = db[i] - (c[0] + c[1] * t[i] + c[2] * t[i] * t[i]);
+      lo = std::min(lo, e);
+      hi = std::max(hi, e);
+    }
+    worst = std::max(worst, hi - lo);
+  }
+  return worst;
+}
+
+/// Partial AM the clavinet's held C4 may carry: its second plane at 11 c reads 5.4 dB, at
+/// 0.5 c 0.4 dB, and with no second plane 0.1 dB.
+constexpr double kClavAmCeilingDb = 1.5;
+
 /// A bright filter-bypassed KS test patch.
 NativeSynthPatch ks_base_patch() {
   NativeSynthPatch p;
@@ -430,6 +487,48 @@ TEST_CASE("two-polarization coupling engages, stays bounded, off by default", "[
   REQUIRE(peak > 0.01f);
   REQUIRE(peak < 2.0f);
   REQUIRE(rms(on_tone, 40000, 48000) > 1.0e-4f);
+}
+
+TEST_CASE("the clavinet's held partials carry no polarization beat", "[midi][synth][ks]") {
+  // A second plane mistuned by cents beats on every partial; one string splits by well under one.
+  const NativeSynthPatch& clav = gm_fallback_patch(0, 7);
+  REQUIRE(clav.mode == SynthEngineMode::kKarplusStrong);
+  REQUIRE(clav.ks.polarization > 0.0f);
+  constexpr uint8_t kNote = 60;
+  const std::vector<float> tone = render_patch(clav, kNote, 80, static_cast<int>(1.5 * kRate));
+  const double depth = partial_am_depth_db(tone, sonare::midi::synth::note_to_hz(kNote), 0.1, 1.5);
+  CAPTURE(depth);
+  CHECK(depth < kClavAmCeilingDb);
+}
+
+TEST_CASE("the second plane stays inside its span at either end of its detune range",
+          "[midi][synth][ks]") {
+  // With the 4' line off its span is unused, so a sentinel there and past the slab sees any
+  // write the second plane makes beyond its own span, lengthened (-50 c) or shortened (+50 c).
+  constexpr float kSentinel = 12345.0f;
+  for (const double rate : {44100.0, 48000.0}) {
+    const int per_line = ks_buffer_capacity(rate);
+    for (const float detune : {-50.0f, 50.0f}) {
+      for (const uint8_t note : {0, 15, 16, 21, 28, 108}) {
+        CAPTURE(rate, detune, note);
+        KsPatchParams params;
+        params.polarization = 1.0f;
+        params.pol_detune_cents = detune;
+        std::vector<float> slab(static_cast<size_t>(ks_slab_capacity(rate)) + 64, 0.0f);
+        std::fill(slab.begin() + 2 * per_line, slab.end(), kSentinel);
+        KsVoiceCore core;
+        core.attach(slab.data(), per_line);
+        core.start(params, rate, note, sonare::midi::Velocity16::from7(110), 0x4B53504Bull);
+        bool finite = true;
+        for (int i = 0; i < static_cast<int>(0.25 * rate); ++i) {
+          finite = finite && std::isfinite(core.render(1.0f));
+        }
+        CHECK(finite);
+        CHECK(std::all_of(slab.begin() + 2 * per_line, slab.end(),
+                          [](float v) { return v == kSentinel; }));
+      }
+    }
+  }
 }
 
 TEST_CASE("bridge coupling engages, stays bounded, off by default", "[midi][synth][ks]") {

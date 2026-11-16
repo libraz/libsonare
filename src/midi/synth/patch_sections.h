@@ -101,6 +101,7 @@ constexpr KsPatchParams blank_ks() noexcept {
   z.mute_harmonic = 0.0f;
   z.slap = 0.0f;
   z.polarization = 0.0f;
+  z.pol_detune_cents = 0.0f;
   z.body_coupling = 0.0f;
   z.pluck_style = 0.0f;
   z.nail = 0.0f;

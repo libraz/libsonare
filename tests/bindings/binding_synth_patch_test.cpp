@@ -451,6 +451,38 @@ TEST_CASE("an engine param reaches the render", "[project][synth_patch]") {
   sonare_project_destroy(project);
 }
 
+TEST_CASE("the Karplus-Strong second plane's detune is a key in cents that reaches the render",
+          "[project][synth_patch]") {
+  const sonare::util::json::Value info =
+      parse_info(sonare_synth_engine_param_info(SONARE_SYNTH_ENGINE_KARPLUS_STRONG));
+  bool listed = false;
+  for (const auto& d : info.as_array()) {
+    if (d["name"].as_string() != "polDetuneCents") continue;
+    listed = true;
+    CHECK(d["unit"].as_string() == "cents");
+    CHECK(d["min"].as_number() == -50.0);
+    CHECK(d["max"].as_number() == 50.0);
+  }
+  REQUIRE(listed);
+
+  SonareProject* project = make_synth_project(3);
+  SonareSynthPatch base{};
+  base.struct_version = SONARE_SYNTH_PATCH_STRUCT_VERSION;
+  std::strcpy(base.preset, "harp");
+  const SonareSynthEngineParam plane{"polarization", 0.3};
+  SonareSynthPatch two_planes = base;
+  two_planes.engine_params = &plane;
+  two_planes.engine_param_count = 1;
+  const std::vector<float> reference = bounce_synth(project, two_planes);
+  REQUIRE(peak_of(reference) > 0.0f);
+  const SonareSynthEngineParam unison[] = {{"polarization", 0.3}, {"polDetuneCents", 0.5}};
+  SonareSynthPatch close = base;
+  close.engine_params = unison;
+  close.engine_param_count = 2;
+  REQUIRE(bounce_synth(project, close) != reference);
+  sonare_project_destroy(project);
+}
+
 TEST_CASE("the subtractive section is set by key and reaches the render",
           "[project][synth_patch]") {
   const sonare::util::json::Value info =

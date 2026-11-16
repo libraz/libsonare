@@ -113,6 +113,7 @@
 - Seashore (GM program 122) takes about 4.8 s instead of 1.6 s to fall from its swell to its held level, which is 5 dB lower, set against the module reference.
 - Gunshot (GM program 127) opens over 35 ms instead of 6 ms and dies over about 0.57 s instead of 0.41 s, its filter sweep reaches higher and closes more slowly, and its noise carries a stronger amplitude flutter, set against the module reference.
 - The ocarina (GM program 79) no longer wanders slowly in pitch; its reference carries no such motion.
+- The clavinet (GM program 7) no longer beats: its string's two polarizations are mistuned by 0.5 cent instead of 11, which removes the 3 to 7 Hz tremolo on its held partials.
 
 ### New
 
@@ -135,6 +136,7 @@
 - The unit vocabulary gains `midiNote`, a MIDI note number, declared by the engine parameters that name a key position: the subtractive engine's `sustainKeyBreak` and the harpsichord's `undampedFromNote`, which were `none`. `MasteringInsertParamUnit` on Node and WASM, its Python `Literal` and the capability catalog schema list it.
 - Give each singer of the vocal engine's section a slow pitch offset of its own with the `sectionDetuneCents` engine parameter (peak cents, 0 to 20, 0 adds none), drifting over seconds independently of the singers' vibrato, so the section beats as its voices move against each other; it sounds the section on its own when `sectionSpreadCents` is 0.
 - Give back the level a seated brass mute costs at the note's fundamental with the `muteNorm` engine parameter (0 to 1, a share of that loss in decibels; 0, the default, renders as before, and it acts only while `mute` is above 0).
+- Set how far a Karplus-Strong string's second polarization is mistuned from the first with the `polDetuneCents` engine parameter (cents, -50 to 50, positive sharp; it acts only while `polarization` is above 0). The default, 11, is the detune the engine applied before.
 
 ### Fixes
 

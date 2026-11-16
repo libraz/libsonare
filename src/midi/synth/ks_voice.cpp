@@ -41,9 +41,8 @@ float ks_steel_inharmonicity_b(uint8_t note) noexcept {
   return std::max(1.0e-5f, kBAtA4 * std::exp(kBetaPerSemitone * (n - kMidiA4)));
 }
 
-/// Second (horizontal) polarization detune, and the fret-gap reflection left
-/// after the slap/pop limiter clips the string against the fret.
-SONARE_TUNABLE(kPolDetuneCents, 11.0f);
+/// The fret-gap reflection left after the slap/pop limiter clips the string
+/// against the fret.
 SONARE_TUNABLE(kReflect, 0.06f);  // near-hard clip at the fret gap
 /// What fraction of the played plane's decay targets the horizontal one keeps.
 /// Applied to both its t60 and its ring at the quote frequency, so the plane
@@ -306,8 +305,9 @@ LoopBudget KsVoiceCore::configure(const KsPatchParams& params, double sr, uint8_
   // cents sharp, more damped and decaying faster than the primary: the two
   // planes beat and the faster line dies first (two-stage decay).
   const float polarization = std::clamp(params.polarization, 0.0f, 1.0f);
+  const float pol_period =
+      loop_period / cents_to_ratio(std::clamp(params.pol_detune_cents, -50.0f, 50.0f));
   if (polarization > 0.0f && slab_ != nullptr) {
-    const float pol_period = loop_period / cents_to_ratio(kPolDetuneCents);
     // The horizontal plane takes the same fraction off both its targets: it
     // decays faster than the primary and loses its highs faster still, which is
     // what gives the two-stage decay.
@@ -365,8 +365,7 @@ LoopBudget KsVoiceCore::configure(const KsPatchParams& params, double sr, uint8_
   // Every loop in use is read at one sample or more and long enough to hold its pitch.
   LoopBudget budget = loop_budget(loop_period, string_.loop_comp, 1.0f, sr);
   if (pol_couple_ > 0.0f) {
-    budget = worst_loop_budget(budget, loop_budget(loop_period / cents_to_ratio(kPolDetuneCents),
-                                                   pol_.loop_comp, 1.0f, sr));
+    budget = worst_loop_budget(budget, loop_budget(pol_period, pol_.loop_comp, 1.0f, sr));
   }
   if (oct_couple_ > 0.0f) {
     budget = worst_loop_budget(budget, loop_budget(0.5f * loop_period, oct_.loop_comp, 1.0f, sr));

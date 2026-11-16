@@ -165,6 +165,9 @@ SONARE_TUNED_CONSTEXPR void configure_keyed_programs(ProgramOverrides& o) noexce
   cl.ks.hf_decay_s = 0.191728f;
   cl.ks.body_coupling = 0.169263f;
   cl.ks.polarization = 0.256966f;
+  // One string splits its two planes by well under a cent: at 11 c they put 5.4 dB of
+  // 3-7 Hz AM on h2-h4 at C4, at 0.5 c 0.4 dB.
+  cl.ks.pol_detune_cents = 0.5f;
   cl.ks.octave_mix = 0.059017f;
   cl.ks.pick_noise = 0.594669f;
   cl.ks.keyoff_noise = 0.539958f;

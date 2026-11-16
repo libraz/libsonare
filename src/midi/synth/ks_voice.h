@@ -54,6 +54,10 @@ inline int ks_slab_capacity(double sample_rate) noexcept {
   return 3 * ks_buffer_capacity(sample_rate);
 }
 
+/// Default mistuning of the second polarization, in cents: the detune every
+/// Karplus-Strong patch that sets no @ref KsPatchParams::pol_detune_cents beats at.
+inline constexpr float kKsPolDetuneCents = 11.0f;
+
 /// KS section of a NativeSynthPatch (used when mode == kKarplusStrong).
 struct KsPatchParams {
   /// Loop-lowpass openness in [0,1]: how slowly the upper harmonics decay
@@ -114,6 +118,9 @@ struct KsPatchParams {
   /// beats against the primary and adds a two-stage decay — the "thickness" and
   /// slow shimmer of a big low string (Karjalainen, Välimäki & Tolonen 1998).
   float polarization = 0.0f;
+  /// The second plane's mistuning against the first, in cents in [-50, 50]; positive is
+  /// sharp. No effect unless @ref polarization > 0.
+  float pol_detune_cents = kKsPolDetuneCents;
   /// Bridge coupling between the two polarizations in [0,1] (off-by-default;
   /// 0 = the planes stay independent and their outputs are merely summed, so
   /// render is bit-identical to plain @ref polarization). With @ref polarization

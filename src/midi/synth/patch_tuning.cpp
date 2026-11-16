@@ -526,6 +526,7 @@ void apply_ks(NativeSynthPatch& p, const Fields& f) {
   F(ks.mute_harmonic);
   F(ks.slap);
   F(ks.polarization);
+  F(ks.pol_detune_cents);
   F(ks.body_coupling);
   F(ks.pluck_style);
   F(ks.nail);

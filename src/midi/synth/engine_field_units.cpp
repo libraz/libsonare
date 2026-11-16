@@ -175,6 +175,7 @@ constexpr UnitRow kEngineUnits[] = {
     {"ks.mute_harmonic", Unit::None},
     {"ks.slap", Unit::None},
     {"ks.polarization", Unit::None},
+    {"ks.pol_detune_cents", Unit::Cents},
     {"ks.body_coupling", Unit::None},
     {"ks.pluck_style", Unit::None},
     {"ks.nail", Unit::None},

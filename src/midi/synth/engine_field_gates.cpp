@@ -318,9 +318,11 @@ const GateRow kEngineGates[] = {
     {"ks.nail", [](const GateSite&) { return equals("pluckMs", 0); }},
     {"ks.pluck_vel_exp", [](const GateSite&) { return above("pluckMs", 0); }},
     // Karplus-Strong: the pick key track scales a pick position that has to be there, the hand
-    // damps only the halo bank, and the air mode belongs to the guitar body the wrapper selects.
+    // damps only the halo bank, the second plane's tuning needs the plane, and the air mode
+    // belongs to the guitar body the wrapper selects.
     {"ks.pick_position_per_octave", [](const GateSite&) { return above("pickPosition", 0); }},
     {"ks.halo_damp_s", [](const GateSite&) { return is("sympathetic", true); }},
+    {"ks.pol_detune_cents", [](const GateSite&) { return above("polarization", 0); }},
     {"ks.body_air_hz",
      [](const GateSite&) { return wrapper_is("body", "guitar") & wrapper_above("bodyMix", 0); }},
     {"ks.body_air_t60_s",
