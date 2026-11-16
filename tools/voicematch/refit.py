@@ -642,18 +642,17 @@ def baseline_pins(
     copies: dict | None = None,
     explicit: dict | None = None,
 ) -> dict:
-    """The overrides that put every gate patch back before the first adoption reaching the voice.
+    """The overrides that pin the voice's pre to its fit's start, and what that start descends from.
 
-    For each gate patch, the commits that moved its values are walked newest first
-    while each also changed the `fits.json` record of a unit in that patch's
-    struct-copy chain: the trailing run of refit write-backs its shipped values
-    descend from. A field moved in the run whose `owner` is in the voice's own
-    chain goes back to its value before the oldest such commit; a field a copy
-    further down owns is that copy's adoption and stays. Each knob of an existing
-    fit is pinned to its start, repeated on the copies inheriting it, where the
-    history pinned nothing. An ancestor whose adoption `fits.json` records but
-    `bank-versions.json` does not yet carry is reported unresolved and left at its
-    shipped values.
+    Each knob of an existing fit is pinned to its start, repeated on the copies
+    inheriting it; a fit started from what ships therefore pins what ships. For each
+    gate patch, the commits that moved its values are walked newest first while each
+    also changed the `fits.json` record of a unit in that patch's struct-copy chain:
+    the trailing run of refit write-backs its shipped values descend from. Every field
+    in that run owned by the voice's own chain is listed in `descends_from` with its
+    value before the oldest such commit; nothing there is pinned. An ancestor whose
+    adoption `fits.json` records but `bank-versions.json` does not yet carry is
+    reported unresolved.
     """
     copies = struct_copies() if copies is None else copies
     explicit = explicit_fields() if explicit is None else explicit
@@ -661,7 +660,7 @@ def baseline_pins(
     undo = set(chain_of(own, copies))
     targets = gate_patches(voice)
     chains = {t: set(chain_of(t, copies)) for t in targets}
-    pins: dict[str, tuple[float, str]] = {}
+    descends: dict[str, tuple[float, str]] = {}
     open_ = set(targets)
     unresolved: list[str] = []
     newer, pairs = None, 0
@@ -700,12 +699,15 @@ def baseline_pins(
             )
             for path in sorted(moved):
                 if path in before and owner(t, path, copies, explicit) in undo:
-                    pins[f"{t}.{path}"] = (before[path], source)
+                    descends[f"{t}.{path}"] = (before[path], source)
         if not open_:
             break
         newer = older
     if not pairs:
-        unresolved.append(f"no history of {BANK_VERSIONS}; gate patches left at shipped values")
+        unresolved.append(
+            f"no history of {BANK_VERSIONS}; what the shipped values descend from is unknown"
+        )
+    pins: dict[str, tuple[float, str]] = {}
     for knob in (own_fit or {}).get("knobs", []):
         unit, _, path = knob["key"].partition(".")
         reached = [knob["key"]] + [
@@ -721,6 +723,10 @@ def baseline_pins(
     return {
         "overrides": ",".join(f"{p['key']}={p['value']}" for p in pinned),
         "pinned": pinned,
+        "descends_from": [
+            {"key": k, "value": format_value(v), "source": s}
+            for k, (v, s) in sorted(descends.items())
+        ],
         "unresolved": unresolved,
     }
 
@@ -1887,48 +1893,51 @@ def run_voice(voice: dict, root: Path, build_dir: str, per_knob: int) -> dict:
     return result
 
 
-def history_pins(pinned: list[dict]) -> list[dict]:
-    """The baseline pins read from the registry history (a fit's own starts are `stale_starts`'s)."""
-    return [p for p in pinned if p["source"] != "fit.json start"]
-
-
 def unshipped_pins(pinned: list[dict], shipped: dict[str, float]) -> list[str]:
-    """The baseline pins whose value is not what the library ships, as `key value (ships s)`."""
+    """The pins whose value is not what the library ships, as `key value (ships s)`."""
     out = []
-    for p in history_pins(pinned):
+    for p in pinned:
         ships = shipped.get(p["key"])
         if ships is not None and format_value(float(p["value"])) != format_value(ships):
             out.append(f"{p['key']} {p['value']} (ships {format_value(ships)})")
     return out
 
 
-def refuse_unshipped_pre(voice: dict, pinned: list[dict], shipped: dict[str, float]) -> None:
-    """Refuse a judge whose `pre` is pinned away from what ships: an adoption is judged
-    against the shipped values, so such a voice is refitted from its shipped start."""
-    off = unshipped_pins(pinned, shipped)
-    if off:
+def refuse_stale_start(voice: dict, fits: list[dict], shipped: dict[str, float]) -> None:
+    """Refuse a judge of fits that started from values the library no longer ships: an
+    adoption is judged against what ships, so such a voice is refitted from its shipped start."""
+    stale = stale_starts(fits, shipped)
+    if stale:
         raise RuntimeError(
-            f"{voice['slug']}: pre is not what ships; refit from the shipped start "
-            f"({'; '.join(off)})"
+            f"{voice['slug']}: its fits started from values the library no longer ships "
+            f"({'; '.join(stale)}); refit it from the shipped start"
         )
+
+
+def _retire_pre(d: Path) -> None:
+    """Move a recorded pre and its per-capture readings aside, so the pre is measured again."""
+    stale = d / "stale"
+    stale.mkdir(exist_ok=True)
+    for path in sorted(d.glob("pre*.json")) + sorted(d.glob("pre*.log")):
+        path.rename(stale / path.name)
 
 
 def _judge_voice(voice: dict, d: Path, build_dir: str, per_knob: int) -> dict:
     _check_pin()
     pre, fit, post = d / "pre.json", d / "fit.json", d / "post.json"
     lib = _tuning_lib(build_dir)
+    own_fit = json.loads(fit.read_text()) if fit.exists() else None
+    if (own_fit or {}).get("knobs"):
+        refuse_stale_start(voice, [own_fit], _catalogue(voice, lib).defaults)
     if pre.exists():
         recorded = (json.loads(pre.read_text()).get("baseline") or {}).get("pinned") or []
-        if history_pins(recorded):
-            refuse_unshipped_pre(voice, recorded, _catalogue(voice, lib).defaults)
-    else:
+        if recorded and unshipped_pins(recorded, _catalogue(voice, lib).defaults):
+            _retire_pre(d)
+    if not pre.exists():
         _check_pin()
         check_base(voice, lib)
-        own_fit = json.loads(fit.read_text()) if fit.exists() else None
         units = {u for t in gate_patches(voice) for u in chain_of(t, struct_copies())}
         base = baseline_pins(voice, own_fit, registry_history(units))
-        if history_pins(base["pinned"]):
-            refuse_unshipped_pre(voice, base["pinned"], _catalogue(voice, lib).defaults)
         gate_audit.compare_voice(
             voice,
             pre,
@@ -2406,18 +2415,7 @@ def rejudge_voice(voice: dict, root: Path, build_dir: str) -> dict:
     if not (d / "fit.json").exists():
         raise RuntimeError(f"{voice['slug']}: no fit.json under {root} to re-judge")
     fits = [json.loads(p.read_text()) for p in (d / "fit.json", d / "fit_r1.json") if p.exists()]
-    shipped = _catalogue(voice, _tuning_lib(build_dir)).defaults
-    stale = stale_starts(fits, shipped)
-    if stale:
-        # Pre pins each knob at its fit-time value, so the verdict would judge a past start.
-        raise RuntimeError(
-            f"{voice['slug']}: its fits started from values the library no longer ships "
-            f"({'; '.join(stale)}); refit it rather than re-judging"
-        )
-    units = {u for t in gate_patches(voice) for u in chain_of(t, struct_copies())}
-    refuse_unshipped_pre(
-        voice, baseline_pins(voice, fits[0], registry_history(units))["pinned"], shipped
-    )
+    refuse_stale_start(voice, fits, _catalogue(voice, _tuning_lib(build_dir)).defaults)
     ver = d / "verdict.json"
     was = json.loads(ver.read_text())["decision"] if ver.exists() else "unjudged"
     for path in d.iterdir():

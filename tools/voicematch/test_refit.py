@@ -564,34 +564,38 @@ def _history(*, worktree_fits=None):
     return [worktree, c3, c2, c1, c0]
 
 
-def _pins(base):
-    return {p["key"]: (p["value"], p["source"].split(",")[0]) for p in base["pinned"]}
+def _pins(base, field="pinned"):
+    return {p["key"]: (p["value"], p["source"].split(",")[0]) for p in base[field]}
 
 
-def test_a_variation_baseline_undoes_its_capitals_adoption_and_its_own():
+def test_a_variation_baseline_names_its_capitals_adoption_and_its_own_without_pinning():
     from refit import BANK_VERSIONS, baseline_pins
 
     voice = {"patch": "wide", "gates": [{"patch": "wide"}]}
     base = baseline_pins(voice, None, _history(), {"wide": "cap"}, {"wide": frozenset({"x"})})
-    assert _pins(base) == {
+    assert _pins(base, "descends_from") == {
         "wide.a": ("1.0", f"{BANK_VERSIONS}@c1"),  # before the capital's adoption reached it
         "wide.x": ("0.5", f"{BANK_VERSIONS}@c2"),  # before its own
     }, "c1 moved b without a fit record, so the run stops there"
-    assert base["overrides"] == "wide.a=1.0,wide.x=0.5" and not base["unresolved"]
+    assert base["pinned"] == [] and base["overrides"] == "" and not base["unresolved"]
 
 
-def test_a_capital_baseline_leaves_the_fields_its_copy_adopted_itself():
+def test_a_capital_baseline_pins_its_fits_start_and_names_what_it_descends_from():
     from refit import baseline_pins
 
     voice = {"patch": "cap", "gates": [{"patch": "cap"}, {"patch": "wide"}]}
     fit = {"knobs": [{"key": "cap.a", "start": 3.0}, {"key": "cap.c", "start": 5.0}]}
     base = baseline_pins(voice, fit, _history(), {"wide": "cap"}, {"wide": frozenset({"x"})})
     assert _pins(base) == {
-        "cap.a": ("1.0", "tools/bank-versions.json@c1"),  # the history outranks the fit's start
+        "cap.a": ("3.0", "fit.json start"),
         "cap.c": ("5.0", "fit.json start"),
-        "wide.a": ("1.0", "tools/bank-versions.json@c1"),
-        "wide.c": ("5.0", "fit.json start"),  # repeated on the copy that inherits it
+        "wide.a": ("3.0", "fit.json start"),  # repeated on the copy that inherits it
+        "wide.c": ("5.0", "fit.json start"),
     }
+    assert _pins(base, "descends_from") == {
+        "cap.a": ("1.0", "tools/bank-versions.json@c1"),
+        "wide.a": ("1.0", "tools/bank-versions.json@c1"),
+    }, "the copy's own adoption of x is the copy's, not the capital's"
 
 
 def test_an_adoption_the_registry_does_not_carry_is_reported_not_guessed():
@@ -604,7 +608,7 @@ def test_an_adoption_the_registry_does_not_carry_is_reported_not_guessed():
     )
     assert base["unresolved"] and base["unresolved"][0].startswith("cap:")
     alone = baseline_pins(voice, None, _history()[:1], {"wide": "cap"}, {})
-    assert alone["pinned"] == [] and "no history" in alone["unresolved"][0]
+    assert alone["descends_from"] == [] and "no history" in alone["unresolved"][0]
 
 
 def _judged_dir(tmp_path, monkeypatch, *, fit_runs):
@@ -659,32 +663,77 @@ def _judged_dir(tmp_path, monkeypatch, *, fit_runs):
     return refit, voice, d, seen
 
 
-def test_a_pre_pinned_away_from_what_ships_is_refused(tmp_path, monkeypatch):
-    # The fit starts at the shipped 3.0, but the history pins the baseline before the
-    # adoption that shipped it (1.0): the judge would measure against a state that does not ship.
+def test_a_fit_from_what_ships_is_judged_against_what_ships_despite_an_adoption_history(
+    tmp_path, monkeypatch
+):
+    import json
+
+    # The fit starts at the shipped 3.0, which an adoption moved there from 1.0.
     runs: list = []
     refit, voice, d, seen = _judged_dir(tmp_path, monkeypatch, fit_runs=runs)
-    with pytest.raises(RuntimeError, match=r"pre is not what ships; refit from the shipped start"):
-        refit.run_voice(voice, tmp_path, "build", 8)
-    assert not (d / "pre.json").exists() and not seen and not runs
-    with pytest.raises(RuntimeError, match=r"cap\.a 1\.0 \(ships 3\.0\)"):
-        refit.rejudge_voice(voice, tmp_path, "build")
+    result = refit.run_voice(voice, tmp_path, "build", 8)
+    pre = json.loads((d / "pre.json").read_text())
+    assert pre["baseline"]["overrides"] == "cap.a=3.0,wide.a=3.0"
+    assert {p["key"]: p["value"] for p in pre["baseline"]["descends_from"]} == {
+        "cap.a": "1.0",
+        "wide.a": "1.0",
+    }
+    assert seen["pre.wide.json"] == "cap.a=3.0,wide.a=3.0"
+    assert seen["post.wide.json"] == "cap.a=9.0,wide.a=9.0", "post reaches the copy too"
+    assert result["newly_over"] == ["cap:decay p90", "wide:decay p90"] and not runs
 
 
-def test_pre_is_pinned_to_the_baseline_and_says_so(tmp_path, monkeypatch):
+def test_a_recorded_pre_pinned_away_from_what_ships_is_measured_again(tmp_path, monkeypatch):
     import json
 
     runs: list = []
     refit, voice, d, seen = _judged_dir(tmp_path, monkeypatch, fit_runs=runs)
-    # What the history pins is what ships: the baseline stands as the judge.
-    shipped = {"cap.a": 1.0, "wide.a": 1.0}
-    monkeypatch.setattr(refit, "_catalogue", lambda voice, lib: SimpleNamespace(defaults=shipped))
-    result = refit.run_voice(voice, tmp_path, "build", 8)
+    old = {"gate": {"readings": []}, "baseline": {"pinned": [{"key": "cap.a", "value": "1.0"}]}}
+    (d / "pre.json").write_text(json.dumps(old))
+    (d / "pre.wide.json").write_text("{}")
+    refit.run_voice(voice, tmp_path, "build", 8)
+    assert json.loads((d / "stale" / "pre.json").read_text()) == old
+    assert (d / "stale" / "pre.wide.json").exists()
     pre = json.loads((d / "pre.json").read_text())
-    assert pre["baseline"]["overrides"] == "cap.a=1.0,wide.a=1.0"
-    assert seen["pre.wide.json"] == "cap.a=1.0,wide.a=1.0"
-    assert seen["post.wide.json"] == "cap.a=9.0,wide.a=9.0", "post reaches the copy too"
-    assert result["newly_over"] == ["cap:decay p90", "wide:decay p90"] and not runs
+    assert pre["baseline"]["overrides"] == "cap.a=3.0,wide.a=3.0"
+    assert seen["pre.wide.json"] == "cap.a=3.0,wide.a=3.0" and not runs
+
+
+@pytest.mark.parametrize(
+    ("ships", "recorded", "refused"),
+    [
+        (3.0, None, False),  # fit from what ships, an adoption in the history
+        (3.0, "1.0", False),  # fit from what ships, an old pre pinned before the adoption
+        (4.0, None, True),  # fit from a value that no longer ships
+        (4.0, "3.0", True),
+    ],
+)
+def test_the_refusal_is_produced_only_for_a_fit_whose_start_differs_from_what_ships(
+    tmp_path, monkeypatch, ships, recorded, refused
+):
+    import json
+
+    refit, voice, d, _seen = _judged_dir(tmp_path, monkeypatch, fit_runs=[])
+    monkeypatch.setattr(
+        refit, "_catalogue", lambda voice, lib: SimpleNamespace(defaults={"cap.a": ships})
+    )
+    if recorded is not None:
+        pin = [{"key": "cap.a", "value": recorded}]
+        body = {"gate": {"readings": []}, "baseline": {"pinned": pin}}
+        (d / "pre.json").write_text(json.dumps(body))
+    fit = json.loads((d / "fit.json").read_text())
+    assert bool(refit.stale_starts([fit], {"cap.a": ships})) == refused
+    for judge in (
+        lambda: refit.run_voice(voice, tmp_path, "build", 8),
+        lambda: refit.rejudge_voice(voice, tmp_path, "build"),
+    ):
+        if refused:
+            with pytest.raises(
+                RuntimeError, match=r"cap\.a 3\.0 -> 4\.0.*refit it from the shipped start"
+            ):
+                judge()
+        else:
+            judge()
 
 
 def test_rejudge_recreates_the_judged_state_without_fitting(tmp_path, monkeypatch):
@@ -715,7 +764,7 @@ def test_rejudge_refuses_fits_started_from_values_no_longer_shipped(tmp_path, mo
     monkeypatch.setattr(
         refit, "_catalogue", lambda voice, lib: SimpleNamespace(defaults={"cap.a": 4.0})
     )
-    with pytest.raises(RuntimeError, match=r"cap\.a 3\.0 -> 4\.0.*refit it"):
+    with pytest.raises(RuntimeError, match=r"cap\.a 3\.0 -> 4\.0.*refit it from the shipped start"):
         refit.rejudge_voice(voice, tmp_path, "build")
     assert (d / "pre.json").read_text() == "{}" and not seen, "nothing judged or deleted"
 
