@@ -1517,6 +1517,15 @@ def _unison_held(ref: dict, pairs: list, model_rows: list[dict]) -> dict[str, st
     return {"balance": reason} if reason else None
 
 
+def tally_floor_censors(tally: CensorTally, ref_row: dict) -> dict[str, str]:
+    """Count each dimension the reference row's recording floor censors under that dimension."""
+    floor = {"body": body_floor_state(ref_row), "tnr": tnr_floor_state(ref_row)}
+    floor = {dim: why for dim, why in floor.items() if why}
+    for dim in floor:
+        tally.absent(dim, False, True)
+    return floor
+
+
 def compare(
     cfg: dict,
     profile_path: Path,
@@ -1700,13 +1709,9 @@ def compare(
             for dim in ("decay", "aftersound", "doubling"):
                 tally.absent(dim, True, True)
         # The reference's body band is its recording's own floor, so the delta is the floor's.
-        body_floor = body_floor_state(r)
-        if body_floor:
-            body_censored.append((note, vel, "body", body_floor))
-        tnr_floor = tnr_floor_state(r)
-        if tnr_floor:
-            body_censored.append((note, vel, "tnr", tnr_floor))
-            tally.absent("body", False, True)
+        floor = tally_floor_censors(tally, r)
+        body_censored.extend((note, vel, dim, why) for dim, why in floor.items())
+        body_floor, tnr_floor = floor.get("body"), floor.get("tnr")
         row = {
             "stretch": None if stretch is None else stretch + a4_off,
             "decay": None if span_mismatch else d("decay_db_s"),

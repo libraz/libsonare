@@ -204,6 +204,24 @@ def test_censor_readers_follow_the_row_floor_state():
     assert not tnr_at_floor(_state(body="why"))
 
 
+def test_a_floor_censored_row_is_counted_under_the_dimension_it_censors():
+    from profile import tally_floor_censors
+
+    from profile_gate import CensorTally
+
+    t = CensorTally()
+    for row in (_state(tnr="tnr why"), _state(body="body why"), _state()):
+        t.begin_row()
+        tally_floor_censors(t, row)
+    assert t.dims == {
+        "tnr": {"model": 0, "reference": 1, "rows": 1},
+        "body": {"model": 0, "reference": 1, "rows": 1},
+    }
+    t.begin_row()
+    assert tally_floor_censors(t, _state(body="b", tnr="n")) == {"body": "b", "tnr": "n"}
+    assert t.dims["body"]["rows"] == 2 and t.dims["tnr"]["rows"] == 2
+
+
 def test_rows_without_a_floor_state_are_not_censored():
     assert not body_at_floor({})
     assert not tnr_at_floor({"floor_state": None})
