@@ -333,6 +333,7 @@ def test_the_furthest_point_the_gate_accepts_is_found_by_bisection(
         )
 
     monkeypatch.setattr(gate_audit, "compare_voice", fake_compare)
+    monkeypatch.setattr(refit, "gate_floors", lambda voice: lambda key: 0.1)
     found = refit.along_the_path({}, tmp_path, Path("lib"), report, "fit")
     if last_good < 0:
         assert found["accepted"] is None
@@ -1814,9 +1815,18 @@ def _rows(centroid: float, crest: float) -> dict:
     return {"drums_module_hit": rows}
 
 
+def _gated(post, *keys):
+    """`post` with a gate reading for each key, the pairs its gate holds a bound for."""
+    post["gate"]["readings"] += [
+        {"key": k, "stat": "median", "value": 0.0, "limit": 9.0, "over": False} for k in keys
+    ]
+    return post
+
+
 def test_a_single_note_fit_is_kept_when_its_own_row_worsens_past_the_floor():
     """The kit-wide statistic does not see one note of sixty, so the note's own row is read."""
     pre, fit, post = _case(*GOOD)
+    _gated(post, "drums_module_hit:centroid_pct", "drums_module_hit:crest")
     pre["note_rows"], post["note_rows"] = _rows(14.7, 3.1), _rows(24.9, 3.7)
     floors = {"drums_module_hit:centroid_pct": 5.0, "drums_module_hit:crest": 0.5}
     got = verdict(pre, fit, post, floor_of=floors.__getitem__, own_note=71)
@@ -1832,6 +1842,35 @@ def test_a_single_note_fit_is_kept_when_its_own_row_worsens_past_the_floor():
     post["note_rows"] = _rows(16.0, 3.3)
     assert verdict(pre, fit, post, floor_of=floors.__getitem__, own_note=71)["decision"] == "adopt"
     assert verdict(*_case(*GOOD))["decision"] == "adopt"
+
+
+def test_an_excused_dimensions_row_neither_keeps_a_fit_nor_counts():
+    """A row of a dimension the capture's gate does not read is a printed number, not a row."""
+    pre, fit, post = _case(*GOOD)
+    _gated(post, "drums_module_hit:crest")
+    pre["note_rows"], post["note_rows"] = _rows(14.7, 3.1), _rows(24.9, 3.1)
+    floors = {"drums_module_hit:crest": 0.5}
+    got = verdict(pre, fit, post, floor_of=floors.__getitem__, own_note=71)
+    assert got["decision"] == "adopt" and got["own_row_worse"] == []
+    # The same row counts once its gate reads the dimension.
+    _gated(post, "drums_module_hit:centroid_pct")
+    floors["drums_module_hit:centroid_pct"] = 5.0
+    got = verdict(pre, fit, post, floor_of=floors.__getitem__, own_note=71)
+    assert got["decision"] == "kept"
+    assert [r["key"] for r in got["own_row_worse"]] == ["drums_module_hit:centroid_pct"]
+
+
+def test_a_pair_its_gate_holds_no_bound_for_has_no_floor(tmp_path, monkeypatch):
+    import json as _json
+
+    import refit
+
+    gate = tmp_path / "cap_gate.json"
+    gate.write_text(_json.dumps({"bounds": {"tnr": {"floor": 0.3}}}))
+    floor_of = refit.gate_floors({"gates": [{"capture": "cap", "gate": str(gate)}]})
+    assert floor_of("cap:tnr") == 0.3
+    with pytest.raises(ValueError, match="cap:centroid_pct holds no bound"):
+        floor_of("cap:centroid_pct")
 
 
 def test_a_single_note_fit_without_recorded_rows_is_refused():
@@ -1850,7 +1889,19 @@ def test_the_path_accepts_no_point_whose_own_row_the_verdict_would_keep(tmp_path
 
     def body(i, rows=True):
         value = 0.8 - i / 100  # the kit statistic keeps improving all along the path
-        out = {"gate": {"readings": [dict(over, value=value, over=False, excess=value - 1.0)]}}
+        centroid = {
+            "key": "hit:centroid_pct",
+            "stat": "median",
+            "value": 0.0,
+            "limit": 9.0,
+            "over": False,
+            "excess": -9.0,
+        }
+        out = {
+            "gate": {
+                "readings": [dict(over, value=value, over=False, excess=value - 1.0), centroid]
+            }
+        }
         if rows:
             # The fitted note's own centroid worsens past its floor from the fifth point on.
             own = 1.0 + (10.0 if i >= 4 else 0.0)

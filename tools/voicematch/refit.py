@@ -2046,7 +2046,9 @@ def gate_floors(voice: dict):
     def floor_of(key: str) -> float:
         capture, _, dim = key.rpartition(":")
         gate = gate_of(capture)
-        bound = (gate.get("bounds") or {}).get(dim) or {}
+        bound = (gate.get("bounds") or {}).get(dim)
+        if bound is None:
+            raise ValueError(f"{key} holds no bound, so it has no floor: the gate does not read it")
         if "floor" in bound:
             return bound["floor"]
         return dimension_floor(dim, gate.get("reference_spread"))[0]
@@ -2089,13 +2091,16 @@ def own_rows_worse(pre: dict, post: dict, note: int, floor_of) -> list[dict]:
     """The fitted note's own rows that worsened past their dimension's floor, pre to post.
 
     A kit gate reduces over every note of the kit, so one note's row can worsen
-    without moving its statistic; a single-note fit is read on its own rows too.
+    without moving its statistic; a single-note fit is read on its own rows too. Only a
+    dimension the capture's gate reads (a key of `post`'s gate readings) is a row: an
+    excused dimension's printed number is evidence about nothing.
     """
     missing = [name for name, body in (("pre", pre), ("post", post)) if "note_rows" not in body]
     if missing:
         raise ValueError(
             f"{' and '.join(missing)} recorded no per-note rows; re-measure them to judge note {note}"
         )
+    gated = {r["key"] for r in (post.get("gate") or {}).get("readings") or []}
     out = []
     for capture, rows in post["note_rows"].items():
         before = {
@@ -2109,6 +2114,8 @@ def own_rows_worse(pre: dict, post: dict, note: int, floor_of) -> list[dict]:
                 if dim in ("note", "velocity") or dim not in b:
                     continue
                 key = f"{capture}:{dim}"
+                if key not in gated:
+                    continue
                 floor = floor_of(key)
                 if abs(after) - abs(b[dim]) > floor:
                     out.append(
