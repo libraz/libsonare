@@ -138,6 +138,8 @@ def _check_pin() -> None:
 EVALS_PER_KNOB = 12
 #: Normalized held-out improvement a fit must show to count as generalising.
 HELD_OUT_MARGIN = 0.005
+#: Relative full-objective gain a gate-only fit must show on its own notes.
+IN_SAMPLE_MARGIN = 0.005
 #: `DahdsrEnvelope::kSilenceLevel`: a sustain at or under it makes the envelope end
 #: itself when the decay lands, so leaving it is a branch, not a value.
 SILENT_SUSTAIN = 1.0e-4
@@ -919,6 +921,24 @@ def switch_moves(report: dict, held: frozenset[str] = frozenset()) -> list[str]:
     ]
 
 
+def in_sample_gain(fit: dict) -> float | None:
+    """Relative full-objective gain of a fit on its own notes, or None when none can be read.
+
+    A `confirm` block (the local pair under the full objective) outranks the fit's own numbers.
+    """
+    local = (fit.get("confirm") or {}).get("local")
+    try:
+        if local:
+            start, best = local["start"]["loss"], local["best"]["loss"]
+        else:
+            quality = fit["selected"]["quality"]
+            start = quality["baseline"]["absolute_weighted_mean_units"]
+            best = quality["absolute_weighted_mean_units"]
+        return (start - best) / start
+    except (KeyError, TypeError, ZeroDivisionError):
+        return None
+
+
 def verdict(
     pre: dict,
     fit: dict,
@@ -930,7 +950,9 @@ def verdict(
     """The adoption decision for one voice, with the numbers it rests on.
 
     `gate_only` is for a grid with one condition per note, a drum module's single
-    velocity, where no held-out condition exists and the gate is the whole judgement.
+    velocity, where no held-out condition exists and the gate is the whole judgement; its
+    fit must also show an in-sample gain over `IN_SAMPLE_MARGIN`, and an adoption on it is
+    marked `in_sample`.
     """
     moved = [
         k["key"]
@@ -946,10 +968,12 @@ def verdict(
     pre_sum, pre_over = _excess(pre["gate"]["readings"])
     post_sum, post_over = _excess(post["gate"]["readings"])
     newly = sorted(f"{k} {s}" for k, s in post_over - pre_over)
+    gain = in_sample_gain(fit) if gate_only and held is None else None
     out = {
         "moved": len(moved),
         "loss": fit["loss"].get("selected"),
         "held_out_gain": held,
+        "in_sample_gain": gain,
         "excess": [pre_sum, post_sum],
         "newly_over": newly,
         "switches": switch_moves(fit, unjudged),
@@ -963,6 +987,10 @@ def verdict(
         out["decision"], out["why"] = "kept", "no independent held-out result"
     elif held is not None and held <= HELD_OUT_MARGIN:
         out["decision"], out["why"] = "kept", f"held-out notes did not improve ({held:+.4f})"
+    elif gate_only and held is None and gain is None:
+        out["decision"], out["why"] = "kept", "no in-sample gain to judge"
+    elif gate_only and held is None and gain <= IN_SAMPLE_MARGIN:
+        out["decision"], out["why"] = "kept", f"confirm gain under the floor ({gain:+.4f})"
     elif out["switches"]:
         out["decision"], out["why"] = (
             "trade",
@@ -973,11 +1001,13 @@ def verdict(
     elif post_sum > pre_sum + 1e-9:
         out["decision"], out["why"] = "kept", f"gate excess grew {pre_sum:.3f} -> {post_sum:.3f}"
     else:
-        gain = "gate only" if held is None else f"held-out {held:+.4f}"
+        basis = "gate only" if held is None else f"held-out {held:+.4f}"
         out["decision"], out["why"] = (
             "adopt",
-            (f"{gain}, gate excess {pre_sum:.3f} -> {post_sum:.3f}"),
+            (f"{basis}, gate excess {pre_sum:.3f} -> {post_sum:.3f}"),
         )
+        if held is None:
+            out["in_sample"] = True
     return out
 
 
@@ -1805,6 +1835,8 @@ def adopt(root: Path, only: set[str]) -> int:
                 "provisional_off_layer": True,
                 "provisional_oracle": voice["provisional_oracle"],
             }
+        if outcome == "adopted" and ver.get("in_sample"):
+            report = {**report, "in_sample": True}
         unit, entry = fits_mod.record_fit(
             report,
             capture=voice["capture"],

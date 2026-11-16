@@ -1064,6 +1064,27 @@ def test_the_fit_axis_shows_a_provisional_fit_as_its_own_state():
     assert fits.axis(["grand"], {"grand": entry}, "new", set())["state"] == fits.STALE
 
 
+def test_the_fit_axis_ranks_an_in_sample_fit_between_off_layer_and_under_base():
+    entry = {
+        "objective": "d",
+        "date": "2026-01-01",
+        "outcome": "adopted",
+        "capture": "own",
+        "timbre": "t0",
+        "in_sample": True,
+        "base_overrides": "e.k=1",
+    }
+    got = fits.axis(["kit"], {"kit": entry}, "d", set())
+    assert got["state"] == fits.IN_SAMPLE
+    assert got["note"] == "provisional: adopted on an in-sample gain, no held-out"
+    off = {**entry, "provisional_off_layer": True, "provisional_oracle": ["own:t0"]}
+    assert fits.axis(["kit"], {"kit": off}, "d", set())["state"] == fits.OFF_LAYER
+    assert fits.axis(["kit"], {"kit": entry}, "new", set())["state"] == fits.STALE
+    report = {"objective": "d", "knobs": [{"key": "kit.x"}], "in_sample": True}
+    recorded = fits.record_fit(report, capture="own", timbre="t0", outcome="adopted")[1]
+    assert recorded["in_sample"] is True
+
+
 def test_the_report_of_a_fit_against_off_layer_captures_only_is_provisional(tmp_path, monkeypatch):
     _aim(monkeypatch)
     _serve_definitions(monkeypatch, {"mod": "module"})

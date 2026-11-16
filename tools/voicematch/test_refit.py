@@ -17,7 +17,7 @@ import fits
 import gate_audit
 import objective
 from profile_gate import gate_readings
-from refit import HELD_OUT_MARGIN, verdict
+from refit import HELD_OUT_MARGIN, IN_SAMPLE_MARGIN, verdict
 
 SWITCH = "p.one_shot"  # declared I_TYPED in the override layer, so a switch field
 FLOAT = "p.gain"
@@ -163,12 +163,58 @@ def test_a_trade_is_refitted_with_the_broken_dimensions_weighed_up():
     assert reweighed(report, ["stereo median"]) is None, "a dimension with no term has no refit"
 
 
+def _own_notes(fit, start=1.0, best=0.9):
+    """Give a fit the full-objective quality a gate-only judgement reads."""
+    quality = {"absolute_weighted_mean_units": best, "baseline": {}}
+    quality["baseline"]["absolute_weighted_mean_units"] = start
+    fit["selected"]["quality"] = quality
+    return fit
+
+
 def test_a_grid_with_one_condition_per_note_is_judged_by_the_gate_alone():
     pre, fit, post = _case(False, True, "none", False, False, False)
+    _own_notes(fit)
     assert verdict(pre, fit, post)["decision"] == "kept"
     assert verdict(pre, fit, post, gate_only=True)["decision"] == "adopt"
     pre, fit, post = _case(False, True, "none", False, True, False)
+    _own_notes(fit)
     assert verdict(pre, fit, post, gate_only=True)["decision"] == "trade"
+
+
+def test_a_gate_only_fit_under_the_gain_floor_is_kept():
+    pre, fit, post = _case(False, True, "none", False, False, False)
+    _own_notes(fit, 1.0, 1.0 - IN_SAMPLE_MARGIN / 2)
+    got = verdict(pre, fit, post, gate_only=True)
+    assert got["decision"] == "kept"
+    assert got["why"] == f"confirm gain under the floor ({IN_SAMPLE_MARGIN / 2:+.4f})"
+    assert "in_sample" not in got
+
+
+def test_a_gate_only_fit_with_no_readable_gain_is_kept():
+    pre, fit, post = _case(False, True, "none", False, False, False)
+    got = verdict(pre, fit, post, gate_only=True)
+    assert got["decision"] == "kept" and got["why"] == "no in-sample gain to judge"
+    assert got["in_sample_gain"] is None
+
+
+def test_the_confirm_pair_outranks_the_fits_own_numbers():
+    pre, fit, post = _case(False, True, "none", False, False, False)
+    _own_notes(fit, 1.0, 0.5)
+    fit["confirm"] = {"local": {"start": {"loss": 1.0}, "best": {"loss": 0.999}}}
+    got = verdict(pre, fit, post, gate_only=True)
+    assert got["decision"] == "kept" and got["in_sample_gain"] == pytest.approx(0.001)
+    fit["confirm"]["local"]["best"]["loss"] = 0.9
+    got = verdict(pre, fit, post, gate_only=True)
+    assert got["decision"] == "adopt" and got["in_sample_gain"] == pytest.approx(0.1)
+
+
+def test_an_adoption_with_no_held_out_condition_is_marked_in_sample():
+    pre, fit, post = _case(False, True, "none", False, False, False)
+    _own_notes(fit)
+    assert verdict(pre, fit, post, gate_only=True)["in_sample"] is True
+    pre, fit, post = _case(False, True, "better", False, False, False)
+    got = verdict(pre, fit, post)
+    assert got["decision"] == "adopt" and "in_sample" not in got
 
 
 @pytest.mark.parametrize(

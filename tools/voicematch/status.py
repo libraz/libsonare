@@ -696,6 +696,11 @@ def next_action(axes: dict, stage: int, candidates: list[str]) -> str:
             f"{fit['note']} ({', '.join(fit['oracle'])}): capture the wanted layer, "
             f"then refit: refit.py"
         )
+    if stage in (3, 4) and fit.get("fittable") and fit.get("state") == fits_mod.IN_SAMPLE:
+        return (
+            f"{fit['note']}: capture a held-out condition, or listen, "
+            f"before treating it as validated"
+        )
     if stage in (3, 4) and fit.get("fittable") and fit.get("state") == fits_mod.UNDER_BASE:
         return (
             f"the last fit stood on base overrides ({'; '.join(fit['base_overrides'])}): "
@@ -945,6 +950,7 @@ def render_table(rows: list[dict], *, every: bool, pol: dict, goal: str | None =
         stale = sum(f["state"] == fits_mod.STALE for f in fit_states)
         based = sum(f["state"] == fits_mod.UNDER_BASE for f in fit_states)
         provisional = sum(f["state"] == fits_mod.OFF_LAYER for f in fit_states)
+        in_sample = sum(f["state"] == fits_mod.IN_SAMPLE for f in fit_states)
         partial = sum(f["state"] == fits_mod.SCORED_WITHOUT for f in fit_states)
         blocked = sum(f["state"] == fits_mod.BLOCKED for f in fit_states)
         print(
@@ -952,9 +958,10 @@ def render_table(rows: list[dict], *, every: bool, pol: dict, goal: str | None =
             f"voice(s); {equivalent} under a proven-equivalent objective, {stale} stale, "
             + (f"{based} under uncommitted base overrides, " if based else "")
             + (f"{provisional} provisional (off-layer oracle), " if provisional else "")
+            + (f"{in_sample} adopted in-sample, " if in_sample else "")
             + (f"{partial} scored without a weighed term, " if partial else "")
             + (f"{blocked} blocked by gated rows, " if blocked else "")
-            + f"{len(fit_states) - current - equivalent - stale - based - provisional - partial - blocked} "
+            + f"{len(fit_states) - current - equivalent - stale - based - provisional - in_sample - partial - blocked} "
             f"never recorded"
         )
     census = signoff_census(rows)
