@@ -43,8 +43,12 @@ def _report(start=10.0, best=9.0):
     quality = _quality(best, modes=4.0)
     quality["baseline"] = _quality(start, modes=5.0)
     return {
-        "knobs": [{"key": "marimba.modal.a"}, {"key": "marimba.b"}],
-        "selected": {"values": [0.123456789012, 3.0], "quality": quality},
+        "knobs": [
+            {"key": "marimba.modal.a", "start": 0.1},
+            {"key": "marimba.b", "start": 2.0},
+            {"key": "marimba.modal.velocity_exponent", "start": 0.5},
+        ],
+        "selected": {"values": [0.123456789012, 3.0, 0.5], "quality": quality},
         "renders": 400,
     }
 
@@ -101,7 +105,8 @@ def test_a_host_line_sendaway_ran_on_this_machine_refuses_before_touching_anythi
     assert (out / "fit.log").read_text() == "kept\n"
 
 
-def test_the_selected_point_is_handed_back_at_full_precision():
+def test_the_selected_point_is_handed_back_at_full_precision_without_unmoved_knobs():
+    # The third knob sits at its start, as a knob the search now holds always does.
     assert remote_fit.start_overrides(_report()) == "marimba.modal.a=0.123456789012,marimba.b=3.0"
 
 

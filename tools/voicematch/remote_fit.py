@@ -680,9 +680,15 @@ def remote_points(report: dict) -> dict:
 
 
 def start_overrides(report: dict) -> str:
-    """The selected point as `--start-overrides`, at full precision."""
+    """The selected point as `--start-overrides`, at full precision.
+
+    Only the knobs off their start: one at its start needs no override, and one the search
+    now holds (a velocity-axis knob on a one-velocity probe) is refused as a start override.
+    """
     values = report["selected"]["values"]
-    return ",".join(f"{k['key']}={v!r}" for k, v in zip(report["knobs"], values, strict=True))
+    return ",".join(
+        f"{k['key']}={v!r}" for k, v in zip(report["knobs"], values, strict=True) if v != k["start"]
+    )
 
 
 def _without(argv: list[str], *flags: str) -> list[str]:
