@@ -14,12 +14,19 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import remote_fit
 
 _real_tree = remote_fit.sendaway_tree
+_real_leave = remote_fit.leave
 
 
 @pytest.fixture(autouse=True)
 def _marked_tree(monkeypatch, tmp_path):
     """Every test sends from a marked copy of its own, never from the checkout running it."""
     monkeypatch.setattr(remote_fit, "sendaway_tree", lambda: tmp_path)
+    monkeypatch.setattr(remote_fit, "leave", lambda: "leave-check PASS")
+
+
+def _bundle(files, slug="p012"):
+    """What the host's pull prints: each named output directory's files."""
+    return json.dumps({f"{remote_fit.HOST_OUT}/{slug}": files})
 
 
 ARGV = ["--spec", "auto", "--program", "12", "--corpus", "/x/marimba", "--corpus-timbre", "t"]
@@ -56,12 +63,16 @@ def test_a_fit_without_a_corpus_is_refused():
         remote_fit.check_args(["--spec", "auto", "--program", "12"])
 
 
-@pytest.mark.parametrize("mode", sorted(remote_fit.HOST_REFUSED_ENGINES))
-def test_self_sustaining_engines_are_refused(mode):
-    assert "fit it on this Mac" in remote_fit.engine_refusal(mode)
+@pytest.fixture
+def reed_refused(monkeypatch):
+    monkeypatch.setattr(remote_fit, "HOST_REFUSED_ENGINES", {"reed": "a reed-bore loop"})
 
 
-@pytest.mark.parametrize("mode", ["modal", "karplus_strong", "plucked_string", "piano", None])
+def test_a_listed_engine_is_refused(reed_refused):
+    assert "fit it on this Mac" in remote_fit.engine_refusal("reed")
+
+
+@pytest.mark.parametrize("mode", ["modal", "plucked_string", "reed", "fm", None])
 def test_linear_engines_pass(mode):
     assert remote_fit.engine_refusal(mode) is None
 
@@ -138,11 +149,17 @@ def test_a_refused_leave_check_sends_nothing(tmp_path, monkeypatch):
     fake = tmp_path / "sendaway"
     fake.write_text(f'#!/bin/sh\necho "$@" >> {calls}\n')
     fake.chmod(0o755)
-    cache = tmp_path / "cache"
-    cache.mkdir()
+    tree = tmp_path / "tree"
+    tree.mkdir()
+    cache = tmp_path / "cache" / "p012"
+    cache.mkdir(parents=True)
     (cache / "x.json.gz").write_bytes(b"not gzip")
+    monkeypatch.setattr(remote_fit, "leave", _real_leave)
+    monkeypatch.setattr(remote_fit, "REPO_ROOT", tree)
+    monkeypatch.setattr(remote_fit, "CACHE_ROOT", tmp_path / "cache")
     monkeypatch.setattr(remote_fit, "voice_engine", lambda argv, lib: "modal")
     monkeypatch.setattr(remote_fit, "write_caches", lambda argv, slug, lib: cache)
+    monkeypatch.setattr(remote_fit, "mac_head", lambda: "abc")
     with pytest.raises(RuntimeError, match="nothing was sent"):
         remote_fit.run_remote(ARGV, "p012", tmp_path / "out", Path("lib"), 12, sendaway=fake)
     assert not calls.exists()
@@ -150,7 +167,7 @@ def test_a_refused_leave_check_sends_nothing(tmp_path, monkeypatch):
 
 def test_pull_writes_the_host_files_into_the_output_dir(tmp_path):
     fake = tmp_path / "sendaway"
-    body = json.dumps({"fit.json": "{}", "fit.log": "eval #1\n"})
+    body = _bundle({"fit.json": "{}", "fit.log": "eval #1\n"})
     fake.write_text(f"#!/bin/sh\ncat <<'EOF'\n{body}\nEOF\n")
     fake.chmod(0o755)
     assert remote_fit.pull("p012", tmp_path / "out", fake) == ["fit.json", "fit.log"]
@@ -159,7 +176,7 @@ def test_pull_writes_the_host_files_into_the_output_dir(tmp_path):
 
 def _sendaway(tmp_path, files, rc=0):
     fake = tmp_path / "sendaway"
-    body = json.dumps(files)
+    body = _bundle(files)
     fake.write_text(f"#!/bin/sh\ncat <<'EOF'\n{body}\nEOF\nexit {rc}\n")
     fake.chmod(0o755)
     return fake
@@ -196,7 +213,7 @@ def _driver(tmp_path, monkeypatch, script):
     """A fake sendaway running `script` for host lines; a pull answers with a finished search."""
     calls = tmp_path / "calls"
     fake = tmp_path / "sendaway"
-    bundle = json.dumps(
+    bundle = _bundle(
         {
             "host.json": '{"wall_s": 10, "rc": 0}',
             "fit.attempt1.log": "  eval #1 builds=0 loss=1\n  eval #2 builds=0 loss=1\n",
@@ -216,7 +233,7 @@ def _driver(tmp_path, monkeypatch, script):
     monkeypatch.setattr(remote_fit, "voice_engine", lambda argv, lib: "modal")
     monkeypatch.setattr(remote_fit, "write_caches", lambda argv, slug, lib: cache)
     monkeypatch.setattr(remote_fit, "mac_head", lambda: "abc")
-    monkeypatch.setattr(remote_fit, "leave", lambda d: leaves.append(d) or "leave-check PASS")
+    monkeypatch.setattr(remote_fit, "leave", lambda: leaves.append(1) or "leave-check PASS")
     return fake, calls, leaves
 
 
@@ -240,7 +257,8 @@ def test_a_dropped_connection_is_re_issued_and_each_attempt_counted(tmp_path, mo
     got = remote_fit.run_remote(
         ARGV, "p012", tmp_path / "out", Path("lib"), 12, sendaway=fake, wait=lambda s: None
     )
-    assert len(calls.read_text().splitlines()) == len(leaves) == 2
+    # One leave-check per sync: both attempts and the pull.
+    assert len(calls.read_text().splitlines()) == 2 and len(leaves) == 3
     first, second = got["host"]["attempts"]
     assert first["log"] == "fit.attempt1.log" and first["rc"] == lost
     assert (first["evals_new"], first["evals_replayed"]) == (2, 0)
@@ -346,3 +364,258 @@ def test_an_unmarked_tree_is_refused_and_a_marked_one_passes(tmp_path):
     mark.parent.mkdir(parents=True)
     mark.touch()
     assert _real_tree(tmp_path) == tmp_path
+
+
+# --------------------------------------------------------------------------
+# queue
+
+
+def _queue_file(tmp_path, *slugs):
+    path = tmp_path / "queue.jsonl"
+    path.write_text(
+        "".join(json.dumps({"slug": s, "group": "g1", "args": ARGV}) + "\n" for s in slugs)
+    )
+    return path
+
+
+def test_a_queue_refuses_a_slug_that_is_not_a_directory_name_or_repeats(tmp_path):
+    with pytest.raises(ValueError, match="refused: a/b"):
+        remote_fit.load_queue(_queue_file(tmp_path, "a/b"))
+    with pytest.raises(ValueError, match="repeated: p012"):
+        remote_fit.load_queue(_queue_file(tmp_path, "p012", "p013", "p012"))
+
+
+def test_a_queue_key_moves_with_the_commit_and_the_arguments():
+    key = remote_fit.queue_key("abc", ARGV)
+    assert key == remote_fit.queue_key("abc", list(ARGV))
+    assert key != remote_fit.queue_key("abd", ARGV)
+    assert key != remote_fit.queue_key("abc", [*ARGV, "--w-modes", "2"])
+
+
+def _loadavg(tmp_path):
+    path = tmp_path / "loadavg"
+    path.write_text("1.00 1.00 1.00 1/2 3\n")
+    return str(path)
+
+
+def _fake_host_python(tmp_path):
+    """Runs `-c` snippets with this interpreter; a search writes a finished report."""
+    fake = tmp_path / "hostpy"
+    fake.write_text(
+        "#!/bin/bash\n"
+        f'if [ "$1" = -c ]; then exec {sys.executable} "$@"; fi\n'
+        'while [ $# -gt 0 ]; do [ "$1" = --out ] && out=$2; shift; done\n'
+        f"echo search >> {tmp_path / 'searches'}\n"
+        "printf '%s' '"
+        + json.dumps(
+            {
+                "evaluations": 7,
+                "selected": {
+                    "quality": {
+                        "absolute_weighted_mean_units": 2.0,
+                        "baseline": {"absolute_weighted_mean_units": 3.0},
+                    }
+                },
+            }
+        )
+        + '\' > "$out"\n'
+    )
+    fake.chmod(0o755)
+    return str(fake)
+
+
+def test_the_queue_line_runs_each_search_once_and_reports_each(tmp_path, monkeypatch):
+    monkeypatch.setattr(remote_fit, "REPO_ROOT", tmp_path)
+    monkeypatch.setattr(remote_fit, "HOST_PYTHON", _fake_host_python(tmp_path))
+    items = [{"slug": s, "args": ARGV} for s in ("p012", "p013")]
+    keys = {s: remote_fit.queue_key("abc", ARGV) for s in ("p012", "p013")}
+    line = remote_fit.queue_command(items, 12, keys, "abc").replace("$(uname -s)", "Linux")
+    line = line.replace("/proc/loadavg", _loadavg(tmp_path))
+
+    def run():
+        out = subprocess.run(["bash", "-c", line], capture_output=True, text=True, check=True)
+        marks = [x for x in out.stdout.splitlines() if x.startswith(remote_fit.QUEUE_MARK)]
+        return [json.loads(x[len(remote_fit.QUEUE_MARK) :]) for x in marks]
+
+    first = run()
+    assert [(r["slug"], r["finished_earlier"]) for r in first] == [
+        ("p012", False),
+        ("p013", False),
+    ]
+    assert first[0]["versions"]["python"] == sys.version.split()[0]
+    assert {k: first[0][k] for k in ("rc", "start_loss", "best_loss", "evals")} == {
+        "rc": 0,
+        "start_loss": 3.0,
+        "best_loss": 2.0,
+        "evals": 7,
+    }
+    log = (tmp_path / remote_fit.HOST_OUT / "p012" / "fit.log").read_text()
+    assert remote_fit._eval_counts(log)["versions"] == first[0]["versions"]
+    # Re-issued after a drop: both ended at this commit with these arguments, so neither reruns.
+    again = run()
+    assert [r["finished_earlier"] for r in again] == [True, True]
+    assert (tmp_path / "searches").read_text().count("search") == 2
+
+
+def test_parallel_queue_streams_share_the_workers_and_run_every_search(tmp_path, monkeypatch):
+    monkeypatch.setattr(remote_fit, "REPO_ROOT", tmp_path)
+    monkeypatch.setattr(remote_fit, "HOST_PYTHON", _fake_host_python(tmp_path))
+    slugs = ("p012", "p013", "p014")
+    items = [{"slug": s, "args": ARGV} for s in slugs]
+    keys = {s: remote_fit.queue_key("abc", ARGV) for s in slugs}
+    line = remote_fit.queue_command(items, 12, keys, "abc", parallel=2)
+    assert line.count("--workers 6 ") == 3
+    line = line.replace("$(uname -s)", "Linux").replace("/proc/loadavg", _loadavg(tmp_path))
+    out = subprocess.run(["bash", "-c", line], capture_output=True, text=True, check=True)
+    marks = [x for x in out.stdout.splitlines() if x.startswith(remote_fit.QUEUE_MARK)]
+    assert sorted(json.loads(x[len(remote_fit.QUEUE_MARK) :])["slug"] for x in marks) == list(slugs)
+    assert (tmp_path / "searches").read_text().count("search") == 3
+
+
+def test_a_packed_line_runs_as_sent_and_keeps_its_exit():
+    line = "echo " + "x" * 200_000 + " | wc -c; exit 3"
+    sent = remote_fit.packed(line)
+    assert len(sent) < 10_000
+    out = subprocess.run(
+        ["bash", "-c", sent.replace("$(uname -s)", "Linux")],
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    assert (out.stdout.strip(), out.returncode) == ("200001", 3)
+    darwin = subprocess.run(["bash", "-c", sent.replace("$(uname -s)", "Darwin")], check=False)
+    assert darwin.returncode == remote_fit.FELL_BACK
+
+
+def test_the_queue_line_reruns_a_search_whose_arguments_changed(tmp_path, monkeypatch):
+    monkeypatch.setattr(remote_fit, "REPO_ROOT", tmp_path)
+    monkeypatch.setattr(remote_fit, "HOST_PYTHON", _fake_host_python(tmp_path))
+    items = [{"slug": "p012", "args": ARGV}]
+    for key in ("k1", "k2"):
+        line = remote_fit.queue_command(items, 12, {"p012": key}, "abc")
+        line = line.replace("$(uname -s)", "Linux").replace("/proc/loadavg", _loadavg(tmp_path))
+        subprocess.run(["bash", "-c", line], capture_output=True, check=True)
+    assert (tmp_path / "searches").read_text().count("search") == 2
+
+
+def test_a_queue_line_sendaway_ran_on_this_machine_refuses(tmp_path, monkeypatch):
+    monkeypatch.setattr(remote_fit, "REPO_ROOT", tmp_path)
+    line = remote_fit.queue_command([{"slug": "p012", "args": ARGV}], 12, {"p012": "k"}, "abc")
+    proc = subprocess.run(["bash", "-c", line.replace("$(uname -s)", "Darwin")], check=False)
+    assert proc.returncode == remote_fit.FELL_BACK
+    assert not (tmp_path / remote_fit.HOST_OUT).exists()
+
+
+def _queue_driver(tmp_path, monkeypatch, script):
+    """A fake sendaway: a host run prints `script`'s output, a pull answers finished searches."""
+    calls = tmp_path / "calls"
+    fake = tmp_path / "sendaway"
+    done = {"host.json": '{"wall_s": 10, "rc": 0}', "fit.log": "  eval #1 builds=0 loss=1\n"}
+    bundle = json.dumps({f"{remote_fit.HOST_OUT}/{s}": done for s in ("p012", "p013")})
+    fake.write_text(
+        "#!/bin/bash\n"
+        f'if [ "$2" = bash ]; then echo run >> {calls}; {script}; exit $?; fi\n'
+        f"cat <<'EOF'\n{bundle}\nEOF\n"
+    )
+    fake.chmod(0o755)
+    leaves = []
+    monkeypatch.setattr(remote_fit, "voice_engine", lambda argv, lib: "modal")
+    monkeypatch.setattr(remote_fit, "write_caches", lambda argv, slug, lib: tmp_path)
+    monkeypatch.setattr(remote_fit, "mac_head", lambda: "abc")
+    monkeypatch.setattr(remote_fit, "leave", lambda: leaves.append(1) or "leave-check PASS")
+    return fake, calls, leaves
+
+
+def _mark(slug, rc=0):
+    row = {"slug": slug, "rc": rc, "seconds": 5, "start_loss": 3.0, "best_loss": 2.0, "evals": 7}
+    return f"echo '{remote_fit.QUEUE_MARK}{json.dumps(row)}'"
+
+
+def test_a_queue_appends_one_status_line_per_ended_search_across_a_drop(tmp_path, monkeypatch):
+    lost = remote_fit.SENDAWAY_LOST
+    # The first run ends p012 and drops; the re-issued run reports p012 again and ends p013.
+    script = (
+        f'if [ "$(wc -l < {tmp_path / "calls"})" -eq 1 ]; then {_mark("p012")}; exit {lost}; '
+        f"else {_mark('p012')}; {_mark('p013', 2)}; fi"
+    )
+    fake, _, leaves = _queue_driver(tmp_path, monkeypatch, script)
+    items = remote_fit.load_queue(_queue_file(tmp_path, "p012", "p013"))
+    status = tmp_path / "status.jsonl"
+    got = remote_fit.run_queue(
+        items,
+        tmp_path / "out",
+        Path("lib"),
+        12,
+        status,
+        host="h1",
+        sendaway=fake,
+        wait=lambda s: None,
+    )
+    rows = [json.loads(x) for x in status.read_text().splitlines()]
+    assert [(r["slug"], r["rc"], r["group"], r["host"]) for r in rows] == [
+        ("p012", 0, "g1", "h1"),
+        ("p013", 2, "g1", "h1"),
+    ]
+    assert all(r["key"] == remote_fit.queue_key("abc", ARGV) for r in rows)
+    assert [a["rc"] for a in got["attempts"]] == [lost, 0]
+    # One leave-check per sync: two host runs and the pull.
+    assert len(leaves) == 3
+    assert (tmp_path / "out" / "p013" / "host.json").exists()
+
+
+def test_a_queue_holding_a_refused_engine_sends_nothing(tmp_path, monkeypatch, reed_refused):
+    fake, calls, _ = _queue_driver(tmp_path, monkeypatch, "true")
+    monkeypatch.setattr(remote_fit, "voice_engine", lambda argv, lib: "reed")
+    items = remote_fit.load_queue(_queue_file(tmp_path, "p012"))
+    with pytest.raises(ValueError, match="p012: the reed engine"):
+        remote_fit.run_queue(
+            items, tmp_path / "out", Path("lib"), 12, tmp_path / "s", sendaway=fake
+        )
+    assert not calls.exists()
+
+
+def test_a_host_route_is_a_private_config_outside_what_syncs(tmp_path, monkeypatch):
+    monkeypatch.setattr(remote_fit, "REPO_ROOT", tmp_path)
+    monkeypatch.setattr(remote_fit, "TREE_MARK", tmp_path / ".cache" / "remote-fit-tree")
+    env = remote_fit.sendaway_env("build-a")
+    config = Path(env["XDG_CONFIG_HOME"]) / "sendaway" / "config.yml"
+    assert config.read_text() == f"routes:\n  - path: {tmp_path}\n    host: build-a\n"
+    assert config.is_relative_to(tmp_path / ".cache")
+    other = remote_fit.sendaway_env("build-b")
+    assert env["XDG_STATE_HOME"] != other["XDG_STATE_HOME"]
+    assert remote_fit.sendaway_env(None) is None
+    with pytest.raises(ValueError, match="not a host alias"):
+        remote_fit.sendaway_env("a b")
+
+
+# --------------------------------------------------------------------------
+# probe
+
+
+def test_a_probe_compares_the_start_per_term_even_for_a_refused_engine(
+    tmp_path, monkeypatch, reed_refused
+):
+    out = tmp_path / "out"
+    out.mkdir()
+    sent = []
+
+    def host(argv, slug, out_dir, workers, resume, host, sendaway, wait):
+        sent.append(argv)
+        (out_dir / "fit.json").write_text(json.dumps(_report(start=10.0)))
+        return {"host": {"wall_s": 9}}
+
+    here = _quality(10.1, modes=5.05)
+    monkeypatch.setattr(remote_fit, "voice_engine", lambda argv, lib: "reed")
+    monkeypatch.setattr(remote_fit, "write_caches", lambda argv, slug, lib: tmp_path)
+    monkeypatch.setattr(remote_fit, "_run_host", host)
+    monkeypatch.setattr(
+        remote_fit,
+        "score_once",
+        lambda argv, lib, o, start: {"selected": {"quality": here | {"baseline": here}}},
+    )
+    got = remote_fit.probe([*ARGV, "--evals-per-knob", "12"], "p065", out, Path("lib"), 12)
+    assert sent[0][-3:] == ["--short-run", "--max-evals", "1"] and "--evals-per-knob" not in sent[0]
+    assert got["refused"] and got["engine"] == "reed"
+    assert got["terms"]["modes"] == {"host": 5.0, "here": 5.05, "gap": pytest.approx(0.01)}
+    assert got["loss_gap"] == pytest.approx(0.01) and not got["agrees"]
+    assert json.loads((out / "probe.json").read_text()) == got
