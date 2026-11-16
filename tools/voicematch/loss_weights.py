@@ -220,6 +220,45 @@ DROP_REASONS = {
 }
 
 
+#: The terms whose loss reads a gated dimension's OWN quantity. Any other mapping is a
+#: proxy: `slope` and `tail` read per-harmonic skeleton slopes, `env` a sum of sustain
+#: slope, release and attack, `harm` the ladder, `modedyn` modal brightness -- none the
+#: gate's broadband reading. A dimension absent here has no own term.
+GATE_OWN_TERMS = {
+    "stretch": ("stiff",),
+    "tnr": ("tnr",),
+    "vel_range": ("velspan",),
+    "onset": ("onset",),
+    "onset_settle": ("onset",),
+    "register": ("level",),
+    "attack_hf": ("hf",),
+    "attack_hf_swing": ("hfdyn",),
+    "crest": ("crest",),
+    "centroid_pct": ("bright",),
+    "body": ("body",),
+}
+#: Own-measure terms of the percussion set: a term whose change moved the note's own gate row,
+#: past the row's floor, the same way on at least 80 % of at least 10 notes over finished kit fits.
+PERCUSSION_GATE_OWN_TERMS = {
+    "vel_range": ("velspan",),
+    "crest": ("crest",),
+    "band_shape": ("band",),  # n=17, agree 88 %
+    "centroid_pct": ("bright",),  # n=21, agree 100 %
+    "tonality": ("tonal",),  # n=20, agree 100 %
+    "tilt_rise": ("rise",),  # n=17, agree 100 %
+}
+#: Percussion dimensions measured and found to have only a proxy: the mapped term did not move
+#: the row the same way (bdecay 57 %, band -> band_tilt 47 %, env 11 %), or too few rows passed
+#: their floor (ring: 2 of 12).
+PERCUSSION_GATE_PROXIES = frozenset({"band_decay", "band_tilt", "attack", "ring"})
+
+#: The weight a gated dimension's own term takes when the fit's profile gives it none.
+PRESENCE_WEIGHT = 0.25
+#: The most one presence term, and all of them together, may carry of the start's weighted loss.
+PRESENCE_TERM_SHARE = 0.10
+PRESENCE_TOTAL_SHARE = 0.30
+
+
 def unmeasurable_terms(args) -> list[tuple[str, str]]:
     """Terms this probe's shape produces no cell for, with why — weight aside.
 
@@ -256,6 +295,103 @@ def dropped_weights(args) -> list[tuple[str, str]]:
         and getattr(args, f"w_{t}", None) is None
         and not getattr(args, flag, True)
     ]
+
+
+def _probe_measures(args, term: str) -> bool:
+    """Whether this probe's metric set and shape produce `term` at all."""
+    if term not in measured_terms(getattr(args, "percussive", False)):
+        return False
+    if not getattr(args, "has_analysis_notes", True) and term != "mss":
+        return False
+    return term not in dict(unmeasurable_terms(args))
+
+
+def presence_plan(args, gated: dict[str, frozenset[str]], weights: dict[str, float]) -> dict:
+    """Which own terms the gate's dimensions add to a fit, and which dimensions none can weigh.
+
+    `gated` maps each gated dimension to the statistics its bound holds. Every one gets its own
+    term (`GATE_OWN_TERMS`, or the percussion map on a percussive probe) at `PRESENCE_WEIGHT`
+    where `weights`, the resolved profile, gives it none; the term records the statistics of
+    its dimensions. An own term the profile already weighs is listed in `weighted` the same
+    way. An explicit weight of 0 in `args` wins and is listed in `user_zero`. A dimension with
+    no own term, or whose own terms this probe cannot measure, is `unscorable`.
+    """
+    own = PERCUSSION_GATE_OWN_TERMS if getattr(args, "percussive", False) else GATE_OWN_TERMS
+    terms: dict[str, dict] = {}
+    weighted: dict[str, dict] = {}
+    user_zero: dict[str, list[str]] = {}
+    unscorable: list[str] = []
+    for dim in sorted(gated):
+        measurable = [t for t in own.get(dim, ()) if _probe_measures(args, t)]
+        if not measurable:
+            unscorable.append(dim)
+        for t in measurable:
+            if getattr(args, f"w_{t}", None) == 0.0:
+                user_zero.setdefault(t, []).append(dim)
+            else:
+                fresh = weights.get(t, 0.0) <= 0.0
+                entry = (terms if fresh else weighted).setdefault(
+                    t,
+                    {
+                        "dimensions": [],
+                        "weight": PRESENCE_WEIGHT if fresh else weights[t],
+                        "statistics": [],
+                    },
+                )
+                entry["dimensions"].append(dim)
+                entry["statistics"] = sorted({*entry["statistics"], *gated[dim]})
+    return {
+        "terms": terms,
+        "weighted": weighted,
+        "unscorable": unscorable,
+        "user_zero": user_zero,
+        "capped": False,
+    }
+
+
+def _floor4(value: float) -> float:
+    """Rounded down to four decimals, so a recorded cap never exceeds its bound."""
+    return math.floor(value * 1.0e4) / 1.0e4
+
+
+def cap_presence(
+    starts: list[tuple[LossWeights, dict[str, float]]],
+    presence: dict[str, float],
+    *,
+    fixed_units: bool = True,
+) -> dict[str, dict]:
+    """Presence weights capped against each start point's weighted loss.
+
+    `starts` pairs each capture's anchored weights (presence terms included) with its start
+    terms. Per term the contribution is held to `PRESENCE_TERM_SHARE` of the total, then all
+    presence terms together to `PRESENCE_TOTAL_SHARE` by one common factor; across captures the
+    smallest weight is taken. Returns each term's `weight`, and `capped_from`/`cap` (`term` or
+    `total`) where a cap bound.
+    """
+    term_k = PRESENCE_TERM_SHARE / (1.0 - PRESENCE_TERM_SHARE)
+    total_k = PRESENCE_TOTAL_SHARE / (1.0 - PRESENCE_TOTAL_SHARE)
+    out = {t: {"weight": w} for t, w in presence.items()}
+    for loss, terms in starts:
+        contrib = loss.term_contributions(terms, fixed_units=fixed_units)
+        main = sum(c for t, c in contrib.items() if t not in presence)
+        unit = {t: contrib.get(t, 0.0) / w for t, w in presence.items() if w > 0.0}
+        got: dict[str, tuple[float, str | None]] = {}
+        for t, w in presence.items():
+            u = unit.get(t, 0.0)
+            # Held against the main terms alone; the other presence terms only lower its share.
+            got[t] = (main * term_k / u, "term") if u * w > main * term_k else (w, None)
+        spent = sum(unit.get(t, 0.0) * w for t, (w, _) in got.items())
+        if spent > main * total_k:
+            factor = main * total_k / spent
+            got = {t: (w * factor, "total") for t, (w, _) in got.items()}
+        for t, (w, why) in got.items():
+            if why is not None and w < out[t]["weight"]:
+                out[t] = {"weight": w, "cap": why}
+    for t, entry in out.items():
+        if "cap" in entry:
+            entry["weight"] = _floor4(entry["weight"])
+            entry["capped_from"] = presence[t]
+    return out
 
 
 # Which key carries the count of data points each count-tracked term was

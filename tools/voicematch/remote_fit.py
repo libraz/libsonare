@@ -141,6 +141,23 @@ def voice_engine(argv: list[str], local_lib: Path) -> str | None:
     return cat.mode_for(args.program, args.bank)
 
 
+def host_argv(argv: list[str]) -> list[str]:
+    """`argv` as the host searches it: `mss` at 0 where the class weighs it and none is given.
+
+    A cache never holds the corpus audio `mss` reads, so the host searches without it and
+    `confirm` scores the pair here with it on.
+    """
+    import autofit
+
+    if any(a.split("=", 1)[0] == "--w-mss" for a in argv):
+        return argv
+    args = autofit.build_parser().parse_args(argv)
+    weighs = autofit.default_weights(
+        args.program, drum_note=args.drum_note, percussive=getattr(args, "percussive", False)
+    ).get("mss", 0.0)
+    return [*argv, "--w-mss", "0"] if weighs > 0.0 else argv
+
+
 def cache_dir(slug: str) -> Path:
     return CACHE_ROOT / slug
 
@@ -391,6 +408,7 @@ def run_remote(
     refusal = engine_refusal(voice_engine(argv, local_lib))
     if refusal:
         raise ValueError(refusal)
+    argv = host_argv(argv)
     write_caches(argv, slug, local_lib)
     return _run_host(argv, slug, out_dir, workers, resume, host, sendaway, wait)
 
@@ -601,6 +619,7 @@ def run_queue(
         refusal = engine_refusal(voice_engine(item["args"], local_lib))
         if refusal:
             raise ValueError(f"{item['slug']}: {refusal}")
+    items = [{**item, "args": host_argv(item["args"])} for item in items]
     for item in items:
         write_caches(item["args"], item["slug"], local_lib)
     head = mac_head()
@@ -707,11 +726,36 @@ def _without(argv: list[str], *flags: str) -> list[str]:
     return out
 
 
-def score_once(argv: list[str], local_lib: Path, out: Path, start: str | None) -> dict:
-    """One full-objective evaluation here, at the search's start or at `start`."""
+#: The flags `presence_pin` emits, so a re-score drops any the command line already carried.
+PIN_FLAGS = ("--presence-weights", "--term-tails")
+
+
+def presence_pin(report: dict) -> list[str]:
+    """The flags that re-score a fit under the presence weights and own-term tails it recorded."""
+    profile = report.get("fit_profile") or {}
+    presence, tails = profile.get("presence") or {}, profile.get("term_tails") or {}
+    out = []
+    if presence:
+        out += ["--presence-weights", ",".join(f"{t}={e['weight']!r}" for t, e in presence.items())]
+    if tails:
+        out += ["--term-tails", ",".join(f"{t}={f!r}" for t, f in tails.items())]
+    return out
+
+
+def score_once(
+    argv: list[str], local_lib: Path, out: Path, start: str | None, fit: dict | None = None
+) -> dict:
+    """One full-objective evaluation here, at the search's start or at `start`.
+
+    With `fit`, its recorded presence weights are used as given rather than capped at `start`.
+    """
     extra = ["--start-overrides", start] if start else []
+    pin = presence_pin(fit) if fit is not None else []
+    extra += pin
     # A per-knob budget outranks --max-evals, so it goes, or the one evaluation becomes a search.
-    base = _without(argv, "--evals-per-knob", *(["--start-overrides"] if start else []))
+    dropped = ["--start-overrides"] if start else []
+    dropped += list(PIN_FLAGS) if pin else []
+    base = _without(argv, "--evals-per-knob", *dropped)
     cmd = _autofit(
         [*base, *extra, "--lib", str(local_lib), "--short-run", "--max-evals", "1"]
         + ["--dry-run", "--out", str(out)]
@@ -731,20 +775,32 @@ def confirm(argv, slug, out_dir, local_lib) -> dict:
     fit = out_dir / "fit.json"
     report = json.loads(fit.read_text())
     remote = remote_points(report)
+    searched = host_argv(argv)
     t0 = time.monotonic()
-    here_start = score_once(argv, local_lib, out_dir / "confirm_start.json", None)
-    here_best = score_once(argv, local_lib, out_dir / "confirm_best.json", start_overrides(report))
+    here_start = score_once(argv, local_lib, out_dir / "confirm_start.json", None, report)
+    here_best = score_once(
+        argv, local_lib, out_dir / "confirm_best.json", start_overrides(report), report
+    )
+    # The host's start is compared under the objective it searched, which lacks a term the pair has.
+    as_searched = (
+        here_start
+        if searched == argv
+        else score_once(searched, local_lib, out_dir / "confirm_searched.json", None, report)
+    )
     seconds = time.monotonic() - t0
     local = {
         "start": _point(here_start["selected"]["quality"]),
         "best": _point(here_best["selected"]["quality"]),
     }
-    gap = abs(local["start"]["loss"] - remote["start"]["loss"]) / remote["start"]["loss"]
+    agreed = _point(as_searched["selected"]["quality"])["loss"]
+    gap = abs(agreed - remote["start"]["loss"]) / remote["start"]["loss"]
+    renders = here_start["renders"] + here_best["renders"]
     block = {
-        "renders": here_start["renders"] + here_best["renders"],
+        "renders": renders + (as_searched["renders"] if as_searched is not here_start else 0),
         "seconds": round(seconds, 1),
         "remote": remote,
         "local": local,
+        "objective": here_best.get("objective"),
         "start_gap": gap,
         "agrees": gap <= HOST_AGREEMENT,
         "improves": local["best"]["loss"] < local["start"]["loss"],

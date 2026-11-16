@@ -486,10 +486,18 @@ def test_the_out_record_has_the_corpora_and_a_per_capture_block(tmp_path, monkey
         [0.9],
         joint,
         args,
-        {"corpora": corpora, "captures": corpora, "validation": None},
+        {
+            "corpora": corpora,
+            "captures": corpora,
+            "validation": None,
+            "oracle": {"cache": "c"},
+            "scored_without": ["mss"],
+        },
     )
     record = json.loads(out.read_text())
     assert [c["capture"] for c in record["corpora"]] == ["a", "b"]
+    # `fits.record_fit` and the verdict read these off the record, never off the run.
+    assert record["oracle"] == {"cache": "c"} and record["scored_without"] == ["mss"]
     assert [r["label"] for r in record["per_capture"]] == ["a:t0", "b:t0"]
     assert all({"start", "search", "selected"} <= set(r["loss"]) for r in record["per_capture"])
     assert "== per capture" in capsys.readouterr().out
@@ -1117,3 +1125,25 @@ def test_a_capture_with_no_declared_class_is_named_at_the_start_of_a_refit(tmp_p
     _plan_world(tmp_path, monkeypatch, {"own": "library", "bare": None, "ok": "library"})
     todo, _ = refit.plan("capitals")
     assert refit.undeclared_lines(todo) == ["bare: no source_class declared: treated as off-layer"]
+
+
+def test_the_first_joint_point_caps_presence_over_every_capture(tmp_path, monkeypatch):
+    def member(body_units):
+        terms = {"harm": _units("harm", 1.0), "body": _units("body", body_units)}
+        return _member(tmp_path, monkeypatch, lambda values: dict(terms), harm=1.0, body=0.25)
+
+    quiet, loud = member(0.1), member(40.0)
+    joint = _joint(quiet, loud)
+    joint.args.presence = {
+        "terms": {"body": {"dimensions": ["body"], "weight": 0.25}},
+        "unscorable": [],
+        "user_zero": {},
+        "capped": False,
+    }
+    assert joint([KNOB.start_value]) == pytest.approx(1.0)
+    capped = joint.args.presence["terms"]["body"]
+    # The loud capture binds, and both captures score under its weight.
+    assert capped["cap"] == "term" and capped["weight"] < 0.25
+    for m in (quiet, loud):
+        assert m.args.w_body == capped["weight"] and m.loss.weights["body"] == capped["weight"]
+        assert m.loss.combine(m.baseline_terms) == pytest.approx(1.0)

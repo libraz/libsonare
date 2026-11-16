@@ -758,6 +758,7 @@ def _anchoring_evaluator(normalize: bool, start_terms: dict):
     ev.start_level_offset_db = None
     ev.start_sustain_excess_db_s = None
     ev.baseline_terms = None
+    ev.args = _probe_args()  # no presence plan, so the start caps nothing
 
     class _Loss:
         scales = None
@@ -901,3 +902,75 @@ def test_the_four_cell_outcomes_are_what_the_loss_actually_emits():
     assert census["slope"]["clipped"] == 24 and census["slope"]["compared"] == 0
     assert census["tail"]["skipped"] == 12 and census["tail"]["compared"] == 0
     assert terms["tail"] == 0.0, "a band with no cells scores the term's best"
+
+
+# --------------------------------------------------------------------------- #
+# Presence: every gated dimension's own term, capped at the start point
+# --------------------------------------------------------------------------- #
+def _shares(loss, terms, presence):
+    contrib = loss.term_contributions(terms)
+    total = sum(contrib.values())
+    return {t: contrib[t] / total for t in presence}, sum(contrib[t] for t in presence) / total
+
+
+def _capped(weights, terms, presence):
+    from loss_weights import cap_presence
+
+    loss = LossWeights(weights)
+    loss.anchor(terms)
+    got = cap_presence([(loss, terms)], presence)
+    after = LossWeights({**weights, **{t: g["weight"] for t, g in got.items()}})
+    after.anchor(terms)
+    return got, after
+
+
+def test_a_presence_term_under_its_share_keeps_its_weight():
+    from loss_weights import PRESENCE_WEIGHT
+
+    terms = _terms(harm=10.0 * TERM_UNITS["harm"], body=0.5)
+    got, _ = _capped({"harm": 1.0, "body": PRESENCE_WEIGHT}, terms, {"body": PRESENCE_WEIGHT})
+    assert got == {"body": {"weight": PRESENCE_WEIGHT}}
+
+
+def test_presence_terms_are_capped_per_term_then_together():
+    from loss_weights import PRESENCE_TERM_SHARE, PRESENCE_TOTAL_SHARE, PRESENCE_WEIGHT
+
+    presence = {t: PRESENCE_WEIGHT for t in ("body", "bright", "onset", "stiff")}
+    # Each presence term alone would sit just under its own cap; four of them break the total.
+    terms = _terms(harm=TERM_UNITS["harm"])
+    for t in presence:
+        terms[t] = 0.44 * TERM_UNITS[t]
+    got, after = _capped({"harm": 1.0, **presence}, terms, presence)
+    assert all(g["cap"] == "total" and g["capped_from"] == PRESENCE_WEIGHT for g in got.values())
+    each, together = _shares(after, terms, presence)
+    assert together <= PRESENCE_TOTAL_SHARE + 1e-9 and together > PRESENCE_TOTAL_SHARE - 1e-3
+    assert all(s <= PRESENCE_TERM_SHARE for s in each.values())
+    # One loud term alone: the per-term cap binds and the total is not reached.
+    terms = _terms(harm=TERM_UNITS["harm"], body=100.0 * TERM_UNITS["body"])
+    got, after = _capped({"harm": 1.0, "body": PRESENCE_WEIGHT}, terms, {"body": PRESENCE_WEIGHT})
+    assert got["body"]["cap"] == "term"
+    each, _ = _shares(after, terms, {"body": 0.0})
+    assert PRESENCE_TERM_SHARE - 1e-3 < each["body"] <= PRESENCE_TERM_SHARE + 1e-9
+
+
+def test_a_joint_fit_takes_the_smallest_capped_presence_weight():
+    from loss_weights import PRESENCE_WEIGHT, cap_presence
+
+    weights = {"harm": 1.0, "body": PRESENCE_WEIGHT}
+    starts = []
+    for body in (0.1, 50.0):
+        terms = _terms(harm=TERM_UNITS["harm"], body=body * TERM_UNITS["body"])
+        loss = LossWeights(weights)
+        loss.anchor(terms)
+        starts.append((loss, terms))
+    joint = cap_presence(starts, {"body": PRESENCE_WEIGHT})["body"]["weight"]
+    alone = cap_presence(starts[1:], {"body": PRESENCE_WEIGHT})["body"]["weight"]
+    assert joint == alone < PRESENCE_WEIGHT
+
+
+def test_refit_judges_against_the_own_term_maps_the_weights_module_holds():
+    import loss_weights
+    import refit
+
+    assert refit.GATE_OWN_TERMS is loss_weights.GATE_OWN_TERMS
+    assert refit.PERCUSSION_GATE_OWN_TERMS is loss_weights.PERCUSSION_GATE_OWN_TERMS

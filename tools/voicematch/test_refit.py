@@ -208,6 +208,22 @@ def test_the_confirm_pair_outranks_the_fits_own_numbers():
     assert got["decision"] == "adopt" and got["in_sample_gain"] == pytest.approx(0.1)
 
 
+def test_a_search_without_a_weighed_term_is_judged_on_the_confirm_pair_alone():
+    pre, fit, post = _case(False, True, "better", False, False, False)
+    fit["scored_without"] = ["mss"]
+    got = verdict(pre, fit, post)
+    assert got["decision"] == "kept"
+    assert got["why"] == "searched without mss and not confirmed with it here"
+    assert got["held_out_gain"] is None and got["searched_held_out_gain"] > 0
+    fit["confirm"] = {"local": {"start": {"loss": 1.0}, "best": {"loss": 0.999}}}
+    got = verdict(pre, fit, post)
+    assert got["decision"] == "kept" and got["why"].startswith("confirm with mss on gained under")
+    fit["confirm"]["local"]["best"]["loss"] = 0.9
+    got = verdict(pre, fit, post)
+    assert got["decision"] == "adopt" and got["why"].startswith("confirm +0.1000 with mss on")
+    assert got["scored_without"] == ["mss"]
+
+
 def test_an_adoption_with_no_held_out_condition_is_marked_in_sample():
     pre, fit, post = _case(False, True, "none", False, False, False)
     _own_notes(fit)
@@ -643,11 +659,26 @@ def _judged_dir(tmp_path, monkeypatch, *, fit_runs):
     return refit, voice, d, seen
 
 
+def test_a_pre_pinned_away_from_what_ships_is_refused(tmp_path, monkeypatch):
+    # The fit starts at the shipped 3.0, but the history pins the baseline before the
+    # adoption that shipped it (1.0): the judge would measure against a state that does not ship.
+    runs: list = []
+    refit, voice, d, seen = _judged_dir(tmp_path, monkeypatch, fit_runs=runs)
+    with pytest.raises(RuntimeError, match=r"pre is not what ships; refit from the shipped start"):
+        refit.run_voice(voice, tmp_path, "build", 8)
+    assert not (d / "pre.json").exists() and not seen and not runs
+    with pytest.raises(RuntimeError, match=r"cap\.a 1\.0 \(ships 3\.0\)"):
+        refit.rejudge_voice(voice, tmp_path, "build")
+
+
 def test_pre_is_pinned_to_the_baseline_and_says_so(tmp_path, monkeypatch):
     import json
 
     runs: list = []
     refit, voice, d, seen = _judged_dir(tmp_path, monkeypatch, fit_runs=runs)
+    # What the history pins is what ships: the baseline stands as the judge.
+    shipped = {"cap.a": 1.0, "wide.a": 1.0}
+    monkeypatch.setattr(refit, "_catalogue", lambda voice, lib: SimpleNamespace(defaults=shipped))
     result = refit.run_voice(voice, tmp_path, "build", 8)
     pre = json.loads((d / "pre.json").read_text())
     assert pre["baseline"]["overrides"] == "cap.a=1.0,wide.a=1.0"
@@ -661,6 +692,7 @@ def test_rejudge_recreates_the_judged_state_without_fitting(tmp_path, monkeypatc
 
     runs: list = []
     refit, voice, d, seen = _judged_dir(tmp_path, monkeypatch, fit_runs=runs)
+    monkeypatch.setattr(refit, "registry_history", lambda units: iter(()))
     for stale in ("pre.json", "pre.wide.json", "post.json", "path_fit_1.wide.json"):
         (d / stale).write_text(json.dumps({"gate": {"readings": []}}))
     (d / "verdict.json").write_text(json.dumps({"decision": "adopt", "why": "old"}))
@@ -767,7 +799,7 @@ def _prefit_dir(tmp_path, monkeypatch, red, *, weights, refuse_weighted=False):
     monkeypatch.setattr(refit, "profile_weights", lambda voice: dict(weights))
     monkeypatch.setattr(refit, "struct_copies", dict)
     monkeypatch.setattr(refit, "explicit_fields", dict)
-    monkeypatch.setattr(refit, "registry_history", lambda units: iter(_history()))
+    monkeypatch.setattr(refit, "registry_history", lambda units: iter(()))  # pre ships
     voice = {
         "slug": "cap",
         "program": 0,
@@ -1193,6 +1225,24 @@ def test_a_search_whose_gate_load_never_falls_is_kept_under_its_floor_with_that_
     assert held["p"]["outcome"] == "kept" and "blocking" not in held["p"]
 
 
+def test_a_path_that_starts_at_the_shipped_point_takes_its_evidence_from_the_next_point(
+    tmp_path, monkeypatch
+):
+    import json as _json
+
+    import refit
+
+    # Point 0 is the shipped start (reads pre); point 1 on lowers the median but lifts the
+    # p90 past its floor, so the nearest refused point is eval 2 and it is refused by the floor.
+    d, _ = _floor_case(tmp_path, monkeypatch, lambda i: (0.5, 0.5) if i == 0 else (0.05, 0.9))
+    fit = _json.loads((d / "fit.json").read_text())
+    fit["knobs"][0]["start"] = 0.0
+    (d / "fit.json").write_text(_json.dumps(fit))
+    ver = refit.resolve_voice(d, "build", 0)
+    assert ver["decision"] == "kept" and ver["kept_for"] == "floor"
+    assert ver["refused_point"]["eval"] == 2
+
+
 def test_a_bound_refusal_names_the_rows_of_the_refused_point_not_the_endpoint(
     tmp_path, monkeypatch
 ):
@@ -1333,7 +1383,7 @@ def _anchor_setup(monkeypatch, tmp_path, *, level=None, after_loss=1.0, bounds=(
     monkeypatch.setattr(
         remote_fit,
         "score_once",
-        lambda argv, lib, out, start: {
+        lambda argv, lib, out, start, fit=None: {
             "selected": {"quality": {"absolute_weighted_mean_units": next(losses)}}
         },
     )
@@ -1631,3 +1681,186 @@ def test_a_tail_check_without_reference_audio_is_skipped_and_blocks_nothing(monk
     record = refit.tail_check(voice, fit, Path("lib"))
     assert "no reference audio" in record["skipped"] and rendered == []
     assert _tail_verdict(refit, {**fit, refit.TAIL_CHECK_KEY: record})["decision"] == "adopt"
+
+
+# A dimension the gate bounds and the objective could not weigh is judged after the fit.
+
+
+def _unscorable_case(after, *, switch=False, dims=("decay",)):
+    pre, fit, post = _case(*(GOOD[:3] + (switch,) + GOOD[4:]))
+    fit["fit_profile"] = {"unscorable": list(dims)}
+    row = {"key": "cap:decay", "stat": "abs_median", "limit": 9.0, "over": False, "excess": 0.0}
+    pre["gate"]["readings"].append(dict(row, value=-1.0))
+    post["gate"]["readings"].append(dict(row, value=after))
+    return pre, fit, post
+
+
+def test_a_fit_that_worsens_an_unscorable_dimension_past_its_floor_is_kept():
+    result = verdict(*_unscorable_case(-1.5), floor_of=lambda key: 0.2)
+    assert result["decision"] == "kept"
+    assert result["why"] == (
+        "unscorable decay worsened past its floor (abs_median -1->-1.5, floor 0.2)"
+    )
+    assert result["unscorable_worse"] == [
+        {"key": "cap:decay", "stat": "abs_median", "before": -1.0, "after": -1.5, "floor": 0.2}
+    ]
+    assert result["moved_keys"] == [FLOAT]
+
+
+def test_an_unscorable_dimension_moving_inside_its_floor_or_improving_does_not_block():
+    for after in (-1.15, -0.2, 1.1):
+        result = verdict(*_unscorable_case(after), floor_of=lambda key: 0.2)
+        assert result["decision"] == "adopt" and result["unscorable_worse"] == []
+
+
+def test_only_the_unscorable_dimensions_are_judged_by_their_floor():
+    result = verdict(*_unscorable_case(-3.0, dims=("stereo",)), floor_of=lambda key: 0.2)
+    assert result["decision"] == "adopt"
+
+
+def test_the_unscorable_check_comes_before_a_trade():
+    result = verdict(*_unscorable_case(-1.5, switch=True), floor_of=lambda key: 0.2)
+    assert result["decision"] == "kept" and result["why"].startswith("unscorable decay")
+    assert result["moved_keys"] == [FLOAT, SWITCH]
+
+
+def test_an_unscorable_dimension_without_the_gates_floors_is_refused():
+    with pytest.raises(ValueError, match="needs the gate's floors"):
+        verdict(*_unscorable_case(-1.5))
+
+
+def test_the_judged_voice_reads_the_floor_from_its_gate(tmp_path):
+    import json as _json
+
+    import refit
+
+    gate = tmp_path / "cap_gate.json"
+    gate.write_text(_json.dumps({"bounds": {"decay": {"median": 2.0, "floor": 0.0}}}))
+    voice = {"capture": "cap", "gates": [{"capture": "cap", "gate": str(gate)}]}
+    result = verdict(*_unscorable_case(-1.01), floor_of=refit.gate_floors(voice))
+    assert result["decision"] == "kept" and "floor 0)" in result["why"]
+
+
+def test_a_judge_library_older_than_the_newest_synth_commit_is_refused(tmp_path, monkeypatch):
+    import os
+
+    import refit
+
+    lib = tmp_path / "libsonare.dylib"
+    lib.write_bytes(b"")
+    os.utime(lib, (1000.0, 1000.0))
+    monkeypatch.setattr(refit, "newest_synth_commit", lambda: ("abc1234", 2000.0))
+    with pytest.raises(RuntimeError, match=r"before abc1234 .* touched src/midi/synth"):
+        refit.refuse_old_library(lib)
+    os.utime(lib, (3000.0, 3000.0))
+    refit.refuse_old_library(lib)
+
+
+def _rows(centroid: float, crest: float) -> dict:
+    """Per-note rows of a kit compare: the fitted note 71 and a neighbour."""
+    rows = [
+        {"note": 71, "velocity": 100, "centroid_pct": centroid, "crest": crest},
+        {"note": 72, "velocity": 100, "centroid_pct": 1.0, "crest": 0.5},
+    ]
+    return {"drums_module_hit": rows}
+
+
+def test_a_single_note_fit_is_kept_when_its_own_row_worsens_past_the_floor():
+    """The kit-wide statistic does not see one note of sixty, so the note's own row is read."""
+    pre, fit, post = _case(*GOOD)
+    pre["note_rows"], post["note_rows"] = _rows(14.7, 3.1), _rows(24.9, 3.7)
+    floors = {"drums_module_hit:centroid_pct": 5.0, "drums_module_hit:crest": 0.5}
+    got = verdict(pre, fit, post, floor_of=floors.__getitem__, own_note=71)
+    assert got["decision"] == "kept"
+    assert (
+        got["why"] == "own row centroid_pct n71v100 worsened past its floor (14.7->24.9, floor 5)"
+    )
+    assert [r["key"] for r in got["own_row_worse"]] == [
+        "drums_module_hit:centroid_pct",
+        "drums_module_hit:crest",
+    ]
+    # Within the floor, and on another note, nothing is held.
+    post["note_rows"] = _rows(16.0, 3.3)
+    assert verdict(pre, fit, post, floor_of=floors.__getitem__, own_note=71)["decision"] == "adopt"
+    assert verdict(*_case(*GOOD))["decision"] == "adopt"
+
+
+def test_a_single_note_fit_without_recorded_rows_is_refused():
+    pre, fit, post = _case(*GOOD)
+    post["note_rows"] = _rows(1.0, 1.0)
+    with pytest.raises(ValueError, match="pre recorded no per-note rows"):
+        verdict(pre, fit, post, floor_of=lambda key: 1.0, own_note=71)
+
+
+def test_the_path_accepts_no_point_whose_own_row_the_verdict_would_keep(tmp_path, monkeypatch):
+    import json as _json
+
+    import refit
+
+    over = {"key": "hit:tnr", "stat": "p90", "limit": 1.0}
+
+    def body(i, rows=True):
+        value = 0.8 - i / 100  # the kit statistic keeps improving all along the path
+        out = {"gate": {"readings": [dict(over, value=value, over=False, excess=value - 1.0)]}}
+        if rows:
+            # The fitted note's own centroid worsens past its floor from the fifth point on.
+            own = 1.0 + (10.0 if i >= 4 else 0.0)
+            out["note_rows"] = {"hit": [{"note": 71, "velocity": 100, "centroid_pct": own}]}
+        return out
+
+    (tmp_path / "pre.json").write_text(_json.dumps(body(-1)))
+    path = [
+        {"eval": i + 1, "loss": 1.0 - i / 20, "stage": "fit", "values": [float(i)]}
+        for i in range(10)
+    ]
+    report = {"knobs": [{"key": FLOAT, "start": -1.0}], "path": path}
+
+    def fake_compare(voice, out, lib, overrides, **_):
+        out.write_text(_json.dumps(body(int(float(overrides.split("=")[1])))))
+
+    monkeypatch.setattr(gate_audit, "compare_voice", fake_compare)
+    monkeypatch.setattr(refit, "gate_floors", lambda voice: lambda key: 5.0)
+    found = refit.along_the_path({"drum_note": 71}, tmp_path, Path("lib"), report, "fit")
+    assert found["accepted"]["eval"] == 4
+    assert found["refused_point"]["own_row_worse"][0]["key"] == "hit:centroid_pct"
+
+    def no_rows(voice, out, lib, overrides, **_):
+        out.write_text(_json.dumps(body(int(float(overrides.split("=")[1])), rows=False)))
+
+    for stale in tmp_path.glob("path_*.json"):
+        stale.unlink()
+    monkeypatch.setattr(gate_audit, "compare_voice", no_rows)
+    with pytest.raises(ValueError, match="post recorded no per-note rows"):
+        refit.along_the_path({"drum_note": 71}, tmp_path, Path("lib"), report, "fit")
+
+
+def test_a_point_refused_only_by_its_own_row_is_kept_for_the_floor_and_names_the_row(tmp_path):
+    import json as _json
+
+    import refit
+
+    own = {"key": "hit:crest", "note": 71, "velocity": 100, "before": 3.1, "after": 3.7}
+    refused = {
+        "bounds_ok": True,
+        "excess_grew": False,
+        "worse": [],
+        "own_row_worse": [{**own, "floor": 0.5}],
+        "file": "path_fit_5.json",
+    }
+    assert refit._kept_for({"accepted": None, "refused_point": refused}) == ("floor", refused)
+    for name in ("pre.json", "path_fit_5.json"):
+        (tmp_path / name).write_text(_json.dumps({"gate": {"readings": []}}))
+    ver = {"kept_for": "floor", "refused_point": refused}
+    rows = refit.blocking_rows(tmp_path, {"capture": "hit", "gates": []}, ver)
+    assert rows == [
+        {
+            "gate": "hit",
+            "dimension": "crest",
+            "statistic": "n71v100",
+            "before": 3.1,
+            "after": 3.7,
+            "bound": None,
+            "floor": 0.5,
+            "why": "floor",
+        }
+    ]

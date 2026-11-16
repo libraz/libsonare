@@ -11,6 +11,7 @@ voice runs the same four steps, recorded under `<scratch>/refit/<objective>/`:
     post      the same compare with the fit's overrides applied
     verdict   adopt only when values moved, the held-out notes improved, no note
               rings past its scored window longer than shipped or reference (`tail_check`),
+              no dimension the objective could not weigh worsened past its floor,
               no gated statistic newly exceeds its bound and the summed excess over the
               bounds did not grow
 
@@ -34,7 +35,9 @@ tables at measurement time: each knob of an existing fit is pinned to its start,
 and every gate patch is put back to its values before the trailing run of refit
 commits on it that recorded a unit in the voice's struct-copy chain, read from
 the git history of `bank-versions.json` and `fits.json`. `pre.json` records each
-pin and its source. `rejudge` re-measures pre, post and the verdict of given
+pin and its source. An adoption is judged against what ships, so `pre` is a valid
+judge only while those pins equal the shipped values; otherwise the route is a
+fresh refit from the shipped start. `rejudge` re-measures pre, post and the verdict of given
 slugs over their existing fits.
 
 Variations derive from their capital's patch at table-build time, so `--banks
@@ -55,6 +58,7 @@ import re
 import subprocess
 import sys
 import tempfile
+import time
 from collections.abc import Iterable, Iterator
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
@@ -89,6 +93,7 @@ from knobs import (
     unjudged_reach,
 )
 from loop_record import committed_note_groups
+from loss_weights import GATE_OWN_TERMS, PERCUSSION_GATE_OWN_TERMS
 from metrics_floor import BODY_FLOOR_MARGIN_DB, FLOOR_GUARD_S, MIN_FLOOR_S
 from metrics_signal import _db, _rms_envelope, to_mono
 from objective import objective_digest
@@ -984,6 +989,8 @@ def verdict(
     *,
     gate_only: bool = False,
     unjudged: frozenset[str] = frozenset(),
+    floor_of=None,
+    own_note: int | None = None,
 ) -> dict:
     """The adoption decision for one voice, with the numbers it rests on.
 
@@ -991,7 +998,13 @@ def verdict(
     velocity, where no held-out condition exists and the gate is the whole judgement; its
     fit must also show an in-sample gain over `IN_SAMPLE_MARGIN`, and an adoption on it is
     marked `in_sample`. A fit whose `TAIL_CHECK_KEY` record found a note ringing past its
-    bound is kept.
+    bound is kept, and so is one that worsened a statistic of a dimension its objective could
+    not weigh (`fit_profile.unscorable`) past its floor (`floor_of`, as `gate_floors` returns).
+    `own_note` is the note a single-note fit inside a multi-note gate fitted: one of its own
+    rows worsened past its dimension's floor keeps the fit (`own_row_worse`), however little
+    the kit-wide statistic moved.
+    A fit searched without a term its class weighs (`scored_without`) is judged on its
+    `confirm` pair, which has the term, over `IN_SAMPLE_MARGIN` instead of the held-out notes.
     """
     moved = [
         k["key"]
@@ -1007,7 +1020,10 @@ def verdict(
     pre_sum, pre_over = _excess(pre["gate"]["readings"])
     post_sum, post_over = _excess(post["gate"]["readings"])
     newly = sorted(f"{k} {s}" for k, s in post_over - pre_over)
-    gain = in_sample_gain(fit) if gate_only and held is None else None
+    # A search that ran without a weighed term is judged on the confirm pair here, which has it.
+    without = fit.get("scored_without") or []
+    searched_held, held = held, (None if without else held)
+    gain = in_sample_gain(fit) if (gate_only and held is None) or without else None
     out = {
         "moved": len(moved),
         "loss": fit["loss"].get("selected"),
@@ -1018,7 +1034,23 @@ def verdict(
         "switches": switch_moves(fit, unjudged),
         "refused": (fit.get("write_back") or {}).get("refused"),
         "tail_check": fit.get(TAIL_CHECK_KEY),
+        "moved_keys": moved,
     }
+    unscorable = (fit.get("fit_profile") or {}).get("unscorable") or []
+    worse = []
+    if unscorable:
+        if floor_of is None:
+            raise ValueError("judging an unscorable dimension needs the gate's floors")
+        worse = unscorable_worse(
+            pre["gate"]["readings"], post["gate"]["readings"], unscorable, floor_of
+        )
+        out["unscorable_worse"] = worse
+    own_worse = []
+    if own_note is not None:
+        if floor_of is None:
+            raise ValueError("judging a note's own rows needs the gate's floors")
+        own_worse = own_rows_worse(pre, post, own_note, floor_of)
+        out["own_row_worse"] = own_worse
     ringing = tail_violation(fit.get(TAIL_CHECK_KEY))
     if out["refused"]:
         out["decision"], out["why"] = "kept", f"write-back refused: {out['refused']}"
@@ -1026,7 +1058,31 @@ def verdict(
         out["decision"], out["why"] = "kept", "no value moved"
     elif ringing:
         out["decision"], out["why"] = "kept", ringing
-    elif held is None and not gate_only:
+    elif worse:
+        w = worse[0]
+        out["decision"] = "kept"
+        out["why"] = (
+            f"unscorable {w['key'].rpartition(':')[2]} worsened past its floor "
+            f"({w['stat']} {w['before']:g}->{w['after']:g}, floor {w['floor']:g})"
+        )
+    elif own_worse:
+        w = own_worse[0]
+        out["decision"] = "kept"
+        out["why"] = (
+            f"own row {w['key'].rpartition(':')[2]} n{w['note']}v{w['velocity']} worsened "
+            f"past its floor ({w['before']:g}->{w['after']:g}, floor {w['floor']:g})"
+        )
+    elif without and not (fit.get("confirm") or {}).get("local"):
+        out["decision"], out["why"] = (
+            "kept",
+            f"searched without {', '.join(without)} and not confirmed with it here",
+        )
+    elif without and gain <= IN_SAMPLE_MARGIN:
+        out["decision"], out["why"] = (
+            "kept",
+            f"confirm with {', '.join(without)} on gained under the floor ({gain:+.4f})",
+        )
+    elif held is None and not gate_only and not without:
         out["decision"], out["why"] = "kept", "no independent held-out result"
     elif held is not None and held <= HELD_OUT_MARGIN:
         out["decision"], out["why"] = "kept", f"held-out notes did not improve ({held:+.4f})"
@@ -1045,23 +1101,62 @@ def verdict(
         out["decision"], out["why"] = "kept", f"gate excess grew {pre_sum:.3f} -> {post_sum:.3f}"
     else:
         basis = "gate only" if held is None else f"held-out {held:+.4f}"
+        if without:
+            basis = f"confirm {gain:+.4f} with {', '.join(without)} on"
         out["decision"], out["why"] = (
             "adopt",
             (f"{basis}, gate excess {pre_sum:.3f} -> {post_sum:.3f}"),
         )
         if held is None:
             out["in_sample"] = True
+    if without:
+        out["scored_without"] = list(without)
+        out["searched_held_out_gain"] = searched_held
     return out
+
+
+#: The sources a voice is rendered from; a judge library older than their newest commit is refused.
+SYNTH_SOURCES = "src/midi/synth"
+
+
+@functools.cache
+def newest_synth_commit() -> tuple[str, float]:
+    """(short hash, commit time) of the newest commit touching `SYNTH_SOURCES`."""
+    out = subprocess.run(
+        ["git", "-C", str(REPO_ROOT), "log", "-1", "--format=%h %ct", "--", SYNTH_SOURCES],
+        capture_output=True,
+        text=True,
+        check=True,
+    ).stdout.split()
+    if len(out) != 2:
+        raise RuntimeError(f"no commit touches {SYNTH_SOURCES} under {REPO_ROOT}")
+    return out[0], float(out[1])
+
+
+def refuse_old_library(lib: Path) -> None:
+    """Refuse a judge library built before the newest synth commit: its other rows are stale."""
+    sha, committed = newest_synth_commit()
+    built = lib.stat().st_mtime
+    if built < committed:
+        stamp = "%Y-%m-%d %H:%M:%S"
+        raise RuntimeError(
+            f"{lib} was built {time.strftime(stamp, time.localtime(built))}, before {sha} "
+            f"({time.strftime(stamp, time.localtime(committed))}) touched {SYNTH_SOURCES}; "
+            "rebuild it at HEAD before judging"
+        )
 
 
 def _tuning_lib(build_dir: str) -> Path:
     if PREBUILT_LIB:
         # Whether it honours the overrides is autofit's probe to make, per fit.
-        return Path(PREBUILT_LIB)
+        lib = Path(PREBUILT_LIB)
+        refuse_old_library(lib)
+        return lib
     path = (REPO_ROOT / build_dir).resolve()
     lib = library_path(path)
     if lib is None or _cached_option(path, "BUILD_TUNING") != "ON":
         raise RuntimeError(f"{build_dir} holds no BUILD_TUNING=ON library to apply overrides with")
+    refuse_old_library(lib)
     return lib
 
 
@@ -1447,10 +1542,10 @@ def anchor_gain(
         anchored_argv = [*_without(argv, "--base-overrides"), "--base-overrides", pinned]
     try:
         scored = score_once(
-            argv, lib, d / "anchor_before.json", start_overrides(_at(knobs, values))
+            argv, lib, d / "anchor_before.json", start_overrides(_at(knobs, values)), report
         )
         rescored = score_once(
-            anchored_argv, lib, d / "anchor_after.json", start_overrides(_at(knobs, moved))
+            anchored_argv, lib, d / "anchor_after.json", start_overrides(_at(knobs, moved)), report
         )
     except RuntimeError as exc:
         return _write_anchor(d, report, {**record, "skipped": str(exc)})
@@ -1792,16 +1887,48 @@ def run_voice(voice: dict, root: Path, build_dir: str, per_knob: int) -> dict:
     return result
 
 
+def history_pins(pinned: list[dict]) -> list[dict]:
+    """The baseline pins read from the registry history (a fit's own starts are `stale_starts`'s)."""
+    return [p for p in pinned if p["source"] != "fit.json start"]
+
+
+def unshipped_pins(pinned: list[dict], shipped: dict[str, float]) -> list[str]:
+    """The baseline pins whose value is not what the library ships, as `key value (ships s)`."""
+    out = []
+    for p in history_pins(pinned):
+        ships = shipped.get(p["key"])
+        if ships is not None and format_value(float(p["value"])) != format_value(ships):
+            out.append(f"{p['key']} {p['value']} (ships {format_value(ships)})")
+    return out
+
+
+def refuse_unshipped_pre(voice: dict, pinned: list[dict], shipped: dict[str, float]) -> None:
+    """Refuse a judge whose `pre` is pinned away from what ships: an adoption is judged
+    against the shipped values, so such a voice is refitted from its shipped start."""
+    off = unshipped_pins(pinned, shipped)
+    if off:
+        raise RuntimeError(
+            f"{voice['slug']}: pre is not what ships; refit from the shipped start "
+            f"({'; '.join(off)})"
+        )
+
+
 def _judge_voice(voice: dict, d: Path, build_dir: str, per_knob: int) -> dict:
     _check_pin()
     pre, fit, post = d / "pre.json", d / "fit.json", d / "post.json"
     lib = _tuning_lib(build_dir)
-    if not pre.exists():
+    if pre.exists():
+        recorded = (json.loads(pre.read_text()).get("baseline") or {}).get("pinned") or []
+        if history_pins(recorded):
+            refuse_unshipped_pre(voice, recorded, _catalogue(voice, lib).defaults)
+    else:
         _check_pin()
         check_base(voice, lib)
         own_fit = json.loads(fit.read_text()) if fit.exists() else None
         units = {u for t in gate_patches(voice) for u in chain_of(t, struct_copies())}
         base = baseline_pins(voice, own_fit, registry_history(units))
+        if history_pins(base["pinned"]):
+            refuse_unshipped_pre(voice, base["pinned"], _catalogue(voice, lib).defaults)
         gate_audit.compare_voice(
             voice,
             pre,
@@ -1839,6 +1966,8 @@ def _judge_voice(voice: dict, d: Path, build_dir: str, per_knob: int) -> dict:
             json.loads(post.read_text()),
             gate_only=bool(voice.get("gate_only")),
             unjudged=unmeasured(voice),
+            floor_of=gate_floors(voice),
+            own_note=voice.get("drum_note"),
         ),
     }
     prefit = d / "prefit.json"
@@ -1940,6 +2069,52 @@ def floor_movement(pre: list[dict], post: list[dict], floor_of) -> list[dict]:
     return out
 
 
+def unscorable_worse(pre: list[dict], post: list[dict], dims, floor_of) -> list[dict]:
+    """The statistics of the dimensions in `dims` that worsened past their floor, pre to post."""
+    dims = set(dims)
+    moves = floor_movement(pre, post, floor_of)
+    return _worse_rows([m for m in moves if m["key"].rpartition(":")[2] in dims])
+
+
+def own_rows_worse(pre: dict, post: dict, note: int, floor_of) -> list[dict]:
+    """The fitted note's own rows that worsened past their dimension's floor, pre to post.
+
+    A kit gate reduces over every note of the kit, so one note's row can worsen
+    without moving its statistic; a single-note fit is read on its own rows too.
+    """
+    missing = [name for name, body in (("pre", pre), ("post", post)) if "note_rows" not in body]
+    if missing:
+        raise ValueError(
+            f"{' and '.join(missing)} recorded no per-note rows; re-measure them to judge note {note}"
+        )
+    out = []
+    for capture, rows in post["note_rows"].items():
+        before = {
+            (r["note"], r["velocity"]): r for r in (pre.get("note_rows") or {}).get(capture, [])
+        }
+        for r in rows:
+            b = before.get((r["note"], r["velocity"]))
+            if r["note"] != note or b is None:
+                continue
+            for dim, after in r.items():
+                if dim in ("note", "velocity") or dim not in b:
+                    continue
+                key = f"{capture}:{dim}"
+                floor = floor_of(key)
+                if abs(after) - abs(b[dim]) > floor:
+                    out.append(
+                        {
+                            "key": key,
+                            "note": note,
+                            "velocity": r["velocity"],
+                            "before": round(b[dim], 4),
+                            "after": round(after, 4),
+                            "floor": round(floor, 4),
+                        }
+                    )
+    return out
+
+
 def _worse_rows(moves: list[dict]) -> list[dict]:
     """The statistics that worsened past their floor, as the rows a verdict records."""
     return [
@@ -1969,7 +2144,9 @@ def along_the_path(voice: dict, d: Path, lib: Path, report: dict, tag: str) -> d
     path = report.get("path") or []
     if not path:
         return None
-    pre = json.loads((d / "pre.json").read_text())["gate"]["readings"]
+    pre_body = json.loads((d / "pre.json").read_text())
+    pre = pre_body["gate"]["readings"]
+    own_note = voice.get("drum_note")
     pre_sum, pre_over = _excess(pre)
     pre_load = gate_load(pre)
     floor_of = gate_floors(voice)
@@ -1986,15 +2163,18 @@ def along_the_path(voice: dict, d: Path, lib: Path, report: dict, tag: str) -> d
                 reach_copies(overrides_for(report, values), voice),
                 base_overrides=reach_copies(BASE_OVERRIDES, voice),
             )
-        post = json.loads(out.read_text())["gate"]["readings"]
+        post_body = json.loads(out.read_text())
+        post = post_body["gate"]["readings"]
         post_sum, post_over = _excess(post)
         moves = floor_movement(pre, post, floor_of)
         worse = _worse_rows(moves)
+        # The verdict's own-row rule, so the path accepts nothing the verdict would keep.
+        own = [] if own_note is None else own_rows_worse(pre_body, post_body, own_note, floor_of)
         newly = post_over - pre_over
         grew = bool(newly) or post_sum > pre_sum + 1e-9
         load_fell = gate_load(post) < pre_load
         within = not grew and load_fell
-        ok = within and not worse
+        ok = within and not worse and not own
         checked[i] = {
             "eval": path[i]["eval"],
             "loss": path[i]["loss"],
@@ -2007,11 +2187,16 @@ def along_the_path(voice: dict, d: Path, lib: Path, report: dict, tag: str) -> d
             "excess_grew": grew,
             "load_fell": load_fell,
             "worse": worse,
+            "own_row_worse": own,
             "better_count": sum(m["moved"] > m["floor"] for m in moves),
         }
         return ok
 
-    lo, hi = -1, len(path)
+    # The shipped start is the origin, not a candidate: its gate load equals pre's, so it is
+    # never "accepted", and the nearest refused point is the first one past it.
+    starts = [k["start"] for k in report.get("knobs") or []]
+    origin = 0 if starts and list(path[0]["values"]) == starts else -1
+    lo, hi = origin, len(path)
     if accepted(len(path) - 1):
         lo = len(path) - 1
     else:
@@ -2028,7 +2213,7 @@ def along_the_path(voice: dict, d: Path, lib: Path, report: dict, tag: str) -> d
         assert hi in checked, "the nearest refused point was never visited"
         refused = checked[hi] | {"values": None}
     found = {"accepted": None, "tried": tried, "pre_load": pre_load, "refused_point": refused}
-    if lo >= 0:
+    if lo > origin:
         found["accepted"] = checked[lo]
         found["improves"] = checked[lo]["better_count"] > 0
     return found
@@ -2059,25 +2244,6 @@ GATE_TERMS = {
     "attack_hf_swing": ("hfdyn", "modedyn"),
     "crest": "crest",
 }
-#: The terms whose loss reads the dimension's OWN quantity; GATE_TERMS points at
-#: one wherever it exists. The rest are proxies: `slope` and `tail` read per-harmonic
-#: skeleton slopes, `env` a sum of sustain slope, release and attack, `harm` the
-#: ladder, `modedyn` modal brightness -- none the gate's broadband reading.
-GATE_OWN_TERMS = {
-    "stretch": ("stiff",),
-    "tnr": ("tnr",),
-    "vel_range": ("velspan",),
-    "onset": ("onset",),
-    "onset_settle": ("onset",),
-    "register": ("level",),
-    "attack_hf": ("hf",),
-    "attack_hf_swing": ("hfdyn",),
-    "crest": ("crest",),
-    "centroid_pct": ("bright",),
-    "body": ("body",),
-}
-#: Own-measure terms of the percussion set; the rest of that table is unclassified.
-PERCUSSION_GATE_OWN_TERMS = {"vel_range": ("velspan",), "crest": ("crest",)}
 #: The same for a drum note, whose objective is the percussion term set. `level`
 #: and `dyn` are absent: a module note is one velocity, and both need a contrast.
 PERCUSSION_GATE_TERMS = {
@@ -2131,9 +2297,10 @@ def _kept_for(found: dict | None) -> tuple[str, dict | None]:
     if found["accepted"]:
         return "under_floor", found.get("refused_point")
     refused = found.get("refused_point")
-    if refused and refused["bounds_ok"] and refused["worse"]:
+    past_floor = refused and (refused["worse"] or refused.get("own_row_worse"))
+    if refused and refused["bounds_ok"] and past_floor:
         return "floor", refused
-    if refused and not refused["excess_grew"] and not refused["worse"]:
+    if refused and not refused["excess_grew"] and not past_floor:
         # Refused only because the gate load did not fall: no move worth counting.
         return "under_floor", refused
     return "bound", refused
@@ -2239,13 +2406,18 @@ def rejudge_voice(voice: dict, root: Path, build_dir: str) -> dict:
     if not (d / "fit.json").exists():
         raise RuntimeError(f"{voice['slug']}: no fit.json under {root} to re-judge")
     fits = [json.loads(p.read_text()) for p in (d / "fit.json", d / "fit_r1.json") if p.exists()]
-    stale = stale_starts(fits, _catalogue(voice, _tuning_lib(build_dir)).defaults)
+    shipped = _catalogue(voice, _tuning_lib(build_dir)).defaults
+    stale = stale_starts(fits, shipped)
     if stale:
         # Pre pins each knob at its fit-time value, so the verdict would judge a past start.
         raise RuntimeError(
             f"{voice['slug']}: its fits started from values the library no longer ships "
             f"({'; '.join(stale)}); refit it rather than re-judging"
         )
+    units = {u for t in gate_patches(voice) for u in chain_of(t, struct_copies())}
+    refuse_unshipped_pre(
+        voice, baseline_pins(voice, fits[0], registry_history(units))["pinned"], shipped
+    )
     ver = d / "verdict.json"
     was = json.loads(ver.read_text())["decision"] if ver.exists() else "unjudged"
     for path in d.iterdir():
@@ -2271,7 +2443,8 @@ def blocking_rows(d: Path, voice: dict, ver: dict) -> list[dict]:
     verdict; a search with no path has only the fit's own endpoint (`post.json`). A `bound`
     verdict names the rows that point pushed over or further over (`why: "bound"`), a `floor` verdict the
     rows it worsened past their floor (`why: "floor"`). Each names its gate, dimension and
-    statistic, the readings before and after, the bound, and the floor under it.
+    statistic, the readings before and after, the bound, and the floor under it; a fitted
+    note's own row refused at that point names `n<note>v<vel>` as its statistic, with no bound.
     """
     refused = ver.get("refused_point")
     pre = _by_row(d / "pre.json")
@@ -2307,6 +2480,22 @@ def blocking_rows(d: Path, voice: dict, ver: dict) -> list[dict]:
                 "why": why,
             }
         )
+    if ver["kept_for"] == "floor":
+        # A fitted note's own row has no bound: it is read against its dimension's floor alone.
+        for w in refused.get("own_row_worse") or []:
+            capture, _, dim = w["key"].rpartition(":")
+            rows.append(
+                {
+                    "gate": capture or voice["capture"],
+                    "dimension": dim,
+                    "statistic": f"n{w['note']}v{w['velocity']}",
+                    "before": w["before"],
+                    "after": w["after"],
+                    "bound": None,
+                    "floor": w["floor"],
+                    "why": "floor",
+                }
+            )
     return rows
 
 

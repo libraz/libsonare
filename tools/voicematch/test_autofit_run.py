@@ -1122,6 +1122,16 @@ def test_a_bare_autofit_raises_a_red_dimensions_zero_weight_own_term(tmp_path, m
     assert "v: [raised from zero weight: body]" in capsys.readouterr().err
 
 
+def test_a_pre_fit_raise_reaches_every_joint_capture(tmp_path, monkeypatch):
+    bounds = {"body": _bound("p90", 1.0, 2.0)}
+    args = _prefit_world(tmp_path, monkeypatch, bounds)
+    # As `resolve_probes` copies them, before the pre-fit reading runs.
+    captures = [argparse.Namespace(**vars(args)) for _ in range(2)]
+    autofit.apply_prefit(args, captures)
+    for ns in (args, *captures):
+        assert ns.w_body == 1.0 and autofit.cli_weights(ns)["body"] == 1.0
+
+
 def test_a_bare_autofit_raises_a_far_dimension_and_labels_a_guessed_floor(
     tmp_path, monkeypatch, capsys
 ):
@@ -1165,6 +1175,155 @@ def test_a_gate_with_no_stored_measurement_raises_nothing(tmp_path, monkeypatch,
     prefit = autofit.apply_prefit(args)
     assert prefit["readings"] == 0 and prefit["prefit_weights"] == {}
     assert capsys.readouterr().err == ""
+
+
+def _presence_bounds():
+    """A gate bounding one dimension with an own term and a p90, and two none can weigh."""
+    return {
+        "body": {"median": 1.0, "abs_median": 1.0, "p90": 2.0},
+        "decay": {"median": 1.0, "p90": 2.0},
+        "vel_range": {"abs_median": 1.0},
+    }
+
+
+def test_every_gated_dimension_gets_its_own_term_at_the_presence_weight(
+    tmp_path, monkeypatch, capsys
+):
+    from loss_aggregate import PRESENCE_TAIL_FRACTION
+    from loss_weights import PRESENCE_WEIGHT
+
+    args = _prefit_world(tmp_path, monkeypatch, _presence_bounds())
+    args.has_velocity_spread = False
+    capture = argparse.Namespace(**vars(args))
+    assert "body" not in autofit.cli_weights(args)
+    plan = autofit.apply_presence(args, [args, capture])
+    # body's own term is added; decay has none, and velspan is dropped on a one-velocity probe.
+    assert list(plan["terms"]) == ["body"] and plan["unscorable"] == ["decay", "vel_range"]
+    body = plan["terms"]["body"]
+    assert body["weight"] == PRESENCE_WEIGHT and body["dimensions"] == ["body"]
+    assert body["aggregate"] == "tail" and body["tail_fraction"] == PRESENCE_TAIL_FRACTION
+    assert body["covers"] == ["abs_median", "median", "p90"]
+    for ns in (args, capture):
+        assert autofit.cli_weights(ns)["body"] == PRESENCE_WEIGHT
+        assert ns.term_tails == {"body": PRESENCE_TAIL_FRACTION}
+    err = capsys.readouterr().err
+    assert "presence: 1 term(s) weighted for gated dimensions (body<-body tail 0.1)" in err
+    assert "presence: unscorable: decay, vel_range" in err
+
+
+def test_a_users_zero_weight_wins_over_the_presence_weight(tmp_path, monkeypatch, capsys):
+    args = _prefit_world(tmp_path, monkeypatch, _presence_bounds(), body=0.0)
+    plan = autofit.apply_presence(args, [args])
+    assert plan["terms"] == {} and plan["user_zero"] == {"body": ["body"]}
+    assert args.w_body == 0.0 and "body" not in autofit.cli_weights(args)
+    assert "presence: user zero: body (body)" in capsys.readouterr().err
+
+
+def test_an_already_weighted_own_term_takes_the_p90_tail_without_a_presence_weight(
+    tmp_path, monkeypatch, capsys
+):
+    from loss_aggregate import PRESENCE_TAIL_FRACTION
+
+    args = _prefit_world(tmp_path, monkeypatch, {"crest": {"median": 1.0, "p90": 2.0}})
+    weight = autofit.cli_weights(args)["crest"]
+    plan = autofit.apply_presence(args, [args])
+    assert plan["terms"] == {} and autofit.cli_weights(args)["crest"] == weight
+    crest = plan["weighted"]["crest"]
+    assert crest["weight"] == weight and crest["aggregate"] == "tail"
+    assert crest["tail_fraction"] == PRESENCE_TAIL_FRACTION and crest["covers"] == ["median", "p90"]
+    assert args.term_tails == {"crest": PRESENCE_TAIL_FRACTION}
+    assert "tails: weighted own term(s) tailed for a gated p90 (crest<-crest tail 0.1)" in (
+        capsys.readouterr().err
+    )
+    # Without a p90 bound the weighted term keeps the run's reduction.
+    plain = _prefit_world(tmp_path, monkeypatch, {"crest": {"median": 1.0}})
+    autofit.apply_presence(plain, [plain])
+    assert plain.term_tails == {} and plain.presence["weighted"]["crest"]["covers"] == ["median"]
+
+
+def test_recorded_tails_are_used_as_given_and_a_mismatch_is_refused(tmp_path, monkeypatch):
+    args = _prefit_world(tmp_path, monkeypatch, {"crest": {"p90": 2.0}})
+    args.term_tails_given = "crest=0.05"
+    autofit.apply_presence(args, [args])
+    assert args.term_tails == {"crest": 0.05}
+    wrong = _prefit_world(tmp_path, monkeypatch, {"crest": {"p90": 2.0}})
+    wrong.term_tails_given = "body=0.1"
+    with pytest.raises(ValueError, match="--term-tails names"):
+        autofit.apply_presence(wrong, [wrong])
+
+
+def _presence_member(args, terms, stage="fit"):
+    loss = autofit.LossWeights(autofit.cli_weights(args))
+    loss.calibrate(terms)
+    return argparse.Namespace(
+        args=args, baseline_terms=terms, normalize=True, stage=stage, loss=loss
+    )
+
+
+def test_the_start_point_caps_a_presence_term_before_the_search(tmp_path, monkeypatch, capsys):
+    from loss_weights import PRESENCE_TERM_SHARE, PRESENCE_WEIGHT, TERM_UNITS
+
+    args = _prefit_world(tmp_path, monkeypatch, _presence_bounds())
+    autofit.apply_presence(args, [args])
+    # One unit of harm, and a body forty units out: at 0.25 it would carry most of the loss.
+    terms = {"harm": TERM_UNITS["harm"], "body": 40.0 * TERM_UNITS["body"]}
+    member = _presence_member(args, terms)
+    autofit.fix_presence(args, [member])
+    body = args.presence["terms"]["body"]
+    assert body["cap"] == "term" and body["capped_from"] == PRESENCE_WEIGHT
+    assert 0.0 < body["weight"] < PRESENCE_WEIGHT and args.w_body == body["weight"]
+    contrib = member.loss.term_contributions(terms)
+    assert contrib["body"] <= PRESENCE_TERM_SHARE * sum(contrib.values()) + 1e-12
+    # Calibrated under the capped weights, so the start still scores exactly 1.0.
+    assert member.loss.weights["body"] == body["weight"]
+    assert member.loss.combine(terms) == pytest.approx(1.0)
+    assert "presence: capped at the start point: body 0.25->" in capsys.readouterr().err
+    # Once: a later point never re-caps, so the objective is fixed through the search.
+    autofit.fix_presence(args, [_presence_member(args, {"harm": 1.0, "body": 1.0})])
+    assert args.presence["terms"]["body"]["weight"] == body["weight"]
+
+
+def test_a_staged_start_caps_the_cli_weights_and_leaves_the_stage_loss(tmp_path, monkeypatch):
+    from loss_weights import TERM_UNITS
+
+    args = _prefit_world(tmp_path, monkeypatch, _presence_bounds())
+    autofit.apply_presence(args, [args])
+    terms = {"harm": TERM_UNITS["harm"], "body": 40.0 * TERM_UNITS["body"]}
+    member = _presence_member(args, terms, stage="excitation")
+    stage_loss = member.loss
+    autofit.fix_presence(args, [member])
+    assert member.loss is stage_loss and args.w_body < 0.25
+
+
+def test_recorded_presence_weights_are_used_as_given_and_a_mismatch_is_refused(
+    tmp_path, monkeypatch
+):
+    args = _prefit_world(tmp_path, monkeypatch, _presence_bounds())
+    args.presence_weights = "body=0.0625"
+    plan = autofit.apply_presence(args, [args])
+    assert plan["capped"] and plan["pinned"] and args.w_body == 0.0625
+    autofit.fix_presence(args, [_presence_member(args, {"harm": 1.0, "body": 99.0})])
+    assert args.w_body == 0.0625
+    wrong = _prefit_world(tmp_path, monkeypatch, _presence_bounds())
+    wrong.presence_weights = "bright=0.1"
+    with pytest.raises(ValueError, match="--presence-weights names"):
+        autofit.apply_presence(wrong, [wrong])
+
+
+def test_the_presence_plan_is_recorded_under_fit_profile(tmp_path, monkeypatch):
+    args = _prefit_world(tmp_path, monkeypatch, _presence_bounds())
+    autofit.apply_presence(args, [args])
+    out = tmp_path / "fit.json"
+    out.write_text(json.dumps({"fit_profile": {"weights": {"harm": 1.0}}}))
+    autofit._fold_presence(str(out), args)
+    profile = json.loads(out.read_text())["fit_profile"]
+    assert profile["weights"] == {"harm": 1.0}
+    assert profile["presence"]["body"]["dimensions"] == ["body"]
+    assert profile["presence"]["body"]["covers"] == ["abs_median", "median", "p90"]
+    assert profile["unscorable"] == ["decay"] and profile["presence_capped"] is False
+    # vel_range's velspan is already weighted on this probe and bounds no p90: recorded, not tailed.
+    assert profile["tails"]["velspan"]["aggregate"] == "mean"
+    assert profile["term_tails"] == {"body": 0.1}
 
 
 def test_refit_and_autofit_print_the_already_weighted_line_from_one_function():

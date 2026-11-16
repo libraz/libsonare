@@ -702,6 +702,7 @@ def report_result(knobs, pristine, best_values, evaluator, args, extra=None) -> 
                 for i, loss, stage, vals in getattr(evaluator, "path", [])
             ],
             "corpora": extra.get("corpora") or [],
+            **{k: extra[k] for k in ("oracle", "scored_without") if k in extra},
             **(
                 {
                     "provisional_off_layer": True,

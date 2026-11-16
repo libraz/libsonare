@@ -124,7 +124,7 @@ def _confirm(tmp_path, monkeypatch, here_start, here_best):
     (out / "fit.json").write_text(json.dumps(_report()))
     seen = []
 
-    def fake(argv, lib, out, start):
+    def fake(argv, lib, out, start, fit=None):
         seen.append((argv, start))
         loss = here_best if start else here_start
         return {"renders": 2, "selected": {"quality": _quality(loss, modes=loss / 2)}}
@@ -147,6 +147,44 @@ def test_a_start_the_machines_score_apart_refuses_the_report(tmp_path, monkeypat
         remote_fit.confirm(ARGV, "p012", out, Path("lib"))
     assert "confirm" not in json.loads((out / "fit.json").read_text())
     assert not json.loads((out / "confirm_refused.json").read_text())["agrees"]
+
+
+NOISE = ["--spec", "auto", "--program", "123", "--corpus", "/x/bird", "--corpus-timbre", "t0"]
+
+
+def test_a_class_that_weighs_mss_is_searched_without_it_unless_a_weight_is_given():
+    assert remote_fit.host_argv(NOISE) == [*NOISE, "--w-mss", "0"]
+    assert remote_fit.host_argv(ARGV) == ARGV
+    given = [*NOISE, "--w-mss=0.5"]
+    assert remote_fit.host_argv(given) == given
+
+
+def test_a_search_without_mss_agrees_on_its_own_objective_and_confirms_with_it(
+    tmp_path, monkeypatch
+):
+    out = tmp_path / "out"
+    out.mkdir()
+    (out / "fit.json").write_text(json.dumps(_report()))
+    seen = []
+
+    def fake(argv, lib, out, start, fit=None):
+        seen.append((out.name, "--w-mss" in argv))
+        # With mss on the start scores far from the host's 10.0, which searched without it.
+        loss = 9.1 if start else (13.0 if "--w-mss" not in argv else 10.02)
+        quality = _quality(loss, modes=loss / 2)
+        return {"renders": 2, "objective": "o1", "selected": {"quality": quality}}
+
+    monkeypatch.setattr(remote_fit, "score_once", fake)
+    block = remote_fit.confirm(NOISE, "p123", out, Path("lib"))
+    assert seen == [
+        ("confirm_start.json", False),
+        ("confirm_best.json", False),
+        ("confirm_searched.json", True),
+    ]
+    assert block["agrees"] and block["renders"] == 6
+    assert block["local"]["start"]["loss"] == 13.0 and block["improves"]
+    # The registry reads the pair as confirming the fit only under this objective.
+    assert block["objective"] == "o1"
 
 
 def test_a_refused_leave_check_sends_nothing(tmp_path, monkeypatch):
@@ -328,6 +366,23 @@ def test_one_confirm_evaluation_drops_the_per_knob_budget_and_the_given_start(
     assert "--evals-per-knob" not in cmd and "a=1" not in cmd
     assert cmd[cmd.index("--start-overrides") + 1] == "b=2"
     assert cmd[cmd.index("--max-evals") + 1] == "1"
+
+
+def test_a_re_score_carries_the_fits_presence_weights_and_tails(tmp_path, monkeypatch):
+    seen = _scored(tmp_path, monkeypatch)
+    fit = {
+        "fit_profile": {
+            "presence": {"body": {"weight": 0.0625}},
+            "term_tails": {"body": 0.1, "hfdyn": 0.1},
+        }
+    }
+    argv = [*ARGV, "--presence-weights", "old=1", "--term-tails", "old=1"]
+    remote_fit.score_once(argv, Path("lib"), tmp_path / "s.json", "b=2", fit)
+    cmd = seen[0]
+    assert "old=1" not in cmd
+    assert cmd[cmd.index("--presence-weights") + 1] == "body=0.0625"
+    assert cmd[cmd.index("--term-tails") + 1] == "body=0.1,hfdyn=0.1"
+    assert remote_fit.presence_pin({}) == []
 
 
 def test_a_confirm_evaluation_that_became_a_search_is_refused(tmp_path, monkeypatch):

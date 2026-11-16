@@ -117,6 +117,21 @@ def test_an_unclassified_percussion_mapping_reads_unknown():
     assert got["vel_range"] == (gate_audit.WEIGHTED, ("velspan",))
 
 
+def test_a_percussion_mapping_measured_as_a_proxy_reads_proxy():
+    from loss_weights import PERCUSSION_GATE_PROXIES
+
+    own = refit.PERCUSSION_GATE_OWN_TERMS
+    got = gate_audit.weighting(
+        {"band": 1.0, "ring": 1.0},
+        refit.PERCUSSION_GATE_TERMS,
+        own,
+        classified=set(own) | PERCUSSION_GATE_PROXIES,
+    )
+    assert got["band_tilt"] == (gate_audit.PROXY, ("band",))
+    assert got["band_shape"] == (gate_audit.WEIGHTED, ("band",))
+    assert got["ring"] == (gate_audit.PROXY, ("ring",))
+
+
 def _args(tmp_path, **kw):
     out = tmp_path / "fit.json"
     base = {
@@ -242,3 +257,18 @@ def test_compare_voice_carries_each_gates_windows_onto_its_readings(tmp_path, mo
     got = {r["key"]: r.get("window") for r in json.loads(out.read_text())["gate"]["readings"]}
     assert got["module:decay"]["model_s"] == 0.6 and got["library:decay"]["model_s"] == 2.0
     assert got["module:stretch"] is None
+
+
+def test_compare_voice_keeps_each_gates_per_note_rows_by_capture(tmp_path, monkeypatch):
+    def fake_compare(voice, out, lib, overrides="", **_):
+        body = {"gate": {"readings": []}}
+        if voice["capture"] == "hit":
+            body["rows"] = [{"note": 71, "velocity": 100, "crest": 3.1}]
+        out.write_text(json.dumps(body))
+
+    monkeypatch.setattr(gate_audit, "compare", fake_compare)
+    voice = {"slug": "v", "gates": [{"capture": "hit"}, {"capture": "mid"}]}
+    out = tmp_path / "pre.json"
+    gate_audit.compare_voice(voice, out, Path("lib"))
+    got = json.loads(out.read_text())["note_rows"]
+    assert got == {"hit": [{"note": 71, "velocity": 100, "crest": 3.1}]}

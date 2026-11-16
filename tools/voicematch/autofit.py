@@ -354,6 +354,7 @@ from knobs import (
     load_spec_weights,
     load_start_overrides,
     merge_overrides,
+    parse_overrides,
     pinned_lines,
     refuse_absent_knobs,
     refuse_unknown_override_keys,
@@ -381,7 +382,8 @@ from loss import (
     score_terms,
     unmeasurable_terms,
 )
-from loss_aggregate import DEFAULT_TAIL_FRACTION, robust_score_terms
+from loss_aggregate import DEFAULT_TAIL_FRACTION, own_term_aggregates, robust_score_terms
+from loss_weights import PERCUSSION_GATE_PROXIES, cap_presence, presence_plan
 from metrics import (
     MONO_MODES,
     channel_correlation,
@@ -391,6 +393,7 @@ from metrics import (
 from objective import loaded_digest
 from optimizers import cma_es, optimize
 from patterns import DRUM_GATE_HELP, build_pattern, pattern_length
+from profile_gate import RATCHETED_BOUND_KEYS
 from render_model import render_model
 from render_oracle import (
     add_oracle_args,
@@ -735,6 +738,9 @@ class Evaluator:
     cached number no longer reflects.
     """
 
+    #: Whether this evaluator caps presence at its own start; a joint fit's members do not.
+    owns_presence = True
+
     def __init__(
         self,
         knobs,
@@ -910,6 +916,7 @@ class Evaluator:
             "percussive": self.percussive,
             "flat": bool(getattr(self.args, "flat_partial_weighting", False)),
             "loss_tail_fraction": getattr(self.args, "loss_tail_fraction", DEFAULT_TAIL_FRACTION),
+            "term_tails": sorted((getattr(self.args, "term_tails", None) or {}).items()),
             "want_audio": self.want_audio,
             "groups": sorted((k, sorted(v)) for k, v in self.groups.items()),
             "knobs": [k.label for k in self.knobs],
@@ -1063,6 +1070,7 @@ class Evaluator:
             groups=self.groups,
             audibility=not getattr(self.args, "flat_partial_weighting", False),
             tail_fraction=getattr(self.args, "loss_tail_fraction", DEFAULT_TAIL_FRACTION),
+            term_tails=getattr(self.args, "term_tails", None),
         )
         if terms is not None:
             worst, pairs = sustain_excess_db_s(model_rows, self.oracle)
@@ -1240,6 +1248,9 @@ class Evaluator:
             # Anchor counts even for --raw-loss; anchor() leaves scales untouched.
             self.baseline_terms = dict(terms)
             self.loss.anchor(terms)
+            if self.owns_presence:
+                # Before calibration, so the start scores 1.0 under the capped weights.
+                fix_presence(self.args, [self])
             if self.normalize and self.loss.scales is None:
                 self.loss.calibrate(terms)
         # The fences anchor here too, and OUTSIDE the branch above: they are
@@ -1490,6 +1501,7 @@ def holdout_scorer(args, build_dir, knobs, room_ir, reach=None):
             groups=dict(getattr(corpus, "groups", None) or {}),
             audibility=not getattr(args, "flat_partial_weighting", False),
             tail_fraction=getattr(args, "loss_tail_fraction", DEFAULT_TAIL_FRACTION),
+            term_tails=getattr(args, "term_tails", None),
         )
         if weights.scales is None and terms is not None:
             weights.calibrate(terms)
@@ -1809,6 +1821,7 @@ class JointEvaluator:
         for member in members:
             member.written = self.written
             member.quiet = True
+            member.owns_presence = False
         self.quiet = False
         self.stage = "fit"
         self.trajectory: list[tuple[float, float, str]] = []
@@ -1916,11 +1929,13 @@ class JointEvaluator:
     def __call__(self, values: list[float]) -> float:
         for member in self.members:
             member(values)
+        fix_presence(self.args, self.members)
         return self._record(values)
 
     def evaluate_batch(self, batch: list[list[float]]) -> list[float]:
         for member in self.members:
             member.evaluate_batch(batch)
+        fix_presence(self.args, self.members)
         return [self._record(values) for values in batch]
 
     def _announce_start(self) -> None:
@@ -2703,33 +2718,36 @@ def gate_sources(args) -> tuple[dict | None, str]:
     return voice, ""
 
 
-def gated_dimensions(args) -> tuple[frozenset[str] | None, str]:
-    """The dimensions this run's capture gate holds a bound for, or (None, why not).
+def gated_statistics(args) -> tuple[dict[str, frozenset[str]] | None, str]:
+    """Each dimension this run's capture gate bounds, with the statistics it bounds, or (None, why).
 
-    The union of the bounds of every gate `gate_sources` names.
+    The union over every gate `gate_sources` names.
     """
     voice, why = gate_sources(args)
     if voice is None:
         return None, why
-    return (
-        frozenset(
-            d
-            for g in voice["gates"]
-            for d in json.loads(Path(g["gate"]).read_text()).get("bounds", {})
-        ),
-        "",
-    )
+    stats: dict[str, set[str]] = {}
+    for g in voice["gates"]:
+        for dim, bound in json.loads(Path(g["gate"]).read_text()).get("bounds", {}).items():
+            stats.setdefault(dim, set()).update(k for k in RATCHETED_BOUND_KEYS if k in bound)
+    return {d: frozenset(s) for d, s in stats.items()}, ""
 
 
-def apply_prefit(args) -> dict | None:
+def gated_dimensions(args) -> tuple[frozenset[str] | None, str]:
+    """The dimensions this run's capture gate holds a bound for, or (None, why not)."""
+    stats, why = gated_statistics(args)
+    return (None, why) if stats is None else (frozenset(stats), "")
+
+
+def apply_prefit(args, namespaces: list = ()) -> dict | None:
     """Raise the own term of a red or far gate dimension before the search, from the gate's stored readings.
 
     The readings are each bound's `provenance.measured` (what the last gate verification
     stored; none when it stored none). The rule and its lines are refit's: a red dimension,
     or one far from its reference, whose own term has no weight gets that term raised, an
     explicit weight of 0 on the command line wins, and a dimension whose term is already
-    weighted is named as such. A term this probe cannot measure is not raised.
-    Returns the record `--out` keeps under `prefit`, or None where no fit follows.
+    weighted is named as such. A term this probe cannot measure is not raised. A raise is set
+    on `args` and on every capture namespace in `namespaces`. Returns the record `--out` keeps under `prefit`, or None where no fit follows.
     """
     if any(getattr(args, flag, None) for flag in ("diagnose", "dump_knobs", "grid")):
         return None
@@ -2759,12 +2777,166 @@ def apply_prefit(args) -> dict | None:
         }
         prefit["raised_from_zero"] = sorted(prefit["prefit_weights"])
         prefit["raised_far"] = [t for t in prefit["raised_far"] if t in prefit["prefit_weights"]]
-    for term, weight in prefit["prefit_weights"].items():
-        setattr(args, f"w_{term}", weight)
+    # Every capture namespace too: a joint fit's are copied from `args` before this runs.
+    for ns in {id(ns): ns for ns in (args, *namespaces)}.values():
+        for term, weight in prefit["prefit_weights"].items():
+            setattr(ns, f"w_{term}", weight)
     prefit["readings"] = len(readings)
     for line in refit.prefit_lines(voice["slug"], prefit):
         print(line, file=sys.stderr)
     return prefit
+
+
+def presence_lines(plan: dict) -> list[str]:
+    """The start-up lines of a presence plan: weighted terms, unscorable dimensions, user zeros."""
+    terms = plan["terms"]
+    named = ", ".join(
+        f"{t}<-{'/'.join(e['dimensions'])}"
+        + (f" tail {e['tail_fraction']:g}" if e.get("tail_fraction") else "")
+        for t, e in terms.items()
+    )
+    lines = [
+        f"presence: {len(terms)} term(s) weighted for gated dimensions"
+        + (f" ({named})" if named else "")
+    ]
+    tailed = [
+        f"{t}<-{'/'.join(e['dimensions'])} tail {e['tail_fraction']:g}"
+        for t, e in plan["weighted"].items()
+        if t in plan.get("term_tails", {})
+    ]
+    if tailed:
+        lines.append(f"tails: weighted own term(s) tailed for a gated p90 ({', '.join(tailed)})")
+    if plan["unscorable"]:
+        lines.append(f"presence: unscorable: {', '.join(plan['unscorable'])}")
+    for t, dims in plan["user_zero"].items():
+        lines.append(f"presence: user zero: {t} ({', '.join(dims)})")
+    return lines
+
+
+def apply_presence(args, namespaces: list) -> dict | None:
+    """Weigh every gated dimension's own term, at `PRESENCE_WEIGHT` where the profile gives none.
+
+    The weights are set on `args` and every capture namespace in `namespaces`, so each reader of
+    `cli_weights` scores them; the start point caps them (`fix_presence`). Every own term of a
+    p90-bounded dimension, presence or already weighted, takes its upper tail (`term_tails`).
+    The plan is kept on `args.presence` for `--out`. None where no fit follows or no gate
+    resolves.
+    """
+    if any(getattr(args, flag, None) for flag in ("diagnose", "dump_knobs", "grid")):
+        return None
+    gated, why = gated_statistics(args)
+    if gated is None:
+        print(f"presence: skipped ({why})", file=sys.stderr)
+        return None
+    plan = presence_plan(args, gated, cli_weights(args))
+    pinned = dict(parse_overrides(getattr(args, "presence_weights", "") or ""))
+    if pinned:
+        if set(pinned) != set(plan["terms"]):
+            raise ValueError(
+                f"--presence-weights names {sorted(pinned)}, but this run's gate and probe "
+                f"weigh {sorted(plan['terms'])} for presence"
+            )
+        for t, w in pinned.items():
+            plan["terms"][t]["weight"] = float(w)
+        plan["capped"] = plan["pinned"] = True
+    tails = own_term_aggregates(
+        {**plan["weighted"], **plan["terms"]},
+        getattr(args, "loss_tail_fraction", DEFAULT_TAIL_FRACTION),
+    )
+    given = {t: float(f) for t, f in parse_overrides(getattr(args, "term_tails_given", "") or "")}
+    if given:
+        if set(given) != set(tails):
+            raise ValueError(
+                f"--term-tails names {sorted(given)}, but this run's gate and probe "
+                f"tail {sorted(tails)}"
+            )
+        tails = given
+    plan["term_tails"] = tails
+    for ns in {id(ns): ns for ns in (args, *namespaces)}.values():
+        for t, entry in plan["terms"].items():
+            setattr(ns, f"w_{t}", entry["weight"])
+        ns.term_tails = dict(tails)
+    args.presence = plan
+    for line in presence_lines(plan):
+        print(line, file=sys.stderr)
+    return plan
+
+
+def fix_presence(args, members: list) -> None:
+    """Cap `args.presence` against the members' start terms and set the capped weights.
+
+    Runs once, after every member has scored the start point and before any other point is
+    scored, so the objective stays one fixed function through the search. A member still on the
+    CLI weights (stage `fit`) is re-weighted and re-calibrated on its start.
+    """
+    plan = getattr(args, "presence", None)
+    if not plan or plan["capped"] or any(m.baseline_terms is None for m in members):
+        return
+    plan["capped"] = True
+    if not plan["terms"]:
+        return
+    starts = []
+    for m in members:
+        loss = LossWeights(cli_weights(m.args))
+        loss.anchor(m.baseline_terms)
+        starts.append((loss, m.baseline_terms))
+    presence = {t: e["weight"] for t, e in plan["terms"].items()}
+    capped = cap_presence(starts, presence, fixed_units=members[0].normalize)
+    for t, got in capped.items():
+        plan["terms"][t].update(got)
+    for ns in {id(ns): ns for ns in (args, *(m.args for m in members))}.values():
+        for t, got in capped.items():
+            setattr(ns, f"w_{t}", got["weight"])
+    for m in members:
+        if m.stage == "fit":
+            m.loss = LossWeights(cli_weights(m.args))
+            m.loss.anchor(m.baseline_terms)
+            if m.normalize:
+                m.loss.calibrate(m.baseline_terms)
+    binding = [
+        f"{t} {g['capped_from']:g}->{g['weight']:g} ({g['cap']})"
+        for t, g in capped.items()
+        if "cap" in g
+    ]
+    if binding:
+        print(f"presence: capped at the start point: {', '.join(binding)}", file=sys.stderr)
+
+
+#: What `--out` keeps of each presence term.
+_PRESENCE_FIELDS = (
+    "dimensions",
+    "weight",
+    "capped_from",
+    "cap",
+    "statistics",
+    "aggregate",
+    "tail_fraction",
+    "covers",
+)
+
+
+def _fold_presence(out_path: str, args) -> None:
+    """Record the presence plan in an --out record's `fit_profile`."""
+    plan = getattr(args, "presence", None)
+    if not plan or not out_path or not Path(out_path).exists():
+        return
+    path = Path(out_path)
+    record = json.loads(path.read_text())
+    profile = record.setdefault("fit_profile", {})
+    profile["presence"] = {
+        t: {k: v for k, v in e.items() if k in _PRESENCE_FIELDS} for t, e in plan["terms"].items()
+    }
+    profile["tails"] = {
+        t: {k: v for k, v in e.items() if k in _PRESENCE_FIELDS}
+        for t, e in plan["weighted"].items()
+    }
+    profile["term_tails"] = dict(plan["term_tails"])
+    profile["unscorable"] = list(plan["unscorable"])
+    if plan["user_zero"]:
+        profile["presence_user_zero"] = plan["user_zero"]
+    if not plan["capped"]:
+        profile["presence_capped"] = False
+    path.write_text(json.dumps(_json_safe(record), indent=2, allow_nan=False) + "\n")
 
 
 def _fold_gate_audit(args, build_dir, compare=gate_audit.compare_voice) -> None:
@@ -2813,7 +2985,8 @@ def _fold_gate_audit(args, build_dir, compare=gate_audit.compare_voice) -> None:
     weights = (record.get("fit_profile") or {}).get("weights") or {}
     if "drum_note" in voice:
         table, own = refit.PERCUSSION_GATE_TERMS, refit.PERCUSSION_GATE_OWN_TERMS
-        weighing = gate_audit.weighting(weights, table, own, classified=set(own))
+        classified = set(own) | PERCUSSION_GATE_PROXIES
+        weighing = gate_audit.weighting(weights, table, own, classified=classified)
     else:
         weighing = gate_audit.weighting(weights, refit.GATE_TERMS, refit.GATE_OWN_TERMS)
     post_body = json.loads(post.read_text())
@@ -3007,7 +3180,8 @@ def run(args, argv: list[str] | None = None) -> int:
         if joint
         else check_validation_partition(args)
     )
-    prefit = apply_prefit(args)
+    prefit = apply_prefit(args, capture_args)
+    apply_presence(args, capture_args)
     weights = cli_weights(args)
     if not weights and not getattr(args, "dump_knobs", False):
         raise ValueError(
@@ -3515,6 +3689,7 @@ def run(args, argv: list[str] | None = None) -> int:
     _fold_assessment(args.out, args)
     _fold_held_velocity_axis(args.out, args)
     _fold_level_unscored(args.out, args)
+    _fold_presence(args.out, args)
     return 0
 
 
@@ -3988,6 +4163,21 @@ def build_parser() -> argparse.ArgumentParser:
         help="engine constants held fixed under every evaluation (an override string or "
         "@file); a key the search also moves is refused, and the fit is recorded as "
         "answered under this base",
+    )
+    parser.add_argument(
+        "--presence-weights",
+        default="",
+        metavar="T=W,...",
+        help="the presence weights a fit recorded, used as given instead of capped at this "
+        "run's start: a re-score of that fit at a moved start keeps its objective",
+    )
+    parser.add_argument(
+        "--term-tails",
+        dest="term_tails_given",
+        default="",
+        metavar="T=F,...",
+        help="the own-term tail fractions a fit recorded, used as given: a re-score of that "
+        "fit reproduces its objective; a term set the run would not tail is refused",
     )
     parser.add_argument(
         "--hold",

@@ -92,7 +92,8 @@ def compare_voice(
 ) -> None:
     """One voice's gate readings over every gate its patch reaches, keyed by capture.
 
-    `baseline` is recorded beside the readings, so a pinned pre says what it pinned.
+    `baseline` is recorded beside the readings, so a pinned pre says what it pinned, and
+    `note_rows` the per-row deltas a compare recorded, by capture.
     """
     if "gates" not in voice:
         compare(voice, out, lib, overrides, base_overrides=base_overrides)
@@ -103,10 +104,13 @@ def compare_voice(
             body["motion_states"] = {voice["capture"]: body["motion"]["states"]}
         if body.get("velocity_law"):
             body["velocity_laws"] = {voice["capture"]: body["velocity_law"]}
+        if "rows" in body:
+            body["note_rows"] = {voice["capture"]: body.pop("rows")}
     else:
         readings = []
         motion_states = {}
         velocity_laws = {}
+        note_rows = {}
         for g in voice["gates"]:
             part = out.with_name(f"{out.stem}.{g['capture']}.json")
             if not part.exists():
@@ -118,11 +122,15 @@ def compare_voice(
                 motion_states[g["capture"]] = record["motion"]["states"]
             if record.get("velocity_law"):
                 velocity_laws[g["capture"]] = record["velocity_law"]
+            if "rows" in record:
+                note_rows[g["capture"]] = record["rows"]
         body = {"gate": {"readings": readings}}
         if motion_states:
             body["motion_states"] = motion_states
         if velocity_laws:
             body["velocity_laws"] = velocity_laws
+        if note_rows:
+            body["note_rows"] = note_rows
     if baseline is not None:
         body["baseline"] = baseline
     out.write_text(json.dumps(body, indent=2) + "\n")

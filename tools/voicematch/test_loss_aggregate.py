@@ -136,3 +136,64 @@ def test_one_silent_row_cannot_make_the_whole_grid_unscorable():
     assert robust is not None
     assert robust["cents_mean"] == pytest.approx(ordinary["cents"])
     assert robust["cents"] >= ordinary["cents"]
+
+
+def _velocity_rows(pitches=20):
+    from loss_dimensions import ATTACK_BANDS_HZ
+
+    rows = []
+    for i in range(pitches):
+        for velocity in (40, 110):
+            row = _pitched_rows(1)[0]
+            row.update(
+                note=48 + i,
+                velocity=velocity,
+                peak_dbfs=-20.0 + (velocity - 40) / 10.0,
+                attack_hf_db=[-30.0 + (velocity - 40) / 5.0] * len(ATTACK_BANDS_HZ) * 6,
+            )
+            rows.append(row)
+    return rows
+
+
+def test_two_outlier_notes_in_twenty_move_a_presence_tail_term():
+    from loss_aggregate import PRESENCE_TAIL_FRACTION
+
+    oracle = _velocity_rows()
+    model = copy.deepcopy(oracle)
+    for row in model:
+        if row["note"] in (50, 60):
+            row["held_crest_db"] += 6.0
+            if row["velocity"] == 110:
+                row["attack_hf_db"] = [v + 8.0 for v in row["attack_hf_db"]]
+                row["peak_dbfs"] += 4.0
+    tails = {t: PRESENCE_TAIL_FRACTION for t in ("crest", "hfdyn", "velspan")}
+    mean = robust_score_terms(model, oracle, tail_fraction=0.0)
+    tail = robust_score_terms(model, oracle, tail_fraction=0.0, term_tails=tails)
+    # Two of twenty pitches: a tenth of the mean's reading, the whole of the tail's.
+    assert mean["crest"] == pytest.approx(tail["crest_mean"]) == pytest.approx(0.6)
+    assert tail["crest"] == pytest.approx(6.0) and tail["crest_tail_fraction"] == 0.1
+    assert tail["velspan"] == pytest.approx(10.0 * mean["velspan"]) == pytest.approx(4.0)
+    assert tail["hfdyn"] == pytest.approx(10.0 * mean["hfdyn"])
+    assert tail["hfdyn_groups"] == 20 and tail["hfdyn_worst_note"] in (50, 60)
+    # A term no tail names keeps its reduction.
+    assert tail["cents"] == mean["cents"] and "dyn_upper_tail" not in tail
+
+
+def test_a_presence_tail_is_taken_only_where_the_gate_bounds_a_p90():
+    from loss_aggregate import own_term_aggregates
+
+    terms = {
+        "body": {"statistics": ["abs_median", "median", "p90"]},
+        "hfdyn": {"statistics": ["median", "p90"]},
+        "velspan": {"statistics": ["abs_median"]},
+        "modedyn": {"statistics": ["p90"]},
+    }
+    own = own_term_aggregates(terms, 0.25)
+    assert own == {"body": 0.1, "hfdyn": 0.1}
+    assert terms["body"]["covers"] == ["abs_median", "median", "p90"]
+    assert terms["hfdyn"]["aggregate"] == "tail" and terms["hfdyn"]["covers"] == ["median", "p90"]
+    assert terms["velspan"]["aggregate"] == "mean" and terms["velspan"]["covers"] == ["abs_median"]
+    # A grid term with no per-pitch reduction cannot take the tail, and says its p90 is unseen.
+    assert terms["modedyn"]["aggregate"] == "mean" and terms["modedyn"]["covers"] == []
+    # A run-wide tail narrower than a tenth is kept.
+    assert own_term_aggregates({"body": {"statistics": ["p90"]}}, 0.05) == {"body": 0.05}

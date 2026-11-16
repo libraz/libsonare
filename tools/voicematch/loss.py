@@ -418,9 +418,9 @@ def skeleton_note(mono: np.ndarray, sr: int, note, n_harm: int = HARM_REACH) -> 
 
 
 # The spectral centroid carries no default weight on a pitched voice: breath and
-# bow noise move it note by note. It is scored per note as the gate's own ratio,
-# so a fit that asks for it (`--w-bright`) can see a string slipping into a higher
-# regime, which the audibility-weighted `harm` prices cheaply in the bass.
+# bow noise move it note by note. It is scored per note as a centroid ratio over the
+# sustain window (not the gate's ruler), so `--w-bright` can see a string slipping
+# into a higher regime, which the audibility-weighted `harm` prices cheaply in the bass.
 
 
 def oracle_tnr_masks(oracle_rows: list[dict]) -> list[dict] | None:
@@ -719,7 +719,9 @@ def loss_terms(
         decay (the time-averaged harmonic term conflates them). Per-bin deltas
         are capped (12 dB / 30 dB/s) so single-sample oracle quirks cannot
         dominate the objective.
-      - `bright`: the gate's centroid ratio, |100 (model / oracle - 1)| per note.
+      - `bright`: a centroid ratio, |100 (model / oracle - 1)| per note, read off the
+        line-masked sustain window with |X| weighting below 12 kHz; the gate's
+        `centroid_pct` reads 0.12-1.62 s after onset, full band, with |X|^2.
       - `arrival`: the gate's arrival time, |model - oracle| ms per note.
       - `body`: the gate's energy under the fundamental, |model - oracle| dB per note.
 
