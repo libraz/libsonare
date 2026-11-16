@@ -27,6 +27,7 @@ from knobs import (
     clamp_warning,
     declared_ranges,
     hand_spec_warnings,
+    is_velocity_axis,
     load_declared_bounds,
     load_knob_classes,
     pinned_lines,
@@ -883,3 +884,54 @@ def test_an_auto_knob_shipped_outside_its_range_states_the_clamped_start():
     cat = _catalogue({"p0.vibrato": 3.0}, {"vibrato": (0.0, 1.0)})
     (entry,) = auto_spec_report(0, cat)[0]
     assert entry["start"] == entry["max"]
+
+
+# --- velocity-axis fields on a probe with one velocity per pitch ------------------
+
+_VEL_CAT = _catalogue(
+    {"p0.velocity_exponent": 1.0, "p0.mallet_vel_exp": 0.5, "p0.brightness": 0.5},
+    {"velocity_exponent": (0.1, 4.0), "mallet_vel_exp": (0.0, 2.0), "brightness": (0.0, 1.0)},
+)
+
+
+def test_the_velocity_axis_predicate_reads_whole_name_tokens():
+    for name in (
+        "velocity_exponent",
+        "mallet_vel_exp",
+        "pluck_vel_exp",
+        "vel_to_brightness",
+        "onset_breath_overshoot_vel_db",
+        "peak_velocity",
+        "p0.percussion.velocity_exponent",
+    ):
+        assert is_velocity_axis(name), name
+    for name in ("velvet", "level", "p0.level_db", "evel", "velocities", "p0.velvet.gain"):
+        assert not is_velocity_axis(name), name
+    assert not is_velocity_axis("velocity.gain")
+
+
+def test_a_one_velocity_probe_leaves_velocity_axis_knobs_out_and_records_them():
+    spec, report = auto_spec_report(0, _VEL_CAT, velocity_spread=False)
+    assert set(_offered(spec)) == {"p0.brightness"}
+    assert sorted(report.velocity_held) == ["p0.mallet_vel_exp", "p0.velocity_exponent"]
+    assert any(
+        "2 velocity-axis knob(s) held: the probe sounds one velocity per pitch" in line
+        for line in report.lines()
+    )
+
+
+def test_a_probe_with_a_velocity_spread_keeps_velocity_axis_knobs():
+    spec, report = auto_spec_report(0, _VEL_CAT, velocity_spread=True)
+    assert {"p0.velocity_exponent", "p0.mallet_vel_exp"} <= set(_offered(spec))
+    assert report.velocity_held == []
+    assert not any("velocity-axis" in line for line in report.lines())
+
+
+def test_a_hand_spec_naming_a_velocity_axis_knob_keeps_it_and_warns():
+    knobs = [_knob("p0.velocity_exponent"), _knob("p0.brightness")]
+    lines = hand_spec_warnings(knobs, _classes(), velocity_spread=False)
+    assert len(lines) == 1
+    assert (
+        "p0.velocity_exponent" in lines[0] and "searched here because the spec names it" in lines[0]
+    )
+    assert hand_spec_warnings(knobs, _classes(), velocity_spread=True) == []

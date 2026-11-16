@@ -679,6 +679,15 @@ class KnobClass:
         return abs(value - self.off_value) <= self.off_within
 
 
+#: A velocity-axis field: its name has a `vel` or `velocity` token between `_` or the ends.
+VELOCITY_AXIS_FIELD = re.compile(r"(^|_)vel(ocity)?(_|$)")
+
+
+def is_velocity_axis(key: str) -> bool:
+    """Whether the last dotted segment of a catalogue @p key names a velocity-axis field."""
+    return VELOCITY_AXIS_FIELD.search(key.rsplit(".", 1)[-1]) is not None
+
+
 @dataclass(frozen=True)
 class KnobReach:
     """One `reach` entry: the gated dimensions a field needs before `--spec auto` opens it.
@@ -1154,6 +1163,8 @@ class AutoReport:
     compensating groups no knob was offered for, by the number of members present;
     `unjudged` the knobs left out because a dimension they need is not gated, by that
     dimension, and `no_gate` that no gate was found, so none was taken as gated.
+    `velocity_held` the velocity-axis knobs left out because the probe sounds one
+    velocity per pitch.
     """
 
     excluded: dict[str, list[str]] = field(default_factory=dict)
@@ -1163,6 +1174,7 @@ class AutoReport:
     groups_open: list[str] = field(default_factory=list)
     unjudged: dict[str, list[str]] = field(default_factory=dict)
     no_gate: bool = False
+    velocity_held: list[str] = field(default_factory=list)
     #: Engine constants left out because the fit scores k of the engine's n voices.
     shared: list[str] = field(default_factory=list)
     shared_cover: tuple[int, int] = (0, 0)
@@ -1175,6 +1187,11 @@ class AutoReport:
             out.append(
                 f"--spec auto leaves out {sum(len(k) for k in self.unjudged.values())} "
                 f"knob(s), no gated dimension can judge them (missing dimension): {counts}"
+            )
+        if self.velocity_held:
+            out.append(
+                f"{len(self.velocity_held)} velocity-axis knob(s) held: "
+                f"the probe sounds one velocity per pitch"
             )
         if self.no_gate:
             out.append("no gate found for this voice: no dimension is taken as gated")
@@ -1242,6 +1259,7 @@ def auto_spec(
     gated: Collection[str] | None = None,
     covered: Collection[str] | None = None,
     probe: bool = False,
+    velocity_spread: bool = True,
 ) -> list[dict]:
     """The knob list of `auto_spec_report`, without the account of what it left out."""
     return auto_spec_report(
@@ -1255,6 +1273,7 @@ def auto_spec(
         gated=gated,
         covered=covered,
         probe=probe,
+        velocity_spread=velocity_spread,
     )[0]
 
 
@@ -1270,6 +1289,7 @@ def auto_spec_report(
     gated: Collection[str] | None = None,
     covered: Collection[str] | None = None,
     probe: bool = False,
+    velocity_spread: bool = True,
 ) -> tuple[list[dict], AutoReport]:
     """Build a knob spec for `program` from the library's own catalogue.
 
@@ -1311,6 +1331,10 @@ def auto_spec_report(
     engine the fit does not fully cover are left out and counted in the report, where a
     hand spec naming one is refused (`refuse_absent_knobs`). A probe writes nothing back
     and is offered them; `None` skips the check.
+
+    `velocity_spread` is whether the probe sounds any pitch at two velocities. Without
+    it nothing scores a velocity-axis field (`is_velocity_axis`), so it is left out and
+    stays at its start.
     """
     defaults = catalogue.defaults
     if drum_note is not None:
@@ -1410,6 +1434,9 @@ def auto_spec_report(
             and entry.group not in open_groups
         ):
             continue
+        if not velocity_spread and is_velocity_axis(k):
+            report.velocity_held.append(k)
+            continue
         if classes is not None:
             missing = classes.unjudged_by(k, gated)
             if missing:
@@ -1451,12 +1478,14 @@ def hand_spec_warnings(
     knobs: list[Knob],
     classes: KnobClasses | None,
     gated: Collection[str] | None = None,
+    velocity_spread: bool = True,
 ) -> list[str]:
     """One line per runtime knob a hand spec names that `--spec auto` would never offer.
 
     The spec is explicit, so the knob stays; the line says the table holds it
     out of a search and why. A knob needing a dimension that is not in @p gated
-    (None: no gate found) is named too, with the dimension.
+    (None: no gate found) is named too, with the dimension. Without
+    @p velocity_spread a velocity-axis knob is named as well.
     """
     if classes is None:
         return []
@@ -1464,6 +1493,11 @@ def hand_spec_warnings(
     for k in knobs:
         if k.tunable is None:
             continue
+        if not velocity_spread and is_velocity_axis(k.tunable):
+            out.append(
+                f"{k.label}: a velocity-axis knob, nothing scores it when the probe sounds "
+                f"one velocity per pitch; searched here because the spec names it"
+            )
         missing = classes.unjudged_by(k.tunable, gated or ())
         if missing:
             reach = classes.reach_for(k.tunable)

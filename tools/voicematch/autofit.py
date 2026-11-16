@@ -2461,6 +2461,17 @@ def _fold_tree_provenance(
     path.write_text(json.dumps(_json_safe(record), indent=2, allow_nan=False) + "\n")
 
 
+def _fold_held_velocity_axis(out_path: str, args) -> None:
+    """Add the velocity-axis knobs `--spec auto` held at their start to an --out record."""
+    held = getattr(args, "held_velocity_axis", None)
+    if not held or not out_path or not Path(out_path).exists():
+        return
+    path = Path(out_path)
+    record = json.loads(path.read_text())
+    record["held_velocity_axis"] = held
+    path.write_text(json.dumps(_json_safe(record), indent=2, allow_nan=False) + "\n")
+
+
 def _fold_assessment(out_path: str, args) -> None:
     """Add the reference assessment to an --out record, where one applied.
 
@@ -3065,8 +3076,11 @@ def run(args, argv: list[str] | None = None) -> int:
                 gated=gated,
                 covered={p for p in (_voiced_patch(ns, catalogue) for ns in capture_args) if p},
                 probe=bool(args.dry_run),
+                velocity_spread=args.has_velocity_spread,
             )
             print(f"# fit_knobs\t{len(taken)}\tof {len(rows)} rows, what --spec auto takes")
+            for held in dump_report.velocity_held:
+                print(f"# held\t{held}")
             for line in dump_report.reach_lines():
                 print(f"# {line}")
             if no_gate:
@@ -3094,7 +3108,9 @@ def run(args, argv: list[str] | None = None) -> int:
             gated=gated,
             covered={p for p in (_voiced_patch(ns, catalogue) for ns in capture_args) if p},
             probe=_writes_nothing(args),
+            velocity_spread=args.has_velocity_spread,
         )
+        args.held_velocity_axis = list(auto_report.velocity_held)
         subject = (
             f"drum note {args.drum_note}"
             if args.drum_note is not None
@@ -3160,7 +3176,9 @@ def run(args, argv: list[str] | None = None) -> int:
             print(line, file=sys.stderr)
     if not auto and classes is not None:
         gated, _ = gated_dimensions(args)
-        for line in hand_spec_warnings(knobs, classes, gated):
+        for line in hand_spec_warnings(
+            knobs, classes, gated, velocity_spread=args.has_velocity_spread
+        ):
             print(f"warning: {line}", file=sys.stderr)
 
     # Before the base check, so a key in both reads as that and not as a knob clash.
@@ -3351,6 +3369,7 @@ def run(args, argv: list[str] | None = None) -> int:
             finally:
                 restore(pristine, evaluator.written)
             _fold_tree_provenance(args.out, head_sha, dirty_src, library)
+            _fold_held_velocity_axis(args.out, args)
             _fold_gate_audit(args, build_dir)
             return 0
         if args.grid:
@@ -3465,6 +3484,7 @@ def run(args, argv: list[str] | None = None) -> int:
     _fold_write_back_verdict(args.out, evaluator, layers)
     _fold_gate_audit(args, build_dir)
     _fold_assessment(args.out, args)
+    _fold_held_velocity_axis(args.out, args)
     return 0
 
 
