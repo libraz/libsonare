@@ -53,20 +53,20 @@ constexpr void configure_sfx_programs(ProgramOverrides& o) noexcept {
   o.sfx_seashore.amp_env = fallback_env(1000.0f, 1600.0f, 0.35f, 900.0f);
   o.sfx_seashore.filter_output = SynthFilterOutput::kHighpass;
   o.sfx_seashore.cutoff_hz = 802.472f;
-  o.sfx_seashore.resonance_q = 12.706f;
+  o.sfx_seashore.resonance_q = 23.2217f;
   o.sfx_seashore.filter_env = fallback_env(500.0f, 1300.0f, 0.15f, 700.0f);
-  o.sfx_seashore.env_to_cutoff_cents = 596.857f;
+  o.sfx_seashore.env_to_cutoff_cents = 674.789f;
   o.sfx_seashore.stereo_spread = 0.261447f;
   o.sfx_seashore.gain = 0.5367f;
-  o.sfx_seashore.amp_env.attack_ms = 845.17f;
+  o.sfx_seashore.amp_env.attack_ms = 3196.61f;
   o.sfx_seashore.amp_env.release_ms = 3404.28f;
-  o.sfx_seashore.amp_env.sustain = 0.376861f;
+  o.sfx_seashore.amp_env.sustain = 0.164351f;
   o.sfx_seashore.filter_env.attack_ms = 866.014f;
-  o.sfx_seashore.filter_env.decay_ms = 59.0997f;
-  o.sfx_seashore.filter_env.release_ms = 14443.3f;
-  o.sfx_seashore.filter_env.sustain = 0.320674f;
+  o.sfx_seashore.filter_env.decay_ms = 58.0334f;
+  o.sfx_seashore.filter_env.release_ms = 6749.45f;
+  o.sfx_seashore.filter_env.sustain = 0.38338f;
   o.sfx_seashore.unison = 2;
-  o.sfx_seashore.amp_env.decay_ms = 4795.44f;
+  o.sfx_seashore.amp_env.decay_ms = 863.861f;
   o.sfx_seashore.va.velocity_exponent = 1.01f;
 
   // Bird Tweet (GM 123): AmpEnv -> PitchCents sweeps the triangle upward as the call opens.

@@ -2940,8 +2940,8 @@
       "outcome": "adopted"
     },
     "sfx_seashore": {
-      "objective": "3bc465ccbf9a2d13",
-      "date": "2026-11-15",
+      "objective": "f7cf0771ee4e0abc",
+      "date": "2026-11-16",
       "capture": "seashore_module",
       "timbre": "t0",
       "corpora": [
@@ -2951,12 +2951,16 @@
         }
       ],
       "outcome": "adopted",
+      "in_sample": true,
       "weights": {
         "bright": 1.0,
         "crest": 1.0,
-        "env": 1.0,
-        "mss": 1.0
-      }
+        "env": 1.0
+      },
+      "scored_without": [
+        "mss"
+      ],
+      "confirmed_under": "f7cf0771ee4e0abc"
     },
     "sfx_telephone_ring": {
       "objective": "3bc465ccbf9a2d13",
