@@ -841,7 +841,7 @@ def load_knob_classes(path: Path, catalogue: Catalogue, *, strict: bool = False)
                 f"{path}: entry {key!r} must carry 'value' exactly when its class is pinned"
             )
         if cls == "pinned":
-            head, _, tail = key.partition(".")
+            _, _, tail = key.partition(".")
             if not tail or "*" in key:
                 raise ValueError(
                     f"{path}: pinned entry {key!r} must name one patch field as '<patch>.<field>'"

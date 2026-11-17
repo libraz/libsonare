@@ -114,7 +114,7 @@ def test_body_is_excluded_only_where_it_sits_on_the_loop_lines():
 
 def test_a_dimension_read_before_the_join_is_not_excluded():
     late = {**LOOPED, "join_s": 1.4}
-    excluded, snapshot = exclusions(late)
+    excluded, _snapshot = exclusions(late)
     assert "onset_settle" not in excluded and "decay" in excluded
     assert "tnr" in excluded  # its window runs to 1.62 s
     assert exclusions({**LOOPED, "join_s": 1.7})[0].get("tnr") is None
