@@ -135,7 +135,6 @@ OPERATIONS = (
     "phase_vocoder",
     "pitch_correct_timevarying",
     "pitch_correct_to_midi",
-    "pitch_correct_to_midi_timevarying",
     "pitch_pyin",
     "pitch_shift",
     "pitch_yin",

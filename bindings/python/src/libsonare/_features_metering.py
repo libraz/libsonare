@@ -1048,14 +1048,14 @@ def metering_dynamic_range(
 
 
 def _scale_scalar(
-    name: str, root: int, mode_mask: int, reference_midi: float, midi: float
+    name: str, root: int, mode_mask: int, scale_reference_midi: float, midi: float
 ) -> float:
     lib = _get_lib()
     out = ctypes.c_float(0.0)
     rc = getattr(lib, name)(
         _to_c_int(root, "root"),
         _to_c_uint16(mode_mask, "mode_mask"),
-        _to_c_float(reference_midi, "reference_midi"),
+        _to_c_float(scale_reference_midi, "scale_reference_midi"),
         _to_c_float(midi, "midi"),
         ctypes.byref(out),
     )
@@ -1087,29 +1087,42 @@ def scale_mask_for_mode(root: int, mode: KeyMode) -> int:
     return int(out.value)
 
 
+def _scale_reference(fn_name: str, value: float | None) -> float:
+    """Map an absent reference onto the core's 0 (A4); an explicit 0 is refused."""
+    if value is None:
+        return 0.0
+    reference = _validate_scalar(fn_name, value, "scale_reference_midi")
+    if reference == 0.0:
+        raise SonareValueError(
+            f"{fn_name}: scale_reference_midi must not be 0 (use None for the A4 default)"
+        )
+    return reference
+
+
 def scale_quantize_midi(
-    root: int, mode_mask: int, midi: float, reference_midi: float = 0.0
+    root: int, mode_mask: int, midi: float, scale_reference_midi: float | None = None
 ) -> float:
     """Snap a (possibly fractional) MIDI number to the nearest enabled pitch class.
 
     ``mode_mask`` is a 12-bit mask; bit ``i`` enables the ``i``-th pitch class
     relative to ``root``. For natural C major use ``0b101010110101``.
-    ``reference_midi`` selects the anchor (default A4 = 69).
+    ``scale_reference_midi`` anchors the grid; ``None`` is A4 = 69.
     """
     midi = _validate_scalar("scale_quantize_midi", midi, "midi")
-    reference_midi = _validate_scalar("scale_quantize_midi", reference_midi, "reference_midi")
-    return _scale_scalar("sonare_scale_quantize_midi", root, mode_mask, reference_midi, midi)
+    reference = _scale_reference("scale_quantize_midi", scale_reference_midi)
+    return _scale_scalar("sonare_scale_quantize_midi", root, mode_mask, reference, midi)
 
 
 def scale_correction_semitones(
-    root: int, mode_mask: int, midi: float, reference_midi: float = 0.0
+    root: int, mode_mask: int, midi: float, scale_reference_midi: float | None = None
 ) -> float:
-    """Return the correction (quantized - input) in semitones."""
+    """Return the correction (quantized - input) in semitones.
+
+    ``scale_reference_midi`` as in :func:`scale_quantize_midi`.
+    """
     midi = _validate_scalar("scale_correction_semitones", midi, "midi")
-    reference_midi = _validate_scalar(
-        "scale_correction_semitones", reference_midi, "reference_midi"
-    )
-    return _scale_scalar("sonare_scale_correction_semitones", root, mode_mask, reference_midi, midi)
+    reference = _scale_reference("scale_correction_semitones", scale_reference_midi)
+    return _scale_scalar("sonare_scale_correction_semitones", root, mode_mask, reference, midi)
 
 
 def scale_pitch_class_enabled(root: int, mode_mask: int, pitch_class: int) -> bool:

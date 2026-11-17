@@ -71,7 +71,7 @@ class NoteEdit:
         gain_db: Level change applied over the note's span.
         time_stretch_ratio: Duration ratio: ``>1`` lengthens the note, ``<1``
             shortens it, with pitch preserved. The opposite sense of
-            :func:`time_stretch`'s ``rate``, which is a speed.
+            :func:`time_stretch`'s ``speed_ratio``, which is a speed.
         muted: ``True`` silences the note's span; the other fields then do not
             apply.
         formant_shift_semitones: Moves the spectral envelope, on top of whatever

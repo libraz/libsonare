@@ -451,6 +451,8 @@ NormType: TypeAlias = Literal["max", "l1", "l2", "power"]
 
 TempogramMode: TypeAlias = Literal["autocorrelation", "cosine"]
 
+PitchTargetMode: TypeAlias = Literal["midi", "scale"]
+
 KeyProfile: TypeAlias = Literal[
     "krumhanslSchmuckler",
     "temperley",

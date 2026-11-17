@@ -42,11 +42,13 @@ def test_transform_options_use_new_symbols(monkeypatch: pytest.MonkeyPatch) -> N
     monkeypatch.setattr(timepitch, "_call_float_transform", fake_transform)
 
     monkeypatch.setattr(timepitch, "_get_lib", lambda: stretch)
-    assert timepitch.time_stretch(_samples(), n_fft=1024, hop_length=256, sample_rate=22050) == [
-        0.0
-    ]
+    assert timepitch.time_stretch(
+        _samples(), speed_ratio=1.0, n_fft=1024, hop_length=256, sample_rate=22050
+    ) == [0.0]
     monkeypatch.setattr(timepitch, "_get_lib", lambda: shift)
-    assert timepitch.pitch_shift(_samples(), n_fft=1024, hop_length=256, sample_rate=22050) == [0.0]
+    assert timepitch.pitch_shift(
+        _samples(), pitch_semitones=0.0, n_fft=1024, hop_length=256, sample_rate=22050
+    ) == [0.0]
 
     assert calls[0][0] == "sonare_time_stretch_ex"
     assert [int(value.value) for value in calls[0][1][3:]] == [1024, 256]
@@ -70,15 +72,15 @@ def test_legacy_transform_defaults_fallback_but_custom_options_are_not_ignored(
     monkeypatch.setattr(timepitch, "_call_float_transform", fake_transform)
     monkeypatch.setattr(timepitch, "_get_lib", lambda: legacy)
 
-    timepitch.time_stretch(_samples(), sample_rate=22050)
-    timepitch.pitch_shift(_samples(), sample_rate=22050)
+    timepitch.time_stretch(_samples(), speed_ratio=1.0, sample_rate=22050)
+    timepitch.pitch_shift(_samples(), pitch_semitones=0.0, sample_rate=22050)
     assert calls == ["sonare_time_stretch", "sonare_pitch_shift"]
 
     with pytest.raises(SonareError, match="sonare_time_stretch_ex") as stretch_error:
-        timepitch.time_stretch(_samples(), n_fft=1024, sample_rate=22050)
+        timepitch.time_stretch(_samples(), speed_ratio=1.0, n_fft=1024, sample_rate=22050)
     assert stretch_error.value.code == ErrorCode.NOT_SUPPORTED
     with pytest.raises(SonareError, match="sonare_pitch_shift_ex") as shift_error:
-        timepitch.pitch_shift(_samples(), hop_length=256, sample_rate=22050)
+        timepitch.pitch_shift(_samples(), pitch_semitones=0.0, hop_length=256, sample_rate=22050)
     assert shift_error.value.code == ErrorCode.NOT_SUPPORTED
 
 
@@ -179,12 +181,14 @@ def test_invalid_options_are_rejected_before_library_lookup(
     # one left unpatched would still raise, from a path the guard never saw.
     monkeypatch.setattr(timepitch, "_get_lib", fail_lookup)
     with pytest.raises(ValueError, match="n_fft"):
-        timepitch.time_stretch(_samples(), n_fft=1001, sample_rate=22050)
+        timepitch.time_stretch(_samples(), speed_ratio=1.0, n_fft=1001, sample_rate=22050)
     with pytest.raises(ValueError, match="n_fft"):
-        timepitch.time_stretch(_samples(), n_fft=2**32, sample_rate=22050)
+        timepitch.time_stretch(_samples(), speed_ratio=1.0, n_fft=2**32, sample_rate=22050)
     # A two-point symmetric Hann synthesis window is all zeros.
     with pytest.raises(ValueError, match="n_fft must be an even signed 32-bit integer >= 4"):
-        timepitch.pitch_shift(_samples(), n_fft=2, hop_length=1, sample_rate=22050)
+        timepitch.pitch_shift(
+            _samples(), pitch_semitones=0.0, n_fft=2, hop_length=1, sample_rate=22050
+        )
 
     monkeypatch.setattr(separation, "_get_lib", fail_lookup)
     with pytest.raises(ValueError, match="n_fft must be an even signed 32-bit integer >= 4"):
@@ -224,10 +228,10 @@ def _has_extended_effects() -> bool:
 def test_extended_effects_work_with_fresh_library() -> None:
     samples = np.sin(np.linspace(0.0, 8.0 * np.pi, 4096, dtype=np.float32)) * 0.25
     stretched = timepitch.time_stretch(
-        samples, rate=1.1, n_fft=1024, hop_length=256, sample_rate=22050
+        samples, speed_ratio=1.1, n_fft=1024, hop_length=256, sample_rate=22050
     )
     shifted = timepitch.pitch_shift(
-        samples, semitones=2.0, n_fft=1024, hop_length=256, sample_rate=22050
+        samples, pitch_semitones=2.0, n_fft=1024, hop_length=256, sample_rate=22050
     )
     separated = separation.hpss(
         samples, n_fft=1024, hop_length=256, hard_mask=True, sample_rate=22050
@@ -258,13 +262,13 @@ def test_effects_reject_a_hop_below_the_half_window_overlap_contract() -> None:
             samples, n_fft=1024, hop_length=1024, sample_rate=22050
         ),
         lambda: timepitch.time_stretch(
-            samples, rate=1.2, n_fft=512, hop_length=2048, sample_rate=22050
+            samples, speed_ratio=1.2, n_fft=512, hop_length=2048, sample_rate=22050
         ),
         lambda: timepitch.pitch_shift(
-            samples, semitones=3.0, n_fft=1024, hop_length=1024, sample_rate=22050
+            samples, pitch_semitones=3.0, n_fft=1024, hop_length=1024, sample_rate=22050
         ),
         lambda: separation.phase_vocoder(
-            samples, rate=1.2, n_fft=1024, hop_length=1024, sample_rate=22050
+            samples, speed_ratio=1.2, n_fft=1024, hop_length=1024, sample_rate=22050
         ),
     ):
         with pytest.raises(SonareValueError) as error:
@@ -282,14 +286,16 @@ def test_effects_accept_an_even_n_fft_that_is_not_a_power_of_two() -> None:
     assert separated.length == len(samples)
     assert (
         len(
-            timepitch.time_stretch(samples, rate=1.2, n_fft=1500, hop_length=250, sample_rate=22050)
+            timepitch.time_stretch(
+                samples, speed_ratio=1.2, n_fft=1500, hop_length=250, sample_rate=22050
+            )
         )
         > 0
     )
     assert (
         len(
             timepitch.pitch_shift(
-                samples, semitones=3.0, n_fft=1500, hop_length=250, sample_rate=22050
+                samples, pitch_semitones=3.0, n_fft=1500, hop_length=250, sample_rate=22050
             )
         )
         > 0
@@ -297,7 +303,7 @@ def test_effects_accept_an_even_n_fft_that_is_not_a_power_of_two() -> None:
     assert (
         len(
             separation.phase_vocoder(
-                samples, rate=1.2, n_fft=1500, hop_length=250, sample_rate=22050
+                samples, speed_ratio=1.2, n_fft=1500, hop_length=250, sample_rate=22050
             )
         )
         > 0
@@ -323,7 +329,7 @@ def test_the_n_fft_verdict_matches_the_core_for_both_families() -> None:
     assert (
         len(
             separation.phase_vocoder(
-                samples, rate=1.2, n_fft=1500, hop_length=250, sample_rate=22050
+                samples, speed_ratio=1.2, n_fft=1500, hop_length=250, sample_rate=22050
             )
         )
         > 0

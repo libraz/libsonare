@@ -46,6 +46,7 @@ from ._types_enums import _GENRE_HINTS as _GENRE_HINTS
 from ._types_enums import _KEY_MODES as _KEY_MODES
 from ._types_enums import _KEY_PROFILES as _KEY_PROFILES
 from ._types_enums import _NORM_TYPES as _NORM_TYPES
+from ._types_enums import _PITCH_TARGET_MODES as _PITCH_TARGET_MODES
 from ._types_enums import _SECTION_TYPES as _SECTION_TYPES
 from ._types_enums import _TEMPOGRAM_MODES as _TEMPOGRAM_MODES
 from .types import *  # noqa: F403

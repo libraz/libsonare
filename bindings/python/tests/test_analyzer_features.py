@@ -227,16 +227,16 @@ def test_time_stretch() -> None:
     from libsonare import time_stretch
 
     tone = _generate_sine(440, 22050, 1.0)
-    fast = time_stretch(tone, sample_rate=22050, rate=2.0)
+    fast = time_stretch(tone, sample_rate=22050, speed_ratio=2.0)
     assert len(fast) < len(tone)
-    slow = time_stretch(tone, sample_rate=22050, rate=0.5)
+    slow = time_stretch(tone, sample_rate=22050, speed_ratio=0.5)
     assert len(slow) > len(tone)
 
     import libsonare
 
     for invalid in (float("nan"), float("inf"), 1.1754943508222875e-38):
         with pytest.raises(libsonare.SonareError):
-            time_stretch(tone[:4096], sample_rate=22050, rate=invalid)
+            time_stretch(tone[:4096], sample_rate=22050, speed_ratio=invalid)
     assert all(math.isfinite(value) for value in time_stretch(tone[:4096], 22050, 1.0))
 
 
@@ -246,10 +246,10 @@ def test_pitch_shift() -> None:
     from libsonare import pitch_shift
 
     tone = _generate_sine(440, 22050, 1.0)
-    result = pitch_shift(tone, sample_rate=22050, semitones=2.0)
+    result = pitch_shift(tone, sample_rate=22050, pitch_semitones=2.0)
     assert len(result) > 0
     with pytest.raises(libsonare.SonareError):
-        pitch_shift([0.0] * 4, sample_rate=48000, semitones=-120.0)
+        pitch_shift([0.0] * 4, sample_rate=48000, pitch_semitones=-120.0)
 
 
 def test_normalize() -> None:

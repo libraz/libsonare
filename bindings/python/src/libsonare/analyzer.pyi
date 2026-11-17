@@ -83,6 +83,7 @@ from .types import (
     PiptrackResult,
     PitchClass,
     PitchResult,
+    PitchTargetMode,
     ReassignedSpectrogramResult,
     RepairApplyResult,
     ReverbDetection,
@@ -667,7 +668,7 @@ def percussive(
 def time_stretch(
     samples: FloatSamples,
     sample_rate: int,
-    rate: float = 1.0,
+    speed_ratio: float,
     n_fft: int = 2048,
     hop_length: int = 512,
     *,
@@ -676,7 +677,7 @@ def time_stretch(
 def pitch_shift(
     samples: FloatSamples,
     sample_rate: int,
-    semitones: float = 0.0,
+    pitch_semitones: float,
     n_fft: int = 2048,
     hop_length: int = 512,
     *,
@@ -688,26 +689,17 @@ def pitch_correct_to_midi(
     current_midi: float = 69.0,
     target_midi: float = 69.0,
 ) -> list[float]: ...
-def pitch_correct_to_midi_timevarying(
-    samples: FloatSamples,
-    sample_rate: int,
-    f0_hz: FloatSamples,
-    target_midi: float,
-    hop_length: int = 512,
-    voiced: IntSamples | None = None,
-    voiced_prob: FloatSamples | None = None,
-) -> list[float]: ...
 def pitch_correct_timevarying(
     samples: FloatSamples,
     sample_rate: int,
     f0_hz: FloatSamples,
     hop_length: int = 512,
     *,
-    mode: str = "midi",
+    target_mode: PitchTargetMode = "midi",
     target_midi: float = 69.0,
     scale_root: int = 0,
     scale_mode_mask: int | KeyMode | None = None,
-    reference_midi: float | None = None,
+    scale_reference_midi: float | None = None,
     retune_amount: float | None = None,
     max_correction_semitones: float | None = None,
     retune_speed_ms: float | None = None,
@@ -724,7 +716,7 @@ def auto_tune(
     retune_speed_ms: float | None = None,
     vibrato_threshold_cents: float | None = None,
     max_correction_semitones: float | None = None,
-    reference_midi: float | None = None,
+    scale_reference_midi: float | None = None,
 ) -> AutoTuneResult: ...
 def note_stretch(
     samples: FloatSamples,
@@ -1982,7 +1974,7 @@ def hpss_with_residual(
 def phase_vocoder(
     samples: FloatSamples,
     sample_rate: int,
-    rate: float = 1.0,
+    speed_ratio: float,
     n_fft: int = 2048,
     hop_length: int = 512,
     *,
@@ -2625,10 +2617,10 @@ def metering_dynamic_range(
     validate: bool = True,
 ) -> DynamicRangeReport: ...
 def scale_quantize_midi(
-    root: int, mode_mask: int, midi: float, reference_midi: float = 0.0
+    root: int, mode_mask: int, midi: float, scale_reference_midi: float | None = None
 ) -> float: ...
 def scale_correction_semitones(
-    root: int, mode_mask: int, midi: float, reference_midi: float = 0.0
+    root: int, mode_mask: int, midi: float, scale_reference_midi: float | None = None
 ) -> float: ...
 def scale_mask_for_mode(root: int, mode: KeyMode) -> int: ...
 def scale_pitch_class_enabled(root: int, mode_mask: int, pitch_class: int) -> bool: ...

@@ -17,13 +17,14 @@ from __future__ import annotations
 
 import ctypes
 import math
+from collections.abc import Callable
 
 import numpy as np
 import pytest
 
-from libsonare import SonareError
+from libsonare import SonareError, SonareValueError
 from libsonare._features_core import mel_spectrogram
-from libsonare._features_metering import scale_quantize_midi
+from libsonare._features_metering import scale_correction_semitones, scale_quantize_midi
 
 from ._helpers import LIB_AVAILABLE, sine
 
@@ -89,18 +90,18 @@ class TestMelFrequencyBounds:
 
 
 class TestScaleQuantizerReference:
-    """sonare_scale_quantize_midi reference_midi."""
+    """sonare_scale_quantize_midi scale_reference_midi: None is A4, an explicit 0 is refused."""
 
     QUANTIZED = [60.4, 61.6, 66.3, 70.2]
 
     def test_refuses_a_negative_reference(self) -> None:
         with pytest.raises(SonareError) as excinfo:
-            scale_quantize_midi(0, C_MAJOR_MASK, 60.4, reference_midi=-5.0)
+            scale_quantize_midi(0, C_MAJOR_MASK, 60.4, scale_reference_midi=-5.0)
         assert "reference_midi" in str(excinfo.value)
 
     def test_refuses_a_reference_above_the_midi_range(self) -> None:
         with pytest.raises(SonareError) as excinfo:
-            scale_quantize_midi(0, C_MAJOR_MASK, 60.4, reference_midi=127.5)
+            scale_quantize_midi(0, C_MAJOR_MASK, 60.4, scale_reference_midi=127.5)
         assert "reference_midi" in str(excinfo.value)
 
     @pytest.mark.parametrize("value", [math.nan, math.inf, -math.inf])
@@ -121,17 +122,22 @@ class TestScaleQuantizerReference:
         assert rc != 0
 
     @pytest.mark.parametrize("midi", QUANTIZED)
-    def test_zero_selects_the_default_anchor(self, midi: float) -> None:
+    def test_an_absent_reference_is_a4(self, midi: float) -> None:
         assert scale_quantize_midi(0, C_MAJOR_MASK, midi) == scale_quantize_midi(
-            0, C_MAJOR_MASK, midi, reference_midi=0.0
+            0, C_MAJOR_MASK, midi, scale_reference_midi=None
         )
-        assert scale_quantize_midi(0, C_MAJOR_MASK, midi, reference_midi=0.0) == (
-            scale_quantize_midi(0, C_MAJOR_MASK, midi, reference_midi=DEFAULT_REFERENCE_MIDI)
+        assert scale_quantize_midi(0, C_MAJOR_MASK, midi) == (
+            scale_quantize_midi(0, C_MAJOR_MASK, midi, scale_reference_midi=DEFAULT_REFERENCE_MIDI)
         )
+
+    @pytest.mark.parametrize("fn", [scale_quantize_midi, scale_correction_semitones])
+    def test_an_explicit_zero_reference_is_refused(self, fn: Callable[..., float]) -> None:
+        with pytest.raises(SonareValueError, match="scale_reference_midi"):
+            fn(0, C_MAJOR_MASK, 60.4, scale_reference_midi=0.0)
 
     def test_a_detuned_reference_moves_the_grid(self) -> None:
         # The anchor only shifts the grid by its fractional part, so the control
         # against "0 is applied as 0" has to be a fractional reference: an
         # integer one is the same grid as the default whatever its value.
-        detuned = scale_quantize_midi(0, C_MAJOR_MASK, 60.4, reference_midi=69.5)
+        detuned = scale_quantize_midi(0, C_MAJOR_MASK, 60.4, scale_reference_midi=69.5)
         assert detuned != scale_quantize_midi(0, C_MAJOR_MASK, 60.4)

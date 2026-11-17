@@ -4914,3 +4914,90 @@ changed = "renamed to fmax_hz"
 domain = "analysis"
 rule = "frequency-bounds"
 test = "bindings/python/tests/test_frequency_bound_names.py::test_mfcc_reports_its_band_edges_in_hz"
+
+[[entry]]
+kind = "option"
+old = "pitch_shift(semitones)"
+changed = "renamed to pitch_semitones and required"
+domain = "effects"
+rule = "pitch-semitones"
+test = "bindings/python/tests/test_pitch_parameter_names.py::test_the_old_spelling_is_refused"
+
+[[entry]]
+kind = "option"
+old = "Audio.pitch_shift(semitones)"
+changed = "renamed to pitch_semitones and required"
+domain = "core"
+rule = "pitch-semitones"
+test = "bindings/python/tests/test_pitch_parameter_names.py::test_the_old_spelling_is_refused"
+
+[[entry]]
+kind = "option"
+old = "time_stretch(rate)"
+changed = "renamed to speed_ratio and required"
+domain = "effects"
+rule = "sample-rate-name"
+test = "bindings/python/tests/test_pitch_parameter_names.py::test_the_defining_quantity_is_required"
+
+[[entry]]
+kind = "option"
+old = "Audio.time_stretch(rate)"
+changed = "renamed to speed_ratio and required"
+domain = "core"
+rule = "sample-rate-name"
+test = "bindings/python/tests/test_pitch_parameter_names.py::test_the_defining_quantity_is_required"
+
+[[entry]]
+kind = "option"
+old = "phase_vocoder(rate)"
+changed = "renamed to speed_ratio and required"
+domain = "effects"
+rule = "sample-rate-name"
+test = "bindings/python/tests/test_pitch_parameter_names.py::test_the_defining_quantity_is_required"
+
+[[entry]]
+kind = "option"
+old = "pitch_correct_timevarying(mode)"
+changed = "renamed to target_mode (PitchTargetMode = 'midi' | 'scale'); a non-string is a TypeError and an unknown name a SonareValueError"
+domain = "effects"
+rule = "individual"
+test = "bindings/python/tests/test_pitch_parameter_names.py::test_the_removed_mode_keyword_is_refused"
+
+[[entry]]
+kind = "option"
+old = "pitch_correct_timevarying(reference_midi)"
+changed = "renamed to scale_reference_midi"
+domain = "effects"
+rule = "individual"
+test = "bindings/python/tests/test_pitch_parameter_names.py::test_scale_reference_midi_moves_the_scale_grid"
+
+[[entry]]
+kind = "option"
+old = "auto_tune(reference_midi)"
+changed = "renamed to scale_reference_midi"
+domain = "effects"
+rule = "individual"
+test = "bindings/python/tests/test_pitch_parameter_names.py::test_auto_tune_takes_scale_reference_midi"
+
+[[entry]]
+kind = "option"
+old = "scale_quantize_midi(reference_midi)"
+changed = "renamed to scale_reference_midi; None is A4 and an explicit 0 is refused"
+domain = "effects"
+rule = "individual"
+test = "bindings/python/tests/test_pitch_parameter_names.py::test_the_scale_helpers_take_scale_reference_midi"
+
+[[entry]]
+kind = "option"
+old = "scale_correction_semitones(reference_midi)"
+changed = "renamed to scale_reference_midi; None is A4 and an explicit 0 is refused"
+domain = "effects"
+rule = "individual"
+test = "bindings/python/tests/test_pitch_parameter_names.py::test_the_scale_helpers_take_scale_reference_midi"
+
+[[entry]]
+kind = "function"
+old = "pitch_correct_to_midi_timevarying"
+removed = true
+domain = "effects"
+rule = "one-entry-per-operation"

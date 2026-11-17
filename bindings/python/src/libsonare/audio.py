@@ -887,13 +887,13 @@ class Audio:
         """Extract the percussive component."""
         return _percussive(self.data, self.sample_rate)
 
-    def time_stretch(self, rate: float = 1.0) -> list[float]:
-        """Time-stretch audio without changing pitch."""
-        return _time_stretch(self.data, self.sample_rate, rate)
+    def time_stretch(self, speed_ratio: float) -> list[float]:
+        """Time-stretch audio without changing pitch; ``speed_ratio`` > 1 shortens."""
+        return _time_stretch(self.data, self.sample_rate, speed_ratio)
 
-    def pitch_shift(self, semitones: float = 0.0) -> list[float]:
-        """Shift the pitch of audio."""
-        return _pitch_shift(self.data, self.sample_rate, semitones)
+    def pitch_shift(self, pitch_semitones: float) -> list[float]:
+        """Shift the pitch of audio by ``pitch_semitones`` (positive = up)."""
+        return _pitch_shift(self.data, self.sample_rate, pitch_semitones)
 
     def pitch_correct_to_midi(
         self, current_midi: float = 69.0, target_midi: float = 69.0

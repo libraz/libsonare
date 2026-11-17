@@ -47,7 +47,7 @@ def tone() -> np.ndarray:
 def _named_argument(message: str, candidates: Sequence[str]) -> str:
     """The one candidate the refusal names, as a whole word.
 
-    ``midi`` inside ``scale_quantize_midi`` and inside ``reference_midi`` is not
+    ``midi`` inside ``scale_quantize_midi`` and inside ``scale_reference_midi`` is not
     the argument ``midi``, so a plain substring test would let a refusal about
     one argument stand in for a refusal about another.
     """
@@ -78,23 +78,23 @@ def test_a_saturating_midi_number_is_refused_on_the_argument_that_carried_it() -
         0, mask, 61.4, 68.25
     )  # positive control on the second argument
     for value in REFUSED:
-        _refuses("midi", ("reference_midi",), ls.scale_quantize_midi, 0, mask, value)
-        _refuses("reference_midi", ("midi",), ls.scale_quantize_midi, 0, mask, 61.4, value)
+        _refuses("midi", ("scale_reference_midi",), ls.scale_quantize_midi, 0, mask, value)
+        _refuses("scale_reference_midi", ("midi",), ls.scale_quantize_midi, 0, mask, 61.4, value)
 
 
 def test_a_saturating_mel_band_edge_is_refused_on_its_own_argument(tone) -> None:
-    """The analysis path, where fmin and fmax reach the same C call together."""
+    """The analysis path, where fmin_hz and fmax_hz reach the same C call together."""
 
     def mel(**kwargs):
         return ls.mel_spectrogram(
             tone, sample_rate=SAMPLE_RATE, n_fft=512, hop_length=256, n_mels=8, **kwargs
         )
 
-    assert mel(fmin=0.0) != mel(fmin=200.5)  # positive control
-    assert mel(fmax=4000.0) != mel(fmax=6000.25)  # positive control
+    assert mel(fmin_hz=0.0) != mel(fmin_hz=200.5)  # positive control
+    assert mel(fmax_hz=4000.0) != mel(fmax_hz=6000.25)  # positive control
     for value in REFUSED:
-        _refuses("fmin", ("fmax",), mel, fmin=value)
-        _refuses("fmax", ("fmin",), mel, fmax=value)
+        _refuses("fmin_hz", ("fmax_hz",), mel, fmin_hz=value)
+        _refuses("fmax_hz", ("fmin_hz",), mel, fmax_hz=value)
 
 
 def test_a_saturating_normalization_target_is_refused(tone) -> None:
@@ -110,7 +110,7 @@ def test_a_saturating_pitch_shift_is_refused(tone) -> None:
     """The editing path, whose argument is a musical quantity rather than a gain."""
     assert ls.pitch_shift(tone, SAMPLE_RATE, 2.0) != ls.pitch_shift(tone, SAMPLE_RATE, 4.5)
     for value in REFUSED:
-        _refuses("semitones", (), ls.pitch_shift, tone, SAMPLE_RATE, value)
+        _refuses("pitch_semitones", (), ls.pitch_shift, tone, SAMPLE_RATE, value)
 
 
 def test_a_saturating_fader_is_refused(mixer_scene) -> None:

@@ -246,7 +246,7 @@ def cmd_pitch_shift(args: argparse.Namespace) -> int:
     result = pitch_shift(
         samples,
         sample_rate=sr,
-        semitones=args.semitones,
+        pitch_semitones=args.semitones,
         n_fft=getattr(args, "n_fft", 2048),
         hop_length=getattr(args, "hop_length", 512),
     )
@@ -269,7 +269,7 @@ def cmd_time_stretch(args: argparse.Namespace) -> int:
     result = time_stretch(
         samples,
         sample_rate=sr,
-        rate=args.rate,
+        speed_ratio=args.rate,
         n_fft=getattr(args, "n_fft", 2048),
         hop_length=getattr(args, "hop_length", 512),
     )

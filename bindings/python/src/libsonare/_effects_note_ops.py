@@ -116,7 +116,7 @@ def note_stretch(
             length). Not together with ``offset_sec``.
         stretch_ratio: Duration ratio of the region: ``>1`` lengthens it, ``<1``
             shortens it, 1 is unchanged. The opposite sense of
-            :func:`time_stretch`'s ``rate``, which is a speed (``>1`` shortens).
+            :func:`time_stretch`'s ``speed_ratio``, which is a speed (``>1`` shortens).
         onset_sec: Start of the note region in seconds, rounded to the nearest
             sample at ``sample_rate``.
         offset_sec: End of the note region in seconds, rounded the same way.

@@ -90,15 +90,15 @@ def test_scale_mode_mask_name_equals_numeric_mask() -> None:
     voiced = [1 if flag else 0 for flag in pitch.voiced_flag]
     for name in ("major", "dorian"):
         by_name = libsonare.pitch_correct_timevarying(
-            samples, SR, pitch.f0, mode="scale", scale_mode_mask=name, voiced=voiced
+            samples, SR, pitch.f0, target_mode="scale", scale_mode_mask=name, voiced=voiced
         )
         by_mask = libsonare.pitch_correct_timevarying(
-            samples, SR, pitch.f0, mode="scale", scale_mode_mask=MASKS[name], voiced=voiced
+            samples, SR, pitch.f0, target_mode="scale", scale_mode_mask=MASKS[name], voiced=voiced
         )
         assert by_name == by_mask
     with pytest.raises(libsonare.SonareValueError):
         libsonare.pitch_correct_timevarying(
-            samples, SR, pitch.f0, mode="scale", scale_mode_mask="nope", voiced=voiced
+            samples, SR, pitch.f0, target_mode="scale", scale_mode_mask="nope", voiced=voiced
         )
 
 

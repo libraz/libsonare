@@ -67,11 +67,11 @@ def test_pitch_shift_and_time_stretch_forward_fft_options(
     assert calls == [
         (
             "pitch_shift",
-            {"sample_rate": 22050, "semitones": 3.0, "n_fft": 1024, "hop_length": 256},
+            {"sample_rate": 22050, "pitch_semitones": 3.0, "n_fft": 1024, "hop_length": 256},
         ),
         (
             "time_stretch",
-            {"sample_rate": 22050, "rate": 1.2, "n_fft": 1024, "hop_length": 256},
+            {"sample_rate": 22050, "speed_ratio": 1.2, "n_fft": 1024, "hop_length": 256},
         ),
     ]
     assert [call["channels"] for call in emitted] == [[[0.2, 0.3]], [[0.3, 0.4]]]

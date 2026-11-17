@@ -416,6 +416,9 @@ from ._types_enums import (
     PitchClass as PitchClass,
 )
 from ._types_enums import (
+    PitchTargetMode as PitchTargetMode,
+)
+from ._types_enums import (
     SectionType as SectionType,
 )
 from ._types_enums import (

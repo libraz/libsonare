@@ -81,11 +81,11 @@ def cmd_pitch_correct_timevarying(args: argparse.Namespace) -> int:
         f0_hz=track.f0,
         sample_rate=sr,
         hop_length=args.hop_length,
-        mode=args.mode,
+        target_mode=args.mode,
         target_midi=args.target_midi,
         scale_root=args.scale_root,
         scale_mode_mask=args.scale_mode_mask,
-        reference_midi=args.reference_midi,
+        scale_reference_midi=args.reference_midi,
         retune_amount=args.retune_amount,
         max_correction_semitones=args.max_correction_semitones,
         retune_speed_ms=args.retune_speed_ms,
@@ -113,8 +113,9 @@ def cmd_note_move(args: argparse.Namespace) -> int:
 def cmd_scale_quantize(args: argparse.Namespace) -> int:
     from . import scale_quantize_midi
 
+    # The flag keeps the command line's 0 = A4.
     value = scale_quantize_midi(
-        args.root, args.mode_mask, args.midi, reference_midi=args.reference_midi
+        args.root, args.mode_mask, args.midi, scale_reference_midi=args.reference_midi or None
     )
     if args.json:
         print(_strict_json_dumps({"input_midi": args.midi, "quantized_midi": value}))

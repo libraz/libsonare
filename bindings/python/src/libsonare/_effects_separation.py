@@ -813,7 +813,7 @@ def _hpss_with_residual_legacy(
 def phase_vocoder(
     samples: Sequence[float] | list[float],
     sample_rate: int,
-    rate: float = 1.0,
+    speed_ratio: float,
     n_fft: int = 2048,
     hop_length: int = 512,
     *,
@@ -824,9 +824,9 @@ def phase_vocoder(
     Args:
         samples: Input audio.
         sample_rate: Sample rate in Hz.
-        rate: Playback speed (< 1.0 slower and longer, > 1.0 faster and shorter). Must
-            be > 0. The opposite sense of :func:`note_stretch`'s ``stretch_ratio``, a
-            duration ratio.
+        speed_ratio: Playback speed (< 1.0 slower and longer, > 1.0 faster and
+            shorter); required, > 0. The opposite sense of :func:`note_stretch`'s
+            ``stretch_ratio``, a duration ratio.
         n_fft: FFT size used for analysis/synthesis; an even integer >= 4
             (default 2048).
         hop_length: Hop length used for analysis/synthesis, in ``(0, n_fft / 2]``
@@ -846,7 +846,7 @@ def phase_vocoder(
                 c_array,
                 _to_c_size_t(length, "length"),
                 _to_c_int(sample_rate, "sample_rate"),
-                _to_c_float(rate, "rate"),
+                _to_c_float(speed_ratio, "speed_ratio"),
                 _to_c_int(n_fft, "n_fft"),
                 _to_c_int(hop_length, "hop_length"),
                 ctypes.byref(out),

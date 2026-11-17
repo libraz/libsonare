@@ -19,6 +19,7 @@ from ._runtime import (
     _C_INT_MIN,
     _DEFAULT_EFFECT_HOP_LENGTH,
     _DEFAULT_EFFECT_N_FFT,
+    _PITCH_TARGET_MODES,
     _UINT32_MAX,
     SonareValueError,
     _call_float_transform,
@@ -35,18 +36,19 @@ from ._runtime import (
     _to_c_int,
     _to_c_int_array,
     _to_c_size_t,
+    _token_arg,
     _unsupported_effect_symbol,
     _validate_effect_fft_options,
     _validate_samples,
 )
 from ._types_analysis import AutoTuneResult, Key
-from ._types_enums import KeyMode, PitchClass
+from ._types_enums import KeyMode, PitchClass, PitchTargetMode
 
 
 def time_stretch(
     samples: Sequence[float] | list[float],
     sample_rate: int,
-    rate: float = 1.0,
+    speed_ratio: float,
     n_fft: int = _DEFAULT_EFFECT_N_FFT,
     hop_length: int = _DEFAULT_EFFECT_HOP_LENGTH,
     *,
@@ -57,9 +59,9 @@ def time_stretch(
     Args:
         samples: Audio samples.
         sample_rate: Sample rate in Hz.
-        rate: Playback speed: ``>1`` is faster and shorter, ``<1`` slower and longer.
-            The opposite sense of :func:`note_stretch`'s ``stretch_ratio``, a
-            duration ratio.
+        speed_ratio: Playback speed: ``>1`` is faster and shorter, ``<1`` slower
+            and longer; required. The opposite sense of :func:`note_stretch`'s
+            ``stretch_ratio``, a duration ratio.
         n_fft: FFT size used for analysis/synthesis; an even integer >= 4
             (default 2048).
         hop_length: Hop size used for analysis/synthesis, in ``(0, n_fft / 2]``
@@ -82,13 +84,13 @@ def time_stretch(
             "sonare_time_stretch",
             samples,
             _to_c_int(sample_rate, "sample_rate"),
-            _to_c_float(rate, "rate"),
+            _to_c_float(speed_ratio, "speed_ratio"),
         )
     return _call_float_transform(
         "sonare_time_stretch_ex",
         samples,
         _to_c_int(sample_rate, "sample_rate"),
-        _to_c_float(rate, "rate"),
+        _to_c_float(speed_ratio, "speed_ratio"),
         _to_c_int(n_fft, "n_fft"),
         _to_c_int(hop_length, "hop_length"),
     )
@@ -97,7 +99,7 @@ def time_stretch(
 def pitch_shift(
     samples: Sequence[float] | list[float],
     sample_rate: int,
-    semitones: float = 0.0,
+    pitch_semitones: float,
     n_fft: int = _DEFAULT_EFFECT_N_FFT,
     hop_length: int = _DEFAULT_EFFECT_HOP_LENGTH,
     *,
@@ -108,7 +110,7 @@ def pitch_shift(
     Args:
         samples: Audio samples.
         sample_rate: Sample rate in Hz.
-        semitones: Number of semitones to shift (positive = up, negative = down).
+        pitch_semitones: Semitones to shift (positive = up, negative = down); required.
         n_fft: FFT size used for analysis/synthesis; an even integer >= 4
             (default 2048).
         hop_length: Hop size used for analysis/synthesis, in ``(0, n_fft / 2]``
@@ -131,13 +133,13 @@ def pitch_shift(
             "sonare_pitch_shift",
             samples,
             _to_c_int(sample_rate, "sample_rate"),
-            _to_c_float(semitones, "semitones"),
+            _to_c_float(pitch_semitones, "pitch_semitones"),
         )
     return _call_float_transform(
         "sonare_pitch_shift_ex",
         samples,
         _to_c_int(sample_rate, "sample_rate"),
-        _to_c_float(semitones, "semitones"),
+        _to_c_float(pitch_semitones, "pitch_semitones"),
         _to_c_int(n_fft, "n_fft"),
         _to_c_int(hop_length, "hop_length"),
     )
@@ -156,8 +158,7 @@ def pitch_correct_to_midi(
     the input buffer length. The whole interval is applied however large it is:
     both endpoints are validated to [0, 127], so a two-octave move such as
     C3 -> C5 transposes by the full 24 semitones. Use
-    :func:`pitch_correct_to_midi_timevarying` for a caller-supplied pitch
-    contour.
+    :func:`pitch_correct_timevarying` for a caller-supplied pitch contour.
 
     Args:
         samples: Audio samples.
@@ -178,91 +179,17 @@ def pitch_correct_to_midi(
 
 
 @_guard_buffer("samples")
-def pitch_correct_to_midi_timevarying(
-    samples: Sequence[float] | list[float],
-    sample_rate: int,
-    f0_hz: Sequence[float] | list[float],
-    target_midi: float,
-    hop_length: int = 512,
-    voiced: Sequence[int] | list[int] | None = None,
-    voiced_prob: Sequence[float] | list[float] | None = None,
-) -> list[float]:
-    """Contour-following ("time-varying") pitch correction toward a MIDI target.
-
-    Unlike :func:`pitch_correct_to_midi` (a single constant transpose), this
-    follows the caller-supplied per-frame ``f0_hz`` contour and retunes every
-    voiced frame toward ``target_midi``, so vibrato/drift in the source is
-    tracked rather than flattened.
-
-    Args:
-        samples: Audio samples.
-        f0_hz: Per-frame measured F0 in Hz (one entry per analysis frame).
-            Unvoiced frames may use ``NaN`` when the corresponding ``voiced``
-            flag is zero, matching pYIN's default output.
-        target_midi: Desired pitch as a MIDI note number.
-        sample_rate: Sample rate in Hz.
-        hop_length: F0 hop in samples; frame ``i`` covers sample ``i*hop_length``.
-        voiced: Optional per-frame voiced flags (non-zero = voiced); ``None``
-            treats every frame as voiced.
-        voiced_prob: Optional per-frame voicing probability in ``[0, 1]``. Used
-            ONLY to derive voicing when ``voiced`` is ``None`` (>= 0.5 is
-            voiced); ignored entirely when ``voiced`` is supplied. It never
-            scales the correction amount, so passing :func:`pitch_pyin`'s
-            ``voiced_prob`` (a frequency-dependent observation mass, not a
-            confidence) gives the same result as omitting it.
-
-    Returns:
-        List of pitch-corrected samples.
-    """
-    lib = _get_lib()
-    if not hasattr(lib, "sonare_pitch_correct_to_midi_timevarying"):
-        raise _not_supported("libsonare was built without pitch-editor support")
-    c_array, length = _to_c_float_array(samples)
-    f0_array, n_frames = _to_c_float_array(f0_hz, arg_name="f0_hz")
-    voiced_array = None
-    if voiced is not None:
-        # Bulk-marshalled through NumPy like every other buffer on this path;
-        # `(c_int32 * n)(*seq)` unpacks each frame through Python varargs, which
-        # is the one per-element hop left in an otherwise vectorised call.
-        voiced_array, voiced_len = _to_c_int_array(voiced, "voiced")
-        if voiced_len != n_frames:
-            raise SonareValueError("voiced must have the same length as f0_hz")
-    prob_array = None
-    if voiced is None and voiced_prob is not None:
-        prob_array, prob_len = _to_c_float_array(voiced_prob, arg_name="voiced_prob")
-        if prob_len != n_frames:
-            raise SonareValueError("voiced_prob must have the same length as f0_hz")
-    with _out_float_array(lib) as (out, out_length):
-        _check(
-            lib.sonare_pitch_correct_to_midi_timevarying(
-                c_array,
-                _to_c_size_t(length, "length"),
-                _to_c_int(sample_rate, "sample_rate"),
-                f0_array,
-                prob_array,
-                voiced_array,
-                _to_c_size_t(n_frames, "n_frames"),
-                _to_c_int(hop_length, "hop_length"),
-                _to_c_float(target_midi, "target_midi"),
-                ctypes.byref(out),
-                ctypes.byref(out_length),
-            )
-        )
-        return _float_array_result(out, out_length.value)
-
-
-@_guard_buffer("samples")
 def pitch_correct_timevarying(
     samples: Sequence[float] | list[float],
     sample_rate: int,
     f0_hz: Sequence[float] | list[float],
     hop_length: int = 512,
     *,
-    mode: str = "midi",
+    target_mode: PitchTargetMode = "midi",
     target_midi: float = 69.0,
     scale_root: int = 0,
     scale_mode_mask: int | KeyMode | None = None,
-    reference_midi: float | None = None,
+    scale_reference_midi: float | None = None,
     retune_amount: float | None = None,
     max_correction_semitones: float | None = None,
     retune_speed_ms: float | None = None,
@@ -272,10 +199,11 @@ def pitch_correct_timevarying(
 ) -> list[float]:
     """Contour-following pitch correction toward a fixed MIDI note OR a scale.
 
-    Generalises :func:`pitch_correct_to_midi_timevarying`: the same
-    caller-supplied per-frame ``f0_hz`` contour drives correction, but ``mode``
-    selects between a fixed-MIDI target (``"midi"``) and scale quantisation
-    (``"scale"``), and the retune knobs shape natural-vs-robotic correction.
+    Follows the caller-supplied per-frame ``f0_hz`` contour, so vibrato and
+    drift in the source are tracked rather than flattened (unlike the constant
+    transpose of :func:`pitch_correct_to_midi`). ``target_mode`` selects a
+    fixed-MIDI target (``"midi"``) or scale quantisation (``"scale"``), and the
+    retune knobs shape natural-vs-robotic correction.
 
     Args:
         samples: Audio samples.
@@ -284,13 +212,15 @@ def pitch_correct_timevarying(
             flag is zero, matching pYIN's default output.
         sample_rate: Sample rate in Hz.
         hop_length: F0 hop in samples; frame ``i`` covers sample ``i*hop_length``.
-        mode: ``"midi"`` retunes toward ``target_midi``; ``"scale"`` snaps to the key.
-        target_midi: Fixed target note when ``mode == "midi"`` (in ``[0, 127]``).
-        scale_root: Scale root pitch class (0=C .. 11=B) when ``mode == "scale"``.
+        target_mode: ``"midi"`` retunes toward ``target_midi``; ``"scale"`` snaps
+            to the scale.
+        target_midi: Fixed target note when ``target_mode == "midi"`` (in ``[0, 127]``).
+        scale_root: Scale root pitch class (0=C .. 11=B) when ``target_mode == "scale"``.
         scale_mode_mask: 12-bit degree mask, or a mode token
             (``"major"``, ``"dorian"``, ...) resolved by :func:`scale_mask_for_mode`;
             ``None`` keeps the library default (C major).
-        reference_midi: Reference MIDI anchoring the scale grid; ``None`` keeps the default.
+        scale_reference_midi: Reference MIDI anchoring the scale grid; ``None`` keeps
+            the default.
         retune_amount: Correction strength in ``[0, 1]``; ``None`` keeps the default (1.0).
         max_correction_semitones: Per-frame correction clamp; ``None`` keeps the default.
         retune_speed_ms: Retune IIR time constant (ms); ``None`` keeps the default.
@@ -303,8 +233,7 @@ def pitch_correct_timevarying(
     Returns:
         List of pitch-corrected samples.
     """
-    if mode not in ("midi", "scale"):
-        raise SonareValueError("mode must be 'midi' or 'scale'")
+    target = _token_arg(target_mode, _PITCH_TARGET_MODES, "target_mode")
     lib = _get_lib()
     if not hasattr(lib, "sonare_pitch_correct_timevarying"):
         raise _not_supported("libsonare was built without pitch-editor support")
@@ -312,7 +241,7 @@ def pitch_correct_timevarying(
     config = SonarePitchCorrectionConfig()
     _check(lib.sonare_pitch_correction_config_default(ctypes.byref(config)))
     config.target_mode = (
-        SONARE_PITCH_TARGET_SCALE if mode == "scale" else SONARE_PITCH_TARGET_FIXED_MIDI
+        SONARE_PITCH_TARGET_SCALE if target == "scale" else SONARE_PITCH_TARGET_FIXED_MIDI
     )
     config.target_midi = _narrow_double(target_midi, "target_midi")
     # Narrowed rather than coerced: int() takes 3.7 as 3, a root and a degree set
@@ -326,8 +255,8 @@ def pitch_correct_timevarying(
         config.scale_mode_mask = _narrow_int(
             scale_mode_mask, "pitch_correct_timevarying: scale_mode_mask", 0, _UINT32_MAX
         )
-    if reference_midi is not None:
-        config.scale_reference_midi = _narrow_double(reference_midi, "reference_midi")
+    if scale_reference_midi is not None:
+        config.scale_reference_midi = _narrow_double(scale_reference_midi, "scale_reference_midi")
     if retune_amount is not None:
         config.retune_amount = _narrow_double(retune_amount, "retune_amount")
     if max_correction_semitones is not None:
@@ -402,7 +331,7 @@ def auto_tune(
     retune_speed_ms: float | None = None,
     vibrato_threshold_cents: float | None = None,
     max_correction_semitones: float | None = None,
-    reference_midi: float | None = None,
+    scale_reference_midi: float | None = None,
 ) -> AutoTuneResult:
     """Snap the voiced pitch of a monophonic recording to a scale, offline.
 
@@ -423,7 +352,8 @@ def auto_tune(
         retune_speed_ms: Retune IIR time constant (ms); ``None`` keeps the default.
         vibrato_threshold_cents: Vibrato-preserve threshold; ``None`` keeps the default.
         max_correction_semitones: Per-frame correction clamp; ``None`` keeps the default.
-        reference_midi: Reference MIDI anchoring the scale grid; ``None`` keeps the default.
+        scale_reference_midi: Reference MIDI anchoring the scale grid; ``None`` keeps
+            the default.
 
     Returns:
         :class:`AutoTuneResult` with the corrected ``samples`` and the ``key`` used.
@@ -437,8 +367,8 @@ def auto_tune(
     _check(lib.sonare_pitch_correction_config_default(ctypes.byref(config)))
     if strength is not None:
         config.retune_amount = _narrow_double(strength, "strength")
-    if reference_midi is not None:
-        config.scale_reference_midi = _narrow_double(reference_midi, "reference_midi")
+    if scale_reference_midi is not None:
+        config.scale_reference_midi = _narrow_double(scale_reference_midi, "scale_reference_midi")
     if max_correction_semitones is not None:
         config.max_correction_semitones = _narrow_double(
             max_correction_semitones, "max_correction_semitones"
