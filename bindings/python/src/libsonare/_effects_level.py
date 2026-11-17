@@ -112,14 +112,7 @@ def _run_normalize_stereo(
             applied_gain_db=float(out.applied_gain_db),
         )
     finally:
-        # No dedicated free function for this result: each channel is released
-        # with sonare_free_floats (see SonareNormalizeStereoResult in
-        # sonare_c_effects.h). A refused call leaves `out` at the empty result
-        # the C entry writes before validating, so both pointers are NULL here.
-        if out.left:
-            lib.sonare_free_floats(out.left)
-        if out.right:
-            lib.sonare_free_floats(out.right)
+        lib.sonare_free_normalize_stereo_result(ctypes.byref(out))
 
 
 def normalize(

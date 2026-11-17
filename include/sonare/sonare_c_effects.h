@@ -941,8 +941,8 @@ SonareError sonare_normalize_rms(const float* samples, size_t length, int sample
                                  float target_db, float** out, size_t* out_length);
 
 /// @brief A normalized channel pair and the gain that produced it.
-/// @details @c left and @c right are heap-allocated; release each with
-///   @ref sonare_free_floats. @c applied_gain_db is one figure rather than a
+/// @details @c left and @c right are heap-allocated; release the pair with
+///   @ref sonare_free_normalize_stereo_result. @c applied_gain_db is one figure rather than a
 ///   pair because the gain is one decision shared by both channels; silence
 ///   leaves the pair untouched and reports 0.
 typedef struct {
@@ -974,6 +974,10 @@ SonareError sonare_normalize_stereo(const float* left, const float* right, size_
 SonareError sonare_normalize_rms_stereo(const float* left, const float* right, size_t length,
                                         int sample_rate, float target_db,
                                         SonareNormalizeStereoResult* out);
+
+/// @brief Release both channels of a @ref SonareNormalizeStereoResult and empty it.
+/// @details NULL and an already-released result are no-ops.
+void sonare_free_normalize_stereo_result(SonareNormalizeStereoResult* result);
 /// @brief Trim leading/trailing silence using an absolute RMS dBFS threshold.
 /// @note Free @p out with @ref sonare_free_floats.
 SonareError sonare_trim_ex(const float* samples, size_t length, int sample_rate, float threshold_db,

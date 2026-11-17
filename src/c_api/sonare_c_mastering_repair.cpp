@@ -860,3 +860,31 @@ SonareError sonare_mastering_repair_apply(const float* const* channels, size_t c
   return SONARE_OK;
   SONARE_C_CATCH
 }
+
+void sonare_free_declick_stereo_result(SonareDeclickStereoResult* result) {
+  sonare_c_mastering_detail::free_stereo_channels(result);
+}
+
+void sonare_free_denoise_stereo_result(SonareDenoiseStereoResult* result) {
+  sonare_c_mastering_detail::free_stereo_channels(result);
+}
+
+void sonare_free_declip_stereo_result(SonareDeclipStereoResult* result) {
+  sonare_c_mastering_detail::free_stereo_channels(result);
+}
+
+void sonare_free_decrackle_stereo_result(SonareDecrackleStereoResult* result) {
+  sonare_c_mastering_detail::free_stereo_channels(result);
+}
+
+void sonare_free_dehum_stereo_result(SonareDehumStereoResult* result) {
+  sonare_c_mastering_detail::free_stereo_channels(result);
+}
+
+void sonare_free_dereverb_stereo_result(SonareDereverbStereoResult* result) {
+  sonare_c_mastering_detail::free_stereo_channels(result);
+}
+
+void sonare_free_trim_silence_stereo_result(SonareTrimSilenceStereoResult* result) {
+  sonare_c_mastering_detail::free_stereo_channels(result);
+}

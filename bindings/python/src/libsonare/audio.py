@@ -1407,7 +1407,7 @@ class Audio:
     def close(self) -> None:
         """Free the underlying audio resource."""
         if self._handle:
-            self._lib.sonare_audio_free(self._handle)
+            self._lib.sonare_audio_destroy(self._handle)
             self._handle = ctypes.c_void_p()
 
     def __enter__(self) -> Audio:

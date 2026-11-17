@@ -1367,8 +1367,7 @@ TEST_CASE("sonare_normalize_stereo shares one gain between the channels", "[c_ap
   REQUIRE(quiet_peak < peak_of(alone, alone_length) * 0.5f);
   sonare_free_floats(alone);
 
-  sonare_free_floats(result.left);
-  sonare_free_floats(result.right);
+  sonare_free_normalize_stereo_result(&result);
 }
 
 TEST_CASE("sonare_normalize_rms_stereo measures the pair together", "[c_api][effects]") {
@@ -1392,8 +1391,7 @@ TEST_CASE("sonare_normalize_rms_stereo measures the pair together", "[c_api][eff
   REQUIRE(std::abs(20.0 * std::log10(l) - (-20.0)) > 1.0);
   REQUIRE(std::abs(20.0 * std::log10(r) - (-20.0)) > 1.0);
 
-  sonare_free_floats(result.left);
-  sonare_free_floats(result.right);
+  sonare_free_normalize_stereo_result(&result);
 }
 
 TEST_CASE("the stereo normalize outputs are cleared before validation", "[c_api][effects]") {
@@ -1433,6 +1431,5 @@ TEST_CASE("the stereo normalize outputs are cleared before validation", "[c_api]
   REQUIRE(sonare_normalize_stereo(samples.data(), samples.data(), samples.size(), 22050, -1.0f,
                                   &result) == SONARE_OK);
   REQUIRE(result.left != nullptr);
-  sonare_free_floats(result.left);
-  sonare_free_floats(result.right);
+  sonare_free_normalize_stereo_result(&result);
 }

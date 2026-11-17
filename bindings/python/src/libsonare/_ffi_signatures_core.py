@@ -91,9 +91,9 @@ def configure_core_signatures(lib: ctypes.CDLL) -> None:
             ctypes.POINTER(ctypes.c_int),
         ]
 
-    # sonare_audio_free
-    lib.sonare_audio_free.restype = None
-    lib.sonare_audio_free.argtypes = [ctypes.c_void_p]
+    # sonare_audio_destroy
+    lib.sonare_audio_destroy.restype = None
+    lib.sonare_audio_destroy.argtypes = [ctypes.c_void_p]
 
     # sonare_audio_data
     lib.sonare_audio_data.restype = ctypes.POINTER(ctypes.c_float)
@@ -1007,9 +1007,9 @@ def configure_core_signatures(lib: ctypes.CDLL) -> None:
     lib.sonare_free_floats.restype = None
     lib.sonare_free_floats.argtypes = [ctypes.POINTER(ctypes.c_float)]
 
-    # sonare_free_result
-    lib.sonare_free_result.restype = None
-    lib.sonare_free_result.argtypes = [ctypes.POINTER(SonareAnalysisResult)]
+    # sonare_free_analysis_result
+    lib.sonare_free_analysis_result.restype = None
+    lib.sonare_free_analysis_result.argtypes = [ctypes.POINTER(SonareAnalysisResult)]
 
     lib.sonare_free_bpm_analysis_result.restype = None
     lib.sonare_free_bpm_analysis_result.argtypes = [ctypes.POINTER(SonareBpmAnalysisResult)]

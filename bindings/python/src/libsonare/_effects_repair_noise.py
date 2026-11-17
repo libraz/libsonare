@@ -486,14 +486,7 @@ def mastering_repair_denoise_classical_stereo(
             report=_extract_denoise_report(out.report),
         )
     finally:
-        # No dedicated free function for this result: `left`/`right` are each
-        # released with sonare_free_floats (see SonareDenoiseStereoResult in
-        # sonare_c_mastering.h). A refused call leaves `out` at its
-        # zero-initialized default, so both pointers are still NULL here.
-        if out.left:
-            lib.sonare_free_floats(out.left)
-        if out.right:
-            lib.sonare_free_floats(out.right)
+        lib.sonare_free_denoise_stereo_result(ctypes.byref(out))
 
 
 def mastering_repair_denoise_classical_linked(
@@ -877,11 +870,4 @@ def mastering_repair_dehum_stereo(
             right_report=_extract_dehum_report(out.right_report),
         )
     finally:
-        # No dedicated free function for this result: `left`/`right` are each
-        # released with sonare_free_floats (see SonareDehumStereoResult in
-        # sonare_c_mastering.h). A refused call leaves `out` at its
-        # zero-initialized default, so both pointers are still NULL here.
-        if out.left:
-            lib.sonare_free_floats(out.left)
-        if out.right:
-            lib.sonare_free_floats(out.right)
+        lib.sonare_free_dehum_stereo_result(ctypes.byref(out))

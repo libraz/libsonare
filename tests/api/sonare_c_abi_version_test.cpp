@@ -417,7 +417,7 @@ TEST_CASE("C entry points clear a stale error before their validation returns",
   REQUIRE(sonare_audio_from_buffer(samples.data(), samples.size(), 22050, &audio) == SONARE_OK);
   CHECK(sonare_last_error_code() == SONARE_OK);
   CHECK(std::string(sonare_last_error_message()).empty());
-  sonare_audio_free(audio);
+  sonare_audio_destroy(audio);
 }
 
 #ifdef SONARE_WITH_VOICE_CHANGER

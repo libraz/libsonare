@@ -117,8 +117,7 @@ TEST_CASE("sonare_mastering_repair_declick_stereo", "[c_api][mastering]") {
     // The two outputs are not the same buffer restated.
     CHECK(out.left[kRightClick] != out.right[kRightClick]);
 
-    sonare_free_floats(out.left);
-    sonare_free_floats(out.right);
+    sonare_free_declick_stereo_result(&out);
   }
 
   SECTION("linking changes the output against the mono entry point") {
@@ -138,8 +137,19 @@ TEST_CASE("sonare_mastering_repair_declick_stereo", "[c_api][mastering]") {
     CHECK(stereo.left[kLeftClick] == Catch::Approx(mono[kLeftClick]).margin(1e-6));
 
     sonare_free_floats(mono);
-    sonare_free_floats(stereo.left);
-    sonare_free_floats(stereo.right);
+    sonare_free_declick_stereo_result(&stereo);
+  }
+
+  SECTION("the releaser empties the result, and a second release is a no-op") {
+    SonareDeclickStereoResult out{};
+    REQUIRE(sonare_mastering_repair_declick_stereo(left.data(), right.data(), left.size(), sr,
+                                                   nullptr, &out) == SONARE_OK);
+    sonare_free_declick_stereo_result(&out);
+    CHECK(out.left == nullptr);
+    CHECK(out.right == nullptr);
+    CHECK(out.length == 0);
+    sonare_free_declick_stereo_result(&out);
+    sonare_free_declick_stereo_result(nullptr);
   }
 
   SECTION("clears the result before refusing") {
@@ -292,8 +302,7 @@ TEST_CASE("sonare_mastering_repair_denoise_classical_stereo", "[c_api][mastering
     // Pinned so the equality above cannot be satisfied by two silent buffers.
     REQUIRE(max_abs(out.left, out.length) > 0.01f);
 
-    sonare_free_floats(out.left);
-    sonare_free_floats(out.right);
+    sonare_free_denoise_stereo_result(&out);
   }
 
   SECTION("the reported floor is the pair's, not a channel's") {
@@ -319,10 +328,8 @@ TEST_CASE("sonare_mastering_repair_denoise_classical_stereo", "[c_api][mastering
     REQUIRE(doubled.report.detected.floor_dbfs - single.report.detected.floor_dbfs ==
             Catch::Approx(10.0f * sonare::constants::kLog10Of2).margin(1e-4));
 
-    sonare_free_floats(doubled.left);
-    sonare_free_floats(doubled.right);
-    sonare_free_floats(single.left);
-    sonare_free_floats(single.right);
+    sonare_free_denoise_stereo_result(&doubled);
+    sonare_free_denoise_stereo_result(&single);
   }
 
   SECTION("every band slot is measured, not just the first") {
@@ -343,8 +350,7 @@ TEST_CASE("sonare_mastering_repair_denoise_classical_stereo", "[c_api][mastering
     REQUIRE(all_finite);
     REQUIRE(any_differs_from_first);
 
-    sonare_free_floats(out.left);
-    sonare_free_floats(out.right);
+    sonare_free_denoise_stereo_result(&out);
   }
 
   SECTION("the gain floor is observable in the modes that have one") {
@@ -368,8 +374,7 @@ TEST_CASE("sonare_mastering_repair_denoise_classical_stereo", "[c_api][mastering
     REQUIRE(out.report.max_reduction_db >= out.report.mean_reduction_db);
     REQUIRE(out.report.max_reduction_db <= config.reduction_db + 0.01f);
     REQUIRE(out.report.floor_limited_fraction > 0.0f);
-    sonare_free_floats(out.left);
-    sonare_free_floats(out.right);
+    sonare_free_denoise_stereo_result(&out);
 
     // SpectralSubtraction floors on spectral_floor instead, so its zero here is
     // the mode answering rather than a measurement. Asserting it alone would
@@ -381,8 +386,7 @@ TEST_CASE("sonare_mastering_repair_denoise_classical_stereo", "[c_api][mastering
                 noisy.data(), noisy.data(), noisy.size(), sr, &config, &berouti) == SONARE_OK);
     REQUIRE(berouti.report.floor_limited_fraction == 0.0f);
     REQUIRE(berouti.report.mean_reduction_db > 0.0f);
-    sonare_free_floats(berouti.left);
-    sonare_free_floats(berouti.right);
+    sonare_free_denoise_stereo_result(&berouti);
   }
 
   SECTION("an input shorter than n_fft is padded rather than refused") {
@@ -393,8 +397,7 @@ TEST_CASE("sonare_mastering_repair_denoise_classical_stereo", "[c_api][mastering
                                                              sr, nullptr, &out) == SONARE_OK);
     REQUIRE(out.length == tiny.size());
     for (size_t i = 0; i < out.length; ++i) REQUIRE(std::isfinite(out.left[i]));
-    sonare_free_floats(out.left);
-    sonare_free_floats(out.right);
+    sonare_free_denoise_stereo_result(&out);
   }
 
   SECTION("clears the result before refusing") {
@@ -496,8 +499,7 @@ TEST_CASE("sonare_mastering_repair_denoise_classical_linked", "[c_api][mastering
     REQUIRE(report.detected.floor_dbfs == pair.report.detected.floor_dbfs);
     REQUIRE(max_abs(first.data(), length) > 0.01f);
     REQUIRE(max_abs(second.data(), length) > 0.01f);
-    sonare_free_floats(pair.left);
-    sonare_free_floats(pair.right);
+    sonare_free_denoise_stereo_result(&pair);
   }
 
   SECTION("the reported floor is the whole set's, not a pair's") {
@@ -699,8 +701,7 @@ TEST_CASE("sonare_mastering_repair_declip_stereo", "[c_api][mastering]") {
       CHECK(out.left[i] == Catch::Approx(left_input[i]).margin(1e-6));
     }
 
-    sonare_free_floats(out.left);
-    sonare_free_floats(out.right);
+    sonare_free_declip_stereo_result(&out);
   }
 
   SECTION("the extended region differs from the mono entry point") {
@@ -721,8 +722,7 @@ TEST_CASE("sonare_mastering_repair_declip_stereo", "[c_api][mastering]") {
     CHECK(differs);
 
     sonare_free_floats(mono);
-    sonare_free_floats(stereo.left);
-    sonare_free_floats(stereo.right);
+    sonare_free_declip_stereo_result(&stereo);
   }
 
   SECTION("clears the result before refusing") {
@@ -894,8 +894,7 @@ TEST_CASE("sonare_mastering_repair_decrackle_stereo", "[c_api][mastering]") {
     }
     REQUIRE(channels_differ);
 
-    sonare_free_floats(out.left);
-    sonare_free_floats(out.right);
+    sonare_free_decrackle_stereo_result(&out);
   }
 
   SECTION("each channel matches the mono pass sample for sample") {
@@ -927,8 +926,7 @@ TEST_CASE("sonare_mastering_repair_decrackle_stereo", "[c_api][mastering]") {
     }
     sonare_free_floats(mono);
 
-    sonare_free_floats(stereo.left);
-    sonare_free_floats(stereo.right);
+    sonare_free_decrackle_stereo_result(&stereo);
   }
 
   SECTION("swapping the inputs swaps the reports") {
@@ -944,10 +942,8 @@ TEST_CASE("sonare_mastering_repair_decrackle_stereo", "[c_api][mastering]") {
     REQUIRE(reversed.right_report.detected.sample_count ==
             forward.left_report.detected.sample_count);
 
-    sonare_free_floats(forward.left);
-    sonare_free_floats(forward.right);
-    sonare_free_floats(reversed.left);
-    sonare_free_floats(reversed.right);
+    sonare_free_decrackle_stereo_result(&forward);
+    sonare_free_decrackle_stereo_result(&reversed);
   }
 
   SECTION("wavelet mode reports through its own fields") {
@@ -972,8 +968,7 @@ TEST_CASE("sonare_mastering_repair_decrackle_stereo", "[c_api][mastering]") {
     // here while the median repair counter is not.
     REQUIRE(out.left_report.detected.sample_count > 0);
 
-    sonare_free_floats(out.left);
-    sonare_free_floats(out.right);
+    sonare_free_decrackle_stereo_result(&out);
   }
 
   SECTION("threshold reaches the wavelet shrinkage as a cap") {
@@ -1000,10 +995,8 @@ TEST_CASE("sonare_mastering_repair_decrackle_stereo", "[c_api][mastering]") {
             loose_out.left_report.detail_coefficients);
     REQUIRE(capped_out.left_report.shrunk_coefficients < loose_out.left_report.shrunk_coefficients);
 
-    sonare_free_floats(loose_out.left);
-    sonare_free_floats(loose_out.right);
-    sonare_free_floats(capped_out.left);
-    sonare_free_floats(capped_out.right);
+    sonare_free_decrackle_stereo_result(&loose_out);
+    sonare_free_decrackle_stereo_result(&capped_out);
   }
 
   SECTION("rejects a mismatched pair and clears the result") {
@@ -1133,8 +1126,7 @@ TEST_CASE("sonare_mastering_repair_dehum_stereo", "[c_api][mastering]") {
     }
     sonare_free_floats(mono);
 
-    sonare_free_floats(out.left);
-    sonare_free_floats(out.right);
+    sonare_free_dehum_stereo_result(&out);
   }
 
   SECTION("tracking shares one fundamental while each channel measures its own") {
@@ -1174,8 +1166,7 @@ TEST_CASE("sonare_mastering_repair_dehum_stereo", "[c_api][mastering]") {
     REQUIRE(differs_from_mono);
     sonare_free_floats(mono);
 
-    sonare_free_floats(out.left);
-    sonare_free_floats(out.right);
+    sonare_free_dehum_stereo_result(&out);
   }
 
   SECTION("reports every harmonic slot, not just the first") {
@@ -1201,8 +1192,7 @@ TEST_CASE("sonare_mastering_repair_dehum_stereo", "[c_api][mastering]") {
     REQUIRE(out.left_report.notched_harmonics > 0);
     REQUIRE(out.left_report.notched_harmonics <= fixed.harmonics);
 
-    sonare_free_floats(out.left);
-    sonare_free_floats(out.right);
+    sonare_free_dehum_stereo_result(&out);
   }
 
   SECTION("a harmonic past Nyquist reads the floor rather than an unset value") {
@@ -1216,8 +1206,7 @@ TEST_CASE("sonare_mastering_repair_dehum_stereo", "[c_api][mastering]") {
     REQUIRE(sonare_mastering_repair_dehum_stereo(l.data(), r.data(), l.size(), low_sr, &high,
                                                  &out) == SONARE_OK);
     REQUIRE(out.left_report.detected.harmonic_dbfs[1] == -120.0f);
-    sonare_free_floats(out.left);
-    sonare_free_floats(out.right);
+    sonare_free_dehum_stereo_result(&out);
   }
 
   SECTION("clears the result before refusing") {
@@ -1353,8 +1342,7 @@ TEST_CASE("sonare_mastering_repair_dereverb_classical_stereo", "[c_api][masterin
     }
     // Pinned so the equality above cannot be satisfied by two silent buffers.
     REQUIRE(max_abs(out.left, out.length) > 0.01f);
-    sonare_free_floats(out.left);
-    sonare_free_floats(out.right);
+    sonare_free_dereverb_stereo_result(&out);
   }
 
   SECTION("the WPE fields are zero on the path that does not run WPE") {
@@ -1367,8 +1355,7 @@ TEST_CASE("sonare_mastering_repair_dereverb_classical_stereo", "[c_api][masterin
     // The rest of the report still has to be alive, or the two zeros above are
     // satisfied by a call that computed nothing at all.
     REQUIRE(off.report.mean_reduction_db > 0.0f);
-    sonare_free_floats(off.left);
-    sonare_free_floats(off.right);
+    sonare_free_dereverb_stereo_result(&off);
 
     // wpe_enabled is clear by default, so the check above is the whole of what a
     // default-config test can witness: it passes against a build with no WPE
@@ -1384,8 +1371,7 @@ TEST_CASE("sonare_mastering_repair_dereverb_classical_stereo", "[c_api][masterin
     // The applied norm is the pre-clamp one passed through a 0.98 ceiling, so it
     // can equal it but never exceed it.
     REQUIRE(on.report.wpe_predictor_norm <= on.report.detected.late_predictability);
-    sonare_free_floats(on.left);
-    sonare_free_floats(on.right);
+    sonare_free_dereverb_stereo_result(&on);
   }
 
   SECTION("no field carries the pair's level the way a denoise floor does") {
@@ -1415,10 +1401,8 @@ TEST_CASE("sonare_mastering_repair_dereverb_classical_stereo", "[c_api][masterin
     REQUIRE(doubled.report.mean_reduction_db ==
             Catch::Approx(single.report.mean_reduction_db).margin(1e-6));
 
-    sonare_free_floats(doubled.left);
-    sonare_free_floats(doubled.right);
-    sonare_free_floats(single.left);
-    sonare_free_floats(single.right);
+    sonare_free_dereverb_stereo_result(&doubled);
+    sonare_free_dereverb_stereo_result(&single);
   }
 
   SECTION("the threshold gate is observable in suppressed_fraction") {
@@ -1438,10 +1422,8 @@ TEST_CASE("sonare_mastering_repair_dereverb_classical_stereo", "[c_api][masterin
             SONARE_OK);
     REQUIRE(shut.report.suppressed_fraction < open.report.suppressed_fraction);
 
-    sonare_free_floats(open.left);
-    sonare_free_floats(open.right);
-    sonare_free_floats(shut.left);
-    sonare_free_floats(shut.right);
+    sonare_free_dereverb_stereo_result(&open);
+    sonare_free_dereverb_stereo_result(&shut);
   }
 
   SECTION("an input shorter than n_fft is padded rather than refused") {
@@ -1450,8 +1432,7 @@ TEST_CASE("sonare_mastering_repair_dereverb_classical_stereo", "[c_api][masterin
     REQUIRE(sonare_mastering_repair_dereverb_classical_stereo(tiny.data(), tiny.data(), tiny.size(),
                                                               sr, &base, &out) == SONARE_OK);
     REQUIRE(out.length == tiny.size());
-    sonare_free_floats(out.left);
-    sonare_free_floats(out.right);
+    sonare_free_dereverb_stereo_result(&out);
   }
 
   SECTION("clears the result before refusing") {
@@ -1568,8 +1549,7 @@ TEST_CASE("sonare_mastering_repair_dereverb_classical_linked", "[c_api][masterin
     REQUIRE(report.detected.late_decay_ratio_db == pair.report.detected.late_decay_ratio_db);
     REQUIRE(max_abs(first.data(), length) > 0.01f);
     REQUIRE(max_abs(second.data(), length) > 0.01f);
-    sonare_free_floats(pair.left);
-    sonare_free_floats(pair.right);
+    sonare_free_dereverb_stereo_result(&pair);
   }
 
   SECTION("no field moves with the channel count, unlike the denoise entry") {
@@ -1922,8 +1902,7 @@ TEST_CASE("sonare_mastering_repair_trim_silence_stereo", "[c_api][mastering]") {
     REQUIRE(out.left[out.length - 1] == 0.0f);    // left has been silent for a while
     REQUIRE(out.right[out.length - 1] == -0.5f);  // right's own last active sample
 
-    sonare_free_floats(out.left);
-    sonare_free_floats(out.right);
+    sonare_free_trim_silence_stereo_result(&out);
   }
 
   SECTION("hands back (NULL, 0) for a pair that carries no signal at all") {
@@ -1946,8 +1925,7 @@ TEST_CASE("sonare_mastering_repair_trim_silence_stereo", "[c_api][mastering]") {
     REQUIRE(out.report.removed_tail_samples == 0);
 
     // The documented contract that a caller need not branch before freeing.
-    sonare_free_floats(out.left);
-    sonare_free_floats(out.right);
+    sonare_free_trim_silence_stereo_result(&out);
   }
 
   SECTION("padding widens both edges of each channel's range and clamps at the buffer") {
@@ -1963,8 +1941,7 @@ TEST_CASE("sonare_mastering_repair_trim_silence_stereo", "[c_api][mastering]") {
     REQUIRE(out.right_range.last_exclusive == kRightEnd + 1200);
     REQUIRE(out.report.range.first == kLeftFirst - 1200);
     REQUIRE(out.report.range.last_exclusive == kRightEnd + 1200);
-    sonare_free_floats(out.left);
-    sonare_free_floats(out.right);
+    sonare_free_trim_silence_stereo_result(&out);
 
     // Enough padding to run off both ends: the left channel's head clamps at 0
     // and the right channel's tail at the input length, so the pair comes back
@@ -1978,8 +1955,7 @@ TEST_CASE("sonare_mastering_repair_trim_silence_stereo", "[c_api][mastering]") {
     REQUIRE(wide.length == kLength);
     REQUIRE(wide.report.removed_head_samples == 0);
     REQUIRE(wide.report.removed_tail_samples == 0);
-    sonare_free_floats(wide.left);
-    sonare_free_floats(wide.right);
+    sonare_free_trim_silence_stereo_result(&wide);
   }
 
   SECTION("does not pad a pass that kept nothing") {
@@ -2007,8 +1983,7 @@ TEST_CASE("sonare_mastering_repair_trim_silence_stereo", "[c_api][mastering]") {
     REQUIRE(sonare_mastering_repair_trim_silence_stereo(left.data(), right.data(), kLength, sr,
                                                         &at_bound, &out) == SONARE_OK);
     REQUIRE(out.length == kLength);
-    sonare_free_floats(out.left);
-    sonare_free_floats(out.right);
+    sonare_free_trim_silence_stereo_result(&out);
 
     SonareTrimSilenceConfig over = peak;
     over.padding_samples = kMaxPadding + 1;
@@ -2044,8 +2019,7 @@ TEST_CASE("sonare_mastering_repair_trim_silence_stereo", "[c_api][mastering]") {
     REQUIRE(sonare_mastering_repair_trim_silence_stereo(left.data(), right.data(), kLength, sr,
                                                         &gated, &out) == SONARE_OK);
     REQUIRE(out.length > 0);
-    sonare_free_floats(out.left);
-    sonare_free_floats(out.right);
+    sonare_free_trim_silence_stereo_result(&out);
 
     // The mirror image: a gate the material cannot clear empties the pair in
     // gated mode and does nothing at all in peak mode. The burst is +-0.5, so
@@ -2062,8 +2036,7 @@ TEST_CASE("sonare_mastering_repair_trim_silence_stereo", "[c_api][mastering]") {
     REQUIRE(sonare_mastering_repair_trim_silence_stereo(left.data(), right.data(), kLength, sr,
                                                         &shut_but_peak, &out) == SONARE_OK);
     REQUIRE(out.length == kRightEnd - kLeftFirst);
-    sonare_free_floats(out.left);
-    sonare_free_floats(out.right);
+    sonare_free_trim_silence_stereo_result(&out);
   }
 
   SECTION("sizes the gated window from window_ms, which peak mode ignores") {
@@ -2088,10 +2061,8 @@ TEST_CASE("sonare_mastering_repair_trim_silence_stereo", "[c_api][mastering]") {
     // 4800, for radii of 240 and 2400 samples.
     REQUIRE(narrow_out.report.range.first < kLeftFirst);
     REQUIRE(wide_out.report.range.first < narrow_out.report.range.first);
-    sonare_free_floats(narrow_out.left);
-    sonare_free_floats(narrow_out.right);
-    sonare_free_floats(wide_out.left);
-    sonare_free_floats(wide_out.right);
+    sonare_free_trim_silence_stereo_result(&narrow_out);
+    sonare_free_trim_silence_stereo_result(&wide_out);
 
     // In peak mode the same two values change nothing, which is what makes the
     // comparison above an observation of window_ms rather than of the buffer.
@@ -2107,10 +2078,8 @@ TEST_CASE("sonare_mastering_repair_trim_silence_stereo", "[c_api][mastering]") {
                                                         &peak_wide, &b) == SONARE_OK);
     REQUIRE(a.report.range.first == kLeftFirst);
     REQUIRE(b.report.range.first == kLeftFirst);
-    sonare_free_floats(a.left);
-    sonare_free_floats(a.right);
-    sonare_free_floats(b.left);
-    sonare_free_floats(b.right);
+    sonare_free_trim_silence_stereo_result(&a);
+    sonare_free_trim_silence_stereo_result(&b);
   }
 
   SECTION("rejects bad inputs and clears the result it was handed") {
@@ -2193,8 +2162,7 @@ TEST_CASE("sonare_mastering_repair_trim_silence_stereo", "[c_api][mastering]") {
     REQUIRE(out.report.range.first == kLeftFirst);
     REQUIRE(out.report.range.last_exclusive == kRightEnd);
     REQUIRE(out.length == kRightEnd - kLeftFirst);
-    sonare_free_floats(out.left);
-    sonare_free_floats(out.right);
+    sonare_free_trim_silence_stereo_result(&out);
   }
 }
 

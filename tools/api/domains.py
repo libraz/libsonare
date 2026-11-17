@@ -6,7 +6,8 @@ the file, the declaring file's basename, a short list of key patterns when the
 basename names no domain, the symbol key (AREAS) for files whose declarations
 span domains (then that file's basename), and finally ``core``. A vote over those per-surface domains gives each name one
 domain (most surfaces, ties C > wasm > node > python, an override pins it); the
-result is frozen in domains.json, which the checker applies by name.
+result is frozen in domains.json, which the checker applies by name. A releaser
+``free_<struct>`` then takes the domain of the struct it releases.
 Members (methods, fields, options, values, flags) inherit their owner's domain,
 except the direct members of a MEMBER_KEYED override class, which classify by
 their own name; the inventory applies inheritance.
@@ -92,7 +93,7 @@ OVERRIDES: dict[str, str] = {
     # surface; the C functions that analyse a handle keep their operation's domain.
     "audiofrom*": "core",
     "audiofilechannelcount": "core",
-    "audiofree": "core",
+    "audiodestroy": "core",
     "audiodata": "core",
     "audiolength": "core",
     "audiosamplerate": "core",
@@ -471,7 +472,15 @@ def vote(records: list[dict]) -> dict[str, dict]:
             "domain": winner,
             "surfaces": {s: r["domain"] for s, r in firsts.items()},
             "tie": tie,
+            "pinned": bool(pinned),
         }
+    # A releaser belongs where the struct it releases does.
+    for key, v in out.items():
+        released = out.get(key[len("free_") :]) if key.startswith("free_") else None
+        if released is not None and not v["pinned"]:
+            v["domain"] = released["domain"]
+    for v in out.values():
+        del v["pinned"]
     return out
 
 

@@ -582,7 +582,7 @@ TEST_CASE("sonare_audio_from_buffer", "[c_api]") {
     REQUIRE(sonare_audio_duration_sec(audio) > 0.9f);
     REQUIRE(sonare_audio_duration_sec(audio) < 1.1f);
 
-    sonare_audio_free(audio);
+    sonare_audio_destroy(audio);
   }
 
   SECTION("returns error for null data") {
@@ -1223,7 +1223,7 @@ TEST_CASE("sonare_detect_downbeats", "[c_api]") {
       sonare_free_floats(times);
     }
 
-    sonare_audio_free(audio);
+    sonare_audio_destroy(audio);
   }
 
   SECTION("rejects invalid parameters") {
@@ -1278,7 +1278,7 @@ TEST_CASE("sonare_analyze", "[.][slow][c_api]") {
     REQUIRE(result.time_signature_candidate_count > 0);
     REQUIRE(result.time_signature_candidates != nullptr);
 
-    sonare_free_result(&result);
+    sonare_free_analysis_result(&result);
   }
 
   SECTION("returns error for null samples") {
@@ -1297,7 +1297,7 @@ TEST_CASE("sonare_analyze", "[.][slow][c_api]") {
     result.time_signature_candidates = new SonareTimeSignature[1]{{4, 4, 0.8f}};
     result.time_signature_candidate_count = 1;
 
-    sonare_free_result(&result);
+    sonare_free_analysis_result(&result);
 
     REQUIRE(result.beat_times == nullptr);
     REQUIRE(result.beat_count == 0);
@@ -2378,8 +2378,7 @@ TEST_CASE("C result emitters publish nothing when an allocation fails",
         },
         [&] { return r.left == nullptr && r.right == nullptr && r.length == 0; },
         [&] {
-          sonare_free_floats(r.left);
-          sonare_free_floats(r.right);
+          sonare_free_normalize_stereo_result(&r);
           r = {};
         });
   }

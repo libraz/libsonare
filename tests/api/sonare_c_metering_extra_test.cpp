@@ -766,7 +766,7 @@ TEST_CASE(
     CHECK(handle_db == buffer_db);
   }
 
-  sonare_audio_free(audio);
+  sonare_audio_destroy(audio);
 }
 
 TEST_CASE("Handle-form ebur128_loudness_range matches its buffer twin",
@@ -786,7 +786,7 @@ TEST_CASE("Handle-form ebur128_loudness_range matches its buffer twin",
   REQUIRE(handle_lra > 0.5f);  // the alternating loud/quiet blocks move the range off zero
   CHECK(handle_lra == buffer_lra);
 
-  sonare_audio_free(audio);
+  sonare_audio_destroy(audio);
 }
 
 TEST_CASE("Handle-form detect_clipping matches its buffer twin field by field",
@@ -808,7 +808,7 @@ TEST_CASE("Handle-form detect_clipping matches its buffer twin field by field",
 
   sonare_free_clipping_result(&buffer_result);
   sonare_free_clipping_result(&handle_result);
-  sonare_audio_free(audio);
+  sonare_audio_destroy(audio);
 }
 
 TEST_CASE("Handle-form dynamic_range matches its buffer twin field by field",
@@ -832,7 +832,7 @@ TEST_CASE("Handle-form dynamic_range matches its buffer twin field by field",
 
   sonare_free_dynamic_range_result(&buffer_result);
   sonare_free_dynamic_range_result(&handle_result);
-  sonare_audio_free(audio);
+  sonare_audio_destroy(audio);
 }
 
 TEST_CASE("Handle-form spectrum matches its buffer twin field by field",
@@ -858,7 +858,7 @@ TEST_CASE("Handle-form spectrum matches its buffer twin field by field",
 
   sonare_free_spectrum_result(&buffer_result);
   sonare_free_spectrum_result(&handle_result);
-  sonare_audio_free(audio);
+  sonare_audio_destroy(audio);
 }
 
 TEST_CASE(
@@ -901,7 +901,7 @@ TEST_CASE(
     sonare_free_spectrum_result(&handle_result);
   }
 
-  sonare_audio_free(audio);
+  sonare_audio_destroy(audio);
 }
 
 TEST_CASE("Equivalence assertions can tell two differently-shaped buffers apart",
@@ -939,8 +939,8 @@ TEST_CASE("Equivalence assertions can tell two differently-shaped buffers apart"
 
   sonare_free_spectrum_result(&spectrum_b);
   sonare_free_spectrum_result(&spectrum_a);
-  sonare_audio_free(audio_b);
-  sonare_audio_free(audio_a);
+  sonare_audio_destroy(audio_b);
+  sonare_audio_destroy(audio_a);
 }
 
 TEST_CASE("A handle measures the samples present at creation, not the caller's buffer afterwards",
@@ -974,7 +974,7 @@ TEST_CASE("A handle measures the samples present at creation, not the caller's b
         before_handle_db);  // the handle still sees the samples it was built from
   CHECK(after_buffer_db != before_buffer_db);  // the buffer form sees the mutation
 
-  sonare_audio_free(audio);
+  sonare_audio_destroy(audio);
 }
 
 TEST_CASE(
@@ -1058,7 +1058,7 @@ TEST_CASE("Handle-form and buffer-form metering agree on a null out-pointer",
                                        0, 0, 0.0f, 0.0f,
                                        nullptr) == SONARE_ERROR_INVALID_PARAMETER);
 
-  sonare_audio_free(audio);
+  sonare_audio_destroy(audio);
 }
 
 TEST_CASE("A NULL handle is refused rather than dereferenced by every handle-form metering entry",
@@ -1200,7 +1200,7 @@ TEST_CASE("Handle-form and buffer-form metering agree on out-of-domain parameter
     sonare_free_dynamic_range_result(&handle_result);
     sonare_free_dynamic_range_result(&buffer_result);
 
-    sonare_audio_free(range_audio);
+    sonare_audio_destroy(range_audio);
   }
 
   SECTION(
@@ -1232,5 +1232,5 @@ TEST_CASE("Handle-form and buffer-form metering agree on out-of-domain parameter
     sonare_free_spectrum_result(&buffer_result);
   }
 
-  sonare_audio_free(audio);
+  sonare_audio_destroy(audio);
 }

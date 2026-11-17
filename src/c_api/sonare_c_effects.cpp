@@ -294,6 +294,10 @@ SonareError sonare_normalize_rms_stereo(const float* left, const float* right, s
                               });
 }
 
+void sonare_free_normalize_stereo_result(SonareNormalizeStereoResult* result) {
+  sonare_c_mastering_detail::free_stereo_channels(result);
+}
+
 SonareError sonare_trim_ex(const float* samples, size_t length, int sample_rate, float threshold_db,
                            int frame_length, int hop_length, float** out, size_t* out_length) {
   SONARE_C_API_ENTRY;

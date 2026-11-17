@@ -695,6 +695,11 @@ def configure_effects_signatures(lib: ctypes.CDLL) -> None:
             ctypes.c_float,
             ctypes.POINTER(SonareNormalizeStereoResult),
         ]
+    if hasattr(lib, "sonare_free_normalize_stereo_result"):
+        lib.sonare_free_normalize_stereo_result.restype = None
+        lib.sonare_free_normalize_stereo_result.argtypes = [
+            ctypes.POINTER(SonareNormalizeStereoResult)
+        ]
 
     # sonare_trim
     lib.sonare_trim.restype = ctypes.c_int32

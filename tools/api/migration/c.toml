@@ -177,3 +177,17 @@ changed = "an invalid room returns SONARE_ERROR_INVALID_PARAMETER with the diagn
 domain = "effects"
 rule = "c-error-path"
 test = "tests/api/sonare_c_acoustic_test.cpp::refuses invalid RIR geometry with its diagnostic"
+
+[[entry]]
+kind = "function"
+old = "sonare_free_result"
+new = "sonare_free_analysis_result"
+domain = "analysis"
+rule = "c-free"
+
+[[entry]]
+kind = "function"
+old = "sonare_audio_free"
+new = "sonare_audio_destroy"
+domain = "core"
+rule = "c-free"

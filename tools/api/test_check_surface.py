@@ -259,6 +259,28 @@ class Conventions(CheckerCase):
             self.assertIn(self.ZERO_FAIL, lines)
             self.assertFalse(any(x.lstrip().startswith("not compared:") for x in lines))
 
+    def test_c_free_accepts_the_plain_buffer_set_and_names_the_rest(self):
+        def free_fn(name, param_type):
+            return _rec(
+                "c",
+                "function",
+                name,
+                sigs=[{"params": [{"name": "p", "type": param_type}], "returns": "void"}],
+            )
+
+        self.add(
+            free_fn("sonare_free_floats", "float*"),
+            free_fn("sonare_free_ints", "int*"),
+            free_fn("sonare_free_doubles", "double*"),
+            free_fn("sonare_free_result", "SonareBpmOptions*"),
+        )
+        _, lines = self.run_check("--surface", "c", "--check", "c-free")
+        bad = [x.strip() for x in lines if x.startswith("    c function sonare_")]
+        self.assertEqual(
+            [x.split(":")[0] for x in bad],
+            ["c function sonare_free_doubles", "c function sonare_free_result"],
+        )
+
     def test_zero_candidates_in_a_narrowed_run_is_not_a_failure(self):
         self.drop("c", "type", "SonareBpmOptions")
         for extra in (

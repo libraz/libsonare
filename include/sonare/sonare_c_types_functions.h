@@ -10,11 +10,11 @@ extern "C" {
 #endif
 
 // Audio functions
-/// @note Release @p out with @ref sonare_audio_free; it is a handle, not a
+/// @note Release @p out with @ref sonare_audio_destroy; it is a handle, not a
 ///       sonare_free_* buffer.
 SonareError sonare_audio_from_buffer(const float* data, size_t length, int sample_rate,
                                      SonareAudio** out);
-/// @note Release @p out with @ref sonare_audio_free; it is a handle, not a
+/// @note Release @p out with @ref sonare_audio_destroy; it is a handle, not a
 ///       sonare_free_* buffer.
 SonareError sonare_audio_from_memory(const uint8_t* data, size_t length, SonareAudio** out);
 
@@ -69,7 +69,7 @@ SonareError sonare_downmix_ex(const float* channels, size_t frames, int channel_
                               float** out_samples);
 
 #ifndef __EMSCRIPTEN__
-/// @note Release @p out with @ref sonare_audio_free; it is a handle, not a
+/// @note Release @p out with @ref sonare_audio_destroy; it is a handle, not a
 ///       sonare_free_* buffer.
 SonareError sonare_audio_from_file(const char* path, SonareAudio** out);
 /// @brief Loads one channel of an audio file, leaving the others out of it.
@@ -86,7 +86,7 @@ SonareError sonare_audio_from_file(const char* path, SonareAudio** out);
 ///          rate outside the supported range is @c SONARE_ERROR_INVALID_FORMAT.
 ///          A negative @p channel_index, or one the file has no channel for,
 ///          returns @c SONARE_ERROR_INVALID_PARAMETER.
-/// @note Release @p out with @ref sonare_audio_free; it is a handle, not a
+/// @note Release @p out with @ref sonare_audio_destroy; it is a handle, not a
 ///       sonare_free_* buffer.
 SonareError sonare_audio_from_file_channel(const char* path, int channel_index, SonareAudio** out);
 /// @brief Returns the positive source channel count reported by an audio file.
@@ -103,11 +103,11 @@ SonareError sonare_audio_from_file_channel(const char* path, int channel_index, 
 SonareError sonare_audio_file_channel_count(const char* path, int* out_channels);
 #endif
 
-void sonare_audio_free(SonareAudio* audio);
+void sonare_audio_destroy(SonareAudio* audio);
 /// @brief Borrowed view of the handle's mono samples, or NULL for a NULL
 ///        @p audio.
 /// @details Owned by the @ref SonareAudio handle, not the caller: valid until
-///          @ref sonare_audio_free, and never to be freed separately. Use
+///          @ref sonare_audio_destroy, and never to be freed separately. Use
 ///          @ref sonare_audio_length for the element count, which is a sample
 ///          count and not frames times channels: a handle carries one plane, and
 ///          a multi-channel source is downmixed as the handle is built.
@@ -130,7 +130,7 @@ SonareError sonare_audio_detect_onsets(const SonareAudio* audio, float** out_tim
                                        size_t* out_count);
 // Runs the full quick analysis pipeline and fills the flat C result. Use the
 // single-purpose sonare_audio_detect_* helpers for cheaper queries.
-/// @param out Receives heap-owned arrays; free with sonare_free_result.
+/// @param out Receives heap-owned arrays; free with sonare_free_analysis_result.
 SonareError sonare_audio_analyze(const SonareAudio* audio, SonareAnalysisResult* out);
 
 // Quick detection functions
@@ -255,7 +255,7 @@ SonareError sonare_detect_onsets_ex(const float* samples, size_t length, int sam
 
 // Runs the full quick analysis pipeline and fills the flat C result. Use the
 // single-purpose sonare_detect_* helpers for cheaper queries.
-/// @param out Receives heap-owned arrays; free with sonare_free_result.
+/// @param out Receives heap-owned arrays; free with sonare_free_analysis_result.
 SonareError sonare_analyze(const float* samples, size_t length, int sample_rate,
                            SonareAnalysisResult* out);
 
@@ -438,7 +438,7 @@ void sonare_free_floats(float* ptr);
 void sonare_free_ints(int* ptr);
 void sonare_free_string(char* ptr);
 void sonare_free_key_candidates(SonareKeyCandidate* ptr);
-void sonare_free_result(SonareAnalysisResult* result);
+void sonare_free_analysis_result(SonareAnalysisResult* result);
 
 // Error handling
 /// @brief Returns a short static description of @p error.

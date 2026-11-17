@@ -304,14 +304,7 @@ def mastering_repair_declick_stereo(
             right_report=_extract_declick_report(out.right_report),
         )
     finally:
-        # No dedicated free function for this result: `left`/`right` are each
-        # released with sonare_free_floats (see SonareDeclickStereoResult in
-        # sonare_c_mastering.h). A refused call leaves `out` at its
-        # zero-initialized default, so both pointers are still NULL here.
-        if out.left:
-            lib.sonare_free_floats(out.left)
-        if out.right:
-            lib.sonare_free_floats(out.right)
+        lib.sonare_free_declick_stereo_result(ctypes.byref(out))
 
 
 @_guard_buffer("samples")
@@ -528,14 +521,7 @@ def mastering_repair_declip_stereo(
             right_report=_extract_declip_report(out.right_report),
         )
     finally:
-        # No dedicated free function for this result: `left`/`right` are each
-        # released with sonare_free_floats (see SonareDeclipStereoResult in
-        # sonare_c_mastering.h). A refused call leaves `out` at its
-        # zero-initialized default, so both pointers are still NULL here.
-        if out.left:
-            lib.sonare_free_floats(out.left)
-        if out.right:
-            lib.sonare_free_floats(out.right)
+        lib.sonare_free_declip_stereo_result(ctypes.byref(out))
 
 
 @_guard_buffer("samples")
@@ -699,11 +685,4 @@ def mastering_repair_decrackle_stereo(
             right_report=_extract_decrackle_report(out.right_report),
         )
     finally:
-        # No dedicated free function for this result: `left`/`right` are each
-        # released with sonare_free_floats (see SonareDecrackleStereoResult in
-        # sonare_c_mastering.h). A refused call leaves `out` at its
-        # zero-initialized default, so both pointers are still NULL here.
-        if out.left:
-            lib.sonare_free_floats(out.left)
-        if out.right:
-            lib.sonare_free_floats(out.right)
+        lib.sonare_free_decrackle_stereo_result(ctypes.byref(out))

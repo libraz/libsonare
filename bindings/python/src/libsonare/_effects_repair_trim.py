@@ -376,11 +376,4 @@ def mastering_repair_trim_silence_stereo(
             right_range=_extract_trim_range(out.right_range),
         )
     finally:
-        # No dedicated free function: `left`/`right` are each released with
-        # sonare_free_floats (see SonareTrimSilenceStereoResult in
-        # sonare_c_mastering.h). A refused call and an empty result both leave
-        # the pointers NULL, which the guards below skip.
-        if out.left:
-            lib.sonare_free_floats(out.left)
-        if out.right:
-            lib.sonare_free_floats(out.right)
+        lib.sonare_free_trim_silence_stereo_result(ctypes.byref(out))

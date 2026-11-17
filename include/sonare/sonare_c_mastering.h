@@ -1350,8 +1350,8 @@ typedef struct {
 } SonareDeclickReport;
 
 /// @brief A declicked stereo pair and what each channel's pass did.
-/// @details @c left and @c right are heap-allocated; release each with
-///   @ref sonare_free_floats.
+/// @details @c left and @c right are heap-allocated; release the pair with
+///   @ref sonare_free_declick_stereo_result.
 typedef struct {
   float* left;
   float* right;
@@ -1372,6 +1372,10 @@ SonareError sonare_mastering_repair_declick_stereo(const float* left, const floa
                                                    size_t length, int sample_rate,
                                                    const SonareDeclickConfig* config,
                                                    SonareDeclickStereoResult* out);
+
+/// @brief Release both channels of a @ref SonareDeclickStereoResult and empty it.
+/// @details NULL and an already-released result are no-ops.
+void sonare_free_declick_stereo_result(SonareDeclickStereoResult* result);
 
 /// @brief Offline STFT-domain classical denoiser
 ///        (LogMMSE / MMSE-STSA / SpectralSubtraction).
@@ -1452,8 +1456,8 @@ typedef struct {
 } SonareDenoiseReport;
 
 /// @brief A denoised stereo pair and the one mask that produced it.
-/// @details @c left and @c right are heap-allocated; release each with
-///   @ref sonare_free_floats.
+/// @details @c left and @c right are heap-allocated; release the pair with
+///   @ref sonare_free_denoise_stereo_result.
 typedef struct {
   float* left;
   float* right;
@@ -1479,6 +1483,10 @@ typedef struct {
 SonareError sonare_mastering_repair_denoise_classical_stereo(
     const float* left, const float* right, size_t length, int sample_rate,
     const SonareDenoiseClassicalConfig* config, SonareDenoiseStereoResult* out);
+
+/// @brief Release both channels of a @ref SonareDenoiseStereoResult and empty it.
+/// @details NULL and an already-released result are no-ops.
+void sonare_free_denoise_stereo_result(SonareDenoiseStereoResult* result);
 
 /// @brief Denoises any number of channels with one channel-linked gain mask.
 /// @details The N-channel form of
@@ -1589,8 +1597,8 @@ typedef struct {
 } SonareDeclipReport;
 
 /// @brief A declipped stereo pair and what each channel's pass did.
-/// @details @c left and @c right are heap-allocated; release each with
-///   @ref sonare_free_floats.
+/// @details @c left and @c right are heap-allocated; release the pair with
+///   @ref sonare_free_declip_stereo_result.
 typedef struct {
   float* left;
   float* right;
@@ -1612,6 +1620,10 @@ SonareError sonare_mastering_repair_declip_stereo(const float* left, const float
                                                   size_t length, int sample_rate,
                                                   const SonareDeclipConfig* config,
                                                   SonareDeclipStereoResult* out);
+
+/// @brief Release both channels of a @ref SonareDeclipStereoResult and empty it.
+/// @details NULL and an already-released result are no-ops.
+void sonare_free_declip_stereo_result(SonareDeclipStereoResult* result);
 
 // Algorithm modes for sonare_mastering_repair_decrackle.
 #define SONARE_DECRACKLE_MODE_MEDIAN 0
@@ -1673,8 +1685,8 @@ typedef struct {
 } SonareDecrackleReport;
 
 /// @brief A decrackled stereo pair and what each channel's pass did.
-/// @details @c left and @c right are heap-allocated; release each with
-///   @ref sonare_free_floats.
+/// @details @c left and @c right are heap-allocated; release the pair with
+///   @ref sonare_free_decrackle_stereo_result.
 typedef struct {
   float* left;
   float* right;
@@ -1694,6 +1706,10 @@ SonareError sonare_mastering_repair_decrackle_stereo(const float* left, const fl
                                                      size_t length, int sample_rate,
                                                      const SonareDecrackleConfig* config,
                                                      SonareDecrackleStereoResult* out);
+
+/// @brief Release both channels of a @ref SonareDecrackleStereoResult and empty it.
+/// @details NULL and an already-released result are no-ops.
+void sonare_free_decrackle_stereo_result(SonareDecrackleStereoResult* result);
 
 #define SONARE_DEHUM_MODE_SUBTRACT 0  // Subtracts the tracked harmonic series
 #define SONARE_DEHUM_MODE_NOTCH 1     // Cascaded RBJ notches, hum or programme
@@ -1775,8 +1791,8 @@ typedef struct {
 } SonareDehumReport;
 
 /// @brief A dehummed stereo pair and what each channel's pass did.
-/// @details @c left and @c right are heap-allocated; release each with
-///   @ref sonare_free_floats.
+/// @details @c left and @c right are heap-allocated; release the pair with
+///   @ref sonare_free_dehum_stereo_result.
 typedef struct {
   float* left;
   float* right;
@@ -1800,6 +1816,10 @@ SonareError sonare_mastering_repair_dehum_stereo(const float* left, const float*
                                                  size_t length, int sample_rate,
                                                  const SonareDehumConfig* config,
                                                  SonareDehumStereoResult* out);
+
+/// @brief Release both channels of a @ref SonareDehumStereoResult and empty it.
+/// @details NULL and an already-released result are no-ops.
+void sonare_free_dehum_stereo_result(SonareDehumStereoResult* result);
 
 /// @brief Flat POD mirror of @c mastering::repair::DereverbClassicalConfig.
 typedef struct {
@@ -1868,8 +1888,8 @@ typedef struct {
 } SonareDereverbReport;
 
 /// @brief A dereverberated stereo pair and the one mask that produced it.
-/// @details @c left and @c right are heap-allocated; release each with
-///   @ref sonare_free_floats.
+/// @details @c left and @c right are heap-allocated; release the pair with
+///   @ref sonare_free_dereverb_stereo_result.
 typedef struct {
   float* left;
   float* right;
@@ -1893,6 +1913,10 @@ typedef struct {
 SonareError sonare_mastering_repair_dereverb_classical_stereo(
     const float* left, const float* right, size_t length, int sample_rate,
     const SonareDereverbClassicalConfig* config, SonareDereverbStereoResult* out);
+
+/// @brief Release both channels of a @ref SonareDereverbStereoResult and empty it.
+/// @details NULL and an already-released result are no-ops.
+void sonare_free_dereverb_stereo_result(SonareDereverbStereoResult* result);
 
 /// @brief Dereverberates any number of channels with one channel-linked mask.
 /// @details The N-channel form of
@@ -2029,16 +2053,16 @@ typedef struct {
 
 /// @brief A trimmed stereo pair, the range both channels were cut to, and the
 ///        two per-channel ranges that range is the union of.
-/// @details @c left and @c right are heap-allocated; release each with
-///   @ref sonare_free_floats.
+/// @details @c left and @c right are heap-allocated; release the pair with
+///   @ref sonare_free_trim_silence_stereo_result.
 ///
 ///   @c length is an OUTPUT length here, not an echo of the call's @c length
 ///   argument as it is on the other repair stereo entries: trimming shortens the
 ///   pair, so this field is the only thing that says how much came back.
 ///
 ///   When neither channel carries signal both pointers are NULL and @c length is
-///   0 -- no zero-length allocation is made. @ref sonare_free_floats accepts
-///   NULL, so a caller can still free unconditionally.
+///   0 -- no zero-length allocation is made. The releaser accepts that empty
+///   result, so a caller can still free unconditionally.
 typedef struct {
   float* left;
   float* right;
@@ -2081,6 +2105,10 @@ SonareError sonare_mastering_repair_trim_silence_stereo(const float* left, const
                                                         size_t length, int sample_rate,
                                                         const SonareTrimSilenceConfig* config,
                                                         SonareTrimSilenceStereoResult* out);
+
+/// @brief Release both channels of a @ref SonareTrimSilenceStereoResult and empty it.
+/// @details NULL and an already-released result are no-ops.
+void sonare_free_trim_silence_stereo_result(SonareTrimSilenceStereoResult* result);
 
 // ============================================================================
 // Mastering: one repair analysis and one repair application, any channel count

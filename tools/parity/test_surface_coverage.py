@@ -80,9 +80,9 @@ def test_an_allowlisted_gap_still_counts_as_a_gap() -> None:
 
 def test_a_lifecycle_helper_is_not_a_gap() -> None:
     """Destructors are answered by the facade object model, not by a function."""
-    c = _c(("audio_free", "include/sonare/sonare_c_types_functions.h"))
+    c = _c(("audio_destroy", "include/sonare/sonare_c_types_functions.h"))
     rep = _report(c, {"python": _facade("python")})
-    assert "audio_free" not in surface_coverage.unreachable_keys(rep, ("python",))["python"]
+    assert "audio_destroy" not in surface_coverage.unreachable_keys(rep, ("python",))["python"]
 
 
 def test_row_counts_and_totals_agree_with_the_findings() -> None:

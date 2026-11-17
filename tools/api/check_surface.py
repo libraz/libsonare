@@ -780,6 +780,12 @@ def chk_options_struct_size(ctx):
     return cands, bad
 
 
+# Library-allocated plain buffers, one releaser per element kind; a closed set.
+_C_PLAIN_BUFFER_RELEASERS = frozenset(
+    {"sonare_free_string", "sonare_free_floats", "sonare_free_ints"}
+)
+
+
 def chk_c_free(ctx):
     cands, bad = 0, []
     types = recs(ctx, ("c",), ("type",))
@@ -791,7 +797,7 @@ def chk_c_free(ctx):
             continue
         cands += 1
         n = r["name"]
-        if n == "sonare_free_string":
+        if n in _C_PLAIN_BUFFER_RELEASERS:
             continue
         m = re.fullmatch(r"sonare_free_(\w+)", n)
         if m and m.group(1) in structs:
@@ -802,7 +808,7 @@ def chk_c_free(ctx):
         bad.append(
             (
                 r,
-                "release is sonare_free_<result struct>, sonare_free_string or sonare_<handle>_destroy",
+                "release is sonare_free_<result struct>, sonare_<handle>_destroy or a plain-buffer releaser",
             )
         )
     return cands, bad

@@ -140,6 +140,18 @@ inline void copy_stereo_channels(const float* left, const float* right, size_t l
   *out_length = length;
 }
 
+// Release the two channels copy_stereo_channels handed out and empty the pair, so a
+// second release is a no-op.
+template <typename StereoResult>
+void free_stereo_channels(StereoResult* result) {
+  if (result == nullptr) return;
+  delete[] result->left;
+  delete[] result->right;
+  result->left = nullptr;
+  result->right = nullptr;
+  result->length = 0;
+}
+
 // Define a chain result before any validation return, so a rejected call hands
 // back a defined struct rather than the caller's untouched stack slot.
 inline void clear_chain_result(SonareMasteringChainResult* out, int sample_rate) {

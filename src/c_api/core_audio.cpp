@@ -168,7 +168,7 @@ SonareError sonare_audio_file_channel_count(const char* path, int* out_channels)
 }
 #endif
 
-void sonare_audio_free(SonareAudio* audio) { delete audio; }
+void sonare_audio_destroy(SonareAudio* audio) { delete audio; }
 
 const float* sonare_audio_data(const SonareAudio* audio) {
   if (audio == nullptr) {

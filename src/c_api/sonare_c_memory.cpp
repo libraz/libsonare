@@ -193,7 +193,7 @@ void sonare_free_string(char* ptr) { delete[] ptr; }
 
 void sonare_free_key_candidates(SonareKeyCandidate* ptr) { delete[] ptr; }
 
-void sonare_free_result(SonareAnalysisResult* result) {
+void sonare_free_analysis_result(SonareAnalysisResult* result) {
   if (result != nullptr) {
     delete[] result->beat_times;
     result->beat_times = nullptr;

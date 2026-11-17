@@ -662,7 +662,7 @@ SonareWrap::SonareWrap(const Napi::CallbackInfo& info)
 
 SonareWrap::~SonareWrap() {
   if (audio_) {
-    sonare_audio_free(audio_);
+    sonare_audio_destroy(audio_);
     audio_ = nullptr;
   }
 }
@@ -686,8 +686,8 @@ Napi::Value SonareWrap::FromFile(const Napi::CallbackInfo& info) {
     sonare_node::ThrowSonareError(env, err);
     return env.Undefined();
   }
-  std::unique_ptr<SonareAudio, decltype(&sonare_audio_free)> audio_guard(audio_raw,
-                                                                         sonare_audio_free);
+  std::unique_ptr<SonareAudio, decltype(&sonare_audio_destroy)> audio_guard(audio_raw,
+                                                                            sonare_audio_destroy);
 
   Napi::External<SonareAudio> external = Napi::External<SonareAudio>::New(env, audio_raw);
   auto result = info.This().As<Napi::Function>().New({external});
@@ -716,8 +716,8 @@ Napi::Value SonareWrap::FromFileChannel(const Napi::CallbackInfo& info) {
     sonare_node::ThrowSonareError(env, err);
     return env.Undefined();
   }
-  std::unique_ptr<SonareAudio, decltype(&sonare_audio_free)> audio_guard(audio_raw,
-                                                                         sonare_audio_free);
+  std::unique_ptr<SonareAudio, decltype(&sonare_audio_destroy)> audio_guard(audio_raw,
+                                                                            sonare_audio_destroy);
 
   Napi::External<SonareAudio> external = Napi::External<SonareAudio>::New(env, audio_raw);
   auto result = info.This().As<Napi::Function>().New({external});
@@ -768,8 +768,8 @@ Napi::Value SonareWrap::FromBuffer(const Napi::CallbackInfo& info) {
     sonare_node::ThrowSonareError(env, err);
     return env.Undefined();
   }
-  std::unique_ptr<SonareAudio, decltype(&sonare_audio_free)> audio_guard(audio_raw,
-                                                                         sonare_audio_free);
+  std::unique_ptr<SonareAudio, decltype(&sonare_audio_destroy)> audio_guard(audio_raw,
+                                                                            sonare_audio_destroy);
 
   Napi::External<SonareAudio> external = Napi::External<SonareAudio>::New(env, audio_raw);
   auto result = info.This().As<Napi::Function>().New({external});
@@ -811,8 +811,8 @@ Napi::Value SonareWrap::FromMemory(const Napi::CallbackInfo& info) {
     sonare_node::ThrowSonareError(env, err);
     return env.Undefined();
   }
-  std::unique_ptr<SonareAudio, decltype(&sonare_audio_free)> audio_guard(audio_raw,
-                                                                         sonare_audio_free);
+  std::unique_ptr<SonareAudio, decltype(&sonare_audio_destroy)> audio_guard(audio_raw,
+                                                                            sonare_audio_destroy);
 
   Napi::External<SonareAudio> external = Napi::External<SonareAudio>::New(env, audio_raw);
   auto result = info.This().As<Napi::Function>().New({external});
@@ -1216,7 +1216,7 @@ void SonareWrap::Destroy(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
   if (audio_) {
-    sonare_audio_free(audio_);
+    sonare_audio_destroy(audio_);
     audio_ = nullptr;
   }
   SONARE_NODE_CATCH_VOID(env)

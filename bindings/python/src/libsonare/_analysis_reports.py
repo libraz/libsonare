@@ -354,7 +354,7 @@ def analyze(
             ],
         )
     finally:
-        lib.sonare_free_result(ctypes.byref(out))
+        lib.sonare_free_analysis_result(ctypes.byref(out))
 
 
 def _free_json(lib: ctypes.CDLL, out_json: ctypes.c_char_p) -> None:

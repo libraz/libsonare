@@ -268,3 +268,20 @@ def configure_repair_dynamics_signatures(lib: ctypes.CDLL) -> None:
                 ctypes.POINTER(ctypes.c_size_t),
                 ctypes.POINTER(ctypes.c_int),
             ]
+
+    # Each stereo repair result is released by its own function, which frees
+    # both channels and empties the struct.
+    for _name, _result in (
+        ("declick", SonareDeclickStereoResult),
+        ("declip", SonareDeclipStereoResult),
+        ("decrackle", SonareDecrackleStereoResult),
+        ("dehum", SonareDehumStereoResult),
+        ("denoise", SonareDenoiseStereoResult),
+        ("dereverb", SonareDereverbStereoResult),
+        ("trim_silence", SonareTrimSilenceStereoResult),
+    ):
+        _free = getattr(lib, f"sonare_free_{_name}_stereo_result", None)
+        if _free is None:
+            continue
+        _free.restype = None
+        _free.argtypes = [ctypes.POINTER(_result)]

@@ -28,17 +28,29 @@ inline bool CheckMonoArgs(Napi::Env env, const Napi::CallbackInfo& info) {
   return true;
 }
 
-/// @brief Frees the two heap-owned channels of a stereo repair result.
+/// @brief The C releaser of each stereo repair result, picked by overload.
+inline void FreeStereoResult(SonareDeclickStereoResult* r) { sonare_free_declick_stereo_result(r); }
+inline void FreeStereoResult(SonareDenoiseStereoResult* r) { sonare_free_denoise_stereo_result(r); }
+inline void FreeStereoResult(SonareDeclipStereoResult* r) { sonare_free_declip_stereo_result(r); }
+inline void FreeStereoResult(SonareDecrackleStereoResult* r) {
+  sonare_free_decrackle_stereo_result(r);
+}
+inline void FreeStereoResult(SonareDehumStereoResult* r) { sonare_free_dehum_stereo_result(r); }
+inline void FreeStereoResult(SonareDereverbStereoResult* r) {
+  sonare_free_dereverb_stereo_result(r);
+}
+inline void FreeStereoResult(SonareTrimSilenceStereoResult* r) {
+  sonare_free_trim_silence_stereo_result(r);
+}
+
+/// @brief Releases a stereo repair result through its C releaser.
 template <typename Result>
 class StereoResultGuard {
  public:
   explicit StereoResultGuard(Result* result) : result_(result) {}
   StereoResultGuard(const StereoResultGuard&) = delete;
   StereoResultGuard& operator=(const StereoResultGuard&) = delete;
-  ~StereoResultGuard() {
-    sonare_free_floats(result_->left);
-    sonare_free_floats(result_->right);
-  }
+  ~StereoResultGuard() { FreeStereoResult(result_); }
 
  private:
   Result* result_;
