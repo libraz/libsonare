@@ -575,7 +575,7 @@ describe('editing effects', () => {
     const audio = Audio.fromBuffer(tone, SR);
     expect(audio.pitchCorrectToMidi(69, 71)).toBeInstanceOf(Float32Array);
     expect(
-      audio.noteStretch({ onsetSample: 0, offsetSample: audio.getLength(), stretchRatio: 1.5 }),
+      audio.noteStretch({ onsetSample: 0, offsetSample: audio.length, stretchRatio: 1.5 }),
     ).toBeInstanceOf(Float32Array);
     expect(audio.voiceChange({ pitchSemitones: 2, formantFactor: 1.1 })).toBeInstanceOf(
       Float32Array,

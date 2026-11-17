@@ -37,3 +37,174 @@
 # method entry with changed + test, not old/new.
 # A parameter that becomes a request field is an option entry with removed = true, plus a
 # changed entry (with test) on the function that now takes the request.
+
+[[entry]]
+kind = "value"
+old = "ErrorCode"
+changed = "ErrorCode is a const object plus same-named union type instead of a TS enum; there is no reverse mapping, and StaleResult = 11 is added"
+domain = "core"
+rule = "string-closed-sets"
+test = "bindings/node/tests/surface/core-errors.test.ts::is a plain object"
+
+[[entry]]
+kind = "type"
+old = "ErrorCodeName"
+changed = "new exported union type of the ErrorCode keys"
+domain = "core"
+rule = "string-closed-sets"
+test = "bindings/node/tests/surface/core-errors.test.ts::types a code as the union"
+
+[[entry]]
+kind = "field"
+old = "SonareError.code"
+changed = "typed as the ErrorCode union instead of number"
+domain = "core"
+rule = "error-class-by-cause"
+test = "bindings/node/tests/surface/core-errors.test.ts::types a code as the union"
+
+[[entry]]
+kind = "field"
+old = "SonareError.codeName"
+changed = "typed as the ErrorCodeName union instead of string, and derived from code"
+domain = "core"
+rule = "error-class-by-cause"
+test = "bindings/node/tests/surface/core-errors.test.ts::derives codeName from code"
+
+[[entry]]
+kind = "method"
+old = "SonareError.constructor"
+changed = "new SonareError(code, message, { cause }) replaces the (code, codeName, message) argument order"
+domain = "core"
+rule = "error-class-by-cause"
+test = "bindings/node/tests/surface/core-errors.test.ts::takes (code, message, options) only"
+
+[[entry]]
+kind = "field"
+old = "SonareError.cause"
+changed = "cause is passed through to Error"
+domain = "core"
+rule = "error-class-by-cause"
+test = "bindings/node/tests/surface/core-errors.test.ts::derives codeName from code and keeps the cause"
+
+[[entry]]
+kind = "function"
+old = "vocalEditApiVersion"
+new = "vocalEditAbiVersion"
+domain = "core"
+rule = "abi-probes"
+
+[[entry]]
+kind = "function"
+old = "hasFfmpegSupport"
+removed = true
+domain = "core"
+rule = "aliases-removed"
+
+[[entry]]
+kind = "function"
+old = "vocalEditAvailable"
+removed = true
+domain = "core"
+rule = "aliases-removed"
+
+[[entry]]
+kind = "value"
+old = "EXPECTED_ABI_VERSION"
+removed = true
+domain = "core"
+rule = "abi-probes"
+
+[[entry]]
+kind = "value"
+old = "EXPECTED_ENGINE_ABI_VERSION"
+removed = true
+domain = "engine"
+rule = "abi-probes"
+
+[[entry]]
+kind = "value"
+old = "EXPECTED_PROJECT_ABI_VERSION"
+removed = true
+domain = "project"
+rule = "abi-probes"
+
+[[entry]]
+kind = "type"
+old = "CapabilityCatalogParameter"
+new = "MasteringInsertParamInfo"
+domain = "mastering"
+rule = "type-names"
+
+[[entry]]
+kind = "type"
+old = "CapabilityCatalogProcessor"
+new = "MasteringProcessorCatalogEntry"
+domain = "mastering"
+rule = "type-names"
+
+[[entry]]
+kind = "type"
+old = "CapabilityCatalogMasteringPreset"
+new = "MasteringPresetCatalogEntry"
+domain = "mastering"
+rule = "type-names"
+
+[[entry]]
+kind = "type"
+old = "MasteringProcessorCatalogEntry"
+changed = "every field and array is readonly and category is the closed MasteringProcessorCategory union; copy before mutating"
+domain = "mastering"
+rule = "type-names"
+test = "bindings/node/tests/surface/core-types.test.ts::shares one catalog type family"
+
+[[entry]]
+kind = "type"
+old = "MasteringInsertParamInfo"
+changed = "every field and array is readonly; copy before mutating"
+domain = "mastering"
+rule = "type-names"
+test = "bindings/node/tests/surface/core-types.test.ts::shares one catalog type family"
+
+[[entry]]
+kind = "method"
+old = "Audio.data"
+changed = "data is one shared Float32Array read on every access; do not mutate it, copy with slice() first"
+domain = "core"
+rule = "getters"
+test = "bindings/node/tests/surface/core-audio.test.ts::returns the same shared data array on every read"
+
+[[entry]]
+kind = "method"
+old = "Audio.destroy"
+changed = "every read after destroy throws SonareError InvalidState"
+domain = "core"
+rule = "teardown"
+test = "bindings/node/tests/surface/core-audio.test.ts::refuses every read after destroy with InvalidState"
+
+[[entry]]
+kind = "method"
+old = "Audio.getData"
+new = "Audio.data"
+domain = "core"
+rule = "getters"
+
+[[entry]]
+kind = "method"
+old = "Audio.getLength"
+new = "Audio.length"
+domain = "core"
+rule = "getters"
+
+[[entry]]
+kind = "method"
+old = "Audio.getSampleRate"
+new = "Audio.sampleRate"
+domain = "core"
+rule = "getters"
+
+[[entry]]
+kind = "method"
+old = "Audio.getDuration"
+new = "Audio.durationSec"
+domain = "core"
+rule = "seconds-suffix"

@@ -1,12 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { BuiltinSynthConfig } from '../src/index.js';
-import {
-  ErrorCode,
-  EXPECTED_PROJECT_ABI_VERSION,
-  MarkerKind,
-  Project,
-  projectAbiVersion,
-} from '../src/index.js';
+import { ErrorCode, MarkerKind, Project, projectAbiVersion } from '../src/index.js';
+import { EXPECTED_PROJECT_ABI_VERSION } from '../src/types_project.js';
 
 /** Build a small deterministic project: a track + an audio clip + a MIDI clip + tempo. */
 function buildProject(): Project {

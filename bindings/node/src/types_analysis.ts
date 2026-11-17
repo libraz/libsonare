@@ -868,14 +868,17 @@ export interface RoomMorphStereoResult {
   diagnostics: RirDiagnostic[];
 }
 
-/** Row-major dense matrix returned by feature/decompose helpers. */
+/**
+ * Row-major 2-D matrix: `data[r * cols + c]` holds row `r`, column `c`. Each
+ * function returning one states what its rows and columns are.
+ */
 export interface Matrix2D {
+  /** Row-major `[rows x cols]` data buffer. */
+  data: Float32Array;
   /** Number of rows. */
   rows: number;
   /** Number of columns. */
   cols: number;
-  /** Row-major `[rows x cols]` data buffer. */
-  data: Float32Array;
 }
 
 /** Non-negative matrix factorisation result (`decompose`). */

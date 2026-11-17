@@ -119,7 +119,7 @@ describe('failure class follows the cause', () => {
 describe('SonareError is a value class with brand-based instanceof', () => {
   it('is a constructible runtime value, not a type-only name', () => {
     expect(typeof SonareError).toBe('function');
-    const built = new SonareError(ErrorCode.InvalidParameter, 'InvalidParameter', 'built by hand');
+    const built = new SonareError(ErrorCode.InvalidParameter, 'built by hand');
     expect(built).toBeInstanceOf(Error);
     expect(built.name).toBe('SonareError');
     expect(built.code).toBe(4);

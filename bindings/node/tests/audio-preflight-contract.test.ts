@@ -366,9 +366,7 @@ const NOT_AUDIO: string[] = [
     'engineAbiVersion',
     'projectAbiVersion',
     'voiceChangerAbiVersion',
-    'vocalEditAvailable',
-    'vocalEditApiVersion',
-    'hasFfmpegSupport',
+    'vocalEditAbiVersion',
     'isSonareError',
   ],
   // Analysis-to-annotation conversions over a chord or a mode name.
@@ -599,7 +597,13 @@ describe('wrong-typed arguments are TypeErrors that name the argument', () => {
 describe('Node and WASM validators answer one boundary corpus identically', () => {
   // Request-object key checking reads each package's own declared request
   // shapes, which stay surface-local by design.
-  const SURFACE_LOCAL = new Set(['optionsBag', 'requestObject']);
+  const SURFACE_LOCAL = new Set([
+    'assertKnownRequestKeys',
+    'optionsBag',
+    'requestObject',
+    'requestOnly',
+    'sampleOneShot',
+  ]);
   const f32 = (...values: number[]): Float32Array => Float32Array.from(values);
   const fn = 'probe';
 

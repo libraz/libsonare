@@ -18,7 +18,6 @@ export function checkAbiVersion(actual: unknown): void {
     typeof value === 'number' ? `0x${(value >>> 0).toString(16).padStart(8, '0')}` : String(value);
   throw new SonareError(
     ErrorCode.AbiMismatch,
-    'AbiMismatch',
     `libsonare native addon ABI mismatch: the addon reports version ${hex(actual)}, ` +
       `but this package expects ${hex(expected)}. Rebuild the addon (yarn build) so it matches the package.`,
   );

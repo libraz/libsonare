@@ -50,8 +50,8 @@ describe('Audio.fromFileChannel', () => {
       const planes = [0, 1].map((index) => Audio.fromFileChannel(stereo, index));
       const downmixed = Audio.fromFile(stereo);
       try {
-        const decoded = planes.map((audio) => audio.getData());
-        const mixed = downmixed.getData();
+        const decoded = planes.map((audio) => audio.data);
+        const mixed = downmixed.data;
         expect(decoded[0]).toHaveLength(left.length);
         expect(decoded[1]).toHaveLength(right.length);
         expect(mixed).toHaveLength(left.length);
@@ -96,7 +96,7 @@ describe('Audio.fromFileChannel', () => {
       // rejection: the channels the file does have still load.
       const monoPlane = Audio.fromFileChannel(mono, 0);
       try {
-        expect(maxAbsDiff(monoPlane.getData(), left)).toBeLessThan(QUANTIZATION_TOLERANCE);
+        expect(maxAbsDiff(monoPlane.data, left)).toBeLessThan(QUANTIZATION_TOLERANCE);
       } finally {
         monoPlane.destroy();
       }

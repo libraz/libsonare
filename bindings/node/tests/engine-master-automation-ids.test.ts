@@ -1,11 +1,13 @@
 /**
  * Master fader, pan and width automation ids on the Node RealtimeEngine, and the
- * ABI constants a host compares the loaded addon against.
+ * internal ABI mirrors the package checks the loaded addon against.
  */
 
 import { describe, expect, it } from 'vitest';
-import { EXPECTED_ABI_VERSION, EXPECTED_ENGINE_ABI_VERSION, RealtimeEngine } from '../src/index.js';
+import { EXPECTED_ABI_VERSION } from '../src/abi_version.js';
+import { RealtimeEngine } from '../src/index.js';
 import { addon } from '../src/native.js';
+import { EXPECTED_ENGINE_ABI_VERSION } from '../src/realtime_engine.js';
 
 describe('master automation ids (Node)', () => {
   it('resolves the three master controls to engine parameters and refuses other names', () => {
@@ -26,7 +28,7 @@ describe('master automation ids (Node)', () => {
   });
 });
 
-describe('exported ABI constants (Node)', () => {
+describe('internal ABI mirrors (Node)', () => {
   it('match the loaded addon', () => {
     expect(EXPECTED_ABI_VERSION).toBe(addon.abiVersion());
     expect(EXPECTED_ENGINE_ABI_VERSION).toBe(addon.engineAbiVersion());

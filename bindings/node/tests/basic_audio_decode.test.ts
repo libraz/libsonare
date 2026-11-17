@@ -7,10 +7,10 @@ import type { KeyDetectionOptions } from '../src/index.js';
 import {
   Audio,
   analyze,
+  capabilities,
   detectBpm,
   detectKey,
   detectKeyCandidates,
-  hasFfmpegSupport,
 } from '../src/index.js';
 
 function findFfmpegCli(): string | null {
@@ -222,8 +222,8 @@ describe('Audio.fileChannelCount', () => {
 
       const audio = Audio.fromFile(stereoPath);
       try {
-        expect(audio.getLength()).toBe(frameCount);
-        expect(audio.getData()).toHaveLength(frameCount);
+        expect(audio.length).toBe(frameCount);
+        expect(audio.data).toHaveLength(frameCount);
       } finally {
         audio.destroy();
       }
@@ -251,7 +251,7 @@ describe('Audio.fileChannelCount', () => {
       expect(() => Audio.fileChannelCount(malformedPath)).toThrow(
         expect.objectContaining({
           name: 'SonareError',
-          codeName: hasFfmpegSupport() ? 'DecodeFailed' : 'InvalidFormat',
+          codeName: capabilities().features.ffmpeg ? 'DecodeFailed' : 'InvalidFormat',
         }),
       );
     } finally {
@@ -261,10 +261,6 @@ describe('Audio.fileChannelCount', () => {
 });
 
 describe('error message propagation', () => {
-  it('hasFfmpegSupport returns a boolean', () => {
-    expect(typeof hasFfmpegSupport()).toBe('boolean');
-  });
-
   it('Audio.fromFile on unsupported format throws actionable error', () => {
     // Write a tiny non-audio file with an .m4a extension into a tmp dir so we
     // exercise the unsupported-format error path regardless of whether the
@@ -281,7 +277,7 @@ describe('error message propagation', () => {
       }
       expect(caught).not.toBeNull();
       expect(caught?.message.length ?? 0).toBeGreaterThan(20);
-      if (!hasFfmpegSupport()) {
+      if (!capabilities().features.ffmpeg) {
         // Without FFmpeg the message must point to the actionable hint
         // produced by load_audio (extension + SONARE_WITH_FFMPEG note).
         expect(caught?.message).toContain("'.m4a'");
@@ -308,7 +304,7 @@ describe('error message propagation', () => {
 
 describe('FFmpeg decode (skipped without build support or ffmpeg CLI)', () => {
   const ffmpegCli = findFfmpegCli();
-  const canRun = hasFfmpegSupport() && ffmpegCli !== null;
+  const canRun = capabilities().features.ffmpeg && ffmpegCli !== null;
 
   it.skipIf(!canRun)('Audio.fromFile decodes a real .m4a file', () => {
     const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'sonare-m4a-'));
@@ -338,12 +334,10 @@ describe('FFmpeg decode (skipped without build support or ffmpeg CLI)', () => {
 
       const audio = Audio.fromFile(m4aPath);
       expect(Audio.fileChannelCount(m4aPath)).toBe(1);
-      const samples = audio.getData();
-      expect(audio.getData()).not.toBe(samples);
-      samples.fill(0);
-      const retained = audio.getData();
+      const retained = audio.data;
+      expect(audio.data).toBe(retained);
       expect(retained.some((sample) => sample !== 0)).toBe(true);
-      const sr = audio.getSampleRate();
+      const sr = audio.sampleRate;
       expect(sr).toBeGreaterThan(0);
       expect(retained).toBeInstanceOf(Float32Array);
       expect(retained.length).toBeGreaterThan(1000);

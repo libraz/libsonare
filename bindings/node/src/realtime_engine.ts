@@ -2225,19 +2225,20 @@ export class RealtimeEngine {
 }
 
 /**
- * Engine C-ABI version (`engineAbiVersion()`) this package's TypeScript was
- * built against. A host comparing the loaded addon against it sees a skewed
- * engine surface.
+ * Engine C-ABI version this package's TypeScript was built against; an internal
+ * mirror the ABI tooling checks, not part of the package entry.
  */
 export const EXPECTED_ENGINE_ABI_VERSION = 3;
 
 /** Most lanes {@link RealtimeEngine.setTrackLanes} accepts (`SONARE_ENGINE_MAX_TRACK_LANES`). */
 export const MAX_TRACK_LANES = 32;
 
+/** ABI version of the realtime engine command/telemetry layout in the loaded addon. */
 export function engineAbiVersion(): number {
   return addon.engineAbiVersion();
 }
 
+/** ABI version of the realtime voice-changer config layout in the loaded addon. */
 export function voiceChangerAbiVersion(): number {
   return addon.voiceChangerAbiVersion();
 }

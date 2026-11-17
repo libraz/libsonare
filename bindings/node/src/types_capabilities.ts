@@ -1,54 +1,56 @@
-/** Build and runtime capabilities reported by the loaded native library. */
+/** Build and runtime capabilities reported by the loaded library, from {@link capabilities}. */
 export interface Capabilities {
   /** libsonare semantic version. */
-  version: string;
+  readonly version: string;
   /** ABI versions used by project and realtime-engine data structures. */
-  abi: {
-    project: number;
-    engine: number;
+  readonly abi: {
+    readonly project: number;
+    readonly engine: number;
   };
   /** Native target identifier, such as `darwin-arm64` or `wasm32`. */
-  platform: string;
+  readonly platform: string;
   /** Optional feature families compiled into this library. */
-  features: {
-    mastering: boolean;
-    mixing: boolean;
+  readonly features: {
+    readonly mastering: boolean;
+    readonly mixing: boolean;
     /**
      * True when the offline mixing assistant is compiled in. Separate from
      * `mixing` because it can be dropped on its own, and its entry points stay
      * exported either way — they report unsupported rather than disappearing,
      * so probing for the function tells a host nothing.
      */
-    mixingAssistant: boolean;
-    fx: boolean;
-    ffmpeg: boolean;
+    readonly mixingAssistant: boolean;
+    readonly fx: boolean;
+    /** True when the decoder reads the formats FFmpeg handles (M4A, AAC, FLAC, OGG, Opus); false means WAV and MP3 only. */
+    readonly ffmpeg: boolean;
     /**
      * True when hosted instruments expose continuously automatable
      * parameters (`RealtimeEngine.resolveInstrumentAutomationId`).
      */
-    instrumentParamAutomation: boolean;
+    readonly instrumentParamAutomation: boolean;
     /**
-     * The four below name the remaining build options that change which
+     * The flags below name the remaining build options that change which
      * commands and entry points a binary answers. Without them a caller can
      * observe that a capability is missing but not that it was never built.
      */
-    arrangement: boolean;
-    acousticSim: boolean;
+    readonly arrangement: boolean;
+    readonly acousticSim: boolean;
     /** True when the playback renderer (upmix, binaural, speaker output) is compiled in. */
-    playback: boolean;
-    pitchEditor: boolean;
-    vocalEdit: boolean;
-    voiceChanger: boolean;
+    readonly playback: boolean;
+    readonly pitchEditor: boolean;
+    /** True when vocal editing sessions can be opened in this build. */
+    readonly vocalEdit: boolean;
+    readonly voiceChanger: boolean;
   };
   /** Audio decoding available without, and through, FFmpeg. */
-  decode: {
-    builtin: string[];
-    ffmpeg: string[];
+  readonly decode: {
+    readonly builtin: readonly string[];
+    readonly ffmpeg: readonly string[];
   };
   /** SIMD implementation selected for the target. */
-  simd: string;
-  /** Hardware thread count reported by the native runtime. */
-  hardwareConcurrency: number;
+  readonly simd: string;
+  /** Hardware thread count reported by the runtime. */
+  readonly hardwareConcurrency: number;
 }
 
 /** Closed vocabulary of units a numeric insert parameter declares; `none` is a declaration (a fraction, a selector index, a seed). */
@@ -86,16 +88,18 @@ export type MasteringInsertParamRelation = 'lt' | 'le' | 'gt' | 'ge';
 
 /** A sibling whose live value bounds an insert parameter. */
 export interface MasteringInsertParamDependency {
-  key: string;
-  relation: MasteringInsertParamRelation;
+  readonly key: string;
+  readonly relation: MasteringInsertParamRelation;
   /** Positive multiplier on the sibling's value; 1 for a plain ordering. */
-  factor: number;
+  readonly factor: number;
 }
 
-/** One named value of an enum parameter, or of a whole-number parameter whose accepted set has holes. */
+/** One named value an enum- or closed-integer-typed insert param accepts. */
 export interface MasteringInsertParamChoice {
-  name: string;
-  value: number;
+  /** Display/identification name (lowerCamelCase); never accepted as input. */
+  readonly name: string;
+  /** The numeric wire value construction reads for this choice. */
+  readonly value: number;
 }
 
 /**
@@ -105,155 +109,232 @@ export interface MasteringInsertParamChoice {
  */
 export interface MasteringInsertSlot {
   /** Key prefix without the trailing dot, e.g. `midBand3` or `band1.dyn2`. */
-  name: string;
+  readonly name: string;
   /**
    * Enclosing slot, which has to exist for this one to; null for a top-level
    * slot. A parent is always listed before the slots naming it.
    */
-  parent: string | null;
+  readonly parent: string | null;
   /**
    * `anyKey`: the slot exists once any one of its keys is supplied, so an EQ
    * band is built as soon as a host sends any of its keys. `always`: it exists
    * without any of its keys, subject to `minCrossoverCutoffs`.
    */
-  activation: 'anyKey' | 'always';
+  readonly activation: 'anyKey' | 'always';
   /**
    * Crossover cutoffs (`cutoff<i>Hz` keys) the insert needs in effect for the
    * slot to exist; 0 when it needs none. With no cutoff key supplied, the
    * default split applies: the cutoffs that publish a non-null default.
    */
-  minCrossoverCutoffs: number;
+  readonly minCrossoverCutoffs: number;
 }
 
 /**
- * One parameter descriptor in the cross-surface capability catalog.
+ * One key a processor's construction reads, or one of its realtime automation
+ * targets, as both {@link masteringInsertParamInfo} and
+ * {@link capabilityCatalog} report it. Entries come in two runs: first the
+ * processor's realtime automation targets in id order (`id` non-null), then,
+ * sorted by name, every other construction key with `id` null and `rtSafe`
+ * false.
  *
- * Entries come in two runs: automation targets (`id` the integer used by
- * realtime automation, sorted by id), then construction-only keys (`id` null,
- * `rtSafe` false, sorted by name).
- *
- * `type` is the C++ type the processor's config builder reads the key as. An
- * `"enum"` value is sent as the number in its `choices` entry. A `"string"` or
- * `"array"` key (an embedded impulse response, a per-band list) is
- * construction-only and reports null for `default`, `min`, `max` and
- * `choices`.
- *
- * `default` is the value the processor uses when the key is absent, read from
- * the config struct's own field initializer; it is null for an automation
- * target with no construction key and for a key construction reads with no
- * fallback.
- *
- * `choices` is null unless the accepted values are a closed set, listed in
- * value order; when it is non-null, it is the only accepted set and `min` /
- * `max` are both null. Otherwise `min` and `max` are the range construction
- * ACCEPTS, measured by handing candidate values to the same code path a
- * caller would use. They are a hard constraint, not a recommended UI range —
- * a value outside them is an error, while an unvalidated control (most gains)
- * reports null on both, meaning "this catalog states no limit" rather than
- * "unknown". Three properties to plan for: a bound is measured with every
- * other parameter at its default, so two parameters that constrain each other
- * each report the other's default (unless it is a `dependsOn` entry, which
- * leaves the bound null; `coupledWith` names the siblings that move a range
- * `dependsOn` cannot state); a sample-rate-derived bound reflects the
- * un-prepared processor and rises once the insert is prepared at a higher
- * rate; and an exclusive bound is reported as its limit value and flagged by
- * `minExclusive` / `maxExclusive`, so a control requiring `> 0` reports `min` 0
- * with `minExclusive` true. A ceiling that follows the processing rate carries
- * `maxRelativeTo: "nyquist"`: its effective ceiling is the lower of `max` and
- * the host's Nyquist.
+ * `min` and `max` are the range construction ACCEPTS, measured by handing
+ * candidate values to the same code path a caller would use: a hard
+ * constraint, not a UI range, and null on both for an unvalidated control.
+ * A bound is measured with every other parameter at its default; a
+ * sample-rate-derived bound reflects the un-prepared processor; an exclusive
+ * bound is reported as its limit value and flagged by `minExclusive` /
+ * `maxExclusive`.
  */
-export interface CapabilityCatalogParameter {
-  name: string;
-  id: number | null;
-  rtSafe: boolean;
-  type: 'boolean' | 'number' | 'enum' | 'string' | 'array';
-  min: number | null;
-  max: number | null;
-  /** Whether `min` itself is rejected; false when `min` is null. */
-  minExclusive: boolean;
-  /** Whether `max` itself is rejected; false when `max` is null. */
-  maxExclusive: boolean;
-  /** `"nyquist"` when the effective ceiling is the lower of `max` and the host's Nyquist (both exclusive); null otherwise. */
-  maxRelativeTo: 'nyquist' | null;
-  default: boolean | number | null;
-  unit: MasteringInsertParamUnit | null;
-  /** Lowest value a control should draw, inside `min` / `max`; null when the accepted range is also the display range. */
-  uiMin: number | null;
-  /** Highest value a control should draw, inside `min` / `max`; null when the accepted range is also the display range. */
-  uiMax: number | null;
-  /** Axis a control draws the value on. */
-  scale: MasteringInsertParamScale;
-  choices: MasteringInsertParamChoice[] | null;
+export interface MasteringInsertParamInfo {
+  /** JSON-key parameter name, as used in scene insert params. */
+  readonly name: string;
   /**
-   * The {@link MasteringInsertSlot} this key belongs to, or null for a key that
-   * always exists.
+   * Integer param id for realtime automation lanes / MIDI-CC binding, or null
+   * for a construction-only key with no automation target.
    */
-  slot: string | null;
+  readonly id: number | null;
+  /** Whether the param can be changed live from the audio thread; false when `id` is null. */
+  readonly rtSafe: boolean;
+  /**
+   * The C++ type the processor's config builder reads the key as. `"enum"` is
+   * sent as the number in its `choices` entry; `"string"` / `"array"` (an
+   * embedded impulse response, a per-band list) is construction-only and
+   * reports null for `min`, `max`, `default` and `choices`.
+   */
+  readonly type: 'boolean' | 'number' | 'enum' | 'string' | 'array';
+  /** Smallest value construction accepts, or null when the catalog states no limit or `choices` is non-null. */
+  readonly min: number | null;
+  /** Largest value construction accepts, or null when the catalog states no limit or `choices` is non-null. */
+  readonly max: number | null;
+  /** Whether `min` itself is rejected (a `> min` constraint); false when `min` is null. */
+  readonly minExclusive: boolean;
+  /** Whether `max` itself is rejected (a `< max` constraint); false when `max` is null. */
+  readonly maxExclusive: boolean;
+  /**
+   * `"nyquist"` when the ceiling follows the processing rate: the effective
+   * ceiling is then the lower of `max` (measured at the catalog's probe rate)
+   * and the host's Nyquist frequency, both exclusive. Null otherwise.
+   */
+  readonly maxRelativeTo: 'nyquist' | null;
+  /**
+   * Value the processor uses when the key is absent — the config struct's own
+   * field initializer, an enum as its number. Null for a param id with no
+   * construction key, a `"string"` / `"array"` key, or a construction key with
+   * no fallback.
+   */
+  readonly default: boolean | number | null;
+  /** Declared unit of a number; null for any other type. */
+  readonly unit: MasteringInsertParamUnit | null;
+  /** Lowest value a control should draw, inside `min` / `max`; null when the accepted range is also the display range. */
+  readonly uiMin: number | null;
+  /** Highest value a control should draw, inside `min` / `max`; null when the accepted range is also the display range. */
+  readonly uiMax: number | null;
+  /** Axis a control draws the value on. */
+  readonly scale: MasteringInsertParamScale;
+  /**
+   * The closed set of values construction accepts, in value order, or null
+   * when the accepted values are not a closed set. Non-null only for `"enum"`
+   * (every declared enumerator construction accepts) or a `"number"` key
+   * whose accepted integers have holes; `min` / `max` are then both null.
+   */
+  readonly choices: readonly MasteringInsertParamChoice[] | null;
+  /** The {@link MasteringInsertSlot} this key belongs to, or null for a key that always exists. */
+  readonly slot: string | null;
   /**
    * Siblings whose live value bounds this key, each read as `this <relation> factor * sibling`;
    * empty for an independent key. A bound that only restates this dependency at the sibling's default is left null, so `min` and `max` are limits of the key's own.
    */
-  dependsOn: MasteringInsertParamDependency[];
+  readonly dependsOn: readonly MasteringInsertParamDependency[];
   /**
    * Siblings, other than `dependsOn` entries, whose value moves this key's accepted range in a way
    * `dependsOn` cannot state (a receiver spacing against the room geometry); `min` / `max` are measured with them at their defaults. Empty for an independent key.
    */
-  coupledWith: string[];
+  readonly coupledWith: readonly string[];
 }
 
-/** One named mastering processor and its host-facing capabilities. */
-export interface CapabilityCatalogProcessor {
-  id: string;
-  kind: 'realtime' | 'offline' | 'pair';
-  realtimeInsertable: boolean;
-  stereoOnly: boolean;
-  latencySamples: number;
-  tailSamples: number;
+/** Latency and tail of one insert built from given params and prepared at a given sample rate. */
+export interface MasteringInsertTiming {
+  /** Latency in samples at the queried sample rate. */
+  readonly latencySamples: number;
+  /** Audible decay tail in samples at the queried sample rate. */
+  readonly tailSamples: number;
+}
+
+/**
+ * How a processor handles a buffer with more than two channels (a surround
+ * bed). `multichannel` processes every plane in one call; `stereoPairOnly`
+ * operates on the front L/R pair and passes any surround planes through dry.
+ * `perChannel` / `passthrough` are reserved and unused by the current catalog.
+ */
+export type MasteringChannelPolicy =
+  | 'multichannel'
+  | 'stereoPairOnly'
+  | 'perChannel'
+  | 'passthrough';
+
+/** Coarse algorithmic work estimate for a realtime insert; not a benchmark. */
+export type MasteringRealtimeCost = 'low' | 'moderate' | 'high';
+
+/**
+ * Catalog grouping for a processor picker, derived from the id's prefix
+ * (`eq.*` -> `eq`, `match.*` -> `reference`); anything unprefixed is `other`.
+ */
+export type MasteringProcessorCategory =
+  | 'dynamics'
+  | 'effects'
+  | 'eq'
+  | 'final'
+  | 'maximizer'
+  | 'multiband'
+  | 'other'
+  | 'reference'
+  | 'repair'
+  | 'saturation'
+  | 'spectral'
+  | 'stereo'
+  | 'utility'
+  | 'voice';
+
+/**
+ * One processor's role in the catalog, as both
+ * {@link masteringProcessorCatalog} and {@link capabilityCatalog} report it.
+ */
+export interface MasteringProcessorCatalogEntry {
+  /** Processor id (the name used for scene inserts / named processors). */
+  readonly id: string;
+  /**
+   * Primary classification, by precedence pair > realtime > offline: `pair` for
+   * two-input `match.*` processors, `realtime` for ids that build as a realtime
+   * scene insert, `offline` for whole-file-only processors.
+   */
+  readonly kind: 'realtime' | 'offline' | 'pair';
+  /** True exactly for ids that always succeed as a realtime scene insert. */
+  readonly realtimeInsertable: boolean;
+  /** True for processors with no mono implementation (stereo-only). */
+  readonly stereoOnly: boolean;
+  /**
+   * Reported latency for the default 48 kHz / 512-sample probe configuration.
+   * Zero for offline processors; configuration-dependent values are estimates.
+   */
+  readonly latencySamples: number;
+  /**
+   * Audible decay length for the same default prepared probe. Zero for
+   * offline, dry-only, and no-tail processors.
+   */
+  readonly tailSamples: number;
   /** Coarse realtime work estimate, or null when the processor is not an insert. */
-  realtimeCost: 'low' | 'moderate' | 'high' | null;
-  channelPolicy: 'multichannel' | 'stereoPairOnly' | 'perChannel' | 'passthrough';
-  category: string;
-  /** Whether the processor has a causal configuration; false for declick, declip and trimSilence. */
-  causal: boolean;
-  params: CapabilityCatalogParameter[];
+  readonly realtimeCost: MasteringRealtimeCost | null;
+  /** How the mixer wraps the processor on a >2-channel (surround) bus insert. */
+  readonly channelPolicy: MasteringChannelPolicy;
+  /** Grouping for a processor picker. */
+  readonly category: MasteringProcessorCategory;
+  /**
+   * Whether the processor has a configuration whose output at a sample depends only on the
+   * input up to it, plus its reported latency. False for `repair.declick`, `repair.declip` and
+   * `repair.trimSilence`; true for the other repair stages and every insert.
+   */
+  readonly causal: boolean;
+  /**
+   * The processor's construction parameters: for an insert the list
+   * {@link masteringInsertParamInfo} returns, for a `repair.*` stage the bounds its own
+   * configuration validation enforces (no `id`, never `rtSafe`). Empty for any other offline entry.
+   */
+  readonly params: readonly MasteringInsertParamInfo[];
   /**
    * The insert's conditional key groups in declaration order, named by each
    * parameter's `slot`. Empty for entries that are not realtime-insertable.
    */
-  slots: MasteringInsertSlot[];
+  readonly slots: readonly MasteringInsertSlot[];
+}
+
+/**
+ * One built-in mastering preset's loudness-stage identity. The restoration
+ * kind's three loudness values are null: its repair stages leave level alone,
+ * so it carries no loudness target, ceiling or limiter allowance.
+ */
+export interface MasteringPresetCatalogEntry {
+  readonly name: string;
+  readonly kind: 'mastering' | 'restoration';
+  readonly targetLufs: number | null;
+  readonly truePeakCeilingDb: number | null;
+  readonly maxLimiterGainReductionDb: number | null;
 }
 
 /** Built-in preset names grouped by feature family. */
 export interface CapabilityCatalogPresets {
-  mastering: string[];
-  synth: string[];
-  mixingScene: string[];
-  voiceChanger: string[];
-  playbackRoom: string[];
-}
-
-/**
- * One built-in mastering preset's loudness-stage identity, in `preset_names()`
- * order.
- *
- * `kind: 'restoration'` presets enable repair stages only and leave level
- * alone, so all three numeric fields are null; every other preset carries the
- * loudness target its chain builds toward.
- */
-export interface CapabilityCatalogMasteringPreset {
-  name: string;
-  kind: 'mastering' | 'restoration';
-  targetLufs: number | null;
-  truePeakCeilingDb: number | null;
-  maxLimiterGainReductionDb: number | null;
+  readonly mastering: readonly string[];
+  readonly synth: readonly string[];
+  readonly mixingScene: readonly string[];
+  readonly voiceChanger: readonly string[];
+  readonly playbackRoom: readonly string[];
 }
 
 /** One flat mastering chain stage: `<prefix>.<leaf>` keys are `processor`'s parameters. */
 export interface CapabilityCatalogChainStage {
-  prefix: string;
+  readonly prefix: string;
   /** Catalog processor id, or null when every key of the stage is chain-only. */
-  processor: string | null;
-  enabledKey: string;
+  readonly processor: string | null;
+  readonly enabledKey: string;
 }
 
 /**
@@ -261,33 +342,33 @@ export interface CapabilityCatalogChainStage {
  * `processor` is null; otherwise `<key>.<i>.<field>` is that processor's `field`.
  */
 export interface CapabilityCatalogChainList {
-  key: string;
-  processor: string | null;
-  minItems: number;
-  maxItems: number;
+  readonly key: string;
+  readonly processor: string | null;
+  readonly minItems: number;
+  readonly maxItems: number;
 }
 
 /** The other spellings of a canonical chain key; `<i>` stands for a list index. */
 export interface CapabilityCatalogChainAlias {
-  key: string;
-  aliases: string[];
+  readonly key: string;
+  readonly aliases: readonly string[];
 }
 
 /** How each flat mastering chain key is described. */
 export interface CapabilityCatalogChain {
-  stages: CapabilityCatalogChainStage[];
-  lists: CapabilityCatalogChainList[];
+  readonly stages: readonly CapabilityCatalogChainStage[];
+  readonly lists: readonly CapabilityCatalogChainList[];
   /** Keys no processor describes, with bounds measured through the chain's own validator. */
-  params: CapabilityCatalogParameter[];
-  aliases: CapabilityCatalogChainAlias[];
+  readonly params: readonly MasteringInsertParamInfo[];
+  readonly aliases: readonly CapabilityCatalogChainAlias[];
 }
 
 /** Complete runtime catalog exposed by {@link capabilityCatalog}. */
 export interface CapabilityCatalog {
-  version: string;
-  abi: Capabilities['abi'];
-  processors: CapabilityCatalogProcessor[];
-  chain: CapabilityCatalogChain;
-  presets: CapabilityCatalogPresets;
-  masteringPresets: CapabilityCatalogMasteringPreset[];
+  readonly version: string;
+  readonly abi: Capabilities['abi'];
+  readonly processors: readonly MasteringProcessorCatalogEntry[];
+  readonly chain: CapabilityCatalogChain;
+  readonly presets: CapabilityCatalogPresets;
+  readonly masteringPresets: readonly MasteringPresetCatalogEntry[];
 }

@@ -226,11 +226,7 @@ export class VocalEditSession implements Disposable {
 
   private requireAlive(): void {
     if (this.disposed) {
-      throw new SonareError(
-        ErrorCode.InvalidState,
-        'InvalidState',
-        'VocalEditSession has been disposed',
-      );
+      throw new SonareError(ErrorCode.InvalidState, 'VocalEditSession has been disposed');
     }
   }
 }
@@ -316,11 +312,7 @@ export class VocalEditDraft implements Disposable {
 
   private requireAlive(): void {
     if (this.disposed || disposedSessions.has(this.owner)) {
-      throw new SonareError(
-        ErrorCode.InvalidState,
-        'InvalidState',
-        'VocalEditDraft has been disposed',
-      );
+      throw new SonareError(ErrorCode.InvalidState, 'VocalEditDraft has been disposed');
     }
   }
 }
@@ -386,11 +378,7 @@ export class VocalRenderSnapshot implements Disposable {
 
   private requireAlive(): void {
     if (this.disposed) {
-      throw new SonareError(
-        ErrorCode.InvalidState,
-        'InvalidState',
-        'VocalRenderSnapshot has been disposed',
-      );
+      throw new SonareError(ErrorCode.InvalidState, 'VocalRenderSnapshot has been disposed');
     }
   }
 
@@ -461,11 +449,7 @@ export class VocalRenderJob implements Disposable {
 
   private requireAlive(): void {
     if (this.disposed) {
-      throw new SonareError(
-        ErrorCode.InvalidState,
-        'InvalidState',
-        'VocalRenderJob has been disposed',
-      );
+      throw new SonareError(ErrorCode.InvalidState, 'VocalRenderJob has been disposed');
     }
   }
 }
@@ -610,13 +594,11 @@ function resolveVocalOperationTimes(
   });
 }
 
-/** Whether this build has the C vocal-edit surface linked. */
-export function vocalEditAvailable(): boolean {
-  return vocalAddon.vocalEditAvailable();
-}
-
-/** Version of the C vocal-edit ABI exposed by the loaded addon. */
-export function vocalEditApiVersion(): number {
+/**
+ * ABI version of the vocal-edit layout in the loaded addon. Whether vocal
+ * editing is built in at all is `capabilities().features.vocalEdit`.
+ */
+export function vocalEditAbiVersion(): number {
   return vocalAddon.vocalEditApiVersion();
 }
 

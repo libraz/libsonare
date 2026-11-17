@@ -23,12 +23,10 @@ import {
   detectKey,
   detectOnsets,
   ErrorCode,
-  EXPECTED_PROJECT_ABI_VERSION,
   fixFrames,
   fixLength,
   frameSignal,
   framesToSamples,
-  hasFfmpegSupport,
   hybridCqt,
   masteringAssistantSuggest,
   masteringAssistantSuggestStereo,
@@ -62,6 +60,7 @@ import {
   version,
   vqt,
 } from '../src/index.js';
+import { EXPECTED_PROJECT_ABI_VERSION } from '../src/types_project.js';
 
 const SR = 22050;
 
@@ -106,7 +105,7 @@ describe('standalone functions', () => {
       mixing: expect.any(Boolean),
       mixingAssistant: expect.any(Boolean),
       fx: expect.any(Boolean),
-      ffmpeg: hasFfmpegSupport(),
+      ffmpeg: expect.any(Boolean),
       instrumentParamAutomation: expect.any(Boolean),
       arrangement: expect.any(Boolean),
       acousticSim: expect.any(Boolean),

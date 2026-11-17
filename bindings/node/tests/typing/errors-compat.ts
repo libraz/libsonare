@@ -10,7 +10,7 @@
  * vitest does not collect it, because it asserts nothing at runtime.
  */
 
-import { isSonareError, type SonareError } from '../../src/index.js';
+import { ErrorCode, isSonareError, type SonareError } from '../../src/index.js';
 
 // An object literal assigned to the type. This is the case a nominal class
 // rejects, so it is the load-bearing one.
@@ -24,8 +24,8 @@ const fromLiteral: SonareError = {
 // The shape the addon actually raises: a plain Error with the fields attached.
 const fromNativeThrow: SonareError = Object.assign(new Error('boom'), {
   name: 'SonareError' as const,
-  code: 4,
-  codeName: 'InvalidParameter',
+  code: ErrorCode.InvalidParameter,
+  codeName: 'InvalidParameter' as const,
 });
 
 // Used as a parameter annotation.

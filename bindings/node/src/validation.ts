@@ -151,7 +151,16 @@ export function assertIntegralSampleRate(
   }
 }
 
-export function assertSampleRate(fnName: string, sampleRate: number, argName = 'sampleRate'): void {
+/**
+ * A sample rate: `TypeError` unless a number, `RangeError` unless an integer
+ * inside the supported range (NaN, infinities, fractions, zero and negatives
+ * included).
+ */
+export function assertSampleRate(
+  fnName: string,
+  sampleRate: unknown,
+  argName = 'sampleRate',
+): void {
   if (typeof sampleRate !== 'number') {
     throw new TypeError(`${fnName}: ${argName} must be a number`);
   }
@@ -701,4 +710,86 @@ export function requestObject<T, N extends RequestFn>(
     assertKnownRequestKeys(fnName, value);
   }
   return value;
+}
+
+/** A request carrying audio plus the rate it was recorded at. */
+interface SampleRequest {
+  samples: Float32Array;
+  sampleRate: number;
+}
+
+function plainObject(value: unknown): value is Record<string, unknown> {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    !Array.isArray(value) &&
+    !ArrayBuffer.isView(value)
+  );
+}
+
+function assertNoExtraArguments(fnName: string, args: readonly unknown[], from: number): void {
+  for (let i = from; i < args.length; i++) {
+    if (args[i] !== undefined) {
+      throw new TypeError(`${fnName}: unexpected argument after the request object`);
+    }
+  }
+}
+
+/**
+ * Normalises the two accepted call forms of a one-shot over audio into one
+ * request: `(request)` and `(samples, sampleRate, options?)`.
+ *
+ * Throws `TypeError` for a wrong-typed argument, a missing `sampleRate`, an
+ * extra argument after a request object, an unknown key, or `samples` /
+ * `sampleRate` repeated inside `options`; `RangeError` for an out-of-domain
+ * sample rate or audio. The caller states the request type it expects.
+ */
+export function sampleOneShot<R extends SampleRequest>(
+  fnName: RequestFn,
+  args: readonly unknown[],
+): R {
+  const first = args[0];
+  if (first instanceof Float32Array) {
+    if (args.length > 3) {
+      throw new TypeError(`${fnName}: expected (samples, sampleRate, options?)`);
+    }
+    const sampleRate = args[1];
+    assertSampleRate(fnName, sampleRate);
+    const options = args[2] ?? {};
+    if (!plainObject(options)) {
+      throw new TypeError(`${fnName}: options must be an object`);
+    }
+    for (const key of ['samples', 'sampleRate']) {
+      if (Object.keys(options).includes(key)) {
+        throw new TypeError(`${fnName}: unknown option '${key}'`);
+      }
+    }
+    optionsBag(fnName, options);
+    return { ...options, samples: first, sampleRate } as unknown as R;
+  }
+  if (plainObject(first)) {
+    assertNoExtraArguments(fnName, args, 1);
+    assertKnownRequestKeys(fnName, first);
+    if (first.sampleRate === undefined || first.sampleRate === null) {
+      throw new TypeError(`${fnName}: sampleRate is required`);
+    }
+    assertSampleRate(fnName, first.sampleRate);
+    return first as unknown as R;
+  }
+  assertAudioSamples(fnName, first, {}, 'samples');
+  throw new TypeError(`${fnName}: expected a request object or a Float32Array`);
+}
+
+/**
+ * Normalises a one-shot that takes no audio: exactly one request object. Throws
+ * `TypeError` for any other first argument, an extra argument, or an unknown key.
+ */
+export function requestOnly<R extends object>(fnName: RequestFn, args: readonly unknown[]): R {
+  const request = args[0];
+  if (!plainObject(request)) {
+    throw new TypeError(`${fnName}: request must be an object`);
+  }
+  assertNoExtraArguments(fnName, args, 1);
+  assertKnownRequestKeys(fnName, request);
+  return request as R;
 }

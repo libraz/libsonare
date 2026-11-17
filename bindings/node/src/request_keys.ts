@@ -1586,7 +1586,84 @@ const PLAYBACK_RENDERER_CONFIG_KEYS = keySet(
   'output_limiter',
 );
 
+const SET_PART_RIG_REQUEST_KEYS = keySet('destinationId', 'part', 'mode', 'inserts');
+const SET_CAPTURE_PUNCH_REQUEST_KEYS = keySet(
+  'startSample',
+  'startSec',
+  'endSample',
+  'endSec',
+  'enabled',
+);
+const RENDER_OFFLINE_REQUEST_KEYS = keySet('channels', 'blockSize', 'finalize');
+const IMPORT_EXTERNAL_SEPARATED_STEM_REQUEST_KEYS = keySet('sampleRate', 'stems');
+const BAKE_MIDI_FX_REQUEST_KEYS = keySet('clipId', 'configJson', 'withSourceIndex');
+const PREVIEW_MIDI_FX_REQUEST_KEYS = keySet('clipId', 'configJson');
+const TRANSCRIBE_TO_CLIP_REQUEST_KEYS = keySet(
+  'clipId',
+  'samples',
+  'sampleRate',
+  'polyphonic',
+  'referenceHz',
+  'fmin',
+  'fmax',
+  'minNoteMs',
+  'minNoteDivision',
+  'segmentationThresholdCents',
+  'monophonicModel',
+  'velocityFloorDb',
+  'fixedVelocity',
+  'maxPolyphony',
+  'minFramePeakRatio',
+  'minRidgePeakRatio',
+  'reattackRatio',
+  'group',
+  'channel',
+);
+const APPLY_PROJECT_VOCAL_EDIT_REQUEST_KEYS = keySet(
+  'clipId',
+  'takeId',
+  'expectedSourceId',
+  'expectedSourceSampleRate',
+  'expectedSourceSampleCount',
+  'expectedSourceSha256',
+  'expectedClipLengthPpq',
+  'expectedSourceOffsetPpq',
+  'renderedMono',
+  'renderedSampleRate',
+  'renderedStartSample',
+  'renderToken',
+  'sve1',
+);
+const VOCAL_APPLY_REQUEST_KEYS = keySet('expectedGeneration', 'operations');
+const VOCAL_RENDER_REQUEST_KEYS = keySet('range', 'requestId', 'signal');
+const MASTERING_REPAIR_DEREVERB_CONFIG_FOR_ROOM_REQUEST_KEYS = keySet(
+  'estimate',
+  'threshold',
+  'attenuation',
+  'nFft',
+  'hopLength',
+  't60Sec',
+  'lateDelayMs',
+  'overSubtraction',
+  'spectralFloor',
+  'wpeEnabled',
+  'wpeIterations',
+  'wpeTaps',
+  'wpeStrength',
+);
+
 export const REQUEST_KEYS = {
+  setPartRig: SET_PART_RIG_REQUEST_KEYS,
+  setCapturePunch: SET_CAPTURE_PUNCH_REQUEST_KEYS,
+  renderOffline: RENDER_OFFLINE_REQUEST_KEYS,
+  importExternalSeparatedStem: IMPORT_EXTERNAL_SEPARATED_STEM_REQUEST_KEYS,
+  bakeMidiFx: BAKE_MIDI_FX_REQUEST_KEYS,
+  previewMidiFx: PREVIEW_MIDI_FX_REQUEST_KEYS,
+  transcribeToClip: TRANSCRIBE_TO_CLIP_REQUEST_KEYS,
+  applyProjectVocalEdit: APPLY_PROJECT_VOCAL_EDIT_REQUEST_KEYS,
+  vocalApply: VOCAL_APPLY_REQUEST_KEYS,
+  vocalRender: VOCAL_RENDER_REQUEST_KEYS,
+  masteringRepairDereverbConfigForRoom: MASTERING_REPAIR_DEREVERB_CONFIG_FOR_ROOM_REQUEST_KEYS,
   alignTakeToReference: ALIGN_TAKE_TO_REFERENCE_REQUEST_KEYS,
   renderPlayback: RENDER_PLAYBACK_REQUEST_KEYS,
   detectBpm: SAMPLES_REQUEST_KEYS,

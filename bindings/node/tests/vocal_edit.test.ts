@@ -1,13 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import {
+  capabilities,
   createVocalEditSession,
   ErrorCode,
   restoreVocalEditSession,
   type VocalCreateRequest,
   type VocalEditSession,
   type VocalNoteEdit,
-  vocalEditApiVersion,
-  vocalEditAvailable,
+  vocalEditAbiVersion,
 } from '../src/index.js';
 
 const SAMPLE_RATE = 16000;
@@ -77,9 +77,9 @@ function create(): VocalEditSession {
 
 describe('Node vocal edit facade', () => {
   it('reports the linked vocal-edit surface and its ABI version', () => {
-    expect(vocalEditAvailable()).toBe(true);
-    expect(Number.isInteger(vocalEditApiVersion())).toBe(true);
-    expect(vocalEditApiVersion()).toBeGreaterThan(0);
+    expect(capabilities().features.vocalEdit).toBe(true);
+    expect(Number.isInteger(vocalEditAbiVersion())).toBe(true);
+    expect(vocalEditAbiVersion()).toBeGreaterThan(0);
   });
 
   it('copies source and supplied analysis before returning the session', () => {

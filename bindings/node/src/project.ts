@@ -105,10 +105,8 @@ export {
 } from './types.js';
 
 /**
- * Returns the runtime project ABI version of the loaded native binding.
- *
- * Equals {@link EXPECTED_PROJECT_ABI_VERSION} when the arrangement subsystem is
- * compiled in, `0` when the native library was built without it.
+ * ABI version of the flat project layout in the loaded native binding, or `0`
+ * when the native library was built without the arrangement subsystem.
  */
 export function projectAbiVersion(): number {
   return addon.projectAbiVersion();
@@ -252,7 +250,6 @@ export class Project {
     if (this.instrumentBounceActive) {
       throw new SonareError(
         ErrorCode.InvalidState,
-        'InvalidState',
         'Project is busy: it cannot be used from inside a bounceWithInstruments callback',
       );
     }
@@ -281,7 +278,7 @@ export class Project {
 
   private assertAlive(): void {
     if (this.disposed) {
-      throw new SonareError(ErrorCode.InvalidState, 'InvalidState', 'Project has been disposed');
+      throw new SonareError(ErrorCode.InvalidState, 'Project has been disposed');
     }
   }
 

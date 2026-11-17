@@ -26,14 +26,14 @@ import type {
   CapabilityCatalogChainAlias,
   CapabilityCatalogChainList,
   CapabilityCatalogChainStage,
-  CapabilityCatalogMasteringPreset,
-  CapabilityCatalogParameter,
   CapabilityCatalogPresets,
-  CapabilityCatalogProcessor,
   DynamicsAnalysisResult,
   DynamicsProcessorResult,
   DynamicsResult,
+  MasteringInsertParamInfo,
   MasteringInsertSlot,
+  MasteringPresetCatalogEntry,
+  MasteringProcessorCatalogEntry,
 } from '../src/index.js';
 
 interface SharedTypeShapes {
@@ -115,7 +115,7 @@ const catalogParameter = {
   slot: 'band1',
   dependsOn: [{ key: 'maxHz', relation: 'le', factor: 1 }],
   coupledWith: ['minHz'],
-} satisfies CapabilityCatalogParameter;
+} satisfies MasteringInsertParamInfo;
 
 const catalogSlot = {
   name: 'band1',
@@ -137,7 +137,7 @@ const catalogProcessor = {
   causal: true,
   params: [catalogParameter],
   slots: [catalogSlot],
-} satisfies CapabilityCatalogProcessor;
+} satisfies MasteringProcessorCatalogEntry;
 
 const catalogPresets = {
   mastering: [],
@@ -153,7 +153,7 @@ const catalogMasteringPreset = {
   targetLufs: null,
   truePeakCeilingDb: null,
   maxLimiterGainReductionDb: null,
-} satisfies CapabilityCatalogMasteringPreset;
+} satisfies MasteringPresetCatalogEntry;
 
 const catalogChainStage = {
   prefix: 'dynamics.compressor',
@@ -196,11 +196,11 @@ describe('capability catalog type shapes', () => {
     ['CapabilityCatalogChainAlias', catalogChainAlias],
     ['CapabilityCatalogChainList', catalogChainList],
     ['CapabilityCatalogChainStage', catalogChainStage],
-    ['CapabilityCatalogMasteringPreset', catalogMasteringPreset],
-    ['CapabilityCatalogParameter', catalogParameter],
     ['CapabilityCatalogPresets', catalogPresets],
-    ['CapabilityCatalogProcessor', catalogProcessor],
+    ['MasteringInsertParamInfo', catalogParameter],
     ['MasteringInsertSlot', catalogSlot],
+    ['MasteringPresetCatalogEntry', catalogMasteringPreset],
+    ['MasteringProcessorCatalogEntry', catalogProcessor],
   ] as const)('%s is the shape the shared corpus declares', (name, sample) => {
     expect(Object.keys(sample).sort()).toEqual([...shapes.types[name]].sort());
   });

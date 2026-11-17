@@ -28,12 +28,36 @@ const declared = (keys: object): Record<string, undefined> =>
 const refusals = /unknown (request key|option)/;
 
 describe('request objects refuse keys outside their declared set', () => {
-  const names = Object.keys(REQUEST_KEYS);
+  // Shapes of class-method requests; their methods carry their own unknown-key cases.
+  const methodShapes = [
+    'applyProjectVocalEdit',
+    'bakeMidiFx',
+    'importExternalSeparatedStem',
+    'previewMidiFx',
+    'renderOffline',
+    'setCapturePunch',
+    'setPartRig',
+    'transcribeToClip',
+    'vocalApply',
+    'vocalRender',
+  ];
+  const names = Object.keys(REQUEST_KEYS).filter((name) => !methodShapes.includes(name));
+
+  it('declares every other shape for a function the package index exports', () => {
+    expect(
+      names.filter(
+        (name) => typeof (sonare as unknown as Record<string, unknown>)[name] !== 'function',
+      ),
+    ).toEqual([]);
+    expect(methodShapes.filter((name) => !(name in REQUEST_KEYS))).toEqual([]);
+  });
 
   it.each(names)('%s refuses an unknown key, naming it', async (name) => {
     // A bare estimate is also a valid first argument there, so the request form is the one with `estimate`.
     const request =
-      name === 'roomGeometryFromEstimate' ? { estimate: {}, notAField: 1 } : { notAField: 1 };
+      name === 'roomGeometryFromEstimate' || name === 'masteringRepairDereverbConfigForRoom'
+        ? { estimate: {}, notAField: 1 }
+        : { notAField: 1 };
     const error = await outcome(name, request);
     expect(error).toBeInstanceOf(TypeError);
     expect(error?.message).toBe(`${name}: unknown request key 'notAField'`);

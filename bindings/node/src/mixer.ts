@@ -1,8 +1,6 @@
 import { addon } from './native.js';
 import type {
   AutomationCurve,
-  Capabilities,
-  CapabilityCatalog,
   GoniometerPoint,
   MeterTap,
   MixerProcessResult,
@@ -30,48 +28,6 @@ import {
   panModeValue,
   sendTimingValue,
 } from './value_coercion.js';
-
-export function version(): string {
-  return addon.version();
-}
-
-/**
- * Aggregate native ABI version: the per-subsystem ABI macros folded into one
- * 32-bit value. It bumps whenever any flat C POD layout changes, so callers can
- * detect an incompatible prebuilt native binary.
- */
-export function abiVersion(): number {
-  return addon.abiVersion();
-}
-
-/**
- * Returns the build and runtime capabilities of the loaded native library.
- *
- * The native binding parses the canonical C ABI JSON before returning this
- * object, so callers receive a synchronous typed value rather than JSON text.
- */
-export function capabilities(): Capabilities {
-  return addon.capabilities() as Capabilities;
-}
-
-/**
- * Return the loaded native library's processors, parameter descriptors, and
- * built-in presets as one machine-readable catalog.
- */
-export function capabilityCatalog(): CapabilityCatalog {
-  return JSON.parse(addon.capabilityCatalog()) as CapabilityCatalog;
-}
-
-/**
- * Returns whether the loaded native binding was compiled with FFmpeg support.
- *
- * When `true`, `Audio.fromFile` / `Audio.fromMemory` can decode M4A, AAC,
- * FLAC, OGG, Opus, etc. (anything libavformat handles). When `false`, only
- * WAV and MP3 are supported and other formats throw an actionable error.
- */
-export function hasFfmpegSupport(): boolean {
-  return addon.hasFfmpegSupport();
-}
 
 /**
  * The 12-bit scale mask of a mode, in the layout {@link scaleQuantizeMidi} and

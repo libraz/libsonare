@@ -13,11 +13,7 @@ export class ClipPageProvider {
 
   supply(pageIndex: number, channels: Float32Array[]): void {
     if (this.disposed) {
-      throw new SonareError(
-        ErrorCode.InvalidState,
-        'InvalidState',
-        'ClipPageProvider is destroyed',
-      );
+      throw new SonareError(ErrorCode.InvalidState, 'ClipPageProvider is destroyed');
     }
     this.engine.supplyClipPage(this.id, pageIndex, channels);
   }
@@ -68,11 +64,7 @@ export class FileClipPageProvider extends ClipPageProvider {
 
   supplyPage(pageIndex: number): boolean {
     if (this.fd === null) {
-      throw new SonareError(
-        ErrorCode.InvalidState,
-        'InvalidState',
-        'FileClipPageProvider is destroyed',
-      );
+      throw new SonareError(ErrorCode.InvalidState, 'FileClipPageProvider is destroyed');
     }
     if (pageIndex < 0) {
       return false;

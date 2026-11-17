@@ -1,12 +1,10 @@
 import { type MasteringInsertParams, resolveInsertParams } from './internal/processor_params.js';
 import { addon } from './native.js';
 import type {
-  MasteringInsertParamChoice,
-  MasteringInsertParamDependency,
-  MasteringInsertParamScale,
-  MasteringInsertParamUnit,
-  MasteringInsertSlot,
+  MasteringInsertParamInfo,
+  MasteringInsertTiming,
   MasteringPreset,
+  MasteringProcessorCatalogEntry,
   PairAnalysis,
   PairProcessor,
   SoloProcessor,
@@ -79,85 +77,6 @@ export function masteringInsertParamNames(name: string): string[] {
   return addon.masteringInsertParamNames(name);
 }
 
-/** Every key an insert processor's construction reads, plus every realtime automation target. */
-export interface MasteringInsertParamInfo {
-  /** JSON-key parameter name, as used in scene insert params. */
-  name: string;
-  /**
-   * Integer param id for realtime automation lanes / MIDI-CC binding, or null
-   * for a construction-only key (one that is not a realtime automation
-   * target).
-   */
-  id: number | null;
-  /** Whether the param can be changed live from the audio thread. Always false when `id` is null. */
-  rtSafe: boolean;
-  /**
-   * The C++ type the processor's config builder reads the key as. An
-   * `"enum"` value is sent as the number in its {@link choices} entry. A
-   * `"string"` or `"array"` key (an embedded impulse response, a per-band
-   * list) is construction-only and reports null for `default`, `min`, `max`
-   * and `choices`.
-   */
-  type: 'boolean' | 'number' | 'enum' | 'string' | 'array';
-  /**
-   * Smallest value construction accepts, or null when the catalog states no
-   * limit or when {@link choices} is non-null. Measured, so it is a hard
-   * constraint rather than a UI range; see {@link CapabilityCatalogParameter}
-   * for what a measured bound does and does not promise.
-   */
-  min: number | null;
-  /** Largest value construction accepts, or null when the catalog states no limit or when {@link choices} is non-null. */
-  max: number | null;
-  /** Whether {@link min} itself is rejected (a `> min` constraint); false when `min` is null. */
-  minExclusive: boolean;
-  /** Whether {@link max} itself is rejected (a `< max` constraint); false when `max` is null. */
-  maxExclusive: boolean;
-  /**
-   * `"nyquist"` when the ceiling follows the processing rate: the effective
-   * ceiling is then the lower of `max` (measured at the catalog's probe rate)
-   * and the host's Nyquist frequency, both exclusive. Null otherwise.
-   */
-  maxRelativeTo: 'nyquist' | null;
-  /**
-   * Value the processor uses when the key is absent — the config struct's own
-   * field initializer, an enum as its number. Null for an automation target
-   * with no construction key, and for a key construction reads with no
-   * fallback.
-   */
-  default: boolean | number | null;
-  /** Declared unit of a number; null for any other type. */
-  unit: MasteringInsertParamUnit | null;
-  /** Lowest value a control should draw, inside `min` / `max`; null when the accepted range is also the display range. */
-  uiMin: number | null;
-  /** Highest value a control should draw, inside `min` / `max`; null when the accepted range is also the display range. */
-  uiMax: number | null;
-  /** Axis a control draws the value on. */
-  scale: MasteringInsertParamScale;
-  /**
-   * The accepted values, in value order, when they form a closed set: every
-   * declared value of an enum that construction accepts, or the accepted
-   * integers of a whole-number parameter whose accepted set has holes. Null
-   * otherwise. Non-null means it is the only accepted set — `min` and `max`
-   * are then both null.
-   */
-  choices: MasteringInsertParamChoice[] | null;
-  /**
-   * The {@link MasteringInsertSlot} this key belongs to, or null for a key that
-   * always exists.
-   */
-  slot: string | null;
-  /**
-   * Siblings whose live value bounds this key, each read as `this <relation> factor * sibling`;
-   * empty for an independent key. A bound that only restates this dependency at the sibling's default is left null, so `min` and `max` are limits of the key's own.
-   */
-  dependsOn: MasteringInsertParamDependency[];
-  /**
-   * Siblings, other than `dependsOn` entries, whose value moves this key's accepted range in a way
-   * `dependsOn` cannot state (a receiver spacing against the room geometry); `min` / `max` are measured with them at their defaults. Empty for an independent key.
-   */
-  coupledWith: string[];
-}
-
 /**
  * Returns every key an insert / FX processor's construction reads, plus every
  * realtime automation target. Entries come in two runs: first the processor's
@@ -186,14 +105,6 @@ export function masteringInsertParamInfo(
 ): MasteringInsertParamInfo[] {
   const json = addon.masteringInsertParamInfo(name, sampleRate);
   return JSON.parse(json) as MasteringInsertParamInfo[];
-}
-
-/** Latency and tail of one insert built from given params and prepared at a given sample rate. */
-export interface MasteringInsertTiming {
-  /** Latency in samples at the queried sample rate. */
-  latencySamples: number;
-  /** Tail in samples at the queried sample rate. */
-  tailSamples: number;
 }
 
 /**
@@ -228,98 +139,6 @@ export function masteringInsertTiming(
     JSON.stringify(resolved),
     sampleRate,
   ) as MasteringInsertTiming;
-}
-
-/**
- * How a processor handles a buffer with more than two channels (a surround
- * bed). `multichannel` processes every plane in one call; `stereoPairOnly`
- * operates on the front L/R pair and passes any surround planes through dry.
- * `perChannel`/`passthrough` are reserved and unused by the current catalog.
- */
-export type MasteringChannelPolicy =
-  | 'multichannel'
-  | 'stereoPairOnly'
-  | 'perChannel'
-  | 'passthrough';
-
-/** Coarse algorithmic work estimate for a realtime insert; not a benchmark. */
-export type MasteringRealtimeCost = 'low' | 'moderate' | 'high';
-
-/**
- * Catalog grouping for a processor picker, derived from the id's prefix
- * (`eq.*` -> `eq`, `match.*` -> `reference`); anything unprefixed is `other`.
- */
-export type MasteringProcessorCategory =
-  | 'dynamics'
-  | 'effects'
-  | 'eq'
-  | 'final'
-  | 'maximizer'
-  | 'multiband'
-  | 'other'
-  | 'reference'
-  | 'repair'
-  | 'saturation'
-  | 'spectral'
-  | 'stereo'
-  | 'utility'
-  | 'voice';
-
-/** One mastering processor's role in the catalog. */
-export interface MasteringProcessorCatalogEntry {
-  /** Stable processor id (e.g. `dynamics.compressor`, `match.abCrossfade`). */
-  id: string;
-  /**
-   * Coarse role: `pair` (two-input source/reference), `realtime` (usable as a
-   * live insert), or `offline` (whole-buffer only). Precedence is
-   * `pair > realtime > offline`: a processor that fits more than one role is
-   * reported under the highest one.
-   */
-  kind: 'realtime' | 'offline' | 'pair';
-  /**
-   * Whether the processor belongs to the realtime-insert set (the processors
-   * accepted as live track-strip inserts). Mirrors {@link masteringInsertNames}.
-   */
-  realtimeInsertable: boolean;
-  /** Whether the processor requires a stereo signal (e.g. mid/side EQ). */
-  stereoOnly: boolean;
-  /**
-   * Reported latency for the default 48 kHz / 512-sample probe configuration.
-   * Zero for offline processors; configuration-dependent values are estimates.
-   */
-  latencySamples: number;
-  /**
-   * Audible decay length for the same default prepared probe. Zero for
-   * offline, dry-only, and no-tail processors.
-   */
-  tailSamples: number;
-  /** Coarse realtime work estimate, or null when the processor is not an insert. */
-  realtimeCost: MasteringRealtimeCost | null;
-  /**
-   * How the mixer wraps the processor on a >2-channel (surround) bus insert:
-   * `multichannel` (one full-buffer call) or `stereoPairOnly` (front L/R pair,
-   * surround planes passed through dry).
-   */
-  channelPolicy: MasteringChannelPolicy;
-  /** Grouping for a processor picker; see {@link MasteringProcessorCategory}. */
-  category: MasteringProcessorCategory;
-  /**
-   * Whether the processor has a configuration whose output at a sample depends only on the
-   * input up to it, plus its reported latency. False for `repair.declick`, `repair.declip` and
-   * `repair.trimSilence`; true for the other repair stages and every insert.
-   */
-  causal: boolean;
-  /**
-   * The processor's parameter descriptors: for an insert the list
-   * {@link masteringInsertParamInfo} returns, for a `repair.*` stage the bounds its own
-   * configuration validation enforces (no `id`, never `rtSafe`). Empty for any other offline entry.
-   */
-  params: MasteringInsertParamInfo[];
-  /**
-   * The insert's conditional key groups in declaration order, named by each
-   * parameter's `slot`. Empty for entries that are not realtime-insertable.
-   */
-  slots: MasteringInsertSlot[];
 }
 
 /**

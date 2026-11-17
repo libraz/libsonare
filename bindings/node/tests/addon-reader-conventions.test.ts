@@ -685,11 +685,10 @@ const UNDEFINED_EQUIVALENCE: ReadonlyArray<{
       ).slice(0, 32),
   },
   {
-    // `volume` is derived from the estimate record rather than the options bag,
-    // so it arrives here as a key the request form carries harmlessly; the
-    // estimate itself is spread last so it survives the all-undefined bag.
+    // `volume` is read from the estimate record, not the request, which refuses it
+    // as an unknown key; the estimate is spread last so it survives the all-undefined bag.
     jsName: 'masteringRepairDereverbConfigForRoom',
-    invoke: (o) =>
+    invoke: ({ volume: _volume, ...o }) =>
       masteringRepairDereverbConfigForRoom({
         ...o,
         estimate: {

@@ -114,7 +114,7 @@ describe('RealtimeEngine native binding', () => {
     });
 
     const audio = Audio.fromBuffer(new Float32Array([0.25, -0.25]), 48000);
-    expect(audio.getLength()).toBe(2);
+    expect(audio.length).toBe(2);
     audio.destroy();
   });
 

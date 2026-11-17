@@ -1,10 +1,11 @@
-export { EXPECTED_ABI_VERSION } from './abi_version.js';
 export * from './analysis.js';
 export * from './audio.js';
 export * from './audio_channels.js';
+export { abiVersion, capabilities, capabilityCatalog, version } from './capabilities.js';
 export type { ChordSymbolFields } from './chord_annotation.js';
 // Named for the same reason: a helper added beside these two cannot follow without an edit.
 export { chordSymbolFromAnalysis, keyModeFromAnalysis } from './chord_annotation.js';
+export { ClipPageProvider, FileClipPageProvider } from './clip_page_provider.js';
 export * from './effects_mastering.js';
 export * from './effects_polyphony.js';
 export * from './errors.js';
@@ -14,7 +15,12 @@ export * from './mixer.js';
 export * from './mixing_assistant.js';
 export * from './playback.js';
 export * from './project.js';
-export * from './realtime_engine.js';
+export {
+  engineAbiVersion,
+  MAX_TRACK_LANES,
+  RealtimeEngine,
+  voiceChangerAbiVersion,
+} from './realtime_engine.js';
 // Named rather than `export *`, so a helper added to this module later cannot
 // reach the package entry without a deliberate edit and read as a parity
 // coverage gap.
@@ -64,10 +70,7 @@ export type {
   CapabilityCatalogChainAlias,
   CapabilityCatalogChainList,
   CapabilityCatalogChainStage,
-  CapabilityCatalogMasteringPreset,
-  CapabilityCatalogParameter,
   CapabilityCatalogPresets,
-  CapabilityCatalogProcessor,
   ChannelLayout,
   CharacterType,
   Chord,
@@ -170,15 +173,22 @@ export type {
   MasteringChainResult,
   MasteringChainSection,
   MasteringChainStereoResult,
+  MasteringChannelPolicy,
   MasteringInsertParamChoice,
   MasteringInsertParamDependency,
+  MasteringInsertParamInfo,
   MasteringInsertParamRelation,
   MasteringInsertParamScale,
   MasteringInsertParamUnit,
   MasteringInsertSlot,
+  MasteringInsertTiming,
   MasteringLoudnessSummary,
   MasteringOptions,
   MasteringPreset,
+  MasteringPresetCatalogEntry,
+  MasteringProcessorCatalogEntry,
+  MasteringProcessorCategory,
+  MasteringRealtimeCost,
   MasteringReport,
   MasteringResult,
   MasteringStereoResult,
@@ -432,7 +442,6 @@ export {
   ChordQuality,
   CONTROLLER_AXES,
   CONTROLLER_INPUTS,
-  EXPECTED_PROJECT_ABI_VERSION,
   MarkerKind,
   MPE_DIMENSIONS,
   NOTE_TRACKINGS,

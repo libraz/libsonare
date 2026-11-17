@@ -12,7 +12,7 @@ describe('Symbol.dispose / using', () => {
     {
       using audio = Audio.fromBuffer(sine(440, 22050, 0.1), 22050);
       captured = audio;
-      expect(audio.getLength()).toBeGreaterThan(0);
+      expect(audio.length).toBeGreaterThan(0);
     }
     // After the block, dispose ran. destroy() is idempotent, so an explicit
     // second call must not throw.
@@ -25,15 +25,14 @@ describe('Symbol.dispose / using', () => {
     expect(() => audio.destroy()).not.toThrow();
   });
 
-  it('does not expose mutable cached PCM and rejects use after destroy', () => {
+  it('exposes one shared PCM snapshot and rejects use after destroy', () => {
     const audio = Audio.fromBuffer(new Float32Array([0.5, -0.25]), 48000);
-    const exposed = audio.getData();
-    exposed[0] = 0;
-    expect(audio.getData()[0]).toBe(0.5);
+    expect(audio.data).toBe(audio.data);
+    expect(audio.data[0]).toBe(0.5);
 
     audio.destroy();
-    expect(() => audio.getData()).toThrow('Audio has been destroyed');
-    expect(() => audio.getLength()).toThrow('Audio has been destroyed');
+    expect(() => audio.data).toThrow('Audio has been destroyed');
+    expect(() => audio.length).toThrow('Audio has been destroyed');
     expect(() => audio.detectBpm()).toThrow('Audio has been destroyed');
   });
 
@@ -48,9 +47,9 @@ describe('Symbol.dispose / using', () => {
     const source = sine(440, 22050, 0.25);
     const audio = Audio.fromBuffer(source, 22050);
     try {
-      const before = Array.from(audio.getData());
+      const before = Array.from(audio.data);
 
-      const skip = new Set(['constructor', 'destroy', 'getData']);
+      const skip = new Set(['constructor', 'destroy']);
       const prototype = Object.getPrototypeOf(audio) as object;
       const called: string[] = [];
       for (const name of Object.getOwnPropertyNames(prototype)) {
@@ -73,9 +72,9 @@ describe('Symbol.dispose / using', () => {
       // would make this pass by exercising nothing.
       expect(called.length).toBeGreaterThan(10);
 
-      expect(Array.from(audio.getData())).toEqual(before);
-      // The public accessor still hands out a private copy, not the snapshot.
-      expect(audio.getData()).not.toBe(audio.getData());
+      expect(Array.from(audio.data)).toEqual(before);
+      // The public accessor hands out the shared snapshot itself.
+      expect(audio.data).toBe(audio.data);
     } finally {
       audio.destroy();
     }
