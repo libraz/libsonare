@@ -42,7 +42,11 @@ const BUNDLE_SOURCES = {
   ignore: ['.md', '.test.ts'],
 };
 
-/** Every `dist/` artifact a test imports, grouped by the build that writes it. */
+/**
+ * Every `dist/` artifact a test imports, grouped by the build that writes it.
+ * `staleOptOut` marks a module whose source drift a test run may knowingly
+ * accept (`verifyAll({ allowStale: true })`); the TypeScript bundle never is.
+ */
 export const MODULES = [
   {
     name: 'sonare',
@@ -50,6 +54,7 @@ export const MODULES = [
     artifacts: ['sonare.js', 'sonare.wasm'],
     sources: NATIVE_SOURCES,
     rebuild: 'yarn build:wasm',
+    staleOptOut: true,
   },
   {
     name: 'sonare-analysis',
@@ -57,6 +62,7 @@ export const MODULES = [
     artifacts: ['sonare-analysis.js', 'sonare-analysis.wasm'],
     sources: NATIVE_SOURCES,
     rebuild: 'yarn build:wasm',
+    staleOptOut: true,
   },
   {
     name: 'bundle',
@@ -68,6 +74,9 @@ export const MODULES = [
 ];
 
 const MAX_LISTED = 10;
+
+/** Test-run opt-out for native modules built from older sources; `=1` enables it. */
+export const ALLOW_STALE_ENV = 'SONARE_ALLOW_STALE_DIST';
 
 async function sha256(path) {
   return createHash('sha256').update(await readFile(path)).digest('hex');
@@ -91,21 +100,26 @@ const sourceCache = new Map();
  * root. A file added later reaches the build only through an edit to a file
  * already here -- a source list or an import -- so the set stays closed.
  */
-export async function collectSources(spec) {
-  const cached = sourceCache.get(spec);
+export async function collectSources(spec, repoRoot = REPO_ROOT) {
+  let byRoot = sourceCache.get(repoRoot);
+  if (byRoot === undefined) {
+    byRoot = new Map();
+    sourceCache.set(repoRoot, byRoot);
+  }
+  const cached = byRoot.get(spec);
   if (cached !== undefined) return cached;
   const absolute = [];
   for (const root of spec.roots) {
-    await walk(join(REPO_ROOT, root), spec.ignore, absolute);
+    await walk(join(repoRoot, root), spec.ignore, absolute);
   }
   for (const file of spec.files) {
-    absolute.push(join(REPO_ROOT, file));
+    absolute.push(join(repoRoot, file));
   }
   const sources = {};
   for (const path of absolute.sort()) {
-    sources[relative(REPO_ROOT, path).split(sep).join('/')] = await sha256(path);
+    sources[relative(repoRoot, path).split(sep).join('/')] = await sha256(path);
   }
-  sourceCache.set(spec, sources);
+  byRoot.set(spec, sources);
   return sources;
 }
 
@@ -118,21 +132,24 @@ async function fileState(path) {
   }
 }
 
-export function manifestPath(moduleName) {
-  return join(DIST_DIR, `${moduleName}.sources.json`);
+export function manifestPath(moduleName, distDir = DIST_DIR) {
+  return join(distDir, `${moduleName}.sources.json`);
 }
 
 /**
  * Writes a manifest for each named module, from the artifacts currently in
  * `dist/`. A build calls this for the module it just produced and no other.
  */
-export async function writeManifests(names) {
+export async function writeManifests(
+  names,
+  { distDir = DIST_DIR, repoRoot = REPO_ROOT, modules = MODULES } = {},
+) {
   const written = [];
-  for (const module of MODULES.filter((candidate) => names.includes(candidate.name))) {
+  for (const module of modules.filter((candidate) => names.includes(candidate.name))) {
     const artifacts = {};
     let complete = true;
     for (const artifact of module.artifacts) {
-      const state = await fileState(join(DIST_DIR, artifact));
+      const state = await fileState(join(distDir, artifact));
       if (state === null) {
         complete = false;
         break;
@@ -144,9 +161,9 @@ export async function writeManifests(names) {
       module: module.name,
       builtAt: new Date().toISOString(),
       artifacts,
-      sources: await collectSources(module.sources),
+      sources: await collectSources(module.sources, repoRoot),
     };
-    await writeFile(manifestPath(module.name), `${JSON.stringify(manifest, null, 2)}\n`);
+    await writeFile(manifestPath(module.name, distDir), `${JSON.stringify(manifest, null, 2)}\n`);
     written.push(module.name);
   }
   return written;
@@ -158,10 +175,10 @@ function summarize(paths) {
   return shown.join('\n');
 }
 
-async function verifyModule(module) {
+async function verifyModule(module, { distDir, repoRoot, allowStale }) {
   const present = [];
   for (const artifact of module.artifacts) {
-    const state = await fileState(join(DIST_DIR, artifact));
+    const state = await fileState(join(distDir, artifact));
     if (state !== null) present.push({ artifact, state });
   }
   // A module nothing built is not this check's business; importing it fails on its own.
@@ -170,7 +187,7 @@ async function verifyModule(module) {
   const hint = `Run \`${module.rebuild}\` in bindings/wasm.`;
   let manifest;
   try {
-    manifest = JSON.parse(await readFile(manifestPath(module.name), 'utf8'));
+    manifest = JSON.parse(await readFile(manifestPath(module.name, distDir), 'utf8'));
   } catch {
     return {
       problem: `dist/${module.primary} has no source manifest (dist/${module.name}.sources.json), so the sources it was built from are unknown.\n${hint}`,
@@ -189,19 +206,25 @@ async function verifyModule(module) {
     }
   }
 
-  const sources = await collectSources(module.sources);
+  const sources = await collectSources(module.sources, repoRoot);
   const drifted = [];
   for (const [path, digest] of Object.entries(manifest.sources ?? {})) {
     if (sources[path] !== digest) drifted.push(path);
   }
   const total = Object.keys(manifest.sources ?? {}).length;
+  const digests = Object.fromEntries(present.map(({ artifact, state }) => [artifact, state.sha256]));
+  if (drifted.length > 0 && allowStale && module.staleOptOut === true) {
+    return {
+      provenance: `${module.primary} sha256 ${digests[module.primary]?.slice(0, 12) ?? 'absent'} built ${manifest.builtAt}, ACCEPTED STALE (${ALLOW_STALE_ENV}=1): ${drifted.length} of ${total} sources changed since`,
+      artifacts: digests,
+    };
+  }
   if (drifted.length > 0) {
     return {
       problem: `dist/${module.primary} is stale: ${drifted.length} of ${total} sources it was built from have changed.\n${summarize(drifted.sort())}\n${hint}`,
     };
   }
 
-  const digests = Object.fromEntries(present.map(({ artifact, state }) => [artifact, state.sha256]));
   return {
     provenance: `${module.primary} sha256 ${digests[module.primary]?.slice(0, 12) ?? 'absent'} built ${manifest.builtAt}, ${total} sources verified`,
     artifacts: digests,
@@ -211,13 +234,20 @@ async function verifyModule(module) {
 /**
  * Verifies every built module against the working tree. Returns the problems
  * found and, for the modules that passed, the artifact digests read.
+ * `allowStale` accepts source drift on `staleOptOut` modules only; a missing
+ * manifest or an artifact replaced after its manifest stays a problem.
  */
-export async function verifyAll() {
+export async function verifyAll({
+  allowStale = false,
+  distDir = DIST_DIR,
+  repoRoot = REPO_ROOT,
+  modules = MODULES,
+} = {}) {
   const problems = [];
   const provenance = [];
   const artifacts = {};
-  for (const module of MODULES) {
-    const result = await verifyModule(module);
+  for (const module of modules) {
+    const result = await verifyModule(module, { distDir, repoRoot, allowStale });
     if (result === null) continue;
     if (result.problem !== undefined) {
       problems.push(result.problem);

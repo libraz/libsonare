@@ -10,14 +10,21 @@
  * The provenance line pairs the artifact's build time with the time this run
  * read it, which is the comparison that catches a binary predating the change
  * under test.
+ *
+ * `SONARE_ALLOW_STALE_DIST=1` lets a run use emscripten modules built from
+ * older native sources (a TypeScript change tested while native sources are
+ * mid-edit); the provenance line names each module accepted stale. The bundle,
+ * a missing manifest and the mid-run check are never relaxed, and the
+ * `check:dist-freshness` command ignores the variable.
  */
 
-import { readArtifacts, verifyAll } from './dist-source-manifest.mjs';
+import { ALLOW_STALE_ENV, readArtifacts, verifyAll } from './dist-source-manifest.mjs';
 
 let readDigests = {};
 
 export async function setup() {
-  const { problems, provenance, artifacts } = await verifyAll();
+  const allowStale = process.env[ALLOW_STALE_ENV] === '1';
+  const { problems, provenance, artifacts } = await verifyAll({ allowStale });
   if (problems.length > 0) {
     throw new Error(`\n${problems.join('\n\n')}\n`);
   }
