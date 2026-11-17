@@ -11,24 +11,24 @@ from ._analyzer_helpers import *
 from ._helpers import patch_mono_decode
 
 
-def test_onset_envelope() -> None:
-    """onset_envelope returns a finite per-frame envelope."""
-    from libsonare import onset_envelope
+def test_onset_strength() -> None:
+    """onset_strength returns a finite per-frame envelope."""
+    from libsonare import onset_strength
 
     samples = _generate_sine(440, 22050, 2.0)
-    env = onset_envelope(samples, sample_rate=22050)
+    env = onset_strength(samples, sr=22050)
     assert len(env) > 0
     assert _all_finite(env)
 
 
 def test_fourier_tempogram() -> None:
     """fourier_tempogram returns an [n_bins x n_frames] magnitude matrix."""
-    from libsonare import fourier_tempogram, onset_envelope
+    from libsonare import fourier_tempogram, onset_strength
 
     samples = _generate_sine(440, 22050, 2.0)
-    env = onset_envelope(samples, sample_rate=22050)
+    env = onset_strength(samples, sr=22050)
     win_length = 384
-    n_frames, data = fourier_tempogram(env, sample_rate=22050, win_length=win_length)
+    n_frames, data = fourier_tempogram(env, sr=22050, win_length=win_length)
     assert n_frames == len(env)
     n_bins = win_length // 2 + 1
     assert len(data) == n_bins * n_frames
@@ -37,20 +37,18 @@ def test_fourier_tempogram() -> None:
 
 def test_tempogram_ratio() -> None:
     """tempogram_ratio returns one finite value per factor."""
-    from libsonare import onset_envelope, tempogram, tempogram_ratio
+    from libsonare import onset_strength, tempogram, tempogram_ratio
 
     samples = _generate_sine(440, 22050, 2.0)
-    env = onset_envelope(samples, sample_rate=22050)
+    env = onset_strength(samples, sr=22050)
     win_length = 384
-    _, tg = tempogram(env, sample_rate=22050)
+    _, tg = tempogram(env, sr=22050)
 
-    default_ratio = tempogram_ratio(tg, win_length=win_length, sample_rate=22050)
+    default_ratio = tempogram_ratio(tg, win_length=win_length, sr=22050)
     assert len(default_ratio) == 5  # {0.5, 1, 2, 3, 4}
     assert _all_finite(default_ratio)
 
-    explicit = tempogram_ratio(
-        tg, win_length=win_length, sample_rate=22050, factors=[1.0, 2.0, 3.0]
-    )
+    explicit = tempogram_ratio(tg, win_length=win_length, sr=22050, factors=[1.0, 2.0, 3.0])
     assert len(explicit) == 3
     assert _all_finite(explicit)
 
@@ -109,12 +107,12 @@ def test_momentary_and_short_term_lufs() -> None:
     assert _all_finite(short_term)
 
 
-def test_audio_onset_envelope() -> None:
-    """Audio.onset_envelope returns a finite per-frame envelope."""
+def test_audio_onset_strength() -> None:
+    """Audio.onset_strength returns a finite per-frame envelope."""
     from libsonare import Audio
 
     audio = Audio.from_buffer(_generate_sine(440, 22050, 2.0), sample_rate=22050)
-    env = audio.onset_envelope()
+    env = audio.onset_strength()
     assert len(env) > 0
     assert _all_finite(env)
 
@@ -742,8 +740,8 @@ def test_cqt_and_vqt_return_cqt_result() -> None:
 
     samples = _generate_sine(220, 22050, 1.0)
     for result in (
-        cqt(samples, sample_rate=22050, n_bins=24, bins_per_octave=12),
-        vqt(samples, sample_rate=22050, n_bins=24, bins_per_octave=12, gamma=10.0),
+        cqt(samples, sr=22050, n_bins=24, bins_per_octave=12),
+        vqt(samples, sr=22050, n_bins=24, bins_per_octave=12, gamma=10.0),
     ):
         assert isinstance(result, CqtResult)
         assert result.n_bins == 24
@@ -757,8 +755,8 @@ def test_pseudo_and_hybrid_cqt_return_cqt_result() -> None:
 
     samples = _generate_sine(220, 22050, 1.0)
     for result in (
-        pseudo_cqt(samples, sample_rate=22050, n_bins=24, bins_per_octave=12),
-        hybrid_cqt(samples, sample_rate=22050, n_bins=24, bins_per_octave=12),
+        pseudo_cqt(samples, sr=22050, n_bins=24, bins_per_octave=12),
+        hybrid_cqt(samples, sr=22050, n_bins=24, bins_per_octave=12),
     ):
         assert isinstance(result, CqtResult)
         assert result.n_bins == 24

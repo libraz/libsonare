@@ -38,6 +38,7 @@ from ._narrowing import _resolve_optional_non_negative as _resolve_optional_non_
 from ._narrowing import _resolve_render_frame as _resolve_render_frame
 from ._narrowing import _resolve_sample_bound as _resolve_sample_bound
 from ._narrowing import _resolve_time_offset as _resolve_time_offset
+from ._narrowing import _resolve_zero_default as _resolve_zero_default
 from ._narrowing import _utf8_arg as _utf8_arg
 from .types import *  # noqa: F403
 

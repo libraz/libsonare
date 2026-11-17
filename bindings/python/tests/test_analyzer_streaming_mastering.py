@@ -401,7 +401,7 @@ def test_stft_result_types() -> None:
     from libsonare import stft
 
     tone = _generate_sine(440, 22050, 1.0)
-    result = stft(tone, sample_rate=22050)
+    result = stft(tone, sr=22050)
     assert isinstance(result.n_bins, int)
     assert isinstance(result.n_frames, int)
     assert isinstance(result.n_fft, int)

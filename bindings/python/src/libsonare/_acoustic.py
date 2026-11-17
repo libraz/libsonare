@@ -161,7 +161,7 @@ def synthesize_rir(
     band_absorption: Sequence[float] | None = None,
     band_scattering: Sequence[float] | None = None,
     material_preset: MaterialPresetName = "none",
-    sample_rate: int = 48000,
+    sample_rate: int,
     ism_order: int = 3,
     prefer_eyring: bool = True,
     seed: int = 1,
@@ -284,7 +284,7 @@ def synthesize_rir(
 @_guard_buffer("samples")
 def estimate_room(
     samples: Sequence[float] | list[float],
-    sample_rate: int = 48000,
+    sample_rate: int,
     *,
     aspect_hint_lw: float = 1.0,
     aspect_hint_lh: float = 1.0,

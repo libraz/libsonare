@@ -56,7 +56,7 @@ def mastering_pair_process(
     processor_name: str,
     source: Sequence[float] | list[float],
     reference: Sequence[float] | list[float],
-    sample_rate: int = 22050,
+    sample_rate: int,
     params: dict[str, float | int | bool] | None = None,
     *,
     reference_sample_rate: int | None = None,
@@ -114,7 +114,7 @@ def mastering_pair_process_stereo(
     source_right: Sequence[float] | list[float],
     reference_left: Sequence[float] | list[float],
     reference_right: Sequence[float] | list[float],
-    sample_rate: int = 22050,
+    sample_rate: int,
     params: dict[str, float | int | bool] | None = None,
     *,
     reference_sample_rate: int | None = None,
@@ -188,7 +188,7 @@ def mastering_pair_analyze(
     analysis_name: str,
     source: Sequence[float] | list[float],
     reference: Sequence[float] | list[float],
-    sample_rate: int = 22050,
+    sample_rate: int,
     params: dict[str, float | int | bool] | None = None,
     *,
     reference_sample_rate: int | None = None,
@@ -243,7 +243,7 @@ def mastering_pair_analyze(
 def mastering_ab_match_loudness(
     source: Sequence[float] | list[float] | np.ndarray,
     reference: Sequence[float] | list[float] | np.ndarray,
-    sample_rate: int = 22050,
+    sample_rate: int,
     *,
     with_match: bool = True,
     reference_sample_rate: int | None = None,
@@ -266,8 +266,7 @@ def mastering_ab_match_loudness(
     Args:
         source: Mono take to be matched (any sequence convertible to float32).
         reference: Mono take whose loudness ``source`` is brought to.
-        sample_rate: Sample rate of ``source`` and of the result, in Hz
-            (default 22050).
+        sample_rate: Sample rate of ``source`` and of the result, in Hz.
         with_match: Whether to measure the match alongside the audio
             (default True). Pass False to take only the matched samples.
         reference_sample_rate: Sample rate of ``reference``, in Hz; omitted
@@ -322,7 +321,7 @@ def mastering_ab_match_loudness_stereo(
     source_right: Sequence[float] | list[float] | np.ndarray,
     reference_left: Sequence[float] | list[float] | np.ndarray,
     reference_right: Sequence[float] | list[float] | np.ndarray,
-    sample_rate: int = 22050,
+    sample_rate: int,
     *,
     with_match: bool = True,
     reference_sample_rate: int | None = None,
@@ -393,7 +392,7 @@ def mastering_stereo_analyze(
     analysis_name: str,
     left: Sequence[float] | list[float],
     right: Sequence[float] | list[float],
-    sample_rate: int = 22050,
+    sample_rate: int,
     params: dict[str, float | int | bool] | None = None,
 ) -> str:
     """Run a named stereo mastering analysis and return shared JSON.
@@ -459,7 +458,7 @@ def _streaming_platforms(
 @_guard_buffer("samples")
 def mastering_streaming_preview(
     samples: Sequence[float] | list[float],
-    sample_rate: int = 22050,
+    sample_rate: int,
     platforms: Sequence[dict[str, float | str]] | None = None,
 ) -> str:
     """Preview streaming-platform normalization and ceiling risk as shared JSON.
@@ -493,7 +492,7 @@ def mastering_streaming_preview(
 @_guard_buffer("samples")
 def mastering_assistant_suggest(
     samples: Sequence[float] | list[float],
-    sample_rate: int = 22050,
+    sample_rate: int,
     params: dict[str, float | int | bool | str] | None = None,
 ) -> str:
     """Analyze audio and suggest a mastering chain as shared JSON.
@@ -565,7 +564,7 @@ def _unwrap_chain_params(json_text: str) -> dict[str, float | bool]:
 @_guard_buffer("samples")
 def mastering_assistant_suggest_chain(
     samples: Sequence[float] | list[float],
-    sample_rate: int = 22050,
+    sample_rate: int,
     params: dict[str, float | int | bool | str] | None = None,
 ) -> dict[str, float | bool]:
     """Suggest a mastering chain as a :func:`master_audio` overrides mapping.
@@ -599,7 +598,7 @@ def mastering_assistant_suggest_chain(
 @_guard_buffer("samples")
 def mastering_audio_profile(
     samples: Sequence[float] | list[float],
-    sample_rate: int = 22050,
+    sample_rate: int,
     params: dict[str, float | int | bool] | None = None,
 ) -> str:
     """Analyze audio and return the mastering assistant profile as shared JSON.
@@ -678,7 +677,7 @@ def _stereo_analysis_json(
 def mastering_streaming_preview_stereo(
     left: Sequence[float] | list[float],
     right: Sequence[float] | list[float],
-    sample_rate: int = 22050,
+    sample_rate: int,
     platforms: Sequence[dict[str, float | str]] | None = None,
 ) -> str:
     """Preview streaming normalization for a stereo pair as shared JSON.
@@ -707,7 +706,7 @@ def mastering_streaming_preview_stereo(
 def mastering_assistant_suggest_stereo(
     left: Sequence[float] | list[float],
     right: Sequence[float] | list[float],
-    sample_rate: int = 22050,
+    sample_rate: int,
     params: dict[str, float | int | bool | str] | None = None,
 ) -> str:
     """Suggest a mastering chain for a stereo pair as shared JSON.
@@ -735,7 +734,7 @@ def mastering_assistant_suggest_stereo(
 def mastering_assistant_suggest_chain_stereo(
     left: Sequence[float] | list[float],
     right: Sequence[float] | list[float],
-    sample_rate: int = 22050,
+    sample_rate: int,
     params: dict[str, float | int | bool | str] | None = None,
 ) -> dict[str, float | bool]:
     """Stereo counterpart of :func:`mastering_assistant_suggest_chain`."""
@@ -787,7 +786,7 @@ def mastering_preset_params(preset: str) -> dict[str, float | bool]:
 def mastering_audio_profile_stereo(
     left: Sequence[float] | list[float],
     right: Sequence[float] | list[float],
-    sample_rate: int = 22050,
+    sample_rate: int,
     params: dict[str, float | int | bool] | None = None,
 ) -> str:
     """Return the mastering assistant profile of a stereo pair as shared JSON.

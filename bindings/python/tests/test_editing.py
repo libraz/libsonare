@@ -61,7 +61,7 @@ def test_pitch_correct_to_midi_timevarying_function() -> None:
     f0 = [220.0] * n_frames
 
     result = libsonare.pitch_correct_to_midi_timevarying(
-        samples, f0, target_midi=60.0, sample_rate=sr, hop_length=hop
+        samples, f0_hz=f0, target_midi=60.0, sample_rate=sr, hop_length=hop
     )
     assert len(result) == len(samples)
     assert all(math.isfinite(x) for x in result)
@@ -70,7 +70,13 @@ def test_pitch_correct_to_midi_timevarying_function() -> None:
     voiced = [1] * n_frames
     voiced_prob = [1.0] * n_frames
     result2 = libsonare.pitch_correct_to_midi_timevarying(
-        samples, f0, 60.0, sample_rate=sr, hop_length=hop, voiced=voiced, voiced_prob=voiced_prob
+        samples,
+        f0_hz=f0,
+        target_midi=60.0,
+        sample_rate=sr,
+        hop_length=hop,
+        voiced=voiced,
+        voiced_prob=voiced_prob,
     )
     assert len(result2) == len(samples)
 
@@ -79,14 +85,20 @@ def test_pitch_correct_to_midi_timevarying_function() -> None:
     f0[0] = math.nan
     voiced[0] = 0
     pyin_result = libsonare.pitch_correct_to_midi_timevarying(
-        samples, f0, 60.0, sample_rate=sr, hop_length=hop, voiced=voiced, voiced_prob=voiced_prob
+        samples,
+        f0_hz=f0,
+        target_midi=60.0,
+        sample_rate=sr,
+        hop_length=hop,
+        voiced=voiced,
+        voiced_prob=voiced_prob,
     )
     assert all(math.isfinite(x) for x in pyin_result)
 
     # Mismatched companion-array lengths are rejected before the native call.
     with pytest.raises(ValueError):
         libsonare.pitch_correct_to_midi_timevarying(
-            samples, f0, 60.0, sample_rate=sr, hop_length=hop, voiced=[1, 0]
+            samples, f0_hz=f0, target_midi=60.0, sample_rate=sr, hop_length=hop, voiced=[1, 0]
         )
 
 
@@ -109,7 +121,12 @@ def test_pitch_correct_to_midi_timevarying_derives_voicing_from_voiced_prob() ->
     # Below 0.5: every frame reads as unvoiced, so the canonical unvoiced NaN
     # representation is accepted -- this used to fail with voiced forced true.
     libsonare.pitch_correct_to_midi_timevarying(
-        samples, f0, 60.0, sample_rate=sr, hop_length=hop, voiced_prob=[0.1] * n_frames
+        samples,
+        f0_hz=f0,
+        target_midi=60.0,
+        sample_rate=sr,
+        hop_length=hop,
+        voiced_prob=[0.1] * n_frames,
     )
     # At/above 0.5: every frame reads as voiced, so a voiced frame carrying
     # NaN (no measured pitch) is rejected, the same as an explicit voiced=1.
@@ -117,8 +134,8 @@ def test_pitch_correct_to_midi_timevarying_derives_voicing_from_voiced_prob() ->
         with raises_coded():
             libsonare.pitch_correct_to_midi_timevarying(
                 samples,
-                f0,
-                60.0,
+                f0_hz=f0,
+                target_midi=60.0,
                 sample_rate=sr,
                 hop_length=hop,
                 voiced_prob=[threshold] * n_frames,
@@ -127,7 +144,7 @@ def test_pitch_correct_to_midi_timevarying_derives_voicing_from_voiced_prob() ->
     # rejected exactly like the all-voiced case above.
     with raises_coded():
         libsonare.pitch_correct_to_midi_timevarying(
-            samples, f0, 60.0, sample_rate=sr, hop_length=hop
+            samples, f0_hz=f0, target_midi=60.0, sample_rate=sr, hop_length=hop
         )
 
 
@@ -140,11 +157,11 @@ def test_pitch_correct_timevarying_derives_voicing_from_voiced_prob() -> None:
     f0 = [math.nan] * n_frames
 
     libsonare.pitch_correct_timevarying(
-        samples, f0, sample_rate=sr, hop_length=hop, voiced_prob=[0.1] * n_frames
+        samples, f0_hz=f0, sample_rate=sr, hop_length=hop, voiced_prob=[0.1] * n_frames
     )
     with raises_coded():
         libsonare.pitch_correct_timevarying(
-            samples, f0, sample_rate=sr, hop_length=hop, voiced_prob=[0.9] * n_frames
+            samples, f0_hz=f0, sample_rate=sr, hop_length=hop, voiced_prob=[0.9] * n_frames
         )
 
 
@@ -158,10 +175,10 @@ def test_pitch_correction_explicit_voiced_ignores_invalid_probability_shape_and_
     voiced = [1] * n_frames
 
     fixed_without_prob = libsonare.pitch_correct_to_midi_timevarying(
-        samples, f0, 60.0, sample_rate=sr, hop_length=hop, voiced=voiced
+        samples, f0_hz=f0, target_midi=60.0, sample_rate=sr, hop_length=hop, voiced=voiced
     )
     general_without_prob = libsonare.pitch_correct_timevarying(
-        samples, f0, sample_rate=sr, hop_length=hop, voiced=voiced
+        samples, f0_hz=f0, sample_rate=sr, hop_length=hop, voiced=voiced
     )
 
     # A supplied probability track is ignored completely once voiced is present,
@@ -169,8 +186,8 @@ def test_pitch_correction_explicit_voiced_ignores_invalid_probability_shape_and_
     for invalid_prob in ([math.nan] * (n_frames + 1), [-0.1] * n_frames, [1.1] * n_frames):
         fixed_with_invalid_prob = libsonare.pitch_correct_to_midi_timevarying(
             samples,
-            f0,
-            60.0,
+            f0_hz=f0,
+            target_midi=60.0,
             sample_rate=sr,
             hop_length=hop,
             voiced=voiced,
@@ -178,7 +195,7 @@ def test_pitch_correction_explicit_voiced_ignores_invalid_probability_shape_and_
         )
         general_with_invalid_prob = libsonare.pitch_correct_timevarying(
             samples,
-            f0,
+            f0_hz=f0,
             sample_rate=sr,
             hop_length=hop,
             voiced=voiced,
@@ -193,8 +210,8 @@ def test_pitch_correction_explicit_voiced_ignores_invalid_probability_shape_and_
         with raises_coded():
             libsonare.pitch_correct_to_midi_timevarying(
                 samples,
-                f0,
-                60.0,
+                f0_hz=f0,
+                target_midi=60.0,
                 sample_rate=sr,
                 hop_length=hop,
                 voiced_prob=[invalid] * n_frames,
@@ -202,7 +219,7 @@ def test_pitch_correction_explicit_voiced_ignores_invalid_probability_shape_and_
         with raises_coded():
             libsonare.pitch_correct_timevarying(
                 samples,
-                f0,
+                f0_hz=f0,
                 sample_rate=sr,
                 hop_length=hop,
                 voiced_prob=[invalid] * n_frames,
@@ -234,7 +251,7 @@ def test_pitch_correct_timevarying_voiced_accepts_any_int_sequence() -> None:
     ]
     results = [
         libsonare.pitch_correct_to_midi_timevarying(
-            samples, f0, 60.0, sample_rate=sr, hop_length=hop, voiced=form
+            samples, f0_hz=f0, target_midi=60.0, sample_rate=sr, hop_length=hop, voiced=form
         )
         for form in forms
     ]
@@ -245,7 +262,7 @@ def test_pitch_correct_timevarying_voiced_accepts_any_int_sequence() -> None:
     with pytest.raises(ValueError):
         libsonare.pitch_correct_timevarying(
             samples,
-            f0,
+            f0_hz=f0,
             sample_rate=sr,
             hop_length=hop,
             voiced=np.ones(n_frames + 2, dtype=np.int32),
@@ -260,38 +277,38 @@ def test_pitch_correct_timevarying_scale_and_knobs() -> None:
     f0 = [220.0] * n_frames
 
     # NULL-equivalent defaults behave like the fixed-MIDI path.
-    base = libsonare.pitch_correct_timevarying(samples, f0, sample_rate=sr, hop_length=hop)
+    base = libsonare.pitch_correct_timevarying(samples, f0_hz=f0, sample_rate=sr, hop_length=hop)
     assert len(base) == len(samples)
     assert all(math.isfinite(x) for x in base)
 
     # Scale mode snaps the contour to the configured key.
     scaled = libsonare.pitch_correct_timevarying(
-        samples, f0, sample_rate=sr, hop_length=hop, mode="scale", scale_root=0
+        samples, f0_hz=f0, sample_rate=sr, hop_length=hop, mode="scale", scale_root=0
     )
     assert len(scaled) == len(samples)
     assert all(math.isfinite(x) for x in scaled)
 
     # A lower retune_amount produces a different correction than a full snap.
     full = libsonare.pitch_correct_timevarying(
-        samples, f0, sample_rate=sr, hop_length=hop, target_midi=59.0, retune_amount=1.0
+        samples, f0_hz=f0, sample_rate=sr, hop_length=hop, target_midi=59.0, retune_amount=1.0
     )
     gentle = libsonare.pitch_correct_timevarying(
-        samples, f0, sample_rate=sr, hop_length=hop, target_midi=59.0, retune_amount=0.25
+        samples, f0_hz=f0, sample_rate=sr, hop_length=hop, target_midi=59.0, retune_amount=0.25
     )
     assert any(abs(a - b) > 1e-6 for a, b in zip(full, gentle, strict=True))
 
     # Out-of-range knobs are rejected.
     with raises_coded():
         libsonare.pitch_correct_timevarying(
-            samples, f0, sample_rate=sr, hop_length=hop, retune_amount=2.0
+            samples, f0_hz=f0, sample_rate=sr, hop_length=hop, retune_amount=2.0
         )
     with raises_coded():
         libsonare.pitch_correct_timevarying(
-            samples, f0, sample_rate=sr, hop_length=hop, target_midi=200.0
+            samples, f0_hz=f0, sample_rate=sr, hop_length=hop, target_midi=200.0
         )
     with pytest.raises(ValueError, match="mode must be"):
         libsonare.pitch_correct_timevarying(
-            samples, f0, sample_rate=sr, hop_length=hop, mode="Scale"
+            samples, f0_hz=f0, sample_rate=sr, hop_length=hop, mode="Scale"
         )
 
 
@@ -454,7 +471,7 @@ def test_realtime_voice_changer_stereo_interleaved() -> None:
 
 def test_realtime_voice_changer_rejects_odd_interleaved_stereo_length() -> None:
     with pytest.raises(ValueError, match="interleaved stereo input length must be even"):
-        libsonare.voice_change_realtime([0.0, 0.1, 0.2], channels=2)
+        libsonare.voice_change_realtime([0.0, 0.1, 0.2], channels=2, sample_rate=48000)
 
 
 def test_editing_audio_methods() -> None:

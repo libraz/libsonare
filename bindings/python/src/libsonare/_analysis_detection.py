@@ -54,7 +54,7 @@ from .types import (
 @_guard_buffer("samples")
 def detect_bpm(
     samples: Sequence[float] | list[float],
-    sample_rate: int = 22050,
+    sample_rate: int,
 ) -> float:
     """Detect the BPM (tempo) of audio samples.
 
@@ -66,7 +66,7 @@ def detect_bpm(
         samples: Mono audio samples (1D, nominally ``[-1.0, 1.0]``). Accepts
             ``list[float]``, ``tuple[float, ...]``, ``array.array``, or a numpy
             1D array of dtype ``float32``.
-        sample_rate: Sample rate in Hz (default 22050).
+        sample_rate: Sample rate in Hz.
 
     Returns:
         Detected BPM as a ``float``. For confidence, use :func:`analyze`.
@@ -90,7 +90,7 @@ def detect_bpm(
 @_guard_buffer("samples")
 def detect_key(
     samples: Sequence[float] | list[float],
-    sample_rate: int = 22050,
+    sample_rate: int,
     n_fft: int = 2048,
     hop_length: int = 512,
     use_hpss: bool = False,
@@ -109,7 +109,7 @@ def detect_key(
     Args:
         samples: Mono audio samples (1D float). See :func:`detect_bpm` for
             accepted types.
-        sample_rate: Sample rate in Hz (default 22050).
+        sample_rate: Sample rate in Hz.
         n_fft: FFT size used for chroma analysis.
         hop_length: Hop length used for chroma analysis.
         use_hpss: Use harmonic-percussive separation before chroma analysis.
@@ -171,7 +171,7 @@ def detect_key(
 @_guard_buffer("samples")
 def detect_key_candidates(
     samples: Sequence[float] | list[float],
-    sample_rate: int = 22050,
+    sample_rate: int,
     n_fft: int = 2048,
     hop_length: int = 512,
     use_hpss: bool = False,
@@ -234,13 +234,13 @@ def detect_key_candidates(
 @_guard_buffer("samples")
 def detect_beats(
     samples: Sequence[float] | list[float],
-    sample_rate: int = 22050,
+    sample_rate: int,
 ) -> list[float]:
     """Detect beat positions in audio samples.
 
     Args:
         samples: Audio samples as a list/sequence of floats.
-        sample_rate: Sample rate in Hz (default 22050).
+        sample_rate: Sample rate in Hz.
 
     Returns:
         List of beat times in seconds.
@@ -266,7 +266,7 @@ def detect_beats(
 @_guard_buffer("samples")
 def detect_downbeats(
     samples: Sequence[float] | list[float],
-    sample_rate: int = 22050,
+    sample_rate: int,
 ) -> list[float]:
     """Detect downbeat positions in audio samples."""
     lib = _get_lib()
@@ -287,7 +287,7 @@ def detect_downbeats(
 @_guard_buffer("samples")
 def detect_onsets(
     samples: Sequence[float] | list[float],
-    sample_rate: int = 22050,
+    sample_rate: int,
     *,
     n_fft: int = 2048,
     hop_length: int = 512,
@@ -305,7 +305,7 @@ def detect_onsets(
 
     Args:
         samples: Audio samples as a list/sequence of floats.
-        sample_rate: Sample rate in Hz (default 22050).
+        sample_rate: Sample rate in Hz.
 
     Returns:
         List of onset times in seconds.

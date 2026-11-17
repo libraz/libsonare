@@ -32,7 +32,7 @@ def _segment_input(
     dims_prefix: str = "",
 ) -> tuple[ctypes.Array[ctypes.c_float], int]:
     # ``arg_name`` / ``dims_prefix`` name the caller's own parameters, so a
-    # two-matrix entry point such as `cross_similarity` reports `x` / `x_rows`
+    # two-matrix entry point such as `segment_cross_similarity` reports `x` / `x_rows`
     # rather than the helper's internal `data` / `rows` spelling.
     rows_name, cols_name = f"{dims_prefix}rows", f"{dims_prefix}cols"
     if rows <= 0 or cols <= 0:
@@ -58,7 +58,7 @@ def _segment_indices_result(lib: ctypes.CDLL, out: SonareSegmentIndices) -> list
         lib.sonare_free_segment_indices(ctypes.byref(out))
 
 
-def cross_similarity(
+def segment_cross_similarity(
     x: Sequence[float] | list[float],
     x_rows: int,
     x_cols: int,
@@ -71,10 +71,10 @@ def cross_similarity(
 ) -> SegmentMatrix:
     """Return column-wise cross-similarity (``librosa.segment.cross_similarity``)."""
     x_array, _ = _segment_input(
-        "cross_similarity", x, x_rows, x_cols, arg_name="x", dims_prefix="x_"
+        "segment_cross_similarity", x, x_rows, x_cols, arg_name="x", dims_prefix="x_"
     )
     y_array, _ = _segment_input(
-        "cross_similarity", y, y_rows, y_cols, arg_name="y", dims_prefix="y_"
+        "segment_cross_similarity", y, y_rows, y_cols, arg_name="y", dims_prefix="y_"
     )
     out = SonareSegmentMatrix()
     rc = _get_lib().sonare_segment_cross_similarity(
@@ -93,7 +93,7 @@ def cross_similarity(
     return _segment_matrix_result(_get_lib(), out)
 
 
-def recurrence_matrix(
+def segment_recurrence_matrix(
     data: Sequence[float] | list[float],
     rows: int,
     cols: int,
@@ -104,7 +104,7 @@ def recurrence_matrix(
     mode: str = "connectivity",
 ) -> SegmentMatrix:
     """Return a self-similarity recurrence matrix (``librosa.segment.recurrence_matrix``)."""
-    c_data, _ = _segment_input("recurrence_matrix", data, rows, cols)
+    c_data, _ = _segment_input("segment_recurrence_matrix", data, rows, cols)
     lib = _get_lib()
     out = SonareSegmentMatrix()
     rc = lib.sonare_segment_recurrence_matrix(
@@ -122,7 +122,7 @@ def recurrence_matrix(
     return _segment_matrix_result(lib, out)
 
 
-def recurrence_to_lag(
+def segment_recurrence_to_lag(
     recurrence: Sequence[float] | list[float],
     n: int,
     pad: bool = True,
@@ -133,7 +133,9 @@ def recurrence_to_lag(
     with ``n_lags = 2n`` when ``pad`` (negative lags wrapped into the lower half) and ``n``
     otherwise.
     """
-    c_recurrence, _ = _segment_input("recurrence_to_lag", recurrence, n, n, arg_name="recurrence")
+    c_recurrence, _ = _segment_input(
+        "segment_recurrence_to_lag", recurrence, n, n, arg_name="recurrence"
+    )
     lib = _get_lib()
     out = SonareSegmentMatrix()
     _check(
@@ -144,7 +146,7 @@ def recurrence_to_lag(
     return _segment_matrix_result(lib, out)
 
 
-def lag_to_recurrence(
+def segment_lag_to_recurrence(
     lag: Sequence[float] | list[float],
     n_rows: int,
     n_lags: int,
@@ -153,7 +155,7 @@ def lag_to_recurrence(
 
     ``n_lags`` is ``n_rows`` for the unpadded layout and ``2 * n_rows`` for the padded one.
     """
-    c_lag, _ = _segment_input("lag_to_recurrence", lag, n_rows, n_lags, arg_name="lag")
+    c_lag, _ = _segment_input("segment_lag_to_recurrence", lag, n_rows, n_lags, arg_name="lag")
     lib = _get_lib()
     out = SonareSegmentMatrix()
     _check(
@@ -164,7 +166,7 @@ def lag_to_recurrence(
     return _segment_matrix_result(lib, out)
 
 
-def subsegment(
+def segment_subsegment(
     data: Sequence[float] | list[float],
     rows: int,
     cols: int,
@@ -172,7 +174,7 @@ def subsegment(
     n_segments: int = 4,
 ) -> list[int]:
     """Refine frame boundaries by clustering each parent segment."""
-    c_data, _ = _segment_input("subsegment", data, rows, cols)
+    c_data, _ = _segment_input("segment_subsegment", data, rows, cols)
     c_boundaries, count = _to_c_int_array(boundaries, "boundaries")
     lib = _get_lib()
     out = SonareSegmentIndices()
@@ -190,7 +192,7 @@ def subsegment(
     return _segment_indices_result(lib, out)
 
 
-def agglomerative(
+def segment_agglomerative(
     data: Sequence[float] | list[float],
     rows: int,
     cols: int,
@@ -198,7 +200,7 @@ def agglomerative(
     linkage: str = "average",
 ) -> list[int]:
     """Cluster feature columns and return one label per column."""
-    c_data, _ = _segment_input("agglomerative", data, rows, cols)
+    c_data, _ = _segment_input("segment_agglomerative", data, rows, cols)
     lib = _get_lib()
     out = SonareSegmentIndices()
     _check(
@@ -214,7 +216,7 @@ def agglomerative(
     return _segment_indices_result(lib, out)
 
 
-def path_enhance(
+def segment_path_enhance(
     recurrence: Sequence[float] | list[float],
     n: int,
     win: int,
@@ -223,7 +225,9 @@ def path_enhance(
     n_filters: int = 7,
 ) -> SegmentMatrix:
     """Enhance diagonal paths in a recurrence matrix."""
-    c_recurrence, _ = _segment_input("path_enhance", recurrence, n, n, arg_name="recurrence")
+    c_recurrence, _ = _segment_input(
+        "segment_path_enhance", recurrence, n, n, arg_name="recurrence"
+    )
     lib = _get_lib()
     out = SonareSegmentMatrix()
     _check(

@@ -80,7 +80,7 @@ def test_to_c_float_array_accepts_a_read_only_memoryview() -> None:
     assert length == 8
     assert list(c_array)[:3] == [0.0, 1.0, 2.0]
     audio = memoryview(np.ascontiguousarray(_sine(2048)).tobytes()).cast("f")
-    result = np.asarray(libsonare.rms_energy(audio), dtype=np.float64)
+    result = np.asarray(libsonare.rms_energy(audio, sample_rate=22050), dtype=np.float64)
     assert result.size > 0
     assert np.all(np.isfinite(result))
 
@@ -92,7 +92,7 @@ def test_samples_api_accepts_read_only_ndarray() -> None:
     ro.setflags(write=False)
     # Must not raise on the read-only input (the regression). rms_energy returns
     # a per-frame sequence; just assert it produced finite values.
-    result = np.asarray(libsonare.rms_energy(ro), dtype=np.float64)
+    result = np.asarray(libsonare.rms_energy(ro, sample_rate=22050), dtype=np.float64)
     assert result.size > 0
     assert np.all(np.isfinite(result))
 
@@ -157,13 +157,15 @@ def test_int_apis_accept_read_only_ndarray() -> None:
     assert len(backtracked) == 2
 
     data = np.linspace(0.0, 1.0, 4 * 16, dtype=np.float32)
-    refined = libsonare.subsegment(data, 4, 16, read_only([0, 8]), n_segments=2)
+    refined = libsonare.segment_subsegment(data, 4, 16, read_only([0, 8]), n_segments=2)
     assert len(refined) >= 2
 
     samples = _sine(2048)
-    remixed = libsonare.remix(samples, read_only([0, 512, 1024, 1536]))
+    remixed = libsonare.remix(samples, read_only([0, 512, 1024, 1536]), align_zeros=False)
     assert remixed.size == 1024
-    resolved = libsonare.remix_aligned_intervals(samples, read_only([0, 512, 1024, 1536]))
+    resolved = libsonare.remix_aligned_intervals(
+        samples, intervals=read_only([0, 512, 1024, 1536]), sample_rate=22050
+    )
     assert len(resolved) == 4
 
 

@@ -79,7 +79,7 @@ def _coerce_trim_silence_mode(value: int | str) -> int:
 @_guard_buffer("samples")
 def mastering_repair_trim_silence(
     samples: Sequence[float] | list[float] | np.ndarray,
-    sample_rate: int = 22050,
+    sample_rate: int,
     *,
     threshold: float = 0.001,
     padding_samples: int | None = None,
@@ -121,7 +121,7 @@ def _extract_trim_report(raw: Any) -> TrimReport:
 @_guard_buffer("samples")
 def mastering_repair_detect_trim_range(
     samples: Sequence[float] | list[float] | np.ndarray,
-    sample_rate: int = 22050,
+    sample_rate: int,
     *,
     threshold: float = 0.001,
     padding_samples: int | None = None,
@@ -150,7 +150,7 @@ def mastering_repair_detect_trim_range(
 
     Args:
         samples: Mono input buffer (any sequence convertible to float32).
-        sample_rate: Sample rate in Hz (default 22050).
+        sample_rate: Sample rate in Hz.
         threshold: Peak threshold, ``"peak"`` mode only (default 0.001).
         padding_samples: Samples to retain either side of the kept range,
             clamped to the buffer (default 0). A pass that kept nothing is not
@@ -193,7 +193,7 @@ def mastering_repair_detect_trim_range(
 def mastering_repair_detect_trim_range_stereo(
     left: Sequence[float] | list[float] | np.ndarray,
     right: Sequence[float] | list[float] | np.ndarray,
-    sample_rate: int = 22050,
+    sample_rate: int,
     *,
     threshold: float = 0.001,
     padding_samples: int | None = None,
@@ -225,7 +225,7 @@ def mastering_repair_detect_trim_range_stereo(
     Args:
         left: Left channel input buffer (any sequence convertible to float32).
         right: Right channel input buffer, same length as ``left``.
-        sample_rate: Sample rate in Hz (default 22050).
+        sample_rate: Sample rate in Hz.
         threshold: Peak threshold, ``"peak"`` mode only (default 0.001).
         padding_samples: Samples to retain either side of the kept range,
             clamped to the buffer (default 0). Not together with ``padding_sec``.
@@ -275,7 +275,7 @@ def mastering_repair_detect_trim_range_stereo(
 def mastering_repair_trim_silence_stereo(
     left: Sequence[float] | list[float] | np.ndarray,
     right: Sequence[float] | list[float] | np.ndarray,
-    sample_rate: int = 22050,
+    sample_rate: int,
     *,
     threshold: float = 0.001,
     padding_samples: int | None = None,
@@ -318,7 +318,7 @@ def mastering_repair_trim_silence_stereo(
     Args:
         left: Left channel input buffer (any sequence convertible to float32).
         right: Right channel input buffer, same length as ``left``.
-        sample_rate: Sample rate in Hz (default 22050).
+        sample_rate: Sample rate in Hz.
         threshold: Peak threshold, ``"peak"`` mode only (default 0.001).
         padding_samples: Samples to retain either side of the kept range,
             clamped to the buffer so it can never reach past an end (default 0).

@@ -97,7 +97,7 @@ def _optional_note_voiced(
 @_guard_buffer("samples")
 def note_stretch(
     samples: Sequence[float] | list[float],
-    sample_rate: int = 22050,
+    sample_rate: int,
     onset_sample: int | None = None,
     offset_sample: int | None = None,
     stretch_ratio: float = 1.0,
@@ -109,7 +109,7 @@ def note_stretch(
 
     Args:
         samples: Audio samples.
-        sample_rate: Sample rate in Hz (default 22050).
+        sample_rate: Sample rate in Hz.
         onset_sample: Start sample index of the note region (default 0). Not
             together with ``onset_sec``.
         offset_sample: End sample index of the note region (defaults to the input
@@ -145,7 +145,7 @@ def note_stretch(
 @_guard_buffer("samples")
 def note_move(
     samples: Sequence[float] | list[float],
-    sample_rate: int = 22050,
+    sample_rate: int,
     onset_sample: int | None = None,
     offset_sample: int | None = None,
     target_onset_sample: int | None = None,

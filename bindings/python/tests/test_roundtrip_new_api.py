@@ -57,7 +57,7 @@ def test_mel_inverse_roundtrip():
     assert n_frames > 0
     assert len(mel.power) == n_mels * n_frames
 
-    stft = ls.mel_to_stft(mel.power, n_mels, n_frames, sample_rate=sr, n_fft=n_fft)
+    stft = ls.mel_to_stft(mel.power, n_mels, n_frames, sr=sr, n_fft=n_fft)
     assert isinstance(stft, ls.StftMagnitudeResult)
     assert stft.n_bins == n_fft // 2 + 1
     assert stft.n_frames == n_frames
@@ -65,7 +65,7 @@ def test_mel_inverse_roundtrip():
     assert _is_finite_list(stft.magnitude)
     assert max(stft.magnitude) > 0.0  # reconstructed magnitude is non-trivial
 
-    out = ls.mel_to_audio(mel.power, n_mels, n_frames, sample_rate=sr, n_fft=n_fft, hop_length=hop)
+    out = ls.mel_to_audio(mel.power, n_mels, n_frames, sr=sr, n_fft=n_fft, hop_length=hop)
     assert len(out) >= (n_frames - 1) * hop
     assert _is_finite_list(out)
     assert max(abs(x) for x in out) > 0.0
@@ -81,8 +81,8 @@ def test_mel_inverse_honours_htk():
     mel = ls.mel_spectrogram(
         audio, sample_rate=sr, n_fft=n_fft, hop_length=hop, n_mels=n_mels, htk=True
     )
-    slaney = ls.mel_to_stft(mel.power, n_mels, mel.n_frames, sample_rate=sr, n_fft=n_fft, htk=False)
-    htk = ls.mel_to_stft(mel.power, n_mels, mel.n_frames, sample_rate=sr, n_fft=n_fft, htk=True)
+    slaney = ls.mel_to_stft(mel.power, n_mels, mel.n_frames, sr=sr, n_fft=n_fft, htk=False)
+    htk = ls.mel_to_stft(mel.power, n_mels, mel.n_frames, sr=sr, n_fft=n_fft, htk=True)
 
     assert htk.n_bins == n_fft // 2 + 1
     assert htk.n_frames == mel.n_frames
@@ -93,7 +93,7 @@ def test_mel_inverse_honours_htk():
         mel.power,
         n_mels,
         mel.n_frames,
-        sample_rate=sr,
+        sr=sr,
         n_fft=n_fft,
         hop_length=hop,
         n_iter=2,
@@ -110,7 +110,7 @@ def test_mfcc_inverse_roundtrip():
     n_mels = 128
     audio = _sine(sr // 4, 220.0, sr)  # 0.25 s — see mel roundtrip above
 
-    mf = ls.mfcc(audio, sample_rate=sr, n_fft=n_fft, hop_length=hop, n_mfcc=20)
+    mf = ls.mfcc(audio, sr=sr, n_fft=n_fft, hop_length=hop, n_mfcc=20)
     n_frames = mf.n_frames
     assert n_frames > 0
     assert len(mf.coefficients) == 20 * n_frames
@@ -127,7 +127,7 @@ def test_mfcc_inverse_roundtrip():
     assert any(abs(a - b) > 1.0e-5 for a, b in zip(lifted_mel.power, mel.power, strict=True))
 
     out = ls.mfcc_to_audio(
-        mf.coefficients, 20, n_frames, sample_rate=sr, n_fft=n_fft, hop_length=hop, n_mels=n_mels
+        mf.coefficients, 20, n_frames, sr=sr, n_fft=n_fft, hop_length=hop, n_mels=n_mels
     )
     assert len(out) >= (n_frames - 1) * hop
     assert _is_finite_list(out)
@@ -188,22 +188,22 @@ def test_inverse_transforms_reject_non_finite_cells():
 def test_cqt_vqt_inverse_reconstruction_and_shape_validation():
     sr = 8000
     source = _sine(2048, 261.6256, sr)
-    cq = ls.cqt(source, sample_rate=sr, hop_length=128, fmin=130.8128, n_bins=12)
+    cq = ls.cqt(source, sr=sr, hop_length=128, fmin=130.8128, n_bins=12)
     reconstructed = ls.cqt_to_audio(cq.magnitude, cq.n_bins, cq.n_frames, sr, 128, 130.8128, 12, 2)
     assert len(reconstructed) == len(source)
     assert _is_finite_list(reconstructed)
     assert max(map(abs, reconstructed)) > 1e-5
 
-    vq = ls.vqt(source, sample_rate=sr, hop_length=128, fmin=130.8128, n_bins=12)
+    vq = ls.vqt(source, sr=sr, hop_length=128, fmin=130.8128, n_bins=12)
     vqt_reconstructed = ls.vqt_to_audio(
         vq.magnitude, vq.n_bins, vq.n_frames, sr, 128, 130.8128, 12, 0, 2
     )
     assert len(vqt_reconstructed) == len(source)
     assert _is_finite_list(vqt_reconstructed)
     with pytest.raises(ls.SonareError):
-        ls.cqt_to_audio(cq.magnitude[:-1], cq.n_bins, cq.n_frames)
+        ls.cqt_to_audio(cq.magnitude[:-1], cq.n_bins, cq.n_frames, sample_rate=22050)
     with pytest.raises(ls.SonareError):
-        ls.vqt_to_audio(vq.magnitude, vq.n_bins, vq.n_frames, n_iter=257)
+        ls.vqt_to_audio(vq.magnitude, vq.n_bins, vq.n_frames, n_iter=257, sample_rate=22050)
 
 
 def test_stream_analyzer_abi_and_stats():

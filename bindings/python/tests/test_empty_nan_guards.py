@@ -97,8 +97,8 @@ _SAMPLE_WRAPPERS = {
     "phase_vocoder": lambda buf: phase_vocoder(buf, SR),
     "pitch_pyin": lambda buf: pitch_pyin(buf, SR),
     "pitch_yin": lambda buf: pitch_yin(buf, SR),
-    "voice_change": lambda buf: voice_change(buf),
-    "voice_change_realtime": lambda buf: voice_change_realtime(buf),
+    "voice_change": lambda buf: voice_change(buf, sample_rate=22050),
+    "voice_change_realtime": lambda buf: voice_change_realtime(buf, sample_rate=48000),
     "mastering_dynamics_compressor": lambda buf: mastering_dynamics_compressor(buf, SR),
     "mastering_dynamics_gate": lambda buf: mastering_dynamics_gate(buf, SR),
     "mastering_dynamics_transient_shaper": lambda buf: mastering_dynamics_transient_shaper(buf, SR),
@@ -135,11 +135,11 @@ class TestEmptyGuards:
 
     def test_metering_peak_db_rejects_empty(self):
         with pytest.raises(ValueError, match=r"metering_peak_db: samples must not be empty"):
-            metering_peak_db(np.empty(0, dtype=np.float32))
+            metering_peak_db(np.empty(0, dtype=np.float32), sample_rate=22050)
 
     def test_metering_rms_db_rejects_empty(self):
         with pytest.raises(ValueError, match=r"metering_rms_db: samples must not be empty"):
-            metering_rms_db(np.empty(0, dtype=np.float32))
+            metering_rms_db(np.empty(0, dtype=np.float32), sample_rate=22050)
 
     def test_metering_true_peak_db_rejects_empty(self):
         with pytest.raises(ValueError, match=r"metering_true_peak_db: samples must not be empty"):
@@ -150,7 +150,7 @@ class TestEmptyGuards:
             ValueError,
             match=r"metering_stereo_correlation: left must not be empty",
         ):
-            metering_stereo_correlation(np.empty(0, dtype=np.float32), _sine())
+            metering_stereo_correlation(np.empty(0, dtype=np.float32), _sine(), sample_rate=22050)
 
     def test_mastering_dynamics_compressor_rejects_empty(self):
         with pytest.raises(
@@ -172,11 +172,11 @@ class TestEmptyGuards:
 
     def test_voice_change_rejects_empty(self):
         with pytest.raises(ValueError, match=r"voice_change: samples must not be empty"):
-            voice_change(np.empty(0, dtype=np.float32))
+            voice_change(np.empty(0, dtype=np.float32), sample_rate=22050)
 
     def test_voice_change_realtime_rejects_empty(self):
         with pytest.raises(ValueError, match=r"voice_change_realtime: samples must not be empty"):
-            voice_change_realtime(np.empty(0, dtype=np.float32))
+            voice_change_realtime(np.empty(0, dtype=np.float32), sample_rate=48000)
 
 
 class TestNanInfGuards:
@@ -206,7 +206,7 @@ class TestNanInfGuards:
         with pytest.raises(
             ValueError, match=r"metering_peak_db: samples contains NaN or Inf at index 100"
         ):
-            metering_peak_db(_with_nan())
+            metering_peak_db(_with_nan(), sample_rate=22050)
 
 
 class TestValidateFalseStillHasCAbiBackstop:
@@ -443,7 +443,7 @@ class TestSpectralTransformsMatchSiblingGuards:
     def test_invalid_sample_rate_keeps_sonare_error_code(self, name):
         # Preflight covers the buffer only; scalar arguments stay the C ABI's job.
         with pytest.raises(SonareValueError) as exc_info:
-            _SPECTRAL_TRANSFORMS[name](_sine(SR), sample_rate=0)
+            _SPECTRAL_TRANSFORMS[name](_sine(SR), 0)
         assert str(exc_info.value) == "Invalid parameter"
         assert exc_info.value.code == 4
 
@@ -489,7 +489,7 @@ class TestNonFiniteInputYieldsNoPlausibleResult:
 
 class TestPositiveSmoke:
     def test_metering_rms_db_finite_on_sine(self):
-        v = metering_rms_db(_sine(SR))
+        v = metering_rms_db(_sine(SR), sample_rate=22050)
         assert math.isfinite(v)
 
     def test_mastering_dynamics_compressor_returns_same_length(self):
@@ -522,38 +522,38 @@ class TestDocumentedBufferInputForms:
     @pytest.mark.parametrize("form", sorted(ACCEPTED))
     def test_documented_form_converts(self, form):
         samples = self.ACCEPTED[form](_sine(SR)[:1024].tolist())
-        assert math.isfinite(metering_rms_db(samples))
+        assert math.isfinite(metering_rms_db(samples, sample_rate=22050))
 
     @pytest.mark.parametrize("form", sorted(ACCEPTED))
     def test_documented_form_still_reports_an_empty_buffer(self, form):
         empty = range(0) if form == "range" else self.ACCEPTED[form]([])
         with pytest.raises(SonareValueError, match=r"metering_rms_db: samples must not be empty"):
-            metering_rms_db(empty)
+            metering_rms_db(empty, sample_rate=22050)
 
     def test_generator_is_rejected_by_the_guard_not_by_numpy(self):
         # Not a documented form, but it must still fail the way the binding
         # promises rather than leaking NumPy's own TypeError.
         with pytest.raises(SonareValueError) as exc_info:
-            metering_rms_db(float(i) for i in range(1024))
+            metering_rms_db((float(i) for i in range(1024)), sample_rate=22050)
         assert "metering_rms_db: samples" in str(exc_info.value)
         assert exc_info.value.code == 4
 
     def test_uncoercible_object_is_rejected_by_the_guard(self):
         with pytest.raises(SonareValueError) as exc_info:
-            metering_rms_db(["not", "numbers"])
+            metering_rms_db(["not", "numbers"], sample_rate=22050)
         assert "metering_rms_db: samples" in str(exc_info.value)
 
     def test_none_element_is_named_rather_than_reported_as_nan(self):
         samples = [0.0] * 1024
         samples[7] = None
         with pytest.raises(SonareValueError, match=r"metering_rms_db: samples\[7\] is None"):
-            metering_rms_db(samples)
+            metering_rms_db(samples, sample_rate=22050)
 
     def test_nan_element_in_a_list_still_reports_nan(self):
         samples = [0.0] * 1024
         samples[7] = math.nan
         with pytest.raises(SonareValueError, match=r"samples contains NaN or Inf at index 7"):
-            metering_rms_db(samples)
+            metering_rms_db(samples, sample_rate=22050)
 
 
 def _stereo_2d(n: int = 1024) -> np.ndarray:
@@ -598,13 +598,13 @@ class TestBufferRankGuards:
 
     def test_nested_sequence_is_rejected_like_a_2d_array(self):
         with pytest.raises(SonareValueError) as exc_info:
-            metering_rms_db([[0.1, 0.2], [0.3, 0.4]])
+            metering_rms_db([[0.1, 0.2], [0.3, 0.4]], sample_rate=22050)
         assert "metering_rms_db: samples must be a 1-D buffer" in str(exc_info.value)
         assert "shape=(2, 2)" in str(exc_info.value)
 
     def test_zero_dimensional_array_is_rejected(self):
         with pytest.raises(SonareValueError) as exc_info:
-            metering_rms_db(np.array(0.5, dtype=np.float32))
+            metering_rms_db(np.array(0.5, dtype=np.float32), sample_rate=22050)
         assert "ndim=0" in str(exc_info.value)
 
     def test_a_flattened_matrix_argument_rejects_the_unflattened_form(self):
@@ -666,7 +666,7 @@ class TestNoneIsReportedAsATypeNotAsANanSample:
 
     def test_a_bare_scalar_is_reported_by_type_too(self):
         with pytest.raises(SonareValueError, match=r"not float$"):
-            metering_rms_db(0.5)
+            metering_rms_db(0.5, sample_rate=22050)
 
 
 class TestRealtimeFailuresDoNotBorrowAnEarlierMessage:

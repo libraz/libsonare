@@ -117,7 +117,7 @@ def _run_normalize_stereo(
 
 def normalize(
     samples: Sequence[float] | list[float],
-    sample_rate: int = 22050,
+    sample_rate: int,
     target_db: float = 0.0,
     *,
     validate: bool = True,
@@ -126,7 +126,7 @@ def normalize(
 
     Args:
         samples: Audio samples.
-        sample_rate: Sample rate in Hz (default 22050).
+        sample_rate: Sample rate in Hz.
         target_db: Finite target peak at or below 0 dBFS (default 0.0).
         validate: Reject empty / NaN / Inf input (default True). Pass
             ``validate=False`` to skip the scan on hot paths.
@@ -152,7 +152,7 @@ def normalize(
 
 def normalize_rms(
     samples: Sequence[float] | list[float],
-    sample_rate: int = 22050,
+    sample_rate: int,
     target_db: float = -20.0,
     *,
     validate: bool = True,
@@ -166,7 +166,7 @@ def normalize_rms(
 
     Args:
         samples: Audio samples.
-        sample_rate: Sample rate in Hz (default 22050).
+        sample_rate: Sample rate in Hz.
         target_db: Finite RMS target at or below 0 dBFS (default -20.0).
         validate: Reject empty / NaN / Inf input (default True). Pass
             ``validate=False`` to skip the scan on hot paths.
@@ -195,7 +195,7 @@ def normalize_rms(
 def normalize_stereo(
     left: Sequence[float] | list[float] | np.ndarray,
     right: Sequence[float] | list[float] | np.ndarray,
-    sample_rate: int = 22050,
+    sample_rate: int,
     target_db: float = 0.0,
     *,
     validate: bool = True,
@@ -220,7 +220,7 @@ def normalize_stereo(
     Args:
         left: Left channel samples.
         right: Right channel samples, same length as ``left``.
-        sample_rate: Sample rate in Hz, shared by both channels (default 22050).
+        sample_rate: Sample rate in Hz, shared by both channels.
         target_db: Finite target peak at or below 0 dBFS (default 0.0).
         validate: Reject empty / NaN / Inf input (default True). Pass
             ``validate=False`` to skip the scan on hot paths.
@@ -248,7 +248,7 @@ def normalize_stereo(
 def normalize_rms_stereo(
     left: Sequence[float] | list[float] | np.ndarray,
     right: Sequence[float] | list[float] | np.ndarray,
-    sample_rate: int = 22050,
+    sample_rate: int,
     target_db: float = -20.0,
     *,
     validate: bool = True,
@@ -273,7 +273,7 @@ def normalize_rms_stereo(
     Args:
         left: Left channel samples.
         right: Right channel samples, same length as ``left``.
-        sample_rate: Sample rate in Hz, shared by both channels (default 22050).
+        sample_rate: Sample rate in Hz, shared by both channels.
         target_db: Finite RMS target at or below 0 dBFS (default -20.0).
         validate: Reject empty / NaN / Inf input (default True). Pass
             ``validate=False`` to skip the scan on hot paths.
@@ -297,7 +297,7 @@ def normalize_rms_stereo(
 
 def trim(
     samples: Sequence[float] | list[float],
-    sample_rate: int = 22050,
+    sample_rate: int,
     threshold_db: float = -60.0,
     frame_length: int = _DEFAULT_TRIM_FRAME_LENGTH,
     hop_length: int = _DEFAULT_TRIM_HOP_LENGTH,
@@ -308,7 +308,7 @@ def trim(
 
     Args:
         samples: Audio samples.
-        sample_rate: Sample rate in Hz (default 22050).
+        sample_rate: Sample rate in Hz.
         threshold_db: Silence threshold in dB (default -60.0).
         frame_length: RMS analysis frame length in samples (default 2048).
         hop_length: RMS analysis hop length in samples (default 512).

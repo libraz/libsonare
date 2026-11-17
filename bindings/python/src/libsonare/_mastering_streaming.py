@@ -55,7 +55,7 @@ def _streaming_loudness_gain_result(out: SonareStreamingLoudnessGain) -> Streami
 @_guard_buffer("samples")
 def streaming_loudness_gain(
     samples: Sequence[float] | list[float],
-    sample_rate: int = 22050,
+    sample_rate: int,
     config: dict[str, Any] | None = None,
 ) -> StreamingLoudnessGain:
     """Measure the loudness numbers a :class:`StreamingMasteringChain` needs.
@@ -69,7 +69,7 @@ def streaming_loudness_gain(
 
     Args:
         samples: Mono audio samples.
-        sample_rate: Sample rate in Hz (default 22050).
+        sample_rate: Sample rate in Hz.
         config: Chain config as accepted by :func:`mastering_chain`.
 
     Returns:
@@ -106,7 +106,7 @@ def streaming_loudness_gain(
 def streaming_loudness_gain_stereo(
     left: Sequence[float] | list[float],
     right: Sequence[float] | list[float],
-    sample_rate: int = 22050,
+    sample_rate: int,
     config: dict[str, Any] | None = None,
 ) -> StreamingLoudnessGain:
     """Stereo counterpart of :func:`streaming_loudness_gain`.

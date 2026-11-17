@@ -82,7 +82,11 @@ def test_explicit_zero_tuning_is_honoured(detuned: list[float]) -> None:
     assert libsonare.detect_key(detuned, _SR, tuning=0).tuning == 0.0
     assert libsonare.detect_chords(detuned, _SR, tuning=0).tuning == 0.0
     labels = libsonare.chord_functional_analysis(
-        detuned, libsonare.PitchClass.C, libsonare.Mode.MAJOR, _SR, tuning=0
+        detuned,
+        key_root=libsonare.PitchClass.C,
+        key_mode=libsonare.Mode.MAJOR,
+        sample_rate=_SR,
+        tuning=0,
     )
     assert labels
 
@@ -125,7 +129,7 @@ def test_analyze_tuning_recentres_key_and_numerals(detuned: list[float]) -> None
     assert {"I", "V", "vi", "IV"} <= numerals
 
     labels = libsonare.chord_functional_analysis(
-        detuned, on.key.root, on.key.mode, _SR, tuning=estimate
+        detuned, key_root=on.key.root, key_mode=on.key.mode, sample_rate=_SR, tuning=estimate
     )
     detected = libsonare.detect_chords(detuned, _SR, tuning=estimate).chords
     assert [c.name for c in labels] == [c.name for c in detected]
@@ -145,7 +149,7 @@ def test_tuning_out_of_range_is_invalid(detuned: list[float]) -> None:
         lambda: libsonare.detect_chords(detuned[:_SR], _SR, tuning=0.5),
         lambda: libsonare.detect_key_candidates(detuned[:_SR], _SR, tuning=0.5),
         lambda: libsonare.chord_functional_analysis(
-            detuned[:_SR], libsonare.PitchClass.C, tuning=0.5
+            detuned[:_SR], key_root=libsonare.PitchClass.C, tuning=0.5, sample_rate=22050
         ),
     ):
         with pytest.raises(SonareValueError) as info:

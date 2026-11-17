@@ -186,11 +186,11 @@ def cmd_lufs(args: argparse.Namespace) -> int:
 
 
 def cmd_onset_envelope(args: argparse.Namespace) -> int:
-    from ._conversions import onset_envelope
+    from ._conversions import onset_strength
 
     samples, sr = _load_audio(args.file)
-    env = onset_envelope(
-        samples, sample_rate=sr, n_fft=args.n_fft, hop_length=args.hop_length, n_mels=args.n_mels
+    env = onset_strength(
+        samples, sr=sr, n_fft=args.n_fft, hop_length=args.hop_length, n_mels=args.n_mels
     )
 
     if args.json:
@@ -253,16 +253,16 @@ def cmd_nnls_chroma(args: argparse.Namespace) -> int:
 
 
 def cmd_tempogram(args: argparse.Namespace) -> int:
-    from ._conversions import onset_envelope, tempogram
+    from ._conversions import onset_strength, tempogram
 
     samples, sr = _load_audio(args.file)
-    env = onset_envelope(
-        samples, sample_rate=sr, n_fft=args.n_fft, hop_length=args.hop_length, n_mels=args.n_mels
+    env = onset_strength(
+        samples, sr=sr, n_fft=args.n_fft, hop_length=args.hop_length, n_mels=args.n_mels
     )
     tempogram_options = {}
     if hasattr(args, "win_length"):
         tempogram_options["win_length"] = args.win_length
-    n_frames, data = tempogram(env, sample_rate=sr, hop_length=args.hop_length, **tempogram_options)
+    n_frames, data = tempogram(env, sr=sr, hop_length=args.hop_length, **tempogram_options)
     win_length = (
         args.win_length
         if hasattr(args, "win_length")
@@ -290,18 +290,18 @@ def cmd_tempogram(args: argparse.Namespace) -> int:
 
 
 def cmd_plp(args: argparse.Namespace) -> int:
-    from ._conversions import onset_envelope, plp
+    from ._conversions import onset_strength, plp
 
     samples, sr = _load_audio(args.file)
-    env = onset_envelope(
-        samples, sample_rate=sr, n_fft=args.n_fft, hop_length=args.hop_length, n_mels=args.n_mels
+    env = onset_strength(
+        samples, sr=sr, n_fft=args.n_fft, hop_length=args.hop_length, n_mels=args.n_mels
     )
     plp_options = {
         name: getattr(args, name)
         for name in ("tempo_min", "tempo_max", "win_length")
         if hasattr(args, name)
     }
-    pulse = plp(env, sample_rate=sr, hop_length=args.hop_length, **plp_options)
+    pulse = plp(env, sr=sr, hop_length=args.hop_length, **plp_options)
 
     if args.json:
         print(

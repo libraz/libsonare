@@ -606,3 +606,1463 @@ changed = "sample_rate is required; it no longer defaults to 48000"
 domain = "core"
 rule = "sample-rate-required"
 test = "bindings/python/tests/test_binding_consistency.py::test_audio_from_buffer_requires_the_sample_rate"
+
+[[entry]]
+kind = "option"
+old = "detect_bpm(sample_rate)"
+changed = "sample_rate is required (1.x defaulted to 22050)"
+domain = "analysis"
+rule = "sample-rate-required"
+test = "bindings/python/tests/test_surface_analysis.py::test_operation_requires_sample_rate"
+
+[[entry]]
+kind = "option"
+old = "detect_key(sample_rate)"
+changed = "sample_rate is required (1.x defaulted to 22050)"
+domain = "analysis"
+rule = "sample-rate-required"
+test = "bindings/python/tests/test_surface_analysis.py::test_operation_requires_sample_rate"
+
+[[entry]]
+kind = "option"
+old = "detect_key_candidates(sample_rate)"
+changed = "sample_rate is required (1.x defaulted to 22050)"
+domain = "analysis"
+rule = "sample-rate-required"
+test = "bindings/python/tests/test_surface_analysis.py::test_operation_requires_sample_rate"
+
+[[entry]]
+kind = "option"
+old = "detect_beats(sample_rate)"
+changed = "sample_rate is required (1.x defaulted to 22050)"
+domain = "analysis"
+rule = "sample-rate-required"
+test = "bindings/python/tests/test_surface_analysis.py::test_operation_requires_sample_rate"
+
+[[entry]]
+kind = "option"
+old = "detect_downbeats(sample_rate)"
+changed = "sample_rate is required (1.x defaulted to 22050)"
+domain = "analysis"
+rule = "sample-rate-required"
+test = "bindings/python/tests/test_surface_analysis.py::test_operation_requires_sample_rate"
+
+[[entry]]
+kind = "option"
+old = "detect_onsets(sample_rate)"
+changed = "sample_rate is required (1.x defaulted to 22050)"
+domain = "analysis"
+rule = "sample-rate-required"
+test = "bindings/python/tests/test_surface_analysis.py::test_operation_requires_sample_rate"
+
+[[entry]]
+kind = "option"
+old = "analyze(sample_rate)"
+changed = "sample_rate is required (1.x defaulted to 22050)"
+domain = "analysis"
+rule = "sample-rate-required"
+test = "bindings/python/tests/test_surface_analysis.py::test_operation_requires_sample_rate"
+
+[[entry]]
+kind = "option"
+old = "analyze_with_progress(sample_rate)"
+changed = "sample_rate is required (1.x defaulted to 22050)"
+domain = "analysis"
+rule = "sample-rate-required"
+test = "bindings/python/tests/test_surface_analysis.py::test_operation_requires_sample_rate"
+
+[[entry]]
+kind = "option"
+old = "analyze_bpm(sample_rate)"
+changed = "sample_rate is required (1.x defaulted to 22050)"
+domain = "analysis"
+rule = "sample-rate-required"
+test = "bindings/python/tests/test_surface_analysis.py::test_operation_requires_sample_rate"
+
+[[entry]]
+kind = "option"
+old = "analyze_impulse_response(sample_rate)"
+changed = "sample_rate is required (1.x defaulted to 48000)"
+domain = "analysis"
+rule = "sample-rate-required"
+test = "bindings/python/tests/test_surface_analysis.py::test_operation_requires_sample_rate"
+
+[[entry]]
+kind = "option"
+old = "detect_acoustic(sample_rate)"
+changed = "sample_rate is required (1.x defaulted to 48000)"
+domain = "analysis"
+rule = "sample-rate-required"
+test = "bindings/python/tests/test_surface_analysis.py::test_operation_requires_sample_rate"
+
+[[entry]]
+kind = "option"
+old = "synthesize_rir(sample_rate)"
+changed = "sample_rate is required (1.x defaulted to 48000)"
+domain = "effects"
+rule = "sample-rate-required"
+test = "bindings/python/tests/test_surface_analysis.py::test_operation_requires_sample_rate"
+
+[[entry]]
+kind = "option"
+old = "estimate_room(sample_rate)"
+changed = "sample_rate is required (1.x defaulted to 48000)"
+domain = "effects"
+rule = "sample-rate-required"
+test = "bindings/python/tests/test_surface_analysis.py::test_operation_requires_sample_rate"
+
+[[entry]]
+kind = "option"
+old = "analyze_rhythm(sample_rate)"
+changed = "sample_rate is required (1.x defaulted to 22050)"
+domain = "analysis"
+rule = "sample-rate-required"
+test = "bindings/python/tests/test_surface_analysis.py::test_operation_requires_sample_rate"
+
+[[entry]]
+kind = "option"
+old = "analyze_dynamics(sample_rate)"
+changed = "sample_rate is required (1.x defaulted to 22050)"
+domain = "analysis"
+rule = "sample-rate-required"
+test = "bindings/python/tests/test_surface_analysis.py::test_operation_requires_sample_rate"
+
+[[entry]]
+kind = "option"
+old = "analyze_timbre(sample_rate)"
+changed = "sample_rate is required (1.x defaulted to 22050)"
+domain = "analysis"
+rule = "sample-rate-required"
+test = "bindings/python/tests/test_surface_analysis.py::test_operation_requires_sample_rate"
+
+[[entry]]
+kind = "option"
+old = "detect_chords(sample_rate)"
+changed = "sample_rate is required (1.x defaulted to 22050)"
+domain = "analysis"
+rule = "sample-rate-required"
+test = "bindings/python/tests/test_surface_analysis.py::test_operation_requires_sample_rate"
+
+[[entry]]
+kind = "option"
+old = "chord_functional_analysis(sample_rate)"
+changed = "sample_rate is required (1.x defaulted to 22050); sample_rate moves directly after samples"
+domain = "analysis"
+rule = "sample-rate-required"
+test = "bindings/python/tests/test_surface_analysis.py::test_operation_requires_sample_rate"
+
+[[entry]]
+kind = "option"
+old = "analyze_sections(sample_rate)"
+changed = "sample_rate is required (1.x defaulted to 22050)"
+domain = "analysis"
+rule = "sample-rate-required"
+test = "bindings/python/tests/test_surface_analysis.py::test_operation_requires_sample_rate"
+
+[[entry]]
+kind = "option"
+old = "detect_boundaries(sample_rate)"
+changed = "sample_rate is required (1.x defaulted to 22050)"
+domain = "analysis"
+rule = "sample-rate-required"
+test = "bindings/python/tests/test_surface_analysis.py::test_operation_requires_sample_rate"
+
+[[entry]]
+kind = "option"
+old = "analyze_melody(sample_rate)"
+changed = "sample_rate is required (1.x defaulted to 22050)"
+domain = "analysis"
+rule = "sample-rate-required"
+test = "bindings/python/tests/test_surface_analysis.py::test_operation_requires_sample_rate"
+
+[[entry]]
+kind = "option"
+old = "cqt(sample_rate)"
+new = "cqt(sr)"
+domain = "analysis"
+rule = "sample-rate-name"
+
+[[entry]]
+kind = "option"
+old = "pseudo_cqt(sample_rate)"
+new = "pseudo_cqt(sr)"
+domain = "analysis"
+rule = "sample-rate-name"
+
+[[entry]]
+kind = "option"
+old = "hybrid_cqt(sample_rate)"
+new = "hybrid_cqt(sr)"
+domain = "analysis"
+rule = "sample-rate-name"
+
+[[entry]]
+kind = "option"
+old = "vqt(sample_rate)"
+new = "vqt(sr)"
+domain = "analysis"
+rule = "sample-rate-name"
+
+[[entry]]
+kind = "option"
+old = "hpss(sample_rate)"
+changed = "sample_rate is required (1.x defaulted to 22050)"
+domain = "effects"
+rule = "sample-rate-required"
+test = "bindings/python/tests/test_surface_analysis.py::test_operation_requires_sample_rate"
+
+[[entry]]
+kind = "option"
+old = "harmonic(sample_rate)"
+changed = "sample_rate is required (1.x defaulted to 22050)"
+domain = "effects"
+rule = "sample-rate-required"
+test = "bindings/python/tests/test_surface_analysis.py::test_operation_requires_sample_rate"
+
+[[entry]]
+kind = "option"
+old = "percussive(sample_rate)"
+changed = "sample_rate is required (1.x defaulted to 22050)"
+domain = "effects"
+rule = "sample-rate-required"
+test = "bindings/python/tests/test_surface_analysis.py::test_operation_requires_sample_rate"
+
+[[entry]]
+kind = "option"
+old = "time_stretch(sample_rate)"
+changed = "sample_rate is required (1.x defaulted to 22050)"
+domain = "effects"
+rule = "sample-rate-required"
+test = "bindings/python/tests/test_surface_analysis.py::test_operation_requires_sample_rate"
+
+[[entry]]
+kind = "option"
+old = "pitch_shift(sample_rate)"
+changed = "sample_rate is required (1.x defaulted to 22050)"
+domain = "effects"
+rule = "sample-rate-required"
+test = "bindings/python/tests/test_surface_analysis.py::test_operation_requires_sample_rate"
+
+[[entry]]
+kind = "option"
+old = "pitch_correct_to_midi(sample_rate)"
+changed = "sample_rate is required (1.x defaulted to 22050)"
+domain = "effects"
+rule = "sample-rate-required"
+test = "bindings/python/tests/test_surface_analysis.py::test_operation_requires_sample_rate"
+
+[[entry]]
+kind = "option"
+old = "pitch_correct_to_midi_timevarying(sample_rate)"
+changed = "sample_rate is required (1.x defaulted to 22050); sample_rate moves directly after samples"
+domain = "effects"
+rule = "sample-rate-required"
+test = "bindings/python/tests/test_surface_analysis.py::test_operation_requires_sample_rate"
+
+[[entry]]
+kind = "option"
+old = "pitch_correct_timevarying(sample_rate)"
+changed = "sample_rate is required (1.x defaulted to 22050); sample_rate moves directly after samples"
+domain = "effects"
+rule = "sample-rate-required"
+test = "bindings/python/tests/test_surface_analysis.py::test_operation_requires_sample_rate"
+
+[[entry]]
+kind = "option"
+old = "auto_tune(sample_rate)"
+changed = "sample_rate is required (1.x defaulted to 22050)"
+domain = "effects"
+rule = "sample-rate-required"
+test = "bindings/python/tests/test_surface_analysis.py::test_operation_requires_sample_rate"
+
+[[entry]]
+kind = "option"
+old = "note_stretch(sample_rate)"
+changed = "sample_rate is required (1.x defaulted to 22050)"
+domain = "effects"
+rule = "sample-rate-required"
+test = "bindings/python/tests/test_surface_analysis.py::test_operation_requires_sample_rate"
+
+[[entry]]
+kind = "option"
+old = "note_move(sample_rate)"
+changed = "sample_rate is required (1.x defaulted to 22050)"
+domain = "effects"
+rule = "sample-rate-required"
+test = "bindings/python/tests/test_surface_analysis.py::test_operation_requires_sample_rate"
+
+[[entry]]
+kind = "option"
+old = "voice_change(sample_rate)"
+changed = "sample_rate is required (1.x defaulted to 22050)"
+domain = "effects"
+rule = "sample-rate-required"
+test = "bindings/python/tests/test_surface_analysis.py::test_operation_requires_sample_rate"
+
+[[entry]]
+kind = "option"
+old = "voice_change_realtime(sample_rate)"
+changed = "sample_rate is required (1.x defaulted to 48000)"
+domain = "effects"
+rule = "sample-rate-required"
+test = "bindings/python/tests/test_surface_analysis.py::test_operation_requires_sample_rate"
+
+[[entry]]
+kind = "option"
+old = "normalize(sample_rate)"
+changed = "sample_rate is required (1.x defaulted to 22050)"
+domain = "effects"
+rule = "sample-rate-required"
+test = "bindings/python/tests/test_surface_analysis.py::test_operation_requires_sample_rate"
+
+[[entry]]
+kind = "option"
+old = "normalize_rms(sample_rate)"
+changed = "sample_rate is required (1.x defaulted to 22050)"
+domain = "effects"
+rule = "sample-rate-required"
+test = "bindings/python/tests/test_surface_analysis.py::test_operation_requires_sample_rate"
+
+[[entry]]
+kind = "option"
+old = "normalize_stereo(sample_rate)"
+changed = "sample_rate is required (1.x defaulted to 22050)"
+domain = "effects"
+rule = "sample-rate-required"
+test = "bindings/python/tests/test_surface_analysis.py::test_operation_requires_sample_rate"
+
+[[entry]]
+kind = "option"
+old = "normalize_rms_stereo(sample_rate)"
+changed = "sample_rate is required (1.x defaulted to 22050)"
+domain = "effects"
+rule = "sample-rate-required"
+test = "bindings/python/tests/test_surface_analysis.py::test_operation_requires_sample_rate"
+
+[[entry]]
+kind = "option"
+old = "mastering(sample_rate)"
+changed = "sample_rate is required (1.x defaulted to 22050)"
+domain = "mastering"
+rule = "sample-rate-required"
+test = "bindings/python/tests/test_surface_analysis.py::test_operation_requires_sample_rate"
+
+[[entry]]
+kind = "option"
+old = "mastering_assistant_suggest(sample_rate)"
+changed = "sample_rate is required (1.x defaulted to 22050)"
+domain = "mastering"
+rule = "sample-rate-required"
+test = "bindings/python/tests/test_surface_analysis.py::test_operation_requires_sample_rate"
+
+[[entry]]
+kind = "option"
+old = "mastering_assistant_suggest_chain(sample_rate)"
+changed = "sample_rate is required (1.x defaulted to 22050)"
+domain = "mastering"
+rule = "sample-rate-required"
+test = "bindings/python/tests/test_surface_analysis.py::test_operation_requires_sample_rate"
+
+[[entry]]
+kind = "option"
+old = "mastering_audio_profile(sample_rate)"
+changed = "sample_rate is required (1.x defaulted to 22050)"
+domain = "mastering"
+rule = "sample-rate-required"
+test = "bindings/python/tests/test_surface_analysis.py::test_operation_requires_sample_rate"
+
+[[entry]]
+kind = "option"
+old = "mastering_assistant_suggest_stereo(sample_rate)"
+changed = "sample_rate is required (1.x defaulted to 22050)"
+domain = "mastering"
+rule = "sample-rate-required"
+test = "bindings/python/tests/test_surface_analysis.py::test_operation_requires_sample_rate"
+
+[[entry]]
+kind = "option"
+old = "mastering_assistant_suggest_chain_stereo(sample_rate)"
+changed = "sample_rate is required (1.x defaulted to 22050)"
+domain = "mastering"
+rule = "sample-rate-required"
+test = "bindings/python/tests/test_surface_analysis.py::test_operation_requires_sample_rate"
+
+[[entry]]
+kind = "option"
+old = "mastering_audio_profile_stereo(sample_rate)"
+changed = "sample_rate is required (1.x defaulted to 22050)"
+domain = "mastering"
+rule = "sample-rate-required"
+test = "bindings/python/tests/test_surface_analysis.py::test_operation_requires_sample_rate"
+
+[[entry]]
+kind = "option"
+old = "mastering_process(sample_rate)"
+changed = "sample_rate is required (1.x defaulted to 22050)"
+domain = "mastering"
+rule = "sample-rate-required"
+test = "bindings/python/tests/test_surface_analysis.py::test_operation_requires_sample_rate"
+
+[[entry]]
+kind = "option"
+old = "mastering_process_stereo(sample_rate)"
+changed = "sample_rate is required (1.x defaulted to 22050)"
+domain = "mastering"
+rule = "sample-rate-required"
+test = "bindings/python/tests/test_surface_analysis.py::test_operation_requires_sample_rate"
+
+[[entry]]
+kind = "option"
+old = "mastering_chain(sample_rate)"
+changed = "sample_rate is required (1.x defaulted to 22050)"
+domain = "mastering"
+rule = "sample-rate-required"
+test = "bindings/python/tests/test_surface_analysis.py::test_operation_requires_sample_rate"
+
+[[entry]]
+kind = "option"
+old = "mastering_chain_stereo(sample_rate)"
+changed = "sample_rate is required (1.x defaulted to 22050)"
+domain = "mastering"
+rule = "sample-rate-required"
+test = "bindings/python/tests/test_surface_analysis.py::test_operation_requires_sample_rate"
+
+[[entry]]
+kind = "option"
+old = "mix_stereo(sample_rate)"
+changed = "sample_rate is required (1.x defaulted to 48000)"
+domain = "mastering"
+rule = "sample-rate-required"
+test = "bindings/python/tests/test_surface_analysis.py::test_operation_requires_sample_rate"
+
+[[entry]]
+kind = "option"
+old = "master_audio(sample_rate)"
+changed = "sample_rate is required (1.x defaulted to 22050)"
+domain = "mastering"
+rule = "sample-rate-required"
+test = "bindings/python/tests/test_surface_analysis.py::test_operation_requires_sample_rate"
+
+[[entry]]
+kind = "option"
+old = "master_audio_stereo(sample_rate)"
+changed = "sample_rate is required (1.x defaulted to 22050)"
+domain = "mastering"
+rule = "sample-rate-required"
+test = "bindings/python/tests/test_surface_analysis.py::test_operation_requires_sample_rate"
+
+[[entry]]
+kind = "option"
+old = "streaming_loudness_gain(sample_rate)"
+changed = "sample_rate is required (1.x defaulted to 22050)"
+domain = "mastering"
+rule = "sample-rate-required"
+test = "bindings/python/tests/test_surface_analysis.py::test_operation_requires_sample_rate"
+
+[[entry]]
+kind = "option"
+old = "streaming_loudness_gain_stereo(sample_rate)"
+changed = "sample_rate is required (1.x defaulted to 22050)"
+domain = "mastering"
+rule = "sample-rate-required"
+test = "bindings/python/tests/test_surface_analysis.py::test_operation_requires_sample_rate"
+
+[[entry]]
+kind = "option"
+old = "mastering_pair_process(sample_rate)"
+changed = "sample_rate is required (1.x defaulted to 22050)"
+domain = "mastering"
+rule = "sample-rate-required"
+test = "bindings/python/tests/test_surface_analysis.py::test_operation_requires_sample_rate"
+
+[[entry]]
+kind = "option"
+old = "mastering_pair_process_stereo(sample_rate)"
+changed = "sample_rate is required (1.x defaulted to 22050)"
+domain = "mastering"
+rule = "sample-rate-required"
+test = "bindings/python/tests/test_surface_analysis.py::test_operation_requires_sample_rate"
+
+[[entry]]
+kind = "option"
+old = "mastering_pair_analyze(sample_rate)"
+changed = "sample_rate is required (1.x defaulted to 22050)"
+domain = "mastering"
+rule = "sample-rate-required"
+test = "bindings/python/tests/test_surface_analysis.py::test_operation_requires_sample_rate"
+
+[[entry]]
+kind = "option"
+old = "mastering_ab_match_loudness(sample_rate)"
+changed = "sample_rate is required (1.x defaulted to 22050)"
+domain = "mastering"
+rule = "sample-rate-required"
+test = "bindings/python/tests/test_surface_analysis.py::test_operation_requires_sample_rate"
+
+[[entry]]
+kind = "option"
+old = "mastering_ab_match_loudness_stereo(sample_rate)"
+changed = "sample_rate is required (1.x defaulted to 22050)"
+domain = "mastering"
+rule = "sample-rate-required"
+test = "bindings/python/tests/test_surface_analysis.py::test_operation_requires_sample_rate"
+
+[[entry]]
+kind = "option"
+old = "mastering_stereo_analyze(sample_rate)"
+changed = "sample_rate is required (1.x defaulted to 22050)"
+domain = "mastering"
+rule = "sample-rate-required"
+test = "bindings/python/tests/test_surface_analysis.py::test_operation_requires_sample_rate"
+
+[[entry]]
+kind = "option"
+old = "mastering_streaming_preview(sample_rate)"
+changed = "sample_rate is required (1.x defaulted to 22050)"
+domain = "mastering"
+rule = "sample-rate-required"
+test = "bindings/python/tests/test_surface_analysis.py::test_operation_requires_sample_rate"
+
+[[entry]]
+kind = "option"
+old = "mastering_streaming_preview_stereo(sample_rate)"
+changed = "sample_rate is required (1.x defaulted to 22050)"
+domain = "mastering"
+rule = "sample-rate-required"
+test = "bindings/python/tests/test_surface_analysis.py::test_operation_requires_sample_rate"
+
+[[entry]]
+kind = "option"
+old = "trim(sample_rate)"
+changed = "sample_rate is required (1.x defaulted to 22050)"
+domain = "effects"
+rule = "sample-rate-required"
+test = "bindings/python/tests/test_surface_analysis.py::test_operation_requires_sample_rate"
+
+[[entry]]
+kind = "option"
+old = "stft(sample_rate)"
+new = "stft(sr)"
+domain = "analysis"
+rule = "sample-rate-name"
+
+[[entry]]
+kind = "option"
+old = "stft_db(sample_rate)"
+changed = "sample_rate is required (1.x defaulted to 22050)"
+domain = "analysis"
+rule = "sample-rate-required"
+test = "bindings/python/tests/test_surface_analysis.py::test_operation_requires_sample_rate"
+
+[[entry]]
+kind = "option"
+old = "mel_spectrogram(sample_rate)"
+changed = "sample_rate is required (1.x defaulted to 22050)"
+domain = "analysis"
+rule = "sample-rate-required"
+test = "bindings/python/tests/test_surface_analysis.py::test_operation_requires_sample_rate"
+
+[[entry]]
+kind = "option"
+old = "mfcc(sample_rate)"
+new = "mfcc(sr)"
+domain = "analysis"
+rule = "sample-rate-name"
+
+[[entry]]
+kind = "option"
+old = "chroma(sample_rate)"
+changed = "sample_rate is required (1.x defaulted to 22050)"
+domain = "analysis"
+rule = "sample-rate-required"
+test = "bindings/python/tests/test_surface_analysis.py::test_operation_requires_sample_rate"
+
+[[entry]]
+kind = "option"
+old = "chroma_cens(sample_rate)"
+new = "chroma_cens(sr)"
+domain = "analysis"
+rule = "sample-rate-name"
+
+[[entry]]
+kind = "option"
+old = "chroma_cqt(sample_rate)"
+new = "chroma_cqt(sr)"
+domain = "analysis"
+rule = "sample-rate-name"
+
+[[entry]]
+kind = "option"
+old = "bass_chroma(sample_rate)"
+changed = "sample_rate is required (1.x defaulted to 22050)"
+domain = "analysis"
+rule = "sample-rate-required"
+test = "bindings/python/tests/test_surface_analysis.py::test_operation_requires_sample_rate"
+
+[[entry]]
+kind = "option"
+old = "spectral_centroid(sample_rate)"
+new = "spectral_centroid(sr)"
+domain = "analysis"
+rule = "sample-rate-name"
+
+[[entry]]
+kind = "option"
+old = "tone(sample_rate)"
+new = "tone(sr)"
+domain = "analysis"
+rule = "sample-rate-name"
+
+[[entry]]
+kind = "option"
+old = "chirp(sample_rate)"
+new = "chirp(sr)"
+domain = "analysis"
+rule = "sample-rate-name"
+
+[[entry]]
+kind = "option"
+old = "clicks(sample_rate)"
+new = "clicks(sr)"
+domain = "analysis"
+rule = "sample-rate-name"
+
+[[entry]]
+kind = "option"
+old = "spectral_bandwidth(sample_rate)"
+new = "spectral_bandwidth(sr)"
+domain = "analysis"
+rule = "sample-rate-name"
+
+[[entry]]
+kind = "option"
+old = "spectral_flux(sample_rate)"
+changed = "sample_rate is required (1.x defaulted to 22050)"
+domain = "analysis"
+rule = "sample-rate-required"
+test = "bindings/python/tests/test_surface_analysis.py::test_operation_requires_sample_rate"
+
+[[entry]]
+kind = "option"
+old = "spectral_rolloff(sample_rate)"
+new = "spectral_rolloff(sr)"
+domain = "analysis"
+rule = "sample-rate-name"
+
+[[entry]]
+kind = "option"
+old = "spectral_flatness(sample_rate)"
+new = "spectral_flatness(sr)"
+domain = "analysis"
+rule = "sample-rate-name"
+
+[[entry]]
+kind = "option"
+old = "zero_crossing_rate(sample_rate)"
+new = "zero_crossing_rate(sr)"
+domain = "analysis"
+rule = "sample-rate-name"
+
+[[entry]]
+kind = "option"
+old = "rms_energy(sample_rate)"
+changed = "sample_rate is required (1.x defaulted to 22050)"
+domain = "analysis"
+rule = "sample-rate-required"
+test = "bindings/python/tests/test_surface_analysis.py::test_operation_requires_sample_rate"
+
+[[entry]]
+kind = "option"
+old = "pitch_yin(sample_rate)"
+changed = "sample_rate is required (1.x defaulted to 22050)"
+domain = "analysis"
+rule = "sample-rate-required"
+test = "bindings/python/tests/test_surface_analysis.py::test_operation_requires_sample_rate"
+
+[[entry]]
+kind = "option"
+old = "pitch_pyin(sample_rate)"
+changed = "sample_rate is required (1.x defaulted to 22050)"
+domain = "analysis"
+rule = "sample-rate-required"
+test = "bindings/python/tests/test_surface_analysis.py::test_operation_requires_sample_rate"
+
+[[entry]]
+kind = "option"
+old = "piptrack(sample_rate)"
+new = "piptrack(sr)"
+domain = "analysis"
+rule = "sample-rate-name"
+
+[[entry]]
+kind = "option"
+old = "reassigned_spectrogram(sample_rate)"
+new = "reassigned_spectrogram(sr)"
+domain = "analysis"
+rule = "sample-rate-name"
+
+[[entry]]
+kind = "option"
+old = "spectral_contrast(sample_rate)"
+new = "spectral_contrast(sr)"
+domain = "analysis"
+rule = "sample-rate-name"
+
+[[entry]]
+kind = "option"
+old = "poly_features(sample_rate)"
+new = "poly_features(sr)"
+domain = "analysis"
+rule = "sample-rate-name"
+
+[[entry]]
+kind = "option"
+old = "estimate_tuning(sample_rate)"
+new = "estimate_tuning(sr)"
+domain = "analysis"
+rule = "sample-rate-name"
+
+[[entry]]
+kind = "option"
+old = "lufs_interleaved(sample_rate)"
+changed = "sample_rate is required (1.x defaulted to 22050)"
+domain = "mastering"
+rule = "sample-rate-required"
+test = "bindings/python/tests/test_surface_analysis.py::test_operation_requires_sample_rate"
+
+[[entry]]
+kind = "option"
+old = "lufs_series_interleaved(sample_rate)"
+changed = "sample_rate is required (1.x defaulted to 22050)"
+domain = "mastering"
+rule = "sample-rate-required"
+test = "bindings/python/tests/test_surface_analysis.py::test_operation_requires_sample_rate"
+
+[[entry]]
+kind = "option"
+old = "ebur128_loudness_range(sample_rate)"
+changed = "sample_rate is required (1.x defaulted to 22050)"
+domain = "mastering"
+rule = "sample-rate-required"
+test = "bindings/python/tests/test_surface_analysis.py::test_operation_requires_sample_rate"
+
+[[entry]]
+kind = "option"
+old = "decompose_stems(sample_rate)"
+changed = "sample_rate is required (1.x defaulted to 22050)"
+domain = "effects"
+rule = "sample-rate-required"
+test = "bindings/python/tests/test_surface_analysis.py::test_operation_requires_sample_rate"
+
+[[entry]]
+kind = "option"
+old = "decompose_stems_linked(sample_rate)"
+changed = "sample_rate is required (1.x defaulted to 22050)"
+domain = "effects"
+rule = "sample-rate-required"
+test = "bindings/python/tests/test_surface_analysis.py::test_operation_requires_sample_rate"
+
+[[entry]]
+kind = "option"
+old = "remix(sample_rate)"
+new = "remix(sr)"
+domain = "effects"
+rule = "sample-rate-name"
+
+[[entry]]
+kind = "option"
+old = "remix_aligned_intervals(sample_rate)"
+changed = "sample_rate is required (1.x defaulted to 22050); sample_rate moves directly after samples"
+domain = "effects"
+rule = "sample-rate-required"
+test = "bindings/python/tests/test_surface_analysis.py::test_operation_requires_sample_rate"
+
+[[entry]]
+kind = "option"
+old = "hpss_with_residual(sample_rate)"
+changed = "sample_rate is required (1.x defaulted to 22050)"
+domain = "effects"
+rule = "sample-rate-required"
+test = "bindings/python/tests/test_surface_analysis.py::test_operation_requires_sample_rate"
+
+[[entry]]
+kind = "option"
+old = "phase_vocoder(sample_rate)"
+changed = "sample_rate is required (1.x defaulted to 22050)"
+domain = "effects"
+rule = "sample-rate-required"
+test = "bindings/python/tests/test_surface_analysis.py::test_operation_requires_sample_rate"
+
+[[entry]]
+kind = "option"
+old = "pcen(sample_rate)"
+new = "pcen(sr)"
+domain = "analysis"
+rule = "sample-rate-name"
+
+[[entry]]
+kind = "option"
+old = "tempogram(sample_rate)"
+new = "tempogram(sr)"
+domain = "analysis"
+rule = "sample-rate-name"
+
+[[entry]]
+kind = "option"
+old = "cyclic_tempogram(sample_rate)"
+changed = "sample_rate is required (1.x defaulted to 22050)"
+domain = "analysis"
+rule = "sample-rate-required"
+test = "bindings/python/tests/test_surface_analysis.py::test_operation_requires_sample_rate"
+
+[[entry]]
+kind = "option"
+old = "plp(sample_rate)"
+new = "plp(sr)"
+domain = "analysis"
+rule = "sample-rate-name"
+
+[[entry]]
+kind = "option"
+old = "fourier_tempogram(sample_rate)"
+new = "fourier_tempogram(sr)"
+domain = "analysis"
+rule = "sample-rate-name"
+
+[[entry]]
+kind = "option"
+old = "tempogram_ratio(sample_rate)"
+new = "tempogram_ratio(sr)"
+domain = "analysis"
+rule = "sample-rate-name"
+
+[[entry]]
+kind = "option"
+old = "nnls_chroma(sample_rate)"
+changed = "sample_rate is required (1.x defaulted to 22050)"
+domain = "analysis"
+rule = "sample-rate-required"
+test = "bindings/python/tests/test_surface_analysis.py::test_operation_requires_sample_rate"
+
+[[entry]]
+kind = "option"
+old = "onset_strength_multi(sample_rate)"
+changed = "sample_rate is required (1.x defaulted to 22050)"
+domain = "analysis"
+rule = "sample-rate-required"
+test = "bindings/python/tests/test_surface_analysis.py::test_operation_requires_sample_rate"
+
+[[entry]]
+kind = "option"
+old = "mastering_repair_declick(sample_rate)"
+changed = "sample_rate is required (1.x defaulted to 22050)"
+domain = "effects"
+rule = "sample-rate-required"
+test = "bindings/python/tests/test_surface_analysis.py::test_operation_requires_sample_rate"
+
+[[entry]]
+kind = "option"
+old = "mastering_repair_declick_stereo(sample_rate)"
+changed = "sample_rate is required (1.x defaulted to 22050)"
+domain = "effects"
+rule = "sample-rate-required"
+test = "bindings/python/tests/test_surface_analysis.py::test_operation_requires_sample_rate"
+
+[[entry]]
+kind = "option"
+old = "mastering_repair_denoise_classical(sample_rate)"
+changed = "sample_rate is required (1.x defaulted to 22050)"
+domain = "effects"
+rule = "sample-rate-required"
+test = "bindings/python/tests/test_surface_analysis.py::test_operation_requires_sample_rate"
+
+[[entry]]
+kind = "option"
+old = "mastering_repair_denoise_classical_stereo(sample_rate)"
+changed = "sample_rate is required (1.x defaulted to 22050)"
+domain = "effects"
+rule = "sample-rate-required"
+test = "bindings/python/tests/test_surface_analysis.py::test_operation_requires_sample_rate"
+
+[[entry]]
+kind = "option"
+old = "mastering_repair_denoise_classical_linked(sample_rate)"
+changed = "sample_rate is required (1.x defaulted to 22050)"
+domain = "effects"
+rule = "sample-rate-required"
+test = "bindings/python/tests/test_surface_analysis.py::test_operation_requires_sample_rate"
+
+[[entry]]
+kind = "option"
+old = "mastering_repair_analyze(sample_rate)"
+changed = "sample_rate is required (1.x defaulted to 22050)"
+domain = "effects"
+rule = "sample-rate-required"
+test = "bindings/python/tests/test_surface_analysis.py::test_operation_requires_sample_rate"
+
+[[entry]]
+kind = "option"
+old = "mastering_repair_apply(sample_rate)"
+changed = "sample_rate is required (1.x defaulted to 22050)"
+domain = "effects"
+rule = "sample-rate-required"
+test = "bindings/python/tests/test_surface_analysis.py::test_operation_requires_sample_rate"
+
+[[entry]]
+kind = "option"
+old = "mastering_repair_declip(sample_rate)"
+changed = "sample_rate is required (1.x defaulted to 22050)"
+domain = "effects"
+rule = "sample-rate-required"
+test = "bindings/python/tests/test_surface_analysis.py::test_operation_requires_sample_rate"
+
+[[entry]]
+kind = "option"
+old = "mastering_repair_declip_stereo(sample_rate)"
+changed = "sample_rate is required (1.x defaulted to 22050)"
+domain = "effects"
+rule = "sample-rate-required"
+test = "bindings/python/tests/test_surface_analysis.py::test_operation_requires_sample_rate"
+
+[[entry]]
+kind = "option"
+old = "mastering_repair_decrackle(sample_rate)"
+changed = "sample_rate is required (1.x defaulted to 22050)"
+domain = "effects"
+rule = "sample-rate-required"
+test = "bindings/python/tests/test_surface_analysis.py::test_operation_requires_sample_rate"
+
+[[entry]]
+kind = "option"
+old = "mastering_repair_decrackle_stereo(sample_rate)"
+changed = "sample_rate is required (1.x defaulted to 22050)"
+domain = "effects"
+rule = "sample-rate-required"
+test = "bindings/python/tests/test_surface_analysis.py::test_operation_requires_sample_rate"
+
+[[entry]]
+kind = "option"
+old = "mastering_repair_dehum(sample_rate)"
+changed = "sample_rate is required (1.x defaulted to 22050)"
+domain = "effects"
+rule = "sample-rate-required"
+test = "bindings/python/tests/test_surface_analysis.py::test_operation_requires_sample_rate"
+
+[[entry]]
+kind = "option"
+old = "mastering_repair_dehum_stereo(sample_rate)"
+changed = "sample_rate is required (1.x defaulted to 22050)"
+domain = "effects"
+rule = "sample-rate-required"
+test = "bindings/python/tests/test_surface_analysis.py::test_operation_requires_sample_rate"
+
+[[entry]]
+kind = "option"
+old = "mastering_repair_dereverb_classical(sample_rate)"
+changed = "sample_rate is required (1.x defaulted to 22050)"
+domain = "effects"
+rule = "sample-rate-required"
+test = "bindings/python/tests/test_surface_analysis.py::test_operation_requires_sample_rate"
+
+[[entry]]
+kind = "option"
+old = "mastering_repair_dereverb_classical_stereo(sample_rate)"
+changed = "sample_rate is required (1.x defaulted to 22050)"
+domain = "effects"
+rule = "sample-rate-required"
+test = "bindings/python/tests/test_surface_analysis.py::test_operation_requires_sample_rate"
+
+[[entry]]
+kind = "option"
+old = "mastering_repair_dereverb_classical_linked(sample_rate)"
+changed = "sample_rate is required (1.x defaulted to 22050)"
+domain = "effects"
+rule = "sample-rate-required"
+test = "bindings/python/tests/test_surface_analysis.py::test_operation_requires_sample_rate"
+
+[[entry]]
+kind = "option"
+old = "mastering_repair_detect_clicks(sample_rate)"
+changed = "sample_rate is required (1.x defaulted to 22050)"
+domain = "effects"
+rule = "sample-rate-required"
+test = "bindings/python/tests/test_surface_analysis.py::test_operation_requires_sample_rate"
+
+[[entry]]
+kind = "option"
+old = "mastering_repair_detect_noise_floor(sample_rate)"
+changed = "sample_rate is required (1.x defaulted to 22050)"
+domain = "effects"
+rule = "sample-rate-required"
+test = "bindings/python/tests/test_surface_analysis.py::test_operation_requires_sample_rate"
+
+[[entry]]
+kind = "option"
+old = "mastering_repair_noise_band_bins(sample_rate)"
+changed = "sample_rate is required (1.x defaulted to 22050)"
+domain = "effects"
+rule = "sample-rate-required"
+test = "bindings/python/tests/test_surface_analysis.py::test_operation_requires_sample_rate"
+
+[[entry]]
+kind = "option"
+old = "mastering_repair_detect_clipping(sample_rate)"
+changed = "sample_rate is required (1.x defaulted to 22050)"
+domain = "effects"
+rule = "sample-rate-required"
+test = "bindings/python/tests/test_surface_analysis.py::test_operation_requires_sample_rate"
+
+[[entry]]
+kind = "option"
+old = "mastering_repair_detect_crackle(sample_rate)"
+changed = "sample_rate is required (1.x defaulted to 22050)"
+domain = "effects"
+rule = "sample-rate-required"
+test = "bindings/python/tests/test_surface_analysis.py::test_operation_requires_sample_rate"
+
+[[entry]]
+kind = "option"
+old = "mastering_repair_detect_hum(sample_rate)"
+changed = "sample_rate is required (1.x defaulted to 22050)"
+domain = "effects"
+rule = "sample-rate-required"
+test = "bindings/python/tests/test_surface_analysis.py::test_operation_requires_sample_rate"
+
+[[entry]]
+kind = "option"
+old = "mastering_repair_detect_reverb(sample_rate)"
+changed = "sample_rate is required (1.x defaulted to 22050)"
+domain = "effects"
+rule = "sample-rate-required"
+test = "bindings/python/tests/test_surface_analysis.py::test_operation_requires_sample_rate"
+
+[[entry]]
+kind = "option"
+old = "mastering_repair_detect_trim_range(sample_rate)"
+changed = "sample_rate is required (1.x defaulted to 22050)"
+domain = "effects"
+rule = "sample-rate-required"
+test = "bindings/python/tests/test_surface_analysis.py::test_operation_requires_sample_rate"
+
+[[entry]]
+kind = "option"
+old = "mastering_repair_detect_trim_range_stereo(sample_rate)"
+changed = "sample_rate is required (1.x defaulted to 22050)"
+domain = "effects"
+rule = "sample-rate-required"
+test = "bindings/python/tests/test_surface_analysis.py::test_operation_requires_sample_rate"
+
+[[entry]]
+kind = "option"
+old = "mastering_repair_trim_silence(sample_rate)"
+changed = "sample_rate is required (1.x defaulted to 22050)"
+domain = "effects"
+rule = "sample-rate-required"
+test = "bindings/python/tests/test_surface_analysis.py::test_operation_requires_sample_rate"
+
+[[entry]]
+kind = "option"
+old = "mastering_repair_trim_silence_stereo(sample_rate)"
+changed = "sample_rate is required (1.x defaulted to 22050)"
+domain = "effects"
+rule = "sample-rate-required"
+test = "bindings/python/tests/test_surface_analysis.py::test_operation_requires_sample_rate"
+
+[[entry]]
+kind = "option"
+old = "lufs(sample_rate)"
+changed = "sample_rate is required (1.x defaulted to 22050)"
+domain = "analysis"
+rule = "sample-rate-required"
+test = "bindings/python/tests/test_surface_analysis.py::test_operation_requires_sample_rate"
+
+[[entry]]
+kind = "option"
+old = "momentary_lufs(sample_rate)"
+changed = "sample_rate is required (1.x defaulted to 22050)"
+domain = "analysis"
+rule = "sample-rate-required"
+test = "bindings/python/tests/test_surface_analysis.py::test_operation_requires_sample_rate"
+
+[[entry]]
+kind = "option"
+old = "short_term_lufs(sample_rate)"
+changed = "sample_rate is required (1.x defaulted to 22050)"
+domain = "analysis"
+rule = "sample-rate-required"
+test = "bindings/python/tests/test_surface_analysis.py::test_operation_requires_sample_rate"
+
+[[entry]]
+kind = "option"
+old = "metering_stereo_correlation(sample_rate)"
+changed = "sample_rate is required (1.x defaulted to 22050)"
+domain = "mastering"
+rule = "sample-rate-required"
+test = "bindings/python/tests/test_surface_analysis.py::test_operation_requires_sample_rate"
+
+[[entry]]
+kind = "option"
+old = "metering_stereo_width(sample_rate)"
+changed = "sample_rate is required (1.x defaulted to 22050)"
+domain = "mastering"
+rule = "sample-rate-required"
+test = "bindings/python/tests/test_surface_analysis.py::test_operation_requires_sample_rate"
+
+[[entry]]
+kind = "option"
+old = "metering_vectorscope(sample_rate)"
+changed = "sample_rate is required (1.x defaulted to 22050)"
+domain = "mastering"
+rule = "sample-rate-required"
+test = "bindings/python/tests/test_surface_analysis.py::test_operation_requires_sample_rate"
+
+[[entry]]
+kind = "option"
+old = "metering_vectorscope_decimated(sample_rate)"
+changed = "sample_rate is required (1.x defaulted to 22050)"
+domain = "mastering"
+rule = "sample-rate-required"
+test = "bindings/python/tests/test_surface_analysis.py::test_operation_requires_sample_rate"
+
+[[entry]]
+kind = "option"
+old = "metering_phase_scope(sample_rate)"
+changed = "sample_rate is required (1.x defaulted to 22050)"
+domain = "mastering"
+rule = "sample-rate-required"
+test = "bindings/python/tests/test_surface_analysis.py::test_operation_requires_sample_rate"
+
+[[entry]]
+kind = "option"
+old = "metering_phase_scope_decimated(sample_rate)"
+changed = "sample_rate is required (1.x defaulted to 22050)"
+domain = "mastering"
+rule = "sample-rate-required"
+test = "bindings/python/tests/test_surface_analysis.py::test_operation_requires_sample_rate"
+
+[[entry]]
+kind = "option"
+old = "metering_spectrum(sample_rate)"
+changed = "sample_rate is required (1.x defaulted to 22050)"
+domain = "mastering"
+rule = "sample-rate-required"
+test = "bindings/python/tests/test_surface_analysis.py::test_operation_requires_sample_rate"
+
+[[entry]]
+kind = "option"
+old = "metering_spectrum_frame(sample_rate)"
+changed = "sample_rate is required (1.x defaulted to 22050)"
+domain = "mastering"
+rule = "sample-rate-required"
+test = "bindings/python/tests/test_surface_analysis.py::test_operation_requires_sample_rate"
+
+[[entry]]
+kind = "option"
+old = "metering_peak_db(sample_rate)"
+changed = "sample_rate is required (1.x defaulted to 22050)"
+domain = "mastering"
+rule = "sample-rate-required"
+test = "bindings/python/tests/test_surface_analysis.py::test_operation_requires_sample_rate"
+
+[[entry]]
+kind = "option"
+old = "metering_rms_db(sample_rate)"
+changed = "sample_rate is required (1.x defaulted to 22050)"
+domain = "mastering"
+rule = "sample-rate-required"
+test = "bindings/python/tests/test_surface_analysis.py::test_operation_requires_sample_rate"
+
+[[entry]]
+kind = "option"
+old = "metering_silence_ratio(sample_rate)"
+changed = "sample_rate is required (1.x defaulted to 22050)"
+domain = "mastering"
+rule = "sample-rate-required"
+test = "bindings/python/tests/test_surface_analysis.py::test_operation_requires_sample_rate"
+
+[[entry]]
+kind = "option"
+old = "metering_crest_factor_db(sample_rate)"
+changed = "sample_rate is required (1.x defaulted to 22050)"
+domain = "mastering"
+rule = "sample-rate-required"
+test = "bindings/python/tests/test_surface_analysis.py::test_operation_requires_sample_rate"
+
+[[entry]]
+kind = "option"
+old = "metering_crest_factor_db_stereo(sample_rate)"
+changed = "sample_rate is required (1.x defaulted to 22050)"
+domain = "mastering"
+rule = "sample-rate-required"
+test = "bindings/python/tests/test_surface_analysis.py::test_operation_requires_sample_rate"
+
+[[entry]]
+kind = "option"
+old = "metering_dc_offset(sample_rate)"
+changed = "sample_rate is required (1.x defaulted to 22050)"
+domain = "mastering"
+rule = "sample-rate-required"
+test = "bindings/python/tests/test_surface_analysis.py::test_operation_requires_sample_rate"
+
+[[entry]]
+kind = "option"
+old = "metering_true_peak_db(sample_rate)"
+changed = "sample_rate is required (1.x defaulted to 22050)"
+domain = "mastering"
+rule = "sample-rate-required"
+test = "bindings/python/tests/test_surface_analysis.py::test_operation_requires_sample_rate"
+
+[[entry]]
+kind = "option"
+old = "metering_detect_clipping(sample_rate)"
+changed = "sample_rate is required (1.x defaulted to 22050)"
+domain = "mastering"
+rule = "sample-rate-required"
+test = "bindings/python/tests/test_surface_analysis.py::test_operation_requires_sample_rate"
+
+[[entry]]
+kind = "option"
+old = "metering_dynamic_range(sample_rate)"
+changed = "sample_rate is required (1.x defaulted to 22050)"
+domain = "mastering"
+rule = "sample-rate-required"
+test = "bindings/python/tests/test_surface_analysis.py::test_operation_requires_sample_rate"
+
+[[entry]]
+kind = "option"
+old = "mel_to_stft(sample_rate)"
+new = "mel_to_stft(sr)"
+domain = "analysis"
+rule = "sample-rate-name"
+
+[[entry]]
+kind = "option"
+old = "cqt_to_audio(sample_rate)"
+changed = "sample_rate is required (1.x defaulted to 22050)"
+domain = "analysis"
+rule = "sample-rate-required"
+test = "bindings/python/tests/test_surface_analysis.py::test_operation_requires_sample_rate"
+
+[[entry]]
+kind = "option"
+old = "vqt_to_audio(sample_rate)"
+changed = "sample_rate is required (1.x defaulted to 22050)"
+domain = "analysis"
+rule = "sample-rate-required"
+test = "bindings/python/tests/test_surface_analysis.py::test_operation_requires_sample_rate"
+
+[[entry]]
+kind = "option"
+old = "mel_to_audio(sample_rate)"
+new = "mel_to_audio(sr)"
+domain = "analysis"
+rule = "sample-rate-name"
+
+[[entry]]
+kind = "option"
+old = "griffin_lim(sample_rate)"
+changed = "sample_rate is required (1.x defaulted to 22050)"
+domain = "analysis"
+rule = "sample-rate-required"
+test = "bindings/python/tests/test_surface_analysis.py::test_operation_requires_sample_rate"
+
+[[entry]]
+kind = "option"
+old = "mfcc_to_audio(sample_rate)"
+new = "mfcc_to_audio(sr)"
+domain = "analysis"
+rule = "sample-rate-name"
+
+[[entry]]
+kind = "option"
+old = "mastering_dynamics_compressor(sample_rate)"
+changed = "sample_rate is required (1.x defaulted to 22050)"
+domain = "mastering"
+rule = "sample-rate-required"
+test = "bindings/python/tests/test_surface_analysis.py::test_operation_requires_sample_rate"
+
+[[entry]]
+kind = "option"
+old = "mastering_dynamics_gate(sample_rate)"
+changed = "sample_rate is required (1.x defaulted to 22050)"
+domain = "mastering"
+rule = "sample-rate-required"
+test = "bindings/python/tests/test_surface_analysis.py::test_operation_requires_sample_rate"
+
+[[entry]]
+kind = "option"
+old = "mastering_dynamics_transient_shaper(sample_rate)"
+changed = "sample_rate is required (1.x defaulted to 22050)"
+domain = "mastering"
+rule = "sample-rate-required"
+test = "bindings/python/tests/test_surface_analysis.py::test_operation_requires_sample_rate"
+
+[[entry]]
+kind = "function"
+old = "cross_similarity"
+new = "segment_cross_similarity"
+domain = "analysis"
+rule = "onset-strength"
+
+[[entry]]
+kind = "function"
+old = "recurrence_matrix"
+new = "segment_recurrence_matrix"
+domain = "analysis"
+rule = "onset-strength"
+
+[[entry]]
+kind = "function"
+old = "recurrence_to_lag"
+new = "segment_recurrence_to_lag"
+domain = "analysis"
+rule = "onset-strength"
+
+[[entry]]
+kind = "function"
+old = "lag_to_recurrence"
+new = "segment_lag_to_recurrence"
+domain = "analysis"
+rule = "onset-strength"
+
+[[entry]]
+kind = "function"
+old = "subsegment"
+new = "segment_subsegment"
+domain = "analysis"
+rule = "onset-strength"
+
+[[entry]]
+kind = "function"
+old = "agglomerative"
+new = "segment_agglomerative"
+domain = "analysis"
+rule = "onset-strength"
+
+[[entry]]
+kind = "function"
+old = "path_enhance"
+new = "segment_path_enhance"
+domain = "analysis"
+rule = "onset-strength"
+
+[[entry]]
+kind = "function"
+old = "onset_envelope"
+new = "onset_strength"
+domain = "analysis"
+rule = "onset-strength"
+
+[[entry]]
+kind = "method"
+old = "Audio.onset_envelope"
+new = "Audio.onset_strength"
+domain = "core"
+rule = "onset-strength"
+
+[[entry]]
+kind = "option"
+old = "resample(src_sr)"
+new = "resample(source_sample_rate)"
+domain = "analysis"
+rule = "sample-rate-name"
+
+[[entry]]
+kind = "option"
+old = "resample(target_sr)"
+new = "resample(target_sample_rate)"
+domain = "analysis"
+rule = "sample-rate-name"
+
+[[entry]]
+kind = "option"
+old = "Audio.resample(target_sr)"
+new = "Audio.resample(target_sample_rate)"
+domain = "core"
+rule = "sample-rate-name"
+
+[[entry]]
+kind = "option"
+old = "tone(phase)"
+new = "tone(phi)"
+domain = "analysis"
+rule = "librosa-defaults"
+
+[[entry]]
+kind = "option"
+old = "clicks(frequency)"
+new = "clicks(click_freq)"
+domain = "analysis"
+rule = "librosa-defaults"
+
+[[entry]]
+kind = "option"
+old = "chirp(linear)"
+changed = "defaults to False (exponential sweep), as librosa does; pass linear=True for the 1.x sweep"
+domain = "analysis"
+rule = "librosa-defaults"
+test = "bindings/python/tests/test_surface_analysis.py::test_chirp_defaults_to_exponential_sweep"
+
+[[entry]]
+kind = "option"
+old = "remix(align_zeros)"
+changed = "defaults to True (cuts snap to zero crossings), as librosa does; pass align_zeros=False for the 1.x cuts"
+domain = "effects"
+rule = "librosa-defaults"
+test = "bindings/python/tests/test_surface_analysis.py::test_remix_aligns_to_zero_crossings_by_default"
+
+[[entry]]
+kind = "option"
+old = "clicks(length)"
+changed = "absent is None (librosa's default); an explicit 0 raises SonareValueError"
+domain = "analysis"
+rule = "absent-not-sentinel"
+test = "bindings/python/tests/test_surface_analysis.py::test_mirror_absent_is_none_not_zero"
+
+[[entry]]
+kind = "option"
+old = "frames_to_samples(n_fft)"
+changed = "absent is None (librosa's default); an explicit 0 raises SonareValueError"
+domain = "analysis"
+rule = "absent-not-sentinel"
+test = "bindings/python/tests/test_surface_analysis.py::test_mirror_absent_is_none_not_zero"
+
+[[entry]]
+kind = "option"
+old = "samples_to_frames(n_fft)"
+changed = "absent is None (librosa's default); an explicit 0 raises SonareValueError"
+domain = "analysis"
+rule = "absent-not-sentinel"
+test = "bindings/python/tests/test_surface_analysis.py::test_mirror_absent_is_none_not_zero"
+
+[[entry]]
+kind = "option"
+old = "mfcc(fmax)"
+changed = "absent is None (librosa's default); an explicit 0 raises SonareValueError"
+domain = "analysis"
+rule = "absent-not-sentinel"
+test = "bindings/python/tests/test_surface_analysis.py::test_mirror_absent_is_none_not_zero"
+
+[[entry]]
+kind = "option"
+old = "mel_to_stft(fmax)"
+changed = "absent is None (librosa's default); an explicit 0 raises SonareValueError"
+domain = "analysis"
+rule = "absent-not-sentinel"
+test = "bindings/python/tests/test_surface_analysis.py::test_mirror_absent_is_none_not_zero"
+
+[[entry]]
+kind = "option"
+old = "mel_to_audio(fmax)"
+changed = "absent is None (librosa's default); an explicit 0 raises SonareValueError"
+domain = "analysis"
+rule = "absent-not-sentinel"
+test = "bindings/python/tests/test_surface_analysis.py::test_mirror_absent_is_none_not_zero"
+
+[[entry]]
+kind = "option"
+old = "mfcc_to_audio(fmax)"
+changed = "absent is None (librosa's default); an explicit 0 raises SonareValueError"
+domain = "analysis"
+rule = "absent-not-sentinel"
+test = "bindings/python/tests/test_surface_analysis.py::test_mirror_absent_is_none_not_zero"

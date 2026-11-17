@@ -80,7 +80,7 @@ def _run_dynamics(
 
 def mastering_dynamics_compressor(
     samples: Sequence[float] | list[float] | np.ndarray,
-    sample_rate: int = 22050,
+    sample_rate: int,
     *,
     threshold_db: float = -18.0,
     ratio: float = 2.0,
@@ -100,7 +100,7 @@ def mastering_dynamics_compressor(
 
     Args:
         samples: Mono input buffer (any sequence convertible to float32).
-        sample_rate: Sample rate in Hz (default 22050).
+        sample_rate: Sample rate in Hz.
         threshold_db: Compression threshold in dB (default -18).
         ratio: Compression ratio (clamped to >= 1; default 2.0).
         attack_ms: Attack time in milliseconds (default 10); one time constant, about
@@ -148,7 +148,7 @@ def mastering_dynamics_compressor(
 
 def mastering_dynamics_gate(
     samples: Sequence[float] | list[float] | np.ndarray,
-    sample_rate: int = 22050,
+    sample_rate: int,
     *,
     threshold_db: float = -50.0,
     attack_ms: float = 2.0,
@@ -163,7 +163,7 @@ def mastering_dynamics_gate(
 
     Args:
         samples: Mono input buffer (any sequence convertible to float32).
-        sample_rate: Sample rate in Hz (default 22050).
+        sample_rate: Sample rate in Hz.
         threshold_db: Open-state threshold in dB (default -50).
         attack_ms: Attack time in milliseconds (default 2); one time constant, about
             63% of the way at the set time.
@@ -198,7 +198,7 @@ def mastering_dynamics_gate(
 
 def mastering_dynamics_transient_shaper(
     samples: Sequence[float] | list[float] | np.ndarray,
-    sample_rate: int = 22050,
+    sample_rate: int,
     *,
     attack_gain_db: float = 3.0,
     sustain_gain_db: float = 0.0,
@@ -216,7 +216,7 @@ def mastering_dynamics_transient_shaper(
 
     Args:
         samples: Mono input buffer (any sequence convertible to float32).
-        sample_rate: Sample rate in Hz (default 22050).
+        sample_rate: Sample rate in Hz.
         attack_gain_db: Attack-band gain in dB (default +3).
         sustain_gain_db: Sustain-band gain in dB (default 0).
         fast_attack_ms: Fast-envelope attack time in ms (default 0).

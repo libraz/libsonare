@@ -135,8 +135,10 @@ def test_scene_sample_rate_range_is_enforced() -> None:
 @needs_lib
 def test_mix_stereo_short_option_arrays_leave_defaults_and_long_ones_are_refused() -> None:
     strips = [([0.2] * 64, [0.2] * 64), ([0.2] * 64, [0.2] * 64)]
-    short = mix_stereo(strips, fader_db=[-6.0], pan=[0.5], muted=[False])
-    full = mix_stereo(strips, fader_db=[-6.0, 0.0], pan=[0.5, 0.0], muted=[False, False])
+    short = mix_stereo(strips, fader_db=[-6.0], pan=[0.5], muted=[False], sample_rate=48000)
+    full = mix_stereo(
+        strips, fader_db=[-6.0, 0.0], pan=[0.5, 0.0], muted=[False, False], sample_rate=48000
+    )
     assert short.left == pytest.approx(full.left)
     assert short.right == pytest.approx(full.right)
     for name in ("fader_db", "pan", "width", "muted", "input_trim_db", "pan_mode"):
@@ -144,7 +146,7 @@ def test_mix_stereo_short_option_arrays_leave_defaults_and_long_ones_are_refused
         if name == "muted":
             value = [False] * 3
         with pytest.raises(SonareValueError, match=f"'{name}' has more entries than strips"):
-            mix_stereo(strips, **{name: value})  # type: ignore[arg-type]
+            mix_stereo(strips, sample_rate=48000, **{name: value})  # type: ignore[arg-type]
 
 
 @needs_lib

@@ -91,7 +91,7 @@ def _take_string(lib: ctypes.CDLL, pointer: ctypes.c_char_p) -> str:
 
 def mastering_repair_analyze(
     channels: Sequence[Sequence[float] | np.ndarray] | np.ndarray,
-    sample_rate: int = 22050,
+    sample_rate: int,
     *,
     prefer_streaming_safe: bool = True,
 ) -> MasteringRepairAnalysis:
@@ -114,7 +114,7 @@ def mastering_repair_analyze(
     Args:
         channels: One buffer per channel, all of the same length, or a 2-D
             ``(channels, frames)`` array. At least one.
-        sample_rate: Sample rate in Hz (default 22050).
+        sample_rate: Sample rate in Hz.
         prefer_streaming_safe: When a denoise is recommended, track the noise
             frame by frame (default True).
 
@@ -152,7 +152,7 @@ def mastering_repair_analyze(
 
 def mastering_repair_apply(
     channels: Sequence[Sequence[float] | np.ndarray] | np.ndarray,
-    sample_rate: int = 22050,
+    sample_rate: int,
     *,
     stages: Sequence[Mapping[str, Any]],
     on_progress: Callable[[float, str], None] | None = None,
@@ -179,7 +179,7 @@ def mastering_repair_apply(
     Args:
         channels: One buffer per channel, all of the same length, or a 2-D
             ``(channels, frames)`` array. At least one.
-        sample_rate: Sample rate in Hz (default 22050).
+        sample_rate: Sample rate in Hz.
         stages: ``{"stage": name, <setting>: value}`` dicts, each stage at most
             once; ``name`` is one of ``declip``, ``declick``, ``decrackle``,
             ``dehum``, ``denoise``, ``dereverb``. The settings are the stage's

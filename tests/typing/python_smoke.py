@@ -11,24 +11,30 @@ bpm: float = libsonare.detect_bpm(samples, sample_rate=22050)
 downbeats: list[float] = libsonare.detect_downbeats(samples, sample_rate=22050)
 key: libsonare.Key = libsonare.detect_key(
     samples,
+    22050,
     high_pass_hz=80.0,
     profile=libsonare.KeyProfile.FARALDO_EDMA,
     genre_hint="edm",
 )
 key_candidates: list[libsonare.KeyCandidate] = libsonare.detect_key_candidates(
-    samples, high_pass_hz=80.0, modes=[libsonare.Mode.MAJOR, "dorian"], profile="edma"
+    samples, 22050, high_pass_hz=80.0, modes=[libsonare.Mode.MAJOR, "dorian"], profile="edma"
 )
-analysis: libsonare.AnalysisResult = libsonare.analyze(samples)
-acoustic: libsonare.AcousticResult = libsonare.analyze_impulse_response(ir_samples)
-blind_acoustic: libsonare.AcousticResult = libsonare.detect_acoustic(ir_samples)
-rir: libsonare.RirResult = libsonare.synthesize_rir(6.0, 5.0, 3.0, absorption=0.2)
-room_estimate: libsonare.RoomEstimate = libsonare.estimate_room(ir_samples, prefer_eyring=True)
+analysis: libsonare.AnalysisResult = libsonare.analyze(samples, 22050)
+acoustic: libsonare.AcousticResult = libsonare.analyze_impulse_response(ir_samples, 48000)
+blind_acoustic: libsonare.AcousticResult = libsonare.detect_acoustic(ir_samples, 48000)
+rir: libsonare.RirResult = libsonare.synthesize_rir(
+    6.0, 5.0, 3.0, absorption=0.2, sample_rate=48000
+)
+room_estimate: libsonare.RoomEstimate = libsonare.estimate_room(
+    ir_samples, 48000, prefer_eyring=True
+)
 morphed: libsonare.RoomMorphResult = libsonare.room_morph(samples, 22050, 6.0, 5.0, 3.0, wet=0.4)
 morphed_stereo: libsonare.RoomMorphStereoResult = libsonare.room_morph_stereo(
     samples, samples, 22050, 6.0, 5.0, 3.0, receiver_spacing_m=0.5, wet=0.4
 )
 chords: libsonare.ChordAnalysisResult = libsonare.detect_chords(
     samples,
+    22050,
     use_hmm=True,
     hmm_beam_width=8,
     use_key_context=True,
@@ -37,8 +43,8 @@ chords: libsonare.ChordAnalysisResult = libsonare.detect_chords(
     detect_inversions=True,
     chroma_method="nnls",
 )
-cyclic_frames, cyclic_data = libsonare.cyclic_tempogram(samples)
-mastered: libsonare.MasteringChainResult = libsonare.master_audio(samples, preset="aiMusic")
+cyclic_frames, cyclic_data = libsonare.cyclic_tempogram(samples, 22050)
+mastered: libsonare.MasteringChainResult = libsonare.master_audio(samples, 48000, preset="aiMusic")
 catalog = libsonare.mastering_processor_catalog()
 param_info = libsonare.mastering_insert_param_info("saturation.softClipper")
 insert_timing = libsonare.mastering_insert_timing(

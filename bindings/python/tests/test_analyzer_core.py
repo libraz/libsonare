@@ -381,16 +381,14 @@ def test_compat_silence_and_rhythm_utilities() -> None:
     assert len(tonnetz_values) == 12
 
     onset = [0.0, 1.0, 0.0, 1.0, 0.0, 1.0, 0.0, 1.0]
-    temp = libsonare.tempogram(onset, sample_rate=22050, hop_length=512, win_length=4)
+    temp = libsonare.tempogram(onset, sr=22050, hop_length=512, win_length=4)
     assert temp[0] == len(onset)
     assert len(temp[1]) == 4 * len(onset)
-    cosine = libsonare.tempogram(
-        onset, sample_rate=22050, hop_length=512, win_length=4, mode="cosine"
-    )
+    cosine = libsonare.tempogram(onset, sr=22050, hop_length=512, win_length=4, mode="cosine")
     assert cosine[0] == len(onset)
     assert len(cosine[1]) == 4 * len(onset)
     assert all(-1.000001 <= value <= 1.000001 for value in cosine[1])
-    assert len(libsonare.plp(onset, sample_rate=22050, hop_length=512, win_length=4)) == len(onset)
+    assert len(libsonare.plp(onset, sr=22050, hop_length=512, win_length=4)) == len(onset)
 
 
 def test_audio_detect_bpm() -> None:

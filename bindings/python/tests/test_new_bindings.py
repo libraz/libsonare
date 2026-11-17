@@ -158,7 +158,7 @@ def test_decompose_stems_validates_ahead_of_the_c_abi() -> None:
 
 def test_remix_aligned_intervals_resolves_cut_points() -> None:
     x = _tone(440.0, 0.5)
-    pairs = libsonare.remix_aligned_intervals(x, [0, 1000, 5000, 5500])
+    pairs = libsonare.remix_aligned_intervals(x, intervals=[0, 1000, 5000, 5500], sample_rate=22050)
     assert len(pairs) == 4
     assert pairs[0] >= 0
     assert pairs[1] > pairs[0]
@@ -169,7 +169,10 @@ def test_remix_aligned_intervals_resolves_cut_points() -> None:
 def test_remix_aligned_intervals_leaves_a_sign_changeless_signal_unsnapped() -> None:
     # A DC offset has no zero-crossing to snap to; the interval must survive.
     flat = np.full(4096, 0.25, dtype=np.float32)
-    assert libsonare.remix_aligned_intervals(flat, [100, 200]) == [100, 200]
+    assert libsonare.remix_aligned_intervals(flat, intervals=[100, 200], sample_rate=22050) == [
+        100,
+        200,
+    ]
 
 
 def test_nn_filter_preserves_shape() -> None:
@@ -196,11 +199,11 @@ def test_remix_refuses_odd_length_or_non_flat_intervals(intervals: Any) -> None:
     with raises_coded(match="intervals"):
         libsonare.remix(x, intervals)
     with raises_coded(match="intervals"):
-        libsonare.remix_aligned_intervals(x, intervals)
+        libsonare.remix_aligned_intervals(x, intervals=intervals, sample_rate=22050)
 
 
 def test_hpss_with_residual_splits_three_ways() -> None:
-    res = libsonare.hpss_with_residual(_tone())
+    res = libsonare.hpss_with_residual(_tone(), sample_rate=22050)
     harmonic = np.asarray(res["harmonic"], dtype=np.float32)
     percussive = np.asarray(res["percussive"], dtype=np.float32)
     residual = np.asarray(res["residual"], dtype=np.float32)
@@ -302,7 +305,7 @@ def test_lufs_series_interleaved_rejects_non_multiple_length() -> None:
 
 
 def test_ebur128_loudness_range_is_finite_nonnegative() -> None:
-    lra = libsonare.ebur128_loudness_range(_tone())
+    lra = libsonare.ebur128_loudness_range(_tone(), sample_rate=22050)
     assert math.isfinite(lra)
     assert lra >= 0.0
 

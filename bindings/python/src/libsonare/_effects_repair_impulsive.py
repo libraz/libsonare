@@ -77,7 +77,7 @@ def _coerce_decrackle_mode(value: int | str) -> int:
 @_guard_buffer("samples")
 def mastering_repair_declick(
     samples: Sequence[float] | list[float] | np.ndarray,
-    sample_rate: int = 22050,
+    sample_rate: int,
     *,
     threshold: float = 0.8,
     neighbor_ratio: float = 4.0,
@@ -89,7 +89,7 @@ def mastering_repair_declick(
 
     Args:
         samples: Mono input buffer (any sequence convertible to float32).
-        sample_rate: Sample rate in Hz (default 22050).
+        sample_rate: Sample rate in Hz.
         threshold: Amplitude threshold vs LPC prediction (default 0.8).
         neighbor_ratio: Ratio vs neighbour amplitude (default 4.0).
         max_click_samples: Maximum click run length in samples (default 8).
@@ -144,7 +144,7 @@ def _extract_click_detection(raw: Any) -> ClickDetection:
 @_guard_buffer("samples")
 def mastering_repair_detect_clicks(
     samples: Sequence[float] | list[float] | np.ndarray,
-    sample_rate: int = 22050,
+    sample_rate: int,
     *,
     threshold: float = 0.8,
     neighbor_ratio: float = 4.0,
@@ -171,7 +171,7 @@ def mastering_repair_detect_clicks(
 
     Args:
         samples: Mono input buffer (any sequence convertible to float32).
-        sample_rate: Sample rate in Hz (default 22050).
+        sample_rate: Sample rate in Hz.
         threshold: Amplitude threshold vs LPC prediction (default 0.8).
         neighbor_ratio: Ratio vs neighbour amplitude (default 4.0).
         max_click_samples: Maximum click run length in samples (default 8).
@@ -229,7 +229,7 @@ def _extract_declick_report(raw: Any) -> DeclickReport:
 def mastering_repair_declick_stereo(
     left: Sequence[float] | list[float] | np.ndarray,
     right: Sequence[float] | list[float] | np.ndarray,
-    sample_rate: int = 22050,
+    sample_rate: int,
     *,
     threshold: float = 0.8,
     neighbor_ratio: float = 4.0,
@@ -250,7 +250,7 @@ def mastering_repair_declick_stereo(
     Args:
         left: Left channel input buffer (any sequence convertible to float32).
         right: Right channel input buffer, same length as ``left``.
-        sample_rate: Sample rate in Hz (default 22050).
+        sample_rate: Sample rate in Hz.
         threshold: Amplitude threshold vs LPC prediction (default 0.8).
         neighbor_ratio: Ratio vs neighbour amplitude (default 4.0).
         max_click_samples: Maximum click run length in samples (default 8).
@@ -310,7 +310,7 @@ def mastering_repair_declick_stereo(
 @_guard_buffer("samples")
 def mastering_repair_declip(
     samples: Sequence[float] | list[float] | np.ndarray,
-    sample_rate: int = 22050,
+    sample_rate: int,
     *,
     clip_threshold: float = 0.98,
     lpc_order: int = 36,
@@ -358,7 +358,7 @@ def _extract_clip_detection(raw: Any) -> ClipDetection:
 @_guard_buffer("samples")
 def mastering_repair_detect_clipping(
     samples: Sequence[float] | list[float] | np.ndarray,
-    sample_rate: int = 22050,
+    sample_rate: int,
     *,
     clip_threshold: float = 0.98,
     lpc_order: int = 36,
@@ -404,7 +404,7 @@ def mastering_repair_detect_clipping(
 
     Args:
         samples: Mono input buffer (any sequence convertible to float32).
-        sample_rate: Sample rate in Hz (default 22050).
+        sample_rate: Sample rate in Hz.
         clip_threshold: Amplitude at or above which a sample counts as clipped
             (default 0.98).
         lpc_order: LPC order the repair would use (default 36); not read here.
@@ -455,7 +455,7 @@ def _extract_declip_report(raw: Any) -> DeclipReport:
 def mastering_repair_declip_stereo(
     left: Sequence[float] | list[float] | np.ndarray,
     right: Sequence[float] | list[float] | np.ndarray,
-    sample_rate: int = 22050,
+    sample_rate: int,
     *,
     clip_threshold: float = 0.98,
     lpc_order: int = 36,
@@ -475,7 +475,7 @@ def mastering_repair_declip_stereo(
     Args:
         left: Left channel input buffer (any sequence convertible to float32).
         right: Right channel input buffer, same length as ``left``.
-        sample_rate: Sample rate in Hz (default 22050).
+        sample_rate: Sample rate in Hz.
         clip_threshold: Amplitude above which a sample is considered clipped
             (default 0.98).
         lpc_order: LPC order used for prediction (default 36).
@@ -527,7 +527,7 @@ def mastering_repair_declip_stereo(
 @_guard_buffer("samples")
 def mastering_repair_decrackle(
     samples: Sequence[float] | list[float] | np.ndarray,
-    sample_rate: int = 22050,
+    sample_rate: int,
     *,
     threshold: float = 0.4,
     mode: int | str = "median",
@@ -554,7 +554,7 @@ def _extract_crackle_detection(raw: Any) -> CrackleDetection:
 @_guard_buffer("samples")
 def mastering_repair_detect_crackle(
     samples: Sequence[float] | list[float] | np.ndarray,
-    sample_rate: int = 22050,
+    sample_rate: int,
     *,
     threshold: float = 0.4,
     mode: int | str = "median",
@@ -575,7 +575,7 @@ def mastering_repair_detect_crackle(
 
     Args:
         samples: Mono input buffer (any sequence convertible to float32).
-        sample_rate: Sample rate in Hz (default 22050).
+        sample_rate: Sample rate in Hz.
         threshold: Deviation from the local median above which a sample counts
             as crackle (default 0.4).
         mode: ``"median"`` (default) or ``"waveletShrinkage"``; accepted for
@@ -623,7 +623,7 @@ def _extract_decrackle_report(raw: Any) -> DecrackleReport:
 def mastering_repair_decrackle_stereo(
     left: Sequence[float] | list[float] | np.ndarray,
     right: Sequence[float] | list[float] | np.ndarray,
-    sample_rate: int = 22050,
+    sample_rate: int,
     *,
     threshold: float = 0.4,
     mode: int | str = "median",
@@ -640,7 +640,7 @@ def mastering_repair_decrackle_stereo(
     Args:
         left: Left channel input buffer (any sequence convertible to float32).
         right: Right channel input buffer, same length as ``left``.
-        sample_rate: Sample rate in Hz (default 22050).
+        sample_rate: Sample rate in Hz.
         threshold: Median mode: deviation threshold. Wavelet mode: a cap on
             the BayesShrink threshold, which only binds when the configured
             value is below what BayesShrink computes from the signal itself

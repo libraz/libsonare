@@ -95,7 +95,7 @@ from .analyzer import (
     note_stretch as _note_stretch,
 )
 from .analyzer import (
-    onset_envelope as _onset_envelope,
+    onset_strength as _onset_strength,
 )
 from .analyzer import (
     percussive as _percussive,
@@ -1056,14 +1056,14 @@ class Audio:
 
     # --- Features - Onset ---
 
-    def onset_envelope(
+    def onset_strength(
         self,
         n_fft: int = 2048,
         hop_length: int = 512,
         n_mels: int = 128,
     ) -> list[float]:
         """Compute the onset strength envelope (one value per frame)."""
-        return _onset_envelope(self.data, self.sample_rate, n_fft, hop_length, n_mels)
+        return _onset_strength(self.data, self.sample_rate, n_fft, hop_length, n_mels)
 
     # --- Loudness (LUFS) ---
 
@@ -1163,9 +1163,9 @@ class Audio:
 
     # --- Core - Resample ---
 
-    def resample(self, target_sr: int) -> list[float]:
+    def resample(self, target_sample_rate: int) -> list[float]:
         """Resample audio to a different sample rate."""
-        return _resample(self.data, self.sample_rate, target_sr)
+        return _resample(self.data, self.sample_rate, target_sample_rate)
 
     # --- Metering (handle form) ---
     #

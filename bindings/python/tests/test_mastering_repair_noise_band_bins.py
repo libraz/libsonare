@@ -77,7 +77,7 @@ class TestNoiseBandBins:
         assert slower[-1] == base[-1]
 
     def test_defaults_to_the_geometry_the_sibling_facades_default_to(self) -> None:
-        assert libsonare.mastering_repair_noise_band_bins() == (
+        assert libsonare.mastering_repair_noise_band_bins(sample_rate=22050) == (
             libsonare.mastering_repair_noise_band_bins(n_fft=1024, sample_rate=22050)
         )
 

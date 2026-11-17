@@ -66,7 +66,7 @@ def pitch_tuning(
 @_guard_buffer("samples")
 def estimate_tuning(
     samples: Sequence[float] | list[float],
-    sample_rate: int = 22050,
+    sr: int = 22050,
     n_fft: int = 2048,
     hop_length: int = 512,
     resolution: float = 0.01,
@@ -76,7 +76,7 @@ def estimate_tuning(
 
     Args:
         samples: Audio samples.
-        sample_rate: Sample rate in Hz (default 22050).
+        sr: Sample rate in Hz (default 22050).
         n_fft: FFT window size (default 2048).
         hop_length: Hop length in samples (default 512).
         resolution: Tuning resolution in fractions of a bin (default 0.01).
@@ -101,7 +101,7 @@ def estimate_tuning(
     rc = lib.sonare_estimate_tuning(
         c_array,
         _to_c_size_t(length, "length"),
-        _to_c_int(sample_rate, "sample_rate"),
+        _to_c_int(sr, "sr"),
         _to_c_int(n_fft, "n_fft"),
         _to_c_int(hop_length, "hop_length"),
         _to_c_float(resolution, "resolution"),
@@ -165,7 +165,7 @@ def reference_hz_to_tuning(hz: float, a4: float = 440.0) -> float:
 @_guard_buffer("samples")
 def piptrack(
     samples: Sequence[float] | list[float],
-    sample_rate: int = 22050,
+    sr: int = 22050,
     n_fft: int = 2048,
     hop_length: int = 512,
     fmin: float = 150.0,
@@ -182,7 +182,7 @@ def piptrack(
     rc = lib.sonare_piptrack(
         c_array,
         _to_c_size_t(length, "length"),
-        _to_c_int(sample_rate, "sample_rate"),
+        _to_c_int(sr, "sr"),
         _to_c_int(n_fft, "n_fft"),
         _to_c_int(hop_length, "hop_length"),
         _to_c_float(fmin, "fmin"),
@@ -211,7 +211,7 @@ def piptrack(
 
 def pitch_yin(
     samples: Sequence[float] | list[float],
-    sample_rate: int = 22050,
+    sample_rate: int,
     frame_length: int = 2048,
     hop_length: int = 512,
     fmin: float = 65.0,
@@ -223,7 +223,7 @@ def pitch_yin(
 
     Args:
         samples: Audio samples.
-        sample_rate: Sample rate in Hz (default 22050).
+        sample_rate: Sample rate in Hz.
         frame_length: Frame length in samples (default 2048).
         hop_length: Hop length in samples (default 512).
         fmin: Minimum frequency in Hz (default 65.0).
@@ -269,7 +269,7 @@ def pitch_yin(
 
 def pitch_pyin(
     samples: Sequence[float] | list[float],
-    sample_rate: int = 22050,
+    sample_rate: int,
     frame_length: int = 2048,
     hop_length: int = 512,
     fmin: float = 65.0,
@@ -281,7 +281,7 @@ def pitch_pyin(
 
     Args:
         samples: Audio samples.
-        sample_rate: Sample rate in Hz (default 22050).
+        sample_rate: Sample rate in Hz.
         frame_length: Frame length in samples (default 2048).
         hop_length: Hop length in samples (default 512).
         fmin: Minimum frequency in Hz (default 65.0).

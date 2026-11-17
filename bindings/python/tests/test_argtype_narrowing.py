@@ -35,12 +35,12 @@ _BUS_STRIP = (
 
 def test_a_wrapped_sample_rate_is_refused_rather_than_read_as_a_smaller_one() -> None:
     """A one-shot generator's ``c_int`` parameter, driven where the wrap lands in domain."""
-    assert len(ls.tone(sample_rate=8000, duration=0.1)) != len(
-        ls.tone(sample_rate=16000, duration=0.1)
+    assert len(ls.tone(sr=8000, duration=0.1)) != len(
+        ls.tone(sr=16000, duration=0.1)
     )  # positive control
     for value in (2**32 + 8000, 2**32 + 16000, 2**32, -(2**31) - 1, 8000.5):
-        with pytest.raises(SonareValueError, match="sample_rate"):
-            ls.tone(sample_rate=value, duration=0.1)
+        with pytest.raises(SonareValueError, match="sr"):
+            ls.tone(sr=value, duration=0.1)
 
 
 def test_a_wrapped_marker_id_is_refused_rather_than_read_as_a_smaller_one() -> None:

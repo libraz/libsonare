@@ -58,8 +58,8 @@ def test_nnls_chroma_routes_default_and_custom_hop_to_ex2(monkeypatch: pytest.Mo
     lib = _FakeNnlsLibrary(has_ex2=True)
     monkeypatch.setattr(_conversions, "_get_lib", lambda: lib)
 
-    _conversions.nnls_chroma([0.0], hop_length=512)
-    _conversions.nnls_chroma([0.0], hop_length=256)
+    _conversions.nnls_chroma([0.0], hop_length=512, sample_rate=22050)
+    _conversions.nnls_chroma([0.0], hop_length=256, sample_rate=22050)
 
     assert [name for name, _args in lib.calls] == ["ex2", "ex2"]
     assert [cast(ctypes.c_int, args[6]).value for _name, args in lib.calls] == [512, 256]
@@ -70,7 +70,7 @@ def test_nnls_chroma_uses_legacy_ex_when_ex2_is_missing(monkeypatch: pytest.Monk
     lib = _FakeNnlsLibrary(has_ex=True)
     monkeypatch.setattr(_conversions, "_get_lib", lambda: lib)
 
-    _conversions.nnls_chroma([0.0])
+    _conversions.nnls_chroma([0.0], sample_rate=22050)
 
     assert [name for name, _args in lib.calls] == ["ex"]
 
@@ -82,7 +82,7 @@ def test_nnls_chroma_uses_base_symbol_when_all_extended_symbols_are_missing(
     lib = _FakeNnlsLibrary()
     monkeypatch.setattr(_conversions, "_get_lib", lambda: lib)
 
-    _conversions.nnls_chroma([0.0])
+    _conversions.nnls_chroma([0.0], sample_rate=22050)
 
     assert [name for name, _args in lib.calls] == ["legacy"]
 
@@ -93,7 +93,7 @@ def test_nnls_chroma_rejects_custom_hop_without_ex2(monkeypatch: pytest.MonkeyPa
     monkeypatch.setattr(_conversions, "_get_lib", lambda: lib)
 
     with pytest.raises(SonareError, match="sonare_nnls_chroma_ex2") as error:
-        _conversions.nnls_chroma([0.0], hop_length=256)
+        _conversions.nnls_chroma([0.0], hop_length=256, sample_rate=22050)
     assert error.value.code == ErrorCode.NOT_SUPPORTED
     assert not lib.calls
 
@@ -114,7 +114,7 @@ def test_nnls_chroma_rejects_custom_hop_without_ex2(monkeypatch: pytest.MonkeyPa
 def test_nnls_chroma_validates_ex2_parameters(kwargs: dict[str, Any], message: str) -> None:
     """Python rejects values that the ex2 C contract rejects before FFI."""
     with pytest.raises(ValueError, match=message):
-        _conversions.nnls_chroma([0.0], **kwargs)
+        _conversions.nnls_chroma([0.0], sample_rate=22050, **kwargs)
 
 
 def test_analyze_impulse_response_routes_default_and_custom_decay_to_ex(
@@ -124,8 +124,8 @@ def test_analyze_impulse_response_routes_default_and_custom_decay_to_ex(
     lib = _FakeImpulseLibrary(has_ex=True)
     monkeypatch.setattr(_analysis_reports, "_get_lib", lambda: lib)
 
-    _analysis_reports.analyze_impulse_response([0.0], min_decay_db=30.0)
-    _analysis_reports.analyze_impulse_response([0.0], min_decay_db=45.0)
+    _analysis_reports.analyze_impulse_response([0.0], min_decay_db=30.0, sample_rate=48000)
+    _analysis_reports.analyze_impulse_response([0.0], min_decay_db=45.0, sample_rate=48000)
 
     assert [name for name, _args in lib.calls] == ["ex", "ex"]
     assert [cast(ctypes.c_float, args[4]).value for _name, args in lib.calls] == [30.0, 45.0]
@@ -138,7 +138,7 @@ def test_analyze_impulse_response_uses_legacy_symbol_for_default(
     lib = _FakeImpulseLibrary()
     monkeypatch.setattr(_analysis_reports, "_get_lib", lambda: lib)
 
-    _analysis_reports.analyze_impulse_response([0.0])
+    _analysis_reports.analyze_impulse_response([0.0], sample_rate=48000)
 
     assert [name for name, _args in lib.calls] == ["legacy"]
 
@@ -151,7 +151,7 @@ def test_analyze_impulse_response_rejects_custom_decay_without_ex(
     monkeypatch.setattr(_analysis_reports, "_get_lib", lambda: lib)
 
     with pytest.raises(SonareError, match="sonare_analyze_impulse_response_ex") as error:
-        _analysis_reports.analyze_impulse_response([0.0], min_decay_db=45.0)
+        _analysis_reports.analyze_impulse_response([0.0], min_decay_db=45.0, sample_rate=48000)
     assert error.value.code == ErrorCode.NOT_SUPPORTED
     assert not lib.calls
 
@@ -169,4 +169,4 @@ def test_analyze_impulse_response_validates_ex_parameters(
 ) -> None:
     """Python rejects values that the extended C contract rejects."""
     with pytest.raises(ValueError, match=message):
-        _analysis_reports.analyze_impulse_response([0.0], **kwargs)
+        _analysis_reports.analyze_impulse_response([0.0], sample_rate=48000, **kwargs)

@@ -58,7 +58,7 @@ from .types import (
 @_guard_buffer("samples")
 def mastering(
     samples: Sequence[float] | list[float],
-    sample_rate: int = 22050,
+    sample_rate: int,
     target_lufs: float = -14.0,
     ceiling_db: float = -1.0,
     true_peak_oversample: int = 4,
@@ -66,10 +66,6 @@ def mastering(
     apply_gain_at_input_rate: bool = False,
 ) -> MasteringResult:
     """Apply mastering loudness normalization with a true-peak ceiling.
-
-    Pass the buffer's actual ``sample_rate``: the default (22050) is non-standard
-    for audio, and the LUFS measurement driving normalization is sample-rate
-    dependent, so a wrong rate mis-targets the loudness.
 
     ``release_ms`` tunes the post true-peak limiter release, one time constant
     (about 63% of the way at the set time); ``0`` keeps the library default
@@ -460,7 +456,7 @@ def capability_catalog() -> CapabilityCatalog:
 def mastering_process(
     processor_name: str,
     samples: Sequence[float] | list[float],
-    sample_rate: int = 22050,
+    sample_rate: int,
     params: dict[str, float | int | bool | str] | None = None,
 ) -> MasteringResult:
     """Apply a named mastering processor using the shared cross-language API.
@@ -504,7 +500,7 @@ def mastering_process_stereo(
     processor_name: str,
     left: Sequence[float] | list[float],
     right: Sequence[float] | list[float],
-    sample_rate: int = 22050,
+    sample_rate: int,
     params: dict[str, float | int | bool | str] | None = None,
 ) -> MasteringStereoResult:
     """Apply a named stereo mastering processor using the shared cross-language API.
@@ -692,7 +688,7 @@ def _make_progress_trampoline(
 @_guard_buffer("samples")
 def mastering_chain(
     samples: Sequence[float] | list[float],
-    sample_rate: int = 22050,
+    sample_rate: int,
     config: dict[str, Any] | None = None,
     on_progress: Callable[[float, str], None] | None = None,
     *,
@@ -707,7 +703,7 @@ def mastering_chain(
 
     Args:
         samples: Mono audio samples.
-        sample_rate: Sample rate in Hz (default 22050).
+        sample_rate: Sample rate in Hz.
         config: A nested dict of module -> processor -> parameter, e.g.
             ``{"dynamics": {"compressor": {"thresholdDb": -24}},
             "loudness": {"targetLufs": -14}}``. A boolean toggles a
@@ -811,7 +807,7 @@ def mastering_chain(
 def mastering_chain_stereo(
     left: Sequence[float] | list[float],
     right: Sequence[float] | list[float],
-    sample_rate: int = 22050,
+    sample_rate: int,
     config: dict[str, Any] | None = None,
     on_progress: Callable[[float, str], None] | None = None,
     *,
@@ -936,7 +932,7 @@ def mastering_platform_names() -> list[str]:
 @_guard_buffer("samples")
 def master_audio(
     samples: Sequence[float] | list[float],
-    sample_rate: int = 22050,
+    sample_rate: int,
     preset: str = "pop",
     overrides: dict[str, Any] | None = None,
     on_progress: Callable[[float, str], None] | None = None,
@@ -947,7 +943,7 @@ def master_audio(
 
     Args:
         samples: Mono audio samples.
-        sample_rate: Sample rate in Hz (default 22050).
+        sample_rate: Sample rate in Hz.
         preset: Preset identifier from :func:`mastering_preset_names`.
         overrides: Optional nested overrides applied on top of the preset
             defaults. Uses the same config shape as :func:`mastering_chain`.
@@ -1053,7 +1049,7 @@ def master_audio(
 def master_audio_stereo(
     left: Sequence[float] | list[float],
     right: Sequence[float] | list[float],
-    sample_rate: int = 22050,
+    sample_rate: int,
     preset: str = "pop",
     overrides: dict[str, Any] | None = None,
     on_progress: Callable[[float, str], None] | None = None,

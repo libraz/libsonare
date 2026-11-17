@@ -91,9 +91,6 @@ from .analyzer import (
     abi_version as abi_version,
 )
 from .analyzer import (
-    agglomerative as agglomerative,
-)
-from .analyzer import (
     amplitude_to_db as amplitude_to_db,
 )
 from .analyzer import (
@@ -159,9 +156,6 @@ from .analyzer import (
     cqt as cqt,
 )
 from .analyzer import cqt_to_audio as cqt_to_audio
-from .analyzer import (
-    cross_similarity as cross_similarity,
-)
 from .analyzer import (
     cyclic_tempogram as cyclic_tempogram,
 )
@@ -274,9 +268,6 @@ from .analyzer import (
 )
 from .analyzer import (
     hz_to_note as hz_to_note,
-)
-from .analyzer import (
-    lag_to_recurrence as lag_to_recurrence,
 )
 from .analyzer import lufs as lufs
 from .analyzer import (
@@ -573,15 +564,12 @@ from .analyzer import (
 from .analyzer import (
     onset_backtrack as onset_backtrack,
 )
-from .analyzer import onset_envelope as onset_envelope
+from .analyzer import onset_strength as onset_strength
 from .analyzer import (
     onset_strength_multi as onset_strength_multi,
 )
 from .analyzer import (
     pad_center as pad_center,
-)
-from .analyzer import (
-    path_enhance as path_enhance,
 )
 from .analyzer import (
     pcen as pcen,
@@ -648,12 +636,6 @@ from .analyzer import (
     reassigned_spectrogram as reassigned_spectrogram,
 )
 from .analyzer import (
-    recurrence_matrix as recurrence_matrix,
-)
-from .analyzer import (
-    recurrence_to_lag as recurrence_to_lag,
-)
-from .analyzer import (
     reference_hz_to_tuning as reference_hz_to_tuning,
 )
 from .analyzer import (
@@ -690,6 +672,27 @@ from .analyzer import scale_correction_semitones as scale_correction_semitones
 from .analyzer import scale_mask_for_mode as scale_mask_for_mode
 from .analyzer import scale_pitch_class_enabled as scale_pitch_class_enabled
 from .analyzer import scale_quantize_midi as scale_quantize_midi
+from .analyzer import (
+    segment_agglomerative as segment_agglomerative,
+)
+from .analyzer import (
+    segment_cross_similarity as segment_cross_similarity,
+)
+from .analyzer import (
+    segment_lag_to_recurrence as segment_lag_to_recurrence,
+)
+from .analyzer import (
+    segment_path_enhance as segment_path_enhance,
+)
+from .analyzer import (
+    segment_recurrence_matrix as segment_recurrence_matrix,
+)
+from .analyzer import (
+    segment_recurrence_to_lag as segment_recurrence_to_lag,
+)
+from .analyzer import (
+    segment_subsegment as segment_subsegment,
+)
 from .analyzer import short_term_lufs as short_term_lufs
 from .analyzer import (
     spectral_bandwidth as spectral_bandwidth,
@@ -735,9 +738,6 @@ from .analyzer import (
 )
 from .analyzer import (
     streaming_loudness_gain_stereo as streaming_loudness_gain_stereo,
-)
-from .analyzer import (
-    subsegment as subsegment,
 )
 from .analyzer import (
     synthesize_rir as synthesize_rir,

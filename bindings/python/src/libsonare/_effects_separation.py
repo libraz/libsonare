@@ -148,7 +148,7 @@ def decompose_with_init(
 
 def decompose_stems(
     samples: Sequence[float] | list[float],
-    sample_rate: int = 22050,
+    sample_rate: int,
     n_components: int = 4,
     n_fft: int = _DEFAULT_EFFECT_N_FFT,
     hop_length: int = _DEFAULT_EFFECT_HOP_LENGTH,
@@ -170,7 +170,7 @@ def decompose_stems(
 
     Args:
         samples: Input signal (mono).
-        sample_rate: Sample rate in Hz (default 22050).
+        sample_rate: Sample rate in Hz.
         n_components: Number of NMF components (default 4).
         n_fft: STFT size (default 2048).
         hop_length: STFT hop (default 512).
@@ -260,7 +260,7 @@ def decompose_stems(
 
 def decompose_stems_linked(
     channels: Sequence[Sequence[float] | np.ndarray] | np.ndarray,
-    sample_rate: int = 22050,
+    sample_rate: int,
     n_components: int = 4,
     n_fft: int = _DEFAULT_EFFECT_N_FFT,
     hop_length: int = _DEFAULT_EFFECT_HOP_LENGTH,
@@ -287,7 +287,7 @@ def decompose_stems_linked(
         channels: One input buffer per channel, or a 2-D ``(channels, frames)``
             array. All channels must be the same length; the C form has one
             length for the set. At least one and at most 64 channels.
-        sample_rate: Sample rate in Hz, shared by every channel (default 22050).
+        sample_rate: Sample rate in Hz, shared by every channel.
         n_components: Number of NMF components (default 4).
         n_fft: STFT size (default 2048).
         hop_length: STFT hop (default 512).
@@ -436,8 +436,8 @@ def _remix_interval_array(
 def remix(
     samples: Sequence[float] | list[float],
     intervals: Sequence[int] | list[int],
-    sample_rate: int = 22050,
-    align_zeros: bool = False,
+    sr: int = 22050,
+    align_zeros: bool = True,
 ) -> np.ndarray:
     """Reorder / concatenate a signal by interval slices (librosa.effects.remix).
 
@@ -449,8 +449,8 @@ def remix(
     Args:
         samples: Input signal.
         intervals: Flat sequence of ``(start, end)`` pairs (even length).
-        sample_rate: Sample rate in Hz (default 22050).
-        align_zeros: Snap slice boundaries to zero-crossings (default False).
+        sr: Sample rate in Hz (default 22050).
+        align_zeros: Snap slice boundaries to zero-crossings (default True).
 
     Returns:
         The remixed signal as a 1-D float32 array.
@@ -463,7 +463,7 @@ def remix(
             lib.sonare_remix(
                 c_array,
                 _to_c_size_t(length, "length"),
-                _to_c_int(sample_rate, "sample_rate"),
+                _to_c_int(sr, "sr"),
                 intervals_array,
                 ctypes.c_size_t(n_pairs),
                 ctypes.c_int(1 if align_zeros else 0),
@@ -477,8 +477,8 @@ def remix(
 @_guard_buffer("samples")
 def remix_aligned_intervals(
     samples: Sequence[float] | list[float],
+    sample_rate: int,
     intervals: Sequence[int] | list[int],
-    sample_rate: int = 22050,
     align_zeros: bool = True,
 ) -> list[int]:
     """Resolve the cut points :func:`remix` would use, without cutting.
@@ -496,7 +496,7 @@ def remix_aligned_intervals(
     Args:
         samples: Input signal.
         intervals: Flat sequence of ``(start, end)`` pairs (even length).
-        sample_rate: Sample rate in Hz (default 22050).
+        sample_rate: Sample rate in Hz.
         align_zeros: Snap slice boundaries to zero-crossings (default True).
 
     Returns:
@@ -525,7 +525,7 @@ def remix_aligned_intervals(
 
 def hpss(
     samples: Sequence[float] | list[float],
-    sample_rate: int = 22050,
+    sample_rate: int,
     kernel_harmonic: int = 31,
     kernel_percussive: int = 31,
     n_fft: int = _DEFAULT_EFFECT_N_FFT,
@@ -538,7 +538,7 @@ def hpss(
 
     Args:
         samples: Audio samples.
-        sample_rate: Sample rate in Hz (default 22050).
+        sample_rate: Sample rate in Hz.
         kernel_harmonic: Harmonic median filter kernel size, in STFT frames: a
             positive odd integer at most 524287. The ceiling is 524288 and an
             even kernel is refused, so 524287 is the largest legal value.
@@ -631,7 +631,7 @@ def _hpss_legacy(
 
 def harmonic(
     samples: Sequence[float] | list[float],
-    sample_rate: int = 22050,
+    sample_rate: int,
     *,
     validate: bool = True,
 ) -> list[float]:
@@ -639,7 +639,7 @@ def harmonic(
 
     Args:
         samples: Audio samples.
-        sample_rate: Sample rate in Hz (default 22050).
+        sample_rate: Sample rate in Hz.
         validate: Reject empty / NaN / Inf input (default True). Pass
             ``validate=False`` to skip the scan on hot paths.
 
@@ -652,7 +652,7 @@ def harmonic(
 
 def percussive(
     samples: Sequence[float] | list[float],
-    sample_rate: int = 22050,
+    sample_rate: int,
     *,
     validate: bool = True,
 ) -> list[float]:
@@ -660,7 +660,7 @@ def percussive(
 
     Args:
         samples: Audio samples.
-        sample_rate: Sample rate in Hz (default 22050).
+        sample_rate: Sample rate in Hz.
         validate: Reject empty / NaN / Inf input (default True). Pass
             ``validate=False`` to skip the scan on hot paths.
 
@@ -675,7 +675,7 @@ def percussive(
 
 def hpss_with_residual(
     samples: Sequence[float] | list[float],
-    sample_rate: int = 22050,
+    sample_rate: int,
     kernel_harmonic: int = 31,
     kernel_percussive: int = 31,
     n_fft: int = _DEFAULT_EFFECT_N_FFT,
@@ -702,7 +702,7 @@ def hpss_with_residual(
 
     Args:
         samples: Input audio.
-        sample_rate: Sample rate in Hz (default 22050).
+        sample_rate: Sample rate in Hz.
         kernel_harmonic: Horizontal median filter size, in STFT frames: a
             positive odd integer at most 524287. The ceiling is 524288 and an
             even kernel is refused, so 524287 is the largest legal value.
@@ -812,7 +812,7 @@ def _hpss_with_residual_legacy(
 
 def phase_vocoder(
     samples: Sequence[float] | list[float],
-    sample_rate: int = 22050,
+    sample_rate: int,
     rate: float = 1.0,
     n_fft: int = 2048,
     hop_length: int = 512,
@@ -823,7 +823,7 @@ def phase_vocoder(
 
     Args:
         samples: Input audio.
-        sample_rate: Sample rate in Hz (default 22050).
+        sample_rate: Sample rate in Hz.
         rate: Playback speed (< 1.0 slower and longer, > 1.0 faster and shorter). Must
             be > 0. The opposite sense of :func:`note_stretch`'s ``stretch_ratio``, a
             duration ratio.

@@ -1061,7 +1061,7 @@ class Mixer:
 
 def mix_stereo(
     strips: Sequence[tuple[Sequence[float], Sequence[float]]],
-    sample_rate: int = 48000,
+    sample_rate: int,
     fader_db: Sequence[float] | None = None,
     pan: Sequence[float] | None = None,
     pan_mode: Sequence[str | int] | str | int = "balance",

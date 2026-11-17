@@ -69,7 +69,7 @@ def test_default_tuning_is_measured_on_every_entry_point(loop: list[float]) -> N
     names = {c.name for c in libsonare.detect_chords(loop, _SR).chords}
     assert {"C", "G", "Am", "F"} <= names
     functional = libsonare.chord_functional_analysis(
-        loop, libsonare.PitchClass.C, libsonare.Mode.MAJOR, _SR
+        loop, _SR, libsonare.PitchClass.C, libsonare.Mode.MAJOR
     )
     assert {"C", "G", "Am", "F"} <= {c.name for c in functional}
 

@@ -285,6 +285,24 @@ def _resolve_optional_non_negative(value: object, name: str) -> int | float:
     return value  # type: ignore[return-value]
 
 
+def _resolve_zero_default(value: object, name: str) -> int | float:
+    """Map an optional positive argument onto the C ABI's ``0`` for "not given".
+
+    ``None`` becomes ``0``; an explicit zero or negative value is refused rather
+    than read as the default.
+
+    Raises:
+        TypeError: If ``value`` is not a number.
+        SonareValueError: If ``value`` is not finite, or is not positive.
+    """
+    if value is None:
+        return 0
+    number = _narrow_double(value, name)
+    if number <= 0:
+        raise SonareValueError(f"{name} must be positive (use None for the default)")
+    return value  # type: ignore[return-value]
+
+
 def _utf8_arg(value: str, name: str) -> bytes:
     """Encode ``value`` for a NUL-terminated ``char *``, refusing an embedded NUL.
 

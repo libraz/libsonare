@@ -14,7 +14,7 @@ def test_resample() -> None:
     from libsonare import resample
 
     tone = _generate_sine(440, 22050, 1.0)
-    result = resample(tone, src_sr=22050, target_sr=44100)
+    result = resample(tone, source_sample_rate=22050, target_sample_rate=44100)
     assert len(result) > len(tone) * 1.8
     assert len(result) < len(tone) * 2.2
 
@@ -362,7 +362,7 @@ def test_audio_resample() -> None:
     from libsonare import Audio
 
     audio = Audio.from_buffer(_generate_sine(440, 22050, 1.0), sample_rate=22050)
-    result = audio.resample(target_sr=44100)
+    result = audio.resample(target_sample_rate=44100)
     assert len(result) > audio.length * 1.8
 
 
@@ -387,7 +387,7 @@ def test_short_audio() -> None:
     from libsonare import mel_spectrogram, stft
 
     short = _generate_sine(440, 22050, 0.1)  # 100ms
-    result = stft(short, sample_rate=22050)
+    result = stft(short, sr=22050)
     assert result.n_frames >= 0
 
     mel = mel_spectrogram(short, sample_rate=22050)

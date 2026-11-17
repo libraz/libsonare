@@ -110,7 +110,7 @@ def _coerce_denoise_estimator(value: int | str) -> int:
 @_guard_buffer("samples")
 def mastering_repair_denoise_classical(
     samples: Sequence[float] | list[float] | np.ndarray,
-    sample_rate: int = 22050,
+    sample_rate: int,
     *,
     mode: int | str = "logMmse",
     noise_estimator: int | str = "quantile",
@@ -128,7 +128,7 @@ def mastering_repair_denoise_classical(
 
     Args:
         samples: Mono input buffer (any sequence convertible to float32).
-        sample_rate: Sample rate in Hz (default 22050).
+        sample_rate: Sample rate in Hz.
         mode: ``"logMmse"`` (default), ``"mmseStsa"``, or ``"spectralSubtraction"``;
               an integer in ``SONARE_DENOISE_MODE_*`` is also accepted.
         noise_estimator: ``"quantile"`` (default), ``"mcra"``, ``"imcra"``, or ``"spp"``.
@@ -204,7 +204,7 @@ def _extract_noise_detection(raw: Any) -> NoiseDetection:
 @_guard_buffer("samples")
 def mastering_repair_detect_noise_floor(
     samples: Sequence[float] | list[float] | np.ndarray,
-    sample_rate: int = 22050,
+    sample_rate: int,
     *,
     mode: int | str = "logMmse",
     noise_estimator: int | str = "quantile",
@@ -238,7 +238,7 @@ def mastering_repair_detect_noise_floor(
 
     Args:
         samples: Mono input buffer (any sequence convertible to float32).
-        sample_rate: Sample rate in Hz (default 22050).
+        sample_rate: Sample rate in Hz.
         mode: ``"logMmse"`` (default), ``"mmseStsa"``, or ``"spectralSubtraction"``;
               an integer in ``SONARE_DENOISE_MODE_*`` is also accepted.
         noise_estimator: ``"quantile"`` (default), ``"mcra"``, ``"imcra"``, or ``"spp"``.
@@ -301,7 +301,7 @@ def mastering_repair_detect_noise_floor(
 _NOISE_BAND_EDGE_COUNT = SONARE_REPAIR_NOISE_BAND_COUNT + 1
 
 
-def mastering_repair_noise_band_bins(n_fft: int = 1024, sample_rate: int = 22050) -> list[int]:
+def mastering_repair_noise_band_bins(sample_rate: int, n_fft: int = 1024) -> list[int]:
     """Bin boundaries of the grid a denoise noise floor is reported on.
 
     Band ``k`` of :attr:`~libsonare.types.NoiseDetection.band_floor_dbfs` covers
@@ -330,8 +330,7 @@ def mastering_repair_noise_band_bins(n_fft: int = 1024, sample_rate: int = 22050
             rule :func:`mastering_repair_detect_noise_floor` applies to its
             config, so every grid returned here is one that entry can report on
             (default 1024).
-        sample_rate: Sample rate the bins belong to, in Hz; positive
-            (default 22050).
+        sample_rate: Sample rate the bins belong to, in Hz; positive.
 
     Returns:
         33 bin indices, low to high -- one more than the 32 bands: the first bin
@@ -369,7 +368,7 @@ def _extract_denoise_report(raw: Any) -> DenoiseReport:
 def mastering_repair_denoise_classical_stereo(
     left: Sequence[float] | list[float] | np.ndarray,
     right: Sequence[float] | list[float] | np.ndarray,
-    sample_rate: int = 22050,
+    sample_rate: int,
     *,
     mode: int | str = "logMmse",
     noise_estimator: int | str = "quantile",
@@ -409,7 +408,7 @@ def mastering_repair_denoise_classical_stereo(
     Args:
         left: Left channel input buffer (any sequence convertible to float32).
         right: Right channel input buffer, same length as ``left``.
-        sample_rate: Sample rate in Hz (default 22050).
+        sample_rate: Sample rate in Hz.
         mode: ``"logMmse"`` (default), ``"mmseStsa"``, or ``"spectralSubtraction"``;
               an integer in ``SONARE_DENOISE_MODE_*`` is also accepted.
         noise_estimator: ``"quantile"`` (default), ``"mcra"``, ``"imcra"``, or ``"spp"``.
@@ -491,7 +490,7 @@ def mastering_repair_denoise_classical_stereo(
 
 def mastering_repair_denoise_classical_linked(
     channels: Sequence[Sequence[float] | np.ndarray] | np.ndarray,
-    sample_rate: int = 22050,
+    sample_rate: int,
     *,
     mode: int | str = "logMmse",
     noise_estimator: int | str = "quantile",
@@ -544,7 +543,7 @@ def mastering_repair_denoise_classical_linked(
         channels: One input buffer per channel, in the order the outputs come
             back, or a 2-D ``(channels, frames)`` array. All channels must be
             the same length; the C form has one length for the set.
-        sample_rate: Sample rate in Hz, shared by every channel (default 22050).
+        sample_rate: Sample rate in Hz, shared by every channel.
         mode: ``"logMmse"`` (default), ``"mmseStsa"``, or ``"spectralSubtraction"``;
               an integer in ``SONARE_DENOISE_MODE_*`` is also accepted.
         noise_estimator: ``"quantile"`` (default), ``"mcra"``, ``"imcra"``, or ``"spp"``.
@@ -643,7 +642,7 @@ def _coerce_dehum_mode(value: int | str) -> int:
 @_guard_buffer("samples")
 def mastering_repair_dehum(
     samples: Sequence[float] | list[float] | np.ndarray,
-    sample_rate: int = 22050,
+    sample_rate: int,
     *,
     fundamental_hz: float = 50.0,
     harmonics: int = 4,
@@ -692,7 +691,7 @@ def _extract_hum_detection(raw: Any) -> HumDetection:
 @_guard_buffer("samples")
 def mastering_repair_detect_hum(
     samples: Sequence[float] | list[float] | np.ndarray,
-    sample_rate: int = 22050,
+    sample_rate: int,
     *,
     fundamental_hz: float = 50.0,
     harmonics: int = 4,
@@ -728,7 +727,7 @@ def mastering_repair_detect_hum(
 
     Args:
         samples: Mono input buffer (any sequence convertible to float32).
-        sample_rate: Sample rate in Hz (default 22050).
+        sample_rate: Sample rate in Hz.
         fundamental_hz: Frequency the search is centred on (default 50.0).
         harmonics: Notch count the repair would use (default 4).
         q: Notch Q the repair would use (default 20.0).
@@ -786,7 +785,7 @@ def _extract_dehum_report(raw: Any) -> DehumReport:
 def mastering_repair_dehum_stereo(
     left: Sequence[float] | list[float] | np.ndarray,
     right: Sequence[float] | list[float] | np.ndarray,
-    sample_rate: int = 22050,
+    sample_rate: int,
     *,
     fundamental_hz: float = 50.0,
     harmonics: int = 4,
@@ -814,7 +813,7 @@ def mastering_repair_dehum_stereo(
     Args:
         left: Left channel input buffer (any sequence convertible to float32).
         right: Right channel input buffer, same length as ``left``.
-        sample_rate: Sample rate in Hz (default 22050).
+        sample_rate: Sample rate in Hz.
         fundamental_hz: Mains-hum fundamental (default 50 Hz).
         harmonics: Notch count including fundamental (default 4).
         q: Notch Q (default 20).

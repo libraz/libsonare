@@ -114,7 +114,7 @@ def test_tempogram_forwards_mel_and_window_options(
         calls["tempogram"] = (envelope, kwargs)
         return 3, [0.0] * (3 * 96)
 
-    monkeypatch.setattr(_conversions, "onset_envelope", onset_spy)
+    monkeypatch.setattr(_conversions, "onset_strength", onset_spy)
     monkeypatch.setattr(_conversions, "tempogram", tempogram_spy)
 
     assert (
@@ -125,11 +125,11 @@ def test_tempogram_forwards_mel_and_window_options(
 
     assert calls["onset"] == (
         [0.0, 0.5],
-        {"sample_rate": 22050, "n_fft": 1024, "hop_length": 256, "n_mels": 40},
+        {"sr": 22050, "n_fft": 1024, "hop_length": 256, "n_mels": 40},
     )
     assert calls["tempogram"] == (
         [0.1, 0.2, 0.3],
-        {"sample_rate": 22050, "hop_length": 256, "win_length": 96},
+        {"sr": 22050, "hop_length": 256, "win_length": 96},
     )
     assert payload["win_length"] == 96
 
@@ -151,7 +151,7 @@ def test_plp_forwards_mel_tempo_and_window_options(
         calls["plp"] = (envelope, kwargs)
         return [0.0, 1.0]
 
-    monkeypatch.setattr(_conversions, "onset_envelope", onset_spy)
+    monkeypatch.setattr(_conversions, "onset_strength", onset_spy)
     monkeypatch.setattr(_conversions, "plp", plp_spy)
 
     assert (
@@ -171,12 +171,12 @@ def test_plp_forwards_mel_tempo_and_window_options(
 
     assert calls["onset"] == (
         [0.0, 0.5],
-        {"sample_rate": 22050, "n_fft": 4096, "hop_length": 128, "n_mels": 64},
+        {"sr": 22050, "n_fft": 4096, "hop_length": 128, "n_mels": 64},
     )
     assert calls["plp"] == (
         [0.1, 0.2],
         {
-            "sample_rate": 22050,
+            "sr": 22050,
             "hop_length": 128,
             "tempo_min": 70.0,
             "tempo_max": 180.0,

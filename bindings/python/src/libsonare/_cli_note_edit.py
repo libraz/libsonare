@@ -78,7 +78,7 @@ def cmd_pitch_correct_timevarying(args: argparse.Namespace) -> int:
     )
     result = pitch_correct_timevarying(
         samples,
-        track.f0,
+        f0_hz=track.f0,
         sample_rate=sr,
         hop_length=args.hop_length,
         mode=args.mode,

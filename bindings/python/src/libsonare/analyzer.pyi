@@ -275,10 +275,10 @@ PairAnalysis: TypeAlias = Literal[
 ]
 StereoAnalysis: TypeAlias = Literal["stereo.monoCompatCheck", "stereo.monoCompatCheckLogBands"]
 
-def detect_bpm(samples: FloatSamples, sample_rate: int = 22050) -> float: ...
+def detect_bpm(samples: FloatSamples, sample_rate: int) -> float: ...
 def detect_key(
     samples: FloatSamples,
-    sample_rate: int = 22050,
+    sample_rate: int,
     n_fft: int = 2048,
     hop_length: int = 512,
     use_hpss: bool = False,
@@ -291,7 +291,7 @@ def detect_key(
 ) -> KeyDetection: ...
 def detect_key_candidates(
     samples: FloatSamples,
-    sample_rate: int = 22050,
+    sample_rate: int,
     n_fft: int = 2048,
     hop_length: int = 512,
     use_hpss: bool = False,
@@ -302,11 +302,11 @@ def detect_key_candidates(
     genre_hint: str | None = None,
     tuning: float | str = "auto",
 ) -> list[KeyCandidate]: ...
-def detect_beats(samples: FloatSamples, sample_rate: int = 22050) -> list[float]: ...
-def detect_downbeats(samples: FloatSamples, sample_rate: int = 22050) -> list[float]: ...
+def detect_beats(samples: FloatSamples, sample_rate: int) -> list[float]: ...
+def detect_downbeats(samples: FloatSamples, sample_rate: int) -> list[float]: ...
 def detect_onsets(
     samples: FloatSamples,
-    sample_rate: int = 22050,
+    sample_rate: int,
     *,
     n_fft: int = 2048,
     hop_length: int = 512,
@@ -322,7 +322,7 @@ def detect_onsets(
 ) -> list[float]: ...
 def analyze(
     samples: FloatSamples,
-    sample_rate: int = 22050,
+    sample_rate: int,
     *,
     n_fft: int = 2048,
     hop_length: int = 512,
@@ -347,7 +347,7 @@ def analyze(
 ) -> AnalysisResult: ...
 def analyze_with_progress(
     samples: FloatSamples,
-    sample_rate: int = 22050,
+    sample_rate: int,
     on_progress: ProgressCallback | None = None,
     *,
     cancel: CancelCallback | None = None,
@@ -385,7 +385,7 @@ def estimate_meter(
 ) -> MeterEstimate: ...
 def analyze_bpm(
     samples: FloatSamples,
-    sample_rate: int = 22050,
+    sample_rate: int,
     bpm_min: float = 30.0,
     bpm_max: float = 300.0,
     start_bpm: float = 120.0,
@@ -398,13 +398,13 @@ def analyze_bpm(
 
 def analyze_impulse_response(
     samples: FloatSamples,
-    sample_rate: int = 48000,
+    sample_rate: int,
     n_octave_bands: int = 6,
     min_decay_db: float = 30.0,
 ) -> AcousticResult: ...
 def detect_acoustic(
     samples: FloatSamples,
-    sample_rate: int = 48000,
+    sample_rate: int,
     n_octave_bands: int = 6,
     n_third_octave_subbands: int = 24,
     min_decay_db: float = 30.0,
@@ -421,7 +421,7 @@ def synthesize_rir(
     band_absorption: Sequence[float] | None = None,
     band_scattering: Sequence[float] | None = None,
     material_preset: MaterialPresetName = "none",
-    sample_rate: int = 48000,
+    sample_rate: int,
     ism_order: int = 3,
     prefer_eyring: bool = True,
     seed: int = 1,
@@ -434,7 +434,7 @@ def synthesize_rir(
 ) -> RirResult: ...
 def estimate_room(
     samples: FloatSamples,
-    sample_rate: int = 48000,
+    sample_rate: int,
     *,
     aspect_hint_lw: float = 1.0,
     aspect_hint_lh: float = 1.0,
@@ -505,7 +505,7 @@ def room_morph_stereo(
 ) -> RoomMorphStereoResult: ...
 def analyze_rhythm(
     samples: FloatSamples,
-    sample_rate: int = 22050,
+    sample_rate: int,
     bpm_min: float = 60.0,
     bpm_max: float = 200.0,
     start_bpm: float = 120.0,
@@ -517,14 +517,14 @@ def analyze_rhythm(
 
 def analyze_dynamics(
     samples: FloatSamples,
-    sample_rate: int = 22050,
+    sample_rate: int,
     window_sec: float = 0.4,
     hop_length: int = 512,
     compression_threshold: float = 6.0,
 ) -> DynamicsResult: ...
 def analyze_timbre(
     samples: FloatSamples,
-    sample_rate: int = 22050,
+    sample_rate: int,
     n_fft: int = 2048,
     hop_length: int = 512,
     n_mels: int = 128,
@@ -536,7 +536,7 @@ def analyze_timbre(
 
 def detect_chords(
     samples: FloatSamples,
-    sample_rate: int = 22050,
+    sample_rate: int,
     min_duration: float = 0.3,
     smoothing_window: float = 2.0,
     threshold: float = 0.5,
@@ -555,9 +555,9 @@ def detect_chords(
 ) -> ChordAnalysisResult: ...
 def chord_functional_analysis(
     samples: FloatSamples,
+    sample_rate: int,
     key_root: PitchClass,
     key_mode: Mode = Mode.MAJOR,
-    sample_rate: int = 22050,
     min_duration: float = 0.3,
     smoothing_window: float = 2.0,
     threshold: float = 0.5,
@@ -578,14 +578,14 @@ def chord_functions(
 ) -> list[FunctionalChord]: ...
 def analyze_sections(
     samples: FloatSamples,
-    sample_rate: int = 22050,
+    sample_rate: int,
     n_fft: int = 2048,
     hop_length: int = 512,
     min_section_sec: float = 4.0,
 ) -> SectionResult: ...
 def detect_boundaries(
     samples: FloatSamples,
-    sample_rate: int = 22050,
+    sample_rate: int,
     *,
     n_fft: int = 2048,
     hop_length: int = 512,
@@ -611,7 +611,7 @@ def detect_boundaries(
 
 def analyze_melody(
     samples: FloatSamples,
-    sample_rate: int = 22050,
+    sample_rate: int,
     fmin: float = 65.0,
     fmax: float = 2093.0,
     frame_length: int = 2048,
@@ -622,7 +622,7 @@ def analyze_melody(
 ) -> MelodyResult: ...
 def cqt(
     samples: FloatSamples,
-    sample_rate: int = 22050,
+    sr: int = 22050,
     hop_length: int = 512,
     fmin: float = 32.70319566257483,
     n_bins: int = 84,
@@ -630,7 +630,7 @@ def cqt(
 ) -> CqtResult: ...
 def pseudo_cqt(
     samples: FloatSamples,
-    sample_rate: int = 22050,
+    sr: int = 22050,
     hop_length: int = 512,
     fmin: float = 32.70319566257483,
     n_bins: int = 84,
@@ -638,7 +638,7 @@ def pseudo_cqt(
 ) -> CqtResult: ...
 def hybrid_cqt(
     samples: FloatSamples,
-    sample_rate: int = 22050,
+    sr: int = 22050,
     hop_length: int = 512,
     fmin: float = 32.70319566257483,
     n_bins: int = 84,
@@ -646,7 +646,7 @@ def hybrid_cqt(
 ) -> CqtResult: ...
 def vqt(
     samples: FloatSamples,
-    sample_rate: int = 22050,
+    sr: int = 22050,
     hop_length: int = 512,
     fmin: float = 32.70319566257483,
     n_bins: int = 84,
@@ -657,7 +657,7 @@ def version() -> str: ...
 def capabilities() -> Capabilities: ...
 def hpss(
     samples: FloatSamples,
-    sample_rate: int = 22050,
+    sample_rate: int,
     kernel_harmonic: int = 31,
     kernel_percussive: int = 31,
     n_fft: int = 2048,
@@ -666,15 +666,13 @@ def hpss(
     *,
     validate: bool = True,
 ) -> HpssResult: ...
-def harmonic(
-    samples: FloatSamples, sample_rate: int = 22050, *, validate: bool = True
-) -> list[float]: ...
+def harmonic(samples: FloatSamples, sample_rate: int, *, validate: bool = True) -> list[float]: ...
 def percussive(
-    samples: FloatSamples, sample_rate: int = 22050, *, validate: bool = True
+    samples: FloatSamples, sample_rate: int, *, validate: bool = True
 ) -> list[float]: ...
 def time_stretch(
     samples: FloatSamples,
-    sample_rate: int = 22050,
+    sample_rate: int,
     rate: float = 1.0,
     n_fft: int = 2048,
     hop_length: int = 512,
@@ -683,7 +681,7 @@ def time_stretch(
 ) -> list[float]: ...
 def pitch_shift(
     samples: FloatSamples,
-    sample_rate: int = 22050,
+    sample_rate: int,
     semitones: float = 0.0,
     n_fft: int = 2048,
     hop_length: int = 512,
@@ -692,23 +690,23 @@ def pitch_shift(
 ) -> list[float]: ...
 def pitch_correct_to_midi(
     samples: FloatSamples,
-    sample_rate: int = 22050,
+    sample_rate: int,
     current_midi: float = 69.0,
     target_midi: float = 69.0,
 ) -> list[float]: ...
 def pitch_correct_to_midi_timevarying(
     samples: FloatSamples,
+    sample_rate: int,
     f0_hz: FloatSamples,
     target_midi: float,
-    sample_rate: int = 22050,
     hop_length: int = 512,
     voiced: IntSamples | None = None,
     voiced_prob: FloatSamples | None = None,
 ) -> list[float]: ...
 def pitch_correct_timevarying(
     samples: FloatSamples,
+    sample_rate: int,
     f0_hz: FloatSamples,
-    sample_rate: int = 22050,
     hop_length: int = 512,
     *,
     mode: str = "midi",
@@ -725,7 +723,7 @@ def pitch_correct_timevarying(
 ) -> list[float]: ...
 def auto_tune(
     samples: FloatSamples,
-    sample_rate: int = 22050,
+    sample_rate: int,
     key: str | Key | Mapping[str, object] | tuple[PitchClass, Mode] = "detect",
     *,
     strength: float | None = None,
@@ -736,7 +734,7 @@ def auto_tune(
 ) -> AutoTuneResult: ...
 def note_stretch(
     samples: FloatSamples,
-    sample_rate: int = 22050,
+    sample_rate: int,
     onset_sample: int | None = None,
     offset_sample: int | None = None,
     stretch_ratio: float = 1.0,
@@ -746,7 +744,7 @@ def note_stretch(
 ) -> list[float]: ...
 def note_move(
     samples: FloatSamples,
-    sample_rate: int = 22050,
+    sample_rate: int,
     onset_sample: int | None = None,
     offset_sample: int | None = None,
     target_onset_sample: int | None = None,
@@ -757,7 +755,7 @@ def note_move(
 ) -> list[float]: ...
 def voice_change(
     samples: FloatSamples,
-    sample_rate: int = 22050,
+    sample_rate: int,
     pitch_semitones: float = 0.0,
     formant_factor: float = 1.0,
     formant_mode: Literal["relative", "absolute"] = "relative",
@@ -1192,7 +1190,7 @@ class StreamingRetune:
 
 def voice_change_realtime(
     samples: FloatSamples,
-    sample_rate: int = 48000,
+    sample_rate: int,
     preset: str | Mapping[str, object] = "neutral-monitor",
     *,
     channels: int = 1,
@@ -1205,14 +1203,14 @@ def realtime_voice_changer_preset_pod(preset: str | int) -> RealtimeVoiceChanger
 def validate_realtime_voice_changer_preset_json(json_text: str) -> dict[str, object]: ...
 def normalize(
     samples: FloatSamples,
-    sample_rate: int = 22050,
+    sample_rate: int,
     target_db: float = 0.0,
     *,
     validate: bool = True,
 ) -> list[float]: ...
 def normalize_rms(
     samples: FloatSamples,
-    sample_rate: int = 22050,
+    sample_rate: int,
     target_db: float = -20.0,
     *,
     validate: bool = True,
@@ -1220,7 +1218,7 @@ def normalize_rms(
 def normalize_stereo(
     left: FloatSamples,
     right: FloatSamples,
-    sample_rate: int = 22050,
+    sample_rate: int,
     target_db: float = 0.0,
     *,
     validate: bool = True,
@@ -1228,14 +1226,14 @@ def normalize_stereo(
 def normalize_rms_stereo(
     left: FloatSamples,
     right: FloatSamples,
-    sample_rate: int = 22050,
+    sample_rate: int,
     target_db: float = -20.0,
     *,
     validate: bool = True,
 ) -> NormalizeStereoResult: ...
 def mastering(
     samples: FloatSamples,
-    sample_rate: int = 22050,
+    sample_rate: int,
     target_lufs: float = -14.0,
     ceiling_db: float = -1.0,
     true_peak_oversample: int = 4,
@@ -1244,17 +1242,17 @@ def mastering(
 ) -> MasteringResult: ...
 def mastering_assistant_suggest(
     samples: FloatSamples,
-    sample_rate: int = 22050,
+    sample_rate: int,
     params: MasteringAssistantParams | None = None,
 ) -> str: ...
 def mastering_assistant_suggest_chain(
     samples: FloatSamples,
-    sample_rate: int = 22050,
+    sample_rate: int,
     params: MasteringAssistantParams | None = None,
 ) -> MasteringChainParams: ...
 def mastering_audio_profile(
     samples: FloatSamples,
-    sample_rate: int = 22050,
+    sample_rate: int,
     params: MasteringParams | None = None,
 ) -> str:
     """``nFft`` and ``hopLength`` in ``params`` are the window length and hop in samples at
@@ -1263,19 +1261,19 @@ def mastering_audio_profile(
 def mastering_assistant_suggest_stereo(
     left: FloatSamples,
     right: FloatSamples,
-    sample_rate: int = 22050,
+    sample_rate: int,
     params: MasteringAssistantParams | None = None,
 ) -> str: ...
 def mastering_assistant_suggest_chain_stereo(
     left: FloatSamples,
     right: FloatSamples,
-    sample_rate: int = 22050,
+    sample_rate: int,
     params: MasteringAssistantParams | None = None,
 ) -> MasteringChainParams: ...
 def mastering_audio_profile_stereo(
     left: FloatSamples,
     right: FloatSamples,
-    sample_rate: int = 22050,
+    sample_rate: int,
     params: MasteringParams | None = None,
 ) -> str:
     """``nFft`` and ``hopLength`` in ``params`` are the window length and hop in samples at
@@ -1288,19 +1286,19 @@ def mastering_stereo_analysis_names() -> list[StereoAnalysis]: ...
 def mastering_process(
     processor_name: SoloProcessor,
     samples: FloatSamples,
-    sample_rate: int = 22050,
+    sample_rate: int,
     params: MasteringSoloParams | None = None,
 ) -> MasteringResult: ...
 def mastering_process_stereo(
     processor_name: SoloProcessor,
     left: FloatSamples,
     right: FloatSamples,
-    sample_rate: int = 22050,
+    sample_rate: int,
     params: MasteringSoloParams | None = None,
 ) -> MasteringStereoResult: ...
 def mastering_chain(
     samples: FloatSamples,
-    sample_rate: int = 22050,
+    sample_rate: int,
     config: dict[str, Any] | None = None,
     on_progress: ProgressCallback | None = None,
     *,
@@ -1320,7 +1318,7 @@ def mastering_chain(
 def mastering_chain_stereo(
     left: FloatSamples,
     right: FloatSamples,
-    sample_rate: int = 22050,
+    sample_rate: int,
     config: dict[str, Any] | None = None,
     on_progress: ProgressCallback | None = None,
     *,
@@ -1481,7 +1479,7 @@ class Mixer:
 
 def mix_stereo(
     strips: Sequence[tuple[FloatSamples, FloatSamples]],
-    sample_rate: int = 48000,
+    sample_rate: int,
     fader_db: Sequence[float] | None = None,
     pan: Sequence[float] | None = None,
     pan_mode: Sequence[str | int] | str | int = "balance",
@@ -1498,7 +1496,7 @@ def mix_stereo(
 
 def master_audio(
     samples: FloatSamples,
-    sample_rate: int = 22050,
+    sample_rate: int,
     preset: MasteringPreset = "pop",
     overrides: dict[str, Any] | None = None,
     on_progress: ProgressCallback | None = None,
@@ -1508,7 +1506,7 @@ def master_audio(
 def master_audio_stereo(
     left: FloatSamples,
     right: FloatSamples,
-    sample_rate: int = 22050,
+    sample_rate: int,
     preset: MasteringPreset = "pop",
     overrides: dict[str, Any] | None = None,
     on_progress: ProgressCallback | None = None,
@@ -1517,13 +1515,13 @@ def master_audio_stereo(
 ) -> MasteringChainStereoResult: ...
 def streaming_loudness_gain(
     samples: FloatSamples,
-    sample_rate: int = 22050,
+    sample_rate: int,
     config: dict[str, Any] | None = None,
 ) -> StreamingLoudnessGain: ...
 def streaming_loudness_gain_stereo(
     left: FloatSamples,
     right: FloatSamples,
-    sample_rate: int = 22050,
+    sample_rate: int,
     config: dict[str, Any] | None = None,
 ) -> StreamingLoudnessGain: ...
 
@@ -1597,7 +1595,7 @@ def mastering_pair_process(
     processor_name: PairProcessor,
     source: FloatSamples,
     reference: FloatSamples,
-    sample_rate: int = 22050,
+    sample_rate: int,
     params: MasteringParams | None = None,
     *,
     reference_sample_rate: int | None = None,
@@ -1608,7 +1606,7 @@ def mastering_pair_process_stereo(
     source_right: FloatSamples,
     reference_left: FloatSamples,
     reference_right: FloatSamples,
-    sample_rate: int = 22050,
+    sample_rate: int,
     params: MasteringParams | None = None,
     *,
     reference_sample_rate: int | None = None,
@@ -1617,7 +1615,7 @@ def mastering_pair_analyze(
     analysis_name: PairAnalysis,
     source: FloatSamples,
     reference: FloatSamples,
-    sample_rate: int = 22050,
+    sample_rate: int,
     params: MasteringParams | None = None,
     *,
     reference_sample_rate: int | None = None,
@@ -1625,7 +1623,7 @@ def mastering_pair_analyze(
 def mastering_ab_match_loudness(
     source: FloatSamples,
     reference: FloatSamples,
-    sample_rate: int = 22050,
+    sample_rate: int,
     *,
     with_match: bool = True,
     reference_sample_rate: int | None = None,
@@ -1635,7 +1633,7 @@ def mastering_ab_match_loudness_stereo(
     source_right: FloatSamples,
     reference_left: FloatSamples,
     reference_right: FloatSamples,
-    sample_rate: int = 22050,
+    sample_rate: int,
     *,
     with_match: bool = True,
     reference_sample_rate: int | None = None,
@@ -1644,23 +1642,23 @@ def mastering_stereo_analyze(
     analysis_name: StereoAnalysis,
     left: FloatSamples,
     right: FloatSamples,
-    sample_rate: int = 22050,
+    sample_rate: int,
     params: MasteringParams | None = None,
 ) -> str: ...
 def mastering_streaming_preview(
     samples: FloatSamples,
-    sample_rate: int = 22050,
+    sample_rate: int,
     platforms: Sequence[dict[str, float | str]] | None = None,
 ) -> str: ...
 def mastering_streaming_preview_stereo(
     left: FloatSamples,
     right: FloatSamples,
-    sample_rate: int = 22050,
+    sample_rate: int,
     platforms: Sequence[dict[str, float | str]] | None = None,
 ) -> str: ...
 def trim(
     samples: FloatSamples,
-    sample_rate: int = 22050,
+    sample_rate: int,
     threshold_db: float = -60.0,
     frame_length: int = 2048,
     hop_length: int = 512,
@@ -1668,14 +1666,14 @@ def trim(
     validate: bool = True,
 ) -> list[float]: ...
 def stft(
-    samples: FloatSamples, sample_rate: int = 22050, n_fft: int = 2048, hop_length: int = 512
+    samples: FloatSamples, sr: int = 22050, n_fft: int = 2048, hop_length: int = 512
 ) -> StftResult: ...
 def stft_db(
-    samples: FloatSamples, sample_rate: int = 22050, n_fft: int = 2048, hop_length: int = 512
+    samples: FloatSamples, sample_rate: int, n_fft: int = 2048, hop_length: int = 512
 ) -> tuple[int, int, list[float]]: ...
 def mel_spectrogram(
     samples: FloatSamples,
-    sample_rate: int = 22050,
+    sample_rate: int,
     n_fft: int = 2048,
     hop_length: int = 512,
     n_mels: int = 128,
@@ -1688,70 +1686,70 @@ def mel_delta(
 ) -> list[float]: ...
 def mfcc(
     samples: FloatSamples,
-    sample_rate: int = 22050,
+    sr: int = 22050,
     n_fft: int = 2048,
     hop_length: int = 512,
     n_mels: int = 128,
     n_mfcc: int = 20,
     fmin: float = 0.0,
-    fmax: float = 0.0,
+    fmax: float | None = None,
     htk: bool = False,
     lifter: float = 0.0,
 ) -> MfccResult: ...
 def chroma(
-    samples: FloatSamples, sample_rate: int = 22050, n_fft: int = 2048, hop_length: int = 512
+    samples: FloatSamples, sample_rate: int, n_fft: int = 2048, hop_length: int = 512
 ) -> ChromaResult: ...
 def chroma_cens(
     samples: FloatSamples,
-    sample_rate: int = 22050,
+    sr: int = 22050,
     hop_length: int = 512,
     n_chroma: int = 12,
     bins_per_octave: int = 36,
 ) -> ChromaResult: ...
 def chroma_cqt(
     samples: FloatSamples,
-    sample_rate: int = 22050,
+    sr: int = 22050,
     hop_length: int = 512,
     n_chroma: int = 12,
     bins_per_octave: int = 36,
 ) -> ChromaResult: ...
 def bass_chroma(
-    samples: FloatSamples, sample_rate: int = 22050, hop_length: int = 512, n_chroma: int = 12
+    samples: FloatSamples, sample_rate: int, hop_length: int = 512, n_chroma: int = 12
 ) -> ChromaResult: ...
 def spectral_centroid(
-    samples: FloatSamples, sample_rate: int = 22050, n_fft: int = 2048, hop_length: int = 512
+    samples: FloatSamples, sr: int = 22050, n_fft: int = 2048, hop_length: int = 512
 ) -> list[float]: ...
 def tone(
     frequency: float = 440.0,
-    sample_rate: int = 22050,
+    sr: int = 22050,
     duration: float = 1.0,
-    phase: float = 0.0,
+    phi: float = 0.0,
     amplitude: float = 1.0,
 ) -> list[float]: ...
 def chirp(
     fmin: float = 440.0,
     fmax: float = 880.0,
-    sample_rate: int = 22050,
+    sr: int = 22050,
     duration: float = 1.0,
-    linear: bool = True,
+    linear: bool = False,
 ) -> list[float]: ...
 def clicks(
     times: FloatSamples,
-    sample_rate: int = 22050,
-    length: int = 0,
-    frequency: float = 1000.0,
+    sr: int = 22050,
+    length: int | None = None,
+    click_freq: float = 1000.0,
     click_duration: float = 0.1,
 ) -> list[float]: ...
 def spectral_bandwidth(
     samples: FloatSamples,
-    sample_rate: int = 22050,
+    sr: int = 22050,
     n_fft: int = 2048,
     hop_length: int = 512,
     p: float = 2.0,
 ) -> list[float]: ...
 def spectral_flux(
     samples: FloatSamples,
-    sample_rate: int = 22050,
+    sample_rate: int,
     n_fft: int = 2048,
     hop_length: int = 512,
     lag: int = 1,
@@ -1759,23 +1757,23 @@ def spectral_flux(
 def onset_backtrack(events: IntSamples, energy: FloatSamples) -> np.ndarray[Any, Any]: ...
 def spectral_rolloff(
     samples: FloatSamples,
-    sample_rate: int = 22050,
+    sr: int = 22050,
     n_fft: int = 2048,
     hop_length: int = 512,
     roll_percent: float = 0.85,
 ) -> list[float]: ...
 def spectral_flatness(
-    samples: FloatSamples, sample_rate: int = 22050, n_fft: int = 2048, hop_length: int = 512
+    samples: FloatSamples, sr: int = 22050, n_fft: int = 2048, hop_length: int = 512
 ) -> list[float]: ...
 def zero_crossing_rate(
-    samples: FloatSamples, sample_rate: int = 22050, frame_length: int = 2048, hop_length: int = 512
+    samples: FloatSamples, sr: int = 22050, frame_length: int = 2048, hop_length: int = 512
 ) -> list[float]: ...
 def rms_energy(
-    samples: FloatSamples, sample_rate: int = 22050, frame_length: int = 2048, hop_length: int = 512
+    samples: FloatSamples, sample_rate: int, frame_length: int = 2048, hop_length: int = 512
 ) -> list[float]: ...
 def pitch_yin(
     samples: FloatSamples,
-    sample_rate: int = 22050,
+    sample_rate: int,
     frame_length: int = 2048,
     hop_length: int = 512,
     fmin: float = 65.0,
@@ -1785,7 +1783,7 @@ def pitch_yin(
 ) -> PitchResult: ...
 def pitch_pyin(
     samples: FloatSamples,
-    sample_rate: int = 22050,
+    sample_rate: int,
     frame_length: int = 2048,
     hop_length: int = 512,
     fmin: float = 65.0,
@@ -1795,7 +1793,7 @@ def pitch_pyin(
 ) -> PitchResult: ...
 def piptrack(
     samples: FloatSamples,
-    sample_rate: int = 22050,
+    sr: int = 22050,
     n_fft: int = 2048,
     hop_length: int = 512,
     fmin: float = 150.0,
@@ -1804,13 +1802,13 @@ def piptrack(
 ) -> PiptrackResult: ...
 def reassigned_spectrogram(
     samples: FloatSamples,
-    sample_rate: int = 22050,
+    sr: int = 22050,
     n_fft: int = 2048,
     hop_length: int = 512,
     ref_power: float = 1e-6,
     fill_nan: bool = False,
 ) -> ReassignedSpectrogramResult: ...
-def cross_similarity(
+def segment_cross_similarity(
     x: FloatSamples,
     x_rows: int,
     x_cols: int,
@@ -1821,7 +1819,7 @@ def cross_similarity(
     metric: str = "cosine",
     mode: str = "connectivity",
 ) -> SegmentMatrix: ...
-def recurrence_matrix(
+def segment_recurrence_matrix(
     data: FloatSamples,
     rows: int,
     cols: int,
@@ -1831,23 +1829,25 @@ def recurrence_matrix(
     metric: str = "euclidean",
     mode: str = "connectivity",
 ) -> SegmentMatrix: ...
-def recurrence_to_lag(recurrence: FloatSamples, n: int, pad: bool = True) -> SegmentMatrix: ...
-def lag_to_recurrence(lag: FloatSamples, n_rows: int, n_lags: int) -> SegmentMatrix: ...
-def subsegment(
+def segment_recurrence_to_lag(
+    recurrence: FloatSamples, n: int, pad: bool = True
+) -> SegmentMatrix: ...
+def segment_lag_to_recurrence(lag: FloatSamples, n_rows: int, n_lags: int) -> SegmentMatrix: ...
+def segment_subsegment(
     data: FloatSamples,
     rows: int,
     cols: int,
     boundaries: IntSamples,
     n_segments: int = 4,
 ) -> list[int]: ...
-def agglomerative(
+def segment_agglomerative(
     data: FloatSamples,
     rows: int,
     cols: int,
     k: int,
     linkage: str = "average",
 ) -> list[int]: ...
-def path_enhance(
+def segment_path_enhance(
     recurrence: FloatSamples,
     n: int,
     win: int,
@@ -1867,7 +1867,7 @@ def note_segments(
 ) -> list[NoteSegment]: ...
 def spectral_contrast(
     samples: FloatSamples,
-    sample_rate: int = 22050,
+    sr: int = 22050,
     n_fft: int = 2048,
     hop_length: int = 512,
     n_bands: int = 6,
@@ -1876,7 +1876,7 @@ def spectral_contrast(
 ) -> np.ndarray[Any, Any]: ...
 def poly_features(
     samples: FloatSamples,
-    sample_rate: int = 22050,
+    sr: int = 22050,
     n_fft: int = 2048,
     hop_length: int = 512,
     order: int = 1,
@@ -1895,7 +1895,7 @@ def pitch_tuning(
 ) -> float: ...
 def estimate_tuning(
     samples: FloatSamples,
-    sample_rate: int = 22050,
+    sr: int = 22050,
     n_fft: int = 2048,
     hop_length: int = 512,
     resolution: float = 0.01,
@@ -1906,20 +1906,20 @@ def reference_hz_to_tuning(hz: float, a4: float = 440.0) -> float: ...
 def lufs_interleaved(
     samples: FloatSamples,
     channels: int,
-    sample_rate: int = 22050,
+    sample_rate: int,
     *,
     validate: bool = True,
 ) -> LufsResult: ...
 def lufs_series_interleaved(
     samples: FloatSamples,
     channels: int,
-    sample_rate: int = 22050,
+    sample_rate: int,
     *,
     validate: bool = True,
 ) -> tuple[list[float], list[float]]: ...
 def ebur128_loudness_range(
     samples: FloatSamples,
-    sample_rate: int = 22050,
+    sample_rate: int,
     *,
     validate: bool = True,
 ) -> float: ...
@@ -1942,7 +1942,7 @@ def decompose_with_init(
 ) -> tuple[np.ndarray[Any, Any], np.ndarray[Any, Any]]: ...
 def decompose_stems(
     samples: FloatSamples,
-    sample_rate: int = 22050,
+    sample_rate: int,
     n_components: int = 4,
     n_fft: int = 2048,
     hop_length: int = 512,
@@ -1955,7 +1955,7 @@ def decompose_stems(
 ) -> dict[str, object]: ...
 def decompose_stems_linked(
     channels: PlanarChannels,
-    sample_rate: int = 22050,
+    sample_rate: int,
     n_components: int = 4,
     n_fft: int = 2048,
     hop_length: int = 512,
@@ -1977,18 +1977,18 @@ def nn_filter(
 def remix(
     samples: FloatSamples,
     intervals: IntSamples,
-    sample_rate: int = 22050,
-    align_zeros: bool = False,
+    sr: int = 22050,
+    align_zeros: bool = True,
 ) -> np.ndarray[Any, Any]: ...
 def remix_aligned_intervals(
     samples: FloatSamples,
+    sample_rate: int,
     intervals: IntSamples,
-    sample_rate: int = 22050,
     align_zeros: bool = True,
 ) -> list[int]: ...
 def hpss_with_residual(
     samples: FloatSamples,
-    sample_rate: int = 22050,
+    sample_rate: int,
     kernel_harmonic: int = 31,
     kernel_percussive: int = 31,
     n_fft: int = 2048,
@@ -1999,7 +1999,7 @@ def hpss_with_residual(
 ) -> dict[str, object]: ...
 def phase_vocoder(
     samples: FloatSamples,
-    sample_rate: int = 22050,
+    sample_rate: int,
     rate: float = 1.0,
     n_fft: int = 2048,
     hop_length: int = 512,
@@ -2018,8 +2018,8 @@ def note_to_hz(note: str) -> float:
 
 def frames_to_time(frames: int, sr: int = 22050, hop_length: int = 512) -> float: ...
 def time_to_frames(time: float, sr: int = 22050, hop_length: int = 512) -> int: ...
-def frames_to_samples(frames: int, hop_length: int = 512, n_fft: int = 0) -> int: ...
-def samples_to_frames(samples: int, hop_length: int = 512, n_fft: int = 0) -> int: ...
+def frames_to_samples(frames: int, hop_length: int = 512, n_fft: int | None = None) -> int: ...
+def samples_to_frames(samples: int, hop_length: int = 512, n_fft: int | None = None) -> int: ...
 def power_to_db(
     values: FloatSamples, ref: float = 1.0, amin: float = 1e-10, top_db: float = 80.0
 ) -> list[float]: ...
@@ -2083,7 +2083,7 @@ def pcen(
     values: FloatSamples,
     n_bins: int,
     n_frames: int,
-    sample_rate: int = 22050,
+    sr: int = 22050,
     hop_length: int = 512,
     time_constant: float = 0.4,
     gain: float = 0.98,
@@ -2094,7 +2094,7 @@ def pcen(
 def tonnetz(chromagram: FloatSamples, n_chroma: int, n_frames: int) -> list[float]: ...
 def tempogram(
     onset_envelope: FloatSamples,
-    sample_rate: int = 22050,
+    sr: int = 22050,
     hop_length: int = 512,
     win_length: int = 384,
     center: bool = True,
@@ -2103,7 +2103,7 @@ def tempogram(
 ) -> tuple[int, list[float]]: ...
 def cyclic_tempogram(
     onset_envelope: FloatSamples,
-    sample_rate: int = 22050,
+    sample_rate: int,
     hop_length: int = 512,
     win_length: int = 384,
     bpm_min: float = 60.0,
@@ -2111,22 +2111,22 @@ def cyclic_tempogram(
 ) -> tuple[int, list[float]]: ...
 def plp(
     onset_envelope: FloatSamples,
-    sample_rate: int = 22050,
+    sr: int = 22050,
     hop_length: int = 512,
     tempo_min: float = 30.0,
     tempo_max: float = 300.0,
     win_length: int = 384,
 ) -> list[float]: ...
-def onset_envelope(
+def onset_strength(
     samples: FloatSamples,
-    sample_rate: int = 22050,
+    sr: int = 22050,
     n_fft: int = 2048,
     hop_length: int = 512,
     n_mels: int = 128,
 ) -> list[float]: ...
 def fourier_tempogram(
     onset_envelope: FloatSamples,
-    sample_rate: int = 22050,
+    sr: int = 22050,
     hop_length: int = 512,
     win_length: int = 384,
     center: bool = True,
@@ -2135,13 +2135,13 @@ def fourier_tempogram(
 def tempogram_ratio(
     tempogram_data: FloatSamples,
     win_length: int = 384,
-    sample_rate: int = 22050,
+    sr: int = 22050,
     hop_length: int = 512,
     factors: FloatSamples | None = None,
 ) -> list[float]: ...
 def nnls_chroma(
     samples: FloatSamples,
-    sample_rate: int = 22050,
+    sample_rate: int,
     *,
     enable_stft_blend: bool = True,
     stft_blend_weight: float = 0.55,
@@ -2150,7 +2150,7 @@ def nnls_chroma(
 ) -> tuple[int, list[float]]: ...
 def onset_strength_multi(
     samples: FloatSamples,
-    sample_rate: int = 22050,
+    sample_rate: int,
     n_fft: int = 2048,
     hop_length: int = 512,
     n_mels: int = 128,
@@ -2158,7 +2158,7 @@ def onset_strength_multi(
 ) -> tuple[int, list[float]]: ...
 def mastering_repair_declick(
     samples: FloatSamples,
-    sample_rate: int = 22050,
+    sample_rate: int,
     *,
     threshold: float = 0.8,
     neighbor_ratio: float = 4.0,
@@ -2169,7 +2169,7 @@ def mastering_repair_declick(
 def mastering_repair_declick_stereo(
     left: FloatSamples,
     right: FloatSamples,
-    sample_rate: int = 22050,
+    sample_rate: int,
     *,
     threshold: float = 0.8,
     neighbor_ratio: float = 4.0,
@@ -2179,7 +2179,7 @@ def mastering_repair_declick_stereo(
 ) -> DeclickStereoResult: ...
 def mastering_repair_denoise_classical(
     samples: FloatSamples,
-    sample_rate: int = 22050,
+    sample_rate: int,
     *,
     mode: int | str = "logMmse",
     noise_estimator: int | str = "quantile",
@@ -2196,7 +2196,7 @@ def mastering_repair_denoise_classical(
 def mastering_repair_denoise_classical_stereo(
     left: FloatSamples,
     right: FloatSamples,
-    sample_rate: int = 22050,
+    sample_rate: int,
     *,
     mode: int | str = "logMmse",
     noise_estimator: int | str = "quantile",
@@ -2212,7 +2212,7 @@ def mastering_repair_denoise_classical_stereo(
 ) -> DenoiseStereoResult: ...
 def mastering_repair_denoise_classical_linked(
     channels: PlanarChannels,
-    sample_rate: int = 22050,
+    sample_rate: int,
     *,
     mode: int | str = "logMmse",
     noise_estimator: int | str = "quantile",
@@ -2228,13 +2228,13 @@ def mastering_repair_denoise_classical_linked(
 ) -> DenoiseLinkedResult: ...
 def mastering_repair_analyze(
     channels: PlanarChannels,
-    sample_rate: int = 22050,
+    sample_rate: int,
     *,
     prefer_streaming_safe: bool = True,
 ) -> MasteringRepairAnalysis: ...
 def mastering_repair_apply(
     channels: PlanarChannels,
-    sample_rate: int = 22050,
+    sample_rate: int,
     *,
     stages: Sequence[Mapping[str, Any]],
     on_progress: Callable[[float, str], None] | None = None,
@@ -2242,7 +2242,7 @@ def mastering_repair_apply(
 ) -> RepairApplyResult: ...
 def mastering_repair_declip(
     samples: FloatSamples,
-    sample_rate: int = 22050,
+    sample_rate: int,
     *,
     clip_threshold: float = 0.98,
     lpc_order: int = 36,
@@ -2252,7 +2252,7 @@ def mastering_repair_declip(
 def mastering_repair_declip_stereo(
     left: FloatSamples,
     right: FloatSamples,
-    sample_rate: int = 22050,
+    sample_rate: int,
     *,
     clip_threshold: float = 0.98,
     lpc_order: int = 36,
@@ -2261,7 +2261,7 @@ def mastering_repair_declip_stereo(
 ) -> DeclipStereoResult: ...
 def mastering_repair_decrackle(
     samples: FloatSamples,
-    sample_rate: int = 22050,
+    sample_rate: int,
     *,
     threshold: float = 0.4,
     mode: int | str = "median",
@@ -2270,7 +2270,7 @@ def mastering_repair_decrackle(
 def mastering_repair_decrackle_stereo(
     left: FloatSamples,
     right: FloatSamples,
-    sample_rate: int = 22050,
+    sample_rate: int,
     *,
     threshold: float = 0.4,
     mode: int | str = "median",
@@ -2278,7 +2278,7 @@ def mastering_repair_decrackle_stereo(
 ) -> DecrackleStereoResult: ...
 def mastering_repair_dehum(
     samples: FloatSamples,
-    sample_rate: int = 22050,
+    sample_rate: int,
     *,
     fundamental_hz: float = 50.0,
     harmonics: int = 4,
@@ -2293,7 +2293,7 @@ def mastering_repair_dehum(
 def mastering_repair_dehum_stereo(
     left: FloatSamples,
     right: FloatSamples,
-    sample_rate: int = 22050,
+    sample_rate: int,
     *,
     fundamental_hz: float = 50.0,
     harmonics: int = 4,
@@ -2307,7 +2307,7 @@ def mastering_repair_dehum_stereo(
 ) -> DehumStereoResult: ...
 def mastering_repair_dereverb_classical(
     samples: FloatSamples,
-    sample_rate: int = 22050,
+    sample_rate: int,
     *,
     threshold: float = 0.0,
     attenuation: float = 1.0,
@@ -2325,7 +2325,7 @@ def mastering_repair_dereverb_classical(
 def mastering_repair_dereverb_classical_stereo(
     left: FloatSamples,
     right: FloatSamples,
-    sample_rate: int = 22050,
+    sample_rate: int,
     *,
     threshold: float = 0.0,
     attenuation: float = 1.0,
@@ -2342,7 +2342,7 @@ def mastering_repair_dereverb_classical_stereo(
 ) -> DereverbStereoResult: ...
 def mastering_repair_dereverb_classical_linked(
     channels: PlanarChannels,
-    sample_rate: int = 22050,
+    sample_rate: int,
     *,
     threshold: float = 0.0,
     attenuation: float = 1.0,
@@ -2375,7 +2375,7 @@ def mastering_repair_dereverb_config_for_room(
 ) -> DereverbClassicalConfig: ...
 def mastering_repair_detect_clicks(
     samples: FloatSamples,
-    sample_rate: int = 22050,
+    sample_rate: int,
     *,
     threshold: float = 0.8,
     neighbor_ratio: float = 4.0,
@@ -2385,7 +2385,7 @@ def mastering_repair_detect_clicks(
 ) -> ClickDetection: ...
 def mastering_repair_detect_noise_floor(
     samples: FloatSamples,
-    sample_rate: int = 22050,
+    sample_rate: int,
     *,
     mode: int | str = "logMmse",
     noise_estimator: int | str = "quantile",
@@ -2400,12 +2400,12 @@ def mastering_repair_detect_noise_floor(
     gain_smoothing: bool = True,
 ) -> NoiseDetection: ...
 def mastering_repair_noise_band_bins(
+    sample_rate: int,
     n_fft: int = 1024,
-    sample_rate: int = 22050,
 ) -> list[int]: ...
 def mastering_repair_detect_clipping(
     samples: FloatSamples,
-    sample_rate: int = 22050,
+    sample_rate: int,
     *,
     clip_threshold: float = 0.98,
     lpc_order: int = 36,
@@ -2414,7 +2414,7 @@ def mastering_repair_detect_clipping(
 ) -> ClipDetection: ...
 def mastering_repair_detect_crackle(
     samples: FloatSamples,
-    sample_rate: int = 22050,
+    sample_rate: int,
     *,
     threshold: float = 0.4,
     mode: int | str = "median",
@@ -2422,7 +2422,7 @@ def mastering_repair_detect_crackle(
 ) -> CrackleDetection: ...
 def mastering_repair_detect_hum(
     samples: FloatSamples,
-    sample_rate: int = 22050,
+    sample_rate: int,
     *,
     fundamental_hz: float = 50.0,
     harmonics: int = 4,
@@ -2436,7 +2436,7 @@ def mastering_repair_detect_hum(
 ) -> HumDetection: ...
 def mastering_repair_detect_reverb(
     samples: FloatSamples,
-    sample_rate: int = 22050,
+    sample_rate: int,
     *,
     threshold: float = 0.0,
     attenuation: float = 1.0,
@@ -2453,7 +2453,7 @@ def mastering_repair_detect_reverb(
 ) -> ReverbDetection: ...
 def mastering_repair_detect_trim_range(
     samples: FloatSamples,
-    sample_rate: int = 22050,
+    sample_rate: int,
     *,
     threshold: float = 0.001,
     padding_samples: int | None = None,
@@ -2465,7 +2465,7 @@ def mastering_repair_detect_trim_range(
 def mastering_repair_detect_trim_range_stereo(
     left: FloatSamples,
     right: FloatSamples,
-    sample_rate: int = 22050,
+    sample_rate: int,
     *,
     threshold: float = 0.001,
     padding_samples: int | None = None,
@@ -2476,7 +2476,7 @@ def mastering_repair_detect_trim_range_stereo(
 ) -> TrimRange: ...
 def mastering_repair_trim_silence(
     samples: FloatSamples,
-    sample_rate: int = 22050,
+    sample_rate: int,
     *,
     threshold: float = 0.001,
     padding_samples: int | None = None,
@@ -2488,7 +2488,7 @@ def mastering_repair_trim_silence(
 def mastering_repair_trim_silence_stereo(
     left: FloatSamples,
     right: FloatSamples,
-    sample_rate: int = 22050,
+    sample_rate: int,
     *,
     threshold: float = 0.001,
     padding_samples: int | None = None,
@@ -2497,25 +2497,23 @@ def mastering_repair_trim_silence_stereo(
     gate_lufs: float = -60.0,
     window_ms: float = 400.0,
 ) -> TrimSilenceStereoResult: ...
-def lufs(
-    samples: FloatSamples, sample_rate: int = 22050, *, validate: bool = True
-) -> LufsResult: ...
+def lufs(samples: FloatSamples, sample_rate: int, *, validate: bool = True) -> LufsResult: ...
 def momentary_lufs(
-    samples: FloatSamples, sample_rate: int = 22050, *, validate: bool = True
+    samples: FloatSamples, sample_rate: int, *, validate: bool = True
 ) -> list[float]: ...
 def short_term_lufs(
-    samples: FloatSamples, sample_rate: int = 22050, *, validate: bool = True
+    samples: FloatSamples, sample_rate: int, *, validate: bool = True
 ) -> list[float]: ...
 def metering_stereo_correlation(
-    left: FloatSamples, right: FloatSamples, sample_rate: int = 22050, *, validate: bool = True
+    left: FloatSamples, right: FloatSamples, sample_rate: int, *, validate: bool = True
 ) -> float: ...
 def metering_stereo_width(
-    left: FloatSamples, right: FloatSamples, sample_rate: int = 22050, *, validate: bool = True
+    left: FloatSamples, right: FloatSamples, sample_rate: int, *, validate: bool = True
 ) -> float: ...
 def metering_vectorscope(
     left: FloatSamples,
     right: FloatSamples,
-    sample_rate: int = 22050,
+    sample_rate: int,
     max_points: int = 0,
     *,
     validate: bool = True,
@@ -2523,7 +2521,7 @@ def metering_vectorscope(
 def metering_vectorscope_decimated(
     left: FloatSamples,
     right: FloatSamples,
-    sample_rate: int = 22050,
+    sample_rate: int,
     max_points: int = 0,
     *,
     validate: bool = True,
@@ -2531,7 +2529,7 @@ def metering_vectorscope_decimated(
 def metering_phase_scope(
     left: FloatSamples,
     right: FloatSamples,
-    sample_rate: int = 22050,
+    sample_rate: int,
     max_points: int = 0,
     *,
     validate: bool = True,
@@ -2539,14 +2537,14 @@ def metering_phase_scope(
 def metering_phase_scope_decimated(
     left: FloatSamples,
     right: FloatSamples,
-    sample_rate: int = 22050,
+    sample_rate: int,
     max_points: int = 0,
     *,
     validate: bool = True,
 ) -> PhaseScopeReport: ...
 def metering_spectrum(
     samples: FloatSamples,
-    sample_rate: int = 22050,
+    sample_rate: int,
     n_fft: int = 0,
     apply_octave_smoothing: bool = False,
     octave_fraction: int = 0,
@@ -2557,7 +2555,7 @@ def metering_spectrum(
 ) -> SpectrumReport: ...
 def metering_spectrum_frame(
     samples: FloatSamples,
-    sample_rate: int = 22050,
+    sample_rate: int,
     frame_offset: int = 0,
     n_fft: int = 0,
     apply_octave_smoothing: bool = False,
@@ -2582,14 +2580,12 @@ def waveform_peak_pyramid(
     validate: bool = True,
 ) -> list[WaveformPeaksReport]: ...
 def metering_peak_db(
-    samples: FloatSamples, sample_rate: int = 22050, *, validate: bool = True
+    samples: FloatSamples, sample_rate: int, *, validate: bool = True
 ) -> float: ...
-def metering_rms_db(
-    samples: FloatSamples, sample_rate: int = 22050, *, validate: bool = True
-) -> float: ...
+def metering_rms_db(samples: FloatSamples, sample_rate: int, *, validate: bool = True) -> float: ...
 def metering_silence_ratio(
     samples: FloatSamples,
-    sample_rate: int = 22050,
+    sample_rate: int,
     threshold_db: float = -45.0,
     frame_length: int = 1024,
     hop_length: int = 256,
@@ -2597,28 +2593,28 @@ def metering_silence_ratio(
     validate: bool = True,
 ) -> float: ...
 def metering_crest_factor_db(
-    samples: FloatSamples, sample_rate: int = 22050, *, validate: bool = True
+    samples: FloatSamples, sample_rate: int, *, validate: bool = True
 ) -> float: ...
 def metering_crest_factor_db_stereo(
     left: FloatSamples,
     right: FloatSamples,
-    sample_rate: int = 22050,
+    sample_rate: int,
     *,
     validate: bool = True,
 ) -> float: ...
 def metering_dc_offset(
-    samples: FloatSamples, sample_rate: int = 22050, *, validate: bool = True
+    samples: FloatSamples, sample_rate: int, *, validate: bool = True
 ) -> float: ...
 def metering_true_peak_db(
     samples: FloatSamples,
-    sample_rate: int = 22050,
+    sample_rate: int,
     oversample_factor: int = 4,
     *,
     validate: bool = True,
 ) -> float: ...
 def metering_detect_clipping(
     samples: FloatSamples,
-    sample_rate: int = 22050,
+    sample_rate: int,
     threshold: float = 0.999,
     min_region_samples: int = 1,
     *,
@@ -2626,7 +2622,7 @@ def metering_detect_clipping(
 ) -> ClippingReport: ...
 def metering_dynamic_range(
     samples: FloatSamples,
-    sample_rate: int = 22050,
+    sample_rate: int,
     window_sec: float = 0.0,
     hop_sec: float = 0.0,
     low_percentile: float | None = None,
@@ -2646,17 +2642,17 @@ def mel_to_stft(
     mel: FloatSamples,
     n_mels: int,
     n_frames: int,
-    sample_rate: int = 22050,
+    sr: int = 22050,
     n_fft: int = 2048,
     fmin: float = 0.0,
-    fmax: float = 0.0,
+    fmax: float | None = None,
     htk: bool = False,
 ) -> StftMagnitudeResult: ...
 def cqt_to_audio(
     magnitude: FloatSamples,
     n_bins: int,
     n_frames: int,
-    sample_rate: int = 22050,
+    sample_rate: int,
     hop_length: int = 512,
     fmin: float = 32.70319566257483,
     bins_per_octave: int = 12,
@@ -2666,7 +2662,7 @@ def vqt_to_audio(
     magnitude: FloatSamples,
     n_bins: int,
     n_frames: int,
-    sample_rate: int = 22050,
+    sample_rate: int,
     hop_length: int = 512,
     fmin: float = 32.70319566257483,
     bins_per_octave: int = 12,
@@ -2677,11 +2673,11 @@ def mel_to_audio(
     mel: FloatSamples,
     n_mels: int,
     n_frames: int,
-    sample_rate: int = 22050,
+    sr: int = 22050,
     n_fft: int = 2048,
     hop_length: int = 512,
     fmin: float = 0.0,
-    fmax: float = 0.0,
+    fmax: float | None = None,
     n_iter: int = 32,
     htk: bool = False,
 ) -> list[float]: ...
@@ -2689,7 +2685,7 @@ def griffin_lim(
     magnitude: FloatSamples,
     n_bins: int,
     n_frames: int,
-    sample_rate: int = 22050,
+    sample_rate: int,
     n_fft: int = 2048,
     hop_length: int = 512,
     n_iter: int = 32,
@@ -2707,11 +2703,11 @@ def mfcc_to_audio(
     n_mfcc: int,
     n_frames: int,
     n_mels: int = 128,
-    sample_rate: int = 22050,
+    sr: int = 22050,
     n_fft: int = 2048,
     hop_length: int = 512,
     fmin: float = 0.0,
-    fmax: float = 0.0,
+    fmax: float | None = None,
     n_iter: int = 32,
     htk: bool = False,
     lifter: float = 0.0,
@@ -2722,7 +2718,7 @@ def mfcc_result_to_mel(result: MfccResult) -> MelPowerResult: ...
 def mfcc_result_to_audio(result: MfccResult, n_iter: int = 32) -> list[float]: ...
 def mastering_dynamics_compressor(
     samples: FloatSamples,
-    sample_rate: int = 22050,
+    sample_rate: int,
     *,
     threshold_db: float = -18.0,
     ratio: float = 2.0,
@@ -2740,7 +2736,7 @@ def mastering_dynamics_compressor(
 ) -> tuple[np.ndarray[Any, Any], int]: ...
 def mastering_dynamics_gate(
     samples: FloatSamples,
-    sample_rate: int = 22050,
+    sample_rate: int,
     *,
     threshold_db: float = -50.0,
     attack_ms: float = 2.0,
@@ -2753,7 +2749,7 @@ def mastering_dynamics_gate(
 ) -> tuple[np.ndarray[Any, Any], int]: ...
 def mastering_dynamics_transient_shaper(
     samples: FloatSamples,
-    sample_rate: int = 22050,
+    sample_rate: int,
     *,
     attack_gain_db: float = 3.0,
     sustain_gain_db: float = 0.0,
@@ -2767,4 +2763,6 @@ def mastering_dynamics_transient_shaper(
     lookahead_ms: float = 0.0,
     validate: bool = True,
 ) -> tuple[np.ndarray[Any, Any], int]: ...
-def resample(samples: FloatSamples, src_sr: int, target_sr: int) -> list[float]: ...
+def resample(
+    samples: FloatSamples, source_sample_rate: int, target_sample_rate: int
+) -> list[float]: ...

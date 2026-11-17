@@ -30,6 +30,7 @@ from ._runtime import (
     _out_float_array,
     _out_int_array,
     _resolve_optional_non_negative,
+    _resolve_zero_default,
     _to_c_float,
     _to_c_float_array,
     _to_c_int,
@@ -123,26 +124,32 @@ def time_to_frames(time: float, sr: int = 22050, hop_length: int = 512) -> int:
     )
 
 
-def frames_to_samples(frames: int, hop_length: int = 512, n_fft: int = 0) -> int:
-    """Convert frame count to sample index."""
+def frames_to_samples(frames: int, hop_length: int = 512, n_fft: int | None = None) -> int:
+    """Convert frame count to sample index.
+
+    With ``n_fft`` the result is offset by ``n_fft // 2`` (librosa's centring).
+    """
     lib = _get_lib()
     return int(
         lib.sonare_frames_to_samples(
             _to_c_int(frames, "frames"),
             _to_c_int(hop_length, "hop_length"),
-            _to_c_int(n_fft, "n_fft"),
+            _to_c_int(_resolve_zero_default(n_fft, "n_fft"), "n_fft"),
         )
     )
 
 
-def samples_to_frames(samples: int, hop_length: int = 512, n_fft: int = 0) -> int:
-    """Convert sample index to frame count."""
+def samples_to_frames(samples: int, hop_length: int = 512, n_fft: int | None = None) -> int:
+    """Convert sample index to frame count.
+
+    With ``n_fft``, ``n_fft // 2`` is subtracted from the sample first (librosa's centring).
+    """
     lib = _get_lib()
     return int(
         lib.sonare_samples_to_frames(
             _to_c_int(samples, "samples"),
             _to_c_int(hop_length, "hop_length"),
-            _to_c_int(n_fft, "n_fft"),
+            _to_c_int(_resolve_zero_default(n_fft, "n_fft"), "n_fft"),
         )
     )
 
@@ -507,7 +514,7 @@ def peak_pick(
     """Pick peaks using librosa.util.peak_pick-compatible parameters.
 
     ``delta`` is a threshold above the local mean, in the units of ``values``
-    itself. The envelope is not normalized -- :func:`onset_envelope` returns
+    itself. The envelope is not normalized -- :func:`onset_strength` returns
     half-wave rectified Mel-spectrogram flux, whose scale depends on the input
     level and on ``n_mels`` -- so a delta that works for one signal need not
     work for another. Read a starting value off your own envelope (a small
@@ -552,7 +559,7 @@ def pcen(
     values: Sequence[float] | list[float],
     n_bins: int,
     n_frames: int,
-    sample_rate: int = 22050,
+    sr: int = 22050,
     hop_length: int = 512,
     time_constant: float = 0.4,
     gain: float = 0.98,
@@ -570,7 +577,7 @@ def pcen(
             c_array,
             _to_c_int(n_bins, "n_bins"),
             _to_c_int(n_frames, "n_frames"),
-            _to_c_int(sample_rate, "sample_rate"),
+            _to_c_int(sr, "sr"),
             _to_c_int(hop_length, "hop_length"),
             _to_c_float(time_constant, "time_constant"),
             _to_c_float(gain, "gain"),
@@ -605,7 +612,7 @@ def tonnetz(chromagram: Sequence[float] | list[float], n_chroma: int, n_frames: 
 
 def tempogram(
     onset_envelope: Sequence[float] | list[float],
-    sample_rate: int = 22050,
+    sr: int = 22050,
     hop_length: int = 512,
     win_length: int = 384,
     center: bool = True,
@@ -623,7 +630,7 @@ def tempogram(
         rc = lib.sonare_tempogram_with_mode(
             c_array,
             _to_c_size_t(length, "length"),
-            _to_c_int(sample_rate, "sample_rate"),
+            _to_c_int(sr, "sr"),
             _to_c_int(hop_length, "hop_length"),
             _to_c_int(win_length, "win_length"),
             ctypes.c_int(1 if center else 0),
@@ -639,7 +646,7 @@ def tempogram(
 
 def cyclic_tempogram(
     onset_envelope: Sequence[float] | list[float],
-    sample_rate: int = 22050,
+    sample_rate: int,
     hop_length: int = 512,
     win_length: int = 384,
     bpm_min: float = 60.0,
@@ -668,7 +675,7 @@ def cyclic_tempogram(
 
 def plp(
     onset_envelope: Sequence[float] | list[float],
-    sample_rate: int = 22050,
+    sr: int = 22050,
     hop_length: int = 512,
     tempo_min: float = 30.0,
     tempo_max: float = 300.0,
@@ -678,7 +685,7 @@ def plp(
     return _call_float_transform(
         "sonare_plp",
         onset_envelope,
-        _to_c_int(sample_rate, "sample_rate"),
+        _to_c_int(sr, "sr"),
         _to_c_int(hop_length, "hop_length"),
         _to_c_float(tempo_min, "tempo_min"),
         _to_c_float(tempo_max, "tempo_max"),
@@ -688,9 +695,9 @@ def plp(
 
 
 @_guard_buffer("samples")
-def onset_envelope(
+def onset_strength(
     samples: Sequence[float] | list[float],
-    sample_rate: int = 22050,
+    sr: int = 22050,
     n_fft: int = 2048,
     hop_length: int = 512,
     n_mels: int = 128,
@@ -702,7 +709,7 @@ def onset_envelope(
     return _call_float_transform(
         "sonare_onset_strength",
         samples,
-        _to_c_int(sample_rate, "sample_rate"),
+        _to_c_int(sr, "sr"),
         _to_c_int(n_fft, "n_fft"),
         _to_c_int(hop_length, "hop_length"),
         _to_c_int(n_mels, "n_mels"),
@@ -712,7 +719,7 @@ def onset_envelope(
 @_guard_buffer("samples")
 def onset_strength_multi(
     samples: Sequence[float] | list[float],
-    sample_rate: int = 22050,
+    sample_rate: int,
     n_fft: int = 2048,
     hop_length: int = 512,
     n_mels: int = 128,
@@ -741,7 +748,7 @@ def onset_strength_multi(
 
 def fourier_tempogram(
     onset_envelope: Sequence[float] | list[float],
-    sample_rate: int = 22050,
+    sr: int = 22050,
     hop_length: int = 512,
     win_length: int = 384,
     center: bool = True,
@@ -759,7 +766,7 @@ def fourier_tempogram(
         rc = lib.sonare_fourier_tempogram(
             c_array,
             _to_c_size_t(length, "length"),
-            _to_c_int(sample_rate, "sample_rate"),
+            _to_c_int(sr, "sr"),
             _to_c_int(hop_length, "hop_length"),
             _to_c_int(win_length, "win_length"),
             ctypes.c_int(1 if center else 0),
@@ -776,7 +783,7 @@ def fourier_tempogram(
 def tempogram_ratio(
     tempogram_data: Sequence[float] | list[float],
     win_length: int = 384,
-    sample_rate: int = 22050,
+    sr: int = 22050,
     hop_length: int = 512,
     factors: Sequence[float] | list[float] | None = None,
 ) -> list[float]:
@@ -804,7 +811,7 @@ def tempogram_ratio(
         "sonare_tempogram_ratio",
         tempogram_data,
         _to_c_int(win_length, "win_length"),
-        _to_c_int(sample_rate, "sample_rate"),
+        _to_c_int(sr, "sr"),
         _to_c_int(hop_length, "hop_length"),
         factors_ptr,
         _to_c_size_t(n_factors, "n_factors"),
@@ -814,7 +821,7 @@ def tempogram_ratio(
 @_guard_buffer("samples")
 def nnls_chroma(
     samples: Sequence[float] | list[float],
-    sample_rate: int = 22050,
+    sample_rate: int,
     *,
     enable_stft_blend: bool = True,
     stft_blend_weight: float = 0.55,
@@ -920,17 +927,19 @@ def _resample_float32(
 @_guard_buffer("samples")
 def resample(
     samples: Sequence[float] | list[float],
-    src_sr: int,
-    target_sr: int,
+    source_sample_rate: int,
+    target_sample_rate: int,
 ) -> list[float]:
     """Resample audio to a different sample rate.
 
     Args:
         samples: Audio samples.
-        src_sr: Source sample rate in Hz.
-        target_sr: Target sample rate in Hz.
+        source_sample_rate: Source sample rate in Hz.
+        target_sample_rate: Target sample rate in Hz.
 
     Returns:
         List of resampled audio samples.
     """
-    return cast(list[float], _resample_float32(samples, src_sr, target_sr).tolist())
+    return cast(
+        list[float], _resample_float32(samples, source_sample_rate, target_sample_rate).tolist()
+    )

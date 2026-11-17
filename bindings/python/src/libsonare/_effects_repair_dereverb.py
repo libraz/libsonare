@@ -51,7 +51,7 @@ from .types import (
 @_guard_buffer("samples")
 def mastering_repair_dereverb_classical(
     samples: Sequence[float] | list[float] | np.ndarray,
-    sample_rate: int = 22050,
+    sample_rate: int,
     *,
     threshold: float = 0.0,
     attenuation: float = 1.0,
@@ -112,7 +112,7 @@ def _extract_reverb_detection(raw: Any) -> ReverbDetection:
 @_guard_buffer("samples")
 def mastering_repair_detect_reverb(
     samples: Sequence[float] | list[float] | np.ndarray,
-    sample_rate: int = 22050,
+    sample_rate: int,
     *,
     threshold: float = 0.0,
     attenuation: float = 1.0,
@@ -150,7 +150,7 @@ def mastering_repair_detect_reverb(
 
     Args:
         samples: Mono input buffer (any sequence convertible to float32).
-        sample_rate: Sample rate in Hz (default 22050).
+        sample_rate: Sample rate in Hz.
         threshold: Late-reverb gate the repair would use (default 0.0); not read
             here.
         attenuation: Suppression amount the repair would use (default 1.0); not
@@ -228,7 +228,7 @@ def _extract_dereverb_report(raw: Any) -> DereverbReport:
 def mastering_repair_dereverb_classical_stereo(
     left: Sequence[float] | list[float] | np.ndarray,
     right: Sequence[float] | list[float] | np.ndarray,
-    sample_rate: int = 22050,
+    sample_rate: int,
     *,
     threshold: float = 0.0,
     attenuation: float = 1.0,
@@ -265,7 +265,7 @@ def mastering_repair_dereverb_classical_stereo(
     Args:
         left: Left channel input buffer (any sequence convertible to float32).
         right: Right channel input buffer, same length as ``left``.
-        sample_rate: Sample rate in Hz (default 22050).
+        sample_rate: Sample rate in Hz.
         threshold: Late-reverb detection gate; 0 admits everything (default 0).
         attenuation: Suppression amount, linear (default 1.0, full).
         n_fft: STFT size, must be a positive power of two (default 1024).
@@ -353,7 +353,7 @@ def mastering_repair_dereverb_classical_stereo(
 
 def mastering_repair_dereverb_classical_linked(
     channels: Sequence[Sequence[float] | np.ndarray] | np.ndarray,
-    sample_rate: int = 22050,
+    sample_rate: int,
     *,
     threshold: float = 0.0,
     attenuation: float = 1.0,
@@ -403,7 +403,7 @@ def mastering_repair_dereverb_classical_linked(
         channels: One input buffer per channel, in the order the outputs come
             back, or a 2-D ``(channels, frames)`` array. All channels must be
             the same length; the C form has one length for the set.
-        sample_rate: Sample rate in Hz, shared by every channel (default 22050).
+        sample_rate: Sample rate in Hz, shared by every channel.
         threshold: Late-reverb detection gate; 0 admits everything (default 0).
         attenuation: Suppression amount, linear (default 1.0, full).
         n_fft: STFT size, must be a positive power of two (default 1024).

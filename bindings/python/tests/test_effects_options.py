@@ -42,9 +42,11 @@ def test_transform_options_use_new_symbols(monkeypatch: pytest.MonkeyPatch) -> N
     monkeypatch.setattr(timepitch, "_call_float_transform", fake_transform)
 
     monkeypatch.setattr(timepitch, "_get_lib", lambda: stretch)
-    assert timepitch.time_stretch(_samples(), n_fft=1024, hop_length=256) == [0.0]
+    assert timepitch.time_stretch(_samples(), n_fft=1024, hop_length=256, sample_rate=22050) == [
+        0.0
+    ]
     monkeypatch.setattr(timepitch, "_get_lib", lambda: shift)
-    assert timepitch.pitch_shift(_samples(), n_fft=1024, hop_length=256) == [0.0]
+    assert timepitch.pitch_shift(_samples(), n_fft=1024, hop_length=256, sample_rate=22050) == [0.0]
 
     assert calls[0][0] == "sonare_time_stretch_ex"
     assert [int(value.value) for value in calls[0][1][3:]] == [1024, 256]
@@ -68,15 +70,15 @@ def test_legacy_transform_defaults_fallback_but_custom_options_are_not_ignored(
     monkeypatch.setattr(timepitch, "_call_float_transform", fake_transform)
     monkeypatch.setattr(timepitch, "_get_lib", lambda: legacy)
 
-    timepitch.time_stretch(_samples())
-    timepitch.pitch_shift(_samples())
+    timepitch.time_stretch(_samples(), sample_rate=22050)
+    timepitch.pitch_shift(_samples(), sample_rate=22050)
     assert calls == ["sonare_time_stretch", "sonare_pitch_shift"]
 
     with pytest.raises(SonareError, match="sonare_time_stretch_ex") as stretch_error:
-        timepitch.time_stretch(_samples(), n_fft=1024)
+        timepitch.time_stretch(_samples(), n_fft=1024, sample_rate=22050)
     assert stretch_error.value.code == ErrorCode.NOT_SUPPORTED
     with pytest.raises(SonareError, match="sonare_pitch_shift_ex") as shift_error:
-        timepitch.pitch_shift(_samples(), hop_length=256)
+        timepitch.pitch_shift(_samples(), hop_length=256, sample_rate=22050)
     assert shift_error.value.code == ErrorCode.NOT_SUPPORTED
 
 
@@ -87,7 +89,9 @@ def test_hpss_options_and_legacy_fallback(monkeypatch: pytest.MonkeyPatch) -> No
         sonare_free_hpss_result=lambda *_args: None,
     )
     monkeypatch.setattr(separation, "_get_lib", lambda: new)
-    result = separation.hpss(_samples(), n_fft=1024, hop_length=256, hard_mask=True)
+    result = separation.hpss(
+        _samples(), n_fft=1024, hop_length=256, hard_mask=True, sample_rate=22050
+    )
     assert result.length == 0
     assert len(new_call.calls) == 1
     assert [int(new_call.calls[0][index].value) for index in (5, 6, 7, 8)] == [1024, 256, 0, 0]
@@ -101,10 +105,10 @@ def test_hpss_options_and_legacy_fallback(monkeypatch: pytest.MonkeyPatch) -> No
 
     monkeypatch.setattr(separation, "_get_lib", lambda: legacy)
     monkeypatch.setattr(separation, "_hpss_legacy", fake_legacy)
-    assert separation.hpss(_samples()) == "legacy-result"
+    assert separation.hpss(_samples(), sample_rate=22050) == "legacy-result"
     assert len(fallback) == 1
     with pytest.raises(SonareError, match="sonare_hpss_ex"):
-        separation.hpss(_samples(), hard_mask=True)
+        separation.hpss(_samples(), hard_mask=True, sample_rate=22050)
 
 
 def test_hpss_with_residual_options_and_legacy_fallback(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -115,7 +119,9 @@ def test_hpss_with_residual_options_and_legacy_fallback(monkeypatch: pytest.Monk
         sonare_free_floats=lambda *_args: None,
     )
     monkeypatch.setattr(separation, "_get_lib", lambda: new)
-    result = separation.hpss_with_residual(_samples(), n_fft=1024, hop_length=256, hard_mask=True)
+    result = separation.hpss_with_residual(
+        _samples(), n_fft=1024, hop_length=256, hard_mask=True, sample_rate=22050
+    )
     assert set(result) == {"harmonic", "percussive", "residual", "sampleRate"}
     assert len(new_call.calls) == 1
     assert [int(new_call.calls[0][index].value) for index in (5, 6, 7, 8)] == [1024, 256, 0, 1]
@@ -127,22 +133,22 @@ def test_hpss_with_residual_options_and_legacy_fallback(monkeypatch: pytest.Monk
         "_hpss_with_residual_legacy",
         lambda *args: "legacy-result",
     )
-    assert separation.hpss_with_residual(_samples()) == "legacy-result"
+    assert separation.hpss_with_residual(_samples(), sample_rate=22050) == "legacy-result"
     with pytest.raises(SonareError, match="sonare_hpss_ex"):
-        separation.hpss_with_residual(_samples(), hard_mask=True)
+        separation.hpss_with_residual(_samples(), hard_mask=True, sample_rate=22050)
 
 
 def test_trim_and_rms_normalization_symbols(monkeypatch: pytest.MonkeyPatch) -> None:
     trim_call = _Call()
     trim_lib = SimpleNamespace(sonare_trim_ex=trim_call)
     monkeypatch.setattr(level, "_get_lib", lambda: trim_lib)
-    assert level.trim(_samples(), frame_length=64, hop_length=16) == []
+    assert level.trim(_samples(), frame_length=64, hop_length=16, sample_rate=22050) == []
     assert [int(trim_call.calls[0][index].value) for index in (4, 5)] == [64, 16]
 
     rms_call = _Call()
     rms_lib = SimpleNamespace(sonare_normalize_rms=rms_call)
     monkeypatch.setattr(level, "_get_lib", lambda: rms_lib)
-    assert level.normalize_rms(_samples(), target_db=-12.0) == []
+    assert level.normalize_rms(_samples(), target_db=-12.0, sample_rate=22050) == []
     assert float(rms_call.calls[0][3].value) == pytest.approx(-12.0)
 
 
@@ -152,13 +158,13 @@ def test_legacy_trim_fallback_and_rms_normalization_is_explicitly_unsupported(
     trim_call = _Call()
     legacy = SimpleNamespace(sonare_trim=trim_call)
     monkeypatch.setattr(level, "_get_lib", lambda: legacy)
-    assert level.trim(_samples()) == []
+    assert level.trim(_samples(), sample_rate=22050) == []
     assert len(trim_call.calls) == 1
     with pytest.raises(SonareError, match="sonare_trim_ex"):
-        level.trim(_samples(), frame_length=64)
+        level.trim(_samples(), frame_length=64, sample_rate=22050)
 
     with pytest.raises(SonareError, match="sonare_normalize_rms") as error:
-        level.normalize_rms(_samples())
+        level.normalize_rms(_samples(), sample_rate=22050)
     assert error.value.code == ErrorCode.NOT_SUPPORTED
 
 
@@ -173,28 +179,28 @@ def test_invalid_options_are_rejected_before_library_lookup(
     # one left unpatched would still raise, from a path the guard never saw.
     monkeypatch.setattr(timepitch, "_get_lib", fail_lookup)
     with pytest.raises(ValueError, match="n_fft"):
-        timepitch.time_stretch(_samples(), n_fft=1001)
+        timepitch.time_stretch(_samples(), n_fft=1001, sample_rate=22050)
     with pytest.raises(ValueError, match="n_fft"):
-        timepitch.time_stretch(_samples(), n_fft=2**32)
+        timepitch.time_stretch(_samples(), n_fft=2**32, sample_rate=22050)
     # A two-point symmetric Hann synthesis window is all zeros.
     with pytest.raises(ValueError, match="n_fft must be an even signed 32-bit integer >= 4"):
-        timepitch.pitch_shift(_samples(), n_fft=2, hop_length=1)
+        timepitch.pitch_shift(_samples(), n_fft=2, hop_length=1, sample_rate=22050)
 
     monkeypatch.setattr(separation, "_get_lib", fail_lookup)
     with pytest.raises(ValueError, match="n_fft must be an even signed 32-bit integer >= 4"):
-        separation.hpss(_samples(), n_fft=2, hop_length=1)
+        separation.hpss(_samples(), n_fft=2, hop_length=1, sample_rate=22050)
     with pytest.raises(ValueError, match="kernel_harmonic"):
-        separation.hpss(_samples(), kernel_harmonic=2**32 + 1)
+        separation.hpss(_samples(), kernel_harmonic=2**32 + 1, sample_rate=22050)
     with pytest.raises(ValueError, match="hop_length"):
-        separation.hpss_with_residual(_samples(), hop_length=2**32)
+        separation.hpss_with_residual(_samples(), hop_length=2**32, sample_rate=22050)
 
     monkeypatch.setattr(level, "_get_lib", fail_lookup)
     with pytest.raises(ValueError, match="frame_length"):
-        level.trim(_samples(), frame_length=0)
+        level.trim(_samples(), frame_length=0, sample_rate=22050)
     with pytest.raises(ValueError, match="hop_length"):
-        level.trim(_samples(), hop_length=2**32)
+        level.trim(_samples(), hop_length=2**32, sample_rate=22050)
     with pytest.raises(ValueError, match="float32"):
-        level.normalize_rms(_samples(), target_db=-1e100)
+        level.normalize_rms(_samples(), target_db=-1e100, sample_rate=22050)
 
 
 def _has_extended_effects() -> bool:
@@ -217,14 +223,22 @@ def _has_extended_effects() -> bool:
 @pytest.mark.skipif(not _has_extended_effects(), reason="extended effects symbols unavailable")
 def test_extended_effects_work_with_fresh_library() -> None:
     samples = np.sin(np.linspace(0.0, 8.0 * np.pi, 4096, dtype=np.float32)) * 0.25
-    stretched = timepitch.time_stretch(samples, rate=1.1, n_fft=1024, hop_length=256)
-    shifted = timepitch.pitch_shift(samples, semitones=2.0, n_fft=1024, hop_length=256)
-    separated = separation.hpss(samples, n_fft=1024, hop_length=256, hard_mask=True)
-    separated_residual = separation.hpss_with_residual(
-        samples, n_fft=1024, hop_length=256, hard_mask=True
+    stretched = timepitch.time_stretch(
+        samples, rate=1.1, n_fft=1024, hop_length=256, sample_rate=22050
     )
-    normalized = level.normalize_rms(samples, target_db=-12.0)
-    trimmed = level.trim(samples, threshold_db=-40.0, frame_length=1024, hop_length=256)
+    shifted = timepitch.pitch_shift(
+        samples, semitones=2.0, n_fft=1024, hop_length=256, sample_rate=22050
+    )
+    separated = separation.hpss(
+        samples, n_fft=1024, hop_length=256, hard_mask=True, sample_rate=22050
+    )
+    separated_residual = separation.hpss_with_residual(
+        samples, n_fft=1024, hop_length=256, hard_mask=True, sample_rate=22050
+    )
+    normalized = level.normalize_rms(samples, target_db=-12.0, sample_rate=22050)
+    trimmed = level.trim(
+        samples, threshold_db=-40.0, frame_length=1024, hop_length=256, sample_rate=22050
+    )
 
     assert len(stretched) > 0
     assert len(shifted) > 0
@@ -239,11 +253,19 @@ def test_effects_reject_a_hop_below_the_half_window_overlap_contract() -> None:
     samples = np.sin(np.linspace(0.0, 8.0 * np.pi, 4096, dtype=np.float32)) * 0.25
 
     for call in (
-        lambda: separation.hpss(samples, n_fft=1024, hop_length=1024),
-        lambda: separation.hpss_with_residual(samples, n_fft=1024, hop_length=1024),
-        lambda: timepitch.time_stretch(samples, rate=1.2, n_fft=512, hop_length=2048),
-        lambda: timepitch.pitch_shift(samples, semitones=3.0, n_fft=1024, hop_length=1024),
-        lambda: separation.phase_vocoder(samples, rate=1.2, n_fft=1024, hop_length=1024),
+        lambda: separation.hpss(samples, n_fft=1024, hop_length=1024, sample_rate=22050),
+        lambda: separation.hpss_with_residual(
+            samples, n_fft=1024, hop_length=1024, sample_rate=22050
+        ),
+        lambda: timepitch.time_stretch(
+            samples, rate=1.2, n_fft=512, hop_length=2048, sample_rate=22050
+        ),
+        lambda: timepitch.pitch_shift(
+            samples, semitones=3.0, n_fft=1024, hop_length=1024, sample_rate=22050
+        ),
+        lambda: separation.phase_vocoder(
+            samples, rate=1.2, n_fft=1024, hop_length=1024, sample_rate=22050
+        ),
     ):
         with pytest.raises(SonareValueError) as error:
             call()
@@ -256,11 +278,30 @@ def test_effects_accept_an_even_n_fft_that_is_not_a_power_of_two() -> None:
     # which made the same call succeed on the C ABI and fail here.
     samples = np.sin(np.linspace(0.0, 8.0 * np.pi, 4096, dtype=np.float32)) * 0.25
 
-    separated = separation.hpss(samples, n_fft=1500, hop_length=250)
+    separated = separation.hpss(samples, n_fft=1500, hop_length=250, sample_rate=22050)
     assert separated.length == len(samples)
-    assert len(timepitch.time_stretch(samples, rate=1.2, n_fft=1500, hop_length=250)) > 0
-    assert len(timepitch.pitch_shift(samples, semitones=3.0, n_fft=1500, hop_length=250)) > 0
-    assert len(separation.phase_vocoder(samples, rate=1.2, n_fft=1500, hop_length=250)) > 0
+    assert (
+        len(
+            timepitch.time_stretch(samples, rate=1.2, n_fft=1500, hop_length=250, sample_rate=22050)
+        )
+        > 0
+    )
+    assert (
+        len(
+            timepitch.pitch_shift(
+                samples, semitones=3.0, n_fft=1500, hop_length=250, sample_rate=22050
+            )
+        )
+        > 0
+    )
+    assert (
+        len(
+            separation.phase_vocoder(
+                samples, rate=1.2, n_fft=1500, hop_length=250, sample_rate=22050
+            )
+        )
+        > 0
+    )
 
 
 @pytest.mark.skipif(not _has_extended_effects(), reason="extended effects symbols unavailable")
@@ -276,8 +317,17 @@ def test_the_n_fft_verdict_matches_the_core_for_both_families() -> None:
     samples = np.sin(np.linspace(0.0, 8.0 * np.pi, 8192, dtype=np.float32)) * 0.25
 
     # Mixed-radix family: accepted.
-    assert separation.hpss(samples, n_fft=1500, hop_length=250).length == len(samples)
-    assert len(separation.phase_vocoder(samples, rate=1.2, n_fft=1500, hop_length=250)) > 0
+    assert separation.hpss(samples, n_fft=1500, hop_length=250, sample_rate=22050).length == len(
+        samples
+    )
+    assert (
+        len(
+            separation.phase_vocoder(
+                samples, rate=1.2, n_fft=1500, hop_length=250, sample_rate=22050
+            )
+        )
+        > 0
+    )
 
     # Power-of-two family: rejected, by the facade rather than by the core, so
     # the message names the rule.

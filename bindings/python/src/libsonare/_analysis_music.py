@@ -101,7 +101,7 @@ def _chords_from_c(out: SonareChordAnalysisResult) -> list[Chord]:
 @_guard_buffer("samples")
 def detect_chords(
     samples: Sequence[float] | list[float],
-    sample_rate: int = 22050,
+    sample_rate: int,
     min_duration: float = 0.3,
     smoothing_window: float = 2.0,
     threshold: float = 0.5,
@@ -176,9 +176,9 @@ def detect_chords(
 @_guard_buffer("samples")
 def chord_functional_analysis(
     samples: Sequence[float] | list[float],
+    sample_rate: int,
     key_root: PitchClass,
     key_mode: Mode = Mode.MAJOR,
-    sample_rate: int = 22050,
     min_duration: float = 0.3,
     smoothing_window: float = 2.0,
     threshold: float = 0.5,
@@ -348,7 +348,7 @@ def chord_functions(
 @_guard_buffer("samples")
 def analyze_sections(
     samples: Sequence[float] | list[float],
-    sample_rate: int = 22050,
+    sample_rate: int,
     n_fft: int = 2048,
     hop_length: int = 512,
     min_section_sec: float = 4.0,
@@ -357,7 +357,7 @@ def analyze_sections(
 
     Args:
         samples: Mono audio samples (1D float).
-        sample_rate: Sample rate in Hz (default 22050).
+        sample_rate: Sample rate in Hz.
         n_fft: FFT window size used for the structural features.
         hop_length: Hop length in samples.
         min_section_sec: Minimum section duration in seconds.
@@ -409,7 +409,7 @@ def analyze_sections(
 @_guard_buffer("samples")
 def detect_boundaries(
     samples: Sequence[float] | list[float],
-    sample_rate: int = 22050,
+    sample_rate: int,
     *,
     n_fft: int = 2048,
     hop_length: int = 512,
@@ -433,7 +433,7 @@ def detect_boundaries(
 
     Args:
         samples: Mono audio samples (1D float).
-        sample_rate: Sample rate in Hz (default 22050). Rates above 22050 are
+        sample_rate: Sample rate in Hz. Rates above 22050 are
             analyzed at 22050, so boundary times are stable across source rates.
         n_fft: FFT window size used for the structural features.
         hop_length: Hop length in samples.
@@ -523,7 +523,7 @@ def detect_boundaries(
 @_guard_buffer("samples")
 def analyze_melody(
     samples: Sequence[float] | list[float],
-    sample_rate: int = 22050,
+    sample_rate: int,
     fmin: float = 65.0,
     fmax: float = 2093.0,
     frame_length: int = 2048,
@@ -536,7 +536,7 @@ def analyze_melody(
 
     Args:
         samples: Mono audio samples (1D float).
-        sample_rate: Sample rate in Hz (default 22050).
+        sample_rate: Sample rate in Hz.
         fmin: Minimum detectable frequency in Hz.
         fmax: Maximum detectable frequency in Hz.
         frame_length: Analysis frame length in samples at 22050 Hz, rescaled to

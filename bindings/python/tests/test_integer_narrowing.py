@@ -648,8 +648,8 @@ def test_an_interval_boundary_is_refused_rather_than_folded_onto_a_legal_index()
 
     # The control: the boundary selects the result, so a later refusal is not
     # an argument the entry point had stopped reading.
-    assert len(ls.remix(signal, [0, 1000])) == 1000
-    assert len(ls.remix(signal, [0, 2000])) == 2000
+    assert len(ls.remix(signal, [0, 1000], align_zeros=False)) == 1000
+    assert len(ls.remix(signal, [0, 2000], align_zeros=False)) == 2000
 
     with pytest.raises(SonareValueError, match=re.escape("intervals[1] must be an integer")):
         ls.remix(signal, [0, 1000.7])
@@ -660,7 +660,7 @@ def test_an_interval_boundary_is_refused_rather_than_folded_onto_a_legal_index()
 
     # A whole-valued float array is not a fraction and stays accepted, so the
     # refusal cannot be passing by rejecting the dtype instead of the value.
-    assert len(ls.remix(signal, np.array([0.0, 1000.0]))) == 1000
+    assert len(ls.remix(signal, np.array([0.0, 1000.0]), align_zeros=False)) == 1000
 
 
 def test_every_integer_array_argument_names_itself_when_it_refuses() -> None:
@@ -671,11 +671,11 @@ def test_every_integer_array_argument_names_itself_when_it_refuses() -> None:
     """
     signal = np.sin(np.arange(4000) * 0.05).astype(np.float32)
     with pytest.raises(SonareValueError, match=re.escape("intervals[1]")):
-        ls.remix_aligned_intervals(signal, [0, 1000.7])
+        ls.remix_aligned_intervals(signal, intervals=[0, 1000.7], sample_rate=22050)
     rows, cols = 4, 32
     matrix = np.tile(np.arange(cols, dtype=np.float32), rows)
     with pytest.raises(SonareValueError, match=re.escape("boundaries[1]")):
-        ls.subsegment(matrix, rows, cols, [0, 16.5], n_segments=2)
+        ls.segment_subsegment(matrix, rows, cols, [0, 16.5], n_segments=2)
 
 
 @pytest.mark.parametrize("value", ["1", True, None, b"1", object()])

@@ -867,12 +867,12 @@ def test_mix_stereo_rejects_a_scene_with_no_audio() -> None:
     from libsonare import SonareValueError, mix_stereo
 
     with pytest.raises(SonareValueError, match="at least one strip is required"):
-        mix_stereo([])
+        mix_stereo([], sample_rate=48000)
 
     with pytest.raises(SonareValueError, match="no audio to mix"):
-        mix_stereo([([], [])])
+        mix_stereo([([], [])], sample_rate=48000)
     with pytest.raises(SonareValueError, match="no audio to mix"):
-        mix_stereo([([], []), ([], [])])
+        mix_stereo([([], []), ([], [])], sample_rate=48000)
 
     # Positive control: the ordinary two-strip mix still renders, and renders
     # something audible rather than the silence an empty result would show.
@@ -931,12 +931,12 @@ def test_mix_stereo_rejects_non_finite_strip_samples() -> None:
     tone = [0.5, -0.5, 0.5, -0.5]
 
     with pytest.raises(SonareValueError, match=r"strips\[0\] left contains NaN or Inf"):
-        mix_stereo([([math.nan] * 4, tone)])
+        mix_stereo([([math.nan] * 4, tone)], sample_rate=48000)
     with pytest.raises(SonareValueError, match=r"strips\[0\] right contains NaN or Inf"):
-        mix_stereo([(tone, [math.inf] * 4)])
+        mix_stereo([(tone, [math.inf] * 4)], sample_rate=48000)
     # The offending strip is named by index, not just the first one scanned.
     with pytest.raises(SonareValueError, match=r"strips\[1\] right contains NaN or Inf"):
-        mix_stereo([(tone, tone), (tone, [0.5, math.nan, 0.5, -0.5])])
+        mix_stereo([(tone, tone), (tone, [0.5, math.nan, 0.5, -0.5])], sample_rate=48000)
 
 
 def test_mix_stereo_true_peak_is_valid_on_a_one_shot_mix() -> None:

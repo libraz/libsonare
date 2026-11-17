@@ -92,7 +92,7 @@ def _enum_name(field: str, ordinal: int) -> str:
 
 def voice_change(
     samples: Sequence[float] | list[float],
-    sample_rate: int = 22050,
+    sample_rate: int,
     pitch_semitones: float = 0.0,
     formant_factor: float = 1.0,
     formant_mode: str = "relative",
@@ -101,7 +101,7 @@ def voice_change(
 
     Args:
         samples: Audio samples.
-        sample_rate: Sample rate in Hz (default 22050).
+        sample_rate: Sample rate in Hz.
         pitch_semitones: Pitch shift in semitones (positive = up).
         formant_factor: Formant scaling factor. Its meaning depends on
             ``formant_mode``.
@@ -538,7 +538,7 @@ class RealtimeVoiceChanger:
 
 def voice_change_realtime(
     samples: Sequence[float] | list[float] | np.ndarray,
-    sample_rate: int = 48000,
+    sample_rate: int,
     preset: str | Mapping[str, object] = "neutral-monitor",
     *,
     channels: int = 1,

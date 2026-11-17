@@ -62,7 +62,13 @@ acoustic = pytest.mark.skipif(
 @acoustic
 def test_synthesize_rir_produces_decaying_response() -> None:
     result = libsonare.synthesize_rir(
-        7.0, 5.0, 3.0, source=(1.5, 1.0, 1.2), listener=(5.0, 4.0, 1.7), absorption=0.15
+        7.0,
+        5.0,
+        3.0,
+        source=(1.5, 1.0, 1.2),
+        listener=(5.0, 4.0, 1.7),
+        absorption=0.15,
+        sample_rate=48000,
     )
     assert result.sample_rate == 48000
     assert len(result.rir) > 0
@@ -73,13 +79,15 @@ def test_synthesize_rir_produces_decaying_response() -> None:
 def test_synthesize_rir_raises_for_invalid_geometry() -> None:
     # Source outside the room => geometry validation error => coded SonareError.
     with pytest.raises(libsonare.SonareValueError, match="acoustic.source_outside_room") as caught:
-        libsonare.synthesize_rir(7.0, 5.0, 3.0, source=(99.0, 1.0, 1.2))
+        libsonare.synthesize_rir(7.0, 5.0, 3.0, source=(99.0, 1.0, 1.2), sample_rate=48000)
     assert caught.value.code == libsonare.ErrorCode.INVALID_PARAMETER
 
 
 @acoustic
 def test_synthesize_rir_result_has_no_error_fields() -> None:
-    result = libsonare.synthesize_rir(5.0, 4.0, 3.0, absorption=0.3, max_seconds=0.2)
+    result = libsonare.synthesize_rir(
+        5.0, 4.0, 3.0, absorption=0.3, max_seconds=0.2, sample_rate=48000
+    )
     assert not hasattr(result, "has_error")
     assert not hasattr(result, "error_message")
 
@@ -88,7 +96,9 @@ def test_synthesize_rir_result_has_no_error_fields() -> None:
 def test_synthesize_rir_surfaces_non_fatal_diagnostics() -> None:
     # Warnings accompany SUCCESSFUL calls; without them a truncated RIR is
     # indistinguishable from a complete one.
-    clamped = libsonare.synthesize_rir(12.0, 9.0, 5.0, absorption=0.05, max_seconds=0.3)
+    clamped = libsonare.synthesize_rir(
+        12.0, 9.0, 5.0, absorption=0.05, max_seconds=0.3, sample_rate=48000
+    )
     clamp = next(d for d in clamped.diagnostics if d.code == "acoustic.rir_length_clamped")
     # Each entry keeps its own severity and message rather than arriving as one
     # flattened line, so the set matches what Node and WASM hand back.
@@ -97,14 +107,22 @@ def test_synthesize_rir_surfaces_non_fatal_diagnostics() -> None:
 
     # ... and a request that needed no clamping reports nothing, so the field is
     # a real signal rather than always-populated noise.
-    clean = libsonare.synthesize_rir(5.0, 4.0, 3.0, absorption=0.3, max_seconds=3.0)
+    clean = libsonare.synthesize_rir(
+        5.0, 4.0, 3.0, absorption=0.3, max_seconds=3.0, sample_rate=48000
+    )
     assert clean.diagnostics == []
 
 
 @acoustic
 def test_estimate_room_round_trips_a_known_shoebox() -> None:
     rir = libsonare.synthesize_rir(
-        7.0, 5.0, 3.0, source=(1.5, 1.0, 1.2), listener=(5.0, 4.0, 1.7), absorption=0.15
+        7.0,
+        5.0,
+        3.0,
+        source=(1.5, 1.0, 1.2),
+        listener=(5.0, 4.0, 1.7),
+        absorption=0.15,
+        sample_rate=48000,
     )
     est = libsonare.estimate_room(
         rir.rir,
@@ -160,7 +178,7 @@ def test_room_estimate_and_morph_reject_invalid_configuration() -> None:
 @acoustic
 def test_synthesize_rir_uses_default_room_dimensions() -> None:
     # Room dimensions default to 7 x 5 x 3 to match the Node/WASM/CLI bindings.
-    result = libsonare.synthesize_rir()
+    result = libsonare.synthesize_rir(sample_rate=48000)
     assert result.sample_rate == 48000
     assert len(result.rir) > 0
 
@@ -170,10 +188,10 @@ def test_synthesize_rir_late_model_is_honored() -> None:
     # A more absorptive room makes Sabine and Eyring diverge; selecting the model
     # via prefer_eyring must change the synthesized tail.
     sabine = libsonare.synthesize_rir(
-        7.0, 5.0, 3.0, absorption=0.4, max_seconds=0.3, prefer_eyring=False
+        7.0, 5.0, 3.0, absorption=0.4, max_seconds=0.3, prefer_eyring=False, sample_rate=48000
     )
     eyring = libsonare.synthesize_rir(
-        7.0, 5.0, 3.0, absorption=0.4, max_seconds=0.3, prefer_eyring=True
+        7.0, 5.0, 3.0, absorption=0.4, max_seconds=0.3, prefer_eyring=True, sample_rate=48000
     )
     assert sabine.rir != eyring.rir
 
@@ -181,6 +199,7 @@ def test_synthesize_rir_late_model_is_honored() -> None:
 @acoustic
 def test_synthesize_rir_honors_per_band_scattering() -> None:
     base = dict(
+        sample_rate=48000,
         length_m=7.0,
         width_m=5.0,
         height_m=3.0,
@@ -200,7 +219,7 @@ def test_band_arguments_use_the_node_and_wasm_spelling() -> None:
         libsonare.synthesize_rir(**room, absorption_bands=[0.2])
     with pytest.raises(TypeError, match="scattering_bands"):
         libsonare.synthesize_rir(**room, scattering_bands=[0.2])
-    rir = libsonare.synthesize_rir(7.0, 5.0, 3.0, absorption=0.15)
+    rir = libsonare.synthesize_rir(7.0, 5.0, 3.0, absorption=0.15, sample_rate=48000)
     est = libsonare.estimate_room(
         rir.rir, sample_rate=48000, mode="impulse_response", min_decay_db=25.0
     )
@@ -210,7 +229,7 @@ def test_band_arguments_use_the_node_and_wasm_spelling() -> None:
 
 @acoustic
 def test_estimate_room_band_arrays_share_length() -> None:
-    rir = libsonare.synthesize_rir(7.0, 5.0, 3.0, absorption=0.15)
+    rir = libsonare.synthesize_rir(7.0, 5.0, 3.0, absorption=0.15, sample_rate=48000)
     est = libsonare.estimate_room(
         rir.rir, sample_rate=48000, mode="impulse_response", min_decay_db=25.0
     )
@@ -271,6 +290,7 @@ def test_synthesize_rir_routes_air_absorption_through_the_c_abi() -> None:
     # assertion pins one of the three ctypes fields, so dropping any single one
     # fails here instead of hiding behind the other two.
     hall = dict(
+        sample_rate=48000,
         length_m=30.0,
         width_m=24.0,
         height_m=15.0,
@@ -315,7 +335,14 @@ def test_synthesize_rir_routes_air_absorption_through_the_c_abi() -> None:
 
 @acoustic
 def test_synthesize_rir_raises_on_an_implausible_air_climate() -> None:
-    hall = dict(length_m=30.0, width_m=24.0, height_m=15.0, absorption=0.2, max_seconds=0.2)
+    hall = dict(
+        length_m=30.0,
+        width_m=24.0,
+        height_m=15.0,
+        absorption=0.2,
+        max_seconds=0.2,
+        sample_rate=48000,
+    )
     with pytest.raises(libsonare.SonareError, match="acoustic.invalid_air_absorption"):
         libsonare.synthesize_rir(**hall, air_absorption_enabled=True, air_temperature_c=-500.0)
     # The same implausible value is ignored while the flag is off.
@@ -509,27 +536,33 @@ def test_each_material_preset_name_builds_its_own_rir() -> None:
 @acoustic
 def test_a_number_for_a_preset_or_mode_is_a_type_error_naming_the_names() -> None:
     with pytest.raises(TypeError, match="'concrete'.*'glass'"):
-        libsonare.synthesize_rir(material_preset=2)  # type: ignore[arg-type]
+        libsonare.synthesize_rir(material_preset=2, sample_rate=48000)  # type: ignore[arg-type]
     with pytest.raises(TypeError, match="material_preset"):
         libsonare.room_morph([0.0] * 100, 48000, 7.0, 5.0, 3.0, material_preset=1)  # type: ignore[arg-type]
     with pytest.raises(TypeError, match="'blind'.*'impulse_response'"):
-        libsonare.estimate_room([0.0] * 1000, mode=2)  # type: ignore[arg-type]
+        libsonare.estimate_room([0.0] * 1000, mode=2, sample_rate=48000)  # type: ignore[arg-type]
 
 
 @acoustic
 def test_an_unknown_preset_or_mode_name_is_refused_naming_the_valid_set() -> None:
     with pytest.raises(libsonare.SonareValueError, match="'concrete'.*'glass'"):
-        libsonare.synthesize_rir(material_preset="marble")
+        libsonare.synthesize_rir(material_preset="marble", sample_rate=48000)
     with pytest.raises(libsonare.SonareValueError, match="material_preset"):
         libsonare.room_morph([0.0] * 100, 48000, 7.0, 5.0, 3.0, material_preset="Concrete")
     with pytest.raises(libsonare.SonareValueError, match="'blind'.*'impulse_response'"):
-        libsonare.estimate_room([0.0] * 1000, mode="impulseResponse")
+        libsonare.estimate_room([0.0] * 1000, mode="impulseResponse", sample_rate=48000)
 
 
 @acoustic
 def test_room_geometry_from_estimate_feeds_synthesize_rir() -> None:
     rir = libsonare.synthesize_rir(
-        7.0, 5.0, 3.0, source=(1.5, 1.0, 1.2), listener=(5.0, 4.0, 1.7), absorption=0.15
+        7.0,
+        5.0,
+        3.0,
+        source=(1.5, 1.0, 1.2),
+        listener=(5.0, 4.0, 1.7),
+        absorption=0.15,
+        sample_rate=48000,
     )
     estimate = libsonare.estimate_room(
         rir.rir,
@@ -552,7 +585,7 @@ def test_room_geometry_from_estimate_feeds_synthesize_rir() -> None:
     }
     assert geometry["length_m"] == pytest.approx(estimate.length_m, rel=1e-6)
     assert geometry["band_absorption"] == pytest.approx(estimate.band_absorption, rel=1e-6)
-    options = dict(max_seconds=0.1, ism_order=2)
+    options = dict(max_seconds=0.1, ism_order=2, sample_rate=48000)
     mapped = libsonare.synthesize_rir(**geometry, **options)
     by_hand = libsonare.synthesize_rir(
         estimate.length_m,
@@ -588,7 +621,7 @@ def test_room_geometry_from_estimate_places_a_small_room_inside_itself() -> None
     for point in (geometry["source"], geometry["listener"]):
         assert all(0.0 < v < 1.33 for v in point)
     assert geometry["absorption"] == pytest.approx(0.25, rel=1e-6)
-    assert libsonare.synthesize_rir(**geometry, max_seconds=0.1, ism_order=2).rir
+    assert libsonare.synthesize_rir(**geometry, max_seconds=0.1, ism_order=2, sample_rate=48000).rir
     full = libsonare.RoomEstimate(
         volume=105.0,
         length_m=7.0,

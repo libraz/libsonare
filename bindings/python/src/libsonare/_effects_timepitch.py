@@ -44,7 +44,7 @@ from ._types_enums import Mode, PitchClass
 
 def time_stretch(
     samples: Sequence[float] | list[float],
-    sample_rate: int = 22050,
+    sample_rate: int,
     rate: float = 1.0,
     n_fft: int = _DEFAULT_EFFECT_N_FFT,
     hop_length: int = _DEFAULT_EFFECT_HOP_LENGTH,
@@ -55,7 +55,7 @@ def time_stretch(
 
     Args:
         samples: Audio samples.
-        sample_rate: Sample rate in Hz (default 22050).
+        sample_rate: Sample rate in Hz.
         rate: Playback speed: ``>1`` is faster and shorter, ``<1`` slower and longer.
             The opposite sense of :func:`note_stretch`'s ``stretch_ratio``, a
             duration ratio.
@@ -95,7 +95,7 @@ def time_stretch(
 
 def pitch_shift(
     samples: Sequence[float] | list[float],
-    sample_rate: int = 22050,
+    sample_rate: int,
     semitones: float = 0.0,
     n_fft: int = _DEFAULT_EFFECT_N_FFT,
     hop_length: int = _DEFAULT_EFFECT_HOP_LENGTH,
@@ -106,7 +106,7 @@ def pitch_shift(
 
     Args:
         samples: Audio samples.
-        sample_rate: Sample rate in Hz (default 22050).
+        sample_rate: Sample rate in Hz.
         semitones: Number of semitones to shift (positive = up, negative = down).
         n_fft: FFT size used for analysis/synthesis; an even integer >= 4
             (default 2048).
@@ -145,7 +145,7 @@ def pitch_shift(
 @_guard_buffer("samples")
 def pitch_correct_to_midi(
     samples: Sequence[float] | list[float],
-    sample_rate: int = 22050,
+    sample_rate: int,
     current_midi: float = 69.0,
     target_midi: float = 69.0,
 ) -> list[float]:
@@ -160,7 +160,7 @@ def pitch_correct_to_midi(
 
     Args:
         samples: Audio samples.
-        sample_rate: Sample rate in Hz (default 22050).
+        sample_rate: Sample rate in Hz.
         current_midi: Detected/current pitch as a MIDI note number.
         target_midi: Desired pitch as a MIDI note number.
 
@@ -179,9 +179,9 @@ def pitch_correct_to_midi(
 @_guard_buffer("samples")
 def pitch_correct_to_midi_timevarying(
     samples: Sequence[float] | list[float],
+    sample_rate: int,
     f0_hz: Sequence[float] | list[float],
     target_midi: float,
-    sample_rate: int = 22050,
     hop_length: int = 512,
     voiced: Sequence[int] | list[int] | None = None,
     voiced_prob: Sequence[float] | list[float] | None = None,
@@ -199,7 +199,7 @@ def pitch_correct_to_midi_timevarying(
             Unvoiced frames may use ``NaN`` when the corresponding ``voiced``
             flag is zero, matching pYIN's default output.
         target_midi: Desired pitch as a MIDI note number.
-        sample_rate: Sample rate in Hz (default 22050).
+        sample_rate: Sample rate in Hz.
         hop_length: F0 hop in samples; frame ``i`` covers sample ``i*hop_length``.
         voiced: Optional per-frame voiced flags (non-zero = voiced); ``None``
             treats every frame as voiced.
@@ -253,8 +253,8 @@ def pitch_correct_to_midi_timevarying(
 @_guard_buffer("samples")
 def pitch_correct_timevarying(
     samples: Sequence[float] | list[float],
+    sample_rate: int,
     f0_hz: Sequence[float] | list[float],
-    sample_rate: int = 22050,
     hop_length: int = 512,
     *,
     mode: str = "midi",
@@ -281,7 +281,7 @@ def pitch_correct_timevarying(
         f0_hz: Per-frame measured F0 in Hz (one entry per analysis frame).
             Unvoiced frames may use ``NaN`` when the corresponding ``voiced``
             flag is zero, matching pYIN's default output.
-        sample_rate: Sample rate in Hz (default 22050).
+        sample_rate: Sample rate in Hz.
         hop_length: F0 hop in samples; frame ``i`` covers sample ``i*hop_length``.
         mode: ``"midi"`` retunes toward ``target_midi``; ``"scale"`` snaps to the key.
         target_midi: Fixed target note when ``mode == "midi"`` (in ``[0, 127]``).
@@ -394,7 +394,7 @@ def _auto_tune_key(key: object) -> SonareKey | None:
 @_guard_buffer("samples")
 def auto_tune(
     samples: Sequence[float] | list[float],
-    sample_rate: int = 22050,
+    sample_rate: int,
     key: str | Key | Mapping[str, object] | tuple[PitchClass, Mode] = "detect",
     *,
     strength: float | None = None,
@@ -413,7 +413,7 @@ def auto_tune(
 
     Args:
         samples: Mono audio samples.
-        sample_rate: Sample rate in Hz (default 22050).
+        sample_rate: Sample rate in Hz.
         key: ``"detect"`` finds the key with :func:`detect_key`'s defaults; or name
             it with a :class:`Key` (e.g. :func:`detect_key`'s result), a
             ``{"root": ..., "mode": ...}`` mapping or a ``(root, mode)`` pair, the

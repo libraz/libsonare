@@ -279,8 +279,8 @@ def test_a_buffer_element_past_the_float32_range_is_refused_as_the_value_it_was(
 
     # The control: the samples select the result, so a refusal below is not an
     # argument the entry point had stopped reading.
-    quiet = ls.rms_energy(clean, frame_length=512, hop_length=256)
-    loud = ls.rms_energy([0.5] * 2048, frame_length=512, hop_length=256)
+    quiet = ls.rms_energy(clean, frame_length=512, hop_length=256, sample_rate=22050)
+    loud = ls.rms_energy([0.5] * 2048, frame_length=512, hop_length=256, sample_rate=22050)
     assert float(np.mean(loud)) > float(np.mean(quiet))
 
     wide_list = clean[:100] + [1e300] + clean[101:]
@@ -288,13 +288,18 @@ def test_a_buffer_element_past_the_float32_range_is_refused_as_the_value_it_was(
     wide_array[100] = 1e300
     for samples in (wide_list, wide_array):
         with pytest.raises(SonareValueError, match=re.escape("samples[100] must be a finite")):
-            ls.rms_energy(samples, frame_length=512, hop_length=256)
+            ls.rms_energy(samples, frame_length=512, hop_length=256, sample_rate=22050)
 
     # A value that really is non-finite keeps the message that is true of it,
     # so the two causes stay separable rather than collapsing into one report.
     for value in (float("inf"), float("nan")):
         with pytest.raises(SonareValueError, match="contains NaN or Inf"):
-            ls.rms_energy(clean[:100] + [value] + clean[101:], frame_length=512, hop_length=256)
+            ls.rms_energy(
+                clean[:100] + [value] + clean[101:],
+                frame_length=512,
+                hop_length=256,
+                sample_rate=22050,
+            )
 
 
 def test_a_buffer_refusal_words_itself_like_its_scalar_sibling() -> None:
@@ -303,7 +308,7 @@ def test_a_buffer_refusal_words_itself_like_its_scalar_sibling() -> None:
 
     expected = _float_narrowing_error("samples[0]")
     with pytest.raises(SonareValueError) as excinfo:
-        ls.rms_energy([1e300] + [0.1] * 2047, frame_length=512, hop_length=256)
+        ls.rms_energy([1e300] + [0.1] * 2047, frame_length=512, hop_length=256, sample_rate=22050)
     assert str(excinfo.value).endswith(expected)
 
 
@@ -316,13 +321,25 @@ def test_a_number_too_wide_for_a_double_is_refused_by_the_library_not_by_python(
     number the buffer's element type cannot hold.
     """
     clean = [0.1] * 2048
-    assert len(ls.rms_energy(clean, frame_length=512, hop_length=256)) == 9  # positive control
+    assert (
+        len(ls.rms_energy(clean, frame_length=512, hop_length=256, sample_rate=22050)) == 9
+    )  # positive control
 
     with pytest.raises(SonareValueError, match="must be a finite number"):
-        ls.rms_energy(clean[:100] + [10**400] + clean[101:], frame_length=512, hop_length=256)
+        ls.rms_energy(
+            clean[:100] + [10**400] + clean[101:],
+            frame_length=512,
+            hop_length=256,
+            sample_rate=22050,
+        )
     # And specifically not the Python exception it used to be.
     try:
-        ls.rms_energy(clean[:100] + [10**400] + clean[101:], frame_length=512, hop_length=256)
+        ls.rms_energy(
+            clean[:100] + [10**400] + clean[101:],
+            frame_length=512,
+            hop_length=256,
+            sample_rate=22050,
+        )
     except OverflowError:  # pragma: no cover - the repaired path
         pytest.fail("a too-wide int leaked OverflowError")
     except SonareValueError:

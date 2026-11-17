@@ -18,6 +18,7 @@ from ._runtime import (
     _guard_buffer,
     _out_float_array,
     _resolve_optional_non_negative,
+    _resolve_zero_default,
     _to_c_float,
     _to_c_float_array,
     _to_c_int,
@@ -51,7 +52,7 @@ def _cqt_result_from_c(out: SonareCqtResult) -> CqtResult:
 @_guard_buffer("samples")
 def cqt(
     samples: Sequence[float] | list[float],
-    sample_rate: int = 22050,
+    sr: int = 22050,
     hop_length: int = 512,
     fmin: float = 32.70319566257483,
     n_bins: int = 84,
@@ -61,7 +62,7 @@ def cqt(
 
     Args:
         samples: Audio samples.
-        sample_rate: Sample rate in Hz (default 22050).
+        sr: Sample rate in Hz (default 22050).
         hop_length: Hop length in samples (default 512).
         fmin: Lowest center frequency in Hz (default C1).
         n_bins: Total number of frequency bins (default 84).
@@ -78,7 +79,7 @@ def cqt(
     rc = lib.sonare_cqt(
         c_array,
         _to_c_size_t(length, "length"),
-        _to_c_int(sample_rate, "sample_rate"),
+        _to_c_int(sr, "sr"),
         _to_c_int(hop_length, "hop_length"),
         _to_c_float(fmin, "fmin"),
         _to_c_int(n_bins, "n_bins"),
@@ -126,31 +127,27 @@ def _cqt_variant(
 @_guard_buffer("samples")
 def pseudo_cqt(
     samples: Sequence[float] | list[float],
-    sample_rate: int = 22050,
+    sr: int = 22050,
     hop_length: int = 512,
     fmin: float = 32.70319566257483,
     n_bins: int = 84,
     bins_per_octave: int = 12,
 ) -> CqtResult:
     """Compute the pseudo-CQT magnitude approximation."""
-    return _cqt_variant(
-        "sonare_pseudo_cqt", samples, sample_rate, hop_length, fmin, n_bins, bins_per_octave
-    )
+    return _cqt_variant("sonare_pseudo_cqt", samples, sr, hop_length, fmin, n_bins, bins_per_octave)
 
 
 @_guard_buffer("samples")
 def hybrid_cqt(
     samples: Sequence[float] | list[float],
-    sample_rate: int = 22050,
+    sr: int = 22050,
     hop_length: int = 512,
     fmin: float = 32.70319566257483,
     n_bins: int = 84,
     bins_per_octave: int = 12,
 ) -> CqtResult:
     """Compute the hybrid CQT magnitude."""
-    return _cqt_variant(
-        "sonare_hybrid_cqt", samples, sample_rate, hop_length, fmin, n_bins, bins_per_octave
-    )
+    return _cqt_variant("sonare_hybrid_cqt", samples, sr, hop_length, fmin, n_bins, bins_per_octave)
 
 
 @_guard_buffer("magnitude")
@@ -158,7 +155,7 @@ def cqt_to_audio(
     magnitude: Sequence[float] | list[float],
     n_bins: int,
     n_frames: int,
-    sample_rate: int = 22050,
+    sample_rate: int,
     hop_length: int = 512,
     fmin: float = 32.70319566257483,
     bins_per_octave: int = 12,
@@ -200,10 +197,10 @@ def mel_to_stft(
     mel: Sequence[float] | list[float],
     n_mels: int,
     n_frames: int,
-    sample_rate: int = 22050,
+    sr: int = 22050,
     n_fft: int = 2048,
     fmin: float = 0.0,
-    fmax: float = 0.0,
+    fmax: float | None = None,
     htk: bool = False,
 ) -> StftMagnitudeResult:
     """Approximate inverse of a Mel filterbank (Mel power -> STFT magnitude).
@@ -212,11 +209,11 @@ def mel_to_stft(
         mel: Mel power spectrogram, flattened row-major ``[n_mels x n_frames]``.
         n_mels: Number of Mel bands.
         n_frames: Number of time frames.
-        sample_rate: Sample rate that produced ``mel`` in Hz (default 22050).
+        sr: Sample rate that produced ``mel`` in Hz (default 22050).
         n_fft: FFT size of the source STFT; sets output bins to ``n_fft/2 + 1``
             (default 2048).
         fmin: Minimum Mel frequency in Hz (0.0 for librosa default).
-        fmax: Maximum Mel frequency in Hz (0.0 = sr/2).
+        fmax: Maximum Mel frequency in Hz (default None = sr/2).
         htk: Use the HTK Mel formula instead of Slaney (default False).
 
     Returns:
@@ -236,10 +233,10 @@ def mel_to_stft(
             c_array,
             _to_c_int(n_mels, "n_mels"),
             _to_c_int(n_frames, "n_frames"),
-            _to_c_int(sample_rate, "sample_rate"),
+            _to_c_int(sr, "sr"),
             _to_c_int(n_fft, "n_fft"),
             _to_c_float(fmin, "fmin"),
-            _to_c_float(fmax, "fmax"),
+            _to_c_float(_resolve_zero_default(fmax, "fmax"), "fmax"),
             ctypes.c_int(1),
             ctypes.byref(out),
         )
@@ -248,10 +245,10 @@ def mel_to_stft(
             c_array,
             _to_c_int(n_mels, "n_mels"),
             _to_c_int(n_frames, "n_frames"),
-            _to_c_int(sample_rate, "sample_rate"),
+            _to_c_int(sr, "sr"),
             _to_c_int(n_fft, "n_fft"),
             _to_c_float(fmin, "fmin"),
-            _to_c_float(fmax, "fmax"),
+            _to_c_float(_resolve_zero_default(fmax, "fmax"), "fmax"),
             ctypes.byref(out),
         )
     _check(rc)
@@ -300,11 +297,11 @@ def mel_to_audio(
     mel: Sequence[float] | list[float],
     n_mels: int,
     n_frames: int,
-    sample_rate: int = 22050,
+    sr: int = 22050,
     n_fft: int = 2048,
     hop_length: int = 512,
     fmin: float = 0.0,
-    fmax: float = 0.0,
+    fmax: float | None = None,
     n_iter: int = 32,
     htk: bool = False,
 ) -> list[float]:
@@ -314,11 +311,11 @@ def mel_to_audio(
         mel: Mel power spectrogram, flattened row-major ``[n_mels x n_frames]``.
         n_mels: Number of Mel bands.
         n_frames: Number of time frames.
-        sample_rate: Sample rate of the original audio in Hz (default 22050).
+        sr: Sample rate of the original audio in Hz (default 22050).
         n_fft: FFT size used for reconstruction (default 2048).
         hop_length: Hop length used for reconstruction (default 512).
         fmin: Minimum Mel frequency in Hz (0.0 for librosa default).
-        fmax: Maximum Mel frequency in Hz (0.0 = sr/2).
+        fmax: Maximum Mel frequency in Hz (default None = sr/2).
         n_iter: Griffin-Lim iterations (default 32).
         htk: Use the HTK Mel formula instead of Slaney (default False).
 
@@ -339,11 +336,11 @@ def mel_to_audio(
         (
             _to_c_int(n_mels, "n_mels"),
             _to_c_int(n_frames, "n_frames"),
-            _to_c_int(sample_rate, "sample_rate"),
+            _to_c_int(sr, "sr"),
             _to_c_int(n_fft, "n_fft"),
             _to_c_int(hop_length, "hop_length"),
             _to_c_float(fmin, "fmin"),
-            _to_c_float(fmax, "fmax"),
+            _to_c_float(_resolve_zero_default(fmax, "fmax"), "fmax"),
         ),
         n_iter,
         htk,
@@ -355,7 +352,7 @@ def griffin_lim(
     magnitude: Sequence[float] | list[float],
     n_bins: int,
     n_frames: int,
-    sample_rate: int = 22050,
+    sample_rate: int,
     n_fft: int = 2048,
     hop_length: int = 512,
     n_iter: int = 32,
@@ -446,11 +443,11 @@ def mfcc_to_audio(
     n_mfcc: int,
     n_frames: int,
     n_mels: int = 128,
-    sample_rate: int = 22050,
+    sr: int = 22050,
     n_fft: int = 2048,
     hop_length: int = 512,
     fmin: float = 0.0,
-    fmax: float = 0.0,
+    fmax: float | None = None,
     n_iter: int = 32,
     htk: bool = False,
     lifter: float = 0.0,
@@ -462,11 +459,11 @@ def mfcc_to_audio(
         n_mfcc: Number of MFCCs.
         n_frames: Number of time frames.
         n_mels: Number of Mel bins (must match the MFCC source config).
-        sample_rate: Sample rate of the original audio in Hz (default 22050).
+        sr: Sample rate of the original audio in Hz (default 22050).
         n_fft: FFT size used for reconstruction (default 2048).
         hop_length: Hop length used for reconstruction (default 512).
         fmin: Minimum Mel frequency in Hz (0.0 for librosa default).
-        fmax: Maximum Mel frequency in Hz (0.0 = sr/2).
+        fmax: Maximum Mel frequency in Hz (default None = sr/2).
         n_iter: Griffin-Lim iterations (default 32).
         htk: Use the HTK Mel formula instead of Slaney (default False).
 
@@ -489,11 +486,11 @@ def mfcc_to_audio(
                 _to_c_int(n_mfcc, "n_mfcc"),
                 _to_c_int(n_frames, "n_frames"),
                 _to_c_int(n_mels, "n_mels"),
-                _to_c_int(sample_rate, "sample_rate"),
+                _to_c_int(sr, "sr"),
                 _to_c_int(n_fft, "n_fft"),
                 _to_c_int(hop_length, "hop_length"),
                 _to_c_float(fmin, "fmin"),
-                _to_c_float(fmax, "fmax"),
+                _to_c_float(_resolve_zero_default(fmax, "fmax"), "fmax"),
             ),
             n_iter,
             htk,
@@ -507,11 +504,11 @@ def mfcc_to_audio(
         _to_c_int(n_mfcc, "n_mfcc"),
         _to_c_int(n_frames, "n_frames"),
         _to_c_int(n_mels, "n_mels"),
-        _to_c_int(sample_rate, "sample_rate"),
+        _to_c_int(sr, "sr"),
         _to_c_int(n_fft, "n_fft"),
         _to_c_int(hop_length, "hop_length"),
         _to_c_float(fmin, "fmin"),
-        _to_c_float(fmax, "fmax"),
+        _to_c_float(_resolve_zero_default(fmax, "fmax"), "fmax"),
         ctypes.c_int(1 if htk else 0),
         _to_c_float(lifter, "lifter"),
         _to_c_int(n_iter, "n_iter"),
@@ -637,7 +634,7 @@ def mfcc_result_to_audio(result: MfccResult, n_iter: int = 32) -> list[float]:
 @_guard_buffer("samples")
 def vqt(
     samples: Sequence[float] | list[float],
-    sample_rate: int = 22050,
+    sr: int = 22050,
     hop_length: int = 512,
     fmin: float = 32.70319566257483,
     n_bins: int = 84,
@@ -648,7 +645,7 @@ def vqt(
 
     Args:
         samples: Audio samples.
-        sample_rate: Sample rate in Hz (default 22050).
+        sr: Sample rate in Hz (default 22050).
         hop_length: Hop length in samples (default 512).
         fmin: Lowest center frequency in Hz (default C1).
         n_bins: Total number of frequency bins (default 84).
@@ -668,7 +665,7 @@ def vqt(
     rc = lib.sonare_vqt(
         c_array,
         _to_c_size_t(length, "length"),
-        _to_c_int(sample_rate, "sample_rate"),
+        _to_c_int(sr, "sr"),
         _to_c_int(hop_length, "hop_length"),
         _to_c_float(fmin, "fmin"),
         _to_c_int(n_bins, "n_bins"),
@@ -688,7 +685,7 @@ def vqt_to_audio(
     magnitude: Sequence[float] | list[float],
     n_bins: int,
     n_frames: int,
-    sample_rate: int = 22050,
+    sample_rate: int,
     hop_length: int = 512,
     fmin: float = 32.70319566257483,
     bins_per_octave: int = 12,

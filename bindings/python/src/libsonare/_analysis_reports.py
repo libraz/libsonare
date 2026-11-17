@@ -160,7 +160,7 @@ def _music_analyze_options(
 @_guard_buffer("samples")
 def analyze(
     samples: Sequence[float] | list[float],
-    sample_rate: int = 22050,
+    sample_rate: int,
     *,
     n_fft: int = 2048,
     hop_length: int = 512,
@@ -191,7 +191,7 @@ def analyze(
     Args:
         samples: Mono audio samples (1D float). See :func:`detect_bpm` for
             accepted types.
-        sample_rate: Sample rate in Hz (default 22050).
+        sample_rate: Sample rate in Hz.
         adaptive_tempo: Track a locally updated tempo prior through beat
             tracking instead of holding one global tempo.
         tempo_update_interval_beats: Local tempo context length in beats, used
@@ -372,7 +372,7 @@ def _make_analyze_progress_trampoline(
 @_guard_buffer("samples")
 def analyze_with_progress(
     samples: Sequence[float] | list[float],
-    sample_rate: int = 22050,
+    sample_rate: int,
     on_progress: Callable[[float, str], None] | None = None,
     *,
     cancel: Callable[[], bool] | None = None,
@@ -409,7 +409,7 @@ def analyze_with_progress(
     Args:
         samples: Mono audio samples (1D float). See :func:`detect_bpm` for
             accepted types.
-        sample_rate: Sample rate in Hz (default 22050).
+        sample_rate: Sample rate in Hz.
         on_progress: Optional callable ``(progress: float, stage: str) -> object``
             invoked during analysis. Progress is in ``[0, 1]``. Its return
             value is ignored. If ``None``, no callback is registered. An
@@ -516,7 +516,7 @@ def estimate_meter(
             needs pre-scaling: the series is divided by its own maximum before
             scoring, so only the accent contrast within it is read and the
             absolute units it arrives in do not matter. A series assembled by
-            hand from :func:`onset_envelope` — one frame read at each beat time
+            hand from :func:`onset_strength` — one frame read at each beat time
             — is neither of those, and it carries a sample-rate dependence
             neither of them has: a hop counted in samples frames a different
             amount of time at each rate, so one waveform sampled at 32000,
@@ -659,7 +659,7 @@ def estimate_meter(
 @_guard_buffer("samples")
 def analyze_bpm(
     samples: Sequence[float] | list[float],
-    sample_rate: int = 22050,
+    sample_rate: int,
     bpm_min: float = 30.0,
     bpm_max: float = 300.0,
     start_bpm: float = 120.0,
@@ -716,7 +716,7 @@ def analyze_bpm(
 @_guard_buffer("samples")
 def analyze_impulse_response(
     samples: Sequence[float] | list[float],
-    sample_rate: int = 48000,
+    sample_rate: int,
     n_octave_bands: int = 6,
     min_decay_db: float = 30.0,
 ) -> AcousticResult:
@@ -794,7 +794,7 @@ def analyze_impulse_response(
 @_guard_buffer("samples")
 def detect_acoustic(
     samples: Sequence[float] | list[float],
-    sample_rate: int = 48000,
+    sample_rate: int,
     n_octave_bands: int = 6,
     n_third_octave_subbands: int = 24,
     min_decay_db: float = 30.0,
@@ -837,7 +837,7 @@ def detect_acoustic(
 @_guard_buffer("samples")
 def analyze_rhythm(
     samples: Sequence[float] | list[float],
-    sample_rate: int = 22050,
+    sample_rate: int,
     bpm_min: float = 60.0,
     bpm_max: float = 200.0,
     start_bpm: float = 120.0,
@@ -899,7 +899,7 @@ def analyze_rhythm(
 @_guard_buffer("samples")
 def analyze_dynamics(
     samples: Sequence[float] | list[float],
-    sample_rate: int = 22050,
+    sample_rate: int,
     window_sec: float = 0.4,
     hop_length: int = 512,
     compression_threshold: float = 6.0,
@@ -936,7 +936,7 @@ def analyze_dynamics(
 @_guard_buffer("samples")
 def analyze_timbre(
     samples: Sequence[float] | list[float],
-    sample_rate: int = 22050,
+    sample_rate: int,
     n_fft: int = 2048,
     hop_length: int = 512,
     n_mels: int = 128,

@@ -25,6 +25,7 @@ from ._runtime import (
     _guard_buffer,
     _out_float_array,
     _out_int_array,
+    _resolve_zero_default,
     _to_c_float,
     _to_c_float_array,
     _to_c_int,
@@ -43,9 +44,9 @@ from .types import (
 
 def tone(
     frequency: float = 440.0,
-    sample_rate: int = 22050,
+    sr: int = 22050,
     duration: float = 1.0,
-    phase: float = 0.0,
+    phi: float = 0.0,
     amplitude: float = 1.0,
 ) -> list[float]:
     """Generate a sine tone."""
@@ -54,9 +55,9 @@ def tone(
         _check(
             lib.sonare_tone(
                 _to_c_float(frequency, "frequency"),
-                _to_c_int(sample_rate, "sample_rate"),
+                _to_c_int(sr, "sr"),
                 _to_c_float(duration, "duration"),
-                _to_c_float(phase, "phase"),
+                _to_c_float(phi, "phi"),
                 _to_c_float(amplitude, "amplitude"),
                 ctypes.byref(out),
                 ctypes.byref(out_length),
@@ -68,9 +69,9 @@ def tone(
 def chirp(
     fmin: float = 440.0,
     fmax: float = 880.0,
-    sample_rate: int = 22050,
+    sr: int = 22050,
     duration: float = 1.0,
-    linear: bool = True,
+    linear: bool = False,
 ) -> list[float]:
     """Generate a linear or exponential chirp."""
     lib = _get_lib()
@@ -79,7 +80,7 @@ def chirp(
             lib.sonare_chirp(
                 _to_c_float(fmin, "fmin"),
                 _to_c_float(fmax, "fmax"),
-                _to_c_int(sample_rate, "sample_rate"),
+                _to_c_int(sr, "sr"),
                 _to_c_float(duration, "duration"),
                 1 if linear else 0,
                 ctypes.byref(out),
@@ -91,12 +92,15 @@ def chirp(
 
 def clicks(
     times: Sequence[float] | list[float],
-    sample_rate: int = 22050,
-    length: int = 0,
-    frequency: float = 1000.0,
+    sr: int = 22050,
+    length: int | None = None,
+    click_freq: float = 1000.0,
     click_duration: float = 0.1,
 ) -> list[float]:
-    """Generate decaying sine clicks at times in seconds."""
+    """Generate decaying sine clicks at times in seconds.
+
+    ``length`` is the output length in samples; ``None`` ends after the last click.
+    """
     lib = _get_lib()
     data, count = _to_c_float_array(times, arg_name="times")
     with _out_float_array(lib) as (out, out_length):
@@ -104,9 +108,9 @@ def clicks(
             lib.sonare_clicks(
                 data,
                 _to_c_size_t(count, "times length"),
-                _to_c_int(sample_rate, "sample_rate"),
-                _to_c_int(length, "length"),
-                _to_c_float(frequency, "frequency"),
+                _to_c_int(sr, "sr"),
+                _to_c_int(_resolve_zero_default(length, "length"), "length"),
+                _to_c_float(click_freq, "click_freq"),
                 _to_c_float(click_duration, "click_duration"),
                 ctypes.byref(out),
                 ctypes.byref(out_length),
@@ -117,7 +121,7 @@ def clicks(
 
 def stft(
     samples: Sequence[float] | list[float],
-    sample_rate: int = 22050,
+    sr: int = 22050,
     n_fft: int = 2048,
     hop_length: int = 512,
 ) -> StftResult:
@@ -125,7 +129,7 @@ def stft(
 
     Args:
         samples: Audio samples.
-        sample_rate: Sample rate in Hz (default 22050).
+        sr: Sample rate in Hz (default 22050).
         n_fft: FFT window size (default 2048).
         hop_length: Hop length in samples (default 512).
 
@@ -139,7 +143,7 @@ def stft(
     rc = lib.sonare_stft(
         c_array,
         _to_c_size_t(length, "length"),
-        _to_c_int(sample_rate, "sample_rate"),
+        _to_c_int(sr, "sr"),
         _to_c_int(n_fft, "n_fft"),
         _to_c_int(hop_length, "hop_length"),
         ctypes.byref(out),
@@ -163,7 +167,7 @@ def stft(
 @_guard_buffer("samples")
 def stft_db(
     samples: Sequence[float] | list[float],
-    sample_rate: int = 22050,
+    sample_rate: int,
     n_fft: int = 2048,
     hop_length: int = 512,
 ) -> tuple[int, int, list[float]]:
@@ -171,7 +175,7 @@ def stft_db(
 
     Args:
         samples: Audio samples.
-        sample_rate: Sample rate in Hz (default 22050).
+        sample_rate: Sample rate in Hz.
         n_fft: FFT window size (default 2048).
         hop_length: Hop length in samples (default 512).
 
@@ -211,7 +215,7 @@ def stft_db(
 
 def mel_spectrogram(
     samples: Sequence[float] | list[float],
-    sample_rate: int = 22050,
+    sample_rate: int,
     n_fft: int = 2048,
     hop_length: int = 512,
     n_mels: int = 128,
@@ -223,7 +227,7 @@ def mel_spectrogram(
 
     Args:
         samples: Audio samples.
-        sample_rate: Sample rate in Hz (default 22050).
+        sample_rate: Sample rate in Hz.
         n_fft: FFT window size (default 2048).
         hop_length: Hop length in samples (default 512).
         n_mels: Number of Mel bands (default 128).
@@ -274,13 +278,13 @@ def mel_spectrogram(
 
 def mfcc(
     samples: Sequence[float] | list[float],
-    sample_rate: int = 22050,
+    sr: int = 22050,
     n_fft: int = 2048,
     hop_length: int = 512,
     n_mels: int = 128,
     n_mfcc: int = 20,
     fmin: float = 0.0,
-    fmax: float = 0.0,
+    fmax: float | None = None,
     htk: bool = False,
     lifter: float = 0.0,
 ) -> MfccResult:
@@ -288,13 +292,13 @@ def mfcc(
 
     Args:
         samples: Audio samples.
-        sample_rate: Sample rate in Hz (default 22050).
+        sr: Sample rate in Hz (default 22050).
         n_fft: FFT window size (default 2048).
         hop_length: Hop length in samples (default 512).
         n_mels: Number of Mel bands (default 128).
         n_mfcc: Number of MFCC coefficients (default 20).
         fmin: Minimum Mel frequency in Hz (default 0.0 = librosa default).
-        fmax: Maximum Mel frequency in Hz (default 0.0 = sample_rate / 2).
+        fmax: Maximum Mel frequency in Hz (default None = sr / 2).
         htk: Use the HTK Mel formula instead of Slaney (default False).
         lifter: Cepstral liftering coefficient (default 0.0 = no liftering).
 
@@ -308,13 +312,13 @@ def mfcc(
     rc = lib.sonare_mfcc_ex(
         c_array,
         _to_c_size_t(length, "length"),
-        _to_c_int(sample_rate, "sample_rate"),
+        _to_c_int(sr, "sr"),
         _to_c_int(n_fft, "n_fft"),
         _to_c_int(hop_length, "hop_length"),
         _to_c_int(n_mels, "n_mels"),
         _to_c_int(n_mfcc, "n_mfcc"),
         _to_c_float(fmin, "fmin"),
-        _to_c_float(fmax, "fmax"),
+        _to_c_float(_resolve_zero_default(fmax, "fmax"), "fmax"),
         ctypes.c_int(1 if htk else 0),
         _to_c_float(lifter, "lifter"),
         ctypes.byref(out),
@@ -377,7 +381,7 @@ def mel_delta(
 
 def chroma(
     samples: Sequence[float] | list[float],
-    sample_rate: int = 22050,
+    sample_rate: int,
     n_fft: int = 2048,
     hop_length: int = 512,
 ) -> ChromaResult:
@@ -393,7 +397,7 @@ def chroma(
 
     Args:
         samples: Audio samples.
-        sample_rate: Sample rate in Hz (default 22050).
+        sample_rate: Sample rate in Hz.
         n_fft: FFT window size (default 2048).
         hop_length: Hop length in samples (default 512).
 
@@ -471,7 +475,7 @@ def _chroma_variant(
 
 def chroma_cens(
     samples: Sequence[float] | list[float],
-    sample_rate: int = 22050,
+    sr: int = 22050,
     hop_length: int = 512,
     n_chroma: int = 12,
     bins_per_octave: int = 36,
@@ -480,7 +484,7 @@ def chroma_cens(
 
     Args:
         samples: Audio samples.
-        sample_rate: Sample rate in Hz (default 22050).
+        sr: Sample rate in Hz (default 22050).
         hop_length: Hop length in samples (default 512).
         n_chroma: Number of pitch classes (default 12).
         bins_per_octave: Constant-Q bins per octave (default 36). Must be a
@@ -494,7 +498,7 @@ def chroma_cens(
     return _chroma_variant(
         "sonare_chroma_cens_ex",
         samples,
-        sample_rate,
+        sr,
         hop_length,
         n_chroma,
         bins_per_octave,
@@ -504,7 +508,7 @@ def chroma_cens(
 
 def chroma_cqt(
     samples: Sequence[float] | list[float],
-    sample_rate: int = 22050,
+    sr: int = 22050,
     hop_length: int = 512,
     n_chroma: int = 12,
     bins_per_octave: int = 36,
@@ -513,7 +517,7 @@ def chroma_cqt(
 
     Args:
         samples: Audio samples.
-        sample_rate: Sample rate in Hz (default 22050).
+        sr: Sample rate in Hz (default 22050).
         hop_length: Hop length in samples (default 512).
         n_chroma: Number of pitch classes (default 12).
         bins_per_octave: Constant-Q bins per octave (default 36). Must be a
@@ -527,7 +531,7 @@ def chroma_cqt(
     return _chroma_variant(
         "sonare_chroma_cqt_ex",
         samples,
-        sample_rate,
+        sr,
         hop_length,
         n_chroma,
         bins_per_octave,
@@ -537,7 +541,7 @@ def chroma_cqt(
 
 def bass_chroma(
     samples: Sequence[float] | list[float],
-    sample_rate: int = 22050,
+    sample_rate: int,
     hop_length: int = 512,
     n_chroma: int = 12,
 ) -> ChromaResult:
@@ -545,7 +549,7 @@ def bass_chroma(
 
     Args:
         samples: Audio samples.
-        sample_rate: Sample rate in Hz (default 22050).
+        sample_rate: Sample rate in Hz.
         hop_length: Hop length in samples (default 512).
         n_chroma: Number of pitch classes (default 12). The constant-Q resolution
             is the library's own here rather than an argument, and every pitch
@@ -573,7 +577,7 @@ def bass_chroma(
 @_guard_buffer("samples")
 def spectral_centroid(
     samples: Sequence[float] | list[float],
-    sample_rate: int = 22050,
+    sr: int = 22050,
     n_fft: int = 2048,
     hop_length: int = 512,
 ) -> list[float]:
@@ -581,7 +585,7 @@ def spectral_centroid(
 
     Args:
         samples: Audio samples.
-        sample_rate: Sample rate in Hz (default 22050).
+        sr: Sample rate in Hz (default 22050).
         n_fft: FFT window size (default 2048).
         hop_length: Hop length in samples (default 512).
 
@@ -591,7 +595,7 @@ def spectral_centroid(
     return _call_float_transform(
         "sonare_spectral_centroid",
         samples,
-        _to_c_int(sample_rate, "sample_rate"),
+        _to_c_int(sr, "sr"),
         _to_c_int(n_fft, "n_fft"),
         _to_c_int(hop_length, "hop_length"),
     )
@@ -600,7 +604,7 @@ def spectral_centroid(
 @_guard_buffer("samples")
 def spectral_bandwidth(
     samples: Sequence[float] | list[float],
-    sample_rate: int = 22050,
+    sr: int = 22050,
     n_fft: int = 2048,
     hop_length: int = 512,
     p: float = 2.0,
@@ -609,7 +613,7 @@ def spectral_bandwidth(
 
     Args:
         samples: Audio samples.
-        sample_rate: Sample rate in Hz (default 22050).
+        sr: Sample rate in Hz (default 22050).
         n_fft: FFT window size (default 2048).
         hop_length: Hop length in samples (default 512).
         p: Positive Minkowski exponent (default 2.0).
@@ -620,7 +624,7 @@ def spectral_bandwidth(
     return _call_float_transform(
         "sonare_spectral_bandwidth_ex",
         samples,
-        _to_c_int(sample_rate, "sample_rate"),
+        _to_c_int(sr, "sr"),
         _to_c_int(n_fft, "n_fft"),
         _to_c_int(hop_length, "hop_length"),
         _to_c_float(p, "p"),
@@ -630,7 +634,7 @@ def spectral_bandwidth(
 @_guard_buffer("samples")
 def spectral_flux(
     samples: Sequence[float] | list[float],
-    sample_rate: int = 22050,
+    sample_rate: int,
     n_fft: int = 2048,
     hop_length: int = 512,
     lag: int = 1,
@@ -670,7 +674,7 @@ def onset_backtrack(
 @_guard_buffer("samples")
 def spectral_rolloff(
     samples: Sequence[float] | list[float],
-    sample_rate: int = 22050,
+    sr: int = 22050,
     n_fft: int = 2048,
     hop_length: int = 512,
     roll_percent: float = 0.85,
@@ -679,7 +683,7 @@ def spectral_rolloff(
 
     Args:
         samples: Audio samples.
-        sample_rate: Sample rate in Hz (default 22050).
+        sr: Sample rate in Hz (default 22050).
         n_fft: FFT window size (default 2048).
         hop_length: Hop length in samples (default 512).
         roll_percent: Rolloff percentage (default 0.85).
@@ -690,7 +694,7 @@ def spectral_rolloff(
     return _call_float_transform(
         "sonare_spectral_rolloff",
         samples,
-        _to_c_int(sample_rate, "sample_rate"),
+        _to_c_int(sr, "sr"),
         _to_c_int(n_fft, "n_fft"),
         _to_c_int(hop_length, "hop_length"),
         _to_c_float(roll_percent, "roll_percent"),
@@ -700,7 +704,7 @@ def spectral_rolloff(
 @_guard_buffer("samples")
 def spectral_flatness(
     samples: Sequence[float] | list[float],
-    sample_rate: int = 22050,
+    sr: int = 22050,
     n_fft: int = 2048,
     hop_length: int = 512,
 ) -> list[float]:
@@ -708,7 +712,7 @@ def spectral_flatness(
 
     Args:
         samples: Audio samples.
-        sample_rate: Sample rate in Hz (default 22050).
+        sr: Sample rate in Hz (default 22050).
         n_fft: FFT window size (default 2048).
         hop_length: Hop length in samples (default 512).
 
@@ -718,7 +722,7 @@ def spectral_flatness(
     return _call_float_transform(
         "sonare_spectral_flatness",
         samples,
-        _to_c_int(sample_rate, "sample_rate"),
+        _to_c_int(sr, "sr"),
         _to_c_int(n_fft, "n_fft"),
         _to_c_int(hop_length, "hop_length"),
     )
@@ -727,7 +731,7 @@ def spectral_flatness(
 @_guard_buffer("samples")
 def zero_crossing_rate(
     samples: Sequence[float] | list[float],
-    sample_rate: int = 22050,
+    sr: int = 22050,
     frame_length: int = 2048,
     hop_length: int = 512,
 ) -> list[float]:
@@ -735,7 +739,7 @@ def zero_crossing_rate(
 
     Args:
         samples: Audio samples.
-        sample_rate: Sample rate in Hz (default 22050).
+        sr: Sample rate in Hz (default 22050).
         frame_length: Frame length in samples (default 2048).
         hop_length: Hop length in samples (default 512).
 
@@ -745,7 +749,7 @@ def zero_crossing_rate(
     return _call_float_transform(
         "sonare_zero_crossing_rate",
         samples,
-        _to_c_int(sample_rate, "sample_rate"),
+        _to_c_int(sr, "sr"),
         _to_c_int(frame_length, "frame_length"),
         _to_c_int(hop_length, "hop_length"),
     )
@@ -754,7 +758,7 @@ def zero_crossing_rate(
 @_guard_buffer("samples")
 def rms_energy(
     samples: Sequence[float] | list[float],
-    sample_rate: int = 22050,
+    sample_rate: int,
     frame_length: int = 2048,
     hop_length: int = 512,
 ) -> list[float]:
@@ -762,7 +766,7 @@ def rms_energy(
 
     Args:
         samples: Audio samples.
-        sample_rate: Sample rate in Hz (default 22050).
+        sample_rate: Sample rate in Hz.
         frame_length: Frame length in samples (default 2048).
         hop_length: Hop length in samples (default 512).
 
@@ -786,7 +790,7 @@ def rms_energy(
 @_guard_buffer("samples")
 def spectral_contrast(
     samples: Sequence[float] | list[float],
-    sample_rate: int = 22050,
+    sr: int = 22050,
     n_fft: int = 2048,
     hop_length: int = 512,
     n_bands: int = 6,
@@ -797,7 +801,7 @@ def spectral_contrast(
 
     Args:
         samples: Audio samples.
-        sample_rate: Sample rate in Hz (default 22050).
+        sr: Sample rate in Hz (default 22050).
         n_fft: FFT window size (default 2048).
         hop_length: Hop length in samples (default 512).
         n_bands: Number of frequency bands (default 6).
@@ -810,7 +814,7 @@ def spectral_contrast(
 
     Note:
         Band 0 spans ``[0, fmin]``, so an ``fmin`` below one analysis bin
-        (``sample_rate / n_fft``) leaves it empty after the band trim. Row 0 is
+        (``sr / n_fft``) leaves it empty after the band trim. Row 0 is
         still finite, but comes from the other bands' extremes rather than from
         itself, and is neither level-invariant nor confined to the band. Keep
         ``fmin`` at or above one bin width for row 0 to mean anything -- at the
@@ -825,7 +829,7 @@ def spectral_contrast(
         rc = lib.sonare_spectral_contrast(
             c_array,
             _to_c_size_t(length, "length"),
-            _to_c_int(sample_rate, "sample_rate"),
+            _to_c_int(sr, "sr"),
             _to_c_int(n_fft, "n_fft"),
             _to_c_int(hop_length, "hop_length"),
             _to_c_int(n_bands, "n_bands"),
@@ -844,7 +848,7 @@ def spectral_contrast(
 @_guard_buffer("samples")
 def poly_features(
     samples: Sequence[float] | list[float],
-    sample_rate: int = 22050,
+    sr: int = 22050,
     n_fft: int = 2048,
     hop_length: int = 512,
     order: int = 1,
@@ -853,7 +857,7 @@ def poly_features(
 
     Args:
         samples: Audio samples.
-        sample_rate: Sample rate in Hz (default 22050).
+        sr: Sample rate in Hz (default 22050).
         n_fft: FFT window size (default 2048).
         hop_length: Hop length in samples (default 512).
         order: Polynomial order (default 1).
@@ -870,7 +874,7 @@ def poly_features(
         rc = lib.sonare_poly_features(
             c_array,
             _to_c_size_t(length, "length"),
-            _to_c_int(sample_rate, "sample_rate"),
+            _to_c_int(sr, "sr"),
             _to_c_int(n_fft, "n_fft"),
             _to_c_int(hop_length, "hop_length"),
             _to_c_int(order, "order"),
@@ -927,7 +931,7 @@ def zero_crossings(
 @_guard_buffer("samples")
 def reassigned_spectrogram(
     samples: Sequence[float] | list[float],
-    sample_rate: int = 22050,
+    sr: int = 22050,
     n_fft: int = 2048,
     hop_length: int = 512,
     ref_power: float = 1e-6,
@@ -942,7 +946,7 @@ def reassigned_spectrogram(
     rc = lib.sonare_reassigned_spectrogram(
         c_array,
         _to_c_size_t(length, "length"),
-        _to_c_int(sample_rate, "sample_rate"),
+        _to_c_int(sr, "sr"),
         _to_c_int(n_fft, "n_fft"),
         _to_c_int(hop_length, "hop_length"),
         _to_c_float(ref_power, "ref_power"),

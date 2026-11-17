@@ -63,16 +63,11 @@ _DEFAULT_SPECTRUM_N_FFT = 2048
 
 def lufs(
     samples: Sequence[float] | list[float],
-    sample_rate: int = 22050,
+    sample_rate: int,
     *,
     validate: bool = True,
 ) -> LufsResult:
-    """Compute integrated/momentary/short-term LUFS and loudness range.
-
-    Pass the buffer's actual ``sample_rate``: the default (22050) is non-standard
-    for audio, and ITU-R BS.1770 K-weighting is sample-rate dependent, so a wrong
-    rate yields wrong loudness.
-    """
+    """Compute integrated/momentary/short-term LUFS and loudness range."""
     sample_buf = _validate_samples("lufs", samples, validate=validate)
     lib = _get_lib()
     c_array, length = _to_c_float_array(sample_buf)
@@ -96,15 +91,11 @@ def lufs(
 
 def momentary_lufs(
     samples: Sequence[float] | list[float],
-    sample_rate: int = 22050,
+    sample_rate: int,
     *,
     validate: bool = True,
 ) -> list[float]:
-    """Compute the per-block momentary LUFS time series.
-
-    Pass the buffer's actual ``sample_rate``: the default (22050) is non-standard
-    and K-weighting is sample-rate dependent.
-    """
+    """Compute the per-block momentary LUFS time series."""
     sample_buf = _validate_samples("momentary_lufs", samples, validate=validate)
     return _call_float_transform(
         "sonare_momentary_lufs",
@@ -115,15 +106,11 @@ def momentary_lufs(
 
 def short_term_lufs(
     samples: Sequence[float] | list[float],
-    sample_rate: int = 22050,
+    sample_rate: int,
     *,
     validate: bool = True,
 ) -> list[float]:
-    """Compute the per-block short-term LUFS time series.
-
-    Pass the buffer's actual ``sample_rate``: the default (22050) is non-standard
-    and K-weighting is sample-rate dependent.
-    """
+    """Compute the per-block short-term LUFS time series."""
     sample_buf = _validate_samples("short_term_lufs", samples, validate=validate)
     return _call_float_transform(
         "sonare_short_term_lufs",
@@ -135,7 +122,7 @@ def short_term_lufs(
 def lufs_interleaved(
     samples: Sequence[float] | list[float],
     channels: int,
-    sample_rate: int = 22050,
+    sample_rate: int,
     *,
     validate: bool = True,
 ) -> LufsResult:
@@ -144,9 +131,7 @@ def lufs_interleaved(
     Args:
         samples: Interleaved input buffer of ``frames * channels`` values.
         channels: Channel count (must be > 0).
-        sample_rate: Sample rate in Hz. The default (22050) is non-standard for
-            audio; pass the buffer's actual rate, as K-weighting is sample-rate
-            dependent and a wrong rate yields wrong loudness.
+        sample_rate: Sample rate in Hz; K-weighting depends on it.
 
     Returns:
         A :class:`LufsResult` with integrated/momentary/short-term LUFS and
@@ -184,7 +169,7 @@ def lufs_interleaved(
 def lufs_series_interleaved(
     samples: Sequence[float] | list[float],
     channels: int,
-    sample_rate: int = 22050,
+    sample_rate: int,
     *,
     validate: bool = True,
 ) -> tuple[list[float], list[float]]:
@@ -199,9 +184,7 @@ def lufs_series_interleaved(
     Args:
         samples: Interleaved input buffer of ``frames * channels`` values.
         channels: Channel count (must be > 0).
-        sample_rate: Sample rate in Hz. The default (22050) is non-standard for
-            audio; pass the buffer's actual rate, as K-weighting is sample-rate
-            dependent and a wrong rate yields wrong loudness.
+        sample_rate: Sample rate in Hz; K-weighting depends on it.
         validate: Reject empty / NaN / Inf input (default ``True``).
 
     Returns:
@@ -241,15 +224,11 @@ def lufs_series_interleaved(
 
 def ebur128_loudness_range(
     samples: Sequence[float] | list[float],
-    sample_rate: int = 22050,
+    sample_rate: int,
     *,
     validate: bool = True,
 ) -> float:
-    """EBU R128 / Tech 3342 Loudness Range (LRA) in LU for a mono buffer.
-
-    Pass the buffer's actual ``sample_rate``: the default (22050) is non-standard
-    and K-weighting is sample-rate dependent.
-    """
+    """EBU R128 / Tech 3342 Loudness Range (LRA) in LU for a mono buffer."""
     sample_buf = _validate_samples("ebur128_loudness_range", samples, validate=validate)
     lib = _get_lib()
     c_array, length = _to_c_float_array(sample_buf)
@@ -294,7 +273,7 @@ def _metering_scalar(
 
 def metering_peak_db(
     samples: Sequence[float] | list[float],
-    sample_rate: int = 22050,
+    sample_rate: int,
     *,
     validate: bool = True,
 ) -> float:
@@ -304,7 +283,7 @@ def metering_peak_db(
 
 def metering_rms_db(
     samples: Sequence[float] | list[float],
-    sample_rate: int = 22050,
+    sample_rate: int,
     *,
     validate: bool = True,
 ) -> float:
@@ -314,7 +293,7 @@ def metering_rms_db(
 
 def metering_silence_ratio(
     samples: Sequence[float] | list[float],
-    sample_rate: int = 22050,
+    sample_rate: int,
     threshold_db: float = -45.0,
     frame_length: int = 1024,
     hop_length: int = 256,
@@ -341,7 +320,7 @@ def metering_silence_ratio(
 
 def metering_crest_factor_db(
     samples: Sequence[float] | list[float],
-    sample_rate: int = 22050,
+    sample_rate: int,
     *,
     validate: bool = True,
 ) -> float:
@@ -354,7 +333,7 @@ def metering_crest_factor_db(
 def metering_crest_factor_db_stereo(
     left: Sequence[float] | list[float],
     right: Sequence[float] | list[float],
-    sample_rate: int = 22050,
+    sample_rate: int,
     *,
     validate: bool = True,
 ) -> float:
@@ -392,7 +371,7 @@ def metering_crest_factor_db_stereo(
 
 def metering_dc_offset(
     samples: Sequence[float] | list[float],
-    sample_rate: int = 22050,
+    sample_rate: int,
     *,
     validate: bool = True,
 ) -> float:
@@ -402,7 +381,7 @@ def metering_dc_offset(
 
 def metering_true_peak_db(
     samples: Sequence[float] | list[float],
-    sample_rate: int = 22050,
+    sample_rate: int,
     oversample_factor: int = 4,
     *,
     validate: bool = True,
@@ -429,7 +408,7 @@ def metering_true_peak_db(
 
 def metering_detect_clipping(
     samples: Sequence[float] | list[float],
-    sample_rate: int = 22050,
+    sample_rate: int,
     threshold: float = 0.999,
     min_region_samples: int = 1,
     *,
@@ -504,7 +483,7 @@ def _stereo_scalar(
 def metering_stereo_correlation(
     left: Sequence[float] | list[float],
     right: Sequence[float] | list[float],
-    sample_rate: int = 22050,
+    sample_rate: int,
     *,
     validate: bool = True,
 ) -> float:
@@ -521,7 +500,7 @@ def metering_stereo_correlation(
 def metering_stereo_width(
     left: Sequence[float] | list[float],
     right: Sequence[float] | list[float],
-    sample_rate: int = 22050,
+    sample_rate: int,
     *,
     validate: bool = True,
 ) -> float:
@@ -573,7 +552,7 @@ def _scope_point_columns(
 def metering_vectorscope(
     left: Sequence[float] | list[float],
     right: Sequence[float] | list[float],
-    sample_rate: int = 22050,
+    sample_rate: int,
     max_points: int = 0,
     *,
     validate: bool = True,
@@ -619,7 +598,7 @@ def metering_vectorscope(
 def metering_vectorscope_decimated(
     left: Sequence[float] | list[float],
     right: Sequence[float] | list[float],
-    sample_rate: int = 22050,
+    sample_rate: int,
     max_points: int = 0,
     *,
     validate: bool = True,
@@ -666,7 +645,7 @@ def metering_vectorscope_decimated(
 def metering_phase_scope(
     left: Sequence[float] | list[float],
     right: Sequence[float] | list[float],
-    sample_rate: int = 22050,
+    sample_rate: int,
     max_points: int = 0,
     *,
     validate: bool = True,
@@ -721,7 +700,7 @@ def metering_phase_scope(
 def metering_phase_scope_decimated(
     left: Sequence[float] | list[float],
     right: Sequence[float] | list[float],
-    sample_rate: int = 22050,
+    sample_rate: int,
     max_points: int = 0,
     *,
     validate: bool = True,
@@ -775,7 +754,7 @@ def metering_phase_scope_decimated(
 
 def metering_spectrum(
     samples: Sequence[float] | list[float],
-    sample_rate: int = 22050,
+    sample_rate: int,
     n_fft: int = 0,
     apply_octave_smoothing: bool = False,
     octave_fraction: int = 0,
@@ -830,7 +809,7 @@ def metering_spectrum(
 
 def metering_spectrum_frame(
     samples: Sequence[float] | list[float],
-    sample_rate: int = 22050,
+    sample_rate: int,
     frame_offset: int = 0,
     n_fft: int = 0,
     apply_octave_smoothing: bool = False,
@@ -1016,7 +995,7 @@ def waveform_peak_pyramid(
 
 def metering_dynamic_range(
     samples: Sequence[float] | list[float],
-    sample_rate: int = 22050,
+    sample_rate: int,
     window_sec: float = 0.0,
     hop_sec: float = 0.0,
     low_percentile: float | None = None,

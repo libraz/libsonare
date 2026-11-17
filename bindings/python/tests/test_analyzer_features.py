@@ -288,7 +288,7 @@ def test_stft() -> None:
     from libsonare import stft
 
     tone = _generate_sine(440, 22050, 1.0)
-    result = stft(tone, sample_rate=22050)
+    result = stft(tone, sr=22050)
     assert result.n_bins == 1025
     assert result.n_frames > 0
     assert len(result.magnitude) == result.n_bins * result.n_frames
@@ -326,9 +326,7 @@ def test_piptrack_returns_equally_shaped_matrices() -> None:
     """piptrack exposes the per-bin pitch and magnitude matrices."""
     from libsonare import piptrack
 
-    result = piptrack(
-        _generate_sine(440.0, 22050, 1.0), sample_rate=22050, n_fft=1024, hop_length=256
-    )
+    result = piptrack(_generate_sine(440.0, 22050, 1.0), sr=22050, n_fft=1024, hop_length=256)
     assert result.n_bins == 513
     assert len(result.pitches) == result.n_bins * result.n_frames
     assert len(result.magnitudes) == len(result.pitches)
@@ -339,7 +337,7 @@ def test_reassigned_spectrogram_returns_equally_shaped_coordinate_matrices() -> 
     from libsonare import reassigned_spectrogram
 
     result = reassigned_spectrogram(
-        _generate_sine(440.0, 22050, 1.0), sample_rate=22050, n_fft=1024, hop_length=256
+        _generate_sine(440.0, 22050, 1.0), sr=22050, n_fft=1024, hop_length=256
     )
     assert result.n_bins == 513
     assert result.n_frames > 0
@@ -352,25 +350,25 @@ def test_reassigned_spectrogram_returns_equally_shaped_coordinate_matrices() -> 
 def test_librosa_segment_operations_are_public() -> None:
     """All seven librosa.segment-compatible functions cross the Python C ABI."""
     from libsonare import (
-        agglomerative,
-        cross_similarity,
-        lag_to_recurrence,
-        path_enhance,
-        recurrence_matrix,
-        recurrence_to_lag,
-        subsegment,
+        segment_agglomerative,
+        segment_cross_similarity,
+        segment_lag_to_recurrence,
+        segment_path_enhance,
+        segment_recurrence_matrix,
+        segment_recurrence_to_lag,
+        segment_subsegment,
     )
 
     data = [1.0, 0.0, 1.0, 0.0, 1.0, 1.0]
-    cross = cross_similarity(data, 2, 3, data, 2, 3)
+    cross = segment_cross_similarity(data, 2, 3, data, 2, 3)
     assert (cross.rows, cross.cols, len(cross.values)) == (3, 3, 9)
-    recurrence = recurrence_matrix(data, 2, 3)
+    recurrence = segment_recurrence_matrix(data, 2, 3)
     assert (recurrence.rows, recurrence.cols, len(recurrence.values)) == (3, 3, 9)
-    lag = recurrence_to_lag(recurrence.values, 3)
+    lag = segment_recurrence_to_lag(recurrence.values, 3)
     assert (lag.rows, lag.cols, len(lag.values)) == (6, 3, 18)
-    assert len(lag_to_recurrence(lag.values, 3, 6).values) == 9
-    # librosa 0.11.0 recurrence_to_lag on rec[r][c] = 4r + c (pad defaults to True).
-    padded = recurrence_to_lag([float(i) for i in range(16)], 4)
+    assert len(segment_lag_to_recurrence(lag.values, 3, 6).values) == 9
+    # librosa 0.11.0 segment_recurrence_to_lag on rec[r][c] = 4r + c (pad defaults to True).
+    padded = segment_recurrence_to_lag([float(i) for i in range(16)], 4)
     assert (padded.rows, padded.cols) == (8, 4)
     # fmt: off
     assert list(padded.values) == [
@@ -378,9 +376,9 @@ def test_librosa_segment_operations_are_public() -> None:
         0, 0, 0, 0, 0, 0, 0, 3, 0, 0, 2, 7, 0, 1, 6, 11,
     ]
     # fmt: on
-    assert subsegment(data, 2, 3, [0, 3])[0] == 0
-    assert len(agglomerative(data, 2, 3, 2)) == 3
-    assert len(path_enhance(recurrence.values, 3, 1).values) == 9
+    assert segment_subsegment(data, 2, 3, [0, 3])[0] == 0
+    assert len(segment_agglomerative(data, 2, 3, 2)) == 3
+    assert len(segment_path_enhance(recurrence.values, 3, 1).values) == 9
 
 
 def test_mel_spectrogram_explicit_range() -> None:
@@ -434,7 +432,7 @@ def test_mfcc() -> None:
     from libsonare import mfcc
 
     tone = _generate_sine(440, 22050, 1.0)
-    result = mfcc(tone, sample_rate=22050, n_mels=64, n_mfcc=13)
+    result = mfcc(tone, sr=22050, n_mels=64, n_mfcc=13)
     assert result.n_mfcc == 13
     assert result.n_frames > 0
     assert len(result.coefficients) == result.n_mfcc * result.n_frames
@@ -445,8 +443,8 @@ def test_mfcc_explicit_range() -> None:
     from libsonare import mfcc
 
     tone = _generate_sine(440, 22050, 1.0)
-    base = mfcc(tone, sample_rate=22050, n_mels=64, n_mfcc=13)
-    ranged = mfcc(tone, sample_rate=22050, n_mels=64, n_mfcc=13, fmin=500.0, fmax=4000.0)
+    base = mfcc(tone, sr=22050, n_mels=64, n_mfcc=13)
+    ranged = mfcc(tone, sr=22050, n_mels=64, n_mfcc=13, fmin=500.0, fmax=4000.0)
     assert len(base.coefficients) == len(ranged.coefficients)
     assert (
         sum((a - b) ** 2 for a, b in zip(base.coefficients, ranged.coefficients, strict=True))
@@ -471,7 +469,7 @@ def test_chroma_cens_and_bass_chroma() -> None:
 
     tone = _generate_sine(110, 22050, 1.0)
     for result in (
-        chroma_cens(tone, sample_rate=22050),
+        chroma_cens(tone, sr=22050),
         bass_chroma(tone, sample_rate=22050),
     ):
         assert result.n_chroma == 12
@@ -485,7 +483,7 @@ def test_spectral_centroid() -> None:
     from libsonare import spectral_centroid
 
     tone = _generate_sine(440, 22050, 1.0)
-    result = spectral_centroid(tone, sample_rate=22050)
+    result = spectral_centroid(tone, sr=22050)
     assert len(result) > 0
 
 
@@ -494,9 +492,9 @@ def test_spectral_bandwidth() -> None:
     from libsonare import spectral_bandwidth
 
     tone = _generate_sine(440, 22050, 1.0)
-    result = spectral_bandwidth(tone, sample_rate=22050)
+    result = spectral_bandwidth(tone, sr=22050)
     assert len(result) > 0
-    assert spectral_bandwidth(tone, sample_rate=22050, p=1.0) != result
+    assert spectral_bandwidth(tone, sr=22050, p=1.0) != result
 
 
 def test_spectral_flux() -> None:
@@ -522,9 +520,15 @@ def test_griffin_lim() -> None:
     from libsonare import griffin_lim, stft
 
     samples = _generate_sine(440, 22050, 1.0)
-    spec = stft(samples, sample_rate=22050, n_fft=1024, hop_length=256)
+    spec = stft(samples, sr=22050, n_fft=1024, hop_length=256)
     result = griffin_lim(
-        spec.magnitude, spec.n_bins, spec.n_frames, n_fft=1024, hop_length=256, n_iter=1
+        spec.magnitude,
+        spec.n_bins,
+        spec.n_frames,
+        n_fft=1024,
+        hop_length=256,
+        n_iter=1,
+        sample_rate=22050,
     )
     assert len(result) > 0
 
@@ -534,7 +538,7 @@ def test_spectral_rolloff() -> None:
     from libsonare import spectral_rolloff
 
     tone = _generate_sine(440, 22050, 1.0)
-    result = spectral_rolloff(tone, sample_rate=22050)
+    result = spectral_rolloff(tone, sr=22050)
     assert len(result) > 0
 
 
@@ -543,7 +547,7 @@ def test_spectral_flatness() -> None:
     from libsonare import spectral_flatness
 
     tone = _generate_sine(440, 22050, 1.0)
-    result = spectral_flatness(tone, sample_rate=22050)
+    result = spectral_flatness(tone, sr=22050)
     assert len(result) > 0
 
 
@@ -552,7 +556,7 @@ def test_zero_crossing_rate() -> None:
     from libsonare import zero_crossing_rate
 
     tone = _generate_sine(440, 22050, 1.0)
-    result = zero_crossing_rate(tone, sample_rate=22050)
+    result = zero_crossing_rate(tone, sr=22050)
     assert len(result) > 0
     assert all(0 <= v <= 1 for v in result)
 
@@ -561,7 +565,7 @@ def test_zero_crossing_rate_uses_edge_padding() -> None:
     """zero_crossing_rate matches librosa-style edge padding for constant signals."""
     from libsonare import zero_crossing_rate
 
-    result = zero_crossing_rate([-1.0] * 8, sample_rate=22050, frame_length=8, hop_length=4)
+    result = zero_crossing_rate([-1.0] * 8, sr=22050, frame_length=8, hop_length=4)
     assert len(result) > 0
     assert all(v == 0.0 for v in result)
 
@@ -603,10 +607,10 @@ def test_spectral_scalars_repeated_calls_are_stable() -> None:
         rms_energy,
     )
     for helper in helpers:
-        first = helper(tone, sample_rate=22050)
+        first = helper(tone, 22050)
         assert len(first) > 0
         for _ in range(64):
-            again = helper(tone, sample_rate=22050)
+            again = helper(tone, 22050)
             assert again == first
 
 

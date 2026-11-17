@@ -109,7 +109,9 @@ def test_chord_detection_defaults_and_cqt_front_end() -> None:
 
     audio = _progression_audio()
     assert libsonare.detect_chords(audio, SR, chroma_method="cqt").chords
-    assert libsonare.chord_functional_analysis(audio, PitchClass.C, chroma_method="cqt")
+    assert libsonare.chord_functional_analysis(
+        audio, key_root=PitchClass.C, chroma_method="cqt", sample_rate=22050
+    )
     with pytest.raises(ValueError):
         libsonare.detect_chords(audio, SR, chroma_method="bogus")
 
