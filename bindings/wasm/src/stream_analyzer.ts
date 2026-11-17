@@ -98,7 +98,9 @@ function sharedFrameArrays<T extends Float32Array | Uint8Array | Int16Array>(
     spectralCentroid?: T;
     spectralFlatness?: T;
   } = { rmsEnergy: native.rmsEnergy };
-  if (flags & FEATURE_ONSET) out.onsetStrength = native.onsetStrength;
+  if (flags & FEATURE_ONSET) {
+    out.onsetStrength = native.onsetStrength;
+  }
   if (flags & FEATURE_SPECTRAL) {
     out.spectralCentroid = native.spectralCentroid;
     out.spectralFlatness = native.spectralFlatness;

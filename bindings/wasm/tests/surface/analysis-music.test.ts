@@ -1,12 +1,12 @@
 import { beforeAll, describe, expect, expectTypeOf, it } from 'vitest';
 import * as sonare from '../../dist/index.js';
 import {
-  CHORD_QUALITIES,
   analyze,
   analyzeBpm,
   analyzeDynamics,
   analyzeMelody,
   analyzePolyphonic,
+  CHORD_QUALITIES,
   chordFunctions,
   chordSymbolFromAnalysis,
   cqt,
@@ -22,8 +22,8 @@ import {
   onsetStrengthMulti,
   tempogramRatio,
   transcribe,
-  vqtToAudio,
   vqt,
+  vqtToAudio,
 } from '../../dist/index.js';
 import { init as initSource } from '../../src/index';
 import { getSonareModule } from '../../src/module_state';

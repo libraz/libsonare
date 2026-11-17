@@ -151,9 +151,7 @@ describe('one positional form, sampleRate required', () => {
     expect(() => analyzeBpm({ samples, sampleRate, tempoMin: 60 } as never)).toThrow(TypeError);
     expect(() =>
       (analyzeSections as (...args: unknown[]) => unknown)(samples, sampleRate, { nFft: 2048 }, 1),
-    ).toThrow(
-      TypeError,
-    );
+    ).toThrow(TypeError);
   });
 
   it('keeps analyzeAsync rejecting rather than throwing', async () => {

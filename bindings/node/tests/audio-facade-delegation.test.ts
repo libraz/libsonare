@@ -19,7 +19,6 @@ import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import {
   Audio,
-  type PitchClass,
   analyze,
   analyzeImpulseResponse,
   chordFunctionalAnalysis,
@@ -31,6 +30,7 @@ import {
   melSpectrogram,
   mfcc,
   onsetStrength,
+  type PitchClass,
   pitchPyin,
   pitchYin,
   resample,

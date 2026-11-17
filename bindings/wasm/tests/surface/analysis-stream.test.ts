@@ -1,4 +1,5 @@
 import { beforeAll, describe, expect, expectTypeOf, it } from 'vitest';
+import * as indexModule from '../../dist/index.js';
 import {
   CHORD_QUALITIES,
   type ChordQuality,
@@ -17,12 +18,11 @@ import {
   streamAnalyzerConfigDefault,
   type VoiceScaleKind,
 } from '../../dist/index.js';
-import * as indexModule from '../../dist/index.js';
+import * as workletModule from '../../dist/worklet.js';
 import {
-  SonareStreamAnalyzerNode,
+  type SonareStreamAnalyzerNode,
   SonareStreamAnalyzerWorkletProcessor,
 } from '../../dist/worklet.js';
-import * as workletModule from '../../dist/worklet.js';
 
 const sampleRate = 22050;
 
@@ -392,19 +392,19 @@ describe('stream analyzer surface', () => {
     >();
     expectTypeOf<StreamConfig['sampleRate']>().toEqualTypeOf<number>();
     // @ts-expect-error removed
-    type A = import('../../dist/index.js').AnalyzerStats;
+    type _A = import('../../dist/index.js').AnalyzerStats;
     // @ts-expect-error removed
-    type B = import('../../dist/index.js').FrameBuffer;
+    type _B = import('../../dist/index.js').FrameBuffer;
     // @ts-expect-error removed
-    type C = import('../../dist/index.js').ProgressiveEstimate;
+    type _C = import('../../dist/index.js').ProgressiveEstimate;
     // @ts-expect-error removed
-    type D = import('../../dist/index.js').StreamConfigDefaults;
+    type _D = import('../../dist/index.js').StreamConfigDefaults;
     // @ts-expect-error removed
-    type E = import('../../dist/index.js').ChordChange;
+    type _E = import('../../dist/index.js').ChordChange;
     // @ts-expect-error removed
-    type F = import('../../dist/index.js').BarChord;
+    type _F = import('../../dist/index.js').BarChord;
     // @ts-expect-error removed
-    type G = import('../../dist/index.js').PatternScore;
+    type _G = import('../../dist/index.js').PatternScore;
     expect(true).toBe(true);
   });
 });
@@ -429,13 +429,13 @@ describe('stream analyzer worklet surface', () => {
 
   it('no longer exports the wire-protocol message types', () => {
     // @ts-expect-error moved out of the public entry point
-    type A = import('../../dist/worklet.js').SonareStreamAnalyzerChunkMessage;
+    type _A = import('../../dist/worklet.js').SonareStreamAnalyzerChunkMessage;
     // @ts-expect-error moved out of the public entry point
-    type B = import('../../dist/worklet.js').SonareStreamAnalyzerDestroyMessage;
+    type _B = import('../../dist/worklet.js').SonareStreamAnalyzerDestroyMessage;
     // @ts-expect-error moved out of the public entry point
-    type C = import('../../dist/worklet.js').SonareStreamAnalyzerMessage;
+    type _C = import('../../dist/worklet.js').SonareStreamAnalyzerMessage;
     // @ts-expect-error moved out of the public entry point
-    type D = import('../../dist/worklet.js').SonareStreamAnalyzerRecycleMessage;
+    type _D = import('../../dist/worklet.js').SonareStreamAnalyzerRecycleMessage;
     expect(Object.keys(workletModule)).toContain('SonareStreamAnalyzerNode');
   });
 

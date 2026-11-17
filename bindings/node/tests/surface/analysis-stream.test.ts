@@ -1,4 +1,5 @@
 import { describe, expect, expectTypeOf, it } from 'vitest';
+import * as indexModule from '../../dist/index.js';
 import {
   CHORD_QUALITIES,
   type ChordQuality,
@@ -14,7 +15,6 @@ import {
   type StreamProgressiveEstimate,
   type StreamStats,
 } from '../../dist/index.js';
-import * as indexModule from '../../dist/index.js';
 
 const sampleRate = 22050;
 
@@ -381,11 +381,11 @@ describe('stream analyzer surface', () => {
     >();
     expectTypeOf<StreamConfig['sampleRate']>().toEqualTypeOf<number>();
     // @ts-expect-error removed
-    type A = import('../../dist/index.js').StreamAnalyzerStats;
+    type _A = import('../../dist/index.js').StreamAnalyzerStats;
     // @ts-expect-error removed
-    type B = import('../../dist/index.js').StreamFramesSoa;
+    type _B = import('../../dist/index.js').StreamFramesSoa;
     // @ts-expect-error removed
-    type C = import('../../dist/index.js').StreamAnalyzerConfig;
+    type _C = import('../../dist/index.js').StreamAnalyzerConfig;
     expect(true).toBe(true);
   });
 });

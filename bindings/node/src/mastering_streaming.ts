@@ -373,7 +373,9 @@ function streamSharedArrays<T extends StreamArray>(native: NativeStreamFrames<T>
   const out: { onsetStrength?: T; rmsEnergy: T; spectralCentroid?: T; spectralFlatness?: T } = {
     rmsEnergy: native.rmsEnergy,
   };
-  if (native.featureFlags & STREAM_FEATURE_ONSET) out.onsetStrength = native.onsetStrength;
+  if (native.featureFlags & STREAM_FEATURE_ONSET) {
+    out.onsetStrength = native.onsetStrength;
+  }
   if (native.featureFlags & STREAM_FEATURE_SPECTRAL) {
     out.spectralCentroid = native.spectralCentroid;
     out.spectralFlatness = native.spectralFlatness;

@@ -19,8 +19,8 @@ import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { isDeepStrictEqual } from 'node:util';
 import { describe, expect, it } from 'vitest';
-import * as sonare from '../src/index.js';
 import type { PolyphonicAnalysis } from '../src/index.js';
+import * as sonare from '../src/index.js';
 
 const SR = 22050;
 /** A sample rate no function defaults to, so passing it is observable. */
