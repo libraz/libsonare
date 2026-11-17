@@ -113,7 +113,7 @@ describe('masteringRepairDeclickStereo (WASM)', () => {
       sampleRate: SR,
       ...DECLICK_CONFIG,
     });
-    const mono = masteringRepairDeclick(left, SR, DECLICK_CONFIG);
+    const mono = masteringRepairDeclick(left, SR, DECLICK_CONFIG).samples;
 
     // The mono pass never saw the right channel's click, so it leaves this
     // region of the left channel untouched; the stereo pass repairs it

@@ -2817,7 +2817,7 @@ export interface SonareModule {
     samples: Float32Array,
     sampleRate: number,
     options: object,
-  ) => Float32Array;
+  ) => { samples: Float32Array; report: WasmDeclickReport };
   masteringRepairDeclickStereo: (
     left: Float32Array,
     right: Float32Array,
@@ -2828,7 +2828,7 @@ export interface SonareModule {
     samples: Float32Array,
     sampleRate: number,
     options: object,
-  ) => Float32Array;
+  ) => { samples: Float32Array; report: WasmDenoiseReport };
   masteringRepairDenoiseClassicalStereo: (
     left: Float32Array,
     right: Float32Array,
@@ -2856,7 +2856,7 @@ export interface SonareModule {
     samples: Float32Array,
     sampleRate: number,
     options: object,
-  ) => Float32Array;
+  ) => { samples: Float32Array; report: WasmDeclipReport };
   masteringRepairDeclipStereo: (
     left: Float32Array,
     right: Float32Array,
@@ -2867,7 +2867,7 @@ export interface SonareModule {
     samples: Float32Array,
     sampleRate: number,
     options: object,
-  ) => Float32Array;
+  ) => { samples: Float32Array; report: WasmDecrackleReport };
   masteringRepairDecrackleStereo: (
     left: Float32Array,
     right: Float32Array,
@@ -2878,7 +2878,7 @@ export interface SonareModule {
     samples: Float32Array,
     sampleRate: number,
     options: object,
-  ) => Float32Array;
+  ) => { samples: Float32Array; report: WasmDehumReport };
   masteringRepairDehumStereo: (
     left: Float32Array,
     right: Float32Array,
@@ -2889,7 +2889,7 @@ export interface SonareModule {
     samples: Float32Array,
     sampleRate: number,
     options: object,
-  ) => Float32Array;
+  ) => { samples: Float32Array; report: WasmDereverbReport };
   masteringRepairDereverbClassicalStereo: (
     left: Float32Array,
     right: Float32Array,
@@ -2909,7 +2909,7 @@ export interface SonareModule {
     samples: Float32Array,
     sampleRate: number,
     options: object,
-  ) => Float32Array;
+  ) => { samples: Float32Array; report: WasmTrimSilenceReport };
   masteringRepairTrimSilenceStereo: (
     left: Float32Array,
     right: Float32Array,

@@ -250,7 +250,8 @@ describe('trim padding in seconds', () => {
   it('paddingSec equals paddingSamples', () => {
     const bySamples = masteringRepairTrimSilence({ samples, sampleRate: SR, paddingSamples: 2205 });
     const bySeconds = masteringRepairTrimSilence({ samples, sampleRate: SR, paddingSec: 0.1 });
-    expect(bySeconds).toEqual(bySamples);
+    expect(bySeconds.samples).toEqual(bySamples.samples);
+    expect(bySeconds.report).toEqual(bySamples.report);
   });
 
   it('refuses both spellings and a negative padding', () => {

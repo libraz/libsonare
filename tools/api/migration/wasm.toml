@@ -21166,3 +21166,59 @@ new = "SonareRealtimeEngineNodeOptions.maxBlockSize"
 domain = "engine"
 rule = "num-channels"
 entry = "./worklet"
+
+[[entry]]
+kind = "function"
+old = "masteringRepairDeclick"
+changed = "returns DeclickResult { samples, report } instead of a bare Float32Array; the report is the one the stereo call gives per channel"
+domain = "effects"
+rule = "typed-results"
+test = "bindings/wasm/tests/surface/effects-repair.test.ts::masteringRepairDeclick reports the clicks it repaired"
+
+[[entry]]
+kind = "function"
+old = "masteringRepairDeclip"
+changed = "returns DeclipResult { samples, report } instead of a bare Float32Array; the report is the one the stereo call gives per channel"
+domain = "effects"
+rule = "typed-results"
+test = "bindings/wasm/tests/surface/effects-repair.test.ts::masteringRepairDeclip reports the clipped run it rebuilt"
+
+[[entry]]
+kind = "function"
+old = "masteringRepairDecrackle"
+changed = "returns DecrackleResult { samples, report } instead of a bare Float32Array; the report is the one the stereo call gives per channel"
+domain = "effects"
+rule = "typed-results"
+test = "bindings/wasm/tests/surface/effects-repair.test.ts::masteringRepairDecrackle reports the samples it replaced"
+
+[[entry]]
+kind = "function"
+old = "masteringRepairDehum"
+changed = "returns DehumResult { samples, report } instead of a bare Float32Array; the report is the one the stereo call gives per channel"
+domain = "effects"
+rule = "typed-results"
+test = "bindings/wasm/tests/surface/effects-repair.test.ts::masteringRepairDehum reports the hum it found"
+
+[[entry]]
+kind = "function"
+old = "masteringRepairDenoiseClassical"
+changed = "returns DenoiseResult { samples, report } instead of a bare Float32Array; the report is the one the stereo call gives per channel"
+domain = "effects"
+rule = "typed-results"
+test = "bindings/wasm/tests/surface/effects-repair.test.ts::masteringRepairDenoiseClassical returns a finite report and the input length"
+
+[[entry]]
+kind = "function"
+old = "masteringRepairDereverbClassical"
+changed = "returns DereverbResult { samples, report } instead of a bare Float32Array; the report is the one the stereo call gives per channel"
+domain = "effects"
+rule = "typed-results"
+test = "bindings/wasm/tests/surface/effects-repair.test.ts::masteringRepairDereverbClassical returns a finite report and the input length"
+
+[[entry]]
+kind = "function"
+old = "masteringRepairTrimSilence"
+changed = "returns TrimSilenceResult { samples, report } instead of a bare Float32Array; the report is the one the stereo call gives per channel; a trim that kept nothing gives empty samples, not an error"
+domain = "effects"
+rule = "typed-results"
+test = "bindings/wasm/tests/surface/effects-repair.test.ts::masteringRepairTrimSilence reports the range it kept, and tolerates all silence"

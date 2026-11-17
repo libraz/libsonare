@@ -84,7 +84,7 @@ describe('masteringRepairDenoiseClassicalLinked (WASM)', () => {
   it('reproduces the mono entry for one channel, element for element', () => {
     const samples = noisyTone(440, 1);
     const linked = masteringRepairDenoiseClassicalLinked({ channels: [samples], sampleRate: SR });
-    const mono = masteringRepairDenoiseClassical({ samples, sampleRate: SR });
+    const mono = masteringRepairDenoiseClassical({ samples, sampleRate: SR }).samples;
 
     expect(linked.channels).toHaveLength(1);
     expect(linked.channels[0]).toEqual(mono);
@@ -249,7 +249,7 @@ describe('masteringRepairDereverbClassicalLinked (WASM)', () => {
   it('reproduces the mono entry for one channel, element for element', () => {
     const samples = reverberant(1);
     const linked = masteringRepairDereverbClassicalLinked({ channels: [samples], sampleRate: SR });
-    const mono = masteringRepairDereverbClassical({ samples, sampleRate: SR });
+    const mono = masteringRepairDereverbClassical({ samples, sampleRate: SR }).samples;
 
     expect(linked.channels).toHaveLength(1);
     expect(linked.channels[0]).toEqual(mono);

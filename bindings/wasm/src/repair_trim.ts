@@ -4,7 +4,11 @@
 
 import { repairNativeOptions } from './internal/repair_common.js';
 import { getSonareModule } from './module_state.js';
-import type { MasteringRepairTrimSilenceResult, TrimRange } from './public_types_repair.js';
+import type {
+  MasteringRepairTrimSilenceResult,
+  TrimRange,
+  TrimSilenceResult,
+} from './public_types_repair.js';
 import {
   assertAudioInput,
   requestOnly,
@@ -71,13 +75,13 @@ function nativeTrimOptions(
 /** Offline silence trimmer (peak threshold or LUFS-gated). */
 export function masteringRepairTrimSilence(
   request: MasteringRepairTrimSilenceRequest,
-): Float32Array;
+): TrimSilenceResult;
 export function masteringRepairTrimSilence(
   samples: Float32Array,
   sampleRate: number,
   options?: TrimSilenceOptions,
-): Float32Array;
-export function masteringRepairTrimSilence(...args: unknown[]): Float32Array {
+): TrimSilenceResult;
+export function masteringRepairTrimSilence(...args: unknown[]): TrimSilenceResult {
   const r = sampleOneShot<MasteringRepairTrimSilenceRequest>('masteringRepairTrimSilence', args);
   assertAudioInput('masteringRepairTrimSilence', r.samples, r.sampleRate, r);
   return requireModule().masteringRepairTrimSilence(

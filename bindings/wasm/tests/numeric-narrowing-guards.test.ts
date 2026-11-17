@@ -498,7 +498,7 @@ describe('float options refuse a value the float type cannot hold', () => {
     noisy[i] = 0.4 * Math.sin((2 * Math.PI * 440 * i) / 48000) + 0.05 * ((seed / 2 ** 32) * 2 - 1);
   }
   const dereverb = (t60Sec: number): number => {
-    const out = masteringRepairDereverbClassical(noisy, 48000, { t60Sec });
+    const { samples: out } = masteringRepairDereverbClassical(noisy, 48000, { t60Sec });
     let sum = 0;
     for (const value of out) {
       sum += value * value;

@@ -8,6 +8,9 @@ import type {
   ClickDetection,
   ClipDetection,
   CrackleDetection,
+  DeclickResult,
+  DeclipResult,
+  DecrackleResult,
   MasteringRepairDeclickResult,
   MasteringRepairDeclipResult,
   MasteringRepairDecrackleResult,
@@ -73,13 +76,13 @@ export function masteringRepairDeclickStereo(...args: unknown[]): MasteringRepai
 }
 
 /** Offline LPC-based declicker. */
-export function masteringRepairDeclick(request: MasteringRepairDeclickRequest): Float32Array;
+export function masteringRepairDeclick(request: MasteringRepairDeclickRequest): DeclickResult;
 export function masteringRepairDeclick(
   samples: Float32Array,
   sampleRate: number,
   options?: DeclickOptions,
-): Float32Array;
-export function masteringRepairDeclick(...args: unknown[]): Float32Array {
+): DeclickResult;
+export function masteringRepairDeclick(...args: unknown[]): DeclickResult {
   const r = sampleOneShot<MasteringRepairDeclickRequest>('masteringRepairDeclick', args);
   assertAudioInput('masteringRepairDeclick', r.samples, r.sampleRate, r);
   return requireModule().masteringRepairDeclick(
@@ -143,13 +146,13 @@ export interface MasteringRepairDecrackleStereoRequest extends DecrackleOptions 
  * reconstruction method rather than throwing: `lpcOrder`, `iterations` and `lpcBlend` have no
  * effect on the interpolated run.
  */
-export function masteringRepairDeclip(request: MasteringRepairDeclipRequest): Float32Array;
+export function masteringRepairDeclip(request: MasteringRepairDeclipRequest): DeclipResult;
 export function masteringRepairDeclip(
   samples: Float32Array,
   sampleRate: number,
   options?: DeclipOptions,
-): Float32Array;
-export function masteringRepairDeclip(...args: unknown[]): Float32Array {
+): DeclipResult;
+export function masteringRepairDeclip(...args: unknown[]): DeclipResult {
   const r = sampleOneShot<MasteringRepairDeclipRequest>('masteringRepairDeclip', args);
   assertAudioInput('masteringRepairDeclip', r.samples, r.sampleRate, r);
   return requireModule().masteringRepairDeclip(
@@ -188,13 +191,13 @@ export function masteringRepairDeclipStereo(...args: unknown[]): MasteringRepair
 }
 
 /** Offline crackle suppressor (median or wavelet-shrinkage). */
-export function masteringRepairDecrackle(request: MasteringRepairDecrackleRequest): Float32Array;
+export function masteringRepairDecrackle(request: MasteringRepairDecrackleRequest): DecrackleResult;
 export function masteringRepairDecrackle(
   samples: Float32Array,
   sampleRate: number,
   options?: DecrackleOptions,
-): Float32Array;
-export function masteringRepairDecrackle(...args: unknown[]): Float32Array {
+): DecrackleResult;
+export function masteringRepairDecrackle(...args: unknown[]): DecrackleResult {
   const r = sampleOneShot<MasteringRepairDecrackleRequest>('masteringRepairDecrackle', args);
   assertAudioInput('masteringRepairDecrackle', r.samples, r.sampleRate, r);
   return requireModule().masteringRepairDecrackle(

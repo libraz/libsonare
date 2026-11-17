@@ -86,7 +86,7 @@ describe('masteringRepairDeclipStereo (WASM)', () => {
   it('differs from the mono declip on the left channel alone, past its own clipped extent', () => {
     const { left, right } = buildChannels();
     const stereo = masteringRepairDeclipStereo({ left, right, sampleRate: SR, ...DECLIP_CONFIG });
-    const mono = masteringRepairDeclip(left, SR, DECLIP_CONFIG);
+    const mono = masteringRepairDeclip(left, SR, DECLIP_CONFIG).samples;
 
     // The mono pass never saw the right channel's wider plateau, so it
     // leaves [START + SHORT_LEN, START + LONG_LEN) at the raw clip value;

@@ -24,7 +24,7 @@ export interface ClickDetection {
 
 /**
  * What a declick pass found in one channel of a
- * {@link MasteringRepairDeclickResult} and what it did to it.
+ * {@link MasteringRepairDeclickResult}, or of the mono `masteringRepairDeclick` call, and what it did to it.
  */
 export interface DeclickReport {
   /** This channel's own analysis of the input. */
@@ -46,6 +46,12 @@ export interface DeclickReport {
    * reduces to linear interpolation.
    */
   lpcModelUsed: boolean;
+}
+
+/** What `masteringRepairDeclick` returns: the repaired audio and what the pass did. */
+export interface DeclickResult {
+  samples: Float32Array;
+  report: DeclickReport;
 }
 
 /**
@@ -102,7 +108,7 @@ export interface ClipDetection {
 
 /**
  * What a declip pass found in one channel of a
- * {@link MasteringRepairDeclipResult} and what it did to it.
+ * {@link MasteringRepairDeclipResult}, or of the mono `masteringRepairDeclip` call, and what it did to it.
  */
 export interface DeclipReport {
   /** This channel's own analysis of the input. */
@@ -122,6 +128,12 @@ export interface DeclipReport {
    * mono `masteringRepairDeclip`.
    */
   linkedRuns: number;
+}
+
+/** What `masteringRepairDeclip` returns: the repaired audio and what the pass did. */
+export interface DeclipResult {
+  samples: Float32Array;
+  report: DeclipReport;
 }
 
 /**
@@ -161,7 +173,7 @@ export interface CrackleDetection {
 
 /**
  * What a decrackle pass found in one channel of a
- * {@link MasteringRepairDecrackleResult} and what it did to it.
+ * {@link MasteringRepairDecrackleResult}, or of the mono `masteringRepairDecrackle` call, and what it did to it.
  *
  * The two modes remove crackle by different means and report through different fields. A field
  * belonging to the other mode reads zero because that mode did not run -- the caller knows this
@@ -179,6 +191,12 @@ export interface DecrackleReport {
   /** Wavelet mode: the MAD noise estimate that set every level's threshold. The configured
    * `threshold` is only a cap on it. */
   noiseSigma: number;
+}
+
+/** What `masteringRepairDecrackle` returns: the repaired audio and what the pass did. */
+export interface DecrackleResult {
+  samples: Float32Array;
+  report: DecrackleReport;
 }
 
 /**
@@ -220,7 +238,7 @@ export interface HumDetection {
 
 /**
  * What a dehum pass found in one channel of a
- * {@link MasteringRepairDehumResult} and what it did to it.
+ * {@link MasteringRepairDehumResult}, or of the mono `masteringRepairDehum` call, and what it did to it.
  */
 export interface DehumReport {
   /** This channel's own analysis, before filtering. */
@@ -233,6 +251,12 @@ export interface DehumReport {
   /** Largest excursion of the tracked frequency from the configured one. Zero without
    * adaptive tracking, which is the measurement rather than an unset field. */
   fundamentalDriftHz: number;
+}
+
+/** What `masteringRepairDehum` returns: the repaired audio and what the pass did. */
+export interface DehumResult {
+  samples: Float32Array;
+  report: DehumReport;
 }
 
 /**
@@ -272,7 +296,7 @@ export interface NoiseDetection {
 
 /**
  * What a denoise pass found in a
- * {@link MasteringRepairDenoiseClassicalResult} and what it removed.
+ * {@link MasteringRepairDenoiseClassicalResult} or in the mono result of `masteringRepairDenoiseClassical` and what it removed.
  */
 export interface DenoiseReport {
   /** The pair's analysis, before the mask. */
@@ -287,6 +311,12 @@ export interface DenoiseReport {
    * floors on `spectralFloor` instead, so 0 from that mode is the mode and not a
    * measurement. */
   floorLimitedFraction: number;
+}
+
+/** What `masteringRepairDenoiseClassical` returns: the repaired audio and what the pass did. */
+export interface DenoiseResult {
+  samples: Float32Array;
+  report: DenoiseReport;
 }
 
 /**
@@ -328,7 +358,7 @@ export interface ReverbDetection {
 
 /**
  * What a dereverb pass found in a
- * {@link MasteringRepairDereverbClassicalResult} and what it removed.
+ * {@link MasteringRepairDereverbClassicalResult} or in the mono result of `masteringRepairDereverbClassical` and what it removed.
  */
 export interface DereverbReport {
   /** The pair's analysis. */
@@ -343,6 +373,12 @@ export interface DereverbReport {
    * `detected.latePredictability` says the clamp acted, an otherwise silent branch. Zero when
    * the WPE stage did not run, so 0 by default. */
   wpePredictorNorm: number;
+}
+
+/** What `masteringRepairDereverbClassical` returns: the repaired audio and what the pass did. */
+export interface DereverbResult {
+  samples: Float32Array;
+  report: DereverbReport;
 }
 
 /**
@@ -387,6 +423,15 @@ export interface TrimReport {
   removedHeadSamples: number;
   /** Samples dropped after `range.lastExclusive`. */
   removedTailSamples: number;
+}
+
+/**
+ * What `masteringRepairTrimSilence` returns: the trimmed audio and what the pass did. A trim that
+ * kept nothing gives an empty `samples`, not an error.
+ */
+export interface TrimSilenceResult {
+  samples: Float32Array;
+  report: TrimReport;
 }
 
 /**

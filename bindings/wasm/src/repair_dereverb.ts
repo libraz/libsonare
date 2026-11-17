@@ -6,6 +6,7 @@ import { repairNativeOptions, sharedReportResult } from './internal/repair_commo
 import { getSonareModule } from './module_state.js';
 import type { RoomEstimateResult } from './public_types_acoustic.js';
 import type {
+  DereverbResult,
   MasteringRepairDereverbClassicalResult,
   ReverbDetection,
 } from './public_types_repair.js';
@@ -73,13 +74,13 @@ export interface MasteringRepairDereverbConfigForRoomRequest
 /** Offline classical dereverberator (spectral subtraction + optional WPE). */
 export function masteringRepairDereverbClassical(
   request: MasteringRepairDereverbClassicalRequest,
-): Float32Array;
+): DereverbResult;
 export function masteringRepairDereverbClassical(
   samples: Float32Array,
   sampleRate: number,
   options?: DereverbClassicalOptions,
-): Float32Array;
-export function masteringRepairDereverbClassical(...args: unknown[]): Float32Array {
+): DereverbResult;
+export function masteringRepairDereverbClassical(...args: unknown[]): DereverbResult {
   const r = sampleOneShot<MasteringRepairDereverbClassicalRequest>(
     'masteringRepairDereverbClassical',
     args,

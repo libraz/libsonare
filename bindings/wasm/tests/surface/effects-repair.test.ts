@@ -1,10 +1,19 @@
 import { beforeAll, describe, expect, expectTypeOf, it } from 'vitest';
 import type {
+  DeclickReport,
+  DeclickResult,
+  DeclipResult,
+  DecrackleResult,
+  DehumResult,
+  DenoiseResult,
+  DereverbResult,
   MasteringRepairDeclickResult,
   MasteringRepairDenoiseClassicalResult,
   MasteringRepairStage,
   MasteringRepairTrimSilenceResult,
   TrimRange,
+  TrimReport,
+  TrimSilenceResult,
 } from '../../dist/index.js';
 import * as sonare from '../../dist/index.js';
 import { init } from '../../dist/index.js';
@@ -237,18 +246,18 @@ describe('repair: results are {channels, reports}', () => {
 describe('repair: dBFS thresholds', () => {
   it('masteringRepairTrimSilence takes thresholdDb and refuses threshold', () => {
     const pair = padded();
-    const base = sonare.masteringRepairTrimSilence({ samples: pair, sampleRate });
+    const base = sonare.masteringRepairTrimSilence({ samples: pair, sampleRate }).samples;
     const explicit = sonare.masteringRepairTrimSilence({
       samples: pair,
       sampleRate,
       thresholdDb: -60,
-    });
+    }).samples;
     expectClose(base, explicit);
     const strict = sonare.masteringRepairTrimSilence({
       samples: pair,
       sampleRate,
       thresholdDb: -1,
-    });
+    }).samples;
     expect(strict.length).toBeLessThanOrEqual(base.length);
     expectThrows(
       () => api.masteringRepairTrimSilence?.({ samples: pair, sampleRate, threshold: 0.01 }),
@@ -371,5 +380,163 @@ describe('repair: session', () => {
     expect(() =>
       sonare.masteringRepairAnalyze({ channels: [left], sampleRate, validate: false }),
     ).not.toThrow();
+  });
+});
+
+describe('repair: mono results are {samples, report}', () => {
+  const rate = 22050;
+
+  function tone(hz: number, frames: number, amp: number): Float32Array {
+    const out = new Float32Array(frames);
+    for (let i = 0; i < frames; i++) {
+      out[i] = amp * Math.sin((2 * Math.PI * hz * i) / rate);
+    }
+    return out;
+  }
+
+  function noisy(frames: number): Float32Array {
+    const out = tone(440, frames, 0.3);
+    let state = 12345;
+    for (let i = 0; i < frames; i++) {
+      state = (Math.imul(state, 1664525) + 1013904223) >>> 0;
+      out[i] = (out[i] ?? 0) + ((state >>> 8) / (1 << 24) - 0.5) * 0.05;
+    }
+    return out;
+  }
+
+  it('the result types carry the audio and the report', () => {
+    expectTypeOf<DeclickResult>().toEqualTypeOf<{ samples: Float32Array; report: DeclickReport }>();
+    expectTypeOf<DeclipResult>().toHaveProperty('report');
+    expectTypeOf<DecrackleResult>().toHaveProperty('report');
+    expectTypeOf<DehumResult>().toHaveProperty('report');
+    expectTypeOf<DenoiseResult>().toHaveProperty('report');
+    expectTypeOf<DereverbResult>().toHaveProperty('report');
+    expectTypeOf<TrimSilenceResult>().toEqualTypeOf<{
+      samples: Float32Array;
+      report: TrimReport;
+    }>();
+  });
+
+  it('masteringRepairDeclick reports the clicks it repaired', () => {
+    const bed = tone(440, 11025, 0.15);
+    const clicked = bed.slice();
+    for (const pos of [2053, 5462, 8100]) {
+      clicked[pos] = (clicked[pos] ?? 0) + 0.6;
+      clicked[pos + 1] = (clicked[pos + 1] ?? 0) + 0.6;
+    }
+    const options = { threshold: 0.35, neighborRatio: 2, maxClickSamples: 8, lpcOrder: 20 };
+    const hit = sonare.masteringRepairDeclick({ samples: clicked, sampleRate: rate, ...options });
+    expect(hit.samples).toBeInstanceOf(Float32Array);
+    expect(hit.samples.length).toBe(clicked.length);
+    expect(hit.report.detected.count).toBeGreaterThan(0);
+    expect(hit.report.repairedRuns).toBeGreaterThan(0);
+    expect(hit.report.repairedSamples).toBeGreaterThan(0);
+    expect(hit.report.linkedRuns).toBe(0);
+    const clean = sonare.masteringRepairDeclick({ samples: bed, sampleRate: rate, ...options });
+    expect(clean.report.detected.count).toBe(0);
+    expect(clean.report.repairedRuns).toBe(0);
+    expect(clean.report.repairedSamples).toBe(0);
+  });
+
+  it('masteringRepairDeclip reports the clipped run it rebuilt', () => {
+    const bed = tone(440, 11025, 0.3);
+    const clipped = bed.slice();
+    clipped.fill(0.95, 5000, 5020);
+    const options = { clipThresholdDb: -0.9151 };
+    const hit = sonare.masteringRepairDeclip({ samples: clipped, sampleRate: rate, ...options });
+    expect(hit.samples.length).toBe(clipped.length);
+    expect(hit.report.detected.sampleCount).toBeGreaterThan(0);
+    expect(hit.report.lpcReconstructedRuns + hit.report.interpolatedRuns).toBeGreaterThan(0);
+    expect(hit.report.repairedSamples).toBeGreaterThan(0);
+    const clean = sonare.masteringRepairDeclip({ samples: bed, sampleRate: rate, ...options });
+    expect(clean.report.detected.sampleCount).toBe(0);
+    expect(clean.report.repairedSamples).toBe(0);
+  });
+
+  it('masteringRepairDecrackle reports the samples it replaced', () => {
+    const bed = tone(440, 2000, 0.05);
+    const spiked = bed.slice();
+    for (const [i, pos] of [100, 300, 500, 700, 900].entries()) {
+      spiked[pos] = i % 2 === 0 ? 0.5 : -0.5;
+    }
+    const hit = sonare.masteringRepairDecrackle({
+      samples: spiked,
+      sampleRate: rate,
+      threshold: 0.3,
+    });
+    expect(hit.samples.length).toBe(spiked.length);
+    expect(hit.report.detected.sampleCount).toBe(5);
+    expect(hit.report.replacedSamples).toBe(5);
+    const clean = sonare.masteringRepairDecrackle({
+      samples: bed,
+      sampleRate: rate,
+      threshold: 0.3,
+    });
+    expect(clean.report.detected.sampleCount).toBe(0);
+    expect(clean.report.replacedSamples).toBe(0);
+  });
+
+  it('masteringRepairDehum reports the hum it found', () => {
+    const hummed = tone(50, rate, 0.3);
+    const second = tone(100, rate, 0.15);
+    const high = tone(3000, rate, 0.05);
+    for (let i = 0; i < hummed.length; i++) {
+      hummed[i] = (hummed[i] ?? 0) + (second[i] ?? 0) + (high[i] ?? 0);
+    }
+    const hit = sonare.masteringRepairDehum({ samples: hummed, sampleRate: rate });
+    expect(hit.samples.length).toBe(hummed.length);
+    expect(hit.report.detected.harmonics).toBeGreaterThanOrEqual(2);
+    expect(hit.report.notchedHarmonics).toBeGreaterThan(0);
+    const clean = sonare.masteringRepairDehum({ samples: high, sampleRate: rate });
+    expect(clean.report.detected.harmonics).toBe(0);
+  });
+
+  it('masteringRepairDenoiseClassical returns a finite report and the input length', () => {
+    const input = noisy(11025);
+    const { samples, report } = sonare.masteringRepairDenoiseClassical({
+      samples: input,
+      sampleRate: rate,
+    });
+    expect(samples.length).toBe(input.length);
+    for (const value of [
+      report.meanReductionDb,
+      report.maxReductionDb,
+      report.floorLimitedFraction,
+    ]) {
+      expect(Number.isFinite(value)).toBe(true);
+    }
+  });
+
+  it('masteringRepairDereverbClassical returns a finite report and the input length', () => {
+    const input = noisy(11025);
+    const { samples, report } = sonare.masteringRepairDereverbClassical({
+      samples: input,
+      sampleRate: rate,
+    });
+    expect(samples.length).toBe(input.length);
+    for (const value of [
+      report.meanReductionDb,
+      report.suppressedFraction,
+      report.wpePredictorNorm,
+    ]) {
+      expect(Number.isFinite(value)).toBe(true);
+    }
+  });
+
+  it('masteringRepairTrimSilence reports the range it kept, and tolerates all silence', () => {
+    const { samples, report } = sonare.masteringRepairTrimSilence({
+      samples: padded(),
+      sampleRate,
+    });
+    expect(samples.length).toBeGreaterThan(0);
+    expect(report.range.lastExclusive - report.range.first).toBe(samples.length);
+    expect(report.removedHeadSamples + report.removedTailSamples).toBe(
+      padded().length - samples.length,
+    );
+    const silent = sonare.masteringRepairTrimSilence({
+      samples: new Float32Array(sampleRate / 4),
+      sampleRate,
+    });
+    expect(silent.samples.length).toBe(0);
   });
 });

@@ -37,14 +37,14 @@ describe('masteringRepairDeclip (WASM)', () => {
       const v = samples[i] ?? 0;
       samples[i] = Math.max(-0.9, Math.min(0.9, v * 2));
     }
-    const out = masteringRepairDeclip(samples, SR);
+    const { samples: out } = masteringRepairDeclip(samples, SR);
     expect(out).toBeInstanceOf(Float32Array);
     expect(out.length).toBe(samples.length);
   });
 
   it('accepts explicit options', () => {
     const samples = sine(440, 0.2);
-    const out = masteringRepairDeclip(samples, SR, {
+    const { samples: out } = masteringRepairDeclip(samples, SR, {
       clipThresholdDb: -1.41,
       lpcOrder: 24,
       iterations: 1,
@@ -64,13 +64,13 @@ describe('masteringRepairDecrackle (WASM)', () => {
     for (let i = 500; i < samples.length; i += 1700) {
       samples[i] = i % 2 === 0 ? 0.95 : -0.95;
     }
-    const out = masteringRepairDecrackle(samples, SR);
+    const { samples: out } = masteringRepairDecrackle(samples, SR);
     expect(out.length).toBe(samples.length);
   });
 
   it('wavelet shrinkage mode', () => {
     const samples = sine(440, 0.3);
-    const out = masteringRepairDecrackle(samples, SR, {
+    const { samples: out } = masteringRepairDecrackle(samples, SR, {
       mode: 'waveletShrinkage',
       threshold: 0.4,
       levels: 4,
@@ -97,12 +97,12 @@ describe('masteringRepairDehum (WASM)', () => {
   }
 
   it('static notch (default)', () => {
-    const out = masteringRepairDehum(samples, SR);
+    const { samples: out } = masteringRepairDehum(samples, SR);
     expect(out.length).toBe(samples.length);
   });
 
   it('adaptive tracking', () => {
-    const out = masteringRepairDehum(samples, SR, {
+    const { samples: out } = masteringRepairDehum(samples, SR, {
       fundamentalHz: 50,
       harmonics: 4,
       q: 20,
@@ -124,12 +124,12 @@ describe('masteringRepairDereverbClassical (WASM)', () => {
   const samples = sine(440, 0.5, 0.5);
 
   it('runs with default config', () => {
-    const out = masteringRepairDereverbClassical(samples, SR);
+    const { samples: out } = masteringRepairDereverbClassical(samples, SR);
     expect(out.length).toBe(samples.length);
   });
 
   it('runs with WPE enabled', () => {
-    const out = masteringRepairDereverbClassical(samples, SR, {
+    const { samples: out } = masteringRepairDereverbClassical(samples, SR, {
       wpeEnabled: true,
       wpeIterations: 2,
       wpeTaps: 3,
@@ -141,7 +141,7 @@ describe('masteringRepairDereverbClassical (WASM)', () => {
   });
 
   it('falls back to defaults for undefined options without passing NaN into DSP config', () => {
-    const out = masteringRepairDereverbClassical(samples, SR, {
+    const { samples: out } = masteringRepairDereverbClassical(samples, SR, {
       lateDelayMs: undefined,
       nFft: undefined,
       hopLength: undefined,
@@ -280,7 +280,7 @@ describe('masteringRepairDereverbConfigForRoom (WASM)', () => {
   it('produces a config the dereverberator accepts', () => {
     const samples = sine(440, 0.3, 0.5);
     const config = masteringRepairDereverbConfigForRoom({ estimate: roomEstimate(2500) });
-    const out = masteringRepairDereverbClassical(samples, SR, config);
+    const { samples: out } = masteringRepairDereverbClassical(samples, SR, config);
     expect(out.length).toBe(samples.length);
   });
 });
@@ -300,14 +300,14 @@ describe('masteringRepairTrimSilence (WASM)', () => {
 
   it('peak mode (default) shortens the buffer', () => {
     const samples = withSilence();
-    const out = masteringRepairTrimSilence(samples, SR);
+    const { samples: out } = masteringRepairTrimSilence(samples, SR);
     expect(out.length).toBeGreaterThan(0);
     expect(out.length).toBeLessThan(samples.length);
   });
 
   it('LUFS-gated mode with padding', () => {
     const samples = withSilence();
-    const out = masteringRepairTrimSilence(samples, SR, {
+    const { samples: out } = masteringRepairTrimSilence(samples, SR, {
       mode: 'lufsGated',
       gateLufs: -40,
       windowMs: 400,
