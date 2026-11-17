@@ -1,0 +1,6 @@
+{
+  "description": "Sources the native library is built from. A test harness compares a built library's mtime with the newest file matched here to refuse a stale build. Paths are relative to the repository root.",
+  "suffixes": [".cpp", ".cc", ".h", ".hpp", ".inc"],
+  "trees": ["src", "include"],
+  "excluded_trees": ["src/wasm"]
+}
