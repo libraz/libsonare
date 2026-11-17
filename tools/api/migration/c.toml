@@ -688,3 +688,33 @@ old = "sonare_analyze_json_with_progress_ex"
 removed = true
 domain = "analysis"
 rule = "progress-callback"
+
+[[entry]]
+kind = "type"
+old = "SonareRirSynthConfig"
+changed = "leads with uint32_t struct_size; prepare it with sonare_rir_synth_config_init, after which every field is read literally (seed 0, crossfade_ms 0, a 0 degC / 0 % climate are values, not defaults)"
+domain = "effects"
+rule = "absent-not-sentinel"
+test = "tests/api/sonare_c_acoustic_test.cpp::config init sets struct_size and the library defaults"
+
+[[entry]]
+kind = "type"
+old = "SonareRoomMorphConfig"
+changed = "leads with uint32_t struct_size; prepare it with sonare_room_morph_config_init, after which every field is read literally (receiver_spacing_m 0 is refused rather than read as 0.5)"
+domain = "effects"
+rule = "absent-not-sentinel"
+test = "tests/api/sonare_c_acoustic_test.cpp::refuses a room config below its struct_size"
+
+[[entry]]
+kind = "export"
+old = "SONARE_REVERB_MODEL_DEFAULT"
+removed = true
+domain = "effects"
+rule = "absent-not-sentinel"
+
+[[entry]]
+kind = "export"
+old = "SONARE_AIR_ABSORPTION_DEFAULT"
+removed = true
+domain = "effects"
+rule = "absent-not-sentinel"

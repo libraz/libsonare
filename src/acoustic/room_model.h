@@ -28,6 +28,9 @@ inline constexpr RoomDimensions kDefaultRoomDims{7.0f, 5.0f, 3.0f};
 /// @brief Default source and listener positions inside `kDefaultRoomDims` (m).
 inline constexpr SourceListener kDefaultPlacement{{1.0f, 1.0f, 1.2f}, {5.0f, 4.0f, 1.7f}};
 
+/// @brief Default uniform wall absorption of a synthesized or morph-target room.
+inline constexpr float kDefaultWallAbsorption = 0.2f;
+
 /// @brief Index of a shoebox wall in `ShoeboxRoom::walls`.
 enum ShoeboxWall {
   kWallXMin = 0,  ///< x = 0 plane

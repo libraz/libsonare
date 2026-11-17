@@ -27,17 +27,6 @@ namespace {
 constexpr int kAcousticMinSampleRate = 8000;
 constexpr int kAcousticMaxSampleRate = 384000;
 
-// Reads a deterministic late-tail seed, keeping @p fallback for seed 0 (the C
-// ABI's "seed == 0 keeps the library default", so seed: 0 yields the same RIR on
-// every surface instead of seeding the PRNG with 0). The uint32 reader is the
-// C ABI's own width: anything outside it is refused rather than substituted,
-// since a silent default is what once made half the seed space unreachable
-// without a symptom.
-unsigned SeedFromOptions(const Napi::Object& opts, unsigned fallback) {
-  const uint32_t seed_in = Uint32Property(opts, "seed", kZeroIsSentinel);
-  return seed_in == 0 ? fallback : seed_in;
-}
-
 // Throws (via ThrowAsJavaScriptException) and returns false when the rate is out
 // of range, mirroring the C ABI's validate_audio_params bound.
 bool ValidateAcousticSampleRate(const Napi::Env& env, int sample_rate) {
@@ -62,13 +51,10 @@ bool ValidateAcousticSampleRate(const Napi::Env& env, int sample_rate) {
 // out-of-range inputs the C ABI/Python already refuse.
 void ValidateRirShapeAndTiming(const sonare::acoustic::RirSynthConfig& cfg) {
   using namespace sonare::acoustic;
-  // Finiteness is FiniteFloatProperty's at the read, for the placement as well
-  // as for maxSeconds and mixingTimeMs; what is left here is each field's own
-  // bound. crossfadeMs keeps its check because it reaches this through
-  // ZeroIsDefault rather than a reader.
+  // Finiteness is FiniteFloatProperty's at the read; what is left is each field's own bound.
   if (cfg.max_seconds < 0.0f || cfg.max_seconds > kMaxRirSeconds || cfg.mixing_time_ms < 0.0f ||
-      cfg.mixing_time_ms > kMaxRirMixingTimeMs || !std::isfinite(cfg.crossfade_ms) ||
-      cfg.crossfade_ms < 0.0f || cfg.crossfade_ms > kMaxRirCrossfadeMs) {
+      cfg.mixing_time_ms > kMaxRirMixingTimeMs || cfg.crossfade_ms < 0.0f ||
+      cfg.crossfade_ms > kMaxRirCrossfadeMs) {
     throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
                                   "RIR timing parameters out of range");
   }
@@ -209,32 +195,20 @@ Napi::Value SonareWrap::SynthesizeRir(const Napi::CallbackInfo& info) {
   }
   cfg.late_model = BoolProperty(opts, "preferEyring", true) ? sonare::acoustic::ReverbModel::Eyring
                                                             : sonare::acoustic::ReverbModel::Sabine;
-  cfg.seed = SeedFromOptions(opts, cfg.seed);
+  cfg.seed = Uint32Property(opts, "seed", cfg.seed);
   cfg.max_seconds = FiniteFloatProperty(opts, "maxSeconds", cfg.max_seconds);
   cfg.mixing_time_ms = FiniteFloatProperty(opts, "mixingTimeMs", cfg.mixing_time_ms);
-  // crossfadeMs == 0 keeps the RirSynthConfig default (5 ms), matching the C ABI's
-  // "crossfade_ms == 0 means keep the library default"; a literal zero crossfade
-  // shifts the splice by ~1 sample and clicks. Every other value is the caller's
-  // request and is checked here, before the substitution, so a negative or
-  // non-finite crossfade is rejected instead of silently becoming the default.
-  cfg.crossfade_ms =
-      sonare::ZeroIsDefault(FloatProperty(opts, "crossfadeMs", 0.0f))
-          .checked(cfg.crossfade_ms, 0.0f, sonare::acoustic::kMaxRirCrossfadeMs, "crossfadeMs");
+  cfg.crossfade_ms = FiniteFloatProperty(opts, "crossfadeMs", cfg.crossfade_ms);
   cfg.air_absorption_enabled =
       BoolProperty(opts, "airAbsorptionEnabled", cfg.air_absorption_enabled);
-  // airTemperatureC / airHumidityPercent == 0 keep the ISO reference climate
-  // (20 degC, 50 % RH), matching the C ABI's "0 means the library default" rule
-  // so the same options object yields the same RIR on every surface. An
-  // implausible climate is an Error diagnostic, thrown below like the geometry errors.
-  cfg.air.temperature_c = sonare::ZeroIsDefault(FloatProperty(opts, "airTemperatureC", 0.0f))
-                              .or_default(cfg.air.temperature_c);
-  cfg.air.humidity_percent = sonare::ZeroIsDefault(FloatProperty(opts, "airHumidityPercent", 0.0f))
-                                 .or_default(cfg.air.humidity_percent);
+  // An implausible climate is an Error diagnostic, thrown below like the geometry errors.
+  cfg.air.temperature_c = FloatProperty(opts, "airTemperatureC", cfg.air.temperature_c);
+  cfg.air.humidity_percent = FloatProperty(opts, "airHumidityPercent", cfg.air.humidity_percent);
 
   const auto placement = PlacementFromOptions(opts);
   ValidateRirShapeAndTiming(cfg);
-  const auto result =
-      sonare::acoustic::synthesize_rir(RoomFromOptions(opts, 0.2f), placement, sample_rate, cfg);
+  const auto result = sonare::acoustic::synthesize_rir(
+      RoomFromOptions(opts, sonare::acoustic::kDefaultWallAbsorption), placement, sample_rate, cfg);
   if (sonare::has_error(result.diagnostics)) {
     throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
                                   sonare::acoustic::first_error_text(result.diagnostics));
@@ -374,30 +348,23 @@ Napi::Value SonareWrap::RoomGeometryFromEstimate(const Napi::CallbackInfo& info)
 // Options shared by roomMorph and roomMorphStereo.
 sonare::effects::acoustic::RoomMorphConfig RoomMorphConfigFromOptions(const Napi::Object& opts) {
   sonare::effects::acoustic::RoomMorphConfig cfg;
-  cfg.target = RoomFromOptions(opts, 0.2f);
+  cfg.target = RoomFromOptions(opts, sonare::acoustic::kDefaultWallAbsorption);
   cfg.placement = PlacementFromOptions(opts);
   cfg.source_tail_suppression =
       FiniteFloatProperty(opts, "sourceTailSuppression", cfg.source_tail_suppression);
   cfg.wet = FiniteFloatProperty(opts, "wet", cfg.wet);
   cfg.ism_order = IntProperty(opts, "ismOrder", cfg.ism_order);
-  cfg.seed = SeedFromOptions(opts, cfg.seed);
+  cfg.seed = Uint32Property(opts, "seed", cfg.seed);
   cfg.max_seconds = FiniteFloatProperty(opts, "maxSeconds", cfg.max_seconds);
   cfg.late_model = BoolProperty(opts, "preferEyring", true) ? sonare::acoustic::ReverbModel::Eyring
                                                             : sonare::acoustic::ReverbModel::Sabine;
   cfg.mixing_time_ms = FiniteFloatProperty(opts, "mixingTimeMs", cfg.mixing_time_ms);
-  // Same crossfade sentinel rule as SynthesizeRir above.
-  cfg.crossfade_ms =
-      sonare::ZeroIsDefault(FloatProperty(opts, "crossfadeMs", 0.0f))
-          .checked(cfg.crossfade_ms, 0.0f, sonare::acoustic::kMaxRirCrossfadeMs, "crossfadeMs");
-  // Air absorption on the target room; the zero-means-ISO-reference rule is the
-  // same as synthesizeRir above. An implausible climate throws here (the morph
-  // core validates rather than diagnosing), matching the C ABI.
+  // The morph core validates crossfade and climate, throwing on an implausible value.
+  cfg.crossfade_ms = FiniteFloatProperty(opts, "crossfadeMs", cfg.crossfade_ms);
   cfg.air_absorption_enabled =
       BoolProperty(opts, "airAbsorptionEnabled", cfg.air_absorption_enabled);
-  cfg.air.temperature_c = sonare::ZeroIsDefault(FloatProperty(opts, "airTemperatureC", 0.0f))
-                              .or_default(cfg.air.temperature_c);
-  cfg.air.humidity_percent = sonare::ZeroIsDefault(FloatProperty(opts, "airHumidityPercent", 0.0f))
-                                 .or_default(cfg.air.humidity_percent);
+  cfg.air.temperature_c = FloatProperty(opts, "airTemperatureC", cfg.air.temperature_c);
+  cfg.air.humidity_percent = FloatProperty(opts, "airHumidityPercent", cfg.air.humidity_percent);
   return cfg;
 }
 

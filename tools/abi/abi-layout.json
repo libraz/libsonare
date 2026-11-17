@@ -8091,151 +8091,157 @@
     "align": 8,
     "fields": [
       {
-        "kind": "float",
-        "name": "length_m",
+        "kind": "unsigned",
+        "name": "struct_size",
         "offset": 0,
         "size": 4
       },
       {
         "kind": "float",
-        "name": "width_m",
+        "name": "length_m",
         "offset": 4,
         "size": 4
       },
       {
         "kind": "float",
-        "name": "height_m",
+        "name": "width_m",
         "offset": 8,
         "size": 4
       },
       {
         "kind": "float",
-        "name": "source_x",
+        "name": "height_m",
         "offset": 12,
         "size": 4
       },
       {
         "kind": "float",
-        "name": "source_y",
+        "name": "source_x",
         "offset": 16,
         "size": 4
       },
       {
         "kind": "float",
-        "name": "source_z",
+        "name": "source_y",
         "offset": 20,
         "size": 4
       },
       {
         "kind": "float",
-        "name": "listener_x",
+        "name": "source_z",
         "offset": 24,
         "size": 4
       },
       {
         "kind": "float",
-        "name": "listener_y",
+        "name": "listener_x",
         "offset": 28,
         "size": 4
       },
       {
         "kind": "float",
-        "name": "listener_z",
+        "name": "listener_y",
         "offset": 32,
         "size": 4
       },
       {
         "kind": "float",
-        "name": "absorption",
+        "name": "listener_z",
         "offset": 36,
         "size": 4
       },
       {
         "kind": "float",
-        "name": "max_seconds",
+        "name": "absorption",
         "offset": 40,
         "size": 4
       },
       {
         "kind": "float",
-        "name": "mixing_time_ms",
+        "name": "max_seconds",
         "offset": 44,
         "size": 4
       },
       {
         "kind": "float",
-        "name": "crossfade_ms",
+        "name": "mixing_time_ms",
         "offset": 48,
         "size": 4
       },
       {
-        "kind": "signed",
-        "name": "ism_order",
+        "kind": "float",
+        "name": "crossfade_ms",
         "offset": 52,
         "size": 4
       },
       {
         "kind": "signed",
-        "name": "late_model",
+        "name": "ism_order",
         "offset": 56,
+        "size": 4
+      },
+      {
+        "kind": "signed",
+        "name": "late_model",
+        "offset": 60,
         "size": 4
       },
       {
         "kind": "unsigned",
         "name": "seed",
-        "offset": 60,
+        "offset": 64,
         "size": 4
       },
       {
         "kind": "pointer",
         "name": "absorption_bands",
-        "offset": 64,
+        "offset": 72,
         "size": 8
       },
       {
         "kind": "unsigned",
         "name": "absorption_band_count",
-        "offset": 72,
+        "offset": 80,
         "size": 8
       },
       {
         "kind": "pointer",
         "name": "scattering_bands",
-        "offset": 80,
+        "offset": 88,
         "size": 8
       },
       {
         "kind": "unsigned",
         "name": "scattering_band_count",
-        "offset": 88,
+        "offset": 96,
         "size": 8
       },
       {
         "kind": "signed",
         "name": "material_preset",
-        "offset": 96,
+        "offset": 104,
         "size": 4
       },
       {
         "kind": "signed",
         "name": "air_absorption",
-        "offset": 100,
+        "offset": 108,
         "size": 4
       },
       {
         "kind": "float",
         "name": "air_temperature_c",
-        "offset": 104,
+        "offset": 112,
         "size": 4
       },
       {
         "kind": "float",
         "name": "air_humidity_percent",
-        "offset": 108,
+        "offset": 116,
         "size": 4
       }
     ],
-    "size": 112
+    "size": 120
   },
   "SonareRirSynthResult": {
     "align": 8,
@@ -8379,169 +8385,175 @@
     "align": 8,
     "fields": [
       {
-        "kind": "float",
-        "name": "length_m",
+        "kind": "unsigned",
+        "name": "struct_size",
         "offset": 0,
         "size": 4
       },
       {
         "kind": "float",
-        "name": "width_m",
+        "name": "length_m",
         "offset": 4,
         "size": 4
       },
       {
         "kind": "float",
-        "name": "height_m",
+        "name": "width_m",
         "offset": 8,
         "size": 4
       },
       {
         "kind": "float",
-        "name": "source_x",
+        "name": "height_m",
         "offset": 12,
         "size": 4
       },
       {
         "kind": "float",
-        "name": "source_y",
+        "name": "source_x",
         "offset": 16,
         "size": 4
       },
       {
         "kind": "float",
-        "name": "source_z",
+        "name": "source_y",
         "offset": 20,
         "size": 4
       },
       {
         "kind": "float",
-        "name": "listener_x",
+        "name": "source_z",
         "offset": 24,
         "size": 4
       },
       {
         "kind": "float",
-        "name": "listener_y",
+        "name": "listener_x",
         "offset": 28,
         "size": 4
       },
       {
         "kind": "float",
-        "name": "listener_z",
+        "name": "listener_y",
         "offset": 32,
         "size": 4
       },
       {
         "kind": "float",
-        "name": "absorption",
+        "name": "listener_z",
         "offset": 36,
         "size": 4
       },
       {
         "kind": "float",
-        "name": "source_tail_suppression",
+        "name": "absorption",
         "offset": 40,
         "size": 4
       },
       {
         "kind": "float",
-        "name": "wet",
+        "name": "source_tail_suppression",
         "offset": 44,
         "size": 4
       },
       {
         "kind": "float",
-        "name": "max_seconds",
+        "name": "wet",
         "offset": 48,
         "size": 4
       },
       {
         "kind": "float",
-        "name": "mixing_time_ms",
+        "name": "max_seconds",
         "offset": 52,
         "size": 4
       },
       {
         "kind": "float",
-        "name": "crossfade_ms",
+        "name": "mixing_time_ms",
         "offset": 56,
         "size": 4
       },
       {
-        "kind": "signed",
-        "name": "ism_order",
+        "kind": "float",
+        "name": "crossfade_ms",
         "offset": 60,
         "size": 4
       },
       {
         "kind": "signed",
-        "name": "late_model",
+        "name": "ism_order",
         "offset": 64,
+        "size": 4
+      },
+      {
+        "kind": "signed",
+        "name": "late_model",
+        "offset": 68,
         "size": 4
       },
       {
         "kind": "unsigned",
         "name": "seed",
-        "offset": 68,
+        "offset": 72,
         "size": 4
       },
       {
         "kind": "pointer",
         "name": "absorption_bands",
-        "offset": 72,
+        "offset": 80,
         "size": 8
       },
       {
         "kind": "unsigned",
         "name": "absorption_band_count",
-        "offset": 80,
+        "offset": 88,
         "size": 8
       },
       {
         "kind": "pointer",
         "name": "scattering_bands",
-        "offset": 88,
+        "offset": 96,
         "size": 8
       },
       {
         "kind": "unsigned",
         "name": "scattering_band_count",
-        "offset": 96,
+        "offset": 104,
         "size": 8
       },
       {
         "kind": "signed",
         "name": "material_preset",
-        "offset": 104,
+        "offset": 112,
         "size": 4
       },
       {
         "kind": "signed",
         "name": "air_absorption",
-        "offset": 108,
-        "size": 4
-      },
-      {
-        "kind": "float",
-        "name": "air_temperature_c",
-        "offset": 112,
-        "size": 4
-      },
-      {
-        "kind": "float",
-        "name": "air_humidity_percent",
         "offset": 116,
         "size": 4
       },
       {
         "kind": "float",
-        "name": "receiver_spacing_m",
+        "name": "air_temperature_c",
         "offset": 120,
+        "size": 4
+      },
+      {
+        "kind": "float",
+        "name": "air_humidity_percent",
+        "offset": 124,
+        "size": 4
+      },
+      {
+        "kind": "float",
+        "name": "receiver_spacing_m",
+        "offset": 128,
         "size": 4
       }
     ],
-    "size": 128
+    "size": 136
   },
   "SonareRoomMorphStereoResult": {
     "align": 8,

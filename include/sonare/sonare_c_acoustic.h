@@ -18,33 +18,24 @@
 #define SONARE_ACOUSTIC_ABI_VERSION 6u
 
 /// Statistical late-reverberation RT60 model for RIR synthesis / room morph
-/// (SonareRirSynthConfig::late_model, SonareRoomMorphConfig::late_model).
-/// SONARE_REVERB_MODEL_DEFAULT is 0 so a zero-initialized config selects the
-/// library default (Eyring), matching the C++ struct defaults
-/// (RirSynthConfig::late_model / RoomMorphConfig::late_model) and every
-/// high-level binding's preferEyring=true default. SABINE/EYRING select a model
-/// explicitly. Mirrors sonare::acoustic::ReverbModel for the explicit values.
-/// Any other value is refused with SONARE_ERROR_INVALID_PARAMETER.
-#define SONARE_REVERB_MODEL_DEFAULT 0
+/// (SonareRirSynthConfig::late_model, SonareRoomMorphConfig::late_model). The
+/// `_init` functions set EYRING. Mirrors sonare::acoustic::ReverbModel, one above
+/// its ordinal. Any other value is refused with SONARE_ERROR_INVALID_PARAMETER.
 #define SONARE_REVERB_MODEL_SABINE 1
 #define SONARE_REVERB_MODEL_EYRING 2
 
 /// Atmospheric-absorption selector for the late tail
 /// (SonareRirSynthConfig::air_absorption, SonareRoomMorphConfig::air_absorption).
-/// SONARE_AIR_ABSORPTION_DEFAULT is 0 so a zero-initialized config selects the
-/// library default (on), matching the C++ struct defaults and every high-level
-/// binding's airAbsorptionEnabled=true default. ON/OFF select it explicitly.
-/// Any other value is refused with SONARE_ERROR_INVALID_PARAMETER.
-#define SONARE_AIR_ABSORPTION_DEFAULT 0
+/// The `_init` functions set ON. Any other value is refused with
+/// SONARE_ERROR_INVALID_PARAMETER.
 #define SONARE_AIR_ABSORPTION_ON 1
 #define SONARE_AIR_ABSORPTION_OFF 2
 
 /// Building-material preset selector for the uniform-room wall material
 /// (SonareRirSynthConfig::material_preset / SonareRoomMorphConfig::material_preset).
-/// Mirrors sonare::acoustic::MaterialPreset. SONARE_MATERIAL_PRESET_NONE is 0 so a
-/// zero-initialized config leaves the preset unused (back-compat): the per-band
-/// array or scalar absorption then applies. Any other value is refused with
-/// SONARE_ERROR_INVALID_PARAMETER.
+/// Mirrors sonare::acoustic::MaterialPreset. SONARE_MATERIAL_PRESET_NONE leaves the
+/// preset unused, so the per-band array or scalar absorption applies; the `_init`
+/// functions set it. Any other value is refused with SONARE_ERROR_INVALID_PARAMETER.
 #define SONARE_MATERIAL_PRESET_NONE 0
 #define SONARE_MATERIAL_PRESET_CONCRETE 1
 #define SONARE_MATERIAL_PRESET_WOOD 2
@@ -65,6 +56,9 @@ extern "C" {
 
 /// @brief Shoebox geometry + placement + synthesis controls for RIR synthesis.
 ///
+/// Prepare one with sonare_rir_synth_config_init, which sets struct_size and every
+/// field's library default; every field is then read literally (a 0 is a 0).
+///
 /// The room is an axis-aligned box [0,length] x [0,width] x [0,height] with a
 /// uniform wall material applied to all six walls. The wall material is chosen by
 /// this precedence: a named `material_preset` (non-zero) wins; otherwise a
@@ -79,6 +73,9 @@ extern "C" {
 /// public surface (C ABI / Node / Python / WASM): the shoebox model covers the
 /// supported room-acoustics use cases and keeps the ABI mesh-free.
 typedef struct {
+  /* sizeof(SonareRirSynthConfig), set by sonare_rir_synth_config_init. A smaller
+   * value is refused with SONARE_ERROR_INVALID_PARAMETER. */
+  uint32_t struct_size;
   float length_m;
   float width_m;
   float height_m;
@@ -93,8 +90,8 @@ typedef struct {
   float mixing_time_ms; /* early/late crossover (ms); 0 = auto (~sqrt(V) ms) */
   float crossfade_ms;   /* equal-power crossfade width around the mixing time (ms) */
   int ism_order;        /* image-source reflection order (>= 0) */
-  int late_model;       /* SONARE_REVERB_MODEL_* ; DEFAULT (0) = Eyring */
-  unsigned int seed;    /* deterministic late-tail seed; 0 = library default (1) */
+  int late_model;       /* SONARE_REVERB_MODEL_* */
+  unsigned int seed;    /* deterministic late-tail seed */
   /* Optional per-octave-band wall absorption/scattering (125/250/500/1k/2k/4k..
    * Hz). When absorption_bands != NULL and absorption_band_count > 0 it
    * overrides the scalar `absorption` (unless material_preset selects a preset).
@@ -113,22 +110,11 @@ typedef struct {
   size_t scattering_band_count;
   int material_preset; /* SONARE_MATERIAL_PRESET_* ; NONE (0) = use bands/scalar */
   /* ISO 9613-1 atmospheric absorption on the late tail, a SONARE_AIR_ABSORPTION_*
-   * selector; DEFAULT (0) = on. While on, the per-band late RT60 gains the
-   * `4 m V` air term, which mainly shortens the high bands of a large room.
-   *
-   * The climate pair follows this ABI's `seed` / `crossfade_ms` convention:
-   * 0 selects the library value, here the ISO reference climate (20 degC,
-   * 50 % relative humidity). A literal 0 degC is therefore not distinguishable
-   * from unset - request 0.01 for a freezing room, which absorbs identically
-   * (the coefficient varies smoothly with temperature). Out-of-range values are
-   * refused the way the surrounding geometry checks are: SONARE_ERROR_INVALID_PARAMETER,
-   * with acoustic.invalid_air_absorption in sonare_last_error_message().
-   *
-   * These sit after the optional tail rather than with the other scalars: the
-   * scalar prefix is a run of 4-byte members and three more would make it an
-   * odd count, which pads before the pointer on a 64-bit target but not on
-   * wasm32. Appending here keeps every existing offset identical on both and
-   * costs no padding at all. */
+   * selector. While on, the per-band late RT60 gains the `4 m V` air term, which
+   * mainly shortens the high bands of a large room. The climate pair defaults to
+   * the ISO reference (20 degC, 50 % relative humidity); out-of-range values are
+   * refused with SONARE_ERROR_INVALID_PARAMETER and
+   * acoustic.invalid_air_absorption in sonare_last_error_message(). */
   int air_absorption;
   float air_temperature_c;
   float air_humidity_percent;
@@ -193,8 +179,12 @@ typedef struct {
 ///
 /// The target wall material follows the same precedence as SonareRirSynthConfig
 /// (material_preset > absorption_bands > scalar absorption); only uniform
-/// (single-material) target rooms are reachable through this ABI.
+/// (single-material) target rooms are reachable through this ABI. Prepare one with
+/// sonare_room_morph_config_init; every field is then read literally.
 typedef struct {
+  /* sizeof(SonareRoomMorphConfig), set by sonare_room_morph_config_init. A smaller
+   * value is refused with SONARE_ERROR_INVALID_PARAMETER. */
+  uint32_t struct_size;
   float length_m;
   float width_m;
   float height_m;
@@ -211,8 +201,8 @@ typedef struct {
   float mixing_time_ms;          /* early/late crossover (ms); 0 = auto (~sqrt(V) ms) */
   float crossfade_ms;            /* equal-power crossfade width around mixing time (ms) */
   int ism_order;
-  int late_model;    /* SONARE_REVERB_MODEL_* ; DEFAULT (0) = Eyring */
-  unsigned int seed; /* deterministic late-tail seed; 0 = library default (1) */
+  int late_model;    /* SONARE_REVERB_MODEL_* */
+  unsigned int seed; /* deterministic late-tail seed */
   /* Optional per-octave-band target-wall absorption/scattering; see
    * SonareRirSynthConfig. */
   const float* absorption_bands;
@@ -220,15 +210,13 @@ typedef struct {
   const float* scattering_bands;
   size_t scattering_band_count;
   int material_preset; /* SONARE_MATERIAL_PRESET_* ; NONE (0) = use bands/scalar */
-  /* Atmospheric absorption on the target room's late tail; the selector, the
-   * zero-means-ISO-reference climate rule, the physical bounds and the reason
-   * this group sits after the tail are all as documented on
+  /* Atmospheric absorption on the target room's late tail; as documented on
    * SonareRirSynthConfig. */
   int air_absorption;
   float air_temperature_c;
   float air_humidity_percent;
-  /* Receiver spacing in metres for sonare_room_morph_stereo, in (0, 4]; 0 = library default
-   * (0.5). Ignored and not validated by sonare_room_morph. */
+  /* Receiver spacing in metres for sonare_room_morph_stereo, in (0, 4]. Ignored and not
+   * validated by sonare_room_morph. */
   float receiver_spacing_m;
 } SonareRoomMorphConfig;
 
@@ -247,8 +235,11 @@ typedef struct {
 // layout by member-relative offsets, so any padding/alignment/reorder change is
 // caught. SonareRoomEstimateConfig stays a pure-float-sized POD.
 //
-// SonareRirSynthConfig prefix: 13 floats + 3 ints/unsigned = 16 four-byte members.
-static_assert(offsetof(SonareRirSynthConfig, absorption_bands) == 16u * sizeof(float),
+// SonareRirSynthConfig prefix: struct_size + 13 floats + 3 ints/unsigned = 17 four-byte
+// members, padded to the pointer's alignment.
+static_assert(offsetof(SonareRirSynthConfig, absorption_bands) ==
+                  (17u * sizeof(float) + alignof(const float*) - 1) / alignof(const float*) *
+                      alignof(const float*),
               "SonareRirSynthConfig scalar prefix layout changed");
 static_assert(offsetof(SonareRirSynthConfig, scattering_bands) ==
                   offsetof(SonareRirSynthConfig, absorption_band_count) + sizeof(size_t),
@@ -267,9 +258,11 @@ static_assert(offsetof(SonareRirSynthConfig, air_humidity_percent) ==
               "SonareRirSynthConfig air climate layout changed");
 static_assert(sizeof(SonareRoomEstimateConfig) == 8u * sizeof(float),
               "SonareRoomEstimateConfig unexpected size");
-// SonareRoomMorphConfig prefix: 15 floats + 3 ints/unsigned = 18 four-byte members
-// (gained late_model/mixing_time_ms/crossfade_ms over the v1 layout).
-static_assert(offsetof(SonareRoomMorphConfig, absorption_bands) == 18u * sizeof(float),
+// SonareRoomMorphConfig prefix: struct_size + 15 floats + 3 ints/unsigned = 19 four-byte
+// members, padded to the pointer's alignment.
+static_assert(offsetof(SonareRoomMorphConfig, absorption_bands) ==
+                  (19u * sizeof(float) + alignof(const float*) - 1) / alignof(const float*) *
+                      alignof(const float*),
               "SonareRoomMorphConfig scalar prefix layout changed");
 static_assert(offsetof(SonareRoomMorphConfig, scattering_bands) ==
                   offsetof(SonareRoomMorphConfig, absorption_band_count) + sizeof(size_t),
@@ -287,6 +280,18 @@ static_assert(offsetof(SonareRoomMorphConfig, receiver_spacing_m) ==
                   offsetof(SonareRoomMorphConfig, air_humidity_percent) + sizeof(float),
               "SonareRoomMorphConfig receiver spacing layout changed");
 #endif
+
+/// @brief Fill @p config with struct_size and the library default of every field: a
+///   7 x 5 x 3 m room, source (1, 1, 1.2), listener (5, 4, 1.7), absorption 0.2, no
+///   length cap (max_seconds 0), automatic mixing time (mixing_time_ms 0), crossfade
+///   5 ms, ism_order 3, EYRING, seed 1, no band arrays, MATERIAL_PRESET_NONE, air
+///   absorption ON at 20 degC / 50 %. No-op on NULL.
+void sonare_rir_synth_config_init(SonareRirSynthConfig* config);
+
+/// @brief Fill @p config with struct_size and the library default of every field: the
+///   sonare_rir_synth_config_init room and placement, source_tail_suppression 0.5, wet
+///   0.5, receiver_spacing_m 0.5, and the same synthesis defaults. No-op on NULL.
+void sonare_room_morph_config_init(SonareRoomMorphConfig* config);
 
 /// @brief Synthesize a room impulse response from shoebox geometry.
 /// @param config      Geometry + placement + synthesis controls.
@@ -333,13 +338,14 @@ const char* sonare_material_preset_name(int preset);
 const char* sonare_acoustic_mode_name(int mode);
 
 /// @brief Room geometry for sonare_synthesize_rir taken from a room estimate.
-/// @details Zeroes @p out, then sets the three dimensions and borrows the estimate's per-band
+/// @details Initializes @p out with sonare_rir_synth_config_init, then sets the three dimensions
+/// and borrows the estimate's per-band
 ///   absorption as @c absorption_bands (so @p estimate must outlive any use of @p out).
 ///   Source and listener are the library's default positions (source (1, 1, 1.2), listener
 ///   (5, 4, 1.7) in the default 7 x 5 x 3 room) scaled per axis by the estimated dimension over
 ///   the default one, so they lie inside any estimated room and the default room maps to the
 ///   default placement exactly. The scalar @c absorption is the mean of the finite bands;
-///   with no finite band it stays at the zeroed value. Absorption bands that are missing or
+///   with no finite band it stays at the default. Absorption bands that are missing or
 ///   contain a non-finite value (the fit did not converge) are not borrowed, so the scalar
 ///   applies. A caller may overwrite any field before synthesizing. Refuses
 ///   (SONARE_ERROR_INVALID_PARAMETER, with a message) an estimate whose dimensions are not

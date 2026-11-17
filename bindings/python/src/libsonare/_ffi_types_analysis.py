@@ -124,9 +124,10 @@ class SonareAcousticResult(CStruct):
 
 
 class SonareRirSynthConfig(CStruct):
-    """Maps to SonareRirSynthConfig in sonare_c_acoustic.h."""
+    """Maps to SonareRirSynthConfig; fill with sonare_rir_synth_config_init."""
 
     _fields_ = [
+        ("struct_size", ctypes.c_uint32),
         ("length_m", ctypes.c_float),
         ("width_m", ctypes.c_float),
         ("height_m", ctypes.c_float),
@@ -149,10 +150,7 @@ class SonareRirSynthConfig(CStruct):
         ("scattering_bands", ctypes.POINTER(ctypes.c_float)),
         ("scattering_band_count", ctypes.c_size_t),
         ("material_preset", ctypes.c_int),
-        # ISO 9613-1 air absorption on the late tail; the climate pair keeps the
-        # ISO reference (20 degC / 50 % RH) at 0, like seed and crossfade_ms.
-        # Placed after the optional tail to match the C header, which appends
-        # them there so the pointer offsets stay pointer-width agnostic.
+        # ISO 9613-1 air absorption on the late tail.
         ("air_absorption", ctypes.c_int),
         ("air_temperature_c", ctypes.c_float),
         ("air_humidity_percent", ctypes.c_float),
@@ -201,9 +199,10 @@ class SonareRoomEstimate(CStruct):
 
 
 class SonareRoomMorphConfig(CStruct):
-    """Maps to SonareRoomMorphConfig in sonare_c_acoustic.h."""
+    """Maps to SonareRoomMorphConfig; fill with sonare_room_morph_config_init."""
 
     _fields_ = [
+        ("struct_size", ctypes.c_uint32),
         ("length_m", ctypes.c_float),
         ("width_m", ctypes.c_float),
         ("height_m", ctypes.c_float),
@@ -232,7 +231,7 @@ class SonareRoomMorphConfig(CStruct):
         ("air_absorption", ctypes.c_int),
         ("air_temperature_c", ctypes.c_float),
         ("air_humidity_percent", ctypes.c_float),
-        # Read by sonare_room_morph_stereo only; 0 = library default (0.5 m).
+        # Read by sonare_room_morph_stereo only.
         ("receiver_spacing_m", ctypes.c_float),
     ]
 

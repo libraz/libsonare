@@ -275,6 +275,10 @@ node = [
   "mfcc_to_audio_checked_ex2",
   # Seeds SonareDownmixOptions; the facades take normalize / include LFE as downmix options.
   "downmix_options_init",
+  # Seed the room configs; the facades take each field as an option and keep the core default
+  # for an absent one.
+  "rir_synth_config_init",
+  "room_morph_config_init",
   # C-side canonical enum-name supplier consumed internally by the facade
   # snapshot/test helpers; not exposed as a same-named public function.
   "synth_enum_names",
@@ -399,6 +403,10 @@ wasm = [
   "mfcc_to_audio_checked_ex2",
   # Seeds SonareDownmixOptions; the facades take normalize / include LFE as downmix options.
   "downmix_options_init",
+  # Seed the room configs; the facades take each field as an option and keep the core default
+  # for an absent one.
+  "rir_synth_config_init",
+  "room_morph_config_init",
   "synth_enum_names",
   # Unified-analysis variants folded into the base facade analyze /
   # analyzeWithProgress / analyzeMelody (WASM keeps its native analyze() object).
@@ -526,6 +534,10 @@ python = [
   "mfcc_to_audio_checked_ex2",
   # Seeds SonareDownmixOptions; the facades take normalize / include LFE as downmix options.
   "downmix_options_init",
+  # Seed the room configs; the facades take each field as an option and keep the core default
+  # for an absent one.
+  "rir_synth_config_init",
+  "room_morph_config_init",
   "synth_enum_names",
   # Unified-analysis variants folded into the base facade `analyze` /
   # `analyze_with_progress` / `analyze_melody` (use_pyin/center params).

@@ -561,6 +561,10 @@ def configure_core_signatures(lib: ctypes.CDLL) -> None:
     lib.sonare_material_preset_name.argtypes = [ctypes.c_int]
     lib.sonare_acoustic_mode_name.restype = ctypes.c_char_p
     lib.sonare_acoustic_mode_name.argtypes = [ctypes.c_int]
+    lib.sonare_rir_synth_config_init.restype = None
+    lib.sonare_rir_synth_config_init.argtypes = [ctypes.POINTER(SonareRirSynthConfig)]
+    lib.sonare_room_morph_config_init.restype = None
+    lib.sonare_room_morph_config_init.argtypes = [ctypes.POINTER(SonareRoomMorphConfig)]
     lib.sonare_room_geometry_from_estimate.restype = ctypes.c_int32
     lib.sonare_room_geometry_from_estimate.argtypes = [
         ctypes.POINTER(SonareRoomEstimate),

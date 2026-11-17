@@ -107,14 +107,6 @@ sonare::acoustic::ShoeboxRoom roomFromVal(val opts, float def_absorption) {
   return make_uniform_room(dims, request);
 }
 
-// Reads a deterministic late-tail seed over the C ABI's full uint32 domain, keeping @p fallback
-// when the option is absent or exactly 0 (the C ABI's "seed == 0 keeps the library default").
-// A non-number is a TypeError and a value outside [0, 2^32 - 1] or fractional a RangeError.
-unsigned seedFromVal(val opts, unsigned fallback) {
-  const uint32_t seed = uintProperty(opts, "seed", 0);
-  return seed == 0 ? fallback : seed;
-}
-
 sonare::acoustic::SourceListener placementFromVal(val opts) {
   const auto& source = sonare::acoustic::kDefaultPlacement.source;
   const auto& listener = sonare::acoustic::kDefaultPlacement.listener;
@@ -201,26 +193,19 @@ val js_synthesize_rir(val opts) {
   config.late_model = boolProperty(opts, "preferEyring", true)
                           ? sonare::acoustic::ReverbModel::Eyring
                           : sonare::acoustic::ReverbModel::Sabine;
-  config.seed = seedFromVal(opts, config.seed);
+  config.seed = uintProperty(opts, "seed", config.seed);
   config.max_seconds = floatProperty(opts, "maxSeconds", config.max_seconds);
   config.mixing_time_ms = floatProperty(opts, "mixingTimeMs", config.mixing_time_ms);
-  // crossfadeMs == 0 keeps the library default; any other value reaches the core's rule as given.
-  config.crossfade_ms = sonare::ZeroIsDefault(floatProperty(opts, "crossfadeMs", 0.0f))
-                            .or_default(config.crossfade_ms);
+  config.crossfade_ms = floatProperty(opts, "crossfadeMs", config.crossfade_ms);
   config.air_absorption_enabled =
       boolProperty(opts, "airAbsorptionEnabled", config.air_absorption_enabled);
-  // airTemperatureC / airHumidityPercent == 0 keep the ISO reference climate
-  // (20 degC, 50 % RH), matching the C ABI's "0 means the library default" rule
-  // so the same options object yields the same RIR on every surface. An
-  // implausible climate is an Error diagnostic, thrown below like the geometry errors.
-  config.air.temperature_c = sonare::ZeroIsDefault(floatProperty(opts, "airTemperatureC", 0.0f))
-                                 .or_default(config.air.temperature_c);
+  // An implausible climate is an Error diagnostic, thrown below like the geometry errors.
+  config.air.temperature_c = floatProperty(opts, "airTemperatureC", config.air.temperature_c);
   config.air.humidity_percent =
-      sonare::ZeroIsDefault(floatProperty(opts, "airHumidityPercent", 0.0f))
-          .or_default(config.air.humidity_percent);
+      floatProperty(opts, "airHumidityPercent", config.air.humidity_percent);
 
   const auto placement = placementFromVal(opts);
-  const auto room = roomFromVal(opts, 0.2f);
+  const auto room = roomFromVal(opts, sonare::acoustic::kDefaultWallAbsorption);
   requireRirRequest(room, placement, config);
   const auto result = sonare::acoustic::synthesize_rir(room, placement, sample_rate, config);
   if (sonare::has_error(result.diagnostics)) {
@@ -290,31 +275,25 @@ val js_estimate_room(val samples, const val& sample_rate_val, val opts) {
 
 static sonare::effects::acoustic::RoomMorphConfig roomMorphConfigFromVal(val opts) {
   sonare::effects::acoustic::RoomMorphConfig config;
-  config.target = roomFromVal(opts, 0.2f);
+  config.target = roomFromVal(opts, sonare::acoustic::kDefaultWallAbsorption);
   config.placement = placementFromVal(opts);
   config.source_tail_suppression =
       floatProperty(opts, "sourceTailSuppression", config.source_tail_suppression);
   config.wet = floatProperty(opts, "wet", config.wet);
   config.ism_order = intProperty(opts, "ismOrder", config.ism_order);
-  config.seed = seedFromVal(opts, config.seed);
+  config.seed = uintProperty(opts, "seed", config.seed);
   config.max_seconds = floatProperty(opts, "maxSeconds", config.max_seconds);
   config.late_model = boolProperty(opts, "preferEyring", true)
                           ? sonare::acoustic::ReverbModel::Eyring
                           : sonare::acoustic::ReverbModel::Sabine;
   config.mixing_time_ms = floatProperty(opts, "mixingTimeMs", config.mixing_time_ms);
-  // Same crossfade sentinel rule as synthesizeRir above.
-  config.crossfade_ms = sonare::ZeroIsDefault(floatProperty(opts, "crossfadeMs", 0.0f))
-                            .or_default(config.crossfade_ms);
-  // Air absorption on the target room; the zero-means-ISO-reference rule is the
-  // same as synthesizeRir above. An implausible climate throws here (the morph
-  // core validates rather than diagnosing), matching the C ABI.
+  config.crossfade_ms = floatProperty(opts, "crossfadeMs", config.crossfade_ms);
+  // An implausible climate throws here (the morph core validates rather than diagnosing).
   config.air_absorption_enabled =
       boolProperty(opts, "airAbsorptionEnabled", config.air_absorption_enabled);
-  config.air.temperature_c = sonare::ZeroIsDefault(floatProperty(opts, "airTemperatureC", 0.0f))
-                                 .or_default(config.air.temperature_c);
+  config.air.temperature_c = floatProperty(opts, "airTemperatureC", config.air.temperature_c);
   config.air.humidity_percent =
-      sonare::ZeroIsDefault(floatProperty(opts, "airHumidityPercent", 0.0f))
-          .or_default(config.air.humidity_percent);
+      floatProperty(opts, "airHumidityPercent", config.air.humidity_percent);
   sonare::effects::acoustic::validate_room_morph_config(
       config, sonare::acoustic::kShoeboxJsFieldNames, sonare::acoustic::kRirSynthJsFieldNames);
   return config;

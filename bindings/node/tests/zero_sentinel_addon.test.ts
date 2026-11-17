@@ -461,7 +461,9 @@ describe('a facade-guarded sentinel key, reached past the facade', () => {
       return digest(native.synthesizeRir(options).rir);
     };
 
-    expect(rir(0)).toBe(rir(undefined));
+    // Seed 0 is a seed of its own; an absent seed is the library default, 1.
+    expect(rir(0)).not.toBe(rir(undefined));
+    expect(rir(1)).toBe(rir(undefined));
     expect(rir(7)).not.toBe(rir(undefined)); // positive control
     for (const value of FRACTIONS) {
       expect(() => rir(value), `seed ${value}`).toThrow(RangeError);

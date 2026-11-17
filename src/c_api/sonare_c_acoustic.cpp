@@ -3,7 +3,11 @@
 #include <array>
 
 #include "acoustic/estimate_geometry.h"
+#include "acoustic/late_reverb.h"
+#include "acoustic/rir_synthesizer.h"
+#include "acoustic/room_model.h"
 #include "acoustic/selector_names.h"
+#include "effects/acoustic/room_morph.h"
 
 #if defined(SONARE_WITH_ACOUSTIC_SIM)
 #include <algorithm>
@@ -14,11 +18,8 @@
 #include <vector>
 
 #include "acoustic/material.h"
-#include "acoustic/rir_synthesizer.h"
-#include "acoustic/room_model.h"
 #include "analysis/room_estimator.h"
 #include "core/audio.h"
-#include "effects/acoustic/room_morph.h"
 #include "util/zero_is_default.h"
 #endif
 
@@ -40,21 +41,15 @@ static_assert(static_cast<int>(sonare::acoustic::ReverbModel::Sabine) + 1 ==
                   SONARE_REVERB_MODEL_EYRING == SONARE_REVERB_MODEL_SABINE + 1,
               "SONARE_REVERB_MODEL_* must sit one above sonare::acoustic::ReverbModel");
 
-// SONARE_REVERB_MODEL_DEFAULT (0) leaves @p model at the library default, so a
-// {}-zeroed config matches the C++ struct defaults; SABINE / EYRING name a
-// model. False for any other selector, which the caller refuses.
+// False for a selector other than SABINE / EYRING, which the caller refuses.
 bool late_model_from_c(int selector, sonare::acoustic::ReverbModel* model) {
-  return selector == SONARE_REVERB_MODEL_DEFAULT ||
-         sonare_c_detail::ordinal_to_enum(selector, SONARE_REVERB_MODEL_SABINE,
+  return sonare_c_detail::ordinal_to_enum(selector, SONARE_REVERB_MODEL_SABINE,
                                           SONARE_REVERB_MODEL_EYRING, model, 1);
 }
 
-// SONARE_AIR_ABSORPTION_DEFAULT (0) leaves @p enabled at the library default; ON / OFF
-// set it. False for any other selector, which the caller refuses.
+// False for a selector other than ON / OFF, which the caller refuses.
 bool air_absorption_from_c(int selector, bool* enabled) {
   switch (selector) {
-    case SONARE_AIR_ABSORPTION_DEFAULT:
-      return true;
     case SONARE_AIR_ABSORPTION_ON:
       *enabled = true;
       return true;
@@ -117,12 +112,75 @@ static_assert(SONARE_ACOUSTIC_MODE_IMPULSE_RESPONSE + 1 ==
                   sonare::acoustic::kAcousticModeSelectorNames.size(),
               "acoustic mode names must cover the SONARE_ACOUSTIC_MODE_* values");
 
+// The geometry, placement and synthesis defaults the two room configs share.
+template <typename Config>
+void init_room_fields(Config* config) {
+  using namespace sonare::acoustic;
+  config->length_m = kDefaultRoomDims.length;
+  config->width_m = kDefaultRoomDims.width;
+  config->height_m = kDefaultRoomDims.height;
+  config->source_x = kDefaultPlacement.source.x;
+  config->source_y = kDefaultPlacement.source.y;
+  config->source_z = kDefaultPlacement.source.z;
+  config->listener_x = kDefaultPlacement.listener.x;
+  config->listener_y = kDefaultPlacement.listener.y;
+  config->listener_z = kDefaultPlacement.listener.z;
+  config->absorption = kDefaultWallAbsorption;
+  config->material_preset = SONARE_MATERIAL_PRESET_NONE;
+  const AirAbsorption air{};
+  config->air_temperature_c = air.temperature_c;
+  config->air_humidity_percent = air.humidity_percent;
+}
+
+// Refuses a struct_size below the struct this library was built with, naming it.
+bool struct_size_accepted(uint32_t struct_size, size_t expected, const char* name) {
+  if (struct_size >= expected) return true;
+  sonare_c_detail::set_last_error(SONARE_ERROR_INVALID_PARAMETER,
+                                  (std::string(name) + ".struct_size is below sizeof").c_str());
+  return false;
+}
+
 template <size_t N>
 const char* enum_name(const std::array<const char*, N>& names, int value) {
   return value >= 0 && static_cast<size_t>(value) < N ? names[value] : nullptr;
 }
 
 }  // namespace
+
+void sonare_rir_synth_config_init(SonareRirSynthConfig* config) {
+  if (config == nullptr) return;
+  *config = {};
+  config->struct_size = sizeof(*config);
+  init_room_fields(config);
+  const sonare::acoustic::RirSynthConfig defaults;
+  config->max_seconds = defaults.max_seconds;
+  config->mixing_time_ms = defaults.mixing_time_ms;
+  config->crossfade_ms = defaults.crossfade_ms;
+  config->ism_order = defaults.ism_order;
+  config->seed = defaults.seed;
+  config->late_model = static_cast<int>(defaults.late_model) + SONARE_REVERB_MODEL_SABINE;
+  config->air_absorption =
+      defaults.air_absorption_enabled ? SONARE_AIR_ABSORPTION_ON : SONARE_AIR_ABSORPTION_OFF;
+}
+
+void sonare_room_morph_config_init(SonareRoomMorphConfig* config) {
+  if (config == nullptr) return;
+  *config = {};
+  config->struct_size = sizeof(*config);
+  init_room_fields(config);
+  const sonare::effects::acoustic::RoomMorphConfig defaults;
+  config->source_tail_suppression = defaults.source_tail_suppression;
+  config->wet = defaults.wet;
+  config->max_seconds = defaults.max_seconds;
+  config->mixing_time_ms = defaults.mixing_time_ms;
+  config->crossfade_ms = defaults.crossfade_ms;
+  config->ism_order = defaults.ism_order;
+  config->seed = defaults.seed;
+  config->receiver_spacing_m = defaults.receiver_spacing_m;
+  config->late_model = static_cast<int>(defaults.late_model) + SONARE_REVERB_MODEL_SABINE;
+  config->air_absorption =
+      defaults.air_absorption_enabled ? SONARE_AIR_ABSORPTION_ON : SONARE_AIR_ABSORPTION_OFF;
+}
 
 const char* sonare_material_preset_name(int preset) {
   return enum_name(sonare::acoustic::kMaterialPresetSelectorNames, preset);
@@ -137,7 +195,7 @@ SonareError sonare_room_geometry_from_estimate(const SonareRoomEstimate* estimat
   SONARE_C_API_ENTRY;
   SONARE_C_TRY
   if (!estimate || !out) return SONARE_ERROR_INVALID_PARAMETER;
-  *out = SonareRirSynthConfig{};
+  sonare_rir_synth_config_init(out);
   if (!sonare::acoustic::estimated_dimensions_measured(estimate->length_m, estimate->width_m,
                                                        estimate->height_m)) {
     sonare_c_detail::set_last_error(SONARE_ERROR_INVALID_PARAMETER,
@@ -178,7 +236,9 @@ SonareError sonare_synthesize_rir(const SonareRirSynthConfig* config, int sample
   out->rir = nullptr;
   out->length = 0;
   out->sample_rate = sample_rate;
-  if (sample_rate < sonare_c_detail::kMinSampleRate ||
+  if (!struct_size_accepted(config->struct_size, sizeof(SonareRirSynthConfig),
+                            "SonareRirSynthConfig") ||
+      sample_rate < sonare_c_detail::kMinSampleRate ||
       sample_rate > sonare_c_detail::kMaxSampleRate) {
     return SONARE_ERROR_INVALID_PARAMETER;
   }
@@ -219,27 +279,14 @@ SonareError sonare_synthesize_rir(const SonareRirSynthConfig* config, int sample
                 config->scattering_band_count, config->material_preset);
   const SourceListener placement{{config->source_x, config->source_y, config->source_z},
                                  {config->listener_x, config->listener_y, config->listener_z}};
-  rc.ism_order = config->ism_order < 0 ? 0 : config->ism_order;
-  // seed == 0 means "keep the library default" (1), so a zero-initialized POD
-  // produces the same deterministic RIR as the C++/Node/Python/WASM defaults
-  // instead of silently seeding with 0.
-  if (config->seed != 0) rc.seed = config->seed;
+  rc.ism_order = config->ism_order;
+  rc.seed = config->seed;
   rc.max_seconds = config->max_seconds;
   rc.mixing_time_ms = config->mixing_time_ms;
-  // crossfade_ms == 0 means "keep the library default"; a true zero crossfade is
-  // not a useful synthesis setting, so a zeroed POD preserves the C++ default.
-  // The range check above ran on the caller's value, before this substitution.
-  rc.crossfade_ms = sonare::ZeroIsDefault(config->crossfade_ms).or_default(rc.crossfade_ms);
-  // Zero climate values keep the ISO reference (20 degC / 50 % RH) on the same
-  // "0 means the library default" rule as seed and crossfade_ms, so enabling
-  // air absorption on an otherwise zeroed POD gives the documented climate
-  // rather than a silent 0 degC / 0 % one. An implausible value is left for the
-  // core to diagnose (acoustic.invalid_air_absorption), which refuses the call
-  // the same way the geometry checks do.
-  rc.air.temperature_c =
-      sonare::ZeroIsDefault(config->air_temperature_c).or_default(rc.air.temperature_c);
-  rc.air.humidity_percent =
-      sonare::ZeroIsDefault(config->air_humidity_percent).or_default(rc.air.humidity_percent);
+  rc.crossfade_ms = config->crossfade_ms;
+  // An implausible climate is left for the core to diagnose (acoustic.invalid_air_absorption).
+  rc.air.temperature_c = config->air_temperature_c;
+  rc.air.humidity_percent = config->air_humidity_percent;
 
   const RirSynthResult res = synthesize_rir(room, placement, sample_rate, rc);
   publish_rir_diagnostics(res.diagnostics);
@@ -350,6 +397,10 @@ namespace {
 
 // The scalar and band checks the core does not repeat, shared by both morph entries.
 bool room_morph_config_is_valid(const SonareRoomMorphConfig& config) {
+  if (!struct_size_accepted(config.struct_size, sizeof(SonareRoomMorphConfig),
+                            "SonareRoomMorphConfig")) {
+    return false;
+  }
   const auto unit = [](float value) {
     return std::isfinite(value) && value >= 0.0f && value <= 1.0f;
   };
@@ -386,29 +437,18 @@ sonare::effects::acoustic::RoomMorphConfig room_morph_config_from(
   cfg.source_tail_suppression = config.source_tail_suppression;
   cfg.wet = config.wet;
   cfg.ism_order = config.ism_order;
-  // seed == 0 keeps the library default (1); see synthesize_rir above.
-  if (config.seed != 0) cfg.seed = config.seed;
+  cfg.seed = config.seed;
   cfg.max_seconds = config.max_seconds;
-  // room_morph_config_is_valid admitted the selector; 0 keeps the library default.
+  cfg.mixing_time_ms = config.mixing_time_ms;
+  cfg.crossfade_ms = config.crossfade_ms;
+  // room_morph_config_is_valid admitted both selectors.
   (void)late_model_from_c(config.late_model, &cfg.late_model);
-  cfg.mixing_time_ms = config.mixing_time_ms;  // 0 = auto (~sqrt(V) ms)
-  // crossfade_ms == 0 preserves the C++ default (a true zero crossfade is
-  // not a useful setting), matching the RIR-synth ABI convention. Any
-  // other value reaches the morph core, which rejects it if out of range.
-  cfg.crossfade_ms = sonare::ZeroIsDefault(config.crossfade_ms).or_default(cfg.crossfade_ms);
-  // Air absorption on the target room; zero climate values keep the ISO
-  // reference, exactly as in synthesize_rir above. Here the core rejects an
-  // implausible climate by throwing, which the entry maps to
-  // SONARE_ERROR_INVALID_PARAMETER.
-  // room_morph_config_is_valid admitted the selector; 0 keeps the library default.
   (void)air_absorption_from_c(config.air_absorption, &cfg.air_absorption_enabled);
-  cfg.air.temperature_c =
-      sonare::ZeroIsDefault(config.air_temperature_c).or_default(cfg.air.temperature_c);
-  cfg.air.humidity_percent =
-      sonare::ZeroIsDefault(config.air_humidity_percent).or_default(cfg.air.humidity_percent);
+  // The core rejects an implausible climate by throwing, mapped to INVALID_PARAMETER.
+  cfg.air.temperature_c = config.air_temperature_c;
+  cfg.air.humidity_percent = config.air_humidity_percent;
   // Read by the stereo entry only; the mono morph neither validates nor uses it.
-  cfg.receiver_spacing_m =
-      sonare::ZeroIsDefault(config.receiver_spacing_m).or_default(cfg.receiver_spacing_m);
+  cfg.receiver_spacing_m = config.receiver_spacing_m;
   return cfg;
 }
 
