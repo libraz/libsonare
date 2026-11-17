@@ -1,17 +1,21 @@
 # Contributing to libsonare
 
-Contributions are welcome, including small and unfinished ones. A maintainer finishes every change before it is merged, so you do not need to get everything in this document right, or even read all of it.
+Contributions are welcome, including small and unfinished ones. A maintainer reviews every pull request, finishes what is missing, and merges it, so you do not need to get everything in this document right, or even read all of it.
 
 ## What a pull request needs
 
-- A description of what the change does and why.
+- A description of what the change does and why. If the intent is clear, the maintainer can verify the behaviour.
 - If you can, a build and the tests for the part you changed.
 
-That is all. A red CI job, a missing type declaration, or a binding you did not update is fine: say what you know in the pull request, and the maintainer will finish it or tell you what is left. Target `develop` if you can; a pull request against `main` is retargeted.
+That is all. A red check, a missing type declaration, a test you did not write, or a binding you did not update is fine: say what you know in the pull request, and the maintainer will finish it or tell you what is left. Target `develop` if you can; a pull request against `main` is retargeted.
 
 For a larger change, such as a new capability or one that crosses several surfaces, opening an issue first to describe the idea can save you work. It is not required.
 
 Reporting a bug you do not intend to fix is a useful contribution too, and needs none of the setup below.
+
+### What the maintainer can verify
+
+The maintainer tests on macOS; Linux is covered by CI. If your change or bug depends on something else (a Linux audio stack, a particular audio interface or MIDI device, WSL2), describe what you see there, with the output or a recording if you can, because it may not be reproducible on the maintainer's side.
 
 ## What you are contributing to
 
@@ -50,21 +54,19 @@ source /path/to/emsdk/emsdk_env.sh
 make wasm
 ```
 
-### Running the gates locally
+### Running the checks locally
+
+You do not have to; CI and the maintainer run them. If you want to see what CI will say first:
 
 ```bash
-git ls-files -z -- '*.h' '*.hpp' '*.c' '*.cpp' '*.mm' ':!:third_party/**' | xargs -0 clang-format --dry-run --Werror
-make parity                                      # cross-surface drift, runs the conformance gates first
-make processor-types-check
-make check-abi-version
-python3 tools/abi/gen_abi_layout.py --check      # needs a C compiler for a generated probe
-make ci-local                                    # all of the above plus make lint; needs Node and rye
-make format                                      # applies formatting across every language present
+make format        # applies formatting across every language present
+make ci-local      # formatting check and the drift gates; needs Node and rye
+make parity        # cross-surface drift on its own, after the conformance gates
 ```
 
 ## What CI requires
 
-Every check blocks merging, but a red check on your pull request is not a reason to hold it back; the maintainer can look at it with you. A pull request to `develop` runs `develop-ci.yml`. The heavier jobs run in `ci.yml` on pull requests and pushes to `main`, as the pre-release gate.
+A red check on your pull request is not a reason to hold it back; the maintainer can look at it with you. A pull request to `develop` runs `develop-ci.yml`. The heavier jobs run in `ci.yml` on pull requests and pushes to `main`, before a release.
 
 | Job | Runs on | What it checks |
 | --- | --- | --- |
@@ -81,7 +83,7 @@ Every check blocks merging, but a red check on your pull request is not a reason
 
 ## Checklist
 
-This is what a change looks like by the time it is merged. The maintainer checks it and fills in what is missing, so you are not expected to know all of it. Following the items for the area you touched saves a round of review.
+This is what a change looks like by the time it is merged. The maintainer checks it and fills in what is missing, so you are not expected to know all of it. Only the sections for the area you touched apply to your change; skip the rest.
 
 ### Building and checking
 
@@ -268,7 +270,7 @@ Nothing in this section asks anything of you; read it when a checklist item or a
 
 ## Reporting issues
 
-Search the existing issues first, then include: what you did, what happened, what you expected, the version and which binding, and a minimal reproduction if you have one. For an analysis result that looks wrong, the input file matters more than anything else in the report.
+Search the existing issues first, then include what you can of: what you did, what happened, what you expected, the version and which binding, your OS and its display language, and a minimal reproduction. For an analysis result that looks wrong, the input file matters more than anything else in the report.
 
 Security vulnerabilities go through the process in [SECURITY.md](SECURITY.md), not the public issue tracker.
 

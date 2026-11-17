@@ -1,0 +1,11 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Documentation
+    url: https://libsonare.libraz.net/docs/introduction
+    about: Guides, API reference for every binding, and the non-goals
+  - name: Note-level composition
+    url: https://github.com/libraz/libcantus/issues
+    about: Music theory and note generation belong to libcantus
+  - name: Security vulnerabilities
+    url: https://github.com/libraz/libsonare/blob/main/SECURITY.md
+    about: Report privately as described in the security policy
