@@ -8,7 +8,6 @@ import {
   detectKey,
   init,
   type KeyMode,
-  Mode,
   PitchClass,
   type PitchCorrectTimevaryingRequest,
   pitchCorrectTimevarying,
@@ -164,9 +163,9 @@ describe('autoTune (WASM)', () => {
       autoTune({
         samples: input,
         sampleRate: SR,
-        key: { root: PitchClass.D, mode: Mode.Dorian as never },
+        key: { root: PitchClass.D, mode: 2 as never },
       }),
-    ).toThrow();
+    ).toThrow(TypeError);
   });
 
   it('strength 0 leaves the audio unchanged', () => {

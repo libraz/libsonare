@@ -335,6 +335,11 @@ describe('effects notes surface', () => {
     expect(out.length).toBe(samples.length);
   });
 
+  it('exports no numeric Mode: a key mode is a KeyMode name', async () => {
+    expect('Mode' in sonare).toBe(false);
+    expect('Mode' in (await import('../../dist/analysis.js'))).toBe(false);
+  });
+
   it.each([
     ['scaleMaskForMode number mode', () => loose(scaleMaskForMode)(0, 0), TypeError],
     ['scaleMaskForMode Mode ordinal', () => loose(scaleMaskForMode)(0, 1), TypeError],

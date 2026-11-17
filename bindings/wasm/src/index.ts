@@ -983,7 +983,7 @@ export type {
   VoicePresetId,
   WindowType,
 } from './public_types.js';
-export { CHORD_QUALITIES, Mode, PitchClass } from './public_types.js';
+export { CHORD_QUALITIES, PitchClass } from './public_types.js';
 export type * from './public_types_vocal_edit.js';
 export type {
   AnalyzeBpmRequest,

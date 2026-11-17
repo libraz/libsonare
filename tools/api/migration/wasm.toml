@@ -21222,3 +21222,18 @@ changed = "returns TrimSilenceResult { samples, report } instead of a bare Float
 domain = "effects"
 rule = "typed-results"
 test = "bindings/wasm/tests/surface/effects-repair.test.ts::masteringRepairTrimSilence reports the range it kept, and tolerates all silence"
+
+[[entry]]
+kind = "value"
+old = "Mode"
+removed = true
+domain = "core"
+rule = "string-closed-sets"
+
+[[entry]]
+kind = "value"
+old = "Mode"
+removed = true
+domain = "core"
+rule = "string-closed-sets"
+entry = "./analysis"

@@ -20,22 +20,7 @@ export const PitchClass = {
 
 export type PitchClass = (typeof PitchClass)[keyof typeof PitchClass];
 
-/**
- * Musical mode
- */
-export const Mode = {
-  Major: 0,
-  Minor: 1,
-  Dorian: 2,
-  Phrygian: 3,
-  Lydian: 4,
-  Mixolydian: 5,
-  Locrian: 6,
-} as const;
-
-export type Mode = (typeof Mode)[keyof typeof Mode];
-
-/** A key mode by name (`Mode` in lowercase): what {@link Key.mode} reports. */
+/** A key mode by name: what {@link Key.mode} reports, and what every mode input takes. */
 export type KeyMode =
   | 'major'
   | 'minor'
