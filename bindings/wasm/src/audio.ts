@@ -56,6 +56,7 @@ import {
   trim,
   zeroCrossingRate,
 } from './features.js';
+import { CHANNEL_LAYOUT_VALUES, CHANNEL_LAYOUTS } from './internal/channel_layout.js';
 import type {
   ClippingReport,
   DynamicRangeReport,
@@ -135,7 +136,7 @@ import {
 } from './quick_analysis.js';
 import type { ProgressCallback } from './sonare.js';
 import type { ValidateOptions } from './validation.js';
-import { validateAudioBuffer } from './validation.js';
+import { requireToken, validateAudioBuffer } from './validation.js';
 
 // ============================================================================
 // Audio Class
@@ -190,7 +191,7 @@ function foldToMono(channels: Float32Array[], length: number): Float32Array {
   if (channels.length === 0 || length === 0) {
     return new Float32Array(length);
   }
-  return downmix(channels, 0)[0];
+  return downmix(channels, 'mono')[0];
 }
 
 async function closeCreatedContext(context: BrowserDecodeContext): Promise<void> {
@@ -209,10 +210,10 @@ export interface DecodedChannels {
 }
 
 /**
- * Speaker bed layout, mirroring the C enum `SonareChannelLayout`: `0` = mono,
- * `1` = stereo, `2` = 5.1 (L R C LFE Ls Rs), `3` = 7.1 (L R C LFE Ls Rs Lss Rss).
+ * Speaker bed layout, mirroring the C enum `SonareChannelLayout`: `'mono'`,
+ * `'stereo'`, `'5.1'` (L R C LFE Ls Rs) and `'7.1'` (L R C LFE Ls Rs Lss Rss).
  */
-export type ChannelLayout = 0 | 1 | 2 | 3;
+export type ChannelLayout = 'mono' | 'stereo' | '5.1' | '7.1';
 
 /** Options for {@link downmix}. */
 export interface DownmixOptions {
@@ -244,7 +245,7 @@ export interface DownmixOptions {
  * @example
  * ```typescript
  * const { sampleRate, channels } = decodeChannels(bytes);
- * const stereo = channels.length > 2 ? downmix(channels, 1) : channels;
+ * const stereo = channels.length > 2 ? downmix(channels, 'stereo') : channels;
  * ```
  */
 export function decodeChannels(bytes: Uint8Array): DecodedChannels {
@@ -259,7 +260,7 @@ export function decodeChannels(bytes: Uint8Array): DecodedChannels {
  * the decoders use. The source layout is the one the channel count names
  * (1, 2, 6 or 8). Supported targets narrow the bed (7.1 to 5.1, 5.1 or 7.1 to
  * stereo, anything modelled to mono) or copy it. A channel count outside
- * 1/2/6/8 folds to mono (`0`) as the unweighted mean of its planes, as the
+ * 1/2/6/8 folds to `'mono'` as the unweighted mean of its planes, as the
  * decoders do, and has no other target.
  *
  * The fold is not normalised: the coefficients sum, so a source with several
@@ -269,11 +270,12 @@ export function decodeChannels(bytes: Uint8Array): DecodedChannels {
  * calling.
  *
  * @param channels - One `Float32Array` per channel, all of the same length.
- * @param targetLayout - `0` mono, `1` stereo, `2` 5.1, `3` 7.1.
+ * @param targetLayout - `'mono'`, `'stereo'`, `'5.1'` or `'7.1'`.
  * @param options - `normalize` scales the fold so the worst case (every input
  *   at full scale, in phase) cannot exceed unity; `includeLfe` folds the LFE
  *   plane in at -3 dB instead of dropping it. Both default to `false`.
- * @throws RangeError for an upmix or an unknown layout.
+ * @throws TypeError for a `targetLayout` that is not a string.
+ * @throws RangeError for an upmix or an unknown layout name.
  * @throws RangeError for no channels, or channels of differing length.
  * @throws TypeError for an `options` that is not an object or a non-boolean option.
  * @returns One `Float32Array` per channel of the target layout.
@@ -283,7 +285,11 @@ export function downmix(
   targetLayout: ChannelLayout,
   options: DownmixOptions = {},
 ): Float32Array[] {
-  return getSonareModule().downmix(channels, targetLayout, options);
+  if (targetLayout === undefined || targetLayout === null) {
+    throw new TypeError('downmix: targetLayout is required');
+  }
+  const layout = requireToken('downmix', targetLayout, 'targetLayout', CHANNEL_LAYOUTS, 'mono');
+  return getSonareModule().downmix(channels, CHANNEL_LAYOUT_VALUES[layout], options);
 }
 
 /**
