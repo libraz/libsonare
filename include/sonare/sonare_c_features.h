@@ -829,7 +829,7 @@ SonareError sonare_pitch_yin(const float* samples, size_t length, int sample_rat
 ///       Two consequences worth designing around:
 ///        - a fixed 0.5 threshold on @c voiced_prob (the default in
 ///          @ref sonare_note_segments) drops entire low registers. Pass
-///          @c voiced_flag as the @c voiced argument there, or set the
+///          @c voiced_flag as the @c voiced_flags argument there, or set the
 ///          config's @c voiced_threshold.
 ///        - @c voiced_prob is not a correction weight.
 ///          @ref sonare_pitch_correct_timevarying does not scale its correction
@@ -890,12 +890,12 @@ typedef struct {
 ///        is treated as unvoiced. Passing @ref sonare_pitch_pyin's
 ///        @c voiced_prob returns no segments at all for low-register material,
 ///        because that value is a frame's voiced observation mass and rises with
-///        F0 rather than with signal quality; pass @p voiced instead.
-/// @param voiced Per-frame voiced flags (@p n_frames entries, non-zero = voiced),
+///        F0 rather than with signal quality; pass @p voiced_flags instead.
+/// @param voiced_flags Per-frame voiced flags (@p n_frames entries, non-zero = voiced),
 ///        or NULL; @ref sonare_pitch_pyin's @c voiced_flag goes here. A flag of
 ///        1 reads as a voiced_prob of 1.0 and 0 as 0.0, so flags give the same
 ///        segments as the same values passed as 0/1 probabilities. Exactly one
-///        of @p voiced_prob and @p voiced is given; both or neither is
+///        of @p voiced_prob and @p voiced_flags is given; both or neither is
 ///        INVALID_PARAMETER.
 /// @param n_frames Number of F0 frames; must be non-zero.
 /// @param frame_rate Number of F0 frames per second; must be finite and > 0.
@@ -903,7 +903,7 @@ typedef struct {
 /// @param out Receives a heap-owned result, cleared before validation. Empty
 ///        segmentation is returned as (@c NULL, 0).
 SonareError sonare_note_segments(const float* f0_hz, const float* voiced_prob,
-                                 const int32_t* voiced, size_t n_frames, float frame_rate,
+                                 const int32_t* voiced_flags, size_t n_frames, float frame_rate,
                                  const SonareNoteSegmenterConfig* config,
                                  SonareNoteSegmentsResult* out);
 void sonare_free_note_segments(SonareNoteSegmentsResult* result);

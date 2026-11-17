@@ -493,7 +493,7 @@ SonareError sonare_pitch_pyin(const float* samples, size_t length, int sample_ra
 }
 
 SonareError sonare_note_segments(const float* f0_hz, const float* voiced_prob,
-                                 const int32_t* voiced, size_t n_frames, float frame_rate,
+                                 const int32_t* voiced_flags, size_t n_frames, float frame_rate,
                                  const SonareNoteSegmenterConfig* config,
                                  SonareNoteSegmentsResult* out) {
   SONARE_C_API_ENTRY;
@@ -504,10 +504,10 @@ SonareError sonare_note_segments(const float* f0_hz, const float* voiced_prob,
   out->segments = nullptr;
   out->count = 0;
 #if defined(SONARE_WITH_PITCH_EDITOR)
-  if ((voiced_prob == nullptr) == (voiced == nullptr)) {
+  if ((voiced_prob == nullptr) == (voiced_flags == nullptr)) {
     sonare_c_detail::set_last_error(
         SONARE_ERROR_INVALID_PARAMETER,
-        "exactly one of voiced_prob and voiced must be given, not both and not neither");
+        "exactly one of voiced_prob and voiced_flags must be given, not both and not neither");
     return SONARE_ERROR_INVALID_PARAMETER;
   }
   if (f0_hz == nullptr || n_frames == 0 ||
@@ -551,7 +551,8 @@ SonareError sonare_note_segments(const float* f0_hz, const float* voiced_prob,
   for (size_t i = 0; i < n_frames; ++i) {
     const float f0 = f0_hz[i];
     // A flag reads as the probability it stands for, so flags and 0/1 probabilities agree.
-    const float probability = voiced != nullptr ? (voiced[i] != 0 ? 1.0f : 0.0f) : voiced_prob[i];
+    const float probability =
+        voiced_flags != nullptr ? (voiced_flags[i] != 0 ? 1.0f : 0.0f) : voiced_prob[i];
     // The F0 value is not checked: a frame carrying no pitch is spelled zero,
     // negative or non-finite, and the segmenter reads all three the same way.
     // The probability is, because it is compared against a threshold below and
