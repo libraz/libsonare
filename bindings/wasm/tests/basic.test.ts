@@ -90,14 +90,17 @@ describe('Sonare WASM Module', () => {
       expect(Object.keys(capabilities().features).sort()).toEqual([
         'acousticSim',
         'arrangement',
+        'assist',
         'ffmpeg',
         'fx',
+        'graph',
         'instrumentParamAutomation',
         'mastering',
         'mixing',
         'mixingAssistant',
         'pitchEditor',
         'playback',
+        'project',
         'vocalEdit',
         'voiceChanger',
       ]);

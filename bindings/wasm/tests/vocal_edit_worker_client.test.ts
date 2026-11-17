@@ -53,7 +53,7 @@ const analysis: VocalAnalysis = {
   referenceHz: 440,
 };
 const capabilities: VocalCapabilities = {
-  apiVersion: 1,
+  abiVersion: 1,
   profileId: 1,
   monophonicOnly: true,
   analysisCancellable: false,

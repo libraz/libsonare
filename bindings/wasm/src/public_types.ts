@@ -29,6 +29,8 @@ export interface Capabilities {
      * so probing for the function tells a host nothing.
      */
     readonly mixingAssistant: boolean;
+    /** True when the routing graph library is compiled in. */
+    readonly graph: boolean;
     readonly fx: boolean;
     /** True when the decoder reads the formats FFmpeg handles (M4A, AAC, FLAC, OGG, Opus); false means WAV and MP3 only. */
     readonly ffmpeg: boolean;
@@ -43,6 +45,8 @@ export interface Capabilities {
      * observe that a capability is missing but not that it was never built.
      */
     readonly arrangement: boolean;
+    /** True when `Project` documents can be built, edited and rendered in this build. */
+    readonly project: boolean;
     readonly acousticSim: boolean;
     /** True when the playback renderer (upmix, binaural, speaker output) is compiled in. */
     readonly playback: boolean;
@@ -50,6 +54,8 @@ export interface Capabilities {
     /** True when vocal editing sessions can be opened in this build. */
     readonly vocalEdit: boolean;
     readonly voiceChanger: boolean;
+    /** True when the composition-assist injection seam (control and offline only) is compiled in. */
+    readonly assist: boolean;
   };
   /** Audio decoding available without, and through, FFmpeg. */
   readonly decode: {

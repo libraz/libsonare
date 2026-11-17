@@ -392,7 +392,7 @@ test = "bindings/wasm/tests/surface/core-worker.test.ts::no Worker global and no
 kind = "function"
 old = "vocalEditApiVersion"
 new = "vocalEditAbiVersion"
-domain = "project"
+domain = "core"
 rule = "abi-probes"
 
 [[entry]]
@@ -848,3 +848,10 @@ changed = "a second destroy() returns the same promise"
 domain = "core"
 rule = "async-teardown"
 test = "bindings/wasm/tests/surface/core-teardown.test.ts::OfflineWorkerClient returns the same promise"
+
+[[entry]]
+kind = "field"
+old = "VocalCapabilities.apiVersion"
+new = "VocalCapabilities.abiVersion"
+domain = "project"
+rule = "abi-probes"

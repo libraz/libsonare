@@ -50,7 +50,7 @@ describe('VocalEditWorkerClient under Node', () => {
       }
       const session = await client.create({ samples: voice(), sampleRate: SR });
       expect(session.sessionId).toMatch(/\S/);
-      expect(session.created.capabilities.apiVersion).toBeGreaterThan(0);
+      expect(session.created.capabilities.abiVersion).toBeGreaterThan(0);
       await session.destroy();
     } finally {
       await client.destroy();

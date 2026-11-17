@@ -28,8 +28,7 @@ import { assertAudioInput, requestObject, resolveSampleBound } from './validatio
 
 /** Native symbols registered by the full vocal-edit WASM binding. */
 export interface VocalWasmExports {
-  vocalEditApiVersion: () => number;
-  vocalEditAvailable: () => number;
+  vocalEditAbiVersion: () => number;
   vocalEditSessionCreate: (samples: Float32Array, sampleRate: number, options: unknown) => number;
   vocalEditSessionRestore: (
     samples: Float32Array,
@@ -542,7 +541,7 @@ function vocalEditAvailable(): boolean {
  */
 export function vocalEditAbiVersion(): number | undefined {
   const raw = module();
-  const version = typeof raw.vocalEditApiVersion === 'function' ? raw.vocalEditApiVersion() : 0;
+  const version = typeof raw.vocalEditAbiVersion === 'function' ? raw.vocalEditAbiVersion() : 0;
   return version > 0 ? version : undefined;
 }
 
