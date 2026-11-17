@@ -481,7 +481,9 @@ describe('newly exposed Node functions', () => {
     expect(timbre.spectralCentroid).toBeInstanceOf(Float32Array);
     // Remaining options-based entry points run without throwing on defaults+overrides.
     expect(analyzeRhythm(x, SR, { bpmMin: 80, bpmMax: 160 }).bpm).toBeGreaterThan(0);
-    expect(analyzeDynamics(x, SR, { windowSec: 0.2 }).loudnessTimes).toBeInstanceOf(Float32Array);
+    expect(analyzeDynamics(x, SR, { windowSec: 0.2 }).loudnessTimesSec).toBeInstanceOf(
+      Float32Array,
+    );
     expect(detectAcoustic(x, SR, { nOctaveBands: 4 }).rt60Bands).toBeInstanceOf(Float32Array);
   });
 });

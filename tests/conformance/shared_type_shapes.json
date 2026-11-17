@@ -7,7 +7,7 @@
       "isCompressed",
       "loudnessRangeLu",
       "loudnessRmsDb",
-      "loudnessTimes",
+      "loudnessTimesSec",
       "peakDb",
       "rmsDb"
     ],

@@ -152,7 +152,7 @@ describe('Audio class methods', () => {
     const audio = Audio.fromBuffer(generateSine(440, SR, 2.0), SR);
     expect(audio.analyzeBpm().bpm).toBeGreaterThan(0);
     expect(audio.analyzeRhythm().bpm).toBeGreaterThan(0);
-    expect(audio.analyzeDynamics().loudnessTimes).toBeInstanceOf(Float32Array);
+    expect(audio.analyzeDynamics().loudnessTimesSec).toBeInstanceOf(Float32Array);
     expect(audio.analyzeTimbre().spectralCentroid).toBeInstanceOf(Float32Array);
     expect(
       Array.isArray(

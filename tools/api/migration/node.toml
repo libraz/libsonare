@@ -7527,3 +7527,10 @@ old = "Audio.zeroCrossingRate(hopLength)"
 removed = true
 domain = "core"
 rule = "one-positional-form"
+
+[[entry]]
+kind = "field"
+old = "DynamicsResult.loudnessTimes"
+new = "DynamicsResult.loudnessTimesSec"
+domain = "analysis"
+rule = "seconds-suffix"

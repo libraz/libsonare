@@ -309,8 +309,8 @@ describe('standalone functions', () => {
 
     const dynamics = analyzeDynamics(samples, SR);
     expect(dynamics.peakDb).toBeLessThanOrEqual(1);
-    expect(dynamics.loudnessTimes).toBeInstanceOf(Float32Array);
-    expect(dynamics.loudnessRmsDb.length).toBe(dynamics.loudnessTimes.length);
+    expect(dynamics.loudnessTimesSec).toBeInstanceOf(Float32Array);
+    expect(dynamics.loudnessRmsDb.length).toBe(dynamics.loudnessTimesSec.length);
 
     const tone = new Float32Array(SR * 2);
     for (let i = 0; i < tone.length; i++) {

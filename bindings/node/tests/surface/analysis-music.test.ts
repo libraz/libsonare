@@ -230,6 +230,11 @@ describe('renamed result fields', () => {
       expect(typeof boundary.timeSec).toBe('number');
     }
     expect('loudnessRangeLu' in analyzeDynamics(samples, sampleRate)).toBe(true);
+    const dynamics = analyzeDynamics(samples, sampleRate);
+    expect(dynamics.loudnessTimesSec).toBeInstanceOf(Float32Array);
+    expect(dynamics.loudnessTimesSec.length).toBe(dynamics.loudnessRmsDb.length);
+    expect('loudnessTimes' in dynamics).toBe(false);
+    expectTypeOf<sonare.DynamicsResult>().toHaveProperty('loudnessTimesSec');
     expect(['straight', 'shuffle', 'swing']).toContain(
       analyzeRhythm(samples, sampleRate).grooveType,
     );

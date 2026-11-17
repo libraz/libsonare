@@ -1088,14 +1088,14 @@ export function analyzeDynamics(...args: unknown[]): DynamicsResult {
   assertPositiveInteger('analyzeDynamics', request.hopLength ?? 512, 'hopLength');
   const compressionThresholdDb = request.compressionThresholdDb ?? 6.0;
   assertNonNegativeFloatValue('analyzeDynamics', compressionThresholdDb, 'compressionThresholdDb');
-  const { loudnessRangeDb, ...raw }: Native = addon.analyzeDynamics(
+  const { loudnessRangeDb, loudnessTimes, ...raw }: Native = addon.analyzeDynamics(
     request.samples,
     request.sampleRate,
     request.windowSec ?? 0.4,
     request.hopLength ?? 512,
     compressionThresholdDb,
   );
-  return { ...raw, loudnessRangeLu: loudnessRangeDb };
+  return { ...raw, loudnessRangeLu: loudnessRangeDb, loudnessTimesSec: loudnessTimes };
 }
 
 export function analyzeImpulseResponse(request: AnalyzeImpulseResponseRequest): AcousticResult;
