@@ -1,3 +1,4 @@
+import { ErrorCode, SonareError } from '../errors.js';
 import type { AnalyzerStats, FrameBuffer } from '../index.js';
 import { StreamAnalyzer } from '../index.js';
 import { isStreamAnalyzerChunkMessage, resolveContextSampleRate } from './guards.js';
@@ -57,7 +58,9 @@ export class SonareStreamAnalyzerNode {
       } else if (isRecord(event.data) && event.data.type === 'ready') {
         this.resolveReady();
       } else if (isRecord(event.data) && event.data.type === 'error') {
-        this.rejectReady(new Error(String(event.data.message ?? 'AudioWorklet error')));
+        this.rejectReady(
+          new SonareError(ErrorCode.Unknown, String(event.data.message ?? 'AudioWorklet error')),
+        );
       }
     };
   }

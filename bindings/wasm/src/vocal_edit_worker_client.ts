@@ -1,4 +1,4 @@
-import { SonareError } from './errors.js';
+import { failureFromPayload } from './internal/failure_payload.js';
 import { releasedHandleError } from './internal/handle_guard.js';
 import type {
   VocalAnalysis,
@@ -193,15 +193,7 @@ function workerError(message: VocalWorkerErrorMessage): Error {
   if (message.error.name === 'StaleResultError') {
     return new VocalEditWorkerStaleResultError(message.error.message);
   }
-  const { code, codeName } = message.error;
-  const error =
-    message.error.name === 'SonareError' && typeof code === 'number'
-      ? new SonareError(code, codeName ?? '', message.error.message)
-      : message.error.name === 'RangeError'
-        ? new RangeError(message.error.message)
-        : message.error.name === 'TypeError'
-          ? new TypeError(message.error.message)
-          : new Error(message.error.message);
+  const error = failureFromPayload(message.error);
   error.name = message.error.name;
   for (const key of [
     'code',

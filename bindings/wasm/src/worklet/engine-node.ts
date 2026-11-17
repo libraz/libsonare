@@ -1,9 +1,9 @@
 import { ErrorCode, SonareError } from '../errors.js';
 import type { EngineCaptureStatus, EngineTransportState } from '../index.js';
-import { engineCapabilities } from '../index.js';
 import { failureFromPayload, isFailurePayload } from '../internal/failure_payload.js';
 import { assertHandleLive, releasedHandleError } from '../internal/handle_guard.js';
 import { OwnerEpoch } from '../owner_epoch.js';
+import { engineCapabilities } from '../realtime_engine.js';
 import { resolveRenderFrame } from '../validation.js';
 import {
   engineCaptureResponseRequestId,
@@ -132,7 +132,7 @@ function workletFailure(
   if (isFailurePayload(data.failure)) {
     return failureFromPayload(data.failure);
   }
-  return new Error(String(data[messageKey] ?? fallback));
+  return new SonareError(ErrorCode.Unknown, String(data[messageKey] ?? fallback));
 }
 
 const AUDIO_WORKLET_RENDER_QUANTUM = 128;
@@ -247,9 +247,14 @@ export class SonareRealtimeEngineNode {
         if (pending) {
           this.captureRequests.delete(captureRequestId);
           if (!isEngineCaptureResponseMessage(event.data)) {
-            pending.reject(new Error('Malformed capture response.'));
+            pending.reject(new SonareError(ErrorCode.InvalidFormat, 'Malformed capture response.'));
           } else if (!isEngineCaptureResponseForOperation(event.data, pending.op)) {
-            pending.reject(new Error('Capture response does not match request operation.'));
+            pending.reject(
+              new SonareError(
+                ErrorCode.InvalidFormat,
+                'Capture response does not match request operation.',
+              ),
+            );
           } else if (event.data.ok) {
             pending.resolve(event.data);
           } else {
@@ -291,7 +296,9 @@ export class SonareRealtimeEngineNode {
           type: 'syncError',
           syncType: String(event.data.syncType),
           message: String(event.data.message ?? 'AudioWorklet sync failed'),
-          ...(isFailurePayload(event.data.failure) ? { failure: event.data.failure } : {}),
+          ...(isFailurePayload(event.data.failure)
+            ? { failure: failureFromPayload(event.data.failure) }
+            : {}),
         };
         for (const listener of this.syncErrorListeners) {
           listener(syncError);
@@ -338,7 +345,6 @@ export class SonareRealtimeEngineNode {
     if (options.requireAbiCompatible !== false && detectedCapabilities?.abiCompatible === false) {
       throw new SonareError(
         ErrorCode.AbiMismatch,
-        'AbiMismatch',
         `Engine ABI mismatch: wasm=${detectedCapabilities.engineAbiVersion}, expected=${detectedCapabilities.expectedEngineAbiVersion}`,
       );
     }
@@ -352,7 +358,8 @@ export class SonareRealtimeEngineNode {
     const mode =
       options.mode === 'postMessage' || !sharedArrayBuffer || !atomics ? 'postMessage' : 'sab';
     if (options.mode === 'sab' && mode !== 'sab') {
-      throw new Error(
+      throw new SonareError(
+        ErrorCode.NotSupported,
         'SharedArrayBuffer mode requested but SharedArrayBuffer/Atomics are unavailable.',
       );
     }
@@ -407,13 +414,18 @@ export class SonareRealtimeEngineNode {
       1,
     );
     const commandRing =
-      mode === 'sab' ? createSonareEngineCommandRingBuffer(commandRingCapacity) : undefined;
+      mode === 'sab'
+        ? createSonareEngineCommandRingBuffer({ capacity: commandRingCapacity })
+        : undefined;
     const telemetryRing =
-      mode === 'sab' ? createSonareEngineTelemetryRingBuffer(telemetryRingCapacity) : undefined;
+      mode === 'sab'
+        ? createSonareEngineTelemetryRingBuffer({ capacity: telemetryRingCapacity })
+        : undefined;
     // Meter ring: the engine publishes meters into a SAB ring. Lock-free meter
     // delivery matches the telemetry path and keeps the audio render callback
     // allocation-free in SAB mode.
-    const meterRing = mode === 'sab' ? createSonareMeterRingBuffer(meterRingCapacity) : undefined;
+    const meterRing =
+      mode === 'sab' ? createSonareMeterRingBuffer({ capacity: meterRingCapacity }) : undefined;
     // Scope ring (FFT spectrum + goniometer): opt-in. The per-block FFT is
     // heavier than the meter path, so it is created only when the caller
     // requests scope telemetry via scopeIntervalFrames > 0. Zero is the off
@@ -426,17 +438,19 @@ export class SonareRealtimeEngineNode {
     );
     const scopeRing =
       mode === 'sab' && scopeIntervalFrames > 0
-        ? createSonareScopeRingBuffer(scopeRingCapacity, scopeBands)
+        ? createSonareScopeRingBuffer({ capacity: scopeRingCapacity, bands: scopeBands })
         : undefined;
     // Paged-clip cache misses are a worklet-to-main-thread control signal. A
     // dedicated SPSC SAB ring keeps process() free of both embind request
     // objects and postMessage structured cloning.
     const clipPageRequestRing =
       mode === 'sab'
-        ? createSonareClipPageRequestRingBuffer(clipPageRequestRingCapacity)
+        ? createSonareClipPageRequestRingBuffer({ capacity: clipPageRequestRingCapacity })
         : undefined;
     const externalMidiRing =
-      mode === 'sab' ? createSonareExternalMidiRingBuffer(externalMidiRingCapacity) : undefined;
+      mode === 'sab'
+        ? createSonareExternalMidiRingBuffer({ capacity: externalMidiRingCapacity })
+        : undefined;
     const channelCount = requireChannelCount(options.channelCount, 2);
     const cueOutput = options.cueOutput === true;
     const processorOptions: SonareRealtimeEngineWorkletProcessorOptions = {
@@ -613,7 +627,10 @@ export class SonareRealtimeEngineNode {
   requestCaptureStatus(): Promise<EngineCaptureStatus> {
     return this.sendCaptureRequest('status').then((response) => {
       if (!response.ok || !('status' in response)) {
-        throw new Error('Capture status response is missing status.');
+        throw new SonareError(
+          ErrorCode.InvalidFormat,
+          'Capture status response is missing status.',
+        );
       }
       return response.status;
     });
@@ -622,7 +639,10 @@ export class SonareRealtimeEngineNode {
   requestCapturedAudio(): Promise<Float32Array[]> {
     return this.sendCaptureRequest('read').then((response) => {
       if (!response.ok || !('channels' in response)) {
-        throw new Error('Capture read response is missing channels.');
+        throw new SonareError(
+          ErrorCode.InvalidFormat,
+          'Capture read response is missing channels.',
+        );
       }
       return response.channels;
     });
@@ -635,7 +655,10 @@ export class SonareRealtimeEngineNode {
   requestTransportState(): Promise<EngineTransportState> {
     return this.sendTransportRequest().then((response) => {
       if (!response.state) {
-        throw new Error('Transport state response is missing state.');
+        throw new SonareError(
+          ErrorCode.InvalidFormat,
+          'Transport state response is missing state.',
+        );
       }
       return response.state;
     });

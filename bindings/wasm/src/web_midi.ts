@@ -1,3 +1,4 @@
+import { ErrorCode, SonareError } from './errors.js';
 import { OwnerEpoch } from './owner_epoch.js';
 import type { MidiCcBindOptions } from './realtime_engine.js';
 import { assertNibble } from './validation.js';
@@ -174,7 +175,7 @@ export async function bindWebMidi(
 ): Promise<WebMidiBinding> {
   const navigatorWithMidi = globalThis.navigator as NavigatorWithMidi | undefined;
   if (typeof navigatorWithMidi?.requestMIDIAccess !== 'function') {
-    throw new Error('Web MIDI is not available in this environment');
+    throw new SonareError(ErrorCode.NotSupported, 'Web MIDI is not available in this environment');
   }
 
   const group = options.group ?? 0;

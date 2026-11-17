@@ -15,6 +15,7 @@ import {
   timeStretch,
   voiceChange,
 } from './effects_mastering.js';
+import { ErrorCode, SonareError } from './errors.js';
 import {
   chroma,
   ebur128LoudnessRange,
@@ -285,10 +286,12 @@ async function decodeWithBrowserCodec(
     );
 
   if (!context) {
-    throw new Error(
+    throw new SonareError(
+      ErrorCode.NotSupported,
       `${caller} failed and browser decodeAudioData is unavailable: ${
         nativeError instanceof Error ? nativeError.message : String(nativeError)
       }`,
+      { cause: nativeError },
     );
   }
 
@@ -300,10 +303,12 @@ async function decodeWithBrowserCodec(
       channels: audioBufferChannels(decoded),
     };
   } catch (fallbackError) {
-    throw new Error(
+    throw new SonareError(
+      ErrorCode.DecodeFailed,
       `${caller} failed and browser decodeAudioData fallback failed: ${
         fallbackError instanceof Error ? fallbackError.message : String(fallbackError)
       }`,
+      { cause: fallbackError },
     );
   } finally {
     if (createdContext) {
@@ -336,12 +341,24 @@ async function decodeWithBrowserCodec(
  * ```
  */
 export class Audio {
-  private _samples: Float32Array;
-  private _sampleRate: number;
+  private _samples: Float32Array | null;
+  private readonly _sampleRate: number;
 
   private constructor(samples: Float32Array, sampleRate: number) {
     this._samples = samples;
     this._sampleRate = sampleRate;
+  }
+
+  /** The held samples; refuses once {@link destroy} released them. */
+  private requireAlive(): Float32Array {
+    if (this._samples === null) {
+      throw new SonareError(ErrorCode.InvalidState, 'Audio has been destroyed');
+    }
+    return this._samples;
+  }
+
+  private get samples(): Float32Array {
+    return this.requireAlive();
   }
 
   /**
@@ -387,58 +404,77 @@ export class Audio {
   }
 
   /**
-   * A copy of the raw audio samples. Mirrors Node's `getData()` contract: the
-   * returned array is independent of the Audio's internal buffer, so mutating
-   * it (or transferring it to a Worker) does not affect subsequent facade
-   * calls, which all read the internal snapshot directly.
+   * The samples. Every read returns the same array, which is shared with this
+   * Audio's own methods and must not be mutated or transferred (copy it with
+   * `slice()` first).
+   *
+   * @throws SonareError `InvalidState` after {@link destroy}.
    */
   get data(): Float32Array {
-    return this._samples.slice();
+    return this.samples;
   }
 
-  /** Number of samples. */
+  /**
+   * Number of samples.
+   *
+   * @throws SonareError `InvalidState` after {@link destroy}.
+   */
   get length(): number {
-    return this._samples.length;
+    return this.samples.length;
   }
 
-  /** Sample rate in Hz. */
+  /**
+   * Sample rate in Hz.
+   *
+   * @throws SonareError `InvalidState` after {@link destroy}.
+   */
   get sampleRate(): number {
+    this.requireAlive();
     return this._sampleRate;
   }
 
-  /** Duration in seconds. */
-  get duration(): number {
-    return this._samples.length / this._sampleRate;
+  /**
+   * Duration in seconds.
+   *
+   * @throws SonareError `InvalidState` after {@link destroy}.
+   */
+  get durationSec(): number {
+    return this.samples.length / this._sampleRate;
+  }
+
+  /** Releases the samples; later reads throw `SonareError` `InvalidState`. A second call does nothing. */
+  destroy(): void {
+    this._samples = null;
   }
 
   // -- Analysis --
 
   detectBpm(): number {
-    return detectBpm(this._samples, this._sampleRate);
+    return detectBpm(this.samples, this.sampleRate);
   }
 
   detectKey(options: DetectKeyOptions = {}): KeyDetection {
-    return detectKey(this._samples, this._sampleRate, options);
+    return detectKey(this.samples, this.sampleRate, options);
   }
 
   detectKeyCandidates(options: KeyDetectionOptions = {}): KeyCandidate[] {
-    return detectKeyCandidates(this._samples, this._sampleRate, options);
+    return detectKeyCandidates(this.samples, this.sampleRate, options);
   }
 
   detectOnsets(): Float32Array {
-    return detectOnsets(this._samples, this._sampleRate);
+    return detectOnsets(this.samples, this.sampleRate);
   }
 
   detectBeats(): Float32Array {
-    return detectBeats(this._samples, this._sampleRate);
+    return detectBeats(this.samples, this.sampleRate);
   }
 
   detectDownbeats(): Float32Array {
-    return detectDownbeats(this._samples, this._sampleRate);
+    return detectDownbeats(this.samples, this.sampleRate);
   }
 
   detectChords(options: ChordDetectionOptions = {}): ChordAnalysisResult {
-    return detectChords(this._samples, this._sampleRate, options);
+    return detectChords(this.samples, this.sampleRate, options);
   }
 
   chordFunctionalAnalysis(
@@ -446,7 +482,7 @@ export class Audio {
     keyMode: Mode | KeyMode,
     options: ChordDetectionOptions = {},
   ): FunctionalChord[] {
-    return chordFunctionalAnalysis(this._samples, keyRoot, keyMode, this._sampleRate, options);
+    return chordFunctionalAnalysis(this.samples, keyRoot, keyMode, this.sampleRate, options);
   }
 
   /**
@@ -457,57 +493,57 @@ export class Audio {
    * call was tunable on one binding and fixed at the defaults on the other.
    */
   analyze(options: MusicAnalyzeOptions = {}): AnalysisResult {
-    return analyze(this._samples, this._sampleRate, options);
+    return analyze(this.samples, this.sampleRate, options);
   }
 
   analyzeWithProgress(onProgress: ProgressCallback): AnalysisResult {
-    return analyzeWithProgress(this._samples, this._sampleRate, onProgress);
+    return analyzeWithProgress(this.samples, this.sampleRate, onProgress);
   }
 
   // -- Effects --
 
   hpss(kernelHarmonic = 31, kernelPercussive = 31): HpssResult {
-    return hpss(this._samples, this._sampleRate, kernelHarmonic, kernelPercussive);
+    return hpss(this.samples, this.sampleRate, kernelHarmonic, kernelPercussive);
   }
 
   harmonic(): Float32Array {
-    return harmonic(this._samples, this._sampleRate);
+    return harmonic(this.samples, this.sampleRate);
   }
 
   percussive(): Float32Array {
-    return percussive(this._samples, this._sampleRate);
+    return percussive(this.samples, this.sampleRate);
   }
 
   timeStretch(rate: number): Float32Array {
-    return timeStretch(this._samples, this._sampleRate, rate);
+    return timeStretch(this.samples, this.sampleRate, rate);
   }
 
   pitchShift(semitones: number): Float32Array {
-    return pitchShift(this._samples, this._sampleRate, semitones);
+    return pitchShift(this.samples, this.sampleRate, semitones);
   }
 
   pitchCorrectToMidi(currentMidi = 69.0, targetMidi = 69.0): Float32Array {
-    return pitchCorrectToMidi(this._samples, this._sampleRate, currentMidi, targetMidi);
+    return pitchCorrectToMidi(this.samples, this.sampleRate, currentMidi, targetMidi);
   }
 
   noteStretch(options: NoteStretchOptions = {}): Float32Array {
-    return noteStretch(this._samples, this._sampleRate, options);
+    return noteStretch(this.samples, this.sampleRate, options);
   }
 
   noteMove(options: import('./public_types.js').NoteMoveOptions = {}): Float32Array {
-    return noteMove(this._samples, this._sampleRate, options);
+    return noteMove(this.samples, this.sampleRate, options);
   }
 
   voiceChange(options: VoiceChangeOptions = {}): Float32Array {
-    return voiceChange(this._samples, this._sampleRate, options);
+    return voiceChange(this.samples, this.sampleRate, options);
   }
 
   normalize(targetDb = 0.0): Float32Array {
-    return normalize(this._samples, this._sampleRate, targetDb);
+    return normalize(this.samples, this.sampleRate, targetDb);
   }
 
   mastering(options: MasteringOptions = {}): MasteringResult {
-    return mastering(this._samples, this._sampleRate, options);
+    return mastering(this.samples, this.sampleRate, options);
   }
 
   masteringChain(
@@ -515,8 +551,8 @@ export class Audio {
     onProgress?: ProgressCallback,
   ): MasteringChainResult {
     return masteringChain({
-      samples: this._samples,
-      sampleRate: this._sampleRate,
+      samples: this.samples,
+      sampleRate: this.sampleRate,
       config,
       onProgress,
     });
@@ -528,8 +564,8 @@ export class Audio {
     onProgress?: ProgressCallback,
   ): MasteringChainResult {
     return masterAudio({
-      samples: this._samples,
-      sampleRate: this._sampleRate,
+      samples: this.samples,
+      sampleRate: this.sampleRate,
       preset: presetName,
       overrides: overrides ?? {},
       onProgress,
@@ -540,21 +576,21 @@ export class Audio {
     processorName: SoloProcessor,
     params: MasteringSoloProcessorParams = {},
   ): MasteringResult {
-    return masteringProcess(processorName, this._samples, this._sampleRate, params);
+    return masteringProcess(processorName, this.samples, this.sampleRate, params);
   }
 
   trim(thresholdDb = -60.0): Float32Array {
-    return trim(this._samples, this._sampleRate, thresholdDb);
+    return trim(this.samples, this.sampleRate, thresholdDb);
   }
 
   // -- Features --
 
   stft(nFft = 2048, hopLength = 512): StftResult {
-    return stft(this._samples, this._sampleRate, nFft, hopLength);
+    return stft(this.samples, this.sampleRate, nFft, hopLength);
   }
 
   stftDb(nFft = 2048, hopLength = 512): { nBins: number; nFrames: number; db: Float32Array } {
-    return stftDb(this._samples, this._sampleRate, nFft, hopLength);
+    return stftDb(this.samples, this.sampleRate, nFft, hopLength);
   }
 
   melSpectrogram(
@@ -565,7 +601,7 @@ export class Audio {
     fmax = 0,
     htk = false,
   ): MelSpectrogramResult {
-    return melSpectrogram(this._samples, this._sampleRate, nFft, hopLength, nMels, fmin, fmax, htk);
+    return melSpectrogram(this.samples, this.sampleRate, nFft, hopLength, nMels, fmin, fmax, htk);
   }
 
   mfcc(
@@ -577,55 +613,55 @@ export class Audio {
     fmax = 0,
     htk = false,
   ): MfccResult {
-    return mfcc(this._samples, this._sampleRate, nFft, hopLength, nMels, nMfcc, fmin, fmax, htk);
+    return mfcc(this.samples, this.sampleRate, nFft, hopLength, nMels, nMfcc, fmin, fmax, htk);
   }
 
   chroma(nFft = 2048, hopLength = 512): ChromaResult {
-    return chroma(this._samples, this._sampleRate, nFft, hopLength);
+    return chroma(this.samples, this.sampleRate, nFft, hopLength);
   }
 
   nnlsChroma(): WasmNnlsChromaResult {
-    return nnlsChroma(this._samples, this._sampleRate);
+    return nnlsChroma(this.samples, this.sampleRate);
   }
 
   onsetEnvelope(nFft = 2048, hopLength = 512, nMels = 128): Float32Array {
-    return onsetEnvelope(this._samples, this._sampleRate, nFft, hopLength, nMels);
+    return onsetEnvelope(this.samples, this.sampleRate, nFft, hopLength, nMels);
   }
 
   lufs(): LufsResult {
-    return lufs(this._samples, this._sampleRate);
+    return lufs(this.samples, this.sampleRate);
   }
 
   momentaryLufs(): Float32Array {
-    return momentaryLufs(this._samples, this._sampleRate);
+    return momentaryLufs(this.samples, this.sampleRate);
   }
 
   shortTermLufs(): Float32Array {
-    return shortTermLufs(this._samples, this._sampleRate);
+    return shortTermLufs(this.samples, this.sampleRate);
   }
 
   spectralCentroid(nFft = 2048, hopLength = 512): Float32Array {
-    return spectralCentroid(this._samples, this._sampleRate, nFft, hopLength);
+    return spectralCentroid(this.samples, this.sampleRate, nFft, hopLength);
   }
 
   spectralBandwidth(nFft = 2048, hopLength = 512): Float32Array {
-    return spectralBandwidth(this._samples, this._sampleRate, nFft, hopLength);
+    return spectralBandwidth(this.samples, this.sampleRate, nFft, hopLength);
   }
 
   spectralRolloff(nFft = 2048, hopLength = 512, rollPercent = 0.85): Float32Array {
-    return spectralRolloff(this._samples, this._sampleRate, nFft, hopLength, rollPercent);
+    return spectralRolloff(this.samples, this.sampleRate, nFft, hopLength, rollPercent);
   }
 
   spectralFlatness(nFft = 2048, hopLength = 512): Float32Array {
-    return spectralFlatness(this._samples, this._sampleRate, nFft, hopLength);
+    return spectralFlatness(this.samples, this.sampleRate, nFft, hopLength);
   }
 
   zeroCrossingRate(frameLength = 2048, hopLength = 512): Float32Array {
-    return zeroCrossingRate(this._samples, this._sampleRate, frameLength, hopLength);
+    return zeroCrossingRate(this.samples, this.sampleRate, frameLength, hopLength);
   }
 
   rmsEnergy(frameLength = 2048, hopLength = 512): Float32Array {
-    return rmsEnergy(this._samples, this._sampleRate, frameLength, hopLength);
+    return rmsEnergy(this.samples, this.sampleRate, frameLength, hopLength);
   }
 
   pitchYin(
@@ -637,8 +673,8 @@ export class Audio {
     fillNa = false,
   ): PitchResult {
     return pitchYin(
-      this._samples,
-      this._sampleRate,
+      this.samples,
+      this.sampleRate,
       frameLength,
       hopLength,
       fmin,
@@ -657,8 +693,8 @@ export class Audio {
     fillNa = false,
   ): PitchResult {
     return pitchPyin(
-      this._samples,
-      this._sampleRate,
+      this.samples,
+      this.sampleRate,
       frameLength,
       hopLength,
       fmin,
@@ -669,7 +705,7 @@ export class Audio {
   }
 
   resample(targetSr: number): Float32Array {
-    return resample(this._samples, this._sampleRate, targetSr);
+    return resample(this.samples, this.sampleRate, targetSr);
   }
 
   // -- Metering --
@@ -681,29 +717,23 @@ export class Audio {
   // which do hold a native handle here.
 
   peakDb(): number {
-    return meteringPeakDb(this._samples, this._sampleRate);
+    return meteringPeakDb(this.samples, this.sampleRate);
   }
 
   rmsDb(): number {
-    return meteringRmsDb(this._samples, this._sampleRate);
+    return meteringRmsDb(this.samples, this.sampleRate);
   }
 
   dcOffset(): number {
-    return meteringDcOffset(this._samples, this._sampleRate);
+    return meteringDcOffset(this.samples, this.sampleRate);
   }
 
   crestFactorDb(): number {
-    return meteringCrestFactorDb(this._samples, this._sampleRate);
+    return meteringCrestFactorDb(this.samples, this.sampleRate);
   }
 
   silenceRatio(thresholdDb = -45, frameLength = 1024, hopLength = 256): number {
-    return meteringSilenceRatio(
-      this._samples,
-      this._sampleRate,
-      thresholdDb,
-      frameLength,
-      hopLength,
-    );
+    return meteringSilenceRatio(this.samples, this.sampleRate, thresholdDb, frameLength, hopLength);
   }
 
   /**
@@ -711,19 +741,19 @@ export class Audio {
    * in [1, 16]; pass 0 to use the library default (4).
    */
   truePeakDb(oversampleFactor = 4): number {
-    return meteringTruePeakDb(this._samples, this._sampleRate, oversampleFactor);
+    return meteringTruePeakDb(this.samples, this.sampleRate, oversampleFactor);
   }
 
   detectClipping(options: MeteringDetectClippingOptions = {}): ClippingReport {
-    return meteringDetectClipping(this._samples, this._sampleRate, options);
+    return meteringDetectClipping(this.samples, this.sampleRate, options);
   }
 
   dynamicRange(options: MeteringDynamicRangeOptions = {}): DynamicRangeReport {
-    return meteringDynamicRange(this._samples, this._sampleRate, options);
+    return meteringDynamicRange(this.samples, this.sampleRate, options);
   }
 
   spectrum(options: SpectrumOptions & ValidateOptions = {}): SpectrumReport {
-    return meteringSpectrum(this._samples, this._sampleRate, options);
+    return meteringSpectrum(this.samples, this.sampleRate, options);
   }
 
   /**
@@ -731,13 +761,15 @@ export class Audio {
    * See {@link meteringSpectrumFrame} for the frame-validation contract.
    */
   spectrumFrame(frameOffset = 0, options: SpectrumOptions & ValidateOptions = {}): SpectrumReport {
-    return meteringSpectrumFrame(this._samples, this._sampleRate, frameOffset, options);
+    return meteringSpectrumFrame(this.samples, this.sampleRate, frameOffset, options);
   }
 
   ebur128LoudnessRange(): number {
-    return ebur128LoudnessRange(this._samples, this._sampleRate);
+    return ebur128LoudnessRange(this.samples, this.sampleRate);
   }
 
-  /** No-op: Audio holds no native handle, so `using` works the same as on the other surfaces. */
-  [Symbol.dispose](): void {}
+  /** Same as {@link destroy}; lets `using` release the samples. */
+  [Symbol.dispose](): void {
+    this.destroy();
+  }
 }

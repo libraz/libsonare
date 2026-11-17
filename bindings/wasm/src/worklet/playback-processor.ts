@@ -1,3 +1,4 @@
+import { ErrorCode, SonareError } from '../errors.js';
 import { HrtfSet, PlaybackRenderer } from '../index.js';
 import type { PlaybackRendererConfig } from '../public_types_playback.js';
 import type { WasmPlaybackRenderer } from '../sonare.js';
@@ -236,7 +237,10 @@ export function registerSonarePlaybackWorkletProcessor(name = 'sonare-playback-p
     registerProcessor?: (processorName: string, processorCtor: unknown) => void;
   };
   if (!scope.AudioWorkletProcessor || !scope.registerProcessor) {
-    throw new Error('AudioWorkletProcessor is not available in this context.');
+    throw new SonareError(
+      ErrorCode.NotSupported,
+      'AudioWorkletProcessor is not available in this context.',
+    );
   }
   const Base = scope.AudioWorkletProcessor;
   class RegisteredSonarePlaybackWorkletProcessor extends Base {

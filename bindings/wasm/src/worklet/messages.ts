@@ -402,11 +402,20 @@ export interface SonareWorkletExternalMidiMessage {
   events: SonareWorkletExternalMidiEvent[];
 }
 
-/** A control-plane sync message that the worklet rejected without crashing. */
-export interface SonareEngineSyncErrorMessage {
+/** A control-plane sync message that the worklet rejected without crashing, as posted. */
+export interface SonareEngineSyncErrorWireMessage {
   type: 'syncError';
   /** The refusal's class, message and any SonareError code, as raised on the audio thread. */
   failure?: SonareFailurePayload;
+  syncType: SonareEngineSyncMessage['type'] | (string & Record<never, never>);
+  message: string;
+}
+
+/** A control-plane sync rejection as handed to an `onSyncError` listener. */
+export interface SonareEngineSyncErrorMessage {
+  type: 'syncError';
+  /** The refusal as raised on the audio thread, rebuilt with its class and any SonareError code. */
+  failure?: Error;
   /**
    * Discriminant of the rejected sync. Usually a known member, but a
    * `sync`-prefixed type this build does not recognize is reported here too
@@ -432,7 +441,7 @@ export interface WorkletTransport {
       | SonareEngineCaptureResponseMessageInternal
       | SonareEngineTransportResponseMessage
       | SonareEngineInsertGainReductionResponseMessage
-      | SonareEngineSyncErrorMessage,
+      | SonareEngineSyncErrorWireMessage,
     transfer?: Transferable[],
   ) => void;
   onMeter?: (meter: SonareWorkletMeterSnapshot) => void;

@@ -13,10 +13,10 @@ import {
   notInitializedError,
   setSonareModule,
 } from './module_state.js';
-import type { SonareCapabilities } from './public_types.js';
+import type { Capabilities, SonareModuleHandle } from './public_types.js';
 import type { SonareModule } from './sonare.js';
 
-export { EXPECTED_ABI_VERSION } from './abi.js';
+export type { ErrorCodeName } from './errors.js';
 export { ErrorCode, isSonareError, SonareError } from './errors.js';
 export * from './feature_core.js';
 // Several modules here also hold functions the analysis-only embind source set
@@ -122,7 +122,6 @@ export {
   detectKeyCandidates,
   detectOnsets,
   estimateMeter,
-  hasFfmpegSupport,
 } from './quick_analysis.js';
 
 let module: SonareModule | null = null;
@@ -136,7 +135,7 @@ export async function init(options?: {
   moduleFactory?: (options?: {
     locateFile?: (path: string, prefix: string) => string;
     wasmBinary?: ArrayBuffer | Uint8Array;
-  }) => Promise<SonareModule>;
+  }) => Promise<SonareModuleHandle>;
 }): Promise<void> {
   if (module) {
     assertSameInitOptions(firstInitOptions, options);
@@ -150,7 +149,7 @@ export async function init(options?: {
   initPromise = (async () => {
     try {
       const createModule = options?.moduleFactory ?? (await import('./sonare-analysis.js')).default;
-      const created = await createModule(options);
+      const created = (await createModule(options)) as unknown as SonareModule;
       assertAbiCompatible(created);
       module = created;
       setSonareModule(module);
@@ -176,8 +175,13 @@ export function version(): string {
   return module.version();
 }
 
-/** Build capabilities for the loaded analysis-only module. */
-export function capabilities(): SonareCapabilities {
+/**
+ * Build capabilities for the loaded analysis-only module; feature presence is
+ * read here (`capabilities().features.ffmpeg`).
+ *
+ * @throws SonareError `InvalidState` before {@link init} has resolved.
+ */
+export function capabilities(): Capabilities {
   if (!module) {
     throw notInitializedError();
   }

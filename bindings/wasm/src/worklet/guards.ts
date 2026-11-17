@@ -494,7 +494,7 @@ export function resolveScopeSampleRate(requested: number | undefined, what: stri
     return scopeRate;
   }
   if (requested === undefined) {
-    throw new Error(
+    throw new TypeError(
       `${what}: no sampleRate option and no AudioWorkletGlobalScope sampleRate to default to`,
     );
   }

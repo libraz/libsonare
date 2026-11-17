@@ -1,3 +1,4 @@
+import { ErrorCode, SonareError } from '../errors.js';
 import type { EngineTelemetry } from '../index.js';
 import {
   attachProtocolVersion,
@@ -11,8 +12,9 @@ import {
   releaseOverwriteRead,
   requirePositiveCapacity,
   requireProtocolVersion,
-  requireRingDimension,
+  resolveRingCapacity,
   ringCursorSpan,
+  type SonareRingCapacityOptions,
   sonareRingCursorDistance,
   storeSonareRingCursor,
   toSafeInteger,
@@ -192,24 +194,40 @@ function validateEngineTelemetryPublicationWrapped(
     publicationWrapped.byteLength !== Int32Array.BYTES_PER_ELEMENT ||
     publicationWrapped.length !== 1
   ) {
-    throw new Error('engine telemetry ring has an invalid publicationWrapped view.');
+    throw new SonareError(
+      ErrorCode.InvalidFormat,
+      'engine telemetry ring has an invalid publicationWrapped view.',
+    );
   }
   const value = Atomics.load(publicationWrapped, 0);
   if (value !== 0 && value !== 1) {
-    throw new Error('engine telemetry ring has an invalid publicationWrapped value.');
+    throw new SonareError(
+      ErrorCode.InvalidFormat,
+      'engine telemetry ring has an invalid publicationWrapped value.',
+    );
   }
 }
 
-export function sonareEngineCommandRingBufferByteLength(capacity: number): number {
-  const clampedCapacity = requireRingDimension(capacity, 'capacity', 1);
+/** Byte length of the ring. `capacity` is required; RangeError outside the domain, TypeError for an unknown key. */
+export function sonareEngineCommandRingBufferByteLength(options: { capacity: number }): number {
+  const clampedCapacity = resolveRingCapacity(
+    'sonareEngineCommandRingBufferByteLength',
+    options,
+    undefined,
+  );
   return (
     SONARE_ENGINE_RING_HEADER_INTS * Int32Array.BYTES_PER_ELEMENT +
     clampedCapacity * SONARE_ENGINE_COMMAND_RECORD_BYTES
   );
 }
 
-export function sonareEngineTelemetryRingBufferByteLength(capacity: number): number {
-  const clampedCapacity = requireRingDimension(capacity, 'capacity', 1);
+/** Byte length of the ring. `capacity` is required; RangeError outside the domain, TypeError for an unknown key. */
+export function sonareEngineTelemetryRingBufferByteLength(options: { capacity: number }): number {
+  const clampedCapacity = resolveRingCapacity(
+    'sonareEngineTelemetryRingBufferByteLength',
+    options,
+    undefined,
+  );
   return (
     overwriteRingByteLength(
       SONARE_ENGINE_RING_HEADER_INTS * Int32Array.BYTES_PER_ELEMENT,
@@ -219,10 +237,13 @@ export function sonareEngineTelemetryRingBufferByteLength(capacity: number): num
   );
 }
 
-export function createSonareEngineCommandRingBuffer(capacity = 128): SonareEngineCommandRingBuffer {
-  const clampedCapacity = requireRingDimension(capacity, 'capacity', 1);
+/** Creates a shared engine command ring (default `capacity` 128). RangeError outside the domain, TypeError for an unknown key. */
+export function createSonareEngineCommandRingBuffer(
+  options?: SonareRingCapacityOptions,
+): SonareEngineCommandRingBuffer {
+  const clampedCapacity = resolveRingCapacity('createSonareEngineCommandRingBuffer', options, 128);
   const sharedBuffer = new SharedArrayBuffer(
-    sonareEngineCommandRingBufferByteLength(clampedCapacity),
+    sonareEngineCommandRingBufferByteLength({ capacity: clampedCapacity }),
   );
   const ring = engineRingFromSharedBuffer(
     sharedBuffer,
@@ -232,12 +253,17 @@ export function createSonareEngineCommandRingBuffer(capacity = 128): SonareEngin
   return { sharedBuffer, header: ring.header, view: ring.view, capacity: ring.capacity };
 }
 
+/** Creates a shared engine telemetry ring (default `capacity` 128). RangeError outside the domain, TypeError for an unknown key. */
 export function createSonareEngineTelemetryRingBuffer(
-  capacity = 128,
+  options?: SonareRingCapacityOptions,
 ): SonareEngineTelemetryRingBuffer {
-  const clampedCapacity = requireRingDimension(capacity, 'capacity', 1);
+  const clampedCapacity = resolveRingCapacity(
+    'createSonareEngineTelemetryRingBuffer',
+    options,
+    128,
+  );
   const sharedBuffer = new SharedArrayBuffer(
-    sonareEngineTelemetryRingBufferByteLength(clampedCapacity),
+    sonareEngineTelemetryRingBufferByteLength({ capacity: clampedCapacity }),
   );
   const headerBytes = SONARE_ENGINE_RING_HEADER_INTS * Int32Array.BYTES_PER_ELEMENT;
   const header = new Int32Array(sharedBuffer, 0, SONARE_ENGINE_RING_HEADER_INTS);
@@ -459,7 +485,10 @@ export function readSonareEngineTelemetryRingBuffer(
     Atomics.load(header, 2) !== capacity ||
     Atomics.load(header, 3) !== SONARE_ENGINE_TELEMETRY_RECORD_BYTES
   ) {
-    throw new Error('engine telemetry ring has invalid descriptors.');
+    throw new SonareError(
+      ErrorCode.InvalidFormat,
+      'engine telemetry ring has invalid descriptors.',
+    );
   }
   const writeIndex = loadSonareRingCursor(header, 0, capacity);
   const version = Atomics.load(header, 1);
@@ -467,7 +496,8 @@ export function readSonareEngineTelemetryRingBuffer(
     return { nextReadIndex: writeIndex, telemetry: [] };
   }
   if (version !== SONARE_ENGINE_TELEMETRY_RING_PROTOCOL_VERSION) {
-    throw new Error(
+    throw new SonareError(
+      ErrorCode.AbiMismatch,
       `engine telemetry ring protocol version ${version} is incompatible; expected ${SONARE_ENGINE_TELEMETRY_RING_PROTOCOL_VERSION}.`,
     );
   }
@@ -516,7 +546,7 @@ export function engineRingFromSharedBuffer(
   );
   const minBytes = headerBytes + capacity * recordBytes;
   if (sharedBuffer.byteLength < minBytes) {
-    throw new Error('engine SharedArrayBuffer is too small for the requested ring capacity.');
+    throw new RangeError('engine SharedArrayBuffer is too small for the requested ring capacity.');
   }
   Atomics.store(header, 2, capacity);
   Atomics.store(header, 3, recordBytes);
@@ -534,7 +564,7 @@ export function engineTelemetryRingFromSharedBuffer(
 ): SonareEngineTelemetryRingBuffer {
   const headerBytes = SONARE_ENGINE_RING_HEADER_INTS * Int32Array.BYTES_PER_ELEMENT;
   if (sharedBuffer.byteLength < headerBytes) {
-    throw new Error('telemetrySharedBuffer is too small for the ring header.');
+    throw new RangeError('telemetrySharedBuffer is too small for the ring header.');
   }
   const header = new Int32Array(sharedBuffer, 0, SONARE_ENGINE_RING_HEADER_INTS);
   const existingCapacity = Atomics.load(header, 2);
@@ -571,7 +601,10 @@ export function engineTelemetryRingFromSharedBuffer(
     Atomics.load(header, 2) !== capacity ||
     Atomics.load(header, 3) !== SONARE_ENGINE_TELEMETRY_RECORD_BYTES
   ) {
-    throw new Error('engine telemetry ring has invalid descriptors.');
+    throw new SonareError(
+      ErrorCode.InvalidFormat,
+      'engine telemetry ring has invalid descriptors.',
+    );
   }
   requireProtocolVersion(
     header,
@@ -580,7 +613,10 @@ export function engineTelemetryRingFromSharedBuffer(
     'engine telemetry ring',
   );
   if (Atomics.load(header, 1) === 0 && loadSonareRingCursor(header, 0, capacity) !== 0) {
-    throw new Error('engine telemetry ring has records without a compatible producer.');
+    throw new SonareError(
+      ErrorCode.InvalidFormat,
+      'engine telemetry ring has records without a compatible producer.',
+    );
   }
   attachProtocolVersion(
     header,
@@ -616,7 +652,10 @@ function ensureEngineTelemetryRingAttached(
     Atomics.load(header, 2) !== capacity ||
     Atomics.load(header, 3) !== SONARE_ENGINE_TELEMETRY_RECORD_BYTES
   ) {
-    throw new Error('engine telemetry ring has invalid descriptors.');
+    throw new SonareError(
+      ErrorCode.InvalidFormat,
+      'engine telemetry ring has invalid descriptors.',
+    );
   }
   requireProtocolVersion(
     header,
@@ -625,7 +664,10 @@ function ensureEngineTelemetryRingAttached(
     'engine telemetry ring',
   );
   if (Atomics.load(header, 1) === 0 && loadSonareRingCursor(header, 0, capacity) !== 0) {
-    throw new Error('engine telemetry ring has records without a compatible producer.');
+    throw new SonareError(
+      ErrorCode.InvalidFormat,
+      'engine telemetry ring has records without a compatible producer.',
+    );
   }
   attachProtocolVersion(
     header,

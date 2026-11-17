@@ -122,7 +122,9 @@ function commitClips(
 ): void {
   for (const clip of upserts) {
     if (!clip.channels && clip.pageProvider !== undefined && !ctx.workletClipStream(clip)) {
-      throw new Error('A pageProvider on SonareEngine must be created by attachOpfsClipStream().');
+      throw new TypeError(
+        'A pageProvider on SonareEngine must be created by attachOpfsClipStream().',
+      );
     }
   }
   commitStore(ctx, ctx.clips, staged, applyOffline, () => postClipsDelta(ctx, upserts, removeIds));

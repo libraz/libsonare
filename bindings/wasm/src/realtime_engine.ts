@@ -128,6 +128,7 @@ function resolveRenderFrame(
   return frame < 0 ? undefined : frame;
 }
 
+/** Engine ABI version this wrapper was written against; an internal mirror, not part of any package entry. */
 export const EXPECTED_ENGINE_ABI_VERSION = 3;
 
 /** Most lanes {@link RealtimeEngine.setTrackLanes} accepts (`SONARE_ENGINE_MAX_TRACK_LANES`). */
@@ -177,6 +178,7 @@ function normalizeRenderOfflineRequest(
   };
 }
 
+/** Engine ABI agreement and host transport support; internal to the engine and worklet node. */
 export function engineCapabilities(): EngineCapabilities {
   const abiVersion = getSonareModule().engineAbiVersion();
   const sharedArrayBuffer = typeof globalThis.SharedArrayBuffer === 'function';
@@ -202,7 +204,7 @@ function assertSceneJson(json: string, fallbackMessage: string): void {
     JSON.parse(json);
   } catch (error) {
     const message = error instanceof Error ? error.message : fallbackMessage;
-    throw new SonareError(ErrorCode.InvalidFormat, 'InvalidFormat', message);
+    throw new SonareError(ErrorCode.InvalidFormat, message);
   }
 }
 
@@ -257,7 +259,6 @@ export class RealtimeEngine {
     if (!capabilities.abiCompatible) {
       throw new SonareError(
         ErrorCode.AbiMismatch,
-        'AbiMismatch',
         `Engine ABI mismatch: wasm=${capabilities.engineAbiVersion}, expected=${capabilities.expectedEngineAbiVersion}`,
       );
     }

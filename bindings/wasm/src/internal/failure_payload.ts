@@ -1,4 +1,4 @@
-import { isSonareError, SonareError } from '../errors.js';
+import { ErrorCode, isSonareError, SonareError } from '../errors.js';
 
 /** A failure as it crosses a postMessage boundary: class name, message and any SonareError code. */
 export interface SonareFailurePayload {
@@ -19,22 +19,29 @@ export function failurePayload(error: unknown): SonareFailurePayload {
   return { name: 'Error', message: String(error) };
 }
 
+const KNOWN_ERROR_CODES: ReadonlySet<number> = new Set(Object.values(ErrorCode));
+
+/** A numeric code outside the {@link ErrorCode} table reads as `Unknown`. */
+function narrowErrorCode(code: number): ErrorCode {
+  return KNOWN_ERROR_CODES.has(code) ? (code as ErrorCode) : ErrorCode.Unknown;
+}
+
 /**
  * Rebuilds the error a {@link failurePayload} described: a coded SonareError
- * keeps its code, and an argument refusal keeps its RangeError / TypeError class.
+ * keeps its code (an unlisted number becomes `Unknown`), an argument refusal keeps its RangeError / TypeError class,
+ * and any other failure becomes a SonareError with code `Unknown`.
  */
 export function failureFromPayload(payload: SonareFailurePayload): Error {
   if (payload.code !== undefined) {
-    return new SonareError(payload.code, payload.codeName ?? 'Unknown', payload.message);
+    return new SonareError(narrowErrorCode(payload.code), payload.message);
   }
-  const error =
-    payload.name === 'RangeError'
-      ? new RangeError(payload.message)
-      : payload.name === 'TypeError'
-        ? new TypeError(payload.message)
-        : new Error(payload.message);
-  error.name = payload.name;
-  return error;
+  if (payload.name === 'RangeError') {
+    return new RangeError(payload.message);
+  }
+  if (payload.name === 'TypeError') {
+    return new TypeError(payload.message);
+  }
+  return new SonareError(ErrorCode.Unknown, payload.message);
 }
 
 /** Whether a value received over a port is a {@link SonareFailurePayload}. */

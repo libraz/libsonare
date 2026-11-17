@@ -5,12 +5,8 @@
 
 import { resolveEffectFftOptions } from './internal/fft_options.js';
 import { getSonareModule } from './module_state.js';
-import type { SegmentMatrix } from './public_types.js';
-import type {
-  WasmDecomposeResult,
-  WasmHpssWithResidualResult,
-  WasmMatrix2dResult,
-} from './sonare.js';
+import type { Matrix2D, SegmentMatrix } from './public_types.js';
+import type { WasmDecomposeResult, WasmHpssWithResidualResult } from './sonare.js';
 import {
   assertAudioChannels,
   assertAudioInput,
@@ -353,8 +349,10 @@ export function decomposeStemsLinked(
 /**
  * Nearest-neighbour filtering of a flattened [nFeatures x nFrames] spectrogram
  * (librosa.decompose.nn_filter).
+ *
+ * @returns {@link Matrix2D} of the input's shape: rows are features, cols are frames.
  */
-export function nnFilter(request: NnFilterRequest): WasmMatrix2dResult;
+export function nnFilter(request: NnFilterRequest): Matrix2D;
 export function nnFilter(
   s: Float32Array,
   nFeatures: number,
@@ -362,7 +360,7 @@ export function nnFilter(
   aggregate?: string,
   k?: number,
   width?: number,
-): WasmMatrix2dResult;
+): Matrix2D;
 export function nnFilter(
   s: Float32Array | NnFilterRequest,
   nFeatures = 0,
@@ -370,7 +368,7 @@ export function nnFilter(
   aggregate = 'mean',
   k = 7,
   width = 1,
-): WasmMatrix2dResult {
+): Matrix2D {
   if (!(s instanceof Float32Array)) {
     requestObject('nnFilter', s, 's');
     const r = s;

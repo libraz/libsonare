@@ -3,7 +3,7 @@
  *
  * These mirror the Node / Python `analyzeBpm` / `analyzeRhythm` /
  * `analyzeDynamics` / `analyzeTimbre` / `detectKeyCandidates` /
- * `hasFfmpegSupport` / `masterAudioWithProgress` surfaces. The intent is
+ * `capabilities().features.ffmpeg` / `masterAudioWithProgress` surfaces. The intent is
  * to keep feature parity across all three bindings — if any of these is
  * missing from a new WASM build, this file fails.
  */
@@ -14,9 +14,9 @@ import {
   analyzeDynamics,
   analyzeRhythm,
   analyzeTimbre,
+  capabilities,
   chordFunctionalAnalysis,
   ErrorCode,
-  hasFfmpegSupport,
   init,
   Mode,
   masterAudio,
@@ -148,9 +148,9 @@ describe('WASM analyzer coverage parity', () => {
     });
   });
 
-  describe('hasFfmpegSupport', () => {
-    it('returns a boolean (the WASM binding is FFmpeg-less by default)', () => {
-      expect(typeof hasFfmpegSupport()).toBe('boolean');
+  describe('capabilities().features.ffmpeg', () => {
+    it('is a boolean (the WASM binding is FFmpeg-less by default)', () => {
+      expect(typeof capabilities().features.ffmpeg).toBe('boolean');
     });
   });
 

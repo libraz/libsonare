@@ -532,13 +532,17 @@ function normalizeRequest(
 }
 
 /** Whether this build has the C vocal-edit surface linked. */
-export function vocalEditAvailable(): boolean {
+function vocalEditAvailable(): boolean {
   const raw = module();
   return typeof raw.vocalEditAvailable === 'function' && raw.vocalEditAvailable() !== 0;
 }
 
-/** Version of the C vocal-edit ABI exposed by the loaded WASM module. */
-export function vocalEditApiVersion(): number {
+/**
+ * ABI version of the vocal-edit layout in the loaded module, or `0` when the
+ * module has no vocal-edit surface. Whether vocal editing is built in at all is
+ * `capabilities().features.vocalEdit`.
+ */
+export function vocalEditAbiVersion(): number {
   const raw = module();
   return typeof raw.vocalEditApiVersion === 'function' ? raw.vocalEditApiVersion() : 0;
 }
@@ -548,11 +552,7 @@ export function createVocalEditSession(request: VocalCreateRequest): VocalEditSe
   requestObject('createVocalEditSession', request, 'request', true);
   validateCreate(request);
   if (!vocalEditAvailable()) {
-    throw new SonareError(
-      ErrorCode.NotSupported,
-      'NotSupported',
-      'vocal edit is unavailable in this WASM build',
-    );
+    throw new SonareError(ErrorCode.NotSupported, 'vocal edit is unavailable in this WASM build');
   }
   return new VocalEditSession(
     module().vocalEditSessionCreate(request.samples, request.sampleRate, request),
@@ -569,11 +569,7 @@ export function restoreVocalEditSession(request: VocalRestoreRequest): VocalEdit
   }
   validateSessionLimits(request.limits);
   if (!vocalEditAvailable()) {
-    throw new SonareError(
-      ErrorCode.NotSupported,
-      'NotSupported',
-      'vocal edit is unavailable in this WASM build',
-    );
+    throw new SonareError(ErrorCode.NotSupported, 'vocal edit is unavailable in this WASM build');
   }
   return new VocalEditSession(
     module().vocalEditSessionRestore(request.samples, request.sampleRate, request.state, request),
@@ -940,7 +936,7 @@ export class VocalRenderSnapshot {
         while (true) {
           if (signal?.aborted) {
             job.abort();
-            throw new SonareError(ErrorCode.Cancelled, 'Cancelled', 'The render was cancelled');
+            throw new SonareError(ErrorCode.Cancelled, 'The render was cancelled');
           }
           if (job.next().complete) {
             return job.finalize();

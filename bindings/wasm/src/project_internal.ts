@@ -563,7 +563,6 @@ export function projectModule(): ProjectModule {
   if (typeof candidate.projectAbiVersion !== 'function' || candidate.Project === undefined) {
     throw new SonareError(
       ErrorCode.NotSupported,
-      'NotSupported',
       'libsonare was built without arrangement (headless DAW) support',
     );
   }

@@ -17,9 +17,7 @@ import {
   detectBeats,
   detectBpm,
   detectKey,
-  EXPECTED_ENGINE_ABI_VERSION,
   engineAbiVersion,
-  engineCapabilities,
   fixFrames,
   fixLength,
   frameSignal,
@@ -41,6 +39,7 @@ import {
   version,
 } from '../dist/index.js';
 import { SonareEngineTelemetryError } from '../dist/worklet.js';
+import { EXPECTED_ENGINE_ABI_VERSION } from '../src/realtime_engine';
 
 describe('Sonare WASM Module', () => {
   beforeAll(async () => {
@@ -132,11 +131,8 @@ describe('Sonare WASM Module', () => {
       expect(abiVersion()).toBeGreaterThan(0);
     });
 
-    it('reports realtime engine capabilities and ABI compatibility', () => {
-      const capabilities = engineCapabilities();
-      expect(capabilities.engineAbiVersion).toBe(EXPECTED_ENGINE_ABI_VERSION);
-      expect(capabilities.abiCompatible).toBe(true);
-      expect(capabilities.mode === 'sab' || capabilities.mode === 'postMessage').toBe(true);
+    it('agrees with the internal engine ABI mirror', () => {
+      expect(engineAbiVersion()).toBe(EXPECTED_ENGINE_ABI_VERSION);
     });
 
     it('exports the track monitor mode type with the C-ABI ordinals', () => {

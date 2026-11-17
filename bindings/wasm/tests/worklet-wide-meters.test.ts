@@ -109,7 +109,7 @@ describe('wide meters on the live worklet engine', () => {
 
   it('delivers every plane of a 5.1 bus over the shared meter ring', () => {
     const reference = referenceBusMeter(2, SURROUND_STRIP, 6);
-    const ring = createSonareMeterRingBuffer(64);
+    const ring = createSonareMeterRingBuffer({ capacity: 64 });
     const processor = new SonareRealtimeEngineWorkletProcessor(
       {
         sampleRate: SR,
@@ -143,7 +143,7 @@ describe('wide meters on the live worklet engine', () => {
       { sampleRate: SR, blockSize: BLOCK, channelCount: 2, meterIntervalFrames: BLOCK },
       { onMeter: (meter) => posted.push(meter) },
     );
-    const ring = createSonareMeterRingBuffer(64);
+    const ring = createSonareMeterRingBuffer({ capacity: 64 });
     const viaRing = new SonareRealtimeEngineWorkletProcessor(
       {
         sampleRate: SR,
@@ -180,7 +180,7 @@ describe('wide meters on the live worklet engine', () => {
 
   it('widens the meter ring record to carry the per-plane block', () => {
     expect(SONARE_METER_RING_RECORD_FLOATS).toBe(49);
-    expect(createSonareMeterRingBuffer(4).header[3]).toBe(0);
+    expect(createSonareMeterRingBuffer({ capacity: 4 }).header[3]).toBe(0);
   });
 
   it('gates the meter interval per target', () => {

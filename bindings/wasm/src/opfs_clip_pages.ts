@@ -416,7 +416,6 @@ export async function writeOpfsClip(
   if (heldOpfsClipPaths.has(opfsClipPathKey(path))) {
     throw new SonareError(
       ErrorCode.InvalidState,
-      'InvalidState',
       `OPFS path '${path}' is held by an open clip page provider.`,
     );
   }
@@ -460,13 +459,12 @@ export async function writeOpfsClip(
       });
       if (!response.ok) {
         if (response.busy) {
-          throw new SonareError(
-            ErrorCode.InvalidState,
-            'InvalidState',
-            `OPFS path '${path}' is held by a reader.`,
-          );
+          throw new SonareError(ErrorCode.InvalidState, `OPFS path '${path}' is held by a reader.`);
         }
-        throw new Error(`OPFS clip write failed: ${response.error ?? 'unknown error'}`);
+        const reason = response.error ?? 'unknown error';
+        throw new SonareError(ErrorCode.EncodeFailed, `OPFS clip write failed: ${reason}`, {
+          cause: new Error(reason),
+        });
       }
     }
   } finally {

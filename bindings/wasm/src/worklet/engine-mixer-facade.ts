@@ -86,7 +86,7 @@ function hasOwn(object: SceneObject, key: string): boolean {
 }
 
 function sceneFormatError(message: string): SonareError {
-  return new SonareError(ErrorCode.InvalidFormat, 'InvalidFormat', message);
+  return new SonareError(ErrorCode.InvalidFormat, message);
 }
 
 /**

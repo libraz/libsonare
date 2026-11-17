@@ -56,7 +56,7 @@ describe('SonareRealtimeEngineWorkletProcessor', () => {
 
     it('drains external MIDI into the SAB ring without postMessage', () => {
       const blockSize = 128;
-      const externalMidiRing = createSonareExternalMidiRingBuffer(8);
+      const externalMidiRing = createSonareExternalMidiRingBuffer({ capacity: 8 });
       const posted: unknown[] = [];
       const processor = new SonareRealtimeEngineWorkletProcessor(
         {
@@ -111,7 +111,7 @@ describe('SonareRealtimeEngineWorkletProcessor', () => {
 
     it('keeps an external-MIDI event the full ring refused for a later quantum', () => {
       const blockSize = 128;
-      const externalMidiRing = createSonareExternalMidiRingBuffer(1);
+      const externalMidiRing = createSonareExternalMidiRingBuffer({ capacity: 1 });
       const processor = new SonareRealtimeEngineWorkletProcessor({
         sampleRate: 48000,
         blockSize,
@@ -215,7 +215,7 @@ describe('SonareRealtimeEngineWorkletProcessor', () => {
     it('refuses a scopeIntervalFrames instead of rounding it into range', () => {
       const blockSize = 256;
       const scopeCount = (scopeIntervalFrames: number): number => {
-        const scopeRing = createSonareScopeRingBuffer(64, 32);
+        const scopeRing = createSonareScopeRingBuffer({ capacity: 64, bands: 32 });
         const processor = new SonareRealtimeEngineWorkletProcessor({
           sampleRate: 48000,
           blockSize,
@@ -255,8 +255,8 @@ describe('SonareRealtimeEngineWorkletProcessor', () => {
 
     it('applies SAB transport commands within the next processed block', () => {
       const blockSize = 128;
-      const commandRing = createSonareEngineCommandRingBuffer(8);
-      const telemetryRing = createSonareEngineTelemetryRingBuffer(8);
+      const commandRing = createSonareEngineCommandRingBuffer({ capacity: 8 });
+      const telemetryRing = createSonareEngineTelemetryRingBuffer({ capacity: 8 });
       const processor = new SonareRealtimeEngineWorkletProcessor({
         sampleRate: 48000,
         blockSize,
@@ -301,7 +301,7 @@ describe('SonareRealtimeEngineWorkletProcessor', () => {
 
     it('refuses a raw Punch record with a fractional out sample instead of rounding it', () => {
       const blockSize = 128;
-      const telemetryRing = createSonareEngineTelemetryRingBuffer(8);
+      const telemetryRing = createSonareEngineTelemetryRingBuffer({ capacity: 8 });
       const processor = new SonareRealtimeEngineWorkletProcessor({
         sampleRate: 48000,
         blockSize,
@@ -338,7 +338,7 @@ describe('SonareRealtimeEngineWorkletProcessor', () => {
 
     it('holds a SAB command until the sync posted before it has been applied', () => {
       const blockSize = 128;
-      const commandRing = createSonareEngineCommandRingBuffer(8);
+      const commandRing = createSonareEngineCommandRingBuffer({ capacity: 8 });
       const processor = new SonareRealtimeEngineWorkletProcessor({
         sampleRate: 48000,
         blockSize,
@@ -375,7 +375,7 @@ describe('SonareRealtimeEngineWorkletProcessor', () => {
     });
 
     it('keeps a public telemetry publication coherent across 65 held-reader writes', () => {
-      const ring = createSonareEngineTelemetryRingBuffer(1);
+      const ring = createSonareEngineTelemetryRingBuffer({ capacity: 1 });
       // A viewer must accept a newly-created, unacknowledged ring as empty.
       expect(ring.header[1]).toBe(0);
       expect(readSonareEngineTelemetryRingBuffer(ring)).toEqual({
@@ -433,7 +433,7 @@ describe('SonareRealtimeEngineWorkletProcessor', () => {
     });
 
     it('separates capacity-two collision history from physical overwrites across reattach and cursor wrap', () => {
-      const ring = createSonareEngineTelemetryRingBuffer(2);
+      const ring = createSonareEngineTelemetryRingBuffer({ capacity: 2 });
       const telemetry = (frame: number): SonareEngineTelemetryRecord => ({
         type: SonareEngineTelemetryType.ProcessBlock,
         error: SonareEngineTelemetryError.None,
@@ -501,7 +501,7 @@ describe('SonareRealtimeEngineWorkletProcessor', () => {
     });
 
     it('reads and coerces every public telemetry field before a late getter failure', () => {
-      const ring = createSonareEngineTelemetryRingBuffer(1);
+      const ring = createSonareEngineTelemetryRingBuffer({ capacity: 1 });
       writeSonareEngineTelemetryRingBuffer(ring, {
         type: SonareEngineTelemetryType.ProcessBlock,
         error: SonareEngineTelemetryError.None,
@@ -564,7 +564,7 @@ describe('SonareRealtimeEngineWorkletProcessor', () => {
     });
 
     it('holds engine telemetry scratch writes and resumes after the reader releases', () => {
-      const ring = createSonareEngineTelemetryRingBuffer(1);
+      const ring = createSonareEngineTelemetryRingBuffer({ capacity: 1 });
       const processor = new SonareRealtimeEngineWorkletProcessor({
         sampleRate: 48000,
         blockSize: 128,
@@ -632,7 +632,7 @@ describe('SonareRealtimeEngineWorkletProcessor', () => {
     });
 
     it('keeps engine telemetry scratch A intact when the last prepared getter throws', () => {
-      const ring = createSonareEngineTelemetryRingBuffer(1);
+      const ring = createSonareEngineTelemetryRingBuffer({ capacity: 1 });
       const processor = new SonareRealtimeEngineWorkletProcessor({
         sampleRate: 48000,
         blockSize: 128,
@@ -688,7 +688,7 @@ describe('SonareRealtimeEngineWorkletProcessor', () => {
     });
 
     it('holds every engine wide-meter scratch write until the reader releases', () => {
-      const ring = createSonareMeterRingBuffer(1);
+      const ring = createSonareMeterRingBuffer({ capacity: 1 });
       const processor = new SonareRealtimeEngineWorkletProcessor({
         sampleRate: 48000,
         blockSize: 128,
@@ -768,7 +768,7 @@ describe('SonareRealtimeEngineWorkletProcessor', () => {
     });
 
     it('holds every engine scope scratch write until release and keeps scope A on a late getter throw', () => {
-      const ring = createSonareScopeRingBuffer(1, 4, 2);
+      const ring = createSonareScopeRingBuffer({ capacity: 1, bands: 4, maxPoints: 2 });
       const processor = new SonareRealtimeEngineWorkletProcessor({
         sampleRate: 48000,
         blockSize: 128,
@@ -859,7 +859,7 @@ describe('SonareRealtimeEngineWorkletProcessor', () => {
     });
 
     it('drains a large SAB command snapshot before a structural strip sync', () => {
-      const commandRing = createSonareEngineCommandRingBuffer(2048);
+      const commandRing = createSonareEngineCommandRingBuffer({ capacity: 2048 });
       const posted: unknown[] = [];
       const processor = new SonareRealtimeEngineWorkletProcessor(
         {
@@ -1442,8 +1442,8 @@ describe('SonareRealtimeEngineWorkletProcessor', () => {
 
     it('contains an invalid SAB command and continues rendering later blocks', () => {
       const blockSize = 128;
-      const commandRing = createSonareEngineCommandRingBuffer(8);
-      const telemetryRing = createSonareEngineTelemetryRingBuffer(8);
+      const commandRing = createSonareEngineCommandRingBuffer({ capacity: 8 });
+      const telemetryRing = createSonareEngineTelemetryRingBuffer({ capacity: 8 });
       const processor = new SonareRealtimeEngineWorkletProcessor({
         sampleRate: 48000,
         blockSize,
@@ -1987,7 +1987,7 @@ describe('SonareRealtimeEngineWorkletProcessor', () => {
     it('publishes a missing worklet clip page through the SAB ring without postMessage', () => {
       const blockSize = 4;
       const posted: unknown[] = [];
-      const clipPageRequestRing = createSonareClipPageRequestRingBuffer(4);
+      const clipPageRequestRing = createSonareClipPageRequestRingBuffer({ capacity: 4 });
       const processor = new SonareRealtimeEngineWorkletProcessor(
         {
           sampleRate: 48000,
@@ -2673,7 +2673,7 @@ describe('SonareRealtimeEngineWorkletProcessor', () => {
       const blockSize = 256;
       const sampleRate = 48000;
       const toneHz = 1000;
-      const scopeRing = createSonareScopeRingBuffer(64, 32);
+      const scopeRing = createSonareScopeRingBuffer({ capacity: 64, bands: 32 });
       const processor = new SonareRealtimeEngineWorkletProcessor({
         sampleRate,
         blockSize,

@@ -286,7 +286,6 @@ export class Project {
     if (this.instrumentBounceActive) {
       throw new SonareError(
         ErrorCode.InvalidState,
-        'InvalidState',
         'Project is busy: it cannot be used from inside a bounceWithInstruments callback',
       );
     }

@@ -1,3 +1,4 @@
+import { ErrorCode, SonareError } from '../errors.js';
 export const RING_CURSOR_RANGE = 0x1_0000_0000;
 
 // Overwrite records use one atomic state word per slot. The high bit excludes
@@ -153,6 +154,56 @@ export function requireRingDimension(
   return value;
 }
 
+/**
+ * Reads a ring options object: a key outside `defaults` is a TypeError, an
+ * absent or `null` value takes its default, and a field with no default is
+ * required (TypeError when missing). Values are returned unvalidated.
+ */
+export function resolveRingOptions<K extends string>(
+  fn: string,
+  options: unknown,
+  defaults: Record<K, number | undefined>,
+): Record<K, unknown> {
+  if (options === undefined || options === null) {
+    options = {};
+  }
+  if (typeof options !== 'object' || Array.isArray(options)) {
+    throw new TypeError(`${fn} options must be an object`);
+  }
+  const given = options as Record<string, unknown>;
+  const known = new Set<string>(Object.keys(defaults));
+  for (const key of Object.keys(given)) {
+    if (!known.has(key)) {
+      throw new TypeError(`${fn} does not accept the option '${key}'`);
+    }
+  }
+  const resolved = {} as Record<K, unknown>;
+  for (const key of Object.keys(defaults) as K[]) {
+    const value = given[key] ?? defaults[key];
+    if (value === undefined) {
+      throw new TypeError(`${fn}: ${key} is required`);
+    }
+    resolved[key] = value;
+  }
+  return resolved;
+}
+
+/** Options of a single-dimension ring helper; the byte-length helpers require `capacity`. */
+export interface SonareRingCapacityOptions {
+  /** Records the ring holds, an integer of at least 1. */
+  capacity?: number;
+}
+
+/** Resolves and validates `capacity` from a ring options object (`undefined` default means required). */
+export function resolveRingCapacity(
+  fn: string,
+  options: unknown,
+  defaultCapacity: number | undefined,
+): number {
+  const resolved = resolveRingOptions(fn, options, { capacity: defaultCapacity });
+  return requireRingDimension(resolved.capacity, 'capacity', 1);
+}
+
 export function requirePositiveCapacity(
   existingCapacity: number,
   fallbackCapacity: number | undefined,
@@ -185,7 +236,8 @@ export function requireProtocolVersion(
 ): void {
   const version = Atomics.load(header, versionSlot);
   if (version !== 0 && version !== expectedVersion) {
-    throw new Error(
+    throw new SonareError(
+      ErrorCode.AbiMismatch,
       `${name} protocol version ${version} is incompatible; expected ${expectedVersion}.`,
     );
   }
@@ -202,7 +254,8 @@ export function attachProtocolVersion(
   }
   const previous = Atomics.compareExchange(header, versionSlot, 0, expectedVersion);
   if (previous !== 0 && previous !== expectedVersion) {
-    throw new Error(
+    throw new SonareError(
+      ErrorCode.AbiMismatch,
       `${name} protocol version ${previous} is incompatible; expected ${expectedVersion}.`,
     );
   }
@@ -215,7 +268,10 @@ export function requireNoUnpublishedRecords(
   name: string,
 ): void {
   if (Atomics.load(header, versionSlot) === 0 && loadSonareRingCursor(header, 0, capacity) !== 0) {
-    throw new Error(`${name} has records without a compatible producer.`);
+    throw new SonareError(
+      ErrorCode.InvalidFormat,
+      `${name} has records without a compatible producer.`,
+    );
   }
 }
 
@@ -247,7 +303,7 @@ export function validateOverwriteViews(
     slotStates.byteOffset !== stateOffset ||
     slotStates.length !== capacity
   ) {
-    throw new Error(`${name} shared buffer has an invalid layout.`);
+    throw new SonareError(ErrorCode.InvalidFormat, `${name} shared buffer has an invalid layout.`);
   }
 }
 

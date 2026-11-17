@@ -815,7 +815,6 @@ export function synthesizeRir(options: RirSynthOptions = {}): RirResult {
   if (typeof module.synthesizeRir !== 'function') {
     throw new SonareError(
       ErrorCode.NotSupported,
-      'NotSupported',
       'libsonare was built without acoustic-simulation support',
     );
   }
@@ -841,7 +840,6 @@ export function estimateRoom(
   if (typeof module.estimateRoom !== 'function') {
     throw new SonareError(
       ErrorCode.NotSupported,
-      'NotSupported',
       'libsonare was built without acoustic-simulation support',
     );
   }
@@ -885,7 +883,6 @@ export function roomGeometryFromEstimate(
   if (typeof module.roomGeometryFromEstimate !== 'function') {
     throw new SonareError(
       ErrorCode.NotSupported,
-      'NotSupported',
       'libsonare was built without acoustic-simulation support',
     );
   }
@@ -943,7 +940,6 @@ export function roomMorph(
   if (typeof module.roomMorph !== 'function') {
     throw new SonareError(
       ErrorCode.NotSupported,
-      'NotSupported',
       'libsonare was built without acoustic-simulation support',
     );
   }
@@ -972,7 +968,6 @@ export function roomMorphStereo(request: RoomMorphStereoRequest): RoomMorphStere
   if (typeof module.roomMorphStereo !== 'function') {
     throw new SonareError(
       ErrorCode.NotSupported,
-      'NotSupported',
       'libsonare was built without acoustic-simulation support',
     );
   }
@@ -1244,14 +1239,4 @@ export function analyzeTimbre(
     request.nMfcc ?? 13,
     request.windowSec ?? 0.5,
   );
-}
-
-/**
- * Whether this WASM build was compiled with FFmpeg support. Mirrors Node /
- * Python `hasFfmpegSupport`. In the published WASM binding this currently
- * always returns `false` (FFmpeg is not bundled into the .wasm), but the API
- * exists so caller code can branch on capabilities portably.
- */
-export function hasFfmpegSupport(): boolean {
-  return requireModule().hasFfmpegSupport();
 }

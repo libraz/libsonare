@@ -7,9 +7,9 @@ import type { Project, ProjectTimeline } from './project_class.js';
 // ============================================================================
 
 /**
- * Expected project ABI version. Mirrors `SONARE_PROJECT_ABI_VERSION` in
- * `src/sonare_c_project.h`; checked against {@link projectAbiVersion} to detect
- * a WASM build whose flat project POD layout has drifted from this wrapper.
+ * Project ABI version this wrapper was written against; an internal mirror of
+ * `SONARE_PROJECT_ABI_VERSION` the ABI tooling checks, not part of the package
+ * entry.
  */
 export const EXPECTED_PROJECT_ABI_VERSION = 2;
 

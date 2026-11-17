@@ -65,8 +65,8 @@ try {
   try {
     const samples = tone(3);
     const analysis = await worker.analyze(
-      { samples, sampleRate },
-      { copy: true, onProgress: ({ stage }) => progress.push(stage) },
+      { samples, sampleRate, onProgress: (_progress, stage) => progress.push(stage) },
+      { copy: true },
     );
     if (!(analysis.bpm > 0) || progress.length === 0 || ticks === 0) {
       throw new Error('worker analysis did not complete off the UI thread');
@@ -78,19 +78,20 @@ try {
       throw new Error('worker input was not transferred');
     }
 
-    let task;
+    const controller = new AbortController();
     let cancelled = false;
-    task = worker.analyze(
-      { samples: tone(12), sampleRate },
+    const task = worker.analyze(
       {
-        copy: true,
+        samples: tone(12),
+        sampleRate,
         onProgress: () => {
           if (!cancelled) {
             cancelled = true;
-            task.cancel();
+            controller.abort();
           }
         },
       },
+      { copy: true, signal: controller.signal },
     );
     try {
       await task;
@@ -109,7 +110,7 @@ try {
     });
   } finally {
     clearInterval(interval);
-    worker.dispose();
+    await worker.destroy();
   }
 } catch (error) {
   result.dataset.status = 'error';

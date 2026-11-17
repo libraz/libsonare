@@ -217,7 +217,7 @@ describe('SonareWorkletProcessor', () => {
   it('allocates no meter record per publish when a ring is configured', () => {
     const sampleRate = 48000;
     const blockSize = 128;
-    const ring = createSonareMeterRingBuffer(64);
+    const ring = createSonareMeterRingBuffer({ capacity: 64 });
     const posted: unknown[] = [];
     const processor = new SonareWorkletProcessor(
       {
@@ -272,7 +272,7 @@ describe('SonareWorkletProcessor', () => {
   it('can publish meters through a SharedArrayBuffer ring', () => {
     const sampleRate = 48000;
     const blockSize = 128;
-    const ring = createSonareMeterRingBuffer(4);
+    const ring = createSonareMeterRingBuffer({ capacity: 4 });
     const posted: unknown[] = [];
     const processor = new SonareWorkletProcessor(
       {
@@ -315,7 +315,7 @@ describe('SonareWorkletProcessor', () => {
   });
 
   it('holds mixer meter records stable while a reader is active and resumes after release', () => {
-    const ring = createSonareMeterRingBuffer(1);
+    const ring = createSonareMeterRingBuffer({ capacity: 1 });
     // A newly-created viewer ring is explicitly unacknowledged until a producer
     // attaches it. This guards the version cut without depending on a record.
     expect(ring.header[3]).toBe(0);
@@ -384,7 +384,7 @@ describe('SonareWorkletProcessor', () => {
   });
 
   it('materializes mixer meter properties before claiming and preserves the old record on throw', () => {
-    const ring = createSonareMeterRingBuffer(1);
+    const ring = createSonareMeterRingBuffer({ capacity: 1 });
     const processor = new SonareWorkletProcessor({
       sceneJson: mixingScenePresetJson('vocalReverbSend'),
       sampleRate: 48000,
@@ -573,7 +573,7 @@ describe('SonareWorkletProcessor', () => {
       processor.destroy();
     }
 
-    const ring = createSonareSpectrumRingBuffer(4, 8);
+    const ring = createSonareSpectrumRingBuffer({ capacity: 4, bands: 8 });
     const ringProcessor = new SonareWorkletProcessor({
       sceneJson: mixingScenePresetJson('vocalReverbSend'),
       sampleRate,
@@ -597,7 +597,7 @@ describe('SonareWorkletProcessor', () => {
   });
 
   it('holds mixer spectrum records stable across 65 failed claims and resumes after release', () => {
-    const ring = createSonareSpectrumRingBuffer(1, 4);
+    const ring = createSonareSpectrumRingBuffer({ capacity: 1, bands: 4 });
     expect(ring.header[4]).toBe(0);
     expect(readSonareSpectrumRingBuffer(ring)).toEqual({ nextReadIndex: 0, spectra: [] });
     const processor = new SonareWorkletProcessor({

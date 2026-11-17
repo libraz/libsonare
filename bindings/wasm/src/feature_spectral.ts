@@ -4,7 +4,7 @@
  */
 
 import { getSonareModule } from './module_state.js';
-import type { WasmMatrix2dResult } from './sonare.js';
+import type { Matrix2D } from './public_types.js';
 import { assertAudioInput, requestObject, requireBoolean } from './validation.js';
 
 function requireModule() {
@@ -93,9 +93,9 @@ export function spectralCentroid(
  * one bin width for row 0 to mean anything — at the defaults (22050 Hz, 2048)
  * one bin is 10.8 Hz, so only a small `nFft` or a tiny `fmin` reaches this.
  *
- * @returns Matrix2d of shape (nBands + 1) x nFrames.
+ * @returns {@link Matrix2D} whose rows are the `nBands + 1` contrast bands and cols are frames.
  */
-export function spectralContrast(request: SpectralContrastRequest): WasmMatrix2dResult;
+export function spectralContrast(request: SpectralContrastRequest): Matrix2D;
 export function spectralContrast(
   samples: Float32Array,
   sampleRate?: number,
@@ -104,7 +104,7 @@ export function spectralContrast(
   nBands?: number,
   fmin?: number,
   quantile?: number,
-): WasmMatrix2dResult;
+): Matrix2D;
 export function spectralContrast(
   samples: Float32Array | SpectralContrastRequest,
   sampleRate = 22050,
@@ -113,7 +113,7 @@ export function spectralContrast(
   nBands = 6,
   fmin = 200.0,
   quantile = 0.02,
-): WasmMatrix2dResult {
+): Matrix2D {
   if (!(samples instanceof Float32Array)) {
     requestObject('spectralContrast', samples);
     const r = samples;
@@ -142,23 +142,23 @@ export function spectralContrast(
 /**
  * Fit per-frame polynomial coefficients (librosa.feature.poly_features).
  *
- * @returns Matrix2d of shape (order + 1) x nFrames.
+ * @returns {@link Matrix2D} whose rows are the `order + 1` polynomial coefficients and cols are frames.
  */
-export function polyFeatures(request: PolyFeaturesRequest): WasmMatrix2dResult;
+export function polyFeatures(request: PolyFeaturesRequest): Matrix2D;
 export function polyFeatures(
   samples: Float32Array,
   sampleRate?: number,
   nFft?: number,
   hopLength?: number,
   order?: number,
-): WasmMatrix2dResult;
+): Matrix2D;
 export function polyFeatures(
   samples: Float32Array | PolyFeaturesRequest,
   sampleRate = 22050,
   nFft = 2048,
   hopLength = 512,
   order = 1,
-): WasmMatrix2dResult {
+): Matrix2D {
   if (!(samples instanceof Float32Array)) {
     requestObject('polyFeatures', samples);
     const r = samples;

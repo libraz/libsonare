@@ -78,7 +78,7 @@ describe('SonareWorkletProcessor meter scratch', () => {
   }
 
   it('writes the ring from scalar accessors, never from meterSnapshot', () => {
-    const ring = createSonareMeterRingBuffer(64);
+    const ring = createSonareMeterRingBuffer({ capacity: 64 });
     const posted: unknown[] = [];
     const processor = new SonareWorkletProcessor(
       {
@@ -199,7 +199,7 @@ describe('SonareWorkletProcessor meter scratch', () => {
   });
 
   it('leaves the last meter record intact when a late scratch getter throws', () => {
-    const ring = createSonareMeterRingBuffer(1);
+    const ring = createSonareMeterRingBuffer({ capacity: 1 });
     expect(ring.header[3]).toBe(0);
     const processor = new SonareWorkletProcessor(
       {

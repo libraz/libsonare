@@ -22,7 +22,7 @@ beforeAll(async () => {
 });
 
 describe('SonareError', () => {
-  it('exposes an ErrorCode enum aligned with the C ABI', () => {
+  it('exposes an ErrorCode table aligned with the C ABI', () => {
     expect(ErrorCode.Ok).toBe(0);
     expect(ErrorCode.FileNotFound).toBe(1);
     expect(ErrorCode.InvalidParameter).toBe(4);
@@ -104,7 +104,7 @@ describe('SonareError', () => {
 describe('SonareError is a value class with brand-based instanceof', () => {
   it('is a constructible runtime value, not a type-only name', () => {
     expect(typeof SonareError).toBe('function');
-    const built = new SonareError(ErrorCode.InvalidParameter, 'InvalidParameter', 'built by hand');
+    const built = new SonareError(ErrorCode.InvalidParameter, 'built by hand');
     expect(built).toBeInstanceOf(Error);
     expect(built.name).toBe('SonareError');
     expect(built.code).toBe(4);
@@ -168,17 +168,31 @@ function captureOne(text: string, pattern: RegExp, what: string): string {
 }
 
 /** Enumerator names of `sonare::ErrorCode`, in declaration order. */
-function coreErrorCodeEnumerators(): string[] {
+/** The core enumerators with their values: an explicit initialiser, else the previous value plus one. */
+function coreErrorCodeValues(): Map<string, number> {
   const body = captureOne(
     repoFile('src/util/types.h'),
     /enum class ErrorCode : int \{([\s\S]*?)\n\};/,
     'enum class ErrorCode in src/util/types.h',
   );
-  return body
-    .split('\n')
-    .map((line) => line.replace(/\/\/.*$/, '').trim())
-    .map((line) => line.match(/^([A-Za-z_]\w*)\s*(?:=\s*\d+)?\s*,?$/)?.[1])
-    .filter((name): name is string => name !== undefined);
+  const values = new Map<string, number>();
+  let next = 0;
+  for (const raw of body.split('\n')) {
+    const match = raw
+      .replace(/\/\/.*$/, '')
+      .trim()
+      .match(/^([A-Za-z_]\w*)\s*(?:=\s*(\d+))?\s*,?$/);
+    if (match) {
+      const value = match[2] === undefined ? next : Number(match[2]);
+      values.set(match[1], value);
+      next = value + 1;
+    }
+  }
+  return values;
+}
+
+function coreErrorCodeEnumerators(): string[] {
+  return [...coreErrorCodeValues().keys()];
 }
 
 /** The body of `js_sonare_exception_info`'s switch, in `src/wasm/bindings.cpp`. */
@@ -207,15 +221,15 @@ function wasmExceptionArms(): Map<string, { code: number; codeName: string }> {
   return arms;
 }
 
-/** `{ Name: ordinal }` from a TypeScript `export enum ErrorCode { ... }`. */
+/** `{ Name: ordinal }` from a TypeScript `export const ErrorCode = { ... } as const`. */
 function tsErrorCodeEnum(relative: string): Map<string, number> {
   const body = captureOne(
     repoFile(relative),
-    /export enum ErrorCode \{([\s\S]*?)\n\}/,
-    `export enum ErrorCode in ${relative}`,
+    /export const ErrorCode = \{([\s\S]*?)\n\} as const;/,
+    `export const ErrorCode in ${relative}`,
   );
   const out = new Map<string, number>();
-  for (const match of body.matchAll(/^\s*(\w+)\s*=\s*(\d+)\s*,/gm)) {
+  for (const match of body.matchAll(/^\s*(\w+):\s*(\d+),/gm)) {
     out.set(match[1], Number(match[2]));
   }
   return out;
@@ -251,11 +265,10 @@ describe('the WASM exception decoder covers every core ErrorCode', () => {
   });
 
   it('gives each enumerator the ordinal and codeName the TS enum publishes', () => {
-    const enumerators = coreErrorCodeEnumerators();
     const arms = wasmExceptionArms();
     const published = tsErrorCodeEnum('bindings/wasm/src/errors.ts');
     const nameForOrdinal = new Map([...published].map(([name, value]) => [value, name]));
-    enumerators.forEach((enumerator, ordinal) => {
+    coreErrorCodeValues().forEach((ordinal, enumerator) => {
       const arm = arms.get(enumerator);
       expect(arm, enumerator).toBeDefined();
       // Ok is the one enumerator whose ordinal is not its answer: an exception
@@ -264,7 +277,7 @@ describe('the WASM exception decoder covers every core ErrorCode', () => {
       if (enumerator === 'Ok') {
         return;
       }
-      // The core's declaration order IS the C ABI's numbering, so an arm that
+      // The core's enumerator value IS the C ABI's numbering, so an arm that
       // reports a different number has silently renumbered the surface.
       expect(arm?.code, enumerator).toBe(ordinal);
       expect(arm?.codeName, enumerator).toBe(nameForOrdinal.get(ordinal));

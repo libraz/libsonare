@@ -1,4 +1,4 @@
-import { REQUEST_SHAPES } from './request_keys.js';
+import { REQUEST_SHAPES, type RequestFn, type RequestShape } from './request_keys.js';
 
 /**
  * Per-call validation options accepted by guarded wrappers. Empty-buffer
@@ -112,7 +112,16 @@ export function assertNumber(fnName: string, value: unknown, argName: string): v
   }
 }
 
-export function assertSampleRate(fnName: string, sampleRate: number, argName = 'sampleRate'): void {
+/**
+ * A sample rate: `TypeError` unless a number, `RangeError` unless an integer
+ * inside the supported range (NaN, infinities, fractions, zero and negatives
+ * included).
+ */
+export function assertSampleRate(
+  fnName: string,
+  sampleRate: unknown,
+  argName = 'sampleRate',
+): void {
   if (typeof sampleRate !== 'number') {
     throw new TypeError(`${fnName}: ${argName} must be a number`);
   }
@@ -198,14 +207,14 @@ export function requireBoolean(fnName: string, value: unknown, argName: string):
   return value;
 }
 
-/** An optional boolean: `undefined` takes the fallback, any other non-boolean is a `TypeError`. */
+/** An optional boolean: `undefined` and `null` take the fallback, any other non-boolean is a `TypeError`. */
 export function optionalBoolean(
   fnName: string,
   value: unknown,
   argName: string,
   fallback: boolean,
 ): boolean {
-  return value === undefined ? fallback : requireBoolean(fnName, value, argName);
+  return value === undefined || value === null ? fallback : requireBoolean(fnName, value, argName);
 }
 
 /** A string argument the native layer reads through embind; anything else is a `TypeError`, never a raw `BindingError`. */
@@ -215,14 +224,14 @@ export function assertString(fnName: string, value: unknown, argName: string): v
   }
 }
 
-/** An optional string: `undefined` takes the fallback, any other non-string is a `TypeError`. */
+/** An optional string: `undefined` and `null` take the fallback, any other non-string is a `TypeError`. */
 export function optionalString(
   fnName: string,
   value: unknown,
   argName: string,
   fallback: string,
 ): string {
-  if (value === undefined) {
+  if (value === undefined || value === null) {
     return fallback;
   }
   assertString(fnName, value, argName);
@@ -595,11 +604,8 @@ export function resolveRenderFrame(fnName: string, renderFrame: number | null | 
  * declared key whose value is `undefined` is absent, as everywhere else. A key
  * that belongs to a nested object is pointed at its field.
  */
-function assertKnownRequestKeys(fnName: string, request: object): void {
-  const shape = REQUEST_SHAPES[fnName];
-  if (shape === undefined) {
-    throw new Error(`${fnName}: no request shape is declared`);
-  }
+export function assertKnownRequestKeys(fnName: RequestFn, request: object): void {
+  const shape: RequestShape = REQUEST_SHAPES[fnName];
   for (const key of Object.keys(request)) {
     if (shape.keys.includes(key)) {
       continue;
@@ -628,11 +634,8 @@ function assertKnownRequestKeys(fnName: string, request: object): void {
  * the entry point reads: it declares the same keys as the request form, and a
  * key outside them is refused by name rather than dropped.
  */
-export function optionsBag<T extends object>(fnName: string, options: T): T {
-  const shape = REQUEST_SHAPES[fnName];
-  if (shape === undefined) {
-    throw new Error(`${fnName}: no request shape is declared`);
-  }
+export function optionsBag<T extends object>(fnName: RequestFn, options: T): T {
+  const shape: RequestShape = REQUEST_SHAPES[fnName];
   for (const key of Object.keys(options ?? {})) {
     if (!shape.keys.includes(key)) {
       throw new TypeError(`${fnName}: unknown option '${key}'`);
@@ -650,7 +653,7 @@ export function optionsBag<T extends object>(fnName: string, options: T): T {
  * request carrying a key the entry point does not declare is refused by name.
  */
 export function requestObject<T>(
-  fnName: string,
+  fnName: RequestFn,
   value: T,
   argName = 'samples',
   requestOnly = false,
@@ -669,6 +672,88 @@ export function requestObject<T>(
   }
   assertKnownRequestKeys(fnName, value);
   return value;
+}
+
+/** A request carrying audio plus the rate it was recorded at. */
+interface SampleRequest {
+  samples: Float32Array;
+  sampleRate: number;
+}
+
+function plainObject(value: unknown): value is Record<string, unknown> {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    !Array.isArray(value) &&
+    !ArrayBuffer.isView(value)
+  );
+}
+
+function assertNoExtraArguments(fnName: string, args: readonly unknown[], from: number): void {
+  for (let i = from; i < args.length; i++) {
+    if (args[i] !== undefined) {
+      throw new TypeError(`${fnName}: unexpected argument after the request object`);
+    }
+  }
+}
+
+/**
+ * Normalises the two accepted call forms of a one-shot over audio into one
+ * request: `(request)` and `(samples, sampleRate, options?)`.
+ *
+ * Throws `TypeError` for a wrong-typed argument, a missing `sampleRate`, an
+ * extra argument after a request object, an unknown key, or `samples` /
+ * `sampleRate` repeated inside `options`; `RangeError` for an out-of-domain
+ * sample rate or audio. The caller states the request type it expects.
+ */
+export function sampleOneShot<R extends SampleRequest>(
+  fnName: RequestFn,
+  args: readonly unknown[],
+): R {
+  const first = args[0];
+  if (first instanceof Float32Array) {
+    if (args.length > 3) {
+      throw new TypeError(`${fnName}: expected (samples, sampleRate, options?)`);
+    }
+    const sampleRate = args[1];
+    assertSampleRate(fnName, sampleRate);
+    const options = args[2] ?? {};
+    if (!plainObject(options)) {
+      throw new TypeError(`${fnName}: options must be an object`);
+    }
+    for (const key of ['samples', 'sampleRate']) {
+      if (Object.keys(options).includes(key)) {
+        throw new TypeError(`${fnName}: unknown option '${key}'`);
+      }
+    }
+    optionsBag(fnName, options);
+    return { ...options, samples: first, sampleRate } as unknown as R;
+  }
+  if (plainObject(first)) {
+    assertNoExtraArguments(fnName, args, 1);
+    assertKnownRequestKeys(fnName, first);
+    if (first.sampleRate === undefined || first.sampleRate === null) {
+      throw new TypeError(`${fnName}: sampleRate is required`);
+    }
+    assertSampleRate(fnName, first.sampleRate);
+    return first as unknown as R;
+  }
+  assertAudioSamples(fnName, first, {}, 'samples');
+  throw new TypeError(`${fnName}: expected a request object or a Float32Array`);
+}
+
+/**
+ * Normalises a one-shot that takes no audio: exactly one request object. Throws
+ * `TypeError` for any other first argument, an extra argument, or an unknown key.
+ */
+export function requestOnly<R extends object>(fnName: RequestFn, args: readonly unknown[]): R {
+  const request = args[0];
+  if (!plainObject(request)) {
+    throw new TypeError(`${fnName}: request must be an object`);
+  }
+  assertNoExtraArguments(fnName, args, 1);
+  assertKnownRequestKeys(fnName, request);
+  return request as R;
 }
 
 /** Refuse a surround pan field outside its range; the engine and mixer never clamp it. */

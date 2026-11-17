@@ -8,7 +8,7 @@ import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { beforeAll, describe, expect, it } from 'vitest';
 import * as api from '../dist/index.js';
-import { REQUEST_SHAPES } from '../src/request_keys';
+import { REQUEST_SHAPES, type RequestFn } from '../src/request_keys';
 
 type Entry = (request: unknown, ...rest: unknown[]) => unknown;
 
@@ -30,7 +30,23 @@ function message(call: () => unknown): string {
   return '';
 }
 
-const names = Object.keys(REQUEST_SHAPES).sort();
+// Shapes of class-method requests; their methods carry their own unknown-key cases.
+const METHOD_SHAPES = [
+  'applyProjectVocalEdit',
+  'bakeMidiFx',
+  'importExternalSeparatedStem',
+  'previewMidiFx',
+  'renderOffline',
+  'setCapturePunch',
+  'setPartRig',
+  'transcribeToClip',
+  'vocalApply',
+  'vocalRender',
+];
+
+const names = (Object.keys(REQUEST_SHAPES) as RequestFn[])
+  .filter((name) => !METHOD_SHAPES.includes(name))
+  .sort();
 
 describe('request objects refuse unknown keys', () => {
   beforeAll(async () => {
@@ -51,6 +67,15 @@ describe('request objects refuse unknown keys', () => {
     for (const key of REQUEST_SHAPES[name].keys) {
       expect(message(() => entry(name)({ [key]: undefined }))).not.toMatch(/unknown request key/);
     }
+  });
+
+  it('declares every other shape for a function the package root exports', () => {
+    expect(
+      names.filter(
+        (name) => typeof (api as unknown as Record<string, unknown>)[name] !== 'function',
+      ),
+    ).toEqual([]);
+    expect(METHOD_SHAPES.filter((name) => !(name in REQUEST_SHAPES))).toEqual([]);
   });
 
   it('every requestObject call site has a declared shape', () => {

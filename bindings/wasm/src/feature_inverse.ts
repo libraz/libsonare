@@ -14,6 +14,7 @@ import type {
   MfccResult,
   StftMagnitudeResult,
 } from './public_types.js';
+import type { RequestFn } from './request_keys.js';
 import {
   assertAudioInput,
   assertFiniteScalar,
@@ -29,7 +30,7 @@ function requireModule() {
 
 /** True for a `{ result }` request; a request with neither `result` nor `field` is refused by name. */
 function isResultRequest(
-  fn: string,
+  fn: RequestFn,
   request: unknown,
   field: string,
 ): request is { result: unknown } {

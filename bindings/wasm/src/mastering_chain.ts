@@ -7,6 +7,7 @@ import type {
   MasteringPreset,
   StreamingLoudnessGainResult,
 } from './public_types.js';
+import type { RequestFn } from './request_keys.js';
 import type { ProgressCallback } from './sonare.js';
 import type { ValidateOptions } from './validation.js';
 import { assertAudioInput, assertString, optionsBag, requestObject } from './validation.js';
@@ -295,7 +296,7 @@ export interface MasterAudioStereoRequest {
 }
 
 function masterAudioRequest(
-  fnName: string,
+  fnName: RequestFn,
   requestOrSamples: MasterAudioRequest | Float32Array,
   sampleRate: number,
   preset: MasteringPreset,
@@ -315,7 +316,7 @@ function masterAudioRequest(
 }
 
 function masterAudioStereoRequest(
-  fnName: string,
+  fnName: RequestFn,
   requestOrLeft: MasterAudioStereoRequest | Float32Array,
   right: Float32Array | undefined,
   sampleRate: number,

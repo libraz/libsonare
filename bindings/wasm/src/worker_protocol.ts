@@ -5,6 +5,8 @@
  * native resources and cannot safely cross a worker boundary.
  */
 
+import type { SonareFailurePayload } from './internal/failure_payload.js';
+
 export type OfflineWorkerOperation =
   | 'analyze'
   | 'detectBpm'
@@ -45,12 +47,7 @@ export interface OfflineWorkerResultMessage {
 export interface OfflineWorkerErrorMessage {
   type: 'sonare:offline-error';
   id: number;
-  error: {
-    name: string;
-    message: string;
-    code?: number;
-    codeName?: string;
-  };
+  error: SonareFailurePayload;
 }
 
 export type OfflineWorkerResponseMessage =

@@ -2,7 +2,7 @@ import { beforeAll, describe, expect, it } from 'vitest';
 import * as analysis from '../dist/analysis.js';
 import * as full from '../dist/index.js';
 import createSonareModule from '../dist/sonare.js';
-import * as worklet from '../dist/worklet.js';
+import { EXPECTED_ABI_VERSION } from '../src/abi';
 
 type Entry = typeof full | typeof analysis;
 type Factory = NonNullable<Parameters<Entry['init']>[0]>['moduleFactory'];
@@ -43,10 +43,8 @@ describe.each([
   });
 });
 
-describe('EXPECTED_ABI_VERSION', () => {
+describe('internal ABI mirror', () => {
   it('matches the version reported by the generated WASM module', () => {
-    expect(full.EXPECTED_ABI_VERSION).toBe(actualAbiVersion);
-    expect(analysis.EXPECTED_ABI_VERSION).toBe(actualAbiVersion);
-    expect(worklet.EXPECTED_ABI_VERSION).toBe(actualAbiVersion);
+    expect(EXPECTED_ABI_VERSION).toBe(actualAbiVersion);
   });
 });

@@ -151,7 +151,7 @@ export function normalizeTrackLanes(
   }
   for (let index = 0; index < existing.length; index++) {
     if (ids[index] !== existing[index]) {
-      throw new Error(
+      throw new RangeError(
         'Mixer lanes are append-only: keep existing lanes in order and only append new track ids',
       );
     }

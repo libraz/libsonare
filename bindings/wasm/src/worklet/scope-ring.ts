@@ -1,3 +1,4 @@
+import { ErrorCode, SonareError } from '../errors.js';
 import { decodeFrame } from './engine-rings.js';
 import {
   attachProtocolVersion,
@@ -10,6 +11,7 @@ import {
   requirePositiveCapacity,
   requireProtocolVersion,
   requireRingDimension,
+  resolveRingOptions,
   ringCursorSpan,
   sonareRingCursorDistance,
   sonareRingCursorSlot,
@@ -76,31 +78,64 @@ export function sonareScopeRingRecordFloats(bands: number, maxPoints: number): n
   return SONARE_SCOPE_RING_RECORD_PREFIX_FLOATS + bands + 2 * maxPoints;
 }
 
+/** Options of {@link createSonareScopeRingBuffer}; the byte-length helper requires `capacity`. */
+export interface SonareScopeRingOptions {
+  /** Records the ring holds, an integer of at least 1. Default 64 when creating. */
+  capacity?: number;
+  /** Spectrum bands per record, an integer in [1, 64]. Default 32. */
+  bands?: number;
+  /** Waveform points per record, an integer in [0, 32]. Default 32. */
+  maxPoints?: number;
+}
+
+function resolveScopeRingOptions(
+  fn: string,
+  options: unknown,
+  defaultCapacity: number | undefined,
+): { capacity: number; bands: number; maxPoints: number } {
+  const resolved = resolveRingOptions(fn, options, {
+    capacity: defaultCapacity,
+    bands: SONARE_SCOPE_DEFAULT_BANDS,
+    maxPoints: SONARE_SCOPE_DEFAULT_MAX_POINTS,
+  });
+  return {
+    capacity: requireRingDimension(resolved.capacity, 'capacity', 1),
+    bands: requireRingDimension(resolved.bands, 'bands', 1, SONARE_SCOPE_MAX_BANDS),
+    maxPoints: requireRingDimension(resolved.maxPoints, 'maxPoints', 0, SONARE_SCOPE_MAX_POINTS),
+  };
+}
+
+/** Byte length of a scope ring. `capacity` is required; RangeError outside the domain, TypeError for an unknown key. */
 export function sonareScopeRingBufferByteLength(
-  capacity: number,
-  bands = SONARE_SCOPE_DEFAULT_BANDS,
-  maxPoints = SONARE_SCOPE_DEFAULT_MAX_POINTS,
+  options: SonareScopeRingOptions & { capacity: number },
 ): number {
-  const clampedCapacity = requireRingDimension(capacity, 'capacity', 1);
-  const clampedBands = requireRingDimension(bands, 'bands', 1, SONARE_SCOPE_MAX_BANDS);
-  const clampedPoints = requireRingDimension(maxPoints, 'maxPoints', 0, SONARE_SCOPE_MAX_POINTS);
+  const { capacity, bands, maxPoints } = resolveScopeRingOptions(
+    'sonareScopeRingBufferByteLength',
+    options,
+    undefined,
+  );
   return overwriteRingByteLength(
     SONARE_SCOPE_RING_HEADER_INTS * Int32Array.BYTES_PER_ELEMENT,
-    sonareScopeRingRecordFloats(clampedBands, clampedPoints) * Float32Array.BYTES_PER_ELEMENT,
-    clampedCapacity,
+    sonareScopeRingRecordFloats(bands, maxPoints) * Float32Array.BYTES_PER_ELEMENT,
+    capacity,
   );
 }
 
+/** Creates a shared scope ring. RangeError outside the domain, TypeError for an unknown key. */
 export function createSonareScopeRingBuffer(
-  capacity = 64,
-  bands = SONARE_SCOPE_DEFAULT_BANDS,
-  maxPoints = SONARE_SCOPE_DEFAULT_MAX_POINTS,
+  options?: SonareScopeRingOptions,
 ): SonareScopeRingBuffer {
-  const clampedCapacity = requireRingDimension(capacity, 'capacity', 1);
-  const clampedBands = requireRingDimension(bands, 'bands', 1, SONARE_SCOPE_MAX_BANDS);
-  const clampedPoints = requireRingDimension(maxPoints, 'maxPoints', 0, SONARE_SCOPE_MAX_POINTS);
+  const {
+    capacity: clampedCapacity,
+    bands: clampedBands,
+    maxPoints: clampedPoints,
+  } = resolveScopeRingOptions('createSonareScopeRingBuffer', options, 64);
   const sharedBuffer = new SharedArrayBuffer(
-    sonareScopeRingBufferByteLength(clampedCapacity, clampedBands, clampedPoints),
+    sonareScopeRingBufferByteLength({
+      capacity: clampedCapacity,
+      bands: clampedBands,
+      maxPoints: clampedPoints,
+    }),
   );
   const headerBytes = SONARE_SCOPE_RING_HEADER_INTS * Int32Array.BYTES_PER_ELEMENT;
   const recordFloats = sonareScopeRingRecordFloats(clampedBands, clampedPoints);
@@ -155,7 +190,7 @@ export function readSonareScopeRingBuffer(
     Atomics.load(header, 3) !== bands ||
     Atomics.load(header, 4) !== maxPoints
   ) {
-    throw new Error('scope ring has invalid descriptors.');
+    throw new SonareError(ErrorCode.InvalidFormat, 'scope ring has invalid descriptors.');
   }
   const writeIndex = loadSonareRingCursor(header, 0, capacity);
   const version = Atomics.load(header, 5);
@@ -163,7 +198,8 @@ export function readSonareScopeRingBuffer(
     return { nextReadIndex: writeIndex, scopes: [] };
   }
   if (version !== SONARE_SCOPE_RING_PROTOCOL_VERSION) {
-    throw new Error(
+    throw new SonareError(
+      ErrorCode.AbiMismatch,
       `scope ring protocol version ${version} is incompatible; expected ${SONARE_SCOPE_RING_PROTOCOL_VERSION}.`,
     );
   }
@@ -219,7 +255,7 @@ export function scopeRingFromSharedBuffer(
 ): SharedScopeRingWriter {
   const headerBytes = SONARE_SCOPE_RING_HEADER_INTS * Int32Array.BYTES_PER_ELEMENT;
   if (sharedBuffer.byteLength < headerBytes) {
-    throw new Error('scopeSharedBuffer is too small for the ring header.');
+    throw new RangeError('scopeSharedBuffer is too small for the ring header.');
   }
   const header = new Int32Array(sharedBuffer, 0, SONARE_SCOPE_RING_HEADER_INTS);
   const existingCapacity = Atomics.load(header, 1);
@@ -262,7 +298,7 @@ export function scopeRingFromSharedBuffer(
     Atomics.load(header, 3) !== bands ||
     Atomics.load(header, 4) !== maxPoints
   ) {
-    throw new Error('scope ring has invalid descriptors.');
+    throw new SonareError(ErrorCode.InvalidFormat, 'scope ring has invalid descriptors.');
   }
   requireProtocolVersion(header, 5, SONARE_SCOPE_RING_PROTOCOL_VERSION, 'scope ring');
   requireNoUnpublishedRecords(header, 5, capacity, 'scope ring');

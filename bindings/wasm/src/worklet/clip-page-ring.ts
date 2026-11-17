@@ -1,8 +1,9 @@
 import {
   loadSonareRingCursor,
   requirePositiveCapacity,
-  requireRingDimension,
+  resolveRingCapacity,
   ringCursorSpan,
+  type SonareRingCapacityOptions,
   sonareRingCursorDistance,
   sonareRingCursorSlot,
   storeSonareRingCursor,
@@ -40,20 +41,30 @@ export interface SonareClipPageRequestRingReadResult {
   dropped: number;
 }
 
-export function sonareClipPageRequestRingBufferByteLength(capacity: number): number {
-  const clampedCapacity = requireRingDimension(capacity, 'capacity', 1);
+/** Byte length of the ring. `capacity` is required; RangeError outside the domain, TypeError for an unknown key. */
+export function sonareClipPageRequestRingBufferByteLength(options: { capacity: number }): number {
+  const clampedCapacity = resolveRingCapacity(
+    'sonareClipPageRequestRingBufferByteLength',
+    options,
+    undefined,
+  );
   return (
     SONARE_CLIP_PAGE_REQUEST_RING_HEADER_INTS * Int32Array.BYTES_PER_ELEMENT +
     clampedCapacity * SONARE_CLIP_PAGE_REQUEST_RING_RECORD_UINT32S * Uint32Array.BYTES_PER_ELEMENT
   );
 }
 
+/** Creates a shared clip-page request ring (default `capacity` 128). RangeError outside the domain, TypeError for an unknown key. */
 export function createSonareClipPageRequestRingBuffer(
-  capacity = 128,
+  options?: SonareRingCapacityOptions,
 ): SonareClipPageRequestRingBuffer {
-  const clampedCapacity = requireRingDimension(capacity, 'capacity', 1);
+  const clampedCapacity = resolveRingCapacity(
+    'createSonareClipPageRequestRingBuffer',
+    options,
+    128,
+  );
   const sharedBuffer = new SharedArrayBuffer(
-    sonareClipPageRequestRingBufferByteLength(clampedCapacity),
+    sonareClipPageRequestRingBufferByteLength({ capacity: clampedCapacity }),
   );
   const ring = clipPageRequestRingFromSharedBuffer(sharedBuffer, clampedCapacity);
   Atomics.store(ring.header, 0, 0);
@@ -136,9 +147,11 @@ export function clipPageRequestRingFromSharedBuffer(
     fallbackCapacity,
     'clipPageRequestRingCapacity',
   );
-  const minBytes = sonareClipPageRequestRingBufferByteLength(capacity);
+  const minBytes = sonareClipPageRequestRingBufferByteLength({ capacity });
   if (sharedBuffer.byteLength < minBytes) {
-    throw new Error('clipPageRequestSharedBuffer is too small for the requested ring capacity.');
+    throw new RangeError(
+      'clipPageRequestSharedBuffer is too small for the requested ring capacity.',
+    );
   }
   Atomics.store(header, 2, capacity);
   Atomics.store(header, 3, SONARE_CLIP_PAGE_REQUEST_RING_RECORD_UINT32S);

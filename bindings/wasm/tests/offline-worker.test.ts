@@ -156,13 +156,13 @@ describe('OfflineWorkerClient', () => {
     const client = clientWith(worker);
     const progress: string[] = [];
     const result = await client.analyze(
-      { samples: makeTone() },
-      { copy: true, onProgress: ({ stage }) => progress.push(stage) },
+      { samples: makeTone(), onProgress: (_p, stage) => progress.push(stage) },
+      { copy: true },
     );
 
     expect(result.bpm).toBeGreaterThan(0);
     expect(progress.length).toBeGreaterThan(0);
-    client.dispose();
+    await client.destroy();
     expect(worker.terminated).toBe(true);
   });
 
@@ -170,26 +170,30 @@ describe('OfflineWorkerClient', () => {
     const worker = new LoopbackWorker();
     const client = clientWith(worker);
     const transferred = makeTone();
-    const task = client.detectBpm({ samples: transferred });
+    const call = client.detectBpm({ samples: transferred });
     expect(transferred.byteLength).toBe(0);
-    expect(await task).toBeGreaterThan(0);
+    expect(await call).toBeGreaterThan(0);
 
     const copied = makeTone();
     expect(await client.detectBpm({ samples: copied }, { copy: true })).toBeGreaterThan(0);
     expect(copied.byteLength).toBeGreaterThan(0);
-    client.dispose();
+    await client.destroy();
   });
 
   it('cancels before native work begins through the shared control flag', async () => {
     const worker = new LoopbackWorker();
     const client = clientWith(worker);
-    const task = client.analyze({ samples: makeTone(4) }, { copy: true });
-    task.cancel();
+    const controller = new AbortController();
+    const call = client.analyze(
+      { samples: makeTone(4) },
+      { copy: true, signal: controller.signal },
+    );
+    controller.abort();
 
-    await expect(task.result).rejects.toSatisfy(
+    await expect(call).rejects.toSatisfy(
       (error: unknown) => isSonareError(error) && error.code === ErrorCode.Cancelled,
     );
-    client.dispose();
+    await client.destroy();
   });
 
   it('cancels work already running inside the native call', async () => {
@@ -213,32 +217,33 @@ describe('OfflineWorkerClient', () => {
       );
       const client = new OfflineWorkerClient({
         worker: worker as unknown as OfflineWorkerLike,
-        terminateWorkerOnDispose: true,
+        terminateWorkerOnDestroy: true,
       });
       try {
         let ticks = 0;
-        const task = client.analyze(
-          { samples: makeTone(20) },
+        const controller = new AbortController();
+        const call = client.analyze(
           {
-            copy: true,
+            samples: makeTone(20),
             onProgress: () => {
               ticks += 1;
               if (cancelOnFirstTick && ticks === 1) {
-                task.cancel();
+                controller.abort();
               }
             },
           },
+          { copy: true, signal: controller.signal },
         );
         if (cancelOnFirstTick) {
-          await expect(task.result).rejects.toSatisfy(
+          await expect(call).rejects.toSatisfy(
             (error: unknown) => isSonareError(error) && error.code === ErrorCode.Cancelled,
           );
         } else {
-          expect((await task.result).bpm).toBeGreaterThan(0);
+          expect((await call).bpm).toBeGreaterThan(0);
         }
         return ticks;
       } finally {
-        client.dispose();
+        await client.destroy();
       }
     };
 
@@ -262,14 +267,14 @@ describe('OfflineWorkerClient', () => {
       // assignable even under method bivariance. The runtime contract holds —
       // this test is what proves it.
       worker: worker as unknown as OfflineWorkerLike,
-      terminateWorkerOnDispose: true,
+      terminateWorkerOnDestroy: true,
     });
     const samples = makeTone();
     const bpm = await client.detectBpm({ samples });
 
     expect(samples.byteLength).toBe(0);
     expect(bpm).toBeGreaterThan(0);
-    client.dispose();
+    await client.destroy();
   });
 
   it('does not leak a cancelled-set entry when a cancel crosses an already-settled result', async () => {
@@ -306,33 +311,37 @@ describe('OfflineWorkerClient', () => {
     expect(second.type).toBe('sonare:offline-result');
   });
 
-  it('returns a rejected task when initial dispatch throws and does not retry on cancel', async () => {
+  it('rejects when initial dispatch throws and does not retry on abort', async () => {
     const dispatchError = new Error('port is closed');
     const worker = new ThrowingWorker(() => {
       throw dispatchError;
     });
     const client = clientWith(worker as unknown as LoopbackWorker);
-    const task = client.detectBpm({ samples: new Float32Array([0, 0]) }, { copy: true });
+    const controller = new AbortController();
+    const call = client.detectBpm(
+      { samples: new Float32Array([0, 0]) },
+      { copy: true, signal: controller.signal },
+    );
 
-    await expect(task.result).rejects.toBe(dispatchError);
-    task.cancel();
+    await expect(call).rejects.toBe(dispatchError);
+    controller.abort();
     expect(worker.calls).toHaveLength(1);
-    client.dispose();
+    await client.destroy();
   });
 
-  it('refuses a function-valued request field with a TypeError naming it, before dispatch', () => {
+  it('refuses a function-valued request field with a TypeError naming it, before dispatch', async () => {
     const worker = new ThrowingWorker(() => undefined);
     const client = clientWith(worker as unknown as LoopbackWorker);
     const samples = new Float32Array([0, 0]);
-    expect(() =>
+    await expect(
       client.masterAudio({ samples, cancel: () => false } as never, { copy: false }),
-    ).toThrow(/cancel/);
-    expect(() =>
+    ).rejects.toThrow(/cancel/);
+    await expect(
       client.masterAudio({ samples, cancel: () => false } as never, { copy: false }),
-    ).toThrow(TypeError);
+    ).rejects.toThrow(TypeError);
     expect(worker.calls).toHaveLength(0);
     expect(samples.buffer.byteLength).toBe(8);
-    client.dispose();
+    await client.destroy();
   });
 
   it('keeps a reentrant response when the same dispatch then throws', async () => {
@@ -343,28 +352,24 @@ describe('OfflineWorkerClient', () => {
       throw new Error('dispatch reported late failure');
     });
     const client = clientWith(worker as unknown as LoopbackWorker);
-    const task = client.detectBpm({ samples: new Float32Array([0, 0]) }, { copy: true });
+    const call = client.detectBpm({ samples: new Float32Array([0, 0]) }, { copy: true });
 
-    await expect(task.result).resolves.toBe(result);
+    await expect(call).resolves.toBe(result);
     expect(worker.calls).toHaveLength(1);
-    client.dispose();
+    await client.destroy();
   });
 
-  it('rejects a request still pending at dispose with InvalidState, like a new call', async () => {
+  it('rejects a request still pending at destroy with InvalidState, like a new call', async () => {
     const worker = new ThrowingWorker(() => undefined);
     const client = clientWith(worker as unknown as LoopbackWorker);
-    const task = client.detectBpm({ samples: new Float32Array([0, 0]) }, { copy: true });
-    client.dispose();
-    await expect(task.result).rejects.toSatisfy(
+    const call = client.detectBpm({ samples: new Float32Array([0, 0]) }, { copy: true });
+    await client.destroy();
+    await expect(call).rejects.toSatisfy(
       (error: unknown) => isSonareError(error) && error.code === ErrorCode.InvalidState,
     );
-    let refused: unknown;
-    try {
-      client.detectBpm({ samples: new Float32Array([0, 0]) }, { copy: true });
-    } catch (error) {
-      refused = error;
-    }
-    expect(isSonareError(refused) && refused.code === ErrorCode.InvalidState).toBe(true);
+    await expect(
+      client.detectBpm({ samples: new Float32Array([0, 0]) }, { copy: true }),
+    ).rejects.toSatisfy((e: unknown) => isSonareError(e) && e.code === ErrorCode.InvalidState);
   });
 
   it('keeps the SonareError code and the argument-refusal class a worker reports', async () => {
@@ -386,17 +391,15 @@ describe('OfflineWorkerClient', () => {
     const client = clientWith(worker as unknown as LoopbackWorker);
     try {
       const samples = () => ({ samples: new Float32Array([0, 0]) });
-      await expect(client.detectBpm(samples(), { copy: true }).result).rejects.toSatisfy(
+      await expect(client.detectBpm(samples(), { copy: true })).rejects.toSatisfy(
         (error: unknown) =>
           isSonareError(error) &&
           error.code === ErrorCode.NotSupported &&
           error.message === 'no ffmpeg',
       );
-      await expect(client.detectBpm(samples(), { copy: true }).result).rejects.toBeInstanceOf(
-        RangeError,
-      );
+      await expect(client.detectBpm(samples(), { copy: true })).rejects.toBeInstanceOf(RangeError);
     } finally {
-      client.dispose();
+      await client.destroy();
     }
   });
 });

@@ -1,4 +1,5 @@
-import { init as initSonareModule, isInitialized } from '../index.js';
+import { ErrorCode, SonareError } from '../errors.js';
+import { init as initSonareModule, isInitialized, type SonareModuleHandle } from '../index.js';
 import type { SonareModule } from '../sonare.js';
 
 type EmbindModuleFactory = (options?: {
@@ -40,11 +41,15 @@ export async function initializeEmbindInWorklet(
   }
   const moduleFactory = scope.SonareEmbindModuleFactory;
   if (!moduleFactory) {
-    throw new Error('embind realtime engine module is not initialized.');
+    throw new SonareError(
+      ErrorCode.InvalidState,
+      'embind realtime engine module is not initialized.',
+    );
   }
   await initSonareModule({
     locateFile: (path) => path,
     wasmBinary,
-    moduleFactory,
+    // The embind factory is the module the public handle brand stands for.
+    moduleFactory: moduleFactory as unknown as () => Promise<SonareModuleHandle>,
   });
 }

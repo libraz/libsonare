@@ -48,7 +48,6 @@ export class OwnerEpoch {
     if (token !== this.generation) {
       throw new SonareError(
         ErrorCode.InvalidState,
-        'InvalidState',
         `${this.ownerName} was replaced while an operation was pending.`,
       );
     }

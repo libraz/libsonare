@@ -24,14 +24,14 @@
     "CapabilityCatalogChainAlias": ["aliases", "key"],
     "CapabilityCatalogChainList": ["key", "maxItems", "minItems", "processor"],
     "CapabilityCatalogChainStage": ["enabledKey", "prefix", "processor"],
-    "CapabilityCatalogMasteringPreset": [
+    "MasteringPresetCatalogEntry": [
       "kind",
       "maxLimiterGainReductionDb",
       "name",
       "targetLufs",
       "truePeakCeilingDb"
     ],
-    "CapabilityCatalogParameter": [
+    "MasteringInsertParamInfo": [
       "choices",
       "coupledWith",
       "default",
@@ -58,7 +58,7 @@
       "synth",
       "voiceChanger"
     ],
-    "CapabilityCatalogProcessor": [
+    "MasteringProcessorCatalogEntry": [
       "category",
       "causal",
       "channelPolicy",

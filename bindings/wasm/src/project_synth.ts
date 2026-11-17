@@ -10,9 +10,9 @@ import { type ProjectModule, projectModule } from './project_internal.js';
 import { assertString } from './validation.js';
 
 /**
- * Runtime ABI version of the flat project POD layout exposed by this WASM
- * build. Equals {@link EXPECTED_PROJECT_ABI_VERSION} when the arrangement
- * subsystem is compiled in. Mirrors the C-ABI `sonare_project_abi_version`.
+ * ABI version of the flat project layout in the loaded module, or `0` when the
+ * arrangement subsystem is not compiled in. Mirrors the C-ABI
+ * `sonare_project_abi_version`.
  */
 export function projectAbiVersion(): number {
   return projectModule().projectAbiVersion();

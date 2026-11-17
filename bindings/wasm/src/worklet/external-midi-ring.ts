@@ -2,8 +2,9 @@ import {
   loadSonareRingCursor,
   RING_CURSOR_RANGE,
   requirePositiveCapacity,
-  requireRingDimension,
+  resolveRingCapacity,
   ringCursorSpan,
+  type SonareRingCapacityOptions,
   sonareRingCursorDistance,
   sonareRingCursorSlot,
   storeSonareRingCursor,
@@ -40,8 +41,13 @@ export interface SonareExternalMidiRingReadResult {
   dropped: number;
 }
 
-export function sonareExternalMidiRingBufferByteLength(capacity: number): number {
-  const clampedCapacity = requireRingDimension(capacity, 'capacity', 1);
+/** Byte length of the ring. `capacity` is required; RangeError outside the domain, TypeError for an unknown key. */
+export function sonareExternalMidiRingBufferByteLength(options: { capacity: number }): number {
+  const clampedCapacity = resolveRingCapacity(
+    'sonareExternalMidiRingBufferByteLength',
+    options,
+    undefined,
+  );
   return (
     SONARE_EXTERNAL_MIDI_RING_HEADER_INTS * Int32Array.BYTES_PER_ELEMENT +
     clampedCapacity * SONARE_EXTERNAL_MIDI_RING_RECORD_UINT32S * Uint32Array.BYTES_PER_ELEMENT
@@ -60,8 +66,8 @@ export function externalMidiRingFromSharedBuffer(
     fallbackCapacity,
     'externalMidiRingCapacity',
   );
-  if (sharedBuffer.byteLength < sonareExternalMidiRingBufferByteLength(capacity)) {
-    throw new Error('externalMidiSharedBuffer is too small for the requested ring capacity.');
+  if (sharedBuffer.byteLength < sonareExternalMidiRingBufferByteLength({ capacity })) {
+    throw new RangeError('externalMidiSharedBuffer is too small for the requested ring capacity.');
   }
   Atomics.store(header, 2, capacity);
   Atomics.store(header, 3, SONARE_EXTERNAL_MIDI_RING_RECORD_UINT32S);
@@ -76,10 +82,13 @@ export function externalMidiRingFromSharedBuffer(
   };
 }
 
-export function createSonareExternalMidiRingBuffer(capacity = 256): SonareExternalMidiRingBuffer {
-  const clampedCapacity = requireRingDimension(capacity, 'capacity', 1);
+/** Creates a shared external-MIDI ring (default `capacity` 256). RangeError outside the domain, TypeError for an unknown key. */
+export function createSonareExternalMidiRingBuffer(
+  options?: SonareRingCapacityOptions,
+): SonareExternalMidiRingBuffer {
+  const clampedCapacity = resolveRingCapacity('createSonareExternalMidiRingBuffer', options, 256);
   const sharedBuffer = new SharedArrayBuffer(
-    sonareExternalMidiRingBufferByteLength(clampedCapacity),
+    sonareExternalMidiRingBufferByteLength({ capacity: clampedCapacity }),
   );
   const ring = externalMidiRingFromSharedBuffer(sharedBuffer, clampedCapacity);
   Atomics.store(ring.header, 0, 0);

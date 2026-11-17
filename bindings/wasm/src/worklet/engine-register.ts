@@ -1,3 +1,4 @@
+import { ErrorCode, SonareError } from '../errors.js';
 import { failurePayload } from '../internal/failure_payload.js';
 import type { WorkletInput, WorkletOutput } from './audio_types.js';
 import { initializeEmbindInWorklet } from './embind-init.js';
@@ -20,7 +21,10 @@ export function registerSonareRealtimeEngineWorkletProcessor(
     registerProcessor?: (processorName: string, processorCtor: unknown) => void;
   };
   if (!scope.AudioWorkletProcessor || !scope.registerProcessor) {
-    throw new Error('AudioWorkletProcessor is not available in this context.');
+    throw new SonareError(
+      ErrorCode.NotSupported,
+      'AudioWorkletProcessor is not available in this context.',
+    );
   }
   const Base = scope.AudioWorkletProcessor;
   class RegisteredSonareRealtimeEngineWorkletProcessor extends Base {
@@ -112,7 +116,10 @@ export function registerSonareRealtimeEngineWorkletProcessor(
       try {
         await initializeEmbindInWorklet(options.wasmBinary);
         if (this.pendingMessagesOverflowed) {
-          throw new Error('AudioWorklet initialization message buffer overflowed.');
+          throw new SonareError(
+            ErrorCode.InvalidState,
+            'AudioWorklet initialization message buffer overflowed.',
+          );
         }
         this.bridge = new SonareRealtimeEngineWorkletProcessor(options, {
           postMessage: (message, transfer) => port?.postMessage?.(message, transfer),

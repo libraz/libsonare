@@ -142,7 +142,7 @@ describe('insert gain reduction query', () => {
   });
 
   it('answers insertGainReductionRequest in shared-ring meter mode', () => {
-    const ring = createSonareMeterRingBuffer(64);
+    const ring = createSonareMeterRingBuffer({ capacity: 64 });
     const posted: unknown[] = [];
     const processor = new SonareRealtimeEngineWorkletProcessor(
       {
@@ -233,7 +233,7 @@ describe('insert gain reduction query', () => {
       await node.ready;
       const engine = (processor as unknown as { engine: Record<string, unknown> }).engine;
       const notSupported = () => {
-        throw new SonareError(ErrorCode.NotSupported, 'NotSupported', 'not compiled in');
+        throw new SonareError(ErrorCode.NotSupported, 'not compiled in');
       };
       // An argument refusal keeps its class.
       await expect(node.pollInsertGainReduction(41)).rejects.toBeInstanceOf(RangeError);

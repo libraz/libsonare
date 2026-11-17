@@ -128,6 +128,7 @@ import type {
   SpectrogramRequest,
   TrimRequest,
 } from './feature_spectrogram.js';
+import type { PartRigRequest } from './instrument_types.js';
 import type {
   MasterAudioRequest,
   MasterAudioStereoRequest,
@@ -176,8 +177,15 @@ import type {
 import type { SuggestMixSceneRequest } from './mixing_assistant.js';
 import type { MixStereoRequest } from './mixing_oneshot.js';
 import type { AnalyzePolyphonicRequest } from './polyphony.js';
-import type { AlignTakeToReferenceRequest } from './project_types.js';
+import type {
+  AlignTakeToReferenceRequest,
+  ExternalSeparatedStemImportRequest,
+  ProjectMidiFxBakeRequest,
+  ProjectMidiFxPreviewRequest,
+  ProjectTranscribeRequest,
+} from './project_types.js';
 import type { RirSynthOptions, RoomPlacement } from './public_types_acoustic.js';
+import type { EngineCapturePunchRequest, RenderOfflineRequest } from './public_types_engine.js';
 import type {
   MasteringChainConfig,
   PairAnalysis,
@@ -189,10 +197,13 @@ import type { PlaybackRendererConfig, RenderPlaybackRequest } from './public_typ
 import type { AutoTuneKey } from './public_types_spectral.js';
 import type {
   VocalAnalysisInput,
+  VocalApplyRequest,
   VocalCreateRequest,
+  VocalRenderRequest,
   VocalRestoreRequest,
   VocalSessionLimits,
 } from './public_types_vocal_edit.js';
+import type { ProjectVocalEditApplyRequest } from './public_types_vocal_project.js';
 import type {
   AnalyzeBpmRequest,
   AnalyzeDynamicsRequest,
@@ -2236,8 +2247,85 @@ const ZeroCrossingsRequestKeys = keysOf<ZeroCrossingsRequest>()([
   'zeroPos',
 ]);
 
+const SetPartRigRequestKeys = keysOf<PartRigRequest>()([
+  'destinationId',
+  'part',
+  'mode',
+  'inserts',
+]);
+const SetCapturePunchRequestKeys = keysOf<EngineCapturePunchRequest>()([
+  'startSample',
+  'startSec',
+  'endSample',
+  'endSec',
+  'enabled',
+]);
+const RenderOfflineRequestKeys = keysOf<RenderOfflineRequest>()([
+  'channels',
+  'blockSize',
+  'finalize',
+]);
+const ImportExternalSeparatedStemRequestKeys = keysOf<ExternalSeparatedStemImportRequest>()([
+  'sampleRate',
+  'stems',
+]);
+const BakeMidiFxRequestKeys = keysOf<ProjectMidiFxBakeRequest>()([
+  'clipId',
+  'configJson',
+  'withSourceIndex',
+]);
+const PreviewMidiFxRequestKeys = keysOf<ProjectMidiFxPreviewRequest>()(['clipId', 'configJson']);
+const TranscribeToClipRequestKeys = keysOf<ProjectTranscribeRequest>()([
+  'clipId',
+  'samples',
+  'sampleRate',
+  'polyphonic',
+  'referenceHz',
+  'fmin',
+  'fmax',
+  'minNoteMs',
+  'minNoteDivision',
+  'segmentationThresholdCents',
+  'monophonicModel',
+  'velocityFloorDb',
+  'fixedVelocity',
+  'maxPolyphony',
+  'minFramePeakRatio',
+  'minRidgePeakRatio',
+  'reattackRatio',
+  'group',
+  'channel',
+]);
+const ApplyProjectVocalEditRequestKeys = keysOf<ProjectVocalEditApplyRequest>()([
+  'clipId',
+  'takeId',
+  'expectedSourceId',
+  'expectedSourceSampleRate',
+  'expectedSourceSampleCount',
+  'expectedSourceSha256',
+  'expectedClipLengthPpq',
+  'expectedSourceOffsetPpq',
+  'renderedMono',
+  'renderedSampleRate',
+  'renderedStartSample',
+  'renderToken',
+  'sve1',
+]);
+const VocalApplyRequestKeys = keysOf<VocalApplyRequest>()(['expectedGeneration', 'operations']);
+const VocalRenderRequestKeys = keysOf<VocalRenderRequest>()(['range', 'requestId', 'signal']);
+
 /** Request shape of every entry point that takes a request object, by entry-point name. */
-export const REQUEST_SHAPES: Readonly<Record<string, RequestShape>> = {
+export const REQUEST_SHAPES = {
+  setPartRig: { keys: SetPartRigRequestKeys },
+  setCapturePunch: { keys: SetCapturePunchRequestKeys },
+  renderOffline: { keys: RenderOfflineRequestKeys },
+  importExternalSeparatedStem: { keys: ImportExternalSeparatedStemRequestKeys },
+  bakeMidiFx: { keys: BakeMidiFxRequestKeys },
+  previewMidiFx: { keys: PreviewMidiFxRequestKeys },
+  transcribeToClip: { keys: TranscribeToClipRequestKeys },
+  applyProjectVocalEdit: { keys: ApplyProjectVocalEditRequestKeys },
+  vocalApply: { keys: VocalApplyRequestKeys },
+  vocalRender: { keys: VocalRenderRequestKeys },
   alignTakeToReference: { keys: AlignTakeToReferenceRequestKeys },
   amplitudeToDb: { keys: DbConversionRequestKeys },
   analyze: { keys: MusicAnalyzeRequestKeys },
@@ -2520,7 +2608,10 @@ export const REQUEST_SHAPES: Readonly<Record<string, RequestShape>> = {
   waveformPeaks: { keys: WaveformPeaksRequestKeys },
   zeroCrossingRate: { keys: ZeroCrossingRateRequestKeys },
   zeroCrossings: { keys: ZeroCrossingsRequestKeys },
-};
+} as const satisfies Readonly<Record<string, RequestShape>>;
+
+/** Name of an entry point that declares a request shape. */
+export type RequestFn = keyof typeof REQUEST_SHAPES;
 
 /** Option fields {@link analyzeWithProgress} reads from the request itself as well as from `options`. */
 export const MUSIC_ANALYZE_OPTION_KEYS: readonly string[] = MusicAnalyzeOptionsKeys;

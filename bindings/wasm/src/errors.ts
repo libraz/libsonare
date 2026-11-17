@@ -3,20 +3,32 @@
  * `SonareError` enum (and the Node / Python surfaces), so the same failure
  * reports the same numeric code on every binding.
  */
-export enum ErrorCode {
-  Ok = 0,
-  FileNotFound = 1,
-  InvalidFormat = 2,
-  DecodeFailed = 3,
-  InvalidParameter = 4,
-  OutOfMemory = 5,
-  NotSupported = 6,
-  InvalidState = 7,
-  Cancelled = 8,
-  EncodeFailed = 9,
-  AbiMismatch = 10,
-  Unknown = 99,
-}
+export const ErrorCode = {
+  Ok: 0,
+  FileNotFound: 1,
+  InvalidFormat: 2,
+  DecodeFailed: 3,
+  InvalidParameter: 4,
+  OutOfMemory: 5,
+  NotSupported: 6,
+  InvalidState: 7,
+  Cancelled: 8,
+  EncodeFailed: 9,
+  AbiMismatch: 10,
+  /** An operation was attempted on a result its source has since invalidated. */
+  StaleResult: 11,
+  Unknown: 99,
+} as const;
+
+/** Numeric value of an {@link ErrorCode}. */
+export type ErrorCode = (typeof ErrorCode)[keyof typeof ErrorCode];
+
+/** Canonical name of an {@link ErrorCode}, e.g. `'InvalidParameter'`. */
+export type ErrorCodeName = keyof typeof ErrorCode;
+
+const ERROR_CODE_NAMES = new Map<number, ErrorCodeName>(
+  (Object.keys(ErrorCode) as ErrorCodeName[]).map((name) => [ErrorCode[name], name]),
+);
 
 /**
  * Error thrown by libsonare on a native (C++) failure. Carries a numeric
@@ -28,16 +40,30 @@ export enum ErrorCode {
  * same name.
  */
 export class SonareError extends Error {
-  /** Numeric error code, equal to an {@link ErrorCode} value. */
-  readonly code: number;
+  /** Numeric error code, one of the {@link ErrorCode} values. */
+  readonly code: ErrorCode;
   /** Canonical name of `code`, e.g. `'InvalidParameter'`. */
-  readonly codeName: string;
+  readonly codeName: ErrorCodeName;
+  /** The failure this error wraps, when there is one (a cancellation carries the abort reason). */
+  declare readonly cause?: unknown;
 
-  constructor(code: number, codeName: string, message: string) {
+  /**
+   * @param code Numeric code; a value outside {@link ErrorCode} reads back as `codeName` `'Unknown'`.
+   * @param message Human-readable description.
+   * @param options `cause` is passed through to `Error`.
+   */
+  constructor(code: ErrorCode, message: string, options?: { cause?: unknown }) {
     super(message);
+    if (options !== undefined && 'cause' in options) {
+      Object.defineProperty(this, 'cause', {
+        value: options.cause,
+        writable: true,
+        configurable: true,
+      });
+    }
     this.name = 'SonareError';
     this.code = code;
-    this.codeName = codeName;
+    this.codeName = ERROR_CODE_NAMES.get(code) ?? 'Unknown';
   }
 
   /**

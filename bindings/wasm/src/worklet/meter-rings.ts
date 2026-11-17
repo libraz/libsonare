@@ -1,3 +1,4 @@
+import { ErrorCode, SonareError } from '../errors.js';
 import type { EngineMeterTelemetryWide } from '../index.js';
 import { decodeFrame } from './engine-rings.js';
 import {
@@ -11,7 +12,10 @@ import {
   requirePositiveCapacity,
   requireProtocolVersion,
   requireRingDimension,
+  resolveRingCapacity,
+  resolveRingOptions,
   ringCursorSpan,
+  type SonareRingCapacityOptions,
   sonareRingCursorDistance,
   sonareRingCursorSlot,
   tryAcquireOverwriteRead,
@@ -146,18 +150,24 @@ export interface SharedSpectrumRingWriter {
  */
 export const SONARE_FLOOR_DB = -120;
 
-export function sonareMeterRingBufferByteLength(capacity: number): number {
-  const clampedCapacity = requireRingDimension(capacity, 'capacity', 1);
+/** Byte length of a meter ring. `capacity` is required; RangeError outside the domain, TypeError for an unknown key. */
+export function sonareMeterRingBufferByteLength(options: { capacity: number }): number {
+  const capacity = resolveRingCapacity('sonareMeterRingBufferByteLength', options, undefined);
   return overwriteRingByteLength(
     SONARE_METER_RING_HEADER_INTS * Int32Array.BYTES_PER_ELEMENT,
     SONARE_METER_RING_RECORD_FLOATS * Float32Array.BYTES_PER_ELEMENT,
-    clampedCapacity,
+    capacity,
   );
 }
 
-export function createSonareMeterRingBuffer(capacity = 128): SonareMeterRingBuffer {
-  const clampedCapacity = requireRingDimension(capacity, 'capacity', 1);
-  const sharedBuffer = new SharedArrayBuffer(sonareMeterRingBufferByteLength(clampedCapacity));
+/** Creates a shared meter ring. RangeError outside the domain, TypeError for an unknown key. */
+export function createSonareMeterRingBuffer(
+  options?: SonareRingCapacityOptions,
+): SonareMeterRingBuffer {
+  const clampedCapacity = resolveRingCapacity('createSonareMeterRingBuffer', options, 128);
+  const sharedBuffer = new SharedArrayBuffer(
+    sonareMeterRingBufferByteLength({ capacity: clampedCapacity }),
+  );
   const headerBytes = SONARE_METER_RING_HEADER_INTS * Int32Array.BYTES_PER_ELEMENT;
   const recordBytes = SONARE_METER_RING_RECORD_FLOATS * Float32Array.BYTES_PER_ELEMENT;
   const header = new Int32Array(sharedBuffer, 0, SONARE_METER_RING_HEADER_INTS);
@@ -201,7 +211,7 @@ export function readSonareMeterRingBuffer(
     Atomics.load(header, 1) !== capacity ||
     Atomics.load(header, 2) !== SONARE_METER_RING_RECORD_FLOATS
   ) {
-    throw new Error('meter ring has invalid descriptors.');
+    throw new SonareError(ErrorCode.InvalidFormat, 'meter ring has invalid descriptors.');
   }
   const writeIndex = loadSonareRingCursor(header, 0, capacity);
   const version = Atomics.load(header, 3);
@@ -209,7 +219,8 @@ export function readSonareMeterRingBuffer(
     return { nextReadIndex: writeIndex, meters: [] };
   }
   if (version !== SONARE_METER_RING_PROTOCOL_VERSION) {
-    throw new Error(
+    throw new SonareError(
+      ErrorCode.AbiMismatch,
       `meter ring protocol version ${version} is incompatible; expected ${SONARE_METER_RING_PROTOCOL_VERSION}.`,
     );
   }
@@ -276,26 +287,55 @@ export function readSonareMeterRingBuffer(
   return { nextReadIndex, meters };
 }
 
-export function sonareSpectrumRingBufferByteLength(capacity: number, bands = 16): number {
-  const clampedCapacity = requireRingDimension(capacity, 'capacity', 1);
-  const clampedBands = requireRingDimension(bands, 'bands', 1);
+/** Options of the spectrum ring helpers; the byte-length helper requires `capacity`. */
+export interface SonareSpectrumRingOptions {
+  /** Records the ring holds, an integer of at least 1. Default 128 when creating. */
+  capacity?: number;
+  /** Bands per record, an integer of at least 1. Default 16. */
+  bands?: number;
+}
+
+function resolveSpectrumRingOptions(
+  fn: string,
+  options: unknown,
+  defaultCapacity: number | undefined,
+): { capacity: number; bands: number } {
+  const resolved = resolveRingOptions(fn, options, { capacity: defaultCapacity, bands: 16 });
+  return {
+    capacity: requireRingDimension(resolved.capacity, 'capacity', 1),
+    bands: requireRingDimension(resolved.bands, 'bands', 1),
+  };
+}
+
+/** Byte length of a spectrum ring. `capacity` is required; RangeError outside the domain, TypeError for an unknown key. */
+export function sonareSpectrumRingBufferByteLength(
+  options: SonareSpectrumRingOptions & { capacity: number },
+): number {
+  const { capacity, bands } = resolveSpectrumRingOptions(
+    'sonareSpectrumRingBufferByteLength',
+    options,
+    undefined,
+  );
   // Record layout: [frameLo, frameHi, bandCount, band0, band1, ...]. frame is
   // split across two Float32 lanes for exact reconstruction beyond 2^24.
   return overwriteRingByteLength(
     SONARE_SPECTRUM_RING_HEADER_INTS * Int32Array.BYTES_PER_ELEMENT,
-    (3 + clampedBands) * Float32Array.BYTES_PER_ELEMENT,
-    clampedCapacity,
+    (3 + bands) * Float32Array.BYTES_PER_ELEMENT,
+    capacity,
   );
 }
 
+/** Creates a shared spectrum ring. RangeError outside the domain, TypeError for an unknown key. */
 export function createSonareSpectrumRingBuffer(
-  capacity = 128,
-  bands = 16,
+  options?: SonareSpectrumRingOptions,
 ): SonareSpectrumRingBuffer {
-  const clampedCapacity = requireRingDimension(capacity, 'capacity', 1);
-  const clampedBands = requireRingDimension(bands, 'bands', 1);
+  const { capacity: clampedCapacity, bands: clampedBands } = resolveSpectrumRingOptions(
+    'createSonareSpectrumRingBuffer',
+    options,
+    128,
+  );
   const sharedBuffer = new SharedArrayBuffer(
-    sonareSpectrumRingBufferByteLength(clampedCapacity, clampedBands),
+    sonareSpectrumRingBufferByteLength({ capacity: clampedCapacity, bands: clampedBands }),
   );
   const headerBytes = SONARE_SPECTRUM_RING_HEADER_INTS * Int32Array.BYTES_PER_ELEMENT;
   const recordFloats = 3 + clampedBands;
@@ -347,7 +387,7 @@ export function readSonareSpectrumRingBuffer(
     Atomics.load(header, 2) !== recordFloats ||
     Atomics.load(header, 3) !== bands
   ) {
-    throw new Error('spectrum ring has invalid descriptors.');
+    throw new SonareError(ErrorCode.InvalidFormat, 'spectrum ring has invalid descriptors.');
   }
   const writeIndex = loadSonareRingCursor(header, 0, capacity);
   const version = Atomics.load(header, 4);
@@ -355,7 +395,8 @@ export function readSonareSpectrumRingBuffer(
     return { nextReadIndex: writeIndex, spectra: [] };
   }
   if (version !== SONARE_SPECTRUM_RING_PROTOCOL_VERSION) {
-    throw new Error(
+    throw new SonareError(
+      ErrorCode.AbiMismatch,
       `spectrum ring protocol version ${version} is incompatible; expected ${SONARE_SPECTRUM_RING_PROTOCOL_VERSION}.`,
     );
   }
@@ -397,7 +438,7 @@ export function meterRingFromSharedBuffer(
 ): SharedMeterRingWriter {
   const headerBytes = SONARE_METER_RING_HEADER_INTS * Int32Array.BYTES_PER_ELEMENT;
   if (sharedBuffer.byteLength < headerBytes) {
-    throw new Error('meterSharedBuffer is too small for the ring header.');
+    throw new RangeError('meterSharedBuffer is too small for the ring header.');
   }
   const header = new Int32Array(sharedBuffer, 0, SONARE_METER_RING_HEADER_INTS);
   const existingCapacity = Atomics.load(header, 1);
@@ -423,7 +464,7 @@ export function meterRingFromSharedBuffer(
     Atomics.load(header, 2) !== SONARE_METER_RING_RECORD_FLOATS ||
     Atomics.load(header, 1) !== capacity
   ) {
-    throw new Error('meter ring has invalid descriptors.');
+    throw new SonareError(ErrorCode.InvalidFormat, 'meter ring has invalid descriptors.');
   }
   requireProtocolVersion(header, 3, SONARE_METER_RING_PROTOCOL_VERSION, 'meter ring');
   requireNoUnpublishedRecords(header, 3, capacity, 'meter ring');
@@ -443,7 +484,7 @@ export function spectrumRingFromSharedBuffer(
 ): SharedSpectrumRingWriter {
   const headerBytes = SONARE_SPECTRUM_RING_HEADER_INTS * Int32Array.BYTES_PER_ELEMENT;
   if (sharedBuffer.byteLength < headerBytes) {
-    throw new Error('spectrumSharedBuffer is too small for the ring header.');
+    throw new RangeError('spectrumSharedBuffer is too small for the ring header.');
   }
   const header = new Int32Array(sharedBuffer, 0, SONARE_SPECTRUM_RING_HEADER_INTS);
   const existingCapacity = Atomics.load(header, 1);
@@ -475,7 +516,7 @@ export function spectrumRingFromSharedBuffer(
     'spectrum ring',
   );
   if (Atomics.load(header, 2) !== recordFloats || Atomics.load(header, 3) !== bands) {
-    throw new Error('spectrum ring has invalid descriptors.');
+    throw new SonareError(ErrorCode.InvalidFormat, 'spectrum ring has invalid descriptors.');
   }
   requireProtocolVersion(header, 4, SONARE_SPECTRUM_RING_PROTOCOL_VERSION, 'spectrum ring');
   requireNoUnpublishedRecords(header, 4, capacity, 'spectrum ring');

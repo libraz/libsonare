@@ -71,7 +71,6 @@ export class StreamAnalyzer {
     if (config.computeMagnitude) {
       throw new SonareError(
         ErrorCode.NotSupported,
-        'NotSupported',
         'computeMagnitude is not supported because magnitude frames are not exposed by StreamAnalyzer read paths.',
       );
     }

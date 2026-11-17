@@ -7,7 +7,7 @@ import { ErrorCode, SonareError } from '../errors.js';
  * message after the owner's name.
  */
 export function releasedHandleError(className: string, state = 'has been released'): SonareError {
-  return new SonareError(ErrorCode.InvalidState, 'InvalidState', `${className} ${state}`);
+  return new SonareError(ErrorCode.InvalidState, `${className} ${state}`);
 }
 
 /** Throws `InvalidState` once `released` is set; a boolean test, safe on per-block paths. */

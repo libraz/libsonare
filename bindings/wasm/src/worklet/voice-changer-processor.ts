@@ -1,3 +1,4 @@
+import { ErrorCode, SonareError } from '../errors.js';
 import { RealtimeVoiceChanger } from '../index.js';
 import { failurePayload } from '../internal/failure_payload.js';
 import {
@@ -262,7 +263,10 @@ export function registerSonareRealtimeVoiceChangerWorkletProcessor(
     registerProcessor?: (processorName: string, processorCtor: unknown) => void;
   };
   if (!scope.AudioWorkletProcessor || !scope.registerProcessor) {
-    throw new Error('AudioWorkletProcessor is not available in this context.');
+    throw new SonareError(
+      ErrorCode.NotSupported,
+      'AudioWorkletProcessor is not available in this context.',
+    );
   }
   const Base = scope.AudioWorkletProcessor;
   class RegisteredSonareRealtimeVoiceChangerWorkletProcessor extends Base {

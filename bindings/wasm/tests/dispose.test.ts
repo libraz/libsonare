@@ -85,10 +85,10 @@ describe('Symbol.dispose / using', () => {
     expectInvalidState(() => project.toJson());
   });
 
-  it('Audio accepts a no-op dispose', () => {
+  it('Audio releases its samples on dispose', () => {
     const audio = Audio.fromBuffer(new Float32Array([0.5, -0.25]), SR);
     expect(() => audio[Symbol.dispose]()).not.toThrow();
-    expect(audio.length).toBe(2);
+    expect(() => audio.length).toThrow(SonareError);
   });
 
   const releasedHandleCases: Array<{

@@ -77,6 +77,7 @@ export type {
   SonareMeterRingBuffer,
   SonareMeterRingReadResult,
   SonareSpectrumRingBuffer,
+  SonareSpectrumRingOptions,
   SonareSpectrumRingReadResult,
   SonareWorkletMeterSnapshot,
   SonareWorkletSpectrumSnapshot,
@@ -109,6 +110,7 @@ export {
   loadSonareRingCursor,
   readInt64Words,
   releaseOverwriteRead,
+  type SonareRingCapacityOptions,
   sonareRingCursorDistance,
   sonareRingCursorSlot,
   storeSonareRingCursor,
@@ -121,6 +123,7 @@ export {
 export type {
   SharedScopeRingWriter,
   SonareScopeRingBuffer,
+  SonareScopeRingOptions,
   SonareScopeRingReadResult,
   SonareWorkletScopeSnapshot,
 } from './scope-ring.js';

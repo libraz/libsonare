@@ -679,7 +679,7 @@ describe('vocal edit Worker client pipelining and failure paths', () => {
       const session = await client.create({ samples: new Float32Array([0]), sampleRate: 16000 });
       worker.notesError = Object.assign(new Error('revision conflict'), {
         name: 'SonareError',
-        code: 5,
+        code: 7,
         codeName: 'InvalidState',
         reason: 2,
         field: 'revision',
@@ -696,7 +696,7 @@ describe('vocal edit Worker client pipelining and failure paths', () => {
       expect(error).toMatchObject({
         name: 'SonareError',
         message: 'revision conflict',
-        code: 5,
+        code: 7,
         codeName: 'InvalidState',
         reason: 2,
         field: 'revision',

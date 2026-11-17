@@ -683,7 +683,6 @@ export function setSynthInstrument(
   if (typeof patch === 'object' && patch !== null && patch.sampleBank != null) {
     throw new SonareError(
       ErrorCode.NotSupported,
-      'NotSupported',
       'setSynthInstrument: a patch with sampleBank cannot be delivered to the AudioWorklet engine',
     );
   }

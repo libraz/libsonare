@@ -68,7 +68,7 @@ type TelemetryRingWithPublicationWrapped = ReturnType<
 };
 
 function createTelemetryRing(capacity: number): TelemetryRingWithPublicationWrapped {
-  return createSonareEngineTelemetryRingBuffer(capacity) as TelemetryRingWithPublicationWrapped;
+  return createSonareEngineTelemetryRingBuffer({ capacity }) as TelemetryRingWithPublicationWrapped;
 }
 
 describe('Sonare worklet ring buffers', () => {
@@ -76,7 +76,7 @@ describe('Sonare worklet ring buffers', () => {
 
   describe('clip-page request ring-buffer (SPSC)', () => {
     it('drains in FIFO order and reports bounded overflow without overwriting requests', () => {
-      const ring = createSonareClipPageRequestRingBuffer(2);
+      const ring = createSonareClipPageRequestRingBuffer({ capacity: 2 });
       expect(pushSonareClipPageRequestRingBuffer(ring, 10, 3)).toBe(true);
       expect(pushSonareClipPageRequestRingBuffer(ring, 11, 4)).toBe(true);
       expect(pushSonareClipPageRequestRingBuffer(ring, 12, 5)).toBe(false);
@@ -95,7 +95,7 @@ describe('Sonare worklet ring buffers', () => {
 
     it('accepts a manually constructed buffer with the documented header layout', () => {
       const capacity = 2;
-      const sab = new SharedArrayBuffer(sonareClipPageRequestRingBufferByteLength(capacity));
+      const sab = new SharedArrayBuffer(sonareClipPageRequestRingBufferByteLength({ capacity }));
       const header = new Int32Array(sab, 0, SONARE_CLIP_PAGE_REQUEST_RING_HEADER_INTS);
       const records = new Uint32Array(
         sab,
@@ -120,9 +120,9 @@ describe('Sonare worklet ring buffers', () => {
       const capacity = 3;
       const bands = 4;
       const maxPoints = 5;
-      const meter = createSonareMeterRingBuffer(capacity);
-      const spectrum = createSonareSpectrumRingBuffer(capacity, bands);
-      const scope = createSonareScopeRingBuffer(capacity, bands, maxPoints);
+      const meter = createSonareMeterRingBuffer({ capacity });
+      const spectrum = createSonareSpectrumRingBuffer({ capacity, bands });
+      const scope = createSonareScopeRingBuffer({ capacity, bands, maxPoints });
       const telemetry = createTelemetryRing(capacity);
 
       expect(meter.header[3]).toBe(0);
@@ -158,15 +158,15 @@ describe('Sonare worklet ring buffers', () => {
       expect(telemetry.publicationWrapped.byteOffset).toBe(telemetryPublicationWrappedOffset);
       expect(telemetry.publicationWrapped.byteLength).toBe(Int32Array.BYTES_PER_ELEMENT);
       expect(telemetry.publicationWrapped).toHaveLength(1);
-      expect(meter.sharedBuffer.byteLength).toBe(sonareMeterRingBufferByteLength(capacity));
+      expect(meter.sharedBuffer.byteLength).toBe(sonareMeterRingBufferByteLength({ capacity }));
       expect(spectrum.sharedBuffer.byteLength).toBe(
-        sonareSpectrumRingBufferByteLength(capacity, bands),
+        sonareSpectrumRingBufferByteLength({ capacity, bands }),
       );
       expect(scope.sharedBuffer.byteLength).toBe(
-        sonareScopeRingBufferByteLength(capacity, bands, maxPoints),
+        sonareScopeRingBufferByteLength({ capacity, bands, maxPoints }),
       );
       expect(telemetry.sharedBuffer.byteLength).toBe(
-        sonareEngineTelemetryRingBufferByteLength(capacity),
+        sonareEngineTelemetryRingBufferByteLength({ capacity }),
       );
       expect(telemetry.sharedBuffer.byteLength).toBe(
         telemetryPublicationWrappedOffset + Int32Array.BYTES_PER_ELEMENT,
@@ -191,17 +191,17 @@ describe('Sonare worklet ring buffers', () => {
       const stale = [
         {
           name: 'meter',
-          ring: createSonareMeterRingBuffer(2),
+          ring: createSonareMeterRingBuffer({ capacity: 2 }),
           versionSlot: 3,
         },
         {
           name: 'spectrum',
-          ring: createSonareSpectrumRingBuffer(2, 4),
+          ring: createSonareSpectrumRingBuffer({ capacity: 2, bands: 4 }),
           versionSlot: 4,
         },
         {
           name: 'scope',
-          ring: createSonareScopeRingBuffer(2, 4, 3),
+          ring: createSonareScopeRingBuffer({ capacity: 2, bands: 4, maxPoints: 3 }),
           versionSlot: 5,
         },
         {
@@ -227,7 +227,7 @@ describe('Sonare worklet ring buffers', () => {
         expect(Array.from(entry.ring.header)).toEqual(before);
       }
 
-      const staleMeter = createSonareMeterRingBuffer(2);
+      const staleMeter = createSonareMeterRingBuffer({ capacity: 2 });
       staleMeter.header[3] = 2;
       const staleMeterBefore = Array.from(staleMeter.header);
       expect(() => meterRingFromSharedBuffer(staleMeter.sharedBuffer, 2)).toThrow(
@@ -235,7 +235,7 @@ describe('Sonare worklet ring buffers', () => {
       );
       expect(Array.from(staleMeter.header)).toEqual(staleMeterBefore);
 
-      const staleSpectrum = createSonareSpectrumRingBuffer(2, 4);
+      const staleSpectrum = createSonareSpectrumRingBuffer({ capacity: 2, bands: 4 });
       staleSpectrum.header[4] = 2;
       const staleSpectrumBefore = Array.from(staleSpectrum.header);
       expect(() => spectrumRingFromSharedBuffer(staleSpectrum.sharedBuffer, 2, 4)).toThrow(
@@ -243,7 +243,7 @@ describe('Sonare worklet ring buffers', () => {
       );
       expect(Array.from(staleSpectrum.header)).toEqual(staleSpectrumBefore);
 
-      const staleScope = createSonareScopeRingBuffer(2, 4, 3);
+      const staleScope = createSonareScopeRingBuffer({ capacity: 2, bands: 4, maxPoints: 3 });
       staleScope.header[5] = 2;
       const staleScopeBefore = Array.from(staleScope.header);
       expect(() => scopeRingFromSharedBuffer(staleScope.sharedBuffer, 2, 4, 3)).toThrow(
@@ -352,7 +352,7 @@ describe('Sonare worklet ring buffers', () => {
     for (const capacity of capacities) {
       for (const seed of seeds) {
         it(`keeps the command ring FIFO and bounded (capacity ${capacity}, cursor ${seed})`, () => {
-          const ring = createSonareEngineCommandRingBuffer(capacity);
+          const ring = createSonareEngineCommandRingBuffer({ capacity });
           seedCursors(ring.header, seed, [0, 1]);
           for (let round = 0; round < 3; round++) {
             for (let i = 0; i < capacity; i++) {
@@ -375,7 +375,7 @@ describe('Sonare worklet ring buffers', () => {
         });
 
         it(`keeps the clip-page request ring FIFO and bounded (capacity ${capacity}, cursor ${seed})`, () => {
-          const ring = createSonareClipPageRequestRingBuffer(capacity);
+          const ring = createSonareClipPageRequestRingBuffer({ capacity });
           seedCursors(ring.header, seed, [0, 1]);
           for (let round = 0; round < 3; round++) {
             for (let i = 0; i < capacity; i++) {
@@ -394,7 +394,7 @@ describe('Sonare worklet ring buffers', () => {
         });
 
         it(`keeps the external-MIDI ring FIFO and bounded (capacity ${capacity}, cursor ${seed})`, () => {
-          const ring = createSonareExternalMidiRingBuffer(capacity);
+          const ring = createSonareExternalMidiRingBuffer({ capacity });
           seedCursors(ring.header, seed, [0, 1]);
           for (let round = 0; round < 3; round++) {
             for (let i = 0; i < capacity; i++) {
@@ -438,7 +438,7 @@ describe('Sonare worklet ring buffers', () => {
     }
 
     it('round-trips external-MIDI render frames past 32 bits', () => {
-      const ring = createSonareExternalMidiRingBuffer(4);
+      const ring = createSonareExternalMidiRingBuffer({ capacity: 4 });
       const frames = [2 ** 32 - 1, 2 ** 32, 2 ** 32 + 1, Number.MAX_SAFE_INTEGER];
       for (const frame of frames) {
         expect(pushSonareExternalMidiRingBuffer(ring, 2, frame, 0x00403c90, 3)).toBe(true);
@@ -450,7 +450,7 @@ describe('Sonare worklet ring buffers', () => {
 
     it('reads the newest meter records across a wrapped write cursor', () => {
       for (const seed of seeds) {
-        const ring = createSonareMeterRingBuffer(3);
+        const ring = createSonareMeterRingBuffer({ capacity: 3 });
         ring.header[0] = seed;
         ring.header[3] = SONARE_METER_RING_PROTOCOL_VERSION;
         const sceneJson = mixingScenePresetJson('vocalReverbSend');
@@ -487,7 +487,7 @@ describe('Sonare worklet ring buffers', () => {
 
     it('reads the newest spectrum records across a wrapped write cursor', () => {
       for (const seed of seeds) {
-        const ring = createSonareSpectrumRingBuffer(3, 4);
+        const ring = createSonareSpectrumRingBuffer({ capacity: 3, bands: 4 });
         ring.header[0] = seed;
         ring.header[4] = SONARE_SPECTRUM_RING_PROTOCOL_VERSION;
         const processor = new SonareWorkletProcessor({
@@ -517,10 +517,12 @@ describe('Sonare worklet ring buffers', () => {
 
   describe('external-MIDI ring-buffer (SPSC)', () => {
     it('preserves lowered MIDI bytes and drops only new records when full', () => {
-      const ring = createSonareExternalMidiRingBuffer(2);
+      const ring = createSonareExternalMidiRingBuffer({ capacity: 2 });
       expect(ring.header).toHaveLength(SONARE_EXTERNAL_MIDI_RING_HEADER_INTS);
       expect(ring.header[3]).toBe(SONARE_EXTERNAL_MIDI_RING_RECORD_UINT32S);
-      expect(ring.sharedBuffer.byteLength).toBe(sonareExternalMidiRingBufferByteLength(2));
+      expect(ring.sharedBuffer.byteLength).toBe(
+        sonareExternalMidiRingBufferByteLength({ capacity: 2 }),
+      );
       expect(pushSonareExternalMidiRingBuffer(ring, 7, 127, 0x00643c90, 3)).toBe(true);
       // Transport clock retains the uint32 destination sentinel.
       expect(pushSonareExternalMidiRingBuffer(ring, 0xffffffff, 0, 0x000000f8, 1)).toBe(true);
@@ -593,7 +595,7 @@ describe('Sonare worklet ring buffers', () => {
     }
 
     it('publishes one finite record per block and advances the read cursor', () => {
-      const ring = createSonareMeterRingBuffer(8);
+      const ring = createSonareMeterRingBuffer({ capacity: 8 });
       const { processor, stripCount } = makeRingProcessor(ring.sharedBuffer);
       try {
         const blocks = 5;
@@ -630,7 +632,7 @@ describe('Sonare worklet ring buffers', () => {
     });
 
     it('returns only new records on incremental reads', () => {
-      const ring = createSonareMeterRingBuffer(8);
+      const ring = createSonareMeterRingBuffer({ capacity: 8 });
       const { processor, stripCount } = makeRingProcessor(ring.sharedBuffer);
       try {
         driveBlocks(processor, stripCount, 2);
@@ -656,7 +658,7 @@ describe('Sonare worklet ring buffers', () => {
 
     it('wraps around and returns at most capacity most-recent records', () => {
       const capacity = 4;
-      const ring = createSonareMeterRingBuffer(capacity);
+      const ring = createSonareMeterRingBuffer({ capacity });
       const { processor, stripCount } = makeRingProcessor(ring.sharedBuffer);
       try {
         const blocks = 10; // more than capacity
@@ -691,7 +693,7 @@ describe('Sonare worklet ring buffers', () => {
 
     it('round-trips a manually populated SharedArrayBuffer using the documented layout', () => {
       const capacity = 4;
-      const sab = new SharedArrayBuffer(sonareMeterRingBufferByteLength(capacity));
+      const sab = new SharedArrayBuffer(sonareMeterRingBufferByteLength({ capacity }));
       const header = new Int32Array(sab, 0, SONARE_METER_RING_HEADER_INTS);
       const records = new Float32Array(
         sab,
@@ -787,10 +789,12 @@ describe('Sonare worklet ring buffers', () => {
 
   describe('engine SAB command and telemetry rings', () => {
     it('round-trips fixed-layout command records and detects overflow', () => {
-      const ring = createSonareEngineCommandRingBuffer(2);
+      const ring = createSonareEngineCommandRingBuffer({ capacity: 2 });
       expect(ring.header[2]).toBe(2);
       expect(ring.header[3]).toBe(SONARE_ENGINE_COMMAND_RECORD_BYTES);
-      expect(ring.sharedBuffer.byteLength).toBe(sonareEngineCommandRingBufferByteLength(2));
+      expect(ring.sharedBuffer.byteLength).toBe(
+        sonareEngineCommandRingBufferByteLength({ capacity: 2 }),
+      );
 
       expect(
         pushSonareEngineCommandRingBuffer(ring, {
@@ -829,7 +833,7 @@ describe('Sonare worklet ring buffers', () => {
     });
 
     it('holds type and targetId to the uint32 slot the readers are unsigned on', () => {
-      const ring = createSonareEngineCommandRingBuffer(8);
+      const ring = createSonareEngineCommandRingBuffer({ capacity: 8 });
       const push = (command: { type: number; targetId?: number }): boolean =>
         pushSonareEngineCommandRingBuffer(ring, command);
 
@@ -864,7 +868,9 @@ describe('Sonare worklet ring buffers', () => {
       expect(ring.header[1]).toBe(0);
       expect(ring.header[2]).toBe(2);
       expect(ring.header[3]).toBe(SONARE_ENGINE_TELEMETRY_RECORD_BYTES);
-      expect(ring.sharedBuffer.byteLength).toBe(sonareEngineTelemetryRingBufferByteLength(2));
+      expect(ring.sharedBuffer.byteLength).toBe(
+        sonareEngineTelemetryRingBufferByteLength({ capacity: 2 }),
+      );
       expect(ring.publicationWrapped[0]).toBe(0);
 
       writeSonareEngineTelemetryRingBuffer(ring, {
@@ -944,7 +950,7 @@ describe('Sonare worklet ring buffers', () => {
 
     it('documents the shared ring header layout', () => {
       const capacity = 4;
-      const sab = new SharedArrayBuffer(sonareEngineCommandRingBufferByteLength(capacity));
+      const sab = new SharedArrayBuffer(sonareEngineCommandRingBufferByteLength({ capacity }));
       const header = new Int32Array(sab, 0, SONARE_ENGINE_RING_HEADER_INTS);
       header[0] = 3; // writeIndex
       header[1] = 1; // readIndex
@@ -1317,22 +1323,52 @@ describe('Sonare worklet ring buffers', () => {
 
   describe('ring dimensions are refused, never floored or clamped', () => {
     const creators: Array<[string, (value: unknown) => unknown]> = [
-      ['meter', (v) => createSonareMeterRingBuffer(v as number)],
-      ['spectrum capacity', (v) => createSonareSpectrumRingBuffer(v as number, 4)],
-      ['spectrum bands', (v) => createSonareSpectrumRingBuffer(2, v as number)],
-      ['scope capacity', (v) => createSonareScopeRingBuffer(v as number, 4, 3)],
-      ['scope bands', (v) => createSonareScopeRingBuffer(2, v as number, 3)],
-      ['command', (v) => createSonareEngineCommandRingBuffer(v as number)],
-      ['telemetry', (v) => createSonareEngineTelemetryRingBuffer(v as number)],
-      ['clip page request', (v) => createSonareClipPageRequestRingBuffer(v as number)],
-      ['external MIDI', (v) => createSonareExternalMidiRingBuffer(v as number)],
-      ['meter bytes', (v) => sonareMeterRingBufferByteLength(v as number)],
-      ['spectrum bytes', (v) => sonareSpectrumRingBufferByteLength(v as number, 4)],
-      ['scope bytes', (v) => sonareScopeRingBufferByteLength(v as number, 4, 3)],
-      ['command bytes', (v) => sonareEngineCommandRingBufferByteLength(v as number)],
-      ['telemetry bytes', (v) => sonareEngineTelemetryRingBufferByteLength(v as number)],
-      ['clip page bytes', (v) => sonareClipPageRequestRingBufferByteLength(v as number)],
-      ['external MIDI bytes', (v) => sonareExternalMidiRingBufferByteLength(v as number)],
+      ['meter', (v) => createSonareMeterRingBuffer({ capacity: v as number })],
+      [
+        'spectrum capacity',
+        (v) => createSonareSpectrumRingBuffer({ capacity: v as number, bands: 4 }),
+      ],
+      [
+        'spectrum bands',
+        (v) => createSonareSpectrumRingBuffer({ capacity: 2, bands: v as number }),
+      ],
+      [
+        'scope capacity',
+        (v) => createSonareScopeRingBuffer({ capacity: v as number, bands: 4, maxPoints: 3 }),
+      ],
+      [
+        'scope bands',
+        (v) => createSonareScopeRingBuffer({ capacity: 2, bands: v as number, maxPoints: 3 }),
+      ],
+      ['command', (v) => createSonareEngineCommandRingBuffer({ capacity: v as number })],
+      ['telemetry', (v) => createSonareEngineTelemetryRingBuffer({ capacity: v as number })],
+      [
+        'clip page request',
+        (v) => createSonareClipPageRequestRingBuffer({ capacity: v as number }),
+      ],
+      ['external MIDI', (v) => createSonareExternalMidiRingBuffer({ capacity: v as number })],
+      ['meter bytes', (v) => sonareMeterRingBufferByteLength({ capacity: v as number })],
+      [
+        'spectrum bytes',
+        (v) => sonareSpectrumRingBufferByteLength({ capacity: v as number, bands: 4 }),
+      ],
+      [
+        'scope bytes',
+        (v) => sonareScopeRingBufferByteLength({ capacity: v as number, bands: 4, maxPoints: 3 }),
+      ],
+      ['command bytes', (v) => sonareEngineCommandRingBufferByteLength({ capacity: v as number })],
+      [
+        'telemetry bytes',
+        (v) => sonareEngineTelemetryRingBufferByteLength({ capacity: v as number }),
+      ],
+      [
+        'clip page bytes',
+        (v) => sonareClipPageRequestRingBufferByteLength({ capacity: v as number }),
+      ],
+      [
+        'external MIDI bytes',
+        (v) => sonareExternalMidiRingBufferByteLength({ capacity: v as number }),
+      ],
     ];
 
     for (const [name, create] of creators) {
@@ -1347,17 +1383,25 @@ describe('Sonare worklet ring buffers', () => {
     }
 
     it('keeps a legal capacity exactly instead of rounding it', () => {
-      expect(createSonareEngineCommandRingBuffer(3).capacity).toBe(3);
-      expect(sonareEngineCommandRingBufferByteLength(3)).toBe(
+      expect(createSonareEngineCommandRingBuffer({ capacity: 3 }).capacity).toBe(3);
+      expect(sonareEngineCommandRingBufferByteLength({ capacity: 3 })).toBe(
         SONARE_ENGINE_RING_HEADER_INTS * 4 + 3 * SONARE_ENGINE_COMMAND_RECORD_BYTES,
       );
     });
 
     it('refuses scope bands and points past the native tap ceiling', () => {
-      expect(() => createSonareScopeRingBuffer(2, 64, 32)).not.toThrow();
-      expect(() => createSonareScopeRingBuffer(2, 65, 3)).toThrow(RangeError);
-      expect(() => createSonareScopeRingBuffer(2, 4, 33)).toThrow(RangeError);
-      expect(() => sonareScopeRingBufferByteLength(2, 65, 3)).toThrow(RangeError);
+      expect(() =>
+        createSonareScopeRingBuffer({ capacity: 2, bands: 64, maxPoints: 32 }),
+      ).not.toThrow();
+      expect(() => createSonareScopeRingBuffer({ capacity: 2, bands: 65, maxPoints: 3 })).toThrow(
+        RangeError,
+      );
+      expect(() => createSonareScopeRingBuffer({ capacity: 2, bands: 4, maxPoints: 33 })).toThrow(
+        RangeError,
+      );
+      expect(() =>
+        sonareScopeRingBufferByteLength({ capacity: 2, bands: 65, maxPoints: 3 }),
+      ).toThrow(RangeError);
     });
   });
 });

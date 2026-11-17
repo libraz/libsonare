@@ -1,7 +1,8 @@
-import { ErrorCode } from './errors.js';
-import { failureFromPayload } from './internal/failure_payload.js';
-import { releasedHandleError } from './internal/handle_guard.js';
+import { ErrorCode, SonareError } from './errors.js';
+import { failureFromPayload, isFailurePayload } from './internal/failure_payload.js';
+import './lifetime.js';
 import type { MasterAudioRequest, MasterAudioStereoRequest } from './mastering_chain.js';
+import type { ProgressCallback } from './public_types.js';
 import type {
   DetectChordsRequest,
   DetectKeyRequest,
@@ -10,13 +11,12 @@ import type {
 } from './quick_analysis.js';
 import type { OfflineWorkerOperation, OfflineWorkerResponseMessage } from './worker_protocol.js';
 
-type WorkerRequest<T> = Omit<T, 'onProgress' | 'cancel'>;
-
-/** Progress relayed from the Worker at the core's native progress boundaries. */
-export interface OfflineWorkerProgress {
-  progress: number;
-  stage: string;
-}
+/**
+ * A request as a worker call takes it: `onProgress` stays on the calling thread
+ * and is invoked with the worker's progress, and the synchronous `cancel`
+ * predicate is not accepted because a function cannot cross the thread.
+ */
+type WorkerRequest<T> = Omit<T, 'onProgress' | 'cancel'> & { onProgress?: ProgressCallback };
 
 /** Per-call behaviour for a one-shot operation. */
 export interface OfflineWorkerCallOptions {
@@ -27,8 +27,13 @@ export interface OfflineWorkerCallOptions {
    * Worker and become detached on the calling thread, avoiding a second copy.
    */
   copy?: boolean;
-  /** Receives native progress boundaries for analysis and mastering calls. */
-  onProgress?: (update: OfflineWorkerProgress) => void;
+  /**
+   * Cancels the call. The promise rejects with a `SonareError` of code
+   * `Cancelled` whose `cause` is `signal.reason`, and the Worker is told to stop
+   * at the next native progress boundary. A signal already aborted rejects
+   * without dispatching work.
+   */
+  signal?: AbortSignal;
 }
 
 /** Options used to create an {@link OfflineWorkerClient}. */
@@ -39,8 +44,8 @@ export interface OfflineWorkerClientOptions {
   workerUrl?: string | URL;
   /** Test/host hook for creating a dedicated Worker. */
   workerFactory?: (url: URL) => OfflineWorker;
-  /** Terminate a supplied Worker when {@link OfflineWorkerClient.dispose} runs. */
-  terminateWorkerOnDispose?: boolean;
+  /** Terminate a supplied Worker when {@link OfflineWorkerClient.destroy} runs. */
+  terminateWorkerOnDestroy?: boolean;
 }
 
 /** Browser Worker or Node `worker_threads.Worker` used by the client. */
@@ -53,50 +58,10 @@ export interface OfflineWorker {
   off?(type: 'message' | 'error', listener: (...args: unknown[]) => void): unknown;
 }
 
-/**
- * A cancellable promise returned by an {@link OfflineWorkerClient} call.
- *
- * It is Promise-like, so `await client.analyze(...)` works. Call `cancel()` to
- * request cancellation at the next native progress boundary. In browsers this
- * uses a `SharedArrayBuffer` flag, which requires cross-origin isolation for
- * prompt cancellation while synchronous WASM is running. The worker forwards
- * that flag through the same native cancellation callback used by synchronous
- * one-shot requests.
- */
-export class OfflineWorkerTask<T> implements PromiseLike<T> {
-  constructor(
-    readonly result: Promise<T>,
-    private readonly cancelRequest: () => void,
-  ) {}
-
-  cancel(): void {
-    this.cancelRequest();
-  }
-
-  // biome-ignore lint/suspicious/noThenProperty: this intentionally implements PromiseLike so callers can await a task and cancel it.
-  then<TResult1 = T, TResult2 = never>(
-    onfulfilled?: ((value: T) => TResult1 | PromiseLike<TResult1>) | null,
-    onrejected?: ((reason: unknown) => TResult2 | PromiseLike<TResult2>) | null,
-  ): Promise<TResult1 | TResult2> {
-    return this.result.then(onfulfilled, onrejected);
-  }
-
-  catch<TResult = never>(
-    onrejected?: ((reason: unknown) => TResult | PromiseLike<TResult>) | null,
-  ): Promise<T | TResult> {
-    return this.result.catch(onrejected);
-  }
-
-  finally(onfinally?: (() => void) | null): Promise<T> {
-    return this.result.finally(onfinally);
-  }
-}
-
 interface PendingCall {
   resolve: (value: unknown) => void;
   reject: (reason: unknown) => void;
-  onProgress?: (update: OfflineWorkerProgress) => void;
-  cancelFlag?: Int32Array;
+  onProgress?: ProgressCallback;
 }
 
 function cloneForWorker(
@@ -154,14 +119,15 @@ function cancellationFlag(): Int32Array | undefined {
   return new Int32Array(new SharedArrayBuffer(Int32Array.BYTES_PER_ELEMENT));
 }
 
-function workerError(
-  message: Extract<OfflineWorkerResponseMessage, { type: 'sonare:offline-error' }>,
-): Error {
-  return failureFromPayload(message.error);
-}
-
 /**
  * Owns a dedicated Worker for value-based offline analysis and mastering.
+ *
+ * Worker calls take an `AbortSignal` because the call is asynchronous and an
+ * abort can be delivered while it runs; in-thread calls keep the synchronous
+ * `cancel` predicate because a synchronous call blocks the thread, so an abort
+ * could not be delivered until it returned. Cancellation reaches native code at
+ * its next progress boundary; in browsers prompt cancellation of synchronous
+ * WASM needs cross-origin isolation for the `SharedArrayBuffer` flag.
  *
  * `Project`, `Mixer`, and realtime APIs are intentionally absent: their native
  * handles are local to one JavaScript realm and cannot be transferred safely.
@@ -172,15 +138,23 @@ export class OfflineWorkerClient {
   private readonly pending = new Map<number, PendingCall>();
   private nextId = 1;
   private closed = false;
+  private destroying: Promise<void> | undefined;
   private usesEventTarget = false;
 
+  /**
+   * @param options Worker source and ownership.
+   * @throws SonareError `NotSupported` when no Worker implementation is available and neither `worker` nor `workerFactory` is given.
+   */
   constructor(options: OfflineWorkerClientOptions = {}) {
-    this.ownsWorker = options.worker === undefined || options.terminateWorkerOnDispose === true;
+    this.ownsWorker = options.worker === undefined || options.terminateWorkerOnDestroy === true;
     if (options.worker) {
       this.worker = options.worker;
     } else {
       if (!options.workerFactory && typeof Worker === 'undefined') {
-        throw new Error('OfflineWorkerClient requires a browser Worker implementation');
+        throw new SonareError(
+          ErrorCode.NotSupported,
+          'OfflineWorkerClient requires a Worker implementation',
+        );
       }
       const url =
         options.workerUrl === undefined
@@ -201,58 +175,69 @@ export class OfflineWorkerClient {
     }
   }
 
-  /** Dispatch full music analysis to the Worker. */
+  /**
+   * Run full music analysis in the Worker.
+   *
+   * @param request Analysis request; `onProgress` receives `(progress, stage)` on the calling thread.
+   * @param options Copy and cancellation behaviour.
+   * @returns The analysis result.
+   * @throws SonareError `Cancelled` on abort, `InvalidState` after {@link destroy}; the call rejects with `TypeError` for a function-valued request field such as `cancel`.
+   */
   analyze(
     request: WorkerRequest<MusicAnalyzeRequest>,
     options?: OfflineWorkerCallOptions,
-  ): OfflineWorkerTask<ReturnType<typeof import('./quick_analysis.js').analyze>> {
+  ): Promise<ReturnType<typeof import('./quick_analysis.js').analyze>> {
     return this.call('analyze', request, options);
   }
 
-  /** Dispatch BPM detection to the Worker. */
+  /** Detect BPM in the Worker. Same request, option and error contract as {@link analyze}. */
   detectBpm(
-    request: SamplesRequest,
+    request: WorkerRequest<SamplesRequest>,
     options?: OfflineWorkerCallOptions,
-  ): OfflineWorkerTask<number> {
+  ): Promise<number> {
     return this.call('detectBpm', request, options);
   }
 
-  /** Dispatch key detection to the Worker. */
+  /** Detect the key in the Worker. Same request, option and error contract as {@link analyze}. */
   detectKey(
-    request: DetectKeyRequest,
+    request: WorkerRequest<DetectKeyRequest>,
     options?: OfflineWorkerCallOptions,
-  ): OfflineWorkerTask<ReturnType<typeof import('./quick_analysis.js').detectKey>> {
+  ): Promise<ReturnType<typeof import('./quick_analysis.js').detectKey>> {
     return this.call('detectKey', request, options);
   }
 
-  /** Dispatch chord detection to the Worker. */
+  /** Detect chords in the Worker. Same request, option and error contract as {@link analyze}. */
   detectChords(
-    request: DetectChordsRequest,
+    request: WorkerRequest<DetectChordsRequest>,
     options?: OfflineWorkerCallOptions,
-  ): OfflineWorkerTask<ReturnType<typeof import('./quick_analysis.js').detectChords>> {
+  ): Promise<ReturnType<typeof import('./quick_analysis.js').detectChords>> {
     return this.call('detectChords', request, options);
   }
 
-  /** Dispatch mono preset mastering to the Worker. */
+  /** Run mono preset mastering in the Worker. Same request, option and error contract as {@link analyze}. */
   masterAudio(
     request: WorkerRequest<MasterAudioRequest>,
     options?: OfflineWorkerCallOptions,
-  ): OfflineWorkerTask<ReturnType<typeof import('./mastering_chain.js').masterAudio>> {
+  ): Promise<ReturnType<typeof import('./mastering_chain.js').masterAudio>> {
     return this.call('masterAudio', request, options);
   }
 
-  /** Dispatch stereo preset mastering to the Worker. */
+  /** Run stereo preset mastering in the Worker. Same request, option and error contract as {@link analyze}. */
   masterAudioStereo(
     request: WorkerRequest<MasterAudioStereoRequest>,
     options?: OfflineWorkerCallOptions,
-  ): OfflineWorkerTask<ReturnType<typeof import('./mastering_chain.js').masterAudioStereo>> {
+  ): Promise<ReturnType<typeof import('./mastering_chain.js').masterAudioStereo>> {
     return this.call('masterAudioStereo', request, options);
   }
 
-  /** Stop accepting calls, reject outstanding work, and release the Worker if owned. */
-  dispose(): void {
-    if (this.closed) {
-      return;
+  /**
+   * Stop accepting calls, reject outstanding work with `InvalidState`, and
+   * release the Worker if owned, resolving once the Worker has terminated.
+   * Calling it again returns the same completion.
+   */
+  destroy(): Promise<void> {
+    if (this.destroying) {
+      return this.destroying;
     }
     this.closed = true;
     if (this.usesEventTarget) {
@@ -262,82 +247,117 @@ export class OfflineWorkerClient {
       this.worker.off?.('message', this.onNodeMessage);
       this.worker.off?.('error', this.onNodeError);
     }
-    for (const { reject } of this.pending.values()) {
-      reject(releasedHandleError('OfflineWorkerClient', 'was disposed'));
-    }
+    this.rejectAll(() => destroyedError());
+    this.destroying = this.ownsWorker
+      ? Promise.resolve(this.worker.terminate()).then(() => undefined)
+      : Promise.resolve();
+    return this.destroying;
+  }
+
+  /** Same as {@link destroy}, for `await using`. */
+  [Symbol.asyncDispose](): Promise<void> {
+    return this.destroy();
+  }
+
+  private rejectAll(makeError: () => Error): void {
+    const calls = [...this.pending.values()];
     this.pending.clear();
-    if (this.ownsWorker) {
-      this.worker.terminate();
+    for (const { reject } of calls) {
+      reject(makeError());
     }
   }
 
   private call<T>(
     operation: OfflineWorkerOperation,
-    request: object,
+    request: WorkerRequest<object>,
     options: OfflineWorkerCallOptions = {},
-  ): OfflineWorkerTask<T> {
+  ): Promise<T> {
     if (this.closed) {
-      throw releasedHandleError('OfflineWorkerClient', 'was disposed');
+      return Promise.reject(destroyedError());
+    }
+    const signal = options.signal;
+    if (signal?.aborted) {
+      return Promise.reject(cancelledError(signal));
+    }
+    const { onProgress, ...posted } = request as { onProgress?: ProgressCallback };
+    let preparedRequest: Record<string, unknown>;
+    const transfers: Transferable[] = [];
+    try {
+      if (onProgress !== undefined && typeof onProgress !== 'function') {
+        throw new TypeError('OfflineWorkerClient: onProgress must be a function');
+      }
+      preparedRequest = cloneForWorker(posted, options.copy === true, transfers) as Record<
+        string,
+        unknown
+      >;
+    } catch (error) {
+      return Promise.reject(error);
     }
     const id = this.nextId++;
-    const transfers: Transferable[] = [];
-    const preparedRequest = cloneForWorker(request, options.copy === true, transfers) as Record<
-      string,
-      unknown
-    >;
     const cancelFlag = cancellationFlag();
-    const result = new Promise<T>((resolve, reject) => {
+    return new Promise<T>((resolve, reject) => {
+      const onAbort = (): void => {
+        if (!this.pending.delete(id)) {
+          return;
+        }
+        if (cancelFlag) {
+          Atomics.store(cancelFlag, 0, 1);
+        }
+        // A message also covers a call cancelled before it begins and is the
+        // best available fallback where SharedArrayBuffer is unavailable.
+        this.worker.postMessage({ type: 'sonare:offline-cancel', id });
+        reject(cancelledError(signal as AbortSignal));
+      };
+      signal?.addEventListener('abort', onAbort, { once: true });
+      const settle = (): void => signal?.removeEventListener('abort', onAbort);
       this.pending.set(id, {
-        resolve: (value) => resolve(value as T),
-        reject,
-        onProgress: options.onProgress,
-        cancelFlag,
-      });
-    });
-    try {
-      this.worker.postMessage(
-        {
-          type: 'sonare:offline-run',
-          id,
-          operation,
-          request: preparedRequest,
-          ...(cancelFlag ? { cancelBuffer: cancelFlag.buffer as SharedArrayBuffer } : {}),
+        resolve: (value) => {
+          settle();
+          resolve(value as T);
         },
-        transfers,
-      );
-    } catch (error) {
-      // The pending entry is inserted before dispatch so a worker/port that
-      // answers reentrantly can settle the task first. Only the still-pending
-      // entry is rolled back: a response received before postMessage threw has
-      // already won the settlement race, and the transferred input must not be
-      // retried after a failed dispatch.
-      const pending = this.pending.get(id);
-      if (pending) {
-        this.pending.delete(id);
-        pending.reject(error);
+        reject: (reason) => {
+          settle();
+          reject(reason);
+        },
+        onProgress,
+      });
+      try {
+        this.worker.postMessage(
+          {
+            type: 'sonare:offline-run',
+            id,
+            operation,
+            request: preparedRequest,
+            ...(cancelFlag ? { cancelBuffer: cancelFlag.buffer as SharedArrayBuffer } : {}),
+          },
+          transfers,
+        );
+      } catch (error) {
+        // The entry is inserted before dispatch so a reentrant response can
+        // settle the call first; only a still-pending entry is rolled back.
+        const entry = this.pending.get(id);
+        if (entry) {
+          this.pending.delete(id);
+          entry.reject(error);
+        }
       }
-    }
-    return new OfflineWorkerTask(result, () => {
-      if (!this.pending.has(id)) {
-        return;
-      }
-      if (cancelFlag) {
-        Atomics.store(cancelFlag, 0, 1);
-      }
-      // A message also covers a call cancelled before it begins and is the
-      // best available fallback where SharedArrayBuffer is unavailable.
-      this.worker.postMessage({ type: 'sonare:offline-cancel', id });
     });
   }
 
   private readonly onMessage = (event: MessageEvent<OfflineWorkerResponseMessage>): void => {
     const message = event.data;
+    if (!isResponseMessage(message)) {
+      this.rejectAll(
+        () => new SonareError(ErrorCode.InvalidFormat, 'Offline Worker sent a malformed message'),
+      );
+      return;
+    }
     const pending = this.pending.get(message.id);
     if (!pending) {
       return;
     }
     if (message.type === 'sonare:offline-progress') {
-      pending.onProgress?.({ progress: message.progress, stage: message.stage });
+      pending.onProgress?.(message.progress, message.stage);
       return;
     }
     this.pending.delete(message.id);
@@ -345,15 +365,21 @@ export class OfflineWorkerClient {
       pending.resolve(message.result);
       return;
     }
-    pending.reject(workerError(message));
+    pending.reject(
+      isFailurePayload(message.error)
+        ? failureFromPayload(message.error)
+        : new SonareError(ErrorCode.InvalidFormat, 'Offline Worker sent a malformed error'),
+    );
   };
 
   private readonly onError = (event: ErrorEvent): void => {
-    const error = new Error(event.message || 'Offline Worker failed');
-    for (const { reject } of this.pending.values()) {
-      reject(error);
-    }
-    this.pending.clear();
+    // A crash has no finer class than Unknown; the original event is the cause.
+    this.rejectAll(
+      () =>
+        new SonareError(ErrorCode.Unknown, event.message || 'Offline Worker failed', {
+          cause: event,
+        }),
+    );
   };
 
   private readonly onNodeMessage = (data: unknown): void => {
@@ -363,10 +389,29 @@ export class OfflineWorkerClient {
   private readonly onNodeError = (error: unknown): void => {
     this.onError(
       error instanceof Error
-        ? ({ message: error.message } as ErrorEvent)
-        : ({ message: String(error) } as ErrorEvent),
+        ? ({ message: error.message, error } as ErrorEvent)
+        : ({ message: String(error), error } as ErrorEvent),
     );
   };
 }
 
-export { ErrorCode };
+function destroyedError(): SonareError {
+  return new SonareError(ErrorCode.InvalidState, 'OfflineWorkerClient was destroyed');
+}
+
+function cancelledError(signal: AbortSignal): SonareError {
+  return new SonareError(ErrorCode.Cancelled, 'Operation cancelled', { cause: signal.reason });
+}
+
+function isResponseMessage(value: unknown): value is OfflineWorkerResponseMessage {
+  if (typeof value !== 'object' || value === null) {
+    return false;
+  }
+  const m = value as Record<string, unknown>;
+  return (
+    typeof m.id === 'number' &&
+    (m.type === 'sonare:offline-progress'
+      ? typeof m.progress === 'number' && typeof m.stage === 'string'
+      : m.type === 'sonare:offline-result' || m.type === 'sonare:offline-error')
+  );
+}

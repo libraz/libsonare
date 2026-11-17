@@ -8,7 +8,6 @@
 import { beforeAll, describe, expect, it } from 'vitest';
 import {
   ErrorCode,
-  EXPECTED_PROJECT_ABI_VERSION,
   init,
   isSonareError,
   Project,
@@ -17,6 +16,7 @@ import {
   synthGsDrumKitName,
   synthGsVariationIsVoicedApart,
 } from '../dist/index.js';
+import { EXPECTED_PROJECT_ABI_VERSION } from '../src/project_types';
 import { expectArgumentRefusal } from './_helpers';
 
 describe('Sonare WASM Project', () => {

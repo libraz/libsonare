@@ -37,3 +37,562 @@
 # method entry with changed + test, not old/new.
 # A parameter that becomes a request field is an option entry with removed = true, plus a
 # changed entry (with test) on the function that now takes the request.
+
+[[entry]]
+kind = "option"
+old = "detectKey(useHpss)"
+changed = "null is now accepted for optional boolean options and reads as omitted (was TypeError); the same holds for every optional boolean reader"
+domain = "core"
+rule = "absent-not-sentinel"
+test = "bindings/wasm/tests/surface/core-requests.test.ts::treats null for an optional boolean"
+
+[[entry]]
+kind = "option"
+old = "detectKey(genreHint)"
+changed = "null is now accepted for optional string options and reads as omitted (was TypeError); the same holds for every optional string reader"
+domain = "core"
+rule = "absent-not-sentinel"
+test = "bindings/wasm/tests/surface/core-requests.test.ts::treats null for an optional string"
+
+[[entry]]
+kind = "value"
+old = "ErrorCode"
+changed = "ErrorCode is a const object plus same-named union type instead of a TS enum; there is no reverse mapping, and StaleResult = 11 is added"
+domain = "core"
+rule = "string-closed-sets"
+test = "bindings/wasm/tests/surface/core-errors.test.ts::is a plain object"
+
+[[entry]]
+kind = "type"
+old = "ErrorCodeName"
+changed = "new exported union type of the ErrorCode keys"
+domain = "core"
+rule = "string-closed-sets"
+test = "bindings/wasm/tests/surface/core-errors.test.ts::types a code as the union"
+
+[[entry]]
+kind = "field"
+old = "SonareError.code"
+changed = "typed as the ErrorCode union instead of number"
+domain = "core"
+rule = "error-class-by-cause"
+test = "bindings/wasm/tests/surface/core-errors.test.ts::types a code as the union"
+
+[[entry]]
+kind = "field"
+old = "SonareError.codeName"
+changed = "typed as the ErrorCodeName union instead of string, and derived from code"
+domain = "core"
+rule = "error-class-by-cause"
+test = "bindings/wasm/tests/surface/core-errors.test.ts::derives codeName from code"
+
+[[entry]]
+kind = "method"
+old = "SonareError.constructor"
+changed = "new SonareError(code, message, { cause }) replaces the (code, codeName, message) argument order"
+domain = "core"
+rule = "error-class-by-cause"
+test = "bindings/wasm/tests/surface/core-errors.test.ts::takes (code, message, options) only"
+
+[[entry]]
+kind = "field"
+old = "SonareError.cause"
+changed = "cause is passed through to Error"
+domain = "core"
+rule = "error-class-by-cause"
+test = "bindings/wasm/tests/surface/core-errors.test.ts::derives codeName from code and keeps the cause"
+
+[[entry]]
+kind = "method"
+old = "SonareRealtimeEngineNode.onSyncError"
+changed = "the listener's message.failure is a rebuilt Error (a SonareError when coded) instead of the raw failure payload"
+domain = "engine"
+rule = "error-class-by-cause"
+entry = "./worklet"
+test = "bindings/wasm/tests/surface/core-worklet-errors.test.ts::rebuilds the posted failure as a SonareError"
+
+[[entry]]
+kind = "field"
+old = "SonareEngineSyncErrorMessage.failure"
+changed = "typed Error (coded SonareError when the audio thread raised one) instead of SonareFailurePayload"
+domain = "engine"
+rule = "error-class-by-cause"
+entry = "./worklet"
+test = "bindings/wasm/tests/surface/core-worklet-errors.test.ts::rebuilds the posted failure as a SonareError"
+
+[[entry]]
+kind = "type"
+old = "SonareFailurePayload"
+removed = true
+domain = "engine"
+rule = "worklet-scope"
+entry = "./worklet"
+
+[[entry]]
+kind = "function"
+old = "createSonareScopeRingBuffer"
+changed = "takes one options object { capacity, bands, maxPoints } instead of positional numbers; an unknown key is a TypeError, a non-integer or out-of-domain value a RangeError"
+domain = "engine"
+rule = "individual"
+entry = "./worklet"
+test = "bindings/wasm/tests/surface/core-worklet-errors.test.ts::creates each ring from named options"
+
+[[entry]]
+kind = "function"
+old = "createSonareMeterRingBuffer"
+changed = "takes one options object { capacity } instead of positional numbers; an unknown key is a TypeError, a non-integer or out-of-domain value a RangeError"
+domain = "engine"
+rule = "individual"
+entry = "./worklet"
+test = "bindings/wasm/tests/surface/core-worklet-errors.test.ts::creates each ring from named options"
+
+[[entry]]
+kind = "function"
+old = "createSonareSpectrumRingBuffer"
+changed = "takes one options object { capacity, bands } instead of positional numbers; an unknown key is a TypeError, a non-integer or out-of-domain value a RangeError"
+domain = "engine"
+rule = "individual"
+entry = "./worklet"
+test = "bindings/wasm/tests/surface/core-worklet-errors.test.ts::creates each ring from named options"
+
+[[entry]]
+kind = "function"
+old = "createSonareClipPageRequestRingBuffer"
+changed = "takes one options object { capacity } instead of positional numbers; an unknown key is a TypeError, a non-integer or out-of-domain value a RangeError"
+domain = "engine"
+rule = "individual"
+entry = "./worklet"
+test = "bindings/wasm/tests/surface/core-worklet-errors.test.ts::creates each ring from named options"
+
+[[entry]]
+kind = "function"
+old = "createSonareExternalMidiRingBuffer"
+changed = "takes one options object { capacity } instead of positional numbers; an unknown key is a TypeError, a non-integer or out-of-domain value a RangeError"
+domain = "engine"
+rule = "individual"
+entry = "./worklet"
+test = "bindings/wasm/tests/surface/core-worklet-errors.test.ts::creates each ring from named options"
+
+[[entry]]
+kind = "function"
+old = "createSonareEngineCommandRingBuffer"
+changed = "takes one options object { capacity } instead of positional numbers; an unknown key is a TypeError, a non-integer or out-of-domain value a RangeError"
+domain = "engine"
+rule = "individual"
+entry = "./worklet"
+test = "bindings/wasm/tests/surface/core-worklet-errors.test.ts::creates each ring from named options"
+
+[[entry]]
+kind = "function"
+old = "createSonareEngineTelemetryRingBuffer"
+changed = "takes one options object { capacity } instead of positional numbers; an unknown key is a TypeError, a non-integer or out-of-domain value a RangeError"
+domain = "engine"
+rule = "individual"
+entry = "./worklet"
+test = "bindings/wasm/tests/surface/core-worklet-errors.test.ts::creates each ring from named options"
+
+[[entry]]
+kind = "function"
+old = "sonareScopeRingBufferByteLength"
+changed = "takes one options object { capacity, bands, maxPoints } instead of positional numbers; an unknown key is a TypeError, a non-integer or out-of-domain value a RangeError"
+domain = "engine"
+rule = "individual"
+entry = "./worklet"
+test = "bindings/wasm/tests/surface/core-worklet-errors.test.ts::sizes each ring from named options"
+
+[[entry]]
+kind = "function"
+old = "sonareMeterRingBufferByteLength"
+changed = "takes one options object { capacity } instead of positional numbers; an unknown key is a TypeError, a non-integer or out-of-domain value a RangeError"
+domain = "engine"
+rule = "individual"
+entry = "./worklet"
+test = "bindings/wasm/tests/surface/core-worklet-errors.test.ts::sizes each ring from named options"
+
+[[entry]]
+kind = "function"
+old = "sonareSpectrumRingBufferByteLength"
+changed = "takes one options object { capacity, bands } instead of positional numbers; an unknown key is a TypeError, a non-integer or out-of-domain value a RangeError"
+domain = "engine"
+rule = "individual"
+entry = "./worklet"
+test = "bindings/wasm/tests/surface/core-worklet-errors.test.ts::sizes each ring from named options"
+
+[[entry]]
+kind = "function"
+old = "sonareClipPageRequestRingBufferByteLength"
+changed = "takes one options object { capacity } instead of positional numbers; an unknown key is a TypeError, a non-integer or out-of-domain value a RangeError"
+domain = "engine"
+rule = "individual"
+entry = "./worklet"
+test = "bindings/wasm/tests/surface/core-worklet-errors.test.ts::sizes each ring from named options"
+
+[[entry]]
+kind = "function"
+old = "sonareExternalMidiRingBufferByteLength"
+changed = "takes one options object { capacity } instead of positional numbers; an unknown key is a TypeError, a non-integer or out-of-domain value a RangeError"
+domain = "engine"
+rule = "individual"
+entry = "./worklet"
+test = "bindings/wasm/tests/surface/core-worklet-errors.test.ts::sizes each ring from named options"
+
+[[entry]]
+kind = "function"
+old = "sonareEngineCommandRingBufferByteLength"
+changed = "takes one options object { capacity } instead of positional numbers; an unknown key is a TypeError, a non-integer or out-of-domain value a RangeError"
+domain = "engine"
+rule = "individual"
+entry = "./worklet"
+test = "bindings/wasm/tests/surface/core-worklet-errors.test.ts::sizes each ring from named options"
+
+[[entry]]
+kind = "function"
+old = "sonareEngineTelemetryRingBufferByteLength"
+changed = "takes one options object { capacity } instead of positional numbers; an unknown key is a TypeError, a non-integer or out-of-domain value a RangeError"
+domain = "engine"
+rule = "individual"
+entry = "./worklet"
+test = "bindings/wasm/tests/surface/core-worklet-errors.test.ts::sizes each ring from named options"
+
+[[entry]]
+kind = "type"
+old = "SonareRingCapacityOptions"
+changed = "new exported options type for the ring helpers"
+domain = "engine"
+rule = "individual"
+entry = "./worklet"
+test = "bindings/wasm/tests/surface/core-worklet-errors.test.ts::creates each ring from named options"
+
+[[entry]]
+kind = "type"
+old = "SonareScopeRingOptions"
+changed = "new exported options type for the ring helpers"
+domain = "engine"
+rule = "individual"
+entry = "./worklet"
+test = "bindings/wasm/tests/surface/core-worklet-errors.test.ts::creates each ring from named options"
+
+[[entry]]
+kind = "type"
+old = "SonareSpectrumRingOptions"
+changed = "new exported options type for the ring helpers"
+domain = "engine"
+rule = "individual"
+entry = "./worklet"
+test = "bindings/wasm/tests/surface/core-worklet-errors.test.ts::creates each ring from named options"
+
+[[entry]]
+kind = "function"
+old = "createSonare*RingBuffer / ring readers"
+changed = "a malformed ring descriptor or layout throws SonareError InvalidFormat, a protocol version skew AbiMismatch, instead of a plain Error"
+domain = "engine"
+rule = "error-class-by-cause"
+entry = "./worklet"
+test = "bindings/wasm/tests/surface/core-worklet-errors.test.ts::reports a descriptor that does not describe a ring as InvalidFormat"
+
+[[entry]]
+kind = "type"
+old = "OfflineWorkerTask"
+removed = true
+domain = "core"
+rule = "cancellation"
+
+[[entry]]
+kind = "method"
+old = "OfflineWorkerTask.cancel"
+removed = true
+domain = "core"
+rule = "cancellation"
+
+[[entry]]
+kind = "option"
+old = "OfflineWorkerClient.analyze(options)"
+changed = "pass { signal } to cancel; the call returns a Promise instead of OfflineWorkerTask; onProgress moves to the request as (progress, stage)"
+domain = "core"
+rule = "cancellation"
+test = "bindings/wasm/tests/surface/core-worker.test.ts::abort mid-call rejects with Cancelled"
+
+[[entry]]
+kind = "method"
+old = "OfflineWorkerClient.detectBpm"
+changed = "returns Promise; cancel with options.signal; request takes onProgress"
+domain = "core"
+rule = "cancellation"
+test = "bindings/wasm/tests/surface/core-worker.test.ts::a pre-aborted signal rejects"
+
+[[entry]]
+kind = "method"
+old = "OfflineWorkerClient.detectKey"
+changed = "returns Promise; cancel with options.signal; request takes onProgress"
+domain = "core"
+rule = "cancellation"
+test = "bindings/wasm/tests/surface/core-worker.test.ts::a pre-aborted signal rejects"
+
+[[entry]]
+kind = "method"
+old = "OfflineWorkerClient.detectChords"
+changed = "returns Promise; cancel with options.signal; request takes onProgress"
+domain = "core"
+rule = "cancellation"
+test = "bindings/wasm/tests/surface/core-worker.test.ts::a pre-aborted signal rejects"
+
+[[entry]]
+kind = "method"
+old = "OfflineWorkerClient.masterAudio"
+changed = "returns Promise; cancel with options.signal; request takes onProgress; a cancel field is refused"
+domain = "core"
+rule = "cancellation"
+test = "bindings/wasm/tests/surface/core-worker.test.ts::refuses a function-valued cancel field"
+
+[[entry]]
+kind = "method"
+old = "OfflineWorkerClient.masterAudioStereo"
+changed = "returns Promise; cancel with options.signal; request takes onProgress"
+domain = "core"
+rule = "cancellation"
+test = "bindings/wasm/tests/surface/core-worker.test.ts::a pre-aborted signal rejects"
+
+[[entry]]
+kind = "field"
+old = "OfflineWorkerCallOptions.onProgress"
+removed = true
+domain = "core"
+rule = "progress-callback"
+
+[[entry]]
+kind = "type"
+old = "OfflineWorkerProgress"
+removed = true
+domain = "core"
+rule = "progress-callback"
+
+[[entry]]
+kind = "method"
+old = "OfflineWorkerClient.dispose"
+new = "OfflineWorkerClient.destroy"
+domain = "core"
+rule = "async-teardown"
+
+[[entry]]
+kind = "field"
+old = "OfflineWorkerClientOptions.terminateWorkerOnDispose"
+new = "OfflineWorkerClientOptions.terminateWorkerOnDestroy"
+domain = "core"
+rule = "async-teardown"
+
+[[entry]]
+kind = "class"
+old = "OfflineWorkerClient"
+changed = "constructor without a Worker throws SonareError NotSupported; a worker crash or malformed message rejects pending calls with a SonareError"
+domain = "core"
+rule = "error-class-by-cause"
+test = "bindings/wasm/tests/surface/core-worker.test.ts::no Worker global and no worker option is NotSupported"
+
+[[entry]]
+kind = "function"
+old = "vocalEditApiVersion"
+new = "vocalEditAbiVersion"
+domain = "core"
+rule = "abi-probes"
+
+[[entry]]
+kind = "function"
+old = "hasFfmpegSupport"
+removed = true
+domain = "core"
+rule = "aliases-removed"
+
+[[entry]]
+kind = "function"
+old = "vocalEditAvailable"
+removed = true
+domain = "core"
+rule = "aliases-removed"
+
+[[entry]]
+kind = "value"
+old = "EXPECTED_ABI_VERSION"
+removed = true
+domain = "core"
+rule = "abi-probes"
+
+[[entry]]
+kind = "value"
+old = "EXPECTED_ENGINE_ABI_VERSION"
+removed = true
+domain = "engine"
+rule = "abi-probes"
+
+[[entry]]
+kind = "value"
+old = "EXPECTED_PROJECT_ABI_VERSION"
+removed = true
+domain = "project"
+rule = "abi-probes"
+
+[[entry]]
+kind = "type"
+old = "CapabilityCatalogParameter"
+new = "MasteringInsertParamInfo"
+domain = "mastering"
+rule = "type-names"
+
+[[entry]]
+kind = "type"
+old = "CapabilityCatalogProcessor"
+new = "MasteringProcessorCatalogEntry"
+domain = "mastering"
+rule = "type-names"
+
+[[entry]]
+kind = "type"
+old = "CapabilityCatalogMasteringPreset"
+new = "MasteringPresetCatalogEntry"
+domain = "mastering"
+rule = "type-names"
+
+[[entry]]
+kind = "type"
+old = "MasteringProcessorCatalogEntry"
+changed = "every field and array is readonly and category is the closed MasteringProcessorCategory union; copy before mutating"
+domain = "mastering"
+rule = "type-names"
+test = "bindings/wasm/tests/surface/core-types.test.ts::shares one catalog type family"
+
+[[entry]]
+kind = "type"
+old = "MasteringInsertParamInfo"
+changed = "every field and array is readonly; copy before mutating"
+domain = "mastering"
+rule = "type-names"
+test = "bindings/wasm/tests/surface/core-types.test.ts::shares one catalog type family"
+
+[[entry]]
+kind = "method"
+old = "Audio.data"
+changed = "data is one shared Float32Array read on every access; do not mutate it, copy with slice() first"
+domain = "core"
+rule = "getters"
+test = "bindings/wasm/tests/surface/core-audio.test.ts::returns the same shared data array on every read"
+
+[[entry]]
+kind = "method"
+old = "Audio.destroy"
+changed = "new method, idempotent and also reached through Symbol.dispose; every read after it throws SonareError InvalidState"
+domain = "core"
+rule = "teardown"
+test = "bindings/wasm/tests/surface/core-audio.test.ts::refuses every read after destroy with InvalidState"
+
+[[entry]]
+kind = "function"
+old = "engineCapabilities"
+removed = true
+domain = "engine"
+rule = "abi-probes"
+
+[[entry]]
+kind = "type"
+old = "EngineCapabilities"
+removed = true
+domain = "engine"
+rule = "abi-probes"
+
+[[entry]]
+kind = "type"
+old = "SonareCapabilities"
+new = "Capabilities"
+domain = "core"
+rule = "type-names"
+
+[[entry]]
+kind = "type"
+old = "SonareCapabilities"
+new = "Capabilities"
+domain = "core"
+rule = "type-names"
+entry = "./analysis"
+
+[[entry]]
+kind = "value"
+old = "EXPECTED_ABI_VERSION"
+removed = true
+domain = "core"
+rule = "abi-probes"
+entry = "./analysis"
+
+[[entry]]
+kind = "function"
+old = "hasFfmpegSupport"
+removed = true
+domain = "core"
+rule = "aliases-removed"
+entry = "./analysis"
+
+[[entry]]
+kind = "value"
+old = "EXPECTED_ABI_VERSION"
+removed = true
+domain = "core"
+rule = "abi-probes"
+entry = "./worklet"
+
+[[entry]]
+kind = "type"
+old = "Matrix2dResult"
+new = "Matrix2D"
+domain = "analysis"
+rule = "matrix-2d"
+
+[[entry]]
+kind = "function"
+old = "spectralContrast"
+changed = "returns Matrix2D (rows = nBands + 1, cols = frames)"
+domain = "analysis"
+rule = "matrix-2d"
+test = "bindings/wasm/tests/surface/core-types.test.ts::exports one Matrix2D from both entries"
+
+[[entry]]
+kind = "function"
+old = "polyFeatures"
+changed = "returns Matrix2D (rows = order + 1, cols = frames)"
+domain = "analysis"
+rule = "matrix-2d"
+test = "bindings/wasm/tests/surface/core-types.test.ts::exports one Matrix2D from both entries"
+
+[[entry]]
+kind = "function"
+old = "nnFilter"
+changed = "returns Matrix2D (rows = features, cols = frames)"
+domain = "analysis"
+rule = "matrix-2d"
+test = "bindings/wasm/tests/surface/core-types.test.ts::exports one Matrix2D from both entries"
+
+[[entry]]
+kind = "type"
+old = "SonareModule"
+removed = true
+domain = "core"
+rule = "no-internal-types"
+
+[[entry]]
+kind = "option"
+old = "init(moduleFactory)"
+changed = "moduleFactory resolves to the opaque SonareModuleHandle; pass the generated module factory through unchanged"
+domain = "core"
+rule = "no-internal-types"
+test = "bindings/wasm/tests/surface/core-types.test.ts::types moduleFactory with the opaque module handle"
+
+[[entry]]
+kind = "method"
+old = "Audio.duration"
+new = "Audio.durationSec"
+domain = "core"
+rule = "seconds-suffix"
+
+[[entry]]
+kind = "method"
+old = "Audio.fromMemoryWithBrowserFallback"
+changed = "fallback failures throw SonareError NotSupported (no decoding context) or DecodeFailed with the decoder error as cause"
+domain = "core"
+rule = "error-class-by-cause"
+test = "bindings/wasm/tests/surface/core-audio.test.ts::reports a failed browser decode as DecodeFailed"

@@ -79,7 +79,7 @@ function errorMessage(error: unknown): OfflineWorkerErrorMessage['error'] {
 }
 
 function cancelledError(): SonareError {
-  return new SonareError(ErrorCode.Cancelled, 'Cancelled', 'Operation cancelled');
+  return new SonareError(ErrorCode.Cancelled, 'Operation cancelled');
 }
 
 /**

@@ -693,7 +693,6 @@ export function noteTargetsFromSmf(request: NoteTargetsFromSmfRequest): NoteTarg
   if (typeof module.noteTargetsFromSmf !== 'function') {
     throw new SonareError(
       ErrorCode.NotSupported,
-      'NotSupported',
       'libsonare was built without arrangement support',
     );
   }

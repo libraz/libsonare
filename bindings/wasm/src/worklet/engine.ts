@@ -3,6 +3,7 @@ import {
   type ClipPageStreamerRequest,
   type OpfsClipStreamOptions,
 } from '../clip_page_streamer.js';
+import { ErrorCode, SonareError } from '../errors.js';
 import type {
   EngineAutomationPoint,
   EngineBounceOptions,
@@ -870,7 +871,10 @@ export class SonareEngine {
     }
     const { clipId, primePages = 1, ...providerOptions } = options;
     if ([...this.workletPageProviderClipIds.values()].some((entry) => entry.clipId === clipId)) {
-      throw new Error(`An OPFS stream is already attached for clip ${clipId}.`);
+      throw new SonareError(
+        ErrorCode.InvalidState,
+        `An OPFS stream is already attached for clip ${clipId}.`,
+      );
     }
     const streamer = this.ensureWorkletClipStreamer();
     // Allocate the worklet-owned provider before priming: port message order

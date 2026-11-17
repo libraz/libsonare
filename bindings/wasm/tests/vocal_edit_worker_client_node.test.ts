@@ -5,7 +5,7 @@
 
 import { Worker as NodeWorker } from 'node:worker_threads';
 import { beforeAll, describe, expect, it } from 'vitest';
-import { init, VocalEditWorkerClient, vocalEditAvailable } from '../dist/index.js';
+import { capabilities, init, VocalEditWorkerClient } from '../dist/index.js';
 
 const SR = 22050;
 const entry = new URL('./fixtures/vocal-edit-worker-node-entry.mjs', import.meta.url);
@@ -43,7 +43,7 @@ describe('VocalEditWorkerClient under Node', () => {
   it.each(spellings)('completes one round trip through %s', async (_label, build) => {
     const client = build();
     try {
-      if (!vocalEditAvailable()) {
+      if (!capabilities().features.vocalEdit) {
         // The message still crosses the thread and comes back as the module's refusal.
         await expect(client.create({ samples: voice(), sampleRate: SR }).result).rejects.toThrow();
         return;

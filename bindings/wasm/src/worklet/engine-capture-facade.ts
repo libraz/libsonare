@@ -1,3 +1,4 @@
+import { ErrorCode, SonareError } from '../errors.js';
 import type { EngineCaptureStatus, RealtimeEngine } from '../index.js';
 import { commitCommand, commitSync, type EngineCommitContext } from './engine-commit.js';
 import type { SonareRealtimeEngineNode } from './engine-node.js';
@@ -50,7 +51,7 @@ export function armRecord(
     throw new RangeError('Capture is global; armRecord only accepts trackId 0');
   }
   if (enabled && !ctx.getCaptureConfig()) {
-    throw new Error('Capture buffer is not configured');
+    throw new SonareError(ErrorCode.InvalidState, 'Capture buffer is not configured');
   }
   return commitCommand(
     ctx,

@@ -10,6 +10,7 @@
 import type { SplitSilenceCommonWithReportResult } from './feature_core.js';
 import type { StripMeteringOptions } from './mixer.js';
 import type {
+  Capabilities,
   NoteEditInput,
   NoteObject,
   NoteObjectInput,
@@ -21,7 +22,6 @@ import type {
   PercussiveEventInput,
   PitchDecompositionResult,
   ProgressCallback,
-  SonareCapabilities,
   SpectralRegionOp,
   SurroundPan,
 } from './public_types.js';
@@ -2171,7 +2171,7 @@ export interface SonareModule {
   detectKeyCandidates: (samples: Float32Array, sampleRate: number) => WasmKeyCandidateResult[];
   hasFfmpegSupport: () => boolean;
   version: () => string;
-  capabilities: () => SonareCapabilities;
+  capabilities: () => Capabilities;
   capabilityCatalog: () => string;
   abiVersion: () => number;
   engineAbiVersion: () => number;

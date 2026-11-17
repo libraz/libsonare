@@ -26,9 +26,10 @@ import {
   setSonareModule,
 } from './module_state.js';
 import type {
+  Capabilities,
   CapabilityCatalog,
   RealtimeVoiceChangerPodConfig,
-  SonareCapabilities,
+  SonareModuleHandle,
   VoicePresetId,
 } from './public_types.js';
 import type {
@@ -38,13 +39,11 @@ import type {
   WasmFourierTempogramResult,
   WasmFrameResult,
   WasmHpssWithResidualResult,
-  WasmMatrix2dResult,
   WasmNnlsChromaResult,
   WasmTempogramResult,
   WasmTrimResult,
 } from './sonare.js';
 
-export { EXPECTED_ABI_VERSION } from './abi.js';
 export { alignTakeToReference } from './align_take.js';
 export type {
   BrowserAudioDecodeOptions,
@@ -279,6 +278,7 @@ export type {
   PitchShiftRequest,
   TimeStretchRequest,
 } from './effects_timepitch.js';
+export type { ErrorCodeName } from './errors.js';
 export { ErrorCode, isSonareError, SonareError } from './errors.js';
 export type {
   ChirpRequest,
@@ -682,7 +682,6 @@ export {
   CONTROLLER_AXES,
   CONTROLLER_INPUTS,
   controllerProfileNames,
-  EXPECTED_PROJECT_ABI_VERSION,
   MarkerKind,
   MPE_DIMENSIONS,
   NOTE_TRACKINGS,
@@ -734,15 +733,13 @@ export type {
   BoundaryOptions,
   BoundaryResult,
   BpmHypothesis,
+  Capabilities,
   CapabilityCatalog,
   CapabilityCatalogChain,
   CapabilityCatalogChainAlias,
   CapabilityCatalogChainList,
   CapabilityCatalogChainStage,
-  CapabilityCatalogMasteringPreset,
-  CapabilityCatalogParameter,
   CapabilityCatalogPresets,
-  CapabilityCatalogProcessor,
   Chord,
   ChordAnalysisResult,
   ChordDetectionOptions,
@@ -800,6 +797,7 @@ export type {
   MasteringLoudnessSummary,
   MasteringOptions,
   MasteringPreset,
+  MasteringPresetCatalogEntry,
   MasteringProcessorParams,
   MasteringRepairDeclickStereoResult,
   MasteringRepairDeclipStereoResult,
@@ -824,6 +822,7 @@ export type {
   MatchTonalBalanceLogBandsResult,
   MatchTonalBalanceResult,
   MaterialPresetName,
+  Matrix2D,
   MelodyPoint,
   MelodyResult,
   MelPowerResult,
@@ -928,7 +927,7 @@ export type {
   SidechainRefusal,
   SidechainSourceKind,
   SoloProcessor,
-  SonareCapabilities,
+  SonareModuleHandle,
   SpectralEditMode,
   SpectralEditOptions,
   SpectralEditWindow,
@@ -1027,7 +1026,6 @@ export {
   detectOnsets,
   estimateMeter,
   estimateRoom,
-  hasFfmpegSupport,
   roomGeometryFromEstimate,
   roomMorph,
   roomMorphStereo,
@@ -1039,7 +1037,6 @@ export type {
   EngineBounceOptions,
   EngineBounceResult,
   EngineBus,
-  EngineCapabilities,
   EngineCapturePunchRequest,
   EngineCaptureSource,
   EngineCaptureStatus,
@@ -1070,8 +1067,6 @@ export type {
 } from './realtime_engine.js';
 export {
   ClipPageProvider,
-  EXPECTED_ENGINE_ABI_VERSION,
-  engineCapabilities,
   MAX_TRACK_LANES,
   RealtimeEngine,
 } from './realtime_engine.js';
@@ -1124,8 +1119,7 @@ export {
   VocalEditSession,
   VocalRenderJob,
   VocalRenderSnapshot,
-  vocalEditApiVersion,
-  vocalEditAvailable,
+  vocalEditAbiVersion,
 } from './vocal_edit.js';
 export type {
   VocalEditWorker,
@@ -1153,12 +1147,9 @@ export type {
   OfflineWorker,
   OfflineWorkerCallOptions,
   OfflineWorkerClientOptions,
-  OfflineWorkerProgress,
 } from './worker_client.js';
-export { OfflineWorkerClient, OfflineWorkerTask } from './worker_client.js';
+export { OfflineWorkerClient } from './worker_client.js';
 
-/** Row-major 2-D matrix as a flat buffer plus its dimensions. */
-export type Matrix2dResult = WasmMatrix2dResult;
 /** NMF factor matrices { w, h } from {@link decompose}. */
 export type DecomposeResult = WasmDecomposeResult;
 /** Harmonic / percussive / residual signals from {@link hpssWithResidual}. */
@@ -1175,7 +1166,6 @@ export type FrameResult = WasmFrameResult;
 export type NnlsChromaResult = WasmNnlsChromaResult;
 /** Trimmed signal and its bounds from {@link trimSilence}. */
 export type TrimResult = WasmTrimResult;
-export type { SonareModule };
 
 // ============================================================================
 // Module State
@@ -1202,7 +1192,7 @@ export async function init(options?: {
   moduleFactory?: (options?: {
     locateFile?: (path: string, prefix: string) => string;
     wasmBinary?: ArrayBuffer | Uint8Array;
-  }) => Promise<SonareModule>;
+  }) => Promise<SonareModuleHandle>;
 }): Promise<void> {
   if (module) {
     assertSameInitOptions(firstInitOptions, options);
@@ -1217,7 +1207,7 @@ export async function init(options?: {
   initPromise = (async () => {
     try {
       const createModule = options?.moduleFactory ?? (await import('./sonare.js')).default;
-      const created = await createModule(options);
+      const created = (await createModule(options)) as unknown as SonareModule;
       assertAbiCompatible(created);
       module = created;
       setSonareModule(module);
@@ -1249,18 +1239,26 @@ export function version(): string {
 }
 
 /**
- * Return the capabilities of the loaded WASM build.
+ * Return the capabilities of the loaded WASM build. Feature presence is read
+ * here (`capabilities().features.ffmpeg`, `capabilities().features.vocalEdit`,
+ * ...); there is no separate probe per feature.
  *
- * This is synchronous and only describes the already-initialized module.
+ * @throws SonareError `InvalidState` before {@link init} has resolved.
  */
-export function capabilities(): SonareCapabilities {
+export function capabilities(): Capabilities {
   if (!module) {
     throw notInitializedError();
   }
   return module.capabilities();
 }
 
-/** Return the initialized module's processors, parameters, and presets. */
+/**
+ * Return the initialized module's processors, parameters, and presets. The
+ * processor and parameter entries are the same records
+ * {@link masteringProcessorCatalog} and {@link masteringInsertParamInfo} return.
+ *
+ * @throws SonareError `InvalidState` before {@link init} has resolved.
+ */
 export function capabilityCatalog(): CapabilityCatalog {
   if (!module) {
     throw notInitializedError();
@@ -1280,6 +1278,7 @@ export function abiVersion(): number {
   return module.abiVersion();
 }
 
+/** ABI version of the realtime engine command/telemetry layout in the loaded module. */
 export function engineAbiVersion(): number {
   if (!module) {
     throw notInitializedError();
@@ -1287,6 +1286,7 @@ export function engineAbiVersion(): number {
   return module.engineAbiVersion();
 }
 
+/** ABI version of the realtime voice-changer config layout in the loaded module. */
 export function voiceChangerAbiVersion(): number {
   if (!module) {
     throw notInitializedError();

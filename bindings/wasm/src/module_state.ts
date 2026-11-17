@@ -62,7 +62,6 @@ export function nativeExceptionPtr(error: unknown): number | null {
  */
 function makeSonareError(raw: SonareModule, thrown: number): Error {
   let code: number = ErrorCode.Unknown;
-  let codeName = 'Unknown';
   let kind: NativeExceptionInfo['kind'];
   let message = `libsonare native exception (${thrown})`;
   try {
@@ -71,7 +70,6 @@ function makeSonareError(raw: SonareModule, thrown: number): Error {
     ).sonareExceptionInfo?.(thrown);
     if (info) {
       code = info.code ?? code;
-      codeName = info.codeName ?? codeName;
       message = info.message || message;
       kind = info.kind;
     }
@@ -91,7 +89,7 @@ function makeSonareError(raw: SonareModule, thrown: number): Error {
   if (kind === 'RangeError') {
     return new RangeError(message);
   }
-  return new SonareError(code, codeName, message);
+  return new SonareError(code as ErrorCode, message);
 }
 
 /**
@@ -112,7 +110,7 @@ function wrapModuleErrors(raw: SonareModule): SonareModule {
     }
     // embind's use-after-delete is a plain BindingError; report it as object state.
     if (error instanceof Error && EMBIND_DELETED_PATTERN.test(error.message)) {
-      throw new SonareError(ErrorCode.InvalidState, 'InvalidState', error.message);
+      throw new SonareError(ErrorCode.InvalidState, error.message);
     }
     throw error;
   };
@@ -224,11 +222,7 @@ function wrapModuleErrors(raw: SonareModule): SonareModule {
 
 /** Error thrown when a facade function runs before `init()` resolved. */
 export function notInitializedError(): SonareError {
-  return new SonareError(
-    ErrorCode.InvalidState,
-    'InvalidState',
-    'Module not initialized. Call init() first.',
-  );
+  return new SonareError(ErrorCode.InvalidState, 'Module not initialized. Call init() first.');
 }
 
 /** Format a packed ABI version as `0x` plus eight hex digits. */
@@ -251,7 +245,6 @@ export function assertAbiCompatible(created: SonareModule): void {
   }
   throw new SonareError(
     ErrorCode.AbiMismatch,
-    'AbiMismatch',
     `libsonare ABI mismatch: wasm module reports ${
       actual === undefined ? 'no ABI version' : hexAbi(actual)
     }, this package expects ${hexAbi(EXPECTED_ABI_VERSION)}. ` +
@@ -275,7 +268,6 @@ export function assertSameInitOptions(first: object | undefined, next: object | 
     if (a[key] !== b[key]) {
       throw new SonareError(
         ErrorCode.InvalidState,
-        'InvalidState',
         `init() options differ from the first call (${key}); options apply on the first call only.`,
       );
     }
