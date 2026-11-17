@@ -1,0 +1,16 @@
+# Ledger fixture: a removal and a reshaped signature.
+
+[[entry]]
+kind = "function"
+old = "bpm_legacy"
+removed = true
+domain = "analysis"
+rule = "individual"
+
+[[entry]]
+kind = "function"
+old = "detect_bpm"
+changed = "sample_rate is a required argument."
+test = "tools/api/testdata/changed_case.txt::detect_bpm requires sample_rate"
+domain = "analysis"
+rule = "sample-rate-required"

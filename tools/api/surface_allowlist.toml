@@ -1,0 +1,9 @@
+# Excused convention-check violations for tools/api/check_surface.py.
+#
+# One [[allow]] per decided exception:
+#   check     a check id (slug or slug:aspect)
+#   surface   wasm | node | python | c | cli-python | cli-native | cli
+#   name      fnmatch pattern on the qualified symbol name
+#   category  librosa-mirror | platform | wire-format | hot-path
+#   reason    one line
+# --audit-allowlist fails on an entry that excused nothing in a full run.

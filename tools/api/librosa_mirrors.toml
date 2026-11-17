@@ -1,0 +1,226 @@
+# Python functions that mirror a librosa function of the same name.
+#
+# On the Python surface the spelling of the rate parameter tells the two families apart:
+# `sr` with a 22050 default is a librosa mirror with librosa's semantics; `sample_rate`,
+# required, is a libsonare operation. No function carries both, and none has `sample_rate`
+# with a default. The first argument is `samples` in both families.
+#
+# A name is listed when librosa has a function of that name with the same meaning and no
+# parameter is a librosa parameter under another name. The primary data argument's name is
+# exempt, an extra parameter librosa lacks is allowed when its default reproduces librosa's
+# behaviour, and parameters that only describe a flat matrix's shape are not counted.
+# A family of related functions is all mirrors or all operations, never split.
+# Mirrors keep librosa's parameter names, defaults and return shapes, so the naming rules
+# for seconds, units, sample-rate names and tuple returns do not apply to them on Python.
+# The same-named WASM, Node and C functions are not mirrors.
+#
+# evidence: "in-tree" = a librosa reference generator or benchmark in this repository
+# calls the librosa function; "recalled" = not yet confirmed against an installed librosa.
+
+[[mirror]]
+name = "stft"
+evidence = "in-tree"
+
+[[mirror]]
+name = "mfcc"
+evidence = "in-tree"
+
+[[mirror]]
+name = "chroma_cqt"
+evidence = "in-tree"
+
+[[mirror]]
+name = "chroma_cens"
+evidence = "in-tree"
+
+[[mirror]]
+name = "cqt"
+evidence = "in-tree"
+
+[[mirror]]
+name = "hybrid_cqt"
+evidence = "in-tree"
+
+[[mirror]]
+name = "pseudo_cqt"
+evidence = "in-tree"
+
+[[mirror]]
+name = "vqt"
+evidence = "in-tree"
+
+[[mirror]]
+name = "spectral_centroid"
+evidence = "in-tree"
+
+[[mirror]]
+name = "spectral_bandwidth"
+evidence = "in-tree"
+
+[[mirror]]
+name = "spectral_contrast"
+evidence = "in-tree"
+
+[[mirror]]
+name = "spectral_flatness"
+evidence = "in-tree"
+
+[[mirror]]
+name = "spectral_rolloff"
+evidence = "in-tree"
+
+[[mirror]]
+name = "poly_features"
+evidence = "in-tree"
+
+[[mirror]]
+name = "zero_crossing_rate"
+evidence = "in-tree"
+
+[[mirror]]
+name = "zero_crossings"
+evidence = "in-tree"
+
+[[mirror]]
+name = "reassigned_spectrogram"
+evidence = "in-tree"
+
+[[mirror]]
+name = "piptrack"
+evidence = "in-tree"
+
+[[mirror]]
+name = "estimate_tuning"
+evidence = "in-tree"
+
+[[mirror]]
+name = "pitch_tuning"
+evidence = "in-tree"
+
+[[mirror]]
+name = "pcen"
+evidence = "in-tree"
+
+[[mirror]]
+name = "onset_strength"
+evidence = "in-tree"
+
+[[mirror]]
+name = "onset_backtrack"
+evidence = "in-tree"
+
+[[mirror]]
+name = "peak_pick"
+evidence = "in-tree"
+
+[[mirror]]
+name = "plp"
+evidence = "in-tree"
+
+[[mirror]]
+name = "mel_to_stft"
+evidence = "in-tree"
+
+[[mirror]]
+name = "mel_to_audio"
+evidence = "recalled"
+
+[[mirror]]
+name = "mfcc_to_mel"
+evidence = "recalled"
+
+[[mirror]]
+name = "mfcc_to_audio"
+evidence = "recalled"
+
+[[mirror]]
+name = "frames_to_time"
+evidence = "in-tree"
+
+[[mirror]]
+name = "time_to_frames"
+evidence = "recalled"
+
+[[mirror]]
+name = "frames_to_samples"
+evidence = "in-tree"
+
+[[mirror]]
+name = "samples_to_frames"
+evidence = "in-tree"
+
+[[mirror]]
+name = "amplitude_to_db"
+evidence = "in-tree"
+
+[[mirror]]
+name = "power_to_db"
+evidence = "in-tree"
+
+[[mirror]]
+name = "db_to_amplitude"
+evidence = "in-tree"
+
+[[mirror]]
+name = "db_to_power"
+evidence = "in-tree"
+
+[[mirror]]
+name = "hz_to_mel"
+evidence = "in-tree"
+
+[[mirror]]
+name = "mel_to_hz"
+evidence = "in-tree"
+
+[[mirror]]
+name = "hz_to_midi"
+evidence = "in-tree"
+
+[[mirror]]
+name = "midi_to_hz"
+evidence = "recalled"
+
+[[mirror]]
+name = "hz_to_note"
+evidence = "recalled"
+
+[[mirror]]
+name = "note_to_hz"
+evidence = "in-tree"
+
+[[mirror]]
+name = "chirp"
+evidence = "in-tree"
+
+[[mirror]]
+name = "preemphasis"
+evidence = "in-tree"
+
+[[mirror]]
+name = "deemphasis"
+evidence = "in-tree"
+
+[[mirror]]
+name = "remix"
+evidence = "in-tree"
+
+[[mirror]]
+name = "tempogram"
+evidence = "in-tree"
+
+[[mirror]]
+name = "fourier_tempogram"
+evidence = "in-tree"
+
+[[mirror]]
+name = "tempogram_ratio"
+evidence = "recalled"
+
+[[mirror]]
+name = "tone"
+evidence = "in-tree"
+
+[[mirror]]
+name = "clicks"
+evidence = "in-tree"

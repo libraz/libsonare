@@ -1,0 +1,1135 @@
+{
+ "cli_only": {
+  "native_only": [],
+  "python_only": []
+ },
+ "counts": {
+  "c": 9,
+  "cli-native": 2,
+  "cli-python": 2,
+  "node": 17,
+  "python": 10,
+  "wasm": 17
+ },
+ "domain_paths": {
+  "declaring-file": 20,
+  "inherited": 37
+ },
+ "errors": [],
+ "files": {
+  "c": 1,
+  "cli-native": 1,
+  "cli-python": 1,
+  "node": 1,
+  "python": 1,
+  "wasm": 1
+ },
+ "python_all": [
+  "BpmResult",
+  "Session",
+  "detect_bpm",
+  "stft"
+ ],
+ "python_unresolved": [],
+ "records": [
+  {
+   "domain": "analysis",
+   "domain_path": "inherited",
+   "entries": [],
+   "file": "include/sonare/sonare_c_analysis.h",
+   "has_doc": true,
+   "index": 2,
+   "kind": "field",
+   "line": 1,
+   "member": "length",
+   "name": "SonareBpmOptions.length",
+   "owner": "SonareBpmOptions",
+   "surface": "c",
+   "type": "size_t"
+  },
+  {
+   "domain": "analysis",
+   "domain_path": "inherited",
+   "entries": [],
+   "file": "include/sonare/sonare_c_analysis.h",
+   "has_doc": true,
+   "index": 1,
+   "kind": "field",
+   "line": 1,
+   "member": "sample_rate",
+   "name": "SonareBpmOptions.sample_rate",
+   "owner": "SonareBpmOptions",
+   "surface": "c",
+   "type": "int"
+  },
+  {
+   "domain": "analysis",
+   "domain_path": "inherited",
+   "entries": [],
+   "file": "include/sonare/sonare_c_analysis.h",
+   "has_doc": true,
+   "index": 0,
+   "kind": "field",
+   "line": 1,
+   "member": "struct_size",
+   "name": "SonareBpmOptions.struct_size",
+   "owner": "SonareBpmOptions",
+   "surface": "c",
+   "type": "uint32_t"
+  },
+  {
+   "domain": "analysis",
+   "domain_path": "declaring-file",
+   "entries": [],
+   "file": "include/sonare/sonare_c_analysis.h",
+   "has_doc": true,
+   "kind": "function",
+   "line": 1,
+   "member": "",
+   "name": "sonare_bpm_options_init",
+   "owner": "",
+   "sigs": [
+    {
+     "params": [
+      {
+       "boolean": false,
+       "default": null,
+       "literals": [],
+       "name": "options",
+       "optional": false,
+       "rest": false,
+       "type": "SonareBpmOptions*"
+      }
+     ],
+     "returns": "void"
+    }
+   ],
+   "surface": "c"
+  },
+  {
+   "domain": "analysis",
+   "domain_path": "declaring-file",
+   "entries": [],
+   "file": "include/sonare/sonare_c_analysis.h",
+   "has_doc": true,
+   "kind": "function",
+   "line": 1,
+   "member": "",
+   "name": "sonare_free_string",
+   "owner": "",
+   "sigs": [
+    {
+     "params": [
+      {
+       "boolean": false,
+       "default": null,
+       "literals": [],
+       "name": "text",
+       "optional": false,
+       "rest": false,
+       "type": "char*"
+      }
+     ],
+     "returns": "void"
+    }
+   ],
+   "surface": "c"
+  },
+  {
+   "domain": "analysis",
+   "domain_path": "declaring-file",
+   "entries": [],
+   "file": "include/sonare/sonare_c_analysis.h",
+   "has_doc": true,
+   "kind": "function",
+   "line": 1,
+   "member": "",
+   "name": "sonare_session_create",
+   "owner": "",
+   "sigs": [
+    {
+     "params": [
+      {
+       "boolean": false,
+       "default": null,
+       "literals": [],
+       "name": "out",
+       "optional": false,
+       "rest": false,
+       "type": "SonareSession**"
+      }
+     ],
+     "returns": "SonareError"
+    }
+   ],
+   "surface": "c"
+  },
+  {
+   "domain": "analysis",
+   "domain_path": "declaring-file",
+   "entries": [],
+   "file": "include/sonare/sonare_c_analysis.h",
+   "has_doc": true,
+   "kind": "function",
+   "line": 1,
+   "member": "",
+   "name": "sonare_session_destroy",
+   "owner": "",
+   "sigs": [
+    {
+     "params": [
+      {
+       "boolean": false,
+       "default": null,
+       "literals": [],
+       "name": "session",
+       "optional": false,
+       "rest": false,
+       "type": "SonareSession*"
+      }
+     ],
+     "returns": "void"
+    }
+   ],
+   "surface": "c"
+  },
+  {
+   "c_kind": "struct",
+   "domain": "analysis",
+   "domain_path": "declaring-file",
+   "entries": [],
+   "fields": [
+    "struct_size",
+    "sample_rate",
+    "length"
+   ],
+   "file": "include/sonare/sonare_c_analysis.h",
+   "has_doc": true,
+   "kind": "type",
+   "line": 1,
+   "member": "",
+   "name": "SonareBpmOptions",
+   "owner": "",
+   "surface": "c"
+  },
+  {
+   "c_kind": "opaque",
+   "domain": "engine",
+   "domain_path": "declaring-file",
+   "entries": [],
+   "file": "include/sonare/sonare_c_analysis.h",
+   "has_doc": true,
+   "kind": "type",
+   "line": 1,
+   "member": "",
+   "name": "SonareSession",
+   "owner": "",
+   "surface": "c"
+  },
+  {
+   "domain": "analysis",
+   "domain_path": "declaring-file",
+   "entries": [],
+   "file": "tools/cli/sonare_cli_registry.cpp",
+   "group": false,
+   "has_doc": true,
+   "kind": "command",
+   "line": 1,
+   "member": "",
+   "name": "bpm",
+   "owner": "",
+   "surface": "cli-native"
+  },
+  {
+   "domain": "analysis",
+   "domain_path": "inherited",
+   "entries": [],
+   "file": "tools/cli/sonare_cli_registry.cpp",
+   "has_doc": true,
+   "kind": "flag",
+   "line": 1,
+   "member": "json",
+   "name": "bpm --json",
+   "owner": "bpm",
+   "surface": "cli-native"
+  },
+  {
+   "domain": "analysis",
+   "domain_path": "declaring-file",
+   "entries": [],
+   "file": "bindings/python/src/libsonare/_cli_bpm.py",
+   "group": false,
+   "has_doc": true,
+   "kind": "command",
+   "line": 1,
+   "member": "",
+   "name": "bpm",
+   "owner": "",
+   "surface": "cli-python"
+  },
+  {
+   "domain": "analysis",
+   "domain_path": "inherited",
+   "entries": [],
+   "file": "bindings/python/src/libsonare/_cli_bpm.py",
+   "has_doc": true,
+   "kind": "flag",
+   "line": 1,
+   "member": "json",
+   "name": "bpm --json",
+   "owner": "bpm",
+   "surface": "cli-python"
+  },
+  {
+   "bases": [],
+   "ctor_private": true,
+   "domain": "engine",
+   "domain_path": "declaring-file",
+   "entries": [],
+   "file": "bindings/node/src/analysis_bpm.ts",
+   "has_doc": true,
+   "kind": "class",
+   "line": 1,
+   "member": "",
+   "name": "Session",
+   "owner": "",
+   "sigs": [],
+   "surface": "node"
+  },
+  {
+   "domain": "analysis",
+   "domain_path": "inherited",
+   "entries": [],
+   "file": "bindings/node/src/analysis_bpm.ts",
+   "has_doc": true,
+   "inline_literals": false,
+   "kind": "field",
+   "line": 1,
+   "literals": [],
+   "member": "centerHz",
+   "name": "BpmRequest.centerHz",
+   "optional": true,
+   "owner": "BpmRequest",
+   "surface": "node",
+   "type": "number"
+  },
+  {
+   "domain": "analysis",
+   "domain_path": "inherited",
+   "entries": [],
+   "file": "bindings/node/src/analysis_bpm.ts",
+   "has_doc": true,
+   "inline_literals": false,
+   "kind": "field",
+   "line": 1,
+   "literals": [],
+   "member": "channels",
+   "name": "BpmRequest.channels",
+   "optional": true,
+   "owner": "BpmRequest",
+   "surface": "node",
+   "type": "Float32Array[]"
+  },
+  {
+   "domain": "analysis",
+   "domain_path": "inherited",
+   "entries": [],
+   "file": "bindings/node/src/analysis_bpm.ts",
+   "has_doc": true,
+   "inline_literals": false,
+   "kind": "field",
+   "line": 1,
+   "literals": [],
+   "member": "fadeInSec",
+   "name": "BpmRequest.fadeInSec",
+   "optional": true,
+   "owner": "BpmRequest",
+   "surface": "node",
+   "type": "number"
+  },
+  {
+   "domain": "analysis",
+   "domain_path": "inherited",
+   "entries": [],
+   "file": "bindings/node/src/analysis_bpm.ts",
+   "has_doc": true,
+   "inline_literals": false,
+   "kind": "field",
+   "line": 1,
+   "literals": [],
+   "member": "fminHz",
+   "name": "BpmRequest.fminHz",
+   "optional": true,
+   "owner": "BpmRequest",
+   "surface": "node",
+   "type": "number"
+  },
+  {
+   "domain": "analysis",
+   "domain_path": "inherited",
+   "entries": [],
+   "file": "bindings/node/src/analysis_bpm.ts",
+   "has_doc": true,
+   "inline_literals": false,
+   "kind": "field",
+   "line": 1,
+   "literals": [],
+   "member": "sampleRate",
+   "name": "BpmRequest.sampleRate",
+   "optional": false,
+   "owner": "BpmRequest",
+   "surface": "node",
+   "type": "number"
+  },
+  {
+   "domain": "analysis",
+   "domain_path": "inherited",
+   "entries": [],
+   "file": "bindings/node/src/analysis_bpm.ts",
+   "has_doc": true,
+   "inline_literals": false,
+   "kind": "field",
+   "line": 1,
+   "literals": [],
+   "member": "samples",
+   "name": "BpmRequest.samples",
+   "optional": false,
+   "owner": "BpmRequest",
+   "surface": "node",
+   "type": "Float32Array"
+  },
+  {
+   "domain": "analysis",
+   "domain_path": "inherited",
+   "entries": [],
+   "file": "bindings/node/src/analysis_bpm.ts",
+   "has_doc": true,
+   "inline_literals": false,
+   "kind": "field",
+   "line": 1,
+   "literals": [],
+   "member": "transposeSemitones",
+   "name": "BpmRequest.transposeSemitones",
+   "optional": true,
+   "owner": "BpmRequest",
+   "surface": "node",
+   "type": "number"
+  },
+  {
+   "domain": "analysis",
+   "domain_path": "inherited",
+   "entries": [],
+   "file": "bindings/node/src/analysis_bpm.ts",
+   "has_doc": true,
+   "inline_literals": false,
+   "kind": "field",
+   "line": 1,
+   "literals": [],
+   "member": "validate",
+   "name": "BpmRequest.validate",
+   "optional": true,
+   "owner": "BpmRequest",
+   "surface": "node",
+   "type": "boolean"
+  },
+  {
+   "domain": "analysis",
+   "domain_path": "declaring-file",
+   "entries": [],
+   "file": "bindings/node/src/analysis_bpm.ts",
+   "has_doc": true,
+   "kind": "function",
+   "line": 1,
+   "member": "",
+   "name": "detectBpm",
+   "owner": "",
+   "sigs": [
+    {
+     "params": [
+      {
+       "boolean": false,
+       "default": null,
+       "literals": [],
+       "name": "request",
+       "optional": false,
+       "rest": false,
+       "type": "BpmRequest"
+      }
+     ],
+     "returns": "BpmResult"
+    }
+   ],
+   "surface": "node"
+  },
+  {
+   "domain": "engine",
+   "domain_path": "inherited",
+   "entries": [],
+   "file": "bindings/node/src/analysis_bpm.ts",
+   "has_doc": true,
+   "kind": "method",
+   "line": 1,
+   "member": "[Symbol.dispose]",
+   "name": "Session.[Symbol.dispose]",
+   "owner": "Session",
+   "sigs": [
+    {
+     "params": [],
+     "returns": "void"
+    }
+   ],
+   "static": false,
+   "surface": "node"
+  },
+  {
+   "domain": "engine",
+   "domain_path": "inherited",
+   "entries": [],
+   "file": "bindings/node/src/analysis_bpm.ts",
+   "has_doc": true,
+   "kind": "method",
+   "line": 1,
+   "member": "destroy",
+   "name": "Session.destroy",
+   "owner": "Session",
+   "sigs": [
+    {
+     "params": [],
+     "returns": "void"
+    }
+   ],
+   "static": false,
+   "surface": "node"
+  },
+  {
+   "domain": "analysis",
+   "domain_path": "inherited",
+   "entries": [],
+   "file": "bindings/node/src/analysis_bpm.ts",
+   "has_doc": true,
+   "kind": "option",
+   "line": 1,
+   "member": "request",
+   "name": "detectBpm(request)",
+   "owner": "detectBpm",
+   "surface": "node",
+   "type": "BpmRequest"
+  },
+  {
+   "domain": "analysis",
+   "domain_path": "declaring-file",
+   "entries": [],
+   "file": "bindings/node/src/analysis_bpm.ts",
+   "has_doc": true,
+   "kind": "type",
+   "line": 1,
+   "literals": [
+    "fast",
+    "midi2"
+   ],
+   "member": "",
+   "name": "BpmMode",
+   "owner": "",
+   "surface": "node",
+   "ts_kind": "type"
+  },
+  {
+   "domain": "analysis",
+   "domain_path": "declaring-file",
+   "entries": [],
+   "file": "bindings/node/src/analysis_bpm.ts",
+   "has_doc": true,
+   "kind": "type",
+   "line": 1,
+   "member": "",
+   "name": "BpmRequest",
+   "owner": "",
+   "surface": "node",
+   "ts_kind": "interface"
+  },
+  {
+   "domain": "analysis",
+   "domain_path": "inherited",
+   "entries": [],
+   "file": "bindings/node/src/analysis_bpm.ts",
+   "has_doc": true,
+   "kind": "value",
+   "line": 1,
+   "member": "fast",
+   "name": "BpmMode='fast'",
+   "owner": "BpmMode",
+   "surface": "node",
+   "token": "fast"
+  },
+  {
+   "domain": "analysis",
+   "domain_path": "inherited",
+   "entries": [],
+   "file": "bindings/node/src/analysis_bpm.ts",
+   "has_doc": true,
+   "kind": "value",
+   "line": 1,
+   "member": "midi2",
+   "name": "BpmMode='midi2'",
+   "owner": "BpmMode",
+   "surface": "node",
+   "token": "midi2"
+  },
+  {
+   "domain": "engine",
+   "domain_path": "declaring-file",
+   "entries": [],
+   "file": "bindings/python/src/libsonare/_analysis_bpm.py",
+   "has_doc": true,
+   "in_all": true,
+   "kind": "class",
+   "line": 1,
+   "member": "",
+   "modules": [
+    "__init__",
+    "analyzer"
+   ],
+   "name": "Session",
+   "owner": "",
+   "py_kind": "class",
+   "surface": "python"
+  },
+  {
+   "domain": "analysis",
+   "domain_path": "inherited",
+   "entries": [],
+   "file": "bindings/python/src/libsonare/_analysis_bpm.py",
+   "has_doc": true,
+   "index": 0,
+   "kind": "field",
+   "line": 1,
+   "member": "bpm",
+   "name": "BpmResult.bpm",
+   "owner": "BpmResult",
+   "surface": "python",
+   "type": "float"
+  },
+  {
+   "domain": "analysis",
+   "domain_path": "declaring-file",
+   "entries": [],
+   "file": "bindings/python/src/libsonare/_analysis_bpm.py",
+   "has_doc": true,
+   "in_all": true,
+   "kind": "function",
+   "line": 1,
+   "member": "",
+   "modules": [
+    "__init__",
+    "analyzer"
+   ],
+   "name": "detect_bpm",
+   "owner": "",
+   "sigs": [
+    {
+     "params": [
+      {
+       "boolean": false,
+       "default": null,
+       "literals": [],
+       "name": "samples",
+       "optional": false,
+       "rest": false,
+       "type": "NDArray"
+      },
+      {
+       "boolean": false,
+       "default": null,
+       "literals": [],
+       "name": "sample_rate",
+       "optional": false,
+       "rest": false,
+       "type": "int"
+      }
+     ],
+     "returns": "BpmResult"
+    }
+   ],
+   "surface": "python"
+  },
+  {
+   "domain": "analysis",
+   "domain_path": "declaring-file",
+   "entries": [],
+   "file": "bindings/python/src/libsonare/_analysis_bpm.py",
+   "has_doc": true,
+   "in_all": true,
+   "kind": "function",
+   "line": 1,
+   "member": "",
+   "modules": [
+    "__init__",
+    "analyzer"
+   ],
+   "name": "stft",
+   "owner": "",
+   "sigs": [
+    {
+     "params": [
+      {
+       "boolean": false,
+       "default": null,
+       "literals": [],
+       "name": "y",
+       "optional": false,
+       "rest": false,
+       "type": "NDArray"
+      },
+      {
+       "boolean": false,
+       "default": "22050",
+       "literals": [],
+       "name": "sr",
+       "optional": true,
+       "rest": false,
+       "type": "int"
+      }
+     ],
+     "returns": "tuple[NDArray, int]"
+    }
+   ],
+   "surface": "python"
+  },
+  {
+   "domain": "engine",
+   "domain_path": "inherited",
+   "entries": [],
+   "file": "bindings/python/src/libsonare/_analysis_bpm.py",
+   "has_doc": true,
+   "kind": "method",
+   "line": 1,
+   "member": "__enter__",
+   "name": "Session.__enter__",
+   "owner": "Session",
+   "sigs": [
+    {
+     "params": [],
+     "returns": "None"
+    }
+   ],
+   "surface": "python"
+  },
+  {
+   "domain": "engine",
+   "domain_path": "inherited",
+   "entries": [],
+   "file": "bindings/python/src/libsonare/_analysis_bpm.py",
+   "has_doc": true,
+   "kind": "method",
+   "line": 1,
+   "member": "__exit__",
+   "name": "Session.__exit__",
+   "owner": "Session",
+   "sigs": [
+    {
+     "params": [],
+     "returns": "None"
+    }
+   ],
+   "surface": "python"
+  },
+  {
+   "domain": "engine",
+   "domain_path": "inherited",
+   "entries": [],
+   "file": "bindings/python/src/libsonare/_analysis_bpm.py",
+   "has_doc": true,
+   "kind": "method",
+   "line": 1,
+   "member": "close",
+   "name": "Session.close",
+   "owner": "Session",
+   "sigs": [
+    {
+     "params": [],
+     "returns": "None"
+    }
+   ],
+   "surface": "python"
+  },
+  {
+   "domain": "analysis",
+   "domain_path": "inherited",
+   "entries": [],
+   "file": "bindings/python/src/libsonare/_analysis_bpm.py",
+   "has_doc": true,
+   "kind": "option",
+   "line": 1,
+   "member": "sample_rate",
+   "name": "detect_bpm(sample_rate)",
+   "owner": "detect_bpm",
+   "surface": "python",
+   "type": "int"
+  },
+  {
+   "domain": "analysis",
+   "domain_path": "inherited",
+   "entries": [],
+   "file": "bindings/python/src/libsonare/_analysis_bpm.py",
+   "has_doc": true,
+   "kind": "option",
+   "line": 1,
+   "member": "sr",
+   "name": "stft(sr)",
+   "optional": true,
+   "owner": "stft",
+   "surface": "python",
+   "type": "int"
+  },
+  {
+   "dataclass": true,
+   "domain": "analysis",
+   "domain_path": "declaring-file",
+   "entries": [],
+   "file": "bindings/python/src/libsonare/_analysis_bpm.py",
+   "frozen": true,
+   "has_doc": true,
+   "in_all": true,
+   "kind": "type",
+   "line": 1,
+   "member": "",
+   "modules": [
+    "__init__",
+    "analyzer"
+   ],
+   "name": "BpmResult",
+   "owner": "",
+   "py_kind": "dataclass",
+   "surface": "python"
+  },
+  {
+   "bases": [],
+   "ctor_private": true,
+   "domain": "engine",
+   "domain_path": "declaring-file",
+   "entries": [
+    "."
+   ],
+   "file": "bindings/wasm/src/analysis_bpm.ts",
+   "has_doc": true,
+   "kind": "class",
+   "line": 1,
+   "member": "",
+   "name": "Session",
+   "owner": "",
+   "sigs": [],
+   "surface": "wasm"
+  },
+  {
+   "domain": "analysis",
+   "domain_path": "inherited",
+   "entries": [
+    "."
+   ],
+   "file": "bindings/wasm/src/analysis_bpm.ts",
+   "has_doc": true,
+   "inline_literals": false,
+   "kind": "field",
+   "line": 1,
+   "literals": [],
+   "member": "centerHz",
+   "name": "BpmRequest.centerHz",
+   "optional": true,
+   "owner": "BpmRequest",
+   "surface": "wasm",
+   "type": "number"
+  },
+  {
+   "domain": "analysis",
+   "domain_path": "inherited",
+   "entries": [
+    "."
+   ],
+   "file": "bindings/wasm/src/analysis_bpm.ts",
+   "has_doc": true,
+   "inline_literals": false,
+   "kind": "field",
+   "line": 1,
+   "literals": [],
+   "member": "channels",
+   "name": "BpmRequest.channels",
+   "optional": true,
+   "owner": "BpmRequest",
+   "surface": "wasm",
+   "type": "Float32Array[]"
+  },
+  {
+   "domain": "analysis",
+   "domain_path": "inherited",
+   "entries": [
+    "."
+   ],
+   "file": "bindings/wasm/src/analysis_bpm.ts",
+   "has_doc": true,
+   "inline_literals": false,
+   "kind": "field",
+   "line": 1,
+   "literals": [],
+   "member": "fadeInSec",
+   "name": "BpmRequest.fadeInSec",
+   "optional": true,
+   "owner": "BpmRequest",
+   "surface": "wasm",
+   "type": "number"
+  },
+  {
+   "domain": "analysis",
+   "domain_path": "inherited",
+   "entries": [
+    "."
+   ],
+   "file": "bindings/wasm/src/analysis_bpm.ts",
+   "has_doc": true,
+   "inline_literals": false,
+   "kind": "field",
+   "line": 1,
+   "literals": [],
+   "member": "fminHz",
+   "name": "BpmRequest.fminHz",
+   "optional": true,
+   "owner": "BpmRequest",
+   "surface": "wasm",
+   "type": "number"
+  },
+  {
+   "domain": "analysis",
+   "domain_path": "inherited",
+   "entries": [
+    "."
+   ],
+   "file": "bindings/wasm/src/analysis_bpm.ts",
+   "has_doc": true,
+   "inline_literals": false,
+   "kind": "field",
+   "line": 1,
+   "literals": [],
+   "member": "sampleRate",
+   "name": "BpmRequest.sampleRate",
+   "optional": false,
+   "owner": "BpmRequest",
+   "surface": "wasm",
+   "type": "number"
+  },
+  {
+   "domain": "analysis",
+   "domain_path": "inherited",
+   "entries": [
+    "."
+   ],
+   "file": "bindings/wasm/src/analysis_bpm.ts",
+   "has_doc": true,
+   "inline_literals": false,
+   "kind": "field",
+   "line": 1,
+   "literals": [],
+   "member": "samples",
+   "name": "BpmRequest.samples",
+   "optional": false,
+   "owner": "BpmRequest",
+   "surface": "wasm",
+   "type": "Float32Array"
+  },
+  {
+   "domain": "analysis",
+   "domain_path": "inherited",
+   "entries": [
+    "."
+   ],
+   "file": "bindings/wasm/src/analysis_bpm.ts",
+   "has_doc": true,
+   "inline_literals": false,
+   "kind": "field",
+   "line": 1,
+   "literals": [],
+   "member": "transposeSemitones",
+   "name": "BpmRequest.transposeSemitones",
+   "optional": true,
+   "owner": "BpmRequest",
+   "surface": "wasm",
+   "type": "number"
+  },
+  {
+   "domain": "analysis",
+   "domain_path": "inherited",
+   "entries": [
+    "."
+   ],
+   "file": "bindings/wasm/src/analysis_bpm.ts",
+   "has_doc": true,
+   "inline_literals": false,
+   "kind": "field",
+   "line": 1,
+   "literals": [],
+   "member": "validate",
+   "name": "BpmRequest.validate",
+   "optional": true,
+   "owner": "BpmRequest",
+   "surface": "wasm",
+   "type": "boolean"
+  },
+  {
+   "domain": "analysis",
+   "domain_path": "declaring-file",
+   "entries": [
+    "."
+   ],
+   "file": "bindings/wasm/src/analysis_bpm.ts",
+   "has_doc": true,
+   "kind": "function",
+   "line": 1,
+   "member": "",
+   "name": "detectBpm",
+   "owner": "",
+   "sigs": [
+    {
+     "params": [
+      {
+       "boolean": false,
+       "default": null,
+       "literals": [],
+       "name": "request",
+       "optional": false,
+       "rest": false,
+       "type": "BpmRequest"
+      }
+     ],
+     "returns": "BpmResult"
+    }
+   ],
+   "surface": "wasm"
+  },
+  {
+   "domain": "engine",
+   "domain_path": "inherited",
+   "entries": [
+    "."
+   ],
+   "file": "bindings/wasm/src/analysis_bpm.ts",
+   "has_doc": true,
+   "kind": "method",
+   "line": 1,
+   "member": "[Symbol.dispose]",
+   "name": "Session.[Symbol.dispose]",
+   "owner": "Session",
+   "sigs": [
+    {
+     "params": [],
+     "returns": "void"
+    }
+   ],
+   "static": false,
+   "surface": "wasm"
+  },
+  {
+   "domain": "engine",
+   "domain_path": "inherited",
+   "entries": [
+    "."
+   ],
+   "file": "bindings/wasm/src/analysis_bpm.ts",
+   "has_doc": true,
+   "kind": "method",
+   "line": 1,
+   "member": "destroy",
+   "name": "Session.destroy",
+   "owner": "Session",
+   "sigs": [
+    {
+     "params": [],
+     "returns": "void"
+    }
+   ],
+   "static": false,
+   "surface": "wasm"
+  },
+  {
+   "domain": "analysis",
+   "domain_path": "inherited",
+   "entries": [
+    "."
+   ],
+   "file": "bindings/wasm/src/analysis_bpm.ts",
+   "has_doc": true,
+   "kind": "option",
+   "line": 1,
+   "member": "request",
+   "name": "detectBpm(request)",
+   "owner": "detectBpm",
+   "surface": "wasm",
+   "type": "BpmRequest"
+  },
+  {
+   "domain": "analysis",
+   "domain_path": "declaring-file",
+   "entries": [
+    "."
+   ],
+   "file": "bindings/wasm/src/analysis_bpm.ts",
+   "has_doc": true,
+   "kind": "type",
+   "line": 1,
+   "literals": [
+    "fast",
+    "midi2"
+   ],
+   "member": "",
+   "name": "BpmMode",
+   "owner": "",
+   "surface": "wasm",
+   "ts_kind": "type"
+  },
+  {
+   "domain": "analysis",
+   "domain_path": "declaring-file",
+   "entries": [
+    "."
+   ],
+   "file": "bindings/wasm/src/analysis_bpm.ts",
+   "has_doc": true,
+   "kind": "type",
+   "line": 1,
+   "member": "",
+   "name": "BpmRequest",
+   "owner": "",
+   "surface": "wasm",
+   "ts_kind": "interface"
+  },
+  {
+   "domain": "analysis",
+   "domain_path": "inherited",
+   "entries": [
+    "."
+   ],
+   "file": "bindings/wasm/src/analysis_bpm.ts",
+   "has_doc": true,
+   "kind": "value",
+   "line": 1,
+   "member": "fast",
+   "name": "BpmMode='fast'",
+   "owner": "BpmMode",
+   "surface": "wasm",
+   "token": "fast"
+  },
+  {
+   "domain": "analysis",
+   "domain_path": "inherited",
+   "entries": [
+    "."
+   ],
+   "file": "bindings/wasm/src/analysis_bpm.ts",
+   "has_doc": true,
+   "kind": "value",
+   "line": 1,
+   "member": "midi2",
+   "name": "BpmMode='midi2'",
+   "owner": "BpmMode",
+   "surface": "wasm",
+   "token": "midi2"
+  }
+ ]
+}

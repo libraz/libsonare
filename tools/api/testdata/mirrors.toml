@@ -1,0 +1,5 @@
+# librosa mirror fixture.
+
+[[mirror]]
+name = "stft"
+evidence = "in-tree"

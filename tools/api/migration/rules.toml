@@ -1,0 +1,987 @@
+# Public-interface conventions adopted by 2.0.0. The UPGRADING.md renderer prints
+# each rule's title, summary and examples, followed by a generated symbol table.
+
+[[rule]]
+slug = "sample-rate-required"
+title = "Sample rate is required wherever samples are passed"
+summary = "In 1.x most analysis and effect entries assumed 22050 Hz when the sample rate was omitted, so a 44.1 kHz buffer returned wrong results without a warning. In 2.0.0 every entry that takes audio samples requires the sample rate; librosa-mirror functions in Python keep `sr=22050`."
+[[rule.example]]
+surface = "wasm"
+before = '''
+const bpm = detectBpm(samples); // assumed 22050 Hz
+'''
+after = '''
+const bpm = detectBpm(samples, 44100);
+'''
+[[rule.example]]
+surface = "python"
+before = '''
+bpm = detect_bpm(samples)  # assumed 22050 Hz
+'''
+after = '''
+bpm = detect_bpm(samples, 44100)
+'''
+
+[[rule]]
+slug = "sample-rate-name"
+title = "Sample rate is spelled sampleRate, sample_rate and --sample-rate"
+summary = "Sample-rate parameters and fields use one spelling on every surface; a conversion names its two rates `sourceSampleRate` and `targetSampleRate`. In Python the spelling tells the two families apart: `sr` with a 22050 default is a librosa mirror with librosa's semantics, and a required `sample_rate` is a libsonare operation; no function has both, and none has `sample_rate` with a default."
+[[rule.example]]
+surface = "wasm"
+before = '''
+const out = resample({ samples, srcSr: 44100, targetSr: 48000 });
+'''
+after = '''
+const out = resample({ samples, sourceSampleRate: 44100, targetSampleRate: 48000 });
+'''
+[[rule.example]]
+surface = "python"
+before = '''
+S = stft(samples, sample_rate=22050)       # librosa mirror
+key = detect_key(samples, sample_rate=22050)  # operation
+'''
+after = '''
+S = stft(samples, sr=22050)  # mirror: sr, default 22050
+key = detect_key(samples, 22050)  # operation: sample_rate, required
+'''
+[[rule.example]]
+surface = "c"
+before = '''
+SonareError sonare_onset_strength(const float* samples, size_t length, int sr, int n_fft, ...);
+'''
+after = '''
+SonareError sonare_onset_strength(const float* samples, size_t length, int sample_rate, int n_fft, ...);
+'''
+[[rule.example]]
+surface = "cli"
+before = '''
+sonare resample song.wav --target-rate 16000 -o song16k.wav
+'''
+after = '''
+sonare resample song.wav --target-sample-rate 16000 -o song16k.wav
+'''
+
+[[rule]]
+slug = "teardown"
+title = "Handles are released with destroy() and close()"
+summary = "Every JavaScript handle class releases its native resources with `destroy()` and `[Symbol.dispose]()`; `dispose`, `close` and `delete` are no longer public. Python handles use `close()` and the context manager; the `destroy` and `delete` aliases are gone."
+[[rule.example]]
+surface = "wasm"
+before = '''
+const mixer = Mixer.fromSceneJson(json);
+mixer.delete();
+'''
+after = '''
+using mixer = new Mixer(scene);
+// or: mixer.destroy();
+'''
+[[rule.example]]
+surface = "python"
+before = '''
+analysis = PolyphonicAnalysis(samples, 44100)
+analysis.destroy()
+'''
+after = '''
+with PolyphonicAnalysis(samples, 44100) as analysis:
+    ...
+'''
+
+[[rule]]
+slug = "async-teardown"
+title = "Classes that wait on a worker destroy asynchronously"
+summary = "Worker clients, worklet nodes and the worker-backed vocal edit session return a Promise from `destroy()` and implement `[Symbol.asyncDispose]()`. The `terminateWorkerOnDispose` option is named `terminateWorkerOnDestroy`."
+[[rule.example]]
+surface = "wasm"
+before = '''
+const client = new OfflineWorkerClient({ worker, terminateWorkerOnDispose: true });
+client.dispose();
+'''
+after = '''
+await using client = new OfflineWorkerClient({ worker, terminateWorkerOnDestroy: true });
+// or: await client.destroy();
+'''
+
+[[rule]]
+slug = "seconds-suffix"
+title = "Seconds are spelled Sec and _sec"
+summary = "Time quantities in seconds end in `Sec` (`_sec` in Python and C, `-sec` in CLI flags); `Seconds` suffixes and unit-less names are renamed."
+[[rule.example]]
+surface = "wasm"
+before = '''
+const rir = synthesizeRir({ maxSeconds: 2 });
+'''
+after = '''
+const rir = synthesizeRir({ maxSec: 2 });
+'''
+[[rule.example]]
+surface = "python"
+before = '''
+rir = synthesize_rir(max_seconds=2.0)
+'''
+after = '''
+rir = synthesize_rir(max_sec=2.0)
+'''
+[[rule.example]]
+surface = "c"
+before = '''
+config.max_seconds = 2.0f;
+'''
+after = '''
+config.max_sec = 2.0f;
+'''
+
+[[rule]]
+slug = "unit-in-name"
+title = "Physical quantities carry their unit in the name"
+summary = "Names end in `Sec`, `Ms`, `Hz`, `Db`, `Cents`, `Semitones`, `Ppq`, `Bpm` and similar; lengths are `Samples` or `Frames` and positions are `Sample` or `Frame`. Ratios and counts take no suffix, and a bare `gain` stays linear."
+[[rule.example]]
+surface = "wasm"
+before = '''
+detectChords({ samples, sampleRate: 44100, minDuration: 0.3, smoothingWindow: 0.5 });
+'''
+after = '''
+detectChords({ samples, sampleRate: 44100, minDurationSec: 0.3, smoothingWindowSec: 0.5 });
+'''
+[[rule.example]]
+surface = "cli"
+before = '''
+sonare fade song.wav --fade-in 0.5 -o out.wav
+'''
+after = '''
+sonare fade song.wav --fade-in-sec 0.5 -o out.wav
+'''
+
+[[rule]]
+slug = "loudness-names"
+title = "Loudness quantities use one name per measurement"
+summary = "Loudness range is `loudnessRangeLu`, true peak is `truePeakDbtp` and integrated, momentary and short-term loudness end in `Lufs`, in every result record. Configured ceilings stay `*Db`."
+[[rule.example]]
+surface = "wasm"
+before = '''
+const { lraLu, truePeakDb } = profile;
+const range = lufsResult.loudnessRange;
+'''
+after = '''
+const { loudnessRangeLu, truePeakDbtp } = profile;
+const range = lufsResult.loudnessRangeLu;
+'''
+[[rule.example]]
+surface = "python"
+before = '''
+range_lu = lufs_result.loudness_range
+'''
+after = '''
+range_lu = lufs_result.loudness_range_lu
+'''
+
+[[rule]]
+slug = "absent-not-sentinel"
+title = "A value that is not given is absent, never 0, -1 or ''"
+summary = "Optional inputs are omitted in JavaScript and `None` in Python; results use an optional field or `None`. An explicit 0 on a field where 0 used to mean the default is refused with RangeError or SonareValueError (\"omit it for the default\"), and a negative position is never read as \"to the end\"."
+[[rule.example]]
+surface = "wasm"
+before = '''
+melSpectrogram({ samples, sampleRate: 44100, fmax: 0 }); // 0 meant Nyquist
+'''
+after = '''
+melSpectrogram({ samples, sampleRate: 44100 }); // omit for Nyquist
+'''
+[[rule.example]]
+surface = "python"
+before = '''
+rir = synthesize_rir(max_seconds=0.0)  # 0 meant natural length
+'''
+after = '''
+rir = synthesize_rir()  # omit for natural length; max_sec=0.0 raises SonareValueError
+'''
+
+[[rule]]
+slug = "non-finite-is-absent"
+title = "A measurement that could not be taken is absent"
+summary = "Values the C JSON output writes as `null` (loudness or true peak of silence) are an absent optional field in JavaScript and `None` in Python. They are never restored as `-Infinity` or `NaN`."
+[[rule.example]]
+surface = "wasm"
+before = '''
+if (strip.integratedLufs === null) skipStrip();
+'''
+after = '''
+if (strip.integratedLufs === undefined) skipStrip();
+'''
+
+[[rule]]
+slug = "token-case"
+title = "String values are lowerCamelCase tokens"
+summary = "Every member of a closed string set is one lowerCamelCase word, identical in JavaScript, Python and JSON documents; acronyms count as one word. CLI values are the same word in kebab-case, and only the exact spelling is accepted."
+[[rule.example]]
+surface = "wasm"
+before = '''
+mixer.setPan(0, 0, 'dual-pan'); // 'dualPan' also accepted
+'''
+after = '''
+mixer.setPan(0, 0, 'dualPan');
+'''
+
+[[rule]]
+slug = "digit-tokens"
+title = "Tokens containing digits and units have a single spelling"
+summary = "A token may contain digits, a decimal point and a unit written as in an identifier (`'const3Db'`, `'const4.5Db'`, `'linear0Db'`); hyphens and underscores are not allowed. Case and separators are not normalised, so the old aliases are refused."
+[[rule.example]]
+surface = "wasm"
+before = '''
+mixer.setPanLaw(0, 'const3dB'); // 'const-3db' and '-3db' also accepted
+'''
+after = '''
+mixer.setPanLaw(0, 'const3Db');
+'''
+
+[[rule]]
+slug = "string-closed-sets"
+title = "Closed sets are string unions, not numbers or IntEnums"
+summary = "JavaScript parameters that take a closed set accept the string union only and refuse numbers. In Python only `ErrorCode` and `PitchClass` remain IntEnums; every other enum, `Mode` included, is a `Literal` of the same string tokens."
+[[rule.example]]
+surface = "wasm"
+before = '''
+mixer.setPan(0, 0.5, 1); // ordinal
+'''
+after = '''
+mixer.setPan(0, 0.5, 'stereoPan');
+'''
+[[rule.example]]
+surface = "python"
+before = '''
+from libsonare import Mode
+if key.mode == Mode.MINOR: ...
+'''
+after = '''
+if key.mode == 'minor': ...
+'''
+
+[[rule]]
+slug = "typed-results"
+title = "Results are typed values, not JSON strings"
+summary = "Bindings return typed objects where 1.x returned a JSON string or a phantom-branded string. Persistent documents (scene, project, preset) have one `toJson()` / `fromJson()` pair (`to_json()` / `from_json()` in Python); the C ABI keeps `*_json`."
+[[rule.example]]
+surface = "wasm"
+before = '''
+const json = masteringPairAnalyze(request);
+const result = JSON.parse(json) as JsonResult<typeof json>;
+'''
+after = '''
+const result = masteringPairAnalyze(request);
+'''
+
+[[rule]]
+slug = "array-results"
+title = "Python arrays are numpy arrays"
+summary = "Python audio is a `float32` ndarray of shape `(n,)` or `(channels, n)` and a matrix is `(rows, cols)`; `list[float]` returns, flat row-major lists and redundant length fields are gone. Inputs accept `npt.ArrayLike` of float dtype, and an integer dtype raises `TypeError`."
+[[rule.example]]
+surface = "python"
+before = '''
+n_bins, n_frames, flat = audio.stft_db()
+db = np.array(flat).reshape(n_bins, n_frames)
+beats = np.asarray(detect_beats(samples, 44100))
+'''
+after = '''
+db = audio.stft_db()  # ndarray (rows, cols)
+beats = detect_beats(samples, 44100)  # ndarray
+'''
+
+[[rule]]
+slug = "matrix-2d"
+title = "Two-dimensional results are one Matrix2D type"
+summary = "Every JavaScript 2-D result and input is `Matrix2D { data, rows, cols }`, row-major, with rows as bins or coefficients and columns as frames. Per-result dimension names such as `nBins` and `nFrames` are gone."
+[[rule.example]]
+surface = "wasm"
+before = '''
+const { magnitude, nBins, nFrames } = stft({ samples, sampleRate: 44100 });
+const v = magnitude[bin * nFrames + frame];
+'''
+after = '''
+const { magnitude } = stft({ samples, sampleRate: 44100 });
+const v = magnitude.data[bin * magnitude.cols + frame];
+'''
+
+[[rule]]
+slug = "no-internal-types"
+title = "Public types never expose Wasm* names"
+summary = "WASM public declarations no longer mention `Wasm*` types or `SonareModule`; public types are declared in `public_types_*.ts` and converted by the facade. The `moduleFactory` option of `init()` is typed as the opaque `SonareModuleHandle`."
+[[rule.example]]
+surface = "wasm"
+before = '''
+import type { SonareModule } from '@libraz/libsonare';
+const factory = async (): Promise<SonareModule> => createModule();
+'''
+after = '''
+import { init } from '@libraz/libsonare';
+await init({ moduleFactory: createModule });
+'''
+
+[[rule]]
+slug = "frozen-results"
+title = "Python composite results are frozen dataclasses"
+summary = "Bare tuples, dicts and tuple-unpacking compatibility are gone; a result is a frozen dataclass whose fields match the TypeScript result in snake_case. Results holding arrays compare by identity, and librosa mirrors keep librosa's return shapes."
+[[rule.example]]
+surface = "python"
+before = '''
+n_frames, chroma = audio.nnls_chroma()
+'''
+after = '''
+result = audio.nnls_chroma()
+chroma = result.chroma
+'''
+
+[[rule]]
+slug = "snake-case-only"
+title = "Python keys and attributes are snake_case only"
+summary = "camelCase keys, alias properties and camelCase override keys are no longer accepted in Python. Keys inside JSON documents follow the document's own spelling."
+[[rule.example]]
+surface = "python"
+before = '''
+master_audio(samples, 44100, overrides={"truePeakLimiter": {"ceilingDb": -1.0}})
+'''
+after = '''
+master_audio(samples, 44100, overrides={"true_peak_limiter": {"ceiling_db": -1.0}})
+'''
+
+[[rule]]
+slug = "cancellation"
+title = "Cancellation uses signal for promises and cancel for sync calls"
+summary = "Promise-returning APIs take `{ signal?: AbortSignal }`; synchronous JavaScript calls keep `cancel?: () => boolean`, because no timer or event runs during a synchronous call. A cancelled call is a SonareError with code `Cancelled` on every surface."
+[[rule.example]]
+surface = "wasm"
+before = '''
+const task = client.analyze({ samples, sampleRate: 44100 });
+task.cancel();
+'''
+after = '''
+const ctrl = new AbortController();
+const result = client.analyze({ samples, sampleRate: 44100 }, { signal: ctrl.signal });
+ctrl.abort(); // rejects with SonareError, code Cancelled
+'''
+
+[[rule]]
+slug = "progress-callback"
+title = "Progress is an onProgress option, not a separate function"
+summary = "The `*WithProgress` twin functions are removed; the request takes `onProgress` (`on_progress=` in Python) with the same `(progress, stage)` callback on the main thread and in workers. In C the callback travels in the operation's options struct."
+[[rule.example]]
+surface = "wasm"
+before = '''
+const result = analyzeWithProgress(samples, 44100, (p, stage) => log(p, stage));
+'''
+after = '''
+const result = analyze({ samples, sampleRate: 44100, onProgress: (p, stage) => log(p, stage) });
+'''
+[[rule.example]]
+surface = "python"
+before = '''
+result = analyze_with_progress(samples, 44100, on_progress=log)
+'''
+after = '''
+result = analyze(samples, 44100, on_progress=log)
+'''
+
+[[rule]]
+slug = "librosa-defaults"
+title = "librosa-mirror functions default to librosa's values"
+summary = "Functions that mirror a librosa function take librosa's defaults; `chirp` now defaults to `linear=False`. Pass the old value explicitly to keep 1.x output. Parameters also take librosa's names: `tone(phase=)` is `tone(phi=)` and `clicks(frequency=)` is `clicks(click_freq=)`."
+[[rule.example]]
+surface = "python"
+before = '''
+y = chirp(fmin=440.0, fmax=880.0)  # linear sweep
+'''
+after = '''
+y = chirp(fmin=440.0, fmax=880.0, linear=True)  # default is now exponential
+'''
+
+[[rule]]
+slug = "onset-strength"
+title = "Onset strength has one name on every surface"
+summary = "The onset-strength function is `onsetStrength`, `onset_strength` and the CLI command `onset-strength`; the CLI's two identical commands collapse into one. On Python every segmentation function is named `segment_*`."
+[[rule.example]]
+surface = "wasm"
+before = '''
+const env = onsetEnvelope({ samples, sampleRate: 44100 });
+'''
+after = '''
+const env = onsetStrength({ samples, sampleRate: 44100 });
+'''
+[[rule.example]]
+surface = "python"
+before = '''
+env = onset_envelope(samples, 44100)
+'''
+after = '''
+env = onset_strength(samples, 44100)
+'''
+[[rule.example]]
+surface = "cli"
+before = '''
+sonare onset-envelope song.wav
+'''
+after = '''
+sonare onset-strength song.wav
+'''
+
+[[rule]]
+slug = "tempo-range"
+title = "Public tempo searches default to 60-200 BPM"
+summary = "In 1.x `analyzeBpm` and beat detection searched 30-300 BPM while `analyze` searched 60-200, so one recording could report two tempos. In 2.0.0 every public entry that takes a tempo range defaults to 60-200 BPM; pass the range to keep the old search."
+[[rule.example]]
+surface = "wasm"
+before = '''
+analyzeBpm({ samples, sampleRate: 44100 }); // searched 30-300 BPM
+'''
+after = '''
+analyzeBpm({ samples, sampleRate: 44100 }); // searches 60-200 BPM
+analyzeBpm({ samples, sampleRate: 44100, bpmMin: 30, bpmMax: 300 }); // 1.x range
+'''
+[[rule.example]]
+surface = "python"
+before = '''
+audio.analyze_bpm()  # searched 30-300 BPM
+'''
+after = '''
+audio.analyze_bpm()  # searches 60-200 BPM
+audio.analyze_bpm(bpm_min=30.0, bpm_max=300.0)  # 1.x range
+'''
+
+[[rule]]
+slug = "one-positional-form"
+title = "One-shot JavaScript calls take a request object"
+summary = "The request object is canonical. A sample-taking call keeps at most one positional form, `(samples, sampleRate, options?)`; longer positional lists are removed, and extra positional arguments after a request object are a `TypeError`."
+[[rule.example]]
+surface = "wasm"
+before = '''
+timeStretch(samples, 44100, 1.25, 2048, 512);
+'''
+after = '''
+timeStretch({ samples, sampleRate: 44100, rate: 1.25, nFft: 2048, hopLength: 512 });
+'''
+
+[[rule]]
+slug = "options-struct"
+title = "C extends an operation through an Options struct"
+summary = "Each C operation has one entry point with an optional `Sonare<Op>Options` struct whose first field is `struct_size`, initialised by `sonare_<op>_options_init`; `NULL` selects the defaults. The `_ex`, `_ex2`, `_v2`, `_checked`, `_with_options` and `_with_progress` variants are removed."
+[[rule.example]]
+surface = "c"
+before = '''
+sonare_time_stretch_ex(samples, length, 44100, 1.25f, 2048, 512, &out, &out_length);
+'''
+after = '''
+SonareTimeStretchOptions opts;
+sonare_time_stretch_options_init(&opts);
+opts.n_fft = 2048;
+sonare_time_stretch(samples, length, 44100, 1.25f, &opts, &out, &out_length);
+'''
+
+[[rule]]
+slug = "c-create"
+title = "C constructors return SonareError and an out pointer"
+summary = "Every `sonare_<type>_create` returns a `SonareError` and writes the handle through an out parameter; the pointer-returning form and the `last_error` check are gone. Handle type names match their function prefix."
+[[rule.example]]
+surface = "c"
+before = '''
+SonareMixer* mixer = sonare_mixer_create(48000, 512);
+if (!mixer) { /* inspect sonare_last_error_message() */ }
+'''
+after = '''
+SonareMixer* mixer = NULL;
+SonareError err = sonare_mixer_create(48000, 512, &mixer);
+if (err != SONARE_OK) { /* inspect sonare_last_error_message() */ }
+'''
+
+[[rule]]
+slug = "c-free"
+title = "C results are released by a function named after the result"
+summary = "A result the library allocates is released with `sonare_free_<result struct>`, and an output string with `sonare_free_string`. Static name tables return `SonareError` with a borrowed `out_names` / `out_count` pair whose lifetime the header states."
+[[rule.example]]
+surface = "c"
+before = '''
+const char* names = sonare_mastering_preset_names();
+'''
+after = '''
+const char* const* names = NULL;
+size_t count = 0;
+SonareError err = sonare_mastering_preset_names(&names, &count);
+'''
+
+[[rule]]
+slug = "c-count-types"
+title = "C counts are size_t and returned through an out parameter"
+summary = "In-memory counts and lengths are `size_t`, sample positions are `int64_t`, sample rates are `int` and boolean fields are `int32_t`. A function that returns a count returns `SonareError` and writes the count to an out parameter."
+[[rule.example]]
+surface = "c"
+before = '''
+size_t n = sonare_mixer_strip_count(mixer);
+'''
+after = '''
+size_t n = 0;
+SonareError err = sonare_mixer_strip_count(mixer, &n);
+'''
+
+[[rule]]
+slug = "c-error-path"
+title = "Every C failure sets the error message"
+summary = "Every function that returns a non-OK code sets `sonare_last_error_message()`, and warnings use `sonare_last_diagnostic_*` only. Conversions and lookups report failure as `SonareError` with an out parameter instead of `NaN`, `0` or `-1` in the value."
+[[rule.example]]
+surface = "c"
+before = '''
+float t = sonare_frames_to_time(10, 0, 512); /* NaN on bad input */
+'''
+after = '''
+float t = 0.0f;
+SonareError err = sonare_frames_to_time(10, 0, 512, &t); /* INVALID_PARAMETER */
+'''
+
+[[rule]]
+slug = "error-class-by-cause"
+title = "Errors are coded by cause on every surface"
+summary = "Worker and worklet failures are `SonareError` with a code: a missing Worker is `NotSupported`, an unreadable response `InvalidFormat`, and a response after destroy `InvalidState`. An unknown name or invalid conversion is a `RangeError` / `SonareValueError`, never `-1`, `null` or `false`."
+[[rule.example]]
+surface = "wasm"
+before = '''
+try { new OfflineWorkerClient(); } catch (e) { /* plain Error */ }
+'''
+after = '''
+try { new OfflineWorkerClient(); } catch (e) {
+  if (isSonareError(e) && e.code === ErrorCode.NotSupported) useMainThread();
+}
+'''
+
+[[rule]]
+slug = "getters"
+title = "Cheap scalar state reads are getters and properties"
+summary = "A read with no arguments that is O(1) and allocation-free and returns a scalar or enum is a readonly getter in JavaScript and a `@property` in Python. Reads that compute, allocate, take arguments or return a record stay methods without a `get` prefix."
+[[rule.example]]
+surface = "wasm"
+before = '''
+const latency = changer.latencySamples();
+'''
+after = '''
+const latency = changer.latencySamples;
+'''
+[[rule.example]]
+surface = "python"
+before = '''
+latency = changer.latency_samples()
+'''
+after = '''
+latency = changer.latency_samples
+'''
+
+[[rule]]
+slug = "collections"
+title = "Collections are methods that return arrays"
+summary = "`project.tracks()`, `clips()`, `markers()`, `sources()` and `engine.listParameters()` return arrays. The `count` and `byIndex` pairs are removed from the bindings; C keeps count plus index."
+[[rule.example]]
+surface = "wasm"
+before = '''
+for (let i = 0; i < project.markerCount(); i++) {
+  use(project.markerByIndex(i));
+}
+'''
+after = '''
+for (const marker of project.markers()) use(marker);
+'''
+[[rule.example]]
+surface = "python"
+before = '''
+for i in range(project.marker_count()):
+    use(project.marker_by_index(i))
+'''
+after = '''
+for marker in project.markers():
+    use(marker)
+'''
+
+[[rule]]
+slug = "one-entry-per-operation"
+title = "Each operation has exactly one entry point"
+summary = "Duplicated entries are merged: `decompose` absorbs its warm-start variant, `normalize` takes `mode: 'rms'`, bounces have one method per kind, and `Project.fromJson` is the only loader with diagnostics from `project.loadDiagnostics()`. `compile()` returns `ProjectCompileResult`."
+[[rule.example]]
+surface = "wasm"
+before = '''
+const { project, diagnostics } = Project.fromJsonWithDiagnostics(json);
+'''
+after = '''
+const project = Project.fromJson(json);
+const diagnostics = project.loadDiagnostics();
+'''
+[[rule.example]]
+surface = "python"
+before = '''
+y = normalize_rms(samples, 44100, target_db=-20.0)
+'''
+after = '''
+y = normalize(samples, 44100, mode="rms", target_db=-20.0)
+'''
+[[rule.example]]
+surface = "c"
+before = '''
+size_t n = sonare_mixer_strip_count(mixer);
+SonareError err = sonare_mixer_get_strip_count(mixer, &n);
+'''
+after = '''
+size_t n = 0;
+SonareError err = sonare_mixer_strip_count(mixer, &n);
+'''
+
+[[rule]]
+slug = "mastering-names"
+title = "masterAudio is the mastering entry; mastering is renamed"
+summary = "`masterAudio` is the main mastering entry. The 1.x `mastering(...)` only normalises loudness, so it is `masteringNormalizeLoudness` (`mastering_normalize_loudness`, `sonare_mastering_normalize_loudness`, CLI `mastering-normalize-loudness`)."
+[[rule.example]]
+surface = "wasm"
+before = '''
+const out = mastering({ samples, sampleRate: 44100, targetLufs: -14 });
+'''
+after = '''
+const out = masteringNormalizeLoudness({ samples, sampleRate: 44100, targetLufs: -14 });
+'''
+[[rule.example]]
+surface = "python"
+before = '''
+result = audio.mastering(target_lufs=-14.0)
+'''
+after = '''
+result = audio.mastering_normalize_loudness(target_lufs=-14.0)
+'''
+[[rule.example]]
+surface = "cli"
+before = '''
+sonare mastering song.wav --target-lufs -14 -o out.wav
+'''
+after = '''
+sonare mastering-normalize-loudness song.wav --target-lufs -14 -o out.wav
+'''
+
+[[rule]]
+slug = "construction"
+title = "Synchronous construction is new X(config); create() is async"
+summary = "A synchronous constructor takes one config object, and `static create()` exists only for constructions that return a Promise, such as worklet nodes (`await X.create(ctx, { moduleUrl, ... })`). Python constructors take keyword arguments instead of option objects and `**overrides`."
+[[rule.example]]
+surface = "wasm"
+before = '''
+const engine = new RealtimeEngine(48000, 128, 1024, 1024, 64);
+const mixer = Mixer.fromSceneJson(json, 48000, 512);
+const project = Project.create();
+'''
+after = '''
+const engine = new RealtimeEngine({ sampleRate: 48000, maxBlockSize: 128, commandCapacity: 1024, telemetryCapacity: 1024, maxNumChannels: 64 });
+const mixer = new Mixer(scene);
+const project = new Project();
+'''
+
+[[rule]]
+slug = "planar-channels"
+title = "Multichannel audio is planar: channels plus sampleRate"
+summary = "N-channel audio is `channels: Float32Array[]` with `sampleRate`, and Python uses a `(channels, n)` ndarray. Interleaved buffers leave the public surface, except for the real-time `process*Into` calls, whose exception is documented as a performance contract."
+[[rule.example]]
+surface = "wasm"
+before = '''
+const out = renderPlayback({ samples: interleaved, channels: 6, sampleRate: 48000 });
+'''
+after = '''
+const out = renderPlayback({ channels: planes, sampleRate: 48000 });
+'''
+
+[[rule]]
+slug = "stereo-pair"
+title = "Stereo-only algorithms take left and right"
+summary = "Algorithms defined on exactly two channels (mid/side, width, pan, correlation) take `left` and `right`; all other multichannel inputs take `channels`. Repair functions return `{ channels, reports }` whether the input was mono, stereo or linked."
+[[rule.example]]
+surface = "wasm"
+before = '''
+const r = meteringStereoCorrelation(left, right); // assumed 22050 Hz
+'''
+after = '''
+const r = meteringStereoCorrelation({ left, right, sampleRate: 44100 });
+'''
+
+[[rule]]
+slug = "num-channels"
+title = "Channel counts are numChannels"
+summary = "A count of channels is `numChannels` (`num_channels`); `channels` always names the buffer array."
+[[rule.example]]
+surface = "wasm"
+before = '''
+const n = meter.channelCount;
+'''
+after = '''
+const n = meter.numChannels;
+'''
+[[rule.example]]
+surface = "python"
+before = '''
+n = meter.channel_count
+'''
+after = '''
+n = meter.num_channels
+'''
+
+[[rule]]
+slug = "no-positional-bools"
+title = "Setters take labelled objects, not positional booleans"
+summary = "Setters with booleans take a labelled object, and Python analysis functions are keyword-only after `sample_rate` (librosa mirrors excepted). Boolean option names are positive (`tonality`, not `tonalityOff`)."
+[[rule.example]]
+surface = "wasm"
+before = '''
+mixer.configureMeter(true, 8);
+mixer.setPolarityInvert(0, true, false);
+'''
+after = '''
+mixer.configureMeter({ enabled: true, truePeakOversample: 8 });
+mixer.setPolarityInvert('bass', { left: true, right: false });
+'''
+[[rule.example]]
+surface = "python"
+before = '''
+key = detect_key(samples, 44100, 2048, 512, False, True)
+'''
+after = '''
+key = detect_key(samples, 44100, n_fft=2048, hop_length=512, use_hpss=False, loudness_weighted=True)
+'''
+
+[[rule]]
+slug = "strip-ref"
+title = "Mixer strips are addressed by StripRef"
+summary = "A mixer strip is a `StripRef` (`number | string`) on every surface, and `'master'` is accepted where the master strip applies. Engine strip operations start with `setStrip*`, buses with `setBus*` and tracks with `setTrack*`."
+[[rule.example]]
+surface = "wasm"
+before = '''
+mixer.setFaderDb(0, -3);
+'''
+after = '''
+mixer.setFaderDb('bass', -3);
+'''
+
+[[rule]]
+slug = "high-pass"
+title = "High-pass filters are spelled HighPass"
+summary = "The seven spellings of one concept become `HighPass` (`chromaHighPassHz`, `keyHighPassHz`, `sidechainHighPassHz`, `highPassHz`; `--chroma-high-pass-hz`). Filters that are on by default keep an 80 Hz default and accept 0 as a real cutoff; a filter with an enable flag drops the flag, so an absent value is off."
+[[rule.example]]
+surface = "wasm"
+before = '''
+const compressor = { sidechainHpfEnabled: true, sidechainHpfHz: 120 };
+'''
+after = '''
+const compressor = { sidechainHighPassHz: 120 };
+'''
+[[rule.example]]
+surface = "python"
+before = '''
+compressor = {"sidechain_hpf_enabled": True, "sidechain_hpf_hz": 120.0}
+'''
+after = '''
+compressor = {"sidechain_high_pass_hz": 120.0}
+'''
+[[rule.example]]
+surface = "cli"
+before = '''
+sonare chroma song.wav --chroma-highpass 100
+'''
+after = '''
+sonare chroma song.wav --chroma-high-pass-hz 100
+'''
+
+[[rule]]
+slug = "frequency-bounds"
+title = "Frequency bounds are f0MinHz/f0MaxHz and fminHz/fmaxHz"
+summary = "High-level pitch searches use `f0MinHz` and `f0MaxHz`, and spectral bands use `fminHz` and `fmaxHz`. librosa mirrors keep `fmin` and `fmax`."
+[[rule.example]]
+surface = "wasm"
+before = '''
+const mel = melSpectrogram({ samples, sampleRate: 44100, fmin: 50, fmax: 8000 });
+'''
+after = '''
+const mel = melSpectrogram({ samples, sampleRate: 44100, fminHz: 50, fmaxHz: 8000 });
+'''
+
+[[rule]]
+slug = "pitch-semitones"
+title = "Pitch and formant shifts are named in semitones"
+summary = "Shifts are `pitchSemitones` and `formantSemitones` (`pitch_semitones`, `retune_semitones` and similar are unified); tuning is `tuningCents`. Spellings use the American `center*` and `romanNumeral`, and `canonical_name` is replaced by `name`."
+[[rule.example]]
+surface = "wasm"
+before = '''
+const edit = { timeOffsetSamples: 0, pitchShiftSemitones: 2, gainDb: 0 };
+'''
+after = '''
+const edit = { timeOffsetSamples: 0, pitchSemitones: 2, gainDb: 0 };
+'''
+[[rule.example]]
+surface = "python"
+before = '''
+edit = NoteEdit(pitch_shift_semitones=2.0)
+'''
+after = '''
+edit = NoteEdit(pitch_semitones=2.0)
+'''
+
+[[rule]]
+slug = "type-names"
+title = "One type name per record on every surface"
+summary = "A record has one name in WASM, Node and Python (Python keeps snake_case fields). The `Sonare` prefix is dropped except for the error class and names registered with Web Audio. Inputs and outputs are separate types; requests are `*Request`, results `*Result`, one-shot settings `*Options` and handle construction `*Config`."
+[[rule.example]]
+surface = "wasm"
+before = '''
+import type { SonareCapabilities } from '@libraz/libsonare';
+'''
+after = '''
+import type { Capabilities } from '@libraz/libsonare';
+'''
+
+[[rule]]
+slug = "input-types"
+title = "Input-only types are named <Name>Input"
+summary = "When a type is split into an input form with optional fields and an output form with every field present, the input is `<Name>Input`. Methods carry no `Ex` suffix variants."
+[[rule.example]]
+surface = "wasm"
+before = '''
+project.setMarkerEx(marker);
+'''
+after = '''
+const input: ProjectMarkerInput = { ... };
+project.setMarker(input);
+'''
+
+[[rule]]
+slug = "aliases-removed"
+title = "Historical aliases are removed"
+summary = "Names kept only for history are deleted, along with fields that never worked (`outputFormat`, `computeMagnitude`) and the public `EXPECTED_PROJECT_ABI_VERSION`. The two clipping detectors both remain and share `clippedSamples` and `clippedRatio`."
+[[rule.example]]
+surface = "wasm"
+before = '''
+const comp = { lookaheadMs: 5 };
+import type { VocalHistoryState } from '@libraz/libsonare';
+'''
+after = '''
+const comp = { detectorDelayMs: 5 };
+import type { VocalHistory } from '@libraz/libsonare';
+'''
+
+[[rule]]
+slug = "abi-probes"
+title = "Versions and features come from *AbiVersion() and capabilities()"
+summary = "ABI versions are `*AbiVersion()` (`vocalEditApiVersion` is renamed), and feature presence is `capabilities().features.<name>`, which absorbs `hasFfmpegSupport()` and `vocalEditAvailable()`. C exposes `SONARE_VERSION_MAJOR/MINOR/PATCH` and a `SONARE_*_ABI_VERSION` macro per area through `sonare_c.h`."
+[[rule.example]]
+surface = "wasm"
+before = '''
+if (hasFfmpegSupport() && vocalEditAvailable()) enableImport();
+const v = vocalEditApiVersion();
+'''
+after = '''
+const { features } = capabilities();
+if (features.ffmpeg && features.vocalEdit) enableImport();
+const v = vocalEditAbiVersion();
+'''
+
+[[rule]]
+slug = "worklet-scope"
+title = "The ./worklet entry exports only the documented surface"
+summary = "`@libraz/libsonare/worklet` keeps the `register*` functions, node and engine classes with their option types, the documented ring-buffer helpers, and the protocol version and record-size constants. Wire-protocol internals (frame codecs, record layouts, message types, `*Scratch*` helpers) move to `src/internal/` and are not exported."
+
+[[rule]]
+slug = "engine-vocabulary"
+title = "RealtimeEngine and SonareEngine share one vocabulary"
+summary = "Both engine classes put the target id first, take typed config objects, return the same types and use the same units. Q8 fixed-point values are plain fractional numbers in the public API, and C keeps `_q8`."
+[[rule.example]]
+surface = "wasm"
+before = '''
+const latency = engine.graphLatencySamplesQ8() / 256;
+'''
+after = '''
+const latency = engine.graphLatencySamples;
+'''
+
+[[rule]]
+slug = "vocal-edit-model"
+title = "Vocal editing has one model on Python and JavaScript"
+summary = "Operation and field names agree across surfaces, so `VocalSplitOperation(note_id, source_sample)` in Python is `{ kind: 'split', noteId, sourceSample }` in TypeScript. The worker session has the same shape as the main-thread session (`beginEdit()` returns the draft) and `draft.apply({ operations, expectedGeneration? })` is the one apply call."
+[[rule.example]]
+surface = "python"
+before = '''
+op = VocalSplitNote(note_id=3, cut_source_sample=48000)
+'''
+after = '''
+op = VocalSplitOperation(note_id=3, source_sample=48000)
+'''
+
+[[rule]]
+slug = "cli-positional-input"
+title = "CLI input is a positional argument"
+summary = "In both CLI front-ends the primary input is positional and `--in`, `--input`, `--smf` and `--midi2` are removed. Commands without a single primary input (`mix`, `suggest-mix`) keep a repeatable `--input [ID=]WAV`, and `-` means standard input or output."
+[[rule.example]]
+surface = "cli"
+before = '''
+sonare project import-smf --smf song.mid -o project.json
+sonare project export-smf --in project.json -o song.mid
+'''
+after = '''
+sonare project import-smf song.mid -o project.json
+sonare project export-smf project.json -o song.mid
+'''
+
+[[rule]]
+slug = "cli-front-end-parity"
+title = "Both CLIs share command names, flags, defaults and failures"
+summary = "The native and Python front-ends use the same command names, flags and defaults, and exit 0 on success, 2 for a usage error, 3 for an invalid argument value and 11 when cancelled. With `--json` a failure prints `{\"ok\":false,\"error\":...,\"code\":\"<error code name>\",\"exit_code\":n}`; `system-info` stays separate from `doctor`."
+[[rule.example]]
+surface = "cli"
+before = '''
+# stdout of a failing command run with --json
+{"ok":false,"error":"File not found: missing.wav"}
+'''
+after = '''
+# stdout of a failing command run with --json
+{"ok":false,"error":"File not found: missing.wav","code":"FileNotFound","exit_code":1}
+'''
+
+[[rule]]
+slug = "cpp-include"
+title = "C++ consumers include <sonare/cpp/sonare.h>"
+summary = "The one documented C++ include is `<sonare/cpp/sonare.h>`; headers do not move. The supported native public surface is the C ABI, and the C++ headers are the implementation tree."
+[[rule.example]]
+surface = "c"
+before = '''
+#include "sonare.h"
+'''
+after = '''
+#include <sonare/cpp/sonare.h>
+'''
+
+[[rule]]
+slug = "doc-comments"
+title = "Every public symbol has a documentation comment"
+summary = "Each public symbol carries a TSDoc, docstring or Doxygen comment stating units, defaults and the error class on failure. A check enforces this for new symbols."
+
+[[rule]]
+slug = "config-keys"
+title = "Persistent configuration keys are camelCase"
+summary = "The `playback-renderer-config` document uses camelCase keys (`lfeMixDb`, `nightMode`) and carries a required `version` of 2. A document without `version` is read as version 1 (snake_case) and converted on load, saving always writes version 2, and a version 2 document containing a snake_case key is refused with `InvalidFormat` naming the key."
+[[rule.example]]
+surface = "wasm"
+before = '''
+const config = { lfe_mix_db: -6 };
+'''
+after = '''
+const config = { version: 2, lfeMixDb: -6 };
+'''
+
+[[rule]]
+slug = "python-public-names"
+title = "Every public Python type imports from libsonare"
+summary = "Types that appear in public signatures (`BoundaryResult`, `Beat`, `MasteringPreset`, `ProgressCallback`, `StripRef`) can be imported from `libsonare` at run time, not only seen in the stubs. Public signatures show literal defaults rather than private constants, and `validate` is available on every function that takes samples."
+[[rule.example]]
+surface = "python"
+before = '''
+from libsonare import ProgressCallback  # ImportError: stub-only name
+'''
+after = '''
+from libsonare import ProgressCallback
+'''
+
+[[rule]]
+slug = "individual"
+title = "Other individual changes"
+summary = "Changes specific to a single symbol that follow no shared convention are listed in the tables below."

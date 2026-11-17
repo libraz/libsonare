@@ -1,0 +1,39 @@
+# Migration ledger for the wasm surface of the 2.0.0 public interface.
+#
+# One [[entry]] per public name that 2.0.0 renames, removes or reshapes.
+# tools/api/check_surface.py checks every entry against the built surface;
+# tools/api/upgrade_notes.py renders UPGRADING.md from these files and rules.toml.
+#
+# Keys:
+#   kind     function | method | class | type | field | option | value | export | flag | command
+#   old      the 1.x public name, spelled as below
+#   new      the 2.0.0 name (old must be absent, new present, same kind and entry)
+#   removed  true when the name is gone with no replacement (old must be absent)
+#   changed  one line saying what a caller must change when the name stays the same;
+#            requires test = "<file>::<case name substring>", which must exist
+#   domain   core | analysis | effects | mastering | engine | project
+#   rule     a slug from tools/api/migration/rules.toml
+#   entry    WASM subpath ("./analysis", "./worklet", ...); omitted means "."
+#   frontend CLI ledger only: "python" or "native" to check one front-end; omitted checks both
+# Exactly one of new / removed / changed per entry.
+#
+# Names by kind:
+#   function  exported name on this surface: analyzeBpm (wasm/node), analyze_bpm (python),
+#             sonare_analyze_bpm (c)
+#   method    Class.member, static members included (Project.fromJson); accessors and getters too
+#   class     Name
+#   type      Name: TS interface or type alias, Python dataclass / TypedDict / Literal alias,
+#             C struct, typedef or enum
+#   field     Type.field: TS interface property, Python dataclass field, C struct field
+#   option    a parameter: function(param) or Class.method(param); a field of a JS
+#             *Request / *Options type is a field, not an option
+#   value     a string token as Type='token' (Type is the TS union or Python Literal alias),
+#             an enum member as Type.MEMBER
+#   export    any other top-level exported name (constant, C macro, re-export)
+#   command   CLI subcommand name
+#   flag      command --flag
+#
+# A member whose name stays but whose kind moves (a method that becomes a getter) is a
+# method entry with changed + test, not old/new.
+# A parameter that becomes a request field is an option entry with removed = true, plus a
+# changed entry (with test) on the function that now takes the request.

@@ -1,0 +1,295 @@
+# Rule fixture: every slug of the closed set.
+
+[[rule]]
+slug = "sample-rate-required"
+title = "Title of sample-rate-required"
+summary = "Summary of sample-rate-required."
+
+[[rule]]
+slug = "sample-rate-name"
+title = "Title of sample-rate-name"
+summary = "Summary of sample-rate-name."
+
+[[rule]]
+slug = "teardown"
+title = "Title of teardown"
+summary = "Summary of teardown."
+
+[[rule]]
+slug = "async-teardown"
+title = "Title of async-teardown"
+summary = "Summary of async-teardown."
+
+[[rule]]
+slug = "seconds-suffix"
+title = "Title of seconds-suffix"
+summary = "Summary of seconds-suffix."
+
+[[rule]]
+slug = "unit-in-name"
+title = "Title of unit-in-name"
+summary = "Summary of unit-in-name."
+
+[[rule]]
+slug = "loudness-names"
+title = "Title of loudness-names"
+summary = "Summary of loudness-names."
+
+[[rule]]
+slug = "absent-not-sentinel"
+title = "Title of absent-not-sentinel"
+summary = "Summary of absent-not-sentinel."
+
+[[rule]]
+slug = "non-finite-is-absent"
+title = "Title of non-finite-is-absent"
+summary = "Summary of non-finite-is-absent."
+
+[[rule]]
+slug = "token-case"
+title = "Title of token-case"
+summary = "Summary of token-case."
+
+[[rule]]
+slug = "digit-tokens"
+title = "Title of digit-tokens"
+summary = "Summary of digit-tokens."
+
+[[rule]]
+slug = "string-closed-sets"
+title = "Title of string-closed-sets"
+summary = "Summary of string-closed-sets."
+
+[[rule]]
+slug = "typed-results"
+title = "Title of typed-results"
+summary = "Summary of typed-results."
+
+[[rule]]
+slug = "array-results"
+title = "Title of array-results"
+summary = "Summary of array-results."
+
+[[rule]]
+slug = "matrix-2d"
+title = "Title of matrix-2d"
+summary = "Summary of matrix-2d."
+
+[[rule]]
+slug = "no-internal-types"
+title = "Title of no-internal-types"
+summary = "Summary of no-internal-types."
+
+[[rule]]
+slug = "frozen-results"
+title = "Title of frozen-results"
+summary = "Summary of frozen-results."
+
+[[rule]]
+slug = "snake-case-only"
+title = "Title of snake-case-only"
+summary = "Summary of snake-case-only."
+
+[[rule]]
+slug = "cancellation"
+title = "Title of cancellation"
+summary = "Summary of cancellation."
+
+[[rule]]
+slug = "progress-callback"
+title = "Title of progress-callback"
+summary = "Summary of progress-callback."
+
+[[rule]]
+slug = "librosa-defaults"
+title = "Title of librosa-defaults"
+summary = "Summary of librosa-defaults."
+
+[[rule]]
+slug = "onset-strength"
+title = "Title of onset-strength"
+summary = "Summary of onset-strength."
+
+[[rule]]
+slug = "tempo-range"
+title = "Title of tempo-range"
+summary = "Summary of tempo-range."
+
+[[rule]]
+slug = "one-positional-form"
+title = "Title of one-positional-form"
+summary = "Summary of one-positional-form."
+
+[[rule]]
+slug = "options-struct"
+title = "Title of options-struct"
+summary = "Summary of options-struct."
+
+[[rule]]
+slug = "c-create"
+title = "Title of c-create"
+summary = "Summary of c-create."
+
+[[rule]]
+slug = "c-free"
+title = "Title of c-free"
+summary = "Summary of c-free."
+
+[[rule]]
+slug = "c-count-types"
+title = "Title of c-count-types"
+summary = "Summary of c-count-types."
+
+[[rule]]
+slug = "c-error-path"
+title = "Title of c-error-path"
+summary = "Summary of c-error-path."
+
+[[rule]]
+slug = "error-class-by-cause"
+title = "Title of error-class-by-cause"
+summary = "Summary of error-class-by-cause."
+
+[[rule]]
+slug = "getters"
+title = "Title of getters"
+summary = "Summary of getters."
+
+[[rule.example]]
+surface = "wasm"
+before = '''
+getBpm(request)
+'''
+after = '''
+detectBpm(request)
+'''
+
+[[rule]]
+slug = "collections"
+title = "Title of collections"
+summary = "Summary of collections."
+
+[[rule]]
+slug = "one-entry-per-operation"
+title = "Title of one-entry-per-operation"
+summary = "Summary of one-entry-per-operation."
+
+[[rule]]
+slug = "mastering-names"
+title = "Title of mastering-names"
+summary = "Summary of mastering-names."
+
+[[rule]]
+slug = "construction"
+title = "Title of construction"
+summary = "Summary of construction."
+
+[[rule]]
+slug = "planar-channels"
+title = "Title of planar-channels"
+summary = "Summary of planar-channels."
+
+[[rule]]
+slug = "stereo-pair"
+title = "Title of stereo-pair"
+summary = "Summary of stereo-pair."
+
+[[rule]]
+slug = "num-channels"
+title = "Title of num-channels"
+summary = "Summary of num-channels."
+
+[[rule]]
+slug = "no-positional-bools"
+title = "Title of no-positional-bools"
+summary = "Summary of no-positional-bools."
+
+[[rule]]
+slug = "strip-ref"
+title = "Title of strip-ref"
+summary = "Summary of strip-ref."
+
+[[rule]]
+slug = "high-pass"
+title = "Title of high-pass"
+summary = "Summary of high-pass."
+
+[[rule]]
+slug = "frequency-bounds"
+title = "Title of frequency-bounds"
+summary = "Summary of frequency-bounds."
+
+[[rule]]
+slug = "pitch-semitones"
+title = "Title of pitch-semitones"
+summary = "Summary of pitch-semitones."
+
+[[rule]]
+slug = "type-names"
+title = "Title of type-names"
+summary = "Summary of type-names."
+
+[[rule]]
+slug = "input-types"
+title = "Title of input-types"
+summary = "Summary of input-types."
+
+[[rule]]
+slug = "aliases-removed"
+title = "Title of aliases-removed"
+summary = "Summary of aliases-removed."
+
+[[rule]]
+slug = "abi-probes"
+title = "Title of abi-probes"
+summary = "Summary of abi-probes."
+
+[[rule]]
+slug = "worklet-scope"
+title = "Title of worklet-scope"
+summary = "Summary of worklet-scope."
+
+[[rule]]
+slug = "engine-vocabulary"
+title = "Title of engine-vocabulary"
+summary = "Summary of engine-vocabulary."
+
+[[rule]]
+slug = "vocal-edit-model"
+title = "Title of vocal-edit-model"
+summary = "Summary of vocal-edit-model."
+
+[[rule]]
+slug = "cli-positional-input"
+title = "Title of cli-positional-input"
+summary = "Summary of cli-positional-input."
+
+[[rule]]
+slug = "cli-front-end-parity"
+title = "Title of cli-front-end-parity"
+summary = "Summary of cli-front-end-parity."
+
+[[rule]]
+slug = "cpp-include"
+title = "Title of cpp-include"
+summary = "Summary of cpp-include."
+
+[[rule]]
+slug = "doc-comments"
+title = "Title of doc-comments"
+summary = "Summary of doc-comments."
+
+[[rule]]
+slug = "config-keys"
+title = "Title of config-keys"
+summary = "Summary of config-keys."
+
+[[rule]]
+slug = "python-public-names"
+title = "Title of python-public-names"
+summary = "Summary of python-public-names."
+
+[[rule]]
+slug = "individual"
+title = "Title of individual"
+summary = "Summary of individual."

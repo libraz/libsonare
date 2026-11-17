@@ -3,7 +3,7 @@
        test-python test-python-slow test-node test-wasm parity conformance test-gm-cross-surface test-mix-assistant-cross-surface abi-layout abi-layout-check check-abi-version \
        capability-catalog capability-catalog-check processor-types processor-types-check ci-local \
        build-bank-shared build-head-shared baseline bank-versions bank-versions-check \
-       surface-coverage surface-coverage-check \
+       surface-coverage surface-coverage-check surface-check upgrade-notes \
        gs-census gs-census-header gs-census-check gs-program-census gs-address-table-json gs-unit-archive-set gs-unit-diff gs-unit-diff-check \
        gs-efx-archive-set gs-efx-tables gs-efx-tables-check gs-efx-coverage \
        gs-classic-models gs-classic-check gs-classic-overlays-check gs-efx-soundings-drift \
@@ -703,6 +703,18 @@ surface-coverage:
 
 surface-coverage-check:
 	python3 tools/parity/surface_coverage.py --check
+
+# Public-interface conventions and the 2.0.0 migration ledgers. Kept out of
+# `conformance` until every ledger entry and convention is green, since a check
+# that is red by design must not sit upstream of a gate that has to pass.
+# Narrow it with SURFACE_CHECK_ARGS, e.g. "--surface python --domain core".
+surface-check:
+	python3 -m unittest tools/api/test_check_surface.py
+	python3 tools/api/check_surface.py $(if $(SURFACE_CHECK_ARGS),$(SURFACE_CHECK_ARGS),--all)
+
+# UPGRADING.md is generated from tools/api/migration/rules.toml and the ledgers.
+upgrade-notes:
+	python3 tools/api/upgrade_notes.py -o UPGRADING.md
 
 # The GS address census: which addresses real Standard MIDI Files reach, and how
 # many files reach each. The corpus is not in the repository (see

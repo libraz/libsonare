@@ -1,0 +1,8 @@
+# Ledger fixture: a rename whose new name exists and whose old name is gone.
+
+[[entry]]
+kind = "function"
+old = "getBpm"
+new = "detectBpm"
+domain = "analysis"
+rule = "getters"

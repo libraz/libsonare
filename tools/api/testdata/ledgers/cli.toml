@@ -1,0 +1,9 @@
+# Ledger fixture: a flag removed from the native front-end only.
+
+[[entry]]
+kind = "flag"
+old = "bpm --verbose"
+removed = true
+frontend = "native"
+domain = "analysis"
+rule = "individual"

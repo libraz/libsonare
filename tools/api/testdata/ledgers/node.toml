@@ -1,0 +1,8 @@
+# Ledger fixture.
+
+[[entry]]
+kind = "function"
+old = "getBpm"
+new = "detectBpm"
+domain = "analysis"
+rule = "getters"

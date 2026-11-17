@@ -1,0 +1,3 @@
+Stand-in test file for a ledger `changed` entry.
+
+def test_detect_bpm_requires_sample_rate():  # detect_bpm requires sample_rate

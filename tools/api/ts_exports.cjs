@@ -1,0 +1,206 @@
+// Dumps every export of a TypeScript package's entry points through the type checker.
+//
+// Usage: node tools/api/ts_exports.cjs <packageDir> <entry.ts>...
+// Entries are resolved under <packageDir>/src. The package must have typescript in its
+// own node_modules. Output is a JSON array on stdout, one object per (entry, export):
+// name, kind, declaring file and line, doc presence, structured call signatures (params
+// with name / optional / type text / boolean / string-literal members, return text),
+// class and interface members (well-known symbols spelled `[Symbol.dispose]`), enum
+// members, and the string-literal members of exported type aliases. Paths are relative
+// to the repository root (two levels above the package directory).
+'use strict';
+const path = require('path');
+
+const [pkgArg, ...entries] = process.argv.slice(2);
+const pkgDir = path.resolve(pkgArg);
+const ts = require(path.join(pkgDir, 'node_modules/typescript'));
+const cfgPath = ts.findConfigFile(pkgDir, ts.sys.fileExists, 'tsconfig.json');
+const cfg = ts.parseJsonConfigFileContent(
+  ts.readConfigFile(cfgPath, ts.sys.readFile).config,
+  ts.sys,
+  path.dirname(cfgPath),
+);
+const files = entries.map((e) => path.join(pkgDir, 'src', e));
+const program = ts.createProgram(files, { ...cfg.options, noEmit: true });
+const checker = program.getTypeChecker();
+const root = path.resolve(pkgDir, '../..');
+const TF = ts.TypeFormatFlags.NoTruncation;
+const MAX_TEXT = 4000;
+
+const clip = (s) => (s.length > MAX_TEXT ? s.slice(0, MAX_TEXT) : s);
+const where = (d) => {
+  const sf = d.getSourceFile();
+  const { line } = sf.getLineAndCharacterOfPosition(d.getStart());
+  return { file: path.relative(root, sf.fileName), line: line + 1 };
+};
+const declHasDoc = (d) => !!(d && d.jsDoc && d.jsDoc.length > 0);
+const symHasDoc = (s) =>
+  s.getDocumentationComment(checker).length > 0 || (s.declarations || []).some(declHasDoc);
+const typeText = (t) => clip(checker.typeToString(t, undefined, TF));
+
+// Members of a union after dropping undefined / null.
+const definedParts = (t) =>
+  (t.isUnion() ? t.types : [t]).filter(
+    (p) => !(p.flags & (ts.TypeFlags.Undefined | ts.TypeFlags.Null | ts.TypeFlags.Void)),
+  );
+const isBoolean = (t) => {
+  const parts = definedParts(t);
+  return parts.length > 0 && parts.every((p) => p.flags & (ts.TypeFlags.BooleanLike));
+};
+const stringLiterals = (t) => {
+  const parts = definedParts(t);
+  return parts.filter((p) => p.isStringLiteral()).map((p) => p.value).sort();
+};
+
+const memberName = (m, md) => {
+  if (md && md.name && ts.isComputedPropertyName(md.name)) return md.name.getText();
+  return m.getName();
+};
+
+const describeSignature = (g) => {
+  const params = g.getParameters().map((p) => {
+    const pd = (p.declarations || [])[0];
+    const pt = checker.getTypeOfSymbolAtLocation(p, pd || g.getDeclaration());
+    const optional = !!(
+      pd &&
+      ts.isParameter(pd) &&
+      (pd.questionToken || pd.initializer || pd.dotDotDotToken)
+    );
+    return {
+      name: p.getName(),
+      optional,
+      rest: !!(pd && ts.isParameter(pd) && pd.dotDotDotToken),
+      type: typeText(pt),
+      boolean: isBoolean(pt),
+      literals: stringLiterals(pt),
+    };
+  });
+  return {
+    text: clip(checker.signatureToString(g, undefined, TF)),
+    params,
+    returns: typeText(checker.getReturnTypeOfSignature(g)),
+  };
+};
+
+const isHidden = (md) =>
+  !!(ts.getCombinedModifierFlags(md) & (ts.ModifierFlags.Private | ts.ModifierFlags.Protected)) ||
+  (md.name && ts.isPrivateIdentifier && ts.isPrivateIdentifier(md.name));
+
+const describeMember = (m, isStatic) => {
+  const md = (m.declarations || [])[0];
+  if (!md || isHidden(md)) return null;
+  const name = memberName(m, md);
+  if (name.startsWith('#')) return null;
+  const mt = checker.getTypeOfSymbolAtLocation(m, md);
+  const cs = mt.getCallSignatures();
+  let kind;
+  if (m.flags & ts.SymbolFlags.Method) kind = 'method';
+  else if (m.flags & ts.SymbolFlags.Accessor) kind = 'accessor';
+  else kind = 'property';
+  return {
+    name,
+    kind,
+    static: isStatic,
+    optional: !!(m.flags & ts.SymbolFlags.Optional),
+    readonly: !!(ts.getCombinedModifierFlags(md) & ts.ModifierFlags.Readonly),
+    ...where(md),
+    doc: symHasDoc(m),
+    sigs: kind === 'method' ? cs.map(describeSignature) : [],
+    type: typeText(mt),
+    boolean: kind !== 'method' && isBoolean(mt),
+    literals: kind !== 'method' ? stringLiterals(mt) : [],
+  };
+};
+
+const kindOf = (s) => {
+  const f = s.flags;
+  if (f & ts.SymbolFlags.Class) return 'class';
+  if (f & ts.SymbolFlags.Function) return 'function';
+  if (f & ts.SymbolFlags.Interface) return 'interface';
+  if (f & ts.SymbolFlags.TypeAlias) return 'type';
+  if (f & ts.SymbolFlags.Enum) return 'enum';
+  if (f & ts.SymbolFlags.Variable) return 'const';
+  if (f & ts.SymbolFlags.Module) return 'namespace';
+  return 'other';
+};
+
+const out = [];
+for (let i = 0; i < files.length; i++) {
+  const sf = program.getSourceFile(files[i]);
+  if (!sf) {
+    process.stderr.write(`missing entry: ${files[i]}\n`);
+    process.exit(2);
+  }
+  const mod = checker.getSymbolAtLocation(sf);
+  for (let s of checker.getExportsOfModule(mod)) {
+    const exportName = s.getName();
+    if (s.flags & ts.SymbolFlags.Alias) s = checker.getAliasedSymbol(s);
+    const d = (s.declarations || [])[0];
+    if (!d) continue;
+    const kind = kindOf(s);
+    const row = {
+      entry: entries[i],
+      name: exportName,
+      kind,
+      ...where(d),
+      doc: symHasDoc(s),
+      sigs: [],
+      members: [],
+      enumMembers: [],
+      literals: [],
+      type: '',
+      ctorPrivate: false,
+    };
+    if (kind === 'function') {
+      const t = checker.getTypeOfSymbolAtLocation(s, d);
+      row.sigs = t.getCallSignatures().map(describeSignature);
+    } else if (kind === 'const') {
+      const t = checker.getTypeOfSymbolAtLocation(s, d);
+      row.type = typeText(t);
+      row.sigs = t.getCallSignatures().map(describeSignature);
+    } else if (kind === 'type') {
+      const t = checker.getDeclaredTypeOfSymbol(s);
+      row.type = clip(d.getText().replace(/\s+/g, ' '));
+      row.literals = stringLiterals(t);
+      if (t.flags & (ts.TypeFlags.Object | ts.TypeFlags.Intersection)) {
+        for (const m of checker.getPropertiesOfType(t)) {
+          const r = describeMember(m, false);
+          if (r) row.members.push(r);
+        }
+      }
+    } else if (kind === 'enum') {
+      row.enumMembers = (d.members || []).map((m) => ({
+        name: m.name.getText(),
+        ...where(m),
+        doc: declHasDoc(m),
+      }));
+    }
+    if (kind === 'class' || kind === 'interface') {
+      const inst = checker.getDeclaredTypeOfSymbol(s);
+      for (const m of checker.getPropertiesOfType(inst)) {
+        const r = describeMember(m, false);
+        if (r) row.members.push(r);
+      }
+      if (kind === 'class') {
+        const st = checker.getTypeOfSymbolAtLocation(s, d);
+        for (const m of checker.getPropertiesOfType(st)) {
+          if (m.getName() === 'prototype') continue;
+          const r = describeMember(m, true);
+          if (r) row.members.push(r);
+        }
+        row.sigs = st.getConstructSignatures().map(describeSignature);
+        const cd = (s.declarations || []).find(ts.isClassDeclaration);
+        const ctor = cd && cd.members.find(ts.isConstructorDeclaration);
+        row.ctorPrivate = !!(
+          ctor &&
+          ts.getCombinedModifierFlags(ctor) & (ts.ModifierFlags.Private | ts.ModifierFlags.Protected)
+        );
+        row.bases = cd && cd.heritageClauses
+          ? cd.heritageClauses.flatMap((h) => h.types.map((x) => x.expression.getText()))
+          : [];
+      }
+    }
+    out.push(row);
+  }
+}
+process.stdout.write(JSON.stringify(out));
