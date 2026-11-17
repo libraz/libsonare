@@ -539,13 +539,13 @@ class Audio:
         return int(self._lib.sonare_audio_sample_rate(self._require_handle()))
 
     @property
-    def duration(self) -> float:
+    def duration_sec(self) -> float:
         """Return the audio duration in seconds.
 
         Raises:
             RuntimeError: If the audio has been closed.
         """
-        return float(self._lib.sonare_audio_duration(self._require_handle()))
+        return float(self._lib.sonare_audio_duration_sec(self._require_handle()))
 
     def detect_bpm(self) -> float:
         """Detect BPM (tempo).

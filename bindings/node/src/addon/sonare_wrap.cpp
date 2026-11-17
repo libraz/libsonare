@@ -983,7 +983,7 @@ Napi::Value SonareWrap::GetDuration(const Napi::CallbackInfo& info) {
     return env.Undefined();
   }
 
-  return Napi::Number::New(env, static_cast<double>(sonare_audio_duration(audio_)));
+  return Napi::Number::New(env, static_cast<double>(sonare_audio_duration_sec(audio_)));
   SONARE_NODE_CATCH(env)
 }
 

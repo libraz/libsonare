@@ -191,7 +191,7 @@ int sonare_audio_sample_rate(const SonareAudio* audio) {
   return audio->audio.sample_rate();
 }
 
-float sonare_audio_duration(const SonareAudio* audio) {
+float sonare_audio_duration_sec(const SonareAudio* audio) {
   if (audio == nullptr) {
     return 0.0f;
   }

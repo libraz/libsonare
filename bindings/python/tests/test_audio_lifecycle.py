@@ -39,7 +39,7 @@ _DIRECT_HANDLE_MEMBERS = frozenset(
         "data",
         "length",
         "sample_rate",
-        "duration",
+        "duration_sec",
         "detect_bpm",
         "detect_beats",
         "detect_downbeats",
@@ -115,7 +115,7 @@ def test_context_manager_closes_the_handle() -> None:
     with _make_audio() as audio:
         assert audio.length > 0
     with raises_coded(ErrorCode.INVALID_STATE, match="Audio is closed"):
-        _ = audio.duration
+        _ = audio.duration_sec
 
 
 def test_del_after_close_is_silent() -> None:

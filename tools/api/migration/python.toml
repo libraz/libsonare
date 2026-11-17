@@ -89,3 +89,10 @@ old = "VocalCapabilities.api_version"
 new = "VocalCapabilities.abi_version"
 domain = "project"
 rule = "abi-probes"
+
+[[entry]]
+kind = "method"
+old = "Audio.duration"
+new = "Audio.duration_sec"
+domain = "core"
+rule = "seconds-suffix"

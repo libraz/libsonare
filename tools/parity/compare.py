@@ -267,7 +267,7 @@ _ALIAS_COVERAGE = {
     # Accessors exposed as bare properties or get-prefixed getters.
     "audio_data": ("data", "get_data"),
     "audio_length": ("length", "get_length"),
-    "audio_duration": ("duration", "get_duration"),
+    "audio_duration_sec": ("duration_sec", "get_duration_sec"),
     "audio_sample_rate": ("sample_rate", "get_sample_rate"),
     "engine_get_transport_state": ("transport_state",),
     # The V2 meter drains append input-tap peaks to the legacy record shape;

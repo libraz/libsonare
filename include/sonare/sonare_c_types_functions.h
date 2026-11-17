@@ -116,7 +116,7 @@ void sonare_audio_free(SonareAudio* audio);
 const float* sonare_audio_data(const SonareAudio* audio);
 size_t sonare_audio_length(const SonareAudio* audio);
 int sonare_audio_sample_rate(const SonareAudio* audio);
-float sonare_audio_duration(const SonareAudio* audio);
+float sonare_audio_duration_sec(const SonareAudio* audio);
 SonareError sonare_audio_detect_bpm(const SonareAudio* audio, float* out_bpm);
 SonareError sonare_audio_detect_key(const SonareAudio* audio, SonareKey* out_key);
 /// @note Free @p out_times with @ref sonare_free_floats.

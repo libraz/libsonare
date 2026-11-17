@@ -178,7 +178,7 @@ def test_audio_properties() -> None:
     audio = Audio.from_buffer(samples, sample_rate=sr)
     assert audio.length == len(samples)
     assert audio.sample_rate == sr
-    assert abs(audio.duration - 1.0) < 0.01
+    assert abs(audio.duration_sec - 1.0) < 0.01
     data = audio.data
     assert isinstance(data, np.ndarray)
     assert data.dtype == np.float32
@@ -220,7 +220,7 @@ def test_audio_from_file() -> None:
         audio = Audio.from_file(wav_path)
         assert audio.length > 0
         assert audio.sample_rate == sr
-        assert abs(audio.duration - 0.5) < 0.05
+        assert abs(audio.duration_sec - 0.5) < 0.05
     finally:
         os.unlink(wav_path)
 

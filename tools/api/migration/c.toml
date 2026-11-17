@@ -127,3 +127,10 @@ changed = "now reachable from sonare_c.h through sonare_c_version.h"
 domain = "core"
 rule = "abi-probes"
 test = "tests/api/surface_core_test.cpp::Version macros are reachable from sonare_c.h"
+
+[[entry]]
+kind = "function"
+old = "sonare_audio_duration"
+new = "sonare_audio_duration_sec"
+domain = "analysis"
+rule = "seconds-suffix"

@@ -579,8 +579,8 @@ TEST_CASE("sonare_audio_from_buffer", "[c_api]") {
     REQUIRE(audio != nullptr);
     REQUIRE(sonare_audio_length(audio) == samples.size());
     REQUIRE(sonare_audio_sample_rate(audio) == 22050);
-    REQUIRE(sonare_audio_duration(audio) > 0.9f);
-    REQUIRE(sonare_audio_duration(audio) < 1.1f);
+    REQUIRE(sonare_audio_duration_sec(audio) > 0.9f);
+    REQUIRE(sonare_audio_duration_sec(audio) < 1.1f);
 
     sonare_audio_free(audio);
   }
