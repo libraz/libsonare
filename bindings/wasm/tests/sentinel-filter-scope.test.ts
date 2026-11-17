@@ -429,10 +429,6 @@ const NOT_SENTINEL_FILTERS: ReadonlyMap<string, string> = new Map([
     'The routing count on a patch the core produced, sizing the JS array it is copied into.',
   ],
   [
-    'src/c_api/mixing_mixer.cpp:n',
-    'A loop index deciding whether a separator precedes the next warning line.',
-  ],
-  [
     'src/c_api/project_bounce.cpp:block_size',
     'The project bounce documents this one as "<= 0 => 128", so a non-positive value is a documented default request rather than a mis-spelled sentinel.',
   ],
