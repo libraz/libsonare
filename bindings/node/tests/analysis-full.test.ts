@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { analyze, analyzeMelody, analyzeWithProgress } from '../src/index.js';
+import { analyze, analyzeMelody } from '../src/index.js';
 
 const SR = 22050;
 
@@ -35,7 +35,7 @@ describe('analyze() full result', () => {
     expect(typeof result.bpmConfidence).toBe('number');
     expect(Array.isArray(result.bpmCandidates)).toBe(true);
     expect(result.bpmCandidates[0]?.relation).toBe('primary');
-    expect(result.bpmCandidates[0]?.value).toBe(result.bpm);
+    expect(result.bpmCandidates[0]?.bpm).toBe(result.bpm);
     expect(result.key).toBeDefined();
     expect(typeof result.key.root).toBe('number');
     expect(result.timeSignature).toBeDefined();
@@ -43,13 +43,10 @@ describe('analyze() full result', () => {
     expect(Array.isArray(result.timeSignatureCandidates)).toBe(true);
     expect(result.timeSignatureCandidates.length).toBeGreaterThan(0);
 
-    // beatTimes is still a Float32Array (backward compatibility).
-    expect(result.beatTimes).toBeInstanceOf(Float32Array);
-
-    // beats is an array; each beat now also carries a numeric strength.
+    // beats is an array; each beat carries a time and a numeric strength.
     expect(Array.isArray(result.beats)).toBe(true);
     if (result.beats.length > 0) {
-      expect(typeof result.beats[0].time).toBe('number');
+      expect(typeof result.beats[0].timeSec).toBe('number');
       expect(typeof result.beats[0].strength).toBe('number');
     }
 
@@ -71,31 +68,32 @@ describe('analyze() full result', () => {
     expect(typeof result.rhythm.grooveType).toBe('string');
 
     expect(result.melody).toBeDefined();
-    expect(typeof result.melody.meanFrequency).toBe('number');
+    expect(typeof result.melody.meanFrequencyHz).toBe('number');
     expect(Array.isArray(result.melody.pitches)).toBe(true);
 
     expect(result.form).toBeDefined();
     expect(typeof result.form).toBe('string');
   });
 
-  it('beatTimes matches beats[].time', () => {
+  it('beats are ordered in time', () => {
     const samples = generateChordTone(SR, 3);
     const result = analyze(samples, SR);
-    expect(result.beatTimes.length).toBe(result.beats.length);
-    for (let i = 0; i < result.beats.length; i++) {
-      expect(result.beatTimes[i]).toBeCloseTo(result.beats[i].time, 3);
+    for (let i = 1; i < result.beats.length; i++) {
+      expect(result.beats[i].timeSec).toBeGreaterThanOrEqual(result.beats[i - 1].timeSec);
     }
   });
 });
 
-describe('analyzeWithProgress full result', () => {
+describe('analyze() with onProgress full result', () => {
   it('fires the progress callback and returns the full shape', () => {
     const samples = generateChordTone(SR, 3);
     const progress: number[] = [];
     const stages: string[] = [];
-    const result = analyzeWithProgress(samples, SR, (p, stage) => {
-      progress.push(p);
-      stages.push(stage);
+    const result = analyze(samples, SR, {
+      onProgress: (p, stage) => {
+        progress.push(p);
+        stages.push(stage);
+      },
     });
 
     // Callback must have fired at least once.
@@ -106,7 +104,6 @@ describe('analyzeWithProgress full result', () => {
     }
 
     // Full shape parity with analyze().
-    expect(result.beatTimes).toBeInstanceOf(Float32Array);
     expect(Array.isArray(result.beats)).toBe(true);
     expect(Array.isArray(result.chords)).toBe(true);
     expect(Array.isArray(result.sections)).toBe(true);
@@ -123,11 +120,13 @@ describe('analyzeMelody pYIN / center', () => {
     const samples = generateSine(220, SR, 1);
     const melody = analyzeMelody(samples, SR, { usePyin: true });
     expect(Array.isArray(melody.points)).toBe(true);
-    expect(typeof melody.meanFrequency).toBe('number');
+    expect(typeof melody.meanFrequencyHz).toBe('number');
     expect(typeof melody.pitchStability).toBe('number');
     for (const point of melody.points) {
-      expect(typeof point.time).toBe('number');
-      expect(typeof point.frequency).toBe('number');
+      expect(typeof point.timeSec).toBe('number');
+      if (point.frequencyHz !== undefined) {
+        expect(typeof point.frequencyHz).toBe('number');
+      }
       expect(typeof point.confidence).toBe('number');
     }
   });
@@ -135,8 +134,8 @@ describe('analyzeMelody pYIN / center', () => {
   it('accepts explicit tuning + tracker options', () => {
     const samples = generateSine(220, SR, 1);
     const melody = analyzeMelody(samples, SR, {
-      fmin: 65.0,
-      fmax: 2093.0,
+      f0MinHz: 65.0,
+      f0MaxHz: 2093.0,
       frameLength: 2048,
       hopLength: 256,
       threshold: 0.1,
@@ -144,7 +143,7 @@ describe('analyzeMelody pYIN / center', () => {
       center: false,
     });
     expect(Array.isArray(melody.points)).toBe(true);
-    expect(typeof melody.meanFrequency).toBe('number');
+    expect(typeof melody.meanFrequencyHz).toBe('number');
   });
 
   it('defaults to plain YIN when no tracker option is given', () => {

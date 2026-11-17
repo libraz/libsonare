@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import {
-  analyzeWithProgress,
+  analyze,
   lufsInterleaved,
   Mixer,
   masterAudio,
@@ -356,8 +356,10 @@ describe('explicit undefined reads as an omitted option', () => {
     const nBins = 4;
     const nFrames = 8;
     const values = new Float32Array(nBins * nFrames).map((_, i) => (i % 5) * 0.1);
-    const omitted = pcen(values, nBins, nFrames, {});
-    const explicit = pcen(values, nBins, nFrames, {
+    const matrix = { data: values, rows: nBins, cols: nFrames };
+    const omitted = pcen({ values: matrix });
+    const explicit = pcen({
+      values: matrix,
       sampleRate: undefined,
       hopLength: undefined,
       timeConstant: undefined,
@@ -366,7 +368,7 @@ describe('explicit undefined reads as an omitted option', () => {
       power: undefined,
       eps: undefined,
     });
-    expect(Array.from(explicit)).toEqual(Array.from(omitted));
+    expect(Array.from(explicit.data)).toEqual(Array.from(omitted.data));
   });
 
   it('applies noteSegments config defaults for explicitly undefined fields', () => {
@@ -377,11 +379,9 @@ describe('explicit undefined reads as an omitted option', () => {
         f0Hz,
         voicedProb,
         frameRate: 100,
-        config: {
-          segmentationThresholdCents: undefined,
-          minNoteMs: undefined,
-          referenceHz: undefined,
-        },
+        segmentationThresholdCents: undefined,
+        minNoteMs: undefined,
+        referenceHz: undefined,
       }),
     ).toEqual(noteSegments({ f0Hz, voicedProb, frameRate: 100 }));
   });
@@ -516,14 +516,16 @@ describe('explicit undefined reads as an omitted option', () => {
 });
 
 describe('a throwing progress callback surfaces as a catchable JS exception', () => {
-  it('propagates an onProgress throw out of analyzeWithProgress', () => {
+  it('propagates an onProgress throw out of analyze', () => {
     const sampleRate = 22050;
     const samples = new Float32Array(sampleRate).map((_, i) =>
       Math.sin((2 * Math.PI * 440 * i) / sampleRate),
     );
     expect(() =>
-      analyzeWithProgress(samples, sampleRate, () => {
-        throw new Error('boom from onProgress');
+      analyze(samples, sampleRate, {
+        onProgress: () => {
+          throw new Error('boom from onProgress');
+        },
       }),
     ).toThrow('boom from onProgress');
   });
@@ -622,10 +624,10 @@ describe('a progress callback cannot corrupt its own input', () => {
     };
   }
 
-  it('analyzeWithProgress keeps its result identical under a sabotaging callback', () => {
-    const reference = analyzeWithProgress(tone(440), sampleRate, () => {});
+  it('analyze with onProgress keeps its result identical under a sabotaging callback', () => {
+    const reference = analyze(tone(440), sampleRate, { onProgress: () => {} });
     const victim = tone(440);
-    const result = analyzeWithProgress(victim, sampleRate, sabotage(victim));
+    const result = analyze(victim, sampleRate, { onProgress: sabotage(victim) });
     expect(victim.byteLength).toBe(0);
     expect(result.bpm).toBe(reference.bpm);
     expect(result.key.name).toBe(reference.key.name);

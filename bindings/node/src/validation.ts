@@ -123,6 +123,64 @@ export function assertNonNegativeScalar(fnName: string, value: number, argName: 
   }
 }
 
+const FLOAT32_MAX = 3.4028234663852886e38;
+
+/** A scalar native reads as a float: `TypeError` unless a number, `RangeError` unless finite and within the 32-bit float range. */
+export function assertFloatValue(fnName: string, value: unknown, argName: string): void {
+  if (typeof value !== 'number') {
+    throw new TypeError(`${fnName}: ${argName} must be a number`);
+  }
+  if (!Number.isFinite(value) || Math.abs(value) > FLOAT32_MAX) {
+    throw new RangeError(
+      `${fnName}: ${argName} must be a finite number within the 32-bit float range`,
+    );
+  }
+}
+
+/** {@link assertFloatValue} plus a floor: strictly positive. */
+export function assertPositiveFloatValue(fnName: string, value: unknown, argName: string): void {
+  assertFloatValue(fnName, value, argName);
+  if ((value as number) <= 0) {
+    throw new RangeError(`${fnName}: ${argName} must be positive`);
+  }
+}
+
+/** {@link assertFloatValue} plus a floor of zero. */
+export function assertNonNegativeFloatValue(fnName: string, value: unknown, argName: string): void {
+  assertFloatValue(fnName, value, argName);
+  if ((value as number) < 0) {
+    throw new RangeError(`${fnName}: ${argName} must be non-negative`);
+  }
+}
+
+/** {@link assertFloatValue} over every entry of `fields`, each named by its key. */
+export function assertFloatFields(fnName: string, fields: Record<string, unknown>): void {
+  for (const [name, value] of Object.entries(fields)) {
+    assertFloatValue(fnName, value, name);
+  }
+}
+
+/** A frequency band: each given bound is a positive float, and a given pair is strictly ordered. Absent (`undefined` / `null`) is skipped. */
+export function assertFrequencyBounds(
+  fnName: string,
+  min: unknown,
+  max: unknown,
+  minName: string,
+  maxName: string,
+): void {
+  const hasMin = min !== undefined && min !== null;
+  const hasMax = max !== undefined && max !== null;
+  if (hasMin) {
+    assertPositiveFloatValue(fnName, min, minName);
+  }
+  if (hasMax) {
+    assertPositiveFloatValue(fnName, max, maxName);
+  }
+  if (hasMin && hasMax && !((max as number) > (min as number))) {
+    throw new RangeError(`${fnName}: ${maxName} must be above ${minName}`);
+  }
+}
+
 /**
  * Offline-analysis sample-rate bounds, mirroring the C++ core limits
  * (`sonare::kMinAudioSampleRate` / `kMaxAudioSampleRate` in `core/audio.h`) and
@@ -284,6 +342,33 @@ export function assertBoundedInteger(
 ): void {
   if (!Number.isInteger(value) || value < min || value > max) {
     throw new RangeError(`${fnName}: ${argName} must be an integer in [${min}, ${max}]`);
+  }
+}
+
+/** A pitch class: `TypeError` unless a number, `RangeError` unless an integer in `[0, 11]`. Names are refused. */
+export function assertPitchClass(fnName: string, value: unknown, argName: string): void {
+  if (typeof value !== 'number') {
+    throw new TypeError(`${fnName}: ${argName} must be a pitch class number 0-11`);
+  }
+  if (!Number.isInteger(value) || value < 0 || value > 11) {
+    throw new RangeError(`${fnName}: ${argName} must be an integer in [0, 11]`);
+  }
+}
+
+/** A member of a closed string set: `TypeError` unless a string (numbers included), `RangeError` for an unknown token. */
+export function assertClosedToken<T extends string>(
+  fnName: string,
+  value: unknown,
+  allowed: readonly T[],
+  argName: string,
+): asserts value is T {
+  if (typeof value !== 'string') {
+    throw new TypeError(`${fnName}: ${argName} must be one of ${allowed.join(', ')}`);
+  }
+  if (!allowed.includes(value as T)) {
+    throw new RangeError(
+      `${fnName}: ${argName} must be one of ${allowed.join(', ')}, got '${value}'`,
+    );
   }
 }
 

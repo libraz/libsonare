@@ -66,7 +66,7 @@ export type VoiceEngine = 'grain' | 'psola';
 export type PitchCorrectionMode = 'off' | 'auto' | 'robot';
 
 /** Scale a pitch correction snaps to. `'chromatic'` ignores the key root. */
-export type ScaleKind = 'major' | 'natural_minor' | 'chromatic';
+export type ScaleKind = 'major' | 'naturalMinor' | 'chromatic';
 
 /** Where the vocoder takes its carrier from; `'external'` reads the `*WithCarrier` process input. */
 export type VocoderCarrierSource = 'internal' | 'external';

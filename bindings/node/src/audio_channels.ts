@@ -41,7 +41,7 @@ export interface DownmixOptions {
  * const stereo = channels.length > 2 ? downmix(channels, 1) : channels;
  * ```
  */
-export function decodeChannels(data: Buffer | Uint8Array): DecodedChannels {
+export function decodeChannels(data: Uint8Array): DecodedChannels {
   return addon.decodeChannels(data);
 }
 

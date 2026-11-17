@@ -8,7 +8,7 @@ import {
   masterAudioAsync,
   masterAudioStereoAsync,
   masteringStreamingPreview,
-  onsetEnvelope,
+  onsetStrength,
   onsetStrengthMulti,
   remix,
   remixAlignedIntervals,
@@ -71,7 +71,7 @@ describe('request keys that the entry point does not honour', () => {
     for (const key of ['fmin', 'fmax', 'htk']) {
       const extra = { [key]: 1 } as Record<string, unknown>;
       expectRefusal(
-        () => onsetEnvelope({ samples, sampleRate: SR, ...extra }),
+        () => onsetStrength({ samples, sampleRate: SR, ...extra }),
         TypeError,
         new RegExp(key),
       );

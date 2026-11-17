@@ -1,6 +1,9 @@
+/** Pitch class, C = 0 through B = 11. */
+export type PitchClass = 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11;
+
 export interface Key {
-  /** Pitch class ordinal 0..11 (C=0), the form `detectChords` and `chordFunctions` take back. */
-  root: number;
+  /** Pitch class of the tonic (C = 0). */
+  root: PitchClass;
   mode: KeyMode;
   /**
    * Share of the model's belief that this key is the answer, in `[0, 1)`.
@@ -30,63 +33,65 @@ export type KeyMode =
   | 'mixolydian'
   | 'locrian';
 
-/** A scale named by the mode names {@link detectKey} reports. */
-export type ScaleName = KeyMode;
+/** Autocorrelation or cosine similarity for a tempogram. */
+export type TempogramMode = 'autocorrelation' | 'cosine';
 
-export type TempogramMode = 'autocorrelation' | 'auto' | 'ac' | 'cosine' | 0 | 1;
+/** Normalisation applied to a vector: by its maximum, its L1 or L2 norm, or its power. */
+export type NormType = 'max' | 'l1' | 'l2' | 'power';
+
+/** Rhythmic feel reported by {@link analyzeRhythm}. */
+export type GrooveType = 'straight' | 'shuffle' | 'swing';
+
+/** How a tempo candidate relates to the primary tempo. */
+export type BpmCandidateRelation = 'primary' | 'half' | 'double' | 'other';
+
+/** Genre hint that picks the key-profile family; an unknown value is a `RangeError`. */
+export type GenreHint = 'auto' | 'edm' | 'electronic' | 'dance' | 'pop' | 'classical' | 'jazz';
 
 export type KeyProfile =
-  | 'ks'
-  | 'krumhansl'
-  | 'krumhansl-schmuckler'
+  | 'krumhanslSchmuckler'
   | 'temperley'
   | 'shaath'
-  | 'keyfinder'
-  | 'faraldo-edmt'
-  | 'edmt'
-  | 'faraldo-edma'
-  | 'edma'
-  | 'faraldo-edmm'
-  | 'edmm'
-  | 'bellman-budge'
-  | 'bellman'
-  | 0
-  | 1
-  | 2
-  | 3
-  | 4
-  | 5
-  | 6;
+  | 'faraldoEdmt'
+  | 'faraldoEdma'
+  | 'faraldoEdmm'
+  | 'bellmanBudge';
 
+/**
+ * Settings shared by {@link detectKey} and {@link detectKeyCandidates}, as the
+ * request fields and as the positional `options`.
+ */
 export interface KeyDetectionOptions {
   nFft?: number;
   hopLength?: number;
   useHpss?: boolean;
   loudnessWeighted?: boolean;
-  highPassHz?: number;
-  modes?: KeyMode[] | 'major-minor' | 'all' | 'modal';
+  /** Chroma high-pass corner in Hz, as in {@link analyze}. Absent = 80; 0 = no filter. */
+  chromaHighPassHz?: number;
+  /** Candidate modes: an explicit list, `'majorMinor'`, or `'all'`/`'modal'` for all seven. */
+  modes?: KeyMode[] | 'majorMinor' | 'all' | 'modal';
   /**
    * Pins the key-profile family; a pinned profile outranks `genreHint`. Omitted, `genreHint`
    * chooses it, or the chroma does under the default `'auto'` hint.
    */
   profile?: KeyProfile;
-  genreHint?: 'auto' | 'edm' | 'electronic' | 'dance' | 'pop' | 'classical' | 'jazz' | string;
+  /** Picks the profile family when `profile` is absent. Unknown values are a `RangeError`. */
+  genreHint?: GenreHint;
   /**
-   * Tuning offset of the recording in fractions of a semitone, in `[-0.5, 0.5)`;
-   * 0 is concert A440. Omitted or `'auto'` measures it from the audio. The value
-   * used is reported as {@link KeyDetection.tuning}. {@link referenceHzToTuning}
-   * converts a reference pitch to this unit. Pass 0 to read the chroma at A440.
+   * Tuning offset of the recording in cents, in `[-50, 50)`; 0 is concert A440.
+   * Omitted or `'auto'` measures it from the audio. The value used is reported as
+   * {@link KeyDetection.tuningCents}. {@link referenceHzToTuning} converts a reference
+   * pitch to this unit. Pass 0 to read the chroma at A440.
    */
-  tuning?: number | 'auto';
+  tuningCents?: number | 'auto';
+  /** Set `false` to skip the NaN/Inf pre-scan of the samples. Default true. */
+  validate?: boolean;
 }
-
-/** Options of {@link detectKey}; the same set {@link detectKeyCandidates} takes. */
-export type DetectKeyOptions = KeyDetectionOptions;
 
 /** Result of {@link detectKey}: the key, and the tuning its chroma was built with. */
 export interface KeyDetection extends Key {
-  /** Tuning used, in fractions of a semitone: the given value, or the measured one under `'auto'`. */
-  tuning: number;
+  /** Tuning used, in cents: the given value, or the measured one under `'auto'`. */
+  tuningCents: number;
 }
 
 export interface KeyCandidate {
@@ -110,17 +115,10 @@ export interface TimeSignature {
   confidence: number;
 }
 
-/** Existing tempo-estimator hypothesis retained by unified analysis. */
-export interface BpmHypothesis {
-  value: number;
-  confidence: number;
-  relation: 'primary' | 'half' | 'double' | 'other';
-}
-
 /** A single detected beat in {@link AnalysisResult.beats}. */
-export interface AnalysisBeat {
+export interface Beat {
   /** Beat time in seconds. */
-  time: number;
+  timeSec: number;
   /**
    * The onset envelope sampled at the single frame nearest this beat. It is a
    * raw, unnormalized value: its scale depends on the material, and it shifts
@@ -140,9 +138,8 @@ export interface AnalysisBeat {
 export interface BeatObservations {
   /**
    * Onset-envelope aggregate over a window around each beat. This is the
-   * strength {@link estimateMeter} is meant to be fed;
-   * {@link AnalysisBeat.strength} is a single unwindowed frame of the same
-   * envelope.
+   * accent evidence the library's own meter pass scores;
+   * {@link Beat.strength} is a single unwindowed frame of the same envelope.
    */
   onsetStrength: number[];
   /** Low-frequency energy at each beat. Empty when the analysis ran without audio. */
@@ -165,38 +162,14 @@ export interface AnalysisChord extends Chord {
   romanNumeral: string;
 }
 
-/** One song-structure section in {@link AnalysisResult.sections}. */
-export interface AnalysisSection {
-  /** Section type ordinal (0=Intro, 1=Verse, ... 7=Unknown). */
-  type: SectionTypeOrdinal;
-  start: number;
-  end: number;
-  /** Median frame RMS in the section over the loudest section's, in `[0, 1]`. */
-  energyLevel: number;
-  /** Detection confidence in `[0, 1]`. */
-  confidence: number;
-  /** Human-readable section name (e.g. `'Chorus'`). */
-  name: string;
-  /** Sections sharing a value repeat the same material, numbered 0, 1, ... by first appearance. */
-  group: number;
-}
-
-/** Aggregate timbre summary in {@link AnalysisResult.timbre}. */
-export interface AnalysisTimbre {
-  brightness: number;
-  warmth: number;
-  density: number;
-  roughness: number;
-  complexity: number;
-}
-
 /** Aggregate dynamics summary in {@link AnalysisResult.dynamics}. */
 export interface AnalysisDynamics {
   dynamicRangeDb: number;
   peakDb: number;
   rmsDb: number;
   crestFactor: number;
-  loudnessRangeDb: number;
+  /** Loudness range in LU. */
+  loudnessRangeLu: number;
   isCompressed: boolean;
 }
 
@@ -204,48 +177,33 @@ export interface AnalysisDynamics {
 export interface AnalysisRhythm {
   timeSignature: TimeSignature;
   syncopation: number;
-  grooveType: string;
+  grooveType: GrooveType;
   patternRegularity: number;
   tempoStability: number;
-}
-
-/** One melody pitch sample in {@link AnalysisMelody.pitches}. */
-export interface AnalysisPitchPoint {
-  /** Frame time in seconds. */
-  time: number;
-  /** Estimated fundamental frequency in Hz (0 when unvoiced). */
-  frequency: number;
-  /** Voicing confidence in `[0, 1]`. */
-  confidence: number;
 }
 
 /** Melody-contour summary in {@link AnalysisResult.melody}. */
 export interface AnalysisMelody {
   pitchRangeOctaves: number;
   pitchStability: number;
-  meanFrequency: number;
-  vibratoRate: number;
-  pitches: AnalysisPitchPoint[];
+  meanFrequencyHz: number;
+  vibratoRateHz: number;
+  pitches: MelodyPoint[];
 }
 
 export interface AnalysisResult {
   bpm: number;
   /**
    * Winning tempo cluster's vote share within the searched range: 60–200 BPM at 22050 Hz.
-   * `analyzeBpm()` searches 30–300 BPM at the input rate by default, so the two can differ on
-   * the same input; pass `bpmMin: 60, bpmMax: 200` and a 22050 Hz input to compare them.
+   * `analyzeBpm()` searches the same 60–200 BPM by default at the input rate, so the two can
+   * still differ on the same input.
    */
   bpmConfidence: number;
-  bpmCandidates: BpmHypothesis[];
+  bpmCandidates: BpmCandidate[];
   key: Key;
   timeSignature: TimeSignature;
   timeSignatureCandidates: TimeSignature[];
-  /**
-   * Beat times as a `Float32Array` for backward compatibility. Derived from
-   * `beats[].time`.
-   */
-  beatTimes: Float32Array;
-  beats: AnalysisBeat[];
+  beats: Beat[];
   /** Per-beat evidence behind the downbeat and meter decisions. */
   beatObservations: BeatObservations;
   /**
@@ -267,16 +225,16 @@ export interface AnalysisResult {
    * not how to get the global tempo.
    */
   beatLocalBpm: number[];
-  /** Indices into `beats` that fall on a measure start. Not the same length as `beats`. */
-  downbeatIndices: number[];
+  /** The beats that fall on a measure start. Not the same length as `beats`. */
+  downbeats: Beat[];
   /** Beat index the first measure starts on. */
   downbeatPhase: number;
   /** Detected chord progression. */
   chords: AnalysisChord[];
   /** Detected song-structure sections. */
-  sections: AnalysisSection[];
+  sections: Section[];
   /** Aggregate timbre summary. */
-  timbre: AnalysisTimbre;
+  timbre: TimbreFrame;
   /** Aggregate dynamics summary. */
   dynamics: AnalysisDynamics;
   /** Aggregate rhythm summary. */
@@ -285,8 +243,8 @@ export interface AnalysisResult {
   melody: AnalysisMelody;
   /** Human-readable musical form label (e.g. `'AABA'`). */
   form: string;
-  /** Tuning the chromagrams were built with, in fractions of a semitone: the given value, or the measured one under `tuning: 'auto'`. */
-  tuning: number;
+  /** Tuning the chromagrams were built with, in cents: the given value, or the measured one under `tuningCents: 'auto'`. */
+  tuningCents: number;
 }
 
 /** Result of {@link estimateMeter}. */
@@ -347,18 +305,12 @@ export interface MeterEstimate {
   candidates: TimeSignature[];
 }
 
-/**
- * Progress callback for {@link analyzeWithProgress}. Its return value is
- * ignored; use the request object's `cancel` callback to cancel cooperatively.
- */
-export type AnalysisProgressCallback = import('./types.js').ProgressCallback;
-
 /** Options for {@link analyzeMelody}. All fields are optional. */
 export interface MelodyOptions {
   /** Lowest f0 (Hz) the tracker will consider. Default 65 (≈ C2). */
-  fmin?: number;
+  f0MinHz?: number;
   /** Highest f0 (Hz) the tracker will consider. Default 2093 (≈ C7). */
-  fmax?: number;
+  f0MaxHz?: number;
   /** Analysis frame length in samples at 22050 Hz, rescaled to the input rate. Default 2048. */
   frameLength?: number;
   /** Hop length between frames in samples of the input buffer. Default 256. */
@@ -373,13 +325,15 @@ export interface MelodyOptions {
    * for plain YIN. Default true.
    */
   center?: boolean;
+  /** Set `false` to skip the NaN/Inf pre-scan of the samples. Default true. */
+  validate?: boolean;
 }
 
 /** Options for {@link analyzeBpm}. All fields are optional. */
 export interface AnalyzeBpmOptions {
-  /** Lowest BPM to consider. Default 30. */
+  /** Lowest BPM to consider. Default 60. */
   bpmMin?: number;
-  /** Highest BPM to consider. Default 300. */
+  /** Highest BPM to consider. Default 200. */
   bpmMax?: number;
   /** Tempo prior the tracker is biased toward. Default 120. */
   startBpm?: number;
@@ -389,6 +343,8 @@ export interface AnalyzeBpmOptions {
   hopLength?: number;
   /** Number of tempo candidates to return. Default 5. */
   maxCandidates?: number;
+  /** Set `false` to skip the NaN/Inf pre-scan of the samples. Default true. */
+  validate?: boolean;
 }
 
 /** Options for {@link analyzeRhythm}. All fields are optional. */
@@ -403,6 +359,8 @@ export interface AnalyzeRhythmOptions {
   nFft?: number;
   /** Hop length in samples of the input buffer. Default 512. */
   hopLength?: number;
+  /** Set `false` to skip the NaN/Inf pre-scan of the samples. Default true. */
+  validate?: boolean;
 }
 
 /** Options for {@link analyzeDynamics}. All fields are optional. */
@@ -412,7 +370,9 @@ export interface AnalyzeDynamicsOptions {
   /** Hop length in samples. Default 512. */
   hopLength?: number;
   /** Threshold (dB) above which compression is flagged. Default 6. */
-  compressionThreshold?: number;
+  compressionThresholdDb?: number;
+  /** Set `false` to skip the NaN/Inf pre-scan of the samples. Default true. */
+  validate?: boolean;
 }
 
 /** Options for {@link detectAcoustic}. All fields are optional. */
@@ -425,6 +385,8 @@ export interface AcousticOptions {
   minDecayDb?: number;
   /** Noise-floor margin (dB) above the measured floor. Default 10. */
   noiseFloorMarginDb?: number;
+  /** Set `false` to skip the NaN/Inf pre-scan of the samples. Default true. */
+  validate?: boolean;
 }
 
 /** Options for {@link analyzeTimbre}. All fields are optional. */
@@ -439,6 +401,8 @@ export interface AnalyzeTimbreOptions {
   nMfcc?: number;
   /** Per-frame statistics window in seconds. Default 0.5. */
   windowSec?: number;
+  /** Set `false` to skip the NaN/Inf pre-scan of the samples. Default true. */
+  validate?: boolean;
 }
 
 /** Options for {@link analyzeSections}. All fields are optional. */
@@ -449,6 +413,8 @@ export interface AnalyzeSectionsOptions {
   hopLength?: number;
   /** Minimum section length in seconds. Default 4. */
   minSectionSec?: number;
+  /** Set `false` to skip the NaN/Inf pre-scan of the samples. Default true. */
+  validate?: boolean;
 }
 
 /** Options for {@link detectBoundaries}. All fields are optional. */
@@ -477,7 +443,7 @@ export interface BoundaryOptions {
   /** Number of chroma bins. Default 12. */
   nChroma?: number;
   /** Minimum spacing between peaks in seconds. Default 2. */
-  peakDistance?: number;
+  peakDistanceSec?: number;
   /**
    * One-sided span in seconds over which the local novelty maximum that
    * `threshold` is measured against is taken. Must be finite and non-negative;
@@ -485,22 +451,24 @@ export interface BoundaryOptions {
    * A value at least the track length makes the reference whole-track, still with
    * a lone dominant event set aside. Default 60.
    */
-  referenceWindow?: number;
+  referenceWindowSec?: number;
   /** Include MFCC in the similarity features. Default true. */
   useMfcc?: boolean;
   /** Include chroma in the similarity features. Default true. */
   useChroma?: boolean;
+  /** Set `false` to skip the NaN/Inf pre-scan of the samples. Default true. */
+  validate?: boolean;
 }
 
 /** One detected structural transition. */
 export interface Boundary {
   /** Boundary time in seconds; the authoritative output. */
-  time: number;
+  timeSec: number;
   /**
    * Index into the ANALYSIS grid, which is not the source's STFT grid: input
    * above 22.05 kHz is resampled before any feature is computed, and a long
    * input is additionally mean-pooled (see `frameStride` on the result). Use
-   * `time` for any sample or second mapping.
+   * `timeSec` for any sample or second mapping.
    */
   frame: number;
   /** Novelty score at the boundary. */
@@ -529,25 +497,32 @@ export interface BoundaryResult {
 }
 
 /**
- * Song-structure section type ordinal (mirrors the C `SonareSectionType`).
+ * Song-structure section type.
  *
- * 7 (Unknown) means no labelling rule matched the segment; it always comes
+ * `'unknown'` means no labelling rule matched the segment; it always comes
  * with `confidence` 0.
  */
-export type SectionTypeOrdinal = 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7;
+export type SectionType =
+  | 'intro'
+  | 'verse'
+  | 'preChorus'
+  | 'chorus'
+  | 'bridge'
+  | 'instrumental'
+  | 'outro'
+  | 'unknown';
 
 export interface Section {
-  /** Section type ordinal (0=Intro, 1=Verse, ... 7=Unknown). */
-  type: SectionTypeOrdinal;
+  type: SectionType;
   /** Human-readable section name (e.g. `'Chorus'`). */
   name: string;
   /** Section start time in seconds. */
-  start: number;
+  startSec: number;
   /** Section end time in seconds. */
-  end: number;
+  endSec: number;
   /** Median frame RMS in the section over the loudest section's, in `[0, 1]`. */
   energyLevel: number;
-  /** Detection confidence in `[0, 1]`; 0 for Unknown (no labelling rule matched). */
+  /** Detection confidence in `[0, 1]`; 0 for `'unknown'` (no labelling rule matched). */
   confidence: number;
   /** Sections sharing a value repeat the same material, numbered 0, 1, ... by first appearance. */
   group: number;
@@ -555,9 +530,9 @@ export interface Section {
 
 export interface MelodyPoint {
   /** Frame time in seconds. */
-  time: number;
-  /** Estimated fundamental frequency in Hz (0 when unvoiced). */
-  frequency: number;
+  timeSec: number;
+  /** Estimated fundamental frequency in Hz; absent when the frame is unvoiced. */
+  frequencyHz?: number;
   /** Voicing confidence in `[0, 1]`. */
   confidence: number;
 }
@@ -566,20 +541,22 @@ export interface MelodyResult {
   points: MelodyPoint[];
   pitchRangeOctaves: number;
   pitchStability: number;
-  meanFrequency: number;
-  vibratoRate: number;
+  meanFrequencyHz: number;
+  vibratoRateHz: number;
 }
 
 export interface BpmCandidate {
   bpm: number;
   confidence: number;
+  /** Relation to the primary tempo; present on {@link AnalysisResult.bpmCandidates}. */
+  relation?: BpmCandidateRelation;
 }
 
 export interface BpmAnalysisResult {
   bpm: number;
   /**
-   * Winning tempo cluster's vote share within `bpmMin`–`bpmMax` (30–300 by default), searched at
-   * the input rate. `analyze()` searches 60–200 BPM at 22050 Hz, so its `bpmConfidence` can differ.
+   * Winning tempo cluster's vote share within `bpmMin`–`bpmMax` (60–200 by default), searched at
+   * the input rate. `analyze()` searches at 22050 Hz, so its `bpmConfidence` can differ.
    */
   confidence: number;
   /**
@@ -912,7 +889,7 @@ export interface RhythmResult {
    */
   bpm: number;
   timeSignature: TimeSignature;
-  grooveType: 'straight' | 'shuffle' | 'swing';
+  grooveType: GrooveType;
   syncopation: number;
   patternRegularity: number;
   tempoStability: number;
@@ -924,27 +901,19 @@ export interface RhythmResult {
  *
  * The WASM package declares the same shape under the same name; the two are
  * pinned to one field list by `tests/conformance/shared_type_shapes.json`. The
- * processor envelope is `DynamicsProcessorResult`, which is a different shape —
- * the WASM package used to spell that one `DynamicsResult`, so a shared module
- * annotated with this name type-checked against one package and failed against
- * the other.
+ * processor envelope is `DynamicsProcessorResult`, which is a different shape.
  */
 export interface DynamicsResult {
   dynamicRangeDb: number;
   peakDb: number;
   rmsDb: number;
   crestFactor: number;
-  loudnessRangeDb: number;
+  /** Loudness range in LU. */
+  loudnessRangeLu: number;
   isCompressed: boolean;
   loudnessTimes: Float32Array;
   loudnessRmsDb: Float32Array;
 }
-
-/**
- * @deprecated Use {@link DynamicsResult}. Exported so the spelling the WASM
- * package used for this shape resolves in both packages.
- */
-export type DynamicsAnalysisResult = DynamicsResult;
 
 /** Timbre metrics for one analysis window. Entries are ordered by time in {@link TimbreResult.timbreOverTime}. */
 export interface TimbreFrame {
@@ -968,81 +937,56 @@ export interface TimbreResult {
   timbreOverTime: TimbreFrame[];
 }
 
-/** Chord quality ordinals, as `Chord.quality` carries them. */
-export const ChordQuality = {
-  Major: 0,
-  Minor: 1,
-  Diminished: 2,
-  Augmented: 3,
-  Dominant7: 4,
-  Major7: 5,
-  Minor7: 6,
-  Sus2: 7,
-  Sus4: 8,
-  Unknown: 9,
-  Add9: 10,
-  MinorAdd9: 11,
-  Dim7: 12,
-  HalfDim7: 13,
-  Major9: 14,
-  Dominant9: 15,
-  Sus2Add4: 16,
-  Major6: 17,
-  Minor6: 18,
-  MinorMajor7: 19,
-  Dominant7Sus4: 20,
-  Dominant11: 21,
-  Dominant13: 22,
-  Dominant7Flat9: 23,
-  Dominant7Sharp9: 24,
-} as const;
+/**
+ * Chord quality tokens, indexed by the native ordinal. A chord crosses the
+ * native boundary as the ordinal; the position in this tuple is its token.
+ */
+export const CHORD_QUALITIES = [
+  'major',
+  'minor',
+  'diminished',
+  'augmented',
+  'dominant7',
+  'major7',
+  'minor7',
+  'sus2',
+  'sus4',
+  'unknown',
+  'add9',
+  'minorAdd9',
+  'dim7',
+  'halfDim7',
+  'major9',
+  'dominant9',
+  'sus2Add4',
+  'major6',
+  'minor6',
+  'minorMajor7',
+  'dominant7Sus4',
+  'dominant11',
+  'dominant13',
+  'dominant7Flat9',
+  'dominant7Sharp9',
+] as const;
 
-export type ChordQuality = (typeof ChordQuality)[keyof typeof ChordQuality];
-
-/** The spelling of a chord quality, accepted wherever a hand-built chord names one. */
-export type ChordQualityName =
-  | 'major'
-  | 'minor'
-  | 'diminished'
-  | 'augmented'
-  | 'dominant7'
-  | 'major7'
-  | 'minor7'
-  | 'sus2'
-  | 'sus4'
-  | 'add9'
-  | 'minorAdd9'
-  | 'dim7'
-  | 'halfDim7'
-  | 'major9'
-  | 'dominant9'
-  | 'sus2Add4'
-  | 'major6'
-  | 'minor6'
-  | 'minorMajor7'
-  | 'dominant7Sus4'
-  | 'dominant11'
-  | 'dominant13'
-  | 'dominant7Flat9'
-  | 'dominant7Sharp9'
-  | 'unknown';
+/** Chord quality token; see {@link CHORD_QUALITIES}. Numbers are refused. */
+export type ChordQuality = (typeof CHORD_QUALITIES)[number];
 
 export interface Chord {
-  /** Root pitch class ordinal (0..11, C=0). */
-  root: number;
-  /** Bass pitch class ordinal (0..11, C=0). */
-  bass: number;
+  /** Root pitch class (C = 0). */
+  root: PitchClass;
+  /** Bass pitch class (C = 0). */
+  bass: PitchClass;
   /** Canonical core spelling of `root`; stable across all language bindings. */
   rootName: string;
   /** Canonical core spelling of `bass`; stable across all language bindings. */
   bassName: string;
-  /** ChordQuality ordinal. */
   quality: ChordQuality;
   /** Canonical core chord symbol (e.g. `'Cmaj7'`, `'Am/C'`, `'N.C.'`). */
   name: string;
-  start: number;
-  end: number;
-  duration: number;
+  startSec: number;
+  endSec: number;
+  durationSec: number;
   confidence: number;
 }
 
@@ -1055,44 +999,40 @@ export type ChordFunction = 'tonic' | 'subdominant' | 'dominant' | 'chromatic' |
 /** A timed chord with its Roman numeral and harmonic function in a key. */
 export type FunctionalChord<T extends ChordFunctionsInput = Chord> = T & {
   /** Roman numeral relative to the key (`'I'`, `'V7'`, `'vi'`; `'N.C.'` for an unknown chord). */
-  roman: string;
+  romanNumeral: string;
   function: ChordFunction;
 };
 
 /** The fields {@link chordFunctions} reads from a chord; everything else is carried through. */
 export interface ChordFunctionsInput {
-  /** Pitch class name (`'C'`, `'C#'`, ...) or ordinal 0..11. */
-  root: string | number;
-  /** Chord quality ordinal 0..24, or its name. */
-  quality: ChordQualityName | number;
+  root: PitchClass;
+  quality: ChordQuality;
 }
 
-/** A key given as `detectKey` reports it, or by ordinals. */
+/** A key as `detectKey` reports it. */
 export interface ChordFunctionsKey {
-  /** Pitch class name (`'C'`, `'C#'`, ...) or ordinal 0..11. */
-  root: string | number;
-  /** Mode name (`'major'`, `'minor'`, `'dorian'`, ...) or ordinal 0..6. */
-  mode: KeyMode | number;
+  root: PitchClass;
+  mode: KeyMode;
 }
 
 export interface ChordAnalysisResult {
   chords: Chord[];
-  /** Tuning the chroma was built with, in fractions of a semitone: the given value, or the measured one under `tuning: 'auto'`. */
-  tuning: number;
+  /** Tuning the chroma was built with, in cents: the given value, or the measured one under `tuningCents: 'auto'`. */
+  tuningCents: number;
 }
 
 /** Chroma front end for chord detection; `'cqt'` is the default. */
 export type ChordChromaMethod = 'stft' | 'nnls' | 'cqt';
 
 /**
- * Options-object form of the chord-detection parameters, mirroring the WASM
- * `ChordDetectionOptions`. Accepted by the standalone {@link detectChords} /
- * {@link chordFunctionalAnalysis} functions as an alternative to the positional
- * argument form.
+ * Settings shared by {@link detectChords} and {@link chordFunctionalAnalysis}, as
+ * the request fields and as the positional `options`.
  */
 export interface ChordDetectionOptions {
-  minDuration?: number;
-  smoothingWindow?: number;
+  /** Shortest chord kept, in seconds. */
+  minDurationSec?: number;
+  /** Smoothing window, in seconds. */
+  smoothingWindowSec?: number;
   /** Final-template correlation threshold in [0, 1]; below it emits `unknown` / N.C. */
   threshold?: number;
   useTriadsOnly?: boolean;
@@ -1103,19 +1043,21 @@ export interface ChordDetectionOptions {
   useHmm?: boolean;
   hmmBeamWidth?: number;
   useKeyContext?: boolean;
-  /** Pitch class ordinal or name (`'C'`, `'C#'`, ...), e.g. {@link detectKey}'s `root`. */
-  keyRoot?: ChordFunctionsKey['root'];
-  /** Mode ordinal or name, e.g. {@link detectKey}'s `mode`. */
-  keyMode?: ChordFunctionsKey['mode'];
+  /** Pitch class of the key, e.g. {@link detectKey}'s `root`. */
+  keyRoot?: PitchClass;
+  /** Mode of the key, e.g. {@link detectKey}'s `mode`. */
+  keyMode?: KeyMode;
   detectInversions?: boolean;
   chromaMethod?: ChordChromaMethod;
   /**
-   * Tuning offset of the recording in fractions of a semitone; must be in
-   * `[-0.5, 0.5)`. Omitted or `'auto'` measures it from the audio; the value used
-   * is reported as {@link ChordAnalysisResult.tuning}. {@link referenceHzToTuning}
-   * converts a reference pitch to this unit. Pass 0 for concert A440.
+   * Tuning offset of the recording in cents; must be in `[-50, 50)`. Omitted or
+   * `'auto'` measures it from the audio; the value used is reported as
+   * {@link ChordAnalysisResult.tuningCents}. {@link referenceHzToTuning} converts a
+   * reference pitch to this unit. Pass 0 for concert A440.
    */
-  tuning?: number | 'auto';
+  tuningCents?: number | 'auto';
+  /** Set `false` to skip the NaN/Inf pre-scan of the samples. Default true. */
+  validate?: boolean;
 }
 
 export interface HpssResult {

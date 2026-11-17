@@ -1,9 +1,41 @@
 import { resolveIntegerOption, resolvePositiveIntegerOption } from './internal/feature_options.js';
 import { addon } from './native.js';
-import { requestObject } from './validation.js';
+import { assertPositiveInteger, requestOnly } from './validation.js';
 
-export interface ValuesRequest {
+/** Request for {@link powerToDb}. */
+export interface PowerToDbRequest {
   values: Float32Array;
+  /** Reference power. Default 1. */
+  ref?: number;
+  /** Floor under which a power is clamped. Default 1e-10. */
+  amin?: number;
+  /** Dynamic range kept below the peak, in dB. Default 80. */
+  topDb?: number;
+}
+
+/** Request for {@link amplitudeToDb}. */
+export interface AmplitudeToDbRequest {
+  values: Float32Array;
+  /** Reference amplitude. Default 1. */
+  ref?: number;
+  /** Floor under which an amplitude is clamped. Default 1e-5. */
+  amin?: number;
+  /** Dynamic range kept below the peak, in dB. Default 80. */
+  topDb?: number;
+}
+
+/** Request for {@link dbToPower}. */
+export interface DbToPowerRequest {
+  values: Float32Array;
+  /** Reference power. Default 1. */
+  ref?: number;
+}
+
+/** Request for {@link dbToAmplitude}. */
+export interface DbToAmplitudeRequest {
+  values: Float32Array;
+  /** Reference amplitude. Default 1. */
+  ref?: number;
 }
 
 /**
@@ -69,169 +101,111 @@ export function noteToHz(note: string): number {
   return addon.noteToHz(note);
 }
 
-export function framesToTime(request: { frames: number; sr?: number; hopLength?: number }): number;
-export function framesToTime(frames: number, sr?: number, hopLength?: number): number;
-export function framesToTime(
-  frames: number | { frames: number; sr?: number; hopLength?: number },
-  sr = 22050,
-  hopLength = 512,
-): number {
-  const request =
-    typeof frames === 'number'
-      ? { frames, sr, hopLength }
-      : requestObject('framesToTime', frames, 'request', true);
+/**
+ * Frame index to seconds at `sampleRate` / `hopLength`.
+ *
+ * @param sampleRate Default 22050.
+ * @param hopLength Positive integer in samples. Default 512.
+ * @throws `RangeError` for a hop that is not a positive integer.
+ */
+export function framesToTime(frames: number, sampleRate = 22050, hopLength = 512): number {
   // The conversion requires a positive hop, so positivity is the domain; a
   // fraction has to be refused here because the addon narrowing truncates it.
   const resolvedHopLength = resolvePositiveIntegerOption(
     'framesToTime',
     'hopLength',
-    request.hopLength,
+    hopLength,
     512,
   );
-  return addon.framesToTime(request.frames, request.sr ?? 22050, resolvedHopLength);
+  return addon.framesToTime(frames, sampleRate, resolvedHopLength);
 }
 
 /**
- * Seconds to a frame index at `sr` / `hopLength`.
+ * Seconds to a frame index at `sampleRate` / `hopLength`.
  *
- * `time` must be finite: the conversion saturates into the int frame index, so
+ * `timeSec` must be finite: the conversion saturates into the int frame index, so
  * an infinity would return `INT_MAX` — a frame index nothing downstream can
  * tell from a real one.
  */
-export function timeToFrames(request: { time: number; sr?: number; hopLength?: number }): number;
-export function timeToFrames(time: number, sr?: number, hopLength?: number): number;
-export function timeToFrames(
-  time: number | { time: number; sr?: number; hopLength?: number },
-  sr = 22050,
-  hopLength = 512,
-): number {
-  const request =
-    typeof time === 'number'
-      ? { time, sr, hopLength }
-      : requestObject('timeToFrames', time, 'request', true);
+export function timeToFrames(timeSec: number, sampleRate = 22050, hopLength = 512): number {
   // Positive hop, as framesToTime: the same conversion in the other direction.
   const resolvedHopLength = resolvePositiveIntegerOption(
     'timeToFrames',
     'hopLength',
-    request.hopLength,
+    hopLength,
     512,
   );
-  return addon.timeToFrames(request.time, request.sr ?? 22050, resolvedHopLength);
+  return addon.timeToFrames(timeSec, sampleRate, resolvedHopLength);
 }
 
-export function framesToSamples(request: {
-  frames: number;
-  hopLength?: number;
-  nFft?: number;
-}): number;
-export function framesToSamples(frames: number, hopLength?: number, nFft?: number): number;
-export function framesToSamples(
-  frames: number | { frames: number; hopLength?: number; nFft?: number },
-  hopLength = 512,
-  nFft = 0,
-): number {
-  const request =
-    typeof frames === 'number'
-      ? { frames, hopLength, nFft }
-      : requestObject('framesToSamples', frames, 'request', true);
-  // Integrality only: this conversion saturates rather than refusing, and `nFft`
-  // at or below 0 is the documented "no centering offset" spelling, so a domain
-  // here would reject values the core answers.
-  const resolvedHopLength = resolveIntegerOption(
-    'framesToSamples',
-    'hopLength',
-    request.hopLength,
-    512,
-  );
-  const resolvedNFft = resolveIntegerOption('framesToSamples', 'nFft', request.nFft, 0);
-  return addon.framesToSamples(request.frames, resolvedHopLength, resolvedNFft);
+/** Absent `nFft` leaves out the centring offset; the offset must otherwise be a positive integer. */
+function resolveCentringNFft(fnName: string, nFft: number | null | undefined): number {
+  if (nFft === undefined || nFft === null) {
+    return 0;
+  }
+  const resolved = resolveIntegerOption(fnName, 'nFft', nFft, 0);
+  assertPositiveInteger(fnName, resolved, 'nFft');
+  return resolved;
 }
 
-export function samplesToFrames(request: {
-  samples: number;
-  hopLength?: number;
-  nFft?: number;
-}): number;
-export function samplesToFrames(samples: number, hopLength?: number, nFft?: number): number;
-export function samplesToFrames(
-  samples: number | { samples: number; hopLength?: number; nFft?: number },
-  hopLength = 512,
-  nFft = 0,
-): number {
-  const request =
-    typeof samples === 'number'
-      ? { samples, hopLength, nFft }
-      : requestObject('samplesToFrames', samples, 'request', true);
-  // Integrality only, as framesToSamples: a non-positive hop answers 0 frames
-  // rather than failing, so positivity is not this conversion's domain.
-  const resolvedHopLength = resolveIntegerOption(
-    'samplesToFrames',
-    'hopLength',
-    request.hopLength,
-    512,
-  );
-  const resolvedNFft = resolveIntegerOption('samplesToFrames', 'nFft', request.nFft, 0);
-  return addon.samplesToFrames(request.samples, resolvedHopLength, resolvedNFft);
-}
-
-export function powerToDb(
-  request: ValuesRequest & { ref?: number; amin?: number; topDb?: number },
-): Float32Array;
-export function powerToDb(
-  values: Float32Array,
-  ref?: number,
-  amin?: number,
-  topDb?: number,
-): Float32Array;
-export function powerToDb(
-  values: Float32Array | (ValuesRequest & { ref?: number; amin?: number; topDb?: number }),
-  ref = 1.0,
-  amin = 1e-10,
-  topDb = 80.0,
-): Float32Array {
-  const request =
-    values instanceof Float32Array
-      ? { values, ref, amin, topDb }
-      : requestObject('powerToDb', values, 'values');
-  return addon.powerToDb(
-    request.values,
-    request.ref ?? 1,
-    request.amin ?? 1e-10,
-    request.topDb ?? 80,
+/**
+ * Frame index to the sample it starts at, optionally shifted by the centring
+ * offset of an `nFft`-sample window.
+ *
+ * @param nFft Absent means no centring offset.
+ * @throws `RangeError` for an explicit `nFft` that is not a positive integer.
+ */
+export function framesToSamples(frames: number, hopLength = 512, nFft?: number): number {
+  // Integrality only for the hop: this conversion saturates rather than refusing.
+  const resolvedHopLength = resolveIntegerOption('framesToSamples', 'hopLength', hopLength, 512);
+  return addon.framesToSamples(
+    frames,
+    resolvedHopLength,
+    resolveCentringNFft('framesToSamples', nFft),
   );
 }
 
-export function amplitudeToDb(
-  request: ValuesRequest & { ref?: number; amin?: number; topDb?: number },
-): Float32Array;
-export function amplitudeToDb(
-  values: Float32Array,
-  ref?: number,
-  amin?: number,
-  topDb?: number,
-): Float32Array;
-export function amplitudeToDb(
-  values: Float32Array | (ValuesRequest & { ref?: number; amin?: number; topDb?: number }),
-  ref = 1.0,
-  amin = 1e-5,
-  topDb = 80.0,
-): Float32Array {
-  const request =
-    values instanceof Float32Array
-      ? { values, ref, amin, topDb }
-      : requestObject('amplitudeToDb', values, 'values');
-  return addon.amplitudeToDb(
-    request.values,
-    request.ref ?? 1,
-    request.amin ?? 1e-5,
-    request.topDb ?? 80,
+/**
+ * Sample count to the frame count it spans, optionally shifted by the centring
+ * offset of an `nFft`-sample window.
+ *
+ * @param nFft Absent means no centring offset.
+ * @throws `RangeError` for an explicit `nFft` that is not a positive integer.
+ */
+export function samplesToFrames(samples: number, hopLength = 512, nFft?: number): number {
+  // Integrality only for the hop: a non-positive hop answers 0 frames rather than failing.
+  const resolvedHopLength = resolveIntegerOption('samplesToFrames', 'hopLength', hopLength, 512);
+  return addon.samplesToFrames(
+    samples,
+    resolvedHopLength,
+    resolveCentringNFft('samplesToFrames', nFft),
   );
 }
 
-export function dbToPower(values: Float32Array, ref = 1.0): Float32Array {
-  return addon.dbToPower(values, ref);
+/** Power to dB. Request-only; `values` is a power spectrogram or series. */
+export function powerToDb(request: PowerToDbRequest): Float32Array;
+export function powerToDb(...args: unknown[]): Float32Array {
+  const r = requestOnly<PowerToDbRequest>('powerToDb', args);
+  return addon.powerToDb(r.values, r.ref ?? 1, r.amin ?? 1e-10, r.topDb ?? 80);
 }
 
-export function dbToAmplitude(values: Float32Array, ref = 1.0): Float32Array {
-  return addon.dbToAmplitude(values, ref);
+/** Amplitude to dB. Request-only; `values` is a magnitude spectrogram or series. */
+export function amplitudeToDb(request: AmplitudeToDbRequest): Float32Array;
+export function amplitudeToDb(...args: unknown[]): Float32Array {
+  const r = requestOnly<AmplitudeToDbRequest>('amplitudeToDb', args);
+  return addon.amplitudeToDb(r.values, r.ref ?? 1, r.amin ?? 1e-5, r.topDb ?? 80);
+}
+
+/** dB to power. Request-only. */
+export function dbToPower(request: DbToPowerRequest): Float32Array;
+export function dbToPower(...args: unknown[]): Float32Array {
+  const r = requestOnly<DbToPowerRequest>('dbToPower', args);
+  return addon.dbToPower(r.values, r.ref ?? 1);
+}
+
+/** dB to amplitude. Request-only. */
+export function dbToAmplitude(request: DbToAmplitudeRequest): Float32Array;
+export function dbToAmplitude(...args: unknown[]): Float32Array {
+  const r = requestOnly<DbToAmplitudeRequest>('dbToAmplitude', args);
+  return addon.dbToAmplitude(r.values, r.ref ?? 1);
 }

@@ -152,35 +152,39 @@ describe('spectralEdit requires an explicit sample rate', () => {
 });
 
 /**
- * A request-object form must resolve every omitted field through the same
- * default table as the positional form; a duplicated table is how the two drift.
+ * An omitted request field resolves to the documented default; spelling the
+ * defaults out must answer identically.
  *
- * `vqtToAudio.gamma` is the field whose request/positional defaults must stay
- * aligned: both forms must pass the core's automatic sentinel -1 unless the
- * caller supplies another value. The VQT inverse now receives that config and
- * applies its bandwidth in the raw-magnitude path. The C++ result-only overload
- * intentionally remains a gamma=0 legacy path because a CqtResult carries no
- * VQT configuration; these C-ABI facades pass gamma explicitly. The assertion
- * here is about the shared default table, with binsPerOctave providing the
- * observable reconstruction guard.
+ * `vqtToAudio.gamma` is absent-means-automatic: the facade passes the core's
+ * automatic sentinel unless the caller supplies a value, and the reconstruction
+ * guard here is `binsPerOctave`, which the result can observe.
  */
-describe('request and positional forms share one default table', () => {
-  const nBins = 24;
-  const nFrames = 8;
-  const magnitude = new Float32Array(nBins * nFrames).map((_, i) => 0.5 + 0.5 * Math.sin(i * 0.3));
+describe('an omitted request field resolves to its documented default', () => {
+  const rows = 24;
+  const cols = 8;
+  const magnitude = {
+    data: new Float32Array(rows * cols).map((_, i) => 0.5 + 0.5 * Math.sin(i * 0.3)),
+    rows,
+    cols,
+  };
 
-  it('vqtToAudio reconstructs identically with every optional field omitted', () => {
-    const positional = vqtToAudio(magnitude, nBins, nFrames);
-    const request = vqtToAudio({ magnitude, nBins, nFrames });
-    expect(Array.from(request)).toEqual(Array.from(positional));
+  it('vqtToAudio reconstructs identically with every optional field omitted or spelled out', () => {
+    const omitted = vqtToAudio({ magnitude });
+    const explicit = vqtToAudio({
+      magnitude,
+      sampleRate: 22050,
+      hopLength: 512,
+      binsPerOctave: 12,
+      nIter: 32,
+    });
+    expect(Array.from(explicit)).toEqual(Array.from(omitted));
   });
 
-  it('vqtToAudio still forwards the fields the request form carries', () => {
-    // Keeps the equality above from passing for the wrong reason: the request
-    // form must actually reach the transform, so a field the reconstruction can
-    // observe has to change the result.
-    const base = vqtToAudio({ magnitude, nBins, nFrames });
-    const wider = vqtToAudio({ magnitude, nBins, nFrames, binsPerOctave: 24 });
+  it('vqtToAudio still forwards the fields the request carries', () => {
+    // Keeps the equality above from passing for the wrong reason: a field the
+    // reconstruction can observe has to change the result.
+    const base = vqtToAudio({ magnitude });
+    const wider = vqtToAudio({ magnitude, binsPerOctave: 24 });
     expect(Array.from(wider)).not.toEqual(Array.from(base));
   });
 });

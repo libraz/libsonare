@@ -78,6 +78,13 @@ def main() -> int:
     contract = corpus["streaming_contract"]
     snake_fields = contract["frame_fields"]
     camel_fields = [_camel(field) for field in snake_fields]
+    # The JS facades fold the band counts into Matrix2D rows, report a disabled
+    # feature by absence, and name the time axis in seconds.
+    facade_fields = [
+        "timestampsSec" if field == "timestamps" else field
+        for field in camel_fields
+        if field not in ("nMels", "nChroma", "featureFlags")
+    ]
 
     c_header = public_header("sonare_c_streaming.h").read_text(encoding="utf-8")
     cpp_header = _read("src/streaming/stream_frame.h")
@@ -109,24 +116,24 @@ def main() -> int:
             snake_fields,
         ),
         (
-            "Node StreamFramesSoa",
+            "Node StreamFrames",
             _block(
                 node_types,
-                r"export interface StreamFramesSoa\s*\{(?P<body>.*?)\n\}",
-                "Node StreamFramesSoa",
+                r"export interface StreamFrames\s*\{(?P<body>.*?)\n\}",
+                "Node StreamFrames",
                 errors,
             ),
-            camel_fields,
+            facade_fields,
         ),
         (
-            "WASM FrameBuffer",
+            "WASM StreamFrames",
             _block(
                 wasm_types,
-                r"export interface FrameBuffer\s*\{(?P<body>.*?)\n\}",
-                "WASM FrameBuffer",
+                r"export interface StreamFrames\s*\{(?P<body>.*?)\n\}",
+                "WASM StreamFrames",
                 errors,
             ),
-            camel_fields,
+            facade_fields,
         ),
         (
             "raw WASM WasmFrameBuffer",

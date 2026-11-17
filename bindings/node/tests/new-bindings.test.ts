@@ -73,7 +73,7 @@ function allFinite(arr: ArrayLike<number>): boolean {
 
 describe('newly exposed Node functions', () => {
   it('spectralContrast returns (nBands+1) x nFrames', () => {
-    const r = spectralContrast(sine(1, 440), SR, 2048, 512, 6);
+    const r = spectralContrast(sine(1, 440), SR, { nFft: 2048, hopLength: 512, nBands: 6 });
     expect(r.rows).toBe(7);
     expect(r.cols).toBeGreaterThan(0);
     expect(r.data.length).toBe(r.rows * r.cols);
@@ -81,14 +81,14 @@ describe('newly exposed Node functions', () => {
   });
 
   it('polyFeatures returns (order+1) x nFrames', () => {
-    const r = polyFeatures(sine(1, 440), SR, 2048, 512, 1);
+    const r = polyFeatures(sine(1, 440), SR, { nFft: 2048, hopLength: 512, order: 1 });
     expect(r.rows).toBe(2);
     expect(allFinite(r.data)).toBe(true);
   });
 
   it('zeroCrossings returns sorted in-range indices', () => {
     const x = sine(0.05, 440);
-    const idx = zeroCrossings(x);
+    const idx = zeroCrossings(x, SR);
     expect(idx.length).toBeGreaterThan(0);
     for (let i = 1; i < idx.length; i++) {
       expect(idx[i]).toBeGreaterThan(idx[i - 1]);
@@ -97,10 +97,10 @@ describe('newly exposed Node functions', () => {
   });
 
   it('pitchTuning is finite', () => {
-    const t = pitchTuning(new Float32Array([440, 880, 660]));
+    const t = pitchTuning({ frequencies: new Float32Array([440, 880, 660]) });
     expect(Number.isFinite(t)).toBe(true);
-    expect(t).toBeGreaterThanOrEqual(-0.5);
-    expect(t).toBeLessThan(0.5);
+    expect(t).toBeGreaterThanOrEqual(-50);
+    expect(t).toBeLessThan(50);
   });
 
   it('estimateTuning is finite', () => {
@@ -376,20 +376,48 @@ describe('newly exposed Node functions', () => {
 
   it('pitchYin returns librosa-style estimates for unvoiced frames', () => {
     const silence = new Float32Array(SR); // fully unvoiced
-    const nanRes = pitchYin(silence, SR, 2048, 512, 65, 2093, 0.3, false);
+    const nanRes = pitchYin(silence, SR, {
+      frameLength: 2048,
+      hopLength: 512,
+      f0MinHz: 65,
+      f0MaxHz: 2093,
+      threshold: 0.3,
+      fillNa: false,
+    });
     expect(nanRes.f0.every((v) => Number.isFinite(v))).toBe(true);
     expect(nanRes.voicedFlag.every((v) => !v)).toBe(true);
 
-    const filled = pitchYin(silence, SR, 2048, 512, 65, 2093, 0.3, true);
+    const filled = pitchYin(silence, SR, {
+      frameLength: 2048,
+      hopLength: 512,
+      f0MinHz: 65,
+      f0MaxHz: 2093,
+      threshold: 0.3,
+      fillNa: true,
+    });
     expect(filled.f0.every((v) => Number.isFinite(v))).toBe(true);
   });
 
   it('pitchPyin fillNa controls the unvoiced value', () => {
     const silence = new Float32Array(SR);
-    const nanRes = pitchPyin(silence, SR, 2048, 512, 65, 2093, 0.3, false);
+    const nanRes = pitchPyin(silence, SR, {
+      frameLength: 2048,
+      hopLength: 512,
+      f0MinHz: 65,
+      f0MaxHz: 2093,
+      threshold: 0.3,
+      fillNa: false,
+    });
     expect(nanRes.f0.some((v) => Number.isNaN(v))).toBe(true);
 
-    const filled = pitchPyin(silence, SR, 2048, 512, 65, 2093, 0.3, true);
+    const filled = pitchPyin(silence, SR, {
+      frameLength: 2048,
+      hopLength: 512,
+      f0MinHz: 65,
+      f0MaxHz: 2093,
+      threshold: 0.3,
+      fillNa: true,
+    });
     expect(filled.f0.every((v) => Number.isFinite(v))).toBe(true);
   });
 

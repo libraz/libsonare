@@ -1,16 +1,19 @@
 import { resolveFftOptions } from './internal/fft_options.js';
+import { KEY_MODES } from './internal/key_modes.js';
+import { centsToNativeTuning, nativeTuningToCents } from './internal/tuning_units.js';
 import { addon } from './native.js';
-import { MUSIC_ANALYZE_OPTIONS_KEYS } from './request_keys.js';
+import type { RequestFn } from './request_keys.js';
 import type {
   AcousticOptions,
   AcousticResult,
-  AnalysisProgressCallback,
+  AnalysisChord,
   AnalysisResult,
   AnalyzeBpmOptions,
   AnalyzeDynamicsOptions,
   AnalyzeRhythmOptions,
   AnalyzeSectionsOptions,
   AnalyzeTimbreOptions,
+  Beat,
   BoundaryOptions,
   BoundaryResult,
   BpmAnalysisResult,
@@ -21,15 +24,20 @@ import type {
   ChordFunction,
   ChordFunctionsInput,
   ChordFunctionsKey,
-  DetectKeyOptions,
   DynamicsResult,
   FunctionalChord,
+  Key,
   KeyCandidate,
   KeyDetection,
   KeyDetectionOptions,
+  KeyMode,
+  KeyProfile,
   MelodyOptions,
+  MelodyPoint,
   MelodyResult,
   MeterEstimate,
+  PitchClass,
+  ProgressCallback,
   RhythmResult,
   RirResult,
   RirSynthOptions,
@@ -41,18 +49,29 @@ import type {
   RoomMorphResult,
   RoomMorphStereoResult,
   Section,
+  SectionType,
   TimbreResult,
 } from './types.js';
+import { CHORD_QUALITIES } from './types_analysis.js';
 import {
   assertAudioInput,
+  assertClosedToken,
   assertFiniteScalar,
+  assertFloatFields,
+  assertFloatValue,
+  assertFrequencyBounds,
   assertInt32,
   assertInt64,
+  assertNonNegativeFloatValue,
   assertNonNegativeSafeInteger,
+  assertPitchClass,
   assertPositiveInteger,
   assertSampleRate,
   optionsBag,
   requestObject,
+  requestOnly,
+  sampleOneShot,
+  type ValidateOptions,
 } from './validation.js';
 
 /**
@@ -77,9 +96,168 @@ function assertRoomOptions(
   }
 }
 
-export interface SamplesRequest {
-  samples: Float32Array;
-  sampleRate?: number;
+// The native layer answers in its own field names and ordinals; the facade
+// reshapes every result here, so the raw shape is deliberately loose.
+// biome-ignore lint/suspicious/noExplicitAny: raw addon objects
+type Native = any;
+
+/** Drops absent (`undefined` / `null`) entries so the addon sees an omitted key. */
+function compact(object: Record<string, unknown>): Record<string, unknown> {
+  const out: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(object)) {
+    if (value !== undefined && value !== null) {
+      out[key] = value;
+    }
+  }
+  return out;
+}
+
+function without(object: object, ...keys: string[]): Record<string, unknown> {
+  const out: Record<string, unknown> = { ...object };
+  for (const key of keys) {
+    delete out[key];
+  }
+  return out;
+}
+
+const KEY_PROFILE_NATIVE: Readonly<Record<KeyProfile, string>> = {
+  krumhanslSchmuckler: 'krumhansl-schmuckler',
+  temperley: 'temperley',
+  shaath: 'shaath',
+  faraldoEdmt: 'faraldo-edmt',
+  faraldoEdma: 'faraldo-edma',
+  faraldoEdmm: 'faraldo-edmm',
+  bellmanBudge: 'bellman-budge',
+};
+
+const GENRE_HINTS = ['auto', 'edm', 'electronic', 'dance', 'pop', 'classical', 'jazz'] as const;
+const CHORD_CHROMA_METHODS: readonly ChordChromaMethod[] = ['stft', 'nnls', 'cqt'];
+const SECTION_TYPES: readonly SectionType[] = [
+  'intro',
+  'verse',
+  'preChorus',
+  'chorus',
+  'bridge',
+  'instrumental',
+  'outro',
+  'unknown',
+];
+
+/** Native tuning is a semitone fraction, so every site converts through the shared helper. */
+function nativeTuning(fnName: string, tuningCents: unknown): number | 'auto' | undefined {
+  if (tuningCents === undefined || tuningCents === null) {
+    return undefined;
+  }
+  if (tuningCents === 'auto') {
+    return 'auto';
+  }
+  if (typeof tuningCents !== 'number') {
+    throw new TypeError(`${fnName}: tuningCents must be a number or 'auto'`);
+  }
+  return centsToNativeTuning(tuningCents);
+}
+
+function pitchClassOf(value: number): PitchClass {
+  return value as PitchClass;
+}
+
+function chordFromNative(raw: Native): Chord {
+  const chord: Chord = {
+    root: pitchClassOf(raw.root),
+    bass: pitchClassOf(raw.bass),
+    rootName: raw.rootName,
+    bassName: raw.bassName,
+    quality: CHORD_QUALITIES[raw.quality],
+    name: raw.name,
+    startSec: raw.start,
+    endSec: raw.end,
+    durationSec: raw.duration ?? raw.end - raw.start,
+    confidence: raw.confidence,
+  };
+  return chord;
+}
+
+function beatFromNative(raw: Native): Beat {
+  return { timeSec: raw.time, strength: raw.strength };
+}
+
+function keyFromNative(raw: Native): Key {
+  return { ...raw, root: pitchClassOf(raw.root) };
+}
+
+function sectionFromNative(raw: Native): Section {
+  return {
+    type: SECTION_TYPES[raw.type],
+    name: raw.name,
+    startSec: raw.start,
+    endSec: raw.end,
+    energyLevel: raw.energyLevel,
+    confidence: raw.confidence,
+    group: raw.group,
+  };
+}
+
+function melodyPointFromNative(raw: Native): MelodyPoint {
+  const point: MelodyPoint = { timeSec: raw.time, confidence: raw.confidence };
+  if (raw.frequency > 0) {
+    point.frequencyHz = raw.frequency;
+  }
+  return point;
+}
+
+function analysisFromNative(raw: Native): AnalysisResult {
+  const beats: Beat[] = raw.beats.map(beatFromNative);
+  const {
+    beatTimes: _beatTimes,
+    downbeatIndices,
+    tuning,
+    bpmCandidates,
+    chords,
+    sections,
+    dynamics,
+    melody,
+    ...rest
+  } = raw;
+  return {
+    ...rest,
+    key: keyFromNative(raw.key),
+    bpmCandidates: bpmCandidates.map((c: Native) => ({
+      bpm: c.value,
+      confidence: c.confidence,
+      relation: c.relation,
+    })),
+    beats,
+    downbeats: (downbeatIndices as number[]).map((i) => beats[i]),
+    chords: chords.map(
+      (c: Native): AnalysisChord => ({ ...chordFromNative(c), romanNumeral: c.romanNumeral }),
+    ),
+    sections: sections.map(sectionFromNative),
+    dynamics: {
+      dynamicRangeDb: dynamics.dynamicRangeDb,
+      peakDb: dynamics.peakDb,
+      rmsDb: dynamics.rmsDb,
+      crestFactor: dynamics.crestFactor,
+      loudnessRangeLu: dynamics.loudnessRangeDb,
+      isCompressed: dynamics.isCompressed,
+    },
+    melody: {
+      pitchRangeOctaves: melody.pitchRangeOctaves,
+      pitchStability: melody.pitchStability,
+      meanFrequencyHz: melody.meanFrequency,
+      vibratoRateHz: melody.vibratoRate,
+      pitches: melody.pitches.map(melodyPointFromNative),
+    },
+    tuningCents: nativeTuningToCents(tuning),
+  };
+}
+
+function keyDetectionFromNative(raw: Native): KeyDetection {
+  const { tuning, ...key } = raw;
+  return { ...keyFromNative(key), tuningCents: nativeTuningToCents(tuning) };
+}
+
+function chordAnalysisFromNative(raw: Native): ChordAnalysisResult {
+  return { chords: raw.chords.map(chordFromNative), tuningCents: nativeTuningToCents(raw.tuning) };
 }
 
 /** Peak-picking configuration for {@link detectOnsets}. */
@@ -95,14 +273,47 @@ export interface OnsetDetectOptions {
   wait?: number;
   backtrack?: boolean;
   backtrackRange?: number;
+  /** Set `false` to skip the NaN/Inf pre-scan of the samples. Default true. */
+  validate?: boolean;
 }
-export interface DetectOnsetsRequest extends SamplesRequest, OnsetDetectOptions {}
+export interface DetectOnsetsRequest extends OnsetDetectOptions {
+  samples: Float32Array;
+  sampleRate: number;
+}
 
-export interface DetectKeyRequest extends DetectKeyOptions, SamplesRequest {}
-export interface DetectKeyCandidatesRequest extends KeyDetectionOptions, SamplesRequest {}
+/** Request for {@link detectBpm}. */
+export interface DetectBpmRequest extends ValidateOptions {
+  samples: Float32Array;
+  sampleRate: number;
+}
+/** Request for {@link detectBeats}. */
+export interface DetectBeatsRequest extends ValidateOptions {
+  samples: Float32Array;
+  sampleRate: number;
+}
+/** Request for {@link detectDownbeats}. */
+export interface DetectDownbeatsRequest extends ValidateOptions {
+  samples: Float32Array;
+  sampleRate: number;
+}
 
-export interface RoomEstimateRequest extends RoomEstimateOptions, SamplesRequest {}
-export interface RoomMorphRequest extends RoomMorphOptions, SamplesRequest {}
+export interface DetectKeyRequest extends KeyDetectionOptions {
+  samples: Float32Array;
+  sampleRate: number;
+}
+export interface DetectKeyCandidatesRequest extends KeyDetectionOptions {
+  samples: Float32Array;
+  sampleRate: number;
+}
+
+export interface RoomEstimateRequest extends RoomEstimateOptions {
+  samples: Float32Array;
+  sampleRate?: number;
+}
+export interface RoomMorphRequest extends RoomMorphOptions {
+  samples: Float32Array;
+  sampleRate?: number;
+}
 /** Request for {@link roomMorphStereo}. */
 export interface RoomMorphStereoRequest extends RoomMorphOptions {
   left: Float32Array;
@@ -124,18 +335,6 @@ export interface ChordFunctionsRequest<T extends ChordFunctionsInput = Chord> {
   key: ChordFunctionsKey;
 }
 
-export interface AnalyzeWithProgressRequest extends SamplesRequest, MusicAnalyzeOptions {
-  onProgress?: AnalysisProgressCallback;
-  cancel?: () => boolean;
-  /**
-   * Analysis options, with the same fields and defaults {@link analyze} takes.
-   * Equivalent to setting the same fields directly on this request object (the
-   * flattened form {@link analyze}/{@link analyzeAsync} take); a field set both
-   * ways takes the value set here.
-   */
-  options?: MusicAnalyzeOptions;
-}
-
 export interface MusicAnalyzeOptions {
   nFft?: number;
   hopLength?: number;
@@ -144,7 +343,8 @@ export interface MusicAnalyzeOptions {
   startBpm?: number;
   useTriadsOnly?: boolean;
   useHpss?: boolean;
-  chromaHighpassHz?: number;
+  /** Chroma high-pass corner in Hz. Absent = 80; 0 = no filter. */
+  chromaHighPassHz?: number;
   useBassWeighted?: boolean;
   chromaHopMultiplier?: number;
   useChordHmm?: boolean;
@@ -183,63 +383,42 @@ export interface MusicAnalyzeOptions {
    */
   meterDenominator?: number;
   /**
-   * Tuning offset of the recording in fractions of a semitone; must be in
-   * `[-0.5, 0.5)`. Every chroma the analysis builds (key, chords, sections) is
-   * shifted by it, so a recording that is not at A440 reads its key and chords
-   * on its own pitch grid. Omitted or `'auto'` measures it from the audio; pass 0
-   * for concert A440. The value used, given or measured, is the result's
-   * `tuning`; {@link referenceHzToTuning} converts a reference pitch to this unit.
+   * Tuning offset of the recording in cents; must be in `[-50, 50)`. Every chroma
+   * the analysis builds (key, chords, sections) is shifted by it, so a recording
+   * that is not at A440 reads its key and chords on its own pitch grid. Omitted or
+   * `'auto'` measures it from the audio; pass 0 for concert A440. The value used,
+   * given or measured, is the result's `tuningCents`; {@link referenceHzToTuning}
+   * converts a reference pitch to this unit.
    */
-  tuning?: number | 'auto';
+  tuningCents?: number | 'auto';
+  /** Set `false` to skip the NaN/Inf pre-scan of the samples. Default true. */
+  validate?: boolean;
 }
-export interface MusicAnalyzeRequest extends SamplesRequest, MusicAnalyzeOptions {}
 
-/**
- * Every {@link MusicAnalyzeOptions} key. The set lives with the request key
- * sets, where the type checker holds it to the interface in both directions.
- */
-const MUSIC_ANALYZE_OPTION_KEY_LIST = Object.keys(
-  MUSIC_ANALYZE_OPTIONS_KEYS,
-) as (keyof MusicAnalyzeOptions)[];
-
-/**
- * Pulls MusicAnalyzeOptions fields spread directly onto a request object
- * (`analyze`/`analyzeAsync`'s flattened `MusicAnalyzeRequest` shape) rather
- * than nested under `options` (`analyzeWithProgress`'s own documented shape).
- * A request built for one is structurally assignable to the other -- every
- * extra field either carries is optional on the other's type -- so a caller
- * reusing one request object across both must not have either shape's fields
- * silently dropped.
- */
-function flattenedMusicAnalyzeOptions(request: MusicAnalyzeOptions): MusicAnalyzeOptions {
-  const out: MusicAnalyzeOptions = {};
-  for (const key of MUSIC_ANALYZE_OPTION_KEY_LIST) {
-    if (request[key] !== undefined) {
-      (out as Record<string, unknown>)[key] = request[key];
-    }
-  }
-  return out;
+/** Request for {@link analyze}: the settings plus audio and optional progress reporting. */
+export interface AnalyzeRequest extends MusicAnalyzeOptions {
+  samples: Float32Array;
+  sampleRate: number;
+  /** Called with a progress value in `[0, 1]` and the current stage name; its return value is ignored. */
+  onProgress?: ProgressCallback;
+  /** Polled during analysis; return `true` to cancel cooperatively. */
+  cancel?: () => boolean;
 }
+
+/** Request for {@link analyzeAsync}: {@link AnalyzeRequest} without the synchronous callbacks. */
+export type AnalyzeAsyncRequest = Omit<AnalyzeRequest, 'onProgress' | 'cancel'>;
 
 /** Request for {@link estimateMeter}. */
 export interface EstimateMeterRequest {
-  /** Beat positions in seconds, non-decreasing. */
-  beatTimes: ArrayLike<number>;
   /**
-   * Per-beat accent value, the same length as `beatTimes`. `AnalysisResult`'s
-   * `beatObservations.onsetStrength` is the intended source; `beats[].strength`
-   * also works but is a single unwindowed envelope frame. Neither needs
-   * pre-scaling: the series is divided by its own maximum before scoring, so
-   * only the accent contrast within it is read.
-   *
-   * A series assembled by hand from `onsetEnvelope` — one frame read at each
-   * beat time — is neither of those, and it carries a sample-rate dependence
-   * neither of them has: a hop counted in samples frames a different amount of
-   * time at each rate, so one waveform sampled at 32000, 44100 and 48000 Hz has
-   * produced three different winning numerators off beat times identical to the
-   * sample. Widening the read to a window around the beat does not remove it.
+   * Detected beats, non-decreasing in `timeSec`. Each beat's `strength` is the
+   * accent value scored; the series is divided by its own maximum before scoring,
+   * so only the accent contrast within it is read. `AnalysisResult.beats` is the
+   * usual source; its `strength` is a single unwindowed envelope frame, and
+   * `beatObservations.onsetStrength` is the windowed aggregate the library's own
+   * meter pass scores.
    */
-  beatStrengths: ArrayLike<number>;
+  beats: readonly Beat[];
   /**
    * Meter numerators to score. At most 16 entries, each in `[2, 32]`; an empty
    * list is rejected rather than restoring the default. Widening the set does
@@ -268,147 +447,246 @@ export interface EstimateMeterRequest {
   compoundSubdivisionThreshold?: number;
 }
 
-export interface AnalyzeSectionsRequest extends AnalyzeSectionsOptions, SamplesRequest {}
-export interface DetectBoundariesRequest extends BoundaryOptions, SamplesRequest {}
-export interface AnalyzeMelodyRequest extends MelodyOptions, SamplesRequest {}
-export interface AnalyzeBpmRequest extends AnalyzeBpmOptions, SamplesRequest {}
-export interface AnalyzeRhythmRequest extends AnalyzeRhythmOptions, SamplesRequest {}
-export interface AnalyzeDynamicsRequest extends AnalyzeDynamicsOptions, SamplesRequest {}
-export interface AnalyzeImpulseResponseRequest extends SamplesRequest {
+export interface AnalyzeSectionsRequest extends AnalyzeSectionsOptions {
+  samples: Float32Array;
+  sampleRate: number;
+}
+export interface DetectBoundariesRequest extends BoundaryOptions {
+  samples: Float32Array;
+  sampleRate: number;
+}
+export interface AnalyzeMelodyRequest extends MelodyOptions {
+  samples: Float32Array;
+  sampleRate: number;
+}
+export interface AnalyzeBpmRequest extends AnalyzeBpmOptions {
+  samples: Float32Array;
+  sampleRate: number;
+}
+export interface AnalyzeRhythmRequest extends AnalyzeRhythmOptions {
+  samples: Float32Array;
+  sampleRate: number;
+}
+export interface AnalyzeDynamicsRequest extends AnalyzeDynamicsOptions {
+  samples: Float32Array;
+  sampleRate: number;
+}
+export interface AnalyzeImpulseResponseRequest extends ValidateOptions {
+  samples: Float32Array;
+  sampleRate: number;
   nOctaveBands?: number;
   minDecayDb?: number;
 }
-export interface DetectAcousticRequest extends AcousticOptions, SamplesRequest {}
-export interface AnalyzeTimbreRequest extends AnalyzeTimbreOptions, SamplesRequest {}
-export interface DetectChordsRequest extends ChordDetectionOptions, SamplesRequest {}
-export interface ChordFunctionalAnalysisRequest extends ChordDetectionOptions, SamplesRequest {
-  keyRoot: ChordFunctionsKey['root'];
-  keyMode?: ChordFunctionsKey['mode'];
+export interface DetectAcousticRequest extends AcousticOptions {
+  samples: Float32Array;
+  sampleRate: number;
+}
+export interface AnalyzeTimbreRequest extends AnalyzeTimbreOptions {
+  samples: Float32Array;
+  sampleRate: number;
+}
+export interface DetectChordsRequest extends ChordDetectionOptions {
+  samples: Float32Array;
+  sampleRate: number;
+}
+export interface ChordFunctionalAnalysisRequest
+  extends Omit<ChordDetectionOptions, 'keyRoot' | 'keyMode'> {
+  samples: Float32Array;
+  sampleRate: number;
+  keyRoot: PitchClass;
+  keyMode?: KeyMode;
 }
 
-export function detectBpm(request: SamplesRequest): number;
-export function detectBpm(samples: Float32Array, sampleRate?: number): number;
-export function detectBpm(samples: Float32Array | SamplesRequest, sampleRate = 22050): number {
-  const request =
-    samples instanceof Float32Array ? { samples, sampleRate } : requestObject('detectBpm', samples);
-  const resolvedSampleRate = request.sampleRate ?? 22050;
-  assertAudioInput('detectBpm', request.samples, resolvedSampleRate, request);
-  return addon.detectBpm(request.samples, resolvedSampleRate);
+/** Normalises either call form of a one-shot over audio and preflights the audio. */
+function audioCall<R extends { samples: Float32Array; sampleRate: number } & ValidateOptions>(
+  fnName: RequestFn,
+  args: readonly unknown[],
+): R {
+  const request = sampleOneShot<R>(fnName, args);
+  assertAudioInput(fnName, request.samples, request.sampleRate, request);
+  return request;
+}
+
+/** The key-detection fields in the addon's spelling. */
+function nativeKeyOptions(fnName: string, request: KeyDetectionOptions): Record<string, unknown> {
+  const { profile, genreHint, modes } = request;
+  if (profile !== undefined && profile !== null) {
+    assertClosedToken(fnName, profile, Object.keys(KEY_PROFILE_NATIVE) as KeyProfile[], 'profile');
+  }
+  if (genreHint !== undefined && genreHint !== null) {
+    assertClosedToken(fnName, genreHint, GENRE_HINTS, 'genreHint');
+  }
+  let nativeModes: unknown = modes;
+  if (modes === 'majorMinor') {
+    nativeModes = 'major-minor';
+  } else if (Array.isArray(modes)) {
+    modes.forEach((mode, i) => {
+      assertClosedToken(fnName, mode, KEY_MODES, `modes[${i}]`);
+    });
+  } else if (modes !== undefined && modes !== null) {
+    assertClosedToken(fnName, modes, ['all', 'modal'] as const, 'modes');
+  }
+  if (request.chromaHighPassHz !== undefined && request.chromaHighPassHz !== null) {
+    assertFloatValue(fnName, request.chromaHighPassHz, 'chromaHighPassHz');
+  }
+  return compact({
+    nFft: request.nFft,
+    hopLength: request.hopLength,
+    useHpss: request.useHpss,
+    loudnessWeighted: request.loudnessWeighted,
+    highPassHz: request.chromaHighPassHz,
+    modes: nativeModes,
+    profile: profile === undefined || profile === null ? undefined : KEY_PROFILE_NATIVE[profile],
+    genreHint,
+    tuning: nativeTuning(fnName, request.tuningCents),
+  });
+}
+
+/** The music-analysis settings in the addon's spelling. */
+function nativeAnalyzeOptions(fnName: string, request: AnalyzeRequest): Record<string, unknown> {
+  if (request.chromaHighPassHz !== undefined && request.chromaHighPassHz !== null) {
+    assertFloatValue(fnName, request.chromaHighPassHz, 'chromaHighPassHz');
+  }
+  return compact({
+    ...without(
+      request,
+      'samples',
+      'sampleRate',
+      'validate',
+      'onProgress',
+      'cancel',
+      'chromaHighPassHz',
+      'tuningCents',
+    ),
+    chromaHighpassHz: request.chromaHighPassHz,
+    tuning: nativeTuning(fnName, request.tuningCents),
+  });
 }
 
 /**
- * Detect the musical key. The tuning is measured from the audio unless `tuning`
- * says otherwise: a semitone fraction in `[-0.5, 0.5)` (0 reads concert A440),
- * or `'auto'`. The result reports the tuning used.
+ * Detect the tempo in BPM.
+ *
+ * @throws TypeError for a wrong-typed argument or an omitted `sampleRate`;
+ *   RangeError for empty or non-finite audio or an out-of-range rate.
+ */
+export function detectBpm(request: DetectBpmRequest): number;
+export function detectBpm(
+  samples: Float32Array,
+  sampleRate: number,
+  options?: Omit<DetectBpmRequest, 'samples' | 'sampleRate'>,
+): number;
+export function detectBpm(...args: unknown[]): number {
+  const request = audioCall<DetectBpmRequest>('detectBpm', args);
+  return addon.detectBpm(request.samples, request.sampleRate);
+}
+
+/**
+ * Detect the musical key. The tuning is measured from the audio unless
+ * `tuningCents` says otherwise: an offset in cents in `[-50, 50)` (0 reads
+ * concert A440), or `'auto'`. The result reports the tuning used.
  */
 export function detectKey(request: DetectKeyRequest): KeyDetection;
 export function detectKey(
   samples: Float32Array,
-  sampleRate?: number,
-  options?: DetectKeyOptions,
+  sampleRate: number,
+  options?: Omit<DetectKeyRequest, 'samples' | 'sampleRate'>,
 ): KeyDetection;
-export function detectKey(
-  samples: Float32Array | DetectKeyRequest,
-  sampleRate?: number,
-  options?: DetectKeyOptions,
-): KeyDetection {
-  const request =
-    samples instanceof Float32Array
-      ? { samples, sampleRate, ...optionsBag('detectKey', options) }
-      : requestObject('detectKey', samples);
-  const resolvedSampleRate = request.sampleRate ?? 22050;
-  assertAudioInput('detectKey', request.samples, resolvedSampleRate, request);
-  return addon.detectKey(request.samples, resolvedSampleRate, request);
+export function detectKey(...args: unknown[]): KeyDetection {
+  const request = audioCall<DetectKeyRequest>('detectKey', args);
+  return keyDetectionFromNative(
+    addon.detectKey(request.samples, request.sampleRate, nativeKeyOptions('detectKey', request)),
+  );
 }
 
+/** The ranked key candidates; the options are {@link detectKey}'s. */
 export function detectKeyCandidates(request: DetectKeyCandidatesRequest): KeyCandidate[];
 export function detectKeyCandidates(
   samples: Float32Array,
-  sampleRate?: number,
-  options?: KeyDetectionOptions,
+  sampleRate: number,
+  options?: Omit<DetectKeyCandidatesRequest, 'samples' | 'sampleRate'>,
 ): KeyCandidate[];
-export function detectKeyCandidates(
-  samples: Float32Array | DetectKeyCandidatesRequest,
-  sampleRate?: number,
-  options?: KeyDetectionOptions,
-): KeyCandidate[] {
-  const request =
-    samples instanceof Float32Array
-      ? { samples, sampleRate, ...optionsBag('detectKeyCandidates', options) }
-      : requestObject('detectKeyCandidates', samples);
-  const resolvedSampleRate = request.sampleRate ?? 22050;
-  assertAudioInput('detectKeyCandidates', request.samples, resolvedSampleRate, request);
-  return addon.detectKeyCandidates(request.samples, resolvedSampleRate, request);
+export function detectKeyCandidates(...args: unknown[]): KeyCandidate[] {
+  const request = audioCall<DetectKeyCandidatesRequest>('detectKeyCandidates', args);
+  const candidates: Native[] = addon.detectKeyCandidates(
+    request.samples,
+    request.sampleRate,
+    nativeKeyOptions('detectKeyCandidates', request),
+  );
+  return candidates.map((c) => ({ key: keyFromNative(c.key), correlation: c.correlation }));
 }
 
-export function detectBeats(request: SamplesRequest): Float32Array;
-export function detectBeats(samples: Float32Array, sampleRate?: number): Float32Array;
+/** Beat times in seconds. */
+export function detectBeats(request: DetectBeatsRequest): Float32Array;
 export function detectBeats(
-  samples: Float32Array | SamplesRequest,
-  sampleRate = 22050,
-): Float32Array {
-  const request =
-    samples instanceof Float32Array
-      ? { samples, sampleRate }
-      : requestObject('detectBeats', samples);
-  const resolvedSampleRate = request.sampleRate ?? 22050;
-  assertAudioInput('detectBeats', request.samples, resolvedSampleRate, request);
-  return addon.detectBeats(request.samples, resolvedSampleRate);
+  samples: Float32Array,
+  sampleRate: number,
+  options?: Omit<DetectBeatsRequest, 'samples' | 'sampleRate'>,
+): Float32Array;
+export function detectBeats(...args: unknown[]): Float32Array {
+  const request = audioCall<DetectBeatsRequest>('detectBeats', args);
+  return addon.detectBeats(request.samples, request.sampleRate);
 }
 
-export function detectDownbeats(request: SamplesRequest): Float32Array;
-export function detectDownbeats(samples: Float32Array, sampleRate?: number): Float32Array;
+/** Downbeat times in seconds. */
+export function detectDownbeats(request: DetectDownbeatsRequest): Float32Array;
 export function detectDownbeats(
-  samples: Float32Array | SamplesRequest,
-  sampleRate = 22050,
-): Float32Array {
-  const request =
-    samples instanceof Float32Array
-      ? { samples, sampleRate }
-      : requestObject('detectDownbeats', samples);
-  const resolvedSampleRate = request.sampleRate ?? 22050;
-  assertAudioInput('detectDownbeats', request.samples, resolvedSampleRate, request);
-  return addon.detectDownbeats(request.samples, resolvedSampleRate);
+  samples: Float32Array,
+  sampleRate: number,
+  options?: Omit<DetectDownbeatsRequest, 'samples' | 'sampleRate'>,
+): Float32Array;
+export function detectDownbeats(...args: unknown[]): Float32Array {
+  const request = audioCall<DetectDownbeatsRequest>('detectDownbeats', args);
+  return addon.detectDownbeats(request.samples, request.sampleRate);
 }
 
+/** Onset times in seconds. */
 export function detectOnsets(request: DetectOnsetsRequest): Float32Array;
 export function detectOnsets(
   samples: Float32Array,
-  sampleRate?: number,
-  options?: OnsetDetectOptions,
+  sampleRate: number,
+  options?: Omit<DetectOnsetsRequest, 'samples' | 'sampleRate'>,
 ): Float32Array;
-export function detectOnsets(
-  samples: Float32Array | DetectOnsetsRequest,
-  sampleRate = 22050,
-  options: OnsetDetectOptions = {},
-): Float32Array {
-  const request =
-    samples instanceof Float32Array
-      ? { samples, sampleRate, ...optionsBag('detectOnsets', options) }
-      : requestObject('detectOnsets', samples);
-  const resolvedSampleRate = request.sampleRate ?? 22050;
-  assertAudioInput('detectOnsets', request.samples, resolvedSampleRate, request);
-  return addon.detectOnsets(request.samples, resolvedSampleRate, request);
+export function detectOnsets(...args: unknown[]): Float32Array {
+  const request = audioCall<DetectOnsetsRequest>('detectOnsets', args);
+  return addon.detectOnsets(request.samples, request.sampleRate, request);
 }
 
-export function analyze(request: MusicAnalyzeRequest): AnalysisResult;
+function assertProgressCallbacks(fnName: string, request: AnalyzeRequest): void {
+  for (const field of ['onProgress', 'cancel'] as const) {
+    const value = request[field];
+    if (value !== undefined && value !== null && typeof value !== 'function') {
+      throw new TypeError(`${fnName}: ${field} must be a function`);
+    }
+  }
+}
+
+/**
+ * Run the full music analysis. `onProgress` receives a progress value in `[0, 1]`
+ * and the stage name, synchronously; `cancel` is polled and returns `true` to stop.
+ */
+export function analyze(request: AnalyzeRequest): AnalysisResult;
 export function analyze(
   samples: Float32Array,
-  sampleRate?: number,
-  options?: MusicAnalyzeOptions,
+  sampleRate: number,
+  options?: Omit<AnalyzeRequest, 'samples' | 'sampleRate'>,
 ): AnalysisResult;
-export function analyze(
-  samples: Float32Array | MusicAnalyzeRequest,
-  sampleRate = 22050,
-  options: MusicAnalyzeOptions = {},
-): AnalysisResult {
-  const request =
-    samples instanceof Float32Array
-      ? { samples, sampleRate, ...optionsBag('analyze', options) }
-      : requestObject('analyze', samples);
-  const resolvedSampleRate = request.sampleRate ?? 22050;
-  assertAudioInput('analyze', request.samples, resolvedSampleRate, request);
-  return addon.analyze(request.samples, resolvedSampleRate, request);
+export function analyze(...args: unknown[]): AnalysisResult {
+  const request = audioCall<AnalyzeRequest>('analyze', args);
+  assertProgressCallbacks('analyze', request);
+  const options = nativeAnalyzeOptions('analyze', request);
+  const { onProgress, cancel } = request;
+  if (onProgress == null && cancel == null) {
+    return analysisFromNative(addon.analyze(request.samples, request.sampleRate, options));
+  }
+  return analysisFromNative(
+    addon.analyzeWithProgress(
+      request.samples,
+      request.sampleRate,
+      onProgress ?? (() => {}),
+      cancel ?? (() => false),
+      options,
+    ),
+  );
 }
 
 const asFloat32Array = (values: ArrayLike<number>): Float32Array =>
@@ -419,26 +697,39 @@ const asFloat32Array = (values: ArrayLike<number>): Float32Array =>
  * re-running analysis, so an arbitrary span of an existing result — or a beat
  * series from anywhere else — can be scored on its own.
  *
- * `beatStrengths` is the accent evidence the scoring reads; feed it
- * `AnalysisResult`'s `beatObservations.onsetStrength` rather than
- * `beats[].strength`, which is a single unwindowed envelope frame. Either
- * arrives in whatever units the envelope produced; the series is divided by its
- * own maximum before scoring, so it needs no pre-scaling.
+ * Each beat's `strength` is the accent evidence the scoring reads. It arrives in
+ * whatever units the envelope produced; the series is divided by its own maximum
+ * before scoring, so it needs no pre-scaling.
  *
  * Option values are validated by the core, so an out-of-range weight, a
- * denominator that is not a power of two, an empty `candidateNumerators`, or a
- * `beatTimes` that decreases surfaces as a `SonareError`.
+ * denominator that is not a power of two, an empty `candidateNumerators`, or
+ * beats whose `timeSec` decreases surfaces as a `SonareError`.
  *
  * The result carries `grouping` alongside the numerator: how the bar divides
  * into accent groups of two and three beats, so a seven comes back as
  * `[3, 2, 2]` or `[2, 2, 3]` rather than as a bare seven.
  */
 export function estimateMeter(request: EstimateMeterRequest): MeterEstimate {
-  requestObject('estimateMeter', request, 'request', true);
+  const { beats } = requestOnly<EstimateMeterRequest>('estimateMeter', [request]);
+  if (!Array.isArray(beats)) {
+    throw new TypeError('estimateMeter: beats must be an array of beats');
+  }
+  const times: number[] = [];
+  const strengths: number[] = [];
+  beats.forEach((beat: Beat, i: number) => {
+    if (typeof beat !== 'object' || beat === null) {
+      throw new TypeError(`estimateMeter: beats[${i}] must be an object`);
+    }
+    if (typeof beat.timeSec !== 'number' || typeof beat.strength !== 'number') {
+      throw new TypeError(`estimateMeter: beats[${i}] must carry numeric timeSec and strength`);
+    }
+    times.push(beat.timeSec);
+    strengths.push(beat.strength);
+  });
   return addon.estimateMeter(
-    asFloat32Array(request.beatTimes),
-    asFloat32Array(request.beatStrengths),
-    request,
+    asFloat32Array(times),
+    asFloat32Array(strengths),
+    without(request, 'beats'),
   );
 }
 
@@ -592,114 +883,45 @@ export function roomMorphStereo(request: RoomMorphStereoRequest): RoomMorphStere
 /**
  * Asynchronous variant of {@link analyze}. Runs the DSP pipeline on a libuv
  * worker thread so the JS event loop is never blocked. The returned promise
- * resolves with the same shape as the synchronous version.
+ * resolves with the same shape as the synchronous version, and every validation
+ * failure rejects it rather than throwing.
  */
-export function analyzeAsync(request: MusicAnalyzeRequest): Promise<AnalysisResult>;
+export function analyzeAsync(request: AnalyzeAsyncRequest): Promise<AnalysisResult>;
 export function analyzeAsync(
   samples: Float32Array,
-  sampleRate?: number,
-  options?: MusicAnalyzeOptions,
+  sampleRate: number,
+  options?: Omit<AnalyzeAsyncRequest, 'samples' | 'sampleRate'>,
 ): Promise<AnalysisResult>;
-export function analyzeAsync(
-  samples: Float32Array | MusicAnalyzeRequest,
-  sampleRate = 22050,
-  options: MusicAnalyzeOptions = {},
-): Promise<AnalysisResult> {
-  // Preserve the legacy async validation contract: invalid positional input is
-  // handed to the addon so it becomes a rejected Promise, not a synchronous
-  // property-access error while normalizing the new request form.
-  if (!(samples instanceof Float32Array) && (!samples || typeof samples !== 'object')) {
-    return addon.analyzeAsync(samples as Float32Array, sampleRate);
-  }
-  // Normalizing and validating can throw (a bad sample rate, or an invalid
-  // option value the addon reports as a synchronous C++ throw rather than a
-  // pending-exception-to-reject conversion); route that through the same
-  // rejected-Promise contract so `analyzeAsync(...).catch(h)` sees every
-  // validation failure, matching masterAudioAsync/masterAudioStereoAsync.
+export function analyzeAsync(...args: unknown[]): Promise<AnalysisResult> {
   try {
-    const request =
-      samples instanceof Float32Array
-        ? { samples, sampleRate, ...optionsBag('analyzeAsync', options) }
-        : requestObject('analyzeAsync', samples);
-    const resolvedSampleRate = request.sampleRate ?? 22050;
-    assertAudioInput('analyzeAsync', request.samples, resolvedSampleRate, request);
-    return addon.analyzeAsync(request.samples, resolvedSampleRate, request);
+    const request = audioCall<AnalyzeAsyncRequest>('analyzeAsync', args);
+    const options = nativeAnalyzeOptions('analyzeAsync', request as AnalyzeRequest);
+    return addon
+      .analyzeAsync(request.samples, request.sampleRate, options)
+      .then(analysisFromNative);
   } catch (error) {
     return Promise.reject(error);
   }
-}
-
-/**
- * Run the full music analysis, reporting per-stage progress.
- *
- * The progress callback is invoked synchronously during analysis with a
- * normalized progress value in `[0, 1]` and the current stage name. The result
- * shape matches {@link analyze}.
- */
-export function analyzeWithProgress(request: AnalyzeWithProgressRequest): AnalysisResult;
-export function analyzeWithProgress(
-  samples: Float32Array,
-  sampleRate: number | undefined,
-  onProgress: AnalysisProgressCallback,
-  options?: MusicAnalyzeOptions,
-): AnalysisResult;
-export function analyzeWithProgress(
-  samples: Float32Array | AnalyzeWithProgressRequest,
-  sampleRate?: number,
-  onProgress?: AnalysisProgressCallback,
-  options?: MusicAnalyzeOptions,
-): AnalysisResult {
-  const request: AnalyzeWithProgressRequest =
-    samples instanceof Float32Array
-      ? { samples, sampleRate, onProgress, options }
-      : requestObject('analyzeWithProgress', samples);
-  const resolvedSampleRate = request.sampleRate ?? 22050;
-  assertAudioInput('analyzeWithProgress', request.samples, resolvedSampleRate, request);
-  // A request object built from analyze/analyzeAsync's flattened
-  // MusicAnalyzeRequest shape carries its option fields directly on the
-  // request rather than nested under `options`; read both and let the
-  // nested `options` -- this function's own documented shape -- win a field
-  // present in both, rather than silently dropping the flattened ones.
-  const mergedOptions: MusicAnalyzeOptions = {
-    ...flattenedMusicAnalyzeOptions(request),
-    ...request.options,
-  };
-  // The addon reads options with the same reader analyze uses.
-  return addon.analyzeWithProgress(
-    request.samples,
-    resolvedSampleRate,
-    request.onProgress ?? (() => {}),
-    request.cancel ?? (() => false),
-    mergedOptions,
-  );
 }
 
 /** Detect song-structure sections (intro/verse/chorus/...). */
 export function analyzeSections(request: AnalyzeSectionsRequest): Section[];
 export function analyzeSections(
   samples: Float32Array,
-  sampleRate?: number,
-  options?: AnalyzeSectionsOptions,
+  sampleRate: number,
+  options?: Omit<AnalyzeSectionsRequest, 'samples' | 'sampleRate'>,
 ): Section[];
-export function analyzeSections(
-  samples: Float32Array | AnalyzeSectionsRequest,
-  sampleRate = 22050,
-  options: AnalyzeSectionsOptions = {},
-): Section[] {
-  const request =
-    samples instanceof Float32Array
-      ? { samples, sampleRate, ...optionsBag('analyzeSections', options) }
-      : requestObject('analyzeSections', samples);
-  const resolvedSampleRate = request.sampleRate ?? 22050;
-  assertAudioInput('analyzeSections', request.samples, resolvedSampleRate, request);
+export function analyzeSections(...args: unknown[]): Section[] {
+  const request = audioCall<AnalyzeSectionsRequest>('analyzeSections', args);
   const fft = resolveFftOptions('analyzeSections', request.nFft, request.hopLength);
-  return addon.analyzeSections(
+  const sections: Native[] = addon.analyzeSections(
     request.samples,
-    resolvedSampleRate,
+    request.sampleRate,
     fft.nFft,
     fft.hopLength,
     request.minSectionSec ?? 4.0,
   );
+  return sections.map(sectionFromNative);
 }
 
 /**
@@ -717,7 +939,7 @@ export function analyzeSections(
  *
  * The analysis resamples anything above 22.05 kHz before computing a feature,
  * so the result's `sampleRate`, `hopLength` and `frameStride` describe the
- * analysis grid `frame` indexes rather than the input. `time` is the
+ * analysis grid `frame` indexes rather than the input. `timeSec` is the
  * authoritative output.
  *
  * @example
@@ -727,88 +949,107 @@ export function analyzeSections(
  *   sampleRate: 44100,
  * });
  * for (const boundary of boundaries) {
- *   console.log(boundary.time, boundary.strength);
+ *   console.log(boundary.timeSec, boundary.strength);
  * }
  * ```
  */
-export function detectBoundaries(request: DetectBoundariesRequest): BoundaryResult {
-  requestObject('detectBoundaries', request, 'request', true);
-  const resolvedSampleRate = request.sampleRate ?? 22050;
-  assertAudioInput('detectBoundaries', request.samples, resolvedSampleRate, request);
+export function detectBoundaries(request: DetectBoundariesRequest): BoundaryResult;
+export function detectBoundaries(
+  samples: Float32Array,
+  sampleRate: number,
+  options?: Omit<DetectBoundariesRequest, 'samples' | 'sampleRate'>,
+): BoundaryResult;
+export function detectBoundaries(...args: unknown[]): BoundaryResult {
+  const request = audioCall<DetectBoundariesRequest>('detectBoundaries', args);
   // Validation only: the addon seeds every default from the C ABI, so the
   // resolved pair is deliberately not passed on.
   resolveFftOptions('detectBoundaries', request.nFft, request.hopLength);
-  return addon.detectBoundaries(request.samples, resolvedSampleRate, request);
+  const raw: Native = addon.detectBoundaries(
+    request.samples,
+    request.sampleRate,
+    compact({
+      ...without(
+        request,
+        'samples',
+        'sampleRate',
+        'validate',
+        'peakDistanceSec',
+        'referenceWindowSec',
+      ),
+      peakDistance: request.peakDistanceSec,
+      referenceWindow: request.referenceWindowSec,
+    }),
+  );
+  return {
+    ...raw,
+    boundaries: raw.boundaries.map((b: Native) => ({
+      timeSec: b.time,
+      frame: b.frame,
+      strength: b.strength,
+    })),
+  };
 }
 
 /**
  * Extract the melody contour from monophonic audio.
  *
  * By default this uses plain per-frame YIN. Pass `{ usePyin: true }` for the
- * Viterbi-smoothed pYIN tracker (less prone to octave jumps), or supply
- * `usePyin` / `center` positionally. When pYIN is active, `center` (default
- * `true`) zero-pads by `frameLength / 2` so frame `i` is centered at
- * `i * hopLength` (matching `librosa.pyin(center=True)`); `center` is ignored
- * for plain YIN.
+ * Viterbi-smoothed pYIN tracker (less prone to octave jumps). When pYIN is
+ * active, `center` (default `true`) zero-pads by `frameLength / 2` so frame `i`
+ * is centered at `i * hopLength` (matching `librosa.pyin(center=True)`);
+ * `center` is ignored for plain YIN.
  */
 export function analyzeMelody(request: AnalyzeMelodyRequest): MelodyResult;
 export function analyzeMelody(
   samples: Float32Array,
-  sampleRate?: number,
-  options?: MelodyOptions,
+  sampleRate: number,
+  options?: Omit<AnalyzeMelodyRequest, 'samples' | 'sampleRate'>,
 ): MelodyResult;
-export function analyzeMelody(
-  samples: Float32Array | AnalyzeMelodyRequest,
-  sampleRate = 22050,
-  options: MelodyOptions = {},
-): MelodyResult {
-  const request =
-    samples instanceof Float32Array
-      ? { samples, sampleRate, ...optionsBag('analyzeMelody', options) }
-      : requestObject('analyzeMelody', samples);
-  const resolvedSampleRate = request.sampleRate ?? 22050;
-  assertAudioInput('analyzeMelody', request.samples, resolvedSampleRate, request);
+export function analyzeMelody(...args: unknown[]): MelodyResult {
+  const request = audioCall<AnalyzeMelodyRequest>('analyzeMelody', args);
   // frameLength is a framing window, not a transform size, so it carries no evenness rule.
   assertPositiveInteger('analyzeMelody', request.frameLength ?? 2048, 'frameLength');
   assertPositiveInteger('analyzeMelody', request.hopLength ?? 256, 'hopLength');
-  return addon.analyzeMelody(
+  const f0MinHz = request.f0MinHz ?? 65.0;
+  const f0MaxHz = request.f0MaxHz ?? 2093.0;
+  assertFrequencyBounds('analyzeMelody', f0MinHz, f0MaxHz, 'f0MinHz', 'f0MaxHz');
+  const raw: Native = addon.analyzeMelody(
     request.samples,
-    resolvedSampleRate,
-    request.fmin ?? 65.0,
-    request.fmax ?? 2093.0,
+    request.sampleRate,
+    f0MinHz,
+    f0MaxHz,
     request.frameLength ?? 2048,
     request.hopLength ?? 256,
     request.threshold ?? 0.1,
     request.usePyin ?? false,
     request.center ?? true,
   );
+  return {
+    points: raw.points.map(melodyPointFromNative),
+    pitchRangeOctaves: raw.pitchRangeOctaves,
+    pitchStability: raw.pitchStability,
+    meanFrequencyHz: raw.meanFrequency,
+    vibratoRateHz: raw.vibratoRate,
+  };
 }
 
+/** Tempo estimate with candidates; searches 60-200 BPM unless `bpmMin` / `bpmMax` say otherwise. */
 export function analyzeBpm(request: AnalyzeBpmRequest): BpmAnalysisResult;
 export function analyzeBpm(
   samples: Float32Array,
-  sampleRate?: number,
-  options?: AnalyzeBpmOptions,
+  sampleRate: number,
+  options?: Omit<AnalyzeBpmRequest, 'samples' | 'sampleRate'>,
 ): BpmAnalysisResult;
-export function analyzeBpm(
-  samples: Float32Array | AnalyzeBpmRequest,
-  sampleRate = 22050,
-  options: AnalyzeBpmOptions = {},
-): BpmAnalysisResult {
-  const request =
-    samples instanceof Float32Array
-      ? { samples, sampleRate, ...optionsBag('analyzeBpm', options) }
-      : requestObject('analyzeBpm', samples);
-  const resolvedSampleRate = request.sampleRate ?? 22050;
-  assertAudioInput('analyzeBpm', request.samples, resolvedSampleRate, request);
+export function analyzeBpm(...args: unknown[]): BpmAnalysisResult {
+  const request = audioCall<AnalyzeBpmRequest>('analyzeBpm', args);
   const fft = resolveFftOptions('analyzeBpm', request.nFft, request.hopLength);
   // The domain (>= 0) is the C ABI's; this only keeps the addon's int narrowing from wrapping.
   assertInt32('analyzeBpm', request.maxCandidates ?? 5, 'maxCandidates');
   return addon.analyzeBpm(
     request.samples,
-    resolvedSampleRate,
-    request.bpmMin ?? 30.0,
-    request.bpmMax ?? 300.0,
+    request.sampleRate,
+    request.bpmMin ?? 60.0,
+    request.bpmMax ?? 200.0,
     request.startBpm ?? 120.0,
     fft.nFft,
     fft.hopLength,
@@ -819,24 +1060,15 @@ export function analyzeBpm(
 export function analyzeRhythm(request: AnalyzeRhythmRequest): RhythmResult;
 export function analyzeRhythm(
   samples: Float32Array,
-  sampleRate?: number,
-  options?: AnalyzeRhythmOptions,
+  sampleRate: number,
+  options?: Omit<AnalyzeRhythmRequest, 'samples' | 'sampleRate'>,
 ): RhythmResult;
-export function analyzeRhythm(
-  samples: Float32Array | AnalyzeRhythmRequest,
-  sampleRate = 22050,
-  options: AnalyzeRhythmOptions = {},
-): RhythmResult {
-  const request =
-    samples instanceof Float32Array
-      ? { samples, sampleRate, ...optionsBag('analyzeRhythm', options) }
-      : requestObject('analyzeRhythm', samples);
-  const resolvedSampleRate = request.sampleRate ?? 22050;
-  assertAudioInput('analyzeRhythm', request.samples, resolvedSampleRate, request);
+export function analyzeRhythm(...args: unknown[]): RhythmResult {
+  const request = audioCall<AnalyzeRhythmRequest>('analyzeRhythm', args);
   const fft = resolveFftOptions('analyzeRhythm', request.nFft, request.hopLength);
   return addon.analyzeRhythm(
     request.samples,
-    resolvedSampleRate,
+    request.sampleRate,
     request.bpmMin ?? 60.0,
     request.bpmMax ?? 200.0,
     request.startBpm ?? 120.0,
@@ -848,85 +1080,56 @@ export function analyzeRhythm(
 export function analyzeDynamics(request: AnalyzeDynamicsRequest): DynamicsResult;
 export function analyzeDynamics(
   samples: Float32Array,
-  sampleRate?: number,
-  options?: AnalyzeDynamicsOptions,
+  sampleRate: number,
+  options?: Omit<AnalyzeDynamicsRequest, 'samples' | 'sampleRate'>,
 ): DynamicsResult;
-export function analyzeDynamics(
-  samples: Float32Array | AnalyzeDynamicsRequest,
-  sampleRate = 22050,
-  options: AnalyzeDynamicsOptions = {},
-): DynamicsResult {
-  const request =
-    samples instanceof Float32Array
-      ? { samples, sampleRate, ...optionsBag('analyzeDynamics', options) }
-      : requestObject('analyzeDynamics', samples);
-  const resolvedSampleRate = request.sampleRate ?? 22050;
-  assertAudioInput('analyzeDynamics', request.samples, resolvedSampleRate, request);
+export function analyzeDynamics(...args: unknown[]): DynamicsResult {
+  const request = audioCall<AnalyzeDynamicsRequest>('analyzeDynamics', args);
   assertPositiveInteger('analyzeDynamics', request.hopLength ?? 512, 'hopLength');
-  return addon.analyzeDynamics(
+  const compressionThresholdDb = request.compressionThresholdDb ?? 6.0;
+  assertNonNegativeFloatValue('analyzeDynamics', compressionThresholdDb, 'compressionThresholdDb');
+  const { loudnessRangeDb, ...raw }: Native = addon.analyzeDynamics(
     request.samples,
-    resolvedSampleRate,
+    request.sampleRate,
     request.windowSec ?? 0.4,
     request.hopLength ?? 512,
-    request.compressionThreshold ?? 6.0,
+    compressionThresholdDb,
   );
+  return { ...raw, loudnessRangeLu: loudnessRangeDb };
 }
 
 export function analyzeImpulseResponse(request: AnalyzeImpulseResponseRequest): AcousticResult;
 export function analyzeImpulseResponse(
   samples: Float32Array,
-  sampleRate?: number,
-  nOctaveBands?: number,
-  minDecayDb?: number,
+  sampleRate: number,
+  options?: Omit<AnalyzeImpulseResponseRequest, 'samples' | 'sampleRate'>,
 ): AcousticResult;
-export function analyzeImpulseResponse(
-  samples: Float32Array | AnalyzeImpulseResponseRequest,
-  sampleRate = 48000,
-  nOctaveBands = 6,
-  minDecayDb?: number,
-): AcousticResult {
-  const request =
-    samples instanceof Float32Array
-      ? { samples, sampleRate, nOctaveBands, minDecayDb }
-      : requestObject('analyzeImpulseResponse', samples);
-  if (request.minDecayDb === null) {
-    throw new TypeError('analyzeImpulseResponse: minDecayDb must be a finite number');
-  }
-  const resolvedMinDecayDb = request.minDecayDb === undefined ? 30.0 : request.minDecayDb;
-  assertFiniteScalar('analyzeImpulseResponse', resolvedMinDecayDb, 'minDecayDb');
-  if (resolvedMinDecayDb <= 0) {
+export function analyzeImpulseResponse(...args: unknown[]): AcousticResult {
+  const request = audioCall<AnalyzeImpulseResponseRequest>('analyzeImpulseResponse', args);
+  const minDecayDb = request.minDecayDb ?? 30.0;
+  assertFiniteScalar('analyzeImpulseResponse', minDecayDb, 'minDecayDb');
+  if (minDecayDb <= 0) {
     throw new RangeError('analyzeImpulseResponse: minDecayDb must be greater than zero');
   }
-  const resolvedSampleRate = request.sampleRate ?? 48000;
-  assertAudioInput('analyzeImpulseResponse', request.samples, resolvedSampleRate, request);
   // Zero is degenerate but legal: the C ABI refuses only a negative count, so
   // refusing it here would narrow the domain the other surfaces accept.
   assertNonNegativeSafeInteger('analyzeImpulseResponse', request.nOctaveBands ?? 6, 'nOctaveBands');
   return addon.analyzeImpulseResponse(
     request.samples,
-    resolvedSampleRate,
+    request.sampleRate,
     request.nOctaveBands ?? 6,
-    resolvedMinDecayDb,
+    minDecayDb,
   );
 }
 
 export function detectAcoustic(request: DetectAcousticRequest): AcousticResult;
 export function detectAcoustic(
   samples: Float32Array,
-  sampleRate?: number,
-  options?: AcousticOptions,
+  sampleRate: number,
+  options?: Omit<DetectAcousticRequest, 'samples' | 'sampleRate'>,
 ): AcousticResult;
-export function detectAcoustic(
-  samples: Float32Array | DetectAcousticRequest,
-  sampleRate = 48000,
-  options: AcousticOptions = {},
-): AcousticResult {
-  const request =
-    samples instanceof Float32Array
-      ? { samples, sampleRate, ...optionsBag('detectAcoustic', options) }
-      : requestObject('detectAcoustic', samples);
-  const resolvedSampleRate = request.sampleRate ?? 48000;
-  assertAudioInput('detectAcoustic', request.samples, resolvedSampleRate, request);
+export function detectAcoustic(...args: unknown[]): AcousticResult {
+  const request = audioCall<DetectAcousticRequest>('detectAcoustic', args);
   assertNonNegativeSafeInteger('detectAcoustic', request.nOctaveBands ?? 6, 'nOctaveBands');
   assertNonNegativeSafeInteger(
     'detectAcoustic',
@@ -935,7 +1138,7 @@ export function detectAcoustic(
   );
   return addon.detectAcoustic(
     request.samples,
-    resolvedSampleRate,
+    request.sampleRate,
     request.nOctaveBands ?? 6,
     request.nThirdOctaveSubbands ?? 24,
     request.minDecayDb ?? 30.0,
@@ -946,26 +1149,17 @@ export function detectAcoustic(
 export function analyzeTimbre(request: AnalyzeTimbreRequest): TimbreResult;
 export function analyzeTimbre(
   samples: Float32Array,
-  sampleRate?: number,
-  options?: AnalyzeTimbreOptions,
+  sampleRate: number,
+  options?: Omit<AnalyzeTimbreRequest, 'samples' | 'sampleRate'>,
 ): TimbreResult;
-export function analyzeTimbre(
-  samples: Float32Array | AnalyzeTimbreRequest,
-  sampleRate = 22050,
-  options: AnalyzeTimbreOptions = {},
-): TimbreResult {
-  const request =
-    samples instanceof Float32Array
-      ? { samples, sampleRate, ...optionsBag('analyzeTimbre', options) }
-      : requestObject('analyzeTimbre', samples);
-  const resolvedSampleRate = request.sampleRate ?? 22050;
-  assertAudioInput('analyzeTimbre', request.samples, resolvedSampleRate, request);
+export function analyzeTimbre(...args: unknown[]): TimbreResult {
+  const request = audioCall<AnalyzeTimbreRequest>('analyzeTimbre', args);
   const fft = resolveFftOptions('analyzeTimbre', request.nFft, request.hopLength);
   assertPositiveInteger('analyzeTimbre', request.nMels ?? 128, 'nMels');
   assertPositiveInteger('analyzeTimbre', request.nMfcc ?? 13, 'nMfcc');
   return addon.analyzeTimbre(
     request.samples,
-    resolvedSampleRate,
+    request.sampleRate,
     fft.nFft,
     fft.hopLength,
     request.nMels ?? 128,
@@ -974,12 +1168,11 @@ export function analyzeTimbre(
   );
 }
 
-/**
- * Resolved chord-detection parameters with all defaults applied. Used to feed
- * the positional native call from either the positional or options-object
- * public forms.
- */
-interface ResolvedChordParams {
+/** The chord parameters in the addon's positional order, defaults applied and validated. */
+function resolveChordParams(
+  fnName: string,
+  request: ChordDetectionOptions,
+): {
   minDuration: number;
   smoothingWindow: number;
   threshold: number;
@@ -990,315 +1183,130 @@ interface ResolvedChordParams {
   useHmm: boolean;
   hmmBeamWidth: number;
   useKeyContext: boolean;
-  keyRoot: ChordFunctionsKey['root'];
-  keyMode: ChordFunctionsKey['mode'];
+  keyRoot: number;
+  keyMode: number;
   detectInversions: boolean;
-  chromaMethod: ChordChromaMethod;
-  tuning: number | 'auto';
-}
-
-function resolveChordOptions(options: ChordDetectionOptions): ResolvedChordParams {
-  return {
-    minDuration: options.minDuration ?? 0.3,
-    smoothingWindow: options.smoothingWindow ?? 2.0,
-    threshold: options.threshold ?? 0.5,
-    useTriadsOnly: options.useTriadsOnly ?? true,
-    nFft: options.nFft ?? 2048,
-    hopLength: options.hopLength ?? 512,
-    useBeatSync: options.useBeatSync ?? true,
-    useHmm: options.useHmm ?? true,
-    hmmBeamWidth: options.hmmBeamWidth ?? 24,
-    useKeyContext: options.useKeyContext ?? false,
-    keyRoot: options.keyRoot ?? 0,
-    keyMode: options.keyMode ?? 0,
-    detectInversions: options.detectInversions ?? false,
-    chromaMethod: options.chromaMethod ?? 'cqt',
-    tuning: options.tuning ?? 'auto',
-  };
-}
-
-/**
- * The chord parameters both entry points resolve the same way. The key is not
- * among them: `chordFunctionalAnalysis` takes it as its own argument and sends
- * that rather than the resolved one, so each caller checks the key it sends.
- */
-function assertChordParams(
-  fnName: string,
-  p: ResolvedChordParams,
-): { nFft: number; hopLength: number } {
-  const fft = resolveFftOptions(fnName, p.nFft, p.hopLength);
-  // The domain (>= 0) is the C ABI's; this only keeps the addon's int narrowing from wrapping.
-  assertInt32(fnName, p.hmmBeamWidth, 'hmmBeamWidth');
-  return fft;
-}
-
-/** Resolves the positional or request form of a chord call, then validates audio and parameters. */
-function resolveChordCall(
-  fnName: string,
-  samples: Float32Array | DetectChordsRequest | ChordFunctionalAnalysisRequest,
-  sampleRate: number,
-  minDurationOrOptions: number | ChordDetectionOptions,
-  smoothingWindow: number,
-  threshold: number,
-  useTriadsOnly: boolean,
-  nFft: number,
-  hopLength: number,
-  useBeatSync: boolean,
-  useHmm: boolean,
-  hmmBeamWidth: number,
-  useKeyContext: boolean,
-  keyRoot: ChordFunctionsKey['root'],
-  keyMode: ChordFunctionsKey['mode'],
-  detectInversions: boolean,
-  chromaMethod: ChordChromaMethod,
-): {
-  p: ResolvedChordParams;
-  fft: { nFft: number; hopLength: number };
-  resolvedSampleRate: number;
+  chromaMethod: number;
+  tuning: number;
+  tuningAuto: boolean;
 } {
-  const p: ResolvedChordParams =
-    samples instanceof Float32Array && typeof minDurationOrOptions === 'object'
-      ? resolveChordOptions(minDurationOrOptions)
-      : samples instanceof Float32Array
-        ? {
-            minDuration: minDurationOrOptions as number,
-            smoothingWindow,
-            threshold,
-            useTriadsOnly,
-            nFft,
-            hopLength,
-            useBeatSync,
-            useHmm,
-            hmmBeamWidth,
-            useKeyContext,
-            keyRoot,
-            keyMode,
-            detectInversions,
-            chromaMethod,
-            tuning: 'auto',
-          }
-        : resolveChordOptions(samples);
-  const resolvedSampleRate =
-    samples instanceof Float32Array ? sampleRate : (samples.sampleRate ?? 22050);
-  assertAudioInput(
-    fnName,
-    samples instanceof Float32Array ? samples : samples.samples,
-    resolvedSampleRate,
-    samples instanceof Float32Array ? {} : samples,
-  );
-  const fft = assertChordParams(fnName, p);
-  return { p, fft, resolvedSampleRate };
+  const fft = resolveFftOptions(fnName, request.nFft ?? 2048, request.hopLength ?? 512);
+  // The domain (>= 0) is the C ABI's; this only keeps the addon's int narrowing from wrapping.
+  const hmmBeamWidth = request.hmmBeamWidth ?? 24;
+  assertInt32(fnName, hmmBeamWidth, 'hmmBeamWidth');
+  const keyRoot = request.keyRoot ?? 0;
+  assertPitchClass(fnName, keyRoot, 'keyRoot');
+  const keyMode = request.keyMode ?? 'major';
+  assertClosedToken(fnName, keyMode, KEY_MODES, 'keyMode');
+  const chromaMethod = request.chromaMethod ?? 'cqt';
+  assertClosedToken(fnName, chromaMethod, CHORD_CHROMA_METHODS, 'chromaMethod');
+  const tuning = nativeTuning(fnName, request.tuningCents);
+  const minDurationSec = request.minDurationSec ?? 0.3;
+  const smoothingWindowSec = request.smoothingWindowSec ?? 2.0;
+  assertFloatFields(fnName, { minDurationSec, smoothingWindowSec });
+  return {
+    minDuration: minDurationSec,
+    smoothingWindow: smoothingWindowSec,
+    threshold: request.threshold ?? 0.5,
+    useTriadsOnly: request.useTriadsOnly ?? true,
+    nFft: fft.nFft,
+    hopLength: fft.hopLength,
+    useBeatSync: request.useBeatSync ?? true,
+    useHmm: request.useHmm ?? true,
+    hmmBeamWidth,
+    useKeyContext: request.useKeyContext ?? false,
+    keyRoot,
+    keyMode: KEY_MODES.indexOf(keyMode),
+    detectInversions: request.detectInversions ?? false,
+    chromaMethod: chromaMethod === 'stft' ? 0 : chromaMethod === 'nnls' ? 1 : 2,
+    tuning: typeof tuning === 'number' ? tuning : 0,
+    tuningAuto: tuning === undefined || tuning === 'auto',
+  };
 }
 
 /**
  * Detect chords from mono samples.
  *
- * Accepts either an options object (`detectChords(samples, sampleRate, options)`,
- * matching the WASM binding) or the legacy positional argument list. The form
- * is selected by the type of the third argument: an object selects the
- * options form, otherwise the positional form is used.
+ * Takes either one request or `(samples, sampleRate, options?)`; a request plus an
+ * extra positional argument is a `TypeError`.
  */
 export function detectChords(request: DetectChordsRequest): ChordAnalysisResult;
 export function detectChords(
   samples: Float32Array,
-  sampleRate?: number,
-  options?: ChordDetectionOptions,
+  sampleRate: number,
+  options?: Omit<DetectChordsRequest, 'samples' | 'sampleRate'>,
 ): ChordAnalysisResult;
-export function detectChords(
-  samples: Float32Array,
-  sampleRate?: number,
-  minDuration?: number,
-  smoothingWindow?: number,
-  threshold?: number,
-  useTriadsOnly?: boolean,
-  nFft?: number,
-  hopLength?: number,
-  useBeatSync?: boolean,
-  useHmm?: boolean,
-  hmmBeamWidth?: number,
-  useKeyContext?: boolean,
-  keyRoot?: ChordFunctionsKey['root'],
-  keyMode?: ChordFunctionsKey['mode'],
-  detectInversions?: boolean,
-  chromaMethod?: ChordChromaMethod,
-): ChordAnalysisResult;
-export function detectChords(
-  samples: Float32Array | DetectChordsRequest,
-  sampleRate = 22050,
-  minDurationOrOptions: number | ChordDetectionOptions = 0.3,
-  smoothingWindow = 2.0,
-  threshold = 0.5,
-  useTriadsOnly = true,
-  nFft = 2048,
-  hopLength = 512,
-  useBeatSync = true,
-  useHmm = true,
-  hmmBeamWidth = 24,
-  useKeyContext = false,
-  keyRoot: ChordFunctionsKey['root'] = 0,
-  keyMode: ChordFunctionsKey['mode'] = 0,
-  detectInversions = false,
-  chromaMethod: ChordChromaMethod = 'cqt',
-): ChordAnalysisResult {
-  if (!(samples instanceof Float32Array)) {
-    requestObject('detectChords', samples);
-  }
-  const { p, fft, resolvedSampleRate } = resolveChordCall(
-    'detectChords',
-    samples,
-    sampleRate,
-    minDurationOrOptions,
-    smoothingWindow,
-    threshold,
-    useTriadsOnly,
-    nFft,
-    hopLength,
-    useBeatSync,
-    useHmm,
-    hmmBeamWidth,
-    useKeyContext,
-    keyRoot,
-    keyMode,
-    detectInversions,
-    chromaMethod,
-  );
-  return addon.detectChords(
-    samples instanceof Float32Array ? samples : samples.samples,
-    resolvedSampleRate,
-    p.minDuration,
-    p.smoothingWindow,
-    p.threshold,
-    p.useTriadsOnly,
-    fft.nFft,
-    fft.hopLength,
-    p.useBeatSync,
-    p.useHmm,
-    p.hmmBeamWidth,
-    p.useKeyContext,
-    p.keyRoot,
-    p.keyMode,
-    p.detectInversions,
-    chordChromaMethodValue(p.chromaMethod),
-    p.tuning === 'auto' ? 0 : p.tuning,
-    p.tuning === 'auto',
+export function detectChords(...args: unknown[]): ChordAnalysisResult {
+  const request = audioCall<DetectChordsRequest>('detectChords', args);
+  const p = resolveChordParams('detectChords', request);
+  return chordAnalysisFromNative(
+    addon.detectChords(
+      request.samples,
+      request.sampleRate,
+      p.minDuration,
+      p.smoothingWindow,
+      p.threshold,
+      p.useTriadsOnly,
+      p.nFft,
+      p.hopLength,
+      p.useBeatSync,
+      p.useHmm,
+      p.hmmBeamWidth,
+      p.useKeyContext,
+      p.keyRoot,
+      p.keyMode,
+      p.detectInversions,
+      p.chromaMethod,
+      p.tuning,
+      p.tuningAuto,
+    ),
   );
 }
 
 /**
  * Functional (Roman-numeral) chord analysis from mono samples: {@link detectChords}
  * followed by {@link chordFunctions} in the given key, returning the timed
- * entries with `roman` and `function` added.
+ * entries with `romanNumeral` and `function` added.
  *
- * Accepts either an options object
- * (`chordFunctionalAnalysis(samples, keyRoot, keyMode, sampleRate, options)`,
- * matching the WASM binding) or the legacy positional argument list. The form
- * is selected by the type of the fifth argument.
+ * `keyRoot` is required and travels with the other settings, so the positional
+ * form's `options` is required as well.
  */
 export function chordFunctionalAnalysis(request: ChordFunctionalAnalysisRequest): FunctionalChord[];
 export function chordFunctionalAnalysis(
   samples: Float32Array,
-  keyRoot: ChordFunctionsKey['root'],
-  keyMode?: ChordFunctionsKey['mode'],
-  sampleRate?: number,
-  options?: ChordDetectionOptions,
+  sampleRate: number,
+  options: Omit<ChordFunctionalAnalysisRequest, 'samples' | 'sampleRate'>,
 ): FunctionalChord[];
-export function chordFunctionalAnalysis(
-  samples: Float32Array,
-  keyRoot: ChordFunctionsKey['root'],
-  keyMode?: ChordFunctionsKey['mode'],
-  sampleRate?: number,
-  minDuration?: number,
-  smoothingWindow?: number,
-  threshold?: number,
-  useTriadsOnly?: boolean,
-  nFft?: number,
-  hopLength?: number,
-  useBeatSync?: boolean,
-  useHmm?: boolean,
-  hmmBeamWidth?: number,
-  useKeyContext?: boolean,
-  detectInversions?: boolean,
-  chromaMethod?: ChordChromaMethod,
-): FunctionalChord[];
-export function chordFunctionalAnalysis(
-  samples: Float32Array | ChordFunctionalAnalysisRequest,
-  keyRoot?: ChordFunctionsKey['root'],
-  keyMode: ChordFunctionsKey['mode'] = 0,
-  sampleRate = 22050,
-  minDurationOrOptions: number | ChordDetectionOptions = 0.3,
-  smoothingWindow = 2.0,
-  threshold = 0.5,
-  useTriadsOnly = true,
-  nFft = 2048,
-  hopLength = 512,
-  useBeatSync = true,
-  useHmm = true,
-  hmmBeamWidth = 24,
-  useKeyContext = false,
-  detectInversions = false,
-  chromaMethod: ChordChromaMethod = 'cqt',
-): FunctionalChord[] {
-  if (!(samples instanceof Float32Array)) {
-    requestObject('chordFunctionalAnalysis', samples);
-  }
-  const { p, fft, resolvedSampleRate } = resolveChordCall(
-    'chordFunctionalAnalysis',
-    samples,
-    sampleRate,
-    minDurationOrOptions,
-    smoothingWindow,
-    threshold,
-    useTriadsOnly,
-    nFft,
-    hopLength,
-    useBeatSync,
-    useHmm,
-    hmmBeamWidth,
-    useKeyContext,
-    keyRoot ?? 0,
-    keyMode,
-    detectInversions,
-    chromaMethod,
-  );
-  // Ahead of the key, because a first argument that is neither form reads as a
-  // request whose every field is absent, and the key would be blamed for it.
-  if (!(samples instanceof Float32Array) && !(samples.samples instanceof Float32Array)) {
-    throw new TypeError('chordFunctionalAnalysis: samples must be a Float32Array');
-  }
-  // The key travels beside the resolved parameters rather than inside them, so
-  // it is read once here and both checked and sent from the same const.
-  const resolvedKeyRoot = samples instanceof Float32Array ? keyRoot : samples.keyRoot;
-  const resolvedKeyMode = samples instanceof Float32Array ? keyMode : (samples.keyMode ?? 0);
-  if (resolvedKeyRoot === undefined || resolvedKeyRoot === null) {
+export function chordFunctionalAnalysis(...args: unknown[]): FunctionalChord[] {
+  const request = audioCall<ChordFunctionalAnalysisRequest>('chordFunctionalAnalysis', args);
+  if (request.keyRoot === undefined || request.keyRoot === null) {
     throw new TypeError('chordFunctionalAnalysis: keyRoot is required');
   }
-  const analysed: {
-    chords: Chord[];
-    roman: string[];
-    functions: ChordFunction[];
-  } = addon.chordFunctionalAnalysis(
-    samples instanceof Float32Array ? samples : samples.samples,
-    resolvedKeyRoot,
-    resolvedKeyMode,
-    resolvedSampleRate,
-    p.minDuration,
-    p.smoothingWindow,
-    p.threshold,
-    p.useTriadsOnly,
-    fft.nFft,
-    fft.hopLength,
-    p.useBeatSync,
-    p.useHmm,
-    p.hmmBeamWidth,
-    p.useKeyContext,
-    p.detectInversions,
-    chordChromaMethodValue(p.chromaMethod),
-    p.tuning === 'auto' ? 0 : p.tuning,
-    p.tuning === 'auto',
-  );
+  const p = resolveChordParams('chordFunctionalAnalysis', request);
+  const analysed: { chords: Native[]; roman: string[]; functions: ChordFunction[] } =
+    addon.chordFunctionalAnalysis(
+      request.samples,
+      p.keyRoot,
+      p.keyMode,
+      request.sampleRate,
+      p.minDuration,
+      p.smoothingWindow,
+      p.threshold,
+      p.useTriadsOnly,
+      p.nFft,
+      p.hopLength,
+      p.useBeatSync,
+      p.useHmm,
+      p.hmmBeamWidth,
+      p.useKeyContext,
+      p.detectInversions,
+      p.chromaMethod,
+      p.tuning,
+      p.tuningAuto,
+    );
   return analysed.chords.map((chord, i) => ({
-    ...chord,
-    roman: analysed.roman[i],
+    ...chordFromNative(chord),
+    romanNumeral: analysed.roman[i],
     function: analysed.functions[i],
   }));
 }
@@ -1310,41 +1318,45 @@ export function chordFunctionalAnalysis(
  * `chords` is {@link detectChords}' result or its `chords` array, or the same
  * shape built by hand (only `root` and `quality` are read). `key` is
  * `{ root, mode }`, e.g. {@link detectKey}'s result. Returns the same timed
- * entries with `roman` (`'I'`, `'V7'`, `'vi'`; `'N.C.'` for an unknown chord)
- * and `function` (`'tonic'`, `'subdominant'`, `'dominant'`, `'chromatic'` for a
- * root outside the key's scale, `'none'` for an unknown chord) added. Every mode
- * other than minor reads the major scale.
+ * entries with `romanNumeral` (`'I'`, `'V7'`, `'vi'`; `'N.C.'` for an unknown
+ * chord) and `function` (`'tonic'`, `'subdominant'`, `'dominant'`, `'chromatic'`
+ * for a root outside the key's scale, `'none'` for an unknown chord) added. Every
+ * mode other than minor reads the major scale.
+ *
+ * @throws TypeError when a root is not a number or a quality or mode is not a
+ *   string; RangeError for a pitch class outside 0-11 or an unknown token.
  */
-export function chordFunctions(request: ChordFunctionsRequest): FunctionalChord[];
-export function chordFunctions<T extends ChordFunctionsInput>(
+export function chordFunctions<T extends ChordFunctionsInput = Chord>(
   request: ChordFunctionsRequest<T>,
-): FunctionalChord<T>[];
-export function chordFunctions(
-  request: ChordFunctionsRequest<ChordFunctionsInput>,
-): FunctionalChord<ChordFunctionsInput>[] {
-  requestObject('chordFunctions', request, 'request', true);
-  const entries = 'chords' in request.chords ? request.chords.chords : request.chords;
+): FunctionalChord<T>[] {
+  const { chords, key } = requestOnly<ChordFunctionsRequest<T>>('chordFunctions', [request]);
+  if (typeof key !== 'object' || key === null) {
+    throw new TypeError('chordFunctions: key must be an object');
+  }
+  assertPitchClass('chordFunctions', key.root, 'key.root');
+  assertClosedToken('chordFunctions', key.mode, KEY_MODES, 'key.mode');
+  if (typeof chords !== 'object' || chords === null) {
+    throw new TypeError('chordFunctions: chords must be an array or a chord analysis result');
+  }
+  const entries = 'chords' in chords ? chords.chords : chords;
+  if (!Array.isArray(entries)) {
+    throw new TypeError('chordFunctions: chords must be an array');
+  }
+  entries.forEach((chord, i) => {
+    if (typeof chord !== 'object' || chord === null) {
+      throw new TypeError(`chordFunctions: chords[${i}] must be an object`);
+    }
+    assertPitchClass('chordFunctions', chord.root, `chords[${i}].root`);
+    assertClosedToken('chordFunctions', chord.quality, CHORD_QUALITIES, `chords[${i}].quality`);
+  });
   const labels: { roman: string[]; functions: ChordFunction[] } = addon.chordFunctions(
     entries,
-    request.key.root,
-    request.key.mode,
+    key.root,
+    key.mode,
   );
   return entries.map((chord, i) => ({
     ...chord,
-    roman: labels.roman[i],
+    romanNumeral: labels.roman[i],
     function: labels.functions[i],
   }));
-}
-
-function chordChromaMethodValue(method: ChordChromaMethod): number {
-  if (method === 'stft') {
-    return 0;
-  }
-  if (method === 'nnls') {
-    return 1;
-  }
-  if (method === 'cqt') {
-    return 2;
-  }
-  throw new RangeError(`Invalid chord chroma method: ${method}`);
 }

@@ -3,9 +3,19 @@ import { chirp, clicks, tone } from '../src/index.js';
 
 describe('synthetic audio generation', () => {
   it('generates tone, chirp, and clicks', () => {
-    expect(tone(440, 22050, 0.01)).toHaveLength(220);
-    expect(chirp(200, 800, 22050, 0.01)).toHaveLength(220);
-    expect(clicks(new Float32Array([0]), 22050, 32, 1000, 0.01)).toHaveLength(32);
+    expect(tone({ frequencyHz: 440, sampleRate: 22050, durationSec: 0.01 })).toHaveLength(220);
+    expect(chirp({ fminHz: 200, fmaxHz: 800, sampleRate: 22050, durationSec: 0.01 })).toHaveLength(
+      220,
+    );
+    expect(
+      clicks({
+        times: new Float32Array([0]),
+        sampleRate: 22050,
+        length: 32,
+        frequencyHz: 1000,
+        clickDurationSec: 0.01,
+      }),
+    ).toHaveLength(32);
   });
 
   /**
@@ -17,11 +27,21 @@ describe('synthetic audio generation', () => {
    */
   describe('a generator refuses a fractional rate without gaining a range', () => {
     const calls: Array<[string, (sampleRate: number) => Float32Array]> = [
-      ['tone', (sampleRate) => tone(440, sampleRate, 0.01)],
-      ['chirp', (sampleRate) => chirp(200, 800, sampleRate, 0.01)],
+      ['tone', (sampleRate) => tone({ frequencyHz: 440, sampleRate, durationSec: 0.01 })],
+      ['chirp', (sampleRate) => chirp({ fminHz: 200, fmaxHz: 800, sampleRate, durationSec: 0.01 })],
       // A longer click than the case above: 0.01 s rounds to nothing at 100 Hz,
       // and the core refuses that on its own geometry rather than on the rate.
-      ['clicks', (sampleRate) => clicks(new Float32Array([0]), sampleRate, 32, 1000, 0.1)],
+      [
+        'clicks',
+        (sampleRate) =>
+          clicks({
+            times: new Float32Array([0]),
+            sampleRate,
+            length: 32,
+            frequencyHz: 1000,
+            clickDurationSec: 0.1,
+          }),
+      ],
     ];
 
     for (const [name, call] of calls) {

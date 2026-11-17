@@ -8,7 +8,6 @@ import {
   analyzeRhythm,
   analyzeSections,
   analyzeTimbre,
-  analyzeWithProgress,
   capabilities,
   capabilityCatalog,
   chordFunctionalAnalysis,
@@ -74,7 +73,7 @@ function generateSine(freq: number, sr: number, duration: number): Float32Array 
 }
 
 const CHORD_PITCH_NAMES = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
-const CHORD_QUALITY_UNKNOWN = 9;
+const CHORD_QUALITY_UNKNOWN = 'unknown';
 
 describe('standalone functions', () => {
   it('version returns a string', () => {
@@ -172,22 +171,24 @@ describe('standalone functions', () => {
     expect(result).toHaveProperty('bpm');
     expect(result).toHaveProperty('key');
     expect(result).toHaveProperty('timeSignature');
-    expect(result).toHaveProperty('beatTimes');
     expect(result).toHaveProperty('beats');
-    expect(result.beatTimes).toBeInstanceOf(Float32Array);
+    expect(result).toHaveProperty('downbeats');
     expect(Array.isArray(result.beats)).toBe(true);
+    expect(Array.isArray(result.downbeats)).toBe(true);
   });
 
-  it('analyzeWithProgress reports progress and matches analyze shape', () => {
+  it('analyze with onProgress reports progress and matches the plain shape', () => {
     const samples = generateSine(220, SR, 2);
     const progress: number[] = [];
-    const result = analyzeWithProgress(samples, SR, (p, _stage) => {
-      progress.push(p);
+    const result = analyze(samples, SR, {
+      onProgress: (p, _stage) => {
+        progress.push(p);
+      },
     });
     expect(result).toHaveProperty('bpm');
     expect(result).toHaveProperty('key');
     expect(result).toHaveProperty('timeSignature');
-    expect(result.beatTimes).toBeInstanceOf(Float32Array);
+    expect(Array.isArray(result.beats)).toBe(true);
     expect(progress.length).toBeGreaterThan(0);
     for (const p of progress) {
       expect(p).toBeGreaterThanOrEqual(0);
@@ -195,20 +196,22 @@ describe('standalone functions', () => {
     }
   });
 
-  it('analyzeWithProgress ignores a progress callback false result', () => {
+  it('analyze ignores an onProgress false result', () => {
     const progress: number[] = [];
-    const result = analyzeWithProgress(generateSine(220, SR, 2), SR, (value) => {
-      progress.push(value);
-      return false;
+    const result = analyze(generateSine(220, SR, 2), SR, {
+      onProgress: (value) => {
+        progress.push(value);
+        return false;
+      },
     });
 
     expect(progress.some((value) => value > 0.5)).toBe(true);
-    expect(result.beatTimes).toBeInstanceOf(Float32Array);
+    expect(Array.isArray(result.beats)).toBe(true);
   });
 
-  it('analyzeWithProgress cancels through the request cancel callback', () => {
+  it('analyze cancels through the request cancel callback', () => {
     expect(() =>
-      analyzeWithProgress({
+      analyze({
         samples: generateSine(220, SR, 2),
         sampleRate: SR,
         cancel: () => true,
@@ -221,9 +224,9 @@ describe('standalone functions', () => {
     const sections = analyzeSections(samples, SR);
     expect(Array.isArray(sections)).toBe(true);
     for (const section of sections) {
-      expect(typeof section.type).toBe('number');
+      expect(typeof section.type).toBe('string');
       expect(typeof section.name).toBe('string');
-      expect(section.end).toBeGreaterThanOrEqual(section.start);
+      expect(section.endSec).toBeGreaterThanOrEqual(section.startSec);
     }
   });
 
@@ -231,47 +234,54 @@ describe('standalone functions', () => {
     const samples = generateSine(220, SR, 1);
     const melody = analyzeMelody(samples, SR);
     expect(Array.isArray(melody.points)).toBe(true);
-    expect(typeof melody.meanFrequency).toBe('number');
+    expect(typeof melody.meanFrequencyHz).toBe('number');
     expect(typeof melody.pitchStability).toBe('number');
     for (const point of melody.points) {
-      expect(typeof point.time).toBe('number');
-      expect(typeof point.frequency).toBe('number');
+      expect(typeof point.timeSec).toBe('number');
+      expect(typeof point.frequencyHz).toBe('number');
     }
   });
 
   it('cqt and vqt return magnitude matrices', () => {
     const samples = generateSine(220, SR, 1);
     const cqtResult = cqt(samples, SR);
-    expect(cqtResult.nBins).toBe(84);
-    expect(cqtResult.nFrames).toBeGreaterThan(0);
-    expect(cqtResult.magnitude.length).toBe(cqtResult.nBins * cqtResult.nFrames);
-    expect(cqtResult.frequencies.length).toBe(cqtResult.nBins);
+    expect(cqtResult.magnitude.rows).toBe(84);
+    expect(cqtResult.magnitude.cols).toBeGreaterThan(0);
+    expect(cqtResult.magnitude.data.length).toBe(
+      cqtResult.magnitude.rows * cqtResult.magnitude.cols,
+    );
+    expect(cqtResult.frequencies.length).toBe(cqtResult.magnitude.rows);
 
     const vqtResult = vqt(samples, SR);
-    expect(vqtResult.nBins).toBe(84);
-    expect(vqtResult.magnitude.length).toBe(vqtResult.nBins * vqtResult.nFrames);
-    expect(vqtResult.frequencies.length).toBe(vqtResult.nBins);
+    expect(vqtResult.magnitude.rows).toBe(84);
+    expect(vqtResult.magnitude.data.length).toBe(
+      vqtResult.magnitude.rows * vqtResult.magnitude.cols,
+    );
+    expect(vqtResult.frequencies.length).toBe(vqtResult.magnitude.rows);
   });
 
   it('pseudoCqt and hybridCqt return magnitude matrices', () => {
     const samples = generateSine(220, SR, 1);
-    for (const result of [
-      pseudoCqt(samples, SR, 512, 32.70319566257483, 24, 12),
-      hybridCqt(samples, SR, 512, 32.70319566257483, 24, 12),
-    ]) {
-      expect(result.nBins).toBe(24);
-      expect(result.nFrames).toBeGreaterThan(0);
-      expect(result.magnitude.length).toBe(result.nBins * result.nFrames);
-      expect(result.frequencies.length).toBe(result.nBins);
+    const cqtOptions = { hopLength: 512, fminHz: 32.70319566257483, nBins: 24, binsPerOctave: 12 };
+    for (const result of [pseudoCqt(samples, SR, cqtOptions), hybridCqt(samples, SR, cqtOptions)]) {
+      expect(result.magnitude.rows).toBe(24);
+      expect(result.magnitude.cols).toBeGreaterThan(0);
+      expect(result.magnitude.data.length).toBe(result.magnitude.rows * result.magnitude.cols);
+      expect(result.frequencies.length).toBe(result.magnitude.rows);
     }
   });
 
   it('onsetStrengthMulti returns a band matrix', () => {
     const samples = generateSine(440, SR, 1);
-    const result = onsetStrengthMulti(samples, SR, 2048, 512, 64, 4);
-    expect(result.nBands).toBe(4);
-    expect(result.nFrames).toBeGreaterThan(0);
-    expect(result.data.length).toBe(result.nBands * result.nFrames);
+    const result = onsetStrengthMulti(samples, SR, {
+      nFft: 2048,
+      hopLength: 512,
+      nMels: 64,
+      nBands: 4,
+    });
+    expect(result.rows).toBe(4);
+    expect(result.cols).toBeGreaterThan(0);
+    expect(result.data.length).toBe(result.rows * result.cols);
   });
 
   it('analysis primitives expose detailed BPM and rhythm data', () => {
@@ -315,7 +325,16 @@ describe('standalone functions', () => {
     expect(timbre.brightness).toBeLessThanOrEqual(1);
     expect(timbre.spectralCentroid).toBeInstanceOf(Float32Array);
 
-    const chords = detectChords(tone, SR, 0.3, 2.0, 0.5, false, 2048, 512, false);
+    const detectOptions = {
+      minDurationSec: 0.3,
+      smoothingWindowSec: 2.0,
+      threshold: 0.5,
+      useTriadsOnly: false,
+      nFft: 2048,
+      hopLength: 512,
+      useBeatSync: false,
+    };
+    const chords = detectChords(tone, SR, detectOptions);
     expect(Array.isArray(chords.chords)).toBe(true);
     // The per-chord assertions below say nothing on an empty progression, and
     // this input is a sustained triad, so it must detect at least one chord.
@@ -341,17 +360,21 @@ describe('standalone functions', () => {
 
     // Timed entries: one per detected chord, each carrying a numeral and a function,
     // and equal to detectChords followed by chordFunctions.
-    const romans = chordFunctionalAnalysis(tone, 0, 0, SR, 0.3, 2.0, 0.5, false, 2048, 512, false);
+    const romans = chordFunctionalAnalysis(tone, SR, {
+      ...detectOptions,
+      keyRoot: 0,
+      keyMode: 'major',
+    });
     expect(Array.isArray(romans)).toBe(true);
     expect(romans.length).toBe(chords.chords.length);
     for (const entry of romans) {
-      expect(entry.roman.length).toBeGreaterThan(0);
+      expect(entry.romanNumeral.length).toBeGreaterThan(0);
       expect(entry.function.length).toBeGreaterThan(0);
     }
-    expect(romans).toEqual(chordFunctions({ chords, key: { root: 0, mode: 0 } }));
+    expect(romans).toEqual(chordFunctions({ chords, key: { root: 0, mode: 'major' } }));
   });
 
-  it('detectChords options-object form matches the positional form', () => {
+  it('detectChords and chordFunctionalAnalysis give one answer in the positional and request forms', () => {
     const tone = new Float32Array(SR);
     for (let i = 0; i < tone.length; i++) {
       tone[i] =
@@ -360,58 +383,37 @@ describe('standalone functions', () => {
           Math.sin((2 * Math.PI * 329.63 * i) / SR) +
           Math.sin((2 * Math.PI * 392.0 * i) / SR));
     }
-
-    const positional = detectChords(tone, SR, 0.3, 2.0, 0.5, false, 2048, 512, false);
-    const optionForm = detectChords(tone, SR, {
-      minDuration: 0.3,
-      smoothingWindow: 2.0,
+    const options = {
+      minDurationSec: 0.3,
+      smoothingWindowSec: 2.0,
       threshold: 0.5,
       useTriadsOnly: false,
       nFft: 2048,
       hopLength: 512,
       useBeatSync: false,
-    });
-    expect(Array.isArray(optionForm.chords)).toBe(true);
-    expect(optionForm.chords.length).toBe(positional.chords.length);
+    };
+
+    const positional = detectChords(tone, SR, options);
+    const requestForm = detectChords({ samples: tone, sampleRate: SR, ...options });
+    expect(Array.isArray(requestForm.chords)).toBe(true);
+    expect(requestForm).toEqual(positional);
     if (positional.chords.length > 0) {
-      expect(optionForm.chords[0].root).toBe(positional.chords[0].root);
-      expect(optionForm.chords[0].quality).toBe(positional.chords[0].quality);
+      expect(requestForm.chords[0]?.root).toBe(positional.chords[0]?.root);
+      expect(requestForm.chords[0]?.quality).toBe(positional.chords[0]?.quality);
     }
 
-    // chordFunctionalAnalysis options form: key from the dedicated args, the
-    // detection knobs from the options object.
-    const romansPositional = chordFunctionalAnalysis(
-      tone,
-      0,
-      0,
-      SR,
-      0.3,
-      2.0,
-      0.5,
-      false,
-      2048,
-      512,
-      false,
-    );
-    const romansOptions = chordFunctionalAnalysis(tone, 0, 0, SR, {
-      minDuration: 0.3,
-      smoothingWindow: 2.0,
-      threshold: 0.5,
-      useTriadsOnly: false,
-      nFft: 2048,
-      hopLength: 512,
-      useBeatSync: false,
-    });
-    expect(Array.isArray(romansOptions)).toBe(true);
-    expect(romansOptions.length).toBe(romansPositional.length);
-    expect(romansOptions).toEqual(romansPositional);
+    const keyed = { ...options, keyRoot: 0 as const, keyMode: 'major' as const };
+    const romansPositional = chordFunctionalAnalysis(tone, SR, keyed);
+    const romansRequest = chordFunctionalAnalysis({ samples: tone, sampleRate: SR, ...keyed });
+    expect(Array.isArray(romansRequest)).toBe(true);
+    expect(romansRequest).toEqual(romansPositional);
   });
 
   it('detectChords threshold emits unknown for ambiguous input', () => {
     const silence = new Float32Array(4096);
     const common = {
-      minDuration: 0,
-      smoothingWindow: 0.01,
+      minDurationSec: 0,
+      smoothingWindowSec: 0.01,
       useTriadsOnly: true,
       nFft: 2048,
       hopLength: 512,
@@ -423,13 +425,13 @@ describe('standalone functions', () => {
     expect(low.chords[0]?.quality).not.toBe(CHORD_QUALITY_UNKNOWN);
     expect(high.chords).toHaveLength(1);
     expect(high.chords[0]?.quality).toBe(CHORD_QUALITY_UNKNOWN);
-    expect(high.chords[0]?.start).toBe(0);
-    expect(high.chords[0]?.end).toBeGreaterThan(0);
+    expect(high.chords[0]?.startSec).toBe(0);
+    expect(high.chords[0]?.endSec).toBeGreaterThan(0);
   });
 
   it('chordFunctionalAnalysis rejects non-Float32Array input', () => {
     expect(() =>
-      chordFunctionalAnalysis(new Float64Array(SR) as unknown as Float32Array, 0, 0, SR),
+      chordFunctionalAnalysis(new Float64Array(SR) as unknown as Float32Array, SR, { keyRoot: 0 }),
     ).toThrow(/Float32Array/);
   });
 
@@ -446,65 +448,113 @@ describe('standalone functions', () => {
   });
 
   it('exposes compatibility numeric and signal utilities', () => {
-    expect(framesToSamples(4, 512, 0)).toBe(2048);
-    expect(samplesToFrames(2048, 512, 0)).toBe(4);
+    expect(framesToSamples(4, 512)).toBe(2048);
+    expect(samplesToFrames(2048, 512)).toBe(4);
 
-    const powerDb = powerToDb(new Float32Array([1, 0.01]), 1, 1e-10, 80);
+    const powerDb = powerToDb({
+      values: new Float32Array([1, 0.01]),
+      ref: 1,
+      amin: 1e-10,
+      topDb: 80,
+    });
     expect(powerDb[0]).toBeCloseTo(0, 5);
     expect(powerDb[1]).toBeCloseTo(-20, 4);
-    expect(dbToPower(powerDb, 1)[1]).toBeCloseTo(0.01, 5);
+    expect(dbToPower({ values: powerDb, ref: 1 })[1]).toBeCloseTo(0.01, 5);
 
-    const ampDb = amplitudeToDb(new Float32Array([1, 0.5]), 1, 1e-5, 80);
+    const ampDb = amplitudeToDb({
+      values: new Float32Array([1, 0.5]),
+      ref: 1,
+      amin: 1e-5,
+      topDb: 80,
+    });
     expect(ampDb[0]).toBeCloseTo(0, 5);
-    expect(dbToAmplitude(ampDb, 1)[1]).toBeCloseTo(0.5, 5);
+    expect(dbToAmplitude({ values: ampDb, ref: 1 })[1]).toBeCloseTo(0.5, 5);
 
-    const emphasized = preemphasis(new Float32Array([1, 1, 1]), 0.5, 0);
+    const emphasized = preemphasis(new Float32Array([1, 1, 1]), SR, { coef: 0.5, zi: 0 });
     expect(Array.from(emphasized)).toEqual([1, 0.5, 0.5]);
-    const deemphasized = deemphasis(emphasized, 0.5, 0);
+    const deemphasized = deemphasis(emphasized, SR, { coef: 0.5, zi: 0 });
     expect(deemphasized[2]).toBeCloseTo(1, 5);
 
-    const framed = frameSignal(new Float32Array([1, 2, 3, 4]), 2, 1);
-    expect(framed.nFrames).toBe(3);
-    expect(Array.from(framed.frames)).toEqual([1, 2, 2, 3, 3, 4]);
-    expect(Array.from(fixLength(new Float32Array([1, 2]), 4, -1))).toEqual([1, 2, -1, -1]);
-    expect(() => padCenter(new Float32Array([1, 2]), -1)).toThrow(RangeError);
-    expect(() => fixLength(new Float32Array([1, 2]), -1)).toThrow(RangeError);
-    expect(Array.from(fixFrames(new Int32Array([2, 4]), 0, 5, true))).toEqual([0, 2, 4, 5]);
+    const framed = frameSignal(new Float32Array([1, 2, 3, 4]), SR, {
+      frameLength: 2,
+      hopLength: 1,
+    });
+    expect(framed.rows).toBe(2);
+    expect(framed.cols).toBe(3);
+    expect(Array.from(framed.data)).toEqual([1, 2, 2, 3, 3, 4]);
+    expect(
+      Array.from(fixLength({ values: new Float32Array([1, 2]), targetSize: 4, padValue: -1 })),
+    ).toEqual([1, 2, -1, -1]);
+    expect(() => padCenter({ values: new Float32Array([1, 2]), targetSize: -1 })).toThrow(
+      RangeError,
+    );
+    expect(() => fixLength({ values: new Float32Array([1, 2]), targetSize: -1 })).toThrow(
+      RangeError,
+    );
+    expect(
+      Array.from(fixFrames({ frames: new Int32Array([2, 4]), xMin: 0, xMax: 5, pad: true })),
+    ).toEqual([0, 2, 4, 5]);
     // Matches librosa.util.peak_pick exactly (index 0 is a peak under its
     // first-frame rule: x[0] >= max/mean of the leading window).
-    expect(Array.from(peakPick(new Float32Array([0, 1, 0, 2, 0]), 1, 1, 1, 1, 0, 0))).toEqual([
-      0, 1, 3,
-    ]);
+    expect(
+      Array.from(
+        peakPick({
+          values: new Float32Array([0, 1, 0, 2, 0]),
+          preMax: 1,
+          postMax: 1,
+          preAvg: 1,
+          postAvg: 1,
+          delta: 0,
+          wait: 0,
+        }),
+      ),
+    ).toEqual([0, 1, 3]);
 
-    const normalized = vectorNormalize(new Float32Array([3, 4]), 2, 1e-12);
+    const normalized = vectorNormalize({
+      values: new Float32Array([3, 4]),
+      norm: 'l2',
+      threshold: 1e-12,
+    });
     expect(normalized[0]).toBeCloseTo(0.6, 5);
     expect(normalized[1]).toBeCloseTo(0.8, 5);
   });
 
   it('exposes silence and rhythm compatibility utilities', () => {
     const samples = new Float32Array([0, 0, 1, 1, 0, 0]);
-    const trimmed = trimSilence(samples, 20, 2, 1);
+    const trimmed = trimSilence(samples, SR, { topDb: 20, frameLength: 2, hopLength: 1 });
     expect(trimmed.audio.length).toBeGreaterThan(0);
     expect(trimmed.startSample).toBeGreaterThanOrEqual(0);
     expect(trimmed.endSample).toBeGreaterThan(trimmed.startSample);
-    expect(splitSilence(samples, 20, 2, 1)).toBeInstanceOf(Int32Array);
+    expect(splitSilence(samples, SR, { topDb: 20, frameLength: 2, hopLength: 1 })).toBeInstanceOf(
+      Int32Array,
+    );
 
-    const pcenValues = pcen(new Float32Array([1, 2, 3, 4]), 2, 2);
-    expect(pcenValues).toBeInstanceOf(Float32Array);
-    expect(pcenValues.length).toBe(4);
+    const pcenValues = pcen({ values: { data: new Float32Array([1, 2, 3, 4]), rows: 2, cols: 2 } });
+    expect(pcenValues.data).toBeInstanceOf(Float32Array);
+    expect(pcenValues.data.length).toBe(4);
 
     const chromaValues = new Float32Array(12 * 2);
     chromaValues[0] = 1;
     chromaValues[12] = 1;
-    const tonnetzValues = tonnetz(chromaValues, 12, 2);
-    expect(tonnetzValues).toBeInstanceOf(Float32Array);
-    expect(tonnetzValues.length).toBe(12);
+    const tonnetzValues = tonnetz({ chromagram: { data: chromaValues, rows: 12, cols: 2 } });
+    expect(tonnetzValues.data).toBeInstanceOf(Float32Array);
+    expect(tonnetzValues.rows).toBe(6);
+    expect(tonnetzValues.data.length).toBe(12);
 
     const onset = new Float32Array([0, 1, 0, 1, 0, 1, 0, 1]);
-    const temp = tempogram(onset, SR, 512, 4);
+    const temp = tempogram({ onsetEnvelope: onset, sampleRate: SR, hopLength: 512, winLength: 4 });
     expect(temp.data).toBeInstanceOf(Float32Array);
-    expect(temp.winLength).toBe(4);
-    expect(plp(onset, SR, 512, 30, 300, 4)).toBeInstanceOf(Float32Array);
+    expect(temp.rows).toBe(4);
+    expect(
+      plp({
+        onsetEnvelope: onset,
+        sampleRate: SR,
+        hopLength: 512,
+        bpmMin: 30,
+        bpmMax: 300,
+        winLength: 4,
+      }),
+    ).toBeInstanceOf(Float32Array);
   });
 
   it('exposes pair and stereo mastering APIs', () => {
@@ -683,13 +733,13 @@ describe('chord entry shape', () => {
     'bass',
     'bassName',
     'confidence',
-    'duration',
-    'end',
+    'durationSec',
+    'endSec',
     'name',
     'quality',
     'root',
     'rootName',
-    'start',
+    'startSec',
   ];
 
   it('gives detectChords and analyze chords one ordinal + name shape for a C major triad', () => {
@@ -715,10 +765,10 @@ describe('chord entry shape', () => {
     for (const chord of [...detected, ...analysed]) {
       expect(typeof chord.root).toBe('number');
       expect(typeof chord.bass).toBe('number');
-      expect(typeof chord.quality).toBe('number');
+      expect(typeof chord.quality).toBe('string');
       expect(chord.rootName).toBe(CHORD_PITCH_NAMES[chord.root]);
       expect(chord.bassName).toBe(CHORD_PITCH_NAMES[chord.bass]);
-      expect(chord.duration).toBeCloseTo(chord.end - chord.start, 5);
+      expect(chord.durationSec).toBeCloseTo(chord.endSec - chord.startSec, 5);
     }
     const first = detected.find((chord) => chord.name !== 'N.C.');
     expect(first?.rootName).toBe('C');

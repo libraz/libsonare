@@ -84,7 +84,7 @@ describe('voice transformer presets and flat config', () => {
       changer.setConfig({
         ...pod,
         pitchCorrectionMode: 'auto',
-        pitchCorrectionScale: 'natural_minor',
+        pitchCorrectionScale: 'naturalMinor',
         pitchCorrectionKeyRoot: 9,
         harmonyVoices: 2,
         harmonyStep1: 2,
@@ -96,6 +96,7 @@ describe('voice transformer presets and flat config', () => {
       });
       const applied = JSON.parse(changer.configJson()).dsp;
       expect(applied.pitchCorrection.mode).toBe('auto');
+      // The serialized document keeps the core spelling of the scale.
       expect(applied.pitchCorrection.scale).toBe('natural_minor');
       expect(applied.pitchCorrection.keyRoot).toBe(9);
       expect(applied.harmony.voices).toBe(2);

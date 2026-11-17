@@ -99,16 +99,23 @@ describe('Audio class methods', () => {
       );
 
       const opts: KeyDetectionOptions = {
-        modes: 'major-minor',
+        modes: 'majorMinor',
         profile: 'temperley',
         genreHint: 'edm',
       };
-      const instanceKey = native.detectKey(opts) as { root: string; mode: string };
+      // The instance method sits under the facade, so it takes the native spellings.
+      const instanceKey = native.detectKey({ ...opts, modes: 'major-minor' }) as {
+        root: string;
+        mode: string;
+      };
       const standaloneKey = detectKey(samples, SR, opts);
       expect(instanceKey.root).toBe(standaloneKey.root);
       expect(instanceKey.mode).toBe(standaloneKey.mode);
 
-      const instanceCandidates = native.detectKeyCandidates(opts) as Array<{
+      const instanceCandidates = native.detectKeyCandidates({
+        ...opts,
+        modes: 'major-minor',
+      }) as Array<{
         key: { root: string };
       }>;
       const standaloneCandidates = detectKeyCandidates(samples, SR, opts);
@@ -121,12 +128,12 @@ describe('Audio class methods', () => {
     }
   });
 
-  it('analyze via class returns beat aliases and rich key', () => {
+  it('analyze via class returns beats and rich key', () => {
     const audio = Audio.fromBuffer(generateSine(440, SR, 1.0), SR);
     const result = audio.analyze();
     expect(Number.isInteger(result.key.root)).toBe(true);
     expect(result.key.name).toContain(result.key.mode);
-    expect(result.beats.length).toBe(result.beatTimes.length);
+    expect(Array.isArray(result.beats)).toBe(true);
     audio.destroy();
   });
 
@@ -150,8 +157,8 @@ describe('Audio class methods', () => {
     expect(
       Array.isArray(
         audio.detectChords({
-          minDuration: 0.3,
-          smoothingWindow: 2.0,
+          minDurationSec: 0.3,
+          smoothingWindowSec: 2.0,
           threshold: 0.5,
           useTriadsOnly: false,
           nFft: 2048,
@@ -166,22 +173,22 @@ describe('Audio class methods', () => {
   it('stft works via class', () => {
     const audio = Audio.fromBuffer(generateSine(440, SR, 1.0), SR);
     const result = audio.stft();
-    expect(result.nBins).toBe(1025);
-    expect(result.magnitude).toBeInstanceOf(Float32Array);
+    expect(result.magnitude.rows).toBe(1025);
+    expect(result.magnitude.data).toBeInstanceOf(Float32Array);
     audio.destroy();
   });
 
   it('melSpectrogram works via class', () => {
     const audio = Audio.fromBuffer(generateSine(440, SR, 1.0), SR);
     const result = audio.melSpectrogram();
-    expect(result.nMels).toBe(128);
+    expect(result.power.rows).toBe(128);
     audio.destroy();
   });
 
   it('chroma works via class', () => {
     const audio = Audio.fromBuffer(generateSine(440, SR, 1.0), SR);
     const result = audio.chroma();
-    expect(result.nChroma).toBe(12);
+    expect(result.features.rows).toBe(12);
     audio.destroy();
   });
 

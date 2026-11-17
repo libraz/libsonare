@@ -27,7 +27,6 @@ import type {
   CapabilityCatalogChainList,
   CapabilityCatalogChainStage,
   CapabilityCatalogPresets,
-  DynamicsAnalysisResult,
   DynamicsProcessorResult,
   DynamicsResult,
   MasteringInsertParamInfo,
@@ -55,7 +54,7 @@ const dynamicsResult = {
   peakDb: 0,
   rmsDb: 0,
   crestFactor: 0,
-  loudnessRangeDb: 0,
+  loudnessRangeLu: 0,
   isCompressed: false,
   loudnessTimes: new Float32Array(0),
   loudnessRmsDb: new Float32Array(0),
@@ -81,16 +80,6 @@ describe('shared public type shapes', () => {
     const analysis = new Set(shapes.types.DynamicsResult);
     const overlap = shapes.types.DynamicsProcessorResult.filter((key) => analysis.has(key));
     expect(overlap).toEqual([]);
-  });
-
-  it('DynamicsAnalysisResult remains an alias of DynamicsResult', () => {
-    expect(shapes.aliases.DynamicsAnalysisResult).toBe('DynamicsResult');
-    // Assignable in both directions, which an alias is and a separate
-    // interface of the same shape would also be — the corpus entry above is
-    // what pins it to being the same name in both packages.
-    const asAlias: DynamicsAnalysisResult = dynamicsResult;
-    const asCanonical: DynamicsResult = asAlias;
-    expect(asCanonical.isCompressed).toBe(false);
   });
 });
 

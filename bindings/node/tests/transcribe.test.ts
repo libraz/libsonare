@@ -113,9 +113,15 @@ describe('transcribe', () => {
     const detected = transcribe({ samples: audio, sampleRate: SR }).tempoBpm;
     expect(Number.isFinite(detected)).toBe(true);
     expect(detected).toBeGreaterThan(0);
-    // A tempo <= 0 is the documented "detect it", so it must land on the same
-    // answer omitting the field does rather than on a zero-tempo grid.
-    expect(transcribe({ samples: audio, sampleRate: SR, tempoBpm: 0 }).tempoBpm).toBe(detected);
+    // A written tempo <= 0 is refused; omitting the field is how to ask for detection.
+    for (const tempoBpm of [0, -1]) {
+      expect(() => transcribe({ samples: audio, sampleRate: SR, tempoBpm })).toThrow(
+        expect.objectContaining({
+          name: 'RangeError',
+          message: 'transcribe: tempoBpm must be positive',
+        }),
+      );
+    }
   });
 
   it('scales the ppq grid with the supplied tempo', () => {
@@ -227,8 +233,8 @@ describe('transcribe', () => {
       samples: lowNote,
       sampleRate: SR,
       polyphonic: true,
-      fmin: 55,
-      fmax: 1760,
+      f0MinHz: 55,
+      f0MaxHz: 1760,
       tempoBpm: 120,
     });
     expect(polyphonic).toEqual(explicitPolyphonic);
@@ -238,16 +244,17 @@ describe('transcribe', () => {
     // Mono uses its 2093 Hz upper default, so this is a valid high lower bound
     // even though the fixture contains no note in that range. Polyphonic uses
     // the salience tracker's 1760 Hz upper default and must refuse the same
-    // partial request after resolving it.
+    // partial request after resolving it; the facade cannot see the resolved
+    // bound, so the refusal is the addon's.
     expect(() =>
-      transcribe({ samples: audio, sampleRate: SR, fmin: 1800, tempoBpm: 120 }),
+      transcribe({ samples: audio, sampleRate: SR, f0MinHz: 1800, tempoBpm: 120 }),
     ).not.toThrow();
     expect(() =>
       transcribe({
         samples: audio,
         sampleRate: SR,
         polyphonic: true,
-        fmin: 1800,
+        f0MinHz: 1800,
         tempoBpm: 120,
       }),
     ).toThrow(/^fmax must be above fmin$/);
@@ -263,8 +270,8 @@ describe('transcribe', () => {
 
     expect(zeroed({ velocityFloorDb: 0 })).toThrow(/velocityFloorDb must be negative/);
     expect(zeroed({ referenceHz: 0 })).toThrow(/referenceHz must be a positive number/);
-    expect(zeroed({ fmin: 0 })).toThrow(/fmin must be a positive number/);
-    expect(zeroed({ fmax: 0 })).toThrow(/fmax must be a positive number/);
+    expect(zeroed({ f0MinHz: 0 })).toThrow(/f0MinHz must be positive/);
+    expect(zeroed({ f0MaxHz: 0 })).toThrow(/f0MaxHz must be positive/);
     expect(zeroed({ minNoteMs: 0 })).toThrow(/minNoteMs must be a positive number/);
     expect(zeroed({ segmentationThresholdCents: 0 })).toThrow(
       /segmentationThresholdCents must be a positive number/,
@@ -319,21 +326,23 @@ describe('transcribe', () => {
       /fixedVelocity must be an integer in \[1, 127\]/,
     );
     expect(() => transcribe({ samples: audio, sampleRate: SR, velocityFloorDb: 6 })).toThrow();
-    expect(() => transcribe({ samples: audio, sampleRate: SR, fmin: 2000, fmax: 100 })).toThrow();
+    expect(() =>
+      transcribe({ samples: audio, sampleRate: SR, f0MinHz: 2000, f0MaxHz: 100 }),
+    ).toThrow();
     expect(() => transcribe({ samples: audio, sampleRate: SR, group: 16 })).toThrow();
     expect(() => transcribe({ samples: audio, sampleRate: SR, channel: 16 })).toThrow();
   });
 
   it('surfaces the C ABI’s own field-naming refusals', () => {
-    // These three carry no addon-side guard on purpose — one rule in one place.
+    // These carry no facade guard on purpose — one rule in one place.
     // The C ABI records which field it refused, and the addon's error path
     // prefers that recorded detail over the generic message for the code, so a
     // caller is told what to fix rather than "Invalid parameter". Pinned here
     // because nothing else fails if that preference is lost: the call still
     // throws, with the same code, carrying a message that names nothing.
-    expect(() => transcribe({ samples: audio, sampleRate: SR, fmin: 900, fmax: 200 })).toThrow(
-      /^fmax must be above fmin$/,
-    );
+    expect(() =>
+      transcribe({ samples: audio, sampleRate: SR, f0MinHz: 900, f0MaxHz: 200 }),
+    ).toThrow(/^transcribe: f0MaxHz must be above f0MinHz$/);
     expect(() => transcribe({ samples: audio, sampleRate: SR, group: 99 })).toThrow(
       /^group must be an integer in \[0, 15\]$/,
     );
@@ -345,10 +354,8 @@ describe('transcribe', () => {
     // be the previous call's. Fail something else first and check the answer
     // moved: without this, a slot that had stopped being written would still
     // read as correct for whichever failure ran before it.
+    expect(() => transcribe({ samples: audio, sampleRate: SR, channel: 99 })).toThrow(/^channel /);
     expect(() => transcribe({ samples: audio, sampleRate: SR, group: 99 })).toThrow(/^group /);
-    expect(() => transcribe({ samples: audio, sampleRate: SR, fmin: 900, fmax: 200 })).toThrow(
-      /^fmax must be above fmin$/,
-    );
     // ...and a success after a failure is still a success, i.e. the slot is not
     // consulted when there is nothing to report.
     expect(transcribe({ samples: audio, sampleRate: SR }).noteCount).toBeGreaterThan(0);
@@ -374,11 +381,11 @@ describe('transcribe', () => {
           return (error as Error).message;
         }
       };
-      const annotated = () => transcribe({ samples: audio, sampleRate: SR, fmin: 900, fmax: 200 });
+      const annotated = () => transcribe({ samples: audio, sampleRate: SR, channel: 99 });
       const unannotated = () =>
         project.transcribeToClip({ clipId: clipId + 5000, samples: audio, sampleRate: SR });
 
-      expect(detail(annotated)).toBe('fmax must be above fmin');
+      expect(detail(annotated)).toBe('channel must be an integer in [0, 15]');
       expect(detail(unannotated)).toBe('Invalid parameter');
       expect(detail(() => transcribe({ samples: audio, sampleRate: SR, group: 99 }))).toBe(
         'group must be an integer in [0, 15]',
@@ -388,7 +395,7 @@ describe('transcribe', () => {
       // Reversed, so the generic answer above cannot be "it is generic whatever
       // ran before it, including nothing".
       expect(detail(unannotated)).toBe('Invalid parameter');
-      expect(detail(annotated)).toBe('fmax must be above fmin');
+      expect(detail(annotated)).toBe('channel must be an integer in [0, 15]');
 
       // A success after a failure is still a success: the slot is not consulted
       // when there is nothing to report.
@@ -506,8 +513,18 @@ describe('Project.transcribeToClip', () => {
       // The C ABI's field-naming refusals reach this door too, not only the
       // free function's.
       expect(() =>
-        project.transcribeToClip({ clipId, samples: audio, sampleRate: SR, fmin: 900, fmax: 200 }),
-      ).toThrow(/^fmax must be above fmin$/);
+        project.transcribeToClip({ clipId, samples: audio, sampleRate: SR, group: 99 }),
+      ).toThrow(/^group must be an integer in \[0, 15\]$/);
+      // The facade checks the F0 bounds by their public names before the addon.
+      expect(() =>
+        project.transcribeToClip({
+          clipId,
+          samples: audio,
+          sampleRate: SR,
+          f0MinHz: 900,
+          f0MaxHz: 200,
+        }),
+      ).toThrow(/^Project\.transcribeToClip: f0MaxHz must be above f0MinHz$/);
     });
   });
 });
@@ -576,12 +593,12 @@ describe('transcribe polyphonic tuning', () => {
     expect(poly({ minRidgePeakRatio: 1 }).events).not.toEqual(base.events);
   });
 
-  it('reattackRatio 0 stops splitting a re-struck tone', () => {
+  it('an absent reattackRatio does not split a re-struck tone, a given one does', () => {
     const tone = restruck();
     const run = (extra: Record<string, number> = {}) =>
       transcribe({ samples: tone, sampleRate: SR, tempoBpm: 120, polyphonic: true, ...extra });
-    const split = run();
-    const whole = run({ reattackRatio: 0 });
+    const whole = run();
+    const split = run({ reattackRatio: 1.5 });
     expect(split.noteCount).toBeGreaterThan(whole.noteCount);
     expect(whole.noteCount).toBe(1);
   });
@@ -600,9 +617,9 @@ describe('transcribe polyphonic tuning', () => {
     expect(bad({ minFramePeakRatio: 1.5 })).toThrow(/minFramePeakRatio must be a number/);
     expect(bad({ minRidgePeakRatio: -1 })).toThrow(/minRidgePeakRatio must be a number/);
     expect(bad({ minRidgePeakRatio: 2 })).toThrow(/minRidgePeakRatio must be a number/);
-    expect(bad({ reattackRatio: 1 })).toThrow(/reattackRatio must be 0/);
-    expect(bad({ reattackRatio: 0.5 })).toThrow(/reattackRatio must be 0/);
-    expect(bad({ reattackRatio: -1 })).toThrow(/reattackRatio must be 0/);
+    expect(bad({ reattackRatio: 1 })).toThrow(/reattackRatio must be greater than 1/);
+    expect(bad({ reattackRatio: 0.5 })).toThrow(/reattackRatio must be greater than 1/);
+    expect(bad({ reattackRatio: -1 })).toThrow(/reattackRatio must be greater than 1/);
   });
 
   it('surfaces the C refusal of a polyphonic field on the monophonic tracker', () => {

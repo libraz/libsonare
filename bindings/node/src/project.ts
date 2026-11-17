@@ -8,6 +8,7 @@ import {
   programArg,
 } from './internal/ump_events.js';
 import { addon } from './native.js';
+import { nativeTranscribeRequest } from './transcribe.js';
 import type {
   BuiltinInstrumentConfig,
   ExternalInstrument,
@@ -1451,7 +1452,9 @@ export class Project {
   transcribeToClip(request: ProjectTranscribeRequest): number {
     assertSamples('Project.transcribeToClip', request.samples, true);
     assertSampleRate('Project.transcribeToClip', request.sampleRate);
-    return this.native.transcribeToClip(request);
+    return this.native.transcribeToClip(
+      nativeTranscribeRequest('Project.transcribeToClip', request),
+    );
   }
 
   // -- MIR --

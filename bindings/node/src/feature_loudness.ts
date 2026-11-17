@@ -1,11 +1,43 @@
-import type { FeatureSamplesRequest } from './feature_spectral.js';
 import { addon } from './native.js';
 import type { LufsResult, LufsSeriesResult } from './types.js';
-import type { ValidateOptions } from './validation.js';
-import { assertAudioInput, optionsBag, requestObject } from './validation.js';
+import { assertAudioInput, requestObject, sampleOneShot } from './validation.js';
 
-/** Input for LUFS feature functions, including optional input validation control. */
-export interface LufsRequest extends FeatureSamplesRequest, ValidateOptions {}
+// Native names the loudness range `loudnessRange`; the public field carries its unit.
+function toLufsResult(
+  native: Omit<LufsResult, 'loudnessRangeLu'> & { loudnessRange: number },
+): LufsResult {
+  const { loudnessRange, ...rest } = native;
+  return { ...rest, loudnessRangeLu: loudnessRange };
+}
+
+/** Request for {@link lufs}. `validate: false` skips the NaN/Inf pre-scan. */
+export interface LufsRequest {
+  samples: Float32Array;
+  sampleRate: number;
+  validate?: boolean;
+}
+
+/** Request for {@link momentaryLufs}. */
+export type MomentaryLufsRequest = LufsRequest;
+
+/** Request for {@link shortTermLufs}. */
+export type ShortTermLufsRequest = LufsRequest;
+
+/** Request for {@link lufsInterleaved} and {@link lufsSeriesInterleaved}. */
+export interface LufsInterleavedRequest {
+  /** Interleaved `frames * channels` samples. */
+  samples: Float32Array;
+  channels: number;
+  /** Default 22050; pass the buffer's actual rate. */
+  sampleRate?: number;
+}
+
+/** Request for {@link ebur128LoudnessRange}. */
+export interface Ebur128LoudnessRangeRequest {
+  samples: Float32Array;
+  /** Default 22050; pass the buffer's actual rate. */
+  sampleRate?: number;
+}
 
 /**
  * Channel-weighted multichannel loudness + LRA (BS.1770 / EBU R128) from an
@@ -16,14 +48,14 @@ export interface LufsRequest extends FeatureSamplesRequest, ValidateOptions {}
  * audio, and K-weighting is sample-rate dependent, so a wrong rate yields wrong
  * loudness.
  */
-export function lufsInterleaved(request: FeatureSamplesRequest & { channels: number }): LufsResult;
+export function lufsInterleaved(request: LufsInterleavedRequest): LufsResult;
 export function lufsInterleaved(
   samples: Float32Array,
   channels: number,
   sampleRate?: number,
 ): LufsResult;
 export function lufsInterleaved(
-  samples: Float32Array | (FeatureSamplesRequest & { channels: number }),
+  samples: Float32Array | LufsInterleavedRequest,
   channels = 0,
   sampleRate = 22050,
 ): LufsResult {
@@ -33,7 +65,7 @@ export function lufsInterleaved(
       : requestObject('lufsInterleaved', samples);
   const resolvedSampleRate = request.sampleRate ?? 22050;
   assertAudioInput('lufsInterleaved', request.samples, resolvedSampleRate, request);
-  return addon.lufsInterleaved(request.samples, request.channels, resolvedSampleRate);
+  return toLufsResult(addon.lufsInterleaved(request.samples, request.channels, resolvedSampleRate));
 }
 
 /**
@@ -61,16 +93,14 @@ export function lufsInterleaved(
  * });
  * ```
  */
-export function lufsSeriesInterleaved(
-  request: FeatureSamplesRequest & { channels: number },
-): LufsSeriesResult;
+export function lufsSeriesInterleaved(request: LufsInterleavedRequest): LufsSeriesResult;
 export function lufsSeriesInterleaved(
   samples: Float32Array,
   channels: number,
   sampleRate?: number,
 ): LufsSeriesResult;
 export function lufsSeriesInterleaved(
-  samples: Float32Array | (FeatureSamplesRequest & { channels: number }),
+  samples: Float32Array | LufsInterleavedRequest,
   channels = 0,
   sampleRate = 22050,
 ): LufsSeriesResult {
@@ -88,10 +118,10 @@ export function lufsSeriesInterleaved(
  * actual `sampleRate`: the default (22050) is non-standard and K-weighting is
  * sample-rate dependent.
  */
-export function ebur128LoudnessRange(request: FeatureSamplesRequest): number;
+export function ebur128LoudnessRange(request: Ebur128LoudnessRangeRequest): number;
 export function ebur128LoudnessRange(samples: Float32Array, sampleRate?: number): number;
 export function ebur128LoudnessRange(
-  samples: Float32Array | FeatureSamplesRequest,
+  samples: Float32Array | Ebur128LoudnessRangeRequest,
   sampleRate = 22050,
 ): number {
   const request =
@@ -105,73 +135,43 @@ export function ebur128LoudnessRange(
 
 /**
  * Integrated/momentary/short-term LUFS + loudness range. Pass the buffer's
- * actual `sampleRate`: the default (22050) is non-standard for audio, and
- * K-weighting is sample-rate dependent, so a wrong rate yields wrong loudness.
+ * actual `sampleRate`: K-weighting is sample-rate dependent, so a wrong rate
+ * yields wrong loudness.
  */
 export function lufs(request: LufsRequest): LufsResult;
 export function lufs(
   samples: Float32Array,
-  sampleRate?: number,
-  options?: ValidateOptions,
+  sampleRate: number,
+  options?: Omit<LufsRequest, 'samples' | 'sampleRate'>,
 ): LufsResult;
-export function lufs(
-  samples: Float32Array | LufsRequest,
-  sampleRate = 22050,
-  options: ValidateOptions = {},
-): LufsResult {
-  const request =
-    samples instanceof Float32Array
-      ? { samples, sampleRate, ...optionsBag('lufs', options) }
-      : requestObject('lufs', samples);
-  const resolvedSampleRate = request.sampleRate ?? 22050;
-  assertAudioInput('lufs', request.samples, resolvedSampleRate, request);
-  return addon.lufs(request.samples, resolvedSampleRate);
+export function lufs(...args: unknown[]): LufsResult {
+  const request = sampleOneShot<LufsRequest>('lufs', args);
+  assertAudioInput('lufs', request.samples, request.sampleRate, request);
+  return toLufsResult(addon.lufs(request.samples, request.sampleRate));
 }
 
-/**
- * Per-block momentary LUFS series. Pass the buffer's actual `sampleRate`: the
- * default (22050) is non-standard and K-weighting is sample-rate dependent.
- */
-export function momentaryLufs(request: LufsRequest): Float32Array;
+/** Per-block momentary (400 ms) LUFS series. Pass the buffer's actual `sampleRate`. */
+export function momentaryLufs(request: MomentaryLufsRequest): Float32Array;
 export function momentaryLufs(
   samples: Float32Array,
-  sampleRate?: number,
-  options?: ValidateOptions,
+  sampleRate: number,
+  options?: Omit<MomentaryLufsRequest, 'samples' | 'sampleRate'>,
 ): Float32Array;
-export function momentaryLufs(
-  samples: Float32Array | LufsRequest,
-  sampleRate = 22050,
-  options: ValidateOptions = {},
-): Float32Array {
-  const request =
-    samples instanceof Float32Array
-      ? { samples, sampleRate, ...optionsBag('momentaryLufs', options) }
-      : requestObject('momentaryLufs', samples);
-  const resolvedSampleRate = request.sampleRate ?? 22050;
-  assertAudioInput('momentaryLufs', request.samples, resolvedSampleRate, request);
-  return addon.momentaryLufs(request.samples, resolvedSampleRate);
+export function momentaryLufs(...args: unknown[]): Float32Array {
+  const request = sampleOneShot<MomentaryLufsRequest>('momentaryLufs', args);
+  assertAudioInput('momentaryLufs', request.samples, request.sampleRate, request);
+  return addon.momentaryLufs(request.samples, request.sampleRate);
 }
 
-/**
- * Per-block short-term LUFS series. Pass the buffer's actual `sampleRate`: the
- * default (22050) is non-standard and K-weighting is sample-rate dependent.
- */
-export function shortTermLufs(request: LufsRequest): Float32Array;
+/** Per-block short-term (3 s) LUFS series. Pass the buffer's actual `sampleRate`. */
+export function shortTermLufs(request: ShortTermLufsRequest): Float32Array;
 export function shortTermLufs(
   samples: Float32Array,
-  sampleRate?: number,
-  options?: ValidateOptions,
+  sampleRate: number,
+  options?: Omit<ShortTermLufsRequest, 'samples' | 'sampleRate'>,
 ): Float32Array;
-export function shortTermLufs(
-  samples: Float32Array | LufsRequest,
-  sampleRate = 22050,
-  options: ValidateOptions = {},
-): Float32Array {
-  const request =
-    samples instanceof Float32Array
-      ? { samples, sampleRate, ...optionsBag('shortTermLufs', options) }
-      : requestObject('shortTermLufs', samples);
-  const resolvedSampleRate = request.sampleRate ?? 22050;
-  assertAudioInput('shortTermLufs', request.samples, resolvedSampleRate, request);
-  return addon.shortTermLufs(request.samples, resolvedSampleRate);
+export function shortTermLufs(...args: unknown[]): Float32Array {
+  const request = sampleOneShot<ShortTermLufsRequest>('shortTermLufs', args);
+  assertAudioInput('shortTermLufs', request.samples, request.sampleRate, request);
+  return addon.shortTermLufs(request.samples, request.sampleRate);
 }

@@ -42,10 +42,10 @@ function noteAt(onsetSample: number, offsetSample: number, medianHz: number): No
     edit: {
       timeOffsetSamples: 0,
       amplitudeEnvelope: new Float32Array(0),
-      pitchShiftSemitones: 0,
+      pitchSemitones: 0,
       gainDb: 0,
       timeStretchRatio: 1,
-      formantShiftSemitones: 0,
+      formantSemitones: 0,
       vibratoDepthChange: 0,
       driftChange: 0,
       muted: false,
@@ -62,7 +62,7 @@ function matchedAndStranded(): NoteObject[] {
   return [noteAt(0, HALF_SECOND, A4_HZ), noteAt(3 * HALF_SECOND, 4 * HALF_SECOND, A4_HZ)];
 }
 
-const shift = (note: NoteObject): number => Number(note.edit.pitchShiftSemitones.toFixed(4));
+const shift = (note: NoteObject): number => Number(note.edit.pitchSemitones.toFixed(4));
 
 it('keeps assigned note curves independent of the source notes', () => {
   const note = noteAt(0, HALF_SECOND, A4_HZ);
@@ -87,7 +87,7 @@ it('assigns sparse JavaScript notes without curves or an edit object', () => {
     targets: [target(0, 0.5, 60)],
   });
   expect(result.assignedCount).toBe(1);
-  expect(result.notes[0].edit.pitchShiftSemitones).toBeCloseTo(-9, 4);
+  expect(result.notes[0].edit.pitchSemitones).toBeCloseTo(-9, 4);
   expect(note).not.toHaveProperty('edit');
 });
 
@@ -168,12 +168,12 @@ describe('assignNoteTargets writes the shift its target asks for', () => {
 
   it("returns a new array and leaves the caller's own notes alone", () => {
     const notes = [noteAt(0, HALF_SECOND, A4_HZ)];
-    const before = notes[0].edit.pitchShiftSemitones;
+    const before = notes[0].edit.pitchSemitones;
     const result = assignNoteTargets({ notes, sampleRate: SR, targets: [target(0, 0.5, 72)] });
     expect(shift(result.notes[0])).toBeCloseTo(3, 4);
     expect(result.notes).not.toBe(notes);
     expect(result.notes[0]).not.toBe(notes[0]);
-    expect(notes[0].edit.pitchShiftSemitones).toBe(before);
+    expect(notes[0].edit.pitchSemitones).toBe(before);
   });
 
   it('assigns nothing, and refuses nothing, for an empty take or an empty reference', () => {

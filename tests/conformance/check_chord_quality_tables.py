@@ -184,11 +184,11 @@ ORDINAL_TABLES = (
     ),
     Table(
         "bindings/wasm/src/public_types_music.ts",
-        "ChordQuality",
-        "ts_object",
-        "pascal",
+        "CHORD_QUALITIES",
+        "ts_tuple",
+        "camel",
         "wasm",
-        "the exported constant a WASM caller compares an ordinal against",
+        "the exported token tuple a WASM caller decodes an ordinal through",
     ),
     Table(
         "bindings/wasm/src/sonare.js.d.ts",
@@ -232,25 +232,17 @@ ORDINAL_TABLES = (
     ),
     Table(
         "bindings/node/src/types_analysis.ts",
-        "ChordQuality",
-        "ts_object",
-        "pascal",
+        "CHORD_QUALITIES",
+        "ts_tuple",
+        "camel",
         "node",
-        "the exported constant a Node caller compares an ordinal against",
+        "the exported token tuple a Node caller decodes an ordinal through",
     ),
 )
 
 # Tables keyed on a name. Ordering carries nothing, but the set is a public
 # surface: a name missing here is a value the facade cannot represent.
 NAME_TABLES = (
-    Table(
-        "bindings/node/src/types_analysis.ts",
-        "ChordQualityName",
-        "ts_union",
-        "camel",
-        "node",
-        "the TypeScript type of a quality spelled as a name in a hand-built chord",
-    ),
     Table(
         "bindings/python/src/libsonare/_analysis_detection.py",
         "chord_quality_str",
@@ -345,7 +337,7 @@ SUFFIX_EXCEPTIONS: dict[tuple[str, int], SuffixException] = {
 FLOOR = {
     "qualities": 25,
     "ordinal_tables": 9,
-    "name_tables": 3,
+    "name_tables": 2,
     "suffix_tables": 4,
     "suffix_symbol_tables": 2,
 }
@@ -461,6 +453,18 @@ def ts_object(text: str, table: Table) -> tuple[int, dict[int, str]] | None:
     for name, value in re.findall(r"(\w+)\s*:\s*(?:\{\s*value\s*:\s*)?(-?\d+)", body):
         by_ordinal[int(value)] = name
     return line, by_ordinal
+
+
+def ts_tuple(text: str, table: Table) -> tuple[int, dict[int, str]] | None:
+    """``export const NAME = ['token', ...] as const;``, indexed by position."""
+    found = re.search(
+        rf"\bexport\s+const\s+{re.escape(table.symbol)}\s*=\s*\[(?P<body>[^\]]*)\]\s*as\s+const",
+        text,
+    )
+    if found is None:
+        return None
+    names = re.findall(r"'([^']+)'", found.group("body"))
+    return text[: found.start()].count("\n") + 1, dict(enumerate(names))
 
 
 def embind(text: str, table: Table) -> tuple[int, dict[str, str]] | None:
@@ -711,6 +715,8 @@ def locate(root: Path, table: Table, core: dict[int, str] | None, c_abi: dict[in
         result = c_enum(text, table)
     elif table.parser == "ts_object":
         result = ts_object(text, table)
+    elif table.parser == "ts_tuple":
+        result = ts_tuple(text, table)
     elif table.parser == "python_dict":
         found = python_dict(text, table)
         if found is None:

@@ -742,17 +742,17 @@ export interface TranscribeOptions {
    * polyphonic path applies it to the salience estimator's F0 axis while its
    * cent-spectrum bounds remain independent. When omitted, the monophonic
    * default is `65` and the polyphonic default is `55`. An explicit value must
-   * be finite and positive, and below {@link fmax}.
+   * be finite and positive, and below {@link f0MaxHz}.
    */
-  fmin?: number;
+  f0MinHz?: number;
   /**
    * High end of the F0 tracker's range, in Hz. Both paths use this bound; the
    * polyphonic path applies it to the salience estimator's F0 axis while its
    * cent-spectrum bounds remain independent. When omitted, the monophonic
    * default is `2093` and the polyphonic default is `1760`. An explicit value
-   * must be finite and above {@link fmin}.
+   * must be finite and above {@link f0MinHz}.
    */
-  fmax?: number;
+  f0MaxHz?: number;
   /**
    * Shortest span kept as a note, in milliseconds. Must be finite and
    * positive. Refused together with {@link minNoteDivision}. When neither is
@@ -813,8 +813,8 @@ export interface TranscribeOptions {
   minRidgePeakRatio?: number;
   /**
    * A re-strike whose level rises to this multiple of the preceding trough
-   * splits the note. Polyphonic only. Greater than `1`; `0` turns splitting off,
-   * and a value in `(0, 1]` or a negative one is refused. Default `2.0`.
+   * splits the note. Polyphonic only. Greater than `1`; an explicit `0`, a value
+   * in `(0, 1]` and a negative one are refused with a `RangeError`. Absent leaves the split off.
    */
   reattackRatio?: number;
   /**
@@ -839,9 +839,12 @@ export interface TranscribeRequest extends TranscribeOptions {
   samples: Float32Array;
   /** Sample rate of {@link samples}, in Hz. */
   sampleRate: number;
+  /** Set `false` to skip the NaN/Inf pre-scan of the samples. Default true. */
+  validate?: boolean;
   /**
-   * The tempo the PPQ grid is built on. Omit it — or pass a value `<= 0` — to
-   * have it detected from {@link samples}, which costs an onset/tempo pass.
+   * The tempo the PPQ grid is built on, in BPM. Omit it to have it detected
+   * from {@link samples}, which costs an onset/tempo pass. A value `<= 0` is a
+   * `RangeError`.
    * The one setting that reads it is {@link TranscribeOptions.minNoteDivision};
    * with a grid tempo that is not the music's, give `minNoteMs` instead.
    */

@@ -1,37 +1,15 @@
+import type { ChordQuality, Key, Matrix2D, PitchClass } from './types_analysis.js';
+
 /** Constant-Q / Variable-Q transform magnitude result. */
 export interface CqtResult {
-  /** Number of frequency bins. */
-  nBins: number;
-  /** Number of time frames. */
-  nFrames: number;
   /** Hop length in samples. */
   hopLength: number;
   /** Sample rate in Hz. */
   sampleRate: number;
-  /** Row-major `[nBins x nFrames]` magnitude matrix. */
-  magnitude: Float32Array;
-  /** Center frequency (Hz) of each of the `nBins` bins. */
+  /** Magnitude matrix: rows = CQT bins, cols = frames. */
+  magnitude: Matrix2D;
+  /** Center frequency (Hz) of each CQT bin (`magnitude.rows` entries). */
   frequencies: Float32Array;
-}
-
-/** Reconstructed STFT magnitude from a mel spectrogram (`melToStft`). */
-export interface InverseStftResult {
-  /** Number of STFT frequency bins (`nFft / 2 + 1`). */
-  nBins: number;
-  /** Number of time frames. */
-  nFrames: number;
-  /** Row-major `[nBins x nFrames]` magnitude matrix (not squared). */
-  magnitude: Float32Array;
-}
-
-/** Reconstructed mel spectrogram from MFCCs (`mfccToMel`). */
-export interface InverseMelResult {
-  /** Number of mel bands. */
-  nMels: number;
-  /** Number of time frames. */
-  nFrames: number;
-  /** Row-major `[nMels x nFrames]` mel power matrix. */
-  power: Float32Array;
 }
 
 /**
@@ -39,12 +17,13 @@ export interface InverseMelResult {
  *
  * Every count-valued field (`sampleRate`, `nFft`, `hopLength`, `nMels`,
  * `emitEveryNFrames`, `magnitudeDownsample`, `maxPendingFrames`,
- * `maxProgressionEntries`, `window`, `outputFormat`) must be an integer the
- * native type can hold; a fractional or out-of-range value is rejected rather
- * than truncated.
+ * `maxProgressionEntries`) must be an integer the native type can hold; a
+ * fractional or out-of-range value is rejected (`RangeError`) rather than
+ * truncated.
  */
-export interface StreamAnalyzerConfig {
-  sampleRate?: number;
+export interface StreamConfig {
+  /** Input rate in Hz. Required. */
+  sampleRate: number;
   /**
    * Analysis window as a duration, in samples at 44100 Hz. Below that rate the
    * window is rescaled to the analysis rate, never shorter than `hopLength`. The
@@ -54,16 +33,12 @@ export interface StreamAnalyzerConfig {
   nFft?: number;
   hopLength?: number;
   nMels?: number;
-  fmin?: number;
-  fmax?: number;
-  /** A4 tuning reference in Hz. Defaults to 440; must be within 220..880, the
-   *  same range `setTuningRefHz` accepts live. */
-  tuningRefHz?: number;
-  /** Compute the per-frame magnitude spectrum. Must be false (the default): no
-   *  read path on this surface returns magnitude frames, so enabling it would
-   *  only burn realtime CPU with no readable result. `true` is rejected, the
-   *  same way the C ABI, WASM and Python reject it. */
-  computeMagnitude?: boolean;
+  /** Lower mel band edge in Hz. */
+  fminHz?: number;
+  /** Upper mel band edge in Hz. Absent means the Nyquist; an explicit 0 is refused (`RangeError`). */
+  fmaxHz?: number;
+  /** A4 reference in Hz. Defaults to 440; must be within 220..880, the same range `setReferenceHz` accepts live. */
+  referenceHz?: number;
   computeMel?: boolean;
   computeChroma?: boolean;
   computeOnset?: boolean;
@@ -76,35 +51,34 @@ export interface StreamAnalyzerConfig {
   maxProgressionEntries?: number;
   keyUpdateIntervalSec?: number;
   bpmUpdateIntervalSec?: number;
-  /** Window type: 0 Hann, 1 Hamming, 2 Blackman, 3 Rectangular. */
-  window?: number;
-  /** @deprecated Must be 0 (Float32). Use readFramesU8/readFramesI16 explicitly. */
-  outputFormat?: number;
+  /** Analysis window. Default `'hann'`. */
+  window?: WindowType;
 }
 
-/** Structure-of-arrays frame buffer (`StreamAnalyzer.readFramesSoa`). */
-export interface StreamFramesSoa {
+/**
+ * Frames read from a {@link StreamAnalyzer} (`readFrames`). A feature array is
+ * absent when its feature was not computed.
+ */
+export interface StreamFrames {
   nFrames: number;
-  nMels: number;
-  /** Chroma stride: 12 when enabled, otherwise 0. */
-  nChroma: number;
-  /** MEL=1, CHROMA=2, ONSET=4, SPECTRAL=8. */
-  featureFlags: number;
-  timestamps: Float32Array;
+  /** Per-frame time in seconds. */
+  timestampsSec: Float32Array;
   /**
-   * Row-major `[nFrames * nMels]` mel spectrogram in LINEAR power (not dB) — the
-   * raw per-frame mel energies. The quantized read paths (`readFramesU8` /
+   * Mel spectrogram in LINEAR power (not dB), the raw per-frame mel energies:
+   * rows = mel bands, cols = frames. The quantized read paths (`readFramesU8` /
    * `readFramesI16`) convert to dB before packing, so their `mel` is dB-scaled.
    */
-  mel: Float32Array;
-  chroma: Float32Array;
-  onsetStrength: Float32Array;
-  rmsEnergy: Float32Array;
-  spectralCentroid: Float32Array;
-  spectralFlatness: Float32Array;
-  chordRoot: Int32Array;
-  chordQuality: Int32Array;
-  chordConfidence: Float32Array;
+  mel?: Matrix2D;
+  /** Chroma: rows = chroma bins, cols = frames. */
+  chroma?: Matrix2D;
+  onsetStrength?: Float32Array;
+  rmsEnergy?: Float32Array;
+  spectralCentroid?: Float32Array;
+  spectralFlatness?: Float32Array;
+  chordRoot?: Int32Array;
+  /** Chord quality ordinals; decode each through `CHORD_QUALITIES`. */
+  chordQuality?: Int32Array;
+  chordConfidence?: Float32Array;
 }
 
 /**
@@ -126,47 +100,48 @@ export interface StreamQuantizeConfig {
   centroidMax?: number;
 }
 
-/** Quantized (uint8) frame buffer (`StreamAnalyzer.readFramesU8`). */
+/** Quantized (uint8) frame buffer (`StreamAnalyzer.readFramesU8`); a feature array is absent when not computed. */
 export interface StreamFramesU8 {
   nFrames: number;
   nMels: number;
   nChroma: number;
-  /** MEL=1, CHROMA=2, ONSET=4, SPECTRAL=8. */
-  featureFlags: number;
-  timestamps: Float32Array;
-  /** Row-major `[nFrames * nMels]` mel in dB, quantized over `[melDbMin, melDbMax]`. */
-  mel: Uint8Array;
-  chroma: Uint8Array;
-  onsetStrength: Uint8Array;
-  rmsEnergy: Uint8Array;
-  spectralCentroid: Uint8Array;
-  spectralFlatness: Uint8Array;
+  /** Per-frame time in seconds. */
+  timestampsSec: Float32Array;
+  /** Band-major `[nMels x nFrames]` mel in dB, quantized over `[melDbMin, melDbMax]`. */
+  mel?: Uint8Array;
+  /** Band-major `[nChroma x nFrames]` chroma. */
+  chroma?: Uint8Array;
+  onsetStrength?: Uint8Array;
+  rmsEnergy?: Uint8Array;
+  spectralCentroid?: Uint8Array;
+  spectralFlatness?: Uint8Array;
 }
 
-/** Quantized (int16) frame buffer (`StreamAnalyzer.readFramesI16`). */
+/** Quantized (int16) frame buffer (`StreamAnalyzer.readFramesI16`); a feature array is absent when not computed. */
 export interface StreamFramesI16 {
   nFrames: number;
   nMels: number;
   nChroma: number;
-  /** MEL=1, CHROMA=2, ONSET=4, SPECTRAL=8. */
-  featureFlags: number;
-  timestamps: Float32Array;
-  /** Row-major `[nFrames * nMels]` mel in dB, quantized over `[melDbMin, melDbMax]`. */
-  mel: Int16Array;
-  chroma: Int16Array;
-  onsetStrength: Int16Array;
-  rmsEnergy: Int16Array;
-  spectralCentroid: Int16Array;
-  spectralFlatness: Int16Array;
+  /** Per-frame time in seconds. */
+  timestampsSec: Float32Array;
+  /** Band-major `[nMels x nFrames]` mel in dB, quantized over `[melDbMin, melDbMax]`. */
+  mel?: Int16Array;
+  /** Band-major `[nChroma x nFrames]` chroma. */
+  chroma?: Int16Array;
+  onsetStrength?: Int16Array;
+  rmsEnergy?: Int16Array;
+  spectralCentroid?: Int16Array;
+  spectralFlatness?: Int16Array;
 }
 
-/** A chord change in a progressive estimate (semitone root, quality ordinal). */
+/** A chord change in a progressive estimate. */
 export interface StreamChordChange {
-  root: number;
-  quality: number;
+  root: PitchClass;
+  quality: ChordQuality;
   /** Chord symbol (e.g. `C`, `C#m`, `N.C.`), spelled as the batch analysis spells it. */
   name: string;
-  startTime: number;
+  /** Start of the chord in seconds. */
+  startSec: number;
   confidence: number;
 }
 
@@ -179,17 +154,17 @@ export interface StreamBarChord {
    * index. In `votedPattern` it is the pattern position instead.
    */
   barIndex: number;
-  root: number;
-  quality: number;
+  root: PitchClass;
+  quality: ChordQuality;
   /** Chord symbol, spelled as the batch analysis spells it. */
   name: string;
   /**
-   * Start of the bar, on the same timeline as `StreamFrame.timestamp`
-   * (including a `sampleOffset` anchor). Consecutive bars are `barDuration`
-   * apart rather than snapped to the analysis frame grid. Unused in
-   * `votedPattern`.
+   * Start of the bar in seconds, on the same timeline as `timestampsSec`
+   * (including a `processWithOffset` anchor). Consecutive bars are
+   * `barDurationSec` apart rather than snapped to the analysis frame grid.
+   * Unused in `votedPattern`.
    */
-  startTime: number;
+  startSec: number;
   confidence: number;
 }
 
@@ -199,39 +174,37 @@ export interface StreamPatternScore {
   score: number;
 }
 
-/** Progressive (incremental) musical estimate from {@link StreamAnalyzer.stats}. */
+/**
+ * Progressive (incremental) musical estimate from {@link StreamAnalyzer.stats}.
+ * A field is absent until its quantity has been estimated.
+ */
 export interface StreamProgressiveEstimate {
-  bpm: number;
-  bpmConfidence: number;
+  bpm?: number;
+  bpmConfidence?: number;
   /**
    * Tempo candidates the most recent BPM estimate chose from; 0 until an
    * estimate has run. Same quantity as the batch analysis result's field of the
    * same name.
    */
   bpmCandidateCount: number;
-  key: number;
-  keyMinor: boolean;
-  keyConfidence: number;
-  /** Key name (e.g. `A minor`); `null` while no key is estimated. */
-  keyName: string | null;
-  /** Short key name (e.g. `Am`); `null` while no key is estimated. */
-  keyShortName: string | null;
-  chordRoot: number;
-  chordQuality: number;
-  /** Current chord symbol; `N.C.` while no chord is detected. */
-  chordName: string;
-  chordConfidence: number;
-  chordStartTime: number;
+  key?: Key;
+  /** The current chord; absent while no chord is detected. */
+  chord?: StreamChordChange;
   chordProgression: StreamChordChange[];
   barChordProgression: StreamBarChord[];
-  currentBar: number;
-  barDuration: number;
+  /** Current bar number; absent until a bar is detected. */
+  currentBar?: number;
+  /** Bar length in seconds; absent until a bar is detected. */
+  barDurationSec?: number;
   votedPattern: StreamBarChord[];
   patternLength: number;
-  detectedPatternName: string;
-  detectedPatternScore: number;
+  /** Absent when no pattern is detected. */
+  detectedPatternName?: string;
+  /** Absent when no pattern is detected. */
+  detectedPatternScore?: number;
   allPatternScores: StreamPatternScore[];
-  accumulatedSeconds: number;
+  /** Audio accumulated so far, in seconds. */
+  accumulatedSec: number;
   usedFrames: number;
   /**
    * True when the key or BPM was re-estimated since the previous stats
@@ -242,10 +215,10 @@ export interface StreamProgressiveEstimate {
 }
 
 /** Snapshot returned by {@link StreamAnalyzer.stats}. */
-export interface StreamAnalyzerStats {
+export interface StreamStats {
   totalFrames: number;
   totalSamples: number;
-  durationSeconds: number;
+  durationSec: number;
   pendingFrames: number;
   droppedOutputFrames: number;
   droppedChordProgressionEntries: number;
@@ -266,76 +239,67 @@ export interface StreamAnalyzerStats {
   estimate: StreamProgressiveEstimate;
 }
 
+/** Window shape for the streaming analyzer and spectral edits. */
+export type WindowType = 'hann' | 'hamming' | 'blackman' | 'rectangular';
+
 export interface StftResult {
-  nBins: number;
-  nFrames: number;
   nFft: number;
   hopLength: number;
   sampleRate: number;
-  magnitude: Float32Array;
-  power: Float32Array;
-}
-
-export interface StftDbResult {
-  nBins: number;
-  nFrames: number;
-  db: Float32Array;
+  /** Magnitude matrix: rows = `nFft / 2 + 1` bins, cols = frames. */
+  magnitude: Matrix2D;
+  /** Power matrix: rows = `nFft / 2 + 1` bins, cols = frames. */
+  power: Matrix2D;
 }
 
 /**
  * Mel spectrogram, with the parameters of the forward transform, so the result
- * alone is enough to invert it: `melToStft` and `melToAudio` take it as
- * `{ result }`.
+ * alone says how to invert it: pass `power` to `melToStft` or `melToAudio` with
+ * the same `sampleRate`, `nFft`, `fminHz`, `fmaxHz` and `htk`.
  */
 export interface MelSpectrogramResult {
-  nMels: number;
-  nFrames: number;
   sampleRate: number;
   hopLength: number;
   /** FFT size of the source STFT. */
   nFft: number;
   /** Lower Mel band edge in Hz as applied. */
-  fmin: number;
-  /** Upper Mel band edge in Hz as applied: the Nyquist when the request left it at 0. */
-  fmax: number;
+  fminHz: number;
+  /** Upper Mel band edge in Hz as applied: the Nyquist when the request left it out. */
+  fmaxHz: number;
   /** `true` for the HTK Mel formula, `false` for Slaney. */
   htk: boolean;
-  /** `true` when `power` holds dB values. A forward transform always reports `false`: `power` is linear power and `db` is its dB form. */
-  isDb: boolean;
-  power: Float32Array;
-  db: Float32Array;
+  /** Linear mel power: rows = mel bands, cols = frames. */
+  power: Matrix2D;
+  /** The dB form of `power`: rows = mel bands, cols = frames. */
+  db: Matrix2D;
 }
 
 /**
  * MFCCs, with the Mel parameters they were derived with and the lifter, so the
- * result alone is enough to invert it: `mfccToMel` and `mfccToAudio` take it as
- * `{ result }`.
+ * result alone says how to invert it: pass `coefficients` to `mfccToMel` or
+ * `mfccToAudio` with the same `nMels`, `lifter` and Mel parameters.
  */
 export interface MfccResult {
-  nMfcc: number;
-  nFrames: number;
   sampleRate: number;
   hopLength: number;
   nFft: number;
   /** Mel bands the coefficients were taken from. */
   nMels: number;
-  fmin: number;
-  /** Upper Mel band edge in Hz as applied: the Nyquist when the request left it at 0. */
-  fmax: number;
+  fminHz: number;
+  /** Upper Mel band edge in Hz as applied: the Nyquist when the request left it out. */
+  fmaxHz: number;
   htk: boolean;
-  /** Always `false`: the coefficients are a cepstrum, not a dB spectrogram. */
-  isDb: boolean;
   /** Cepstral lifter applied to the coefficients; 0 means none. */
   lifter: number;
-  coefficients: Float32Array;
+  /** Coefficients: rows = coefficients, cols = frames. */
+  coefficients: Matrix2D;
 }
 
 export interface ChromaResult {
-  nChroma: number;
-  nFrames: number;
   sampleRate: number;
   hopLength: number;
-  features: Float32Array;
+  /** Chromagram: rows = chroma bins, cols = frames. */
+  features: Matrix2D;
   meanEnergy: number[];
 }
 
@@ -367,27 +331,28 @@ export interface PitchResult {
 
 /** Per-bin pitch candidates and peak magnitudes from spectral piptrack. */
 export interface PiptrackResult {
-  nBins: number;
-  nFrames: number;
-  pitches: Float32Array;
-  magnitudes: Float32Array;
+  /** Pitch candidate (Hz) per bin: rows = FFT bins, cols = frames. */
+  pitches: Matrix2D;
+  /** Peak magnitude per bin: rows = FFT bins, cols = frames. */
+  magnitudes: Matrix2D;
 }
 
 /** Magnitude and reassigned time/frequency coordinates for each STFT bin. */
 export interface ReassignedSpectrogramResult {
-  nBins: number;
-  nFrames: number;
-  magnitude: Float32Array;
-  times: Float32Array;
-  frequencies: Float32Array;
+  /** Magnitude: rows = FFT bins, cols = frames. */
+  magnitude: Matrix2D;
+  /** Reassigned times (s): rows = FFT bins, cols = frames. */
+  times: Matrix2D;
+  /** Reassigned frequencies (Hz): rows = FFT bins, cols = frames. */
+  frequencies: Matrix2D;
 }
 
 /** One stable monophonic note region segmented from an F0 track. */
 export interface NoteSegment {
   frameStart: number;
   frameEnd: number;
-  startSeconds: number;
-  endSeconds: number;
+  startSec: number;
+  endSec: number;
   medianCents: number;
 }
 
@@ -440,6 +405,39 @@ export interface SilenceCommonReport {
   minSignalIntervals: number;
 }
 
+/** Result of {@link splitSilenceCommonWithReport}: the shared intervals and why they are the gaps. */
+export interface SplitSilenceCommonWithReportResult {
+  /** Flat `[start, end, ...]` sample pairs. */
+  intervals: Int32Array;
+  report: SilenceCommonReport;
+}
+
+/** Equalizer band type. */
+export type EqBandType =
+  | 'peak'
+  | 'lowShelf'
+  | 'highShelf'
+  | 'lowPass'
+  | 'highPass'
+  | 'bandPass'
+  | 'notch'
+  | 'tiltShelf'
+  | 'flatTilt'
+  | 'allPass';
+
+/** Biquad coefficient design mode. */
+export type EqCoeffMode = 'rbj' | 'vicanek';
+
+/** Per-band phase behaviour. */
+export type EqBandPhase = 'inherit' | 'zeroLatency' | 'naturalPhase' | 'linearPhase';
+
+/** Trimmed signal and its bounds, in samples of the input. */
+export interface TrimResult {
+  audio: Float32Array;
+  startSample: number;
+  endSample: number;
+}
+
 /** Phase processing mode for the streaming equalizer. */
 export type EqPhaseMode = 'zero' | 'natural' | 'linear';
 
@@ -453,29 +451,19 @@ export type EqPhaseMode = 'zero' | 'natural' | 'linear';
 export type EqStereoPlacement = 'Stereo' | 'Left' | 'Right' | 'Mid' | 'Side';
 
 export interface EqBandInput {
-  type?:
-    | 'Peak'
-    | 'LowShelf'
-    | 'HighShelf'
-    | 'LowPass'
-    | 'HighPass'
-    | 'BandPass'
-    | 'Notch'
-    | 'TiltShelf'
-    | 'FlatTilt'
-    | 'AllPass';
+  type?: EqBandType;
   frequencyHz?: number;
   gainDb?: number;
   /**
    * Resonance/slope. Ignored for a LowShelf/HighShelf band once `phase:
-   * 'NaturalPhase'` forces Vicanek coefficients (the Vicanek matched-Z shelf
+   * 'naturalPhase'` forces Vicanek coefficients (the Vicanek matched-Z shelf
    * design has no Q/S parameter) -- the value is still stored and read back
    * verbatim, so a reflected `q` on such a band does not describe the applied
-   * response. Set `coeffMode: 'Rbj'` for a Q-controllable shelf.
+   * response. Set `coeffMode: 'rbj'` for a Q-controllable shelf.
    */
   q?: number;
   enabled?: boolean;
-  coeffMode?: 'Rbj' | 'Vicanek';
+  coeffMode?: EqCoeffMode;
   /**
    * Slope in dB/octave. 6 selects a first-order section on a pass or shelf
    * band; a first-order shelf's frequency is its half-gain point and its `q`
@@ -484,10 +472,10 @@ export interface EqBandInput {
   slopeDbOct?: number;
   placement?: EqStereoPlacement;
   /**
-   * `'NaturalPhase'` forces `coeffMode: 'Vicanek'` for this band, which
+   * `'naturalPhase'` forces `coeffMode: 'vicanek'` for this band, which
    * ignores `q` for LowShelf/HighShelf (see `q`'s doc).
    */
-  phase?: 'Inherit' | 'ZeroLatency' | 'NaturalPhase' | 'LinearPhase';
+  phase?: EqBandPhase;
   soloed?: boolean;
   bypassed?: boolean;
   proportionalQ?: boolean;
@@ -507,8 +495,6 @@ export interface EqBandInput {
    * true look-ahead, and adds no latency to the audio path.
    */
   detectorDelayMs?: number;
-  /** Former (misleading) spelling of `detectorDelayMs`, still accepted; `detectorDelayMs` wins if both are set. */
-  lookaheadMs?: number;
   externalSidechain?: boolean;
   sidechainFreqHz?: number;
   sidechainQ?: number;
@@ -559,7 +545,8 @@ export interface LufsResult {
   maxMomentaryLufs: number;
   /** Maximum 3 s window (EBU R128 Max-S). */
   maxShortTermLufs: number;
-  loudnessRange: number;
+  /** Loudness range in LU. */
+  loudnessRangeLu: number;
 }
 
 /**
@@ -620,7 +607,7 @@ export interface SpectralEditOptions {
   /** Hop length; must satisfy `0 < hop <= nFft / 2`. Default 512. */
   hopLength?: number;
   /** Analysis/synthesis window. Default `'hann'`. */
-  window?: 'hann' | 'hamming' | 'blackman' | 'rectangular';
+  window?: WindowType;
   /** Neighbour frames each side used by `'heal'`. Default 2. */
   healRadiusFrames?: number;
 }

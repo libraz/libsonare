@@ -32,54 +32,90 @@ function tone(seconds: number, freq = 440): Float32Array {
 describe('mel band edges', () => {
   const samples = tone(0.25);
 
-  it('refuses a negative or non-finite fmin/fmax on melSpectrogram and mfcc', () => {
-    for (const [fmin, fmax] of [
+  it('refuses a negative or non-finite fminHz/fmaxHz on melSpectrogram and mfcc', () => {
+    for (const [fminHz, fmaxHz] of [
       [-1000, 0],
       [0, -1],
       [Number.NaN, 0],
       [0, Number.POSITIVE_INFINITY],
     ]) {
-      expectRefusal(() => melSpectrogram({ samples, sampleRate: SR, fmin, fmax }), RangeError);
-      expectRefusal(() => mfcc({ samples, sampleRate: SR, fmin, fmax }), RangeError);
+      expectRefusal(() => melSpectrogram({ samples, sampleRate: SR, fminHz, fmaxHz }), RangeError);
+      expectRefusal(() => mfcc({ samples, sampleRate: SR, fminHz, fmaxHz }), RangeError);
     }
   });
 
   it('keeps 0 as the default spelling of both edges', () => {
-    const mel = melSpectrogram({ samples, sampleRate: SR, fmin: 0, fmax: 0 });
-    expect(mel.fmin).toBe(0);
-    expect(mel.fmax).toBe(SR / 2);
-    expect(mfcc({ samples, sampleRate: SR, fmin: 0, fmax: 0 }).nFrames).toBeGreaterThan(0);
+    const mel = melSpectrogram({ samples, sampleRate: SR, fminHz: 0, fmaxHz: 0 });
+    expect(mel.fminHz).toBe(0);
+    expect(mel.fmaxHz).toBe(SR / 2);
+    expect(
+      mfcc({ samples, sampleRate: SR, fminHz: 0, fmaxHz: 0 }).coefficients.cols,
+    ).toBeGreaterThan(0);
   });
 });
 
 describe('inverse mel band edges', () => {
   const nMels = 16;
   const nFrames = 4;
-  const power = new Float32Array(nMels * nFrames).fill(1);
-  const coefficients = new Float32Array(13 * nFrames);
+  const power = { data: new Float32Array(nMels * nFrames).fill(1), rows: nMels, cols: nFrames };
+  const coefficients = { data: new Float32Array(13 * nFrames), rows: 13, cols: nFrames };
 
-  it('refuses a negative or non-finite fmin/fmax on every inverse entry', () => {
-    for (const [fmin, fmax] of [
+  it('refuses a negative or non-finite fminHz/fmaxHz on every inverse entry', () => {
+    for (const [fminHz, fmaxHz] of [
       [-1000, 0],
       [0, -1],
       [Number.NaN, 0],
       [0, Number.POSITIVE_INFINITY],
     ]) {
-      expectRefusal(() => melToStft(power, nMels, nFrames, SR, 512, fmin, fmax), RangeError);
       expectRefusal(
-        () => melToAudio(power, nMels, nFrames, SR, 512, 128, fmin, fmax, 1),
+        () => melToStft({ power, sampleRate: SR, nFft: 512, fminHz, fmaxHz }),
         RangeError,
       );
       expectRefusal(
-        () => mfccToAudio(coefficients, 13, nFrames, nMels, SR, 512, 128, fmin, fmax, 1),
+        () =>
+          melToAudio({
+            power,
+            sampleRate: SR,
+            nFft: 512,
+            hopLength: 128,
+            fminHz,
+            fmaxHz,
+            nIter: 1,
+          }),
+        RangeError,
+      );
+      expectRefusal(
+        () =>
+          mfccToAudio({
+            coefficients,
+            nMels,
+            sampleRate: SR,
+            nFft: 512,
+            hopLength: 128,
+            fminHz,
+            fmaxHz,
+            nIter: 1,
+          }),
         RangeError,
       );
     }
   });
 
   it('keeps 0 as the default spelling of both edges', () => {
-    expect(melToStft(power, nMels, nFrames, SR, 512, 0, 0).nFrames).toBe(nFrames);
-    expect(melToAudio(power, nMels, nFrames, SR, 512, 128, 0, 0, 1).length).toBeGreaterThan(0);
+    expect(melToStft({ power, sampleRate: SR, nFft: 512, fminHz: 0, fmaxHz: 0 }).cols).toBe(
+      nFrames,
+    );
+    expect(
+      melToAudio({
+        power,
+        sampleRate: SR,
+        nFft: 512,
+        hopLength: 128,
+        fminHz: 0,
+        fmaxHz: 0,
+        nIter: 1,
+      }).length,
+    ).toBeGreaterThan(0);
   });
 });
 

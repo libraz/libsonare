@@ -3,7 +3,7 @@
  * percussive decomposition produces, and the options that drive it.
  */
 
-import type { Key, ScaleName } from './types_analysis.js';
+import type { Key, KeyMode, PitchClass } from './types_analysis.js';
 
 /**
  * Per-frame voicing decision, one entry per `f0Hz` frame. A truthy or non-zero
@@ -31,7 +31,7 @@ export interface PitchCorrectOptions {
    * Scale degrees enabled: a 12-bit mask (bit `i` = semitone `i` above the root)
    * or a mode name, as {@link scaleMaskForMode} resolves it. Default C major.
    */
-  scaleModeMask?: number | ScaleName;
+  scaleModeMask?: number | KeyMode;
   /** Reference MIDI anchoring the scale grid. Default 69 (A4). */
   referenceMidi?: number;
   /** Correction strength in `[0, 1]`; 1 = full snap, 0 = bypass. Default 1. */
@@ -57,10 +57,9 @@ export interface PitchCorrectOptions {
 
 /** A key as {@link detectKey} reports it, which is what {@link autoTune} takes to name one. */
 export interface AutoTuneKey {
-  /** Pitch class name (`'C'`, `'C#'`, ...) or ordinal 0..11. */
-  root: string | number;
-  /** Mode name (a {@link ScaleName}) or ordinal 0..6. */
-  mode: string | number;
+  /** Pitch class of the tonic (C = 0). */
+  root: PitchClass;
+  mode: KeyMode;
 }
 
 /** Tuning knobs of {@link autoTune}. All fields are optional. */
@@ -152,7 +151,7 @@ export interface NoteEdit {
    */
   amplitudeEnvelope: Float32Array;
   /** Transpose applied to the note's span. */
-  pitchShiftSemitones: number;
+  pitchSemitones: number;
   /** Level change applied to the note's span. */
   gainDb: number;
   /**
@@ -166,11 +165,11 @@ export interface NoteEdit {
    *
    * 0 runs no warp at all, so a pitch-only edit is not charged for an LPC
    * analysis-resynthesis round it did not ask for. A pitch shift drags the
-   * formants with it, so holding them still is `-pitchShiftSemitones` and the
+   * formants with it, so holding them still is `-pitchSemitones` and the
    * chipmunk is the default. Saturates near -10.3 and +8.7 semitones rather than
    * being rejected.
    */
-  formantShiftSemitones: number;
+  formantSemitones: number;
   /**
    * Scales the vibrato measured over the note, stated as a change from it: 0
    * keeps it, -1 flattens it, +1 doubles it.
@@ -315,7 +314,7 @@ export type NoteTargetUnmatchedPolicy = 'leave' | 'mute' | 'nearest';
 export interface AssignNoteTargetsResult {
   /**
    * A new array, one note per input note in the same order, carrying the
-   * assigned `edit.pitchShiftSemitones` and `edit.muted`. Every other field is
+   * assigned `edit.pitchSemitones` and `edit.muted`. Every other field is
    * the caller's own, unchanged.
    */
   notes: NoteObject[];
@@ -360,8 +359,8 @@ export interface PolyphonicAnalysisOptions {
   centsPerBin?: number;
   /** Top of that axis, in Hz. Default 8000. */
   centMaxHz?: number;
-  /** Stops weighting bins by tonality, which is on. Default false. */
-  tonalityOff?: boolean;
+  /** Weight bins by tonality. Default true. */
+  tonality?: boolean;
 
   /** Partials summed per F0 candidate; at most 128. Default 20. */
   salienceHarmonics?: number;
@@ -382,12 +381,12 @@ export interface PolyphonicAnalysisOptions {
   maxPolyphony?: number;
   /**
    * Share of a frame's peak salience below which the estimation stops iterating.
-   * Default 0.20; **negative selects 0**.
+   * Absent = 0.20; an explicit 0 is a real zero; a negative is a `RangeError`.
    */
   minFramePeakRatio?: number;
   /**
-   * Closest two candidates in one frame may sit, in cents. Default 50;
-   * **negative selects 0**.
+   * Closest two candidates in one frame may sit, in cents. Absent = 50; an
+   * explicit 0 is a real zero; a negative is a `RangeError`.
    */
   minSeparationCents?: number;
   /** Share of a found voice removed before the next iteration. Default 1. */
@@ -396,12 +395,13 @@ export interface PolyphonicAnalysisOptions {
   /** A jump larger than this breaks a ridge, in cents. Default 50. */
   maxJumpCents?: number;
   /**
-   * A fade below this share of a ridge's own peak breaks it. Default 0.10;
-   * **negative selects 0**.
+   * A fade below this share of a ridge's own peak breaks it. Absent = 0.10; an
+   * explicit 0 is a real zero; a negative is a `RangeError`.
    */
   minRidgePeakRatio?: number;
   /**
-   * Shorter ridges are dropped, in ms. Default 140; **negative selects 0**.
+   * Shorter ridges are dropped, in ms. Absent = 140; an explicit 0 is a real
+   * zero; a negative is a `RangeError`.
    */
   minRidgeDurationMs?: number;
 
@@ -469,8 +469,9 @@ export interface PolyphonicAnalysisOptions {
   minNoteMs?: number;
   /**
    * A re-strike whose level rises to this multiple of the preceding trough
-   * splits a ridge into two notes. Must be greater than 1; `0` or omitted turns
-   * splitting off (the default).
+   * splits a ridge into two notes. Must be greater than 1; absent leaves
+   * splitting off, and an explicit 0, a negative or a non-finite value is a
+   * `RangeError`.
    */
   reattackRatio?: number;
   /** Reference pitch each note's `medianCents` is measured against. Default 440. */
@@ -602,12 +603,12 @@ export interface PercussiveEventInput {
  * returned by {@link decomposeNotePitch}.
  *
  * `driftCents[i] + vibratoCents[i]` is the note's own pitch at frame `i`, in
- * cents above `centreHz`, so the three parts reconstruct the curve.
+ * cents above `centerHz`, so the three parts reconstruct the curve.
  */
 export interface PitchDecompositionResult {
   /** The note's steady pitch in Hz, or 0 when it carries no usable pitch. */
-  centreHz: number;
-  /** Slow deviation from `centreHz` in cents, one entry per frame. */
+  centerHz: number;
+  /** Slow deviation from `centerHz` in cents, one entry per frame. */
   driftCents: Float32Array;
   /** Fast deviation in cents, over the same frames. */
   vibratoCents: Float32Array;

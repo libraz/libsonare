@@ -58,7 +58,12 @@ describe('editing effects', () => {
     expect(result).toBeInstanceOf(Float32Array);
     expect(result.length).toBeGreaterThan(0);
 
-    const detected = pitchPyin(result, SR, 2048, 512, 100, 1000);
+    const detected = pitchPyin(result, SR, {
+      frameLength: 2048,
+      hopLength: 512,
+      f0MinHz: 100,
+      f0MaxHz: 1000,
+    });
     const expectedHz = 440 * 2 ** (2 / 12);
     const centsError = 1200 * Math.log2(detected.medianF0 / expectedHz);
     expect(Math.abs(centsError)).toBeLessThan(5);

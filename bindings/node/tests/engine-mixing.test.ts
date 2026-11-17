@@ -558,7 +558,7 @@ describe('RealtimeEngine native binding', () => {
     );
     let badIndexError: unknown;
     try {
-      engine.setTrackStripEqBand(10, 99, { type: 'Peak', enabled: true });
+      engine.setTrackStripEqBand(10, 99, { type: 'peak', enabled: true });
     } catch (error) {
       badIndexError = error;
     }
@@ -568,7 +568,7 @@ describe('RealtimeEngine native binding', () => {
     engine.play();
     const [flatOut] = engine.process([new Float32Array(256)]);
     engine.setTrackStripEqBand(10, 0, {
-      type: 'Peak',
+      type: 'peak',
       frequencyHz: 1000,
       gainDb: 12,
       q: 1,
@@ -635,12 +635,12 @@ describe('RealtimeEngine native binding', () => {
     ]);
     engine.setTrackBuses([{ busId: 1, gainDb: 0 }]);
     engine.setTrackLanes([{ trackId: 10, outputBusId: 1 }]);
-    expectArgumentRefusal(() => engine.setBusStripEqBand(1, 99, { type: 'Peak', enabled: true }));
+    expectArgumentRefusal(() => engine.setBusStripEqBand(1, 99, { type: 'peak', enabled: true }));
 
     engine.play();
     const [flatOut] = engine.process([new Float32Array(256)]);
     engine.setBusStripEqBand(1, 0, {
-      type: 'Peak',
+      type: 'peak',
       frequencyHz: 1000,
       gainDb: 12,
       q: 1,
@@ -681,7 +681,7 @@ describe('RealtimeEngine native binding', () => {
 
     expect(() =>
       engine.setBusStripEqBand(1, 0, {
-        type: 'Peak',
+        type: 'peak',
         frequencyHz: 1000,
         gainDb: 6,
         q: 1,
@@ -798,7 +798,7 @@ describe('RealtimeEngine native binding', () => {
     );
     let badIndexError: unknown;
     try {
-      engine.setMasterStripEqBand(99, { type: 'Peak', enabled: true });
+      engine.setMasterStripEqBand(99, { type: 'peak', enabled: true });
     } catch (error) {
       badIndexError = error;
     }
@@ -808,7 +808,7 @@ describe('RealtimeEngine native binding', () => {
     engine.play();
     const [flatOut] = engine.process([new Float32Array(256)]);
     engine.setMasterStripEqBand(0, {
-      type: 'Peak',
+      type: 'peak',
       frequencyHz: 1000,
       gainDb: 12,
       q: 1,

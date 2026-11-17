@@ -19,13 +19,18 @@ import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import {
   Audio,
+  type PitchClass,
+  analyze,
   analyzeImpulseResponse,
   chordFunctionalAnalysis,
   chroma,
+  detectKey,
+  detectKeyCandidates,
+  detectOnsets,
   hpss,
   melSpectrogram,
   mfcc,
-  onsetEnvelope,
+  onsetStrength,
   pitchPyin,
   pitchYin,
   resample,
@@ -83,13 +88,54 @@ interface Delegation {
 
 const DELEGATIONS: Delegation[] = [
   // -- Analysis --
+  {
+    name: 'analyze',
+    valid: [2048, 512],
+    intArgs: [
+      { index: 0, name: 'nFft' },
+      { index: 1, name: 'hopLength' },
+    ],
+    method: (audio, [a, b]) => audio.analyze({ nFft: a, hopLength: b }),
+    facade: (samples, rate, [a, b]) => analyze(samples, rate, { nFft: a, hopLength: b }),
+  },
+  {
+    name: 'detectKey',
+    valid: [2048, 512],
+    intArgs: [
+      { index: 0, name: 'nFft' },
+      { index: 1, name: 'hopLength' },
+    ],
+    method: (audio, [a, b]) => audio.detectKey({ nFft: a, hopLength: b }),
+    facade: (samples, rate, [a, b]) => detectKey(samples, rate, { nFft: a, hopLength: b }),
+  },
+  {
+    name: 'detectKeyCandidates',
+    valid: [2048, 512],
+    intArgs: [
+      { index: 0, name: 'nFft' },
+      { index: 1, name: 'hopLength' },
+    ],
+    method: (audio, [a, b]) => audio.detectKeyCandidates({ nFft: a, hopLength: b }),
+    facade: (samples, rate, [a, b]) =>
+      detectKeyCandidates(samples, rate, { nFft: a, hopLength: b }),
+  },
+  {
+    name: 'detectOnsets',
+    valid: [2048, 512],
+    intArgs: [
+      { index: 0, name: 'nFft' },
+      { index: 1, name: 'hopLength' },
+    ],
+    method: (audio, [a, b]) => audio.detectOnsets({ nFft: a, hopLength: b }),
+    facade: (samples, rate, [a, b]) => detectOnsets(samples, rate, { nFft: a, hopLength: b }),
+  },
   { name: 'analyzeBpm', noIntArgs: 'takes an options object only' },
   {
     name: 'analyzeImpulseResponse',
     valid: [6],
     intArgs: [{ index: 0, name: 'nOctaveBands' }],
-    method: (audio, [a]) => audio.analyzeImpulseResponse(a),
-    facade: (samples, rate, [a]) => analyzeImpulseResponse(samples, rate, a),
+    method: (audio, [a]) => audio.analyzeImpulseResponse({ nOctaveBands: a }),
+    facade: (samples, rate, [a]) => analyzeImpulseResponse(samples, rate, { nOctaveBands: a }),
   },
   { name: 'detectAcoustic', noIntArgs: 'takes an options object only' },
   { name: 'analyzeRhythm', noIntArgs: 'takes an options object only' },
@@ -98,15 +144,11 @@ const DELEGATIONS: Delegation[] = [
   { name: 'detectChords', noIntArgs: 'takes an options object only' },
   {
     name: 'chordFunctionalAnalysis',
-    valid: [0, 0],
-    intArgs: [
-      { index: 0, name: 'keyRoot' },
-      { index: 1, name: 'keyMode' },
-    ],
-    method: (audio, [a, b]) => audio.chordFunctionalAnalysis(a, b),
-    // The only entry whose two forms disagree on argument order: the facade
-    // takes the key before the sample rate.
-    facade: (samples, rate, [a, b]) => chordFunctionalAnalysis(samples, a, b, rate),
+    valid: [0],
+    intArgs: [{ index: 0, name: 'keyRoot' }],
+    method: (audio, [a]) => audio.chordFunctionalAnalysis({ keyRoot: a as PitchClass }),
+    facade: (samples, rate, [a]) =>
+      chordFunctionalAnalysis(samples, rate, { keyRoot: a as PitchClass }),
   },
 
   // -- Effects --
@@ -143,8 +185,8 @@ const DELEGATIONS: Delegation[] = [
       { index: 0, name: 'nFft' },
       { index: 1, name: 'hopLength' },
     ],
-    method: (audio, [a, b]) => audio.stft(a, b),
-    facade: (samples, rate, [a, b]) => stft(samples, rate, a, b),
+    method: (audio, [a, b]) => audio.stft({ nFft: a, hopLength: b }),
+    facade: (samples, rate, [a, b]) => stft(samples, rate, { nFft: a, hopLength: b }),
   },
   {
     name: 'stftDb',
@@ -153,19 +195,20 @@ const DELEGATIONS: Delegation[] = [
       { index: 0, name: 'nFft' },
       { index: 1, name: 'hopLength' },
     ],
-    method: (audio, [a, b]) => audio.stftDb(a, b),
-    facade: (samples, rate, [a, b]) => stftDb(samples, rate, a, b),
+    method: (audio, [a, b]) => audio.stftDb({ nFft: a, hopLength: b }),
+    facade: (samples, rate, [a, b]) => stftDb(samples, rate, { nFft: a, hopLength: b }),
   },
   {
     name: 'melSpectrogram',
-    valid: [2048, 512, 128, 0, 0],
+    valid: [2048, 512, 128],
     intArgs: [
       { index: 0, name: 'nFft' },
       { index: 1, name: 'hopLength' },
       { index: 2, name: 'nMels' },
     ],
-    method: (audio, [a, b, c]) => audio.melSpectrogram(a, b, c),
-    facade: (samples, rate, [a, b, c]) => melSpectrogram(samples, rate, a, b, c),
+    method: (audio, [a, b, c]) => audio.melSpectrogram({ nFft: a, hopLength: b, nMels: c }),
+    facade: (samples, rate, [a, b, c]) =>
+      melSpectrogram(samples, rate, { nFft: a, hopLength: b, nMels: c }),
   },
   {
     name: 'mfcc',
@@ -176,8 +219,9 @@ const DELEGATIONS: Delegation[] = [
       { index: 2, name: 'nMels' },
       { index: 3, name: 'nMfcc' },
     ],
-    method: (audio, [a, b, c, d]) => audio.mfcc(a, b, c, d),
-    facade: (samples, rate, [a, b, c, d]) => mfcc(samples, rate, a, b, c, d),
+    method: (audio, [a, b, c, d]) => audio.mfcc({ nFft: a, hopLength: b, nMels: c, nMfcc: d }),
+    facade: (samples, rate, [a, b, c, d]) =>
+      mfcc(samples, rate, { nFft: a, hopLength: b, nMels: c, nMfcc: d }),
   },
   {
     name: 'chroma',
@@ -186,8 +230,8 @@ const DELEGATIONS: Delegation[] = [
       { index: 0, name: 'nFft' },
       { index: 1, name: 'hopLength' },
     ],
-    method: (audio, [a, b]) => audio.chroma(a, b),
-    facade: (samples, rate, [a, b]) => chroma(samples, rate, a, b),
+    method: (audio, [a, b]) => audio.chroma({ nFft: a, hopLength: b }),
+    facade: (samples, rate, [a, b]) => chroma(samples, rate, { nFft: a, hopLength: b }),
   },
   {
     name: 'spectralCentroid',
@@ -196,8 +240,8 @@ const DELEGATIONS: Delegation[] = [
       { index: 0, name: 'nFft' },
       { index: 1, name: 'hopLength' },
     ],
-    method: (audio, [a, b]) => audio.spectralCentroid(a, b),
-    facade: (samples, rate, [a, b]) => spectralCentroid(samples, rate, a, b),
+    method: (audio, [a, b]) => audio.spectralCentroid({ nFft: a, hopLength: b }),
+    facade: (samples, rate, [a, b]) => spectralCentroid(samples, rate, { nFft: a, hopLength: b }),
   },
   {
     name: 'spectralBandwidth',
@@ -206,8 +250,8 @@ const DELEGATIONS: Delegation[] = [
       { index: 0, name: 'nFft' },
       { index: 1, name: 'hopLength' },
     ],
-    method: (audio, [a, b]) => audio.spectralBandwidth(a, b),
-    facade: (samples, rate, [a, b]) => spectralBandwidth(samples, rate, a, b),
+    method: (audio, [a, b]) => audio.spectralBandwidth({ nFft: a, hopLength: b }),
+    facade: (samples, rate, [a, b]) => spectralBandwidth(samples, rate, { nFft: a, hopLength: b }),
   },
   {
     name: 'spectralRolloff',
@@ -216,8 +260,9 @@ const DELEGATIONS: Delegation[] = [
       { index: 0, name: 'nFft' },
       { index: 1, name: 'hopLength' },
     ],
-    method: (audio, [a, b, c]) => audio.spectralRolloff(a, b, c),
-    facade: (samples, rate, [a, b, c]) => spectralRolloff(samples, rate, a, b, c),
+    method: (audio, [a, b, c]) => audio.spectralRolloff({ nFft: a, hopLength: b, rollPercent: c }),
+    facade: (samples, rate, [a, b, c]) =>
+      spectralRolloff(samples, rate, { nFft: a, hopLength: b, rollPercent: c }),
   },
   {
     name: 'spectralFlatness',
@@ -226,8 +271,8 @@ const DELEGATIONS: Delegation[] = [
       { index: 0, name: 'nFft' },
       { index: 1, name: 'hopLength' },
     ],
-    method: (audio, [a, b]) => audio.spectralFlatness(a, b),
-    facade: (samples, rate, [a, b]) => spectralFlatness(samples, rate, a, b),
+    method: (audio, [a, b]) => audio.spectralFlatness({ nFft: a, hopLength: b }),
+    facade: (samples, rate, [a, b]) => spectralFlatness(samples, rate, { nFft: a, hopLength: b }),
   },
   {
     name: 'zeroCrossingRate',
@@ -236,8 +281,9 @@ const DELEGATIONS: Delegation[] = [
       { index: 0, name: 'frameLength' },
       { index: 1, name: 'hopLength' },
     ],
-    method: (audio, [a, b]) => audio.zeroCrossingRate(a, b),
-    facade: (samples, rate, [a, b]) => zeroCrossingRate(samples, rate, a, b),
+    method: (audio, [a, b]) => audio.zeroCrossingRate({ frameLength: a, hopLength: b }),
+    facade: (samples, rate, [a, b]) =>
+      zeroCrossingRate(samples, rate, { frameLength: a, hopLength: b }),
   },
   {
     name: 'rmsEnergy',
@@ -246,8 +292,8 @@ const DELEGATIONS: Delegation[] = [
       { index: 0, name: 'frameLength' },
       { index: 1, name: 'hopLength' },
     ],
-    method: (audio, [a, b]) => audio.rmsEnergy(a, b),
-    facade: (samples, rate, [a, b]) => rmsEnergy(samples, rate, a, b),
+    method: (audio, [a, b]) => audio.rmsEnergy({ frameLength: a, hopLength: b }),
+    facade: (samples, rate, [a, b]) => rmsEnergy(samples, rate, { frameLength: a, hopLength: b }),
   },
   {
     name: 'pitchYin',
@@ -256,8 +302,16 @@ const DELEGATIONS: Delegation[] = [
       { index: 0, name: 'frameLength' },
       { index: 1, name: 'hopLength' },
     ],
-    method: (audio, [a, b, c, d, e]) => audio.pitchYin(a, b, c, d, e),
-    facade: (samples, rate, [a, b, c, d, e]) => pitchYin(samples, rate, a, b, c, d, e),
+    method: (audio, [a, b, c, d, e]) =>
+      audio.pitchYin({ frameLength: a, hopLength: b, f0MinHz: c, f0MaxHz: d, threshold: e }),
+    facade: (samples, rate, [a, b, c, d, e]) =>
+      pitchYin(samples, rate, {
+        frameLength: a,
+        hopLength: b,
+        f0MinHz: c,
+        f0MaxHz: d,
+        threshold: e,
+      }),
   },
   {
     name: 'pitchPyin',
@@ -266,8 +320,16 @@ const DELEGATIONS: Delegation[] = [
       { index: 0, name: 'frameLength' },
       { index: 1, name: 'hopLength' },
     ],
-    method: (audio, [a, b, c, d, e]) => audio.pitchPyin(a, b, c, d, e),
-    facade: (samples, rate, [a, b, c, d, e]) => pitchPyin(samples, rate, a, b, c, d, e),
+    method: (audio, [a, b, c, d, e]) =>
+      audio.pitchPyin({ frameLength: a, hopLength: b, f0MinHz: c, f0MaxHz: d, threshold: e }),
+    facade: (samples, rate, [a, b, c, d, e]) =>
+      pitchPyin(samples, rate, {
+        frameLength: a,
+        hopLength: b,
+        f0MinHz: c,
+        f0MaxHz: d,
+        threshold: e,
+      }),
   },
   {
     name: 'resample',
@@ -277,15 +339,16 @@ const DELEGATIONS: Delegation[] = [
     facade: (samples, rate, [a]) => resample(samples, rate, a),
   },
   {
-    name: 'onsetEnvelope',
+    name: 'onsetStrength',
     valid: [2048, 512, 128],
     intArgs: [
       { index: 0, name: 'nFft' },
       { index: 1, name: 'hopLength' },
       { index: 2, name: 'nMels' },
     ],
-    method: (audio, [a, b, c]) => audio.onsetEnvelope(a, b, c),
-    facade: (samples, rate, [a, b, c]) => onsetEnvelope(samples, rate, a, b, c),
+    method: (audio, [a, b, c]) => audio.onsetStrength({ nFft: a, hopLength: b, nMels: c }),
+    facade: (samples, rate, [a, b, c]) =>
+      onsetStrength(samples, rate, { nFft: a, hopLength: b, nMels: c }),
   },
   { name: 'nnlsChroma', noIntArgs: 'takes no argument' },
   { name: 'lufs', noIntArgs: 'takes a validate option only' },

@@ -1,29 +1,49 @@
-import type { FeatureSamplesRequest } from './feature_spectral.js';
-import type { ValuesRequest } from './feature_units.js';
+import { toMatrix2D, toNativeIndexList } from './internal/feature_matrix.js';
 import { resolvePositiveIntegerOption } from './internal/feature_options.js';
 import { addon } from './native.js';
-import type { SilenceCommonReport } from './types_features.js';
+import type {
+  Matrix2D,
+  NormType,
+  SplitSilenceCommonWithReportResult,
+  TrimResult,
+} from './types.js';
 import {
   assertAudioInput,
   assertAudioSamples,
   assertPositiveInteger,
   requestObject,
+  requestOnly,
   resolveOptionalNonNegative,
+  sampleOneShot,
 } from './validation.js';
 
+/** Request for {@link trimSilence}. `validate: false` skips the NaN/Inf pre-scan. */
 export interface TrimSilenceRequest {
   samples: Float32Array;
+  sampleRate: number;
+  /** Threshold under the peak, in dB. Default 60. */
   topDb?: number;
+  /** Framing window in samples. Default 2048. */
   frameLength?: number;
+  /** Hop in samples. Default 512. */
   hopLength?: number;
+  validate?: boolean;
 }
 
+/** Request for {@link splitSilence}. */
+export type SplitSilenceRequest = TrimSilenceRequest;
+
+/** Request for {@link splitSilenceCommon}. */
 export interface SplitSilenceCommonRequest {
   signals: Float32Array[];
   topDb?: number;
   frameLength?: number;
   hopLength?: number;
 }
+
+/** Request for {@link splitSilenceCommonWithReport}. */
+export type SplitSilenceCommonWithReportRequest = SplitSilenceCommonRequest;
+
 /** An empty or non-array `signals` is the addon's own `TypeError`; only each element's content is checked here. */
 function assertSilenceSignals(fnName: string, request: SplitSilenceCommonRequest): void {
   if (Array.isArray(request.signals)) {
@@ -33,26 +53,69 @@ function assertSilenceSignals(fnName: string, request: SplitSilenceCommonRequest
   }
 }
 
+/** Request for {@link frameSignal}. */
 export interface FrameSignalRequest {
   samples: Float32Array;
+  /** Required for rule uniformity; framing itself is rate-independent. */
+  sampleRate: number;
   frameLength: number;
   hopLength: number;
+  validate?: boolean;
 }
 
-/** Input for pre/de-emphasis filters. `zi` is the initial delay value. */
-export interface EmphasisRequest {
+/** Request for {@link preemphasis}. `zi` is the initial delay value. */
+export interface PreemphasisRequest {
   samples: Float32Array;
+  sampleRate: number;
+  /** Filter coefficient. Default 0.97. */
   coef?: number;
   zi?: number;
+  validate?: boolean;
 }
 
-export function trim(
-  request: FeatureSamplesRequest & {
-    thresholdDb?: number;
-    frameLength?: number;
-    hopLength?: number;
-  },
-): Float32Array;
+/** Request for {@link deemphasis}. */
+export type DeemphasisRequest = PreemphasisRequest;
+
+/** Request for {@link padCenter}. */
+export interface PadCenterRequest {
+  values: Float32Array;
+  targetSize: number;
+  /** Literal fill value for every added element. Default 0. */
+  padValue?: number;
+}
+
+/** Request for {@link fixLength}. */
+export type FixLengthRequest = PadCenterRequest;
+
+/** Request for {@link fixFrames}. */
+export interface FixFramesRequest {
+  frames: Int32Array | ArrayLike<number>;
+  /** Lower bound. Default 0. */
+  xMin?: number;
+  /** Upper bound; omit for none. Negative is refused. */
+  xMax?: number;
+  /** Pad to the bounds instead of clipping. Default true. */
+  pad?: boolean;
+}
+
+/** Request for {@link vectorNormalize}. */
+export interface VectorNormalizeRequest {
+  values: Float32Array;
+  /** Norm applied. Default `'max'`. */
+  norm?: NormType;
+  threshold?: number;
+}
+
+const NORM_ORDINALS: Readonly<Record<NormType, number>> = { max: 0, l1: 1, l2: 2, power: 3 };
+
+/** Peak-trims `samples` to what sounds above `thresholdDb`. Effects entry point, unchanged. */
+export function trim(request: {
+  samples: Float32Array;
+  sampleRate?: number;
+  thresholdDb?: number;
+  frameLength?: number;
+  hopLength?: number;
+}): Float32Array;
 export function trim(
   samples: Float32Array,
   sampleRate?: number,
@@ -63,11 +126,13 @@ export function trim(
 export function trim(
   samples:
     | Float32Array
-    | (FeatureSamplesRequest & {
+    | {
+        samples: Float32Array;
+        sampleRate?: number;
         thresholdDb?: number;
         frameLength?: number;
         hopLength?: number;
-      }),
+      },
   sampleRate = 22050,
   thresholdDb = -60.0,
   frameLength?: number,
@@ -99,119 +164,83 @@ export function trim(
   );
 }
 
-export function preemphasis(request: EmphasisRequest): Float32Array;
-export function preemphasis(samples: Float32Array, coef?: number, zi?: number): Float32Array;
+/** First-order pre-emphasis filter. */
+export function preemphasis(request: PreemphasisRequest): Float32Array;
 export function preemphasis(
-  samples: Float32Array | EmphasisRequest,
-  coef = 0.97,
-  zi?: number,
-): Float32Array {
-  const request =
-    samples instanceof Float32Array ? { samples, coef, zi } : requestObject('preemphasis', samples);
-  if (!(request.samples instanceof Float32Array)) {
-    throw new TypeError('preemphasis: samples must be a Float32Array');
-  }
+  samples: Float32Array,
+  sampleRate: number,
+  options?: Omit<PreemphasisRequest, 'samples' | 'sampleRate'>,
+): Float32Array;
+export function preemphasis(...args: unknown[]): Float32Array {
+  const request = sampleOneShot<PreemphasisRequest>('preemphasis', args);
+  assertAudioInput('preemphasis', request.samples, request.sampleRate, request);
   return request.zi === undefined
     ? addon.preemphasis(request.samples, request.coef ?? 0.97)
     : addon.preemphasis(request.samples, request.coef ?? 0.97, request.zi);
 }
 
-export function deemphasis(request: EmphasisRequest): Float32Array;
-export function deemphasis(samples: Float32Array, coef?: number, zi?: number): Float32Array;
+/** Inverse of {@link preemphasis}. */
+export function deemphasis(request: DeemphasisRequest): Float32Array;
 export function deemphasis(
-  samples: Float32Array | EmphasisRequest,
-  coef = 0.97,
-  zi?: number,
-): Float32Array {
-  const request =
-    samples instanceof Float32Array ? { samples, coef, zi } : requestObject('deemphasis', samples);
-  if (!(request.samples instanceof Float32Array)) {
-    throw new TypeError('deemphasis: samples must be a Float32Array');
-  }
+  samples: Float32Array,
+  sampleRate: number,
+  options?: Omit<DeemphasisRequest, 'samples' | 'sampleRate'>,
+): Float32Array;
+export function deemphasis(...args: unknown[]): Float32Array {
+  const request = sampleOneShot<DeemphasisRequest>('deemphasis', args);
+  assertAudioInput('deemphasis', request.samples, request.sampleRate, request);
   return request.zi === undefined
     ? addon.deemphasis(request.samples, request.coef ?? 0.97)
     : addon.deemphasis(request.samples, request.coef ?? 0.97, request.zi);
 }
 
-export function trimSilence(request: TrimSilenceRequest): {
-  audio: Float32Array;
-  startSample: number;
-  endSample: number;
-};
+// Framing rule every silence entry shares: both positive, no other domain.
+function resolveSilenceFraming(
+  fnName: string,
+  frameLength: number | undefined,
+  hopLength: number | undefined,
+): { frameLength: number; hopLength: number } {
+  return {
+    frameLength: resolvePositiveIntegerOption(fnName, 'frameLength', frameLength, 2048),
+    hopLength: resolvePositiveIntegerOption(fnName, 'hopLength', hopLength, 512),
+  };
+}
+
+/** Trims leading and trailing silence. */
+export function trimSilence(request: TrimSilenceRequest): TrimResult;
 export function trimSilence(
   samples: Float32Array,
-  topDb?: number,
-  frameLength?: number,
-  hopLength?: number,
-): { audio: Float32Array; startSample: number; endSample: number };
-export function trimSilence(
-  samples: Float32Array | TrimSilenceRequest,
-  topDb = 60.0,
-  frameLength = 2048,
-  hopLength = 512,
-): { audio: Float32Array; startSample: number; endSample: number } {
-  const request =
-    samples instanceof Float32Array
-      ? { samples, topDb, frameLength, hopLength }
-      : requestObject('trimSilence', samples);
-  assertAudioSamples('trimSilence', request.samples, request);
-  // The framing rule `trim` itself enforces: both positive, no other domain.
-  const resolvedFrameLength = resolvePositiveIntegerOption(
-    'trimSilence',
-    'frameLength',
-    request.frameLength,
-    2048,
-  );
-  const resolvedHopLength = resolvePositiveIntegerOption(
-    'trimSilence',
-    'hopLength',
-    request.hopLength,
-    512,
-  );
+  sampleRate: number,
+  options?: Omit<TrimSilenceRequest, 'samples' | 'sampleRate'>,
+): TrimResult;
+export function trimSilence(...args: unknown[]): TrimResult {
+  const request = sampleOneShot<TrimSilenceRequest>('trimSilence', args);
+  assertAudioInput('trimSilence', request.samples, request.sampleRate, request);
+  const framing = resolveSilenceFraming('trimSilence', request.frameLength, request.hopLength);
   return addon.trimSilence(
     request.samples,
     request.topDb ?? 60,
-    resolvedFrameLength,
-    resolvedHopLength,
+    framing.frameLength,
+    framing.hopLength,
   );
 }
 
-export function splitSilence(request: TrimSilenceRequest): Int32Array;
+/** Non-silent intervals as flat `[start, end, ...]` sample pairs. */
+export function splitSilence(request: SplitSilenceRequest): Int32Array;
 export function splitSilence(
   samples: Float32Array,
-  topDb?: number,
-  frameLength?: number,
-  hopLength?: number,
+  sampleRate: number,
+  options?: Omit<SplitSilenceRequest, 'samples' | 'sampleRate'>,
 ): Int32Array;
-export function splitSilence(
-  samples: Float32Array | TrimSilenceRequest,
-  topDb = 60.0,
-  frameLength = 2048,
-  hopLength = 512,
-): Int32Array {
-  const request =
-    samples instanceof Float32Array
-      ? { samples, topDb, frameLength, hopLength }
-      : requestObject('splitSilence', samples);
-  assertAudioSamples('splitSilence', request.samples, request);
-  // Both positive, as trimSilence: `split` applies the same framing rule.
-  const resolvedFrameLength = resolvePositiveIntegerOption(
-    'splitSilence',
-    'frameLength',
-    request.frameLength,
-    2048,
-  );
-  const resolvedHopLength = resolvePositiveIntegerOption(
-    'splitSilence',
-    'hopLength',
-    request.hopLength,
-    512,
-  );
+export function splitSilence(...args: unknown[]): Int32Array {
+  const request = sampleOneShot<SplitSilenceRequest>('splitSilence', args);
+  assertAudioInput('splitSilence', request.samples, request.sampleRate, request);
+  const framing = resolveSilenceFraming('splitSilence', request.frameLength, request.hopLength);
   return addon.splitSilence(
     request.samples,
     request.topDb ?? 60,
-    resolvedFrameLength,
-    resolvedHopLength,
+    framing.frameLength,
+    framing.hopLength,
   );
 }
 
@@ -232,28 +261,21 @@ export function splitSilence(
  * @throws {TypeError} `request.signals` is empty, or one of its elements is
  *   not a `Float32Array`.
  */
-export function splitSilenceCommon(request: SplitSilenceCommonRequest): Int32Array {
-  requestObject('splitSilenceCommon', request, 'request', true);
+export function splitSilenceCommon(request: SplitSilenceCommonRequest): Int32Array;
+export function splitSilenceCommon(...args: unknown[]): Int32Array {
+  const request = requestOnly<SplitSilenceCommonRequest>('splitSilenceCommon', args);
   assertSilenceSignals('splitSilenceCommon', request);
-  // Both positive, as splitSilence: `split_silence_common` applies the same
-  // framing rule to every signal.
-  const resolvedFrameLength = resolvePositiveIntegerOption(
+  // As splitSilence: `split_silence_common` applies the same framing rule to every signal.
+  const framing = resolveSilenceFraming(
     'splitSilenceCommon',
-    'frameLength',
     request.frameLength,
-    2048,
-  );
-  const resolvedHopLength = resolvePositiveIntegerOption(
-    'splitSilenceCommon',
-    'hopLength',
     request.hopLength,
-    512,
   );
   return addon.splitSilenceCommon(
     request.signals,
     request.topDb ?? 60,
-    resolvedFrameLength,
-    resolvedHopLength,
+    framing.frameLength,
+    framing.hopLength,
   );
 }
 
@@ -279,52 +301,45 @@ export function splitSilenceCommon(request: SplitSilenceCommonRequest): Int32Arr
  * }
  * ```
  */
-export function splitSilenceCommonWithReport(request: SplitSilenceCommonRequest): {
-  intervals: Int32Array;
-  report: SilenceCommonReport;
-} {
-  requestObject('splitSilenceCommonWithReport', request, 'request', true);
-  assertSilenceSignals('splitSilenceCommonWithReport', request);
-  const resolvedFrameLength = resolvePositiveIntegerOption(
+export function splitSilenceCommonWithReport(
+  request: SplitSilenceCommonWithReportRequest,
+): SplitSilenceCommonWithReportResult;
+export function splitSilenceCommonWithReport(
+  ...args: unknown[]
+): SplitSilenceCommonWithReportResult {
+  const request = requestOnly<SplitSilenceCommonWithReportRequest>(
     'splitSilenceCommonWithReport',
-    'frameLength',
-    request.frameLength,
-    2048,
+    args,
   );
-  const resolvedHopLength = resolvePositiveIntegerOption(
+  assertSilenceSignals('splitSilenceCommonWithReport', request);
+  const framing = resolveSilenceFraming(
     'splitSilenceCommonWithReport',
-    'hopLength',
+    request.frameLength,
     request.hopLength,
-    512,
   );
   return addon.splitSilenceCommonWithReport(
     request.signals,
     request.topDb ?? 60,
-    resolvedFrameLength,
-    resolvedHopLength,
+    framing.frameLength,
+    framing.hopLength,
   );
 }
 
-export function frameSignal(request: FrameSignalRequest): { nFrames: number; frames: Float32Array };
+/** Slices a signal into overlapping frames. Returns rows = `frameLength` samples, cols = frames. */
+export function frameSignal(request: FrameSignalRequest): Matrix2D;
 export function frameSignal(
   samples: Float32Array,
-  frameLength?: number,
-  hopLength?: number,
-): { nFrames: number; frames: Float32Array };
-export function frameSignal(
-  samples: Float32Array | FrameSignalRequest,
-  frameLength = 0,
-  hopLength = 0,
-): { nFrames: number; frames: Float32Array } {
-  const request =
-    samples instanceof Float32Array
-      ? { samples, frameLength, hopLength }
-      : requestObject('frameSignal', samples);
-  // Both positive, as the sibling framing entries. The positional form's 0 is
-  // not a default the core has -- it refuses one -- so it is refused by name here.
+  sampleRate: number,
+  options: Omit<FrameSignalRequest, 'samples' | 'sampleRate'>,
+): Matrix2D;
+export function frameSignal(...args: unknown[]): Matrix2D {
+  const request = sampleOneShot<FrameSignalRequest>('frameSignal', args);
+  assertAudioInput('frameSignal', request.samples, request.sampleRate, request);
+  // Both positive, as the sibling framing entries; neither has a default.
   assertPositiveInteger('frameSignal', request.frameLength, 'frameLength');
   assertPositiveInteger('frameSignal', request.hopLength, 'hopLength');
-  return addon.frameSignal(request.samples, request.frameLength, request.hopLength);
+  const r = addon.frameSignal(request.samples, request.frameLength, request.hopLength);
+  return toMatrix2D(r.frames, request.frameLength, r.nFrames);
 }
 
 /**
@@ -343,24 +358,10 @@ export function frameSignal(
  * // Float32Array [7, 1, 2, 7]
  * ```
  */
-export function padCenter(
-  request: ValuesRequest & { targetSize: number; padValue?: number },
-): Float32Array;
-export function padCenter(
-  values: Float32Array,
-  targetSize?: number,
-  padValue?: number,
-): Float32Array;
-export function padCenter(
-  values: Float32Array | (ValuesRequest & { targetSize: number; padValue?: number }),
-  targetSize = 0,
-  padValue = 0,
-): Float32Array {
-  const request =
-    values instanceof Float32Array
-      ? { values, targetSize, padValue }
-      : requestObject('padCenter', values, 'values');
-  return addon.padCenter(request.values, request.targetSize, request.padValue ?? 0);
+export function padCenter(request: PadCenterRequest): Float32Array;
+export function padCenter(...args: unknown[]): Float32Array {
+  const r = requestOnly<PadCenterRequest>('padCenter', args);
+  return addon.padCenter(r.values, r.targetSize, r.padValue ?? 0);
 }
 
 /**
@@ -378,76 +379,38 @@ export function padCenter(
  * // Float32Array [1, 2, 7, 7]
  * ```
  */
-export function fixLength(
-  request: ValuesRequest & { targetSize: number; padValue?: number },
-): Float32Array;
-export function fixLength(
-  values: Float32Array,
-  targetSize?: number,
-  padValue?: number,
-): Float32Array;
-export function fixLength(
-  values: Float32Array | (ValuesRequest & { targetSize: number; padValue?: number }),
-  targetSize = 0,
-  padValue = 0,
-): Float32Array {
-  const request =
-    values instanceof Float32Array
-      ? { values, targetSize, padValue }
-      : requestObject('fixLength', values, 'values');
-  return addon.fixLength(request.values, request.targetSize, request.padValue ?? 0);
+export function fixLength(request: FixLengthRequest): Float32Array;
+export function fixLength(...args: unknown[]): Float32Array {
+  const r = requestOnly<FixLengthRequest>('fixLength', args);
+  return addon.fixLength(r.values, r.targetSize, r.padValue ?? 0);
 }
 
-export function fixFrames(request: {
-  frames: Int32Array | number[];
-  xMin?: number;
-  /** Upper bound; omit for none. Negative is refused. */
-  xMax?: number;
-  pad?: boolean;
-}): Int32Array;
-export function fixFrames(
-  frames: Int32Array | number[],
-  xMin?: number,
-  xMax?: number,
-  pad?: boolean,
-): Int32Array;
-export function fixFrames(
-  frames:
-    | Int32Array
-    | number[]
-    | { frames: Int32Array | number[]; xMin?: number; xMax?: number; pad?: boolean },
-  xMin = 0,
-  xMax?: number,
-  pad = true,
-): Int32Array {
-  const request =
-    frames instanceof Int32Array || Array.isArray(frames)
-      ? { frames, xMin, xMax, pad }
-      : requestObject('fixFrames', frames, 'request', true);
+/** Clips or pads a list of frame indices to `[xMin, xMax]`. */
+export function fixFrames(request: FixFramesRequest): Int32Array;
+export function fixFrames(...args: unknown[]): Int32Array {
+  const r = requestOnly<FixFramesRequest>('fixFrames', args);
   return addon.fixFrames(
-    request.frames,
-    request.xMin ?? 0,
-    resolveOptionalNonNegative('fixFrames', request.xMax, 'xMax'),
-    request.pad ?? true,
+    toNativeIndexList(r.frames),
+    r.xMin ?? 0,
+    resolveOptionalNonNegative('fixFrames', r.xMax, 'xMax'),
+    r.pad ?? true,
   );
 }
 
-export function vectorNormalize(
-  request: ValuesRequest & { normType?: number; threshold?: number },
-): Float32Array;
-export function vectorNormalize(
-  values: Float32Array,
-  normType?: number,
-  threshold?: number,
-): Float32Array;
-export function vectorNormalize(
-  values: Float32Array | (ValuesRequest & { normType?: number; threshold?: number }),
-  normType = 0,
-  threshold = 0,
-): Float32Array {
-  const request =
-    values instanceof Float32Array
-      ? { values, normType, threshold }
-      : requestObject('vectorNormalize', values, 'values');
-  return addon.vectorNormalize(request.values, request.normType ?? 0, request.threshold ?? 0);
+/**
+ * Normalises `values` by the chosen norm.
+ *
+ * @throws `TypeError` for a `norm` that is not a string, `RangeError` for an unknown token.
+ */
+export function vectorNormalize(request: VectorNormalizeRequest): Float32Array;
+export function vectorNormalize(...args: unknown[]): Float32Array {
+  const r = requestOnly<VectorNormalizeRequest>('vectorNormalize', args);
+  const norm = r.norm ?? 'max';
+  if (typeof norm !== 'string') {
+    throw new TypeError('vectorNormalize: norm must be a string');
+  }
+  if (!Object.hasOwn(NORM_ORDINALS, norm)) {
+    throw new RangeError(`vectorNormalize: unknown norm '${norm}'`);
+  }
+  return addon.vectorNormalize(r.values, NORM_ORDINALS[norm], r.threshold ?? 0);
 }

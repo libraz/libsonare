@@ -6,7 +6,6 @@ import {
   ErrorCode,
   ebur128LoudnessRange,
   fourierTempogram,
-  isSonareError,
   lufs,
   masterAudio,
   masterAudioStereo,
@@ -15,7 +14,7 @@ import {
   meteringSilenceRatio,
   momentaryLufs,
   nnlsChroma,
-  onsetEnvelope,
+  onsetStrength,
   preemphasis,
   StreamAnalyzer,
   StreamingEqualizer,
@@ -24,7 +23,7 @@ import {
   tempogram,
   tempogramRatio,
 } from '../src/index.js';
-import type { MasteringChainConfig } from '../src/types.js';
+import type { MasteringChainConfig, StreamFramesI16, StreamFramesU8 } from '../src/types.js';
 
 const SR = 22050;
 
@@ -139,26 +138,26 @@ describe('progress callback', () => {
 describe('feature request-object compatibility', () => {
   it('preserves positional results for emphasis, chroma, and loudness features', () => {
     const filterInput = new Float32Array([1, 1, 1, 1]);
-    const emphasized = preemphasis(filterInput, 0.5, 0);
-    expect(Array.from(preemphasis({ samples: filterInput, coef: 0.5, zi: 0 }))).toEqual(
-      Array.from(emphasized),
-    );
-    expect(Array.from(deemphasis({ samples: emphasized, coef: 0.5, zi: 0 }))).toEqual(
-      Array.from(deemphasis(emphasized, 0.5, 0)),
-    );
+    const emphasized = preemphasis(filterInput, SR, { coef: 0.5, zi: 0 });
+    expect(
+      Array.from(preemphasis({ samples: filterInput, sampleRate: SR, coef: 0.5, zi: 0 })),
+    ).toEqual(Array.from(emphasized));
+    expect(
+      Array.from(deemphasis({ samples: emphasized, sampleRate: SR, coef: 0.5, zi: 0 })),
+    ).toEqual(Array.from(deemphasis(emphasized, SR, { coef: 0.5, zi: 0 })));
 
     const chromaInput = generateSine(440, SR, 2.0);
     const chroma = nnlsChroma(chromaInput, SR);
     const objectChroma = nnlsChroma({ samples: chromaInput, sampleRate: SR });
-    expect(objectChroma.nChroma).toBe(chroma.nChroma);
-    expect(objectChroma.nFrames).toBe(chroma.nFrames);
+    expect(objectChroma.rows).toBe(chroma.rows);
+    expect(objectChroma.cols).toBe(chroma.cols);
     expect(Array.from(objectChroma.data)).toEqual(Array.from(chroma.data));
     const unblended = nnlsChroma(chromaInput, SR, {
       enableStftBlend: false,
       stftBlendWeight: 0,
       stftBlendNFft: 2048,
     });
-    expect(unblended.data.length).toBe(12 * unblended.nFrames);
+    expect(unblended.data.length).toBe(12 * unblended.cols);
 
     const loudnessInput = generateSine(440, 48000, 3.0);
     const positional = lufs(loudnessInput, 48000);
@@ -296,7 +295,7 @@ describe('StreamingEqualizer', () => {
     // arrives at set_band as an enormous positive one, which is an edit to a
     // band nobody named rather than a refusal.
     const eq = new StreamingEqualizer({ sampleRate: 48000, maxBlockSize: 512 });
-    const band = { type: 'Peak', frequencyHz: 1000, gainDb: 3, q: 1, enabled: true } as const;
+    const band = { type: 'peak', frequencyHz: 1000, gainDb: 3, q: 1, enabled: true } as const;
     const refused = /finite non-negative integer no greater than Number\.MAX_SAFE_INTEGER/;
     for (const index of [-1, 1.5, Number.NaN, Number.POSITIVE_INFINITY]) {
       expect(() => eq.setBand(index, band), `index ${index}`).toThrow(refused);
@@ -309,7 +308,7 @@ describe('StreamingEqualizer', () => {
     const eq = new StreamingEqualizer({ sampleRate: 48000, maxBlockSize: 512 });
     // Without an enabled band the EQ holds no recursive state, so its count
     // would stay at zero for a reason unrelated to the entry under test.
-    eq.setBand(0, { type: 'Peak', frequencyHz: 1000, gainDb: 9, q: 2, enabled: true });
+    eq.setBand(0, { type: 'peak', frequencyHz: 1000, gainDb: 9, q: 2, enabled: true });
     expect(eq.nonFiniteDiscardCount()).toBe(0);
 
     const block = 64;
@@ -336,7 +335,7 @@ describe('StreamingEqualizer', () => {
 
   it('processes stereo blocks and exposes a spectrum snapshot', () => {
     const eq = new StreamingEqualizer({ sampleRate: 48000, maxBlockSize: 512 });
-    eq.setBand(0, { type: 'HighShelf', frequencyHz: 8000, gainDb: 6, enabled: true });
+    eq.setBand(0, { type: 'highShelf', frequencyHz: 8000, gainDb: 6, enabled: true });
     eq.setGainScale(0.5);
     eq.setOutputGainDb(3);
     eq.setOutputPan(0);
@@ -355,7 +354,7 @@ describe('StreamingEqualizer', () => {
 
   it('draws the magnitude curve the bands actually apply', () => {
     const eq = new StreamingEqualizer({ sampleRate: 48000, maxBlockSize: 512 });
-    eq.setBand(0, { type: 'Peak', frequencyHz: 1000, gainDb: 6, q: 1.5, enabled: true });
+    eq.setBand(0, { type: 'peak', frequencyHz: 1000, gainDb: 6, q: 1.5, enabled: true });
     const db = eq.magnitudeResponse(new Float32Array([100, 1000, 10000]));
     expect(db.length).toBe(3);
     expect(db[1]).toBeGreaterThan(5.5);
@@ -367,7 +366,7 @@ describe('StreamingEqualizer', () => {
   it('keeps a mid band off the left curve and answers an unknown placement', () => {
     const eq = new StreamingEqualizer({ sampleRate: 48000, maxBlockSize: 512 });
     eq.setBand(0, {
-      type: 'Peak',
+      type: 'peak',
       frequencyHz: 1000,
       gainDb: 9,
       q: 1.5,
@@ -382,7 +381,7 @@ describe('StreamingEqualizer', () => {
 
   it('reads an all-pass band as flat while still changing the signal', () => {
     const eq = new StreamingEqualizer({ sampleRate: 48000, maxBlockSize: 512 });
-    eq.setBand(0, { type: 'AllPass', frequencyHz: 1000, q: 0.7, enabled: true });
+    eq.setBand(0, { type: 'allPass', frequencyHz: 1000, q: 0.7, enabled: true });
     const db = eq.magnitudeResponse(new Float32Array([100, 1000, 10000]));
     for (const value of db) {
       expect(Math.abs(value)).toBeLessThan(0.05);
@@ -391,7 +390,7 @@ describe('StreamingEqualizer', () => {
 
   it('switches phase mode and reports linear-phase latency', () => {
     const eq = new StreamingEqualizer({ sampleRate: 48000, maxBlockSize: 512 });
-    eq.setBand(0, { type: 'Peak', frequencyHz: 1000, gainDb: 3, q: 1, enabled: true });
+    eq.setBand(0, { type: 'peak', frequencyHz: 1000, gainDb: 3, q: 1, enabled: true });
     eq.setPhaseMode('linear');
     expect(eq.latencySamples()).toBeGreaterThan(0);
     eq.setPhaseMode('linear-phase');
@@ -404,7 +403,7 @@ describe('StreamingEqualizer', () => {
   it('accepts an external sidechain key for dynamic bands', () => {
     const eq = new StreamingEqualizer({ sampleRate: 48000, maxBlockSize: 512 });
     eq.setBand(0, {
-      type: 'Peak',
+      type: 'peak',
       frequencyHz: 1000,
       gainDb: 0,
       q: 2,
@@ -437,7 +436,7 @@ describe('StreamingEqualizer', () => {
     function dynamicEq(): StreamingEqualizer {
       const eq = new StreamingEqualizer({ sampleRate: SIDECHAIN_SR, maxBlockSize: BLOCK });
       eq.setBand(0, {
-        type: 'Peak',
+        type: 'peak',
         frequencyHz: 1000,
         gainDb: 0,
         q: 2,
@@ -538,15 +537,15 @@ describe('StreamingEqualizer', () => {
     // EQ's live movement when that band is dynamic. It is not a response curve,
     // so every assertion below reads band 0 and treats the rest as unconfigured.
     const staticBand = {
-      type: 'HighShelf',
-      coeffMode: 'Rbj',
+      type: 'highShelf',
+      coeffMode: 'rbj',
       frequencyHz: 6000,
       gainDb: 9,
       q: 0.9,
       enabled: true,
       slopeDbOct: 24,
       placement: 'Stereo',
-      phase: 'Inherit',
+      phase: 'inherit',
       soloed: false,
       bypassed: false,
       proportionalQ: true,
@@ -631,7 +630,7 @@ describe('StreamingEqualizer', () => {
     // Stated as the difference between the two ends rather than as an absolute
     // level at each, so the assertion tracks where the shelf sits instead of the
     // exact skirt of whatever coeffMode / q / slope the band was given.
-    const lowShelf = { ...staticBand, type: 'LowShelf' };
+    const lowShelf = { ...staticBand, type: 'lowShelf' };
     expect(shelfGainDb(staticBand, 8000)).toBeGreaterThan(shelfGainDb(staticBand, 200) + 6);
     expect(shelfGainDb(lowShelf, 200)).toBeGreaterThan(shelfGainDb(lowShelf, 8000) + 6);
 
@@ -706,7 +705,7 @@ describe('streaming handles signal use-after-destroy', () => {
 
   it('throws from every StreamingEqualizer reader after destroy()', () => {
     const eq = new StreamingEqualizer({ sampleRate: 48000, maxBlockSize: 512 });
-    eq.setBand(0, { type: 'Peak', frequencyHz: 1000, gainDb: 3, q: 1, enabled: true });
+    eq.setBand(0, { type: 'peak', frequencyHz: 1000, gainDb: 3, q: 1, enabled: true });
     expect(eq.lastAutoGainDb()).toBe(0);
     eq.destroy();
     expect(() => eq.latencySamples()).toThrow(/destroyed/);
@@ -727,29 +726,34 @@ describe('onset, tempogram, NNLS chroma, and LUFS', () => {
     return true;
   };
 
-  it('onsetEnvelope returns a finite Float32Array', () => {
-    const env = onsetEnvelope(generateSine(440, SR, 2.0), SR);
+  it('onsetStrength returns a finite Float32Array', () => {
+    const env = onsetStrength(generateSine(440, SR, 2.0), SR);
     expect(env).toBeInstanceOf(Float32Array);
     expect(env.length).toBeGreaterThan(0);
     expect(allFinite(env)).toBe(true);
   });
 
   it('fourierTempogram returns an [nBins x nFrames] matrix', () => {
-    const env = onsetEnvelope(generateSine(440, SR, 2.0), SR);
+    const env = onsetStrength(generateSine(440, SR, 2.0), SR);
     const winLength = 384;
-    const result = fourierTempogram(env, SR, 512, winLength);
-    expect(result.nFrames).toBe(env.length);
+    const result = fourierTempogram({
+      onsetEnvelope: env,
+      sampleRate: SR,
+      hopLength: 512,
+      winLength,
+    });
+    expect(result.cols).toBe(env.length);
     const expectedBins = Math.floor(winLength / 2) + 1;
-    expect(result.nBins).toBe(expectedBins);
+    expect(result.rows).toBe(expectedBins);
     expect(result.data).toBeInstanceOf(Float32Array);
-    expect(result.data.length).toBe(result.nBins * result.nFrames);
+    expect(result.data.length).toBe(result.rows * result.cols);
     expect(allFinite(result.data)).toBe(true);
   });
 
   it('tempogramRatio returns one finite value per default factor', () => {
-    const env = onsetEnvelope(generateSine(440, SR, 2.0), SR);
-    const tg = tempogram(env, SR);
-    const ratio = tempogramRatio(tg.data, tg.winLength, SR);
+    const env = onsetStrength(generateSine(440, SR, 2.0), SR);
+    const tg = tempogram({ onsetEnvelope: env, sampleRate: SR });
+    const ratio = tempogramRatio({ tempogram: tg, sampleRate: SR });
     expect(ratio).toBeInstanceOf(Float32Array);
     expect(ratio.length).toBe(5); // {0.5, 1, 2, 3, 4}
     expect(allFinite(ratio)).toBe(true);
@@ -757,9 +761,15 @@ describe('onset, tempogram, NNLS chroma, and LUFS', () => {
 
   it('tempogram cosine mode is exposed', () => {
     const onset = new Float32Array([0.2, 1.0, 0.4, 0.0, 0.8, 0.1, 0.5, 0.3]);
-    const result = tempogram(onset, SR, 1, 4, 'cosine');
-    expect(result.nFrames).toBe(onset.length);
-    expect(result.winLength).toBe(4);
+    const result = tempogram({
+      onsetEnvelope: onset,
+      sampleRate: SR,
+      hopLength: 1,
+      winLength: 4,
+      mode: 'cosine',
+    });
+    expect(result.cols).toBe(onset.length);
+    expect(result.rows).toBe(4);
     expect(result.data.length).toBe(4 * onset.length);
     expect(allFinite(result.data)).toBe(true);
     for (const value of result.data) {
@@ -770,34 +780,26 @@ describe('onset, tempogram, NNLS chroma, and LUFS', () => {
 
   it('tempogram and Fourier tempogram forward center and norm', () => {
     const onset = new Float32Array([0.2, 1.0, 0.4, 0.0, 0.8, 0.1, 0.5, 0.3]);
-    expect(
-      tempogram({
-        onsetEnvelope: onset,
-        sampleRate: SR,
-        hopLength: 1,
-        winLength: 4,
-        center: false,
-        norm: false,
-      }),
-    ).toEqual(tempogram(onset, SR, 1, 4, 'autocorrelation', false, false));
-    expect(
-      fourierTempogram({
-        onsetEnvelope: onset,
-        sampleRate: SR,
-        hopLength: 1,
-        winLength: 4,
-        center: false,
-        norm: false,
-      }),
-    ).toEqual(fourierTempogram(onset, SR, 1, 4, false, false));
+    const base = { onsetEnvelope: onset, sampleRate: SR, hopLength: 1, winLength: 4 };
+    const defaults = tempogram(base);
+    const uncentered = tempogram({ ...base, center: false });
+    const unnormalized = tempogram({ ...base, norm: false });
+    expect(Array.from(uncentered.data)).not.toEqual(Array.from(defaults.data));
+    expect(Array.from(unnormalized.data)).not.toEqual(Array.from(defaults.data));
+    expect(Array.from(tempogram({ ...base, center: false, norm: false }).data)).not.toEqual(
+      Array.from(uncentered.data),
+    );
+    expect(Array.from(fourierTempogram({ ...base, center: false }).data)).not.toEqual(
+      Array.from(fourierTempogram(base).data),
+    );
   });
 
   it('nnlsChroma returns a 12 x nFrames matrix', () => {
     const result = nnlsChroma(generateSine(440, SR, 2.0), SR);
-    expect(result.nChroma).toBe(12);
-    expect(result.nFrames).toBeGreaterThan(0);
+    expect(result.rows).toBe(12);
+    expect(result.cols).toBeGreaterThan(0);
     expect(result.data).toBeInstanceOf(Float32Array);
-    expect(result.data.length).toBe(12 * result.nFrames);
+    expect(result.data.length).toBe(12 * result.cols);
     expect(allFinite(result.data)).toBe(true);
   });
 
@@ -812,8 +814,8 @@ describe('onset, tempogram, NNLS chroma, and LUFS', () => {
       expect(Number.isFinite(r.integratedLufs)).toBe(true);
       expect(Number.isFinite(r.momentaryLufs)).toBe(true);
       expect(Number.isFinite(r.shortTermLufs)).toBe(true);
-      expect(Number.isFinite(r.loudnessRange)).toBe(true);
-      expect(r.loudnessRange).toBeGreaterThanOrEqual(0);
+      expect(Number.isFinite(r.loudnessRangeLu)).toBe(true);
+      expect(r.loudnessRangeLu).toBeGreaterThanOrEqual(0);
     }
     expect(loud.integratedLufs).toBeGreaterThan(quiet.integratedLufs);
   });
@@ -835,17 +837,17 @@ describe('onset, tempogram, NNLS chroma, and LUFS', () => {
   it('Audio methods mirror standalone onset/chroma/LUFS functions', () => {
     const audio = Audio.fromBuffer(generateSine(440, 48000, 3.0), 48000);
     try {
-      const env = audio.onsetEnvelope();
+      const env = audio.onsetStrength();
       expect(env).toBeInstanceOf(Float32Array);
       expect(env.length).toBeGreaterThan(0);
 
       const chromaResult = audio.nnlsChroma();
-      expect(chromaResult.nChroma).toBe(12);
-      expect(chromaResult.data.length).toBe(12 * chromaResult.nFrames);
+      expect(chromaResult.rows).toBe(12);
+      expect(chromaResult.data.length).toBe(12 * chromaResult.cols);
 
       const loud = audio.lufs();
       expect(Number.isFinite(loud.integratedLufs)).toBe(true);
-      expect(Number.isFinite(loud.loudnessRange)).toBe(true);
+      expect(Number.isFinite(loud.loudnessRangeLu)).toBe(true);
 
       expect(audio.momentaryLufs().length).toBeGreaterThan(0);
       expect(audio.shortTermLufs().length).toBeGreaterThan(0);
@@ -856,7 +858,7 @@ describe('onset, tempogram, NNLS chroma, and LUFS', () => {
 });
 
 describe('StreamAnalyzer quantize-config override', () => {
-  it('uses feature flags and empty arrays for every disabled-feature combination and read type', () => {
+  it('omits the arrays of every disabled feature for every combination and read type', () => {
     const input = new Float32Array(32);
     input[8] = 0.5;
     for (let mask = 0; mask < 16; mask += 1) {
@@ -880,49 +882,58 @@ describe('StreamAnalyzer quantize-config override', () => {
               ? analyzer.readFramesU8(1)
               : analyzer.readFramesI16(1);
         expect(frames.nFrames).toBe(1);
-        expect(frames.featureFlags).toBe(mask);
-        expect(frames.nMels).toBe(mask & 1 ? 8 : 0);
-        expect(frames.nChroma).toBe(mask & 2 ? 12 : 0);
-        expect(frames.mel.length).toBe(mask & 1 ? 8 : 0);
-        expect(frames.chroma.length).toBe(mask & 2 ? 12 : 0);
-        expect(frames.onsetStrength.length).toBe(mask & 4 ? 1 : 0);
-        expect(frames.rmsEnergy.length).toBe(1);
-        expect(frames.spectralCentroid.length).toBe(mask & 8 ? 1 : 0);
-        expect(frames.spectralFlatness.length).toBe(mask & 8 ? 1 : 0);
+        // `mel` / `chroma` are a matrix on readFrames and a flat array on the quantized reads.
+        const bandCount = (band: unknown): number | undefined =>
+          band === undefined
+            ? undefined
+            : readType === 0
+              ? (band as { rows: number }).rows
+              : (band as ArrayLike<number>).length;
+        expect(bandCount(frames.mel)).toBe(mask & 1 ? 8 : undefined);
+        expect(bandCount(frames.chroma)).toBe(mask & 2 ? 12 : undefined);
+        if (readType !== 0) {
+          const quantized = frames as StreamFramesU8 | StreamFramesI16;
+          expect(quantized.nMels).toBe(mask & 1 ? 8 : 0);
+          expect(quantized.nChroma).toBe(mask & 2 ? 12 : 0);
+        }
+        expect(frames.onsetStrength?.length).toBe(mask & 4 ? 1 : undefined);
+        expect(frames.rmsEnergy?.length).toBe(1);
+        expect(frames.spectralCentroid?.length).toBe(mask & 8 ? 1 : undefined);
+        expect(frames.spectralFlatness?.length).toBe(mask & 8 ? 1 : undefined);
       }
     }
   });
 
-  it('rejects computeMagnitude, the way the C ABI, WASM and Python do', () => {
-    // This surface builds sonare::StreamAnalyzer directly and inherits nothing
-    // from the C ABI, so it used to be the one facade that accepted the flag --
-    // and then burned realtime CPU per frame computing a magnitude spectrum no
-    // read path here can return. The guard now sits with the field, shared by
-    // every facade.
-    let caught: unknown;
-    try {
-      new StreamAnalyzer({ sampleRate: SR, computeMagnitude: true });
-    } catch (error) {
-      caught = error;
+  it('rejects computeMagnitude as an unknown config key', () => {
+    // No read path here can return a magnitude spectrum, so the key is not part
+    // of the config at all, whatever its value.
+    for (const computeMagnitude of [true, false]) {
+      expect(
+        () => new StreamAnalyzer({ sampleRate: SR, computeMagnitude } as never),
+        `computeMagnitude ${computeMagnitude}`,
+      ).toThrow(TypeError);
     }
-    expect(isSonareError(caught)).toBe(true);
-    expect((caught as { code: number }).code).toBe(ErrorCode.NotSupported);
-    expect((caught as Error).message).toMatch(/computeMagnitude is not supported/);
-    // An explicit false is still the default and stays accepted.
-    const analyzer = new StreamAnalyzer({ sampleRate: SR, computeMagnitude: false });
-    analyzer.destroy();
+    expect(() => new StreamAnalyzer({ sampleRate: SR, computeMagnitude: true } as never)).toThrow(
+      /unknown config key 'computeMagnitude'/,
+    );
   });
 
   it('rejects legacy outputFormat selectors', () => {
-    expect(() => new StreamAnalyzer({ outputFormat: 1 })).toThrow();
-    expect(() => new StreamAnalyzer({ outputFormat: 2 })).toThrow();
-    for (const value of [0.5, Number.NaN, Number.POSITIVE_INFINITY, '0']) {
-      expect(() => new StreamAnalyzer({ outputFormat: value as unknown as number })).toThrow();
+    for (const value of [1, 2, 0.5, Number.NaN, Number.POSITIVE_INFINITY, '0']) {
+      expect(() => new StreamAnalyzer({ sampleRate: SR, outputFormat: value } as never)).toThrow(
+        /unknown config key 'outputFormat'/,
+      );
     }
   });
 
   it('widens the saturating quantization range', () => {
-    const config = { sampleRate: SR, nFft: 1024, hopLength: 256, nMels: 32, window: 1 };
+    const config = {
+      sampleRate: SR,
+      nFft: 1024,
+      hopLength: 256,
+      nMels: 32,
+      window: 'hamming' as const,
+    };
 
     // A tiny centroidMax saturates the (positive) spectral centroid to the u8
     // maximum; a huge centroidMax collapses it toward zero. Reading identical
@@ -938,8 +949,10 @@ describe('StreamAnalyzer quantize-config override', () => {
 
     expect(narrow.nFrames).toBe(broad.nFrames);
     expect(narrow.nFrames).toBeGreaterThan(0);
-    expect(narrow.spectralCentroid[0]).toBe(255); // saturated by the narrow range
-    expect(Array.from(narrow.spectralCentroid)).not.toEqual(Array.from(broad.spectralCentroid));
+    expect(narrow.spectralCentroid?.[0]).toBe(255); // saturated by the narrow range
+    expect(Array.from(narrow.spectralCentroid ?? [])).not.toEqual(
+      Array.from(broad.spectralCentroid ?? []),
+    );
 
     // Omitting the config keeps the default ranges (no throw, same shape).
     const fallback = wide.readFramesU8(4);
@@ -954,7 +967,7 @@ describe('StreamAnalyzer quantize-config override', () => {
     expect(() => new StreamAnalyzer({ sampleRate: SR, nFft: 0 })).toThrow();
     expect(() => new StreamAnalyzer({ sampleRate: SR, nMels: 0 })).toThrow();
     expect(() => new StreamAnalyzer({ sampleRate: SR, nFft: 1024, hopLength: 2048 })).toThrow();
-    expect(() => new StreamAnalyzer({ sampleRate: SR, fmin: 8000, fmax: 4000 })).toThrow();
+    expect(() => new StreamAnalyzer({ sampleRate: SR, fminHz: 8000, fmaxHz: 4000 })).toThrow();
     expect(() => new StreamAnalyzer({ sampleRate: SR, maxProgressionEntries: 0 })).toThrow();
   });
 
@@ -996,12 +1009,12 @@ describe('StreamAnalyzer quantize-config override', () => {
       emitEveryNFrames: 1,
       magnitudeDownsample: 1,
     });
-    expect(ok.sampleRate()).toBe(8000);
+    expect(ok.sampleRate).toBe(8000);
     ok.destroy();
   });
 
-  it('accepts only valid window ordinals at the native boundary', () => {
-    for (const window of [0, 1, 2, 3]) {
+  it('accepts only the window tokens and refuses ordinals', () => {
+    for (const window of ['hann', 'hamming', 'blackman', 'rectangular'] as const) {
       const analyzer = new StreamAnalyzer({
         sampleRate: 8000,
         nFft: 32,
@@ -1009,30 +1022,24 @@ describe('StreamAnalyzer quantize-config override', () => {
         nMels: 8,
         window,
       });
-      expect(analyzer.sampleRate()).toBe(8000);
+      expect(analyzer.sampleRate).toBe(8000);
       analyzer.destroy();
     }
 
-    const explicitUndefined = new StreamAnalyzer({ window: undefined });
+    const explicitUndefined = new StreamAnalyzer({ sampleRate: 8000, window: undefined });
     explicitUndefined.destroy();
 
-    const invalidWindows: unknown[] = [
-      -1,
-      4,
-      99,
-      0.5,
-      Number.NaN,
-      Number.POSITIVE_INFINITY,
-      Number.NEGATIVE_INFINITY,
-      '0',
-      true,
-      null,
-      {},
-      [],
-      new Number(1),
-    ];
-    for (const window of invalidWindows) {
-      expect(() => new StreamAnalyzer({ window: window as number })).toThrow(RangeError);
+    // An unknown spelling is out of the domain; a non-string is the wrong type.
+    for (const window of ['rect', 'Hann', 'triangle', '']) {
+      expect(() => new StreamAnalyzer({ sampleRate: 8000, window: window as never })).toThrow(
+        RangeError,
+      );
+    }
+    const wrongTypes: unknown[] = [0, 1, 2, 3, -1, 0.5, Number.NaN, true, null, {}, []];
+    for (const window of wrongTypes) {
+      expect(() => new StreamAnalyzer({ sampleRate: 8000, window: window as never })).toThrow(
+        TypeError,
+      );
     }
   });
 
@@ -1099,13 +1106,13 @@ describe('StreamAnalyzer external offsets', () => {
     const audio = new Float32Array(4096);
     const reference = new StreamAnalyzer(config);
     reference.process(audio);
-    const expected = reference.readFrames(64).timestamps;
+    const expected = reference.readFrames(64).timestampsSec;
 
     const analyzer = new StreamAnalyzer(config);
     for (let offset = 0; offset < audio.length; offset += 128) {
       analyzer.processWithOffset(audio.subarray(offset, offset + 128), offset);
     }
-    expect(Array.from(analyzer.readFrames(64).timestamps)).toEqual(Array.from(expected));
+    expect(Array.from(analyzer.readFrames(64).timestampsSec)).toEqual(Array.from(expected));
     analyzer.reset();
     analyzer.processWithOffset(audio.subarray(0, 128), 1000);
     expect(() => analyzer.processWithOffset(audio.subarray(128, 256), 1129)).toThrow();
@@ -1128,7 +1135,6 @@ describe('StreamAnalyzer external offsets', () => {
     const refused = /finite non-negative integer no greater than Number\.MAX_SAFE_INTEGER/;
     for (const value of invalidValues) {
       expect(() => analyzer.processWithOffset(new Float32Array([0]), value)).toThrow(refused);
-      expect(() => analyzer.readFramesSoa(value)).toThrow(refused);
       expect(() => analyzer.readFrames(value)).toThrow(refused);
       expect(() => analyzer.readFramesU8(value)).toThrow(refused);
       expect(() => analyzer.readFramesI16(value)).toThrow(refused);
@@ -1139,7 +1145,7 @@ describe('StreamAnalyzer external offsets', () => {
     expect(() =>
       analyzer.processWithOffset(new Float32Array([0]), Number.MAX_SAFE_INTEGER),
     ).not.toThrow();
-    expect(() => analyzer.readFramesSoa(Number.MAX_SAFE_INTEGER)).not.toThrow();
+    expect(() => analyzer.readFrames(Number.MAX_SAFE_INTEGER)).not.toThrow();
     expect(() => analyzer.readFramesU8(Number.MAX_SAFE_INTEGER)).not.toThrow();
     expect(() => analyzer.readFramesI16(Number.MAX_SAFE_INTEGER)).not.toThrow();
   });
@@ -1182,21 +1188,24 @@ describe('StreamAnalyzer chord and key names', () => {
     ]) {
       const prefix = chord.root < 0 ? 'N.C.' : PITCH_NAMES[chord.root];
       expect(chord.name.startsWith(prefix)).toBe(true);
-      if (chord.quality === 0) {
+      if (chord.quality === 'major') {
         expect(chord.name).toBe(PITCH_NAMES[chord.root]);
       }
-      if (chord.quality === 1) {
+      if (chord.quality === 'minor') {
         expect(chord.name).toBe(`${PITCH_NAMES[chord.root]}m`);
       }
     }
-    const currentPrefix = estimate.chordRoot < 0 ? 'N.C.' : PITCH_NAMES[estimate.chordRoot];
-    expect(estimate.chordName.startsWith(currentPrefix)).toBe(true);
+    const current = estimate.chord;
+    expect(current).toBeDefined();
+    expect(current?.name.startsWith(PITCH_NAMES[current?.root ?? 0])).toBe(true);
 
-    expect(estimate.key).toBeGreaterThanOrEqual(0);
-    const mode = estimate.keyMinor ? 'minor' : 'major';
-    expect(estimate.keyName).toBe(`${PITCH_NAMES[estimate.key]} ${mode}`);
-    expect(estimate.keyShortName).toBe(
-      estimate.keyMinor ? `${PITCH_NAMES[estimate.key]}m` : PITCH_NAMES[estimate.key],
+    const key = estimate.key;
+    expect(key).toBeDefined();
+    expect(key?.root).toBeGreaterThanOrEqual(0);
+    const isMinor = key?.mode === 'minor';
+    expect(key?.name).toBe(`${PITCH_NAMES[key?.root ?? 0]} ${isMinor ? 'minor' : 'major'}`);
+    expect(key?.shortName).toBe(
+      isMinor ? `${PITCH_NAMES[key?.root ?? 0]}m` : PITCH_NAMES[key?.root ?? 0],
     );
     analyzer.destroy();
   });
@@ -1213,19 +1222,17 @@ describe('StreamAnalyzer chord and key names', () => {
     analyzer.process(samples);
     const { estimate } = analyzer.stats();
     const batch = detectKey(samples, SR);
-    expect(estimate.keyName).toBe(batch.name);
-    expect(estimate.keyShortName).toBe(batch.shortName);
-    expect(estimate.keyName).toBe('C major');
+    expect(estimate.key?.name).toBe(batch.name);
+    expect(estimate.key?.shortName).toBe(batch.shortName);
+    expect(estimate.key?.name).toBe('C major');
     analyzer.destroy();
   });
 
-  it('reports no key name and N.C. before any estimate exists', () => {
+  it('reports no key and no chord before any estimate exists', () => {
     const analyzer = new StreamAnalyzer({ sampleRate: SR });
     const estimate = analyzer.stats().estimate;
-    expect(estimate.key).toBe(-1);
-    expect(estimate.keyName).toBeNull();
-    expect(estimate.keyShortName).toBeNull();
-    expect(estimate.chordName).toBe('N.C.');
+    expect(estimate.key).toBeUndefined();
+    expect(estimate.chord).toBeUndefined();
     analyzer.destroy();
   });
 });

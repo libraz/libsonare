@@ -133,13 +133,23 @@ describe('reported repros', () => {
     ).toThrow("masteringChain: unknown request key 'loudness' ('loudness' belongs under 'config')");
   });
 
-  it('analyzeWithProgress refuses an unknown request key and an unknown option', () => {
+  it('analyze with onProgress refuses an unknown request key and a nested options object', () => {
     expect(() =>
-      sonare.analyzeWithProgress({ samples, sampleRate: 22050, tunning: 'auto' } as never),
-    ).toThrow("analyzeWithProgress: unknown request key 'tunning'");
+      sonare.analyze({
+        samples,
+        sampleRate: 22050,
+        onProgress: () => {},
+        tunning: 'auto',
+      } as never),
+    ).toThrow("analyze: unknown request key 'tunning'");
     expect(() =>
-      sonare.analyzeWithProgress({ samples, sampleRate: 22050, options: { bogus: 1 } } as never),
-    ).toThrow("analyzeWithProgress: unknown option 'bogus' in 'options'");
+      sonare.analyze({
+        samples,
+        sampleRate: 22050,
+        onProgress: () => {},
+        options: { bogus: 1 },
+      } as never),
+    ).toThrow("analyze: unknown request key 'options'");
   });
 
   it('detectBpm refuses a bound it does not take', () => {

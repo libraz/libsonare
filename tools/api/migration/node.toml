@@ -287,3 +287,7243 @@ old = "VocalCapabilities.apiVersion"
 new = "VocalCapabilities.abiVersion"
 domain = "project"
 rule = "abi-probes"
+
+[[entry]]
+kind = "function"
+old = "amplitudeToDb"
+changed = "request-only: amplitudeToDb(request: AmplitudeToDbRequest)"
+domain = "analysis"
+rule = "one-positional-form"
+test = "bindings/node/tests/surface/analysis-features.test.ts::takes a request and refuses positional values"
+
+[[entry]]
+kind = "function"
+old = "bassChroma"
+changed = "one positional form (bassChroma(samples, sampleRate, options?: Omit<BassChromaRequest,'samples'|'sampleRate'>)); request form takes BassChromaRequest"
+domain = "analysis"
+rule = "one-positional-form"
+test = "bindings/node/tests/surface/analysis-features.test.ts::takes samples, sampleRate and an options bag"
+
+[[entry]]
+kind = "function"
+old = "chirp"
+changed = "request-only: chirp(request: ChirpRequest)"
+domain = "analysis"
+rule = "one-positional-form"
+test = "bindings/node/tests/surface/analysis-features.test.ts::takes a request and refuses positional values"
+
+[[entry]]
+kind = "function"
+old = "chroma"
+changed = "one positional form (chroma(samples, sampleRate, options?: Omit<ChromaRequest,'samples'|'sampleRate'>)); request form takes ChromaRequest"
+domain = "analysis"
+rule = "one-positional-form"
+test = "bindings/node/tests/surface/analysis-features.test.ts::takes samples, sampleRate and an options bag"
+
+[[entry]]
+kind = "function"
+old = "chromaCens"
+changed = "one positional form (chromaCens(samples, sampleRate, options?: Omit<ChromaCensRequest,'samples'|'sampleRate'>)); request form takes ChromaCensRequest"
+domain = "analysis"
+rule = "one-positional-form"
+test = "bindings/node/tests/surface/analysis-features.test.ts::takes samples, sampleRate and an options bag"
+
+[[entry]]
+kind = "function"
+old = "chromaCqt"
+changed = "one positional form (chromaCqt(samples, sampleRate, options?: Omit<ChromaCqtRequest,'samples'|'sampleRate'>)); request form takes ChromaCqtRequest"
+domain = "analysis"
+rule = "one-positional-form"
+test = "bindings/node/tests/surface/analysis-features.test.ts::takes samples, sampleRate and an options bag"
+
+[[entry]]
+kind = "function"
+old = "clicks"
+changed = "request-only: clicks(request: ClicksRequest)"
+domain = "analysis"
+rule = "one-positional-form"
+test = "bindings/node/tests/surface/analysis-features.test.ts::takes a request and refuses positional values"
+
+[[entry]]
+kind = "function"
+old = "cqt"
+changed = "one positional form (cqt(samples, sampleRate, options?: Omit<CqtRequest,'samples'|'sampleRate'>)); request form takes CqtRequest"
+domain = "analysis"
+rule = "one-positional-form"
+test = "bindings/node/tests/surface/analysis-features.test.ts::takes samples, sampleRate and an options bag"
+
+[[entry]]
+kind = "function"
+old = "cqtToAudio"
+changed = "request-only: cqtToAudio(request: CqtToAudioRequest)"
+domain = "analysis"
+rule = "one-positional-form"
+test = "bindings/node/tests/surface/analysis-features.test.ts::takes its matrix as a Matrix2D"
+
+[[entry]]
+kind = "function"
+old = "cyclicTempogram"
+changed = "returns Matrix2D"
+domain = "analysis"
+rule = "no-internal-types"
+test = "bindings/node/tests/surface/analysis-features.test.ts::gives the request-only tempo functions no positional form"
+
+[[entry]]
+kind = "function"
+old = "dbToAmplitude"
+changed = "request-only: dbToAmplitude(request: DbToAmplitudeRequest)"
+domain = "analysis"
+rule = "one-positional-form"
+test = "bindings/node/tests/surface/analysis-features.test.ts::takes a request and refuses positional values"
+
+[[entry]]
+kind = "function"
+old = "dbToPower"
+changed = "request-only: dbToPower(request: DbToPowerRequest)"
+domain = "analysis"
+rule = "one-positional-form"
+test = "bindings/node/tests/surface/analysis-features.test.ts::takes a request and refuses positional values"
+
+[[entry]]
+kind = "function"
+old = "deemphasis"
+changed = "one positional form (deemphasis(samples, sampleRate, options?: Omit<DeemphasisRequest,'samples'|'sampleRate'>)); request form takes DeemphasisRequest"
+domain = "analysis"
+rule = "one-positional-form"
+test = "bindings/node/tests/surface/analysis-features.test.ts::takes samples, sampleRate and an options bag"
+
+[[entry]]
+kind = "function"
+old = "estimateTuning"
+changed = "one positional form (estimateTuning(samples, sampleRate, options?: Omit<EstimateTuningRequest,'samples'|'sampleRate'>)); request form takes EstimateTuningRequest"
+domain = "analysis"
+rule = "one-positional-form"
+test = "bindings/node/tests/surface/analysis-features.test.ts::takes samples, sampleRate and an options bag"
+
+[[entry]]
+kind = "function"
+old = "fixFrames"
+changed = "request-only: fixFrames(request: FixFramesRequest)"
+domain = "analysis"
+rule = "one-positional-form"
+test = "bindings/node/tests/surface/analysis-features.test.ts::takes a request and refuses positional values"
+
+[[entry]]
+kind = "function"
+old = "fixLength"
+changed = "request-only: fixLength(request: FixLengthRequest)"
+domain = "analysis"
+rule = "one-positional-form"
+test = "bindings/node/tests/surface/analysis-features.test.ts::takes a request and refuses positional values"
+
+[[entry]]
+kind = "function"
+old = "fourierTempogram"
+changed = "norm option removed"
+domain = "analysis"
+rule = "individual"
+test = "bindings/node/tests/surface/analysis-features.test.ts::drops the fourierTempogram norm field and the tempogram ratio window"
+
+[[entry]]
+kind = "function"
+old = "frameSignal"
+changed = "returns Matrix2D"
+domain = "analysis"
+rule = "no-internal-types"
+test = "bindings/node/tests/surface/analysis-features.test.ts::returns Matrix2D from"
+
+[[entry]]
+kind = "function"
+old = "framesToSamples"
+changed = "request-object overload removed; call positionally"
+domain = "analysis"
+rule = "one-positional-form"
+test = "bindings/node/tests/surface/analysis-features.test.ts::takes the scalar unit conversions positionally only"
+
+[[entry]]
+kind = "function"
+old = "framesToTime"
+changed = "request-object overload removed; call positionally"
+domain = "analysis"
+rule = "one-positional-form"
+test = "bindings/node/tests/surface/analysis-features.test.ts::takes the scalar unit conversions positionally only"
+
+[[entry]]
+kind = "function"
+old = "griffinLim"
+changed = "request-only: griffinLim(request: GriffinLimRequest)"
+domain = "analysis"
+rule = "one-positional-form"
+test = "bindings/node/tests/surface/analysis-features.test.ts::takes its matrix as a Matrix2D"
+
+[[entry]]
+kind = "function"
+old = "hybridCqt"
+changed = "one positional form (hybridCqt(samples, sampleRate, options?: Omit<HybridCqtRequest,'samples'|'sampleRate'>)); request form takes HybridCqtRequest"
+domain = "analysis"
+rule = "one-positional-form"
+test = "bindings/node/tests/surface/analysis-features.test.ts::takes samples, sampleRate and an options bag"
+
+[[entry]]
+kind = "function"
+old = "lufs"
+changed = "one positional form (lufs(samples, sampleRate, options?: Omit<LufsRequest,'samples'|'sampleRate'>)); request form takes LufsRequest"
+domain = "analysis"
+rule = "one-positional-form"
+test = "bindings/node/tests/surface/analysis-features.test.ts::takes samples, sampleRate and an options bag"
+
+[[entry]]
+kind = "function"
+old = "melDelta"
+changed = "returns Matrix2D"
+domain = "analysis"
+rule = "matrix-2d"
+test = "bindings/node/tests/surface/analysis-features.test.ts::returns Matrix2D from"
+
+[[entry]]
+kind = "function"
+old = "melSpectrogram"
+changed = "one positional form (melSpectrogram(samples, sampleRate, options?: Omit<MelSpectrogramRequest,'samples'|'sampleRate'>)); request form takes MelSpectrogramRequest"
+domain = "analysis"
+rule = "one-positional-form"
+test = "bindings/node/tests/surface/analysis-features.test.ts::takes samples, sampleRate and an options bag"
+
+[[entry]]
+kind = "function"
+old = "melToAudio"
+changed = "request-only: melToAudio(request: MelToAudioRequest)"
+domain = "analysis"
+rule = "one-positional-form"
+test = "bindings/node/tests/surface/analysis-features.test.ts::takes its matrix as a Matrix2D"
+
+[[entry]]
+kind = "function"
+old = "melToStft"
+changed = "returns Matrix2D"
+domain = "analysis"
+rule = "matrix-2d"
+test = "bindings/node/tests/surface/analysis-features.test.ts::returns Matrix2D from"
+
+[[entry]]
+kind = "function"
+old = "mfcc"
+changed = "one positional form (mfcc(samples, sampleRate, options?: Omit<MfccRequest,'samples'|'sampleRate'>)); request form takes MfccRequest"
+domain = "analysis"
+rule = "one-positional-form"
+test = "bindings/node/tests/surface/analysis-features.test.ts::takes samples, sampleRate and an options bag"
+
+[[entry]]
+kind = "function"
+old = "mfccToAudio"
+changed = "request-only: mfccToAudio(request: MfccToAudioRequest)"
+domain = "analysis"
+rule = "one-positional-form"
+test = "bindings/node/tests/surface/analysis-features.test.ts::takes its matrix as a Matrix2D"
+
+[[entry]]
+kind = "function"
+old = "mfccToMel"
+changed = "returns Matrix2D"
+domain = "analysis"
+rule = "matrix-2d"
+test = "bindings/node/tests/surface/analysis-features.test.ts::returns Matrix2D from"
+
+[[entry]]
+kind = "function"
+old = "momentaryLufs"
+changed = "one positional form (momentaryLufs(samples, sampleRate, options?: Omit<MomentaryLufsRequest,'samples'|'sampleRate'>)); request form takes MomentaryLufsRequest"
+domain = "analysis"
+rule = "one-positional-form"
+test = "bindings/node/tests/surface/analysis-features.test.ts::takes samples, sampleRate and an options bag"
+
+[[entry]]
+kind = "function"
+old = "nnlsChroma"
+changed = "returns Matrix2D"
+domain = "analysis"
+rule = "no-internal-types"
+test = "bindings/node/tests/surface/analysis-features.test.ts::returns Matrix2D from"
+
+[[entry]]
+kind = "function"
+old = "noteSegments"
+changed = "request gains voiced?: VoicedFlags; voicedProb optional; nested config removed"
+domain = "analysis"
+rule = "individual"
+test = "bindings/node/tests/surface/analysis-features.test.ts::declares sampleRate required on every sample request"
+
+[[entry]]
+kind = "function"
+old = "onsetBacktrack"
+changed = "request-only: onsetBacktrack(request: OnsetBacktrackRequest)"
+domain = "analysis"
+rule = "one-positional-form"
+test = "bindings/node/tests/surface/analysis-features.test.ts::takes a request and refuses positional values"
+
+[[entry]]
+kind = "function"
+old = "onsetEnvelope"
+new = "onsetStrength"
+domain = "analysis"
+rule = "onset-strength"
+
+[[entry]]
+kind = "function"
+old = "onsetStrengthMulti"
+changed = "returns Matrix2D"
+domain = "analysis"
+rule = "matrix-2d"
+test = "bindings/node/tests/surface/analysis-features.test.ts::returns Matrix2D from"
+
+[[entry]]
+kind = "function"
+old = "padCenter"
+changed = "request-only: padCenter(request: PadCenterRequest)"
+domain = "analysis"
+rule = "one-positional-form"
+test = "bindings/node/tests/surface/analysis-features.test.ts::takes a request and refuses positional values"
+
+[[entry]]
+kind = "function"
+old = "pcen"
+changed = "returns Matrix2D"
+domain = "analysis"
+rule = "matrix-2d"
+test = "bindings/node/tests/surface/analysis-features.test.ts::returns Matrix2D from"
+
+[[entry]]
+kind = "function"
+old = "peakPick"
+changed = "request-only: peakPick(request: PeakPickRequest)"
+domain = "analysis"
+rule = "one-positional-form"
+test = "bindings/node/tests/surface/analysis-features.test.ts::takes a request and refuses positional values"
+
+[[entry]]
+kind = "function"
+old = "piptrack"
+changed = "one positional form (piptrack(samples, sampleRate, options?: Omit<PiptrackRequest,'samples'|'sampleRate'>)); request form takes PiptrackRequest"
+domain = "analysis"
+rule = "one-positional-form"
+test = "bindings/node/tests/surface/analysis-features.test.ts::takes samples, sampleRate and an options bag"
+
+[[entry]]
+kind = "function"
+old = "pitchPyin"
+changed = "one positional form (pitchPyin(samples, sampleRate, options?: Omit<PitchPyinRequest,'samples'|'sampleRate'>)); request form takes PitchPyinRequest"
+domain = "analysis"
+rule = "one-positional-form"
+test = "bindings/node/tests/surface/analysis-features.test.ts::takes samples, sampleRate and an options bag"
+
+[[entry]]
+kind = "function"
+old = "pitchTuning"
+changed = "request-only: pitchTuning(request: PitchTuningRequest)"
+domain = "analysis"
+rule = "one-positional-form"
+test = "bindings/node/tests/surface/analysis-features.test.ts::takes a request and refuses positional values"
+
+[[entry]]
+kind = "function"
+old = "pitchYin"
+changed = "one positional form (pitchYin(samples, sampleRate, options?: Omit<PitchYinRequest,'samples'|'sampleRate'>)); request form takes PitchYinRequest"
+domain = "analysis"
+rule = "one-positional-form"
+test = "bindings/node/tests/surface/analysis-features.test.ts::takes samples, sampleRate and an options bag"
+
+[[entry]]
+kind = "function"
+old = "plp"
+changed = "tempo search default 60-200 BPM via bpmMin/bpmMax"
+domain = "analysis"
+rule = "tempo-range"
+test = "bindings/node/tests/surface/analysis-features.test.ts::gives the request-only tempo functions no positional form"
+
+[[entry]]
+kind = "function"
+old = "polyFeatures"
+changed = "one positional form (polyFeatures(samples, sampleRate, options?: Omit<PolyFeaturesRequest,'samples'|'sampleRate'>)); request form takes PolyFeaturesRequest"
+domain = "analysis"
+rule = "one-positional-form"
+test = "bindings/node/tests/surface/analysis-features.test.ts::takes samples, sampleRate and an options bag"
+
+[[entry]]
+kind = "function"
+old = "powerToDb"
+changed = "request-only: powerToDb(request: PowerToDbRequest)"
+domain = "analysis"
+rule = "one-positional-form"
+test = "bindings/node/tests/surface/analysis-features.test.ts::takes a request and refuses positional values"
+
+[[entry]]
+kind = "function"
+old = "preemphasis"
+changed = "one positional form (preemphasis(samples, sampleRate, options?: Omit<PreemphasisRequest,'samples'|'sampleRate'>)); request form takes PreemphasisRequest"
+domain = "analysis"
+rule = "one-positional-form"
+test = "bindings/node/tests/surface/analysis-features.test.ts::takes samples, sampleRate and an options bag"
+
+[[entry]]
+kind = "function"
+old = "pseudoCqt"
+changed = "one positional form (pseudoCqt(samples, sampleRate, options?: Omit<PseudoCqtRequest,'samples'|'sampleRate'>)); request form takes PseudoCqtRequest"
+domain = "analysis"
+rule = "one-positional-form"
+test = "bindings/node/tests/surface/analysis-features.test.ts::takes samples, sampleRate and an options bag"
+
+[[entry]]
+kind = "function"
+old = "reassignedSpectrogram"
+changed = "one positional form (reassignedSpectrogram(samples, sampleRate, options?: Omit<ReassignedSpectrogramRequest,'samples'|'sampleRate'>)); request form takes ReassignedSpectrogramRequest"
+domain = "analysis"
+rule = "one-positional-form"
+test = "bindings/node/tests/surface/analysis-features.test.ts::takes samples, sampleRate and an options bag"
+
+[[entry]]
+kind = "function"
+old = "rmsEnergy"
+changed = "one positional form (rmsEnergy(samples, sampleRate, options?: Omit<RmsEnergyRequest,'samples'|'sampleRate'>)); request form takes RmsEnergyRequest"
+domain = "analysis"
+rule = "one-positional-form"
+test = "bindings/node/tests/surface/analysis-features.test.ts::takes samples, sampleRate and an options bag"
+
+[[entry]]
+kind = "function"
+old = "samplesToFrames"
+changed = "request-object overload removed; call positionally"
+domain = "analysis"
+rule = "one-positional-form"
+test = "bindings/node/tests/surface/analysis-features.test.ts::takes the scalar unit conversions positionally only"
+
+[[entry]]
+kind = "function"
+old = "segmentAgglomerative"
+changed = "request type is SegmentAgglomerativeRequest"
+domain = "analysis"
+rule = "type-names"
+test = "bindings/node/tests/surface/analysis-features.test.ts::takes its matrix as a Matrix2D"
+
+[[entry]]
+kind = "function"
+old = "segmentCrossSimilarity"
+changed = "returns Matrix2D"
+domain = "analysis"
+rule = "matrix-2d"
+test = "bindings/node/tests/surface/analysis-features.test.ts::returns Matrix2D from fourierTempogram and the segment functions"
+
+[[entry]]
+kind = "function"
+old = "segmentLagToRecurrence"
+changed = "returns Matrix2D"
+domain = "analysis"
+rule = "matrix-2d"
+test = "bindings/node/tests/surface/analysis-features.test.ts::returns Matrix2D from fourierTempogram and the segment functions"
+
+[[entry]]
+kind = "function"
+old = "segmentPathEnhance"
+changed = "returns Matrix2D"
+domain = "analysis"
+rule = "matrix-2d"
+test = "bindings/node/tests/surface/analysis-features.test.ts::returns Matrix2D from fourierTempogram and the segment functions"
+
+[[entry]]
+kind = "function"
+old = "segmentRecurrenceMatrix"
+changed = "returns Matrix2D"
+domain = "analysis"
+rule = "matrix-2d"
+test = "bindings/node/tests/surface/analysis-features.test.ts::returns Matrix2D from fourierTempogram and the segment functions"
+
+[[entry]]
+kind = "function"
+old = "segmentRecurrenceToLag"
+changed = "returns Matrix2D"
+domain = "analysis"
+rule = "matrix-2d"
+test = "bindings/node/tests/surface/analysis-features.test.ts::returns Matrix2D from fourierTempogram and the segment functions"
+
+[[entry]]
+kind = "function"
+old = "segmentSubsegment"
+changed = "request type is SegmentSubsegmentRequest"
+domain = "analysis"
+rule = "type-names"
+test = "bindings/node/tests/surface/analysis-features.test.ts::takes its matrix as a Matrix2D"
+
+[[entry]]
+kind = "function"
+old = "shortTermLufs"
+changed = "one positional form (shortTermLufs(samples, sampleRate, options?: Omit<ShortTermLufsRequest,'samples'|'sampleRate'>)); request form takes ShortTermLufsRequest"
+domain = "analysis"
+rule = "one-positional-form"
+test = "bindings/node/tests/surface/analysis-features.test.ts::takes samples, sampleRate and an options bag"
+
+[[entry]]
+kind = "function"
+old = "spectralBandwidth"
+changed = "one positional form (spectralBandwidth(samples, sampleRate, options?: Omit<SpectralBandwidthRequest,'samples'|'sampleRate'>)); request form takes SpectralBandwidthRequest"
+domain = "analysis"
+rule = "one-positional-form"
+test = "bindings/node/tests/surface/analysis-features.test.ts::takes samples, sampleRate and an options bag"
+
+[[entry]]
+kind = "function"
+old = "spectralCentroid"
+changed = "one positional form (spectralCentroid(samples, sampleRate, options?: Omit<SpectralCentroidRequest,'samples'|'sampleRate'>)); request form takes SpectralCentroidRequest"
+domain = "analysis"
+rule = "one-positional-form"
+test = "bindings/node/tests/surface/analysis-features.test.ts::takes samples, sampleRate and an options bag"
+
+[[entry]]
+kind = "function"
+old = "spectralContrast"
+changed = "one positional form (spectralContrast(samples, sampleRate, options?: Omit<SpectralContrastRequest,'samples'|'sampleRate'>)); request form takes SpectralContrastRequest"
+domain = "analysis"
+rule = "one-positional-form"
+test = "bindings/node/tests/surface/analysis-features.test.ts::takes samples, sampleRate and an options bag"
+
+[[entry]]
+kind = "function"
+old = "spectralFlatness"
+changed = "one positional form (spectralFlatness(samples, sampleRate, options?: Omit<SpectralFlatnessRequest,'samples'|'sampleRate'>)); request form takes SpectralFlatnessRequest"
+domain = "analysis"
+rule = "one-positional-form"
+test = "bindings/node/tests/surface/analysis-features.test.ts::takes samples, sampleRate and an options bag"
+
+[[entry]]
+kind = "function"
+old = "spectralFlux"
+changed = "one positional form (spectralFlux(samples, sampleRate, options?: Omit<SpectralFluxRequest,'samples'|'sampleRate'>)); request form takes SpectralFluxRequest"
+domain = "analysis"
+rule = "one-positional-form"
+test = "bindings/node/tests/surface/analysis-features.test.ts::takes samples, sampleRate and an options bag"
+
+[[entry]]
+kind = "function"
+old = "spectralRolloff"
+changed = "one positional form (spectralRolloff(samples, sampleRate, options?: Omit<SpectralRolloffRequest,'samples'|'sampleRate'>)); request form takes SpectralRolloffRequest"
+domain = "analysis"
+rule = "one-positional-form"
+test = "bindings/node/tests/surface/analysis-features.test.ts::takes samples, sampleRate and an options bag"
+
+[[entry]]
+kind = "function"
+old = "splitSilence"
+changed = "one positional form (splitSilence(samples, sampleRate, options?: Omit<SplitSilenceRequest,'samples'|'sampleRate'>)); request form takes SplitSilenceRequest"
+domain = "analysis"
+rule = "one-positional-form"
+test = "bindings/node/tests/surface/analysis-features.test.ts::takes samples, sampleRate and an options bag"
+
+[[entry]]
+kind = "function"
+old = "splitSilenceCommon"
+changed = "request type is SplitSilenceCommonRequest"
+domain = "analysis"
+rule = "type-names"
+test = "bindings/node/tests/surface/analysis-features.test.ts::splitSilenceCommon and its report variant take a request only"
+
+[[entry]]
+kind = "function"
+old = "splitSilenceCommonWithReport"
+changed = "returns SplitSilenceCommonWithReportResult"
+domain = "analysis"
+rule = "typed-results"
+test = "bindings/node/tests/surface/analysis-features.test.ts::splitSilenceCommon and its report variant take a request only"
+
+[[entry]]
+kind = "function"
+old = "stft"
+changed = "one positional form (stft(samples, sampleRate, options?: Omit<StftRequest,'samples'|'sampleRate'>)); request form takes StftRequest"
+domain = "analysis"
+rule = "one-positional-form"
+test = "bindings/node/tests/surface/analysis-features.test.ts::takes samples, sampleRate and an options bag"
+
+[[entry]]
+kind = "function"
+old = "stftDb"
+changed = "returns Matrix2D"
+domain = "analysis"
+rule = "matrix-2d"
+test = "bindings/node/tests/surface/analysis-features.test.ts::returns Matrix2D from"
+
+[[entry]]
+kind = "function"
+old = "tempogram"
+changed = "returns Matrix2D"
+domain = "analysis"
+rule = "no-internal-types"
+test = "bindings/node/tests/surface/analysis-features.test.ts::gives the request-only tempo functions no positional form"
+
+[[entry]]
+kind = "function"
+old = "tempogramRatio"
+changed = "request-only: tempogramRatio(request: TempogramRatioRequest)"
+domain = "analysis"
+rule = "one-positional-form"
+test = "bindings/node/tests/surface/analysis-features.test.ts::gives the request-only tempo functions no positional form"
+
+[[entry]]
+kind = "function"
+old = "timeToFrames"
+changed = "request-object overload removed; call positionally"
+domain = "analysis"
+rule = "one-positional-form"
+test = "bindings/node/tests/surface/analysis-features.test.ts::takes the scalar unit conversions positionally only"
+
+[[entry]]
+kind = "function"
+old = "tone"
+changed = "request-only: tone(request: ToneRequest)"
+domain = "analysis"
+rule = "one-positional-form"
+test = "bindings/node/tests/surface/analysis-features.test.ts::takes a request and refuses positional values"
+
+[[entry]]
+kind = "function"
+old = "tonnetz"
+changed = "returns Matrix2D"
+domain = "analysis"
+rule = "matrix-2d"
+test = "bindings/node/tests/surface/analysis-features.test.ts::returns Matrix2D from"
+
+[[entry]]
+kind = "function"
+old = "trimSilence"
+changed = "returns TrimResult"
+domain = "analysis"
+rule = "no-internal-types"
+test = "bindings/node/tests/surface/analysis-features.test.ts::returns Matrix2D from"
+
+[[entry]]
+kind = "function"
+old = "vectorNormalize"
+changed = "normType: number -> norm: NormType ('max'|'l1'|'l2'|'power')"
+domain = "analysis"
+rule = "string-closed-sets"
+test = "bindings/node/tests/surface/analysis-features.test.ts::takes a request and refuses positional values"
+
+[[entry]]
+kind = "function"
+old = "vqt"
+changed = "one positional form (vqt(samples, sampleRate, options?: Omit<VqtRequest,'samples'|'sampleRate'>)); request form takes VqtRequest"
+domain = "analysis"
+rule = "one-positional-form"
+test = "bindings/node/tests/surface/analysis-features.test.ts::takes samples, sampleRate and an options bag"
+
+[[entry]]
+kind = "function"
+old = "vqtToAudio"
+changed = "request-only: vqtToAudio(request: VqtToAudioRequest)"
+domain = "analysis"
+rule = "one-positional-form"
+test = "bindings/node/tests/surface/analysis-features.test.ts::takes its matrix as a Matrix2D"
+
+[[entry]]
+kind = "function"
+old = "zeroCrossingRate"
+changed = "one positional form (zeroCrossingRate(samples, sampleRate, options?: Omit<ZeroCrossingRateRequest,'samples'|'sampleRate'>)); request form takes ZeroCrossingRateRequest"
+domain = "analysis"
+rule = "one-positional-form"
+test = "bindings/node/tests/surface/analysis-features.test.ts::takes samples, sampleRate and an options bag"
+
+[[entry]]
+kind = "function"
+old = "zeroCrossings"
+changed = "one positional form (zeroCrossings(samples, sampleRate, options?: Omit<ZeroCrossingsRequest,'samples'|'sampleRate'>)); request form takes ZeroCrossingsRequest"
+domain = "analysis"
+rule = "one-positional-form"
+test = "bindings/node/tests/surface/analysis-features.test.ts::takes samples, sampleRate and an options bag"
+
+[[entry]]
+kind = "option"
+old = "amplitudeToDb(amin)"
+removed = true
+domain = "analysis"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "amplitudeToDb(ref)"
+removed = true
+domain = "analysis"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "amplitudeToDb(topDb)"
+removed = true
+domain = "analysis"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "amplitudeToDb(values)"
+removed = true
+domain = "analysis"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "bassChroma(hopLength)"
+removed = true
+domain = "analysis"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "bassChroma(nChroma)"
+removed = true
+domain = "analysis"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "bassChroma(sampleRate)"
+changed = "required second argument (was optional / later position)"
+domain = "analysis"
+rule = "sample-rate-required"
+test = "bindings/node/tests/surface/analysis-features.test.ts::requires sampleRate in both forms"
+
+[[entry]]
+kind = "option"
+old = "chirp(duration)"
+removed = true
+domain = "analysis"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "chirp(fmax)"
+removed = true
+domain = "analysis"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "chirp(fmin)"
+removed = true
+domain = "analysis"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "chirp(linear)"
+removed = true
+domain = "analysis"
+rule = "no-positional-bools"
+
+[[entry]]
+kind = "option"
+old = "chirp(sampleRate)"
+removed = true
+domain = "analysis"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "chroma(hopLength)"
+removed = true
+domain = "analysis"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "chroma(nFft)"
+removed = true
+domain = "analysis"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "chroma(sampleRate)"
+changed = "required second argument (was optional / later position)"
+domain = "analysis"
+rule = "sample-rate-required"
+test = "bindings/node/tests/surface/analysis-features.test.ts::requires sampleRate in both forms"
+
+[[entry]]
+kind = "option"
+old = "chromaCens(binsPerOctave)"
+removed = true
+domain = "analysis"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "chromaCens(hopLength)"
+removed = true
+domain = "analysis"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "chromaCens(nChroma)"
+removed = true
+domain = "analysis"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "chromaCens(sampleRate)"
+changed = "required second argument (was optional / later position)"
+domain = "analysis"
+rule = "sample-rate-required"
+test = "bindings/node/tests/surface/analysis-features.test.ts::requires sampleRate in both forms"
+
+[[entry]]
+kind = "option"
+old = "chromaCqt(binsPerOctave)"
+removed = true
+domain = "analysis"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "chromaCqt(hopLength)"
+removed = true
+domain = "analysis"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "chromaCqt(nChroma)"
+removed = true
+domain = "analysis"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "chromaCqt(sampleRate)"
+changed = "required second argument (was optional / later position)"
+domain = "analysis"
+rule = "sample-rate-required"
+test = "bindings/node/tests/surface/analysis-features.test.ts::requires sampleRate in both forms"
+
+[[entry]]
+kind = "option"
+old = "clicks(clickDuration)"
+removed = true
+domain = "analysis"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "clicks(frequency)"
+removed = true
+domain = "analysis"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "clicks(length)"
+removed = true
+domain = "analysis"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "clicks(sampleRate)"
+removed = true
+domain = "analysis"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "clicks(times)"
+removed = true
+domain = "analysis"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "cqt(binsPerOctave)"
+removed = true
+domain = "analysis"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "cqt(fmin)"
+removed = true
+domain = "analysis"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "cqt(hopLength)"
+removed = true
+domain = "analysis"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "cqt(nBins)"
+removed = true
+domain = "analysis"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "cqt(sampleRate)"
+changed = "required second argument (was optional / later position)"
+domain = "analysis"
+rule = "sample-rate-required"
+test = "bindings/node/tests/surface/analysis-features.test.ts::requires sampleRate in both forms"
+
+[[entry]]
+kind = "option"
+old = "cqtToAudio(binsPerOctave)"
+removed = true
+domain = "analysis"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "cqtToAudio(fmin)"
+removed = true
+domain = "analysis"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "cqtToAudio(hopLength)"
+removed = true
+domain = "analysis"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "cqtToAudio(magnitude)"
+removed = true
+domain = "analysis"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "cqtToAudio(nBins)"
+removed = true
+domain = "analysis"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "cqtToAudio(nFrames)"
+removed = true
+domain = "analysis"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "cqtToAudio(nIter)"
+removed = true
+domain = "analysis"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "cqtToAudio(sampleRate)"
+removed = true
+domain = "analysis"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "cyclicTempogram(bpmMin)"
+removed = true
+domain = "analysis"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "cyclicTempogram(hopLength)"
+removed = true
+domain = "analysis"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "cyclicTempogram(nBins)"
+removed = true
+domain = "analysis"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "cyclicTempogram(onsetEnvelope)"
+removed = true
+domain = "analysis"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "cyclicTempogram(sampleRate)"
+removed = true
+domain = "analysis"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "cyclicTempogram(winLength)"
+removed = true
+domain = "analysis"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "dbToAmplitude(ref)"
+removed = true
+domain = "analysis"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "dbToAmplitude(values)"
+removed = true
+domain = "analysis"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "dbToPower(ref)"
+removed = true
+domain = "analysis"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "dbToPower(values)"
+removed = true
+domain = "analysis"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "deemphasis(coef)"
+removed = true
+domain = "analysis"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "deemphasis(zi)"
+removed = true
+domain = "analysis"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "estimateTuning(binsPerOctave)"
+removed = true
+domain = "analysis"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "estimateTuning(hopLength)"
+removed = true
+domain = "analysis"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "estimateTuning(nFft)"
+removed = true
+domain = "analysis"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "estimateTuning(resolution)"
+removed = true
+domain = "analysis"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "estimateTuning(sampleRate)"
+changed = "required second argument (was optional / later position)"
+domain = "analysis"
+rule = "sample-rate-required"
+test = "bindings/node/tests/surface/analysis-features.test.ts::requires sampleRate in both forms"
+
+[[entry]]
+kind = "option"
+old = "fixFrames(frames)"
+removed = true
+domain = "analysis"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "fixFrames(pad)"
+removed = true
+domain = "analysis"
+rule = "no-positional-bools"
+
+[[entry]]
+kind = "option"
+old = "fixFrames(xMax)"
+removed = true
+domain = "analysis"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "fixFrames(xMin)"
+removed = true
+domain = "analysis"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "fixLength(padValue)"
+removed = true
+domain = "analysis"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "fixLength(targetSize)"
+removed = true
+domain = "analysis"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "fixLength(values)"
+removed = true
+domain = "analysis"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "fourierTempogram(center)"
+removed = true
+domain = "analysis"
+rule = "no-positional-bools"
+
+[[entry]]
+kind = "option"
+old = "fourierTempogram(hopLength)"
+removed = true
+domain = "analysis"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "fourierTempogram(norm)"
+removed = true
+domain = "analysis"
+rule = "no-positional-bools"
+
+[[entry]]
+kind = "option"
+old = "fourierTempogram(onsetEnvelope)"
+removed = true
+domain = "analysis"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "fourierTempogram(sampleRate)"
+removed = true
+domain = "analysis"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "fourierTempogram(winLength)"
+removed = true
+domain = "analysis"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "frameSignal(frameLength)"
+removed = true
+domain = "analysis"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "frameSignal(hopLength)"
+removed = true
+domain = "analysis"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "framesToSamples(nFft)"
+changed = "absent = no centring offset; explicit 0 refused (RangeError)"
+domain = "analysis"
+rule = "absent-not-sentinel"
+test = "bindings/node/tests/surface/analysis-features.test.ts::refuses an explicit 0 centring window"
+
+[[entry]]
+kind = "option"
+old = "framesToTime(sr)"
+new = "framesToTime(sampleRate)"
+domain = "analysis"
+rule = "sample-rate-name"
+
+[[entry]]
+kind = "option"
+old = "griffinLim(hopLength)"
+removed = true
+domain = "analysis"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "griffinLim(magnitude)"
+removed = true
+domain = "analysis"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "griffinLim(momentum)"
+removed = true
+domain = "analysis"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "griffinLim(nBins)"
+removed = true
+domain = "analysis"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "griffinLim(nFft)"
+removed = true
+domain = "analysis"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "griffinLim(nFrames)"
+removed = true
+domain = "analysis"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "griffinLim(nIter)"
+removed = true
+domain = "analysis"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "griffinLim(sampleRate)"
+removed = true
+domain = "analysis"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "hybridCqt(binsPerOctave)"
+removed = true
+domain = "analysis"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "hybridCqt(fmin)"
+removed = true
+domain = "analysis"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "hybridCqt(hopLength)"
+removed = true
+domain = "analysis"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "hybridCqt(nBins)"
+removed = true
+domain = "analysis"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "hybridCqt(sampleRate)"
+changed = "required second argument (was optional / later position)"
+domain = "analysis"
+rule = "sample-rate-required"
+test = "bindings/node/tests/surface/analysis-features.test.ts::requires sampleRate in both forms"
+
+[[entry]]
+kind = "option"
+old = "lufs(sampleRate)"
+changed = "required second argument (was optional / later position)"
+domain = "analysis"
+rule = "sample-rate-required"
+test = "bindings/node/tests/surface/analysis-features.test.ts::requires sampleRate in both forms"
+
+[[entry]]
+kind = "option"
+old = "melDelta(features)"
+removed = true
+domain = "analysis"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "melDelta(nFeatures)"
+removed = true
+domain = "analysis"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "melDelta(nFrames)"
+removed = true
+domain = "analysis"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "melDelta(width)"
+removed = true
+domain = "analysis"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "melSpectrogram(fmax)"
+removed = true
+domain = "analysis"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "melSpectrogram(fmin)"
+removed = true
+domain = "analysis"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "melSpectrogram(hopLength)"
+removed = true
+domain = "analysis"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "melSpectrogram(htk)"
+removed = true
+domain = "analysis"
+rule = "no-positional-bools"
+
+[[entry]]
+kind = "option"
+old = "melSpectrogram(nFft)"
+removed = true
+domain = "analysis"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "melSpectrogram(nMels)"
+removed = true
+domain = "analysis"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "melSpectrogram(sampleRate)"
+changed = "required second argument (was optional / later position)"
+domain = "analysis"
+rule = "sample-rate-required"
+test = "bindings/node/tests/surface/analysis-features.test.ts::requires sampleRate in both forms"
+
+[[entry]]
+kind = "option"
+old = "melToAudio(fmax)"
+removed = true
+domain = "analysis"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "melToAudio(fmin)"
+removed = true
+domain = "analysis"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "melToAudio(hopLength)"
+removed = true
+domain = "analysis"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "melToAudio(htk)"
+removed = true
+domain = "analysis"
+rule = "no-positional-bools"
+
+[[entry]]
+kind = "option"
+old = "melToAudio(nFft)"
+removed = true
+domain = "analysis"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "melToAudio(nFrames)"
+removed = true
+domain = "analysis"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "melToAudio(nIter)"
+removed = true
+domain = "analysis"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "melToAudio(nMels)"
+removed = true
+domain = "analysis"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "melToAudio(power)"
+removed = true
+domain = "analysis"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "melToAudio(sampleRate)"
+removed = true
+domain = "analysis"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "melToStft(fmax)"
+removed = true
+domain = "analysis"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "melToStft(fmin)"
+removed = true
+domain = "analysis"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "melToStft(htk)"
+removed = true
+domain = "analysis"
+rule = "no-positional-bools"
+
+[[entry]]
+kind = "option"
+old = "melToStft(nFft)"
+removed = true
+domain = "analysis"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "melToStft(nFrames)"
+removed = true
+domain = "analysis"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "melToStft(nMels)"
+removed = true
+domain = "analysis"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "melToStft(power)"
+removed = true
+domain = "analysis"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "melToStft(sampleRate)"
+removed = true
+domain = "analysis"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "mfcc(fmax)"
+removed = true
+domain = "analysis"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "mfcc(fmin)"
+removed = true
+domain = "analysis"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "mfcc(hopLength)"
+removed = true
+domain = "analysis"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "mfcc(htk)"
+removed = true
+domain = "analysis"
+rule = "no-positional-bools"
+
+[[entry]]
+kind = "option"
+old = "mfcc(lifter)"
+removed = true
+domain = "analysis"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "mfcc(nFft)"
+removed = true
+domain = "analysis"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "mfcc(nMels)"
+removed = true
+domain = "analysis"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "mfcc(nMfcc)"
+removed = true
+domain = "analysis"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "mfcc(sampleRate)"
+changed = "required second argument (was optional / later position)"
+domain = "analysis"
+rule = "sample-rate-required"
+test = "bindings/node/tests/surface/analysis-features.test.ts::requires sampleRate in both forms"
+
+[[entry]]
+kind = "option"
+old = "mfccToAudio(coefficients)"
+removed = true
+domain = "analysis"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "mfccToAudio(fmax)"
+removed = true
+domain = "analysis"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "mfccToAudio(fmin)"
+removed = true
+domain = "analysis"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "mfccToAudio(hopLength)"
+removed = true
+domain = "analysis"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "mfccToAudio(htk)"
+removed = true
+domain = "analysis"
+rule = "no-positional-bools"
+
+[[entry]]
+kind = "option"
+old = "mfccToAudio(lifter)"
+removed = true
+domain = "analysis"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "mfccToAudio(nFft)"
+removed = true
+domain = "analysis"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "mfccToAudio(nFrames)"
+removed = true
+domain = "analysis"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "mfccToAudio(nIter)"
+removed = true
+domain = "analysis"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "mfccToAudio(nMels)"
+removed = true
+domain = "analysis"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "mfccToAudio(nMfcc)"
+removed = true
+domain = "analysis"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "mfccToAudio(sampleRate)"
+removed = true
+domain = "analysis"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "mfccToMel(coefficients)"
+removed = true
+domain = "analysis"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "mfccToMel(lifter)"
+removed = true
+domain = "analysis"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "mfccToMel(nFrames)"
+removed = true
+domain = "analysis"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "mfccToMel(nMels)"
+removed = true
+domain = "analysis"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "mfccToMel(nMfcc)"
+removed = true
+domain = "analysis"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "momentaryLufs(sampleRate)"
+changed = "required second argument (was optional / later position)"
+domain = "analysis"
+rule = "sample-rate-required"
+test = "bindings/node/tests/surface/analysis-features.test.ts::requires sampleRate in both forms"
+
+[[entry]]
+kind = "option"
+old = "nnlsChroma(sampleRate)"
+changed = "required second argument (was optional / later position)"
+domain = "analysis"
+rule = "sample-rate-required"
+test = "bindings/node/tests/surface/analysis-features.test.ts::requires sampleRate in both forms"
+
+[[entry]]
+kind = "option"
+old = "onsetBacktrack(energy)"
+removed = true
+domain = "analysis"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "onsetBacktrack(events)"
+removed = true
+domain = "analysis"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "onsetEnvelope(hopLength)"
+removed = true
+domain = "analysis"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "onsetEnvelope(nFft)"
+removed = true
+domain = "analysis"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "onsetEnvelope(nMels)"
+removed = true
+domain = "analysis"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "onsetStrengthMulti(hopLength)"
+removed = true
+domain = "analysis"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "onsetStrengthMulti(nBands)"
+removed = true
+domain = "analysis"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "onsetStrengthMulti(nFft)"
+removed = true
+domain = "analysis"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "onsetStrengthMulti(nMels)"
+removed = true
+domain = "analysis"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "onsetStrengthMulti(sampleRate)"
+changed = "required second argument (was optional / later position)"
+domain = "analysis"
+rule = "sample-rate-required"
+test = "bindings/node/tests/surface/analysis-features.test.ts::requires sampleRate in both forms"
+
+[[entry]]
+kind = "option"
+old = "padCenter(padValue)"
+removed = true
+domain = "analysis"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "padCenter(targetSize)"
+removed = true
+domain = "analysis"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "padCenter(values)"
+removed = true
+domain = "analysis"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "pcen(nBins)"
+removed = true
+domain = "analysis"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "pcen(nFrames)"
+removed = true
+domain = "analysis"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "pcen(options)"
+removed = true
+domain = "analysis"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "pcen(values)"
+removed = true
+domain = "analysis"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "peakPick(delta)"
+removed = true
+domain = "analysis"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "peakPick(postAvg)"
+removed = true
+domain = "analysis"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "peakPick(postMax)"
+removed = true
+domain = "analysis"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "peakPick(preAvg)"
+removed = true
+domain = "analysis"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "peakPick(preMax)"
+removed = true
+domain = "analysis"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "peakPick(values)"
+removed = true
+domain = "analysis"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "peakPick(wait)"
+removed = true
+domain = "analysis"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "piptrack(fmax)"
+removed = true
+domain = "analysis"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "piptrack(fmin)"
+removed = true
+domain = "analysis"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "piptrack(hopLength)"
+removed = true
+domain = "analysis"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "piptrack(nFft)"
+removed = true
+domain = "analysis"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "piptrack(sampleRate)"
+changed = "required second argument (was optional / later position)"
+domain = "analysis"
+rule = "sample-rate-required"
+test = "bindings/node/tests/surface/analysis-features.test.ts::requires sampleRate in both forms"
+
+[[entry]]
+kind = "option"
+old = "piptrack(threshold)"
+removed = true
+domain = "analysis"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "pitchPyin(fillNa)"
+removed = true
+domain = "analysis"
+rule = "no-positional-bools"
+
+[[entry]]
+kind = "option"
+old = "pitchPyin(fmax)"
+removed = true
+domain = "analysis"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "pitchPyin(fmin)"
+removed = true
+domain = "analysis"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "pitchPyin(frameLength)"
+removed = true
+domain = "analysis"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "pitchPyin(hopLength)"
+removed = true
+domain = "analysis"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "pitchPyin(sampleRate)"
+changed = "required second argument (was optional / later position)"
+domain = "analysis"
+rule = "sample-rate-required"
+test = "bindings/node/tests/surface/analysis-features.test.ts::requires sampleRate in both forms"
+
+[[entry]]
+kind = "option"
+old = "pitchPyin(threshold)"
+removed = true
+domain = "analysis"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "pitchTuning(binsPerOctave)"
+removed = true
+domain = "analysis"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "pitchTuning(frequencies)"
+removed = true
+domain = "analysis"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "pitchTuning(resolution)"
+removed = true
+domain = "analysis"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "pitchYin(fillNa)"
+removed = true
+domain = "analysis"
+rule = "no-positional-bools"
+
+[[entry]]
+kind = "option"
+old = "pitchYin(fmax)"
+removed = true
+domain = "analysis"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "pitchYin(fmin)"
+removed = true
+domain = "analysis"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "pitchYin(frameLength)"
+removed = true
+domain = "analysis"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "pitchYin(hopLength)"
+removed = true
+domain = "analysis"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "pitchYin(sampleRate)"
+changed = "required second argument (was optional / later position)"
+domain = "analysis"
+rule = "sample-rate-required"
+test = "bindings/node/tests/surface/analysis-features.test.ts::requires sampleRate in both forms"
+
+[[entry]]
+kind = "option"
+old = "pitchYin(threshold)"
+removed = true
+domain = "analysis"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "plp(hopLength)"
+removed = true
+domain = "analysis"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "plp(onsetEnvelope)"
+removed = true
+domain = "analysis"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "plp(sampleRate)"
+removed = true
+domain = "analysis"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "plp(tempoMax)"
+removed = true
+domain = "analysis"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "plp(tempoMin)"
+removed = true
+domain = "analysis"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "plp(winLength)"
+removed = true
+domain = "analysis"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "polyFeatures(hopLength)"
+removed = true
+domain = "analysis"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "polyFeatures(nFft)"
+removed = true
+domain = "analysis"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "polyFeatures(order)"
+removed = true
+domain = "analysis"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "polyFeatures(sampleRate)"
+changed = "required second argument (was optional / later position)"
+domain = "analysis"
+rule = "sample-rate-required"
+test = "bindings/node/tests/surface/analysis-features.test.ts::requires sampleRate in both forms"
+
+[[entry]]
+kind = "option"
+old = "powerToDb(amin)"
+removed = true
+domain = "analysis"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "powerToDb(ref)"
+removed = true
+domain = "analysis"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "powerToDb(topDb)"
+removed = true
+domain = "analysis"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "powerToDb(values)"
+removed = true
+domain = "analysis"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "preemphasis(coef)"
+removed = true
+domain = "analysis"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "preemphasis(zi)"
+removed = true
+domain = "analysis"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "pseudoCqt(binsPerOctave)"
+removed = true
+domain = "analysis"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "pseudoCqt(fmin)"
+removed = true
+domain = "analysis"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "pseudoCqt(hopLength)"
+removed = true
+domain = "analysis"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "pseudoCqt(nBins)"
+removed = true
+domain = "analysis"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "pseudoCqt(sampleRate)"
+changed = "required second argument (was optional / later position)"
+domain = "analysis"
+rule = "sample-rate-required"
+test = "bindings/node/tests/surface/analysis-features.test.ts::requires sampleRate in both forms"
+
+[[entry]]
+kind = "option"
+old = "reassignedSpectrogram(fillNan)"
+removed = true
+domain = "analysis"
+rule = "no-positional-bools"
+
+[[entry]]
+kind = "option"
+old = "reassignedSpectrogram(hopLength)"
+removed = true
+domain = "analysis"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "reassignedSpectrogram(nFft)"
+removed = true
+domain = "analysis"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "reassignedSpectrogram(refPower)"
+removed = true
+domain = "analysis"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "reassignedSpectrogram(sampleRate)"
+changed = "required second argument (was optional / later position)"
+domain = "analysis"
+rule = "sample-rate-required"
+test = "bindings/node/tests/surface/analysis-features.test.ts::requires sampleRate in both forms"
+
+[[entry]]
+kind = "option"
+old = "referenceHzToTuning(a4)"
+new = "referenceHzToTuning(a4Hz)"
+domain = "analysis"
+rule = "unit-in-name"
+
+[[entry]]
+kind = "option"
+old = "referenceHzToTuning(hz)"
+new = "referenceHzToTuning(referenceHz)"
+domain = "analysis"
+rule = "unit-in-name"
+
+[[entry]]
+kind = "option"
+old = "rmsEnergy(frameLength)"
+removed = true
+domain = "analysis"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "rmsEnergy(hopLength)"
+removed = true
+domain = "analysis"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "rmsEnergy(sampleRate)"
+changed = "required second argument (was optional / later position)"
+domain = "analysis"
+rule = "sample-rate-required"
+test = "bindings/node/tests/surface/analysis-features.test.ts::requires sampleRate in both forms"
+
+[[entry]]
+kind = "option"
+old = "samplesToFrames(nFft)"
+changed = "absent = no centring offset; explicit 0 refused (RangeError)"
+domain = "analysis"
+rule = "absent-not-sentinel"
+test = "bindings/node/tests/surface/analysis-features.test.ts::refuses an explicit 0 centring window"
+
+[[entry]]
+kind = "option"
+old = "shortTermLufs(sampleRate)"
+changed = "required second argument (was optional / later position)"
+domain = "analysis"
+rule = "sample-rate-required"
+test = "bindings/node/tests/surface/analysis-features.test.ts::requires sampleRate in both forms"
+
+[[entry]]
+kind = "option"
+old = "spectralBandwidth(hopLength)"
+removed = true
+domain = "analysis"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "spectralBandwidth(nFft)"
+removed = true
+domain = "analysis"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "spectralBandwidth(p)"
+removed = true
+domain = "analysis"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "spectralBandwidth(sampleRate)"
+changed = "required second argument (was optional / later position)"
+domain = "analysis"
+rule = "sample-rate-required"
+test = "bindings/node/tests/surface/analysis-features.test.ts::requires sampleRate in both forms"
+
+[[entry]]
+kind = "option"
+old = "spectralCentroid(hopLength)"
+removed = true
+domain = "analysis"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "spectralCentroid(nFft)"
+removed = true
+domain = "analysis"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "spectralCentroid(sampleRate)"
+changed = "required second argument (was optional / later position)"
+domain = "analysis"
+rule = "sample-rate-required"
+test = "bindings/node/tests/surface/analysis-features.test.ts::requires sampleRate in both forms"
+
+[[entry]]
+kind = "option"
+old = "spectralContrast(fmin)"
+removed = true
+domain = "analysis"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "spectralContrast(hopLength)"
+removed = true
+domain = "analysis"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "spectralContrast(nBands)"
+removed = true
+domain = "analysis"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "spectralContrast(nFft)"
+removed = true
+domain = "analysis"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "spectralContrast(quantile)"
+removed = true
+domain = "analysis"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "spectralContrast(sampleRate)"
+changed = "required second argument (was optional / later position)"
+domain = "analysis"
+rule = "sample-rate-required"
+test = "bindings/node/tests/surface/analysis-features.test.ts::requires sampleRate in both forms"
+
+[[entry]]
+kind = "option"
+old = "spectralFlatness(hopLength)"
+removed = true
+domain = "analysis"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "spectralFlatness(nFft)"
+removed = true
+domain = "analysis"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "spectralFlatness(sampleRate)"
+changed = "required second argument (was optional / later position)"
+domain = "analysis"
+rule = "sample-rate-required"
+test = "bindings/node/tests/surface/analysis-features.test.ts::requires sampleRate in both forms"
+
+[[entry]]
+kind = "option"
+old = "spectralFlux(hopLength)"
+removed = true
+domain = "analysis"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "spectralFlux(lag)"
+removed = true
+domain = "analysis"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "spectralFlux(nFft)"
+removed = true
+domain = "analysis"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "spectralFlux(sampleRate)"
+changed = "required second argument (was optional / later position)"
+domain = "analysis"
+rule = "sample-rate-required"
+test = "bindings/node/tests/surface/analysis-features.test.ts::requires sampleRate in both forms"
+
+[[entry]]
+kind = "option"
+old = "spectralRolloff(hopLength)"
+removed = true
+domain = "analysis"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "spectralRolloff(nFft)"
+removed = true
+domain = "analysis"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "spectralRolloff(rollPercent)"
+removed = true
+domain = "analysis"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "spectralRolloff(sampleRate)"
+changed = "required second argument (was optional / later position)"
+domain = "analysis"
+rule = "sample-rate-required"
+test = "bindings/node/tests/surface/analysis-features.test.ts::requires sampleRate in both forms"
+
+[[entry]]
+kind = "option"
+old = "splitSilence(frameLength)"
+removed = true
+domain = "analysis"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "splitSilence(hopLength)"
+removed = true
+domain = "analysis"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "splitSilence(topDb)"
+removed = true
+domain = "analysis"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "stft(hopLength)"
+removed = true
+domain = "analysis"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "stft(nFft)"
+removed = true
+domain = "analysis"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "stft(sampleRate)"
+changed = "required second argument (was optional / later position)"
+domain = "analysis"
+rule = "sample-rate-required"
+test = "bindings/node/tests/surface/analysis-features.test.ts::requires sampleRate in both forms"
+
+[[entry]]
+kind = "option"
+old = "stftDb(hopLength)"
+removed = true
+domain = "analysis"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "stftDb(nFft)"
+removed = true
+domain = "analysis"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "stftDb(sampleRate)"
+changed = "required second argument (was optional / later position)"
+domain = "analysis"
+rule = "sample-rate-required"
+test = "bindings/node/tests/surface/analysis-features.test.ts::requires sampleRate in both forms"
+
+[[entry]]
+kind = "option"
+old = "tempogram(center)"
+removed = true
+domain = "analysis"
+rule = "no-positional-bools"
+
+[[entry]]
+kind = "option"
+old = "tempogram(hopLength)"
+removed = true
+domain = "analysis"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "tempogram(mode)"
+removed = true
+domain = "analysis"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "tempogram(norm)"
+removed = true
+domain = "analysis"
+rule = "no-positional-bools"
+
+[[entry]]
+kind = "option"
+old = "tempogram(onsetEnvelope)"
+removed = true
+domain = "analysis"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "tempogram(sampleRate)"
+removed = true
+domain = "analysis"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "tempogram(winLength)"
+removed = true
+domain = "analysis"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "tempogramRatio(factors)"
+removed = true
+domain = "analysis"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "tempogramRatio(hopLength)"
+removed = true
+domain = "analysis"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "tempogramRatio(sampleRate)"
+removed = true
+domain = "analysis"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "tempogramRatio(tempogramData)"
+removed = true
+domain = "analysis"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "tempogramRatio(winLength)"
+removed = true
+domain = "analysis"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "timeToFrames(sr)"
+new = "timeToFrames(sampleRate)"
+domain = "analysis"
+rule = "sample-rate-name"
+
+[[entry]]
+kind = "option"
+old = "timeToFrames(time)"
+new = "timeToFrames(timeSec)"
+domain = "analysis"
+rule = "seconds-suffix"
+
+[[entry]]
+kind = "option"
+old = "tone(amplitude)"
+removed = true
+domain = "analysis"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "tone(duration)"
+removed = true
+domain = "analysis"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "tone(frequency)"
+removed = true
+domain = "analysis"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "tone(phase)"
+removed = true
+domain = "analysis"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "tone(sampleRate)"
+removed = true
+domain = "analysis"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "tonnetz(chromagram)"
+removed = true
+domain = "analysis"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "tonnetz(nChroma)"
+removed = true
+domain = "analysis"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "tonnetz(nFrames)"
+removed = true
+domain = "analysis"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "trimSilence(frameLength)"
+removed = true
+domain = "analysis"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "trimSilence(hopLength)"
+removed = true
+domain = "analysis"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "trimSilence(topDb)"
+removed = true
+domain = "analysis"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "tuningToReferenceHz(a4)"
+new = "tuningToReferenceHz(a4Hz)"
+domain = "analysis"
+rule = "unit-in-name"
+
+[[entry]]
+kind = "option"
+old = "tuningToReferenceHz(tuning)"
+new = "tuningToReferenceHz(tuningCents)"
+domain = "analysis"
+rule = "unit-in-name"
+
+[[entry]]
+kind = "option"
+old = "vectorNormalize(normType)"
+removed = true
+domain = "analysis"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "vectorNormalize(threshold)"
+removed = true
+domain = "analysis"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "vectorNormalize(values)"
+removed = true
+domain = "analysis"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "vqt(binsPerOctave)"
+removed = true
+domain = "analysis"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "vqt(fmin)"
+removed = true
+domain = "analysis"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "vqt(gamma)"
+removed = true
+domain = "analysis"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "vqt(hopLength)"
+removed = true
+domain = "analysis"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "vqt(nBins)"
+removed = true
+domain = "analysis"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "vqt(sampleRate)"
+changed = "required second argument (was optional / later position)"
+domain = "analysis"
+rule = "sample-rate-required"
+test = "bindings/node/tests/surface/analysis-features.test.ts::requires sampleRate in both forms"
+
+[[entry]]
+kind = "option"
+old = "vqtToAudio(binsPerOctave)"
+removed = true
+domain = "analysis"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "vqtToAudio(fmin)"
+removed = true
+domain = "analysis"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "vqtToAudio(gamma)"
+removed = true
+domain = "analysis"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "vqtToAudio(hopLength)"
+removed = true
+domain = "analysis"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "vqtToAudio(magnitude)"
+removed = true
+domain = "analysis"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "vqtToAudio(nBins)"
+removed = true
+domain = "analysis"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "vqtToAudio(nFrames)"
+removed = true
+domain = "analysis"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "vqtToAudio(nIter)"
+removed = true
+domain = "analysis"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "vqtToAudio(sampleRate)"
+removed = true
+domain = "analysis"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "zeroCrossingRate(frameLength)"
+removed = true
+domain = "analysis"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "zeroCrossingRate(hopLength)"
+removed = true
+domain = "analysis"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "zeroCrossingRate(sampleRate)"
+changed = "required second argument (was optional / later position)"
+domain = "analysis"
+rule = "sample-rate-required"
+test = "bindings/node/tests/surface/analysis-features.test.ts::requires sampleRate in both forms"
+
+[[entry]]
+kind = "option"
+old = "zeroCrossings(pad)"
+removed = true
+domain = "analysis"
+rule = "no-positional-bools"
+
+[[entry]]
+kind = "option"
+old = "zeroCrossings(refMagnitude)"
+removed = true
+domain = "analysis"
+rule = "no-positional-bools"
+
+[[entry]]
+kind = "option"
+old = "zeroCrossings(threshold)"
+removed = true
+domain = "analysis"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "zeroCrossings(zeroPos)"
+removed = true
+domain = "analysis"
+rule = "no-positional-bools"
+
+[[entry]]
+kind = "type"
+old = "BassChromaRequest"
+changed = "sampleRate: number required (inherited optional from the shared base; was 22050/44100 default)"
+domain = "analysis"
+rule = "sample-rate-required"
+test = "bindings/node/tests/surface/analysis-features.test.ts::declares sampleRate required on every sample request"
+
+[[entry]]
+kind = "type"
+old = "ChromaRequest"
+changed = "now the request of chroma only; chromaCens, chromaCqt take ChromaCensRequest, ChromaCqtRequest"
+domain = "analysis"
+rule = "type-names"
+test = "bindings/node/tests/surface/analysis-features.test.ts::declares result types without loose dimensions"
+
+[[entry]]
+kind = "type"
+old = "CqtRequest"
+changed = "sampleRate: number required (inherited optional from the shared base; was 22050/44100 default)"
+domain = "analysis"
+rule = "sample-rate-required"
+test = "bindings/node/tests/surface/analysis-features.test.ts::declares sampleRate required on every sample request"
+
+[[entry]]
+kind = "type"
+old = "EmphasisRequest"
+removed = true
+domain = "analysis"
+rule = "type-names"
+
+[[entry]]
+kind = "type"
+old = "EqBandInput"
+changed = "closed-set fields take the core EqBandType / EqCoeffMode / EqBandPhase unions (lowerCamel tokens); lookaheadMs removed"
+domain = "analysis"
+rule = "token-case"
+test = "bindings/node/tests/surface/analysis-features.test.ts::declares result types without loose dimensions"
+
+[[entry]]
+kind = "type"
+old = "EstimateTuningRequest"
+changed = "sampleRate: number required (inherited optional from the shared base; was 22050/44100 default)"
+domain = "analysis"
+rule = "sample-rate-required"
+test = "bindings/node/tests/surface/analysis-features.test.ts::declares sampleRate required on every sample request"
+
+[[entry]]
+kind = "type"
+old = "FeatureSamplesRequest"
+removed = true
+domain = "analysis"
+rule = "type-names"
+
+[[entry]]
+kind = "type"
+old = "FrameSignalRequest"
+changed = "sampleRate: number required (inherited optional from the shared base; was 22050/44100 default)"
+domain = "analysis"
+rule = "sample-rate-required"
+test = "bindings/node/tests/surface/analysis-features.test.ts::declares sampleRate required on every sample request"
+
+[[entry]]
+kind = "type"
+old = "InverseMelResult"
+removed = true
+domain = "analysis"
+rule = "matrix-2d"
+
+[[entry]]
+kind = "type"
+old = "InverseStftResult"
+removed = true
+domain = "analysis"
+rule = "matrix-2d"
+
+[[entry]]
+kind = "type"
+old = "LufsRequest"
+changed = "sampleRate: number required (inherited optional from the shared base; was 22050/44100 default)"
+domain = "analysis"
+rule = "sample-rate-required"
+test = "bindings/node/tests/surface/analysis-features.test.ts::declares sampleRate required on every sample request"
+
+[[entry]]
+kind = "type"
+old = "MelResultToAudioRequest"
+removed = true
+domain = "analysis"
+rule = "one-entry-per-operation"
+
+[[entry]]
+kind = "type"
+old = "MelResultToStftRequest"
+removed = true
+domain = "analysis"
+rule = "one-entry-per-operation"
+
+[[entry]]
+kind = "type"
+old = "MelSpectrogramRequest"
+changed = "sampleRate: number required (inherited optional from the shared base; was 22050/44100 default)"
+domain = "analysis"
+rule = "sample-rate-required"
+test = "bindings/node/tests/surface/analysis-features.test.ts::declares sampleRate required on every sample request"
+
+[[entry]]
+kind = "type"
+old = "MfccRequest"
+changed = "sampleRate: number required (inherited optional from the shared base; was 22050/44100 default)"
+domain = "analysis"
+rule = "sample-rate-required"
+test = "bindings/node/tests/surface/analysis-features.test.ts::declares sampleRate required on every sample request"
+
+[[entry]]
+kind = "type"
+old = "MfccResultToAudioRequest"
+removed = true
+domain = "analysis"
+rule = "one-entry-per-operation"
+
+[[entry]]
+kind = "type"
+old = "MfccResultToMelRequest"
+removed = true
+domain = "analysis"
+rule = "one-entry-per-operation"
+
+[[entry]]
+kind = "type"
+old = "NnlsChromaRequest"
+changed = "sampleRate: number required (inherited optional from the shared base; was 22050/44100 default)"
+domain = "analysis"
+rule = "sample-rate-required"
+test = "bindings/node/tests/surface/analysis-features.test.ts::declares sampleRate required on every sample request"
+
+[[entry]]
+kind = "type"
+old = "NoteSegmentsConfig"
+removed = true
+domain = "analysis"
+rule = "individual"
+
+[[entry]]
+kind = "type"
+old = "OnsetEnvelopeRequest"
+new = "OnsetStrengthRequest"
+domain = "analysis"
+rule = "onset-strength"
+
+[[entry]]
+kind = "type"
+old = "OnsetStrengthMultiRequest"
+changed = "sampleRate: number required (inherited optional from the shared base; was 22050/44100 default)"
+domain = "analysis"
+rule = "sample-rate-required"
+test = "bindings/node/tests/surface/analysis-features.test.ts::declares sampleRate required on every sample request"
+
+[[entry]]
+kind = "type"
+old = "PcenOptions"
+removed = true
+domain = "analysis"
+rule = "individual"
+
+[[entry]]
+kind = "type"
+old = "PiptrackRequest"
+changed = "sampleRate: number required (inherited optional from the shared base; was 22050/44100 default)"
+domain = "analysis"
+rule = "sample-rate-required"
+test = "bindings/node/tests/surface/analysis-features.test.ts::declares sampleRate required on every sample request"
+
+[[entry]]
+kind = "type"
+old = "PitchRequest"
+removed = true
+domain = "analysis"
+rule = "type-names"
+
+[[entry]]
+kind = "type"
+old = "PolyFeaturesRequest"
+changed = "sampleRate: number required (inherited optional from the shared base; was 22050/44100 default)"
+domain = "analysis"
+rule = "sample-rate-required"
+test = "bindings/node/tests/surface/analysis-features.test.ts::declares sampleRate required on every sample request"
+
+[[entry]]
+kind = "type"
+old = "ReassignedSpectrogramRequest"
+changed = "sampleRate: number required (inherited optional from the shared base; was 22050/44100 default)"
+domain = "analysis"
+rule = "sample-rate-required"
+test = "bindings/node/tests/surface/analysis-features.test.ts::declares sampleRate required on every sample request"
+
+[[entry]]
+kind = "type"
+old = "SegmentMatrix"
+removed = true
+domain = "analysis"
+rule = "matrix-2d"
+
+[[entry]]
+kind = "type"
+old = "SpectralContrastRequest"
+changed = "sampleRate: number required (inherited optional from the shared base; was 22050/44100 default)"
+domain = "analysis"
+rule = "sample-rate-required"
+test = "bindings/node/tests/surface/analysis-features.test.ts::declares sampleRate required on every sample request"
+
+[[entry]]
+kind = "type"
+old = "StftDbResult"
+removed = true
+domain = "analysis"
+rule = "matrix-2d"
+
+[[entry]]
+kind = "type"
+old = "StftRequest"
+changed = "sampleRate: number required (inherited optional from the shared base; was 22050/44100 default)"
+domain = "analysis"
+rule = "sample-rate-required"
+test = "bindings/node/tests/surface/analysis-features.test.ts::declares sampleRate required on every sample request"
+
+[[entry]]
+kind = "type"
+old = "StreamAnalyzerConfig"
+new = "StreamConfig"
+domain = "analysis"
+rule = "type-names"
+
+[[entry]]
+kind = "type"
+old = "StreamAnalyzerStats"
+new = "StreamStats"
+domain = "analysis"
+rule = "type-names"
+
+[[entry]]
+kind = "type"
+old = "StreamFramesSoa"
+new = "StreamFrames"
+domain = "analysis"
+rule = "type-names"
+
+[[entry]]
+kind = "type"
+old = "TrimSilenceRequest"
+changed = "sampleRate: number required (inherited optional from the shared base; was 22050/44100 default)"
+domain = "analysis"
+rule = "sample-rate-required"
+test = "bindings/node/tests/surface/analysis-features.test.ts::declares sampleRate required on every sample request"
+
+[[entry]]
+kind = "type"
+old = "ValuesRequest"
+removed = true
+domain = "analysis"
+rule = "type-names"
+
+[[entry]]
+kind = "type"
+old = "VqtRequest"
+changed = "sampleRate: number required (inherited optional from the shared base; was 22050/44100 default)"
+domain = "analysis"
+rule = "sample-rate-required"
+test = "bindings/node/tests/surface/analysis-features.test.ts::declares sampleRate required on every sample request"
+
+[[entry]]
+kind = "type"
+old = "ZeroCrossingsRequest"
+changed = "sampleRate: number required (inherited optional from the shared base; was 22050/44100 default)"
+domain = "analysis"
+rule = "sample-rate-required"
+test = "bindings/node/tests/surface/analysis-features.test.ts::declares sampleRate required on every sample request"
+
+[[entry]]
+kind = "field"
+old = "BassChromaRequest.sampleRate"
+changed = "required (was optional with a 22050/44100 default)"
+domain = "analysis"
+rule = "sample-rate-required"
+test = "bindings/node/tests/surface/analysis-features.test.ts::requires sampleRate in both forms"
+
+[[entry]]
+kind = "field"
+old = "ChirpRequest.duration"
+new = "ChirpRequest.durationSec"
+domain = "analysis"
+rule = "seconds-suffix"
+
+[[entry]]
+kind = "field"
+old = "ChirpRequest.fmax"
+new = "ChirpRequest.fmaxHz"
+domain = "analysis"
+rule = "frequency-bounds"
+
+[[entry]]
+kind = "field"
+old = "ChirpRequest.fmin"
+new = "ChirpRequest.fminHz"
+domain = "analysis"
+rule = "frequency-bounds"
+
+[[entry]]
+kind = "field"
+old = "ChirpRequest.linear"
+changed = "default false (exponential sweep), was true"
+domain = "analysis"
+rule = "librosa-defaults"
+test = "bindings/node/tests/surface/analysis-features.test.ts::defaults chirp to an exponential sweep"
+
+[[entry]]
+kind = "field"
+old = "ChromaRequest.sampleRate"
+changed = "required (was optional with a 22050/44100 default)"
+domain = "analysis"
+rule = "sample-rate-required"
+test = "bindings/node/tests/surface/analysis-features.test.ts::requires sampleRate in both forms"
+
+[[entry]]
+kind = "field"
+old = "ChromaResult.features"
+changed = "Float32Array -> Matrix2D; TSDoc: rows = chroma bins, cols = frames"
+domain = "analysis"
+rule = "matrix-2d"
+test = "bindings/node/tests/surface/analysis-features.test.ts::carries every 2-D result field as a Matrix2D"
+
+[[entry]]
+kind = "field"
+old = "ChromaResult.nChroma"
+removed = true
+domain = "analysis"
+rule = "matrix-2d"
+
+[[entry]]
+kind = "field"
+old = "ChromaResult.nFrames"
+removed = true
+domain = "analysis"
+rule = "matrix-2d"
+
+[[entry]]
+kind = "field"
+old = "ClicksRequest.clickDuration"
+new = "ClicksRequest.clickDurationSec"
+domain = "analysis"
+rule = "seconds-suffix"
+
+[[entry]]
+kind = "field"
+old = "ClicksRequest.frequency"
+new = "ClicksRequest.frequencyHz"
+domain = "analysis"
+rule = "unit-in-name"
+
+[[entry]]
+kind = "field"
+old = "ClicksRequest.length"
+changed = "absent = derived from the last click; explicit 0 refused (RangeError)"
+domain = "analysis"
+rule = "absent-not-sentinel"
+test = "bindings/node/tests/surface/analysis-features.test.ts::spells the absent click length as absence"
+
+[[entry]]
+kind = "field"
+old = "CqtRequest.fmin"
+new = "CqtRequest.fminHz"
+domain = "analysis"
+rule = "frequency-bounds"
+
+[[entry]]
+kind = "field"
+old = "CqtRequest.sampleRate"
+changed = "required (was optional with a 22050/44100 default)"
+domain = "analysis"
+rule = "sample-rate-required"
+test = "bindings/node/tests/surface/analysis-features.test.ts::requires sampleRate in both forms"
+
+[[entry]]
+kind = "field"
+old = "CqtResult.magnitude"
+changed = "Float32Array -> Matrix2D; TSDoc: rows = CQT bins, cols = frames"
+domain = "analysis"
+rule = "matrix-2d"
+test = "bindings/node/tests/surface/analysis-features.test.ts::carries every 2-D result field as a Matrix2D"
+
+[[entry]]
+kind = "field"
+old = "CqtResult.nBins"
+removed = true
+domain = "analysis"
+rule = "matrix-2d"
+
+[[entry]]
+kind = "field"
+old = "CqtResult.nFrames"
+removed = true
+domain = "analysis"
+rule = "matrix-2d"
+
+[[entry]]
+kind = "field"
+old = "CqtToAudioRequest.fmin"
+new = "CqtToAudioRequest.fminHz"
+domain = "analysis"
+rule = "frequency-bounds"
+
+[[entry]]
+kind = "field"
+old = "CqtToAudioRequest.magnitude"
+changed = "Float32Array -> Matrix2D; TSDoc: rows = CQT bins, cols = frames"
+domain = "analysis"
+rule = "matrix-2d"
+test = "bindings/node/tests/surface/analysis-features.test.ts::takes its matrix as a Matrix2D"
+
+[[entry]]
+kind = "field"
+old = "CqtToAudioRequest.nBins"
+removed = true
+domain = "analysis"
+rule = "matrix-2d"
+
+[[entry]]
+kind = "field"
+old = "CqtToAudioRequest.nFrames"
+removed = true
+domain = "analysis"
+rule = "matrix-2d"
+
+[[entry]]
+kind = "field"
+old = "EqBandInput.coeffMode"
+changed = "type EqCoeffMode (core-owned); tokens 'rbj','vicanek'"
+domain = "analysis"
+rule = "token-case"
+test = "bindings/node/tests/surface/analysis-features.test.ts::declares result types without loose dimensions"
+
+[[entry]]
+kind = "field"
+old = "EqBandInput.lookaheadMs"
+removed = true
+domain = "analysis"
+rule = "aliases-removed"
+
+[[entry]]
+kind = "field"
+old = "EqBandInput.phase"
+changed = "type EqBandPhase (core-owned); tokens 'inherit','zeroLatency','naturalPhase','linearPhase'"
+domain = "analysis"
+rule = "token-case"
+test = "bindings/node/tests/surface/analysis-features.test.ts::declares result types without loose dimensions"
+
+[[entry]]
+kind = "field"
+old = "EqBandInput.type"
+changed = "type EqBandType (core-owned union); tokens lowerCamel: 'peak','lowShelf','highShelf','lowPass','highPass','bandPass','notch','allPass','tiltShelf','flatTilt'"
+domain = "analysis"
+rule = "token-case"
+test = "bindings/node/tests/surface/analysis-features.test.ts::declares result types without loose dimensions"
+
+[[entry]]
+kind = "field"
+old = "EstimateTuningRequest.sampleRate"
+changed = "required (was optional with a 22050/44100 default)"
+domain = "analysis"
+rule = "sample-rate-required"
+test = "bindings/node/tests/surface/analysis-features.test.ts::requires sampleRate in both forms"
+
+[[entry]]
+kind = "field"
+old = "GriffinLimRequest.magnitude"
+changed = "Float32Array -> Matrix2D; TSDoc: rows = nFft/2+1 bins, cols = frames"
+domain = "analysis"
+rule = "matrix-2d"
+test = "bindings/node/tests/surface/analysis-features.test.ts::takes its matrix as a Matrix2D"
+
+[[entry]]
+kind = "field"
+old = "GriffinLimRequest.nBins"
+removed = true
+domain = "analysis"
+rule = "matrix-2d"
+
+[[entry]]
+kind = "field"
+old = "GriffinLimRequest.nFrames"
+removed = true
+domain = "analysis"
+rule = "matrix-2d"
+
+[[entry]]
+kind = "field"
+old = "LufsRequest.sampleRate"
+changed = "required (was optional with a 22050/44100 default)"
+domain = "analysis"
+rule = "sample-rate-required"
+test = "bindings/node/tests/surface/analysis-features.test.ts::requires sampleRate in both forms"
+
+[[entry]]
+kind = "field"
+old = "LufsResult.loudnessRange"
+new = "LufsResult.loudnessRangeLu"
+domain = "analysis"
+rule = "loudness-names"
+
+[[entry]]
+kind = "field"
+old = "MelDeltaRequest.features"
+changed = "Float32Array -> Matrix2D; TSDoc: rows = features, cols = frames"
+domain = "analysis"
+rule = "matrix-2d"
+test = "bindings/node/tests/surface/analysis-features.test.ts::takes its matrix as a Matrix2D"
+
+[[entry]]
+kind = "field"
+old = "MelDeltaRequest.nFeatures"
+removed = true
+domain = "analysis"
+rule = "matrix-2d"
+
+[[entry]]
+kind = "field"
+old = "MelDeltaRequest.nFrames"
+removed = true
+domain = "analysis"
+rule = "matrix-2d"
+
+[[entry]]
+kind = "field"
+old = "MelSpectrogramRequest.fmax"
+new = "MelSpectrogramRequest.fmaxHz"
+domain = "analysis"
+rule = "frequency-bounds"
+
+[[entry]]
+kind = "field"
+old = "MelSpectrogramRequest.fmin"
+new = "MelSpectrogramRequest.fminHz"
+domain = "analysis"
+rule = "frequency-bounds"
+
+[[entry]]
+kind = "field"
+old = "MelSpectrogramRequest.sampleRate"
+changed = "required (was optional with a 22050/44100 default)"
+domain = "analysis"
+rule = "sample-rate-required"
+test = "bindings/node/tests/surface/analysis-features.test.ts::requires sampleRate in both forms"
+
+[[entry]]
+kind = "field"
+old = "MelSpectrogramResult.db"
+changed = "Float32Array -> Matrix2D; TSDoc: rows = mel bands, cols = frames"
+domain = "analysis"
+rule = "matrix-2d"
+test = "bindings/node/tests/surface/analysis-features.test.ts::carries every 2-D result field as a Matrix2D"
+
+[[entry]]
+kind = "field"
+old = "MelSpectrogramResult.fmax"
+new = "MelSpectrogramResult.fmaxHz"
+domain = "analysis"
+rule = "frequency-bounds"
+
+[[entry]]
+kind = "field"
+old = "MelSpectrogramResult.fmin"
+new = "MelSpectrogramResult.fminHz"
+domain = "analysis"
+rule = "frequency-bounds"
+
+[[entry]]
+kind = "field"
+old = "MelSpectrogramResult.isDb"
+removed = true
+domain = "analysis"
+rule = "aliases-removed"
+
+[[entry]]
+kind = "field"
+old = "MelSpectrogramResult.nFrames"
+removed = true
+domain = "analysis"
+rule = "matrix-2d"
+
+[[entry]]
+kind = "field"
+old = "MelSpectrogramResult.nMels"
+removed = true
+domain = "analysis"
+rule = "matrix-2d"
+
+[[entry]]
+kind = "field"
+old = "MelSpectrogramResult.power"
+changed = "Float32Array -> Matrix2D; TSDoc: rows = mel bands, cols = frames"
+domain = "analysis"
+rule = "matrix-2d"
+test = "bindings/node/tests/surface/analysis-features.test.ts::carries every 2-D result field as a Matrix2D"
+
+[[entry]]
+kind = "field"
+old = "MelToAudioRequest.fmax"
+new = "MelToAudioRequest.fmaxHz"
+domain = "analysis"
+rule = "frequency-bounds"
+
+[[entry]]
+kind = "field"
+old = "MelToAudioRequest.fmin"
+new = "MelToAudioRequest.fminHz"
+domain = "analysis"
+rule = "frequency-bounds"
+
+[[entry]]
+kind = "field"
+old = "MelToAudioRequest.nFrames"
+removed = true
+domain = "analysis"
+rule = "matrix-2d"
+
+[[entry]]
+kind = "field"
+old = "MelToAudioRequest.nMels"
+removed = true
+domain = "analysis"
+rule = "matrix-2d"
+
+[[entry]]
+kind = "field"
+old = "MelToAudioRequest.power"
+changed = "Float32Array -> Matrix2D; TSDoc: rows = mel bands, cols = frames"
+domain = "analysis"
+rule = "matrix-2d"
+test = "bindings/node/tests/surface/analysis-features.test.ts::takes its matrix as a Matrix2D"
+
+[[entry]]
+kind = "field"
+old = "MelToStftRequest.fmax"
+new = "MelToStftRequest.fmaxHz"
+domain = "analysis"
+rule = "frequency-bounds"
+
+[[entry]]
+kind = "field"
+old = "MelToStftRequest.fmin"
+new = "MelToStftRequest.fminHz"
+domain = "analysis"
+rule = "frequency-bounds"
+
+[[entry]]
+kind = "field"
+old = "MelToStftRequest.nFrames"
+removed = true
+domain = "analysis"
+rule = "matrix-2d"
+
+[[entry]]
+kind = "field"
+old = "MelToStftRequest.nMels"
+removed = true
+domain = "analysis"
+rule = "matrix-2d"
+
+[[entry]]
+kind = "field"
+old = "MelToStftRequest.power"
+changed = "Float32Array -> Matrix2D; TSDoc: rows = mel bands, cols = frames"
+domain = "analysis"
+rule = "matrix-2d"
+test = "bindings/node/tests/surface/analysis-features.test.ts::takes its matrix as a Matrix2D"
+
+[[entry]]
+kind = "field"
+old = "MfccRequest.fmax"
+new = "MfccRequest.fmaxHz"
+domain = "analysis"
+rule = "frequency-bounds"
+
+[[entry]]
+kind = "field"
+old = "MfccRequest.fmin"
+new = "MfccRequest.fminHz"
+domain = "analysis"
+rule = "frequency-bounds"
+
+[[entry]]
+kind = "field"
+old = "MfccRequest.sampleRate"
+changed = "required (was optional with a 22050/44100 default)"
+domain = "analysis"
+rule = "sample-rate-required"
+test = "bindings/node/tests/surface/analysis-features.test.ts::requires sampleRate in both forms"
+
+[[entry]]
+kind = "field"
+old = "MfccResult.coefficients"
+changed = "Float32Array -> Matrix2D; TSDoc: rows = coefficients, cols = frames"
+domain = "analysis"
+rule = "matrix-2d"
+test = "bindings/node/tests/surface/analysis-features.test.ts::carries every 2-D result field as a Matrix2D"
+
+[[entry]]
+kind = "field"
+old = "MfccResult.fmax"
+new = "MfccResult.fmaxHz"
+domain = "analysis"
+rule = "frequency-bounds"
+
+[[entry]]
+kind = "field"
+old = "MfccResult.fmin"
+new = "MfccResult.fminHz"
+domain = "analysis"
+rule = "frequency-bounds"
+
+[[entry]]
+kind = "field"
+old = "MfccResult.isDb"
+removed = true
+domain = "analysis"
+rule = "aliases-removed"
+
+[[entry]]
+kind = "field"
+old = "MfccResult.nFrames"
+removed = true
+domain = "analysis"
+rule = "matrix-2d"
+
+[[entry]]
+kind = "field"
+old = "MfccResult.nMfcc"
+removed = true
+domain = "analysis"
+rule = "matrix-2d"
+
+[[entry]]
+kind = "field"
+old = "MfccToAudioRequest.coefficients"
+changed = "Float32Array -> Matrix2D; TSDoc: rows = coefficients, cols = frames"
+domain = "analysis"
+rule = "matrix-2d"
+test = "bindings/node/tests/surface/analysis-features.test.ts::takes its matrix as a Matrix2D"
+
+[[entry]]
+kind = "field"
+old = "MfccToAudioRequest.fmax"
+new = "MfccToAudioRequest.fmaxHz"
+domain = "analysis"
+rule = "frequency-bounds"
+
+[[entry]]
+kind = "field"
+old = "MfccToAudioRequest.fmin"
+new = "MfccToAudioRequest.fminHz"
+domain = "analysis"
+rule = "frequency-bounds"
+
+[[entry]]
+kind = "field"
+old = "MfccToAudioRequest.nFrames"
+removed = true
+domain = "analysis"
+rule = "matrix-2d"
+
+[[entry]]
+kind = "field"
+old = "MfccToAudioRequest.nMfcc"
+removed = true
+domain = "analysis"
+rule = "matrix-2d"
+
+[[entry]]
+kind = "field"
+old = "MfccToMelRequest.coefficients"
+changed = "Float32Array -> Matrix2D; TSDoc: rows = coefficients, cols = frames"
+domain = "analysis"
+rule = "matrix-2d"
+test = "bindings/node/tests/surface/analysis-features.test.ts::takes its matrix as a Matrix2D"
+
+[[entry]]
+kind = "field"
+old = "MfccToMelRequest.nFrames"
+removed = true
+domain = "analysis"
+rule = "matrix-2d"
+
+[[entry]]
+kind = "field"
+old = "MfccToMelRequest.nMfcc"
+removed = true
+domain = "analysis"
+rule = "matrix-2d"
+
+[[entry]]
+kind = "field"
+old = "NnlsChromaRequest.sampleRate"
+changed = "required (was optional with a 22050/44100 default)"
+domain = "analysis"
+rule = "sample-rate-required"
+test = "bindings/node/tests/surface/analysis-features.test.ts::requires sampleRate in both forms"
+
+[[entry]]
+kind = "field"
+old = "NoteSegment.endSeconds"
+new = "NoteSegment.endSec"
+domain = "analysis"
+rule = "seconds-suffix"
+
+[[entry]]
+kind = "field"
+old = "NoteSegment.startSeconds"
+new = "NoteSegment.startSec"
+domain = "analysis"
+rule = "seconds-suffix"
+
+[[entry]]
+kind = "field"
+old = "NoteSegmentsRequest.config"
+removed = true
+domain = "analysis"
+rule = "individual"
+
+[[entry]]
+kind = "field"
+old = "NoteSegmentsRequest.voicedProb"
+changed = "optional; give voiced?: VoicedFlags (pitchPyin voicedFlag) or a real probability; one of the two required"
+domain = "analysis"
+rule = "individual"
+test = "bindings/node/tests/surface/analysis-features.test.ts::keeps the note segment tuning fields flat"
+
+[[entry]]
+kind = "field"
+old = "OnsetBacktrackRequest.events"
+changed = "type Int32Array | ArrayLike<number>"
+domain = "analysis"
+rule = "input-types"
+test = "bindings/node/tests/surface/analysis-features.test.ts::takes boundaries and events as any array-like"
+
+[[entry]]
+kind = "field"
+old = "OnsetEnvelopeRequest.sampleRate"
+changed = "required (was optional with a 22050/44100 default)"
+domain = "analysis"
+rule = "sample-rate-required"
+test = "bindings/node/tests/surface/analysis-features.test.ts::requires sampleRate in both forms"
+
+[[entry]]
+kind = "field"
+old = "OnsetStrengthMultiRequest.sampleRate"
+changed = "required (was optional with a 22050/44100 default)"
+domain = "analysis"
+rule = "sample-rate-required"
+test = "bindings/node/tests/surface/analysis-features.test.ts::requires sampleRate in both forms"
+
+[[entry]]
+kind = "field"
+old = "PiptrackRequest.fmax"
+new = "PiptrackRequest.fmaxHz"
+domain = "analysis"
+rule = "frequency-bounds"
+
+[[entry]]
+kind = "field"
+old = "PiptrackRequest.fmin"
+new = "PiptrackRequest.fminHz"
+domain = "analysis"
+rule = "frequency-bounds"
+
+[[entry]]
+kind = "field"
+old = "PiptrackRequest.sampleRate"
+changed = "required (was optional with a 22050/44100 default)"
+domain = "analysis"
+rule = "sample-rate-required"
+test = "bindings/node/tests/surface/analysis-features.test.ts::requires sampleRate in both forms"
+
+[[entry]]
+kind = "field"
+old = "PiptrackResult.magnitudes"
+changed = "Float32Array -> Matrix2D; TSDoc: rows = FFT bins, cols = frames"
+domain = "analysis"
+rule = "matrix-2d"
+test = "bindings/node/tests/surface/analysis-features.test.ts::carries every 2-D result field as a Matrix2D"
+
+[[entry]]
+kind = "field"
+old = "PiptrackResult.nBins"
+removed = true
+domain = "analysis"
+rule = "matrix-2d"
+
+[[entry]]
+kind = "field"
+old = "PiptrackResult.nFrames"
+removed = true
+domain = "analysis"
+rule = "matrix-2d"
+
+[[entry]]
+kind = "field"
+old = "PiptrackResult.pitches"
+changed = "Float32Array -> Matrix2D; TSDoc: rows = FFT bins, cols = frames"
+domain = "analysis"
+rule = "matrix-2d"
+test = "bindings/node/tests/surface/analysis-features.test.ts::carries every 2-D result field as a Matrix2D"
+
+[[entry]]
+kind = "field"
+old = "PlpRequest.tempoMax"
+new = "PlpRequest.bpmMax"
+domain = "analysis"
+rule = "tempo-range"
+
+[[entry]]
+kind = "field"
+old = "PlpRequest.tempoMin"
+new = "PlpRequest.bpmMin"
+domain = "analysis"
+rule = "tempo-range"
+
+[[entry]]
+kind = "field"
+old = "PolyFeaturesRequest.sampleRate"
+changed = "required (was optional with a 22050/44100 default)"
+domain = "analysis"
+rule = "sample-rate-required"
+test = "bindings/node/tests/surface/analysis-features.test.ts::requires sampleRate in both forms"
+
+[[entry]]
+kind = "field"
+old = "ReassignedSpectrogramRequest.sampleRate"
+changed = "required (was optional with a 22050/44100 default)"
+domain = "analysis"
+rule = "sample-rate-required"
+test = "bindings/node/tests/surface/analysis-features.test.ts::requires sampleRate in both forms"
+
+[[entry]]
+kind = "field"
+old = "ReassignedSpectrogramResult.frequencies"
+changed = "Float32Array -> Matrix2D; TSDoc: rows = FFT bins, cols = frames"
+domain = "analysis"
+rule = "matrix-2d"
+test = "bindings/node/tests/surface/analysis-features.test.ts::carries every 2-D result field as a Matrix2D"
+
+[[entry]]
+kind = "field"
+old = "ReassignedSpectrogramResult.magnitude"
+changed = "Float32Array -> Matrix2D; TSDoc: rows = FFT bins, cols = frames"
+domain = "analysis"
+rule = "matrix-2d"
+test = "bindings/node/tests/surface/analysis-features.test.ts::carries every 2-D result field as a Matrix2D"
+
+[[entry]]
+kind = "field"
+old = "ReassignedSpectrogramResult.nBins"
+removed = true
+domain = "analysis"
+rule = "matrix-2d"
+
+[[entry]]
+kind = "field"
+old = "ReassignedSpectrogramResult.nFrames"
+removed = true
+domain = "analysis"
+rule = "matrix-2d"
+
+[[entry]]
+kind = "field"
+old = "ReassignedSpectrogramResult.times"
+changed = "Float32Array -> Matrix2D; TSDoc: rows = FFT bins, cols = frames"
+domain = "analysis"
+rule = "matrix-2d"
+test = "bindings/node/tests/surface/analysis-features.test.ts::carries every 2-D result field as a Matrix2D"
+
+[[entry]]
+kind = "field"
+old = "SegmentAgglomerativeRequest.cols"
+removed = true
+domain = "analysis"
+rule = "matrix-2d"
+
+[[entry]]
+kind = "field"
+old = "SegmentAgglomerativeRequest.data"
+changed = "Float32Array -> Matrix2D; TSDoc: rows = features, cols = frames"
+domain = "analysis"
+rule = "matrix-2d"
+test = "bindings/node/tests/surface/analysis-features.test.ts::takes its matrix as a Matrix2D"
+
+[[entry]]
+kind = "field"
+old = "SegmentAgglomerativeRequest.rows"
+removed = true
+domain = "analysis"
+rule = "matrix-2d"
+
+[[entry]]
+kind = "field"
+old = "SegmentCrossSimilarityRequest.x"
+changed = "Float32Array -> Matrix2D; TSDoc: rows = features, cols = frames"
+domain = "analysis"
+rule = "matrix-2d"
+test = "bindings/node/tests/surface/analysis-features.test.ts::takes its matrix as a Matrix2D"
+
+[[entry]]
+kind = "field"
+old = "SegmentCrossSimilarityRequest.xCols"
+removed = true
+domain = "analysis"
+rule = "matrix-2d"
+
+[[entry]]
+kind = "field"
+old = "SegmentCrossSimilarityRequest.xRows"
+removed = true
+domain = "analysis"
+rule = "matrix-2d"
+
+[[entry]]
+kind = "field"
+old = "SegmentCrossSimilarityRequest.y"
+changed = "Float32Array -> Matrix2D; TSDoc: rows = features, cols = frames"
+domain = "analysis"
+rule = "matrix-2d"
+test = "bindings/node/tests/surface/analysis-features.test.ts::takes its matrix as a Matrix2D"
+
+[[entry]]
+kind = "field"
+old = "SegmentCrossSimilarityRequest.yCols"
+removed = true
+domain = "analysis"
+rule = "matrix-2d"
+
+[[entry]]
+kind = "field"
+old = "SegmentCrossSimilarityRequest.yRows"
+removed = true
+domain = "analysis"
+rule = "matrix-2d"
+
+[[entry]]
+kind = "field"
+old = "SegmentLagToRecurrenceRequest.lag"
+changed = "Float32Array -> Matrix2D; TSDoc: rows = lags, cols = frames"
+domain = "analysis"
+rule = "matrix-2d"
+test = "bindings/node/tests/surface/analysis-features.test.ts::takes its matrix as a Matrix2D"
+
+[[entry]]
+kind = "field"
+old = "SegmentLagToRecurrenceRequest.lags"
+removed = true
+domain = "analysis"
+rule = "matrix-2d"
+
+[[entry]]
+kind = "field"
+old = "SegmentLagToRecurrenceRequest.rows"
+removed = true
+domain = "analysis"
+rule = "matrix-2d"
+
+[[entry]]
+kind = "field"
+old = "SegmentPathEnhanceRequest.n"
+removed = true
+domain = "analysis"
+rule = "matrix-2d"
+
+[[entry]]
+kind = "field"
+old = "SegmentPathEnhanceRequest.recurrence"
+changed = "Float32Array -> Matrix2D; TSDoc: square, rows = cols = frames"
+domain = "analysis"
+rule = "matrix-2d"
+test = "bindings/node/tests/surface/analysis-features.test.ts::takes its matrix as a Matrix2D"
+
+[[entry]]
+kind = "field"
+old = "SegmentRecurrenceMatrixRequest.cols"
+removed = true
+domain = "analysis"
+rule = "matrix-2d"
+
+[[entry]]
+kind = "field"
+old = "SegmentRecurrenceMatrixRequest.data"
+changed = "Float32Array -> Matrix2D; TSDoc: rows = features, cols = frames"
+domain = "analysis"
+rule = "matrix-2d"
+test = "bindings/node/tests/surface/analysis-features.test.ts::takes its matrix as a Matrix2D"
+
+[[entry]]
+kind = "field"
+old = "SegmentRecurrenceMatrixRequest.rows"
+removed = true
+domain = "analysis"
+rule = "matrix-2d"
+
+[[entry]]
+kind = "field"
+old = "SegmentRecurrenceToLagRequest.n"
+removed = true
+domain = "analysis"
+rule = "matrix-2d"
+
+[[entry]]
+kind = "field"
+old = "SegmentRecurrenceToLagRequest.recurrence"
+changed = "Float32Array -> Matrix2D; TSDoc: square, rows = cols = frames"
+domain = "analysis"
+rule = "matrix-2d"
+test = "bindings/node/tests/surface/analysis-features.test.ts::takes its matrix as a Matrix2D"
+
+[[entry]]
+kind = "field"
+old = "SegmentSubsegmentRequest.boundaries"
+changed = "type Int32Array | ArrayLike<number>"
+domain = "analysis"
+rule = "input-types"
+test = "bindings/node/tests/surface/analysis-features.test.ts::takes boundaries and events as any array-like"
+
+[[entry]]
+kind = "field"
+old = "SegmentSubsegmentRequest.cols"
+removed = true
+domain = "analysis"
+rule = "matrix-2d"
+
+[[entry]]
+kind = "field"
+old = "SegmentSubsegmentRequest.data"
+changed = "Float32Array -> Matrix2D; TSDoc: rows = features, cols = frames"
+domain = "analysis"
+rule = "matrix-2d"
+test = "bindings/node/tests/surface/analysis-features.test.ts::takes its matrix as a Matrix2D"
+
+[[entry]]
+kind = "field"
+old = "SegmentSubsegmentRequest.rows"
+removed = true
+domain = "analysis"
+rule = "matrix-2d"
+
+[[entry]]
+kind = "field"
+old = "SpectralContrastRequest.fmin"
+new = "SpectralContrastRequest.fminHz"
+domain = "analysis"
+rule = "frequency-bounds"
+
+[[entry]]
+kind = "field"
+old = "SpectralContrastRequest.sampleRate"
+changed = "required (was optional with a 22050/44100 default)"
+domain = "analysis"
+rule = "sample-rate-required"
+test = "bindings/node/tests/surface/analysis-features.test.ts::requires sampleRate in both forms"
+
+[[entry]]
+kind = "field"
+old = "SpectralEditOptions.window"
+changed = "type WindowType; 'rect' removed (use 'rectangular')"
+domain = "effects"
+rule = "type-names"
+test = "bindings/node/tests/surface/analysis-features.test.ts::declares sampleRate required on every sample request"
+
+[[entry]]
+kind = "field"
+old = "StftRequest.sampleRate"
+changed = "required (was optional with a 22050/44100 default)"
+domain = "analysis"
+rule = "sample-rate-required"
+test = "bindings/node/tests/surface/analysis-features.test.ts::requires sampleRate in both forms"
+
+[[entry]]
+kind = "field"
+old = "StftResult.magnitude"
+changed = "Float32Array -> Matrix2D; TSDoc: rows = nFft/2+1 bins, cols = frames"
+domain = "analysis"
+rule = "matrix-2d"
+test = "bindings/node/tests/surface/analysis-features.test.ts::carries every 2-D result field as a Matrix2D"
+
+[[entry]]
+kind = "field"
+old = "StftResult.nBins"
+removed = true
+domain = "analysis"
+rule = "matrix-2d"
+
+[[entry]]
+kind = "field"
+old = "StftResult.nFrames"
+removed = true
+domain = "analysis"
+rule = "matrix-2d"
+
+[[entry]]
+kind = "field"
+old = "StftResult.power"
+changed = "Float32Array -> Matrix2D; TSDoc: rows = nFft/2+1 bins, cols = frames"
+domain = "analysis"
+rule = "matrix-2d"
+test = "bindings/node/tests/surface/analysis-features.test.ts::carries every 2-D result field as a Matrix2D"
+
+[[entry]]
+kind = "field"
+old = "StreamAnalyzerConfig.computeMagnitude"
+removed = true
+domain = "analysis"
+rule = "aliases-removed"
+
+[[entry]]
+kind = "field"
+old = "StreamAnalyzerConfig.fmax"
+new = "StreamConfig.fmaxHz"
+domain = "analysis"
+rule = "frequency-bounds"
+
+[[entry]]
+kind = "field"
+old = "StreamAnalyzerConfig.fmin"
+new = "StreamConfig.fminHz"
+domain = "analysis"
+rule = "frequency-bounds"
+
+[[entry]]
+kind = "field"
+old = "StreamAnalyzerConfig.outputFormat"
+removed = true
+domain = "analysis"
+rule = "aliases-removed"
+
+[[entry]]
+kind = "field"
+old = "StreamAnalyzerConfig.sampleRate"
+changed = "required (was default 44100)"
+domain = "analysis"
+rule = "sample-rate-required"
+test = "bindings/node/tests/surface/analysis-features.test.ts::requires sampleRate in both forms"
+
+[[entry]]
+kind = "field"
+old = "StreamAnalyzerConfig.tuningRefHz"
+new = "StreamConfig.referenceHz"
+domain = "analysis"
+rule = "unit-in-name"
+
+[[entry]]
+kind = "field"
+old = "StreamAnalyzerConfig.window"
+changed = "type WindowType = 'hann'|'hamming'|'blackman'|'rectangular' (was ordinal)"
+domain = "analysis"
+rule = "string-closed-sets"
+test = "bindings/node/tests/surface/analysis-features.test.ts::declares the streaming configuration"
+
+[[entry]]
+kind = "field"
+old = "StreamAnalyzerStats.durationSeconds"
+new = "StreamStats.durationSec"
+domain = "analysis"
+rule = "seconds-suffix"
+
+[[entry]]
+kind = "field"
+old = "StreamBarChord.quality"
+changed = "type ChordQuality (string union)"
+domain = "analysis"
+rule = "string-closed-sets"
+test = "bindings/node/tests/surface/analysis-features.test.ts::declares the streaming estimate"
+
+[[entry]]
+kind = "field"
+old = "StreamBarChord.root"
+changed = "type PitchClass (number 0-11, as WASM)"
+domain = "analysis"
+rule = "string-closed-sets"
+test = "bindings/node/tests/surface/analysis-features.test.ts::declares the streaming estimate"
+
+[[entry]]
+kind = "field"
+old = "StreamBarChord.startTime"
+new = "StreamBarChord.startSec"
+domain = "analysis"
+rule = "seconds-suffix"
+
+[[entry]]
+kind = "field"
+old = "StreamChordChange.quality"
+changed = "type ChordQuality (string union)"
+domain = "analysis"
+rule = "string-closed-sets"
+test = "bindings/node/tests/surface/analysis-features.test.ts::declares the streaming estimate"
+
+[[entry]]
+kind = "field"
+old = "StreamChordChange.root"
+changed = "type PitchClass (number 0-11, as WASM)"
+domain = "analysis"
+rule = "string-closed-sets"
+test = "bindings/node/tests/surface/analysis-features.test.ts::declares the streaming estimate"
+
+[[entry]]
+kind = "field"
+old = "StreamChordChange.startTime"
+new = "StreamChordChange.startSec"
+domain = "analysis"
+rule = "seconds-suffix"
+
+[[entry]]
+kind = "field"
+old = "StreamFramesI16.chroma"
+changed = "band-major layout (was frame-major); optional when not computed"
+domain = "analysis"
+rule = "matrix-2d"
+test = "bindings/node/tests/surface/analysis-features.test.ts::declares StreamFrames with optional band-major features"
+
+[[entry]]
+kind = "field"
+old = "StreamFramesI16.featureFlags"
+removed = true
+domain = "analysis"
+rule = "absent-not-sentinel"
+
+[[entry]]
+kind = "field"
+old = "StreamFramesI16.mel"
+changed = "band-major layout (was frame-major); optional when not computed"
+domain = "analysis"
+rule = "matrix-2d"
+test = "bindings/node/tests/surface/analysis-features.test.ts::declares StreamFrames with optional band-major features"
+
+[[entry]]
+kind = "field"
+old = "StreamFramesI16.onsetStrength"
+changed = "optional; absent when the feature is not computed"
+domain = "analysis"
+rule = "absent-not-sentinel"
+test = "bindings/node/tests/surface/analysis-features.test.ts::declares StreamFrames with optional band-major features"
+
+[[entry]]
+kind = "field"
+old = "StreamFramesI16.rmsEnergy"
+changed = "optional; absent when the feature is not computed"
+domain = "analysis"
+rule = "absent-not-sentinel"
+test = "bindings/node/tests/surface/analysis-features.test.ts::declares StreamFrames with optional band-major features"
+
+[[entry]]
+kind = "field"
+old = "StreamFramesI16.spectralCentroid"
+changed = "optional; absent when the feature is not computed"
+domain = "analysis"
+rule = "absent-not-sentinel"
+test = "bindings/node/tests/surface/analysis-features.test.ts::declares StreamFrames with optional band-major features"
+
+[[entry]]
+kind = "field"
+old = "StreamFramesI16.spectralFlatness"
+changed = "optional; absent when the feature is not computed"
+domain = "analysis"
+rule = "absent-not-sentinel"
+test = "bindings/node/tests/surface/analysis-features.test.ts::declares StreamFrames with optional band-major features"
+
+[[entry]]
+kind = "field"
+old = "StreamFramesI16.timestamps"
+new = "StreamFramesI16.timestampsSec"
+domain = "analysis"
+rule = "seconds-suffix"
+
+[[entry]]
+kind = "field"
+old = "StreamFramesSoa.chordConfidence"
+changed = "optional; absent when the feature is not computed"
+domain = "analysis"
+rule = "absent-not-sentinel"
+test = "bindings/node/tests/surface/analysis-features.test.ts::declares StreamFrames with optional band-major features"
+
+[[entry]]
+kind = "field"
+old = "StreamFramesSoa.chordQuality"
+changed = "optional; absent when the feature is not computed"
+domain = "analysis"
+rule = "absent-not-sentinel"
+test = "bindings/node/tests/surface/analysis-features.test.ts::declares StreamFrames with optional band-major features"
+
+[[entry]]
+kind = "field"
+old = "StreamFramesSoa.chordRoot"
+changed = "optional; absent when the feature is not computed"
+domain = "analysis"
+rule = "absent-not-sentinel"
+test = "bindings/node/tests/surface/analysis-features.test.ts::declares StreamFrames with optional band-major features"
+
+[[entry]]
+kind = "field"
+old = "StreamFramesSoa.chroma"
+changed = "Float32Array frame-major -> Matrix2D band-major; optional (absent when not computed); TSDoc: rows = chroma bins, cols = frames"
+domain = "analysis"
+rule = "matrix-2d"
+test = "bindings/node/tests/surface/analysis-features.test.ts::declares StreamFrames with optional band-major features"
+
+[[entry]]
+kind = "field"
+old = "StreamFramesSoa.featureFlags"
+removed = true
+domain = "analysis"
+rule = "absent-not-sentinel"
+
+[[entry]]
+kind = "field"
+old = "StreamFramesSoa.mel"
+changed = "Float32Array frame-major -> Matrix2D band-major; optional (absent when not computed); TSDoc: rows = mel bands, cols = frames"
+domain = "analysis"
+rule = "matrix-2d"
+test = "bindings/node/tests/surface/analysis-features.test.ts::declares StreamFrames with optional band-major features"
+
+[[entry]]
+kind = "field"
+old = "StreamFramesSoa.nChroma"
+removed = true
+domain = "analysis"
+rule = "matrix-2d"
+
+[[entry]]
+kind = "field"
+old = "StreamFramesSoa.nMels"
+removed = true
+domain = "analysis"
+rule = "matrix-2d"
+
+[[entry]]
+kind = "field"
+old = "StreamFramesSoa.onsetStrength"
+changed = "optional; absent when the feature is not computed"
+domain = "analysis"
+rule = "absent-not-sentinel"
+test = "bindings/node/tests/surface/analysis-features.test.ts::declares StreamFrames with optional band-major features"
+
+[[entry]]
+kind = "field"
+old = "StreamFramesSoa.rmsEnergy"
+changed = "optional; absent when the feature is not computed"
+domain = "analysis"
+rule = "absent-not-sentinel"
+test = "bindings/node/tests/surface/analysis-features.test.ts::declares StreamFrames with optional band-major features"
+
+[[entry]]
+kind = "field"
+old = "StreamFramesSoa.spectralCentroid"
+changed = "optional; absent when the feature is not computed"
+domain = "analysis"
+rule = "absent-not-sentinel"
+test = "bindings/node/tests/surface/analysis-features.test.ts::declares StreamFrames with optional band-major features"
+
+[[entry]]
+kind = "field"
+old = "StreamFramesSoa.spectralFlatness"
+changed = "optional; absent when the feature is not computed"
+domain = "analysis"
+rule = "absent-not-sentinel"
+test = "bindings/node/tests/surface/analysis-features.test.ts::declares StreamFrames with optional band-major features"
+
+[[entry]]
+kind = "field"
+old = "StreamFramesSoa.timestamps"
+new = "StreamFrames.timestampsSec"
+domain = "analysis"
+rule = "seconds-suffix"
+
+[[entry]]
+kind = "field"
+old = "StreamFramesU8.chroma"
+changed = "band-major layout (was frame-major); optional when not computed"
+domain = "analysis"
+rule = "matrix-2d"
+test = "bindings/node/tests/surface/analysis-features.test.ts::declares StreamFrames with optional band-major features"
+
+[[entry]]
+kind = "field"
+old = "StreamFramesU8.featureFlags"
+removed = true
+domain = "analysis"
+rule = "absent-not-sentinel"
+
+[[entry]]
+kind = "field"
+old = "StreamFramesU8.mel"
+changed = "band-major layout (was frame-major); optional when not computed"
+domain = "analysis"
+rule = "matrix-2d"
+test = "bindings/node/tests/surface/analysis-features.test.ts::declares StreamFrames with optional band-major features"
+
+[[entry]]
+kind = "field"
+old = "StreamFramesU8.onsetStrength"
+changed = "optional; absent when the feature is not computed"
+domain = "analysis"
+rule = "absent-not-sentinel"
+test = "bindings/node/tests/surface/analysis-features.test.ts::declares StreamFrames with optional band-major features"
+
+[[entry]]
+kind = "field"
+old = "StreamFramesU8.rmsEnergy"
+changed = "optional; absent when the feature is not computed"
+domain = "analysis"
+rule = "absent-not-sentinel"
+test = "bindings/node/tests/surface/analysis-features.test.ts::declares StreamFrames with optional band-major features"
+
+[[entry]]
+kind = "field"
+old = "StreamFramesU8.spectralCentroid"
+changed = "optional; absent when the feature is not computed"
+domain = "analysis"
+rule = "absent-not-sentinel"
+test = "bindings/node/tests/surface/analysis-features.test.ts::declares StreamFrames with optional band-major features"
+
+[[entry]]
+kind = "field"
+old = "StreamFramesU8.spectralFlatness"
+changed = "optional; absent when the feature is not computed"
+domain = "analysis"
+rule = "absent-not-sentinel"
+test = "bindings/node/tests/surface/analysis-features.test.ts::declares StreamFrames with optional band-major features"
+
+[[entry]]
+kind = "field"
+old = "StreamFramesU8.timestamps"
+new = "StreamFramesU8.timestampsSec"
+domain = "analysis"
+rule = "seconds-suffix"
+
+[[entry]]
+kind = "field"
+old = "StreamProgressiveEstimate.accumulatedSeconds"
+new = "StreamProgressiveEstimate.accumulatedSec"
+domain = "analysis"
+rule = "seconds-suffix"
+
+[[entry]]
+kind = "field"
+old = "StreamProgressiveEstimate.barDuration"
+new = "StreamProgressiveEstimate.barDurationSec"
+domain = "analysis"
+rule = "seconds-suffix"
+
+[[entry]]
+kind = "field"
+old = "StreamProgressiveEstimate.bpm"
+changed = "optional; absent until estimated (was 0)"
+domain = "analysis"
+rule = "absent-not-sentinel"
+test = "bindings/node/tests/surface/analysis-features.test.ts::declares the streaming estimate"
+
+[[entry]]
+kind = "field"
+old = "StreamProgressiveEstimate.bpmConfidence"
+changed = "optional; absent until estimated (was 0)"
+domain = "analysis"
+rule = "absent-not-sentinel"
+test = "bindings/node/tests/surface/analysis-features.test.ts::declares the streaming estimate"
+
+[[entry]]
+kind = "field"
+old = "StreamProgressiveEstimate.chordConfidence"
+removed = true
+domain = "analysis"
+rule = "absent-not-sentinel"
+
+[[entry]]
+kind = "field"
+old = "StreamProgressiveEstimate.chordName"
+removed = true
+domain = "analysis"
+rule = "absent-not-sentinel"
+
+[[entry]]
+kind = "field"
+old = "StreamProgressiveEstimate.chordQuality"
+removed = true
+domain = "analysis"
+rule = "absent-not-sentinel"
+
+[[entry]]
+kind = "field"
+old = "StreamProgressiveEstimate.chordRoot"
+removed = true
+domain = "analysis"
+rule = "absent-not-sentinel"
+
+[[entry]]
+kind = "field"
+old = "StreamProgressiveEstimate.chordStartTime"
+removed = true
+domain = "analysis"
+rule = "absent-not-sentinel"
+
+[[entry]]
+kind = "field"
+old = "StreamProgressiveEstimate.currentBar"
+changed = "optional; absent until a bar is detected (was -1)"
+domain = "analysis"
+rule = "absent-not-sentinel"
+test = "bindings/node/tests/surface/analysis-features.test.ts::declares the streaming estimate"
+
+[[entry]]
+kind = "field"
+old = "StreamProgressiveEstimate.detectedPatternName"
+changed = "optional; absent when no pattern (was '' / 0)"
+domain = "analysis"
+rule = "absent-not-sentinel"
+test = "bindings/node/tests/surface/analysis-features.test.ts::declares the streaming estimate"
+
+[[entry]]
+kind = "field"
+old = "StreamProgressiveEstimate.detectedPatternScore"
+changed = "optional; absent when no pattern (was '' / 0)"
+domain = "analysis"
+rule = "absent-not-sentinel"
+test = "bindings/node/tests/surface/analysis-features.test.ts::declares the streaming estimate"
+
+[[entry]]
+kind = "field"
+old = "StreamProgressiveEstimate.key"
+changed = "key?: Key (root, mode, confidence, name, shortName); absent until estimated (was -1)"
+domain = "analysis"
+rule = "absent-not-sentinel"
+test = "bindings/node/tests/surface/analysis-features.test.ts::declares the streaming estimate"
+
+[[entry]]
+kind = "field"
+old = "StreamProgressiveEstimate.keyConfidence"
+removed = true
+domain = "analysis"
+rule = "absent-not-sentinel"
+
+[[entry]]
+kind = "field"
+old = "StreamProgressiveEstimate.keyMinor"
+removed = true
+domain = "analysis"
+rule = "absent-not-sentinel"
+
+[[entry]]
+kind = "field"
+old = "StreamProgressiveEstimate.keyName"
+removed = true
+domain = "analysis"
+rule = "absent-not-sentinel"
+
+[[entry]]
+kind = "field"
+old = "StreamProgressiveEstimate.keyShortName"
+removed = true
+domain = "analysis"
+rule = "absent-not-sentinel"
+
+[[entry]]
+kind = "field"
+old = "TempogramRatioRequest.tempogramData"
+new = "TempogramRatioRequest.tempogram"
+domain = "analysis"
+rule = "matrix-2d"
+
+[[entry]]
+kind = "field"
+old = "TempogramRatioRequest.winLength"
+removed = true
+domain = "analysis"
+rule = "matrix-2d"
+
+[[entry]]
+kind = "field"
+old = "ToneRequest.duration"
+new = "ToneRequest.durationSec"
+domain = "analysis"
+rule = "seconds-suffix"
+
+[[entry]]
+kind = "field"
+old = "ToneRequest.frequency"
+new = "ToneRequest.frequencyHz"
+domain = "analysis"
+rule = "unit-in-name"
+
+[[entry]]
+kind = "field"
+old = "VqtRequest.fmin"
+new = "VqtRequest.fminHz"
+domain = "analysis"
+rule = "frequency-bounds"
+
+[[entry]]
+kind = "field"
+old = "VqtRequest.sampleRate"
+changed = "required (was optional with a 22050/44100 default)"
+domain = "analysis"
+rule = "sample-rate-required"
+test = "bindings/node/tests/surface/analysis-features.test.ts::requires sampleRate in both forms"
+
+[[entry]]
+kind = "field"
+old = "VqtToAudioRequest.fmin"
+new = "VqtToAudioRequest.fminHz"
+domain = "analysis"
+rule = "frequency-bounds"
+
+[[entry]]
+kind = "field"
+old = "VqtToAudioRequest.magnitude"
+changed = "Float32Array -> Matrix2D; TSDoc: rows = VQT bins, cols = frames"
+domain = "analysis"
+rule = "matrix-2d"
+test = "bindings/node/tests/surface/analysis-features.test.ts::takes its matrix as a Matrix2D"
+
+[[entry]]
+kind = "field"
+old = "VqtToAudioRequest.nBins"
+removed = true
+domain = "analysis"
+rule = "matrix-2d"
+
+[[entry]]
+kind = "field"
+old = "VqtToAudioRequest.nFrames"
+removed = true
+domain = "analysis"
+rule = "matrix-2d"
+
+[[entry]]
+kind = "function"
+old = "analyze"
+changed = "request gains onProgress?: (progress, stage) => void and cancel?: () => boolean"
+domain = "analysis"
+rule = "progress-callback"
+test = "bindings/node/tests/surface/analysis-music.test.ts::reports progress through the request"
+
+[[entry]]
+kind = "function"
+old = "analyzeAsync"
+changed = "request type AnalyzeAsyncRequest (AnalyzeRequest minus onProgress/cancel); positional (samples, sampleRate, options?) with sampleRate required"
+domain = "analysis"
+rule = "one-positional-form"
+test = "bindings/node/tests/surface/analysis-music.test.ts::async resolves the same shape"
+
+[[entry]]
+kind = "function"
+old = "analyzeBpm"
+changed = "bpmMin/bpmMax default 60/200 (was 30/300)"
+domain = "analysis"
+rule = "tempo-range"
+test = "bindings/node/tests/surface/analysis-music.test.ts::searches 60-200 BPM by default"
+
+[[entry]]
+kind = "function"
+old = "analyzeDynamics"
+changed = "one positional form (analyzeDynamics(samples, sampleRate, options?: Omit<AnalyzeDynamicsRequest,'samples'|'sampleRate'>)); request form takes AnalyzeDynamicsRequest"
+domain = "analysis"
+rule = "one-positional-form"
+test = "bindings/node/tests/surface/analysis-music.test.ts::refuses an omitted sampleRate"
+
+[[entry]]
+kind = "function"
+old = "analyzeImpulseResponse"
+changed = "one positional form (analyzeImpulseResponse(samples, sampleRate, options?: Omit<AnalyzeImpulseResponseRequest,'samples'|'sampleRate'>)); request form takes AnalyzeImpulseResponseRequest"
+domain = "analysis"
+rule = "one-positional-form"
+test = "bindings/node/tests/surface/analysis-music.test.ts::refuses an omitted sampleRate"
+
+[[entry]]
+kind = "function"
+old = "analyzeMelody"
+changed = "one positional form (analyzeMelody(samples, sampleRate, options?: Omit<AnalyzeMelodyRequest,'samples'|'sampleRate'>)); request form takes AnalyzeMelodyRequest"
+domain = "analysis"
+rule = "one-positional-form"
+test = "bindings/node/tests/surface/analysis-music.test.ts::refuses an omitted sampleRate"
+
+[[entry]]
+kind = "function"
+old = "analyzeRhythm"
+changed = "one positional form (analyzeRhythm(samples, sampleRate, options?: Omit<AnalyzeRhythmRequest,'samples'|'sampleRate'>)); request form takes AnalyzeRhythmRequest"
+domain = "analysis"
+rule = "one-positional-form"
+test = "bindings/node/tests/surface/analysis-music.test.ts::refuses an omitted sampleRate"
+
+[[entry]]
+kind = "function"
+old = "analyzeSections"
+changed = "one positional form (analyzeSections(samples, sampleRate, options?: Omit<AnalyzeSectionsRequest,'samples'|'sampleRate'>)); request form takes AnalyzeSectionsRequest"
+domain = "analysis"
+rule = "one-positional-form"
+test = "bindings/node/tests/surface/analysis-music.test.ts::refuses an omitted sampleRate"
+
+[[entry]]
+kind = "function"
+old = "analyzeTimbre"
+changed = "one positional form (analyzeTimbre(samples, sampleRate, options?: Omit<AnalyzeTimbreRequest,'samples'|'sampleRate'>)); request form takes AnalyzeTimbreRequest"
+domain = "analysis"
+rule = "one-positional-form"
+test = "bindings/node/tests/surface/analysis-music.test.ts::refuses an omitted sampleRate"
+
+[[entry]]
+kind = "function"
+old = "analyzeWithProgress"
+removed = true
+domain = "analysis"
+rule = "progress-callback"
+
+[[entry]]
+kind = "function"
+old = "chordFunctionalAnalysis"
+changed = "one positional form (chordFunctionalAnalysis(samples, sampleRate, options: Omit<ChordFunctionalAnalysisRequest,'samples'|'sampleRate'>)); request form takes ChordFunctionalAnalysisRequest; options required (carries required fields)"
+domain = "analysis"
+rule = "one-positional-form"
+test = "bindings/node/tests/surface/analysis-music.test.ts::refuses an omitted sampleRate"
+
+[[entry]]
+kind = "function"
+old = "chordFunctions"
+changed = "one generic signature chordFunctions<T extends ChordFunctionsInput>(request: ChordFunctionsRequest<T>): FunctionalChord<T>[]"
+domain = "analysis"
+rule = "one-positional-form"
+test = "bindings/node/tests/surface/analysis-music.test.ts::chordFunctions takes tokens and refuses ordinals and names"
+
+[[entry]]
+kind = "function"
+old = "detectAcoustic"
+changed = "one positional form (detectAcoustic(samples, sampleRate, options?: Omit<DetectAcousticRequest,'samples'|'sampleRate'>)); request form takes DetectAcousticRequest"
+domain = "analysis"
+rule = "one-positional-form"
+test = "bindings/node/tests/surface/analysis-music.test.ts::refuses an omitted sampleRate"
+
+[[entry]]
+kind = "function"
+old = "detectBeats"
+changed = "searches 60-200 BPM (was 30-300)"
+domain = "analysis"
+rule = "tempo-range"
+test = "bindings/node/tests/surface/analysis-music.test.ts::refuses an omitted sampleRate"
+
+[[entry]]
+kind = "function"
+old = "detectBpm"
+changed = "searches 60-200 BPM (was 30-300)"
+domain = "analysis"
+rule = "tempo-range"
+test = "bindings/node/tests/surface/analysis-music.test.ts::refuses an omitted sampleRate"
+
+[[entry]]
+kind = "function"
+old = "detectChords"
+changed = "one positional form (detectChords(samples, sampleRate, options?: Omit<DetectChordsRequest,'samples'|'sampleRate'>)); request form takes DetectChordsRequest"
+domain = "analysis"
+rule = "one-positional-form"
+test = "bindings/node/tests/surface/analysis-music.test.ts::refuses an omitted sampleRate"
+
+[[entry]]
+kind = "function"
+old = "detectDownbeats"
+changed = "one positional form (detectDownbeats(samples, sampleRate, options?: Omit<DetectDownbeatsRequest,'samples'|'sampleRate'>)); request form takes DetectDownbeatsRequest"
+domain = "analysis"
+rule = "one-positional-form"
+test = "bindings/node/tests/surface/analysis-music.test.ts::refuses an omitted sampleRate"
+
+[[entry]]
+kind = "function"
+old = "detectKey"
+changed = "one positional form (detectKey(samples, sampleRate, options?: Omit<DetectKeyRequest,'samples'|'sampleRate'>)); request form takes DetectKeyRequest"
+domain = "analysis"
+rule = "one-positional-form"
+test = "bindings/node/tests/surface/analysis-music.test.ts::refuses an omitted sampleRate"
+
+[[entry]]
+kind = "function"
+old = "detectKeyCandidates"
+changed = "one positional form (detectKeyCandidates(samples, sampleRate, options?: Omit<DetectKeyCandidatesRequest,'samples'|'sampleRate'>)); request form takes DetectKeyCandidatesRequest"
+domain = "analysis"
+rule = "one-positional-form"
+test = "bindings/node/tests/surface/analysis-music.test.ts::refuses an omitted sampleRate"
+
+[[entry]]
+kind = "function"
+old = "detectOnsets"
+changed = "one positional form (detectOnsets(samples, sampleRate, options?: Omit<DetectOnsetsRequest,'samples'|'sampleRate'>)); request form takes DetectOnsetsRequest"
+domain = "analysis"
+rule = "one-positional-form"
+test = "bindings/node/tests/surface/analysis-music.test.ts::refuses an omitted sampleRate"
+
+[[entry]]
+kind = "function"
+old = "estimateMeter"
+changed = "request type is EstimateMeterRequest"
+domain = "analysis"
+rule = "type-names"
+test = "bindings/node/tests/surface/analysis-music.test.ts::estimateMeter takes beats"
+
+[[entry]]
+kind = "function"
+old = "resample"
+changed = "one positional form (resample(samples, sourceSampleRate, targetSampleRate)); request ResampleRequest {samples, sourceSampleRate, targetSampleRate}"
+domain = "analysis"
+rule = "sample-rate-name"
+test = "bindings/node/tests/surface/analysis-music.test.ts::resample takes two named rates"
+
+[[entry]]
+kind = "option"
+old = "analyze(sampleRate)"
+changed = "required second argument (was optional / later position)"
+domain = "analysis"
+rule = "sample-rate-required"
+test = "bindings/node/tests/surface/analysis-music.test.ts::refuses an omitted sampleRate"
+
+[[entry]]
+kind = "option"
+old = "analyzeAsync(sampleRate)"
+changed = "required"
+domain = "analysis"
+rule = "sample-rate-required"
+test = "bindings/node/tests/surface/analysis-music.test.ts::refuses an omitted sampleRate"
+
+[[entry]]
+kind = "option"
+old = "analyzeBpm(sampleRate)"
+changed = "required second argument (was optional / later position)"
+domain = "analysis"
+rule = "sample-rate-required"
+test = "bindings/node/tests/surface/analysis-music.test.ts::refuses an omitted sampleRate"
+
+[[entry]]
+kind = "option"
+old = "analyzeDynamics(sampleRate)"
+changed = "required second argument (was optional / later position)"
+domain = "analysis"
+rule = "sample-rate-required"
+test = "bindings/node/tests/surface/analysis-music.test.ts::refuses an omitted sampleRate"
+
+[[entry]]
+kind = "option"
+old = "analyzeImpulseResponse(minDecayDb)"
+removed = true
+domain = "analysis"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "analyzeImpulseResponse(nOctaveBands)"
+removed = true
+domain = "analysis"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "analyzeImpulseResponse(sampleRate)"
+changed = "required second argument (was optional / later position)"
+domain = "analysis"
+rule = "sample-rate-required"
+test = "bindings/node/tests/surface/analysis-music.test.ts::refuses an omitted sampleRate"
+
+[[entry]]
+kind = "option"
+old = "analyzeMelody(sampleRate)"
+changed = "required second argument (was optional / later position)"
+domain = "analysis"
+rule = "sample-rate-required"
+test = "bindings/node/tests/surface/analysis-music.test.ts::refuses an omitted sampleRate"
+
+[[entry]]
+kind = "option"
+old = "analyzeRhythm(sampleRate)"
+changed = "required second argument (was optional / later position)"
+domain = "analysis"
+rule = "sample-rate-required"
+test = "bindings/node/tests/surface/analysis-music.test.ts::refuses an omitted sampleRate"
+
+[[entry]]
+kind = "option"
+old = "analyzeSections(sampleRate)"
+changed = "required second argument (was optional / later position)"
+domain = "analysis"
+rule = "sample-rate-required"
+test = "bindings/node/tests/surface/analysis-music.test.ts::refuses an omitted sampleRate"
+
+[[entry]]
+kind = "option"
+old = "analyzeTimbre(sampleRate)"
+changed = "required second argument (was optional / later position)"
+domain = "analysis"
+rule = "sample-rate-required"
+test = "bindings/node/tests/surface/analysis-music.test.ts::refuses an omitted sampleRate"
+
+[[entry]]
+kind = "option"
+old = "chordFunctionalAnalysis(chromaMethod)"
+removed = true
+domain = "analysis"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "chordFunctionalAnalysis(detectInversions)"
+removed = true
+domain = "analysis"
+rule = "no-positional-bools"
+
+[[entry]]
+kind = "option"
+old = "chordFunctionalAnalysis(hmmBeamWidth)"
+removed = true
+domain = "analysis"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "chordFunctionalAnalysis(hopLength)"
+removed = true
+domain = "analysis"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "chordFunctionalAnalysis(keyMode)"
+removed = true
+domain = "analysis"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "chordFunctionalAnalysis(keyRoot)"
+removed = true
+domain = "analysis"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "chordFunctionalAnalysis(minDuration)"
+removed = true
+domain = "analysis"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "chordFunctionalAnalysis(nFft)"
+removed = true
+domain = "analysis"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "chordFunctionalAnalysis(sampleRate)"
+changed = "required second argument (was optional / later position)"
+domain = "analysis"
+rule = "sample-rate-required"
+test = "bindings/node/tests/surface/analysis-music.test.ts::refuses an omitted sampleRate"
+
+[[entry]]
+kind = "option"
+old = "chordFunctionalAnalysis(smoothingWindow)"
+removed = true
+domain = "analysis"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "chordFunctionalAnalysis(threshold)"
+removed = true
+domain = "analysis"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "chordFunctionalAnalysis(useBeatSync)"
+removed = true
+domain = "analysis"
+rule = "no-positional-bools"
+
+[[entry]]
+kind = "option"
+old = "chordFunctionalAnalysis(useHmm)"
+removed = true
+domain = "analysis"
+rule = "no-positional-bools"
+
+[[entry]]
+kind = "option"
+old = "chordFunctionalAnalysis(useKeyContext)"
+removed = true
+domain = "analysis"
+rule = "no-positional-bools"
+
+[[entry]]
+kind = "option"
+old = "chordFunctionalAnalysis(useTriadsOnly)"
+removed = true
+domain = "analysis"
+rule = "no-positional-bools"
+
+[[entry]]
+kind = "option"
+old = "detectAcoustic(sampleRate)"
+changed = "required second argument (was optional / later position)"
+domain = "analysis"
+rule = "sample-rate-required"
+test = "bindings/node/tests/surface/analysis-music.test.ts::refuses an omitted sampleRate"
+
+[[entry]]
+kind = "option"
+old = "detectBeats(sampleRate)"
+changed = "required second argument (was optional / later position)"
+domain = "analysis"
+rule = "sample-rate-required"
+test = "bindings/node/tests/surface/analysis-music.test.ts::refuses an omitted sampleRate"
+
+[[entry]]
+kind = "option"
+old = "detectBpm(sampleRate)"
+changed = "required second argument (was optional / later position)"
+domain = "analysis"
+rule = "sample-rate-required"
+test = "bindings/node/tests/surface/analysis-music.test.ts::refuses an omitted sampleRate"
+
+[[entry]]
+kind = "option"
+old = "detectChords(chromaMethod)"
+removed = true
+domain = "analysis"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "detectChords(detectInversions)"
+removed = true
+domain = "analysis"
+rule = "no-positional-bools"
+
+[[entry]]
+kind = "option"
+old = "detectChords(hmmBeamWidth)"
+removed = true
+domain = "analysis"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "detectChords(hopLength)"
+removed = true
+domain = "analysis"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "detectChords(keyMode)"
+removed = true
+domain = "analysis"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "detectChords(keyRoot)"
+removed = true
+domain = "analysis"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "detectChords(minDuration)"
+removed = true
+domain = "analysis"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "detectChords(nFft)"
+removed = true
+domain = "analysis"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "detectChords(sampleRate)"
+changed = "required second argument (was optional / later position)"
+domain = "analysis"
+rule = "sample-rate-required"
+test = "bindings/node/tests/surface/analysis-music.test.ts::refuses an omitted sampleRate"
+
+[[entry]]
+kind = "option"
+old = "detectChords(smoothingWindow)"
+removed = true
+domain = "analysis"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "detectChords(threshold)"
+removed = true
+domain = "analysis"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "detectChords(useBeatSync)"
+removed = true
+domain = "analysis"
+rule = "no-positional-bools"
+
+[[entry]]
+kind = "option"
+old = "detectChords(useHmm)"
+removed = true
+domain = "analysis"
+rule = "no-positional-bools"
+
+[[entry]]
+kind = "option"
+old = "detectChords(useKeyContext)"
+removed = true
+domain = "analysis"
+rule = "no-positional-bools"
+
+[[entry]]
+kind = "option"
+old = "detectChords(useTriadsOnly)"
+removed = true
+domain = "analysis"
+rule = "no-positional-bools"
+
+[[entry]]
+kind = "option"
+old = "detectDownbeats(sampleRate)"
+changed = "required second argument (was optional / later position)"
+domain = "analysis"
+rule = "sample-rate-required"
+test = "bindings/node/tests/surface/analysis-music.test.ts::refuses an omitted sampleRate"
+
+[[entry]]
+kind = "option"
+old = "detectKey(sampleRate)"
+changed = "required second argument (was optional / later position)"
+domain = "analysis"
+rule = "sample-rate-required"
+test = "bindings/node/tests/surface/analysis-music.test.ts::refuses an omitted sampleRate"
+
+[[entry]]
+kind = "option"
+old = "detectKeyCandidates(sampleRate)"
+changed = "required second argument (was optional / later position)"
+domain = "analysis"
+rule = "sample-rate-required"
+test = "bindings/node/tests/surface/analysis-music.test.ts::refuses an omitted sampleRate"
+
+[[entry]]
+kind = "option"
+old = "detectOnsets(sampleRate)"
+changed = "required second argument (was optional / later position)"
+domain = "analysis"
+rule = "sample-rate-required"
+test = "bindings/node/tests/surface/analysis-music.test.ts::refuses an omitted sampleRate"
+
+[[entry]]
+kind = "option"
+old = "resample(srcSr)"
+new = "resample(sourceSampleRate)"
+domain = "analysis"
+rule = "sample-rate-name"
+
+[[entry]]
+kind = "option"
+old = "resample(targetSr)"
+new = "resample(targetSampleRate)"
+domain = "analysis"
+rule = "sample-rate-name"
+
+[[entry]]
+kind = "type"
+old = "AnalysisBeat"
+new = "Beat"
+domain = "analysis"
+rule = "type-names"
+
+[[entry]]
+kind = "type"
+old = "AnalysisPitchPoint"
+removed = true
+domain = "analysis"
+rule = "type-names"
+
+[[entry]]
+kind = "type"
+old = "AnalysisProgressCallback"
+removed = true
+domain = "analysis"
+rule = "aliases-removed"
+
+[[entry]]
+kind = "type"
+old = "AnalysisSection"
+removed = true
+domain = "analysis"
+rule = "type-names"
+
+[[entry]]
+kind = "type"
+old = "AnalysisTimbre"
+removed = true
+domain = "analysis"
+rule = "type-names"
+
+[[entry]]
+kind = "type"
+old = "AnalyzeBpmRequest"
+changed = "sampleRate: number required (inherited optional from the shared base; was 22050/44100 default)"
+domain = "analysis"
+rule = "sample-rate-required"
+test = "bindings/node/tests/surface/analysis-music.test.ts::scans for NaN by default and declares validate"
+
+[[entry]]
+kind = "type"
+old = "AnalyzeDynamicsRequest"
+changed = "sampleRate: number required (inherited optional from the shared base; was 22050/44100 default)"
+domain = "analysis"
+rule = "sample-rate-required"
+test = "bindings/node/tests/surface/analysis-music.test.ts::scans for NaN by default and declares validate"
+
+[[entry]]
+kind = "type"
+old = "AnalyzeImpulseResponseRequest"
+changed = "sampleRate: number required (inherited optional from the shared base; was 22050/44100 default)"
+domain = "analysis"
+rule = "sample-rate-required"
+test = "bindings/node/tests/surface/analysis-music.test.ts::scans for NaN by default and declares validate"
+
+[[entry]]
+kind = "type"
+old = "AnalyzeMelodyRequest"
+changed = "sampleRate: number required (inherited optional from the shared base; was 22050/44100 default)"
+domain = "analysis"
+rule = "sample-rate-required"
+test = "bindings/node/tests/surface/analysis-music.test.ts::scans for NaN by default and declares validate"
+
+[[entry]]
+kind = "type"
+old = "AnalyzeRhythmRequest"
+changed = "sampleRate: number required (inherited optional from the shared base; was 22050/44100 default)"
+domain = "analysis"
+rule = "sample-rate-required"
+test = "bindings/node/tests/surface/analysis-music.test.ts::scans for NaN by default and declares validate"
+
+[[entry]]
+kind = "type"
+old = "AnalyzeSectionsRequest"
+changed = "sampleRate: number required (inherited optional from the shared base; was 22050/44100 default)"
+domain = "analysis"
+rule = "sample-rate-required"
+test = "bindings/node/tests/surface/analysis-music.test.ts::scans for NaN by default and declares validate"
+
+[[entry]]
+kind = "type"
+old = "AnalyzeTimbreRequest"
+changed = "sampleRate: number required (inherited optional from the shared base; was 22050/44100 default)"
+domain = "analysis"
+rule = "sample-rate-required"
+test = "bindings/node/tests/surface/analysis-music.test.ts::scans for NaN by default and declares validate"
+
+[[entry]]
+kind = "type"
+old = "AnalyzeWithProgressRequest"
+removed = true
+domain = "analysis"
+rule = "progress-callback"
+
+[[entry]]
+kind = "type"
+old = "AutoTuneKey"
+changed = "root: PitchClass, mode: KeyMode (Node accepted string | number for both)"
+domain = "analysis"
+rule = "string-closed-sets"
+test = "bindings/node/tests/surface/analysis-music.test.ts::exposes the closed sets and records"
+
+[[entry]]
+kind = "type"
+old = "BpmCandidate"
+changed = "gains relation?: BpmCandidateRelation (present on AnalysisResult.bpmCandidates)"
+domain = "analysis"
+rule = "type-names"
+test = "bindings/node/tests/surface/analysis-music.test.ts::exposes the closed sets and records"
+
+[[entry]]
+kind = "type"
+old = "BpmHypothesis"
+removed = true
+domain = "analysis"
+rule = "type-names"
+
+[[entry]]
+kind = "type"
+old = "ChordFunctionalAnalysisRequest"
+changed = "sampleRate: number required (inherited optional from the shared base; was 22050/44100 default)"
+domain = "analysis"
+rule = "sample-rate-required"
+test = "bindings/node/tests/surface/analysis-music.test.ts::scans for NaN by default and declares validate"
+
+[[entry]]
+kind = "type"
+old = "ChordQuality"
+changed = "string union of the former ChordQualityName tokens (unknown kept); the const object is removed; numbers refused"
+domain = "analysis"
+rule = "string-closed-sets"
+test = "bindings/node/tests/surface/analysis-music.test.ts::exposes the closed sets and records"
+
+[[entry]]
+kind = "type"
+old = "ChordQualityName"
+removed = true
+domain = "analysis"
+rule = "string-closed-sets"
+
+[[entry]]
+kind = "type"
+old = "DetectAcousticRequest"
+changed = "sampleRate: number required (inherited optional from the shared base; was 22050/44100 default)"
+domain = "analysis"
+rule = "sample-rate-required"
+test = "bindings/node/tests/surface/analysis-music.test.ts::scans for NaN by default and declares validate"
+
+[[entry]]
+kind = "type"
+old = "DetectBoundariesRequest"
+changed = "sampleRate: number required (inherited optional from the shared base; was 22050/44100 default)"
+domain = "analysis"
+rule = "sample-rate-required"
+test = "bindings/node/tests/surface/analysis-music.test.ts::scans for NaN by default and declares validate"
+
+[[entry]]
+kind = "type"
+old = "DetectChordsRequest"
+changed = "sampleRate: number required (inherited optional from the shared base; was 22050/44100 default)"
+domain = "analysis"
+rule = "sample-rate-required"
+test = "bindings/node/tests/surface/analysis-music.test.ts::scans for NaN by default and declares validate"
+
+[[entry]]
+kind = "type"
+old = "DetectKeyCandidatesRequest"
+changed = "sampleRate: number required (inherited optional from the shared base; was 22050/44100 default)"
+domain = "analysis"
+rule = "sample-rate-required"
+test = "bindings/node/tests/surface/analysis-music.test.ts::scans for NaN by default and declares validate"
+
+[[entry]]
+kind = "type"
+old = "DetectKeyOptions"
+removed = true
+domain = "analysis"
+rule = "aliases-removed"
+
+[[entry]]
+kind = "type"
+old = "DetectKeyRequest"
+changed = "sampleRate: number required (inherited optional from the shared base; was 22050/44100 default)"
+domain = "analysis"
+rule = "sample-rate-required"
+test = "bindings/node/tests/surface/analysis-music.test.ts::scans for NaN by default and declares validate"
+
+[[entry]]
+kind = "type"
+old = "DetectOnsetsRequest"
+changed = "sampleRate: number required (inherited optional from the shared base; was 22050/44100 default)"
+domain = "analysis"
+rule = "sample-rate-required"
+test = "bindings/node/tests/surface/analysis-music.test.ts::scans for NaN by default and declares validate"
+
+[[entry]]
+kind = "type"
+old = "DynamicsAnalysisResult"
+removed = true
+domain = "analysis"
+rule = "aliases-removed"
+
+[[entry]]
+kind = "type"
+old = "KeyProfile"
+changed = "string union 'krumhanslSchmuckler'|'temperley'|'shaath'|'faraldoEdmt'|'faraldoEdma'|'faraldoEdmm'|'bellmanBudge'; synonyms and numbers refused"
+domain = "analysis"
+rule = "string-closed-sets"
+test = "bindings/node/tests/surface/analysis-music.test.ts::exposes the closed sets and records"
+
+[[entry]]
+kind = "type"
+old = "MusicAnalyzeRequest"
+new = "AnalyzeRequest"
+domain = "analysis"
+rule = "type-names"
+
+[[entry]]
+kind = "type"
+old = "SamplesRequest"
+removed = true
+domain = "analysis"
+rule = "type-names"
+
+[[entry]]
+kind = "type"
+old = "ScaleName"
+removed = true
+domain = "analysis"
+rule = "aliases-removed"
+
+[[entry]]
+kind = "type"
+old = "SectionTypeOrdinal"
+removed = true
+domain = "analysis"
+rule = "string-closed-sets"
+
+[[entry]]
+kind = "type"
+old = "TempogramMode"
+changed = "string union 'autocorrelation'|'cosine'"
+domain = "analysis"
+rule = "string-closed-sets"
+test = "bindings/node/tests/surface/analysis-music.test.ts::exposes the closed sets and records"
+
+[[entry]]
+kind = "field"
+old = "AnalysisBeat.time"
+new = "Beat.timeSec"
+domain = "analysis"
+rule = "seconds-suffix"
+
+[[entry]]
+kind = "field"
+old = "AnalysisChord.bass"
+changed = "type PitchClass"
+domain = "analysis"
+rule = "string-closed-sets"
+test = "bindings/node/tests/surface/analysis-music.test.ts::uses *Sec for chord and section spans"
+
+[[entry]]
+kind = "field"
+old = "AnalysisChord.duration"
+new = "AnalysisChord.durationSec"
+domain = "analysis"
+rule = "seconds-suffix"
+
+[[entry]]
+kind = "field"
+old = "AnalysisChord.end"
+new = "AnalysisChord.endSec"
+domain = "analysis"
+rule = "seconds-suffix"
+
+[[entry]]
+kind = "field"
+old = "AnalysisChord.root"
+changed = "type PitchClass (number 0-11, as WASM)"
+domain = "analysis"
+rule = "string-closed-sets"
+test = "bindings/node/tests/surface/analysis-music.test.ts::uses *Sec for chord and section spans"
+
+[[entry]]
+kind = "field"
+old = "AnalysisChord.start"
+new = "AnalysisChord.startSec"
+domain = "analysis"
+rule = "seconds-suffix"
+
+[[entry]]
+kind = "field"
+old = "AnalysisDynamics.loudnessRangeDb"
+new = "AnalysisDynamics.loudnessRangeLu"
+domain = "analysis"
+rule = "loudness-names"
+
+[[entry]]
+kind = "field"
+old = "AnalysisMelody.meanFrequency"
+new = "AnalysisMelody.meanFrequencyHz"
+domain = "analysis"
+rule = "unit-in-name"
+
+[[entry]]
+kind = "field"
+old = "AnalysisMelody.vibratoRate"
+new = "AnalysisMelody.vibratoRateHz"
+domain = "analysis"
+rule = "unit-in-name"
+
+[[entry]]
+kind = "field"
+old = "AnalysisResult.beatTimes"
+removed = true
+domain = "analysis"
+rule = "typed-results"
+
+[[entry]]
+kind = "field"
+old = "AnalysisResult.bpmCandidates"
+changed = "element type BpmCandidate {bpm, confidence, relation?}"
+domain = "analysis"
+rule = "type-names"
+test = "bindings/node/tests/surface/analysis-music.test.ts::gives tempo candidates bpm and relation"
+
+[[entry]]
+kind = "field"
+old = "AnalysisResult.downbeatIndices"
+new = "AnalysisResult.downbeats"
+domain = "analysis"
+rule = "typed-results"
+
+[[entry]]
+kind = "field"
+old = "AnalysisResult.tuning"
+new = "AnalysisResult.tuningCents"
+domain = "analysis"
+rule = "unit-in-name"
+
+[[entry]]
+kind = "field"
+old = "AnalysisRhythm.grooveType"
+changed = "type GrooveType = 'straight'|'shuffle'|'swing'"
+domain = "analysis"
+rule = "string-closed-sets"
+test = "bindings/node/tests/surface/analysis-music.test.ts::uses the renamed fields on boundary, rhythm and dynamics results"
+
+[[entry]]
+kind = "field"
+old = "AnalyzeBpmOptions.bpmMax"
+changed = "absent = 60 / 200 BPM (was 30 / 300), passed by the facade"
+domain = "analysis"
+rule = "tempo-range"
+test = "bindings/node/tests/surface/analysis-music.test.ts::refuses an omitted sampleRate"
+
+[[entry]]
+kind = "field"
+old = "AnalyzeBpmOptions.bpmMin"
+changed = "absent = 60 / 200 BPM (was 30 / 300), passed by the facade"
+domain = "analysis"
+rule = "tempo-range"
+test = "bindings/node/tests/surface/analysis-music.test.ts::refuses an omitted sampleRate"
+
+[[entry]]
+kind = "field"
+old = "AnalyzeBpmRequest.bpmMax"
+changed = "absent = 60 / 200 BPM (was 30 / 300), passed by the facade"
+domain = "analysis"
+rule = "tempo-range"
+test = "bindings/node/tests/surface/analysis-music.test.ts::refuses an omitted sampleRate"
+
+[[entry]]
+kind = "field"
+old = "AnalyzeBpmRequest.bpmMin"
+changed = "absent = 60 / 200 BPM (was 30 / 300), passed by the facade"
+domain = "analysis"
+rule = "tempo-range"
+test = "bindings/node/tests/surface/analysis-music.test.ts::refuses an omitted sampleRate"
+
+[[entry]]
+kind = "field"
+old = "AnalyzeBpmRequest.sampleRate"
+changed = "required (was optional with a 22050/44100 default)"
+domain = "analysis"
+rule = "sample-rate-required"
+test = "bindings/node/tests/surface/analysis-music.test.ts::refuses an omitted sampleRate"
+
+[[entry]]
+kind = "field"
+old = "AnalyzeDynamicsOptions.compressionThreshold"
+new = "AnalyzeDynamicsOptions.compressionThresholdDb"
+domain = "analysis"
+rule = "unit-in-name"
+
+[[entry]]
+kind = "field"
+old = "AnalyzeDynamicsRequest.compressionThreshold"
+new = "AnalyzeDynamicsRequest.compressionThresholdDb"
+domain = "analysis"
+rule = "unit-in-name"
+
+[[entry]]
+kind = "field"
+old = "AnalyzeDynamicsRequest.sampleRate"
+changed = "required (was optional with a 22050/44100 default)"
+domain = "analysis"
+rule = "sample-rate-required"
+test = "bindings/node/tests/surface/analysis-music.test.ts::refuses an omitted sampleRate"
+
+[[entry]]
+kind = "field"
+old = "AnalyzeImpulseResponseRequest.sampleRate"
+changed = "required (was optional with a 22050/44100 default)"
+domain = "analysis"
+rule = "sample-rate-required"
+test = "bindings/node/tests/surface/analysis-music.test.ts::refuses an omitted sampleRate"
+
+[[entry]]
+kind = "field"
+old = "AnalyzeMelodyRequest.fmax"
+new = "AnalyzeMelodyRequest.f0MaxHz"
+domain = "analysis"
+rule = "frequency-bounds"
+
+[[entry]]
+kind = "field"
+old = "AnalyzeMelodyRequest.fmin"
+new = "AnalyzeMelodyRequest.f0MinHz"
+domain = "analysis"
+rule = "frequency-bounds"
+
+[[entry]]
+kind = "field"
+old = "AnalyzeMelodyRequest.sampleRate"
+changed = "required (was optional with a 22050/44100 default)"
+domain = "analysis"
+rule = "sample-rate-required"
+test = "bindings/node/tests/surface/analysis-music.test.ts::refuses an omitted sampleRate"
+
+[[entry]]
+kind = "field"
+old = "AnalyzePolyphonicRequest.minFramePeakRatio"
+changed = "explicit 0 now means 0; negative refused (RangeError); absent = library default"
+domain = "analysis"
+rule = "absent-not-sentinel"
+test = "bindings/node/tests/surface/analysis-music.test.ts::an explicit 0 is accepted and a negative is a RangeError"
+
+[[entry]]
+kind = "field"
+old = "AnalyzePolyphonicRequest.minRidgeDurationMs"
+changed = "explicit 0 now means 0; negative refused (RangeError); absent = library default"
+domain = "analysis"
+rule = "absent-not-sentinel"
+test = "bindings/node/tests/surface/analysis-music.test.ts::an explicit 0 is accepted and a negative is a RangeError"
+
+[[entry]]
+kind = "field"
+old = "AnalyzePolyphonicRequest.minRidgePeakRatio"
+changed = "explicit 0 now means 0; negative refused (RangeError); absent = library default"
+domain = "analysis"
+rule = "absent-not-sentinel"
+test = "bindings/node/tests/surface/analysis-music.test.ts::an explicit 0 is accepted and a negative is a RangeError"
+
+[[entry]]
+kind = "field"
+old = "AnalyzePolyphonicRequest.minSeparationCents"
+changed = "explicit 0 now means 0; negative refused (RangeError); absent = library default"
+domain = "analysis"
+rule = "absent-not-sentinel"
+test = "bindings/node/tests/surface/analysis-music.test.ts::an explicit 0 is accepted and a negative is a RangeError"
+
+[[entry]]
+kind = "field"
+old = "AnalyzePolyphonicRequest.reattackRatio"
+changed = "absent = re-attack splitting off; explicit 0 refused (RangeError)"
+domain = "analysis"
+rule = "absent-not-sentinel"
+test = "bindings/node/tests/surface/analysis-music.test.ts::refuses an explicit reattackRatio of 0"
+
+[[entry]]
+kind = "field"
+old = "AnalyzePolyphonicRequest.tonalityOff"
+new = "AnalyzePolyphonicRequest.tonality"
+domain = "analysis"
+rule = "no-positional-bools"
+
+[[entry]]
+kind = "field"
+old = "AnalyzeRhythmRequest.sampleRate"
+changed = "required (was optional with a 22050/44100 default)"
+domain = "analysis"
+rule = "sample-rate-required"
+test = "bindings/node/tests/surface/analysis-music.test.ts::refuses an omitted sampleRate"
+
+[[entry]]
+kind = "field"
+old = "AnalyzeSectionsRequest.sampleRate"
+changed = "required (was optional with a 22050/44100 default)"
+domain = "analysis"
+rule = "sample-rate-required"
+test = "bindings/node/tests/surface/analysis-music.test.ts::refuses an omitted sampleRate"
+
+[[entry]]
+kind = "field"
+old = "AnalyzeTimbreRequest.sampleRate"
+changed = "required (was optional with a 22050/44100 default)"
+domain = "analysis"
+rule = "sample-rate-required"
+test = "bindings/node/tests/surface/analysis-music.test.ts::refuses an omitted sampleRate"
+
+[[entry]]
+kind = "field"
+old = "AutoTuneKey.mode"
+changed = "type KeyMode only"
+domain = "analysis"
+rule = "string-closed-sets"
+test = "bindings/node/tests/surface/analysis-music.test.ts::refuses a key given as a name or a number"
+
+[[entry]]
+kind = "field"
+old = "AutoTuneKey.root"
+changed = "type PitchClass"
+domain = "analysis"
+rule = "string-closed-sets"
+test = "bindings/node/tests/surface/analysis-music.test.ts::refuses a key given as a name or a number"
+
+[[entry]]
+kind = "field"
+old = "Boundary.time"
+new = "Boundary.timeSec"
+domain = "analysis"
+rule = "seconds-suffix"
+
+[[entry]]
+kind = "field"
+old = "BoundaryOptions.peakDistance"
+new = "BoundaryOptions.peakDistanceSec"
+domain = "analysis"
+rule = "seconds-suffix"
+
+[[entry]]
+kind = "field"
+old = "BoundaryOptions.referenceWindow"
+new = "BoundaryOptions.referenceWindowSec"
+domain = "analysis"
+rule = "seconds-suffix"
+
+[[entry]]
+kind = "field"
+old = "Chord.bass"
+changed = "type PitchClass"
+domain = "analysis"
+rule = "string-closed-sets"
+test = "bindings/node/tests/surface/analysis-music.test.ts::uses *Sec for chord and section spans"
+
+[[entry]]
+kind = "field"
+old = "Chord.duration"
+new = "Chord.durationSec"
+domain = "analysis"
+rule = "seconds-suffix"
+
+[[entry]]
+kind = "field"
+old = "Chord.end"
+new = "Chord.endSec"
+domain = "analysis"
+rule = "seconds-suffix"
+
+[[entry]]
+kind = "field"
+old = "Chord.root"
+changed = "type PitchClass (number 0-11, as WASM)"
+domain = "analysis"
+rule = "string-closed-sets"
+test = "bindings/node/tests/surface/analysis-music.test.ts::uses *Sec for chord and section spans"
+
+[[entry]]
+kind = "field"
+old = "Chord.start"
+new = "Chord.startSec"
+domain = "analysis"
+rule = "seconds-suffix"
+
+[[entry]]
+kind = "field"
+old = "ChordAnalysisResult.tuning"
+new = "ChordAnalysisResult.tuningCents"
+domain = "analysis"
+rule = "unit-in-name"
+
+[[entry]]
+kind = "field"
+old = "ChordDetectionOptions.keyMode"
+changed = "type KeyMode only; numbers refused"
+domain = "analysis"
+rule = "string-closed-sets"
+test = "bindings/node/tests/surface/analysis-music.test.ts::refuses a key given as a name or a number"
+
+[[entry]]
+kind = "field"
+old = "ChordDetectionOptions.keyRoot"
+changed = "type PitchClass (0-11) only; names refused"
+domain = "analysis"
+rule = "string-closed-sets"
+test = "bindings/node/tests/surface/analysis-music.test.ts::refuses a key given as a name or a number"
+
+[[entry]]
+kind = "field"
+old = "ChordDetectionOptions.minDuration"
+new = "ChordDetectionOptions.minDurationSec"
+domain = "analysis"
+rule = "seconds-suffix"
+
+[[entry]]
+kind = "field"
+old = "ChordDetectionOptions.smoothingWindow"
+new = "ChordDetectionOptions.smoothingWindowSec"
+domain = "analysis"
+rule = "seconds-suffix"
+
+[[entry]]
+kind = "field"
+old = "ChordDetectionOptions.tuning"
+new = "ChordDetectionOptions.tuningCents"
+domain = "analysis"
+rule = "unit-in-name"
+
+[[entry]]
+kind = "field"
+old = "ChordFunctionalAnalysisRequest.keyMode"
+changed = "type KeyMode only; numbers refused"
+domain = "analysis"
+rule = "string-closed-sets"
+test = "bindings/node/tests/surface/analysis-music.test.ts::refuses a key given as a name or a number"
+
+[[entry]]
+kind = "field"
+old = "ChordFunctionalAnalysisRequest.keyRoot"
+changed = "type PitchClass (0-11) only; names refused"
+domain = "analysis"
+rule = "string-closed-sets"
+test = "bindings/node/tests/surface/analysis-music.test.ts::refuses a key given as a name or a number"
+
+[[entry]]
+kind = "field"
+old = "ChordFunctionalAnalysisRequest.minDuration"
+new = "ChordFunctionalAnalysisRequest.minDurationSec"
+domain = "analysis"
+rule = "seconds-suffix"
+
+[[entry]]
+kind = "field"
+old = "ChordFunctionalAnalysisRequest.sampleRate"
+changed = "required (was optional with a 22050/44100 default)"
+domain = "analysis"
+rule = "sample-rate-required"
+test = "bindings/node/tests/surface/analysis-music.test.ts::refuses an omitted sampleRate"
+
+[[entry]]
+kind = "field"
+old = "ChordFunctionalAnalysisRequest.smoothingWindow"
+new = "ChordFunctionalAnalysisRequest.smoothingWindowSec"
+domain = "analysis"
+rule = "seconds-suffix"
+
+[[entry]]
+kind = "field"
+old = "ChordFunctionalAnalysisRequest.tuning"
+new = "ChordFunctionalAnalysisRequest.tuningCents"
+domain = "analysis"
+rule = "unit-in-name"
+
+[[entry]]
+kind = "field"
+old = "ChordFunctionsInput.quality"
+changed = "type ChordQuality"
+domain = "analysis"
+rule = "string-closed-sets"
+test = "bindings/node/tests/surface/analysis-music.test.ts::chordFunctions takes tokens and refuses ordinals and names"
+
+[[entry]]
+kind = "field"
+old = "ChordFunctionsInput.root"
+changed = "type PitchClass"
+domain = "analysis"
+rule = "string-closed-sets"
+test = "bindings/node/tests/surface/analysis-music.test.ts::chordFunctions takes tokens and refuses ordinals and names"
+
+[[entry]]
+kind = "field"
+old = "ChordFunctionsKey.mode"
+changed = "type KeyMode only"
+domain = "analysis"
+rule = "string-closed-sets"
+test = "bindings/node/tests/surface/analysis-music.test.ts::chordFunctions takes tokens and refuses ordinals and names"
+
+[[entry]]
+kind = "field"
+old = "ChordFunctionsKey.root"
+changed = "type PitchClass only"
+domain = "analysis"
+rule = "string-closed-sets"
+test = "bindings/node/tests/surface/analysis-music.test.ts::chordFunctions takes tokens and refuses ordinals and names"
+
+[[entry]]
+kind = "field"
+old = "DetectAcousticRequest.sampleRate"
+changed = "required (was optional with a 22050/44100 default)"
+domain = "analysis"
+rule = "sample-rate-required"
+test = "bindings/node/tests/surface/analysis-music.test.ts::refuses an omitted sampleRate"
+
+[[entry]]
+kind = "field"
+old = "DetectBoundariesRequest.peakDistance"
+new = "DetectBoundariesRequest.peakDistanceSec"
+domain = "analysis"
+rule = "seconds-suffix"
+
+[[entry]]
+kind = "field"
+old = "DetectBoundariesRequest.referenceWindow"
+new = "DetectBoundariesRequest.referenceWindowSec"
+domain = "analysis"
+rule = "seconds-suffix"
+
+[[entry]]
+kind = "field"
+old = "DetectBoundariesRequest.sampleRate"
+changed = "required (was optional with a 22050/44100 default)"
+domain = "analysis"
+rule = "sample-rate-required"
+test = "bindings/node/tests/surface/analysis-music.test.ts::refuses an omitted sampleRate"
+
+[[entry]]
+kind = "field"
+old = "DetectChordsRequest.keyMode"
+changed = "type KeyMode only; numbers refused"
+domain = "analysis"
+rule = "string-closed-sets"
+test = "bindings/node/tests/surface/analysis-music.test.ts::refuses a key given as a name or a number"
+
+[[entry]]
+kind = "field"
+old = "DetectChordsRequest.keyRoot"
+changed = "type PitchClass (0-11) only; names refused"
+domain = "analysis"
+rule = "string-closed-sets"
+test = "bindings/node/tests/surface/analysis-music.test.ts::refuses a key given as a name or a number"
+
+[[entry]]
+kind = "field"
+old = "DetectChordsRequest.minDuration"
+new = "DetectChordsRequest.minDurationSec"
+domain = "analysis"
+rule = "seconds-suffix"
+
+[[entry]]
+kind = "field"
+old = "DetectChordsRequest.sampleRate"
+changed = "required (was optional with a 22050/44100 default)"
+domain = "analysis"
+rule = "sample-rate-required"
+test = "bindings/node/tests/surface/analysis-music.test.ts::refuses an omitted sampleRate"
+
+[[entry]]
+kind = "field"
+old = "DetectChordsRequest.smoothingWindow"
+new = "DetectChordsRequest.smoothingWindowSec"
+domain = "analysis"
+rule = "seconds-suffix"
+
+[[entry]]
+kind = "field"
+old = "DetectChordsRequest.tuning"
+new = "DetectChordsRequest.tuningCents"
+domain = "analysis"
+rule = "unit-in-name"
+
+[[entry]]
+kind = "field"
+old = "DetectKeyCandidatesRequest.genreHint"
+changed = "type GenreHint = 'auto'|'edm'|'electronic'|'dance'|'pop'|'classical'|'jazz'; unknown refused (RangeError)"
+domain = "analysis"
+rule = "string-closed-sets"
+test = "bindings/node/tests/surface/analysis-music.test.ts::closed sets refuse numbers and synonyms"
+
+[[entry]]
+kind = "field"
+old = "DetectKeyCandidatesRequest.highPassHz"
+new = "DetectKeyCandidatesRequest.chromaHighPassHz"
+domain = "analysis"
+rule = "high-pass"
+
+[[entry]]
+kind = "field"
+old = "DetectKeyCandidatesRequest.modes"
+changed = "'major-minor' -> 'majorMinor'; Mode[] refused, KeyMode[] only"
+domain = "analysis"
+rule = "token-case"
+test = "bindings/node/tests/surface/analysis-music.test.ts::closed sets refuse numbers and synonyms"
+
+[[entry]]
+kind = "field"
+old = "DetectKeyCandidatesRequest.sampleRate"
+changed = "required (was optional with a 22050/44100 default)"
+domain = "analysis"
+rule = "sample-rate-required"
+test = "bindings/node/tests/surface/analysis-music.test.ts::refuses an omitted sampleRate"
+
+[[entry]]
+kind = "field"
+old = "DetectKeyCandidatesRequest.tuning"
+new = "DetectKeyCandidatesRequest.tuningCents"
+domain = "analysis"
+rule = "unit-in-name"
+
+[[entry]]
+kind = "field"
+old = "DetectKeyRequest.genreHint"
+changed = "type GenreHint = 'auto'|'edm'|'electronic'|'dance'|'pop'|'classical'|'jazz'; unknown refused (RangeError)"
+domain = "analysis"
+rule = "string-closed-sets"
+test = "bindings/node/tests/surface/analysis-music.test.ts::closed sets refuse numbers and synonyms"
+
+[[entry]]
+kind = "field"
+old = "DetectKeyRequest.highPassHz"
+new = "DetectKeyRequest.chromaHighPassHz"
+domain = "analysis"
+rule = "high-pass"
+
+[[entry]]
+kind = "field"
+old = "DetectKeyRequest.modes"
+changed = "'major-minor' -> 'majorMinor'; Mode[] refused, KeyMode[] only"
+domain = "analysis"
+rule = "token-case"
+test = "bindings/node/tests/surface/analysis-music.test.ts::closed sets refuse numbers and synonyms"
+
+[[entry]]
+kind = "field"
+old = "DetectKeyRequest.sampleRate"
+changed = "required (was optional with a 22050/44100 default)"
+domain = "analysis"
+rule = "sample-rate-required"
+test = "bindings/node/tests/surface/analysis-music.test.ts::refuses an omitted sampleRate"
+
+[[entry]]
+kind = "field"
+old = "DetectKeyRequest.tuning"
+new = "DetectKeyRequest.tuningCents"
+domain = "analysis"
+rule = "unit-in-name"
+
+[[entry]]
+kind = "field"
+old = "DetectOnsetsRequest.sampleRate"
+changed = "required (was optional with a 22050/44100 default)"
+domain = "analysis"
+rule = "sample-rate-required"
+test = "bindings/node/tests/surface/analysis-music.test.ts::refuses an omitted sampleRate"
+
+[[entry]]
+kind = "field"
+old = "DynamicsResult.loudnessRangeDb"
+new = "DynamicsResult.loudnessRangeLu"
+domain = "analysis"
+rule = "loudness-names"
+
+[[entry]]
+kind = "field"
+old = "EstimateMeterRequest.beatStrengths"
+removed = true
+domain = "analysis"
+rule = "typed-results"
+
+[[entry]]
+kind = "field"
+old = "EstimateMeterRequest.beatTimes"
+new = "EstimateMeterRequest.beats"
+domain = "analysis"
+rule = "typed-results"
+
+[[entry]]
+kind = "field"
+old = "FunctionalChord.quality"
+changed = "type ChordQuality"
+domain = "analysis"
+rule = "string-closed-sets"
+test = "bindings/node/tests/surface/analysis-music.test.ts::names the melody and dynamics fields with their units"
+
+[[entry]]
+kind = "field"
+old = "FunctionalChord.roman"
+new = "FunctionalChord.romanNumeral"
+domain = "analysis"
+rule = "individual"
+
+[[entry]]
+kind = "field"
+old = "FunctionalChord.root"
+changed = "type PitchClass"
+domain = "analysis"
+rule = "string-closed-sets"
+test = "bindings/node/tests/surface/analysis-music.test.ts::names the melody and dynamics fields with their units"
+
+[[entry]]
+kind = "field"
+old = "Key.root"
+changed = "type PitchClass (number 0-11, as WASM)"
+domain = "analysis"
+rule = "string-closed-sets"
+test = "bindings/node/tests/surface/analysis-music.test.ts::exposes the closed sets and records"
+
+[[entry]]
+kind = "field"
+old = "KeyDetection.root"
+changed = "type PitchClass (number 0-11, as WASM)"
+domain = "analysis"
+rule = "string-closed-sets"
+test = "bindings/node/tests/surface/analysis-music.test.ts::exposes the closed sets and records"
+
+[[entry]]
+kind = "field"
+old = "KeyDetection.tuning"
+new = "KeyDetection.tuningCents"
+domain = "analysis"
+rule = "unit-in-name"
+
+[[entry]]
+kind = "field"
+old = "KeyDetectionOptions.genreHint"
+changed = "type GenreHint = 'auto'|'edm'|'electronic'|'dance'|'pop'|'classical'|'jazz'; unknown refused (RangeError)"
+domain = "analysis"
+rule = "string-closed-sets"
+test = "bindings/node/tests/surface/analysis-music.test.ts::closed sets refuse numbers and synonyms"
+
+[[entry]]
+kind = "field"
+old = "KeyDetectionOptions.highPassHz"
+new = "KeyDetectionOptions.chromaHighPassHz"
+domain = "analysis"
+rule = "high-pass"
+
+[[entry]]
+kind = "field"
+old = "KeyDetectionOptions.modes"
+changed = "'major-minor' -> 'majorMinor'; Mode[] refused, KeyMode[] only"
+domain = "analysis"
+rule = "token-case"
+test = "bindings/node/tests/surface/analysis-music.test.ts::closed sets refuse numbers and synonyms"
+
+[[entry]]
+kind = "field"
+old = "KeyDetectionOptions.tuning"
+new = "KeyDetectionOptions.tuningCents"
+domain = "analysis"
+rule = "unit-in-name"
+
+[[entry]]
+kind = "field"
+old = "MelodyOptions.fmax"
+new = "MelodyOptions.f0MaxHz"
+domain = "analysis"
+rule = "frequency-bounds"
+
+[[entry]]
+kind = "field"
+old = "MelodyOptions.fmin"
+new = "MelodyOptions.f0MinHz"
+domain = "analysis"
+rule = "frequency-bounds"
+
+[[entry]]
+kind = "field"
+old = "MelodyPoint.frequency"
+new = "MelodyPoint.frequencyHz"
+domain = "analysis"
+rule = "unit-in-name"
+
+[[entry]]
+kind = "field"
+old = "MelodyPoint.time"
+new = "MelodyPoint.timeSec"
+domain = "analysis"
+rule = "seconds-suffix"
+
+[[entry]]
+kind = "field"
+old = "MelodyResult.meanFrequency"
+new = "MelodyResult.meanFrequencyHz"
+domain = "analysis"
+rule = "unit-in-name"
+
+[[entry]]
+kind = "field"
+old = "MelodyResult.vibratoRate"
+new = "MelodyResult.vibratoRateHz"
+domain = "analysis"
+rule = "unit-in-name"
+
+[[entry]]
+kind = "field"
+old = "MusicAnalyzeOptions.chromaHighpassHz"
+new = "MusicAnalyzeOptions.chromaHighPassHz"
+domain = "analysis"
+rule = "high-pass"
+
+[[entry]]
+kind = "field"
+old = "MusicAnalyzeOptions.tuning"
+new = "MusicAnalyzeOptions.tuningCents"
+domain = "analysis"
+rule = "unit-in-name"
+
+[[entry]]
+kind = "field"
+old = "MusicAnalyzeRequest.chromaHighpassHz"
+new = "AnalyzeRequest.chromaHighPassHz"
+domain = "analysis"
+rule = "high-pass"
+
+[[entry]]
+kind = "field"
+old = "MusicAnalyzeRequest.sampleRate"
+changed = "required (was optional with a 22050/44100 default)"
+domain = "analysis"
+rule = "sample-rate-required"
+test = "bindings/node/tests/surface/analysis-music.test.ts::refuses an omitted sampleRate"
+
+[[entry]]
+kind = "field"
+old = "MusicAnalyzeRequest.tuning"
+new = "AnalyzeRequest.tuningCents"
+domain = "analysis"
+rule = "unit-in-name"
+
+[[entry]]
+kind = "field"
+old = "NoteEditInput.formantShiftSemitones"
+new = "NoteEditInput.formantSemitones"
+domain = "analysis"
+rule = "pitch-semitones"
+
+[[entry]]
+kind = "field"
+old = "NoteEditInput.pitchShiftSemitones"
+new = "NoteEditInput.pitchSemitones"
+domain = "analysis"
+rule = "pitch-semitones"
+
+[[entry]]
+kind = "field"
+old = "PitchDecompositionResult.centreHz"
+new = "PitchDecompositionResult.centerHz"
+domain = "effects"
+rule = "frequency-bounds"
+
+[[entry]]
+kind = "field"
+old = "PolyphonicAnalysisOptions.minFramePeakRatio"
+changed = "explicit 0 now means 0; negative refused (RangeError); absent = library default"
+domain = "analysis"
+rule = "absent-not-sentinel"
+test = "bindings/node/tests/surface/analysis-music.test.ts::an explicit 0 is accepted and a negative is a RangeError"
+
+[[entry]]
+kind = "field"
+old = "PolyphonicAnalysisOptions.minRidgeDurationMs"
+changed = "explicit 0 now means 0; negative refused (RangeError); absent = library default"
+domain = "analysis"
+rule = "absent-not-sentinel"
+test = "bindings/node/tests/surface/analysis-music.test.ts::an explicit 0 is accepted and a negative is a RangeError"
+
+[[entry]]
+kind = "field"
+old = "PolyphonicAnalysisOptions.minRidgePeakRatio"
+changed = "explicit 0 now means 0; negative refused (RangeError); absent = library default"
+domain = "analysis"
+rule = "absent-not-sentinel"
+test = "bindings/node/tests/surface/analysis-music.test.ts::an explicit 0 is accepted and a negative is a RangeError"
+
+[[entry]]
+kind = "field"
+old = "PolyphonicAnalysisOptions.minSeparationCents"
+changed = "explicit 0 now means 0; negative refused (RangeError); absent = library default"
+domain = "analysis"
+rule = "absent-not-sentinel"
+test = "bindings/node/tests/surface/analysis-music.test.ts::an explicit 0 is accepted and a negative is a RangeError"
+
+[[entry]]
+kind = "field"
+old = "PolyphonicAnalysisOptions.reattackRatio"
+changed = "absent = re-attack splitting off; explicit 0 refused (RangeError)"
+domain = "analysis"
+rule = "absent-not-sentinel"
+test = "bindings/node/tests/surface/analysis-music.test.ts::refuses an explicit reattackRatio of 0"
+
+[[entry]]
+kind = "field"
+old = "PolyphonicAnalysisOptions.tonalityOff"
+new = "PolyphonicAnalysisOptions.tonality"
+domain = "analysis"
+rule = "no-positional-bools"
+
+[[entry]]
+kind = "field"
+old = "ResampleRequest.srcSr"
+new = "ResampleRequest.sourceSampleRate"
+domain = "analysis"
+rule = "sample-rate-name"
+
+[[entry]]
+kind = "field"
+old = "ResampleRequest.targetSr"
+new = "ResampleRequest.targetSampleRate"
+domain = "analysis"
+rule = "sample-rate-name"
+
+[[entry]]
+kind = "field"
+old = "Section.end"
+new = "Section.endSec"
+domain = "analysis"
+rule = "seconds-suffix"
+
+[[entry]]
+kind = "field"
+old = "Section.start"
+new = "Section.startSec"
+domain = "analysis"
+rule = "seconds-suffix"
+
+[[entry]]
+kind = "field"
+old = "Section.type"
+changed = "type SectionType string union 'intro'|'verse'|'preChorus'|'chorus'|'bridge'|'instrumental'|'outro'|'unknown' (core-owned)"
+domain = "analysis"
+rule = "string-closed-sets"
+test = "bindings/node/tests/surface/analysis-music.test.ts::uses *Sec for chord and section spans"
+
+[[entry]]
+kind = "field"
+old = "TranscribeRequest.fmax"
+new = "TranscribeRequest.f0MaxHz"
+domain = "analysis"
+rule = "frequency-bounds"
+
+[[entry]]
+kind = "field"
+old = "TranscribeRequest.fmin"
+new = "TranscribeRequest.f0MinHz"
+domain = "analysis"
+rule = "frequency-bounds"
+
+[[entry]]
+kind = "field"
+old = "TranscribeRequest.minFramePeakRatio"
+changed = "explicit 0 now means 0; negative refused (RangeError); absent = library default"
+domain = "analysis"
+rule = "absent-not-sentinel"
+test = "bindings/node/tests/surface/analysis-music.test.ts::refuses an explicit reattackRatio of 0"
+
+[[entry]]
+kind = "field"
+old = "TranscribeRequest.minRidgePeakRatio"
+changed = "explicit 0 now means 0; negative refused (RangeError); absent = library default"
+domain = "analysis"
+rule = "absent-not-sentinel"
+test = "bindings/node/tests/surface/analysis-music.test.ts::refuses an explicit reattackRatio of 0"
+
+[[entry]]
+kind = "field"
+old = "TranscribeRequest.reattackRatio"
+changed = "absent = re-attack splitting off; explicit 0 refused (RangeError)"
+domain = "analysis"
+rule = "absent-not-sentinel"
+test = "bindings/node/tests/surface/analysis-music.test.ts::refuses an explicit reattackRatio of 0"
+
+[[entry]]
+kind = "value"
+old = "ChordQualityName='add9'"
+new = "ChordQuality='add9'"
+domain = "analysis"
+rule = "string-closed-sets"
+
+[[entry]]
+kind = "value"
+old = "ChordQualityName='augmented'"
+new = "ChordQuality='augmented'"
+domain = "analysis"
+rule = "string-closed-sets"
+
+[[entry]]
+kind = "value"
+old = "ChordQualityName='dim7'"
+new = "ChordQuality='dim7'"
+domain = "analysis"
+rule = "string-closed-sets"
+
+[[entry]]
+kind = "value"
+old = "ChordQualityName='diminished'"
+new = "ChordQuality='diminished'"
+domain = "analysis"
+rule = "string-closed-sets"
+
+[[entry]]
+kind = "value"
+old = "ChordQualityName='dominant11'"
+new = "ChordQuality='dominant11'"
+domain = "analysis"
+rule = "string-closed-sets"
+
+[[entry]]
+kind = "value"
+old = "ChordQualityName='dominant13'"
+new = "ChordQuality='dominant13'"
+domain = "analysis"
+rule = "string-closed-sets"
+
+[[entry]]
+kind = "value"
+old = "ChordQualityName='dominant7'"
+new = "ChordQuality='dominant7'"
+domain = "analysis"
+rule = "string-closed-sets"
+
+[[entry]]
+kind = "value"
+old = "ChordQualityName='dominant7Flat9'"
+new = "ChordQuality='dominant7Flat9'"
+domain = "analysis"
+rule = "string-closed-sets"
+
+[[entry]]
+kind = "value"
+old = "ChordQualityName='dominant7Sharp9'"
+new = "ChordQuality='dominant7Sharp9'"
+domain = "analysis"
+rule = "string-closed-sets"
+
+[[entry]]
+kind = "value"
+old = "ChordQualityName='dominant7Sus4'"
+new = "ChordQuality='dominant7Sus4'"
+domain = "analysis"
+rule = "string-closed-sets"
+
+[[entry]]
+kind = "value"
+old = "ChordQualityName='dominant9'"
+new = "ChordQuality='dominant9'"
+domain = "analysis"
+rule = "string-closed-sets"
+
+[[entry]]
+kind = "value"
+old = "ChordQualityName='halfDim7'"
+new = "ChordQuality='halfDim7'"
+domain = "analysis"
+rule = "string-closed-sets"
+
+[[entry]]
+kind = "value"
+old = "ChordQualityName='major'"
+new = "ChordQuality='major'"
+domain = "analysis"
+rule = "string-closed-sets"
+
+[[entry]]
+kind = "value"
+old = "ChordQualityName='major6'"
+new = "ChordQuality='major6'"
+domain = "analysis"
+rule = "string-closed-sets"
+
+[[entry]]
+kind = "value"
+old = "ChordQualityName='major7'"
+new = "ChordQuality='major7'"
+domain = "analysis"
+rule = "string-closed-sets"
+
+[[entry]]
+kind = "value"
+old = "ChordQualityName='major9'"
+new = "ChordQuality='major9'"
+domain = "analysis"
+rule = "string-closed-sets"
+
+[[entry]]
+kind = "value"
+old = "ChordQualityName='minor'"
+new = "ChordQuality='minor'"
+domain = "analysis"
+rule = "string-closed-sets"
+
+[[entry]]
+kind = "value"
+old = "ChordQualityName='minor6'"
+new = "ChordQuality='minor6'"
+domain = "analysis"
+rule = "string-closed-sets"
+
+[[entry]]
+kind = "value"
+old = "ChordQualityName='minor7'"
+new = "ChordQuality='minor7'"
+domain = "analysis"
+rule = "string-closed-sets"
+
+[[entry]]
+kind = "value"
+old = "ChordQualityName='minorAdd9'"
+new = "ChordQuality='minorAdd9'"
+domain = "analysis"
+rule = "string-closed-sets"
+
+[[entry]]
+kind = "value"
+old = "ChordQualityName='minorMajor7'"
+new = "ChordQuality='minorMajor7'"
+domain = "analysis"
+rule = "string-closed-sets"
+
+[[entry]]
+kind = "value"
+old = "ChordQualityName='sus2'"
+new = "ChordQuality='sus2'"
+domain = "analysis"
+rule = "string-closed-sets"
+
+[[entry]]
+kind = "value"
+old = "ChordQualityName='sus2Add4'"
+new = "ChordQuality='sus2Add4'"
+domain = "analysis"
+rule = "string-closed-sets"
+
+[[entry]]
+kind = "value"
+old = "ChordQualityName='sus4'"
+new = "ChordQuality='sus4'"
+domain = "analysis"
+rule = "string-closed-sets"
+
+[[entry]]
+kind = "value"
+old = "ChordQualityName='unknown'"
+new = "ChordQuality='unknown'"
+domain = "analysis"
+rule = "string-closed-sets"
+
+[[entry]]
+kind = "value"
+old = "KeyProfile='bellman'"
+removed = true
+domain = "analysis"
+rule = "string-closed-sets"
+
+[[entry]]
+kind = "value"
+old = "KeyProfile='bellman-budge'"
+new = "KeyProfile='bellmanBudge'"
+domain = "analysis"
+rule = "token-case"
+
+[[entry]]
+kind = "value"
+old = "KeyProfile='edma'"
+removed = true
+domain = "analysis"
+rule = "string-closed-sets"
+
+[[entry]]
+kind = "value"
+old = "KeyProfile='edmm'"
+removed = true
+domain = "analysis"
+rule = "string-closed-sets"
+
+[[entry]]
+kind = "value"
+old = "KeyProfile='edmt'"
+removed = true
+domain = "analysis"
+rule = "string-closed-sets"
+
+[[entry]]
+kind = "value"
+old = "KeyProfile='faraldo-edma'"
+new = "KeyProfile='faraldoEdma'"
+domain = "analysis"
+rule = "token-case"
+
+[[entry]]
+kind = "value"
+old = "KeyProfile='faraldo-edmm'"
+new = "KeyProfile='faraldoEdmm'"
+domain = "analysis"
+rule = "token-case"
+
+[[entry]]
+kind = "value"
+old = "KeyProfile='faraldo-edmt'"
+new = "KeyProfile='faraldoEdmt'"
+domain = "analysis"
+rule = "token-case"
+
+[[entry]]
+kind = "value"
+old = "KeyProfile='keyfinder'"
+removed = true
+domain = "analysis"
+rule = "string-closed-sets"
+
+[[entry]]
+kind = "value"
+old = "KeyProfile='krumhansl'"
+removed = true
+domain = "analysis"
+rule = "string-closed-sets"
+
+[[entry]]
+kind = "value"
+old = "KeyProfile='krumhansl-schmuckler'"
+new = "KeyProfile='krumhanslSchmuckler'"
+domain = "analysis"
+rule = "token-case"
+
+[[entry]]
+kind = "value"
+old = "KeyProfile='ks'"
+removed = true
+domain = "analysis"
+rule = "string-closed-sets"
+
+[[entry]]
+kind = "value"
+old = "ScaleName='dorian'"
+removed = true
+domain = "analysis"
+rule = "aliases-removed"
+
+[[entry]]
+kind = "value"
+old = "ScaleName='locrian'"
+removed = true
+domain = "analysis"
+rule = "aliases-removed"
+
+[[entry]]
+kind = "value"
+old = "ScaleName='lydian'"
+removed = true
+domain = "analysis"
+rule = "aliases-removed"
+
+[[entry]]
+kind = "value"
+old = "ScaleName='major'"
+removed = true
+domain = "analysis"
+rule = "aliases-removed"
+
+[[entry]]
+kind = "value"
+old = "ScaleName='minor'"
+removed = true
+domain = "analysis"
+rule = "aliases-removed"
+
+[[entry]]
+kind = "value"
+old = "ScaleName='mixolydian'"
+removed = true
+domain = "analysis"
+rule = "aliases-removed"
+
+[[entry]]
+kind = "value"
+old = "ScaleName='phrygian'"
+removed = true
+domain = "analysis"
+rule = "aliases-removed"
+
+[[entry]]
+kind = "value"
+old = "TempogramMode='ac'"
+removed = true
+domain = "analysis"
+rule = "string-closed-sets"
+
+[[entry]]
+kind = "value"
+old = "TempogramMode='auto'"
+removed = true
+domain = "analysis"
+rule = "string-closed-sets"
+
+[[entry]]
+kind = "method"
+old = "StreamAnalyzer.availableFrames"
+changed = "readonly getter (was a method)"
+domain = "analysis"
+rule = "getters"
+test = "bindings/node/tests/surface/analysis-stream.test.ts::as getters"
+
+[[entry]]
+kind = "method"
+old = "StreamAnalyzer.currentTime"
+new = "StreamAnalyzer.currentTimeSec"
+domain = "analysis"
+rule = "getters"
+
+[[entry]]
+kind = "method"
+old = "StreamAnalyzer.frameCount"
+changed = "readonly getter (was a method)"
+domain = "analysis"
+rule = "getters"
+test = "bindings/node/tests/surface/analysis-stream.test.ts::as getters"
+
+[[entry]]
+kind = "method"
+old = "StreamAnalyzer.readFrames"
+changed = "returns StreamFrames (band-major Matrix2D mel/chroma; absent arrays for features not computed)"
+domain = "analysis"
+rule = "matrix-2d"
+test = "bindings/node/tests/surface/analysis-stream.test.ts::returns band-major Matrix2D"
+
+[[entry]]
+kind = "method"
+old = "StreamAnalyzer.readFramesSoa"
+removed = true
+domain = "analysis"
+rule = "aliases-removed"
+
+[[entry]]
+kind = "method"
+old = "StreamAnalyzer.sampleRate"
+changed = "readonly getter (was a method)"
+domain = "analysis"
+rule = "getters"
+test = "bindings/node/tests/surface/analysis-stream.test.ts::as getters"
+
+[[entry]]
+kind = "method"
+old = "StreamAnalyzer.setTuningRefHz"
+new = "StreamAnalyzer.setReferenceHz"
+domain = "analysis"
+rule = "unit-in-name"
+
+[[entry]]
+kind = "option"
+old = "StreamAnalyzer.processWithOffset(sampleOffset)"
+new = "StreamAnalyzer.processWithOffset(startSample)"
+domain = "analysis"
+rule = "unit-in-name"
+
+[[entry]]
+kind = "option"
+old = "StreamAnalyzer.reset(baseOffset)"
+new = "StreamAnalyzer.reset(startSample)"
+domain = "analysis"
+rule = "unit-in-name"
+
+[[entry]]
+kind = "option"
+old = "StreamAnalyzer.setExpectedDuration(seconds)"
+new = "StreamAnalyzer.setExpectedDuration(durationSec)"
+domain = "analysis"
+rule = "seconds-suffix"
+
+[[entry]]
+kind = "option"
+old = "StreamAnalyzer.setTuningRefHz(hz)"
+new = "StreamAnalyzer.setReferenceHz(referenceHz)"
+domain = "analysis"
+rule = "unit-in-name"
+
+[[entry]]
+kind = "function"
+old = "decodeChannels"
+changed = "parameter typed Uint8Array (was any)"
+domain = "analysis"
+rule = "input-types"
+test = "bindings/node/tests/surface/analysis-audio.test.ts::types its argument as Uint8Array"
+
+[[entry]]
+kind = "method"
+old = "Audio.analyzeImpulseResponse"
+changed = "takes (options?: Omit<AnalyzeImpulseResponseRequest,'samples'|'sampleRate'>)"
+domain = "core"
+rule = "one-positional-form"
+test = "bindings/node/tests/surface/analysis-audio.test.ts::delegation equivalence: audio."
+
+[[entry]]
+kind = "method"
+old = "Audio.chordFunctionalAnalysis"
+changed = "takes (options: Omit<ChordFunctionalAnalysisRequest,'samples'|'sampleRate'>)"
+domain = "core"
+rule = "one-positional-form"
+test = "bindings/node/tests/surface/analysis-audio.test.ts::requires options on chordFunctionalAnalysis"
+
+[[entry]]
+kind = "method"
+old = "Audio.chroma"
+changed = "takes (options?: Omit<ChromaRequest,'samples'|'sampleRate'>)"
+domain = "core"
+rule = "one-positional-form"
+test = "bindings/node/tests/surface/analysis-audio.test.ts::delegation equivalence: audio."
+
+[[entry]]
+kind = "method"
+old = "Audio.detectOnsets"
+changed = "takes (options?: Omit<DetectOnsetsRequest,'samples'|'sampleRate'>)"
+domain = "core"
+rule = "one-positional-form"
+test = "bindings/node/tests/surface/analysis-audio.test.ts::delegation equivalence: audio."
+
+[[entry]]
+kind = "method"
+old = "Audio.melSpectrogram"
+changed = "takes (options?: Omit<MelSpectrogramRequest,'samples'|'sampleRate'>)"
+domain = "core"
+rule = "one-positional-form"
+test = "bindings/node/tests/surface/analysis-audio.test.ts::delegation equivalence: audio."
+
+[[entry]]
+kind = "method"
+old = "Audio.mfcc"
+changed = "takes (options?: Omit<MfccRequest,'samples'|'sampleRate'>)"
+domain = "core"
+rule = "one-positional-form"
+test = "bindings/node/tests/surface/analysis-audio.test.ts::delegation equivalence: audio."
+
+[[entry]]
+kind = "method"
+old = "Audio.nnlsChroma"
+changed = "takes (options?: Omit<NnlsChromaRequest,'samples'|'sampleRate'>)"
+domain = "core"
+rule = "one-positional-form"
+test = "bindings/node/tests/surface/analysis-audio.test.ts::delegation equivalence: audio."
+
+[[entry]]
+kind = "method"
+old = "Audio.onsetEnvelope"
+new = "Audio.onsetStrength"
+domain = "core"
+rule = "onset-strength"
+
+[[entry]]
+kind = "method"
+old = "Audio.pitchPyin"
+changed = "takes (options?: Omit<PitchPyinRequest,'samples'|'sampleRate'>)"
+domain = "core"
+rule = "one-positional-form"
+test = "bindings/node/tests/surface/analysis-audio.test.ts::delegation equivalence: audio."
+
+[[entry]]
+kind = "method"
+old = "Audio.pitchYin"
+changed = "takes (options?: Omit<PitchYinRequest,'samples'|'sampleRate'>)"
+domain = "core"
+rule = "one-positional-form"
+test = "bindings/node/tests/surface/analysis-audio.test.ts::delegation equivalence: audio."
+
+[[entry]]
+kind = "method"
+old = "Audio.rmsEnergy"
+changed = "takes (options?: Omit<RmsEnergyRequest,'samples'|'sampleRate'>)"
+domain = "core"
+rule = "one-positional-form"
+test = "bindings/node/tests/surface/analysis-audio.test.ts::delegation equivalence: audio."
+
+[[entry]]
+kind = "method"
+old = "Audio.spectralBandwidth"
+changed = "takes (options?: Omit<SpectralBandwidthRequest,'samples'|'sampleRate'>)"
+domain = "core"
+rule = "one-positional-form"
+test = "bindings/node/tests/surface/analysis-audio.test.ts::delegation equivalence: audio."
+
+[[entry]]
+kind = "method"
+old = "Audio.spectralCentroid"
+changed = "takes (options?: Omit<SpectralCentroidRequest,'samples'|'sampleRate'>)"
+domain = "core"
+rule = "one-positional-form"
+test = "bindings/node/tests/surface/analysis-audio.test.ts::delegation equivalence: audio."
+
+[[entry]]
+kind = "method"
+old = "Audio.spectralFlatness"
+changed = "takes (options?: Omit<SpectralFlatnessRequest,'samples'|'sampleRate'>)"
+domain = "core"
+rule = "one-positional-form"
+test = "bindings/node/tests/surface/analysis-audio.test.ts::delegation equivalence: audio."
+
+[[entry]]
+kind = "method"
+old = "Audio.spectralRolloff"
+changed = "takes (options?: Omit<SpectralRolloffRequest,'samples'|'sampleRate'>)"
+domain = "core"
+rule = "one-positional-form"
+test = "bindings/node/tests/surface/analysis-audio.test.ts::delegation equivalence: audio."
+
+[[entry]]
+kind = "method"
+old = "Audio.stft"
+changed = "takes (options?: Omit<StftRequest,'samples'|'sampleRate'>)"
+domain = "core"
+rule = "one-positional-form"
+test = "bindings/node/tests/surface/analysis-audio.test.ts::delegation equivalence: audio."
+
+[[entry]]
+kind = "method"
+old = "Audio.stftDb"
+changed = "takes (options?: Omit<StftDbRequest,'samples'|'sampleRate'>)"
+domain = "core"
+rule = "one-positional-form"
+test = "bindings/node/tests/surface/analysis-audio.test.ts::delegation equivalence: audio."
+
+[[entry]]
+kind = "method"
+old = "Audio.zeroCrossingRate"
+changed = "takes (options?: Omit<ZeroCrossingRateRequest,'samples'|'sampleRate'>)"
+domain = "core"
+rule = "one-positional-form"
+test = "bindings/node/tests/surface/analysis-audio.test.ts::delegation equivalence: audio."
+
+[[entry]]
+kind = "option"
+old = "Audio.analyzeImpulseResponse(nOctaveBands)"
+removed = true
+domain = "core"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "Audio.chordFunctionalAnalysis(keyMode)"
+removed = true
+domain = "core"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "Audio.chordFunctionalAnalysis(keyRoot)"
+removed = true
+domain = "core"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "Audio.chroma(hopLength)"
+removed = true
+domain = "core"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "Audio.chroma(nFft)"
+removed = true
+domain = "core"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "Audio.melSpectrogram(fmax)"
+removed = true
+domain = "core"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "Audio.melSpectrogram(fmin)"
+removed = true
+domain = "core"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "Audio.melSpectrogram(hopLength)"
+removed = true
+domain = "core"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "Audio.melSpectrogram(htk)"
+removed = true
+domain = "core"
+rule = "no-positional-bools"
+
+[[entry]]
+kind = "option"
+old = "Audio.melSpectrogram(nFft)"
+removed = true
+domain = "core"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "Audio.melSpectrogram(nMels)"
+removed = true
+domain = "core"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "Audio.mfcc(fmax)"
+removed = true
+domain = "core"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "Audio.mfcc(fmin)"
+removed = true
+domain = "core"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "Audio.mfcc(hopLength)"
+removed = true
+domain = "core"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "Audio.mfcc(htk)"
+removed = true
+domain = "core"
+rule = "no-positional-bools"
+
+[[entry]]
+kind = "option"
+old = "Audio.mfcc(nFft)"
+removed = true
+domain = "core"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "Audio.mfcc(nMels)"
+removed = true
+domain = "core"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "Audio.mfcc(nMfcc)"
+removed = true
+domain = "core"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "Audio.onsetEnvelope(hopLength)"
+removed = true
+domain = "core"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "Audio.onsetEnvelope(nFft)"
+removed = true
+domain = "core"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "Audio.onsetEnvelope(nMels)"
+removed = true
+domain = "core"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "Audio.pitchPyin(fillNa)"
+removed = true
+domain = "core"
+rule = "no-positional-bools"
+
+[[entry]]
+kind = "option"
+old = "Audio.pitchPyin(fmax)"
+removed = true
+domain = "core"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "Audio.pitchPyin(fmin)"
+removed = true
+domain = "core"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "Audio.pitchPyin(frameLength)"
+removed = true
+domain = "core"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "Audio.pitchPyin(hopLength)"
+removed = true
+domain = "core"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "Audio.pitchPyin(threshold)"
+removed = true
+domain = "core"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "Audio.pitchYin(fillNa)"
+removed = true
+domain = "core"
+rule = "no-positional-bools"
+
+[[entry]]
+kind = "option"
+old = "Audio.pitchYin(fmax)"
+removed = true
+domain = "core"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "Audio.pitchYin(fmin)"
+removed = true
+domain = "core"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "Audio.pitchYin(frameLength)"
+removed = true
+domain = "core"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "Audio.pitchYin(hopLength)"
+removed = true
+domain = "core"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "Audio.pitchYin(threshold)"
+removed = true
+domain = "core"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "Audio.resample(targetSr)"
+new = "Audio.resample(targetSampleRate)"
+domain = "core"
+rule = "sample-rate-name"
+
+[[entry]]
+kind = "option"
+old = "Audio.rmsEnergy(frameLength)"
+removed = true
+domain = "core"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "Audio.rmsEnergy(hopLength)"
+removed = true
+domain = "core"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "Audio.spectralBandwidth(hopLength)"
+removed = true
+domain = "core"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "Audio.spectralBandwidth(nFft)"
+removed = true
+domain = "core"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "Audio.spectralCentroid(hopLength)"
+removed = true
+domain = "core"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "Audio.spectralCentroid(nFft)"
+removed = true
+domain = "core"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "Audio.spectralFlatness(hopLength)"
+removed = true
+domain = "core"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "Audio.spectralFlatness(nFft)"
+removed = true
+domain = "core"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "Audio.spectralRolloff(hopLength)"
+removed = true
+domain = "core"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "Audio.spectralRolloff(nFft)"
+removed = true
+domain = "core"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "Audio.spectralRolloff(rollPercent)"
+removed = true
+domain = "core"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "Audio.spectrumFrame(frameOffset)"
+new = "Audio.spectrumFrame(startSample)"
+domain = "core"
+rule = "unit-in-name"
+
+[[entry]]
+kind = "option"
+old = "Audio.stft(hopLength)"
+removed = true
+domain = "core"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "Audio.stft(nFft)"
+removed = true
+domain = "core"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "Audio.stftDb(hopLength)"
+removed = true
+domain = "core"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "Audio.stftDb(nFft)"
+removed = true
+domain = "core"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "Audio.zeroCrossingRate(frameLength)"
+removed = true
+domain = "core"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "Audio.zeroCrossingRate(hopLength)"
+removed = true
+domain = "core"
+rule = "one-positional-form"

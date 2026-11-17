@@ -45,11 +45,13 @@ describe('additive effect and feature options', () => {
     const changedResidual = hpssWithResidual(samples, sampleRate, 31, 31, 1024, 256, true);
     expect(Array.from(changedResidual.residual)).not.toEqual(Array.from(residual.residual));
 
-    const chroma = nnlsChroma(samples);
+    const chroma = nnlsChroma(samples, sampleRate);
     const changedChroma = nnlsChroma(samples, sampleRate, { hopLength: 256 });
-    expect(changedChroma.nFrames).toBeGreaterThan(chroma.nFrames);
+    expect(changedChroma.cols).toBeGreaterThan(chroma.cols);
 
-    expect(() => analyzeImpulseResponse(samples, sampleRate, 6, 0)).toThrow(RangeError);
+    expect(() =>
+      analyzeImpulseResponse(samples, sampleRate, { nOctaveBands: 6, minDecayDb: 0 }),
+    ).toThrow(RangeError);
   });
 
   it('rejects invalid option types and ranges before native dispatch', () => {

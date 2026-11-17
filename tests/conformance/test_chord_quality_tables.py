@@ -45,8 +45,8 @@ PY_DETECTION = check.ORDINAL_TABLES[4].path
 PY_MUSIC = check.ORDINAL_TABLES[5].path
 NODE_ADDON = check.ORDINAL_TABLES[6].path
 CORE_NAMES = check.ORDINAL_TABLES[7].path
-NODE_TYPES = check.NAME_TABLES[0].path
-PY_SUFFIXES = check.NAME_TABLES[2].path
+NODE_TYPES = check.ORDINAL_TABLES[8].path
+PY_SUFFIXES = check.NAME_TABLES[1].path
 # Both chord-symbol suffix tables the core carries live in this one file, and
 # `chord_quality_to_string` shares CORE_NAMES with the quality-name switch.
 ANALYZER = check.SUFFIX_TABLES[1].path
@@ -129,6 +129,25 @@ class ShippingTreeTest(unittest.TestCase):
         self.assertEqual(check.expected_name(scan.core[13], "c_macro"), "SONARE_CHORD_HALF_DIM7")
 
 
+class TsTupleParserTest(unittest.TestCase):
+    """The tuple parser reads tokens by position, which is the ordinal."""
+
+    def test_a_tuple_yields_ordinals_in_position_order(self) -> None:
+        table = check.Table("x.ts", "QS", "ts_tuple", "camel", "wasm", "")
+        text = "// lead\nexport const QS = [\n  'zeta',\n  'alpha',\n  'mid',\n] as const;\n"
+        line, entries = check.ts_tuple(text, table)
+        self.assertEqual(line, 2)
+        self.assertEqual(entries, {0: "zeta", 1: "alpha", 2: "mid"})
+        self.assertEqual(list(entries.values()), ["zeta", "alpha", "mid"])
+
+    def test_the_shipping_tuples_follow_the_core_order(self) -> None:
+        scan = check.Scan()
+        for index in (2, 8):
+            located = scan.ordinal[check.ORDINAL_TABLES[index]]
+            self.assertEqual(list(located.by_ordinal), list(range(len(scan.core))))
+            self.assertEqual(located.by_ordinal[5], "major7")
+
+
 class SpellingTest(unittest.TestCase):
     """The exemptions are a list of two enumerators, not a relaxed comparison."""
 
@@ -176,7 +195,7 @@ class SwappedEntriesTest(_CopiedTree):
     """Two entries exchanged: the set holds, the mapping does not."""
 
     WASM_SWAP: ClassVar[dict[Path, tuple[str, str]]] = {
-        WASM_CONST: ("  Major7: 5,\n  Minor7: 6,", "  Major7: 6,\n  Minor7: 5,")
+        WASM_CONST: ("  'major7',\n  'minor7',", "  'minor7',\n  'major7',")
     }
     PY_SWAP: ClassVar[dict[Path, tuple[str, str]]] = {
         PY_DETECTION: ('    5: "major7",\n    6: "minor7",',
@@ -187,9 +206,9 @@ class SwappedEntriesTest(_CopiedTree):
         failures = check.evaluate(self.tree(self.WASM_SWAP))
         lines = self.lines(failures, "disagree with the core enum at an ordinal")
         self.assertEqual(len(lines), 2, lines)
-        self.assertIn("ordinal 5 is `Minor7`", lines[0])
+        self.assertIn("ordinal 5 is `minor7`", lines[0])
         self.assertIn("core has `Major7`", lines[0])
-        self.assertIn("ordinal 6 is `Major7`", lines[1])
+        self.assertIn("ordinal 6 is `major7`", lines[1])
         self.assertIn("core has `Minor7`", lines[1])
         self.assertEqual(len(failures), 1, self.classes(failures))
 
@@ -276,12 +295,13 @@ class RenamedEntryTest(_CopiedTree):
         self.assertIn("`minorMajor7` is absent", lines[0])
         self.assertIn("`minMaj7` is not a core quality", lines[1])
 
-    def test_a_renamed_node_union_member_is_reported(self) -> None:
+    def test_a_renamed_node_tuple_token_is_reported(self) -> None:
         lines = self.lines(
-            check.evaluate(self.tree({NODE_TYPES: ("  | 'halfDim7'", "  | 'halfDiminished7'")})),
-            "key set no longer matches the core enum",
+            check.evaluate(self.tree({NODE_TYPES: ("  'halfDim7',", "  'halfDiminished7',")})),
+            "disagree with the core enum at an ordinal",
         )
-        self.assertEqual(len(lines), 2, lines)
+        self.assertEqual(len(lines), 1, lines)
+        self.assertIn("ordinal 13 is `halfDiminished7`", lines[0])
 
 
 class MissingTableTest(_CopiedTree):
@@ -355,7 +375,7 @@ class AppendedQualityTest(_CopiedTree):
             self.assertIn("ordinal 25 is absent", line)
             self.assertIn("Dominant7s11", line)
         names = self.lines(failures, "key set no longer matches the core enum")
-        self.assertEqual(len(names), 3, names)
+        self.assertEqual(len(names), len(check.NAME_TABLES), names)
         self.assertTrue(all("`dominant7s11` is absent" in line for line in names), names)
 
 

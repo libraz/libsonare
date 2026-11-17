@@ -160,12 +160,16 @@ describe('a sentinel-bearing count', () => {
 
 describe('pcen', () => {
   it('reads the matrix shape it is given', () => {
-    expect(pcen(new Float32Array(100), 2, 50).length).toBe(100);
+    expect(pcen({ values: { data: new Float32Array(100), rows: 2, cols: 50 } }).data.length).toBe(
+      100,
+    );
   });
 
   it('refuses a fractional bin count that divides the buffer once truncated', () => {
     // The addon checks `nBins * nFrames === length` AFTER narrowing, so 2.5 x 50
     // over 100 values passes that rule as 2 x 50.
-    expect(() => pcen(new Float32Array(100), 2.5, 50)).toThrow(/nBins must be an integer/);
+    expect(() => pcen({ values: { data: new Float32Array(100), rows: 2.5, cols: 50 } })).toThrow(
+      /rows must be an integer/,
+    );
   });
 });

@@ -1,94 +1,153 @@
-import type { FeatureSamplesRequest, StftRequest } from './feature_spectral.js';
+import { assertMatrix2D, toMatrix2D } from './internal/feature_matrix.js';
 import { resolvePositiveIntegerOption } from './internal/feature_options.js';
 import { resolveFftOptions } from './internal/fft_options.js';
+import { centsToNativeTuning, nativeTuningToCents } from './internal/tuning_units.js';
 import { addon } from './native.js';
-import type { ChromaResult, CqtResult, NoteSegment, PiptrackResult, PitchResult } from './types.js';
+import type {
+  ChromaResult,
+  CqtResult,
+  Matrix2D,
+  NoteSegment,
+  PiptrackResult,
+  PitchResult,
+} from './types.js';
 import {
   assertAudioInput,
+  assertFrequencyBounds,
+  assertPositiveFloatValue,
   assertPositiveInteger,
-  optionsBag,
-  requestObject,
+  requestOnly,
   resolveOptionalNonNegative,
+  sampleOneShot,
 } from './validation.js';
 
-/**
- * Options for the constant-Q chroma variants.
- *
- * Deliberately not an `StftRequest`: `chromaCens` and `chromaCqt` are built on
- * a constant-Q transform, which resolves frequency through per-bin filter
- * lengths rather than a single framed FFT, so there is no FFT size to set. The
- * core config carries none either. Use `chroma` for the STFT-framed chromagram,
- * which does take `nFft`.
- */
-export interface ChromaRequest extends FeatureSamplesRequest {
+/** Request for {@link chroma}. `validate: false` skips the NaN/Inf pre-scan. */
+export interface ChromaRequest {
+  samples: Float32Array;
+  sampleRate: number;
+  /** Even FFT size in samples. Default 2048. */
+  nFft?: number;
+  /** Hop in samples. Default 512. */
   hopLength?: number;
+  validate?: boolean;
+}
+
+/**
+ * Request for {@link chromaCens}. Constant-Q based, so there is no FFT size to
+ * set; use {@link chroma} for the STFT-framed chromagram.
+ */
+export interface ChromaCensRequest {
+  samples: Float32Array;
+  sampleRate: number;
+  hopLength?: number;
+  /** Chroma bins. Default 12. */
   nChroma?: number;
+  /** Constant-Q bins per octave. Default 36. */
   binsPerOctave?: number;
+  validate?: boolean;
 }
 
+/** Request for {@link chromaCqt}. */
+export type ChromaCqtRequest = ChromaCensRequest;
+
 /**
- * Options for the bass-focused chroma.
- *
- * Like {@link ChromaRequest} this is constant-Q based and takes no `nFft`. It
- * also takes no `binsPerOctave`: the bass chroma's bin count and its lowest
- * frequency are chosen together, so the resolution is not independently
- * settable through the exposed entry point.
+ * Request for {@link bassChroma}. Constant-Q based; the bass chroma's bin count
+ * and lowest frequency are chosen together, so the resolution is not settable.
  */
-export interface BassChromaRequest extends FeatureSamplesRequest {
+export interface BassChromaRequest {
+  samples: Float32Array;
+  sampleRate: number;
   hopLength?: number;
   nChroma?: number;
+  validate?: boolean;
 }
 
 /**
- * Compile-time guard for the two request shapes above. A field the entry point
+ * Compile-time guard for the request shapes above. A field the entry point
  * cannot forward is worse than a missing one: it type-checks, runs, and returns
  * the default silently. These aliases fail to compile if either field comes
  * back, so restoring one has to be a deliberate act.
  */
 type AbsentKey<T extends never> = T;
-type _ChromaRequestHasNoFftSize = AbsentKey<Extract<keyof ChromaRequest, 'nFft'>>;
+type _ChromaCensRequestHasNoFftSize = AbsentKey<Extract<keyof ChromaCensRequest, 'nFft'>>;
 type _BassChromaRequestHasNoResolutionControls = AbsentKey<
   Extract<keyof BassChromaRequest, 'nFft' | 'binsPerOctave'>
 >;
-export interface CqtRequest extends FeatureSamplesRequest {
+
+/** Request for {@link cqt}. */
+export interface CqtRequest {
+  samples: Float32Array;
+  sampleRate: number;
   hopLength?: number;
-  fmin?: number;
+  /** Lowest bin frequency in Hz. Default C1 (32.70 Hz). */
+  fminHz?: number;
+  /** Number of CQT bins. Default 84. */
   nBins?: number;
+  /** Bins per octave. Default 12. */
   binsPerOctave?: number;
+  validate?: boolean;
 }
+
+/** Request for {@link pseudoCqt}. */
+export type PseudoCqtRequest = CqtRequest;
+
+/** Request for {@link hybridCqt}. */
+export type HybridCqtRequest = CqtRequest;
+
+/** Request for {@link vqt}. */
 export interface VqtRequest extends CqtRequest {
+  /** Bandwidth offset. Absent selects the automatic ERB-derived value; 0 is the constant-Q transform. */
   gamma?: number;
 }
 
-export interface EstimateTuningRequest extends StftRequest {
+/** Request for {@link estimateTuning}. */
+export interface EstimateTuningRequest {
+  samples: Float32Array;
+  sampleRate: number;
+  /** Search resolution as a fraction of a bin. Default 0.01. */
   resolution?: number;
   binsPerOctave?: number;
+  nFft?: number;
+  hopLength?: number;
+  validate?: boolean;
 }
-export interface PitchRequest extends FeatureSamplesRequest {
+
+/** Request for {@link pitchYin}. */
+export interface PitchYinRequest {
+  samples: Float32Array;
+  sampleRate: number;
+  /** Framing window in samples. Default 2048. */
   frameLength?: number;
   hopLength?: number;
-  fmin?: number;
-  fmax?: number;
+  /** Lowest f0 searched, in Hz. Default 65. */
+  f0MinHz?: number;
+  /** Highest f0 searched, in Hz. Default 2093. */
+  f0MaxHz?: number;
   threshold?: number;
   /** pYIN: fill unvoiced f0 with zero. Retained but ignored by YIN, which always estimates f0. */
   fillNa?: boolean;
+  validate?: boolean;
 }
-export interface PiptrackRequest extends StftRequest {
-  fmin?: number;
-  fmax?: number;
+
+/** Request for {@link pitchPyin}. */
+export type PitchPyinRequest = PitchYinRequest;
+
+/** Request for {@link piptrack}. */
+export interface PiptrackRequest {
+  samples: Float32Array;
+  sampleRate: number;
+  nFft?: number;
+  hopLength?: number;
+  /** Lowest frequency considered, in Hz. Default 150. */
+  fminHz?: number;
+  /** Highest frequency considered, in Hz. Default 4000. */
+  fmaxHz?: number;
   threshold?: number;
+  validate?: boolean;
 }
-export interface NoteSegmentsConfig {
-  /** Cents of pitch change that start a new segment. Default 50. */
-  segmentationThresholdCents?: number;
-  /** Shortest segment kept, in ms. Default 30. */
-  minNoteMs?: number;
-  /** Reference pitch each segment's cents are measured against. Default 440. */
-  referenceHz?: number;
-  /** Voicing threshold applied to `voicedProb`; defaults to `0.5`. */
-  voicedThreshold?: number;
-}
-export interface NoteSegmentsRequest extends NoteSegmentsConfig {
+
+/** Request for {@link noteSegments}. */
+export interface NoteSegmentsRequest {
   f0Hz: Float32Array;
   /**
    * Per-frame voicing values in `[0, 1]`; anything below `voicedThreshold` is
@@ -100,603 +159,484 @@ export interface NoteSegmentsRequest extends NoteSegmentsConfig {
    * segments at all for low-register material.
    */
   voicedProb: Float32Array;
+  /** Frames per second of the F0 track. */
   frameRate: number;
-  /** @deprecated Use the flat tuning fields on this request instead. */
-  config?: NoteSegmentsConfig;
+  /** Cents of pitch change that start a new segment. Default 50. */
+  segmentationThresholdCents?: number;
+  /** Shortest segment kept, in ms. Default 30. */
+  minNoteMs?: number;
+  /** Reference pitch each segment's cents are measured against, in Hz. Default 440. */
+  referenceHz?: number;
+  /** Voicing threshold applied to `voicedProb`; defaults to `0.5`. */
+  voicedThreshold?: number;
 }
 
+/** Request for {@link pitchTuning}. */
 export interface PitchTuningRequest {
   frequencies: Float32Array;
+  /** Search resolution as a fraction of a bin. Default 0.01. */
   resolution?: number;
   binsPerOctave?: number;
 }
 
-/** Input for NNLS chroma extraction. */
-export interface NnlsChromaRequest extends FeatureSamplesRequest {
+/** Request for {@link tonnetz}. */
+export interface TonnetzRequest {
+  /** Chromagram: rows = chroma bins, cols = frames. */
+  chromagram: Matrix2D;
+}
+
+/** Request for {@link nnlsChroma}. */
+export interface NnlsChromaRequest {
+  samples: Float32Array;
+  sampleRate: number;
   enableStftBlend?: boolean;
   stftBlendWeight?: number;
   stftBlendNFft?: number;
   hopLength?: number;
+  validate?: boolean;
+}
+
+interface NativeChroma {
+  sampleRate: number;
+  hopLength: number;
+  nChroma: number;
+  nFrames: number;
+  features: Float32Array;
+  meanEnergy: number[];
+}
+
+function toChromaResult(r: NativeChroma): ChromaResult {
+  return {
+    sampleRate: r.sampleRate,
+    hopLength: r.hopLength,
+    features: toMatrix2D(r.features, r.nChroma, r.nFrames),
+    meanEnergy: r.meanEnergy,
+  };
+}
+
+interface NativeCqt {
+  nBins: number;
+  nFrames: number;
+  hopLength: number;
+  sampleRate: number;
+  magnitude: Float32Array;
+  frequencies: Float32Array;
+}
+
+function toCqtResult(r: NativeCqt): CqtResult {
+  return {
+    hopLength: r.hopLength,
+    sampleRate: r.sampleRate,
+    magnitude: toMatrix2D(r.magnitude, r.nBins, r.nFrames),
+    frequencies: r.frequencies,
+  };
+}
+
+const DEFAULT_CQT_FMIN_HZ = 32.70319566257483;
+
+// Shared guard of the CQT family: audio, then the three counts every entry point refuses at zero.
+function checkCqtRequest(
+  fnName: 'cqt' | 'pseudoCqt' | 'hybridCqt' | 'vqt',
+  request: CqtRequest,
+): void {
+  assertAudioInput(fnName, request.samples, request.sampleRate, request);
+  assertPositiveInteger(fnName, request.hopLength ?? 512, 'hopLength');
+  assertPositiveInteger(fnName, request.nBins ?? 84, 'nBins');
+  assertPositiveInteger(fnName, request.binsPerOctave ?? 12, 'binsPerOctave');
+  assertPositiveFloatValue(fnName, request.fminHz ?? DEFAULT_CQT_FMIN_HZ, 'fminHz');
 }
 
 /**
- * STFT chromagram (librosa.feature.chroma_stft).
+ * STFT chromagram (librosa.feature.chroma_stft). Returns `features` as rows =
+ * chroma bins, cols = frames.
  *
  * The chroma filterbank uses a fixed tuning of 0 (concert A440). Unlike
  * librosa.feature.chroma_stft — which estimates tuning from the signal when none
- * is given — this does NOT auto-estimate and takes no tuning argument. A
- * tuning offset (a fraction of a semitone, which {@link estimateTuning} returns
- * at 12 bins per octave) is applied through `analyze`'s `tuning` option (and to
- * chords through `detectChords`); both also measure it themselves with
- * `tuning: 'auto'`.
+ * is given — this does NOT auto-estimate and takes no tuning argument. A tuning
+ * offset in cents ({@link estimateTuning} returns one) is applied through
+ * `analyze`'s `tuningCents` option (and to chords through `detectChords`); both
+ * also measure it themselves with `tuningCents: 'auto'`.
  */
-export function chroma(request: StftRequest): ChromaResult;
+export function chroma(request: ChromaRequest): ChromaResult;
 export function chroma(
   samples: Float32Array,
-  sampleRate?: number,
-  nFft?: number,
-  hopLength?: number,
+  sampleRate: number,
+  options?: Omit<ChromaRequest, 'samples' | 'sampleRate'>,
 ): ChromaResult;
-export function chroma(
-  samples: Float32Array | StftRequest,
-  sampleRate = 22050,
-  nFft = 2048,
-  hopLength = 512,
-): ChromaResult {
-  const request =
-    samples instanceof Float32Array
-      ? { samples, sampleRate, nFft, hopLength }
-      : requestObject('chroma', samples);
-  const resolvedSampleRate = request.sampleRate ?? 22050;
-  assertAudioInput('chroma', request.samples, resolvedSampleRate, request);
+export function chroma(...args: unknown[]): ChromaResult {
+  const request = sampleOneShot<ChromaRequest>('chroma', args);
+  assertAudioInput('chroma', request.samples, request.sampleRate, request);
   const fft = resolveFftOptions('chroma', request.nFft, request.hopLength);
-  return addon.chroma(request.samples, resolvedSampleRate, fft.nFft, fft.hopLength);
+  return toChromaResult(addon.chroma(request.samples, request.sampleRate, fft.nFft, fft.hopLength));
 }
 
-export function chromaCens(request: ChromaRequest): ChromaResult;
+/** CENS chromagram. Returns `features` as rows = chroma bins, cols = frames. */
+export function chromaCens(request: ChromaCensRequest): ChromaResult;
 export function chromaCens(
   samples: Float32Array,
-  sampleRate?: number,
-  hopLength?: number,
-  nChroma?: number,
-  binsPerOctave?: number,
+  sampleRate: number,
+  options?: Omit<ChromaCensRequest, 'samples' | 'sampleRate'>,
 ): ChromaResult;
-export function chromaCens(
-  samples: Float32Array | ChromaRequest,
-  sampleRate = 22050,
-  hopLength = 512,
-  nChroma = 12,
-  binsPerOctave = 36,
-): ChromaResult {
-  const request =
-    samples instanceof Float32Array
-      ? { samples, sampleRate, hopLength, nChroma, binsPerOctave }
-      : requestObject('chromaCens', samples);
-  const resolvedSampleRate = request.sampleRate ?? 22050;
-  assertAudioInput('chromaCens', request.samples, resolvedSampleRate, request);
+export function chromaCens(...args: unknown[]): ChromaResult {
+  const request = sampleOneShot<ChromaCensRequest>('chromaCens', args);
+  assertAudioInput('chromaCens', request.samples, request.sampleRate, request);
   assertPositiveInteger('chromaCens', request.hopLength ?? 512, 'hopLength');
   assertPositiveInteger('chromaCens', request.nChroma ?? 12, 'nChroma');
   assertPositiveInteger('chromaCens', request.binsPerOctave ?? 36, 'binsPerOctave');
-  return addon.chromaCens(
-    request.samples,
-    resolvedSampleRate,
-    request.hopLength ?? 512,
-    request.nChroma ?? 12,
-    request.binsPerOctave ?? 36,
+  return toChromaResult(
+    addon.chromaCens(
+      request.samples,
+      request.sampleRate,
+      request.hopLength ?? 512,
+      request.nChroma ?? 12,
+      request.binsPerOctave ?? 36,
+    ),
   );
 }
 
-export function chromaCqt(request: ChromaRequest): ChromaResult;
+/** Constant-Q chromagram. Returns `features` as rows = chroma bins, cols = frames. */
+export function chromaCqt(request: ChromaCqtRequest): ChromaResult;
 export function chromaCqt(
   samples: Float32Array,
-  sampleRate?: number,
-  hopLength?: number,
-  nChroma?: number,
-  binsPerOctave?: number,
+  sampleRate: number,
+  options?: Omit<ChromaCqtRequest, 'samples' | 'sampleRate'>,
 ): ChromaResult;
-export function chromaCqt(
-  samples: Float32Array | ChromaRequest,
-  sampleRate = 22050,
-  hopLength = 512,
-  nChroma = 12,
-  binsPerOctave = 36,
-): ChromaResult {
-  const request =
-    samples instanceof Float32Array
-      ? { samples, sampleRate, hopLength, nChroma, binsPerOctave }
-      : requestObject('chromaCqt', samples);
-  const resolvedSampleRate = request.sampleRate ?? 22050;
-  assertAudioInput('chromaCqt', request.samples, resolvedSampleRate, request);
+export function chromaCqt(...args: unknown[]): ChromaResult {
+  const request = sampleOneShot<ChromaCqtRequest>('chromaCqt', args);
+  assertAudioInput('chromaCqt', request.samples, request.sampleRate, request);
   assertPositiveInteger('chromaCqt', request.hopLength ?? 512, 'hopLength');
   assertPositiveInteger('chromaCqt', request.nChroma ?? 12, 'nChroma');
   assertPositiveInteger('chromaCqt', request.binsPerOctave ?? 36, 'binsPerOctave');
-  return addon.chromaCqt(
-    request.samples,
-    resolvedSampleRate,
-    request.hopLength ?? 512,
-    request.nChroma ?? 12,
-    request.binsPerOctave ?? 36,
+  return toChromaResult(
+    addon.chromaCqt(
+      request.samples,
+      request.sampleRate,
+      request.hopLength ?? 512,
+      request.nChroma ?? 12,
+      request.binsPerOctave ?? 36,
+    ),
   );
 }
 
+/** Bass-focused chromagram. Returns `features` as rows = chroma bins, cols = frames. */
 export function bassChroma(request: BassChromaRequest): ChromaResult;
 export function bassChroma(
   samples: Float32Array,
-  sampleRate?: number,
-  hopLength?: number,
-  nChroma?: number,
+  sampleRate: number,
+  options?: Omit<BassChromaRequest, 'samples' | 'sampleRate'>,
 ): ChromaResult;
-export function bassChroma(
-  samples: Float32Array | BassChromaRequest,
-  sampleRate = 22050,
-  hopLength = 512,
-  nChroma = 12,
-): ChromaResult {
-  const request =
-    samples instanceof Float32Array
-      ? { samples, sampleRate, hopLength, nChroma }
-      : requestObject('bassChroma', samples);
-  const resolvedSampleRate = request.sampleRate ?? 22050;
-  assertAudioInput('bassChroma', request.samples, resolvedSampleRate, request);
+export function bassChroma(...args: unknown[]): ChromaResult {
+  const request = sampleOneShot<BassChromaRequest>('bassChroma', args);
+  assertAudioInput('bassChroma', request.samples, request.sampleRate, request);
   assertPositiveInteger('bassChroma', request.hopLength ?? 512, 'hopLength');
   assertPositiveInteger('bassChroma', request.nChroma ?? 12, 'nChroma');
-  return addon.bassChroma(
-    request.samples,
-    resolvedSampleRate,
-    request.hopLength ?? 512,
-    request.nChroma ?? 12,
+  return toChromaResult(
+    addon.bassChroma(
+      request.samples,
+      request.sampleRate,
+      request.hopLength ?? 512,
+      request.nChroma ?? 12,
+    ),
   );
 }
 
-/** Compute the Constant-Q Transform magnitude. */
+/** Constant-Q transform magnitude. `magnitude` is rows = CQT bins, cols = frames. */
 export function cqt(request: CqtRequest): CqtResult;
 export function cqt(
   samples: Float32Array,
-  sampleRate?: number,
-  hopLength?: number,
-  fmin?: number,
-  nBins?: number,
-  binsPerOctave?: number,
+  sampleRate: number,
+  options?: Omit<CqtRequest, 'samples' | 'sampleRate'>,
 ): CqtResult;
-export function cqt(
-  samples: Float32Array | CqtRequest,
-  sampleRate = 22050,
-  hopLength = 512,
-  fmin = 32.70319566257483,
-  nBins = 84,
-  binsPerOctave = 12,
-): CqtResult {
-  const request =
-    samples instanceof Float32Array
-      ? { samples, sampleRate, hopLength, fmin, nBins, binsPerOctave }
-      : requestObject('cqt', samples);
-  const resolvedSampleRate = request.sampleRate ?? 22050;
-  assertAudioInput('cqt', request.samples, resolvedSampleRate, request);
-  assertPositiveInteger('cqt', request.hopLength ?? 512, 'hopLength');
-  assertPositiveInteger('cqt', request.nBins ?? 84, 'nBins');
-  assertPositiveInteger('cqt', request.binsPerOctave ?? 12, 'binsPerOctave');
-  return addon.cqt(
-    request.samples,
-    resolvedSampleRate,
-    request.hopLength ?? 512,
-    request.fmin ?? 32.70319566257483,
-    request.nBins ?? 84,
-    request.binsPerOctave ?? 12,
+export function cqt(...args: unknown[]): CqtResult {
+  const request = sampleOneShot<CqtRequest>('cqt', args);
+  checkCqtRequest('cqt', request);
+  return toCqtResult(
+    addon.cqt(
+      request.samples,
+      request.sampleRate,
+      request.hopLength ?? 512,
+      request.fminHz ?? DEFAULT_CQT_FMIN_HZ,
+      request.nBins ?? 84,
+      request.binsPerOctave ?? 12,
+    ),
   );
 }
 
-/** Compute a faster pseudo-CQT magnitude approximation. */
-export function pseudoCqt(request: CqtRequest): CqtResult;
+/** Faster pseudo-CQT magnitude approximation. `magnitude` is rows = CQT bins, cols = frames. */
+export function pseudoCqt(request: PseudoCqtRequest): CqtResult;
 export function pseudoCqt(
   samples: Float32Array,
-  sampleRate?: number,
-  hopLength?: number,
-  fmin?: number,
-  nBins?: number,
-  binsPerOctave?: number,
+  sampleRate: number,
+  options?: Omit<PseudoCqtRequest, 'samples' | 'sampleRate'>,
 ): CqtResult;
-export function pseudoCqt(
-  samples: Float32Array | CqtRequest,
-  sampleRate = 22050,
-  hopLength = 512,
-  fmin = 32.70319566257483,
-  nBins = 84,
-  binsPerOctave = 12,
-): CqtResult {
-  const request =
-    samples instanceof Float32Array
-      ? { samples, sampleRate, hopLength, fmin, nBins, binsPerOctave }
-      : requestObject('pseudoCqt', samples);
-  const resolvedSampleRate = request.sampleRate ?? 22050;
-  assertAudioInput('pseudoCqt', request.samples, resolvedSampleRate, request);
-  assertPositiveInteger('pseudoCqt', request.hopLength ?? 512, 'hopLength');
-  assertPositiveInteger('pseudoCqt', request.nBins ?? 84, 'nBins');
-  assertPositiveInteger('pseudoCqt', request.binsPerOctave ?? 12, 'binsPerOctave');
-  return addon.pseudoCqt(
-    request.samples,
-    resolvedSampleRate,
-    request.hopLength ?? 512,
-    request.fmin ?? 32.70319566257483,
-    request.nBins ?? 84,
-    request.binsPerOctave ?? 12,
+export function pseudoCqt(...args: unknown[]): CqtResult {
+  const request = sampleOneShot<PseudoCqtRequest>('pseudoCqt', args);
+  checkCqtRequest('pseudoCqt', request);
+  return toCqtResult(
+    addon.pseudoCqt(
+      request.samples,
+      request.sampleRate,
+      request.hopLength ?? 512,
+      request.fminHz ?? DEFAULT_CQT_FMIN_HZ,
+      request.nBins ?? 84,
+      request.binsPerOctave ?? 12,
+    ),
   );
 }
 
-/** Compute the hybrid CQT magnitude. */
-export function hybridCqt(request: CqtRequest): CqtResult;
+/** Hybrid CQT magnitude. `magnitude` is rows = CQT bins, cols = frames. */
+export function hybridCqt(request: HybridCqtRequest): CqtResult;
 export function hybridCqt(
   samples: Float32Array,
-  sampleRate?: number,
-  hopLength?: number,
-  fmin?: number,
-  nBins?: number,
-  binsPerOctave?: number,
+  sampleRate: number,
+  options?: Omit<HybridCqtRequest, 'samples' | 'sampleRate'>,
 ): CqtResult;
-export function hybridCqt(
-  samples: Float32Array | CqtRequest,
-  sampleRate = 22050,
-  hopLength = 512,
-  fmin = 32.70319566257483,
-  nBins = 84,
-  binsPerOctave = 12,
-): CqtResult {
-  const request =
-    samples instanceof Float32Array
-      ? { samples, sampleRate, hopLength, fmin, nBins, binsPerOctave }
-      : requestObject('hybridCqt', samples);
-  const resolvedSampleRate = request.sampleRate ?? 22050;
-  assertAudioInput('hybridCqt', request.samples, resolvedSampleRate, request);
-  assertPositiveInteger('hybridCqt', request.hopLength ?? 512, 'hopLength');
-  assertPositiveInteger('hybridCqt', request.nBins ?? 84, 'nBins');
-  assertPositiveInteger('hybridCqt', request.binsPerOctave ?? 12, 'binsPerOctave');
-  return addon.hybridCqt(
-    request.samples,
-    resolvedSampleRate,
-    request.hopLength ?? 512,
-    request.fmin ?? 32.70319566257483,
-    request.nBins ?? 84,
-    request.binsPerOctave ?? 12,
+export function hybridCqt(...args: unknown[]): CqtResult {
+  const request = sampleOneShot<HybridCqtRequest>('hybridCqt', args);
+  checkCqtRequest('hybridCqt', request);
+  return toCqtResult(
+    addon.hybridCqt(
+      request.samples,
+      request.sampleRate,
+      request.hopLength ?? 512,
+      request.fminHz ?? DEFAULT_CQT_FMIN_HZ,
+      request.nBins ?? 84,
+      request.binsPerOctave ?? 12,
+    ),
   );
 }
 
 /**
- * Compute VQT magnitude. Omit `gamma` for the automatic ERB-derived value; 0 is
- * the constant-Q transform, and a negative or non-finite `gamma` is refused.
+ * VQT magnitude. Omit `gamma` for the automatic ERB-derived value; 0 is the
+ * constant-Q transform, and a negative or non-finite `gamma` is refused.
+ * `magnitude` is rows = VQT bins, cols = frames.
  */
 export function vqt(request: VqtRequest): CqtResult;
 export function vqt(
   samples: Float32Array,
-  sampleRate?: number,
-  hopLength?: number,
-  fmin?: number,
-  nBins?: number,
-  binsPerOctave?: number,
-  gamma?: number,
+  sampleRate: number,
+  options?: Omit<VqtRequest, 'samples' | 'sampleRate'>,
 ): CqtResult;
-export function vqt(
-  samples: Float32Array | VqtRequest,
-  sampleRate = 22050,
-  hopLength = 512,
-  fmin = 32.70319566257483,
-  nBins = 84,
-  binsPerOctave = 12,
-  gamma?: number,
-): CqtResult {
-  const request =
-    samples instanceof Float32Array
-      ? { samples, sampleRate, hopLength, fmin, nBins, binsPerOctave, gamma }
-      : requestObject('vqt', samples);
-  const resolvedSampleRate = request.sampleRate ?? 22050;
-  assertAudioInput('vqt', request.samples, resolvedSampleRate, request);
-  assertPositiveInteger('vqt', request.hopLength ?? 512, 'hopLength');
-  assertPositiveInteger('vqt', request.nBins ?? 84, 'nBins');
-  assertPositiveInteger('vqt', request.binsPerOctave ?? 12, 'binsPerOctave');
-  return addon.vqt(
-    request.samples,
-    resolvedSampleRate,
-    request.hopLength ?? 512,
-    request.fmin ?? 32.70319566257483,
-    request.nBins ?? 84,
-    request.binsPerOctave ?? 12,
-    resolveOptionalNonNegative('vqt', request.gamma, 'gamma'),
+export function vqt(...args: unknown[]): CqtResult {
+  const request = sampleOneShot<VqtRequest>('vqt', args);
+  checkCqtRequest('vqt', request);
+  return toCqtResult(
+    addon.vqt(
+      request.samples,
+      request.sampleRate,
+      request.hopLength ?? 512,
+      request.fminHz ?? DEFAULT_CQT_FMIN_HZ,
+      request.nBins ?? 84,
+      request.binsPerOctave ?? 12,
+      resolveOptionalNonNegative('vqt', request.gamma, 'gamma'),
+    ),
   );
 }
 
-/** Global tuning offset from a set of frequencies (librosa.pitch_tuning). */
+/** Global tuning offset, in cents, from a set of frequencies (librosa.pitch_tuning). */
 export function pitchTuning(request: PitchTuningRequest): number;
-export function pitchTuning(
-  frequencies: Float32Array,
-  resolution?: number,
-  binsPerOctave?: number,
-): number;
-export function pitchTuning(
-  frequencies: Float32Array | PitchTuningRequest,
-  resolution = 0.01,
-  binsPerOctave = 12,
-): number {
-  const request =
-    frequencies instanceof Float32Array
-      ? { frequencies, resolution, binsPerOctave }
-      : requestObject('pitchTuning', frequencies, 'frequencies');
-  assertPositiveInteger('pitchTuning', request.binsPerOctave ?? 12, 'binsPerOctave');
-  return addon.pitchTuning(
-    request.frequencies,
-    request.resolution ?? 0.01,
-    request.binsPerOctave ?? 12,
+export function pitchTuning(...args: unknown[]): number {
+  const r = requestOnly<PitchTuningRequest>('pitchTuning', args);
+  const binsPerOctave = r.binsPerOctave ?? 12;
+  assertPositiveInteger('pitchTuning', binsPerOctave, 'binsPerOctave');
+  return nativeTuningToCents(
+    addon.pitchTuning(r.frequencies, r.resolution ?? 0.01, binsPerOctave),
+    binsPerOctave,
   );
 }
 
 /**
- * Tuning offset of an audio signal (librosa.estimate_tuning).
+ * Tuning offset of an audio signal, in cents (librosa.estimate_tuning).
  *
- * A librosa mirror: the offset is a fraction of a bin of `binsPerOctave`, which
- * is the semitone fraction the analysis options take only at 12 (otherwise
- * multiply by `12 / binsPerOctave`). Analysis measures the semitone fraction
- * itself with `tuning: 'auto'`; {@link tuningToReferenceHz} converts it to Hz.
+ * Analysis measures the same quantity itself with `tuningCents: 'auto'`;
+ * {@link tuningToReferenceHz} converts it to Hz.
  */
 export function estimateTuning(request: EstimateTuningRequest): number;
 export function estimateTuning(
   samples: Float32Array,
-  sampleRate?: number,
-  nFft?: number,
-  hopLength?: number,
-  resolution?: number,
-  binsPerOctave?: number,
+  sampleRate: number,
+  options?: Omit<EstimateTuningRequest, 'samples' | 'sampleRate'>,
 ): number;
-export function estimateTuning(
-  samples: Float32Array | EstimateTuningRequest,
-  sampleRate = 22050,
-  nFft = 2048,
-  hopLength = 512,
-  resolution = 0.01,
-  binsPerOctave = 12,
-): number {
-  const request =
-    samples instanceof Float32Array
-      ? { samples, sampleRate, nFft, hopLength, resolution, binsPerOctave }
-      : requestObject('estimateTuning', samples);
-  const resolvedSampleRate = request.sampleRate ?? 22050;
-  assertAudioInput('estimateTuning', request.samples, resolvedSampleRate, request);
+export function estimateTuning(...args: unknown[]): number {
+  const request = sampleOneShot<EstimateTuningRequest>('estimateTuning', args);
+  assertAudioInput('estimateTuning', request.samples, request.sampleRate, request);
   const fft = resolveFftOptions('estimateTuning', request.nFft, request.hopLength);
-  assertPositiveInteger('estimateTuning', request.binsPerOctave ?? 12, 'binsPerOctave');
-  return addon.estimateTuning(
-    request.samples,
-    resolvedSampleRate,
-    fft.nFft,
-    fft.hopLength,
-    request.resolution ?? 0.01,
-    request.binsPerOctave ?? 12,
+  const binsPerOctave = request.binsPerOctave ?? 12;
+  assertPositiveInteger('estimateTuning', binsPerOctave, 'binsPerOctave');
+  return nativeTuningToCents(
+    addon.estimateTuning(
+      request.samples,
+      request.sampleRate,
+      fft.nFft,
+      fft.hopLength,
+      request.resolution ?? 0.01,
+      binsPerOctave,
+    ),
+    binsPerOctave,
   );
 }
 
 /**
- * Reference frequency of an A4 raised by `tuning` fractions of a semitone:
- * `a4 * 2 ** (tuning / 12)`. The converter from the analysis unit (`tuning`, in
- * `[-0.5, 0.5)` for the analysis options) to the Hz a pitch reference is stated
- * in, such as `referenceHz` and the streaming `tuningRefHz`.
+ * Reference frequency of an A4 raised by `tuningCents`: `a4Hz * 2 ** (tuningCents / 1200)`.
+ * The converter from the analysis unit (`tuningCents`) to the Hz a pitch
+ * reference is stated in, such as `referenceHz`.
  *
- * @param tuning - Finite fraction of a semitone.
- * @param a4 - Finite positive concert pitch the tuning is measured from. Default 440.
- * @throws `SonareError` for a non-finite `tuning` or a non-positive `a4`.
+ * @param tuningCents - Finite offset in cents.
+ * @param a4Hz - Finite positive concert pitch the tuning is measured from. Default 440.
+ * @throws `SonareError` for a non-finite `tuningCents` or a non-positive `a4Hz`.
  */
-export function tuningToReferenceHz(tuning: number, a4 = 440): number {
-  return addon.tuningToReferenceHz(tuning, a4);
+export function tuningToReferenceHz(tuningCents: number, a4Hz = 440): number {
+  return addon.tuningToReferenceHz(centsToNativeTuning(tuningCents), a4Hz);
 }
 
 /**
- * Tuning, in fractions of a semitone, of a recording whose A4 sits at `hz`:
- * `12 * log2(hz / a4)`. Inverse of {@link tuningToReferenceHz}.
+ * Tuning, in cents, of a recording whose A4 sits at `referenceHz`:
+ * `1200 * log2(referenceHz / a4Hz)`. Inverse of {@link tuningToReferenceHz}.
  *
- * @param hz - Finite positive reference frequency.
- * @param a4 - Finite positive concert pitch. Default 440.
- * @throws `SonareError` for a non-positive `hz` or `a4`.
+ * @param referenceHz - Finite positive reference frequency.
+ * @param a4Hz - Finite positive concert pitch. Default 440.
+ * @throws `SonareError` for a non-positive `referenceHz` or `a4Hz`.
  */
-export function referenceHzToTuning(hz: number, a4 = 440): number {
-  return addon.referenceHzToTuning(hz, a4);
+export function referenceHzToTuning(referenceHz: number, a4Hz = 440): number {
+  return nativeTuningToCents(addon.referenceHzToTuning(referenceHz, a4Hz));
 }
 
-/** Per-bin spectral pitch candidates and their peak magnitudes (librosa.piptrack). */
+/**
+ * Per-bin spectral pitch candidates and their peak magnitudes (librosa.piptrack).
+ * Both matrices are rows = FFT bins, cols = frames.
+ */
 export function piptrack(request: PiptrackRequest): PiptrackResult;
 export function piptrack(
   samples: Float32Array,
-  sampleRate?: number,
-  nFft?: number,
-  hopLength?: number,
-  fmin?: number,
-  fmax?: number,
-  threshold?: number,
+  sampleRate: number,
+  options?: Omit<PiptrackRequest, 'samples' | 'sampleRate'>,
 ): PiptrackResult;
-export function piptrack(
-  samples: Float32Array | PiptrackRequest,
-  sampleRate = 22050,
-  nFft = 2048,
-  hopLength = 512,
-  fmin = 150,
-  fmax = 4000,
-  threshold = 0.1,
-): PiptrackResult {
-  const request =
-    samples instanceof Float32Array
-      ? { samples, sampleRate, nFft, hopLength, fmin, fmax, threshold }
-      : requestObject('piptrack', samples);
-  const resolvedSampleRate = request.sampleRate ?? 22050;
-  assertAudioInput('piptrack', request.samples, resolvedSampleRate, {});
+export function piptrack(...args: unknown[]): PiptrackResult {
+  const request = sampleOneShot<PiptrackRequest>('piptrack', args);
+  assertAudioInput('piptrack', request.samples, request.sampleRate, request);
   const fft = resolveFftOptions('piptrack', request.nFft, request.hopLength);
-  return addon.piptrack(
+  const fminHz = request.fminHz ?? 150;
+  const fmaxHz = request.fmaxHz ?? 4000;
+  assertFrequencyBounds('piptrack', fminHz, fmaxHz, 'fminHz', 'fmaxHz');
+  const r = addon.piptrack(
     request.samples,
-    resolvedSampleRate,
+    request.sampleRate,
     fft.nFft,
     fft.hopLength,
-    request.fmin ?? 150,
-    request.fmax ?? 4000,
+    fminHz,
+    fmaxHz,
     request.threshold ?? 0.1,
   );
+  return {
+    pitches: toMatrix2D(r.pitches, r.nBins, r.nFrames),
+    magnitudes: toMatrix2D(r.magnitudes, r.nBins, r.nFrames),
+  };
 }
 
-export function pitchYin(request: PitchRequest): PitchResult;
-export function pitchYin(
-  samples: Float32Array,
-  sampleRate?: number,
-  frameLength?: number,
-  hopLength?: number,
-  fmin?: number,
-  fmax?: number,
-  threshold?: number,
-  fillNa?: boolean,
-): PitchResult;
-export function pitchYin(
-  samples: Float32Array | PitchRequest,
-  sampleRate = 22050,
-  frameLength = 2048,
-  hopLength = 512,
-  fmin = 65.0,
-  fmax = 2093.0,
-  threshold = 0.1,
-  fillNa = false,
-): PitchResult {
-  const request =
-    samples instanceof Float32Array
-      ? { samples, sampleRate, frameLength, hopLength, fmin, fmax, threshold, fillNa }
-      : requestObject('pitchYin', samples);
-  const resolvedSampleRate = request.sampleRate ?? 22050;
-  assertAudioInput('pitchYin', request.samples, resolvedSampleRate, {});
+function pitchTrack(fnName: 'pitchYin' | 'pitchPyin', args: unknown[]): PitchResult {
+  const request = sampleOneShot<PitchYinRequest>(fnName, args);
+  assertAudioInput(fnName, request.samples, request.sampleRate, request);
   // frameLength is a framing window, not a transform size, so it carries no evenness rule.
-  assertPositiveInteger('pitchYin', request.frameLength ?? 2048, 'frameLength');
-  assertPositiveInteger('pitchYin', request.hopLength ?? 512, 'hopLength');
-  return addon.pitchYin(
+  assertPositiveInteger(fnName, request.frameLength ?? 2048, 'frameLength');
+  assertPositiveInteger(fnName, request.hopLength ?? 512, 'hopLength');
+  const f0MinHz = request.f0MinHz ?? 65;
+  const f0MaxHz = request.f0MaxHz ?? 2093;
+  assertFrequencyBounds(fnName, f0MinHz, f0MaxHz, 'f0MinHz', 'f0MaxHz');
+  return addon[fnName](
     request.samples,
-    resolvedSampleRate,
+    request.sampleRate,
     request.frameLength ?? 2048,
     request.hopLength ?? 512,
-    request.fmin ?? 65,
-    request.fmax ?? 2093,
+    f0MinHz,
+    f0MaxHz,
     request.threshold ?? 0.1,
     request.fillNa ?? false,
   );
 }
 
-export function pitchPyin(request: PitchRequest): PitchResult;
+/** YIN fundamental-frequency track. */
+export function pitchYin(request: PitchYinRequest): PitchResult;
+export function pitchYin(
+  samples: Float32Array,
+  sampleRate: number,
+  options?: Omit<PitchYinRequest, 'samples' | 'sampleRate'>,
+): PitchResult;
+export function pitchYin(...args: unknown[]): PitchResult {
+  return pitchTrack('pitchYin', args);
+}
+
+/** pYIN fundamental-frequency track. */
+export function pitchPyin(request: PitchPyinRequest): PitchResult;
 export function pitchPyin(
   samples: Float32Array,
-  sampleRate?: number,
-  frameLength?: number,
-  hopLength?: number,
-  fmin?: number,
-  fmax?: number,
-  threshold?: number,
-  fillNa?: boolean,
+  sampleRate: number,
+  options?: Omit<PitchPyinRequest, 'samples' | 'sampleRate'>,
 ): PitchResult;
-export function pitchPyin(
-  samples: Float32Array | PitchRequest,
-  sampleRate = 22050,
-  frameLength = 2048,
-  hopLength = 512,
-  fmin = 65.0,
-  fmax = 2093.0,
-  threshold = 0.1,
-  fillNa = false,
-): PitchResult {
-  const request =
-    samples instanceof Float32Array
-      ? { samples, sampleRate, frameLength, hopLength, fmin, fmax, threshold, fillNa }
-      : requestObject('pitchPyin', samples);
-  const resolvedSampleRate = request.sampleRate ?? 22050;
-  assertAudioInput('pitchPyin', request.samples, resolvedSampleRate, {});
-  assertPositiveInteger('pitchPyin', request.frameLength ?? 2048, 'frameLength');
-  assertPositiveInteger('pitchPyin', request.hopLength ?? 512, 'hopLength');
-  return addon.pitchPyin(
-    request.samples,
-    resolvedSampleRate,
-    request.frameLength ?? 2048,
-    request.hopLength ?? 512,
-    request.fmin ?? 65,
-    request.fmax ?? 2093,
-    request.threshold ?? 0.1,
-    request.fillNa ?? false,
-  );
+export function pitchPyin(...args: unknown[]): PitchResult {
+  return pitchTrack('pitchPyin', args);
 }
 
 /** Segment a host-supplied monophonic F0 track into stable note regions. */
-export function noteSegments(request: NoteSegmentsRequest): NoteSegment[] {
-  requestObject('noteSegments', request, 'request', true);
-  const { config, segmentationThresholdCents, minNoteMs, referenceHz, voicedThreshold } = request;
-  const hasFlatTuningOptions =
+export function noteSegments(request: NoteSegmentsRequest): NoteSegment[];
+export function noteSegments(...args: unknown[]): NoteSegment[] {
+  const r = requestOnly<NoteSegmentsRequest>('noteSegments', args);
+  const { segmentationThresholdCents, minNoteMs, referenceHz, voicedThreshold } = r;
+  const hasTuningOptions =
     segmentationThresholdCents !== undefined ||
     minNoteMs !== undefined ||
     referenceHz !== undefined ||
     voicedThreshold !== undefined;
-  if (config !== undefined && hasFlatTuningOptions) {
-    throw new RangeError(
-      'noteSegments: specify tuning options either flat or in the deprecated config object, not both',
-    );
-  }
-
-  const baseRequest = {
-    f0Hz: request.f0Hz,
-    voicedProb: request.voicedProb,
-    frameRate: request.frameRate,
-  };
-  if (config !== undefined) {
-    return addon.noteSegments({ ...baseRequest, config });
-  }
-  if (!hasFlatTuningOptions) {
-    return addon.noteSegments(baseRequest);
-  }
-  return addon.noteSegments({
-    ...baseRequest,
-    config: { segmentationThresholdCents, minNoteMs, referenceHz, voicedThreshold },
-  });
+  const nativeRequest = { f0Hz: r.f0Hz, voicedProb: r.voicedProb, frameRate: r.frameRate };
+  const segments: Array<{
+    frameStart: number;
+    frameEnd: number;
+    startSeconds: number;
+    endSeconds: number;
+    medianCents: number;
+  }> = hasTuningOptions
+    ? addon.noteSegments({
+        ...nativeRequest,
+        config: { segmentationThresholdCents, minNoteMs, referenceHz, voicedThreshold },
+      })
+    : addon.noteSegments(nativeRequest);
+  // Native names the two times `*Seconds`.
+  return segments.map((s) => ({
+    frameStart: s.frameStart,
+    frameEnd: s.frameEnd,
+    startSec: s.startSeconds,
+    endSec: s.endSeconds,
+    medianCents: s.medianCents,
+  }));
 }
 
-export function tonnetz(request: {
-  chromagram: Float32Array;
-  nChroma: number;
-  nFrames: number;
-}): Float32Array;
-export function tonnetz(chromagram: Float32Array, nChroma?: number, nFrames?: number): Float32Array;
-export function tonnetz(
-  chromagram: Float32Array | { chromagram: Float32Array; nChroma: number; nFrames: number },
-  nChroma = 0,
-  nFrames = 0,
-): Float32Array {
-  const request =
-    chromagram instanceof Float32Array
-      ? { chromagram, nChroma, nFrames }
-      : requestObject('tonnetz', chromagram, 'chromagram');
-  assertPositiveInteger('tonnetz', request.nChroma, 'nChroma');
-  assertPositiveInteger('tonnetz', request.nFrames, 'nFrames');
-  return addon.tonnetz(request.chromagram, request.nChroma, request.nFrames);
+/** Tonal centroid features of a chromagram. Returns rows = 6 tonnetz dims, cols = frames. */
+export function tonnetz(request: TonnetzRequest): Matrix2D;
+export function tonnetz(...args: unknown[]): Matrix2D {
+  const r = requestOnly<TonnetzRequest>('tonnetz', args);
+  assertMatrix2D('tonnetz', r.chromagram, 'chromagram');
+  const out = addon.tonnetz(r.chromagram.data, r.chromagram.rows, r.chromagram.cols);
+  return toMatrix2D(out, 6, r.chromagram.cols);
 }
 
-export function nnlsChroma(request: NnlsChromaRequest): {
-  nChroma: number;
-  nFrames: number;
-  data: Float32Array;
-};
+/** NNLS chroma. Returns rows = 12 chroma bins, cols = frames. */
+export function nnlsChroma(request: NnlsChromaRequest): Matrix2D;
 export function nnlsChroma(
   samples: Float32Array,
-  sampleRate?: number,
+  sampleRate: number,
   options?: Omit<NnlsChromaRequest, 'samples' | 'sampleRate'>,
-): { nChroma: number; nFrames: number; data: Float32Array };
-export function nnlsChroma(
-  samples: Float32Array | NnlsChromaRequest,
-  sampleRate = 22050,
-  options: Omit<NnlsChromaRequest, 'samples' | 'sampleRate'> = {},
-): { nChroma: number; nFrames: number; data: Float32Array } {
-  const request =
-    samples instanceof Float32Array
-      ? { samples, sampleRate, ...optionsBag('nnlsChroma', options) }
-      : requestObject('nnlsChroma', samples);
-  const resolvedSampleRate = request.sampleRate ?? 22050;
-  assertAudioInput('nnlsChroma', request.samples, resolvedSampleRate, request);
+): Matrix2D;
+export function nnlsChroma(...args: unknown[]): Matrix2D {
+  const request = sampleOneShot<NnlsChromaRequest>('nnlsChroma', args);
+  assertAudioInput('nnlsChroma', request.samples, request.sampleRate, request);
   // stftBlendNFft defaults to 4096, not the 2048/512 pair resolveFftOptions assumes.
   assertPositiveInteger('nnlsChroma', request.stftBlendNFft ?? 4096, 'stftBlendNFft');
-  return addon.nnlsChroma(
+  const r = addon.nnlsChroma(
     request.samples,
-    resolvedSampleRate,
+    request.sampleRate,
     request.enableStftBlend ?? true,
     request.stftBlendWeight ?? 0.55,
     request.stftBlendNFft ?? 4096,
     resolvePositiveIntegerOption('nnlsChroma', 'hopLength', request.hopLength, 512),
   );
+  return toMatrix2D(r.data, r.nChroma, r.nFrames);
 }

@@ -39,35 +39,41 @@ describe('chordFunctions', () => {
       useBeatSync: false,
       useTriadsOnly: true,
     });
-    const result = chordFunctions({ chords: detected, key: { root: 'C', mode: 'major' } });
+    const result = chordFunctions({ chords: detected, key: { root: 0, mode: 'major' } });
     expect(result.length).toBe(detected.chords.length);
     result.forEach((entry, i) => {
-      expect(entry.start).toBe(detected.chords[i].start);
-      expect(entry.end).toBe(detected.chords[i].end);
+      expect(entry.startSec).toBe(detected.chords[i].startSec);
+      expect(entry.endSec).toBe(detected.chords[i].endSec);
       expect(entry.name).toBe(detected.chords[i].name);
     });
-    const collapsed = result.filter((entry, i) => i === 0 || entry.roman !== result[i - 1].roman);
-    expect(collapsed.map((entry) => entry.roman)).toEqual(['I', 'IV', 'V', 'I']);
+    const collapsed = result.filter(
+      (entry, i) => i === 0 || entry.romanNumeral !== result[i - 1].romanNumeral,
+    );
+    expect(collapsed.map((entry) => entry.romanNumeral)).toEqual(['I', 'IV', 'V', 'I']);
     expect(collapsed.map((entry) => entry.function)).toEqual([
       'tonic',
       'subdominant',
       'dominant',
       'tonic',
     ]);
-    expect(chordFunctions({ chords: detected.chords, key: { root: 'C', mode: 'major' } })).toEqual(
+    expect(chordFunctions({ chords: detected.chords, key: { root: 0, mode: 'major' } })).toEqual(
       result,
     );
   });
 
   it('labels hand-built chords, including unknown and chromatic ones', () => {
-    const chords: (ChordFunctionsInput & { start: number; end: number; confidence: number })[] = [
-      { root: 'A', quality: 'minor', start: 0, end: 1, confidence: 0.9 },
-      { root: 'D', quality: 'minor', start: 1, end: 2, confidence: 0.9 },
-      { root: 'E', quality: 'major', start: 2, end: 3, confidence: 0.9 },
-      { root: 'C', quality: 'unknown', start: 3, end: 4, confidence: 0 },
-      { root: 'A#', quality: 'major', start: 4, end: 5, confidence: 0.9 },
+    const chords: (ChordFunctionsInput & {
+      startSec: number;
+      endSec: number;
+      confidence: number;
+    })[] = [
+      { root: 9, quality: 'minor', startSec: 0, endSec: 1, confidence: 0.9 },
+      { root: 2, quality: 'minor', startSec: 1, endSec: 2, confidence: 0.9 },
+      { root: 4, quality: 'major', startSec: 2, endSec: 3, confidence: 0.9 },
+      { root: 0, quality: 'unknown', startSec: 3, endSec: 4, confidence: 0 },
+      { root: 10, quality: 'major', startSec: 4, endSec: 5, confidence: 0.9 },
     ];
-    const result = chordFunctions({ chords, key: { root: 'A', mode: 'minor' } });
+    const result = chordFunctions({ chords, key: { root: 9, mode: 'minor' } });
     expect(result.map((entry) => entry.function)).toEqual([
       'tonic',
       'subdominant',
@@ -75,19 +81,24 @@ describe('chordFunctions', () => {
       'none',
       'chromatic',
     ]);
-    expect(result[3].roman).toBe('N.C.');
-    expect(result[0]).toMatchObject({ start: 0, end: 1, confidence: 0.9 });
+    expect(result[3].romanNumeral).toBe('N.C.');
+    expect(result[0]).toMatchObject({ startSec: 0, endSec: 1, confidence: 0.9 });
   });
 
   it('refuses an invalid key or chord', () => {
-    expect(() => chordFunctions({ chords: [], key: { root: 'H', mode: 'major' } })).toThrow();
+    expect(() =>
+      chordFunctions({ chords: [], key: { root: 12 as never, mode: 'major' } }),
+    ).toThrow();
+    expect(() =>
+      chordFunctions({ chords: [], key: { root: 'C' as never, mode: 'major' } }),
+    ).toThrow();
     expect(() =>
       chordFunctions({
-        chords: [{ root: 'C', quality: 'bogus' as never }],
-        key: { root: 'C', mode: 'major' },
+        chords: [{ root: 0, quality: 'bogus' as never }],
+        key: { root: 0, mode: 'major' },
       }),
     ).toThrow();
-    expect(chordFunctions({ chords: [], key: { root: 'C', mode: 'major' } })).toEqual([]);
+    expect(chordFunctions({ chords: [], key: { root: 0, mode: 'major' } })).toEqual([]);
   });
 });
 

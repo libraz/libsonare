@@ -53,14 +53,14 @@ describe('detectBoundaries', () => {
     // The analysis grid, not the input's: `frame` indexes this and `frameStride`
     // is what a pooled run coarsens it by.
     const hopSec = (result.hopLength * result.frameStride) / result.sampleRate;
-    const times = result.boundaries.map((boundary) => boundary.time);
+    const times = result.boundaries.map((boundary) => boundary.timeSec);
     expect(times).toHaveLength(2);
     expect(Math.abs((times[0] as number) - SECTION_SEC)).toBeLessThanOrEqual(2 * hopSec);
     expect(Math.abs((times[1] as number) - 2 * SECTION_SEC)).toBeLessThanOrEqual(2 * hopSec);
 
     // `frame` is only interpretable against the analysis rate the result carries.
     for (const boundary of result.boundaries) {
-      expect(boundary.frame * hopSec).toBeCloseTo(boundary.time, 3);
+      expect(boundary.frame * hopSec).toBeCloseTo(boundary.timeSec, 3);
       expect(boundary.strength).toBeGreaterThan(0);
     }
 
@@ -105,7 +105,7 @@ describe('detectBoundaries', () => {
       samples,
       sampleRate: SR,
       absoluteThreshold: 0,
-      referenceWindow: 0,
+      referenceWindowSec: 0,
     });
     expect(unwindowed.boundaries.length).not.toBe(windowed.boundaries.length);
     // The default is 60 s, so stating it changes nothing.
@@ -113,7 +113,7 @@ describe('detectBoundaries', () => {
       samples,
       sampleRate: SR,
       absoluteThreshold: 0,
-      referenceWindow: 60,
+      referenceWindowSec: 60,
     });
     expect(explicit.boundaries).toEqual(windowed.boundaries);
   });
@@ -121,7 +121,7 @@ describe('detectBoundaries', () => {
   it('refuses the options the C ABI refuses', () => {
     const samples0 = noise(SECTION_SEC, 7);
     expect(() =>
-      detectBoundaries({ samples: samples0, sampleRate: SR, referenceWindow: -1 }),
+      detectBoundaries({ samples: samples0, sampleRate: SR, referenceWindowSec: -1 }),
     ).toThrow();
     const samples = noise(SECTION_SEC, 7);
     expect(() => detectBoundaries({ samples, sampleRate: SR, kernelSize: 0 })).toThrow();
@@ -141,7 +141,7 @@ describe('detectBoundaries', () => {
       detectBoundaries({ samples, sampleRate: SR, useMfcc: 1 as unknown as boolean }),
     ).toThrow(/useMfcc/);
     expect(() =>
-      detectBoundaries({ samples, sampleRate: SR, referenceWindow: '60' as unknown as number }),
+      detectBoundaries({ samples, sampleRate: SR, referenceWindowSec: '60' as unknown as number }),
     ).toThrow(/referenceWindow/);
   });
 });

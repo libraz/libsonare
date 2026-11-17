@@ -83,9 +83,9 @@ function expectEdited(out: Float32Array, source: Float32Array): void {
   expect(peak(out)).toBeLessThan(2 * sourcePeak);
 }
 
-/** A sine whose pitch swings `depthCents` either side of `centreHz` at `rateHz`. */
+/** A sine whose pitch swings `depthCents` either side of `centerHz` at `rateHz`. */
 function fmTone(
-  centreHz: number,
+  centerHz: number,
   depthCents: number,
   rateHz: number,
   length: number,
@@ -95,14 +95,14 @@ function fmTone(
   for (let i = 0; i < length; i += 1) {
     samples[i] = 0.4 * Math.sin(phase);
     const cents = depthCents * Math.sin((2 * Math.PI * rateHz * i) / SR);
-    phase += (2 * Math.PI * centreHz * 2 ** (cents / 1200)) / SR;
+    phase += (2 * Math.PI * centerHz * 2 ** (cents / 1200)) / SR;
   }
   return samples;
 }
 
 /** The F0 track describing {@link fmTone} frame by frame. */
 function fmTrack(
-  centreHz: number,
+  centerHz: number,
   depthCents: number,
   rateHz: number,
   frames: number,
@@ -110,7 +110,7 @@ function fmTrack(
   const f0Hz = new Float32Array(frames);
   for (let frame = 0; frame < frames; frame += 1) {
     const cents = depthCents * Math.sin((2 * Math.PI * rateHz * frame) / FRAME_RATE);
-    f0Hz[frame] = centreHz * 2 ** (cents / 1200);
+    f0Hz[frame] = centerHz * 2 ** (cents / 1200);
   }
   return f0Hz;
 }
@@ -182,10 +182,10 @@ describe('extractNotes', () => {
       expect(note.edit).toEqual({
         timeOffsetSamples: 0,
         amplitudeEnvelope: new Float32Array(0),
-        pitchShiftSemitones: 0,
+        pitchSemitones: 0,
         gainDb: 0,
         timeStretchRatio: 1,
-        formantShiftSemitones: 0,
+        formantSemitones: 0,
         vibratoDepthChange: 0,
         driftChange: 0,
         muted: false,
@@ -554,7 +554,7 @@ describe('renderNotes amplitude envelope', () => {
 describe('renderNotes formant shift', () => {
   const samples = vowelTone(200, 1200, SHORT_LENGTH);
 
-  const renderWith = (formantShiftSemitones: number, gainDb: number): Float32Array =>
+  const renderWith = (formantSemitones: number, gainDb: number): Float32Array =>
     renderNotes({
       samples,
       sampleRate: SR,
@@ -563,7 +563,7 @@ describe('renderNotes formant shift', () => {
           onsetSample: 0,
           offsetSample: SHORT_LENGTH,
           medianHz: 200,
-          edit: { formantShiftSemitones, gainDb },
+          edit: { formantSemitones, gainDb },
         },
       ],
     });
@@ -848,7 +848,7 @@ describe('decomposeNotePitch', () => {
   it('splits a curve into two parts that add back up to it', () => {
     const result = decomposeAt(3);
 
-    expect(result.centreHz).toBe(CENTRE);
+    expect(result.centerHz).toBe(CENTRE);
     expect(result.driftCents).toHaveLength(CURVE_FRAMES);
     expect(result.vibratoCents).toHaveLength(CURVE_FRAMES);
 
@@ -887,7 +887,7 @@ describe('decomposeNotePitch', () => {
       }),
       decomposeNotePitch({ f0Hz, frameRate: CURVE_RATE, medianHz: 0 }),
     ]) {
-      expect(empty.centreHz).toBe(0);
+      expect(empty.centerHz).toBe(0);
       expect(empty.driftCents).toHaveLength(0);
       expect(empty.vibratoCents).toHaveLength(0);
     }
@@ -919,7 +919,7 @@ describe('decomposeNotePitch', () => {
       const track = Float32Array.from(f0Hz);
       track[7] = noPitch;
       expect(
-        decomposeNotePitch({ f0Hz: track, frameRate: CURVE_RATE, medianHz: CENTRE }).centreHz,
+        decomposeNotePitch({ f0Hz: track, frameRate: CURVE_RATE, medianHz: CENTRE }).centerHz,
       ).toBeGreaterThan(0);
     }
   });
@@ -957,7 +957,7 @@ describe('decomposeNotePitch', () => {
       frameRate: CURVE_RATE,
       medianHz: CENTRE,
     });
-    expect(withMask.centreHz).toBeCloseTo(zeroedBaseline.centreHz, 6);
+    expect(withMask.centerHz).toBeCloseTo(zeroedBaseline.centerHz, 6);
     expect(maxDifference(withMask.driftCents, zeroedBaseline.driftCents)).toBeLessThan(1e-6);
     expect(maxDifference(withMask.vibratoCents, zeroedBaseline.vibratoCents)).toBeLessThan(1e-6);
     expect(unmasked).not.toEqual(zeroedBaseline);
@@ -968,7 +968,7 @@ describe('decomposeNotePitch', () => {
         frameRate: CURVE_RATE,
         medianHz: CENTRE,
       });
-      expect(result.centreHz).toBeCloseTo(zeroedBaseline.centreHz, 6);
+      expect(result.centerHz).toBeCloseTo(zeroedBaseline.centerHz, 6);
       expect(maxDifference(result.driftCents, zeroedBaseline.driftCents)).toBeLessThan(1e-6);
       expect(maxDifference(result.vibratoCents, zeroedBaseline.vibratoCents)).toBeLessThan(1e-6);
     }
@@ -988,7 +988,7 @@ describe('decomposeNotePitch', () => {
       frameRate: CURVE_RATE,
       medianHz: CENTRE,
     });
-    expect(sliced.centreHz).toBeCloseTo(withMask.centreHz, 6);
+    expect(sliced.centerHz).toBeCloseTo(withMask.centerHz, 6);
     expect(maxDifference(sliced.driftCents, withMask.driftCents)).toBeLessThan(1e-6);
     expect(maxDifference(sliced.vibratoCents, withMask.vibratoCents)).toBeLessThan(1e-6);
   });
@@ -1259,14 +1259,14 @@ describe('splitNote and mergeNotes', () => {
     const source = gappedSource();
     const notes = extractNotes(source);
     notes[0].edit.gainDb = -3;
-    notes[0].edit.pitchShiftSemitones = 2;
+    notes[0].edit.pitchSemitones = 2;
     notes[0].edit.amplitudeEnvelope = Float32Array.from([0.5]);
     notes[1].edit.gainDb = 9;
     notes[1].edit.muted = true;
 
     const merged = mergeNotes({ ...source, notes, first: 0, last: 1 });
     expect(merged[0].edit.gainDb).toBe(-3);
-    expect(merged[0].edit.pitchShiftSemitones).toBe(2);
+    expect(merged[0].edit.pitchSemitones).toBe(2);
     expect(merged[0].edit.amplitudeEnvelope).toEqual(Float32Array.from([0.5]));
     // The second note's edit does not survive: the rule is the first note's
     // edit, not a merge of the two.

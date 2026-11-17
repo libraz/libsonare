@@ -66,6 +66,8 @@ import {
 
 const SR = 22050;
 
+const matrix = (data: Float32Array, rows: number, cols: number) => ({ data, rows, cols });
+
 function generateSine(freq: number, sr: number, duration: number, amp = 1): Float32Array {
   const n = Math.floor(sr * duration);
   const samples = new Float32Array(n);
@@ -79,73 +81,74 @@ describe('effects', () => {
   const tone = generateSine(440, SR, 1.0);
 
   it('melDelta returns the slope of a linear feature row', () => {
-    const result = melDelta(new Float32Array([0, 1, 2, 3, 4, 5, 6, 7, 8, 9]), 2, 5, 5);
-    expect([...result]).toEqual(Array(10).fill(1));
+    const result = melDelta({
+      features: matrix(new Float32Array([0, 1, 2, 3, 4, 5, 6, 7, 8, 9]), 2, 5),
+      width: 5,
+    });
+    expect([...result.data]).toEqual(Array(10).fill(1));
   });
 
   it('piptrack returns equally shaped pitch and magnitude matrices', () => {
-    const result = piptrack(tone, SR, 1024, 256, 100, 1000);
-    expect(result.nBins).toBe(513);
-    expect(result.pitches.length).toBe(result.nBins * result.nFrames);
-    expect(result.magnitudes.length).toBe(result.pitches.length);
+    const result = piptrack(tone, SR, { nFft: 1024, hopLength: 256, fminHz: 100, fmaxHz: 1000 });
+    expect(result.pitches.rows).toBe(513);
+    expect(result.pitches.data.length).toBe(result.pitches.rows * result.pitches.cols);
+    expect(result.magnitudes.rows).toBe(result.pitches.rows);
+    expect(result.magnitudes.cols).toBe(result.pitches.cols);
+    expect(result.magnitudes.data.length).toBe(result.pitches.data.length);
   });
 
   it('reassignedSpectrogram returns equally shaped coordinate matrices', () => {
-    const result = reassignedSpectrogram(tone, SR, 1024, 256);
-    expect(result.nBins).toBe(513);
-    expect(result.nFrames).toBeGreaterThan(0);
-    expect(result.times.length).toBe(result.nBins * result.nFrames);
-    expect(result.frequencies.length).toBe(result.times.length);
-    expect(result.magnitude.length).toBe(result.times.length);
+    const result = reassignedSpectrogram(tone, SR, { nFft: 1024, hopLength: 256 });
+    const { rows, cols } = result.magnitude;
+    expect(rows).toBe(513);
+    expect(cols).toBeGreaterThan(0);
+    expect(result.times.data.length).toBe(rows * cols);
+    expect(result.frequencies.data.length).toBe(rows * cols);
+    expect(result.magnitude.data.length).toBe(rows * cols);
+    expect([result.times.rows, result.times.cols]).toEqual([rows, cols]);
+    expect([result.frequencies.rows, result.frequencies.cols]).toEqual([rows, cols]);
   });
 
   it('segmentCrossSimilarity returns a matrix with the requested column shape', () => {
     const result = segmentCrossSimilarity({
-      x: new Float32Array([1, 0, 1, 0, 1, 1]),
-      xRows: 2,
-      xCols: 3,
-      y: new Float32Array([1, 1, 0, 0, 1, 1]),
-      yRows: 2,
-      yCols: 3,
+      x: matrix(new Float32Array([1, 0, 1, 0, 1, 1]), 2, 3),
+      y: matrix(new Float32Array([1, 1, 0, 0, 1, 1]), 2, 3),
     });
     expect(result.rows).toBe(3);
     expect(result.cols).toBe(3);
-    expect(result.values).toHaveLength(9);
+    expect(result.data).toHaveLength(9);
   });
 
   it('exposes the remaining librosa.segment operations', () => {
     const data = new Float32Array([1, 0, 1, 0, 1, 1]);
-    const recurrence = segmentRecurrenceMatrix({ data, rows: 2, cols: 3 });
-    expect(recurrence.values).toHaveLength(9);
-    const lag = segmentRecurrenceToLag({ recurrence: recurrence.values, n: 3, pad: true });
+    const features = matrix(data, 2, 3);
+    const recurrence = segmentRecurrenceMatrix({ data: features });
+    expect(recurrence.data).toHaveLength(9);
+    const lag = segmentRecurrenceToLag({ recurrence, pad: true });
     expect(lag.rows).toBe(6);
     expect(lag.cols).toBe(3);
-    expect(segmentLagToRecurrence({ lag: lag.values, rows: 3, lags: 6 }).values).toHaveLength(9);
+    expect(segmentLagToRecurrence({ lag }).data).toHaveLength(9);
     // librosa 0.11.0 recurrence_to_lag on rec[r][c] = 4r + c: pad defaults to true, lag-by-time.
     const asymmetric = Float32Array.from({ length: 16 }, (_, i) => i);
-    const padded = segmentRecurrenceToLag({ recurrence: asymmetric, n: 4 });
+    const padded = segmentRecurrenceToLag({ recurrence: matrix(asymmetric, 4, 4) });
     expect(padded.rows).toBe(8);
     expect(padded.cols).toBe(4);
-    expect(Array.from(padded.values)).toEqual([
+    expect(Array.from(padded.data)).toEqual([
       0, 5, 10, 15, 4, 9, 14, 0, 8, 13, 0, 0, 12, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 3, 0, 0, 2, 7, 0, 1,
       6, 11,
     ]);
-    expect(
-      Array.from(segmentLagToRecurrence({ lag: padded.values, rows: 4, lags: 8 }).values),
-    ).toEqual(Array.from(asymmetric));
-    expect(
-      segmentSubsegment({ data, rows: 2, cols: 3, boundaries: new Int32Array([0, 3]) })[0],
-    ).toBe(0);
-    expect(segmentAgglomerative({ data, rows: 2, cols: 3, k: 2 })).toHaveLength(3);
-    expect(segmentPathEnhance({ recurrence: recurrence.values, n: 3, win: 1 }).values).toHaveLength(
-      9,
+    expect(Array.from(segmentLagToRecurrence({ lag: padded }).data)).toEqual(
+      Array.from(asymmetric),
     );
+    expect(segmentSubsegment({ data: features, boundaries: new Int32Array([0, 3]) })[0]).toBe(0);
+    expect(segmentAgglomerative({ data: features, k: 2 })).toHaveLength(3);
+    expect(segmentPathEnhance({ recurrence, win: 1 }).data).toHaveLength(9);
   });
 
   it('refuses a feature matrix the segment primitives cannot order', () => {
     // These entries take a feature matrix rather than audio, so nothing upstream
     // has checked it, and one non-finite cell poisons every distance drawn from
-    // its column. The addon checks dimensions only, so the refusal is the core's.
+    // its column. The facade scans the matrix and names the offending index.
     const rows = 4;
     const cols = 64;
     const clean = new Float32Array(rows * cols);
@@ -155,32 +158,33 @@ describe('effects', () => {
     const poisoned = Float32Array.from(clean);
     poisoned[30] = Number.NaN;
 
-    expect(() => segmentRecurrenceMatrix({ data: poisoned, rows, cols })).toThrow(/non-finite/);
+    const poisonedMatrix = matrix(poisoned, rows, cols);
+    const cleanMatrix = matrix(clean, rows, cols);
+
+    expect(() => segmentRecurrenceMatrix({ data: poisonedMatrix })).toThrow(
+      /data\.data contains NaN or Inf at index 30/,
+    );
+    expect(() => segmentCrossSimilarity({ x: poisonedMatrix, y: cleanMatrix })).toThrow(
+      /x\.data contains NaN or Inf at index 30/,
+    );
     expect(() =>
-      segmentCrossSimilarity({
-        x: poisoned,
-        xRows: rows,
-        xCols: cols,
-        y: clean,
-        yRows: rows,
-        yCols: cols,
-      }),
-    ).toThrow(/non-finite/);
-    expect(() =>
-      segmentSubsegment({ data: poisoned, rows, cols, boundaries: new Int32Array([0, 32]) }),
-    ).toThrow(/non-finite/);
-    expect(() => segmentAgglomerative({ data: poisoned, rows, cols, k: 2 })).toThrow(/non-finite/);
+      segmentSubsegment({ data: poisonedMatrix, boundaries: new Int32Array([0, 32]) }),
+    ).toThrow(/data\.data contains NaN or Inf at index 30/);
+    expect(() => segmentAgglomerative({ data: poisonedMatrix, k: 2 })).toThrow(
+      /data\.data contains NaN or Inf at index 30/,
+    );
 
     // The same matrix without the one cell is accepted and every output is a
     // number, so the refusals above are not a dimension check firing.
-    const accepted = segmentRecurrenceMatrix({ data: clean, rows, cols });
-    expect(accepted.values).toHaveLength(cols * cols);
-    expect(accepted.values.every((v) => Number.isFinite(v))).toBe(true);
+    const accepted = segmentRecurrenceMatrix({ data: cleanMatrix });
+    expect(accepted.data).toHaveLength(cols * cols);
+    expect(accepted.data.every((v) => Number.isFinite(v))).toBe(true);
 
-    // The reshaping entries carry the caller's own value instead of refusing it:
-    // they derive no distance from the matrix and so have no ordering to protect.
-    const lag = segmentRecurrenceToLag({ recurrence: poisoned, n: 16, pad: false });
-    expect(lag.values.some((v) => Number.isNaN(v))).toBe(true);
+    // The reshaping entries scan their matrix too, so a poisoned cell is refused
+    // there as well instead of being carried into the result.
+    expect(() =>
+      segmentRecurrenceToLag({ recurrence: matrix(poisoned, 16, 16), pad: false }),
+    ).toThrow(/recurrence\.data contains NaN or Inf at index 30/);
   });
 
   it('hpss returns harmonic and percussive', () => {
@@ -411,110 +415,93 @@ describe('features', () => {
   const tone = generateSine(440, SR, 1.0);
 
   it('accepts request objects for transform and feature extraction APIs', () => {
-    const positionalStft = stft(tone, SR, 512, 128);
+    const positionalStft = stft(tone, SR, { nFft: 512, hopLength: 128 });
     const requestedStft = stft({ samples: tone, sampleRate: SR, nFft: 512, hopLength: 128 });
     expect(requestedStft.magnitude).toEqual(positionalStft.magnitude);
 
-    const positionalMel = melSpectrogram(tone, SR, 512, 128, 24, 80, 6000, true);
-    const requestedMel = melSpectrogram({
-      samples: tone,
-      sampleRate: SR,
+    const melOptions = {
       nFft: 512,
       hopLength: 128,
       nMels: 24,
-      fmin: 80,
-      fmax: 6000,
+      fminHz: 80,
+      fmaxHz: 6000,
       htk: true,
-    });
+    };
+    const positionalMel = melSpectrogram(tone, SR, melOptions);
+    const requestedMel = melSpectrogram({ samples: tone, sampleRate: SR, ...melOptions });
     expect(requestedMel.power).toEqual(positionalMel.power);
 
-    const positionalMfcc = mfcc(tone, SR, 512, 128, 24, 10, 80, 6000, true, 4);
-    const requestedMfcc = mfcc({
-      samples: tone,
-      sampleRate: SR,
-      nFft: 512,
-      hopLength: 128,
-      nMels: 24,
-      nMfcc: 10,
-      fmin: 80,
-      fmax: 6000,
-      htk: true,
-      lifter: 4,
-    });
+    const mfccOptions = { ...melOptions, nMfcc: 10, lifter: 4 };
+    const positionalMfcc = mfcc(tone, SR, mfccOptions);
+    const requestedMfcc = mfcc({ samples: tone, sampleRate: SR, ...mfccOptions });
     expect(requestedMfcc.coefficients).toEqual(positionalMfcc.coefficients);
 
-    const positionalCqt = cqt(tone, SR, 128, 130.8128, 12, 12);
-    const requestedCqt = cqt({
-      samples: tone,
-      sampleRate: SR,
-      hopLength: 128,
-      fmin: 130.8128,
-      nBins: 12,
-      binsPerOctave: 12,
-    });
+    const cqtOptions = { hopLength: 128, fminHz: 130.8128, nBins: 12, binsPerOctave: 12 };
+    const positionalCqt = cqt(tone, SR, cqtOptions);
+    const requestedCqt = cqt({ samples: tone, sampleRate: SR, ...cqtOptions });
     expect(requestedCqt.magnitude).toEqual(positionalCqt.magnitude);
 
     expect(spectralCentroid({ samples: tone, sampleRate: SR, nFft: 512, hopLength: 128 })).toEqual(
-      spectralCentroid(tone, SR, 512, 128),
+      spectralCentroid(tone, SR, { nFft: 512, hopLength: 128 }),
     );
+    const yinOptions = {
+      frameLength: 512,
+      hopLength: 128,
+      f0MinHz: 80,
+      f0MaxHz: 1000,
+      threshold: 0.2,
+      fillNa: true,
+    };
+    expect(pitchYin({ samples: tone, sampleRate: SR, ...yinOptions }).f0).toEqual(
+      pitchYin(tone, SR, yinOptions).f0,
+    );
+    expect(framesToTime(8, SR, 128)).toBeCloseTo((8 * 128) / SR, 6);
+    const db = powerToDb({ values: new Float32Array([0.25]), ref: 0.5, amin: 1e-8, topDb: 60 });
+    expect(db[0]).toBeCloseTo(10 * Math.log10(0.25 / 0.5), 4);
     expect(
-      pitchYin({
-        samples: tone,
-        sampleRate: SR,
-        frameLength: 512,
-        hopLength: 128,
-        fmin: 80,
-        fmax: 1000,
-        threshold: 0.2,
-        fillNa: true,
-      }).f0,
-    ).toEqual(pitchYin(tone, SR, 512, 128, 80, 1000, 0.2, true).f0);
-    expect(framesToTime({ frames: 8, sr: SR, hopLength: 128 })).toBe(framesToTime(8, SR, 128));
-    expect(
-      powerToDb({ values: new Float32Array([0.25]), ref: 0.5, amin: 1e-8, topDb: 60 }),
-    ).toEqual(powerToDb(new Float32Array([0.25]), 0.5, 1e-8, 60));
-    expect(
-      trimSilence({ samples: tone, topDb: 40, frameLength: 512, hopLength: 128 }).audio,
-    ).toEqual(trimSilence(tone, 40, 512, 128).audio);
+      trimSilence({ samples: tone, sampleRate: SR, topDb: 40, frameLength: 512, hopLength: 128 })
+        .audio,
+    ).toEqual(trimSilence(tone, SR, { topDb: 40, frameLength: 512, hopLength: 128 }).audio);
   });
 
   it('stft returns magnitude and power', () => {
-    const result = stft(tone, SR, 2048, 512);
-    expect(result.nBins).toBe(1025);
-    expect(result.nFrames).toBeGreaterThan(0);
-    expect(result.magnitude).toBeInstanceOf(Float32Array);
-    expect(result.power).toBeInstanceOf(Float32Array);
-    expect(result.magnitude.length).toBe(result.nBins * result.nFrames);
+    const result = stft(tone, SR, { nFft: 2048, hopLength: 512 });
+    expect(result.magnitude.rows).toBe(1025);
+    expect(result.magnitude.cols).toBeGreaterThan(0);
+    expect(result.magnitude.data).toBeInstanceOf(Float32Array);
+    expect(result.power.data).toBeInstanceOf(Float32Array);
+    expect(result.magnitude.data.length).toBe(result.magnitude.rows * result.magnitude.cols);
   });
 
   it('stftDb returns dB values', () => {
-    const result = stftDb(tone, SR, 2048, 512);
-    expect(result.nBins).toBe(1025);
-    expect(result.db).toBeInstanceOf(Float32Array);
-    for (let i = 0; i < result.db.length; i++) {
-      expect(Number.isFinite(result.db[i])).toBe(true);
+    const result = stftDb(tone, SR, { nFft: 2048, hopLength: 512 });
+    expect(result.rows).toBe(1025);
+    expect(result.data).toBeInstanceOf(Float32Array);
+    for (let i = 0; i < result.data.length; i++) {
+      expect(Number.isFinite(result.data[i])).toBe(true);
     }
     expect(stftDb({ samples: tone, sampleRate: SR, nFft: 2048, hopLength: 512 })).toEqual(result);
   });
 
   it('melSpectrogram returns power and dB', () => {
-    const result = melSpectrogram(tone, SR, 2048, 512, 128);
-    expect(result.nMels).toBe(128);
-    expect(result.nFrames).toBeGreaterThan(0);
-    expect(result.power).toBeInstanceOf(Float32Array);
-    expect(result.db).toBeInstanceOf(Float32Array);
+    const result = melSpectrogram(tone, SR, { nFft: 2048, hopLength: 512, nMels: 128 });
+    expect(result.power.rows).toBe(128);
+    expect(result.power.cols).toBeGreaterThan(0);
+    expect(result.power.data).toBeInstanceOf(Float32Array);
+    expect(result.db.data).toBeInstanceOf(Float32Array);
   });
 
-  it('melSpectrogram honours an explicit Mel range (fmin/fmax/htk)', () => {
-    const base = melSpectrogram(tone, SR, 2048, 512, 40);
-    const ranged = melSpectrogram(tone, SR, 2048, 512, 40, 500, 4000);
-    const htk = melSpectrogram(tone, SR, 2048, 512, 40, 0, 0, true);
-    expect(ranged.power.length).toBe(base.power.length);
+  it('melSpectrogram honours an explicit Mel range (fminHz/fmaxHz/htk)', () => {
+    const framing = { nFft: 2048, hopLength: 512, nMels: 40 };
+    const base = melSpectrogram(tone, SR, framing);
+    const ranged = melSpectrogram(tone, SR, { ...framing, fminHz: 500, fmaxHz: 4000 });
+    const htk = melSpectrogram(tone, SR, { ...framing, htk: true });
+    expect(ranged.power.data.length).toBe(base.power.data.length);
     let dRange = 0;
     let dHtk = 0;
-    for (let i = 0; i < base.power.length; i++) {
-      dRange += (base.power[i] - ranged.power[i]) ** 2;
-      dHtk += (base.power[i] - htk.power[i]) ** 2;
+    for (let i = 0; i < base.power.data.length; i++) {
+      dRange += (base.power.data[i] - ranged.power.data[i]) ** 2;
+      dHtk += (base.power.data[i] - htk.power.data[i]) ** 2;
     }
     expect(dRange).toBeGreaterThan(1e-6);
     expect(dHtk).toBeGreaterThan(1e-6);
@@ -524,44 +511,77 @@ describe('features', () => {
     const nFft = 1024;
     const hop = 256;
     const nMels = 40;
-    const mel = melSpectrogram(tone, SR, nFft, hop, nMels, 0, 0, true);
-    const slaney = melToStft(mel.power, nMels, mel.nFrames, SR, nFft, 0, 0, false);
-    const htk = melToStft(mel.power, nMels, mel.nFrames, SR, nFft, 0, 0, true);
+    const mel = melSpectrogram(tone, SR, { nFft, hopLength: hop, nMels, htk: true });
+    const slaney = melToStft({ power: mel.power, sampleRate: SR, nFft, htk: false });
+    const htk = melToStft({ power: mel.power, sampleRate: SR, nFft, htk: true });
 
-    expect(htk.nBins).toBe(nFft / 2 + 1);
-    expect(htk.nFrames).toBe(mel.nFrames);
+    expect(htk.rows).toBe(nFft / 2 + 1);
+    expect(htk.cols).toBe(mel.power.cols);
     let diff = 0;
-    for (let i = 0; i < htk.magnitude.length; i++) {
-      expect(Number.isFinite(htk.magnitude[i])).toBe(true);
-      diff += (slaney.magnitude[i] - htk.magnitude[i]) ** 2;
+    for (let i = 0; i < htk.data.length; i++) {
+      expect(Number.isFinite(htk.data[i])).toBe(true);
+      diff += (slaney.data[i] - htk.data[i]) ** 2;
     }
     expect(diff).toBeGreaterThan(1e-6);
   });
 
   it('inverse feature wrappers reject non-finite matrices', () => {
-    // The rejection comes from the core transform, so the message names the
-    // core function and its argument rather than the addon wrapper.
-    const mel = new Float32Array(8 * 4).fill(0.1);
-    mel[3] = Number.NaN;
-    expect(() => melToStft(mel, 8, 4, SR, 256)).toThrow(
+    // The facade names the offending index; with its scan off, the core transform
+    // refuses with its own function and argument name.
+    const melData = new Float32Array(8 * 4).fill(0.1);
+    melData[3] = Number.NaN;
+    const mel = matrix(melData, 8, 4);
+    expect(() => melToStft({ power: mel, sampleRate: SR, nFft: 256 })).toThrow(
+      /melToStft: power\.data contains NaN or Inf at index 3/,
+    );
+    expect(() => melToStft({ power: mel, sampleRate: SR, nFft: 256, validate: false })).toThrow(
       /mel_to_stft: M contains a non-finite value/,
     );
-    expect(() => melToAudio(mel, 8, 4, SR, 256, 64, 0, 0, 2)).toThrow(/non-finite value/);
+    expect(() =>
+      melToAudio({
+        power: mel,
+        sampleRate: SR,
+        nFft: 256,
+        hopLength: 64,
+        nIter: 2,
+        validate: false,
+      }),
+    ).toThrow(/non-finite value/);
 
-    const mfccCoeffs = new Float32Array(5 * 4).fill(0.1);
-    mfccCoeffs[7] = Number.POSITIVE_INFINITY;
-    expect(() => mfccToMel(mfccCoeffs, 5, 4, 8)).toThrow(
+    const coeffData = new Float32Array(5 * 4).fill(0.1);
+    coeffData[7] = Number.POSITIVE_INFINITY;
+    const mfccCoeffs = matrix(coeffData, 5, 4);
+    expect(() => mfccToMel({ coefficients: mfccCoeffs, nMels: 8 })).toThrow(
+      /mfccToMel: coefficients\.data contains NaN or Inf at index 7/,
+    );
+    expect(() => mfccToMel({ coefficients: mfccCoeffs, nMels: 8, validate: false })).toThrow(
       /mfcc_to_mel: mfcc contains a non-finite value/,
     );
-    expect(() => mfccToAudio(mfccCoeffs, 5, 4, 8, SR, 256, 64, 0, 0, 2)).toThrow(
-      /non-finite value/,
-    );
+    expect(() =>
+      mfccToAudio({
+        coefficients: mfccCoeffs,
+        nMels: 8,
+        sampleRate: SR,
+        nFft: 256,
+        hopLength: 64,
+        nIter: 2,
+        validate: false,
+      }),
+    ).toThrow(/non-finite value/);
 
     const magnitude = new Float32Array(3 * 5).fill(1);
     magnitude[4] = Number.NaN;
-    expect(() => griffinLim(magnitude, 3, 5, SR, 4, 1, 1, 0)).toThrow(
-      /griffin_lim: magnitude contains a non-finite value/,
-    );
+    expect(() =>
+      griffinLim({
+        magnitude: matrix(magnitude, 3, 5),
+        sampleRate: SR,
+        nFft: 4,
+        hopLength: 1,
+        nIter: 1,
+        momentum: 0,
+        validate: false,
+      }),
+    ).toThrow(/griffin_lim: magnitude contains a non-finite value/);
   });
 
   it('passes the forward lifter back to MFCC inversion', () => {
@@ -570,70 +590,108 @@ describe('features', () => {
       const lift = 1 + 11 * Math.sin((Math.PI * coefficient) / 22);
       lifted.fill((0.2 + 0.1 * coefficient) * lift, coefficient * 4, coefficient * 4 + 4);
     }
-    const restored = mfccToMel(lifted, 5, 4, 8, 22);
-    const untreated = mfccToMel(lifted, 5, 4, 8);
+    const coefficients = matrix(lifted, 5, 4);
+    const restored = mfccToMel({ coefficients, nMels: 8, lifter: 22 });
+    const untreated = mfccToMel({ coefficients, nMels: 8 });
     expect(
-      restored.power.some((value, index) => Math.abs(value - untreated.power[index]) > 1e-5),
+      restored.data.some((value, index) => Math.abs(value - untreated.data[index]) > 1e-5),
     ).toBe(true);
   });
 
   it('reconstructs CQT and VQT magnitudes with shape validation', () => {
     // Shared deterministic oracle fixture with Python/WASM.
     const source = generateSine(261.6256, 8000, 0.256, 0.5);
-    const cq = cqt(source, 8000, 128, 130.8128, 12, 12);
-    const cqtAudio = cqtToAudio(cq.magnitude, cq.nBins, cq.nFrames, 8000, 128, 130.8128, 12, 2);
+    const cq = cqt(source, 8000, {
+      hopLength: 128,
+      fminHz: 130.8128,
+      nBins: 12,
+      binsPerOctave: 12,
+    });
+    const cqtAudio = cqtToAudio({
+      magnitude: cq.magnitude,
+      sampleRate: 8000,
+      hopLength: 128,
+      fminHz: 130.8128,
+      binsPerOctave: 12,
+      nIter: 2,
+    });
     expect(cqtAudio.length).toBe(source.length);
     expect(Array.from(cqtAudio).every(Number.isFinite)).toBe(true);
     expect(Math.max(...cqtAudio.map(Math.abs))).toBeGreaterThan(1e-5);
 
-    const vq = vqt(source, 8000, 128, 130.8128, 12, 12, 0);
-    const vqtAudio = vqtToAudio(vq.magnitude, vq.nBins, vq.nFrames, 8000, 128, 130.8128, 12, 0, 2);
+    const vq = vqt(source, 8000, {
+      hopLength: 128,
+      fminHz: 130.8128,
+      nBins: 12,
+      binsPerOctave: 12,
+      gamma: 0,
+    });
+    const vqtAudio = vqtToAudio({
+      magnitude: vq.magnitude,
+      sampleRate: 8000,
+      hopLength: 128,
+      fminHz: 130.8128,
+      binsPerOctave: 12,
+      gamma: 0,
+      nIter: 2,
+    });
     expect(vqtAudio.length).toBe(source.length);
     expect(Array.from(vqtAudio).every(Number.isFinite)).toBe(true);
-    expect(() => cqtToAudio(cq.magnitude.subarray(1), cq.nBins, cq.nFrames)).toThrow();
+    const truncated = { ...cq.magnitude, data: cq.magnitude.data.subarray(1) };
+    expect(() => cqtToAudio({ magnitude: truncated })).toThrow();
     expect(() =>
-      vqtToAudio(vq.magnitude, vq.nBins, vq.nFrames, 8000, 128, 130.8128, 12, 0, 257),
+      vqtToAudio({
+        magnitude: vq.magnitude,
+        sampleRate: 8000,
+        hopLength: 128,
+        fminHz: 130.8128,
+        binsPerOctave: 12,
+        gamma: 0,
+        nIter: 257,
+      }),
     ).toThrow();
   });
 
   it('mfcc returns coefficients', () => {
-    const result = mfcc(tone, SR, 2048, 512, 64, 20);
-    expect(result.nMfcc).toBe(20);
-    expect(result.nFrames).toBeGreaterThan(0);
-    expect(result.coefficients).toBeInstanceOf(Float32Array);
-    expect(result.coefficients.length).toBe(result.nMfcc * result.nFrames);
+    const result = mfcc(tone, SR, { nFft: 2048, hopLength: 512, nMels: 64, nMfcc: 20 });
+    const { rows, cols, data } = result.coefficients;
+    expect(rows).toBe(20);
+    expect(cols).toBeGreaterThan(0);
+    expect(data).toBeInstanceOf(Float32Array);
+    expect(data.length).toBe(rows * cols);
   });
 
-  it('mfcc honours an explicit Mel range (fmin/fmax)', () => {
-    const base = mfcc(tone, SR, 2048, 512, 64, 13);
-    const ranged = mfcc(tone, SR, 2048, 512, 64, 13, 500, 4000);
-    expect(ranged.coefficients.length).toBe(base.coefficients.length);
+  it('mfcc honours an explicit Mel range (fminHz/fmaxHz)', () => {
+    const framing = { nFft: 2048, hopLength: 512, nMels: 64, nMfcc: 13 };
+    const base = mfcc(tone, SR, framing);
+    const ranged = mfcc(tone, SR, { ...framing, fminHz: 500, fmaxHz: 4000 });
+    expect(ranged.coefficients.data.length).toBe(base.coefficients.data.length);
     let d = 0;
-    for (let i = 0; i < base.coefficients.length; i++) {
-      d += (base.coefficients[i] - ranged.coefficients[i]) ** 2;
+    for (let i = 0; i < base.coefficients.data.length; i++) {
+      d += (base.coefficients.data[i] - ranged.coefficients.data[i]) ** 2;
     }
     expect(d).toBeGreaterThan(1e-6);
   });
 
   it('mfcc defaults nMfcc to 20', () => {
-    const result = mfcc(tone, SR, 2048, 512, 64);
-    expect(result.nMfcc).toBe(20);
+    const result = mfcc(tone, SR, { nFft: 2048, hopLength: 512, nMels: 64 });
+    expect(result.coefficients.rows).toBe(20);
   });
 
   it('chroma returns 12 pitch classes', () => {
-    const result = chroma(tone, SR, 2048, 512);
-    expect(result.nChroma).toBe(12);
-    expect(result.nFrames).toBeGreaterThan(0);
-    expect(result.features).toBeInstanceOf(Float32Array);
+    const result = chroma(tone, SR, { nFft: 2048, hopLength: 512 });
+    expect(result.features.rows).toBe(12);
+    expect(result.features.cols).toBeGreaterThan(0);
+    expect(result.features.data).toBeInstanceOf(Float32Array);
     expect(result.meanEnergy.length).toBe(12);
   });
 
   it('chromaCens and bassChroma return 12 pitch classes', () => {
     for (const result of [chromaCens(tone, SR), bassChroma(tone, SR)]) {
-      expect(result.nChroma).toBe(12);
-      expect(result.nFrames).toBeGreaterThan(0);
-      expect(result.features).toBeInstanceOf(Float32Array);
-      expect(result.features.length).toBe(result.nChroma * result.nFrames);
+      expect(result.features.rows).toBe(12);
+      expect(result.features.cols).toBeGreaterThan(0);
+      expect(result.features.data).toBeInstanceOf(Float32Array);
+      expect(result.features.data.length).toBe(result.features.rows * result.features.cols);
       expect(result.meanEnergy.length).toBe(12);
     }
   });
@@ -645,8 +703,8 @@ describe('features', () => {
     for (const variant of [chromaCens, chromaCqt]) {
       const base = variant({ samples: tone, sampleRate: SR });
       const coarser = variant({ samples: tone, sampleRate: SR, binsPerOctave: 12 });
-      expect(coarser.features.length).toBe(base.features.length);
-      expect(Array.from(coarser.features)).not.toEqual(Array.from(base.features));
+      expect(coarser.features.data.length).toBe(base.features.data.length);
+      expect(Array.from(coarser.features.data)).not.toEqual(Array.from(base.features.data));
     }
   });
 
@@ -660,7 +718,7 @@ describe('features', () => {
     const result = spectralBandwidth(tone, SR);
     expect(result).toBeInstanceOf(Float32Array);
     expect(result.length).toBeGreaterThan(0);
-    expect(spectralBandwidth(tone, SR, 2048, 512, 1)).not.toEqual(result);
+    expect(spectralBandwidth(tone, SR, { nFft: 2048, hopLength: 512, p: 1 })).not.toEqual(result);
   });
 
   it('spectralRolloff returns Float32Array', () => {
@@ -679,7 +737,7 @@ describe('features', () => {
     const result = spectralFlux(tone, SR);
     expect(result).toBeInstanceOf(Float32Array);
     expect(result.length).toBeGreaterThan(0);
-    expect(spectralFlux(tone, SR, 2048, 512, 2)).not.toEqual(result);
+    expect(spectralFlux(tone, SR, { nFft: 2048, hopLength: 512, lag: 2 })).not.toEqual(result);
     expect(
       spectralFlux({ samples: tone, sampleRate: SR, nFft: 2048, hopLength: 512, lag: 1 }),
     ).toEqual(result);
@@ -693,22 +751,25 @@ describe('features', () => {
 
   it('onsetBacktrack returns preceding energy minima', () => {
     expect(
-      Array.from(onsetBacktrack([6], new Float32Array([1, 0.8, 0.5, 0.2, 0.6, 0.9, 1.2]))),
+      Array.from(
+        onsetBacktrack({
+          events: [6],
+          energy: new Float32Array([1, 0.8, 0.5, 0.2, 0.6, 0.9, 1.2]),
+        }),
+      ),
     ).toEqual([3]);
   });
 
   it('griffinLim reconstructs STFT magnitude', () => {
-    const spectrum = stft(tone, SR, 1024, 256);
-    const result = griffinLim(
-      spectrum.magnitude,
-      spectrum.nBins,
-      spectrum.nFrames,
-      SR,
-      1024,
-      256,
-      1,
-      0,
-    );
+    const spectrum = stft(tone, SR, { nFft: 1024, hopLength: 256 });
+    const result = griffinLim({
+      magnitude: spectrum.magnitude,
+      sampleRate: SR,
+      nFft: 1024,
+      hopLength: 256,
+      nIter: 1,
+      momentum: 0,
+    });
     expect(result).toBeInstanceOf(Float32Array);
     expect(result.length).toBeGreaterThan(0);
   });
@@ -756,15 +817,15 @@ describe('features', () => {
     expect(segments[0]).toMatchObject({
       frameStart: 0,
       frameEnd: 5,
-      startSeconds: 0,
+      startSec: 0,
     });
     expect(segments[1]).toMatchObject({
       frameStart: 7,
       frameEnd: 12,
     });
-    expect(segments[0].endSeconds).toBeCloseTo(0.05);
-    expect(segments[1].startSeconds).toBeCloseTo(0.07);
-    expect(segments[1].endSeconds).toBeCloseTo(0.12);
+    expect(segments[0].endSec).toBeCloseTo(0.05);
+    expect(segments[1].startSec).toBeCloseTo(0.07);
+    expect(segments[1].endSec).toBeCloseTo(0.12);
   });
 });
 

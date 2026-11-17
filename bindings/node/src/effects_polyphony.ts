@@ -1,3 +1,4 @@
+import { nativeEdit, publicNote } from './internal/effects_common.js';
 import { addon } from './native.js';
 import type {
   NoteEditInput,
@@ -7,10 +8,12 @@ import type {
 } from './types.js';
 import {
   assertAudioInput,
+  assertFiniteScalar,
+  assertFloatValue,
   assertInt32,
   assertInt64,
-  requestObject,
   resolveSampleBound,
+  sampleOneShot,
 } from './validation.js';
 
 /** Audio, its sample rate, and the analysis tuning, flat in one request. */
@@ -23,6 +26,62 @@ export interface AnalyzePolyphonicRequest extends PolyphonicAnalysisOptions {
    * register than the one asked for.
    */
   sampleRate: number;
+  /** Set `false` to skip the NaN/Inf pre-scan of the samples. Default true. */
+  validate?: boolean;
+}
+
+/**
+ * Fields whose C zero means "use the default". An explicit 0 is a real zero, which
+ * the C ABI spells as a negative number; a negative from the caller is refused.
+ */
+const ZERO_IS_REAL_FIELDS = [
+  'minFramePeakRatio',
+  'minSeparationCents',
+  'minRidgePeakRatio',
+  'minRidgeDurationMs',
+] as const;
+
+/** The analysis tuning in the addon's spelling. */
+function nativePolyphonicOptions(
+  fnName: string,
+  options: PolyphonicAnalysisOptions,
+): Record<string, unknown> {
+  const { tonality, ...rest } = options;
+  const out: Record<string, unknown> = { ...rest };
+  for (const field of ZERO_IS_REAL_FIELDS) {
+    const value = options[field];
+    if (value === undefined || value === null) {
+      delete out[field];
+      continue;
+    }
+    if (typeof value !== 'number') {
+      throw new TypeError(`${fnName}: ${field} must be a number`);
+    }
+    assertFiniteScalar(fnName, value, field);
+    if (value < 0) {
+      throw new RangeError(`${fnName}: ${field} must not be negative (omit it for the default)`);
+    }
+    out[field] = value === 0 ? -1 : value;
+  }
+  const { reattackRatio } = options;
+  if (reattackRatio === undefined || reattackRatio === null) {
+    // Absent is "no split"; the addon reads 0 as exactly that.
+    out.reattackRatio = 0;
+  } else {
+    assertFloatValue(fnName, reattackRatio, 'reattackRatio');
+    if (reattackRatio <= 1) {
+      throw new RangeError(
+        `${fnName}: reattackRatio must be greater than 1 (omit it for no split)`,
+      );
+    }
+  }
+  if (tonality !== undefined && tonality !== null) {
+    if (typeof tonality !== 'boolean') {
+      throw new TypeError(`${fnName}: tonality must be a boolean`);
+    }
+    out.tonalityOff = !tonality;
+  }
+  return out;
 }
 
 /**
@@ -75,7 +134,7 @@ function assertPolyphonicOptions(fnName: string, options: PolyphonicAnalysisOpti
  * // Lift the lowest note of the chord by a semitone and leave the rest alone.
  * const notes = analysis.notes();
  * const lowest = notes.reduce((a, b) => (a.medianHz <= b.medianHz ? a : b));
- * analysis.setNoteEdit(notes.indexOf(lowest), { pitchShiftSemitones: 1 });
+ * analysis.setNoteEdit(notes.indexOf(lowest), { pitchSemitones: 1 });
  * const edited = analysis.render();
  * ```
  */
@@ -88,12 +147,16 @@ export class PolyphonicAnalysis {
    * canonical spelling.
    */
   constructor(request: AnalyzePolyphonicRequest) {
-    requestObject('analyzePolyphonic', request, 'request', true);
-    const { samples, sampleRate, ...options } = request;
-    assertAudioInput('analyzePolyphonic', samples, sampleRate, options);
+    const resolved = sampleOneShot<AnalyzePolyphonicRequest>('analyzePolyphonic', [request]);
+    const { samples, sampleRate, validate, ...options } = resolved;
+    assertAudioInput('analyzePolyphonic', samples, sampleRate, { validate });
     assertPolyphonicOptions('analyzePolyphonic', options);
     this.sampleRate = sampleRate;
-    this.native = new addon.PolyphonicAnalysis(samples, sampleRate, options);
+    this.native = new addon.PolyphonicAnalysis(
+      samples,
+      sampleRate,
+      nativePolyphonicOptions('analyzePolyphonic', options),
+    );
   }
 
   /**
@@ -121,7 +184,7 @@ export class PolyphonicAnalysis {
    * that only edits a gain never pays for them.
    */
   notes(): NoteObject[] {
-    return this.native.notes();
+    return this.native.notes().map((note: NoteObject) => publicNote(note));
   }
 
   /**
@@ -161,7 +224,7 @@ export class PolyphonicAnalysis {
     if (offset !== undefined) {
       assertInt64('setNoteEdit', offset, 'edit.timeOffsetSamples');
     }
-    this.native.setNoteEdit(note, { ...rest, timeOffsetSamples: offset });
+    this.native.setNoteEdit(note, nativeEdit({ ...rest, timeOffsetSamples: offset }));
   }
 
   /**
@@ -312,7 +375,8 @@ export class PolyphonicAnalysis {
  * — silence tracks no ridge, and rendering that is the residual alone, which is
  * the whole round trip.
  *
- * @param request - Audio, its sample rate, and the optional analysis tuning.
+ * @param request - Audio, its sample rate, and the optional analysis tuning; or pass
+ *   `(samples, sampleRate, options?)`.
  * @returns An open analysis the caller owns and must {@link PolyphonicAnalysis.destroy}.
  * @throws {TypeError} `samples` is not a `Float32Array`.
  * @throws {RangeError} `sampleRate` is out of the supported range.
@@ -333,7 +397,12 @@ export class PolyphonicAnalysis {
  * const output = analysis.render({ fadeMs: 10 });
  * ```
  */
-export function analyzePolyphonic(request: AnalyzePolyphonicRequest): PolyphonicAnalysis {
-  requestObject('analyzePolyphonic', request, 'request', true);
-  return new PolyphonicAnalysis(request);
+export function analyzePolyphonic(request: AnalyzePolyphonicRequest): PolyphonicAnalysis;
+export function analyzePolyphonic(
+  samples: Float32Array,
+  sampleRate: number,
+  options?: Omit<AnalyzePolyphonicRequest, 'samples' | 'sampleRate'>,
+): PolyphonicAnalysis;
+export function analyzePolyphonic(...args: unknown[]): PolyphonicAnalysis {
+  return new PolyphonicAnalysis(sampleOneShot<AnalyzePolyphonicRequest>('analyzePolyphonic', args));
 }

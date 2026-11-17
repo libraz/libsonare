@@ -6,6 +6,8 @@
 import type { EffectSamplesRequest } from './internal/effects_common.js';
 import {
   assertPitchTrackLengths,
+  nativeNote,
+  publicNote,
   resolveEntryTimes,
   toVoicedInt32,
 } from './internal/effects_common.js';
@@ -340,7 +342,7 @@ export function noteMove(
  * });
  *
  * // Lift the second note by a semitone and drop it 3 dB.
- * notes[1].edit.pitchShiftSemitones = 1;
+ * notes[1].edit.pitchSemitones = 1;
  * notes[1].edit.gainDb = -3;
  * const edited = renderNotes({ samples, sampleRate, notes });
  * ```
@@ -349,11 +351,12 @@ export function extractNotes(request: ExtractNotesRequest): NoteObject[] {
   requestObject('extractNotes', request, 'request', true);
   const { samples, sampleRate, f0Hz, frameRate, voicedProb, ...options } = request;
   const nativeVoiced = assertNoteTrackRequest('extractNotes', request);
-  return addon.extractNotes(samples, sampleRate, f0Hz, frameRate, {
+  const extracted: NoteObject[] = addon.extractNotes(samples, sampleRate, f0Hz, frameRate, {
     ...options,
     voiced: nativeVoiced,
     voicedProb: voicedProb ?? undefined,
   });
+  return extracted.map(publicNote);
 }
 
 /**
@@ -424,7 +427,9 @@ export function renderNotes(request: RenderNotesRequest): Float32Array {
     }
     assertPitchTrackLengths('renderNotes', options.f0Hz, voiced);
   }
-  const nativeNotes = resolveEntryTimes('renderNotes', notes, 'notes', sampleRate, true);
+  const nativeNotes = resolveEntryTimes('renderNotes', notes, 'notes', sampleRate, true).map(
+    nativeNote,
+  );
   const nativeOptions = nativeVoiced === undefined ? options : { ...options, voiced: nativeVoiced };
   return addon.renderNotes(samples, sampleRate, nativeNotes, nativeOptions);
 }
@@ -433,7 +438,7 @@ export function renderNotes(request: RenderNotesRequest): Float32Array {
  * Split one note's pitch curve into a centre, a slow drift and a vibrato.
  *
  * `driftCents[i] + vibratoCents[i]` is the note's own pitch at frame `i`, in
- * cents above `centreHz`, to within float rounding, so the three parts
+ * cents above `centerHz`, to within float rounding, so the three parts
  * reconstruct the curve. The drift filter is zero phase, so neither curve is
  * shifted in time against the audio.
  *
@@ -479,7 +484,15 @@ export function decomposeNotePitch(request: DecomposeNotePitchRequest): PitchDec
     nativeVoiced = toVoicedInt32('decomposeNotePitch', voiced);
     assertPitchTrackLengths('decomposeNotePitch', f0Hz, voiced);
   }
-  return addon.decomposeNotePitch(f0Hz, frameRate, medianHz, vibratoCutoffHz, nativeVoiced);
+  const { centreHz, ...rest } = addon.decomposeNotePitch(
+    f0Hz,
+    frameRate,
+    medianHz,
+    vibratoCutoffHz,
+    nativeVoiced,
+  );
+  // The addon still names the centre `centreHz`.
+  return { ...rest, centerHz: centreHz };
 }
 
 /**
@@ -549,12 +562,24 @@ export function splitNote(request: SplitNoteRequest): NoteObject[] {
     throw new TypeError('splitNote: notes must be an array');
   }
   assertNoteSetEntries('splitNote', notes);
-  const nativeNotes = resolveEntryTimes('splitNote', notes, 'notes', sampleRate, false);
-  return addon.splitNote(samples, sampleRate, f0Hz, frameRate, nativeNotes, index, frame, {
-    ...options,
-    voiced: nativeVoiced,
-    voicedProb: voicedProb ?? undefined,
-  });
+  const nativeNotes = resolveEntryTimes('splitNote', notes, 'notes', sampleRate, false).map(
+    nativeNote,
+  );
+  const split: NoteObject[] = addon.splitNote(
+    samples,
+    sampleRate,
+    f0Hz,
+    frameRate,
+    nativeNotes,
+    index,
+    frame,
+    {
+      ...options,
+      voiced: nativeVoiced,
+      voicedProb: voicedProb ?? undefined,
+    },
+  );
+  return split.map(publicNote);
 }
 
 /**
@@ -617,12 +642,24 @@ export function mergeNotes(request: MergeNotesRequest): NoteObject[] {
     throw new TypeError('mergeNotes: notes must be an array');
   }
   assertNoteSetEntries('mergeNotes', notes);
-  const nativeNotes = resolveEntryTimes('mergeNotes', notes, 'notes', sampleRate, false);
-  return addon.mergeNotes(samples, sampleRate, f0Hz, frameRate, nativeNotes, first, last, {
-    ...options,
-    voiced: nativeVoiced,
-    voicedProb: voicedProb ?? undefined,
-  });
+  const nativeNotes = resolveEntryTimes('mergeNotes', notes, 'notes', sampleRate, false).map(
+    nativeNote,
+  );
+  const merged: NoteObject[] = addon.mergeNotes(
+    samples,
+    sampleRate,
+    f0Hz,
+    frameRate,
+    nativeNotes,
+    first,
+    last,
+    {
+      ...options,
+      voiced: nativeVoiced,
+      voicedProb: voicedProb ?? undefined,
+    },
+  );
+  return merged.map(publicNote);
 }
 
 /**
@@ -659,7 +696,7 @@ export function noteTargetsFromSmf(request: NoteTargetsFromSmfRequest): NoteTarg
 }
 
 /**
- * Write each note's `edit.pitchShiftSemitones` from the target it overlaps.
+ * Write each note's `edit.pitchSemitones` from the target it overlaps.
  *
  * A note is matched to the target it overlaps longest, provided that overlap is
  * at least `minOverlapRatio` of the note's own span; ties go to the target that
@@ -710,7 +747,7 @@ export function assignNoteTargets(request: AssignNoteTargetsRequest): AssignNote
   if (!Array.isArray(targets)) {
     throw new TypeError('assignNoteTargets: targets must be an array');
   }
-  const assigned = addon.assignNoteTargets(notes, sampleRate, targets, options) as {
+  const assigned = addon.assignNoteTargets(notes.map(nativeNote), sampleRate, targets, options) as {
     edits: ReadonlyArray<{ pitchShiftSemitones: number; muted: boolean }>;
     assignedCount: number;
   };
@@ -722,7 +759,8 @@ export function assignNoteTargets(request: AssignNoteTargetsRequest): AssignNote
       ...(note.amplitude ? { amplitude: note.amplitude.slice() } : {}),
       edit: {
         ...note.edit,
-        ...assigned.edits[index],
+        pitchSemitones: assigned.edits[index].pitchShiftSemitones,
+        muted: assigned.edits[index].muted,
         ...(note.edit?.amplitudeEnvelope
           ? { amplitudeEnvelope: note.edit.amplitudeEnvelope.slice() }
           : {}),

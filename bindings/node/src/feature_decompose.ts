@@ -1,4 +1,4 @@
-import type { FeatureSamplesRequest } from './feature_spectral.js';
+import { assertMatrix2D, toMatrix2D, toNativeIndexList } from './internal/feature_matrix.js';
 import { resolvePositiveIntegerOption } from './internal/feature_options.js';
 import { resolveEffectFftOptions } from './internal/fft_options.js';
 import { addon } from './native.js';
@@ -9,6 +9,7 @@ import {
   assertHpssKernels,
   assertInt32,
   requestObject,
+  requestOnly,
 } from './validation.js';
 
 function resolveHardMaskOption(fnName: string, value: unknown): boolean {
@@ -21,61 +22,62 @@ function resolveHardMaskOption(fnName: string, value: unknown): boolean {
   return value;
 }
 
-/** Row-major matrix returned by segmentation APIs. */
-export interface SegmentMatrix {
-  rows: number;
-  cols: number;
-  values: Float32Array;
-}
+/** Request for {@link segmentCrossSimilarity}. */
 export interface SegmentCrossSimilarityRequest {
-  x: Float32Array;
-  xRows: number;
-  xCols: number;
-  y: Float32Array;
-  yRows: number;
-  yCols: number;
+  /** Feature matrix: rows = features, cols = frames. */
+  x: Matrix2D;
+  /** Feature matrix: rows = features, cols = frames. */
+  y: Matrix2D;
   k?: number;
   metric?: 'cosine' | 'euclidean';
   mode?: 'connectivity' | 'affinity';
 }
+
+/** Request for {@link segmentRecurrenceMatrix}. */
 export interface SegmentRecurrenceMatrixRequest {
-  data: Float32Array;
-  rows: number;
-  cols: number;
+  /** Feature matrix: rows = features, cols = frames. */
+  data: Matrix2D;
   k?: number;
   width?: number;
   sym?: boolean;
   metric?: 'cosine' | 'euclidean';
   mode?: 'connectivity' | 'affinity';
 }
+
+/** Request for {@link segmentRecurrenceToLag}. */
 export interface SegmentRecurrenceToLagRequest {
-  recurrence: Float32Array;
-  n: number;
+  /** Recurrence matrix: square, rows = cols = frames. */
+  recurrence: Matrix2D;
   /** Zero-pad so negative lags stay apart: a `2n × n` result (default true, as librosa). */
   pad?: boolean;
 }
+
+/** Request for {@link segmentLagToRecurrence}. */
 export interface SegmentLagToRecurrenceRequest {
-  lag: Float32Array;
-  rows: number;
-  lags: number;
+  /** Lag matrix: rows = lags (frames, or 2 × frames padded), cols = frames. */
+  lag: Matrix2D;
 }
+
+/** Request for {@link segmentSubsegment}. */
 export interface SegmentSubsegmentRequest {
-  data: Float32Array;
-  rows: number;
-  cols: number;
-  boundaries: Int32Array | number[];
+  /** Feature matrix: rows = features, cols = frames. */
+  data: Matrix2D;
+  boundaries: Int32Array | ArrayLike<number>;
   nSegments?: number;
 }
+
+/** Request for {@link segmentAgglomerative}. */
 export interface SegmentAgglomerativeRequest {
-  data: Float32Array;
-  rows: number;
-  cols: number;
+  /** Feature matrix: rows = features, cols = frames. */
+  data: Matrix2D;
   k: number;
   linkage?: 'average' | 'single' | 'complete' | 'ward';
 }
+
+/** Request for {@link segmentPathEnhance}. */
 export interface SegmentPathEnhanceRequest {
-  recurrence: Float32Array;
-  n: number;
+  /** Recurrence matrix: square, rows = cols = frames. */
+  recurrence: Matrix2D;
   win: number;
   maxRatio?: number;
   minRatio?: number;
@@ -91,7 +93,9 @@ export interface DecomposeRequest {
   beta?: number;
   init?: 'random' | 'nndsvd';
 }
-export interface DecomposeStemsRequest extends FeatureSamplesRequest {
+export interface DecomposeStemsRequest {
+  samples: Float32Array;
+  sampleRate?: number;
   /** Number of NMF components (default 4). */
   nComponents?: number;
   /** STFT size (default 2048). */
@@ -130,7 +134,9 @@ export interface NnFilterRequest {
   width?: number;
 }
 
-export interface HpssWithResidualRequest extends FeatureSamplesRequest {
+export interface HpssWithResidualRequest {
+  samples: Float32Array;
+  sampleRate?: number;
   /**
    * Horizontal median filter size, in STFT frames: a positive odd integer at
    * most 524287. Default 31. The ceiling is 524288 and an even kernel is
@@ -144,105 +150,127 @@ export interface HpssWithResidualRequest extends FeatureSamplesRequest {
   hardMask?: boolean;
 }
 
-/** Column-wise cross-similarity matrix (librosa.segment.cross_similarity). */
-export function segmentCrossSimilarity(request: SegmentCrossSimilarityRequest): SegmentMatrix {
-  requestObject('segmentCrossSimilarity', request, 'request', true);
-  const { x, xRows, xCols, y, yRows, yCols } = request;
-  if (x.length !== xRows * xCols || y.length !== yRows * yCols || xRows !== yRows) {
-    throw new RangeError('segmentCrossSimilarity: invalid matrix dimensions');
+interface NativeSegmentMatrix {
+  rows: number;
+  cols: number;
+  values: Float32Array;
+}
+
+function toSegmentMatrix(m: NativeSegmentMatrix): Matrix2D {
+  return toMatrix2D(m.values, m.rows, m.cols);
+}
+
+function assertSquareMatrix(fnName: string, matrix: Matrix2D, argName: string): void {
+  if (matrix.rows !== matrix.cols) {
+    throw new RangeError(`${fnName}: ${argName} must be square`);
   }
-  return addon.segmentCrossSimilarity(
-    x,
-    xRows,
-    xCols,
-    y,
-    yRows,
-    yCols,
-    request.k ?? 0,
-    request.metric ?? 'cosine',
-    request.mode ?? 'connectivity',
+}
+
+/** Column-wise cross-similarity matrix (librosa.segment.cross_similarity). Returns rows = y frames, cols = x frames. */
+export function segmentCrossSimilarity(request: SegmentCrossSimilarityRequest): Matrix2D;
+export function segmentCrossSimilarity(...args: unknown[]): Matrix2D {
+  const r = requestOnly<SegmentCrossSimilarityRequest>('segmentCrossSimilarity', args);
+  assertMatrix2D('segmentCrossSimilarity', r.x, 'x');
+  assertMatrix2D('segmentCrossSimilarity', r.y, 'y');
+  if (r.x.rows !== r.y.rows) {
+    throw new RangeError('segmentCrossSimilarity: x and y must have the same number of rows');
+  }
+  return toSegmentMatrix(
+    addon.segmentCrossSimilarity(
+      r.x.data,
+      r.x.rows,
+      r.x.cols,
+      r.y.data,
+      r.y.rows,
+      r.y.cols,
+      r.k ?? 0,
+      r.metric ?? 'cosine',
+      r.mode ?? 'connectivity',
+    ),
   );
 }
 
-/** Self-similarity recurrence matrix (librosa.segment.recurrence_matrix). */
-export function segmentRecurrenceMatrix(request: SegmentRecurrenceMatrixRequest): SegmentMatrix {
-  requestObject('segmentRecurrenceMatrix', request, 'request', true);
-  if (request.data.length !== request.rows * request.cols) {
-    throw new RangeError('segmentRecurrenceMatrix: invalid matrix dimensions');
-  }
-  return addon.segmentRecurrenceMatrix(
-    request.data,
-    request.rows,
-    request.cols,
-    request.k ?? 0,
-    request.width ?? 1,
-    request.sym ?? false,
-    request.metric ?? 'euclidean',
-    request.mode ?? 'connectivity',
+/** Self-similarity recurrence matrix (librosa.segment.recurrence_matrix). Returns square, rows = cols = frames. */
+export function segmentRecurrenceMatrix(request: SegmentRecurrenceMatrixRequest): Matrix2D;
+export function segmentRecurrenceMatrix(...args: unknown[]): Matrix2D {
+  const r = requestOnly<SegmentRecurrenceMatrixRequest>('segmentRecurrenceMatrix', args);
+  assertMatrix2D('segmentRecurrenceMatrix', r.data, 'data');
+  return toSegmentMatrix(
+    addon.segmentRecurrenceMatrix(
+      r.data.data,
+      r.data.rows,
+      r.data.cols,
+      r.k ?? 0,
+      r.width ?? 1,
+      r.sym ?? false,
+      r.metric ?? 'euclidean',
+      r.mode ?? 'connectivity',
+    ),
   );
 }
 
-/** Convert an `n × n` recurrence matrix to a lag-by-time matrix, as librosa does. */
-export function segmentRecurrenceToLag(request: SegmentRecurrenceToLagRequest): SegmentMatrix {
-  requestObject('segmentRecurrenceToLag', request, 'request', true);
-  if (request.recurrence.length !== request.n * request.n) {
-    throw new RangeError('segmentRecurrenceToLag: invalid matrix dimensions');
-  }
-  return addon.segmentRecurrenceToLag(request.recurrence, request.n, request.pad ?? true);
+/** Convert a square recurrence matrix to a lag-by-time matrix, as librosa does. Returns rows = lags, cols = frames. */
+export function segmentRecurrenceToLag(request: SegmentRecurrenceToLagRequest): Matrix2D;
+export function segmentRecurrenceToLag(...args: unknown[]): Matrix2D {
+  const r = requestOnly<SegmentRecurrenceToLagRequest>('segmentRecurrenceToLag', args);
+  assertMatrix2D('segmentRecurrenceToLag', r.recurrence, 'recurrence');
+  assertSquareMatrix('segmentRecurrenceToLag', r.recurrence, 'recurrence');
+  return toSegmentMatrix(
+    addon.segmentRecurrenceToLag(r.recurrence.data, r.recurrence.rows, r.pad ?? true),
+  );
 }
 
-/** Convert a `lags × rows` lag matrix (lags = rows, or 2 × rows padded) to a recurrence. */
-export function segmentLagToRecurrence(request: SegmentLagToRecurrenceRequest): SegmentMatrix {
-  requestObject('segmentLagToRecurrence', request, 'request', true);
-  if (request.lag.length !== request.rows * request.lags) {
-    throw new RangeError('segmentLagToRecurrence: invalid matrix dimensions');
-  }
-  return addon.segmentLagToRecurrence(request.lag, request.rows, request.lags);
+/** Convert a lag matrix (lags = frames, or 2 × frames padded) to a recurrence. Returns square, rows = cols = frames. */
+export function segmentLagToRecurrence(request: SegmentLagToRecurrenceRequest): Matrix2D;
+export function segmentLagToRecurrence(...args: unknown[]): Matrix2D {
+  const r = requestOnly<SegmentLagToRecurrenceRequest>('segmentLagToRecurrence', args);
+  assertMatrix2D('segmentLagToRecurrence', r.lag, 'lag');
+  return toSegmentMatrix(addon.segmentLagToRecurrence(r.lag.data, r.lag.cols, r.lag.rows));
 }
 
 /** Refine frame boundaries by clustering within each parent segment. */
-export function segmentSubsegment(request: SegmentSubsegmentRequest): Int32Array {
-  requestObject('segmentSubsegment', request, 'request', true);
-  if (request.data.length !== request.rows * request.cols) {
-    throw new RangeError('segmentSubsegment: invalid matrix dimensions');
-  }
+export function segmentSubsegment(request: SegmentSubsegmentRequest): Int32Array;
+export function segmentSubsegment(...args: unknown[]): Int32Array {
+  const r = requestOnly<SegmentSubsegmentRequest>('segmentSubsegment', args);
+  assertMatrix2D('segmentSubsegment', r.data, 'data');
   return addon.segmentSubsegment(
-    request.data,
-    request.rows,
-    request.cols,
-    request.boundaries,
-    request.nSegments ?? 4,
+    r.data.data,
+    r.data.rows,
+    r.data.cols,
+    toNativeIndexList(r.boundaries),
+    r.nSegments ?? 4,
   );
 }
 
 /** Cluster feature columns and return one label per column. */
-export function segmentAgglomerative(request: SegmentAgglomerativeRequest): Int32Array {
-  requestObject('segmentAgglomerative', request, 'request', true);
-  if (request.data.length !== request.rows * request.cols) {
-    throw new RangeError('segmentAgglomerative: invalid matrix dimensions');
-  }
+export function segmentAgglomerative(request: SegmentAgglomerativeRequest): Int32Array;
+export function segmentAgglomerative(...args: unknown[]): Int32Array {
+  const r = requestOnly<SegmentAgglomerativeRequest>('segmentAgglomerative', args);
+  assertMatrix2D('segmentAgglomerative', r.data, 'data');
   return addon.segmentAgglomerative(
-    request.data,
-    request.rows,
-    request.cols,
-    request.k,
-    request.linkage ?? 'average',
+    r.data.data,
+    r.data.rows,
+    r.data.cols,
+    r.k,
+    r.linkage ?? 'average',
   );
 }
 
-/** Enhance diagonal paths in an `n × n` recurrence matrix. */
-export function segmentPathEnhance(request: SegmentPathEnhanceRequest): SegmentMatrix {
-  requestObject('segmentPathEnhance', request, 'request', true);
-  if (request.recurrence.length !== request.n * request.n) {
-    throw new RangeError('segmentPathEnhance: invalid matrix dimensions');
-  }
-  return addon.segmentPathEnhance(
-    request.recurrence,
-    request.n,
-    request.win,
-    request.maxRatio ?? 2,
-    request.minRatio ?? 0,
-    request.nFilters ?? 7,
+/** Enhance diagonal paths in a square recurrence matrix. Returns square, rows = cols = frames. */
+export function segmentPathEnhance(request: SegmentPathEnhanceRequest): Matrix2D;
+export function segmentPathEnhance(...args: unknown[]): Matrix2D {
+  const r = requestOnly<SegmentPathEnhanceRequest>('segmentPathEnhance', args);
+  assertMatrix2D('segmentPathEnhance', r.recurrence, 'recurrence');
+  assertSquareMatrix('segmentPathEnhance', r.recurrence, 'recurrence');
+  return toSegmentMatrix(
+    addon.segmentPathEnhance(
+      r.recurrence.data,
+      r.recurrence.rows,
+      r.win,
+      r.maxRatio ?? 2,
+      r.minRatio ?? 0,
+      r.nFilters ?? 7,
+    ),
   );
 }
 
@@ -432,7 +460,9 @@ export function nnFilter(
   );
 }
 
-export interface RemixRequest extends FeatureSamplesRequest {
+export interface RemixRequest {
+  samples: Float32Array;
+  sampleRate?: number;
   intervals: Int32Array | number[];
   alignZeros?: boolean;
 }

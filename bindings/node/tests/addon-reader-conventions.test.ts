@@ -28,7 +28,6 @@ import {
   alignTakeToReference,
   analyze,
   analyzePolyphonic,
-  analyzeWithProgress,
   assignNoteTargets,
   autoTune,
   decomposeStems,
@@ -108,6 +107,21 @@ const requestFields = (
 ): Record<string, unknown> =>
   Object.fromEntries(
     Object.entries(options).filter(([key]) => Object.hasOwn(REQUEST_KEYS[name], key)),
+  );
+
+/**
+ * Re-keys a bag of native option names to the facade's names. A native key the
+ * facade does not accept maps to `null` and is dropped.
+ */
+const facadeKeys = (
+  options: Record<string, unknown>,
+  renames: Record<string, string | null>,
+): Record<string, unknown> =>
+  Object.fromEntries(
+    Object.entries(options).flatMap(([key, value]) => {
+      const mapped = key in renames ? renames[key] : key;
+      return mapped === null ? [] : [[mapped, value]];
+    }),
   );
 
 /**
@@ -249,11 +263,26 @@ const UNDEFINED_EQUIVALENCE: ReadonlyArray<{
   jsName: string;
   invoke: (options: Record<string, unknown>) => unknown;
 }> = [
-  { jsName: 'pcen', invoke: (o) => Array.from(pcen(sine(32), 4, 8, o)) },
-  { jsName: 'analyze', invoke: (o) => analyze(sine(8192), SR, o) },
+  {
+    jsName: 'pcen',
+    invoke: (o) => Array.from(pcen({ ...o, values: { data: sine(32), rows: 4, cols: 8 } }).data),
+  },
+  {
+    jsName: 'analyze',
+    invoke: (o) =>
+      analyze(
+        sine(8192),
+        SR,
+        facadeKeys(o, { chromaHighpassHz: 'chromaHighPassHz', tuning: 'tuningCents' }),
+      ),
+  },
   {
     jsName: 'analyzeWithProgress',
-    invoke: (o) => analyzeWithProgress(sine(8192), SR, () => {}, o),
+    invoke: (o) =>
+      analyze(sine(8192), SR, {
+        ...facadeKeys(o, { chromaHighpassHz: 'chromaHighPassHz', tuning: 'tuningCents' }),
+        onProgress: () => {},
+      }),
   },
   {
     // A glide rather than a tone, and two lengths rather than one: a held pair
@@ -274,7 +303,14 @@ const UNDEFINED_EQUIVALENCE: ReadonlyArray<{
     // separate on the curve.
     jsName: 'detectBoundaries',
     invoke: (o) => {
-      const result = detectBoundaries({ ...o, samples: sine(SR * 6), sampleRate: SR });
+      const result = detectBoundaries({
+        ...facadeKeys(o, {
+          peakDistance: 'peakDistanceSec',
+          referenceWindow: 'referenceWindowSec',
+        }),
+        samples: sine(SR * 6),
+        sampleRate: SR,
+      });
       return [result.boundaries, Array.from(result.noveltyCurve), result.noveltyPeak];
     },
   },
@@ -283,18 +319,20 @@ const UNDEFINED_EQUIVALENCE: ReadonlyArray<{
     invoke: (o) =>
       estimateMeter({
         ...o,
-        beatTimes: new Float32Array(32).map((_, i) => i * 0.5),
-        beatStrengths: new Float32Array(32).map((_, i) => (i % 4 === 0 ? 1 : 0.3)),
+        beats: Array.from({ length: 32 }, (_, i) => ({
+          timeSec: i * 0.5,
+          strength: i % 4 === 0 ? 1 : 0.3,
+        })),
       }),
   },
   {
     jsName: 'noteSegments',
     invoke: (o) =>
       noteSegments({
+        ...o,
         f0Hz: new Float32Array(200).fill(440),
         voicedProb: new Float32Array(200).fill(0.9),
         frameRate: 100,
-        config: o,
       }),
   },
   {
@@ -324,7 +362,7 @@ const UNDEFINED_EQUIVALENCE: ReadonlyArray<{
           ...o,
           samples: sine(4096, 220),
           sampleRate: SR,
-          key: { root: 'A', mode: 'minor' },
+          key: { root: 9, mode: 'minor' },
         }).samples,
       ),
   },
@@ -417,10 +455,10 @@ const UNDEFINED_EQUIVALENCE: ReadonlyArray<{
         edit: {
           timeOffsetSamples: 0,
           amplitudeEnvelope: new Float32Array(0),
-          pitchShiftSemitones: 0,
+          pitchSemitones: 0,
           gainDb: 0,
           timeStretchRatio: 0,
-          formantShiftSemitones: 0,
+          formantSemitones: 0,
           vibratoDepthChange: 0,
           driftChange: 0,
           muted: false,
@@ -443,10 +481,7 @@ const UNDEFINED_EQUIVALENCE: ReadonlyArray<{
       });
       return {
         assignedCount: result.assignedCount,
-        edits: result.notes.map((assigned) => [
-          assigned.edit.pitchShiftSemitones,
-          assigned.edit.muted,
-        ]),
+        edits: result.notes.map((assigned) => [assigned.edit.pitchSemitones, assigned.edit.muted]),
       };
     },
   },
@@ -972,7 +1007,12 @@ const UNDEFINED_EQUIVALENCE: ReadonlyArray<{
   },
   {
     jsName: 'transcribe',
-    invoke: (o) => transcribe({ ...o, samples: sine(8192), sampleRate: SR }),
+    invoke: (o) =>
+      transcribe({
+        ...facadeKeys(o, { fmin: 'f0MinHz', fmax: 'f0MaxHz' }),
+        samples: sine(8192),
+        sampleRate: SR,
+      }),
   },
   {
     jsName: 'transcribeToClip',
@@ -993,7 +1033,7 @@ const UNDEFINED_EQUIVALENCE: ReadonlyArray<{
     invoke: (o) => {
       const eq = new StreamingEqualizer({ sampleRate: SR, maxBlockSize: 512 });
       try {
-        eq.setBand(0, { ...o, type: 'Peak', frequencyHz: 1000, gainDb: 6, enabled: true });
+        eq.setBand(0, { ...o, type: 'peak', frequencyHz: 1000, gainDb: 6, enabled: true });
         // Filtered audio as well as the response curve: comparing the curve
         // alone would hold between two silent EQs if it were ever unpopulated.
         const block = sine(512, 1000);
@@ -1027,7 +1067,11 @@ const UNDEFINED_EQUIVALENCE: ReadonlyArray<{
   {
     jsName: 'PolyphonicAnalysis',
     invoke: (o) => {
-      const analysis = analyzePolyphonic({ ...o, samples: sine(8192, 220), sampleRate: SR });
+      const analysis = analyzePolyphonic({
+        ...facadeKeys(o, { tonalityOff: 'tonality' }),
+        samples: sine(8192, 220),
+        sampleRate: SR,
+      });
       try {
         return [
           analysis.noteCount,
@@ -1042,11 +1086,19 @@ const UNDEFINED_EQUIVALENCE: ReadonlyArray<{
   {
     jsName: 'StreamAnalyzer',
     invoke: (o) => {
-      const analyzer = new StreamAnalyzer({ ...o });
+      const analyzer = new StreamAnalyzer({
+        ...facadeKeys(o, {
+          computeMagnitude: null,
+          fmin: 'fminHz',
+          fmax: 'fmaxHz',
+          tuningRefHz: 'referenceHz',
+        }),
+        sampleRate: SR,
+      });
       try {
         analyzer.process(sine(8192));
         analyzer.finalize();
-        return [analyzer.frameCount(), analyzer.sampleRate(), analyzer.stats()];
+        return [analyzer.frameCount, analyzer.sampleRate, analyzer.stats()];
       } finally {
         analyzer.destroy();
       }
@@ -1057,7 +1109,7 @@ const UNDEFINED_EQUIVALENCE: ReadonlyArray<{
     invoke: (o) => {
       const eq = new StreamingEqualizer({ ...o });
       try {
-        eq.setBand(0, { type: 'Peak', frequencyHz: 1000, gainDb: 6, enabled: true });
+        eq.setBand(0, { type: 'peak', frequencyHz: 1000, gainDb: 6, enabled: true });
         const block = sine(512, 1000);
         const out = eq.processStereo(block, block);
         return [Array.from(eq.spectrum().bandGainDb), Array.from(out.left)];

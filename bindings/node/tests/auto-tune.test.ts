@@ -108,7 +108,7 @@ describe('autoTune', () => {
     const { samples, key } = autoTune({
       samples: input,
       sampleRate: SR,
-      key: { root: 'C', mode: 'major' },
+      key: { root: 0, mode: 'major' },
     });
     expect(samples.length).toBe(input.length);
     expect(key).toMatchObject({ root: 0, mode: 'major', confidence: 1 });
@@ -134,18 +134,16 @@ describe('autoTune', () => {
     expect(explicitDetect.samples).toEqual(detected.samples);
   });
 
-  it('takes the key by pitch-class and mode ordinals too', () => {
-    const byName = autoTune({ samples: input, sampleRate: SR, key: { root: 'D', mode: 'dorian' } });
-    const byOrdinal = autoTune({ samples: input, sampleRate: SR, key: { root: 2, mode: 2 } });
-    expect(byOrdinal.samples).toEqual(byName.samples);
-    expect(byOrdinal.key.mode).toBe('dorian');
+  it('takes the key as a pitch class and a mode token', () => {
+    const result = autoTune({ samples: input, sampleRate: SR, key: { root: 2, mode: 'dorian' } });
+    expect(result.key).toMatchObject({ root: 2, mode: 'dorian' });
   });
 
   it('strength 0 leaves the audio unchanged', () => {
     const { samples } = autoTune({
       samples: input,
       sampleRate: SR,
-      key: { root: 'C', mode: 'major' },
+      key: { root: 0, mode: 'major' },
       strength: 0,
     });
     let worst = 0;
@@ -160,10 +158,10 @@ describe('autoTune', () => {
       TypeError,
     );
     expect(() =>
-      autoTune({ samples: input, sampleRate: SR, key: { root: 'H', mode: 'major' } }),
+      autoTune({ samples: input, sampleRate: SR, key: { root: 12 as never, mode: 'major' } }),
     ).toThrow(RangeError);
     expect(() =>
-      autoTune({ samples: input, sampleRate: SR, key: { root: 'C', mode: 'major' }, strength: 2 }),
+      autoTune({ samples: input, sampleRate: SR, key: { root: 0, mode: 'major' }, strength: 2 }),
     ).toThrow();
   });
 });

@@ -63,9 +63,9 @@ describe('analysis options-bag defaults are pinned to the documented values', ()
   const x = testSignal();
 
   it('analyzeBpm', () => {
-    const defaults: Required<AnalyzeBpmOptions> = {
-      bpmMin: 30.0,
-      bpmMax: 300.0,
+    const defaults: Required<Omit<AnalyzeBpmOptions, 'validate'>> = {
+      bpmMin: 60.0,
+      bpmMax: 200.0,
       startBpm: 120.0,
       nFft: 2048,
       hopLength: 512,
@@ -75,7 +75,7 @@ describe('analysis options-bag defaults are pinned to the documented values', ()
   });
 
   it('analyzeRhythm', () => {
-    const defaults: Required<AnalyzeRhythmOptions> = {
+    const defaults: Required<Omit<AnalyzeRhythmOptions, 'validate'>> = {
       bpmMin: 60.0,
       bpmMax: 200.0,
       startBpm: 120.0,
@@ -86,16 +86,16 @@ describe('analysis options-bag defaults are pinned to the documented values', ()
   });
 
   it('analyzeDynamics', () => {
-    const defaults: Required<AnalyzeDynamicsOptions> = {
+    const defaults: Required<Omit<AnalyzeDynamicsOptions, 'validate'>> = {
       windowSec: 0.4,
       hopLength: 512,
-      compressionThreshold: 6.0,
+      compressionThresholdDb: 6.0,
     };
     expect(analyzeDynamics(x, SR)).toEqual(analyzeDynamics(x, SR, defaults));
   });
 
   it('detectAcoustic', () => {
-    const defaults: Required<AcousticOptions> = {
+    const defaults: Required<Omit<AcousticOptions, 'validate'>> = {
       nOctaveBands: 6,
       nThirdOctaveSubbands: 24,
       minDecayDb: 30.0,
@@ -105,7 +105,7 @@ describe('analysis options-bag defaults are pinned to the documented values', ()
   });
 
   it('analyzeTimbre', () => {
-    const defaults: Required<AnalyzeTimbreOptions> = {
+    const defaults: Required<Omit<AnalyzeTimbreOptions, 'validate'>> = {
       nFft: 2048,
       hopLength: 512,
       nMels: 128,
@@ -116,7 +116,7 @@ describe('analysis options-bag defaults are pinned to the documented values', ()
   });
 
   it('analyzeSections', () => {
-    const defaults: Required<AnalyzeSectionsOptions> = {
+    const defaults: Required<Omit<AnalyzeSectionsOptions, 'validate'>> = {
       nFft: 2048,
       hopLength: 512,
       minSectionSec: 4.0,
@@ -125,9 +125,9 @@ describe('analysis options-bag defaults are pinned to the documented values', ()
   });
 
   it('analyzeMelody', () => {
-    const defaults: Required<MelodyOptions> = {
-      fmin: 65.0,
-      fmax: 2093.0,
+    const defaults: Required<Omit<MelodyOptions, 'validate'>> = {
+      f0MinHz: 65.0,
+      f0MaxHz: 2093.0,
       frameLength: 2048,
       hopLength: 256,
       threshold: 0.1,

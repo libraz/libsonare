@@ -1,13 +1,28 @@
-import type { MusicAnalyzeOptions } from './analysis.js';
+import type {
+  AnalyzeBpmRequest,
+  AnalyzeDynamicsRequest,
+  AnalyzeImpulseResponseRequest,
+  AnalyzeRequest,
+  AnalyzeRhythmRequest,
+  AnalyzeTimbreRequest,
+  ChordFunctionalAnalysisRequest,
+  DetectKeyCandidatesRequest,
+  DetectKeyRequest,
+  DetectOnsetsRequest,
+} from './analysis.js';
 import {
   analyzeBpm as analyzeBpmFn,
   analyzeDynamics as analyzeDynamicsFn,
+  analyze as analyzeFn,
   analyzeImpulseResponse as analyzeImpulseResponseFn,
   analyzeRhythm as analyzeRhythmFn,
   analyzeTimbre as analyzeTimbreFn,
   chordFunctionalAnalysis as chordFunctionalAnalysisFn,
   detectAcoustic as detectAcousticFn,
   detectChords as detectChordsFn,
+  detectKeyCandidates as detectKeyCandidatesFn,
+  detectKey as detectKeyFn,
+  detectOnsets as detectOnsetsFn,
 } from './analysis.js';
 import type { VoiceChangeOptions } from './effects_mastering.js';
 import {
@@ -27,6 +42,25 @@ import {
   voiceChange as voiceChangeFn,
 } from './effects_mastering.js';
 import { ErrorCode, SonareError } from './errors.js';
+import type {
+  ChromaRequest,
+  NnlsChromaRequest,
+  PitchPyinRequest,
+  PitchYinRequest,
+} from './feature_pitch.js';
+import type { OnsetStrengthRequest } from './feature_rhythm.js';
+import type {
+  MelSpectrogramRequest,
+  MfccRequest,
+  RmsEnergyRequest,
+  SpectralBandwidthRequest,
+  SpectralCentroidRequest,
+  SpectralFlatnessRequest,
+  SpectralRolloffRequest,
+  StftDbRequest,
+  StftRequest,
+  ZeroCrossingRateRequest,
+} from './feature_spectral.js';
 import {
   chroma as chromaFn,
   lufs as lufsFn,
@@ -34,7 +68,7 @@ import {
   mfcc as mfccFn,
   momentaryLufs as momentaryLufsFn,
   nnlsChroma as nnlsChromaFn,
-  onsetEnvelope as onsetEnvelopeFn,
+  onsetStrength as onsetStrengthFn,
   pitchPyin as pitchPyinFn,
   pitchYin as pitchYinFn,
   rmsEnergy as rmsEnergyFn,
@@ -62,28 +96,22 @@ import type {
   AcousticOptions,
   AcousticResult,
   AnalysisResult,
-  AnalyzeBpmOptions,
-  AnalyzeDynamicsOptions,
-  AnalyzeRhythmOptions,
-  AnalyzeTimbreOptions,
   BpmAnalysisResult,
   ChordAnalysisResult,
   ChordDetectionOptions,
-  ChordFunctionsKey,
   ChromaResult,
-  DetectKeyOptions,
   DynamicsResult,
   FunctionalChord,
   HpssResult,
   KeyCandidate,
   KeyDetection,
-  KeyDetectionOptions,
   LufsResult,
   MasteringChainConfig,
   MasteringChainResult,
   MasteringOptions,
   MasteringPreset,
   MasteringResult,
+  Matrix2D,
   MelSpectrogramResult,
   MfccResult,
   NoteStretchOptions,
@@ -91,12 +119,35 @@ import type {
   ProgressCallback,
   RhythmResult,
   SoloProcessor,
-  StftDbResult,
   StftResult,
   TimbreResult,
 } from './types.js';
 import type { ValidateOptions } from './validation.js';
 import { assertPositiveInteger } from './validation.js';
+
+/**
+ * The request an {@link Audio} method hands to its module function: the
+ * options bag plus the held samples and rate. `null` options mean absent.
+ */
+function audioRequest<R>(
+  methodName: string,
+  samples: Float32Array,
+  sampleRate: number,
+  options: unknown,
+): R {
+  const bag = options ?? {};
+  if (typeof bag !== 'object' || Array.isArray(bag) || ArrayBuffer.isView(bag)) {
+    throw new TypeError(`Audio.${methodName}: options must be an object`);
+  }
+  for (const key of ['samples', 'sampleRate']) {
+    if (key in bag) {
+      throw new TypeError(`Audio.${methodName}: options must not carry '${key}'`);
+    }
+  }
+  return { ...bag, samples, sampleRate } as R;
+}
+
+type AudioOptions<R> = Omit<R, 'samples' | 'sampleRate'>;
 
 export class Audio {
   private native: InstanceType<typeof addon.Audio>;
@@ -242,14 +293,14 @@ export class Audio {
     return this.native.detectBpm();
   }
 
-  detectKey(options: DetectKeyOptions = {}): KeyDetection {
-    this.requireAlive();
-    return this.native.detectKey(options);
+  detectKey(options?: AudioOptions<DetectKeyRequest>): KeyDetection {
+    return detectKeyFn(audioRequest('detectKey', this.data, this.sampleRate, options));
   }
 
-  detectKeyCandidates(options: KeyDetectionOptions = {}): KeyCandidate[] {
-    this.requireAlive();
-    return this.native.detectKeyCandidates(options);
+  detectKeyCandidates(options?: AudioOptions<DetectKeyCandidatesRequest>): KeyCandidate[] {
+    return detectKeyCandidatesFn(
+      audioRequest('detectKeyCandidates', this.data, this.sampleRate, options),
+    );
   }
 
   detectBeats(): Float32Array {
@@ -262,14 +313,16 @@ export class Audio {
     return this.native.detectDownbeats();
   }
 
-  detectOnsets(): Float32Array {
-    this.requireAlive();
-    return this.native.detectOnsets();
+  detectOnsets(options?: AudioOptions<DetectOnsetsRequest>): Float32Array {
+    return detectOnsetsFn(audioRequest('detectOnsets', this.data, this.sampleRate, options));
   }
 
-  analyze(options: MusicAnalyzeOptions = {}): AnalysisResult {
-    this.requireAlive();
-    return this.native.analyze(options);
+  /**
+   * Full music analysis of the held buffer. Takes the module {@link analyzeFn}
+   * request without the audio; `onProgress` and `cancel` report and stop it.
+   */
+  analyze(options?: AudioOptions<AnalyzeRequest>): AnalysisResult {
+    return analyzeFn(audioRequest('analyze', this.data, this.sampleRate, options));
   }
 
   // -- Metering --
@@ -328,12 +381,12 @@ export class Audio {
   }
 
   /**
-   * True single-frame magnitude / power / dB spectrum starting at `frameOffset`.
+   * True single-frame magnitude / power / dB spectrum starting at sample `startSample`.
    * See {@link meteringSpectrumFrame} for the frame-validation contract.
    */
-  spectrumFrame(frameOffset = 0, options: SpectrumOptions = {}): SpectrumReport {
+  spectrumFrame(startSample = 0, options: SpectrumOptions = {}): SpectrumReport {
     this.requireAlive();
-    return this.native.spectrumFrame(frameOffset, options);
+    return this.native.spectrumFrame(startSample, options);
   }
 
   ebur128LoudnessRange(): number {
@@ -341,40 +394,43 @@ export class Audio {
     return this.native.ebur128LoudnessRange();
   }
 
-  analyzeBpm(options: AnalyzeBpmOptions = {}): BpmAnalysisResult {
-    return analyzeBpmFn(this.data, this.sampleRate, options);
+  analyzeBpm(options?: AudioOptions<AnalyzeBpmRequest>): BpmAnalysisResult {
+    return analyzeBpmFn(audioRequest('analyzeBpm', this.data, this.sampleRate, options));
   }
 
-  analyzeImpulseResponse(nOctaveBands = 6): AcousticResult {
-    return analyzeImpulseResponseFn(this.data, this.sampleRate, nOctaveBands);
+  analyzeImpulseResponse(options?: AudioOptions<AnalyzeImpulseResponseRequest>): AcousticResult {
+    return analyzeImpulseResponseFn(
+      audioRequest('analyzeImpulseResponse', this.data, this.sampleRate, options),
+    );
   }
 
   detectAcoustic(options: AcousticOptions = {}): AcousticResult {
     return detectAcousticFn(this.data, this.sampleRate, options);
   }
 
-  analyzeRhythm(options: AnalyzeRhythmOptions = {}): RhythmResult {
-    return analyzeRhythmFn(this.data, this.sampleRate, options);
+  analyzeRhythm(options?: AudioOptions<AnalyzeRhythmRequest>): RhythmResult {
+    return analyzeRhythmFn(audioRequest('analyzeRhythm', this.data, this.sampleRate, options));
   }
 
-  analyzeDynamics(options: AnalyzeDynamicsOptions = {}): DynamicsResult {
-    return analyzeDynamicsFn(this.data, this.sampleRate, options);
+  analyzeDynamics(options?: AudioOptions<AnalyzeDynamicsRequest>): DynamicsResult {
+    return analyzeDynamicsFn(audioRequest('analyzeDynamics', this.data, this.sampleRate, options));
   }
 
-  analyzeTimbre(options: AnalyzeTimbreOptions = {}): TimbreResult {
-    return analyzeTimbreFn(this.data, this.sampleRate, options);
+  analyzeTimbre(options?: AudioOptions<AnalyzeTimbreRequest>): TimbreResult {
+    return analyzeTimbreFn(audioRequest('analyzeTimbre', this.data, this.sampleRate, options));
   }
 
   detectChords(options: ChordDetectionOptions = {}): ChordAnalysisResult {
     return detectChordsFn(this.data, this.sampleRate, options);
   }
 
+  /** Chords with their roman numeral and function in the given key. `keyRoot` is required. */
   chordFunctionalAnalysis(
-    keyRoot: ChordFunctionsKey['root'],
-    keyMode: ChordFunctionsKey['mode'] = 0,
-    options: ChordDetectionOptions = {},
+    options: AudioOptions<ChordFunctionalAnalysisRequest>,
   ): FunctionalChord[] {
-    return chordFunctionalAnalysisFn(this.data, keyRoot, keyMode, this.sampleRate, options);
+    return chordFunctionalAnalysisFn(
+      audioRequest('chordFunctionalAnalysis', this.data, this.sampleRate, options),
+    );
   }
 
   // -- Effects --
@@ -451,115 +507,78 @@ export class Audio {
 
   // -- Features --
 
-  stft(nFft = 2048, hopLength = 512): StftResult {
-    return stftFn(this.data, this.sampleRate, nFft, hopLength);
+  stft(options?: AudioOptions<StftRequest>): StftResult {
+    return stftFn(audioRequest('stft', this.data, this.sampleRate, options));
   }
 
-  stftDb(nFft = 2048, hopLength = 512): StftDbResult {
-    return stftDbFn(this.data, this.sampleRate, nFft, hopLength);
+  /** Rows are frequency bins, cols are frames. */
+  stftDb(options?: AudioOptions<StftDbRequest>): Matrix2D {
+    return stftDbFn(audioRequest('stftDb', this.data, this.sampleRate, options));
   }
 
-  melSpectrogram(
-    nFft = 2048,
-    hopLength = 512,
-    nMels = 128,
-    fmin = 0,
-    fmax = 0,
-    htk = false,
-  ): MelSpectrogramResult {
-    return melSpectrogramFn(this.data, this.sampleRate, nFft, hopLength, nMels, fmin, fmax, htk);
+  melSpectrogram(options?: AudioOptions<MelSpectrogramRequest>): MelSpectrogramResult {
+    return melSpectrogramFn(audioRequest('melSpectrogram', this.data, this.sampleRate, options));
   }
 
-  mfcc(
-    nFft = 2048,
-    hopLength = 512,
-    nMels = 128,
-    nMfcc = 20,
-    fmin = 0,
-    fmax = 0,
-    htk = false,
-  ): MfccResult {
-    return mfccFn(this.data, this.sampleRate, nFft, hopLength, nMels, nMfcc, fmin, fmax, htk);
+  mfcc(options?: AudioOptions<MfccRequest>): MfccResult {
+    return mfccFn(audioRequest('mfcc', this.data, this.sampleRate, options));
   }
 
-  chroma(nFft = 2048, hopLength = 512): ChromaResult {
-    return chromaFn(this.data, this.sampleRate, nFft, hopLength);
+  chroma(options?: AudioOptions<ChromaRequest>): ChromaResult {
+    return chromaFn(audioRequest('chroma', this.data, this.sampleRate, options));
   }
 
-  spectralCentroid(nFft = 2048, hopLength = 512): Float32Array {
-    return spectralCentroidFn(this.data, this.sampleRate, nFft, hopLength);
-  }
-
-  spectralBandwidth(nFft = 2048, hopLength = 512): Float32Array {
-    return spectralBandwidthFn(this.data, this.sampleRate, nFft, hopLength);
-  }
-
-  spectralRolloff(nFft = 2048, hopLength = 512, rollPercent = 0.85): Float32Array {
-    return spectralRolloffFn(this.data, this.sampleRate, nFft, hopLength, rollPercent);
-  }
-
-  spectralFlatness(nFft = 2048, hopLength = 512): Float32Array {
-    return spectralFlatnessFn(this.data, this.sampleRate, nFft, hopLength);
-  }
-
-  zeroCrossingRate(frameLength = 2048, hopLength = 512): Float32Array {
-    return zeroCrossingRateFn(this.data, this.sampleRate, frameLength, hopLength);
-  }
-
-  rmsEnergy(frameLength = 2048, hopLength = 512): Float32Array {
-    return rmsEnergyFn(this.data, this.sampleRate, frameLength, hopLength);
-  }
-
-  pitchYin(
-    frameLength = 2048,
-    hopLength = 512,
-    fmin = 65.0,
-    fmax = 2093.0,
-    threshold = 0.1,
-    fillNa = false,
-  ): PitchResult {
-    return pitchYinFn(
-      this.data,
-      this.sampleRate,
-      frameLength,
-      hopLength,
-      fmin,
-      fmax,
-      threshold,
-      fillNa,
+  spectralCentroid(options?: AudioOptions<SpectralCentroidRequest>): Float32Array {
+    return spectralCentroidFn(
+      audioRequest('spectralCentroid', this.data, this.sampleRate, options),
     );
   }
 
-  pitchPyin(
-    frameLength = 2048,
-    hopLength = 512,
-    fmin = 65.0,
-    fmax = 2093.0,
-    threshold = 0.1,
-    fillNa = false,
-  ): PitchResult {
-    return pitchPyinFn(
-      this.data,
-      this.sampleRate,
-      frameLength,
-      hopLength,
-      fmin,
-      fmax,
-      threshold,
-      fillNa,
+  spectralBandwidth(options?: AudioOptions<SpectralBandwidthRequest>): Float32Array {
+    return spectralBandwidthFn(
+      audioRequest('spectralBandwidth', this.data, this.sampleRate, options),
     );
   }
 
-  resample(targetSr: number): Float32Array {
-    return resampleFn(this.data, this.sampleRate, targetSr);
+  spectralRolloff(options?: AudioOptions<SpectralRolloffRequest>): Float32Array {
+    return spectralRolloffFn(audioRequest('spectralRolloff', this.data, this.sampleRate, options));
   }
 
-  onsetEnvelope(nFft = 2048, hopLength = 512, nMels = 128): Float32Array {
-    return onsetEnvelopeFn(this.data, this.sampleRate, nFft, hopLength, nMels);
+  spectralFlatness(options?: AudioOptions<SpectralFlatnessRequest>): Float32Array {
+    return spectralFlatnessFn(
+      audioRequest('spectralFlatness', this.data, this.sampleRate, options),
+    );
   }
 
-  nnlsChroma(): { nChroma: number; nFrames: number; data: Float32Array } {
-    return nnlsChromaFn(this.data, this.sampleRate);
+  zeroCrossingRate(options?: AudioOptions<ZeroCrossingRateRequest>): Float32Array {
+    return zeroCrossingRateFn(
+      audioRequest('zeroCrossingRate', this.data, this.sampleRate, options),
+    );
+  }
+
+  rmsEnergy(options?: AudioOptions<RmsEnergyRequest>): Float32Array {
+    return rmsEnergyFn(audioRequest('rmsEnergy', this.data, this.sampleRate, options));
+  }
+
+  pitchYin(options?: AudioOptions<PitchYinRequest>): PitchResult {
+    return pitchYinFn(audioRequest('pitchYin', this.data, this.sampleRate, options));
+  }
+
+  pitchPyin(options?: AudioOptions<PitchPyinRequest>): PitchResult {
+    return pitchPyinFn(audioRequest('pitchPyin', this.data, this.sampleRate, options));
+  }
+
+  resample(targetSampleRate: number): Float32Array {
+    return resampleFn(this.data, this.sampleRate, targetSampleRate);
+  }
+
+  onsetStrength(options?: AudioOptions<OnsetStrengthRequest>): Float32Array {
+    return onsetStrengthFn(audioRequest('onsetStrength', this.data, this.sampleRate, options));
+  }
+
+  /** Rows are the 12 chroma bins, cols are frames. */
+  nnlsChroma(options?: AudioOptions<NnlsChromaRequest>): Matrix2D {
+    return nnlsChromaFn(audioRequest('nnlsChroma', this.data, this.sampleRate, options));
   }
 
   lufs(options: ValidateOptions = {}): LufsResult {

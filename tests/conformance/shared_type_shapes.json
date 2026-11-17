@@ -5,7 +5,7 @@
       "crestFactor",
       "dynamicRangeDb",
       "isCompressed",
-      "loudnessRangeDb",
+      "loudnessRangeLu",
       "loudnessRmsDb",
       "loudnessTimes",
       "peakDb",
@@ -79,7 +79,5 @@
       "parent"
     ]
   },
-  "aliases": {
-    "DynamicsAnalysisResult": "DynamicsResult"
-  }
+  "aliases": {}
 }

@@ -114,18 +114,20 @@ const CASES: Case[] = [
 
   // StreamAnalyzer construction config.
   ...(
-    ['nMels', 'fmin', 'fmax', 'tuningRefHz', 'emitEveryNFrames', 'magnitudeDownsample'] as const
+    ['nMels', 'fminHz', 'fmaxHz', 'referenceHz', 'emitEveryNFrames', 'magnitudeDownsample'] as const
   ).map((key) => ({
     bag: 'StreamAnalyzer',
     key,
     wrongValue: `${key}`,
-    run: (options: Record<string, unknown>) => new StreamAnalyzer(options),
+    run: (options: Record<string, unknown>) =>
+      new StreamAnalyzer({ sampleRate: 22050, ...options } as never),
   })),
   ...(['computeMel', 'computeChroma', 'computeOnset', 'computeSpectral'] as const).map((key) => ({
     bag: 'StreamAnalyzer',
     key,
     wrongValue: 'true',
-    run: (options: Record<string, unknown>) => new StreamAnalyzer(options),
+    run: (options: Record<string, unknown>) =>
+      new StreamAnalyzer({ sampleRate: 22050, ...options } as never),
   })),
 ];
 

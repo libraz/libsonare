@@ -124,14 +124,14 @@ describe('analyzePolyphonic', () => {
         expect(note.offsetSample).toBeGreaterThan(note.onsetSample);
         expect(note.frameEnd).toBeGreaterThan(note.frameStart);
         expect(note.medianHz).toBeGreaterThan(0);
-        expect(note.edit.pitchShiftSemitones).toBe(0);
+        expect(note.edit.pitchSemitones).toBe(0);
         expect(note.edit.gainDb).toBe(0);
         expect(note.edit.timeOffsetSamples).toBe(0);
         // 1, not 0: zero is how a caller *writes* the identity, and the way out
         // reports the ratio that will be applied. The by-value door already does
         // this, and its own tests pin the same 1.
         expect(note.edit.timeStretchRatio).toBe(1);
-        expect(note.edit.formantShiftSemitones).toBe(0);
+        expect(note.edit.formantSemitones).toBe(0);
         expect(note.edit.vibratoDepthChange).toBe(0);
         expect(note.edit.driftChange).toBe(0);
         expect(note.edit.muted).toBe(false);
@@ -188,19 +188,23 @@ describe('analyzePolyphonic', () => {
     expect(withAnalysis((analysis) => analysis.frameCount)).toBe(DEFAULT_FRAMES);
   });
 
-  it('passes a float tuning field through to the tracker, and reads a negative as zero', () => {
+  it('passes a float tuning field through to the tracker, and reads 0 as the value 0', () => {
     // A ridge floor longer than the fixture drops every ridge, which is how the
     // float fields are shown to reach their stage rather than being ignored.
     expect(withAnalysis((analysis) => analysis.noteCount, { minRidgeDurationMs: 1e6 })).toBe(0);
-    // The sentinel's claim: on this field a negative is the value 0, not a
-    // refusal and not the default, so dropping the floor keeps at least what the
-    // default kept.
+    // On these fields 0 is the value 0, not the default, so dropping the floors
+    // keeps at least what the default kept; a negative is refused.
     expect(
       withAnalysis((analysis) => analysis.noteCount, {
-        minRidgeDurationMs: -1,
-        minSeparationCents: -1,
+        minRidgeDurationMs: 0,
+        minSeparationCents: 0,
       }),
     ).toBeGreaterThanOrEqual(2);
+    for (const field of ['minRidgeDurationMs', 'minSeparationCents'] as const) {
+      expect(() => withAnalysis((analysis) => analysis.noteCount, { [field]: -1 })).toThrow(
+        RangeError,
+      );
+    }
   });
 
   it('refuses an empty buffer and a sample rate out of range', () => {
@@ -245,7 +249,7 @@ describe('analyzePolyphonic', () => {
       analyzePolyphonic({
         samples: CHORD,
         sampleRate: SR,
-        tonalityOff: 1 as unknown as boolean,
+        tonality: 1 as unknown as boolean,
       }),
     ).toThrow(TypeError);
   });
@@ -255,13 +259,13 @@ describe('a polyphonic note edit', () => {
   it('reaches the render', () => {
     withAnalysis((analysis) => {
       const unedited = analysis.render();
-      analysis.setNoteEdit(0, { pitchShiftSemitones: 1 });
+      analysis.setNoteEdit(0, { pitchSemitones: 1 });
 
       // The edit came back, so the handle holds it rather than having validated
       // and dropped it.
       const notes = analysis.notes();
-      expect(notes[0].edit.pitchShiftSemitones).toBe(1);
-      expect(notes[1].edit.pitchShiftSemitones).toBe(0);
+      expect(notes[0].edit.pitchSemitones).toBe(1);
+      expect(notes[1].edit.pitchSemitones).toBe(0);
 
       // The assertion this whole surface exists for: a wrapper that accepts an
       // edit and never forwards it passes every readback above and fails here.
@@ -334,10 +338,10 @@ describe('a polyphonic note edit', () => {
     withAnalysis((analysis) => {
       analysis.setNoteEdit(0, {
         timeOffsetSamples: undefined,
-        pitchShiftSemitones: undefined,
+        pitchSemitones: undefined,
         gainDb: undefined,
         timeStretchRatio: undefined,
-        formantShiftSemitones: undefined,
+        formantSemitones: undefined,
         vibratoDepthChange: undefined,
         driftChange: undefined,
         muted: undefined,
@@ -511,12 +515,11 @@ describe('reattackRatio', () => {
 
   it('splits a re-struck tone when set and leaves it whole when omitted', () => {
     expect(notes()).toBe(1);
-    expect(notes({ reattackRatio: 0 })).toBe(1);
     expect(notes({ reattackRatio: 2 })).toBe(2);
   });
 
-  it('refuses a ratio outside 0 or above 1', () => {
-    for (const reattackRatio of [0.5, 1, -1]) {
+  it('refuses a ratio that is 0 or not above 1', () => {
+    for (const reattackRatio of [0, 0.5, 1, -1]) {
       expect(() => notes({ reattackRatio })).toThrow(RangeError);
     }
   });

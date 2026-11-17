@@ -14,25 +14,20 @@ describe('request contract gaps', () => {
       minNoteMs: 10,
       referenceHz: 442,
     });
-    const nestedConfig = Object.freeze({
-      segmentationThresholdCents: 30,
-      minNoteMs: 10,
-      referenceHz: 442,
-    });
 
     const flatResult = noteSegments(flatRequest);
-    const nestedResult = noteSegments(Object.freeze({ ...baseRequest, config: nestedConfig }));
 
-    expect(flatResult).toEqual(nestedResult);
+    expect(flatResult.length).toBeGreaterThan(0);
     expect(flatRequest).not.toHaveProperty('config');
-    expect(nestedConfig).toEqual({
+    expect(flatRequest).toEqual({
+      ...baseRequest,
       segmentationThresholdCents: 30,
       minNoteMs: 10,
       referenceHz: 442,
     });
   });
 
-  it('rejects duplicate flat and deprecated nested tuning options', () => {
+  it('refuses a nested config object as an unknown request key', () => {
     expect(() =>
       noteSegments({
         f0Hz: new Float32Array([440, 440]),
@@ -40,7 +35,7 @@ describe('request contract gaps', () => {
         frameRate: 100,
         minNoteMs: 10,
         config: { minNoteMs: 20 },
-      }),
-    ).toThrow(RangeError);
+      } as never),
+    ).toThrow("noteSegments: unknown request key 'config'");
   });
 });

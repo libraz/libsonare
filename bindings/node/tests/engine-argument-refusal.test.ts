@@ -66,7 +66,7 @@ describe('RealtimeEngine state refusals stay coded SonareError', () => {
       expect(() => engine.setMasterStripInsertBypassed(0, true)).toThrow(
         expect.objectContaining({ code: ErrorCode.InvalidState }),
       );
-      expect(() => engine.setMasterStripEqBand(0, { type: 'Peak', enabled: true })).toThrow(
+      expect(() => engine.setMasterStripEqBand(0, { type: 'peak', enabled: true })).toThrow(
         expect.objectContaining({ code: ErrorCode.InvalidState }),
       );
       expect(() => engine.resolveMasterInsertAutomationId(0, 'thresholdDb')).toThrow(

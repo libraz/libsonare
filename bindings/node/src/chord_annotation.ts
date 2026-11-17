@@ -16,8 +16,8 @@ export type ChordSymbolFields = Required<
  * into an entry for {@link Project.annotateChords}; the caller supplies
  * `startPpq` and `endPpq`.
  *
- * @param chord A {@link Chord} or an {@link AnalysisChord}; root, bass and quality are
- *        ordinals (a pitch-class or quality name is also read).
+ * @param chord A {@link Chord} or an {@link AnalysisChord}: `root` and `bass` are pitch
+ *        classes and `quality` is a {@link ChordQuality} token.
  * @throws `TypeError` when `chord` is not an object or a field has the wrong type;
  *         `RangeError` naming the field for an unrecognised pitch class or quality.
  *

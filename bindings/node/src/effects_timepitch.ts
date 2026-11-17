@@ -7,6 +7,7 @@ import type { EffectSamplesRequest } from './internal/effects_common.js';
 import { assertPitchTrackLengths, toVoicedInt32 } from './internal/effects_common.js';
 import { resolvePositiveIntegerOption } from './internal/feature_options.js';
 import { resolveEffectFftOptions } from './internal/fft_options.js';
+import { KEY_MODES } from './internal/key_modes.js';
 import { addon } from './native.js';
 import type {
   AutoTuneKey,
@@ -15,7 +16,14 @@ import type {
   PitchCorrectOptions,
   VoicedFlags,
 } from './types.js';
-import { assertAudioInput, assertFiniteScalar, optionsBag, requestObject } from './validation.js';
+import {
+  assertAudioInput,
+  assertClosedToken,
+  assertFiniteScalar,
+  assertPitchClass,
+  optionsBag,
+  requestObject,
+} from './validation.js';
 
 export interface TimeStretchRequest extends EffectSamplesRequest {
   /**
@@ -55,8 +63,10 @@ export interface PitchCorrectTimevaryingRequest extends EffectSamplesRequest, Pi
 export interface AutoTuneRequest extends EffectSamplesRequest, AutoTuneOptions {
   /**
    * `'detect'` (default) finds the key with {@link detectKey}'s defaults; a
-   * `{ root, mode }` names it, as {@link detectKey}'s result does (pitch class
-   * and mode by name or ordinal).
+   * `{ root, mode }` names it, as {@link detectKey}'s result does: `root` an
+   * integer pitch class `0..11` (`RangeError` otherwise, `TypeError` for a
+   * non-number), `mode` a {@link KeyMode} token (`RangeError` for an unknown one,
+   * `TypeError` for a non-string).
    */
   key?: 'detect' | AutoTuneKey;
 }
@@ -389,5 +399,11 @@ export function autoTune(request: AutoTuneRequest): AutoTuneResult {
     throw new TypeError("autoTune: key must be 'detect' or { root, mode }");
   }
   assertAudioInput('autoTune', samples, sampleRate ?? 22050, options);
-  return addon.autoTune(samples, sampleRate ?? 22050, key === 'detect' ? null : key, options);
+  let nativeKey: AutoTuneKey | null = null;
+  if (key !== 'detect') {
+    assertPitchClass('autoTune', key.root, 'key.root');
+    assertClosedToken('autoTune', key.mode, KEY_MODES, 'key.mode');
+    nativeKey = { root: key.root, mode: key.mode };
+  }
+  return addon.autoTune(samples, sampleRate ?? 22050, nativeKey, options);
 }

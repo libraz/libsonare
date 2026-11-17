@@ -56,7 +56,11 @@ describe('splitSilenceCommon', () => {
   const signalB = toneBurst(Math.floor(0.5 * SR), Math.floor(0.7 * SR));
 
   it('matches splitSilence exactly for a single signal', () => {
-    const expected = splitSilence(signalA, TOP_DB, FRAME_LENGTH, HOP_LENGTH);
+    const expected = splitSilence(signalA, SR, {
+      topDb: TOP_DB,
+      frameLength: FRAME_LENGTH,
+      hopLength: HOP_LENGTH,
+    });
     const actual = splitSilenceCommon({
       signals: [signalA],
       topDb: TOP_DB,
@@ -67,8 +71,20 @@ describe('splitSilenceCommon', () => {
   });
 
   it('returns the union of each signal, not their intersection', () => {
-    const pairsA = toPairs(splitSilence(signalA, TOP_DB, FRAME_LENGTH, HOP_LENGTH));
-    const pairsB = toPairs(splitSilence(signalB, TOP_DB, FRAME_LENGTH, HOP_LENGTH));
+    const pairsA = toPairs(
+      splitSilence(signalA, SR, {
+        topDb: TOP_DB,
+        frameLength: FRAME_LENGTH,
+        hopLength: HOP_LENGTH,
+      }),
+    );
+    const pairsB = toPairs(
+      splitSilence(signalB, SR, {
+        topDb: TOP_DB,
+        frameLength: FRAME_LENGTH,
+        hopLength: HOP_LENGTH,
+      }),
+    );
     const expected = flattenPairs(mergeTouchingPairs([...pairsA, ...pairsB]));
 
     const actual = splitSilenceCommon({
@@ -106,7 +122,11 @@ describe('splitSilenceCommon', () => {
   it('needs no padding for a shorter signal cut before its sound starts', () => {
     // Ends before signalB's onset, so this contributes nothing but silence.
     const truncatedBeforeSound = signalB.slice(0, Math.floor(0.4 * SR));
-    const expected = splitSilence(signalA, TOP_DB, FRAME_LENGTH, HOP_LENGTH);
+    const expected = splitSilence(signalA, SR, {
+      topDb: TOP_DB,
+      frameLength: FRAME_LENGTH,
+      hopLength: HOP_LENGTH,
+    });
     const actual = splitSilenceCommon({
       signals: [signalA, truncatedBeforeSound],
       topDb: TOP_DB,

@@ -22,7 +22,7 @@ import { describe, expect, it } from 'vitest';
 import {
   analyzeBpm,
   type NoteEditInput,
-  onsetEnvelope,
+  onsetStrength,
   peakPick,
   renderNotes,
 } from '../src/index.js';
@@ -81,13 +81,16 @@ describe('analyzeBpm narrows the bpmMin positional argument', () => {
   it('reads two legitimate bpmMin values as two different analyses', () => {
     // Without this every refusal below would pass equally well against an
     // argument the entry point never reads.
+    // An omitted bpmMin is the explicit 60, so a floor below the 120 BPM
+    // clicks changes nothing while one above them moves the answer.
     const base = run();
     const low = run(100);
     const high = run(150);
-    expect(low.candidates.length).not.toBe(base.candidates.length);
+    expect(run(60)).toEqual(base);
+    expect(low.bpm).toBe(base.bpm);
     expect(high.candidates.length).not.toBe(base.candidates.length);
-    expect(low.candidates.length).not.toBe(high.candidates.length);
-    expect(low.bpm).not.toBe(high.bpm);
+    expect(high.bpm).not.toBe(base.bpm);
+    expect(high.bpm).not.toBe(low.bpm);
   });
 
   it('refuses a finite bpmMin no float can hold, naming the argument', () => {
@@ -130,7 +133,7 @@ describe('analyzeBpm narrows the bpmMin positional argument', () => {
 });
 
 describe('peakPick narrows the required delta value', () => {
-  const envelope = onsetEnvelope(clicks, SAMPLE_RATE);
+  const envelope = onsetStrength(clicks, SAMPLE_RATE);
   const pick = (delta: number) =>
     peakPick({ values: envelope, preMax: 3, postMax: 3, preAvg: 3, postAvg: 5, delta, wait: 5 });
   const peaks = (delta: number) => pick(delta).length;

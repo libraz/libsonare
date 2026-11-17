@@ -1,4 +1,4 @@
-import type { ValuesRequest } from './feature_units.js';
+import { assertMatrix2D, toMatrix2D } from './internal/feature_matrix.js';
 import { resolveFftOptions } from './internal/fft_options.js';
 import { addon } from './native.js';
 import type {
@@ -6,591 +6,182 @@ import type {
   MelSpectrogramResult,
   MfccResult,
   ReassignedSpectrogramResult,
-  StftDbResult,
   StftResult,
 } from './types.js';
 import {
   assertAudioInput,
+  assertFloatFields,
   assertNonNegativeScalar,
+  assertPositiveFloatValue,
   assertPositiveInteger,
   assertSampleRate,
-  optionsBag,
-  requestObject,
+  requestOnly,
+  sampleOneShot,
 } from './validation.js';
 
-/** Common input for one-shot feature extraction requests. */
-export interface FeatureSamplesRequest {
+/** Request for {@link stft}. `validate: false` skips the NaN/Inf pre-scan. */
+export interface StftRequest {
   samples: Float32Array;
-  sampleRate?: number;
+  sampleRate: number;
+  /** Even FFT size in samples. Default 2048. */
+  nFft?: number;
+  /** Hop in samples. Default 512. */
+  hopLength?: number;
+  validate?: boolean;
 }
 
-export interface StftRequest extends FeatureSamplesRequest {
+/** Request for {@link stftDb}. */
+export type StftDbRequest = StftRequest;
+
+/** Request for {@link spectralCentroid}. */
+export type SpectralCentroidRequest = StftRequest;
+
+/** Request for {@link spectralFlatness}. */
+export type SpectralFlatnessRequest = StftRequest;
+
+/** Request for {@link melSpectrogram}. */
+export interface MelSpectrogramRequest {
+  samples: Float32Array;
+  sampleRate: number;
+  /** Mel bands. Default 128. */
+  nMels?: number;
+  /** Lower band edge in Hz. Default 0. */
+  fminHz?: number;
+  /** Upper band edge in Hz. Absent means the Nyquist. */
+  fmaxHz?: number;
+  /** HTK mel formula instead of Slaney. Default false. */
+  htk?: boolean;
   nFft?: number;
   hopLength?: number;
-}
-export interface MelSpectrogramRequest extends StftRequest {
-  nMels?: number;
-  fmin?: number;
-  fmax?: number;
-  htk?: boolean;
+  validate?: boolean;
 }
 
-export interface MfccRequest extends MelSpectrogramRequest {
+/** Request for {@link mfcc}. */
+export interface MfccRequest {
+  samples: Float32Array;
+  sampleRate: number;
+  /** Coefficients kept. Default 20. */
   nMfcc?: number;
+  /** Cepstral lifter; 0 means none. Default 0. */
   lifter?: number;
+  nMels?: number;
+  fminHz?: number;
+  fmaxHz?: number;
+  htk?: boolean;
+  nFft?: number;
+  hopLength?: number;
+  validate?: boolean;
 }
+
+/** Request for {@link melDelta}. */
 export interface MelDeltaRequest {
-  features: Float32Array;
-  nFeatures: number;
-  nFrames: number;
+  /** Feature matrix: rows = features, cols = frames. */
+  features: Matrix2D;
+  /** Odd regression width of at least 3. Default 9. */
   width?: number;
+  validate?: boolean;
 }
 
-export interface ReassignedSpectrogramRequest extends StftRequest {
+/** Request for {@link reassignedSpectrogram}. */
+export interface ReassignedSpectrogramRequest {
+  samples: Float32Array;
+  sampleRate: number;
+  /** Power floor under which a bin is not reassigned. Default 1e-6. */
   refPower?: number;
+  /** Fill unreassigned bins with NaN instead of the bin centre. Default false. */
   fillNan?: boolean;
+  nFft?: number;
+  hopLength?: number;
+  validate?: boolean;
 }
 
-export interface SpectralContrastRequest extends StftRequest {
+/** Request for {@link spectralContrast}. */
+export interface SpectralContrastRequest {
+  samples: Float32Array;
+  sampleRate: number;
+  /** Contrast bands. Default 6. */
   nBands?: number;
-  fmin?: number;
+  /** Lower edge of the lowest band, in Hz. Default 200. */
+  fminHz?: number;
+  /** Quantile separating peak from valley. Default 0.02. */
   quantile?: number;
-}
-export interface PolyFeaturesRequest extends StftRequest {
-  order?: number;
+  nFft?: number;
+  hopLength?: number;
+  validate?: boolean;
 }
 
+/** Request for {@link polyFeatures}. */
+export interface PolyFeaturesRequest {
+  samples: Float32Array;
+  sampleRate: number;
+  /** Polynomial order. Default 1. */
+  order?: number;
+  nFft?: number;
+  hopLength?: number;
+  validate?: boolean;
+}
+
+/** Request for {@link zeroCrossings}. */
 export interface ZeroCrossingsRequest {
   samples: Float32Array;
+  sampleRate: number;
   threshold?: number;
   refMagnitude?: boolean;
   pad?: boolean;
   zeroPos?: boolean;
+  validate?: boolean;
 }
 
-export function stft(request: StftRequest): StftResult;
-export function stft(
-  samples: Float32Array,
-  sampleRate?: number,
-  nFft?: number,
-  hopLength?: number,
-): StftResult;
-export function stft(
-  samples: Float32Array | StftRequest,
-  sampleRate = 22050,
-  nFft = 2048,
-  hopLength = 512,
-): StftResult {
-  const request =
-    samples instanceof Float32Array
-      ? { samples, sampleRate, nFft, hopLength }
-      : requestObject('stft', samples);
-  const resolvedSampleRate = request.sampleRate ?? 22050;
-  assertAudioInput('stft', request.samples, resolvedSampleRate, request);
-  const fft = resolveFftOptions('stft', request.nFft, request.hopLength);
-  return addon.stft(request.samples, resolvedSampleRate, fft.nFft, fft.hopLength);
+/** Request for {@link spectralBandwidth}. */
+export interface SpectralBandwidthRequest {
+  samples: Float32Array;
+  sampleRate: number;
+  nFft?: number;
+  hopLength?: number;
+  /** Norm order of the deviation. Default 2. */
+  p?: number;
+  validate?: boolean;
 }
 
-export function stftDb(request: StftRequest): StftDbResult;
-export function stftDb(
-  samples: Float32Array,
-  sampleRate?: number,
-  nFft?: number,
-  hopLength?: number,
-): StftDbResult;
-export function stftDb(
-  samples: Float32Array | StftRequest,
-  sampleRate = 22050,
-  nFft = 2048,
-  hopLength = 512,
-): StftDbResult {
-  const request =
-    samples instanceof Float32Array
-      ? { samples, sampleRate, nFft, hopLength }
-      : requestObject('stftDb', samples);
-  const resolvedSampleRate = request.sampleRate ?? 22050;
-  assertAudioInput('stftDb', request.samples, resolvedSampleRate, request);
-  const fft = resolveFftOptions('stftDb', request.nFft, request.hopLength);
-  return addon.stftDb(request.samples, resolvedSampleRate, fft.nFft, fft.hopLength);
+/** Request for {@link spectralRolloff}. */
+export interface SpectralRolloffRequest {
+  samples: Float32Array;
+  sampleRate: number;
+  /** Energy fraction below the rolloff frequency. Default 0.85. */
+  rollPercent?: number;
+  nFft?: number;
+  hopLength?: number;
+  validate?: boolean;
 }
 
-export function melSpectrogram(request: MelSpectrogramRequest): MelSpectrogramResult;
-export function melSpectrogram(
-  samples: Float32Array,
-  sampleRate?: number,
-  nFft?: number,
-  hopLength?: number,
-  nMels?: number,
-  fmin?: number,
-  fmax?: number,
-  htk?: boolean,
-): MelSpectrogramResult;
-export function melSpectrogram(
-  samples: Float32Array | MelSpectrogramRequest,
-  sampleRate = 22050,
-  nFft = 2048,
-  hopLength = 512,
-  nMels = 128,
-  fmin = 0,
-  fmax = 0,
-  htk = false,
-): MelSpectrogramResult {
-  const request =
-    samples instanceof Float32Array
-      ? { samples, sampleRate, nFft, hopLength, nMels, fmin, fmax, htk }
-      : requestObject('melSpectrogram', samples);
-  const resolvedSampleRate = request.sampleRate ?? 22050;
-  assertAudioInput('melSpectrogram', request.samples, resolvedSampleRate, request);
-  const fft = resolveFftOptions('melSpectrogram', request.nFft, request.hopLength);
-  assertPositiveInteger('melSpectrogram', request.nMels ?? 128, 'nMels');
-  return addon.melSpectrogram(
-    request.samples,
-    resolvedSampleRate,
-    fft.nFft,
-    fft.hopLength,
-    request.nMels ?? 128,
-    request.fmin ?? 0,
-    request.fmax ?? 0,
-    request.htk ?? false,
-  );
+/** Request for {@link spectralFlux}. */
+export interface SpectralFluxRequest {
+  samples: Float32Array;
+  sampleRate: number;
+  nFft?: number;
+  hopLength?: number;
+  /** Frame lag of the difference. Default 1. */
+  lag?: number;
+  validate?: boolean;
 }
 
-export function mfcc(request: MfccRequest): MfccResult;
-export function mfcc(
-  samples: Float32Array,
-  sampleRate?: number,
-  nFft?: number,
-  hopLength?: number,
-  nMels?: number,
-  nMfcc?: number,
-  fmin?: number,
-  fmax?: number,
-  htk?: boolean,
-  lifter?: number,
-): MfccResult;
-export function mfcc(
-  samples: Float32Array | MfccRequest,
-  sampleRate = 22050,
-  nFft = 2048,
-  hopLength = 512,
-  nMels = 128,
-  nMfcc = 20,
-  fmin = 0,
-  fmax = 0,
-  htk = false,
-  lifter = 0,
-): MfccResult {
-  const request =
-    samples instanceof Float32Array
-      ? { samples, sampleRate, nFft, hopLength, nMels, nMfcc, fmin, fmax, htk, lifter }
-      : requestObject('mfcc', samples);
-  const resolvedSampleRate = request.sampleRate ?? 22050;
-  assertAudioInput('mfcc', request.samples, resolvedSampleRate, request);
-  const fft = resolveFftOptions('mfcc', request.nFft, request.hopLength);
-  assertPositiveInteger('mfcc', request.nMels ?? 128, 'nMels');
-  assertPositiveInteger('mfcc', request.nMfcc ?? 20, 'nMfcc');
-  return addon.mfcc(
-    request.samples,
-    resolvedSampleRate,
-    fft.nFft,
-    fft.hopLength,
-    request.nMels ?? 128,
-    request.nMfcc ?? 20,
-    request.fmin ?? 0,
-    request.fmax ?? 0,
-    request.htk ?? false,
-    request.lifter ?? 0,
-  );
+/** Request for {@link zeroCrossingRate}. */
+export interface ZeroCrossingRateRequest {
+  samples: Float32Array;
+  sampleRate: number;
+  /** Framing window in samples. Default 2048. */
+  frameLength?: number;
+  hopLength?: number;
+  validate?: boolean;
 }
 
-/** First-order regression delta of a row-major feature matrix. */
-export function melDelta(request: MelDeltaRequest): Float32Array;
-export function melDelta(
-  features: Float32Array,
-  nFeatures: number,
-  nFrames: number,
-  width?: number,
-): Float32Array;
-export function melDelta(
-  features: Float32Array | MelDeltaRequest,
-  nFeatures?: number,
-  nFrames?: number,
-  width = 9,
-): Float32Array {
-  const request: MelDeltaRequest =
-    features instanceof Float32Array
-      ? { features, nFeatures: nFeatures ?? 0, nFrames: nFrames ?? 0, width }
-      : requestObject('melDelta', features, 'features');
-  assertPositiveInteger('melDelta', request.nFeatures, 'nFeatures');
-  assertPositiveInteger('melDelta', request.nFrames, 'nFrames');
-  assertPositiveInteger('melDelta', request.width ?? 9, 'width');
-  if ((request.width ?? 9) < 3 || (request.width ?? 9) % 2 === 0) {
-    throw new RangeError('melDelta: width must be an odd integer of at least 3');
-  }
-  if (request.features.length !== request.nFeatures * request.nFrames) {
-    throw new RangeError('melDelta: feature matrix length must equal nFeatures * nFrames');
-  }
-  return addon.melDelta(request.features, request.nFeatures, request.nFrames, request.width ?? 9);
-}
+/** Request for {@link rmsEnergy}. */
+export type RmsEnergyRequest = ZeroCrossingRateRequest;
 
-/** Auger-Flandrin reassigned spectrogram (row-major [nBins x nFrames] arrays). */
-export function reassignedSpectrogram(
-  request: ReassignedSpectrogramRequest,
-): ReassignedSpectrogramResult;
-export function reassignedSpectrogram(
-  samples: Float32Array,
-  sampleRate?: number,
-  nFft?: number,
-  hopLength?: number,
-  refPower?: number,
-  fillNan?: boolean,
-): ReassignedSpectrogramResult;
-export function reassignedSpectrogram(
-  samples: Float32Array | ReassignedSpectrogramRequest,
-  sampleRate = 22050,
-  nFft = 2048,
-  hopLength = 512,
-  refPower = 1e-6,
-  fillNan = false,
-): ReassignedSpectrogramResult {
-  const request =
-    samples instanceof Float32Array
-      ? { samples, sampleRate, nFft, hopLength, refPower, fillNan }
-      : requestObject('reassignedSpectrogram', samples);
-  const resolvedRefPower = request.refPower ?? 1e-6;
-  assertNonNegativeScalar('reassignedSpectrogram', resolvedRefPower, 'refPower');
-  const resolvedSampleRate = request.sampleRate ?? 22050;
-  assertAudioInput('reassignedSpectrogram', request.samples, resolvedSampleRate, {});
-  const fft = resolveFftOptions('reassignedSpectrogram', request.nFft, request.hopLength);
-  return addon.reassignedSpectrogram(
-    request.samples,
-    resolvedSampleRate,
-    fft.nFft,
-    fft.hopLength,
-    resolvedRefPower,
-    request.fillNan ?? false,
-  );
-}
-
-export function spectralCentroid(request: StftRequest): Float32Array;
-export function spectralCentroid(
-  samples: Float32Array,
-  sampleRate?: number,
-  nFft?: number,
-  hopLength?: number,
-): Float32Array;
-export function spectralCentroid(
-  samples: Float32Array | StftRequest,
-  sampleRate = 22050,
-  nFft = 2048,
-  hopLength = 512,
-): Float32Array {
-  const request =
-    samples instanceof Float32Array
-      ? { samples, sampleRate, nFft, hopLength }
-      : requestObject('spectralCentroid', samples);
-  const resolvedSampleRate = request.sampleRate ?? 22050;
-  assertAudioInput('spectralCentroid', request.samples, resolvedSampleRate, request);
-  const fft = resolveFftOptions('spectralCentroid', request.nFft, request.hopLength);
-  return addon.spectralCentroid(request.samples, resolvedSampleRate, fft.nFft, fft.hopLength);
-}
-
-/**
- * Spectral contrast (librosa.feature.spectral_contrast); (nBands+1) x nFrames.
- *
- * @remarks
- * Band 0 spans `[0, fmin]`, so an `fmin` below one analysis bin
- * (`sampleRate / nFft`) leaves it empty after the band trim. Row 0 is still
- * finite, but comes from the other bands' extremes rather than from itself, and
- * is neither level-invariant nor confined to the band. Keep `fmin` at or above
- * one bin width for row 0 to mean anything — at the defaults (22050 Hz, 2048)
- * one bin is 10.8 Hz, so only a small `nFft` or a tiny `fmin` reaches this.
- */
-export function spectralContrast(request: SpectralContrastRequest): Matrix2D;
-export function spectralContrast(
-  samples: Float32Array,
-  sampleRate?: number,
-  nFft?: number,
-  hopLength?: number,
-  nBands?: number,
-  fmin?: number,
-  quantile?: number,
-): Matrix2D;
-export function spectralContrast(
-  samples: Float32Array | SpectralContrastRequest,
-  sampleRate = 22050,
-  nFft = 2048,
-  hopLength = 512,
-  nBands = 6,
-  fmin = 200.0,
-  quantile = 0.02,
-): Matrix2D {
-  const request =
-    samples instanceof Float32Array
-      ? { samples, sampleRate, nFft, hopLength, nBands, fmin, quantile }
-      : requestObject('spectralContrast', samples);
-  const resolvedSampleRate = request.sampleRate ?? 22050;
-  assertAudioInput('spectralContrast', request.samples, resolvedSampleRate, request);
-  const fft = resolveFftOptions('spectralContrast', request.nFft, request.hopLength);
-  assertPositiveInteger('spectralContrast', request.nBands ?? 6, 'nBands');
-  return addon.spectralContrast(
-    request.samples,
-    resolvedSampleRate,
-    fft.nFft,
-    fft.hopLength,
-    request.nBands ?? 6,
-    request.fmin ?? 200,
-    request.quantile ?? 0.02,
-  );
-}
-
-/** Per-frame polynomial coefficients (librosa.feature.poly_features); (order+1) x nFrames. */
-export function polyFeatures(request: PolyFeaturesRequest): Matrix2D;
-export function polyFeatures(
-  samples: Float32Array,
-  sampleRate?: number,
-  nFft?: number,
-  hopLength?: number,
-  order?: number,
-): Matrix2D;
-export function polyFeatures(
-  samples: Float32Array | PolyFeaturesRequest,
-  sampleRate = 22050,
-  nFft = 2048,
-  hopLength = 512,
-  order = 1,
-): Matrix2D {
-  const request =
-    samples instanceof Float32Array
-      ? { samples, sampleRate, nFft, hopLength, order }
-      : requestObject('polyFeatures', samples);
-  const resolvedSampleRate = request.sampleRate ?? 22050;
-  assertAudioInput('polyFeatures', request.samples, resolvedSampleRate, request);
-  const fft = resolveFftOptions('polyFeatures', request.nFft, request.hopLength);
-  return addon.polyFeatures(
-    request.samples,
-    resolvedSampleRate,
-    fft.nFft,
-    fft.hopLength,
-    request.order ?? 1,
-  );
-}
-
-/** Zero-crossing indices of a signal (librosa.zero_crossings). */
-export function zeroCrossings(request: ZeroCrossingsRequest): Int32Array;
-export function zeroCrossings(
-  samples: Float32Array,
-  threshold?: number,
-  refMagnitude?: boolean,
-  pad?: boolean,
-  zeroPos?: boolean,
-): Int32Array;
-export function zeroCrossings(
-  samples: Float32Array | ZeroCrossingsRequest,
-  threshold = 1e-10,
-  refMagnitude = false,
-  pad = true,
-  zeroPos = true,
-): Int32Array {
-  const request =
-    samples instanceof Float32Array
-      ? { samples, threshold, refMagnitude, pad, zeroPos }
-      : requestObject('zeroCrossings', samples);
-  return addon.zeroCrossings(
-    request.samples,
-    request.threshold ?? 1e-10,
-    request.refMagnitude ?? false,
-    request.pad ?? true,
-    request.zeroPos ?? true,
-  );
-}
-
-export function spectralBandwidth(request: StftRequest & { p?: number }): Float32Array;
-export function spectralBandwidth(
-  samples: Float32Array,
-  sampleRate?: number,
-  nFft?: number,
-  hopLength?: number,
-  p?: number,
-): Float32Array;
-export function spectralBandwidth(
-  samples: Float32Array | (StftRequest & { p?: number }),
-  sampleRate = 22050,
-  nFft = 2048,
-  hopLength = 512,
-  p = 2,
-): Float32Array {
-  const request =
-    samples instanceof Float32Array
-      ? { samples, sampleRate, nFft, hopLength, p }
-      : requestObject('spectralBandwidth', samples);
-  const resolvedSampleRate = request.sampleRate ?? 22050;
-  assertAudioInput('spectralBandwidth', request.samples, resolvedSampleRate, request);
-  const fft = resolveFftOptions('spectralBandwidth', request.nFft, request.hopLength);
-  return addon.spectralBandwidth(
-    request.samples,
-    resolvedSampleRate,
-    fft.nFft,
-    fft.hopLength,
-    request.p ?? 2,
-  );
-}
-
-export function spectralRolloff(request: StftRequest & { rollPercent?: number }): Float32Array;
-export function spectralRolloff(
-  samples: Float32Array,
-  sampleRate?: number,
-  nFft?: number,
-  hopLength?: number,
-  rollPercent?: number,
-): Float32Array;
-export function spectralRolloff(
-  samples: Float32Array | (StftRequest & { rollPercent?: number }),
-  sampleRate = 22050,
-  nFft = 2048,
-  hopLength = 512,
-  rollPercent = 0.85,
-): Float32Array {
-  const request =
-    samples instanceof Float32Array
-      ? { samples, sampleRate, nFft, hopLength, rollPercent }
-      : requestObject('spectralRolloff', samples);
-  const resolvedSampleRate = request.sampleRate ?? 22050;
-  assertAudioInput('spectralRolloff', request.samples, resolvedSampleRate, request);
-  const fft = resolveFftOptions('spectralRolloff', request.nFft, request.hopLength);
-  return addon.spectralRolloff(
-    request.samples,
-    resolvedSampleRate,
-    fft.nFft,
-    fft.hopLength,
-    request.rollPercent ?? 0.85,
-  );
-}
-
-export function spectralFlatness(request: StftRequest): Float32Array;
-export function spectralFlatness(
-  samples: Float32Array,
-  sampleRate?: number,
-  nFft?: number,
-  hopLength?: number,
-): Float32Array;
-export function spectralFlatness(
-  samples: Float32Array | StftRequest,
-  sampleRate = 22050,
-  nFft = 2048,
-  hopLength = 512,
-): Float32Array {
-  const request =
-    samples instanceof Float32Array
-      ? { samples, sampleRate, nFft, hopLength }
-      : requestObject('spectralFlatness', samples);
-  const resolvedSampleRate = request.sampleRate ?? 22050;
-  assertAudioInput('spectralFlatness', request.samples, resolvedSampleRate, request);
-  const fft = resolveFftOptions('spectralFlatness', request.nFft, request.hopLength);
-  return addon.spectralFlatness(request.samples, resolvedSampleRate, fft.nFft, fft.hopLength);
-}
-
-export function spectralFlux(request: StftRequest & { lag?: number }): Float32Array;
-export function spectralFlux(
-  samples: Float32Array,
-  sampleRate?: number,
-  nFft?: number,
-  hopLength?: number,
-  lag?: number,
-): Float32Array;
-export function spectralFlux(
-  samples: Float32Array | (StftRequest & { lag?: number }),
-  sampleRate = 22050,
-  nFft = 2048,
-  hopLength = 512,
-  lag = 1,
-): Float32Array {
-  const request =
-    samples instanceof Float32Array
-      ? { samples, sampleRate, nFft, hopLength, lag }
-      : requestObject('spectralFlux', samples);
-  const resolvedSampleRate = request.sampleRate ?? 22050;
-  assertAudioInput('spectralFlux', request.samples, resolvedSampleRate, request);
-  const fft = resolveFftOptions('spectralFlux', request.nFft, request.hopLength);
-  assertPositiveInteger('spectralFlux', request.lag ?? 1, 'lag');
-  return addon.spectralFlux(
-    request.samples,
-    resolvedSampleRate,
-    fft.nFft,
-    fft.hopLength,
-    request.lag ?? 1,
-  );
-}
-
-export function zeroCrossingRate(
-  request: FeatureSamplesRequest & { frameLength?: number; hopLength?: number },
-): Float32Array;
-export function zeroCrossingRate(
-  samples: Float32Array,
-  sampleRate?: number,
-  frameLength?: number,
-  hopLength?: number,
-): Float32Array;
-export function zeroCrossingRate(
-  samples: Float32Array | (FeatureSamplesRequest & { frameLength?: number; hopLength?: number }),
-  sampleRate = 22050,
-  frameLength = 2048,
-  hopLength = 512,
-): Float32Array {
-  const request =
-    samples instanceof Float32Array
-      ? { samples, sampleRate, frameLength, hopLength }
-      : requestObject('zeroCrossingRate', samples);
-  const resolvedSampleRate = request.sampleRate ?? 22050;
-  assertAudioInput('zeroCrossingRate', request.samples, resolvedSampleRate, request);
-  // A framing window is not a transform size, so the evenness rule the FFT
-  // resolver carries does not apply to it.
-  assertPositiveInteger('zeroCrossingRate', request.frameLength ?? 2048, 'frameLength');
-  assertPositiveInteger('zeroCrossingRate', request.hopLength ?? 512, 'hopLength');
-  return addon.zeroCrossingRate(
-    request.samples,
-    resolvedSampleRate,
-    request.frameLength ?? 2048,
-    request.hopLength ?? 512,
-  );
-}
-
-export function rmsEnergy(
-  request: FeatureSamplesRequest & { frameLength?: number; hopLength?: number },
-): Float32Array;
-export function rmsEnergy(
-  samples: Float32Array,
-  sampleRate?: number,
-  frameLength?: number,
-  hopLength?: number,
-): Float32Array;
-export function rmsEnergy(
-  samples: Float32Array | (FeatureSamplesRequest & { frameLength?: number; hopLength?: number }),
-  sampleRate = 22050,
-  frameLength = 2048,
-  hopLength = 512,
-): Float32Array {
-  const request =
-    samples instanceof Float32Array
-      ? { samples, sampleRate, frameLength, hopLength }
-      : requestObject('rmsEnergy', samples);
-  const resolvedSampleRate = request.sampleRate ?? 22050;
-  assertAudioInput('rmsEnergy', request.samples, resolvedSampleRate, request);
-  assertPositiveInteger('rmsEnergy', request.frameLength ?? 2048, 'frameLength');
-  assertPositiveInteger('rmsEnergy', request.hopLength ?? 512, 'hopLength');
-  return addon.rmsEnergy(
-    request.samples,
-    resolvedSampleRate,
-    request.frameLength ?? 2048,
-    request.hopLength ?? 512,
-  );
-}
-
-/**
- * Tuning parameters for {@link pcen} (per-channel energy normalization). All
- * fields are optional; omitted keys fall back to librosa-compatible defaults.
- */
-export interface PcenOptions {
+/** Request for {@link pcen}. */
+export interface PcenRequest {
+  /** Magnitude spectrogram: rows = bins, cols = frames. */
+  values: Matrix2D;
   /** Sample rate used to derive the smoothing time constant (default 22050). */
   sampleRate?: number;
   /** Hop length used to derive the smoothing time constant (default 512). */
@@ -607,43 +198,385 @@ export interface PcenOptions {
   eps?: number;
 }
 
-export function pcen(
-  request: ValuesRequest & { nBins: number; nFrames: number } & PcenOptions,
+/** STFT magnitude and power. */
+export function stft(request: StftRequest): StftResult;
+export function stft(
+  samples: Float32Array,
+  sampleRate: number,
+  options?: Omit<StftRequest, 'samples' | 'sampleRate'>,
+): StftResult;
+export function stft(...args: unknown[]): StftResult {
+  const request = sampleOneShot<StftRequest>('stft', args);
+  assertAudioInput('stft', request.samples, request.sampleRate, request);
+  const fft = resolveFftOptions('stft', request.nFft, request.hopLength);
+  const r = addon.stft(request.samples, request.sampleRate, fft.nFft, fft.hopLength);
+  return {
+    nFft: r.nFft,
+    hopLength: r.hopLength,
+    sampleRate: r.sampleRate,
+    magnitude: toMatrix2D(r.magnitude, r.nBins, r.nFrames),
+    power: toMatrix2D(r.power, r.nBins, r.nFrames),
+  };
+}
+
+/** STFT in dB. Returns rows = `nFft / 2 + 1` bins, cols = frames. */
+export function stftDb(request: StftDbRequest): Matrix2D;
+export function stftDb(
+  samples: Float32Array,
+  sampleRate: number,
+  options?: Omit<StftDbRequest, 'samples' | 'sampleRate'>,
+): Matrix2D;
+export function stftDb(...args: unknown[]): Matrix2D {
+  const request = sampleOneShot<StftDbRequest>('stftDb', args);
+  assertAudioInput('stftDb', request.samples, request.sampleRate, request);
+  const fft = resolveFftOptions('stftDb', request.nFft, request.hopLength);
+  const r = addon.stftDb(request.samples, request.sampleRate, fft.nFft, fft.hopLength);
+  return toMatrix2D(r.db, r.nBins, r.nFrames);
+}
+
+/** Mel spectrogram. `power` and `db` are rows = mel bands, cols = frames. */
+export function melSpectrogram(request: MelSpectrogramRequest): MelSpectrogramResult;
+export function melSpectrogram(
+  samples: Float32Array,
+  sampleRate: number,
+  options?: Omit<MelSpectrogramRequest, 'samples' | 'sampleRate'>,
+): MelSpectrogramResult;
+export function melSpectrogram(...args: unknown[]): MelSpectrogramResult {
+  const request = sampleOneShot<MelSpectrogramRequest>('melSpectrogram', args);
+  assertAudioInput('melSpectrogram', request.samples, request.sampleRate, request);
+  const fft = resolveFftOptions('melSpectrogram', request.nFft, request.hopLength);
+  assertPositiveInteger('melSpectrogram', request.nMels ?? 128, 'nMels');
+  const fminHz = request.fminHz ?? 0;
+  const fmaxHz = request.fmaxHz ?? 0;
+  assertFloatFields('melSpectrogram', { fminHz, fmaxHz });
+  const r = addon.melSpectrogram(
+    request.samples,
+    request.sampleRate,
+    fft.nFft,
+    fft.hopLength,
+    request.nMels ?? 128,
+    fminHz,
+    fmaxHz,
+    request.htk ?? false,
+  );
+  return {
+    sampleRate: r.sampleRate,
+    hopLength: r.hopLength,
+    nFft: r.nFft,
+    fminHz: r.fmin,
+    fmaxHz: r.fmax,
+    htk: r.htk,
+    power: toMatrix2D(r.power, r.nMels, r.nFrames),
+    db: toMatrix2D(r.db, r.nMels, r.nFrames),
+  };
+}
+
+/** MFCCs. `coefficients` is rows = coefficients, cols = frames. */
+export function mfcc(request: MfccRequest): MfccResult;
+export function mfcc(
+  samples: Float32Array,
+  sampleRate: number,
+  options?: Omit<MfccRequest, 'samples' | 'sampleRate'>,
+): MfccResult;
+export function mfcc(...args: unknown[]): MfccResult {
+  const request = sampleOneShot<MfccRequest>('mfcc', args);
+  assertAudioInput('mfcc', request.samples, request.sampleRate, request);
+  const fft = resolveFftOptions('mfcc', request.nFft, request.hopLength);
+  assertPositiveInteger('mfcc', request.nMels ?? 128, 'nMels');
+  assertPositiveInteger('mfcc', request.nMfcc ?? 20, 'nMfcc');
+  const fminHz = request.fminHz ?? 0;
+  const fmaxHz = request.fmaxHz ?? 0;
+  assertFloatFields('mfcc', { fminHz, fmaxHz });
+  const r = addon.mfcc(
+    request.samples,
+    request.sampleRate,
+    fft.nFft,
+    fft.hopLength,
+    request.nMels ?? 128,
+    request.nMfcc ?? 20,
+    fminHz,
+    fmaxHz,
+    request.htk ?? false,
+    request.lifter ?? 0,
+  );
+  return {
+    sampleRate: r.sampleRate,
+    hopLength: r.hopLength,
+    nFft: r.nFft,
+    nMels: r.nMels,
+    fminHz: r.fmin,
+    fmaxHz: r.fmax,
+    htk: r.htk,
+    lifter: r.lifter,
+    coefficients: toMatrix2D(r.coefficients, r.nMfcc, r.nFrames),
+  };
+}
+
+/** First-order regression delta of a feature matrix. Returns rows = features, cols = frames. */
+export function melDelta(request: MelDeltaRequest): Matrix2D;
+export function melDelta(...args: unknown[]): Matrix2D {
+  const r = requestOnly<MelDeltaRequest>('melDelta', args);
+  assertMatrix2D('melDelta', r.features, 'features', r.validate);
+  const width = r.width ?? 9;
+  assertPositiveInteger('melDelta', width, 'width');
+  if (width < 3 || width % 2 === 0) {
+    throw new RangeError('melDelta: width must be an odd integer of at least 3');
+  }
+  const out = addon.melDelta(r.features.data, r.features.rows, r.features.cols, width);
+  return toMatrix2D(out, r.features.rows, r.features.cols);
+}
+
+/** Auger-Flandrin reassigned spectrogram; every matrix is rows = FFT bins, cols = frames. */
+export function reassignedSpectrogram(
+  request: ReassignedSpectrogramRequest,
+): ReassignedSpectrogramResult;
+export function reassignedSpectrogram(
+  samples: Float32Array,
+  sampleRate: number,
+  options?: Omit<ReassignedSpectrogramRequest, 'samples' | 'sampleRate'>,
+): ReassignedSpectrogramResult;
+export function reassignedSpectrogram(...args: unknown[]): ReassignedSpectrogramResult {
+  const request = sampleOneShot<ReassignedSpectrogramRequest>('reassignedSpectrogram', args);
+  const refPower = request.refPower ?? 1e-6;
+  assertNonNegativeScalar('reassignedSpectrogram', refPower, 'refPower');
+  assertAudioInput('reassignedSpectrogram', request.samples, request.sampleRate, request);
+  const fft = resolveFftOptions('reassignedSpectrogram', request.nFft, request.hopLength);
+  const r = addon.reassignedSpectrogram(
+    request.samples,
+    request.sampleRate,
+    fft.nFft,
+    fft.hopLength,
+    refPower,
+    request.fillNan ?? false,
+  );
+  return {
+    magnitude: toMatrix2D(r.magnitude, r.nBins, r.nFrames),
+    times: toMatrix2D(r.times, r.nBins, r.nFrames),
+    frequencies: toMatrix2D(r.frequencies, r.nBins, r.nFrames),
+  };
+}
+
+/** Spectral centroid in Hz per frame. */
+export function spectralCentroid(request: SpectralCentroidRequest): Float32Array;
+export function spectralCentroid(
+  samples: Float32Array,
+  sampleRate: number,
+  options?: Omit<SpectralCentroidRequest, 'samples' | 'sampleRate'>,
 ): Float32Array;
-export function pcen(
-  values: Float32Array,
-  nBins?: number,
-  nFrames?: number,
-  options?: PcenOptions,
+export function spectralCentroid(...args: unknown[]): Float32Array {
+  const request = sampleOneShot<SpectralCentroidRequest>('spectralCentroid', args);
+  assertAudioInput('spectralCentroid', request.samples, request.sampleRate, request);
+  const fft = resolveFftOptions('spectralCentroid', request.nFft, request.hopLength);
+  return addon.spectralCentroid(request.samples, request.sampleRate, fft.nFft, fft.hopLength);
+}
+
+/**
+ * Spectral contrast (librosa.feature.spectral_contrast). Returns rows = `nBands + 1` bands, cols = frames.
+ *
+ * @remarks
+ * Band 0 spans `[0, fmin]`, so an `fminHz` below one analysis bin
+ * (`sampleRate / nFft`) leaves it empty after the band trim. Row 0 is still
+ * finite, but comes from the other bands' extremes rather than from itself, and
+ * is neither level-invariant nor confined to the band. Keep `fminHz` at or above
+ * one bin width for row 0 to mean anything — at the defaults (22050 Hz, 2048)
+ * one bin is 10.8 Hz, so only a small `nFft` or a tiny `fminHz` reaches this.
+ */
+export function spectralContrast(request: SpectralContrastRequest): Matrix2D;
+export function spectralContrast(
+  samples: Float32Array,
+  sampleRate: number,
+  options?: Omit<SpectralContrastRequest, 'samples' | 'sampleRate'>,
+): Matrix2D;
+export function spectralContrast(...args: unknown[]): Matrix2D {
+  const request = sampleOneShot<SpectralContrastRequest>('spectralContrast', args);
+  assertAudioInput('spectralContrast', request.samples, request.sampleRate, request);
+  const fft = resolveFftOptions('spectralContrast', request.nFft, request.hopLength);
+  assertPositiveInteger('spectralContrast', request.nBands ?? 6, 'nBands');
+  const fminHz = request.fminHz ?? 200;
+  assertPositiveFloatValue('spectralContrast', fminHz, 'fminHz');
+  const r = addon.spectralContrast(
+    request.samples,
+    request.sampleRate,
+    fft.nFft,
+    fft.hopLength,
+    request.nBands ?? 6,
+    fminHz,
+    request.quantile ?? 0.02,
+  );
+  return toMatrix2D(r.data, r.rows, r.cols);
+}
+
+/** Per-frame polynomial coefficients (librosa.feature.poly_features). Returns rows = `order + 1`, cols = frames. */
+export function polyFeatures(request: PolyFeaturesRequest): Matrix2D;
+export function polyFeatures(
+  samples: Float32Array,
+  sampleRate: number,
+  options?: Omit<PolyFeaturesRequest, 'samples' | 'sampleRate'>,
+): Matrix2D;
+export function polyFeatures(...args: unknown[]): Matrix2D {
+  const request = sampleOneShot<PolyFeaturesRequest>('polyFeatures', args);
+  assertAudioInput('polyFeatures', request.samples, request.sampleRate, request);
+  const fft = resolveFftOptions('polyFeatures', request.nFft, request.hopLength);
+  const r = addon.polyFeatures(
+    request.samples,
+    request.sampleRate,
+    fft.nFft,
+    fft.hopLength,
+    request.order ?? 1,
+  );
+  return toMatrix2D(r.data, r.rows, r.cols);
+}
+
+/** Zero-crossing indices of a signal (librosa.zero_crossings). */
+export function zeroCrossings(request: ZeroCrossingsRequest): Int32Array;
+export function zeroCrossings(
+  samples: Float32Array,
+  sampleRate: number,
+  options?: Omit<ZeroCrossingsRequest, 'samples' | 'sampleRate'>,
+): Int32Array;
+export function zeroCrossings(...args: unknown[]): Int32Array {
+  const request = sampleOneShot<ZeroCrossingsRequest>('zeroCrossings', args);
+  assertAudioInput('zeroCrossings', request.samples, request.sampleRate, request);
+  return addon.zeroCrossings(
+    request.samples,
+    request.threshold ?? 1e-10,
+    request.refMagnitude ?? false,
+    request.pad ?? true,
+    request.zeroPos ?? true,
+  );
+}
+
+/** Spectral bandwidth in Hz per frame. */
+export function spectralBandwidth(request: SpectralBandwidthRequest): Float32Array;
+export function spectralBandwidth(
+  samples: Float32Array,
+  sampleRate: number,
+  options?: Omit<SpectralBandwidthRequest, 'samples' | 'sampleRate'>,
 ): Float32Array;
-export function pcen(
-  values: Float32Array | (ValuesRequest & { nBins: number; nFrames: number } & PcenOptions),
-  nBins = 0,
-  nFrames = 0,
-  options: PcenOptions = {},
-): Float32Array {
-  const request =
-    values instanceof Float32Array
-      ? { values, nBins, nFrames, ...optionsBag('pcen', options) }
-      : requestObject('pcen', values, 'values');
-  const {
-    values: requestValues,
-    nBins: requestBins,
-    nFrames: requestFrames,
-    ...requestOptions
-  } = request;
-  // The addon's matrix-dimension rule runs on the NARROWED values, so a
-  // fractional pair that divides the buffer once truncated passes it: 2.5 x 50
-  // over 100 values is checked as 2 x 50 and answers as a 2-bin result.
-  assertPositiveInteger('pcen', requestBins, 'nBins');
-  assertPositiveInteger('pcen', requestFrames, 'nFrames');
+export function spectralBandwidth(...args: unknown[]): Float32Array {
+  const request = sampleOneShot<SpectralBandwidthRequest>('spectralBandwidth', args);
+  assertAudioInput('spectralBandwidth', request.samples, request.sampleRate, request);
+  const fft = resolveFftOptions('spectralBandwidth', request.nFft, request.hopLength);
+  return addon.spectralBandwidth(
+    request.samples,
+    request.sampleRate,
+    fft.nFft,
+    fft.hopLength,
+    request.p ?? 2,
+  );
+}
+
+/** Spectral rolloff frequency in Hz per frame. */
+export function spectralRolloff(request: SpectralRolloffRequest): Float32Array;
+export function spectralRolloff(
+  samples: Float32Array,
+  sampleRate: number,
+  options?: Omit<SpectralRolloffRequest, 'samples' | 'sampleRate'>,
+): Float32Array;
+export function spectralRolloff(...args: unknown[]): Float32Array {
+  const request = sampleOneShot<SpectralRolloffRequest>('spectralRolloff', args);
+  assertAudioInput('spectralRolloff', request.samples, request.sampleRate, request);
+  const fft = resolveFftOptions('spectralRolloff', request.nFft, request.hopLength);
+  return addon.spectralRolloff(
+    request.samples,
+    request.sampleRate,
+    fft.nFft,
+    fft.hopLength,
+    request.rollPercent ?? 0.85,
+  );
+}
+
+/** Spectral flatness per frame. */
+export function spectralFlatness(request: SpectralFlatnessRequest): Float32Array;
+export function spectralFlatness(
+  samples: Float32Array,
+  sampleRate: number,
+  options?: Omit<SpectralFlatnessRequest, 'samples' | 'sampleRate'>,
+): Float32Array;
+export function spectralFlatness(...args: unknown[]): Float32Array {
+  const request = sampleOneShot<SpectralFlatnessRequest>('spectralFlatness', args);
+  assertAudioInput('spectralFlatness', request.samples, request.sampleRate, request);
+  const fft = resolveFftOptions('spectralFlatness', request.nFft, request.hopLength);
+  return addon.spectralFlatness(request.samples, request.sampleRate, fft.nFft, fft.hopLength);
+}
+
+/** Spectral flux per frame. */
+export function spectralFlux(request: SpectralFluxRequest): Float32Array;
+export function spectralFlux(
+  samples: Float32Array,
+  sampleRate: number,
+  options?: Omit<SpectralFluxRequest, 'samples' | 'sampleRate'>,
+): Float32Array;
+export function spectralFlux(...args: unknown[]): Float32Array {
+  const request = sampleOneShot<SpectralFluxRequest>('spectralFlux', args);
+  assertAudioInput('spectralFlux', request.samples, request.sampleRate, request);
+  const fft = resolveFftOptions('spectralFlux', request.nFft, request.hopLength);
+  assertPositiveInteger('spectralFlux', request.lag ?? 1, 'lag');
+  return addon.spectralFlux(
+    request.samples,
+    request.sampleRate,
+    fft.nFft,
+    fft.hopLength,
+    request.lag ?? 1,
+  );
+}
+
+/** Zero-crossing rate per frame. */
+export function zeroCrossingRate(request: ZeroCrossingRateRequest): Float32Array;
+export function zeroCrossingRate(
+  samples: Float32Array,
+  sampleRate: number,
+  options?: Omit<ZeroCrossingRateRequest, 'samples' | 'sampleRate'>,
+): Float32Array;
+export function zeroCrossingRate(...args: unknown[]): Float32Array {
+  const request = sampleOneShot<ZeroCrossingRateRequest>('zeroCrossingRate', args);
+  assertAudioInput('zeroCrossingRate', request.samples, request.sampleRate, request);
+  // A framing window is not a transform size, so the evenness rule the FFT
+  // resolver carries does not apply to it.
+  assertPositiveInteger('zeroCrossingRate', request.frameLength ?? 2048, 'frameLength');
+  assertPositiveInteger('zeroCrossingRate', request.hopLength ?? 512, 'hopLength');
+  return addon.zeroCrossingRate(
+    request.samples,
+    request.sampleRate,
+    request.frameLength ?? 2048,
+    request.hopLength ?? 512,
+  );
+}
+
+/** RMS energy per frame. */
+export function rmsEnergy(request: RmsEnergyRequest): Float32Array;
+export function rmsEnergy(
+  samples: Float32Array,
+  sampleRate: number,
+  options?: Omit<RmsEnergyRequest, 'samples' | 'sampleRate'>,
+): Float32Array;
+export function rmsEnergy(...args: unknown[]): Float32Array {
+  const request = sampleOneShot<RmsEnergyRequest>('rmsEnergy', args);
+  assertAudioInput('rmsEnergy', request.samples, request.sampleRate, request);
+  assertPositiveInteger('rmsEnergy', request.frameLength ?? 2048, 'frameLength');
+  assertPositiveInteger('rmsEnergy', request.hopLength ?? 512, 'hopLength');
+  return addon.rmsEnergy(
+    request.samples,
+    request.sampleRate,
+    request.frameLength ?? 2048,
+    request.hopLength ?? 512,
+  );
+}
+
+/** Per-channel energy normalization. Returns rows = bins, cols = frames. */
+export function pcen(request: PcenRequest): Matrix2D;
+export function pcen(...args: unknown[]): Matrix2D {
+  const r = requestOnly<PcenRequest>('pcen', args);
+  assertMatrix2D('pcen', r.values, 'values');
+  const { values, ...options } = r;
   // Only what the caller supplied: an omitted field's default belongs to the
   // addon's options reader, so resolving one here would check this file's guess.
-  if (requestOptions.sampleRate !== undefined) {
-    assertSampleRate('pcen', requestOptions.sampleRate);
+  if (options.sampleRate !== undefined) {
+    assertSampleRate('pcen', options.sampleRate);
   }
-  if (requestOptions.hopLength !== undefined) {
-    assertPositiveInteger('pcen', requestOptions.hopLength, 'hopLength');
+  if (options.hopLength !== undefined) {
+    assertPositiveInteger('pcen', options.hopLength, 'hopLength');
   }
-  return addon.pcen(requestValues, requestBins, requestFrames, requestOptions);
+  const out = addon.pcen(values.data, values.rows, values.cols, options);
+  return toMatrix2D(out, values.rows, values.cols);
 }

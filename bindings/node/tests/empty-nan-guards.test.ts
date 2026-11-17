@@ -163,13 +163,20 @@ describe('sample-rate guards (Node)', () => {
 describe('addon input errors remain catchable (Node)', () => {
   it('converts option-parser errors into JavaScript exceptions', () => {
     // @ts-expect-error deliberately invalid key profile; the option parser must reject it.
-    expect(() => detectKey(sine(), SR, { profile: 'bogus' })).toThrow(/invalid key profile/);
+    expect(() => detectKey(sine(), SR, { profile: 'bogus' })).toThrow(/profile must be one of/);
     // @ts-expect-error deliberately invalid key mode; the option parser must reject it.
-    expect(() => detectKey(sine(), SR, { modes: ['major', 'nope'] })).toThrow(/invalid key mode/);
-    expect(() => tempogramRatio(sine(), 384, SR, 512, 'nope' as unknown as Float32Array)).toThrow(
-      /Expected Float32Array or number\[\]/,
+    expect(() => detectKey(sine(), SR, { modes: ['major', 'nope'] })).toThrow(
+      /modes\[1\] must be one of/,
     );
-    expect(() => new StreamAnalyzer({ maxPendingFrames: 1.5 })).toThrow(
+    expect(() =>
+      tempogramRatio({
+        tempogram: { data: sine(768), rows: 384, cols: 2 },
+        sampleRate: SR,
+        hopLength: 512,
+        factors: 'nope' as unknown as Float32Array,
+      }),
+    ).toThrow(/Expected Float32Array or number\[\]/);
+    expect(() => new StreamAnalyzer({ sampleRate: SR, maxPendingFrames: 1.5 })).toThrow(
       /maxPendingFrames must be a non-negative integer/,
     );
   });

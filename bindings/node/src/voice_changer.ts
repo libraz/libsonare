@@ -3,6 +3,7 @@ import type {
   RealtimeVoiceChangerConfig,
   RealtimeVoiceChangerConfigInput,
   RealtimeVoiceChangerOptions,
+  ScaleKind,
   VoicePresetId,
 } from './types.js';
 import type { ValidateOptions } from './validation.js';
@@ -26,13 +27,43 @@ function requirePodFormantMode(config: unknown): void {
   }
 }
 
+const NATIVE_SCALES: Readonly<Record<ScaleKind, string>> = {
+  major: 'major',
+  naturalMinor: 'natural_minor',
+  chromatic: 'chromatic',
+};
+
+/**
+ * A flat POD config with `pitchCorrectionScale` spelt the way the addon reads it.
+ *
+ * @throws RangeError for a scale token outside {@link ScaleKind}.
+ */
+function nativePodConfig<T>(config: T): T {
+  if (config === null || typeof config !== 'object' || !('retuneSemitones' in config)) {
+    return config;
+  }
+  const scale = (config as { pitchCorrectionScale?: unknown }).pitchCorrectionScale;
+  if (scale === undefined) {
+    return config;
+  }
+  if (typeof scale !== 'string') {
+    throw new TypeError('voice changer POD config.pitchCorrectionScale must be a string');
+  }
+  if (!Object.hasOwn(NATIVE_SCALES, scale)) {
+    throw new RangeError(`Unknown pitchCorrectionScale: ${scale}`);
+  }
+  return { ...config, pitchCorrectionScale: NATIVE_SCALES[scale as ScaleKind] };
+}
+
 export class RealtimeVoiceChanger {
   private native: InstanceType<typeof addon.RealtimeVoiceChanger>;
   private disposed = false;
 
   constructor(options: RealtimeVoiceChangerOptions) {
     requirePodFormantMode(options.preset);
-    this.native = new addon.RealtimeVoiceChanger(options.preset ?? 'neutral-monitor');
+    this.native = new addon.RealtimeVoiceChanger(
+      nativePodConfig(options.preset) ?? 'neutral-monitor',
+    );
     try {
       this.native.prepare(options.sampleRate, options.maxBlockSize ?? 128, options.channels ?? 1);
     } catch (error) {
@@ -52,7 +83,7 @@ export class RealtimeVoiceChanger {
     // The shared native parser recognizes the flat POD produced by
     // realtimeVoiceChangerPresetConfig, so bindings never duplicate its 70-field mapping.
     requirePodFormantMode(config);
-    this.native.setConfig(config);
+    this.native.setConfig(nativePodConfig(config));
   }
 
   configJson(): string {
@@ -372,9 +403,16 @@ export function voiceCharacterPresetId(preset: VoicePresetId | number): VoicePre
 export function realtimeVoiceChangerPresetConfig(
   preset: VoicePresetId | number,
 ): RealtimeVoiceChangerConfig {
-  return addon.realtimeVoiceChangerPresetConfig(
-    resolveVoicePresetOrdinal(preset),
-  ) as RealtimeVoiceChangerConfig;
+  const config = addon.realtimeVoiceChangerPresetConfig(resolveVoicePresetOrdinal(preset)) as Omit<
+    RealtimeVoiceChangerConfig,
+    'pitchCorrectionScale'
+  > & {
+    pitchCorrectionScale: string;
+  };
+  // The addon names the minor scale `natural_minor`.
+  const scale =
+    config.pitchCorrectionScale === 'natural_minor' ? 'naturalMinor' : config.pitchCorrectionScale;
+  return { ...config, pitchCorrectionScale: scale as ScaleKind };
 }
 
 /** Live controls for {@link StreamingRetune}. */
