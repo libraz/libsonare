@@ -89,8 +89,8 @@ def test_pitch_omitted_options_are_legacy_equivalent(monkeypatch: pytest.MonkeyP
     assert calls[0][1] == {
         "sample_rate": 22050,
         "hop_length": 512,
-        "fmin": 65.0,
-        "fmax": 2093.0,
+        "f0_min_hz": 65.0,
+        "f0_max_hz": 2093.0,
         "threshold": 0.1,
     }
 
@@ -197,8 +197,8 @@ def test_pitch_forwards_nondefault_options_to_selected_core_call(
             {
                 "sample_rate": 44100,
                 "hop_length": 256,
-                "fmin": 90.0,
-                "fmax": 1200.0,
+                "f0_min_hz": 90.0,
+                "f0_max_hz": 1200.0,
                 "threshold": 0.35,
             },
         )

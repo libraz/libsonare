@@ -722,8 +722,8 @@ def test_pitch_correct_cli_reaches_requested_pitch(tmp_path) -> None:
             sample_rate=corrected.sample_rate,
             frame_length=2048,
             hop_length=512,
-            fmin=100.0,
-            fmax=1000.0,
+            f0_min_hz=100.0,
+            f0_max_hz=1000.0,
         )
     expected_hz = 220.0 * 2 ** (3 / 12)
     cents_error = 1200.0 * math.log2(detected.median_f0 / expected_hz)

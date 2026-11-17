@@ -443,6 +443,14 @@ KeyMode: TypeAlias = Literal[
     "major", "minor", "dorian", "phrygian", "lydian", "mixolydian", "locrian"
 ]
 
+GenreHint: TypeAlias = Literal["auto", "edm", "electronic", "dance", "pop", "classical", "jazz"]
+
+ChordChromaMethod: TypeAlias = Literal["stft", "nnls", "cqt"]
+
+NormType: TypeAlias = Literal["max", "l1", "l2", "power"]
+
+TempogramMode: TypeAlias = Literal["autocorrelation", "cosine"]
+
 KeyProfile: TypeAlias = Literal[
     "krumhanslSchmuckler",
     "temperley",
@@ -1261,8 +1269,8 @@ class MelSpectrogramResult:
     power: NDArray[np.float32]
     db: NDArray[np.float32]
     n_fft: int
-    fmin: float
-    fmax: float
+    fmin_hz: float
+    fmax_hz: float
     htk: bool
     def __init__(
         self,
@@ -1271,8 +1279,8 @@ class MelSpectrogramResult:
         power: NDArray[np.float32],
         db: NDArray[np.float32],
         n_fft: int,
-        fmin: float,
-        fmax: float,
+        fmin_hz: float,
+        fmax_hz: float,
         htk: bool,
     ) -> None: ...
 
@@ -1282,8 +1290,8 @@ class MfccResult:
     hop_length: int
     n_fft: int
     n_mels: int
-    fmin: float
-    fmax: float
+    fmin_hz: float
+    fmax_hz: float
     htk: bool
     lifter: float
     def __init__(
@@ -1293,8 +1301,8 @@ class MfccResult:
         hop_length: int,
         n_fft: int,
         n_mels: int,
-        fmin: float,
-        fmax: float,
+        fmin_hz: float,
+        fmax_hz: float,
         htk: bool,
         lifter: float,
     ) -> None: ...

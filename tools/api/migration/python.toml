@@ -4698,3 +4698,219 @@ changed = "mode is a KeyMode token only; an int raises TypeError"
 domain = "effects"
 rule = "string-closed-sets"
 test = "bindings/python/tests/test_key_tokens.py::test_scale_mask_for_c_major_is_the_numeric_mask"
+
+[[entry]]
+kind = "option"
+old = "vector_normalize(norm_type)"
+changed = "renamed to norm and takes a NormType token (\"max\", \"l1\", \"l2\", \"power\"; default \"max\") instead of an int ordinal"
+domain = "analysis"
+rule = "string-closed-sets"
+test = "bindings/python/tests/test_analysis_closed_set_tokens.py::test_vector_normalize_applies_the_named_norm"
+
+[[entry]]
+kind = "option"
+old = "tempogram(mode)"
+changed = "a TempogramMode token; the \"auto\" and \"ac\" spellings are refused"
+domain = "analysis"
+rule = "string-closed-sets"
+test = "bindings/python/tests/test_analysis_closed_set_tokens.py::test_an_unknown_name_is_refused_naming_the_tokens"
+
+[[entry]]
+kind = "option"
+old = "detect_chords(chroma_method)"
+changed = "a ChordChromaMethod token matched exactly; other case spellings are refused"
+domain = "analysis"
+rule = "string-closed-sets"
+test = "bindings/python/tests/test_analysis_closed_set_tokens.py::test_an_unknown_name_is_refused_naming_the_tokens"
+
+[[entry]]
+kind = "option"
+old = "chord_functional_analysis(chroma_method)"
+changed = "a ChordChromaMethod token matched exactly; other case spellings are refused"
+domain = "analysis"
+rule = "string-closed-sets"
+test = "bindings/python/tests/test_analysis_closed_set_tokens.py::test_an_unknown_name_is_refused_naming_the_tokens"
+
+[[entry]]
+kind = "option"
+old = "detect_key(genre_hint)"
+changed = "a GenreHint token or None; an unknown, differently cased or empty name is refused instead of falling back to the default profile"
+domain = "analysis"
+rule = "string-closed-sets"
+test = "bindings/python/tests/test_analysis_closed_set_tokens.py::test_an_unknown_name_is_refused_naming_the_tokens"
+
+[[entry]]
+kind = "option"
+old = "detect_key_candidates(genre_hint)"
+changed = "a GenreHint token or None; an unknown, differently cased or empty name is refused instead of falling back to the default profile"
+domain = "analysis"
+rule = "string-closed-sets"
+test = "bindings/python/tests/test_analysis_closed_set_tokens.py::test_an_unknown_name_is_refused_naming_the_tokens"
+
+[[entry]]
+kind = "option"
+old = "segment_recurrence_matrix(metric)"
+changed = "\"cosine\" or \"euclidean\"; any other name is refused instead of read as euclidean"
+domain = "analysis"
+rule = "string-closed-sets"
+test = "bindings/python/tests/test_analysis_closed_set_tokens.py::test_an_unknown_name_is_refused_naming_the_tokens"
+
+[[entry]]
+kind = "option"
+old = "segment_cross_similarity(metric)"
+changed = "\"cosine\" or \"euclidean\"; any other name is refused instead of read as euclidean"
+domain = "analysis"
+rule = "string-closed-sets"
+test = "bindings/python/tests/test_analysis_closed_set_tokens.py::test_an_unknown_name_is_refused_naming_the_tokens"
+
+[[entry]]
+kind = "option"
+old = "segment_agglomerative(linkage)"
+changed = "\"average\", \"single\", \"complete\" or \"ward\", matched exactly"
+domain = "analysis"
+rule = "string-closed-sets"
+test = "bindings/python/tests/test_analysis_closed_set_tokens.py::test_an_unknown_name_is_refused_naming_the_tokens"
+
+[[entry]]
+kind = "option"
+old = "pitch_yin(fmin)"
+changed = "renamed to f0_min_hz"
+domain = "analysis"
+rule = "frequency-bounds"
+test = "bindings/python/tests/test_frequency_bound_names.py::test_a_pitch_search_refuses_the_unitless_name"
+
+[[entry]]
+kind = "option"
+old = "pitch_yin(fmax)"
+changed = "renamed to f0_max_hz"
+domain = "analysis"
+rule = "frequency-bounds"
+test = "bindings/python/tests/test_frequency_bound_names.py::test_a_pitch_search_refuses_the_unitless_name"
+
+[[entry]]
+kind = "option"
+old = "pitch_pyin(fmin)"
+changed = "renamed to f0_min_hz"
+domain = "analysis"
+rule = "frequency-bounds"
+test = "bindings/python/tests/test_frequency_bound_names.py::test_a_pitch_search_refuses_the_unitless_name"
+
+[[entry]]
+kind = "option"
+old = "pitch_pyin(fmax)"
+changed = "renamed to f0_max_hz"
+domain = "analysis"
+rule = "frequency-bounds"
+test = "bindings/python/tests/test_frequency_bound_names.py::test_a_pitch_search_refuses_the_unitless_name"
+
+[[entry]]
+kind = "option"
+old = "analyze_melody(fmin)"
+changed = "renamed to f0_min_hz"
+domain = "analysis"
+rule = "frequency-bounds"
+test = "bindings/python/tests/test_frequency_bound_names.py::test_a_pitch_search_refuses_the_unitless_name"
+
+[[entry]]
+kind = "option"
+old = "analyze_melody(fmax)"
+changed = "renamed to f0_max_hz"
+domain = "analysis"
+rule = "frequency-bounds"
+test = "bindings/python/tests/test_frequency_bound_names.py::test_a_pitch_search_refuses_the_unitless_name"
+
+[[entry]]
+kind = "option"
+old = "Audio.pitch_yin(fmin)"
+changed = "renamed to f0_min_hz"
+domain = "core"
+rule = "frequency-bounds"
+test = "bindings/python/tests/test_frequency_bound_names.py::test_a_pitch_search_refuses_the_unitless_name"
+
+[[entry]]
+kind = "option"
+old = "Audio.pitch_yin(fmax)"
+changed = "renamed to f0_max_hz"
+domain = "core"
+rule = "frequency-bounds"
+test = "bindings/python/tests/test_frequency_bound_names.py::test_a_pitch_search_refuses_the_unitless_name"
+
+[[entry]]
+kind = "option"
+old = "Audio.pitch_pyin(fmin)"
+changed = "renamed to f0_min_hz"
+domain = "core"
+rule = "frequency-bounds"
+test = "bindings/python/tests/test_frequency_bound_names.py::test_a_pitch_search_refuses_the_unitless_name"
+
+[[entry]]
+kind = "option"
+old = "Audio.pitch_pyin(fmax)"
+changed = "renamed to f0_max_hz"
+domain = "core"
+rule = "frequency-bounds"
+test = "bindings/python/tests/test_frequency_bound_names.py::test_a_pitch_search_refuses_the_unitless_name"
+
+[[entry]]
+kind = "option"
+old = "mel_spectrogram(fmin)"
+changed = "renamed to fmin_hz"
+domain = "analysis"
+rule = "frequency-bounds"
+test = "bindings/python/tests/test_frequency_bound_names.py::test_mel_spectrogram_band_edges_are_named_in_hz"
+
+[[entry]]
+kind = "option"
+old = "mel_spectrogram(fmax)"
+changed = "renamed to fmax_hz; None (the default) is the Nyquist and an explicit 0 is refused instead of read as the default"
+domain = "analysis"
+rule = "frequency-bounds"
+test = "bindings/python/tests/test_optional_scalar_default_sentinel.py::test_refuses_an_upper_edge_that_is_not_positive_and_finite"
+
+[[entry]]
+kind = "option"
+old = "cqt_to_audio(fmin)"
+changed = "renamed to fmin_hz"
+domain = "analysis"
+rule = "frequency-bounds"
+test = "bindings/python/tests/test_frequency_bound_names.py::test_inverse_constant_q_takes_fmin_hz"
+
+[[entry]]
+kind = "option"
+old = "vqt_to_audio(fmin)"
+changed = "renamed to fmin_hz"
+domain = "analysis"
+rule = "frequency-bounds"
+test = "bindings/python/tests/test_frequency_bound_names.py::test_inverse_constant_q_takes_fmin_hz"
+
+[[entry]]
+kind = "field"
+old = "MelSpectrogramResult.fmin"
+changed = "renamed to fmin_hz"
+domain = "analysis"
+rule = "frequency-bounds"
+test = "bindings/python/tests/test_frequency_bound_names.py::test_mel_spectrogram_band_edges_are_named_in_hz"
+
+[[entry]]
+kind = "field"
+old = "MfccResult.fmin"
+changed = "renamed to fmin_hz"
+domain = "analysis"
+rule = "frequency-bounds"
+test = "bindings/python/tests/test_frequency_bound_names.py::test_mfcc_reports_its_band_edges_in_hz"
+
+[[entry]]
+kind = "field"
+old = "MelSpectrogramResult.fmax"
+changed = "renamed to fmax_hz"
+domain = "analysis"
+rule = "frequency-bounds"
+test = "bindings/python/tests/test_frequency_bound_names.py::test_mel_spectrogram_band_edges_are_named_in_hz"
+
+[[entry]]
+kind = "field"
+old = "MfccResult.fmax"
+changed = "renamed to fmax_hz"
+domain = "analysis"
+rule = "frequency-bounds"
+test = "bindings/python/tests/test_frequency_bound_names.py::test_mfcc_reports_its_band_edges_in_hz"

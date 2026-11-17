@@ -30,11 +30,13 @@ from ._runtime import (
     _to_c_int,
     _to_c_int_array,
     _to_c_size_t,
+    _token_arg,
     _tuning_arg,
     _utf8_arg,
 )
 from ._types_analysis import _chord_symbol
 from ._types_engine import _SECTION_NAMES
+from ._types_enums import _GENRE_HINTS
 from .types import (
     CHORD_QUALITIES,
     AnalysisChord,
@@ -45,6 +47,7 @@ from .types import (
     Beat,
     BeatObservations,
     BpmCandidate,
+    GenreHint,
     Key,
     KeyCandidate,
     KeyDetection,
@@ -118,7 +121,7 @@ def detect_key(
     chroma_high_pass_hz: float = 80.0,
     modes: Sequence[KeyMode] | str | None = None,
     profile: KeyProfile | None = None,
-    genre_hint: str | None = None,
+    genre_hint: GenreHint | None = None,
     tuning_cents: float | str = "auto",
 ) -> KeyDetection:
     """Detect the musical key of audio samples.
@@ -173,7 +176,9 @@ def detect_key(
         mode_array,
         _to_c_size_t(mode_count, "mode_count"),
         ctypes.c_int32(_profile_value(profile)),
-        _utf8_arg(genre_hint, "genre_hint") if genre_hint else None,
+        None
+        if genre_hint is None
+        else _utf8_arg(_token_arg(genre_hint, _GENRE_HINTS, "genre_hint"), "genre_hint"),
         _to_c_float(tuning_value, "tuning_cents"),
         _to_c_int(tuning_auto, "tuning_auto"),
         ctypes.byref(out_key),
@@ -199,7 +204,7 @@ def detect_key_candidates(
     chroma_high_pass_hz: float = 80.0,
     modes: Sequence[KeyMode] | str | None = None,
     profile: KeyProfile | None = None,
-    genre_hint: str | None = None,
+    genre_hint: GenreHint | None = None,
     tuning_cents: float | str = "auto",
 ) -> list[KeyCandidate]:
     """Return ranked musical key candidates for ambiguous material.
@@ -226,7 +231,9 @@ def detect_key_candidates(
         mode_array,
         _to_c_size_t(mode_count, "mode_count"),
         ctypes.c_int32(_profile_value(profile)),
-        _utf8_arg(genre_hint, "genre_hint") if genre_hint else None,
+        None
+        if genre_hint is None
+        else _utf8_arg(_token_arg(genre_hint, _GENRE_HINTS, "genre_hint"), "genre_hint"),
         _to_c_float(tuning_value, "tuning_cents"),
         _to_c_int(tuning_auto, "tuning_auto"),
         ctypes.byref(out_candidates),

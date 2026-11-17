@@ -217,8 +217,8 @@ def mel_spectrogram(
     n_fft: int = 2048,
     hop_length: int = 512,
     n_mels: int = 128,
-    fmin: float = 0.0,
-    fmax: float = 0.0,
+    fmin_hz: float = 0.0,
+    fmax_hz: float | None = None,
     htk: bool = False,
 ) -> MelSpectrogramResult:
     """Compute a Mel spectrogram.
@@ -229,10 +229,10 @@ def mel_spectrogram(
         n_fft: FFT window size (default 2048).
         hop_length: Hop length in samples (default 512).
         n_mels: Number of Mel bands (default 128).
-        fmin: Minimum Mel frequency in Hz (default 0.0 = librosa default).
-            Set together with ``fmax`` to round-trip with ``mel_to_stft`` /
-            ``mel_to_audio``.
-        fmax: Maximum Mel frequency in Hz (default 0.0 = sample_rate / 2).
+        fmin_hz: Lower Mel band edge in Hz (default 0.0). Set together with
+            ``fmax_hz`` to round-trip with ``mel_to_stft`` / ``mel_to_audio``.
+        fmax_hz: Upper Mel band edge in Hz; None (default) is the Nyquist.
+            Must be positive when given.
         htk: Use the HTK Mel formula instead of Slaney (default False).
 
     Returns:
@@ -250,8 +250,8 @@ def mel_spectrogram(
         _to_c_int(n_fft, "n_fft"),
         _to_c_int(hop_length, "hop_length"),
         _to_c_int(n_mels, "n_mels"),
-        _to_c_float(fmin, "fmin"),
-        _to_c_float(fmax, "fmax"),
+        _to_c_float(fmin_hz, "fmin_hz"),
+        _to_c_float(_resolve_zero_default(fmax_hz, "fmax_hz"), "fmax_hz"),
         ctypes.c_int(1 if htk else 0),
         ctypes.byref(out),
     )
@@ -263,8 +263,8 @@ def mel_spectrogram(
             power=_from_c_float_matrix(out.power, out.n_mels, out.n_frames),
             db=_from_c_float_matrix(out.db, out.n_mels, out.n_frames),
             n_fft=out.n_fft,
-            fmin=float(out.fmin),
-            fmax=float(out.fmax),
+            fmin_hz=float(out.fmin),
+            fmax_hz=float(out.fmax),
             htk=bool(out.htk),
         )
     finally:
@@ -326,8 +326,8 @@ def mfcc(
             hop_length=out.hop_length,
             n_fft=out.n_fft,
             n_mels=out.n_mels,
-            fmin=float(out.fmin),
-            fmax=float(out.fmax),
+            fmin_hz=float(out.fmin),
+            fmax_hz=float(out.fmax),
             htk=bool(out.htk),
             lifter=float(out.lifter),
         )

@@ -34,11 +34,13 @@ from ._runtime import (
     _to_c_int,
     _to_c_int32,
     _to_c_size_t,
+    _token_ordinal,
     _tuning_arg,
 )
 from ._types_analysis import _chord_symbol
 from ._types_capabilities import _from_wire
 from ._types_engine import _SECTION_NAMES
+from ._types_enums import _CHORD_CHROMA_METHODS
 from .types import (
     CHORD_QUALITIES,
     Boundary,
@@ -46,6 +48,7 @@ from .types import (
     Capabilities,
     Chord,
     ChordAnalysisResult,
+    ChordChromaMethod,
     FunctionalChord,
     Key,
     KeyMode,
@@ -97,7 +100,7 @@ def detect_chords(
     key_root: PitchClass = PitchClass.C,
     key_mode: KeyMode = "major",
     detect_inversions: bool = False,
-    chroma_method: str = "cqt",
+    chroma_method: ChordChromaMethod = "cqt",
     tuning_cents: float | str = "auto",
 ) -> ChordAnalysisResult:
     """Detect a continuous chord/N.C. timeline.
@@ -113,9 +116,7 @@ def detect_chords(
     ``chroma_method`` is ``"cqt"`` (default), ``"stft"`` or ``"nnls"``; the
     defaults decode triads only, with the HMM on.
     """
-    chroma_method_value = {"stft": 0, "nnls": 1, "cqt": 2}.get(chroma_method.lower())
-    if chroma_method_value is None:
-        raise SonareValueError("chroma_method must be 'stft', 'nnls' or 'cqt'")
+    chroma_method_value = _token_ordinal(chroma_method, _CHORD_CHROMA_METHODS, "chroma_method")
     lib = _get_lib()
     c_array, length = _to_c_float_array(samples)
     out = SonareChordAnalysisResult()
@@ -172,7 +173,7 @@ def chord_functional_analysis(
     hmm_beam_width: int = 24,
     use_key_context: bool = False,
     detect_inversions: bool = False,
-    chroma_method: str = "cqt",
+    chroma_method: ChordChromaMethod = "cqt",
     tuning_cents: float | str = "auto",
 ) -> list[FunctionalChord]:
     """Detect chords and label them relative to a key.
@@ -182,9 +183,7 @@ def chord_functional_analysis(
     :class:`Chord` field plus ``roman`` and ``function``. ``tuning_cents`` is as for
     :func:`detect_chords`.
     """
-    chroma_method_value = {"stft": 0, "nnls": 1, "cqt": 2}.get(chroma_method.lower())
-    if chroma_method_value is None:
-        raise SonareValueError("chroma_method must be 'stft', 'nnls' or 'cqt'")
+    chroma_method_value = _token_ordinal(chroma_method, _CHORD_CHROMA_METHODS, "chroma_method")
     lib = _get_lib()
     c_array, length = _to_c_float_array(samples)
     detected = SonareChordAnalysisResult()
@@ -495,8 +494,8 @@ def detect_boundaries(
 def analyze_melody(
     samples: Sequence[float] | list[float],
     sample_rate: int,
-    fmin: float = 65.0,
-    fmax: float = 2093.0,
+    f0_min_hz: float = 65.0,
+    f0_max_hz: float = 2093.0,
     frame_length: int = 2048,
     hop_length: int = 256,
     threshold: float = 0.1,
@@ -508,8 +507,8 @@ def analyze_melody(
     Args:
         samples: Mono audio samples (1D float).
         sample_rate: Sample rate in Hz.
-        fmin: Minimum detectable frequency in Hz.
-        fmax: Maximum detectable frequency in Hz.
+        f0_min_hz: Lowest detectable F0 in Hz.
+        f0_max_hz: Highest detectable F0 in Hz.
         frame_length: Analysis frame length in samples at 22050 Hz, rescaled to
             ``sample_rate``.
         hop_length: Hop length in samples of the input buffer.
@@ -538,8 +537,8 @@ def analyze_melody(
             c_array,
             _to_c_size_t(length, "length"),
             _to_c_int(sample_rate, "sample_rate"),
-            _to_c_float(fmin, "fmin"),
-            _to_c_float(fmax, "fmax"),
+            _to_c_float(f0_min_hz, "f0_min_hz"),
+            _to_c_float(f0_max_hz, "f0_max_hz"),
             _to_c_int(frame_length, "frame_length"),
             _to_c_int(hop_length, "hop_length"),
             _to_c_float(threshold, "threshold"),
@@ -575,8 +574,8 @@ def analyze_melody(
         c_array,
         _to_c_size_t(length, "length"),
         _to_c_int(sample_rate, "sample_rate"),
-        _to_c_float(fmin, "fmin"),
-        _to_c_float(fmax, "fmax"),
+        _to_c_float(f0_min_hz, "f0_min_hz"),
+        _to_c_float(f0_max_hz, "f0_max_hz"),
         _to_c_int(frame_length, "frame_length"),
         _to_c_int(hop_length, "hop_length"),
         _to_c_float(threshold, "threshold"),

@@ -185,7 +185,24 @@ SectionType = Literal[
 ]
 """Song-structure section type; ``"unknown"`` means no labelling rule matched."""
 
+GenreHint = Literal["auto", "edm", "electronic", "dance", "pop", "classical", "jazz"]
+"""Genre hint that picks a key profile when none is pinned."""
+
+ChordChromaMethod = Literal["stft", "nnls", "cqt"]
+"""Chroma front end used by chord detection."""
+
+NormType = Literal["max", "l1", "l2", "power"]
+"""Vector normalisation: maximum magnitude, L1, L2 or power."""
+
+TempogramMode = Literal["autocorrelation", "cosine"]
+"""Autocorrelation or cosine-similarity tempogram."""
+
 # Ordinal-ordered tokens: index == the C ordinal of each type.
 _KEY_MODES: tuple[KeyMode, ...] = get_args(KeyMode)
 _KEY_PROFILES: tuple[KeyProfile, ...] = get_args(KeyProfile)
 _SECTION_TYPES: tuple[SectionType, ...] = get_args(SectionType)
+_CHORD_CHROMA_METHODS: tuple[ChordChromaMethod, ...] = get_args(ChordChromaMethod)
+_NORM_TYPES: tuple[NormType, ...] = get_args(NormType)
+_TEMPOGRAM_MODES: tuple[TempogramMode, ...] = get_args(TempogramMode)
+# Passed to the core by name, so the order carries no ordinal.
+_GENRE_HINTS: tuple[GenreHint, ...] = get_args(GenreHint)

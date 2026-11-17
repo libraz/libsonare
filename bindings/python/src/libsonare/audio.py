@@ -166,6 +166,7 @@ from .types import (
     ClippingReport,
     DynamicRangeReport,
     DynamicsResult,
+    GenreHint,
     HpssResult,
     KeyCandidate,
     KeyDetection,
@@ -586,7 +587,7 @@ class Audio:
         chroma_high_pass_hz: float = 80.0,
         modes: Sequence[KeyMode] | str | None = None,
         profile: KeyProfile | None = None,
-        genre_hint: str | None = None,
+        genre_hint: GenreHint | None = None,
         tuning_cents: float | str = "auto",
     ) -> KeyDetection:
         """Detect musical key and the tuning its chroma was built with.
@@ -618,7 +619,7 @@ class Audio:
         chroma_high_pass_hz: float = 80.0,
         modes: Sequence[KeyMode] | str | None = None,
         profile: KeyProfile | None = None,
-        genre_hint: str | None = None,
+        genre_hint: GenreHint | None = None,
         tuning_cents: float | str = "auto",
     ) -> list[KeyCandidate]:
         """Return ranked musical key candidates; ``tuning_cents`` is as for :meth:`detect_key`."""
@@ -1158,28 +1159,42 @@ class Audio:
         self,
         frame_length: int = 2048,
         hop_length: int = 512,
-        fmin: float = 65.0,
-        fmax: float = 2093.0,
+        f0_min_hz: float = 65.0,
+        f0_max_hz: float = 2093.0,
         threshold: float = 0.1,
         fill_na: bool = False,
     ) -> PitchResult:
         """Estimate fundamental frequency using the YIN algorithm."""
         return _pitch_yin(
-            self.data, self.sample_rate, frame_length, hop_length, fmin, fmax, threshold, fill_na
+            self.data,
+            self.sample_rate,
+            frame_length,
+            hop_length,
+            f0_min_hz,
+            f0_max_hz,
+            threshold,
+            fill_na,
         )
 
     def pitch_pyin(
         self,
         frame_length: int = 2048,
         hop_length: int = 512,
-        fmin: float = 65.0,
-        fmax: float = 2093.0,
+        f0_min_hz: float = 65.0,
+        f0_max_hz: float = 2093.0,
         threshold: float = 0.1,
         fill_na: bool = False,
     ) -> PitchResult:
         """Estimate fundamental frequency using the pYIN algorithm."""
         return _pitch_pyin(
-            self.data, self.sample_rate, frame_length, hop_length, fmin, fmax, threshold, fill_na
+            self.data,
+            self.sample_rate,
+            frame_length,
+            hop_length,
+            f0_min_hz,
+            f0_max_hz,
+            threshold,
+            fill_na,
         )
 
     # --- Core - Resample ---

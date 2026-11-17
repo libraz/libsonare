@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import ctypes
 from collections.abc import Sequence
+from typing import Literal, get_args
 
 import numpy as np
 import numpy.typing as npt
@@ -19,8 +20,17 @@ from ._runtime import (
     _to_c_int,
     _to_c_int_array,
     _to_c_size_t,
+    _token_arg,
     _utf8_arg,
 )
+
+_SegmentMetric = Literal["cosine", "euclidean"]
+_SegmentMode = Literal["connectivity", "affinity"]
+_SegmentLinkage = Literal["average", "single", "complete", "ward"]
+# Checked here so a refusal names the tokens; the core reads an unknown metric as euclidean.
+_SEGMENT_METRICS: tuple[str, ...] = get_args(_SegmentMetric)
+_SEGMENT_MODES: tuple[str, ...] = get_args(_SegmentMode)
+_SEGMENT_LINKAGES: tuple[str, ...] = get_args(_SegmentLinkage)
 
 
 def _square_input(
@@ -50,8 +60,8 @@ def segment_cross_similarity(
     x: npt.ArrayLike,
     y: npt.ArrayLike,
     k: int = 0,
-    metric: str = "cosine",
-    mode: str = "connectivity",
+    metric: _SegmentMetric = "cosine",
+    mode: _SegmentMode = "connectivity",
 ) -> np.ndarray:
     """Return column-wise cross-similarity (``librosa.segment.cross_similarity``).
 
@@ -69,8 +79,8 @@ def segment_cross_similarity(
         _to_c_int(y_rows, "y_rows"),
         _to_c_int(y_cols, "y_cols"),
         _to_c_int(k, "k"),
-        _utf8_arg(metric, "metric"),
-        _utf8_arg(mode, "mode"),
+        _utf8_arg(_token_arg(metric, _SEGMENT_METRICS, "metric"), "metric"),
+        _utf8_arg(_token_arg(mode, _SEGMENT_MODES, "mode"), "mode"),
         ctypes.byref(out),
     )
     _check(rc)
@@ -82,8 +92,8 @@ def segment_recurrence_matrix(
     k: int = 0,
     width: int = 1,
     sym: bool = False,
-    metric: str = "euclidean",
-    mode: str = "connectivity",
+    metric: _SegmentMetric = "euclidean",
+    mode: _SegmentMode = "connectivity",
 ) -> np.ndarray:
     """Return a self-similarity recurrence matrix (``librosa.segment.recurrence_matrix``).
 
@@ -100,8 +110,8 @@ def segment_recurrence_matrix(
         _to_c_int(k, "k"),
         _to_c_int(width, "width"),
         1 if sym else 0,
-        _utf8_arg(metric, "metric"),
-        _utf8_arg(mode, "mode"),
+        _utf8_arg(_token_arg(metric, _SEGMENT_METRICS, "metric"), "metric"),
+        _utf8_arg(_token_arg(mode, _SEGMENT_MODES, "mode"), "mode"),
         ctypes.byref(out),
     )
     _check(rc)
@@ -177,7 +187,7 @@ def segment_subsegment(
 def segment_agglomerative(
     data: npt.ArrayLike,
     k: int,
-    linkage: str = "average",
+    linkage: _SegmentLinkage = "average",
 ) -> np.ndarray:
     """Cluster feature columns and return one label per column as an int32 array.
 
@@ -192,7 +202,7 @@ def segment_agglomerative(
             _to_c_int(rows, "rows"),
             _to_c_int(cols, "cols"),
             _to_c_int(k, "k"),
-            _utf8_arg(linkage, "linkage"),
+            _utf8_arg(_token_arg(linkage, _SEGMENT_LINKAGES, "linkage"), "linkage"),
             ctypes.byref(out),
         )
     )

@@ -361,7 +361,7 @@ def test_compat_numeric_and_signal_utilities() -> None:
         libsonare.peak_pick([0.0, 1.0, 0.0, 2.0, 0.0], 1, 1, 1, 1, 0.0, 0), [0, 1, 3]
     )
     np.testing.assert_allclose(
-        libsonare.vector_normalize([3.0, 4.0], norm_type=2), [0.6, 0.8], rtol=1e-6
+        libsonare.vector_normalize([3.0, 4.0], norm="l2"), [0.6, 0.8], rtol=1e-6
     )
 
 

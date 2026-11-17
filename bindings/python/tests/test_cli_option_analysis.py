@@ -314,8 +314,8 @@ def test_mel_forwards_htk_flag(monkeypatch: pytest.MonkeyPatch) -> None:
             "n_fft": 2048,
             "hop_length": 512,
             "n_mels": 128,
-            "fmin": 0.0,
-            "fmax": 0.0,
+            "fmin_hz": 0.0,
+            "fmax_hz": None,
             "htk": True,
         }
     ]
@@ -370,8 +370,8 @@ def test_pitch_forwards_threshold_hop_and_frequency_bounds(
             {
                 "sample_rate": 44100,
                 "hop_length": 256,
-                "fmin": 90.0,
-                "fmax": 1200.0,
+                "f0_min_hz": 90.0,
+                "f0_max_hz": 1200.0,
                 "threshold": 0.35,
             },
         )

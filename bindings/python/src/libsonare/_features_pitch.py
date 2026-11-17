@@ -236,8 +236,8 @@ def pitch_yin(
     sample_rate: int,
     frame_length: int = 2048,
     hop_length: int = 512,
-    fmin: float = 65.0,
-    fmax: float = 2093.0,
+    f0_min_hz: float = 65.0,
+    f0_max_hz: float = 2093.0,
     threshold: float = 0.1,
     fill_na: bool = False,
 ) -> PitchResult:
@@ -248,8 +248,8 @@ def pitch_yin(
         sample_rate: Sample rate in Hz.
         frame_length: Frame length in samples (default 2048).
         hop_length: Hop length in samples (default 512).
-        fmin: Minimum frequency in Hz (default 65.0).
-        fmax: Maximum frequency in Hz (default 2093.0).
+        f0_min_hz: Lowest F0 searched, in Hz (default 65.0).
+        f0_max_hz: Highest F0 searched, in Hz (default 2093.0).
         threshold: YIN threshold (default 0.1).
         fill_na: Retained for API compatibility. YIN always returns a finite
             estimate for each complete frame, as librosa.yin does; use
@@ -268,8 +268,8 @@ def pitch_yin(
         _to_c_int(sample_rate, "sample_rate"),
         _to_c_int(frame_length, "frame_length"),
         _to_c_int(hop_length, "hop_length"),
-        _to_c_float(fmin, "fmin"),
-        _to_c_float(fmax, "fmax"),
+        _to_c_float(f0_min_hz, "f0_min_hz"),
+        _to_c_float(f0_max_hz, "f0_max_hz"),
         _to_c_float(threshold, "threshold"),
         ctypes.c_int(1 if fill_na else 0),
         ctypes.byref(out),
@@ -286,8 +286,8 @@ def pitch_pyin(
     sample_rate: int,
     frame_length: int = 2048,
     hop_length: int = 512,
-    fmin: float = 65.0,
-    fmax: float = 2093.0,
+    f0_min_hz: float = 65.0,
+    f0_max_hz: float = 2093.0,
     threshold: float = 0.1,
     fill_na: bool = False,
 ) -> PitchResult:
@@ -298,8 +298,8 @@ def pitch_pyin(
         sample_rate: Sample rate in Hz.
         frame_length: Frame length in samples (default 2048).
         hop_length: Hop length in samples (default 512).
-        fmin: Minimum frequency in Hz (default 65.0).
-        fmax: Maximum frequency in Hz (default 2093.0).
+        f0_min_hz: Lowest F0 searched, in Hz (default 65.0).
+        f0_max_hz: Highest F0 searched, in Hz (default 2093.0).
         threshold: YIN threshold (default 0.1).
         fill_na: If True, return 0 for unvoiced f0 frames. If False,
             keep those frames as NaN to match librosa-style pitch tracks.
@@ -317,8 +317,8 @@ def pitch_pyin(
         _to_c_int(sample_rate, "sample_rate"),
         _to_c_int(frame_length, "frame_length"),
         _to_c_int(hop_length, "hop_length"),
-        _to_c_float(fmin, "fmin"),
-        _to_c_float(fmax, "fmax"),
+        _to_c_float(f0_min_hz, "f0_min_hz"),
+        _to_c_float(f0_max_hz, "f0_max_hz"),
         _to_c_float(threshold, "threshold"),
         ctypes.c_int(1 if fill_na else 0),
         ctypes.byref(out),

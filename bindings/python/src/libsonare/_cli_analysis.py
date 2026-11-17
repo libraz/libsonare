@@ -431,8 +431,9 @@ def cmd_mel(args: argparse.Namespace) -> int:
         n_fft=args.n_fft,
         hop_length=args.hop_length,
         n_mels=args.n_mels,
-        fmin=args.fmin,
-        fmax=args.fmax,
+        fmin_hz=args.fmin,
+        # The flag keeps the command line's 0 = Nyquist.
+        fmax_hz=args.fmax or None,
         htk=args.htk,
     )
     n_mels, n_frames = result.power.shape
@@ -568,8 +569,8 @@ def cmd_pitch(args: argparse.Namespace) -> int:
                 samples,
                 sample_rate=sr,
                 hop_length=hop_length,
-                fmin=fmin,
-                fmax=fmax,
+                f0_min_hz=fmin,
+                f0_max_hz=fmax,
                 threshold=threshold,
             )
         else:
@@ -580,8 +581,8 @@ def cmd_pitch(args: argparse.Namespace) -> int:
                 samples,
                 sample_rate=sr,
                 hop_length=hop_length,
-                fmin=fmin,
-                fmax=fmax,
+                f0_min_hz=fmin,
+                f0_max_hz=fmax,
                 threshold=threshold,
             )
         else:

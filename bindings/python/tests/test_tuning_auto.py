@@ -184,10 +184,10 @@ _MEL_SAMPLES = [0.5 * math.sin(2.0 * math.pi * 440.0 * i / _SR) for i in range(_
 
 
 def test_mel_result_carries_the_forward_parameters() -> None:
-    mel = libsonare.mel_spectrogram(_MEL_SAMPLES, _SR, 1024, 256, 40, 100.0, 0.0, True)
+    mel = libsonare.mel_spectrogram(_MEL_SAMPLES, _SR, 1024, 256, 40, 100.0, None, True)
     assert (mel.power.shape[0], mel.sample_rate, mel.hop_length, mel.n_fft) == (40, _SR, 256, 1024)
-    assert mel.fmin == 100.0
-    assert mel.fmax == _SR / 2
+    assert mel.fmin_hz == 100.0
+    assert mel.fmax_hz == _SR / 2
     assert mel.htk is True
     assert not hasattr(mel, "is_db")
 
@@ -196,7 +196,7 @@ def test_mfcc_result_carries_the_mel_parameters_and_the_lifter() -> None:
     result = libsonare.mfcc(_MEL_SAMPLES, _SR, 1024, 256, 40, 13, 0.0, 8000.0, False, 22.0)
     assert (result.coefficients.shape[0], result.n_mels, result.sample_rate) == (13, 40, _SR)
     assert (result.hop_length, result.n_fft) == (256, 1024)
-    assert result.fmax == 8000.0
+    assert result.fmax_hz == 8000.0
     assert result.htk is False
     assert not hasattr(result, "is_db")
     assert result.lifter == 22.0
@@ -214,7 +214,7 @@ def test_the_lifter_is_part_of_the_mfcc_inverse() -> None:
 
 def test_a_mel_result_inverts_with_the_parameters_it_carries() -> None:
     mel = libsonare.mel_spectrogram(_MEL_SAMPLES, _SR, 1024, 256, 40, 100.0, 4000.0, True)
-    stft = libsonare.mel_to_stft(mel.power, _SR, mel.n_fft, mel.fmin, mel.fmax, mel.htk)
+    stft = libsonare.mel_to_stft(mel.power, _SR, mel.n_fft, mel.fmin_hz, mel.fmax_hz, mel.htk)
     assert stft.shape == (1024 // 2 + 1, mel.power.shape[1])
     # The Mel range is part of the answer: the default range inverts differently.
     default_range = libsonare.mel_to_stft(mel.power, _SR, mel.n_fft, 0.0, None, mel.htk)

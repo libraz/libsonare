@@ -39,10 +39,12 @@ from ._runtime import (
     _to_c_int,
     _to_c_int_array,
     _to_c_size_t,
+    _token_ordinal,
     _utf8_arg,
     _validate_matrix,
     _validate_samples,
 )
+from ._types_enums import _NORM_TYPES, _TEMPOGRAM_MODES, NormType, TempogramMode
 
 
 def _unsupported_feature_symbol(symbol: str) -> SonareError:
@@ -598,14 +600,14 @@ def peak_pick(
 
 def vector_normalize(
     values: Sequence[float] | list[float],
-    norm_type: int = 0,
+    norm: NormType = "max",
     threshold: float = 0.0,
 ) -> np.ndarray:
-    """Normalize a vector (float32 array). norm_type: 0=inf, 1=L1, 2=L2, 3=power."""
+    """Normalize a vector (float32 array) by its maximum magnitude, L1, L2 or power norm."""
     return _call_float_array_transform(
         "sonare_vector_normalize",
         values,
-        _to_c_int(norm_type, "norm_type"),
+        ctypes.c_int(_token_ordinal(norm, _NORM_TYPES, "norm")),
         _to_c_float(threshold, "threshold"),
         arg_name="values",
     )
@@ -674,12 +676,10 @@ def tempogram(
     win_length: int = 384,
     center: bool = True,
     norm: bool = True,
-    mode: str = "autocorrelation",
+    mode: TempogramMode = "autocorrelation",
 ) -> np.ndarray:
     """Compute a tempogram as a float32 array of shape ``(win_length, n_frames)``."""
-    mode_id = {"autocorrelation": 0, "auto": 0, "ac": 0, "cosine": 1}.get(mode)
-    if mode_id is None:
-        raise SonareValueError("mode must be 'autocorrelation' or 'cosine'")
+    mode_id = _token_ordinal(mode, _TEMPOGRAM_MODES, "mode")
     lib = _get_lib()
     c_array, length = _to_c_float_array(onset_envelope, arg_name="onset_envelope")
     n_frames = ctypes.c_int()

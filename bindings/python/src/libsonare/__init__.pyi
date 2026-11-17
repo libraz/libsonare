@@ -876,6 +876,9 @@ from .types import (
     ChordAnalysisResult as ChordAnalysisResult,
 )
 from .types import (
+    ChordChromaMethod as ChordChromaMethod,
+)
+from .types import (
     ChordFunctionName as ChordFunctionName,
 )
 from .types import (
@@ -1005,6 +1008,9 @@ from .types import (
 )
 from .types import (
     FunctionalChord as FunctionalChord,
+)
+from .types import (
+    GenreHint as GenreHint,
 )
 from .types import (
     GoniometerPoint as GoniometerPoint,
@@ -1161,6 +1167,9 @@ from .types import (
     NormalizeStereoResult as NormalizeStereoResult,
 )
 from .types import (
+    NormType as NormType,
+)
+from .types import (
     NoteSegment as NoteSegment,
 )
 from .types import PanLaw as PanLaw
@@ -1292,6 +1301,9 @@ from .types import (
 )
 from .types import SynthParamCondition as SynthParamCondition
 from .types import SynthParamInfo as SynthParamInfo
+from .types import (
+    TempogramMode as TempogramMode,
+)
 from .types import (
     TimbreFrame as TimbreFrame,
 )

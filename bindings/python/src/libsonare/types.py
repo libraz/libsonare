@@ -386,10 +386,16 @@ from ._types_enums import (
     ChannelLayout as ChannelLayout,
 )
 from ._types_enums import (
+    ChordChromaMethod as ChordChromaMethod,
+)
+from ._types_enums import (
     EngineTelemetryError as EngineTelemetryError,
 )
 from ._types_enums import (
     EngineTelemetryType as EngineTelemetryType,
+)
+from ._types_enums import (
+    GenreHint as GenreHint,
 )
 from ._types_enums import (
     KeyMode as KeyMode,
@@ -399,6 +405,9 @@ from ._types_enums import (
 )
 from ._types_enums import (
     MeterTap as MeterTap,
+)
+from ._types_enums import (
+    NormType as NormType,
 )
 from ._types_enums import (
     PanLaw as PanLaw,
@@ -414,6 +423,9 @@ from ._types_enums import (
 )
 from ._types_enums import (
     SidechainSourceKind as SidechainSourceKind,
+)
+from ._types_enums import (
+    TempogramMode as TempogramMode,
 )
 from ._types_mastering import (
     LoudnessMatch as LoudnessMatch,

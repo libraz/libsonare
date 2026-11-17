@@ -679,8 +679,8 @@ class MelSpectrogramResult:
 
     Attributes:
         n_fft: FFT size of the source STFT.
-        fmin: Lower Mel band edge in Hz as applied.
-        fmax: Upper Mel band edge in Hz as applied: the Nyquist when the
+        fmin_hz: Lower Mel band edge in Hz as applied.
+        fmax_hz: Upper Mel band edge in Hz as applied: the Nyquist when the
             request left it at 0.
         htk: ``True`` for the HTK Mel formula, ``False`` for Slaney.
     """
@@ -690,8 +690,8 @@ class MelSpectrogramResult:
     power: NDArray[np.float32]
     db: NDArray[np.float32]
     n_fft: int
-    fmin: float
-    fmax: float
+    fmin_hz: float
+    fmax_hz: float
     htk: bool
 
 
@@ -704,7 +704,7 @@ class MfccResult:
 
     Attributes:
         n_mels: Mel bands the coefficients were taken from.
-        fmax: Upper Mel band edge in Hz as applied: the Nyquist when the request
+        fmax_hz: Upper Mel band edge in Hz as applied: the Nyquist when the request
             left it at 0.
         lifter: Cepstral lifter applied to the coefficients; 0 means none.
     """
@@ -714,8 +714,8 @@ class MfccResult:
     hop_length: int
     n_fft: int
     n_mels: int
-    fmin: float
-    fmax: float
+    fmin_hz: float
+    fmax_hz: float
     htk: bool
     lifter: float
 

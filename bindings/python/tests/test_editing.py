@@ -34,7 +34,7 @@ def test_pitch_correct_to_midi_function() -> None:
     assert all(math.isfinite(x) for x in result)
 
     detected = libsonare.pitch_pyin(
-        result, sample_rate=sr, frame_length=2048, hop_length=512, fmin=100.0, fmax=1000.0
+        result, sample_rate=sr, frame_length=2048, hop_length=512, f0_min_hz=100.0, f0_max_hz=1000.0
     )
     expected_hz = 220.0 * 2 ** (3 / 12)
     cents_error = 1200.0 * math.log2(detected.median_f0 / expected_hz)

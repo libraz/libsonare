@@ -41,9 +41,13 @@ from ._narrowing import _resolve_sample_bound as _resolve_sample_bound
 from ._narrowing import _resolve_time_offset as _resolve_time_offset
 from ._narrowing import _resolve_zero_default as _resolve_zero_default
 from ._narrowing import _utf8_arg as _utf8_arg
+from ._types_enums import _CHORD_CHROMA_METHODS as _CHORD_CHROMA_METHODS
+from ._types_enums import _GENRE_HINTS as _GENRE_HINTS
 from ._types_enums import _KEY_MODES as _KEY_MODES
 from ._types_enums import _KEY_PROFILES as _KEY_PROFILES
+from ._types_enums import _NORM_TYPES as _NORM_TYPES
 from ._types_enums import _SECTION_TYPES as _SECTION_TYPES
+from ._types_enums import _TEMPOGRAM_MODES as _TEMPOGRAM_MODES
 from .types import *  # noqa: F403
 
 # Pan-law aliases are normalized case-insensitively and with underscores folded
@@ -1271,6 +1275,14 @@ def _token_ordinal(value: object, tokens: tuple[str, ...], what: str) -> int:
         raise SonareValueError(
             f"invalid {what}: {value!r} (expected one of {list(tokens)})"
         ) from None
+
+
+def _token_arg(value: object, tokens: tuple[str, ...], what: str) -> str:
+    """Return ``value`` once it is one of ``tokens``, refusing it as :func:`_token_ordinal` does.
+
+    For a closed set the core receives by name and does not itself refuse.
+    """
+    return tokens[_token_ordinal(value, tokens, what)]
 
 
 # Candidate-mode groups a ``modes`` string may name instead of a single mode.

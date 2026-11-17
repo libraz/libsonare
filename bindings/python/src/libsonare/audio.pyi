@@ -12,10 +12,12 @@ from .types import (
     BpmAnalysisResult,
     ChannelLayout,
     ChordAnalysisResult,
+    ChordChromaMethod,
     ChromaResult,
     ClippingReport,
     DynamicRangeReport,
     DynamicsResult,
+    GenreHint,
     HpssResult,
     KeyCandidate,
     KeyDetection,
@@ -74,7 +76,7 @@ class Audio:
         chroma_high_pass_hz: float = 80.0,
         modes: Sequence[KeyMode] | str | None = None,
         profile: KeyProfile | None = None,
-        genre_hint: str | None = None,
+        genre_hint: GenreHint | None = None,
         tuning_cents: float | str = "auto",
     ) -> KeyDetection: ...
     def detect_key_candidates(
@@ -86,7 +88,7 @@ class Audio:
         chroma_high_pass_hz: float = 80.0,
         modes: Sequence[KeyMode] | str | None = None,
         profile: KeyProfile | None = None,
-        genre_hint: str | None = None,
+        genre_hint: GenreHint | None = None,
         tuning_cents: float | str = "auto",
     ) -> list[KeyCandidate]: ...
     def detect_beats(
@@ -146,7 +148,7 @@ class Audio:
         key_root: PitchClass = PitchClass.C,
         key_mode: KeyMode = "major",
         detect_inversions: bool = False,
-        chroma_method: str = "cqt",
+        chroma_method: ChordChromaMethod = "cqt",
         tuning_cents: float | str = "auto",
     ) -> ChordAnalysisResult: ...
     def hpss(self, kernel_harmonic: int = 31, kernel_percussive: int = 31) -> HpssResult: ...
@@ -241,8 +243,8 @@ class Audio:
         self,
         frame_length: int = 2048,
         hop_length: int = 512,
-        fmin: float = 65.0,
-        fmax: float = 2093.0,
+        f0_min_hz: float = 65.0,
+        f0_max_hz: float = 2093.0,
         threshold: float = 0.1,
         fill_na: bool = False,
     ) -> PitchResult: ...
@@ -250,8 +252,8 @@ class Audio:
         self,
         frame_length: int = 2048,
         hop_length: int = 512,
-        fmin: float = 65.0,
-        fmax: float = 2093.0,
+        f0_min_hz: float = 65.0,
+        f0_max_hz: float = 2093.0,
         threshold: float = 0.1,
         fill_na: bool = False,
     ) -> PitchResult: ...

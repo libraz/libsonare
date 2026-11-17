@@ -397,7 +397,7 @@ def test_mel_spectrogram_explicit_range() -> None:
 
     tone = _generate_sine(440, 22050, 1.0)
     base = mel_spectrogram(tone, sample_rate=22050, n_mels=40)
-    ranged = mel_spectrogram(tone, sample_rate=22050, n_mels=40, fmin=500.0, fmax=4000.0)
+    ranged = mel_spectrogram(tone, sample_rate=22050, n_mels=40, fmin_hz=500.0, fmax_hz=4000.0)
     htk = mel_spectrogram(tone, sample_rate=22050, n_mels=40, htk=True)
 
     assert base.power.shape[0] == ranged.power.shape[0] == 40
@@ -410,8 +410,8 @@ def test_mel_spectrogram_explicit_range() -> None:
 def test_mel_range_is_applied_or_refused_never_defaulted() -> None:
     """A negative or non-finite Mel bound reaches a refusal, not the default.
 
-    The positive controls are consumed rather than merely accepted: the sentinel
-    0 must land on the same bands as spelling sample_rate / 2 out, and a legal
+    The positive controls are consumed rather than merely accepted: the default
+    upper edge must land on the same bands as spelling sample_rate / 2 out, and a legal
     range must move the filterbank off the default one. A refusal-only test
     passes against a reader that rejects everything, and the defect this covers
     is a *successful* call carrying a value the caller did not choose.
@@ -424,17 +424,20 @@ def test_mel_range_is_applied_or_refused_never_defaulted() -> None:
 
     tone = _generate_sine(440, 22050, 0.5)
     defaulted = mel_spectrogram(tone, sample_rate=22050, n_mels=40)
-    nyquist = mel_spectrogram(tone, sample_rate=22050, n_mels=40, fmax=11025.0)
-    ranged = mel_spectrogram(tone, sample_rate=22050, n_mels=40, fmin=500.0, fmax=4000.0)
+    nyquist = mel_spectrogram(tone, sample_rate=22050, n_mels=40, fmax_hz=11025.0)
+    ranged = mel_spectrogram(tone, sample_rate=22050, n_mels=40, fmin_hz=500.0, fmax_hz=4000.0)
 
     np.testing.assert_allclose(defaulted.power, nyquist.power, atol=1e-6)
     assert np.sum((defaulted.power - ranged.power) ** 2) > 1e-6
 
     for bad in (-1.0, -11025.0, math.nan, math.inf, -math.inf):
         with pytest.raises(SonareError):
-            mel_spectrogram(tone, sample_rate=22050, n_mels=40, fmin=bad)
+            mel_spectrogram(tone, sample_rate=22050, n_mels=40, fmin_hz=bad)
         with pytest.raises(SonareError):
-            mel_spectrogram(tone, sample_rate=22050, n_mels=40, fmax=bad)
+            mel_spectrogram(tone, sample_rate=22050, n_mels=40, fmax_hz=bad)
+    # An explicit 0 is an empty band, not a request for the Nyquist.
+    with pytest.raises(SonareError):
+        mel_spectrogram(tone, sample_rate=22050, n_mels=40, fmax_hz=0.0)
 
 
 def test_mfcc() -> None:

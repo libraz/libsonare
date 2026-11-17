@@ -43,7 +43,7 @@ REFUSED_VALUES = [
 ]
 
 
-def _mel(**kwargs: float) -> np.ndarray:
+def _mel(**kwargs: float | None) -> np.ndarray:
     result = mel_spectrogram(
         sine(440.0, 0.5, SR), SR, n_fft=512, hop_length=256, n_mels=16, **kwargs
     )
@@ -51,34 +51,41 @@ def _mel(**kwargs: float) -> np.ndarray:
 
 
 class TestMelFrequencyBounds:
-    """sonare_mel_spectrogram_ex fmin / fmax."""
+    """sonare_mel_spectrogram_ex fmin / fmax, reached as fmin_hz / fmax_hz."""
 
-    @pytest.mark.parametrize("field", ["fmin", "fmax"])
     @pytest.mark.parametrize("value", REFUSED_VALUES)
-    def test_refuses_a_negative_or_non_finite_bound(self, field: str, value: float) -> None:
+    def test_refuses_a_negative_or_non_finite_lower_edge(self, value: float) -> None:
         with pytest.raises(SonareError) as excinfo:
-            _mel(**{field: value})
+            _mel(fmin_hz=value)
         # The diagnostic has to name the field, so a caller passing several
         # optional bounds knows which one was refused.
-        assert field in str(excinfo.value)
-        # Which layer answers is part of the contract. A negative bound is
-        # representable, so it reaches the core and the core's domain check
-        # refuses it. A non-finite one never leaves the binding: the argument
-        # reader refuses it there, because the conversion that would carry it
-        # is the same one that folds a saturating value onto it.
+        assert "fmin" in str(excinfo.value)
+        # A negative edge is representable, so it reaches the core and the
+        # core's domain check refuses it; a non-finite one never leaves the
+        # binding, whose argument reader refuses it.
         wording = (
             "finite non-negative" if math.isfinite(value) else "must be a finite number within"
         )
         assert wording in str(excinfo.value)
 
-    @pytest.mark.parametrize("field", ["fmin", "fmax"])
-    def test_zero_selects_the_librosa_default(self, field: str) -> None:
-        assert np.array_equal(_mel(**{field: 0.0}), _mel())
+    @pytest.mark.parametrize("value", [0.0, *REFUSED_VALUES])
+    def test_refuses_an_upper_edge_that_is_not_positive_and_finite(self, value: float) -> None:
+        # 0 is the core's "Nyquist" sentinel; the binding spells that as None,
+        # so an explicit 0 is refused rather than read as the default.
+        with pytest.raises(SonareError) as excinfo:
+            _mel(fmax_hz=value)
+        assert "fmax_hz" in str(excinfo.value)
 
-    def test_a_non_sentinel_bound_changes_the_spectrogram(self) -> None:
-        # Without this the equality above would also hold if 0 were applied as 0.
-        assert not np.array_equal(_mel(fmin=300.0), _mel())
-        assert not np.array_equal(_mel(fmax=4000.0), _mel())
+    def test_a_zero_lower_edge_is_zero_hz(self) -> None:
+        assert np.array_equal(_mel(fmin_hz=0.0), _mel())
+
+    def test_an_absent_upper_edge_is_the_nyquist(self) -> None:
+        assert np.array_equal(_mel(fmax_hz=None), _mel(fmax_hz=SR / 2))
+
+    def test_a_given_bound_changes_the_spectrogram(self) -> None:
+        # Without this the equalities above would also hold if the bounds were ignored.
+        assert not np.array_equal(_mel(fmin_hz=300.0), _mel())
+        assert not np.array_equal(_mel(fmax_hz=4000.0), _mel())
 
 
 class TestScaleQuantizerReference:

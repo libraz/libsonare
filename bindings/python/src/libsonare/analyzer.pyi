@@ -20,6 +20,7 @@ from .types import (
     CapabilityCatalog,
     Chord,
     ChordAnalysisResult,
+    ChordChromaMethod,
     ChromaResult,
     ClickDetection,
     ClipDetection,
@@ -45,6 +46,7 @@ from .types import (
     DynamicsResult,
     EqSpectrumSnapshot,
     FunctionalChord,
+    GenreHint,
     GoniometerPoint,
     HpssResult,
     HumDetection,
@@ -74,6 +76,7 @@ from .types import (
     MixResult,
     NoiseDetection,
     NormalizeStereoResult,
+    NormType,
     NoteSegment,
     PanLaw,
     PhaseScopeReport,
@@ -94,6 +97,7 @@ from .types import (
     SpectrumReport,
     StftResult,
     StreamingLoudnessGain,
+    TempogramMode,
     TimbreResult,
     TrimRange,
     TrimSilenceResult,
@@ -101,8 +105,6 @@ from .types import (
     VectorscopeReport,
     WaveformPeaksReport,
 )
-
-TempogramMode: TypeAlias = Literal["autocorrelation", "auto", "ac", "cosine"]
 
 FloatSamples: TypeAlias = Sequence[float] | list[float] | np.ndarray[Any, Any]
 # Planar audio: one buffer per channel, or a 2-D (channels, frames) array.
@@ -298,7 +300,7 @@ def detect_key(
     chroma_high_pass_hz: float = 80.0,
     modes: Sequence[KeyMode] | str | None = None,
     profile: KeyProfile | None = None,
-    genre_hint: str | None = None,
+    genre_hint: GenreHint | None = None,
     tuning_cents: float | str = "auto",
 ) -> KeyDetection: ...
 def detect_key_candidates(
@@ -311,7 +313,7 @@ def detect_key_candidates(
     chroma_high_pass_hz: float = 80.0,
     modes: Sequence[KeyMode] | str | None = None,
     profile: KeyProfile | None = None,
-    genre_hint: str | None = None,
+    genre_hint: GenreHint | None = None,
     tuning_cents: float | str = "auto",
 ) -> list[KeyCandidate]: ...
 def detect_beats(
@@ -542,7 +544,7 @@ def detect_chords(
     key_root: PitchClass = PitchClass.C,
     key_mode: KeyMode = "major",
     detect_inversions: bool = False,
-    chroma_method: str = "cqt",
+    chroma_method: ChordChromaMethod = "cqt",
     tuning_cents: float | str = "auto",
 ) -> ChordAnalysisResult: ...
 def chord_functional_analysis(
@@ -561,7 +563,7 @@ def chord_functional_analysis(
     hmm_beam_width: int = 24,
     use_key_context: bool = False,
     detect_inversions: bool = False,
-    chroma_method: str = "cqt",
+    chroma_method: ChordChromaMethod = "cqt",
     tuning_cents: float | str = "auto",
 ) -> list[FunctionalChord]: ...
 def chord_functions(
@@ -604,8 +606,8 @@ def detect_boundaries(
 def analyze_melody(
     samples: FloatSamples,
     sample_rate: int,
-    fmin: float = 65.0,
-    fmax: float = 2093.0,
+    f0_min_hz: float = 65.0,
+    f0_max_hz: float = 2093.0,
     frame_length: int = 2048,
     hop_length: int = 256,
     threshold: float = 0.1,
@@ -1669,8 +1671,8 @@ def mel_spectrogram(
     n_fft: int = 2048,
     hop_length: int = 512,
     n_mels: int = 128,
-    fmin: float = 0.0,
-    fmax: float = 0.0,
+    fmin_hz: float = 0.0,
+    fmax_hz: float | None = None,
     htk: bool = False,
 ) -> MelSpectrogramResult: ...
 def mel_delta(features: npt.ArrayLike, width: int = 9) -> np.ndarray[Any, Any]: ...
@@ -1766,8 +1768,8 @@ def pitch_yin(
     sample_rate: int,
     frame_length: int = 2048,
     hop_length: int = 512,
-    fmin: float = 65.0,
-    fmax: float = 2093.0,
+    f0_min_hz: float = 65.0,
+    f0_max_hz: float = 2093.0,
     threshold: float = 0.1,
     fill_na: bool = False,
 ) -> PitchResult: ...
@@ -1776,8 +1778,8 @@ def pitch_pyin(
     sample_rate: int,
     frame_length: int = 2048,
     hop_length: int = 512,
-    fmin: float = 65.0,
-    fmax: float = 2093.0,
+    f0_min_hz: float = 65.0,
+    f0_max_hz: float = 2093.0,
     threshold: float = 0.1,
     fill_na: bool = False,
 ) -> PitchResult: ...
@@ -1802,16 +1804,16 @@ def segment_cross_similarity(
     x: npt.ArrayLike,
     y: npt.ArrayLike,
     k: int = 0,
-    metric: str = "cosine",
-    mode: str = "connectivity",
+    metric: Literal["cosine", "euclidean"] = "cosine",
+    mode: Literal["connectivity", "affinity"] = "connectivity",
 ) -> np.ndarray[Any, Any]: ...
 def segment_recurrence_matrix(
     data: npt.ArrayLike,
     k: int = 0,
     width: int = 1,
     sym: bool = False,
-    metric: str = "euclidean",
-    mode: str = "connectivity",
+    metric: Literal["cosine", "euclidean"] = "euclidean",
+    mode: Literal["connectivity", "affinity"] = "connectivity",
 ) -> np.ndarray[Any, Any]: ...
 def segment_recurrence_to_lag(
     recurrence: npt.ArrayLike, pad: bool = True
@@ -1825,7 +1827,7 @@ def segment_subsegment(
 def segment_agglomerative(
     data: npt.ArrayLike,
     k: int,
-    linkage: str = "average",
+    linkage: Literal["average", "single", "complete", "ward"] = "average",
 ) -> np.ndarray[Any, Any]: ...
 def segment_path_enhance(
     recurrence: npt.ArrayLike,
@@ -2072,7 +2074,7 @@ def peak_pick(
     wait: int,
 ) -> np.ndarray[Any, Any]: ...
 def vector_normalize(
-    values: FloatSamples, norm_type: int = 0, threshold: float = 0.0
+    values: FloatSamples, norm: NormType = "max", threshold: float = 0.0
 ) -> np.ndarray[Any, Any]: ...
 def pcen(
     values: npt.ArrayLike,
@@ -2642,7 +2644,7 @@ def cqt_to_audio(
     magnitude: npt.ArrayLike,
     sample_rate: int,
     hop_length: int = 512,
-    fmin: float = 32.70319566257483,
+    fmin_hz: float = 32.70319566257483,
     bins_per_octave: int = 12,
     n_iter: int = 32,
 ) -> np.ndarray[Any, Any]: ...
@@ -2650,7 +2652,7 @@ def vqt_to_audio(
     magnitude: npt.ArrayLike,
     sample_rate: int,
     hop_length: int = 512,
-    fmin: float = 32.70319566257483,
+    fmin_hz: float = 32.70319566257483,
     bins_per_octave: int = 12,
     gamma: float | None = None,
     n_iter: int = 32,
