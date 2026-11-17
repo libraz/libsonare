@@ -256,7 +256,7 @@ describe('WASM inherits the C ABI feature gate on mixing-only engine commands', 
       'These push a command the C ABI answers with NOT_SUPPORTED when mixing is ' +
         'compiled out. Ungated, the analysis-only bundle accepts the call, reports ' +
         "success, and drops it on the engine's unknown-target telemetry. Wrap the " +
-        'body in #if defined(SONARE_WITH_MIXING) and throw NotImplemented in the #else.',
+        'body in #if defined(SONARE_WITH_MIXING) and throw NotSupported in the #else.',
     ).toEqual([]);
   });
 });

@@ -399,12 +399,12 @@ describe('a compiled-out WASM feature reports NotSupported, not InvalidState', (
     expect(new Set(stubs.map((stub) => stub.file)).size).toBeGreaterThanOrEqual(4);
   });
 
-  it('throws NotImplemented from every one of them', () => {
+  it('throws NotSupported from every one of them', () => {
     // The C ABI answers SONARE_ERROR_NOT_SUPPORTED from every one of its own
-    // disabled-feature branches, and ErrorCode::NotImplemented is the enumerator
+    // disabled-feature branches, and ErrorCode::NotSupported is the enumerator
     // that reaches JS as code 6 / 'NotSupported'. InvalidState (7) is a
     // different, recoverable condition and tells the caller the wrong thing.
-    const wrong = compiledOutFeatureStubs().filter((stub) => stub.code !== 'NotImplemented');
+    const wrong = compiledOutFeatureStubs().filter((stub) => stub.code !== 'NotSupported');
     expect(wrong).toEqual([]);
   });
 });
