@@ -67,6 +67,7 @@ export const AUTOMATION_CURVE_VALUES = {
   exponential: 1,
   hold: 2,
   's-curve': 3,
+  sCurve: 3,
 } as const;
 
 /** One automation breakpoint as the native layer reads it: the curve as its ordinal. */

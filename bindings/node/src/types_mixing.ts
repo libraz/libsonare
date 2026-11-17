@@ -120,7 +120,7 @@ export interface MixerProcessResult {
  * Interpolation curve for scheduled automation events
  * (see {@link Mixer.scheduleInsertAutomation}).
  */
-export type AutomationCurve = 'linear' | 'exponential' | 'hold' | 's-curve';
+export type AutomationCurve = 'linear' | 'exponential' | 'hold' | 'sCurve' | 's-curve';
 
 /**
  * Pan law applied by a strip's panner. Mapped to C enum ints `0=const3dB`, `1=const4.5dB`,
@@ -132,7 +132,15 @@ export type AutomationCurve = 'linear' | 'exponential' | 'hold' | 's-curve';
  * planes and engine lanes are unity at centre. Only a C++ `ChannelStrip` built without
  * `mono_pan_centre_unity` makes the law change a mono strip's centre gain.
  */
-export type PanLaw = 'const3dB' | 'const4.5dB' | 'const6dB' | 'linear0dB';
+export type PanLaw =
+  | 'const3Db'
+  | 'const4.5Db'
+  | 'const6Db'
+  | 'linear0Db'
+  | 'const3dB'
+  | 'const4.5dB'
+  | 'const6dB'
+  | 'linear0dB';
 
 /**
  * Accepted pan-law name aliases. Names are normalized case-insensitively with

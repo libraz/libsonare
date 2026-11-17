@@ -1,6 +1,10 @@
 {
   "schema_version": 1,
   "accepted": [
+    { "value": "const3Db", "ordinal": 0 },
+    { "value": "const4.5Db", "ordinal": 1 },
+    { "value": "const6Db", "ordinal": 2 },
+    { "value": "linear0Db", "ordinal": 3 },
     { "value": "const3dB", "ordinal": 0 },
     { "value": "const-3db", "ordinal": 0 },
     { "value": "-3db", "ordinal": 0 },

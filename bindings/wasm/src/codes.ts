@@ -62,6 +62,7 @@ export const AUTOMATION_CURVE_VALUES = {
   exponential: 1,
   hold: 2,
   's-curve': 3,
+  sCurve: 3,
 } as const;
 
 const PAN_LAW_VALUES: Readonly<Record<string, number>> = {
