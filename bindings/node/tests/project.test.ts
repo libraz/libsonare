@@ -1388,7 +1388,7 @@ describe('UMP MIDI-1.0 packing matches the canonical word layout', () => {
       maxValue: 0,
     };
     const point = Project.midiCcToBreakpoint([binding], Project.midiCc(2, 0, 4, 74, 127));
-    expect(point).toEqual({ ppq: 2, value: 0, curveToNext: 0 });
+    expect(point).toEqual({ ppq: 2, value: 0, curveToNext: 'linear' });
 
     const event = Project.midiParamToCc([binding], 88, -60, 0, 3);
     expect(event?.ppq).toBe(3);

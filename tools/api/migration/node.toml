@@ -11934,3 +11934,19 @@ changed = "a ProjectChordQuality token instead of an ordinal; a number is refuse
 domain = "project"
 rule = "string-closed-sets"
 test = "bindings/node/tests/chord-annotation.test.ts::produces annotations annotateChords accepts"
+
+[[entry]]
+kind = "type"
+old = "ProjectAutomationCurve"
+changed = "the same tokens as AutomationCurve; an ordinal is a TypeError and the 'scurve' spelling is refused"
+domain = "project"
+rule = "string-closed-sets"
+test = "bindings/node/tests/project-edit-extra.test.ts::refuses a curve ordinal and the retired scurve spelling"
+
+[[entry]]
+kind = "method"
+old = "Project.midiCcToBreakpoint"
+changed = "the breakpoint's curveToNext is an AutomationCurve token instead of an ordinal"
+domain = "project"
+rule = "string-closed-sets"
+test = "bindings/node/tests/project.test.ts::exposes native CcMap learn"

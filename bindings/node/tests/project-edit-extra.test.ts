@@ -459,7 +459,7 @@ describe('Project edit ops (new bindings)', () => {
     const targetParamId = project.addAutomationLane(track, {
       targetParamId: 1,
       points: [
-        { ppq: 0, value: 0, curve: 0 },
+        { ppq: 0, value: 0, curve: 'linear' },
         { ppq: 4, value: 1, curveToNext: 'exponential' },
       ],
     });
@@ -544,16 +544,11 @@ describe('Project edit ops (new bindings)', () => {
     project.destroy();
   });
 
-  it('resolves every documented curve spelling and alias to one serialized ordinal', () => {
-    // A breakpoint the WASM Project facade accepts has to render the same shape
-    // here: the legacy 'scurve' spelling used to throw and a `curveToNext`-only
-    // point used to fall back to Linear on the other side of the boundary.
+  it('resolves a curve token and its curveToNext alias to one serialized ordinal', () => {
+    // A `curveToNext`-only point must not fall back to Linear at the boundary.
     const spellings: ProjectAutomationPoint[] = [
       { ppq: 0, value: 1, curve: 's-curve' },
-      { ppq: 0, value: 1, curve: 'scurve' },
-      { ppq: 0, value: 1, curve: 3 },
       { ppq: 0, value: 1, curveToNext: 's-curve' },
-      { ppq: 0, value: 1, curveToNext: 'scurve' },
     ];
     const serialized = spellings.map((point) => {
       const project = new Project();
@@ -571,6 +566,22 @@ describe('Project edit ops (new bindings)', () => {
     expect(lane.tracks[0].automation_lanes[0].points[0].curve_to_next).toBe(3);
     for (const json of serialized) {
       expect(json).toBe(serialized[0]);
+    }
+  });
+
+  it('refuses a curve ordinal and the retired scurve spelling', () => {
+    const project = new Project();
+    try {
+      const track = project.addTrack({ kind: 'audio' });
+      const lane = (curve: unknown) =>
+        project.addAutomationLane(track, {
+          targetParamId: 1,
+          points: [{ ppq: 0, value: 1, curve: curve as never }],
+        });
+      expect(() => lane(3)).toThrow(TypeError);
+      expect(() => lane('scurve')).toThrow(RangeError);
+    } finally {
+      project.destroy();
     }
   });
 

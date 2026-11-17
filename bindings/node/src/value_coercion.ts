@@ -1,3 +1,4 @@
+import { tokenName, tokenOrdinal } from './internal/project_tokens.js';
 import { SampleBank } from './sample_bank.js';
 import type {
   AutomationCurve,
@@ -8,7 +9,6 @@ import type {
   PartRigKey,
   PartRigMode,
   PartRigRequest,
-  ProjectAutomationCurve,
   ProjectAutomationLaneDesc,
   ProjectAutomationPoint,
   SendTiming,
@@ -69,42 +69,54 @@ export const AUTOMATION_CURVE_VALUES = {
   's-curve': 3,
 } as const;
 
-/**
- * The Project facade additionally accepts the legacy `'scurve'` spelling, which
- * the WASM Project facade has always taken. Rejecting it here meant the same
- * breakpoint object loaded on one binding and threw on the other, so the
- * accepted set is declared once and both packages derive their type from it.
- */
-export const PROJECT_AUTOMATION_CURVE_VALUES = {
-  ...AUTOMATION_CURVE_VALUES,
-  scurve: 3,
-} as const;
+/** One automation breakpoint as the native layer reads it: the curve as its ordinal. */
+export type NativeAutomationPoint = Omit<ProjectAutomationPoint, 'curve' | 'curveToNext'> & {
+  curve: number;
+  curveToNext: number;
+};
 
-/** Resolve a Project automation breakpoint curve, legacy spellings included. */
-export function projectAutomationCurveValue(curve: ProjectAutomationCurve | undefined): number {
-  return resolveEnumOrdinal(curve ?? 'linear', PROJECT_AUTOMATION_CURVE_VALUES, 'automation curve');
-}
-
-export function projectAutomationPointValue(point: ProjectAutomationPoint): ProjectAutomationPoint {
-  const curve = projectAutomationCurveValue(point.curve ?? point.curveToNext);
+/** A breakpoint the native layer produced, with its curve ordinal named. */
+export function projectAutomationPointFromNative(native: {
+  ppq: number;
+  value: number;
+  curveToNext: number;
+}): ProjectAutomationPoint {
   return {
-    ...point,
-    curve: curve as ProjectAutomationCurve,
-    curveToNext: curve as ProjectAutomationCurve,
+    ...native,
+    curveToNext: tokenName(AUTOMATION_CURVE_VALUES, native.curveToNext, 'automation curve'),
   };
 }
 
-export type NativeAutomationLaneDesc = Omit<ProjectAutomationLaneDesc, 'targetKind'> & {
+/** Resolve a breakpoint's curve token, folding the `curveToNext` alias onto `curve`. */
+export function projectAutomationPointValue(
+  point: ProjectAutomationPoint,
+  fnName: string,
+): NativeAutomationPoint {
+  const curve = tokenOrdinal(
+    fnName,
+    point.curve ?? point.curveToNext ?? 'linear',
+    AUTOMATION_CURVE_VALUES,
+    'curve',
+  );
+  return { ...point, curve, curveToNext: curve };
+}
+
+export type NativeAutomationLaneDesc = Omit<ProjectAutomationLaneDesc, 'targetKind' | 'points'> & {
   targetKind?: 0 | 1 | 2;
+  points: NativeAutomationPoint[];
 };
 
 export function projectAutomationLaneValue(
-  desc: NativeAutomationLaneDesc,
+  desc: Omit<ProjectAutomationLaneDesc, 'targetKind'> & { targetKind?: 0 | 1 | 2 },
+  fnName: string,
 ): NativeAutomationLaneDesc {
   if (desc.targetParamId === 0) {
     throw new RangeError('project automation lane targetParamId must be non-zero');
   }
-  return { ...desc, points: desc.points.map(projectAutomationPointValue) };
+  return {
+    ...desc,
+    points: desc.points.map((point) => projectAutomationPointValue(point, fnName)),
+  };
 }
 
 const PAN_LAW_VALUES: Readonly<Record<string, number>> = {

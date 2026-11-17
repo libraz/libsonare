@@ -7,9 +7,7 @@ import type { ProjectAutomationCurve } from '../src/types_project.js';
 import {
   AUTOMATION_CURVE_VALUES,
   meterTapValue,
-  PROJECT_AUTOMATION_CURVE_VALUES,
   panLawValue,
-  projectAutomationCurveValue,
   projectAutomationPointValue,
   resolveEnumOrdinal,
 } from '../src/value_coercion.js';
@@ -23,7 +21,6 @@ interface PanLawCorpus {
 
 interface AutomationCurveCorpus {
   accepted: Array<{ value: string; ordinal: number }>;
-  projectOnly: Array<{ value: string; ordinal: number }>;
   numeric: number[];
   rejected: string[];
 }
@@ -73,50 +70,45 @@ describe('enum ordinal coercion', () => {
     expect(AUTOMATION_CURVE_VALUES).toEqual(
       Object.fromEntries(curveCorpus.accepted.map(({ value, ordinal }) => [value, ordinal])),
     );
-    expect(PROJECT_AUTOMATION_CURVE_VALUES).toEqual(
-      Object.fromEntries(
-        [...curveCorpus.accepted, ...curveCorpus.projectOnly].map(({ value, ordinal }) => [
-          value,
-          ordinal,
-        ]),
-      ),
-    );
+    const curve = (value: unknown) =>
+      projectAutomationPointValue(
+        { ppq: 0, value: 1, curve: value as ProjectAutomationCurve },
+        'addAutomationLane',
+      ).curve;
     for (const { value, ordinal } of curveCorpus.accepted) {
-      expect(projectAutomationCurveValue(value as ProjectAutomationCurve)).toBe(ordinal);
+      expect(curve(value)).toBe(ordinal);
     }
+    // A Project curve is a token on every path, so an ordinal is a type error.
     for (const value of curveCorpus.numeric) {
-      expect(projectAutomationCurveValue(value as ProjectAutomationCurve)).toBe(value);
+      expect(() => curve(value)).toThrow(TypeError);
     }
     for (const value of curveCorpus.rejected) {
-      expect(() => projectAutomationCurveValue(value as ProjectAutomationCurve)).toThrow(
-        RangeError,
-      );
-    }
-  });
-
-  it('accepts the legacy project curve spelling the WASM facade has always taken', () => {
-    for (const { value, ordinal } of curveCorpus.projectOnly) {
-      expect(projectAutomationCurveValue(value as ProjectAutomationCurve)).toBe(ordinal);
-      expect(
-        projectAutomationPointValue({ ppq: 0, value: 1, curve: value as ProjectAutomationCurve }),
-      ).toEqual({ ppq: 0, value: 1, curve: ordinal, curveToNext: ordinal });
+      expect(() => curve(value)).toThrow(RangeError);
     }
   });
 
   it('folds the curveToNext alias onto curve, with curve winning', () => {
     // A breakpoint that carries only `curveToNext` must not fall back to Linear:
     // the type documents it as an alias and the Python marshaller reads it too.
-    expect(projectAutomationPointValue({ ppq: 1, value: 0.5, curveToNext: 's-curve' })).toEqual({
+    expect(
+      projectAutomationPointValue(
+        { ppq: 1, value: 0.5, curveToNext: 's-curve' },
+        'addAutomationLane',
+      ),
+    ).toEqual({
       ppq: 1,
       value: 0.5,
       curve: 3,
       curveToNext: 3,
     });
     expect(
-      projectAutomationPointValue({ ppq: 1, value: 0.5, curve: 'hold', curveToNext: 's-curve' }),
+      projectAutomationPointValue(
+        { ppq: 1, value: 0.5, curve: 'hold', curveToNext: 's-curve' },
+        'addAutomationLane',
+      ),
     ).toEqual({ ppq: 1, value: 0.5, curve: 2, curveToNext: 2 });
     // An omitted curve is Linear, matching the documented default.
-    expect(projectAutomationPointValue({ ppq: 1, value: 0.5 })).toEqual({
+    expect(projectAutomationPointValue({ ppq: 1, value: 0.5 }, 'addAutomationLane')).toEqual({
       ppq: 1,
       value: 0.5,
       curve: 0,

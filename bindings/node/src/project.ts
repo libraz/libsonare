@@ -122,6 +122,7 @@ import {
   normalizePartRig,
   normalizeSynthInstrument,
   projectAutomationLaneValue,
+  projectAutomationPointFromNative,
 } from './value_coercion.js';
 import {
   projectApplyVocalEdit,
@@ -350,7 +351,10 @@ function automationLaneToNative(
           ...rest,
           targetKind: tokenOrdinal(fnName, targetKind, AUTOMATION_TARGET_KIND, 'targetKind'),
         };
-  return projectAutomationLaneValue(resolved as NativeAutomationLaneDesc);
+  return projectAutomationLaneValue(
+    resolved as Omit<ProjectAutomationLaneDesc, 'targetKind'> & { targetKind?: 0 | 1 | 2 },
+    fnName,
+  );
 }
 
 /**
@@ -896,7 +900,12 @@ export class Project {
     bindings: ReadonlyArray<ProjectMidiCcBinding>,
     event: ProjectMidiEvent,
   ): ProjectAutomationPoint | null {
-    return addon.midiCcToBreakpoint(bindings, event);
+    const native = addon.midiCcToBreakpoint(bindings, event) as {
+      ppq: number;
+      value: number;
+      curveToNext: number;
+    } | null;
+    return native === null ? null : projectAutomationPointFromNative(native);
   }
 
   /** Convert one automation value back to a CC UMP event using native CcMap. */

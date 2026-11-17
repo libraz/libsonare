@@ -1,17 +1,13 @@
 // Type-only, so the erased import adds no runtime edge: to the coercion module
 // below, and to the bank module, which names these types back.
 import type { ProjectTimeline } from './project.js';
-import type { PROJECT_AUTOMATION_CURVE_VALUES } from './value_coercion.js';
+import type { AutomationCurve } from './types_mixing.js';
 
 /**
- * Automation breakpoint interpolation for {@link ProjectAutomationPoint}.
- *
- * `'s-curve'` is the canonical spelling; the legacy `'scurve'` stays accepted
- * for compatibility with project data written through the WASM facade. The
- * spellings are derived from the resolver's own table, so the documented set
- * and the accepted set cannot drift apart.
+ * Automation breakpoint interpolation for {@link ProjectAutomationPoint}: the same
+ * tokens as the mixer's {@link AutomationCurve}. An ordinal is a `TypeError`.
  */
-export type ProjectAutomationCurve = 0 | 1 | 2 | 3 | keyof typeof PROJECT_AUTOMATION_CURVE_VALUES;
+export type ProjectAutomationCurve = AutomationCurve;
 
 /**
  * Expected project ABI version, mirroring `SONARE_PROJECT_ABI_VERSION`
