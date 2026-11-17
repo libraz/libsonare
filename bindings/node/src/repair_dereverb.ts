@@ -4,19 +4,29 @@
 
 import {
   assertRepairGeometry,
-  type MasteringRepairSamplesRequest,
+  repairNativeOptions,
+  sharedReportResult,
 } from './internal/repair_common.js';
 import { addon } from './native.js';
 import type {
-  DereverbLinkedResult,
-  DereverbStereoResult,
+  MasteringRepairDereverbClassicalResult,
+  MasteringRepairSamplesRequest,
   ReverbDetection,
   RoomEstimateResult,
 } from './types.js';
-import { assertAudioChannels, assertAudioInput, optionsBag, requestObject } from './validation.js';
+import {
+  assertAudioChannels,
+  assertAudioInput,
+  requestOnly,
+  sampleOneShot,
+  type ValidateOptions,
+} from './validation.js';
+
+/** A complete dereverb config, as `masteringRepairDereverbConfigForRoom` returns it. */
+export type DereverbClassicalConfig = Required<Omit<DereverbClassicalOptions, 'validate'>>;
 
 /** Options for `masteringRepairDereverbClassical`. */
-export interface DereverbClassicalOptions {
+export interface DereverbClassicalOptions extends ValidateOptions {
   threshold?: number;
   attenuation?: number;
   nFft?: number;
@@ -37,7 +47,8 @@ export interface MasteringRepairDereverbClassicalRequest
     DereverbClassicalOptions {}
 
 /** Request form of `masteringRepairDereverbConfigForRoom`. */
-export interface MasteringRepairDereverbConfigForRoomRequest extends DereverbClassicalOptions {
+export interface MasteringRepairDereverbConfigForRoomRequest
+  extends Omit<DereverbClassicalOptions, 'validate'> {
   /** The measured room, from `estimateRoom`. Only `volume` and `rt60Bands` are read. */
   estimate: RoomEstimateResult;
 }
@@ -48,34 +59,28 @@ export function masteringRepairDereverbClassical(
 ): Float32Array;
 export function masteringRepairDereverbClassical(
   samples: Float32Array,
-  sampleRate?: number,
+  sampleRate: number,
   options?: DereverbClassicalOptions,
 ): Float32Array;
-export function masteringRepairDereverbClassical(
-  samples: Float32Array | MasteringRepairDereverbClassicalRequest,
-  sampleRate = 22050,
-  options: DereverbClassicalOptions = {},
-): Float32Array {
-  const request =
-    samples instanceof Float32Array
-      ? { samples, sampleRate, ...optionsBag('masteringRepairDereverbClassical', options) }
-      : requestObject('masteringRepairDereverbClassical', samples);
-  const resolvedSampleRate = request.sampleRate ?? 22050;
-  assertAudioInput(
+export function masteringRepairDereverbClassical(...args: unknown[]): Float32Array {
+  const r = sampleOneShot<MasteringRepairDereverbClassicalRequest>(
     'masteringRepairDereverbClassical',
-    request.samples,
-    resolvedSampleRate,
-    request,
+    args,
   );
-  assertRepairGeometry('masteringRepairDereverbClassical', request);
-  return addon.masteringRepairDereverbClassical(request.samples, resolvedSampleRate, request);
+  assertAudioInput('masteringRepairDereverbClassical', r.samples, r.sampleRate, r);
+  assertRepairGeometry('masteringRepairDereverbClassical', r);
+  return addon.masteringRepairDereverbClassical(
+    r.samples,
+    r.sampleRate,
+    repairNativeOptions('masteringRepairDereverbClassical', r),
+  );
 }
 
 /** Request form of `masteringRepairDereverbClassicalStereo`. */
 export interface MasteringRepairDereverbClassicalStereoRequest extends DereverbClassicalOptions {
   left: Float32Array;
   right: Float32Array;
-  sampleRate?: number;
+  sampleRate: number;
 }
 
 /**
@@ -85,7 +90,7 @@ export interface MasteringRepairDereverbClassicalStereoRequest extends DereverbC
  * The mask is built from the channel-summed power, and the WPE stage
  * accumulates over both channels and applies one predictor set to each, so
  * neither stage can move an interchannel level or phase difference. That is
- * also why the result carries a single `report` rather than one per channel.
+ * also why the result carries a single report rather than one per channel.
  *
  * Every field of that report is a ratio or a fraction, so unlike the denoise
  * pair nothing in it shifts with the channel count: a stereo figure here is
@@ -104,40 +109,35 @@ export interface MasteringRepairDereverbClassicalStereoRequest extends DereverbC
  *
  * @example
  * ```ts
- * const { left, right, report } = masteringRepairDereverbClassicalStereo({
+ * const { channels, reports } = masteringRepairDereverbClassicalStereo({
  *   left: leftSamples,
  *   right: rightSamples,
  *   sampleRate: 48000,
  *   wpeEnabled: true,
  * });
- * console.log(report.detected.lateDecayRatioDb, report.wpePredictorNorm);
+ * console.log(reports[0].detected.lateDecayRatioDb, reports[0].wpePredictorNorm);
  * ```
  */
 export function masteringRepairDereverbClassicalStereo(
   request: MasteringRepairDereverbClassicalStereoRequest,
-): DereverbStereoResult {
-  requestObject('masteringRepairDereverbClassicalStereo', request, 'left');
-  const resolvedSampleRate = request.sampleRate ?? 22050;
-  assertAudioInput(
+): MasteringRepairDereverbClassicalResult;
+export function masteringRepairDereverbClassicalStereo(
+  ...args: unknown[]
+): MasteringRepairDereverbClassicalResult {
+  const r = requestOnly<MasteringRepairDereverbClassicalStereoRequest>(
     'masteringRepairDereverbClassicalStereo',
-    request.left,
-    resolvedSampleRate,
-    request,
-    'left',
+    args,
   );
-  assertAudioInput(
-    'masteringRepairDereverbClassicalStereo',
-    request.right,
-    resolvedSampleRate,
-    request,
-    'right',
-  );
-  assertRepairGeometry('masteringRepairDereverbClassicalStereo', request);
-  return addon.masteringRepairDereverbClassicalStereo(
-    request.left,
-    request.right,
-    resolvedSampleRate,
-    request,
+  assertAudioInput('masteringRepairDereverbClassicalStereo', r.left, r.sampleRate, r, 'left');
+  assertAudioInput('masteringRepairDereverbClassicalStereo', r.right, r.sampleRate, r, 'right');
+  assertRepairGeometry('masteringRepairDereverbClassicalStereo', r);
+  return sharedReportResult(
+    addon.masteringRepairDereverbClassicalStereo(
+      r.left,
+      r.right,
+      r.sampleRate,
+      repairNativeOptions('masteringRepairDereverbClassicalStereo', r),
+    ),
   );
 }
 
@@ -145,7 +145,7 @@ export function masteringRepairDereverbClassicalStereo(
 export interface MasteringRepairDereverbClassicalLinkedRequest extends DereverbClassicalOptions {
   /** One plane per channel, all of the same length. At least one. */
   channels: Float32Array[];
-  sampleRate?: number;
+  sampleRate: number;
 }
 
 /**
@@ -157,7 +157,7 @@ export interface MasteringRepairDereverbClassicalLinkedRequest extends DereverbC
  * both stages across the whole set rather than just a pair: one mask over the
  * channel-summed power, and one WPE predictor set fitted over every channel's
  * statistics, so neither stage can move an interchannel level or phase
- * difference. That is also why the result carries a single `report`. One channel
+ * difference. That is also why the result carries a single report. One channel
  * reproduces {@link masteringRepairDereverbClassical} sample for sample, and two
  * reproduce {@link masteringRepairDereverbClassicalStereo} plane for plane,
  * `channels[0]` being the left.
@@ -182,30 +182,32 @@ export interface MasteringRepairDereverbClassicalLinkedRequest extends DereverbC
  *
  * @example
  * ```ts
- * const { channels, report } = masteringRepairDereverbClassicalLinked({
+ * const { channels, reports } = masteringRepairDereverbClassicalLinked({
  *   channels: [left, right, centre],
  *   sampleRate: 48000,
  *   wpeEnabled: true,
  * });
- * console.log(channels.length, report.wpePredictorNorm);
+ * console.log(channels.length, reports[0].wpePredictorNorm);
  * ```
  */
 export function masteringRepairDereverbClassicalLinked(
   request: MasteringRepairDereverbClassicalLinkedRequest,
-): DereverbLinkedResult {
-  requestObject('masteringRepairDereverbClassicalLinked', request, 'request', true);
-  const resolvedSampleRate = request.sampleRate ?? 22050;
-  assertAudioChannels(
+): MasteringRepairDereverbClassicalResult;
+export function masteringRepairDereverbClassicalLinked(
+  ...args: unknown[]
+): MasteringRepairDereverbClassicalResult {
+  const r = requestOnly<MasteringRepairDereverbClassicalLinkedRequest>(
     'masteringRepairDereverbClassicalLinked',
-    request.channels,
-    resolvedSampleRate,
-    request,
+    args,
   );
-  assertRepairGeometry('masteringRepairDereverbClassicalLinked', request);
-  return addon.masteringRepairDereverbClassicalLinked(
-    request.channels,
-    resolvedSampleRate,
-    request,
+  assertAudioChannels('masteringRepairDereverbClassicalLinked', r.channels, r.sampleRate, r);
+  assertRepairGeometry('masteringRepairDereverbClassicalLinked', r);
+  return sharedReportResult(
+    addon.masteringRepairDereverbClassicalLinked(
+      r.channels,
+      r.sampleRate,
+      repairNativeOptions('masteringRepairDereverbClassicalLinked', r),
+    ),
   );
 }
 
@@ -236,16 +238,15 @@ export function masteringRepairDereverbClassicalLinked(
  * config and takes every field literally — it has no "zero means default" rule — which is
  * why an omitted field resolves to its default here rather than to zero.
  *
- * @param estimate - The measured room, from {@link estimateRoom}. Only `volume` and
- *   `rt60Bands` are read. The request form carries it as `estimate` alongside the config
- *   fields.
- * @param config - The config to point at the room; omitted fields take the library default.
+ * @param request - `estimate` is the measured room, from {@link estimateRoom}; only `volume`
+ *   and `rt60Bands` are read. The other fields are the config to point at the room; omitted
+ *   fields take the library default.
  * @returns A complete dereverb config.
  *
  * @example
  * ```ts
- * const estimate = estimateRoom(samples, sampleRate);
- * const config = masteringRepairDereverbConfigForRoom(estimate);
+ * const estimate = estimateRoom({ samples, sampleRate });
+ * const config = masteringRepairDereverbConfigForRoom({ estimate });
  * const clean = masteringRepairDereverbClassical(samples, sampleRate, config);
  * ```
  *
@@ -256,21 +257,18 @@ export function masteringRepairDereverbClassicalLinked(
  */
 export function masteringRepairDereverbConfigForRoom(
   request: MasteringRepairDereverbConfigForRoomRequest,
-): Required<DereverbClassicalOptions>;
-export function masteringRepairDereverbConfigForRoom(
-  estimate: RoomEstimateResult,
-  config?: DereverbClassicalOptions,
-): Required<DereverbClassicalOptions>;
-export function masteringRepairDereverbConfigForRoom(
-  estimate: RoomEstimateResult | MasteringRepairDereverbConfigForRoomRequest,
-  config: DereverbClassicalOptions = {},
-): Required<DereverbClassicalOptions> {
-  const request =
-    typeof estimate === 'object' && estimate !== null && 'estimate' in estimate
-      ? requestObject('masteringRepairDereverbConfigForRoom', estimate, 'estimate')
-      : { estimate, ...optionsBag('masteringRepairDereverbConfigForRoom', config) };
-  assertRepairGeometry('masteringRepairDereverbConfigForRoom', request);
-  return addon.masteringRepairDereverbConfigForRoom(request.estimate, request);
+): DereverbClassicalConfig;
+export function masteringRepairDereverbConfigForRoom(...args: unknown[]): DereverbClassicalConfig {
+  const r = requestOnly<MasteringRepairDereverbConfigForRoomRequest>(
+    'masteringRepairDereverbConfigForRoom',
+    args,
+  );
+  if (typeof r.estimate !== 'object' || r.estimate === null) {
+    throw new TypeError('masteringRepairDereverbConfigForRoom: estimate must be a room estimate');
+  }
+  assertRepairGeometry('masteringRepairDereverbConfigForRoom', r);
+  const { estimate, ...config } = r;
+  return addon.masteringRepairDereverbConfigForRoom(estimate, config);
 }
 
 /** Request form of `masteringRepairDetectReverb`. */
@@ -298,10 +296,19 @@ export interface MasteringRepairDetectReverbRequest
  */
 export function masteringRepairDetectReverb(
   request: MasteringRepairDetectReverbRequest,
-): ReverbDetection {
-  requestObject('masteringRepairDetectReverb', request, 'samples');
-  const resolvedSampleRate = request.sampleRate ?? 22050;
-  assertAudioInput('masteringRepairDetectReverb', request.samples, resolvedSampleRate, request);
-  assertRepairGeometry('masteringRepairDetectReverb', request);
-  return addon.masteringRepairDetectReverb(request.samples, resolvedSampleRate, request);
+): ReverbDetection;
+export function masteringRepairDetectReverb(
+  samples: Float32Array,
+  sampleRate: number,
+  options?: DereverbClassicalOptions,
+): ReverbDetection;
+export function masteringRepairDetectReverb(...args: unknown[]): ReverbDetection {
+  const r = sampleOneShot<MasteringRepairDetectReverbRequest>('masteringRepairDetectReverb', args);
+  assertAudioInput('masteringRepairDetectReverb', r.samples, r.sampleRate, r);
+  assertRepairGeometry('masteringRepairDetectReverb', r);
+  return addon.masteringRepairDetectReverb(
+    r.samples,
+    r.sampleRate,
+    repairNativeOptions('masteringRepairDetectReverb', r),
+  );
 }

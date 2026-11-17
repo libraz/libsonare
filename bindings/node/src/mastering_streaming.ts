@@ -1,4 +1,5 @@
 import { flattenChainConfig, STREAMING_ONLY_CONFIG_KEYS } from './internal/chain_config.js';
+import { WINDOW_TYPES } from './internal/window_type.js';
 import { addon } from './native.js';
 import type {
   EqBandInput,
@@ -16,7 +17,6 @@ import type {
   StreamProgressiveEstimate,
   StreamQuantizeConfig,
   StreamStats,
-  WindowType,
 } from './types.js';
 import { CHORD_QUALITIES } from './types.js';
 import { assertClosedToken, assertFloatValue, assertSampleRate } from './validation.js';
@@ -259,7 +259,6 @@ export class StreamingMasteringChain {
   }
 }
 
-const STREAM_WINDOW_TOKENS: readonly WindowType[] = ['hann', 'hamming', 'blackman', 'rectangular'];
 const STREAM_REFERENCE_HZ_RANGE = [220, 880] as const;
 const STREAM_CONFIG_KEYS: ReadonlySet<string> = new Set([
   'sampleRate',
@@ -295,7 +294,7 @@ interface NativeStreamFrames<T extends StreamArray> {
   nMels: number;
   nChroma: number;
   featureFlags: number;
-  timestamps: Float32Array;
+  timestampsSec: Float32Array;
   mel: T;
   chroma: T;
   onsetStrength: T;
@@ -311,7 +310,7 @@ interface NativeStreamChord {
   root: number;
   quality: number;
   name: string;
-  startTime: number;
+  startSec: number;
   confidence: number;
 }
 
@@ -322,7 +321,7 @@ interface NativeStreamBarChord extends NativeStreamChord {
 interface NativeStreamStats {
   totalFrames: number;
   totalSamples: number;
-  durationSeconds: number;
+  durationSec: number;
   pendingFrames: number;
   droppedOutputFrames: number;
   droppedChordProgressionEntries: number;
@@ -341,17 +340,17 @@ interface NativeStreamStats {
     chordQuality: number;
     chordName: string;
     chordConfidence: number;
-    chordStartTime: number;
+    chordStartSec: number;
     chordProgression: NativeStreamChord[];
     barChordProgression: NativeStreamBarChord[];
     currentBar: number;
-    barDuration: number;
+    barDurationSec: number;
     votedPattern: NativeStreamBarChord[];
     patternLength: number;
     detectedPatternName: string;
     detectedPatternScore: number;
     allPatternScores: Array<{ name: string; score: number }>;
-    accumulatedSeconds: number;
+    accumulatedSec: number;
     usedFrames: number;
     updated: boolean;
   };
@@ -397,8 +396,7 @@ function streamQuantizedFrames<T extends Uint8Array | Int16Array>(
     nFrames: native.nFrames,
     nMels: native.nMels,
     nChroma: native.nChroma,
-    // Native names the per-frame time `timestamps`.
-    timestampsSec: native.timestamps,
+    timestampsSec: native.timestampsSec,
     ...out,
     ...streamSharedArrays(native),
   } as StreamFramesU8 | StreamFramesI16;
@@ -409,8 +407,7 @@ function streamChordChange(c: NativeStreamChord): StreamChordChange {
     root: c.root as PitchClass,
     quality: CHORD_QUALITIES[c.quality],
     name: c.name,
-    // Native names the chord start `startTime`.
-    startSec: c.startTime,
+    startSec: c.startSec,
     confidence: c.confidence,
   };
 }
@@ -428,8 +425,7 @@ function streamStats(s: NativeStreamStats): StreamStats {
     votedPattern: (e.votedPattern ?? []).map(streamBarChord),
     patternLength: e.patternLength,
     allPatternScores: (e.allPatternScores ?? []).map((p) => ({ name: p.name, score: p.score })),
-    // Native names the accumulated duration `accumulatedSeconds`.
-    accumulatedSec: e.accumulatedSeconds,
+    accumulatedSec: e.accumulatedSec,
     usedFrames: e.usedFrames,
     updated: e.updated,
   };
@@ -452,15 +448,13 @@ function streamStats(s: NativeStreamStats): StreamStats {
       root: e.chordRoot,
       quality: e.chordQuality,
       name: e.chordName,
-      // Native names the chord start `chordStartTime`.
-      startTime: e.chordStartTime,
+      startSec: e.chordStartSec,
       confidence: e.chordConfidence,
     });
   }
   if (e.currentBar >= 0) {
     estimate.currentBar = e.currentBar;
-    // Native names the bar length `barDuration`.
-    estimate.barDurationSec = e.barDuration;
+    estimate.barDurationSec = e.barDurationSec;
   }
   if (e.detectedPatternName) {
     estimate.detectedPatternName = e.detectedPatternName;
@@ -469,8 +463,7 @@ function streamStats(s: NativeStreamStats): StreamStats {
   return {
     totalFrames: s.totalFrames,
     totalSamples: s.totalSamples,
-    // Native names the duration `durationSeconds`.
-    durationSec: s.durationSeconds,
+    durationSec: s.durationSec,
     pendingFrames: s.pendingFrames,
     droppedOutputFrames: s.droppedOutputFrames,
     droppedChordProgressionEntries: s.droppedChordProgressionEntries,
@@ -499,6 +492,34 @@ function assertStreamReferenceHz(
   }
 }
 
+/**
+ * The native configuration defaults. `fmaxHz` is Nyquist, the value the
+ * analyzer reads an absent upper edge as.
+ */
+export function streamAnalyzerConfigDefault(): Required<StreamConfig> {
+  const d = addon.streamAnalyzerConfigDefault();
+  return {
+    sampleRate: d.sampleRate,
+    nFft: d.nFft,
+    hopLength: d.hopLength,
+    nMels: d.nMels,
+    fminHz: d.fmin,
+    fmaxHz: d.fmax > 0 ? d.fmax : d.sampleRate / 2,
+    referenceHz: d.referenceHz,
+    computeMel: d.computeMel,
+    computeChroma: d.computeChroma,
+    computeOnset: d.computeOnset,
+    computeSpectral: d.computeSpectral,
+    emitEveryNFrames: d.emitEveryNFrames,
+    magnitudeDownsample: d.magnitudeDownsample,
+    maxPendingFrames: d.maxPendingFrames,
+    maxProgressionEntries: d.maxProgressionEntries,
+    keyUpdateIntervalSec: d.keyUpdateIntervalSec,
+    bpmUpdateIntervalSec: d.bpmUpdateIntervalSec,
+    window: WINDOW_TYPES[d.window],
+  };
+}
+
 /** Validates the public config and spells it the way the addon reads it. */
 function nativeStreamConfig(config: StreamConfig): Record<string, unknown> {
   if (typeof config !== 'object' || config === null || Array.isArray(config)) {
@@ -525,12 +546,11 @@ function nativeStreamConfig(config: StreamConfig): Record<string, unknown> {
   }
   if (referenceHz !== undefined) {
     assertStreamReferenceHz('StreamAnalyzer', referenceHz);
-    // Native names the A4 reference `tuningRefHz`.
-    native.tuningRefHz = referenceHz;
+    native.referenceHz = referenceHz;
   }
   if (window !== undefined) {
-    assertClosedToken('StreamAnalyzer', window, STREAM_WINDOW_TOKENS, 'window');
-    native.window = STREAM_WINDOW_TOKENS.indexOf(window);
+    assertClosedToken('StreamAnalyzer', window, WINDOW_TYPES, 'window');
+    native.window = WINDOW_TYPES.indexOf(window);
   }
   return native;
 }
@@ -606,8 +626,7 @@ export class StreamAnalyzer {
     const native = this.native.readFramesSoa(maxFrames) as NativeStreamFrames<Float32Array>;
     const out: StreamFrames = {
       nFrames: native.nFrames,
-      // Native names the per-frame time `timestamps`.
-      timestampsSec: native.timestamps,
+      timestampsSec: native.timestampsSec,
       ...streamSharedArrays(native),
     };
     if (native.featureFlags & STREAM_FEATURE_MEL) {
@@ -677,8 +696,7 @@ export class StreamAnalyzer {
 
   /** Current analysis time in seconds. */
   get currentTimeSec(): number {
-    // Native names the position `currentTime`.
-    return this.native.currentTime();
+    return this.native.currentTimeSec();
   }
 
   /** Configured sample rate in Hz. */
@@ -724,8 +742,7 @@ export class StreamAnalyzer {
    */
   setReferenceHz(referenceHz: number): void {
     assertStreamReferenceHz('StreamAnalyzer.setReferenceHz', referenceHz);
-    // Native names the setter `setTuningRefHz`.
-    this.native.setTuningRefHz(referenceHz);
+    this.native.setReferenceHz(referenceHz);
   }
 
   /**

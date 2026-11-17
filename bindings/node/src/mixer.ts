@@ -2,7 +2,6 @@ import { addon } from './native.js';
 import type {
   AutomationCurve,
   GoniometerPoint,
-  KeyMode,
   MeterTap,
   MixerProcessResult,
   MixMeterSnapshot,
@@ -18,7 +17,6 @@ import type {
 import {
   assertAudioChannels,
   assertClosedToken,
-  assertFiniteScalar,
   assertFloatValue,
   assertIntegerValue,
   assertSampleRate,
@@ -32,52 +30,6 @@ import {
   panModeValue,
   sendTimingValue,
 } from './value_coercion.js';
-
-/**
- * The 12-bit scale mask of a mode, in the layout {@link scaleQuantizeMidi} and
- * the pitch correctors read: bit `i` is the semitone `i` above the root.
- *
- * The mask is relative to the root, so it is the same for every `root`, which is
- * still validated. `mode` is a church-mode name as {@link detectKey} reports it
- * (`'major'`, `'minor'`, `'dorian'`, `'phrygian'`, `'lydian'`, `'mixolydian'`,
- * `'locrian'`) or its ordinal 0..6; minor is the natural minor.
- *
- * @example
- * scaleMaskForMode(0, 'major'); // 0b101010110101
- */
-export function scaleMaskForMode(root: number, mode: KeyMode | number): number {
-  return addon.scaleMaskForMode(root, mode);
-}
-
-export function scaleQuantizeMidi(
-  root: number,
-  modeMask: number,
-  midi: number,
-  referenceMidi = 0,
-): number {
-  assertFiniteScalar('scaleQuantizeMidi', midi, 'midi');
-  assertFiniteScalar('scaleQuantizeMidi', referenceMidi, 'referenceMidi');
-  return addon.scaleQuantizeMidi(root, modeMask, midi, referenceMidi);
-}
-
-export function scaleCorrectionSemitones(
-  root: number,
-  modeMask: number,
-  midi: number,
-  referenceMidi = 0,
-): number {
-  assertFiniteScalar('scaleCorrectionSemitones', midi, 'midi');
-  assertFiniteScalar('scaleCorrectionSemitones', referenceMidi, 'referenceMidi');
-  return addon.scaleCorrectionSemitones(root, modeMask, midi, referenceMidi);
-}
-
-export function scalePitchClassEnabled(
-  root: number,
-  modeMask: number,
-  pitchClass: number,
-): boolean {
-  return addon.scalePitchClassEnabled(root, modeMask, pitchClass);
-}
 
 /** Inputs for the one-shot {@link resample} facade. */
 export interface ResampleRequest {
@@ -195,7 +147,7 @@ export interface MixerSend {
 }
 
 /** One automation event; `curve` is an {@link AutomationCurve} token, default `'linear'`. */
-interface AutomationPointBase {
+export interface MixerAutomationPointBase {
   /** Absolute sample position from the start of processing. */
   samplePos: number;
   /** Interpolation curve toward the value. A number is refused. */
@@ -203,31 +155,31 @@ interface AutomationPointBase {
 }
 
 /** Fader automation event for {@link Mixer.scheduleFaderAutomation}. */
-export interface FaderAutomationPoint extends AutomationPointBase {
+export interface FaderAutomationPoint extends MixerAutomationPointBase {
   /** Target fader level in dB. */
   faderDb: number;
 }
 
 /** Pan automation event for {@link Mixer.schedulePanAutomation}. */
-export interface PanAutomationPoint extends AutomationPointBase {
+export interface PanAutomationPoint extends MixerAutomationPointBase {
   /** Target pan position in `[-1, 1]`. */
   pan: number;
 }
 
 /** Width automation event for {@link Mixer.scheduleWidthAutomation}. */
-export interface WidthAutomationPoint extends AutomationPointBase {
+export interface WidthAutomationPoint extends MixerAutomationPointBase {
   /** Target stereo width in `[0, 2]`. */
   width: number;
 }
 
 /** Send-level automation event for {@link Mixer.scheduleSendAutomation}. */
-export interface SendAutomationPoint extends AutomationPointBase {
+export interface SendAutomationPoint extends MixerAutomationPointBase {
   /** Target send level in dB. */
   sendDb: number;
 }
 
 /** Insert-parameter automation event for {@link Mixer.scheduleInsertAutomation}. */
-export interface InsertAutomationPoint extends AutomationPointBase {
+export interface InsertAutomationPoint extends MixerAutomationPointBase {
   /** Processor-specific parameter id. */
   paramId: number;
   /** Target parameter value. */

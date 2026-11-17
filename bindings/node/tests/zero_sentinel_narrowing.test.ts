@@ -91,16 +91,21 @@ function digest(samples: Float32Array | number[]): string {
 }
 
 /**
- * Drives one field through the four cases: omitted, the documented zero, a
+ * Drives one field through the four cases: omitted, an explicit zero (the default, or refused), a
  * control value that has to move the result, and the two fractional requests.
  */
 function expectSentinelRefused<T>(
   call: (value?: number) => T,
   read: (result: T) => string,
   control: number,
+  zero: 'default' | 'refused' = 'default',
 ): void {
   const omitted = read(call());
-  expect(read(call(0))).toBe(omitted);
+  if (zero === 'refused') {
+    expect(() => call(0)).toThrow(RangeError);
+  } else {
+    expect(read(call(0))).toBe(omitted);
+  }
   expect(read(call(control))).not.toBe(omitted);
   // Matched on the message, so an unrelated throw from further down the call
   // cannot stand in for the refusal this asserts.
@@ -213,9 +218,10 @@ describe('metering spectrum sizes', () => {
 describe('acoustic room options', () => {
   it('refuses a fractional RIR seed rather than seeding the late tail with one', () => {
     expectSentinelRefused(
-      (seed) => synthesizeRir({ seed, maxSeconds: 0.4 }),
+      (seed) => synthesizeRir({ seed, sampleRate: SR, maxSec: 0.4 }),
       (result) => digest(result.rir),
       987654,
+      'refused',
     );
   });
 
@@ -224,6 +230,7 @@ describe('acoustic room options', () => {
       (seed) => roomMorph({ samples: SHORT, sampleRate: SR, seed }).audio,
       digest,
       987654,
+      'refused',
     );
   });
 
@@ -232,6 +239,7 @@ describe('acoustic room options', () => {
       (nOctaveBands) => estimateRoom({ samples: MIXED, sampleRate: SR, nOctaveBands }),
       (result) => String(result.rt60Bands.length),
       8,
+      'refused',
     );
   });
 });

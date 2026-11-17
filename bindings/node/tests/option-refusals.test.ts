@@ -28,10 +28,19 @@ function tone(seconds = 0.5): Float32Array {
 describe('remix intervals', () => {
   it('refuses an odd-length list as a RangeError on both entry points', () => {
     const samples = tone();
-    expectRefusal(() => remix(samples, [0, 100, 200], SR), RangeError, /pairs/);
-    expectRefusal(() => remix(samples, new Int32Array([0, 100, 200]), SR), RangeError, /pairs/);
+    expectRefusal(() => remix(samples, SR, { intervals: [0, 100, 200] }), RangeError, /pairs/);
     expectRefusal(
-      () => remixAlignedIntervals({ samples, intervals: new Int32Array([0, 100, 200]) }),
+      () => remix(samples, SR, { intervals: new Int32Array([0, 100, 200]) }),
+      RangeError,
+      /pairs/,
+    );
+    expectRefusal(
+      () =>
+        remixAlignedIntervals({
+          samples,
+          sampleRate: SR,
+          intervals: new Int32Array([0, 100, 200]),
+        }),
       RangeError,
       /pairs/,
     );

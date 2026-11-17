@@ -50,7 +50,7 @@ describe('Node async API', () => {
 
     it('rejects invalid arguments instead of throwing synchronously', async () => {
       const promise = analyzeAsync(undefined as unknown as Float32Array, SR);
-      await expect(promise).rejects.toThrow(/Expected \(Float32Array, sampleRate\?\)/);
+      await expect(promise).rejects.toThrow('analyzeAsync: samples must be a Float32Array');
     });
 
     it('rejects a bad sample rate or a wrong-typed option without throwing synchronously', async () => {

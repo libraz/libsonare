@@ -61,35 +61,35 @@ describe('masteringRepairDeclipStereo', () => {
     const { left, right } = fixture();
     const result = masteringRepairDeclipStereo({ left, right, sampleRate: SR });
 
-    expect(result.left).toHaveLength(left.length);
-    expect(result.right).toHaveLength(right.length);
-    expect(result.left.every(Number.isFinite)).toBe(true);
-    expect(result.right.every(Number.isFinite)).toBe(true);
+    expect(result.channels[0]).toHaveLength(left.length);
+    expect(result.channels[1]).toHaveLength(right.length);
+    expect(result.channels[0].every(Number.isFinite)).toBe(true);
+    expect(result.channels[1].every(Number.isFinite)).toBe(true);
 
     // The fixture only witnesses linking while each channel detects its own
     // clipped samples in its own right. A channel that detected nothing still
     // satisfies loose inequalities and reads exactly like linking working.
-    expect(result.leftReport.detected.runCount).toBe(3);
-    expect(result.leftReport.detected.sampleCount).toBe(
+    expect(result.reports[0].detected.runCount).toBe(3);
+    expect(result.reports[0].detected.sampleCount).toBe(
       ISOLATED_LEFT_LENGTH + LEFT_NARROW_LENGTH + LEFT_WIDE_LENGTH,
     );
-    expect(result.rightReport.detected.runCount).toBe(2);
-    expect(result.rightReport.detected.sampleCount).toBe(RIGHT_WIDE_LENGTH + RIGHT_NARROW_LENGTH);
+    expect(result.reports[1].detected.runCount).toBe(2);
+    expect(result.reports[1].detected.sampleCount).toBe(RIGHT_WIDE_LENGTH + RIGHT_NARROW_LENGTH);
 
     // The discriminating property: the narrower side's reconstruction reaches
     // past its own clipped samples because the wider side's run drags the
     // union boundary further out.
-    expect(result.leftReport.linkedRuns).toBeGreaterThan(0);
-    expect(result.rightReport.linkedRuns).toBeGreaterThan(0);
-    expect(result.leftReport.repairedSamples).toBeGreaterThan(
-      result.leftReport.detected.sampleCount,
+    expect(result.reports[0].linkedRuns).toBeGreaterThan(0);
+    expect(result.reports[1].linkedRuns).toBeGreaterThan(0);
+    expect(result.reports[0].repairedSamples).toBeGreaterThan(
+      result.reports[0].detected.sampleCount,
     );
-    expect(result.rightReport.repairedSamples).toBeGreaterThan(
-      result.rightReport.detected.sampleCount,
+    expect(result.reports[1].repairedSamples).toBeGreaterThan(
+      result.reports[1].detected.sampleCount,
     );
 
     // Not one channel restated.
-    expect(Array.from(result.left)).not.toEqual(Array.from(result.right));
+    expect(Array.from(result.channels[0])).not.toEqual(Array.from(result.channels[1]));
   });
 
   it('leaves a channel with no clipped sample in a run untouched there', () => {
@@ -101,7 +101,9 @@ describe('masteringRepairDeclipStereo', () => {
     // reconstructing unclipped audio to match the left side never happens --
     // the right channel is left exactly as it was there.
     for (let i = 0; i < ISOLATED_LEFT_LENGTH; i += 1) {
-      expect(result.right[ISOLATED_LEFT_START + i]).toBe(original.right[ISOLATED_LEFT_START + i]);
+      expect(result.channels[1][ISOLATED_LEFT_START + i]).toBe(
+        original.right[ISOLATED_LEFT_START + i],
+      );
     }
   });
 
@@ -114,24 +116,27 @@ describe('masteringRepairDeclipStereo', () => {
     // exactly (right never clips there), so stereo and mono reconstruct the
     // identical span the identical way.
     for (let i = 0; i < ISOLATED_LEFT_LENGTH; i += 1) {
-      expect(stereo.left[ISOLATED_LEFT_START + i]).toBeCloseTo(mono[ISOLATED_LEFT_START + i], 5);
+      expect(stereo.channels[0][ISOLATED_LEFT_START + i]).toBeCloseTo(
+        mono[ISOLATED_LEFT_START + i],
+        5,
+      );
     }
 
     // At the linked region, the right channel's wider run drags the union
     // bound past what the mono pass -- which never sees the right channel --
     // would ever reconstruct, so the stereo and mono results diverge there.
     const linkedTail = LEFT_NARROW_START + LEFT_NARROW_LENGTH;
-    expect(stereo.left[linkedTail]).not.toBeCloseTo(mono[linkedTail], 5);
+    expect(stereo.channels[0][linkedTail]).not.toBeCloseTo(mono[linkedTail], 5);
   });
 
   it('carries the options bag through to the detector', () => {
     const { left, right } = fixture();
 
     // Two separate claims, because reaching the validator does not prove the
-    // value survives to the detector. clipThreshold is range-checked in (0, 1],
+    // value survives to the detector. clipThresholdDb is range-checked to at most 0,
     // so an out-of-range value proves only that the wrapper passed it along.
     expect(() =>
-      masteringRepairDeclipStereo({ left, right, sampleRate: SR, clipThreshold: 1.5 }),
+      masteringRepairDeclipStereo({ left, right, sampleRate: SR, clipThresholdDb: 6 }),
     ).toThrow();
 
     // A threshold under the tone's own amplitude makes the tone itself read as
@@ -141,10 +146,10 @@ describe('masteringRepairDeclipStereo', () => {
       left,
       right,
       sampleRate: SR,
-      clipThreshold: 0.4,
+      clipThresholdDb: -8,
     });
-    expect(strict.leftReport.detected.runCount).toBeGreaterThan(0);
-    expect(loose.leftReport.detected.runCount).toBeGreaterThan(strict.leftReport.detected.runCount);
+    expect(strict.reports[0].detected.runCount).toBeGreaterThan(0);
+    expect(loose.reports[0].detected.runCount).toBeGreaterThan(strict.reports[0].detected.runCount);
   });
 
   it('refuses bad arguments with a catchable error', () => {

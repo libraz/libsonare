@@ -82,8 +82,12 @@ describe('feature extractors validate offline audio input', () => {
  * on a facade that ignored the argument entirely and threw for some other reason.
  */
 const N = 4096;
-const frameCount = (frames: { length: number } | { nFrames: number }): number =>
-  'nFrames' in frames ? frames.nFrames : frames.length;
+// Frames are the columns of the result's Matrix2D, whether it is the result or one of its fields.
+const frameCount = (result: unknown): number => {
+  const fields = [result, ...Object.values(result as object)] as Array<{ cols?: unknown }>;
+  const matrix = fields.find((field) => typeof field?.cols === 'number');
+  return matrix ? (matrix.cols as number) : (result as { length: number }).length;
+};
 
 type FftCall = (opts: { nFft?: number; hopLength?: number; sampleRate?: number }) => unknown;
 
@@ -101,10 +105,8 @@ const fftCalls: Array<[string, FftCall]> = [
 describe('an STFT-backed entry point refuses a fraction its narrowing would fold', () => {
   for (const [name, call] of fftCalls) {
     it(`${name} reads the hop it is given`, () => {
-      const wide = call({ nFft: 512, hopLength: 256 }) as { length: number } | { nFrames: number };
-      const narrow = call({ nFft: 512, hopLength: 128 }) as
-        | { length: number }
-        | { nFrames: number };
+      const wide = call({ nFft: 512, hopLength: 256 });
+      const narrow = call({ nFft: 512, hopLength: 128 });
       expect(frameCount(narrow)).toBeGreaterThan(frameCount(wide));
     });
 

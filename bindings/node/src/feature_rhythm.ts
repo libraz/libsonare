@@ -2,6 +2,7 @@ import { assertMatrix2D, toMatrix2D, toNativeIndexList } from './internal/featur
 import { resolveFftOptions } from './internal/fft_options.js';
 import { addon } from './native.js';
 import type { Matrix2D, TempogramMode } from './types.js';
+import type { OptionsOf } from './validation.js';
 import {
   assertAudioInput,
   assertFiniteSamples,
@@ -242,7 +243,7 @@ export function onsetStrength(request: OnsetStrengthRequest): Float32Array;
 export function onsetStrength(
   samples: Float32Array,
   sampleRate: number,
-  options?: Omit<OnsetStrengthRequest, 'samples' | 'sampleRate'>,
+  options?: OptionsOf<OnsetStrengthRequest>,
 ): Float32Array;
 export function onsetStrength(...args: unknown[]): Float32Array {
   const request = sampleOneShot<OnsetStrengthRequest>('onsetStrength', args);
@@ -263,7 +264,7 @@ export function onsetStrengthMulti(request: OnsetStrengthMultiRequest): Matrix2D
 export function onsetStrengthMulti(
   samples: Float32Array,
   sampleRate: number,
-  options?: Omit<OnsetStrengthMultiRequest, 'samples' | 'sampleRate'>,
+  options?: OptionsOf<OnsetStrengthMultiRequest>,
 ): Matrix2D;
 export function onsetStrengthMulti(...args: unknown[]): Matrix2D {
   const request = sampleOneShot<OnsetStrengthMultiRequest>('onsetStrengthMulti', args);

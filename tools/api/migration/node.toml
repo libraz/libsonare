@@ -8660,3 +8660,2249 @@ old = "Mixer.scheduleInsertAutomation(stripIndex)"
 new = "Mixer.scheduleInsertAutomation(strip)"
 domain = "engine"
 rule = "strip-ref"
+
+[[entry]]
+kind = "field"
+old = "DecomposeRequest.nFeatures"
+removed = true
+domain = "effects"
+rule = "matrix-2d"
+
+[[entry]]
+kind = "field"
+old = "DecomposeRequest.nFrames"
+removed = true
+domain = "effects"
+rule = "matrix-2d"
+
+[[entry]]
+kind = "field"
+old = "DecomposeRequest.s"
+changed = "Float32Array -> Matrix2D; TSDoc: rows = features, cols = frames"
+domain = "effects"
+rule = "matrix-2d"
+test = "bindings/node/tests/surface/effects-sep.test.ts::Matrix2D"
+
+[[entry]]
+kind = "field"
+old = "DecomposeStemsLinkedRequest.sampleRate"
+changed = "optional -> required (no default)"
+domain = "effects"
+rule = "sample-rate-required"
+test = "bindings/node/tests/surface/effects-sep.test.ts::requires sampleRate in both forms"
+
+[[entry]]
+kind = "field"
+old = "DecomposeStemsRequest.sampleRate"
+changed = "optional -> required (no default)"
+domain = "effects"
+rule = "sample-rate-required"
+test = "bindings/node/tests/surface/effects-sep.test.ts::requires sampleRate in both forms"
+
+[[entry]]
+kind = "field"
+old = "HpssRequest.sampleRate"
+changed = "optional -> required (no default)"
+domain = "effects"
+rule = "sample-rate-required"
+test = "bindings/node/tests/surface/effects-sep.test.ts::requires sampleRate in both forms"
+
+[[entry]]
+kind = "field"
+old = "HpssWithResidualRequest.sampleRate"
+changed = "optional -> required (no default)"
+domain = "effects"
+rule = "sample-rate-required"
+test = "bindings/node/tests/surface/effects-sep.test.ts::requires sampleRate in both forms"
+
+[[entry]]
+kind = "field"
+old = "NnFilterRequest.aggregate"
+changed = "string -> NnFilterAggregate ('mean'|'median'|'min'|'max'); other strings refused with RangeError"
+domain = "effects"
+rule = "string-closed-sets"
+test = "bindings/node/tests/surface/effects-sep.test.ts::nnFilter refuses aggregate"
+
+[[entry]]
+kind = "field"
+old = "NnFilterRequest.nFeatures"
+removed = true
+domain = "effects"
+rule = "matrix-2d"
+
+[[entry]]
+kind = "field"
+old = "NnFilterRequest.nFrames"
+removed = true
+domain = "effects"
+rule = "matrix-2d"
+
+[[entry]]
+kind = "field"
+old = "NnFilterRequest.s"
+changed = "Float32Array -> Matrix2D; TSDoc: rows = features, cols = frames"
+domain = "effects"
+rule = "matrix-2d"
+test = "bindings/node/tests/surface/effects-sep.test.ts::Matrix2D"
+
+[[entry]]
+kind = "field"
+old = "NormalizeRequest.sampleRate"
+changed = "optional -> required (no default)"
+domain = "effects"
+rule = "sample-rate-required"
+test = "bindings/node/tests/surface/effects-sep.test.ts::requires sampleRate in both forms"
+
+[[entry]]
+kind = "field"
+old = "NormalizeStereoRequest.sampleRate"
+changed = "optional -> required (no default)"
+domain = "effects"
+rule = "sample-rate-required"
+test = "bindings/node/tests/surface/effects-sep.test.ts::requires sampleRate in both forms"
+
+[[entry]]
+kind = "field"
+old = "PhaseVocoderRequest.rate"
+changed = "rate -> speedRatio"
+domain = "effects"
+rule = "sample-rate-name"
+test = "bindings/node/tests/surface/effects-sep.test.ts::phaseVocoder takes speedRatio"
+
+[[entry]]
+kind = "field"
+old = "PhaseVocoderRequest.sampleRate"
+changed = "optional -> required (no default)"
+domain = "effects"
+rule = "sample-rate-required"
+test = "bindings/node/tests/surface/effects-sep.test.ts::requires sampleRate in both forms"
+
+[[entry]]
+kind = "field"
+old = "RemixRequest.alignZeros"
+changed = "default false -> true on remix (remixAlignedIntervals already true)"
+domain = "effects"
+rule = "individual"
+test = "bindings/node/tests/surface/effects-sep.test.ts::remix aligns cuts to zero crossings by default"
+
+[[entry]]
+kind = "field"
+old = "RemixRequest.sampleRate"
+changed = "optional -> required (no default)"
+domain = "effects"
+rule = "sample-rate-required"
+test = "bindings/node/tests/surface/effects-sep.test.ts::requires sampleRate in both forms"
+
+[[entry]]
+kind = "field"
+old = "RirSynthOptions.crossfadeMs"
+changed = "absent = library default; explicit 0 -> RangeError (\"omit for the default\"); TSDoc drops the \"0 = default\" wording"
+domain = "effects"
+rule = "absent-not-sentinel"
+test = "bindings/node/tests/surface/effects-sep.test.ts::synthesizeRir refuses an explicit 0"
+
+[[entry]]
+kind = "field"
+old = "RirSynthOptions.mixingTimeMs"
+changed = "absent = library default; explicit 0 -> RangeError (\"omit for the default\"); TSDoc drops the \"0 = default\" wording"
+domain = "effects"
+rule = "absent-not-sentinel"
+test = "bindings/node/tests/surface/effects-sep.test.ts::synthesizeRir refuses an explicit 0"
+
+[[entry]]
+kind = "field"
+old = "RirSynthOptions.sampleRate"
+changed = "optional -> required (no default)"
+domain = "effects"
+rule = "sample-rate-required"
+test = "bindings/node/tests/surface/effects-sep.test.ts::requires sampleRate in both forms"
+
+[[entry]]
+kind = "field"
+old = "RoomEstimateOptions.aspectHintLh"
+changed = "absent = library default; explicit 0 -> RangeError (\"omit for the default\"); TSDoc drops the \"0 = default\" wording"
+domain = "effects"
+rule = "absent-not-sentinel"
+test = "bindings/node/tests/surface/effects-sep.test.ts::estimateRoom refuses an explicit 0"
+
+[[entry]]
+kind = "field"
+old = "RoomEstimateOptions.aspectHintLw"
+changed = "absent = library default; explicit 0 -> RangeError (\"omit for the default\"); TSDoc drops the \"0 = default\" wording"
+domain = "effects"
+rule = "absent-not-sentinel"
+test = "bindings/node/tests/surface/effects-sep.test.ts::estimateRoom refuses an explicit 0"
+
+[[entry]]
+kind = "field"
+old = "RoomEstimateOptions.minDecayDb"
+changed = "absent = library default; explicit 0 -> RangeError (\"omit for the default\"); TSDoc drops the \"0 = default\" wording"
+domain = "effects"
+rule = "absent-not-sentinel"
+test = "bindings/node/tests/surface/effects-sep.test.ts::estimateRoom refuses an explicit 0"
+
+[[entry]]
+kind = "field"
+old = "RoomEstimateOptions.nOctaveBands"
+changed = "absent = library default; explicit 0 -> RangeError (\"omit for the default\"); TSDoc drops the \"0 = default\" wording"
+domain = "effects"
+rule = "absent-not-sentinel"
+test = "bindings/node/tests/surface/effects-sep.test.ts::estimateRoom refuses an explicit 0"
+
+[[entry]]
+kind = "field"
+old = "RoomEstimateOptions.noiseFloorMarginDb"
+changed = "absent = library default; explicit 0 -> RangeError (\"omit for the default\"); TSDoc drops the \"0 = default\" wording"
+domain = "effects"
+rule = "absent-not-sentinel"
+test = "bindings/node/tests/surface/effects-sep.test.ts::estimateRoom refuses an explicit 0"
+
+[[entry]]
+kind = "field"
+old = "RoomEstimateOptions.referenceAbsorption"
+changed = "absent = library default; explicit 0 -> RangeError (\"omit for the default\"); TSDoc drops the \"0 = default\" wording"
+domain = "effects"
+rule = "absent-not-sentinel"
+test = "bindings/node/tests/surface/effects-sep.test.ts::estimateRoom refuses an explicit 0"
+
+[[entry]]
+kind = "field"
+old = "RoomEstimateRequest.sampleRate"
+changed = "optional -> required (no default)"
+domain = "effects"
+rule = "sample-rate-required"
+test = "bindings/node/tests/surface/effects-sep.test.ts::requires sampleRate in both forms"
+
+[[entry]]
+kind = "field"
+old = "RoomGeometryOptions.airHumidityPercent"
+changed = "absent = library default; explicit 0 -> RangeError (\"omit for the default\"); TSDoc drops the \"0 = default\" wording"
+domain = "effects"
+rule = "absent-not-sentinel"
+test = "bindings/node/tests/surface/effects-sep.test.ts::refuses airHumidityPercent = 0"
+
+[[entry]]
+kind = "field"
+old = "RoomGeometryOptions.airTemperatureC"
+changed = "absent = library default; explicit 0 -> RangeError (\"omit for the default\"); TSDoc drops the \"0 = default\" wording"
+domain = "effects"
+rule = "absent-not-sentinel"
+test = "bindings/node/tests/surface/effects-sep.test.ts::refuses airTemperatureC = 0"
+
+[[entry]]
+kind = "field"
+old = "RoomGeometryOptions.listenerX"
+changed = "listenerX -> listener (RoomPlacement {x, y, z} (metres))"
+domain = "effects"
+rule = "individual"
+test = "bindings/node/tests/surface/effects-sep.test.ts::synthesizeRir takes source and listener placements and a maxSec"
+
+[[entry]]
+kind = "field"
+old = "RoomGeometryOptions.listenerY"
+changed = "listenerY -> listener (RoomPlacement {x, y, z} (metres))"
+domain = "effects"
+rule = "individual"
+test = "bindings/node/tests/surface/effects-sep.test.ts::synthesizeRir takes source and listener placements and a maxSec"
+
+[[entry]]
+kind = "field"
+old = "RoomGeometryOptions.listenerZ"
+changed = "listenerZ -> listener (RoomPlacement {x, y, z} (metres))"
+domain = "effects"
+rule = "individual"
+test = "bindings/node/tests/surface/effects-sep.test.ts::synthesizeRir takes source and listener placements and a maxSec"
+
+[[entry]]
+kind = "field"
+old = "RoomGeometryOptions.maxSec"
+changed = "absent = library default; explicit 0 -> RangeError (\"omit for the default\"); TSDoc drops the \"0 = default\" wording"
+domain = "effects"
+rule = "absent-not-sentinel"
+test = "bindings/node/tests/surface/effects-sep.test.ts::synthesizeRir refuses an explicit 0"
+
+[[entry]]
+kind = "field"
+old = "RoomGeometryOptions.maxSeconds"
+changed = "maxSeconds -> maxSec"
+domain = "effects"
+rule = "seconds-suffix"
+test = "bindings/node/tests/surface/effects-sep.test.ts::synthesizeRir takes source and listener placements and a maxSec"
+
+[[entry]]
+kind = "field"
+old = "RoomGeometryOptions.seed"
+changed = "absent = library default; explicit 0 -> RangeError (\"omit for the default\"); TSDoc drops the \"0 = default\" wording"
+domain = "effects"
+rule = "absent-not-sentinel"
+test = "bindings/node/tests/surface/effects-sep.test.ts::refuses seed = 0"
+
+[[entry]]
+kind = "field"
+old = "RoomGeometryOptions.sourceX"
+changed = "sourceX -> source (RoomPlacement {x, y, z} (metres))"
+domain = "effects"
+rule = "individual"
+test = "bindings/node/tests/surface/effects-sep.test.ts::synthesizeRir takes source and listener placements and a maxSec"
+
+[[entry]]
+kind = "field"
+old = "RoomGeometryOptions.sourceY"
+changed = "sourceY -> source (RoomPlacement {x, y, z} (metres))"
+domain = "effects"
+rule = "individual"
+test = "bindings/node/tests/surface/effects-sep.test.ts::synthesizeRir takes source and listener placements and a maxSec"
+
+[[entry]]
+kind = "field"
+old = "RoomGeometryOptions.sourceZ"
+changed = "sourceZ -> source (RoomPlacement {x, y, z} (metres))"
+domain = "effects"
+rule = "individual"
+test = "bindings/node/tests/surface/effects-sep.test.ts::synthesizeRir takes source and listener placements and a maxSec"
+
+[[entry]]
+kind = "field"
+old = "RoomMorphOptions.crossfadeMs"
+changed = "absent = library default; explicit 0 -> RangeError (\"omit for the default\"); TSDoc drops the \"0 = default\" wording"
+domain = "effects"
+rule = "absent-not-sentinel"
+test = "bindings/node/tests/surface/effects-sep.test.ts::roomMorph refuses an explicit 0"
+
+[[entry]]
+kind = "field"
+old = "RoomMorphOptions.mixingTimeMs"
+changed = "absent = library default; explicit 0 -> RangeError (\"omit for the default\"); TSDoc drops the \"0 = default\" wording"
+domain = "effects"
+rule = "absent-not-sentinel"
+test = "bindings/node/tests/surface/effects-sep.test.ts::roomMorph refuses an explicit 0"
+
+[[entry]]
+kind = "field"
+old = "RoomMorphRequest.sampleRate"
+changed = "optional -> required (no default)"
+domain = "effects"
+rule = "sample-rate-required"
+test = "bindings/node/tests/surface/effects-sep.test.ts::requires sampleRate in both forms"
+
+[[entry]]
+kind = "field"
+old = "RoomMorphStereoRequest.sampleRate"
+changed = "optional -> required (no default)"
+domain = "effects"
+rule = "sample-rate-required"
+test = "bindings/node/tests/surface/effects-sep.test.ts::requires sampleRate in both forms"
+
+[[entry]]
+kind = "function"
+old = "decompose"
+changed = "request-only: decompose(request: DecomposeRequest): DecomposeResult"
+domain = "effects"
+rule = "one-positional-form"
+test = "bindings/node/tests/surface/effects-sep.test.ts::decompose takes a Matrix2D"
+
+[[entry]]
+kind = "function"
+old = "decomposeStems"
+changed = "one positional form (decomposeStems(samples, sampleRate, options?: Omit<DecomposeStemsRequest,'samples'|'sampleRate'>)); request form takes DecomposeStemsRequest; returns DecomposeStemsResult"
+domain = "effects"
+rule = "one-positional-form"
+test = "bindings/node/tests/surface/effects-sep.test.ts::requires sampleRate in both forms"
+
+[[entry]]
+kind = "function"
+old = "estimateRoom"
+changed = "one positional form (estimateRoom(samples, sampleRate, options?: RoomEstimateOptions)); request form takes EstimateRoomRequest; returns RoomEstimateResult"
+domain = "effects"
+rule = "one-positional-form"
+test = "bindings/node/tests/surface/effects-sep.test.ts::requires sampleRate in both forms"
+
+[[entry]]
+kind = "function"
+old = "harmonic"
+changed = "one positional form (harmonic(samples, sampleRate, options?: Omit<HarmonicRequest,'samples'|'sampleRate'>)); request form takes HarmonicRequest; returns Float32Array"
+domain = "effects"
+rule = "one-positional-form"
+test = "bindings/node/tests/surface/effects-sep.test.ts::requires sampleRate in both forms"
+
+[[entry]]
+kind = "function"
+old = "hpss"
+changed = "one positional form (hpss(samples, sampleRate, options?: Omit<HpssRequest,'samples'|'sampleRate'>)); request form takes HpssRequest; returns HpssResult"
+domain = "effects"
+rule = "one-positional-form"
+test = "bindings/node/tests/surface/effects-sep.test.ts::requires sampleRate in both forms"
+
+[[entry]]
+kind = "function"
+old = "hpssWithResidual"
+changed = "one positional form (hpssWithResidual(samples, sampleRate, options?: Omit<HpssWithResidualRequest,'samples'|'sampleRate'>)); request form takes HpssWithResidualRequest; returns HpssWithResidualResult"
+domain = "effects"
+rule = "one-positional-form"
+test = "bindings/node/tests/surface/effects-sep.test.ts::requires sampleRate in both forms"
+
+[[entry]]
+kind = "function"
+old = "nnFilter"
+changed = "request-only: nnFilter(request: NnFilterRequest): Matrix2D"
+domain = "effects"
+rule = "one-positional-form"
+test = "bindings/node/tests/surface/effects-sep.test.ts::nnFilter takes and returns a Matrix2D"
+
+[[entry]]
+kind = "function"
+old = "normalize"
+changed = "one positional form (normalize(samples, sampleRate, options?: Omit<NormalizeRequest,'samples'|'sampleRate'>)); request form takes NormalizeRequest; returns Float32Array"
+domain = "effects"
+rule = "one-positional-form"
+test = "bindings/node/tests/surface/effects-sep.test.ts::requires sampleRate in both forms"
+
+[[entry]]
+kind = "function"
+old = "percussive"
+changed = "one positional form (percussive(samples, sampleRate, options?: Omit<PercussiveRequest,'samples'|'sampleRate'>)); request form takes PercussiveRequest; returns Float32Array"
+domain = "effects"
+rule = "one-positional-form"
+test = "bindings/node/tests/surface/effects-sep.test.ts::requires sampleRate in both forms"
+
+[[entry]]
+kind = "function"
+old = "phaseVocoder"
+changed = "one positional form (phaseVocoder(samples, sampleRate, options: Omit<PhaseVocoderRequest,'samples'|'sampleRate'>)); request form takes PhaseVocoderRequest; returns Float32Array"
+domain = "effects"
+rule = "one-positional-form"
+test = "bindings/node/tests/surface/effects-sep.test.ts::requires sampleRate in both forms"
+
+[[entry]]
+kind = "function"
+old = "remix"
+changed = "one positional form (remix(samples, sampleRate, options: Omit<RemixRequest,'samples'|'sampleRate'>)); request form takes RemixRequest; returns Float32Array"
+domain = "effects"
+rule = "one-positional-form"
+test = "bindings/node/tests/surface/effects-sep.test.ts::requires sampleRate in both forms"
+
+[[entry]]
+kind = "function"
+old = "remixAlignedIntervals"
+changed = "one positional form (remixAlignedIntervals(samples, sampleRate, options: Omit<RemixRequest,'samples'|'sampleRate'>)); request form takes RemixRequest; returns Int32Array"
+domain = "effects"
+rule = "one-positional-form"
+test = "bindings/node/tests/surface/effects-sep.test.ts::requires sampleRate in both forms"
+
+[[entry]]
+kind = "function"
+old = "roomGeometryFromEstimate"
+changed = "request-only: roomGeometryFromEstimate(request: RoomGeometryFromEstimateRequest): RoomGeometryOptions"
+domain = "effects"
+rule = "one-positional-form"
+test = "bindings/node/tests/surface/effects-sep.test.ts::roomGeometryFromEstimate is request-only"
+
+[[entry]]
+kind = "function"
+old = "synthesizeRir"
+changed = "request-only: synthesizeRir(request: SynthesizeRirRequest): RirResult"
+domain = "effects"
+rule = "one-positional-form"
+test = "bindings/node/tests/surface/effects-sep.test.ts::synthesizeRir refuses"
+
+[[entry]]
+kind = "function"
+old = "trim"
+changed = "one positional form (trim(samples, sampleRate, options?: Omit<TrimRequest,'samples'|'sampleRate'>)); request form takes TrimRequest; returns Float32Array"
+domain = "effects"
+rule = "one-positional-form"
+test = "bindings/node/tests/surface/effects-sep.test.ts::requires sampleRate in both forms"
+
+[[entry]]
+kind = "type"
+old = "DecomposeRequest"
+changed = "field list"
+domain = "effects"
+rule = "matrix-2d"
+test = "bindings/node/tests/surface/effects-sep.test.ts::Matrix2D"
+
+[[entry]]
+kind = "type"
+old = "DecomposeStemsLinkedRequest"
+changed = "field list"
+domain = "effects"
+rule = "sample-rate-required"
+test = "bindings/node/tests/surface/effects-sep.test.ts::requires sampleRate in both forms"
+
+[[entry]]
+kind = "type"
+old = "DecomposeStemsRequest"
+changed = "field list"
+domain = "effects"
+rule = "sample-rate-required"
+test = "bindings/node/tests/surface/effects-sep.test.ts::requires sampleRate in both forms"
+
+[[entry]]
+kind = "type"
+old = "EffectSamplesRequest"
+removed = true
+domain = "effects"
+rule = "worklet-scope"
+
+[[entry]]
+kind = "type"
+old = "HpssRequest"
+changed = "field list"
+domain = "effects"
+rule = "sample-rate-required"
+test = "bindings/node/tests/surface/effects-sep.test.ts::requires sampleRate in both forms"
+
+[[entry]]
+kind = "type"
+old = "HpssWithResidualRequest"
+changed = "field list"
+domain = "effects"
+rule = "sample-rate-required"
+test = "bindings/node/tests/surface/effects-sep.test.ts::requires sampleRate in both forms"
+
+[[entry]]
+kind = "type"
+old = "NnFilterRequest"
+changed = "field list"
+domain = "effects"
+rule = "matrix-2d"
+test = "bindings/node/tests/surface/effects-sep.test.ts::Matrix2D"
+
+[[entry]]
+kind = "type"
+old = "NormalizeRequest"
+changed = "field list"
+domain = "effects"
+rule = "sample-rate-required"
+test = "bindings/node/tests/surface/effects-sep.test.ts::requires sampleRate in both forms"
+
+[[entry]]
+kind = "type"
+old = "NormalizeStereoRequest"
+changed = "field list"
+domain = "effects"
+rule = "sample-rate-required"
+test = "bindings/node/tests/surface/effects-sep.test.ts::requires sampleRate in both forms"
+
+[[entry]]
+kind = "type"
+old = "PhaseVocoderRequest"
+changed = "field list"
+domain = "effects"
+rule = "sample-rate-required"
+test = "bindings/node/tests/surface/effects-sep.test.ts::requires sampleRate in both forms"
+
+[[entry]]
+kind = "type"
+old = "RemixRequest"
+changed = "field list"
+domain = "effects"
+rule = "sample-rate-required"
+test = "bindings/node/tests/surface/effects-sep.test.ts::requires sampleRate in both forms"
+
+[[entry]]
+kind = "type"
+old = "RirSynthOptions"
+changed = "renamed to SynthesizeRirRequest"
+domain = "effects"
+rule = "type-names"
+test = "bindings/node/tests/surface/effects-sep.test.ts::declares the result and request types"
+
+[[entry]]
+kind = "type"
+old = "RoomEstimateOptions"
+changed = "field list"
+domain = "effects"
+rule = "sample-rate-required"
+test = "bindings/node/tests/surface/effects-sep.test.ts::requires sampleRate in both forms"
+
+[[entry]]
+kind = "type"
+old = "RoomEstimateRequest"
+changed = "renamed to EstimateRoomRequest"
+domain = "effects"
+rule = "type-names"
+test = "bindings/node/tests/surface/effects-sep.test.ts::declares the result and request types"
+
+[[entry]]
+kind = "type"
+old = "RoomGeometryFromEstimateOptions"
+removed = true
+domain = "effects"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "type"
+old = "RoomGeometryOptions"
+changed = "field list"
+domain = "effects"
+rule = "individual"
+test = "bindings/node/tests/surface/effects-sep.test.ts::synthesizeRir takes source and listener placements and a maxSec"
+
+[[entry]]
+kind = "type"
+old = "RoomMorphOptions"
+changed = "field list"
+domain = "effects"
+rule = "sample-rate-required"
+test = "bindings/node/tests/surface/effects-sep.test.ts::requires sampleRate in both forms"
+
+[[entry]]
+kind = "type"
+old = "RoomMorphRequest"
+changed = "field list"
+domain = "effects"
+rule = "sample-rate-required"
+test = "bindings/node/tests/surface/effects-sep.test.ts::requires sampleRate in both forms"
+
+[[entry]]
+kind = "type"
+old = "RoomMorphStereoRequest"
+changed = "field list"
+domain = "effects"
+rule = "sample-rate-required"
+test = "bindings/node/tests/surface/effects-sep.test.ts::requires sampleRate in both forms"
+
+[[entry]]
+kind = "value"
+old = "AcousticModeName='impulse_response'"
+changed = "AcousticModeName='impulseResponse'"
+domain = "effects"
+rule = "token-case"
+test = "bindings/node/tests/surface/effects-sep.test.ts::names the impulse-response mode impulseResponse"
+
+[[entry]]
+kind = "field"
+old = "AutoTuneOptions.referenceMidi"
+changed = "referenceMidi -> scaleReferenceMidi"
+domain = "effects"
+rule = "individual"
+test = "bindings/node/tests/surface/effects-notes.test.ts::refuses the removed shape of"
+
+[[entry]]
+kind = "field"
+old = "NoteObject.amplitude"
+changed = "readonly"
+domain = "effects"
+rule = "individual"
+test = "bindings/node/tests/surface/effects-notes.test.ts::exposes the note types readonly"
+
+[[entry]]
+kind = "field"
+old = "NoteObject.edit"
+changed = "readonly"
+domain = "effects"
+rule = "individual"
+test = "bindings/node/tests/surface/effects-notes.test.ts::exposes the note types readonly"
+
+[[entry]]
+kind = "field"
+old = "NoteObject.f0Stability"
+changed = "readonly"
+domain = "effects"
+rule = "individual"
+test = "bindings/node/tests/surface/effects-notes.test.ts::exposes the note types readonly"
+
+[[entry]]
+kind = "field"
+old = "NoteObject.frameEnd"
+changed = "readonly"
+domain = "effects"
+rule = "individual"
+test = "bindings/node/tests/surface/effects-notes.test.ts::exposes the note types readonly"
+
+[[entry]]
+kind = "field"
+old = "NoteObject.frameStart"
+changed = "readonly"
+domain = "effects"
+rule = "individual"
+test = "bindings/node/tests/surface/effects-notes.test.ts::exposes the note types readonly"
+
+[[entry]]
+kind = "field"
+old = "NoteObject.medianCents"
+changed = "readonly"
+domain = "effects"
+rule = "individual"
+test = "bindings/node/tests/surface/effects-notes.test.ts::exposes the note types readonly"
+
+[[entry]]
+kind = "field"
+old = "NoteObject.medianHz"
+changed = "readonly"
+domain = "effects"
+rule = "individual"
+test = "bindings/node/tests/surface/effects-notes.test.ts::exposes the note types readonly"
+
+[[entry]]
+kind = "field"
+old = "NoteObject.offsetSample"
+changed = "readonly"
+domain = "effects"
+rule = "individual"
+test = "bindings/node/tests/surface/effects-notes.test.ts::exposes the note types readonly"
+
+[[entry]]
+kind = "field"
+old = "NoteObject.onsetSample"
+changed = "readonly"
+domain = "effects"
+rule = "individual"
+test = "bindings/node/tests/surface/effects-notes.test.ts::exposes the note types readonly"
+
+[[entry]]
+kind = "field"
+old = "NoteStretchOptions.stretchRatio"
+changed = "optional -> required"
+domain = "effects"
+rule = "individual"
+test = "bindings/node/tests/surface/effects-notes.test.ts::requires the defining parameter of"
+
+[[entry]]
+kind = "field"
+old = "PitchCorrectOptions.mode"
+changed = "mode -> targetMode (type PitchTargetMode = 'midi'|'scale')"
+domain = "effects"
+rule = "individual"
+test = "bindings/node/tests/surface/effects-notes.test.ts::refuses the removed shape of"
+
+[[entry]]
+kind = "field"
+old = "PitchCorrectOptions.referenceMidi"
+changed = "referenceMidi -> scaleReferenceMidi"
+domain = "effects"
+rule = "individual"
+test = "bindings/node/tests/surface/effects-notes.test.ts::refuses the removed shape of"
+
+[[entry]]
+kind = "field"
+old = "PitchCorrectToMidiRequest.currentMidi"
+changed = "optional -> required"
+domain = "effects"
+rule = "individual"
+test = "bindings/node/tests/surface/effects-notes.test.ts::requires the defining parameter of"
+
+[[entry]]
+kind = "field"
+old = "PitchCorrectToMidiRequest.targetMidi"
+changed = "optional -> required"
+domain = "effects"
+rule = "individual"
+test = "bindings/node/tests/surface/effects-notes.test.ts::requires the defining parameter of"
+
+[[entry]]
+kind = "field"
+old = "PitchShiftRequest.semitones"
+changed = "semitones -> pitchSemitones"
+domain = "effects"
+rule = "pitch-semitones"
+test = "bindings/node/tests/surface/effects-notes.test.ts::refuses the removed shape of"
+
+[[entry]]
+kind = "field"
+old = "SpectralEditRequest.ops"
+changed = "optional -> required (readonly SpectralRegionOp[]); empty array returns a copy"
+domain = "effects"
+rule = "individual"
+test = "bindings/node/tests/surface/effects-notes.test.ts::requires the defining parameter of"
+
+[[entry]]
+kind = "field"
+old = "SplitNoteRequest.frame"
+changed = "required -> optional; exactly one of frame / frameSec; both or neither -> RangeError"
+domain = "effects"
+rule = "individual"
+test = "bindings/node/tests/surface/effects-notes.test.ts::splitNote takes exactly one of frame and frameSec"
+
+[[entry]]
+kind = "field"
+old = "TimeStretchRequest.rate"
+changed = "rate -> speedRatio"
+domain = "effects"
+rule = "sample-rate-name"
+test = "bindings/node/tests/surface/effects-notes.test.ts::refuses the removed shape of"
+
+[[entry]]
+kind = "function"
+old = "autoTune"
+changed = "one positional form (autoTune(samples, sampleRate, options?: AutoTuneOptions)); request form takes AutoTuneRequest; returns AutoTuneResult"
+domain = "effects"
+rule = "one-positional-form"
+test = "bindings/node/tests/surface/effects-notes.test.ts::positional form equals request form for"
+
+[[entry]]
+kind = "function"
+old = "extractNotes"
+changed = "one positional form (extractNotes(samples, sampleRate, options: Omit<ExtractNotesRequest,'samples'|'sampleRate'>)); request form takes ExtractNotesRequest; returns NoteObject[]"
+domain = "effects"
+rule = "one-positional-form"
+test = "bindings/node/tests/surface/effects-notes.test.ts::positional form equals request form for"
+
+[[entry]]
+kind = "function"
+old = "extractPercussiveEvents"
+changed = "one positional form (extractPercussiveEvents(samples, sampleRate, options?: Omit<ExtractPercussiveEventsRequest,'samples'|'sampleRate'>)); request form takes ExtractPercussiveEventsRequest; returns PercussiveEvent[]"
+domain = "effects"
+rule = "one-positional-form"
+test = "bindings/node/tests/surface/effects-notes.test.ts::positional form equals request form for"
+
+[[entry]]
+kind = "function"
+old = "mergeNotes"
+changed = "one positional form (mergeNotes(samples, sampleRate, options: Omit<MergeNotesRequest,'samples'|'sampleRate'>)); request form takes MergeNotesRequest; returns NoteObject[]"
+domain = "effects"
+rule = "one-positional-form"
+test = "bindings/node/tests/surface/effects-notes.test.ts::positional form equals request form for"
+
+[[entry]]
+kind = "function"
+old = "noteMove"
+changed = "one positional form (noteMove(samples, sampleRate, options?: NoteMoveOptions)); request form takes NoteMoveRequest; returns Float32Array"
+domain = "effects"
+rule = "one-positional-form"
+test = "bindings/node/tests/surface/effects-notes.test.ts::positional form equals request form for"
+
+[[entry]]
+kind = "function"
+old = "noteStretch"
+changed = "one positional form (noteStretch(samples, sampleRate, options: NoteStretchOptions)); request form takes NoteStretchRequest; returns Float32Array"
+domain = "effects"
+rule = "one-positional-form"
+test = "bindings/node/tests/surface/effects-notes.test.ts::positional form equals request form for"
+
+[[entry]]
+kind = "function"
+old = "pitchCorrectTimevarying"
+changed = "one positional form (pitchCorrectTimevarying(samples, sampleRate, options: PitchCorrectOptions)); request form takes PitchCorrectTimevaryingRequest; returns Float32Array"
+domain = "effects"
+rule = "one-positional-form"
+test = "bindings/node/tests/surface/effects-notes.test.ts::positional form equals request form for"
+
+[[entry]]
+kind = "function"
+old = "pitchCorrectToMidi"
+changed = "one positional form (pitchCorrectToMidi(samples, sampleRate, options: Omit<PitchCorrectToMidiRequest,'samples'|'sampleRate'>)); request form takes PitchCorrectToMidiRequest; returns Float32Array"
+domain = "effects"
+rule = "one-positional-form"
+test = "bindings/node/tests/surface/effects-notes.test.ts::positional form equals request form for"
+
+[[entry]]
+kind = "function"
+old = "pitchCorrectToMidiTimevarying"
+removed = true
+domain = "effects"
+rule = "one-entry-per-operation"
+
+[[entry]]
+kind = "function"
+old = "pitchShift"
+changed = "one positional form (pitchShift(samples, sampleRate, options: Omit<PitchShiftRequest,'samples'|'sampleRate'>)); request form takes PitchShiftRequest; returns Float32Array"
+domain = "effects"
+rule = "one-positional-form"
+test = "bindings/node/tests/surface/effects-notes.test.ts::positional form equals request form for"
+
+[[entry]]
+kind = "function"
+old = "renderNotes"
+changed = "one positional form (renderNotes(samples, sampleRate, options: Omit<RenderNotesRequest,'samples'|'sampleRate'>)); request form takes RenderNotesRequest; returns Float32Array"
+domain = "effects"
+rule = "one-positional-form"
+test = "bindings/node/tests/surface/effects-notes.test.ts::positional form equals request form for"
+
+[[entry]]
+kind = "function"
+old = "renderPercussiveEvents"
+changed = "one positional form (renderPercussiveEvents(samples, sampleRate, options: Omit<RenderPercussiveEventsRequest,'samples'|'sampleRate'>)); request form takes RenderPercussiveEventsRequest; returns Float32Array"
+domain = "effects"
+rule = "one-positional-form"
+test = "bindings/node/tests/surface/effects-notes.test.ts::positional form equals request form for"
+
+[[entry]]
+kind = "function"
+old = "scaleMaskForMode"
+changed = "scaleMaskForMode(root: PitchClass, mode: KeyMode): number; numbers and Mode refused (TypeError)"
+domain = "effects"
+rule = "string-closed-sets"
+test = "bindings/node/tests/surface/effects-notes.test.ts::refuses a closed-set value"
+
+[[entry]]
+kind = "function"
+old = "spectralEdit"
+changed = "one positional form (spectralEdit(samples, sampleRate, options: SpectralEditOptions)); request form takes SpectralEditRequest; returns Float32Array"
+domain = "effects"
+rule = "one-positional-form"
+test = "bindings/node/tests/surface/effects-notes.test.ts::positional form equals request form for"
+
+[[entry]]
+kind = "function"
+old = "splitNote"
+changed = "one positional form (splitNote(samples, sampleRate, options: Omit<SplitNoteRequest,'samples'|'sampleRate'>)); request form takes SplitNoteRequest; returns NoteObject[]"
+domain = "effects"
+rule = "one-positional-form"
+test = "bindings/node/tests/surface/effects-notes.test.ts::positional form equals request form for"
+
+[[entry]]
+kind = "function"
+old = "timeStretch"
+changed = "one positional form (timeStretch(samples, sampleRate, options: Omit<TimeStretchRequest,'samples'|'sampleRate'>)); request form takes TimeStretchRequest; returns Float32Array"
+domain = "effects"
+rule = "one-positional-form"
+test = "bindings/node/tests/surface/effects-notes.test.ts::positional form equals request form for"
+
+[[entry]]
+kind = "method"
+old = "Audio.harmonic"
+changed = "harmonic(options?: Omit<HarmonicRequest,'samples'|'sampleRate'>)"
+domain = "core"
+rule = "one-positional-form"
+test = "bindings/node/tests/surface/effects-notes.test.ts::refuses the removed positional form of Audio"
+
+[[entry]]
+kind = "method"
+old = "Audio.hpss"
+changed = "hpss(options?: Omit<HpssRequest,'samples'|'sampleRate'>)"
+domain = "core"
+rule = "one-positional-form"
+test = "bindings/node/tests/surface/effects-notes.test.ts::refuses the removed positional form of Audio"
+
+[[entry]]
+kind = "method"
+old = "Audio.normalize"
+changed = "normalize(options?: Omit<NormalizeRequest,'samples'|'sampleRate'>)"
+domain = "core"
+rule = "one-positional-form"
+test = "bindings/node/tests/surface/effects-notes.test.ts::refuses the removed positional form of Audio"
+
+[[entry]]
+kind = "method"
+old = "Audio.noteMove"
+changed = "noteMove(options?: NoteMoveOptions)"
+domain = "core"
+rule = "one-positional-form"
+test = "bindings/node/tests/surface/effects-notes.test.ts::refuses the removed positional form of Audio"
+
+[[entry]]
+kind = "method"
+old = "Audio.noteStretch"
+changed = "noteStretch(options: NoteStretchOptions)"
+domain = "core"
+rule = "one-positional-form"
+test = "bindings/node/tests/surface/effects-notes.test.ts::refuses the removed positional form of Audio"
+
+[[entry]]
+kind = "method"
+old = "Audio.percussive"
+changed = "percussive(options?: Omit<PercussiveRequest,'samples'|'sampleRate'>)"
+domain = "core"
+rule = "one-positional-form"
+test = "bindings/node/tests/surface/effects-notes.test.ts::refuses the removed positional form of Audio"
+
+[[entry]]
+kind = "method"
+old = "Audio.pitchShift"
+changed = "pitchShift(options: Omit<PitchShiftRequest,'samples'|'sampleRate'>)"
+domain = "core"
+rule = "pitch-semitones"
+test = "bindings/node/tests/surface/effects-notes.test.ts::refuses the removed positional form of Audio"
+
+[[entry]]
+kind = "method"
+old = "Audio.timeStretch"
+changed = "timeStretch(options: Omit<TimeStretchRequest,'samples'|'sampleRate'>)"
+domain = "core"
+rule = "sample-rate-name"
+test = "bindings/node/tests/surface/effects-notes.test.ts::refuses the removed positional form of Audio"
+
+[[entry]]
+kind = "method"
+old = "Audio.trim"
+changed = "trim(options?: Omit<TrimRequest,'samples'|'sampleRate'>)"
+domain = "core"
+rule = "one-positional-form"
+test = "bindings/node/tests/surface/effects-notes.test.ts::refuses the removed positional form of Audio"
+
+[[entry]]
+kind = "method"
+old = "Audio.voiceChange"
+changed = "voiceChange(options?: VoiceChangeOptions)"
+domain = "core"
+rule = "one-positional-form"
+test = "bindings/node/tests/surface/effects-notes.test.ts::refuses the removed positional form of Audio"
+
+[[entry]]
+kind = "option"
+old = "scaleCorrectionSemitones(referenceMidi)"
+changed = "scaleCorrectionSemitones(scaleReferenceMidi)"
+domain = "effects"
+rule = "individual"
+test = "bindings/node/tests/surface/effects-notes.test.ts::scale helpers keep their positional scalar form"
+
+[[entry]]
+kind = "option"
+old = "scaleQuantizeMidi(referenceMidi)"
+changed = "scaleQuantizeMidi(scaleReferenceMidi)"
+domain = "effects"
+rule = "individual"
+test = "bindings/node/tests/surface/effects-notes.test.ts::scale helpers keep their positional scalar form"
+
+[[entry]]
+kind = "type"
+old = "AutoTuneOptions"
+changed = "field list"
+domain = "effects"
+rule = "sample-rate-required"
+test = "bindings/node/tests/surface/effects-notes.test.ts::positional form equals request form for"
+
+[[entry]]
+kind = "type"
+old = "AutoTuneRequest"
+changed = "field list"
+domain = "effects"
+rule = "sample-rate-required"
+test = "bindings/node/tests/surface/effects-notes.test.ts::positional form equals request form for"
+
+[[entry]]
+kind = "type"
+old = "ExtractNotesRequest"
+changed = "declared interface carrying the full field list (was `type ExtractNotesRequest = NoteTrackRequest`)"
+domain = "effects"
+rule = "type-names"
+test = "bindings/node/tests/surface/effects-notes.test.ts::refuses a removed note-request name"
+
+[[entry]]
+kind = "type"
+old = "ExtractPercussiveEventsRequest"
+changed = "field list"
+domain = "effects"
+rule = "sample-rate-required"
+test = "bindings/node/tests/surface/effects-notes.test.ts::positional form equals request form for"
+
+[[entry]]
+kind = "type"
+old = "MergeNotesRequest"
+changed = "field list"
+domain = "effects"
+rule = "sample-rate-required"
+test = "bindings/node/tests/surface/effects-notes.test.ts::positional form equals request form for"
+
+[[entry]]
+kind = "type"
+old = "NoteEdit"
+changed = "every field readonly"
+domain = "effects"
+rule = "individual"
+test = "bindings/node/tests/surface/effects-notes.test.ts::exposes the note types readonly"
+
+[[entry]]
+kind = "type"
+old = "NoteMoveOptions"
+changed = "field list"
+domain = "effects"
+rule = "sample-rate-required"
+test = "bindings/node/tests/surface/effects-notes.test.ts::positional form equals request form for"
+
+[[entry]]
+kind = "type"
+old = "NoteMoveRequest"
+changed = "field list"
+domain = "effects"
+rule = "sample-rate-required"
+test = "bindings/node/tests/surface/effects-notes.test.ts::positional form equals request form for"
+
+[[entry]]
+kind = "type"
+old = "NoteStretchOptions"
+changed = "field list"
+domain = "effects"
+rule = "sample-rate-required"
+test = "bindings/node/tests/surface/effects-notes.test.ts::positional form equals request form for"
+
+[[entry]]
+kind = "type"
+old = "NoteStretchRequest"
+changed = "field list"
+domain = "effects"
+rule = "sample-rate-required"
+test = "bindings/node/tests/surface/effects-notes.test.ts::positional form equals request form for"
+
+[[entry]]
+kind = "type"
+old = "NoteTrackRequest"
+changed = "renamed to ExtractNotesRequest"
+domain = "effects"
+rule = "type-names"
+test = "bindings/node/tests/surface/effects-notes.test.ts::refuses a removed note-request name"
+
+[[entry]]
+kind = "type"
+old = "PitchCorrectOptions"
+changed = "field list"
+domain = "effects"
+rule = "sample-rate-required"
+test = "bindings/node/tests/surface/effects-notes.test.ts::positional form equals request form for"
+
+[[entry]]
+kind = "type"
+old = "PitchCorrectTimevaryingRequest"
+changed = "field list"
+domain = "effects"
+rule = "sample-rate-required"
+test = "bindings/node/tests/surface/effects-notes.test.ts::positional form equals request form for"
+
+[[entry]]
+kind = "type"
+old = "PitchCorrectToMidiRequest"
+changed = "field list"
+domain = "effects"
+rule = "sample-rate-required"
+test = "bindings/node/tests/surface/effects-notes.test.ts::positional form equals request form for"
+
+[[entry]]
+kind = "type"
+old = "PitchCorrectToMidiTimevaryingRequest"
+removed = true
+domain = "effects"
+rule = "one-entry-per-operation"
+
+[[entry]]
+kind = "type"
+old = "PitchShiftRequest"
+changed = "field list"
+domain = "effects"
+rule = "sample-rate-required"
+test = "bindings/node/tests/surface/effects-notes.test.ts::positional form equals request form for"
+
+[[entry]]
+kind = "type"
+old = "RenderNotesRequest"
+changed = "field list"
+domain = "effects"
+rule = "sample-rate-required"
+test = "bindings/node/tests/surface/effects-notes.test.ts::positional form equals request form for"
+
+[[entry]]
+kind = "type"
+old = "RenderPercussiveEventsRequest"
+changed = "field list"
+domain = "effects"
+rule = "sample-rate-required"
+test = "bindings/node/tests/surface/effects-notes.test.ts::positional form equals request form for"
+
+[[entry]]
+kind = "type"
+old = "SpectralEditOptions"
+changed = "field list"
+domain = "effects"
+rule = "sample-rate-required"
+test = "bindings/node/tests/surface/effects-notes.test.ts::positional form equals request form for"
+
+[[entry]]
+kind = "type"
+old = "SpectralEditRequest"
+changed = "field list"
+domain = "effects"
+rule = "sample-rate-required"
+test = "bindings/node/tests/surface/effects-notes.test.ts::positional form equals request form for"
+
+[[entry]]
+kind = "type"
+old = "SplitNoteRequest"
+changed = "field list"
+domain = "effects"
+rule = "sample-rate-required"
+test = "bindings/node/tests/surface/effects-notes.test.ts::positional form equals request form for"
+
+[[entry]]
+kind = "type"
+old = "TimeStretchRequest"
+changed = "field list"
+domain = "effects"
+rule = "sample-rate-required"
+test = "bindings/node/tests/surface/effects-notes.test.ts::positional form equals request form for"
+
+[[entry]]
+kind = "field"
+old = "DeclipOptions.clipThreshold"
+changed = "clipThreshold -> clipThresholdDb (linear clip level -> dBFS; default 20*log10(0.98) ~ -0.175 dBFS)"
+domain = "effects"
+rule = "unit-in-name"
+test = "bindings/node/tests/surface/effects-repair.test.ts::takes clipThresholdDb"
+
+[[entry]]
+kind = "field"
+old = "HumDetection.harmonicDbfs"
+changed = "number[] -> Float32Array"
+domain = "effects"
+rule = "type-names"
+test = "bindings/node/tests/surface/effects-repair.test.ts::carry Float32Array detection arrays"
+
+[[entry]]
+kind = "field"
+old = "MasteringRepairAnalyzeRequest.sampleRate"
+changed = "optional -> required (no default)"
+domain = "effects"
+rule = "sample-rate-required"
+test = "bindings/node/tests/surface/effects-repair.test.ts::requires sampleRate"
+
+[[entry]]
+kind = "field"
+old = "MasteringRepairApplyRequest.sampleRate"
+changed = "optional -> required (no default)"
+domain = "effects"
+rule = "sample-rate-required"
+test = "bindings/node/tests/surface/effects-repair.test.ts::requires sampleRate"
+
+[[entry]]
+kind = "field"
+old = "MasteringRepairDeclickRequest.sampleRate"
+changed = "optional -> required (no default)"
+domain = "effects"
+rule = "sample-rate-required"
+test = "bindings/node/tests/surface/effects-repair.test.ts::requires sampleRate"
+
+[[entry]]
+kind = "field"
+old = "MasteringRepairDeclickStereoRequest.sampleRate"
+changed = "optional -> required (no default)"
+domain = "effects"
+rule = "sample-rate-required"
+test = "bindings/node/tests/surface/effects-repair.test.ts::requires sampleRate"
+
+[[entry]]
+kind = "field"
+old = "MasteringRepairDeclipRequest.clipThreshold"
+changed = "clipThreshold -> clipThresholdDb"
+domain = "effects"
+rule = "unit-in-name"
+test = "bindings/node/tests/surface/effects-repair.test.ts::takes clipThresholdDb"
+
+[[entry]]
+kind = "field"
+old = "MasteringRepairDeclipStereoRequest.sampleRate"
+changed = "optional -> required (no default)"
+domain = "effects"
+rule = "sample-rate-required"
+test = "bindings/node/tests/surface/effects-repair.test.ts::requires sampleRate"
+
+[[entry]]
+kind = "field"
+old = "MasteringRepairDecrackleStereoRequest.sampleRate"
+changed = "optional -> required (no default)"
+domain = "effects"
+rule = "sample-rate-required"
+test = "bindings/node/tests/surface/effects-repair.test.ts::requires sampleRate"
+
+[[entry]]
+kind = "field"
+old = "MasteringRepairDehumStereoRequest.sampleRate"
+changed = "optional -> required (no default)"
+domain = "effects"
+rule = "sample-rate-required"
+test = "bindings/node/tests/surface/effects-repair.test.ts::requires sampleRate"
+
+[[entry]]
+kind = "field"
+old = "MasteringRepairDenoiseClassicalLinkedRequest.sampleRate"
+changed = "optional -> required (no default)"
+domain = "effects"
+rule = "sample-rate-required"
+test = "bindings/node/tests/surface/effects-repair.test.ts::requires sampleRate"
+
+[[entry]]
+kind = "field"
+old = "MasteringRepairDenoiseClassicalStereoRequest.sampleRate"
+changed = "optional -> required (no default)"
+domain = "effects"
+rule = "sample-rate-required"
+test = "bindings/node/tests/surface/effects-repair.test.ts::requires sampleRate"
+
+[[entry]]
+kind = "field"
+old = "MasteringRepairDereverbClassicalLinkedRequest.sampleRate"
+changed = "optional -> required (no default)"
+domain = "effects"
+rule = "sample-rate-required"
+test = "bindings/node/tests/surface/effects-repair.test.ts::requires sampleRate"
+
+[[entry]]
+kind = "field"
+old = "MasteringRepairDereverbClassicalStereoRequest.sampleRate"
+changed = "optional -> required (no default)"
+domain = "effects"
+rule = "sample-rate-required"
+test = "bindings/node/tests/surface/effects-repair.test.ts::requires sampleRate"
+
+[[entry]]
+kind = "field"
+old = "MasteringRepairDetectTrimRangeStereoRequest.sampleRate"
+changed = "optional -> required (no default)"
+domain = "effects"
+rule = "sample-rate-required"
+test = "bindings/node/tests/surface/effects-repair.test.ts::requires sampleRate"
+
+[[entry]]
+kind = "field"
+old = "MasteringRepairNoiseBandBinsRequest.sampleRate"
+changed = "optional -> required (no default)"
+domain = "effects"
+rule = "sample-rate-required"
+test = "bindings/node/tests/surface/effects-repair.test.ts::requires sampleRate"
+
+[[entry]]
+kind = "field"
+old = "MasteringRepairTrimSilenceRequest.threshold"
+changed = "threshold -> thresholdDb"
+domain = "effects"
+rule = "unit-in-name"
+test = "bindings/node/tests/surface/effects-repair.test.ts::takes thresholdDb and refuses threshold"
+
+[[entry]]
+kind = "field"
+old = "MasteringRepairTrimSilenceStereoRequest.sampleRate"
+changed = "optional -> required (no default)"
+domain = "effects"
+rule = "sample-rate-required"
+test = "bindings/node/tests/surface/effects-repair.test.ts::requires sampleRate"
+
+[[entry]]
+kind = "field"
+old = "NoiseDetection.bandFloorDbfs"
+changed = "number[] -> Float32Array"
+domain = "effects"
+rule = "type-names"
+test = "bindings/node/tests/surface/effects-repair.test.ts::carry Float32Array detection arrays"
+
+[[entry]]
+kind = "field"
+old = "TrimSilenceOptions.threshold"
+changed = "threshold -> thresholdDb (linear peak threshold -> dBFS; default -60 dBFS (was 0.001))"
+domain = "analysis"
+rule = "unit-in-name"
+test = "bindings/node/tests/surface/effects-repair.test.ts::takes thresholdDb and refuses threshold"
+
+[[entry]]
+kind = "function"
+old = "masteringRepairDeclickStereo"
+changed = "request-only: masteringRepairDeclickStereo(request: MasteringRepairDeclickStereoRequest): MasteringRepairDeclickResult"
+domain = "effects"
+rule = "one-positional-form"
+test = "bindings/node/tests/surface/effects-repair.test.ts::is request-only"
+
+[[entry]]
+kind = "function"
+old = "masteringRepairDeclipStereo"
+changed = "request-only: masteringRepairDeclipStereo(request: MasteringRepairDeclipStereoRequest): MasteringRepairDeclipResult"
+domain = "effects"
+rule = "one-positional-form"
+test = "bindings/node/tests/surface/effects-repair.test.ts::is request-only"
+
+[[entry]]
+kind = "function"
+old = "masteringRepairDecrackleStereo"
+changed = "request-only: masteringRepairDecrackleStereo(request: MasteringRepairDecrackleStereoRequest): MasteringRepairDecrackleResult"
+domain = "effects"
+rule = "one-positional-form"
+test = "bindings/node/tests/surface/effects-repair.test.ts::is request-only"
+
+[[entry]]
+kind = "function"
+old = "masteringRepairDehumStereo"
+changed = "request-only: masteringRepairDehumStereo(request: MasteringRepairDehumStereoRequest): MasteringRepairDehumResult"
+domain = "effects"
+rule = "one-positional-form"
+test = "bindings/node/tests/surface/effects-repair.test.ts::is request-only"
+
+[[entry]]
+kind = "function"
+old = "masteringRepairDenoiseClassicalLinked"
+changed = "request-only: masteringRepairDenoiseClassicalLinked(request: MasteringRepairDenoiseClassicalLinkedRequest): MasteringRepairDenoiseClassicalResult"
+domain = "effects"
+rule = "one-positional-form"
+test = "bindings/node/tests/surface/effects-repair.test.ts::is request-only"
+
+[[entry]]
+kind = "function"
+old = "masteringRepairDenoiseClassicalStereo"
+changed = "request-only: masteringRepairDenoiseClassicalStereo(request: MasteringRepairDenoiseClassicalStereoRequest): MasteringRepairDenoiseClassicalResult"
+domain = "effects"
+rule = "one-positional-form"
+test = "bindings/node/tests/surface/effects-repair.test.ts::is request-only"
+
+[[entry]]
+kind = "function"
+old = "masteringRepairDereverbClassicalLinked"
+changed = "request-only: masteringRepairDereverbClassicalLinked(request: MasteringRepairDereverbClassicalLinkedRequest): MasteringRepairDereverbClassicalResult"
+domain = "effects"
+rule = "one-positional-form"
+test = "bindings/node/tests/surface/effects-repair.test.ts::is request-only"
+
+[[entry]]
+kind = "function"
+old = "masteringRepairDereverbClassicalStereo"
+changed = "request-only: masteringRepairDereverbClassicalStereo(request: MasteringRepairDereverbClassicalStereoRequest): MasteringRepairDereverbClassicalResult"
+domain = "effects"
+rule = "one-positional-form"
+test = "bindings/node/tests/surface/effects-repair.test.ts::is request-only"
+
+[[entry]]
+kind = "function"
+old = "masteringRepairDereverbConfigForRoom"
+changed = "request-only: masteringRepairDereverbConfigForRoom(request: MasteringRepairDereverbConfigForRoomRequest): Required<DereverbClassicalOptions>"
+domain = "effects"
+rule = "one-positional-form"
+test = "bindings/node/tests/surface/effects-repair.test.ts::masteringRepairDereverbConfigForRoom takes a request"
+
+[[entry]]
+kind = "function"
+old = "masteringRepairDetectClicks"
+changed = "one positional form (masteringRepairDetectClicks(samples, sampleRate, options?: DeclickOptions)); request form takes MasteringRepairDetectClicksRequest; returns ClickDetection"
+domain = "effects"
+rule = "one-positional-form"
+test = "bindings/node/tests/surface/effects-repair.test.ts::takes one positional form and a request, equivalently"
+
+[[entry]]
+kind = "function"
+old = "masteringRepairDetectClipping"
+changed = "one positional form (masteringRepairDetectClipping(samples, sampleRate, options?: DeclipOptions)); request form takes MasteringRepairDetectClippingRequest; returns ClipDetection"
+domain = "effects"
+rule = "one-positional-form"
+test = "bindings/node/tests/surface/effects-repair.test.ts::takes one positional form and a request, equivalently"
+
+[[entry]]
+kind = "function"
+old = "masteringRepairDetectCrackle"
+changed = "one positional form (masteringRepairDetectCrackle(samples, sampleRate, options?: DecrackleOptions)); request form takes MasteringRepairDetectCrackleRequest; returns CrackleDetection"
+domain = "effects"
+rule = "one-positional-form"
+test = "bindings/node/tests/surface/effects-repair.test.ts::takes one positional form and a request, equivalently"
+
+[[entry]]
+kind = "function"
+old = "masteringRepairDetectHum"
+changed = "one positional form (masteringRepairDetectHum(samples, sampleRate, options?: DehumOptions)); request form takes MasteringRepairDetectHumRequest; returns HumDetection"
+domain = "effects"
+rule = "one-positional-form"
+test = "bindings/node/tests/surface/effects-repair.test.ts::takes one positional form and a request, equivalently"
+
+[[entry]]
+kind = "function"
+old = "masteringRepairDetectNoiseFloor"
+changed = "one positional form (masteringRepairDetectNoiseFloor(samples, sampleRate, options?: DenoiseClassicalOptions)); request form takes MasteringRepairDetectNoiseFloorRequest; returns NoiseDetection"
+domain = "effects"
+rule = "one-positional-form"
+test = "bindings/node/tests/surface/effects-repair.test.ts::takes one positional form and a request, equivalently"
+
+[[entry]]
+kind = "function"
+old = "masteringRepairDetectReverb"
+changed = "one positional form (masteringRepairDetectReverb(samples, sampleRate, options?: DereverbClassicalOptions)); request form takes MasteringRepairDetectReverbRequest; returns ReverbDetection"
+domain = "effects"
+rule = "one-positional-form"
+test = "bindings/node/tests/surface/effects-repair.test.ts::takes one positional form and a request, equivalently"
+
+[[entry]]
+kind = "function"
+old = "masteringRepairDetectTrimRange"
+changed = "one positional form (masteringRepairDetectTrimRange(samples, sampleRate, options?: TrimSilenceOptions)); request form takes MasteringRepairDetectTrimRangeRequest; returns TrimRange"
+domain = "effects"
+rule = "one-positional-form"
+test = "bindings/node/tests/surface/effects-repair.test.ts::takes one positional form and a request, equivalently"
+
+[[entry]]
+kind = "function"
+old = "masteringRepairTrimSilenceStereo"
+changed = "request-only: masteringRepairTrimSilenceStereo(request: MasteringRepairTrimSilenceStereoRequest): MasteringRepairTrimSilenceResult"
+domain = "effects"
+rule = "one-positional-form"
+test = "bindings/node/tests/surface/effects-repair.test.ts::is request-only"
+
+[[entry]]
+kind = "type"
+old = "DeclickOptions"
+changed = "field list"
+domain = "effects"
+rule = "sample-rate-required"
+test = "bindings/node/tests/surface/effects-repair.test.ts::declares validate as an option"
+
+[[entry]]
+kind = "type"
+old = "DeclickStereoResult"
+changed = "renamed to MasteringRepairDeclickResult; shape {channels, reports}"
+domain = "effects"
+rule = "type-names"
+test = "bindings/node/tests/surface/effects-repair.test.ts::results are {channels, reports}"
+
+[[entry]]
+kind = "type"
+old = "DeclipOptions"
+changed = "field list"
+domain = "effects"
+rule = "sample-rate-required"
+test = "bindings/node/tests/surface/effects-repair.test.ts::declares validate as an option"
+
+[[entry]]
+kind = "type"
+old = "DeclipStereoResult"
+changed = "renamed to MasteringRepairDeclipResult; shape {channels, reports}"
+domain = "effects"
+rule = "type-names"
+test = "bindings/node/tests/surface/effects-repair.test.ts::results are {channels, reports}"
+
+[[entry]]
+kind = "type"
+old = "DecrackleOptions"
+changed = "field list"
+domain = "effects"
+rule = "sample-rate-required"
+test = "bindings/node/tests/surface/effects-repair.test.ts::declares validate as an option"
+
+[[entry]]
+kind = "type"
+old = "DecrackleStereoResult"
+changed = "renamed to MasteringRepairDecrackleResult; shape {channels, reports}"
+domain = "effects"
+rule = "type-names"
+test = "bindings/node/tests/surface/effects-repair.test.ts::results are {channels, reports}"
+
+[[entry]]
+kind = "type"
+old = "DehumOptions"
+changed = "field list"
+domain = "effects"
+rule = "sample-rate-required"
+test = "bindings/node/tests/surface/effects-repair.test.ts::declares validate as an option"
+
+[[entry]]
+kind = "type"
+old = "DehumStereoResult"
+changed = "renamed to MasteringRepairDehumResult; shape {channels, reports}"
+domain = "effects"
+rule = "type-names"
+test = "bindings/node/tests/surface/effects-repair.test.ts::results are {channels, reports}"
+
+[[entry]]
+kind = "type"
+old = "DenoiseClassicalOptions"
+changed = "field list"
+domain = "effects"
+rule = "sample-rate-required"
+test = "bindings/node/tests/surface/effects-repair.test.ts::declares validate as an option"
+
+[[entry]]
+kind = "type"
+old = "DenoiseLinkedResult"
+removed = true
+domain = "effects"
+rule = "type-names"
+
+[[entry]]
+kind = "type"
+old = "DenoiseStereoResult"
+changed = "renamed to MasteringRepairDenoiseClassicalResult; shape {channels, reports}"
+domain = "effects"
+rule = "type-names"
+test = "bindings/node/tests/surface/effects-repair.test.ts::results are {channels, reports}"
+
+[[entry]]
+kind = "type"
+old = "DereverbClassicalOptions"
+changed = "field list"
+domain = "effects"
+rule = "sample-rate-required"
+test = "bindings/node/tests/surface/effects-repair.test.ts::declares validate as an option"
+
+[[entry]]
+kind = "type"
+old = "DereverbLinkedResult"
+removed = true
+domain = "effects"
+rule = "type-names"
+
+[[entry]]
+kind = "type"
+old = "DereverbStereoResult"
+changed = "renamed to MasteringRepairDereverbClassicalResult; shape {channels, reports}"
+domain = "effects"
+rule = "type-names"
+test = "bindings/node/tests/surface/effects-repair.test.ts::results are {channels, reports}"
+
+[[entry]]
+kind = "type"
+old = "MasteringRepairAnalyzeRequest"
+changed = "field list"
+domain = "effects"
+rule = "sample-rate-required"
+test = "bindings/node/tests/surface/effects-repair.test.ts::declares validate as an option"
+
+[[entry]]
+kind = "type"
+old = "MasteringRepairApplyRequest"
+changed = "field list"
+domain = "effects"
+rule = "sample-rate-required"
+test = "bindings/node/tests/surface/effects-repair.test.ts::declares validate as an option"
+
+[[entry]]
+kind = "type"
+old = "MasteringRepairDeclickRequest"
+changed = "field list"
+domain = "effects"
+rule = "sample-rate-required"
+test = "bindings/node/tests/surface/effects-repair.test.ts::declares validate as an option"
+
+[[entry]]
+kind = "type"
+old = "MasteringRepairDeclickStereoRequest"
+changed = "field list"
+domain = "effects"
+rule = "sample-rate-required"
+test = "bindings/node/tests/surface/effects-repair.test.ts::declares validate as an option"
+
+[[entry]]
+kind = "type"
+old = "MasteringRepairDeclipRequest"
+changed = "field list"
+domain = "effects"
+rule = "sample-rate-required"
+test = "bindings/node/tests/surface/effects-repair.test.ts::declares validate as an option"
+
+[[entry]]
+kind = "type"
+old = "MasteringRepairDeclipStereoRequest"
+changed = "field list"
+domain = "effects"
+rule = "sample-rate-required"
+test = "bindings/node/tests/surface/effects-repair.test.ts::declares validate as an option"
+
+[[entry]]
+kind = "type"
+old = "MasteringRepairDecrackleRequest"
+changed = "field list"
+domain = "effects"
+rule = "sample-rate-required"
+test = "bindings/node/tests/surface/effects-repair.test.ts::declares validate as an option"
+
+[[entry]]
+kind = "type"
+old = "MasteringRepairDecrackleStereoRequest"
+changed = "field list"
+domain = "effects"
+rule = "sample-rate-required"
+test = "bindings/node/tests/surface/effects-repair.test.ts::declares validate as an option"
+
+[[entry]]
+kind = "type"
+old = "MasteringRepairDehumRequest"
+changed = "field list"
+domain = "effects"
+rule = "sample-rate-required"
+test = "bindings/node/tests/surface/effects-repair.test.ts::declares validate as an option"
+
+[[entry]]
+kind = "type"
+old = "MasteringRepairDehumStereoRequest"
+changed = "field list"
+domain = "effects"
+rule = "sample-rate-required"
+test = "bindings/node/tests/surface/effects-repair.test.ts::declares validate as an option"
+
+[[entry]]
+kind = "type"
+old = "MasteringRepairDenoiseClassicalLinkedRequest"
+changed = "field list"
+domain = "effects"
+rule = "sample-rate-required"
+test = "bindings/node/tests/surface/effects-repair.test.ts::declares validate as an option"
+
+[[entry]]
+kind = "type"
+old = "MasteringRepairDenoiseClassicalRequest"
+changed = "field list"
+domain = "effects"
+rule = "sample-rate-required"
+test = "bindings/node/tests/surface/effects-repair.test.ts::declares validate as an option"
+
+[[entry]]
+kind = "type"
+old = "MasteringRepairDenoiseClassicalStereoRequest"
+changed = "field list"
+domain = "effects"
+rule = "sample-rate-required"
+test = "bindings/node/tests/surface/effects-repair.test.ts::declares validate as an option"
+
+[[entry]]
+kind = "type"
+old = "MasteringRepairDereverbClassicalLinkedRequest"
+changed = "field list"
+domain = "effects"
+rule = "sample-rate-required"
+test = "bindings/node/tests/surface/effects-repair.test.ts::declares validate as an option"
+
+[[entry]]
+kind = "type"
+old = "MasteringRepairDereverbClassicalRequest"
+changed = "field list"
+domain = "effects"
+rule = "sample-rate-required"
+test = "bindings/node/tests/surface/effects-repair.test.ts::declares validate as an option"
+
+[[entry]]
+kind = "type"
+old = "MasteringRepairDereverbClassicalStereoRequest"
+changed = "field list"
+domain = "effects"
+rule = "sample-rate-required"
+test = "bindings/node/tests/surface/effects-repair.test.ts::declares validate as an option"
+
+[[entry]]
+kind = "type"
+old = "MasteringRepairDetectClicksRequest"
+changed = "field list"
+domain = "effects"
+rule = "sample-rate-required"
+test = "bindings/node/tests/surface/effects-repair.test.ts::declares validate as an option"
+
+[[entry]]
+kind = "type"
+old = "MasteringRepairDetectClippingRequest"
+changed = "field list"
+domain = "effects"
+rule = "sample-rate-required"
+test = "bindings/node/tests/surface/effects-repair.test.ts::declares validate as an option"
+
+[[entry]]
+kind = "type"
+old = "MasteringRepairDetectCrackleRequest"
+changed = "field list"
+domain = "effects"
+rule = "sample-rate-required"
+test = "bindings/node/tests/surface/effects-repair.test.ts::declares validate as an option"
+
+[[entry]]
+kind = "type"
+old = "MasteringRepairDetectHumRequest"
+changed = "field list"
+domain = "effects"
+rule = "sample-rate-required"
+test = "bindings/node/tests/surface/effects-repair.test.ts::declares validate as an option"
+
+[[entry]]
+kind = "type"
+old = "MasteringRepairDetectNoiseFloorRequest"
+changed = "field list"
+domain = "effects"
+rule = "sample-rate-required"
+test = "bindings/node/tests/surface/effects-repair.test.ts::declares validate as an option"
+
+[[entry]]
+kind = "type"
+old = "MasteringRepairDetectReverbRequest"
+changed = "field list"
+domain = "effects"
+rule = "sample-rate-required"
+test = "bindings/node/tests/surface/effects-repair.test.ts::declares validate as an option"
+
+[[entry]]
+kind = "type"
+old = "MasteringRepairDetectTrimRangeRequest"
+changed = "field list"
+domain = "effects"
+rule = "sample-rate-required"
+test = "bindings/node/tests/surface/effects-repair.test.ts::declares validate as an option"
+
+[[entry]]
+kind = "type"
+old = "MasteringRepairDetectTrimRangeStereoRequest"
+changed = "field list"
+domain = "effects"
+rule = "sample-rate-required"
+test = "bindings/node/tests/surface/effects-repair.test.ts::declares validate as an option"
+
+[[entry]]
+kind = "type"
+old = "MasteringRepairNoiseBandBinsRequest"
+changed = "field list"
+domain = "effects"
+rule = "sample-rate-required"
+test = "bindings/node/tests/surface/effects-repair.test.ts::masteringRepairNoiseBandBins takes a request"
+
+[[entry]]
+kind = "type"
+old = "MasteringRepairStage"
+changed = "discriminated union: ({stage:'declick'} & Omit<DeclickOptions,'validate'>) | ({stage:'declip'} & Omit<DeclipOptions,'validate'>) | ({stage:'decrackle'} & Omit<DecrackleOptions,'validate'>) | ({stage:'dehum'} & Omit<DehumOptions,'validate'>) | ({stage:'denoise'} & Omit<DenoiseClassicalOptions,'validate'>) | ({stage:'dereverb'} & Omit<DereverbClassicalOptions,'validate'>)"
+domain = "effects"
+rule = "individual"
+test = "bindings/node/tests/surface/effects-repair.test.ts::stages are a discriminated union"
+
+[[entry]]
+kind = "type"
+old = "MasteringRepairTrimSilenceRequest"
+changed = "field list"
+domain = "effects"
+rule = "sample-rate-required"
+test = "bindings/node/tests/surface/effects-repair.test.ts::declares validate as an option"
+
+[[entry]]
+kind = "type"
+old = "MasteringRepairTrimSilenceStereoRequest"
+changed = "field list"
+domain = "effects"
+rule = "sample-rate-required"
+test = "bindings/node/tests/surface/effects-repair.test.ts::declares validate as an option"
+
+[[entry]]
+kind = "type"
+old = "TrimSilenceOptions"
+changed = "field list"
+domain = "analysis"
+rule = "sample-rate-required"
+test = "bindings/node/tests/surface/effects-repair.test.ts::declares validate as an option"
+
+[[entry]]
+kind = "type"
+old = "TrimSilenceStereoResult"
+changed = "renamed to MasteringRepairTrimSilenceResult; shape {channels, reports}"
+domain = "effects"
+rule = "type-names"
+test = "bindings/node/tests/surface/effects-repair.test.ts::results are {channels, reports}"
+
+[[entry]]
+kind = "field"
+old = "RealtimeVoiceChangerConfig.eqHighpassHz"
+changed = "eqHighpassHz -> eqHighPassHz"
+domain = "effects"
+rule = "high-pass"
+test = "bindings/node/tests/surface/effects-voice.test.ts::preset config uses the unified field names"
+
+[[entry]]
+kind = "field"
+old = "RealtimeVoiceChangerConfig.formantMode"
+changed = "'relative'|'absolute' -> FormantMode"
+domain = "effects"
+rule = "type-names"
+test = "bindings/node/tests/surface/effects-voice.test.ts::preset config uses the unified field names"
+
+[[entry]]
+kind = "field"
+old = "RealtimeVoiceChangerConfig.harmonyStep1"
+removed = true
+domain = "effects"
+rule = "individual"
+
+[[entry]]
+kind = "field"
+old = "RealtimeVoiceChangerConfig.harmonyStep2"
+removed = true
+domain = "effects"
+rule = "individual"
+
+[[entry]]
+kind = "field"
+old = "RealtimeVoiceChangerConfig.harmonyStep3"
+removed = true
+domain = "effects"
+rule = "individual"
+
+[[entry]]
+kind = "field"
+old = "RealtimeVoiceChangerConfig.retuneGrainSize"
+changed = "retuneGrainSize -> retuneGrainSizeSamples"
+domain = "effects"
+rule = "unit-in-name"
+test = "bindings/node/tests/surface/effects-voice.test.ts::preset config uses the unified field names"
+
+[[entry]]
+kind = "field"
+old = "RealtimeVoiceChangerConfig.retuneSemitones"
+changed = "retuneSemitones -> retunePitchSemitones"
+domain = "effects"
+rule = "pitch-semitones"
+test = "bindings/node/tests/surface/effects-voice.test.ts::preset config uses the unified field names"
+
+[[entry]]
+kind = "field"
+old = "RealtimeVoiceChangerConfig.reverbVariationVariation"
+changed = "reverbVariationVariation -> reverbVariation"
+domain = "effects"
+rule = "individual"
+test = "bindings/node/tests/surface/effects-voice.test.ts::preset config uses the unified field names"
+
+[[entry]]
+kind = "field"
+old = "RealtimeVoiceChangerConfig.voiceEngineEngine"
+changed = "voiceEngineEngine -> voiceEngine"
+domain = "effects"
+rule = "individual"
+test = "bindings/node/tests/surface/effects-voice.test.ts::preset config uses the unified field names"
+
+[[entry]]
+kind = "field"
+old = "RealtimeVoiceChangerOptions.channels"
+changed = "channels -> numChannels (1 | 2, default 1)"
+domain = "effects"
+rule = "num-channels"
+test = "bindings/node/tests/surface/effects-voice.test.ts::refuses the old option"
+
+[[entry]]
+kind = "field"
+old = "RealtimeVoiceChangerOptions.preset"
+changed = "preset -> config (RealtimeVoiceChangerConfigInput, default 'neutralMonitor')"
+domain = "effects"
+rule = "individual"
+test = "bindings/node/tests/surface/effects-voice.test.ts::refuses the old option"
+
+[[entry]]
+kind = "field"
+old = "StreamingRetuneConfig.grainSize"
+changed = "grainSize -> grainSizeSamples (grain size in samples; absent = derived from the sample rate; explicit 0 -> RangeError)"
+domain = "effects"
+rule = "absent-not-sentinel"
+test = "bindings/node/tests/surface/effects-voice.test.ts::names its controls pitchSemitones and grainSizeSamples"
+
+[[entry]]
+kind = "field"
+old = "StreamingRetuneConfig.semitones"
+changed = "semitones -> pitchSemitones (renamed)"
+domain = "effects"
+rule = "pitch-semitones"
+test = "bindings/node/tests/surface/effects-voice.test.ts::names its controls pitchSemitones and grainSizeSamples"
+
+[[entry]]
+kind = "field"
+old = "VoiceChangeRealtimeRequest.channels"
+changed = "the planar input itself, one or two Float32Array channels of equal length, instead of a channel count over interleaved samples"
+domain = "effects"
+rule = "sample-rate-required"
+test = "bindings/node/tests/surface/effects-voice.test.ts::voiceChangeRealtime is request-only and planar"
+
+[[entry]]
+kind = "field"
+old = "VoiceChangeRealtimeRequest.preset"
+changed = "preset -> config (RealtimeVoiceChangerConfigInput; default 'neutralMonitor')"
+domain = "effects"
+rule = "individual"
+test = "bindings/node/tests/surface/effects-voice.test.ts::voiceChangeRealtime is request-only and planar"
+
+[[entry]]
+kind = "field"
+old = "VoiceChangeRealtimeRequest.sampleRate"
+changed = "optional -> required (no default)"
+domain = "effects"
+rule = "sample-rate-required"
+test = "bindings/node/tests/surface/effects-voice.test.ts::voiceChangeRealtime is request-only and planar"
+
+[[entry]]
+kind = "field"
+old = "VoiceChangeRealtimeRequest.samples"
+changed = "samples -> channels (Float32Array[] (1 or 2 planar channels, equal lengths); was interleaved `samples` + count `channels`)"
+domain = "effects"
+rule = "num-channels"
+test = "bindings/node/tests/surface/effects-voice.test.ts::voiceChangeRealtime is request-only and planar"
+
+[[entry]]
+kind = "field"
+old = "VoiceChangeRequest.sampleRate"
+changed = "optional -> required (no default)"
+domain = "effects"
+rule = "sample-rate-required"
+test = "bindings/node/tests/surface/effects-voice.test.ts::voiceChange requires sampleRate in both forms"
+
+[[entry]]
+kind = "function"
+old = "RealtimeVoiceChanger"
+changed = "constructor(options: RealtimeVoiceChangerOptions) (fields preset -> config, channels -> numChannels)"
+domain = "effects"
+rule = "individual"
+test = "bindings/node/tests/surface/effects-voice.test.ts::takes one options object with sampleRate required"
+
+[[entry]]
+kind = "function"
+old = "realtimeVoiceChangerPresetConfig"
+changed = "realtimeVoiceChangerPresetConfig(preset: VoicePresetId): RealtimeVoiceChangerConfig; numeric ordinals refused (TypeError)"
+domain = "effects"
+rule = "string-closed-sets"
+test = "bindings/node/tests/surface/effects-voice.test.ts::preset config and preset JSON refuse"
+
+[[entry]]
+kind = "function"
+old = "validateRealtimeVoiceChangerPresetJson"
+changed = "renamed to realtimeVoiceChangerValidatePresetJson(json: string): RealtimeVoiceChangerValidatePresetJsonResult"
+domain = "effects"
+rule = "type-names"
+test = "bindings/node/tests/surface/effects-voice.test.ts::renames the validator to its C name"
+
+[[entry]]
+kind = "function"
+old = "voiceChange"
+changed = "one positional form (voiceChange(samples, sampleRate, options?: VoiceChangeOptions)); request form takes VoiceChangeRequest; returns Float32Array"
+domain = "effects"
+rule = "one-positional-form"
+test = "bindings/node/tests/surface/effects-voice.test.ts::voiceChange requires sampleRate in both forms"
+
+[[entry]]
+kind = "function"
+old = "voiceChangeRealtime"
+changed = "request-only: voiceChangeRealtime(request: VoiceChangeRealtimeRequest): Float32Array[]"
+domain = "effects"
+rule = "one-positional-form"
+test = "bindings/node/tests/surface/effects-voice.test.ts::voiceChangeRealtime is request-only and planar"
+
+[[entry]]
+kind = "function"
+old = "voiceCharacterPresetId"
+changed = "voiceCharacterPresetId(ordinal: number): VoicePresetId; an unknown ordinal throws RangeError (was null); the string-identity input is removed"
+domain = "effects"
+rule = "individual"
+test = "bindings/node/tests/surface/effects-voice.test.ts::voiceCharacterPresetId refuses"
+
+[[entry]]
+kind = "method"
+old = "RealtimeVoiceChanger.latencySamples"
+changed = "readonly getter latencySamples: number"
+domain = "effects"
+rule = "getters"
+test = "bindings/node/tests/surface/effects-voice.test.ts::exposes latencySamples and nonFiniteDiscardCount as getters"
+
+[[entry]]
+kind = "method"
+old = "RealtimeVoiceChanger.nonFiniteDiscardCount"
+changed = "readonly getter nonFiniteDiscardCount: number"
+domain = "effects"
+rule = "getters"
+test = "bindings/node/tests/surface/effects-voice.test.ts::exposes latencySamples and nonFiniteDiscardCount as getters"
+
+[[entry]]
+kind = "method"
+old = "RealtimeVoiceChanger.processInterleaved"
+removed = true
+domain = "effects"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "method"
+old = "RealtimeVoiceChanger.processInterleavedInto"
+changed = "processInterleavedInto(input: Float32Array, numChannels: 1 | 2, output: Float32Array): void"
+domain = "effects"
+rule = "num-channels"
+test = "bindings/node/tests/surface/effects-voice.test.ts::require numChannels 1 or 2"
+
+[[entry]]
+kind = "method"
+old = "RealtimeVoiceChanger.processInterleavedWithCarrier"
+removed = true
+domain = "effects"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "method"
+old = "RealtimeVoiceChanger.processInterleavedWithCarrierInto"
+changed = "processInterleavedWithCarrierInto(input: Float32Array, carrier: Float32Array, numChannels: 1 | 2, output: Float32Array): void"
+domain = "effects"
+rule = "num-channels"
+test = "bindings/node/tests/surface/effects-voice.test.ts::require numChannels 1 or 2"
+
+[[entry]]
+kind = "method"
+old = "RealtimeVoiceChanger.processPlanarStereo"
+removed = true
+domain = "effects"
+rule = "individual"
+
+[[entry]]
+kind = "method"
+old = "RealtimeVoiceChanger.processPlanarStereoWithCarrier"
+removed = true
+domain = "effects"
+rule = "individual"
+
+[[entry]]
+kind = "method"
+old = "RealtimeVoiceChanger.setConfig"
+changed = "setConfig(config: RealtimeVoiceChangerConfigInput)"
+domain = "effects"
+rule = "individual"
+test = "bindings/node/tests/surface/effects-voice.test.ts::feeds a preset config back through the constructor and setConfig"
+
+[[entry]]
+kind = "method"
+old = "StreamingRetune.grainSize"
+changed = "readonly getter grainSizeSamples: number"
+domain = "effects"
+rule = "getters"
+test = "bindings/node/tests/surface/effects-voice.test.ts::names its controls pitchSemitones and grainSizeSamples"
+
+[[entry]]
+kind = "method"
+old = "StreamingRetune.latencySamples"
+changed = "readonly getter latencySamples: number"
+domain = "effects"
+rule = "getters"
+test = "bindings/node/tests/surface/effects-voice.test.ts::names its controls pitchSemitones and grainSizeSamples"
+
+[[entry]]
+kind = "type"
+old = "RealtimeVoiceChangerConfig"
+changed = "field list"
+domain = "effects"
+rule = "individual"
+test = "bindings/node/tests/surface/effects-voice.test.ts::preset config uses the unified field names"
+
+[[entry]]
+kind = "type"
+old = "RealtimeVoiceChangerOptions"
+changed = "field list"
+domain = "effects"
+rule = "individual"
+test = "bindings/node/tests/surface/effects-voice.test.ts::takes one options object with sampleRate required"
+
+[[entry]]
+kind = "type"
+old = "StreamingRetuneConfig"
+changed = "field list"
+domain = "effects"
+rule = "pitch-semitones"
+test = "bindings/node/tests/surface/effects-voice.test.ts::names its controls pitchSemitones and grainSizeSamples"
+
+[[entry]]
+kind = "type"
+old = "VoiceChangeRealtimeOptions"
+removed = true
+domain = "effects"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "type"
+old = "VoiceChangeRequest"
+changed = "field list"
+domain = "effects"
+rule = "sample-rate-required"
+test = "bindings/node/tests/surface/effects-voice.test.ts::voiceChange requires sampleRate in both forms"
+
+[[entry]]
+kind = "value"
+old = "CharacterType='bbd_chorus'"
+changed = "CharacterType='bbdChorus'"
+domain = "core"
+rule = "token-case"
+test = "bindings/node/tests/surface/effects-voice.test.ts::accepts the lowerCamel tokens"
+
+[[entry]]
+kind = "value"
+old = "NoteDivision='dotted_eighth'"
+changed = "NoteDivision='dottedEighth'"
+domain = "core"
+rule = "token-case"
+test = "bindings/node/tests/surface/effects-voice.test.ts::accepts the lowerCamel tokens"
+
+[[entry]]
+kind = "value"
+old = "ReverbVariation='dub_echo'"
+changed = "ReverbVariation='dubEcho'"
+domain = "core"
+rule = "token-case"
+test = "bindings/node/tests/surface/effects-voice.test.ts::accepts the lowerCamel tokens"
+
+[[entry]]
+kind = "value"
+old = "ReverbVariation='tempo_delay'"
+changed = "ReverbVariation='tempoDelay'"
+domain = "core"
+rule = "token-case"
+test = "bindings/node/tests/surface/effects-voice.test.ts::accepts the lowerCamel tokens"
+
+[[entry]]
+kind = "value"
+old = "VoicePresetId='bright-idol'"
+changed = "VoicePresetId='brightIdol'"
+domain = "core"
+rule = "token-case"
+test = "bindings/node/tests/surface/effects-voice.test.ts::names the presets in lowerCamel, in ordinal order"
+
+[[entry]]
+kind = "value"
+old = "VoicePresetId='choir-harmony'"
+changed = "VoicePresetId='choirHarmony'"
+domain = "core"
+rule = "token-case"
+test = "bindings/node/tests/surface/effects-voice.test.ts::names the presets in lowerCamel, in ordinal order"
+
+[[entry]]
+kind = "value"
+old = "VoicePresetId='dark-villain'"
+changed = "VoicePresetId='darkVillain'"
+domain = "core"
+rule = "token-case"
+test = "bindings/node/tests/surface/effects-voice.test.ts::names the presets in lowerCamel, in ordinal order"
+
+[[entry]]
+kind = "value"
+old = "VoicePresetId='deep-narrator'"
+changed = "VoicePresetId='deepNarrator'"
+domain = "core"
+rule = "token-case"
+test = "bindings/node/tests/surface/effects-voice.test.ts::names the presets in lowerCamel, in ordinal order"
+
+[[entry]]
+kind = "value"
+old = "VoicePresetId='hard-tune'"
+changed = "VoicePresetId='hardTune'"
+domain = "core"
+rule = "token-case"
+test = "bindings/node/tests/surface/effects-voice.test.ts::names the presets in lowerCamel, in ordinal order"
+
+[[entry]]
+kind = "value"
+old = "VoicePresetId='neutral-monitor'"
+changed = "VoicePresetId='neutralMonitor'"
+domain = "core"
+rule = "token-case"
+test = "bindings/node/tests/surface/effects-voice.test.ts::names the presets in lowerCamel, in ordinal order"
+
+[[entry]]
+kind = "value"
+old = "VoicePresetId='radio-voice'"
+changed = "VoicePresetId='radioVoice'"
+domain = "core"
+rule = "token-case"
+test = "bindings/node/tests/surface/effects-voice.test.ts::names the presets in lowerCamel, in ordinal order"
+
+[[entry]]
+kind = "value"
+old = "VoicePresetId='robot-mascot'"
+changed = "VoicePresetId='robotMascot'"
+domain = "core"
+rule = "token-case"
+test = "bindings/node/tests/surface/effects-voice.test.ts::names the presets in lowerCamel, in ordinal order"
+
+[[entry]]
+kind = "value"
+old = "VoicePresetId='robot-monotone'"
+changed = "VoicePresetId='robotMonotone'"
+domain = "core"
+rule = "token-case"
+test = "bindings/node/tests/surface/effects-voice.test.ts::names the presets in lowerCamel, in ordinal order"
+
+[[entry]]
+kind = "value"
+old = "VoicePresetId='soft-whisper'"
+changed = "VoicePresetId='softWhisper'"
+domain = "core"
+rule = "token-case"
+test = "bindings/node/tests/surface/effects-voice.test.ts::names the presets in lowerCamel, in ordinal order"
+
+[[entry]]
+kind = "value"
+old = "VoicePresetId='vocoder-strings'"
+changed = "VoicePresetId='vocoderStrings'"
+domain = "core"
+rule = "token-case"
+test = "bindings/node/tests/surface/effects-voice.test.ts::names the presets in lowerCamel, in ordinal order"
+
+[[entry]]
+kind = "field"
+old = "SpectralEditOptions.window"
+changed = "a WindowType name only: an ordinal is refused (TypeError), an unknown name (RangeError)"
+domain = "effects"
+rule = "token-case"
+test = "bindings/node/tests/surface/effects-notes.test.ts::spectralEdit takes a window by name only"

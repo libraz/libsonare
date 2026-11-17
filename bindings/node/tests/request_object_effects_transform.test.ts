@@ -6,7 +6,6 @@ import {
   percussive,
   pitchCorrectTimevarying,
   pitchCorrectToMidi,
-  pitchCorrectToMidiTimevarying,
   pitchShift,
   spectralEdit,
   timeStretch,
@@ -22,15 +21,15 @@ for (let i = 0; i < samples.length; i++) {
 describe('effects transform request-object compatibility', () => {
   it('preserves HPSS and basic transform calls', () => {
     expect(hpss({ samples, sampleRate, kernelHarmonic: 17, kernelPercussive: 19 })).toEqual(
-      hpss(samples, sampleRate, 17, 19),
+      hpss(samples, sampleRate, { kernelHarmonic: 17, kernelPercussive: 19 }),
     );
     expect(harmonic({ samples, sampleRate })).toEqual(harmonic(samples, sampleRate));
     expect(percussive({ samples, sampleRate })).toEqual(percussive(samples, sampleRate));
-    expect(timeStretch({ samples, sampleRate, rate: 1.25 })).toEqual(
-      timeStretch(samples, sampleRate, 1.25),
+    expect(timeStretch({ samples, sampleRate, speedRatio: 1.25 })).toEqual(
+      timeStretch(samples, sampleRate, { speedRatio: 1.25 }),
     );
-    expect(pitchShift({ samples, sampleRate, semitones: 2 })).toEqual(
-      pitchShift(samples, sampleRate, 2),
+    expect(pitchShift({ samples, sampleRate, pitchSemitones: 2 })).toEqual(
+      pitchShift(samples, sampleRate, { pitchSemitones: 2 }),
     );
   });
 
@@ -38,7 +37,7 @@ describe('effects transform request-object compatibility', () => {
     const ops = [{ lowHz: 2000, highHz: 6000, gainDb: -6, mode: 'attenuate' as const }];
     const options = { nFft: 1024, hopLength: 256, window: 'hann' as const };
     expect(spectralEdit({ samples, sampleRate, ops, ...options })).toEqual(
-      spectralEdit(samples, sampleRate, ops, options),
+      spectralEdit(samples, sampleRate, { ops, ...options }),
     );
   });
 
@@ -49,25 +48,16 @@ describe('effects transform request-object compatibility', () => {
     const voicedProb = new Float32Array(f0Hz.length).fill(1);
 
     expect(pitchCorrectToMidi({ samples, sampleRate, currentMidi: 69, targetMidi: 71 })).toEqual(
-      pitchCorrectToMidi(samples, sampleRate, 69, 71),
+      pitchCorrectToMidi(samples, sampleRate, { currentMidi: 69, targetMidi: 71 }),
     );
-    expect(
-      pitchCorrectToMidiTimevarying({
-        samples,
-        sampleRate,
-        f0Hz,
-        targetMidi: 71,
-        hopLength,
-        voiced,
-        voicedProb,
-      }),
-    ).toEqual(
-      pitchCorrectToMidiTimevarying(samples, f0Hz, 71, sampleRate, hopLength, voiced, voicedProb),
+    const voicedRequest = { f0Hz, targetMidi: 71, hopLength, voiced, voicedProb };
+    expect(pitchCorrectTimevarying({ samples, sampleRate, ...voicedRequest })).toEqual(
+      pitchCorrectTimevarying(samples, sampleRate, voicedRequest),
     );
-    const correction = { mode: 'scale' as const, scaleRoot: 0, retuneAmount: 0.5 };
+    const correction = { targetMode: 'scale' as const, scaleRoot: 0, retuneAmount: 0.5 };
     expect(
       pitchCorrectTimevarying({ samples, sampleRate, f0Hz, hopLength, ...correction }),
-    ).toEqual(pitchCorrectTimevarying(samples, f0Hz, sampleRate, hopLength, correction));
+    ).toEqual(pitchCorrectTimevarying(samples, sampleRate, { f0Hz, hopLength, ...correction }));
     const stretch = { onsetSample: 0, offsetSample: samples.length, stretchRatio: 1.25 };
     expect(noteStretch({ samples, sampleRate, ...stretch })).toEqual(
       noteStretch(samples, sampleRate, stretch),
@@ -83,38 +73,26 @@ describe('effects transform request-object compatibility', () => {
     const flags = Array.from({ length: f0Hz.length }, (_, i) => i % 3 !== 0);
     const numeric = Int32Array.from(flags, (voiced) => (voiced ? 1 : 0));
 
-    const fromBooleans = pitchCorrectToMidiTimevarying(
-      samples,
+    const fromBooleans = pitchCorrectTimevarying(samples, sampleRate, {
       f0Hz,
-      71,
-      sampleRate,
       hopLength,
-      flags,
-    );
-    const fromInt32 = pitchCorrectToMidiTimevarying(
-      samples,
+      targetMidi: 71,
+      voiced: flags,
+    });
+    const fromInt32 = pitchCorrectTimevarying(samples, sampleRate, {
       f0Hz,
-      71,
-      sampleRate,
       hopLength,
-      numeric,
-    );
+      targetMidi: 71,
+      voiced: numeric,
+    });
     expect(fromBooleans).toEqual(fromInt32);
 
-    const allVoiced = pitchCorrectToMidiTimevarying(samples, f0Hz, 71, sampleRate, hopLength);
-    expect(fromBooleans.some((x, i) => Math.abs(x - allVoiced[i]) > 1e-6)).toBe(true);
-
-    expect(
-      pitchCorrectTimevarying(samples, f0Hz, sampleRate, hopLength, {
-        targetMidi: 71,
-        voiced: flags,
-      }),
-    ).toEqual(
-      pitchCorrectTimevarying(samples, f0Hz, sampleRate, hopLength, {
-        targetMidi: 71,
-        voiced: numeric,
-      }),
-    );
+    const allVoiced = pitchCorrectTimevarying(samples, sampleRate, {
+      f0Hz,
+      hopLength,
+      targetMidi: 71,
+    });
+    expect(fromBooleans.some((x, i) => Math.abs(x - (allVoiced[i] as number)) > 1e-6)).toBe(true);
   });
 
   // Both call shapes funnel through one private normalizer, so an invalid input
@@ -122,14 +100,18 @@ describe('effects transform request-object compatibility', () => {
   // not prove the error path stays in lockstep.
   it('throws identically on invalid input in both call forms', () => {
     const empty = new Float32Array(0);
-    const posShift = captureThrow(() => pitchShift(empty, sampleRate, 2));
-    const reqShift = captureThrow(() => pitchShift({ samples: empty, sampleRate, semitones: 2 }));
+    const posShift = captureThrow(() => pitchShift(empty, sampleRate, { pitchSemitones: 2 }));
+    const reqShift = captureThrow(() =>
+      pitchShift({ samples: empty, sampleRate, pitchSemitones: 2 }),
+    );
     expect(posShift.threw).toBe(true);
     expect(reqShift.threw).toBe(true);
     expect(reqShift.message).toBe(posShift.message);
 
-    const posStretch = captureThrow(() => timeStretch(empty, sampleRate, 1.25));
-    const reqStretch = captureThrow(() => timeStretch({ samples: empty, sampleRate, rate: 1.25 }));
+    const posStretch = captureThrow(() => timeStretch(empty, sampleRate, { speedRatio: 1.25 }));
+    const reqStretch = captureThrow(() =>
+      timeStretch({ samples: empty, sampleRate, speedRatio: 1.25 }),
+    );
     expect(posStretch.threw).toBe(true);
     expect(reqStretch.threw).toBe(true);
     expect(reqStretch.message).toBe(posStretch.message);
@@ -143,7 +125,7 @@ describe('spectralEdit requires an explicit sample rate', () => {
     // biome-ignore lint/suspicious/noExplicitAny: exercising the runtime guard with the required field omitted
     expect(captureThrow(() => spectralEdit({ samples, ops } as any)).threw).toBe(true);
     // biome-ignore lint/suspicious/noExplicitAny: positional form with an undefined sample rate
-    expect(captureThrow(() => spectralEdit(samples, undefined as any, ops)).threw).toBe(true);
+    expect(captureThrow(() => spectralEdit(samples, undefined as any, { ops })).threw).toBe(true);
   });
 
   it('accepts an explicit sample rate', () => {

@@ -133,7 +133,7 @@ describe('the addon and the WASM binding read one options bag one way', () => {
 
   /** The WASM `floatOption` field: `volume` sets `lateDelayMs` to sqrt(V) ms. */
   const wasmLateDelayMs = (volume?: unknown): number =>
-    wasmDereverbConfigForRoom(estimate(volume)).lateDelayMs;
+    wasmDereverbConfigForRoom({ estimate: estimate(volume) }).lateDelayMs;
 
   beforeAll(async () => {
     await wasmInit();

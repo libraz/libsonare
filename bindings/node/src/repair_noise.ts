@@ -4,22 +4,29 @@
 
 import {
   assertRepairGeometry,
-  type MasteringRepairSamplesRequest,
+  dehumReport,
+  denoiseReport,
+  humDetection,
+  noiseDetection,
+  pairedResult,
+  repairNativeOptions,
+  sharedReportResult,
 } from './internal/repair_common.js';
 import { addon } from './native.js';
 import type {
-  DehumStereoResult,
-  DenoiseLinkedResult,
-  DenoiseStereoResult,
   HumDetection,
+  MasteringRepairDehumResult,
+  MasteringRepairDenoiseClassicalResult,
+  MasteringRepairSamplesRequest,
   NoiseDetection,
 } from './types.js';
 import {
   assertAudioChannels,
   assertAudioInput,
   assertPositiveInteger,
-  optionsBag,
-  requestObject,
+  requestOnly,
+  sampleOneShot,
+  type ValidateOptions,
 } from './validation.js';
 
 /** Algorithms accepted by `masteringRepairDenoiseClassical`. */
@@ -29,7 +36,7 @@ export type DenoiseClassicalMode = 'logMmse' | 'mmseStsa' | 'spectralSubtraction
 export type DenoiseClassicalNoiseEstimator = 'quantile' | 'mcra' | 'imcra' | 'spp';
 
 /** Options for `masteringRepairDenoiseClassical`. */
-export interface DenoiseClassicalOptions {
+export interface DenoiseClassicalOptions extends ValidateOptions {
   mode?: DenoiseClassicalMode;
   noiseEstimator?: DenoiseClassicalNoiseEstimator;
   nFft?: number;
@@ -54,29 +61,28 @@ export function masteringRepairDenoiseClassical(
 ): Float32Array;
 export function masteringRepairDenoiseClassical(
   samples: Float32Array,
-  sampleRate?: number,
+  sampleRate: number,
   options?: DenoiseClassicalOptions,
 ): Float32Array;
-export function masteringRepairDenoiseClassical(
-  samples: Float32Array | MasteringRepairDenoiseClassicalRequest,
-  sampleRate = 22050,
-  options: DenoiseClassicalOptions = {},
-): Float32Array {
-  const request =
-    samples instanceof Float32Array
-      ? { samples, sampleRate, ...optionsBag('masteringRepairDenoiseClassical', options) }
-      : requestObject('masteringRepairDenoiseClassical', samples);
-  const resolvedSampleRate = request.sampleRate ?? 22050;
-  assertAudioInput('masteringRepairDenoiseClassical', request.samples, resolvedSampleRate, request);
-  assertRepairGeometry('masteringRepairDenoiseClassical', request);
-  return addon.masteringRepairDenoiseClassical(request.samples, resolvedSampleRate, request);
+export function masteringRepairDenoiseClassical(...args: unknown[]): Float32Array {
+  const r = sampleOneShot<MasteringRepairDenoiseClassicalRequest>(
+    'masteringRepairDenoiseClassical',
+    args,
+  );
+  assertAudioInput('masteringRepairDenoiseClassical', r.samples, r.sampleRate, r);
+  assertRepairGeometry('masteringRepairDenoiseClassical', r);
+  return addon.masteringRepairDenoiseClassical(
+    r.samples,
+    r.sampleRate,
+    repairNativeOptions('masteringRepairDenoiseClassical', r),
+  );
 }
 
 /** Request form of `masteringRepairDenoiseClassicalStereo`. */
 export interface MasteringRepairDenoiseClassicalStereoRequest extends DenoiseClassicalOptions {
   left: Float32Array;
   right: Float32Array;
-  sampleRate?: number;
+  sampleRate: number;
 }
 
 /**
@@ -85,7 +91,7 @@ export interface MasteringRepairDenoiseClassicalStereoRequest extends DenoiseCla
  *
  * The mask is built from the channel-summed power and applied unchanged to
  * both channels, so the pass cannot move an interchannel level or phase
- * difference. That is also why the result carries a single `report` rather
+ * difference. That is also why the result carries a single report rather
  * than one per channel: a pair would be two copies of one measurement and
  * would read as though the two could differ.
  *
@@ -105,40 +111,36 @@ export interface MasteringRepairDenoiseClassicalStereoRequest extends DenoiseCla
  *
  * @example
  * ```ts
- * const { left, right, report } = masteringRepairDenoiseClassicalStereo({
+ * const { channels, reports } = masteringRepairDenoiseClassicalStereo({
  *   left: leftSamples,
  *   right: rightSamples,
  *   sampleRate: 48000,
  *   reductionDb: 18,
  * });
- * console.log(report.detected.floorDbfs, report.meanReductionDb);
+ * console.log(reports[0].detected.floorDbfs, reports[0].meanReductionDb);
  * ```
  */
 export function masteringRepairDenoiseClassicalStereo(
   request: MasteringRepairDenoiseClassicalStereoRequest,
-): DenoiseStereoResult {
-  requestObject('masteringRepairDenoiseClassicalStereo', request, 'left');
-  const resolvedSampleRate = request.sampleRate ?? 22050;
-  assertAudioInput(
+): MasteringRepairDenoiseClassicalResult;
+export function masteringRepairDenoiseClassicalStereo(
+  ...args: unknown[]
+): MasteringRepairDenoiseClassicalResult {
+  const r = requestOnly<MasteringRepairDenoiseClassicalStereoRequest>(
     'masteringRepairDenoiseClassicalStereo',
-    request.left,
-    resolvedSampleRate,
-    request,
-    'left',
+    args,
   );
-  assertAudioInput(
-    'masteringRepairDenoiseClassicalStereo',
-    request.right,
-    resolvedSampleRate,
-    request,
-    'right',
-  );
-  assertRepairGeometry('masteringRepairDenoiseClassicalStereo', request);
-  return addon.masteringRepairDenoiseClassicalStereo(
-    request.left,
-    request.right,
-    resolvedSampleRate,
-    request,
+  assertAudioInput('masteringRepairDenoiseClassicalStereo', r.left, r.sampleRate, r, 'left');
+  assertAudioInput('masteringRepairDenoiseClassicalStereo', r.right, r.sampleRate, r, 'right');
+  assertRepairGeometry('masteringRepairDenoiseClassicalStereo', r);
+  return sharedReportResult(
+    addon.masteringRepairDenoiseClassicalStereo(
+      r.left,
+      r.right,
+      r.sampleRate,
+      repairNativeOptions('masteringRepairDenoiseClassicalStereo', r),
+    ),
+    denoiseReport,
   );
 }
 
@@ -146,7 +148,7 @@ export function masteringRepairDenoiseClassicalStereo(
 export interface MasteringRepairDenoiseClassicalLinkedRequest extends DenoiseClassicalOptions {
   /** One plane per channel, all of the same length. At least one. */
   channels: Float32Array[];
-  sampleRate?: number;
+  sampleRate: number;
 }
 
 /**
@@ -157,7 +159,7 @@ export interface MasteringRepairDenoiseClassicalLinkedRequest extends DenoiseCla
  * the same guarantee for the whole set: the mask is built from the
  * channel-summed power and applied unchanged to every channel, so no
  * interchannel level or phase difference moves however many channels there are.
- * That is also why the result carries a single `report` rather than one per
+ * That is also why the result carries a single report rather than one per
  * channel. One channel reproduces {@link masteringRepairDenoiseClassical}
  * sample for sample, and two reproduce
  * {@link masteringRepairDenoiseClassicalStereo} plane for plane, `channels[0]`
@@ -182,27 +184,34 @@ export interface MasteringRepairDenoiseClassicalLinkedRequest extends DenoiseCla
  *
  * @example
  * ```ts
- * const { channels, report } = masteringRepairDenoiseClassicalLinked({
+ * const { channels, reports } = masteringRepairDenoiseClassicalLinked({
  *   channels: [left, right, centre],
  *   sampleRate: 48000,
  *   reductionDb: 18,
  * });
- * console.log(channels.length, report.detected.floorDbfs);
+ * console.log(channels.length, reports[0].detected.floorDbfs);
  * ```
  */
 export function masteringRepairDenoiseClassicalLinked(
   request: MasteringRepairDenoiseClassicalLinkedRequest,
-): DenoiseLinkedResult {
-  requestObject('masteringRepairDenoiseClassicalLinked', request, 'request', true);
-  const resolvedSampleRate = request.sampleRate ?? 22050;
-  assertAudioChannels(
+): MasteringRepairDenoiseClassicalResult;
+export function masteringRepairDenoiseClassicalLinked(
+  ...args: unknown[]
+): MasteringRepairDenoiseClassicalResult {
+  const r = requestOnly<MasteringRepairDenoiseClassicalLinkedRequest>(
     'masteringRepairDenoiseClassicalLinked',
-    request.channels,
-    resolvedSampleRate,
-    request,
+    args,
   );
-  assertRepairGeometry('masteringRepairDenoiseClassicalLinked', request);
-  return addon.masteringRepairDenoiseClassicalLinked(request.channels, resolvedSampleRate, request);
+  assertAudioChannels('masteringRepairDenoiseClassicalLinked', r.channels, r.sampleRate, r);
+  assertRepairGeometry('masteringRepairDenoiseClassicalLinked', r);
+  return sharedReportResult(
+    addon.masteringRepairDenoiseClassicalLinked(
+      r.channels,
+      r.sampleRate,
+      repairNativeOptions('masteringRepairDenoiseClassicalLinked', r),
+    ),
+    denoiseReport,
+  );
 }
 
 /**
@@ -216,7 +225,7 @@ export function masteringRepairDenoiseClassicalLinked(
 export type DehumMode = 'subtract' | 'notch';
 
 /** Options for `masteringRepairDehum`. */
-export interface DehumOptions {
+export interface DehumOptions extends ValidateOptions {
   fundamentalHz?: number;
   harmonics?: number;
   q?: number;
@@ -235,28 +244,24 @@ export interface MasteringRepairDehumRequest extends MasteringRepairSamplesReque
 export function masteringRepairDehum(request: MasteringRepairDehumRequest): Float32Array;
 export function masteringRepairDehum(
   samples: Float32Array,
-  sampleRate?: number,
+  sampleRate: number,
   options?: DehumOptions,
 ): Float32Array;
-export function masteringRepairDehum(
-  samples: Float32Array | MasteringRepairDehumRequest,
-  sampleRate = 22050,
-  options: DehumOptions = {},
-): Float32Array {
-  const request =
-    samples instanceof Float32Array
-      ? { samples, sampleRate, ...optionsBag('masteringRepairDehum', options) }
-      : requestObject('masteringRepairDehum', samples);
-  const resolvedSampleRate = request.sampleRate ?? 22050;
-  assertAudioInput('masteringRepairDehum', request.samples, resolvedSampleRate, request);
-  return addon.masteringRepairDehum(request.samples, resolvedSampleRate, request);
+export function masteringRepairDehum(...args: unknown[]): Float32Array {
+  const r = sampleOneShot<MasteringRepairDehumRequest>('masteringRepairDehum', args);
+  assertAudioInput('masteringRepairDehum', r.samples, r.sampleRate, r);
+  return addon.masteringRepairDehum(
+    r.samples,
+    r.sampleRate,
+    repairNativeOptions('masteringRepairDehum', r),
+  );
 }
 
 /** Request form of `masteringRepairDehumStereo`. */
 export interface MasteringRepairDehumStereoRequest extends DehumOptions {
   left: Float32Array;
   right: Float32Array;
-  sampleRate?: number;
+  sampleRate: number;
 }
 
 /**
@@ -264,7 +269,7 @@ export interface MasteringRepairDehumStereoRequest extends DehumOptions {
  *
  * With `adaptive` set, mains hum is one physical source: the tracker reads
  * the channel mean and both cascades follow the one frequency it finds, so
- * `leftReport.appliedFundamentalHz` and `rightReport.appliedFundamentalHz`
+ * `reports[0].appliedFundamentalHz` and `reports[1].appliedFundamentalHz`
  * (and `fundamentalDriftHz`) are identical by construction, even when the two
  * channels carry different hum. Only the frequency is shared -- each channel
  * keeps its own filter state, and each report's `detected` still measures
@@ -276,18 +281,20 @@ export interface MasteringRepairDehumStereoRequest extends DehumOptions {
  */
 export function masteringRepairDehumStereo(
   request: MasteringRepairDehumStereoRequest,
-): DehumStereoResult {
-  requestObject('masteringRepairDehumStereo', request, 'left');
-  const resolvedSampleRate = request.sampleRate ?? 22050;
-  assertAudioInput('masteringRepairDehumStereo', request.left, resolvedSampleRate, request, 'left');
-  assertAudioInput(
-    'masteringRepairDehumStereo',
-    request.right,
-    resolvedSampleRate,
-    request,
-    'right',
+): MasteringRepairDehumResult;
+export function masteringRepairDehumStereo(...args: unknown[]): MasteringRepairDehumResult {
+  const r = requestOnly<MasteringRepairDehumStereoRequest>('masteringRepairDehumStereo', args);
+  assertAudioInput('masteringRepairDehumStereo', r.left, r.sampleRate, r, 'left');
+  assertAudioInput('masteringRepairDehumStereo', r.right, r.sampleRate, r, 'right');
+  return pairedResult(
+    addon.masteringRepairDehumStereo(
+      r.left,
+      r.right,
+      r.sampleRate,
+      repairNativeOptions('masteringRepairDehumStereo', r),
+    ),
+    dehumReport,
   );
-  return addon.masteringRepairDehumStereo(request.left, request.right, resolvedSampleRate, request);
 }
 
 /** Request form of `masteringRepairDetectNoiseFloor`. */
@@ -316,12 +323,26 @@ export interface MasteringRepairDetectNoiseFloorRequest
  */
 export function masteringRepairDetectNoiseFloor(
   request: MasteringRepairDetectNoiseFloorRequest,
-): NoiseDetection {
-  requestObject('masteringRepairDetectNoiseFloor', request, 'samples');
-  const resolvedSampleRate = request.sampleRate ?? 22050;
-  assertAudioInput('masteringRepairDetectNoiseFloor', request.samples, resolvedSampleRate, request);
-  assertRepairGeometry('masteringRepairDetectNoiseFloor', request);
-  return addon.masteringRepairDetectNoiseFloor(request.samples, resolvedSampleRate, request);
+): NoiseDetection;
+export function masteringRepairDetectNoiseFloor(
+  samples: Float32Array,
+  sampleRate: number,
+  options?: DenoiseClassicalOptions,
+): NoiseDetection;
+export function masteringRepairDetectNoiseFloor(...args: unknown[]): NoiseDetection {
+  const r = sampleOneShot<MasteringRepairDetectNoiseFloorRequest>(
+    'masteringRepairDetectNoiseFloor',
+    args,
+  );
+  assertAudioInput('masteringRepairDetectNoiseFloor', r.samples, r.sampleRate, r);
+  assertRepairGeometry('masteringRepairDetectNoiseFloor', r);
+  return noiseDetection(
+    addon.masteringRepairDetectNoiseFloor(
+      r.samples,
+      r.sampleRate,
+      repairNativeOptions('masteringRepairDetectNoiseFloor', r),
+    ),
+  );
 }
 
 /** Request form of `masteringRepairNoiseBandBins`. */
@@ -334,11 +355,9 @@ export interface MasteringRepairNoiseBandBinsRequest {
    */
   nFft?: number;
   /**
-   * Sample rate the bins belong to; positive.
-   *
-   * @defaultValue 22050
+   * Sample rate in Hz the bins belong to; a positive integer. Required.
    */
-  sampleRate?: number;
+  sampleRate: number;
 }
 
 /**
@@ -372,18 +391,16 @@ export interface MasteringRepairNoiseBandBinsRequest {
  */
 export function masteringRepairNoiseBandBins(
   request: MasteringRepairNoiseBandBinsRequest,
-): Int32Array {
-  requestObject('masteringRepairNoiseBandBins', request, 'request', true);
-  // Geometry only, no audio read: the core requires sample_rate > 0, not the
-  // [8000, 384000] audio-analysis bound the other repair entries carry. Only
-  // what the caller supplied, because the whole request travels to the addon's
-  // own options reader -- resolving a default here would check this file's guess
-  // at one the reader owns.
-  if (request.sampleRate !== undefined) {
-    assertPositiveInteger('masteringRepairNoiseBandBins', request.sampleRate, 'sampleRate');
+): Int32Array;
+export function masteringRepairNoiseBandBins(...args: unknown[]): Int32Array {
+  const r = requestOnly<MasteringRepairNoiseBandBinsRequest>('masteringRepairNoiseBandBins', args);
+  // Geometry only, no audio read: the core requires sample_rate > 0, not the audio-analysis range.
+  if (typeof r.sampleRate !== 'number') {
+    throw new TypeError('masteringRepairNoiseBandBins: sampleRate must be a number');
   }
-  assertRepairGeometry('masteringRepairNoiseBandBins', request);
-  return addon.masteringRepairNoiseBandBins(request);
+  assertPositiveInteger('masteringRepairNoiseBandBins', r.sampleRate, 'sampleRate');
+  assertRepairGeometry('masteringRepairNoiseBandBins', r);
+  return addon.masteringRepairNoiseBandBins({ nFft: r.nFft, sampleRate: r.sampleRate });
 }
 
 /** Request form of `masteringRepairDetectHum`. */
@@ -407,9 +424,20 @@ export interface MasteringRepairDetectHumRequest
  * console.log(detected.fundamentalHz, detected.fundamentalProminence);
  * ```
  */
-export function masteringRepairDetectHum(request: MasteringRepairDetectHumRequest): HumDetection {
-  requestObject('masteringRepairDetectHum', request, 'samples');
-  const resolvedSampleRate = request.sampleRate ?? 22050;
-  assertAudioInput('masteringRepairDetectHum', request.samples, resolvedSampleRate, request);
-  return addon.masteringRepairDetectHum(request.samples, resolvedSampleRate, request);
+export function masteringRepairDetectHum(request: MasteringRepairDetectHumRequest): HumDetection;
+export function masteringRepairDetectHum(
+  samples: Float32Array,
+  sampleRate: number,
+  options?: DehumOptions,
+): HumDetection;
+export function masteringRepairDetectHum(...args: unknown[]): HumDetection {
+  const r = sampleOneShot<MasteringRepairDetectHumRequest>('masteringRepairDetectHum', args);
+  assertAudioInput('masteringRepairDetectHum', r.samples, r.sampleRate, r);
+  return humDetection(
+    addon.masteringRepairDetectHum(
+      r.samples,
+      r.sampleRate,
+      repairNativeOptions('masteringRepairDetectHum', r),
+    ),
+  );
 }

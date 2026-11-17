@@ -96,7 +96,7 @@ function clipped(): Float32Array {
 
 /**
  * A clip run's plateau, surviving a gain change that has taken every sample
- * under `clipThreshold`. The scaling is uniform, so the flat top -- still bit-
+ * under `clipThresholdDb`. The scaling is uniform, so the flat top -- still bit-
  * identical runs at the signal's new peak -- is untouched by it.
  */
 function clippedThenAttenuated(): Float32Array {
@@ -156,7 +156,7 @@ describe('masteringRepairDetectNoiseFloor', () => {
 });
 
 describe('masteringRepairDetectClipping', () => {
-  it('counts samples at or past clipThreshold, and none in unclipped material', () => {
+  it('counts samples at or past clipThresholdDb, and none in unclipped material', () => {
     const detected = masteringRepairDetectClipping({ samples: clipped(), sampleRate: SR });
     expect(detected.sampleCount).toBeGreaterThan(0);
     expect(detected.sampleFraction).toBeCloseTo(detected.sampleCount / LENGTH, 5);
@@ -167,12 +167,12 @@ describe('masteringRepairDetectClipping', () => {
     ).toBe(0);
   });
 
-  it('reads clipThreshold and nothing else off the config', () => {
+  it('reads clipThresholdDb and nothing else off the config', () => {
     const base = masteringRepairDetectClipping({ samples: clipped(), sampleRate: SR });
     const raised = masteringRepairDetectClipping({
       samples: clipped(),
       sampleRate: SR,
-      clipThreshold: 0.999999,
+      clipThresholdDb: 20 * Math.log10(0.999999),
     });
     expect(raised.sampleCount).toBeLessThan(base.sampleCount);
     // The reconstruction fields describe a repair that does not run here, so
@@ -188,7 +188,7 @@ describe('masteringRepairDetectClipping', () => {
     ).toEqual(base);
   });
 
-  it('finds a flat top a gain change has carried under clipThreshold, where the threshold count misses it', () => {
+  it('finds a flat top a gain change has carried under clipThresholdDb, where the threshold count misses it', () => {
     const detected = masteringRepairDetectClipping({
       samples: clippedThenAttenuated(),
       sampleRate: SR,
@@ -203,7 +203,7 @@ describe('masteringRepairDetectClipping', () => {
   it('counts an unclipped full-scale sine at the threshold, where the flat-top count does not', () => {
     // The peak of an unclamped sine is a single smooth curve rather than a
     // plateau, so nothing here was ever clipped -- yet enough samples sit at
-    // or past the default clipThreshold near each peak to count as "clipped"
+    // or past the default clipThresholdDb near each peak to count as "clipped"
     // by the threshold criterion alone.
     const detected = masteringRepairDetectClipping({
       samples: tone(LENGTH, 440, 1.0),
@@ -441,7 +441,14 @@ describe('an omitted config is the library defaults', () => {
 
   for (const [name, omitted, spelled] of cases) {
     it(`${name} answers the same with no config as with an empty one`, () => {
-      expect(omitted()).toEqual(spelled());
+      // The addon hands back plain arrays where the facade types them as Float32Array.
+      const plain = (value: unknown) =>
+        JSON.parse(
+          JSON.stringify(value, (_key, item) =>
+            ArrayBuffer.isView(item) ? Array.from(item as Float32Array) : item,
+          ),
+        );
+      expect(plain(omitted())).toEqual(plain(spelled()));
     });
   }
 });

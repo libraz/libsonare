@@ -195,7 +195,7 @@ describe('the room measurement volume is read one way on both surfaces', () => {
   };
 
   const wasmLateDelayMs = (volume?: unknown): number =>
-    wasmDereverbConfigForRoom(estimate(volume)).lateDelayMs;
+    wasmDereverbConfigForRoom({ estimate: estimate(volume) }).lateDelayMs;
 
   it('answers two legitimate volumes with two different mixing times', () => {
     // Polack: lateDelayMs is sqrt(V) ms. The positive control for this field.

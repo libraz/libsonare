@@ -390,13 +390,11 @@ describe('explicit undefined reads as an omitted option', () => {
     const samples = new Float32Array(4096).map((_, i) =>
       Math.sin((2 * Math.PI * 440 * i) / sampleRate),
     );
-    const omitted = spectralEdit(samples, sampleRate, [
-      { lowHz: 1000, highHz: 3000, mode: 'mute' },
-    ]);
-    const explicit = spectralEdit(
-      samples,
-      sampleRate,
-      [
+    const omitted = spectralEdit(samples, sampleRate, {
+      ops: [{ lowHz: 1000, highHz: 3000, mode: 'mute' }],
+    });
+    const explicit = spectralEdit(samples, sampleRate, {
+      ops: [
         {
           lowHz: 1000,
           highHz: 3000,
@@ -406,8 +404,11 @@ describe('explicit undefined reads as an omitted option', () => {
           gainDb: undefined,
         },
       ],
-      { nFft: undefined, hopLength: undefined, healRadiusFrames: undefined, window: undefined },
-    );
+      nFft: undefined,
+      hopLength: undefined,
+      healRadiusFrames: undefined,
+      window: undefined,
+    });
     expect(Array.from(explicit)).toEqual(Array.from(omitted));
   });
 
@@ -498,14 +499,18 @@ describe('explicit undefined reads as an omitted option', () => {
     }
   });
 
-  it('applies the pitchCorrectTimevarying mode default for an explicit undefined', () => {
+  it('applies the pitchCorrectTimevarying targetMode default for an explicit undefined', () => {
     const sampleRate = 22050;
     const samples = new Float32Array(4096).map((_, i) =>
       Math.sin((2 * Math.PI * 220 * i) / sampleRate),
     );
     const f0Hz = new Float32Array(16).fill(220);
-    const omitted = pitchCorrectTimevarying(samples, f0Hz, sampleRate, 256, {});
-    const explicit = pitchCorrectTimevarying(samples, f0Hz, sampleRate, 256, { mode: undefined });
+    const omitted = pitchCorrectTimevarying(samples, sampleRate, { f0Hz, hopLength: 256 });
+    const explicit = pitchCorrectTimevarying(samples, sampleRate, {
+      f0Hz,
+      hopLength: 256,
+      targetMode: undefined,
+    });
     expect(Array.from(explicit)).toEqual(Array.from(omitted));
   });
 });
@@ -878,9 +883,13 @@ describe('an out-of-domain scalar is a RangeError across the addon readers', () 
     // The facade resolver in front of the addon was split the same way, so this
     // pins both halves of the path a caller actually travels.
     for (const frameLength of [12.5, Number.NaN, Number.POSITIVE_INFINITY]) {
-      expect(() => trim(tone, 22050, -60, frameLength, 512)).toThrow(RangeError);
+      expect(() => trim(tone, 22050, { thresholdDb: -60, frameLength, hopLength: 512 })).toThrow(
+        RangeError,
+      );
     }
-    expect(() => trim(tone, 22050, -60, 0, 512)).toThrow(RangeError);
+    expect(() => trim(tone, 22050, { thresholdDb: -60, frameLength: 0, hopLength: 512 })).toThrow(
+      RangeError,
+    );
   });
 
   it('the addon trim reader refuses a non-integer frame option with RangeError', () => {
@@ -895,8 +904,12 @@ describe('an out-of-domain scalar is a RangeError across the addon readers', () 
   });
 
   it('trim keeps TypeError for a non-number frame option, and still trims', () => {
-    expect(() => trim(tone, 22050, -60, 'x' as never, 512)).toThrow(TypeError);
-    expect(trim(tone, 22050, -60, 1024, 512)).toBeInstanceOf(Float32Array);
+    expect(() =>
+      trim(tone, 22050, { thresholdDb: -60, frameLength: 'x' as never, hopLength: 512 }),
+    ).toThrow(TypeError);
+    expect(
+      trim(tone, 22050, { thresholdDb: -60, frameLength: 1024, hopLength: 512 }),
+    ).toBeInstanceOf(Float32Array);
   });
 
   it('lufsInterleaved refuses a non-positive channel count with RangeError', () => {

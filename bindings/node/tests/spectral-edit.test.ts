@@ -49,7 +49,7 @@ function tonePower(samples: Float32Array, freq: number): number {
 describe('spectralEdit (Node)', () => {
   it('identity (no ops) preserves length and stays finite', () => {
     const samples = sine(440, 0.3);
-    const out = spectralEdit(samples, SR);
+    const out = spectralEdit(samples, SR, { ops: [] });
     expect(out).toBeInstanceOf(Float32Array);
     expect(out.length).toBe(samples.length);
     for (let i = 0; i < out.length; i += 97) {
@@ -65,10 +65,8 @@ describe('spectralEdit (Node)', () => {
     const beforeHigh = tonePower(samples, highHz);
     const beforeLow = tonePower(samples, lowHz);
 
-    const out = spectralEdit(
-      samples,
-      SR,
-      [
+    const out = spectralEdit(samples, SR, {
+      ops: [
         {
           startSample: 0,
           endSample: samples.length,
@@ -78,8 +76,10 @@ describe('spectralEdit (Node)', () => {
           mode: 'attenuate',
         },
       ],
-      { nFft: 2048, hopLength: 512, window: 'hann' },
-    );
+      nFft: 2048,
+      hopLength: 512,
+      window: 'hann',
+    });
 
     expect(out.length).toBe(samples.length);
 
@@ -94,35 +94,33 @@ describe('spectralEdit (Node)', () => {
 
   it('supports mute and gain modes', () => {
     const samples = twoTone(300, 4000, 0.3);
-    const muted = spectralEdit(samples, SR, [{ lowHz: 2000, highHz: 6000, mode: 'mute' }]);
+    const muted = spectralEdit(samples, SR, { ops: [{ lowHz: 2000, highHz: 6000, mode: 'mute' }] });
     expect(muted.length).toBe(samples.length);
     expect(tonePower(muted, 4000)).toBeLessThan(tonePower(samples, 4000) * 0.5);
 
-    const gained = spectralEdit(samples, SR, [
-      { lowHz: 2000, highHz: 6000, gainDb: 3, mode: 'gain' },
-    ]);
+    const gained = spectralEdit(samples, SR, {
+      ops: [{ lowHz: 2000, highHz: 6000, gainDb: 3, mode: 'gain' }],
+    });
     expect(gained.length).toBe(samples.length);
   });
 
   it('rejects an unknown mode string', () => {
     const samples = sine(440, 0.1);
-    expect(() => spectralEdit(samples, SR, [{ mode: 'not-a-mode' as never }])).toThrow(
+    expect(() => spectralEdit(samples, SR, { ops: [{ mode: 'not-a-mode' as never }] })).toThrow(
       /op\.mode must be one of/,
     );
   });
 
   it('rejects an unknown window string', () => {
     const samples = sine(440, 0.1);
-    expect(() => spectralEdit(samples, SR, [], { window: 'triangle' as never })).toThrow(
+    expect(() => spectralEdit(samples, SR, { ops: [], window: 'triangle' as never })).toThrow(
       /window must be one of/,
     );
   });
 
-  it('takes a window ordinal and reaches the same window the name does', () => {
-    // Both spellings are accepted on every surface, so a generated binding that
-    // emits the ordinal must not fall through to a different window. The name
-    // and the ordinal have to produce a bit-identical signal, and the members
-    // have to separate from each other, or the comparison proves nothing.
+  it('renders every window name distinctly', () => {
+    // The members have to separate from each other, or a name that fell through
+    // to another window would pass unnoticed.
     const samples = sine(440, 0.2);
     const ops = [
       {
@@ -135,7 +133,7 @@ describe('spectralEdit (Node)', () => {
       },
     ];
     const render = (window: unknown) =>
-      spectralEdit(samples, SR, ops, { nFft: 1024, hopLength: 256, window: window as never });
+      spectralEdit(samples, SR, { ops, nFft: 1024, hopLength: 256, window: window as never });
     const members: [string, number][] = [
       ['hann', 0],
       ['hamming', 1],
@@ -151,38 +149,35 @@ describe('spectralEdit (Node)', () => {
         ).not.toEqual(byName.get(members[j][0]));
       }
     }
-    for (const [name, ordinal] of members) {
-      expect(render(ordinal), `ordinal ${ordinal} did not reach ${name}`).toEqual(byName.get(name));
+  });
+
+  it('refuses a window ordinal rather than aliasing it to a name', () => {
+    const samples = sine(440, 0.1);
+    for (const ordinal of [0, 1, 2, 3]) {
+      expect(
+        () => spectralEdit(samples, SR, { ops: [], window: ordinal as never }),
+        `ordinal ${ordinal}`,
+      ).toThrow(TypeError);
     }
   });
 
-  it('rejects a window ordinal outside the enum, and a fractional one', () => {
+  it('refuses a non-string window of any kind', () => {
     const samples = sine(440, 0.1);
-    const render = (window: unknown) => spectralEdit(samples, SR, [], { window: window as never });
-    // The bound is the enum's own, so a member added later widens the accepted
-    // set rather than changing what the first rejected value means.
-    for (const value of [4, 5, -1]) {
-      expect(() => render(value), `ordinal ${value}`).toThrow(/unknown window/i);
+    const render = (window: unknown) =>
+      spectralEdit(samples, SR, { ops: [], window: window as never });
+    for (const value of [4, -1, 0.5, 1.5, 2 ** 32, Number.NaN, Number.POSITIVE_INFINITY, true]) {
+      expect(() => render(value), `window ${value}`).toThrow();
     }
-    // An ordinal is a member, not a magnitude: truncating 1.5 would select a
-    // window the caller never named.
-    for (const value of [0.5, 1.5]) {
-      expect(() => render(value), `ordinal ${value}`).toThrow(/must be an integer/i);
-    }
-    for (const value of [2 ** 32, Number.NaN, Number.POSITIVE_INFINITY]) {
-      expect(() => render(value), `ordinal ${value}`).toThrow(RangeError);
-    }
-    expect(() => render(true)).toThrow(/window name or a window ordinal/i);
   });
 
   it('rejects a non-array ops argument', () => {
     const samples = sine(440, 0.1);
     // biome-ignore lint/suspicious/noExplicitAny: deliberately wrong-typed arg
-    expect(() => spectralEdit(samples, SR, 'nope' as any)).toThrow();
+    expect(() => spectralEdit(samples, SR, { ops: 'nope' as any })).toThrow();
   });
 
   it.each([6, 1000, 2])('refuses nFft %i naming nFft and the power-of-two rule', (nFft) => {
-    expect(() => spectralEdit(sine(440, 0.1), SR, [{ mode: 'mute' }], { nFft })).toThrow(
+    expect(() => spectralEdit(sine(440, 0.1), SR, { ops: [{ mode: 'mute' }], nFft })).toThrow(
       /nFft must be a power of two/,
     );
   });

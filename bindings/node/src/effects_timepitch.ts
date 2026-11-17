@@ -3,112 +3,126 @@
  * correction onto a target pitch.
  */
 
-import type { EffectSamplesRequest } from './internal/effects_common.js';
 import { assertPitchTrackLengths, toVoicedInt32 } from './internal/effects_common.js';
 import { resolvePositiveIntegerOption } from './internal/feature_options.js';
 import { resolveEffectFftOptions } from './internal/fft_options.js';
 import { KEY_MODES } from './internal/key_modes.js';
 import { addon } from './native.js';
 import type {
-  AutoTuneKey,
   AutoTuneOptions,
   AutoTuneResult,
   PitchCorrectOptions,
-  VoicedFlags,
+  PitchTargetMode,
 } from './types.js';
+import type { OptionsOf, ValidateOptions } from './validation.js';
 import {
   assertAudioInput,
   assertClosedToken,
-  assertFiniteScalar,
+  assertFloatValue,
   assertPitchClass,
-  optionsBag,
-  requestObject,
+  assertPositiveFloatValue,
+  sampleOneShot,
 } from './validation.js';
 
-export interface TimeStretchRequest extends EffectSamplesRequest {
+const PITCH_TARGET_MODES: readonly PitchTargetMode[] = ['midi', 'scale'];
+
+// The addon still spells these `mode` and `referenceMidi`.
+function nativePitchOptions(
+  fnName: string,
+  options: { targetMode?: PitchTargetMode | null; scaleReferenceMidi?: number | null },
+): Record<string, unknown> {
+  const { targetMode, scaleReferenceMidi, ...rest } = options;
+  const native: Record<string, unknown> = { ...rest };
+  if (targetMode !== undefined && targetMode !== null) {
+    assertClosedToken(fnName, targetMode, PITCH_TARGET_MODES, 'targetMode');
+    native.mode = targetMode;
+  }
+  if (scaleReferenceMidi !== undefined && scaleReferenceMidi !== null) {
+    native.referenceMidi = scaleReferenceMidi;
+  }
+  return native;
+}
+
+/**
+ * Time-stretch request. `sampleRate` (Hz) and `speedRatio` are required; a
+ * missing field is a `TypeError`, a non-finite value a `RangeError`.
+ */
+export interface TimeStretchRequest extends ValidateOptions {
+  samples: Float32Array;
+  sampleRate: number;
   /**
    * Playback speed: `> 1` is faster and shorter (2 halves the duration), `< 1`
    * is slower and longer (0.5 doubles it). The opposite sense of
    * a note's `stretchRatio`, which is a duration ratio.
    */
-  rate: number;
+  speedRatio: number;
+  /** FFT size: an even integer >= 4. Default 2048. */
   nFft?: number;
+  /** Hop in samples, in `(0, nFft / 2]`. Default 512. */
   hopLength?: number;
 }
 
-export interface PitchShiftRequest extends EffectSamplesRequest {
-  semitones: number;
+/** Pitch-shift request. `sampleRate` (Hz) and `pitchSemitones` are required. */
+export interface PitchShiftRequest extends ValidateOptions {
+  samples: Float32Array;
+  sampleRate: number;
+  /** Shift in semitones: +12 is one octave up, -12 one octave down. */
+  pitchSemitones: number;
+  /** FFT size: an even integer >= 4. Default 2048. */
   nFft?: number;
+  /** Hop in samples, in `(0, nFft / 2]`. Default 512. */
   hopLength?: number;
 }
 
-export interface PitchCorrectToMidiRequest extends EffectSamplesRequest {
-  currentMidi?: number;
-  targetMidi?: number;
-}
-
-export interface PitchCorrectToMidiTimevaryingRequest extends EffectSamplesRequest {
-  f0Hz: Float32Array;
+/** Constant-interval correction request. `sampleRate` (Hz), `currentMidi` and `targetMidi` are required. */
+export interface PitchCorrectToMidiRequest extends ValidateOptions {
+  samples: Float32Array;
+  sampleRate: number;
+  /** MIDI note the audio currently sits on, in `[0, 127]`. */
+  currentMidi: number;
+  /** MIDI note to move it to, in `[0, 127]`. */
   targetMidi: number;
-  hopLength?: number;
-  voiced?: VoicedFlags | null;
-  voicedProb?: Float32Array | null;
 }
 
-export interface PitchCorrectTimevaryingRequest extends EffectSamplesRequest, PitchCorrectOptions {
-  f0Hz: Float32Array;
-  hopLength?: number;
+/** Contour-following correction request; the fields are {@link PitchCorrectOptions} plus the audio. */
+export interface PitchCorrectTimevaryingRequest extends PitchCorrectOptions {
+  samples: Float32Array;
+  sampleRate: number;
 }
 
-export interface AutoTuneRequest extends EffectSamplesRequest, AutoTuneOptions {
-  /**
-   * `'detect'` (default) finds the key with {@link detectKey}'s defaults; a
-   * `{ root, mode }` names it, as {@link detectKey}'s result does: `root` an
-   * integer pitch class `0..11` (`RangeError` otherwise, `TypeError` for a
-   * non-number), `mode` a {@link KeyMode} token (`RangeError` for an unknown one,
-   * `TypeError` for a non-string).
-   */
-  key?: 'detect' | AutoTuneKey;
+/** Auto-tune request; the fields are {@link AutoTuneOptions} plus the audio. `sampleRate` (Hz) is required. */
+export interface AutoTuneRequest extends AutoTuneOptions {
+  samples: Float32Array;
+  sampleRate: number;
 }
 
 /**
  * Time-stretch audio without changing pitch.
  *
+ * `options.nFft` is an even integer >= 4 (default 2048); `options.hopLength` is
+ * in `(0, nFft / 2]` (default 512), so frames overlap by at least half a window.
+ *
  * @param samples - Audio samples (mono, float32)
  * @param sampleRate - Sample rate in Hz
- * @param rate - Playback speed (0.5 = double duration, 2.0 = half duration); the
- *   opposite sense of the per-note `stretchRatio`, a duration ratio
- * @param nFft - FFT size: an even integer >= 4 (default 2048)
- * @param hopLength - Hop in samples, in `(0, nFft / 2]` (default 512), so
- *   frames overlap by at least half a window
+ * @param options - `speedRatio` (0.5 = double duration, 2.0 = half duration), required, and the FFT framing
  * @returns Time-stretched audio
+ * @throws TypeError for a missing `sampleRate` or `speedRatio`, RangeError for an out-of-domain one
  */
 export function timeStretch(request: TimeStretchRequest): Float32Array;
 export function timeStretch(
   samples: Float32Array,
   sampleRate: number,
-  rate: number,
-  nFft?: number,
-  hopLength?: number,
+  options: OptionsOf<TimeStretchRequest>,
 ): Float32Array;
-export function timeStretch(
-  samples: Float32Array | TimeStretchRequest,
-  sampleRate?: number,
-  rate?: number,
-  nFft?: number,
-  hopLength?: number,
-): Float32Array {
-  const request =
-    samples instanceof Float32Array
-      ? { samples, sampleRate, rate, nFft, hopLength }
-      : requestObject('timeStretch', samples);
-  assertAudioInput('timeStretch', request.samples, request.sampleRate ?? 22050, request);
-  assertFiniteScalar('timeStretch', request.rate as number, 'rate');
-  const fftOptions = resolveEffectFftOptions('timeStretch', request.nFft, request.hopLength);
+export function timeStretch(...args: unknown[]): Float32Array {
+  const r = sampleOneShot<TimeStretchRequest>('timeStretch', args);
+  assertAudioInput('timeStretch', r.samples, r.sampleRate, r);
+  assertPositiveFloatValue('timeStretch', r.speedRatio, 'speedRatio');
+  const fftOptions = resolveEffectFftOptions('timeStretch', r.nFft, r.hopLength);
   return addon.timeStretch(
-    request.samples,
-    request.sampleRate ?? 22050,
-    request.rate,
+    r.samples,
+    r.sampleRate,
+    r.speedRatio,
     fftOptions.nFft,
     fftOptions.hopLength,
   );
@@ -117,40 +131,30 @@ export function timeStretch(
 /**
  * Pitch-shift audio without changing duration.
  *
+ * `options.nFft` is an even integer >= 4 (default 2048); `options.hopLength` is
+ * in `(0, nFft / 2]` (default 512), so frames overlap by at least half a window.
+ *
  * @param samples - Audio samples (mono, float32)
  * @param sampleRate - Sample rate in Hz
- * @param semitones - Pitch shift in semitones (+12 = one octave up, -12 = one octave down)
- * @param nFft - FFT size: an even integer >= 4 (default 2048)
- * @param hopLength - Hop in samples, in `(0, nFft / 2]` (default 512), so
- *   frames overlap by at least half a window
+ * @param options - `pitchSemitones` (+12 = one octave up), required, and the FFT framing
  * @returns Pitch-shifted audio
+ * @throws TypeError for a missing `sampleRate` or `pitchSemitones`, RangeError for an out-of-domain one
  */
 export function pitchShift(request: PitchShiftRequest): Float32Array;
 export function pitchShift(
   samples: Float32Array,
   sampleRate: number,
-  semitones: number,
-  nFft?: number,
-  hopLength?: number,
+  options: OptionsOf<PitchShiftRequest>,
 ): Float32Array;
-export function pitchShift(
-  samples: Float32Array | PitchShiftRequest,
-  sampleRate?: number,
-  semitones?: number,
-  nFft?: number,
-  hopLength?: number,
-): Float32Array {
-  const request =
-    samples instanceof Float32Array
-      ? { samples, sampleRate, semitones, nFft, hopLength }
-      : requestObject('pitchShift', samples);
-  assertAudioInput('pitchShift', request.samples, request.sampleRate ?? 22050, request);
-  assertFiniteScalar('pitchShift', request.semitones as number, 'semitones');
-  const fftOptions = resolveEffectFftOptions('pitchShift', request.nFft, request.hopLength);
+export function pitchShift(...args: unknown[]): Float32Array {
+  const r = sampleOneShot<PitchShiftRequest>('pitchShift', args);
+  assertAudioInput('pitchShift', r.samples, r.sampleRate, r);
+  assertFloatValue('pitchShift', r.pitchSemitones, 'pitchSemitones');
+  const fftOptions = resolveEffectFftOptions('pitchShift', r.nFft, r.hopLength);
   return addon.pitchShift(
-    request.samples,
-    request.sampleRate ?? 22050,
-    request.semitones,
+    r.samples,
+    r.sampleRate,
+    r.pitchSemitones,
     fftOptions.nFft,
     fftOptions.hopLength,
   );
@@ -162,219 +166,81 @@ export function pitchShift(
  * The result has exactly the input length. Both endpoints must be finite, and
  * the whole interval is applied however large it is: they are validated to
  * [0, 127], so a two-octave move such as C3 -> C5 transposes by the full 24
- * semitones. Use
- * {@link pitchCorrectToMidiTimevarying} for a caller-supplied pitch contour and
- * retune glide.
+ * semitones. Use {@link pitchCorrectTimevarying} for a caller-supplied pitch
+ * contour and retune glide.
+ *
+ * @param samples - Audio samples (mono, float32)
+ * @param sampleRate - Sample rate in Hz
+ * @param options - `currentMidi` and `targetMidi`, both required
+ * @throws TypeError for a missing `sampleRate`, `currentMidi` or `targetMidi`
  */
 export function pitchCorrectToMidi(request: PitchCorrectToMidiRequest): Float32Array;
 export function pitchCorrectToMidi(
   samples: Float32Array,
-  sampleRate?: number,
-  currentMidi?: number,
-  targetMidi?: number,
+  sampleRate: number,
+  options: OptionsOf<PitchCorrectToMidiRequest>,
 ): Float32Array;
-export function pitchCorrectToMidi(
-  samples: Float32Array | PitchCorrectToMidiRequest,
-  sampleRate = 22050,
-  currentMidi = 69.0,
-  targetMidi = 69.0,
-): Float32Array {
-  const request =
-    samples instanceof Float32Array
-      ? { samples, sampleRate, currentMidi, targetMidi }
-      : requestObject('pitchCorrectToMidi', samples);
-  assertAudioInput('pitchCorrectToMidi', request.samples, request.sampleRate ?? 22050, request);
-  return addon.pitchCorrectToMidi(
-    request.samples,
-    request.sampleRate ?? 22050,
-    request.currentMidi ?? 69.0,
-    request.targetMidi ?? 69.0,
-  );
+export function pitchCorrectToMidi(...args: unknown[]): Float32Array {
+  const r = sampleOneShot<PitchCorrectToMidiRequest>('pitchCorrectToMidi', args);
+  assertAudioInput('pitchCorrectToMidi', r.samples, r.sampleRate, r);
+  assertFloatValue('pitchCorrectToMidi', r.currentMidi, 'currentMidi');
+  assertFloatValue('pitchCorrectToMidi', r.targetMidi, 'targetMidi');
+  return addon.pitchCorrectToMidi(r.samples, r.sampleRate, r.currentMidi, r.targetMidi);
 }
 
 /**
- * Contour-following ("time-varying") pitch correction toward a MIDI target.
+ * Contour-following ("time-varying") pitch correction toward a fixed MIDI note
+ * OR a musical scale, with tunable retune strength and vibrato preservation.
  *
- * Unlike {@link pitchCorrectToMidi} (a single constant transpose), this follows
- * the caller-supplied per-frame `f0Hz` contour and retunes every voiced frame
- * toward `targetMidi`, so vibrato/drift in the source is tracked rather than
- * flattened. When `voiced` is supplied (truthy = voiced), it takes precedence
- * over `voicedProb`; omitting it or passing `null` uses the probability array.
- * When both are omitted, every frame is treated as voiced. A false `voiced`
- * entry suppresses a positive F0 candidate, while a voiced frame whose F0 is
- * non-positive or non-finite is rejected as an invalid parameter. An `f0Hz` NaN
- * is accepted only when the corresponding `voiced` entry is falsy, matching
- * pYIN output. The
+ * It follows the caller-supplied per-frame `f0Hz` contour and retunes every
+ * voiced frame, so vibrato/drift in the source is tracked rather than
+ * flattened. `targetMode` selects a fixed-MIDI target (`'midi'`, default;
+ * `targetMidi`) or scale quantisation (`'scale'`); the retune knobs
+ * (`retuneAmount`, `maxCorrectionSemitones`, `retuneSpeedMs`,
+ * `vibratoThresholdCents`) shape natural-vs-robotic correction. For a constant
+ * transpose use {@link pitchCorrectToMidi}. When `voiced` is supplied (truthy =
+ * voiced), it takes precedence over `voicedProb`; omitting it or passing `null`
+ * uses the probability array. When both are omitted, every frame is treated as
+ * voiced. A false `voiced` entry suppresses a positive F0 candidate, while a
+ * voiced frame whose F0 is non-positive or non-finite is rejected as an invalid
+ * parameter. An `f0Hz` NaN is accepted only for a frame marked unvoiced. The
  * `voicedFlag` / `voicedProb` arrays of a {@link PitchResult} can be passed
  * through directly.
  *
  * @param samples - Audio samples (mono, float32)
- * @param f0Hz - Per-frame measured F0 in Hz (one entry per analysis frame)
- * @param targetMidi - Desired MIDI note number
  * @param sampleRate - Sample rate in Hz
- * @param hopLength - F0 frame-center spacing in samples; frame `i` is centered
- *   at sample `i * hopLength`, and nearest-frame voicing switches halfway
- *   between adjacent centers
- * @param voiced - Optional per-frame voiced flags; takes precedence over
- *   `voicedProb`
- * @param voicedProb - Optional per-frame voicing probability in `[0, 1]`, used
- *   when `voiced` is omitted or `null`
+ * @param options - `f0Hz` (required), `hopLength` (samples, default 512), target mode and retune knobs
  * @returns Pitch-corrected audio
- */
-export function pitchCorrectToMidiTimevarying(
-  request: PitchCorrectToMidiTimevaryingRequest,
-): Float32Array;
-export function pitchCorrectToMidiTimevarying(
-  samples: Float32Array,
-  f0Hz: Float32Array,
-  targetMidi: number,
-  sampleRate?: number,
-  hopLength?: number,
-  voiced?: VoicedFlags | null,
-  voicedProb?: Float32Array | null,
-): Float32Array;
-export function pitchCorrectToMidiTimevarying(
-  samples: Float32Array | PitchCorrectToMidiTimevaryingRequest,
-  f0Hz?: Float32Array,
-  targetMidi?: number,
-  sampleRate = 22050,
-  hopLength = 512,
-  voiced?: VoicedFlags | null,
-  voicedProb?: Float32Array | null,
-): Float32Array {
-  const request =
-    samples instanceof Float32Array
-      ? {
-          samples,
-          f0Hz: f0Hz as Float32Array,
-          targetMidi: targetMidi as number,
-          sampleRate,
-          hopLength,
-          voiced,
-          voicedProb,
-        }
-      : requestObject('pitchCorrectToMidiTimevarying', samples);
-  assertAudioInput(
-    'pitchCorrectToMidiTimevarying',
-    request.samples,
-    request.sampleRate ?? 22050,
-    request,
-  );
-  const nativeVoiced =
-    request.voiced != null
-      ? toVoicedInt32('pitchCorrectToMidiTimevarying', request.voiced)
-      : undefined;
-  assertPitchTrackLengths(
-    'pitchCorrectToMidiTimevarying',
-    request.f0Hz,
-    request.voiced,
-    request.voicedProb,
-  );
-  // Positivity only: the corrector requires a positive hop to place the contour
-  // and carries no further domain.
-  const resolvedHopLength = resolvePositiveIntegerOption(
-    'pitchCorrectToMidiTimevarying',
-    'hopLength',
-    request.hopLength,
-    512,
-  );
-  return addon.pitchCorrectToMidiTimevarying(
-    request.samples,
-    request.sampleRate ?? 22050,
-    request.f0Hz,
-    request.targetMidi,
-    resolvedHopLength,
-    nativeVoiced,
-    request.voicedProb ?? undefined,
-  );
-}
-
-/**
- * Contour-following pitch correction toward a fixed MIDI note OR a musical
- * scale, with tunable retune strength and vibrato preservation.
- *
- * Generalises {@link pitchCorrectToMidiTimevarying}: the same caller-supplied
- * per-frame `f0Hz` contour drives correction, but {@link options.mode} selects
- * between a fixed-MIDI target (`'midi'`, default) and scale quantisation
- * (`'scale'`), and the retune knobs (`retuneAmount`, `maxCorrectionSemitones`,
- * `retuneSpeedMs`, `vibratoThresholdCents`) shape natural-vs-robotic correction.
- * When `voiced` is supplied (truthy = voiced), it takes precedence over
- * `voicedProb`; omitting it or passing `null` uses the probability array. When
- * both are omitted, every frame is treated as voiced. A false `voiced` entry
- * suppresses a positive F0 candidate, while a voiced frame whose F0 is
- * non-positive or non-finite is rejected as an invalid parameter. An `f0Hz` NaN
- * is accepted only for a frame marked unvoiced.
- *
- * @param samples - Audio samples (mono, float32)
- * @param f0Hz - Per-frame measured F0 in Hz (one entry per analysis frame)
- * @param sampleRate - Sample rate in Hz
- * @param hopLength - F0 frame-center spacing in samples; frame `i` is centered
- *   at sample `i * hopLength`, and nearest-frame voicing switches halfway
- *   between adjacent centers
- * @param options - Target mode, retune knobs, and optional voiced/voicedProb arrays
- * @returns Pitch-corrected audio
+ * @throws TypeError for a missing `sampleRate` or `f0Hz`, RangeError for an unknown `targetMode`
  */
 export function pitchCorrectTimevarying(request: PitchCorrectTimevaryingRequest): Float32Array;
 export function pitchCorrectTimevarying(
   samples: Float32Array,
-  f0Hz: Float32Array,
-  sampleRate?: number,
-  hopLength?: number,
-  options?: PitchCorrectOptions,
+  sampleRate: number,
+  options: PitchCorrectOptions,
 ): Float32Array;
-export function pitchCorrectTimevarying(
-  samples: Float32Array | PitchCorrectTimevaryingRequest,
-  f0Hz?: Float32Array,
-  sampleRate = 22050,
-  hopLength = 512,
-  options: PitchCorrectOptions = {},
-): Float32Array {
-  const request =
-    samples instanceof Float32Array
-      ? {
-          samples,
-          f0Hz: f0Hz as Float32Array,
-          sampleRate,
-          hopLength,
-          ...optionsBag('pitchCorrectTimevarying', options),
-        }
-      : requestObject('pitchCorrectTimevarying', samples);
-  const {
-    samples: input,
-    sampleRate: requestSampleRate,
-    f0Hz: requestF0Hz,
-    hopLength: requestHopLength,
-    ...requestOptions
-  } = request;
-  assertAudioInput('pitchCorrectTimevarying', input, requestSampleRate ?? 22050, requestOptions);
+export function pitchCorrectTimevarying(...args: unknown[]): Float32Array {
+  const r = sampleOneShot<PitchCorrectTimevaryingRequest>('pitchCorrectTimevarying', args);
+  const { samples, sampleRate, f0Hz, hopLength, validate, voiced, voicedProb, ...rest } = r;
+  assertAudioInput('pitchCorrectTimevarying', samples, sampleRate, { validate });
+  if (!(f0Hz instanceof Float32Array)) {
+    throw new TypeError('pitchCorrectTimevarying: f0Hz must be a Float32Array');
+  }
   const nativeVoiced =
-    requestOptions.voiced != null
-      ? toVoicedInt32('pitchCorrectTimevarying', requestOptions.voiced)
-      : undefined;
-  assertPitchTrackLengths(
-    'pitchCorrectTimevarying',
-    requestF0Hz,
-    requestOptions.voiced,
-    requestOptions.voicedProb,
-  );
-  // Positivity only, as pitchCorrectToMidiTimevarying: the same corrector.
+    voiced != null ? toVoicedInt32('pitchCorrectTimevarying', voiced) : undefined;
+  assertPitchTrackLengths('pitchCorrectTimevarying', f0Hz, voiced, voicedProb);
+  // Positivity only: the corrector requires a positive hop to place the contour.
   const resolvedHopLength = resolvePositiveIntegerOption(
     'pitchCorrectTimevarying',
     'hopLength',
-    requestHopLength,
+    hopLength,
     512,
   );
-  return addon.pitchCorrectTimevarying(
-    input,
-    requestSampleRate ?? 22050,
-    requestF0Hz,
-    resolvedHopLength,
-    {
-      ...requestOptions,
-      voiced: nativeVoiced,
-      voicedProb: requestOptions.voicedProb ?? undefined,
-    },
-  );
+  return addon.pitchCorrectTimevarying(samples, sampleRate, f0Hz, resolvedHopLength, {
+    ...nativePitchOptions('pitchCorrectTimevarying', rest),
+    voiced: nativeVoiced,
+    voicedProb: voicedProb ?? undefined,
+  });
 }
 
 /**
@@ -386,24 +252,39 @@ export function pitchCorrectTimevarying(
  * as `retuneAmount`. The output has the input's length. Unvoiced stretches and
  * notes the corrector cannot repitch pass through unchanged.
  *
+ * `key` is `'detect'` (default) or a `{ root, mode }` as {@link detectKey}'s
+ * result has it: `root` an integer pitch class `0..11` (`RangeError` otherwise,
+ * `TypeError` for a non-number), `mode` a {@link KeyMode} token (`RangeError`
+ * for an unknown one, `TypeError` for a non-string).
+ *
  * @example
  * const { samples: tuned, key } = autoTune({ samples, sampleRate: 44100, strength: 0.8 });
  *
- * @param request - Audio, the key (`'detect'` or `{ root, mode }`) and the tuning knobs
+ * @param samples - Audio samples (mono, float32)
+ * @param sampleRate - Sample rate in Hz
+ * @param options - The key and the tuning knobs
  * @returns The corrected audio and the key it was tuned to
+ * @throws TypeError for a missing `sampleRate` or a malformed `key`
  */
-export function autoTune(request: AutoTuneRequest): AutoTuneResult {
-  requestObject('autoTune', request, 'request', true);
-  const { samples, sampleRate, key = 'detect', ...options } = request;
-  if (key !== 'detect' && (key === null || typeof key !== 'object')) {
+export function autoTune(request: AutoTuneRequest): AutoTuneResult;
+export function autoTune(
+  samples: Float32Array,
+  sampleRate: number,
+  options?: AutoTuneOptions,
+): AutoTuneResult;
+export function autoTune(...args: unknown[]): AutoTuneResult {
+  const r = sampleOneShot<AutoTuneRequest>('autoTune', args);
+  const { samples, sampleRate, key, validate, ...options } = r;
+  const keyOrDetect = key ?? 'detect';
+  if (keyOrDetect !== 'detect' && typeof keyOrDetect !== 'object') {
     throw new TypeError("autoTune: key must be 'detect' or { root, mode }");
   }
-  assertAudioInput('autoTune', samples, sampleRate ?? 22050, options);
-  let nativeKey: AutoTuneKey | null = null;
-  if (key !== 'detect') {
-    assertPitchClass('autoTune', key.root, 'key.root');
-    assertClosedToken('autoTune', key.mode, KEY_MODES, 'key.mode');
-    nativeKey = { root: key.root, mode: key.mode };
+  assertAudioInput('autoTune', samples, sampleRate, { validate });
+  let nativeKey: { root: number; mode: string } | null = null;
+  if (keyOrDetect !== 'detect') {
+    assertPitchClass('autoTune', keyOrDetect.root, 'key.root');
+    assertClosedToken('autoTune', keyOrDetect.mode, KEY_MODES, 'key.mode');
+    nativeKey = { root: keyOrDetect.root, mode: keyOrDetect.mode };
   }
-  return addon.autoTune(samples, sampleRate ?? 22050, nativeKey, options);
+  return addon.autoTune(samples, sampleRate, nativeKey, nativePitchOptions('autoTune', options));
 }

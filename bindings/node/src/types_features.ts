@@ -1,4 +1,5 @@
 import type { ChordQuality, Key, Matrix2D, PitchClass } from './types_analysis.js';
+import type { ValidateOptions } from './validation.js';
 
 /** Constant-Q / Variable-Q transform magnitude result. */
 export interface CqtResult {
@@ -601,7 +602,9 @@ export interface SpectralRegionOp {
  * omitted fields take the documented native defaults. Mirrors the C
  * `SonareSpectralEditConfig`.
  */
-export interface SpectralEditOptions {
+export interface SpectralEditOptions extends ValidateOptions {
+  /** Region edit ops applied in array order; an empty array returns a copy of the input. */
+  ops: readonly SpectralRegionOp[];
   /** FFT size; a power of two in `[4, 262144]`. Default 2048. */
   nFft?: number;
   /** Hop length; must satisfy `0 < hop <= nFft / 2`. Default 512. */

@@ -108,9 +108,9 @@ describe("tuningCents: 'auto'", () => {
       /tuningCents must be a number or 'auto'/,
     );
     expect(() => detectKey({ samples: loop, sampleRate, tuningCents: 70 })).toThrow(RangeError);
-    // The core's KeyConfig guard, which the facade deliberately does not mirror.
+    // The core's guard, which the facade deliberately does not mirror.
     expect(() => detectKey({ samples: loop, sampleRate, tuningCents: 70 })).toThrow(
-      /^KeyConfig: tuning must be/,
+      /^tuning_cents must be/,
     );
   });
 });
@@ -168,7 +168,7 @@ describe("transcribe referenceHz: 'auto'", () => {
       referenceHz: 'auto',
     });
     expect(result.noteCount).toBeGreaterThan(0);
-    expect(result.tuning).toBeCloseTo(0.3, 1);
+    expect(result.tuningCents).toBeCloseTo(30, -1);
   });
 
   it('reports the tuning a given reference amounts to', () => {
@@ -178,9 +178,9 @@ describe("transcribe referenceHz: 'auto'", () => {
       tempoBpm: 120,
       referenceHz: 432,
     });
-    // The transcribe result reports the tuning in semitone fractions.
-    expect(result.tuning).toBeCloseTo(referenceHzToTuning(432) / 100, 4);
-    expect(transcribe({ samples: tones(1), sampleRate, tempoBpm: 120 }).tuning).toBe(0);
+    // The transcribe result reports the tuning in cents.
+    expect(result.tuningCents).toBeCloseTo(referenceHzToTuning(432), 2);
+    expect(transcribe({ samples: tones(1), sampleRate, tempoBpm: 120 }).tuningCents).toBe(0);
   });
 
   it('refuses a reference that is neither a number nor auto', () => {

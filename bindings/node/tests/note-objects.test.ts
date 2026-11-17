@@ -17,6 +17,11 @@ const SR = 22050;
 const HOP = 512;
 const N_FRAMES = 43;
 const LENGTH = N_FRAMES * HOP;
+/** A copy of `note` with `patch` applied to its edit; notes are readonly. */
+function withEdit(note: NoteObject, patch: Partial<NoteObject['edit']>): NoteObject {
+  return { ...note, edit: { ...note.edit, ...patch } };
+}
+
 const FRAME_RATE = SR / HOP;
 // The pitch steps here, so the segmenter splits into exactly two notes whose
 // spans tile the buffer: [0, SPLIT_FRAME * HOP) and [SPLIT_FRAME * HOP, LENGTH).
@@ -358,7 +363,7 @@ describe('renderNotes', () => {
 
   it('applies a gain edit to that note only', () => {
     const notes = extractTone();
-    notes[0].edit.gainDb = -20;
+    notes[0] = withEdit(notes[0], { gainDb: -20 });
     const rendered = renderNotes({ samples: tone.samples, sampleRate: SR, notes });
 
     // Sampled past the 5 ms edge cross-fade, where the edit's gain is exact.
@@ -368,7 +373,7 @@ describe('renderNotes', () => {
 
   it('silences a muted note and leaves its neighbour untouched', () => {
     const notes = extractTone();
-    notes[1].edit.muted = true;
+    notes[1] = withEdit(notes[1], { muted: true });
     const rendered = renderNotes({ samples: tone.samples, sampleRate: SR, notes });
 
     expect(rms(rendered, SPLIT_SAMPLE + 2000, LENGTH - 2000)).toBe(0);
@@ -1200,7 +1205,7 @@ describe('splitNote and mergeNotes', () => {
   it('cuts the source note envelope at the same proportion as the span', () => {
     const source = plainSource();
     const notes = extractNotes(source);
-    notes[0].edit.amplitudeEnvelope = Float32Array.from([0.25, 1]);
+    notes[0] = withEdit(notes[0], { amplitudeEnvelope: Float32Array.from([0.25, 1]) });
 
     // The cut is at the note's midpoint, so a 0.25 -> 1.0 ramp parts at 0.625.
     const split = splitNote({ ...source, notes, index: 0, frame: 20 });
@@ -1223,7 +1228,7 @@ describe('splitNote and mergeNotes', () => {
   it('gives both halves a one-entry envelope unchanged, because it is a constant', () => {
     const source = plainSource();
     const notes = extractNotes(source);
-    notes[0].edit.amplitudeEnvelope = Float32Array.from([0.5]);
+    notes[0] = withEdit(notes[0], { amplitudeEnvelope: Float32Array.from([0.5]) });
 
     const split = splitNote({ ...source, notes, index: 0, frame: 20 });
     for (const half of split) {
@@ -1258,11 +1263,11 @@ describe('splitNote and mergeNotes', () => {
   it('takes the first note edit of the run it joins', () => {
     const source = gappedSource();
     const notes = extractNotes(source);
-    notes[0].edit.gainDb = -3;
-    notes[0].edit.pitchSemitones = 2;
-    notes[0].edit.amplitudeEnvelope = Float32Array.from([0.5]);
-    notes[1].edit.gainDb = 9;
-    notes[1].edit.muted = true;
+    notes[0] = withEdit(notes[0], { gainDb: -3 });
+    notes[0] = withEdit(notes[0], { pitchSemitones: 2 });
+    notes[0] = withEdit(notes[0], { amplitudeEnvelope: Float32Array.from([0.5]) });
+    notes[1] = withEdit(notes[1], { gainDb: 9 });
+    notes[1] = withEdit(notes[1], { muted: true });
 
     const merged = mergeNotes({ ...source, notes, first: 0, last: 1 });
     expect(merged[0].edit.gainDb).toBe(-3);
@@ -1430,7 +1435,7 @@ describe('the documented pitchPyin to extractNotes pipeline', () => {
 
     // The notes go back where they came from: the whole point of extracting
     // them is to edit and render them.
-    notes[0].edit.gainDb = -6;
+    notes[0] = withEdit(notes[0], { gainDb: -6 });
     expect(renderNotes({ samples: gappedTone, sampleRate: SR, notes })).toHaveLength(
       PIPELINE_LENGTH,
     );

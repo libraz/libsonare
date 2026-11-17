@@ -33,14 +33,14 @@ const BUFFER_FIRST: Array<[string, string]> = [
   ['analyzeRhythm', 'samples'],
   ['analyzeSections', 'samples'],
   ['analyzeTimbre', 'samples'],
+  ['autoTune', 'samples'],
   ['bassChroma', 'samples'],
   ['chordFunctionalAnalysis', 'samples'],
   ['chroma', 'samples'],
   ['chromaCens', 'samples'],
   ['chromaCqt', 'samples'],
   ['cqt', 'samples'],
-  ['decompose', 's'],
-  ['decomposeWithInit', 's'],
+  ['decomposeStems', 'samples'],
   ['deemphasis', 'samples'],
   ['detectAcoustic', 'samples'],
   ['detectBeats', 'samples'],
@@ -54,6 +54,8 @@ const BUFFER_FIRST: Array<[string, string]> = [
   ['ebur128LoudnessRange', 'samples'],
   ['estimateRoom', 'samples'],
   ['estimateTuning', 'samples'],
+  ['extractNotes', 'samples'],
+  ['extractPercussiveEvents', 'samples'],
   ['frameSignal', 'samples'],
   ['harmonic', 'samples'],
   ['hpss', 'samples'],
@@ -73,17 +75,11 @@ const BUFFER_FIRST: Array<[string, string]> = [
   ['masteringDynamicsGate', 'samples'],
   ['masteringDynamicsTransientShaper', 'samples'],
   ['masteringRepairDeclick', 'samples'],
-  ['masteringRepairDeclickStereo', 'left'],
   ['masteringRepairDeclip', 'samples'],
-  ['masteringRepairDeclipStereo', 'left'],
   ['masteringRepairDecrackle', 'samples'],
-  ['masteringRepairDecrackleStereo', 'left'],
   ['masteringRepairDehum', 'samples'],
-  ['masteringRepairDehumStereo', 'left'],
   ['masteringRepairDenoiseClassical', 'samples'],
-  ['masteringRepairDenoiseClassicalStereo', 'left'],
   ['masteringRepairDereverbClassical', 'samples'],
-  ['masteringRepairDereverbClassicalStereo', 'left'],
   ['masteringRepairDetectClicks', 'samples'],
   ['masteringRepairDetectClipping', 'samples'],
   ['masteringRepairDetectCrackle', 'samples'],
@@ -91,11 +87,10 @@ const BUFFER_FIRST: Array<[string, string]> = [
   ['masteringRepairDetectNoiseFloor', 'samples'],
   ['masteringRepairDetectReverb', 'samples'],
   ['masteringRepairDetectTrimRange', 'samples'],
-  ['masteringRepairDetectTrimRangeStereo', 'left'],
   ['masteringRepairTrimSilence', 'samples'],
-  ['masteringRepairTrimSilenceStereo', 'left'],
   ['masteringStreamingPreview', 'samples'],
   ['melSpectrogram', 'samples'],
+  ['mergeNotes', 'samples'],
   ['meteringCrestFactorDb', 'samples'],
   ['meteringDcOffset', 'samples'],
   ['meteringDetectClipping', 'samples'],
@@ -114,7 +109,6 @@ const BUFFER_FIRST: Array<[string, string]> = [
   ['meteringVectorscopeDecimated', 'left'],
   ['mfcc', 'samples'],
   ['momentaryLufs', 'samples'],
-  ['nnFilter', 's'],
   ['nnlsChroma', 'samples'],
   ['normalize', 'samples'],
   ['noteMove', 'samples'],
@@ -126,7 +120,6 @@ const BUFFER_FIRST: Array<[string, string]> = [
   ['piptrack', 'samples'],
   ['pitchCorrectTimevarying', 'samples'],
   ['pitchCorrectToMidi', 'samples'],
-  ['pitchCorrectToMidiTimevarying', 'samples'],
   ['pitchPyin', 'samples'],
   ['pitchShift', 'samples'],
   ['pitchYin', 'samples'],
@@ -136,6 +129,8 @@ const BUFFER_FIRST: Array<[string, string]> = [
   ['reassignedSpectrogram', 'samples'],
   ['remix', 'samples'],
   ['remixAlignedIntervals', 'samples'],
+  ['renderNotes', 'samples'],
+  ['renderPercussiveEvents', 'samples'],
   ['resample', 'samples'],
   ['rmsEnergy', 'samples'],
   ['roomMorph', 'samples'],
@@ -147,6 +142,7 @@ const BUFFER_FIRST: Array<[string, string]> = [
   ['spectralFlatness', 'samples'],
   ['spectralFlux', 'samples'],
   ['spectralRolloff', 'samples'],
+  ['splitNote', 'samples'],
   ['splitSilence', 'samples'],
   ['stft', 'samples'],
   ['stftDb', 'samples'],
@@ -155,7 +151,6 @@ const BUFFER_FIRST: Array<[string, string]> = [
   ['trim', 'samples'],
   ['trimSilence', 'samples'],
   ['voiceChange', 'samples'],
-  ['voiceChangeRealtime', 'samples'],
   ['vqt', 'samples'],
   ['waveformPeakPyramid', 'samples'],
   ['waveformPeaks', 'samples'],
@@ -180,24 +175,24 @@ const NOT_A_REQUEST_ENTRY = new Set([
   'voiceCharacterPresetId',
 ]);
 
+/** Entry points that also take a plain number array as their audio, so an array reaches the next argument. */
+const ARRAY_AUDIO = new Set(['extractPercussiveEvents', 'renderPercussiveEvents']);
+
 const RAW_PROPERTY_READ = /Cannot read propert|Cannot destructure|undefined is not|is not iterable/;
 
 const REQUEST_ONLY: string[] = [
   'alignTakeToReference',
   'amplitudeToDb',
   'assignNoteTargets',
-  'autoTune',
   'chirp',
   'chordFunctions',
   'clicks',
   'cqtToAudio',
   'cyclicTempogram',
+  'decompose',
   'decomposeNotePitch',
-  'decomposeStems',
   'decomposeStemsLinked',
   'estimateMeter',
-  'extractNotes',
-  'extractPercussiveEvents',
   'fixFrames',
   'fixLength',
   'fourierTempogram',
@@ -212,13 +207,21 @@ const REQUEST_ONLY: string[] = [
   'masteringProcessStereo',
   'masteringRepairAnalyze',
   'masteringRepairApply',
+  'masteringRepairDeclickStereo',
+  'masteringRepairDeclipStereo',
+  'masteringRepairDecrackleStereo',
+  'masteringRepairDehumStereo',
   'masteringRepairDenoiseClassicalLinked',
+  'masteringRepairDenoiseClassicalStereo',
   'masteringRepairDereverbClassicalLinked',
+  'masteringRepairDereverbClassicalStereo',
+  'masteringRepairDetectTrimRangeStereo',
+  'masteringRepairTrimSilenceStereo',
   'masteringStereoAnalyze',
   'melDelta',
-  'mergeNotes',
   'meteringCrestFactorDbStereo',
   'mixStereo',
+  'nnFilter',
   'normalizeStereo',
   'noteSegments',
   'noteTargetsFromSmf',
@@ -229,8 +232,6 @@ const REQUEST_ONLY: string[] = [
   'pitchTuning',
   'plp',
   'powerToDb',
-  'renderNotes',
-  'renderPercussiveEvents',
   'renderPlayback',
   'restoreVocalEditSession',
   'segmentAgglomerative',
@@ -240,7 +241,6 @@ const REQUEST_ONLY: string[] = [
   'segmentRecurrenceMatrix',
   'segmentRecurrenceToLag',
   'segmentSubsegment',
-  'splitNote',
   'splitSilenceCommon',
   'splitSilenceCommonWithReport',
   'streamingLoudnessGain',
@@ -253,6 +253,7 @@ const REQUEST_ONLY: string[] = [
   'tone',
   'tonnetz',
   'vectorNormalize',
+  'voiceChangeRealtime',
   'vqtToAudio',
 ];
 
@@ -288,11 +289,64 @@ describe.each(BUFFER_FIRST.filter(([name]) => typeof fn(name) === 'function'))(
       ['an array', [1, 2, 3]],
       ['a Float64Array', new Float64Array(8)],
     ])('refuses %s as a TypeError naming %s', (_label, value) => {
+      const message =
+        _label === 'an array' && ARRAY_AUDIO.has(name)
+          ? `${name}: sampleRate must be a number`
+          : `${name}: ${argName} must be a Float32Array`;
       expect(() => fn(name)(value)).toThrow(TypeError);
-      expect(() => fn(name)(value)).toThrow(`${name}: ${argName} must be a Float32Array`);
+      expect(() => fn(name)(value)).toThrow(message);
     });
   },
 );
+
+// Request-only entry points refuse a wrong-typed buffer field inside the request.
+const REQUEST_FIELD = (name: string, field: string, bad: unknown, rest: object) => ({
+  name,
+  field,
+  request: { ...rest, [field]: bad },
+});
+const F32 = new Float32Array(8);
+const STEREO_REPAIR = [
+  'masteringRepairDeclickStereo',
+  'masteringRepairDeclipStereo',
+  'masteringRepairDecrackleStereo',
+  'masteringRepairDehumStereo',
+  'masteringRepairDenoiseClassicalStereo',
+  'masteringRepairDereverbClassicalStereo',
+  'masteringRepairDetectTrimRangeStereo',
+  'masteringRepairTrimSilenceStereo',
+];
+describe.each([
+  ...STEREO_REPAIR.flatMap((name) => [
+    REQUEST_FIELD(name, 'left', 5, { right: F32, sampleRate: 44100 }),
+    REQUEST_FIELD(name, 'right', new Float64Array(8), { left: F32, sampleRate: 44100 }),
+  ]),
+])('$name request field $field', ({ name, field, request }) => {
+  it('refuses a wrong-typed buffer as a TypeError naming the field', () => {
+    expect(() => fn(name)(request)).toThrow(TypeError);
+    expect(() => fn(name)(request)).toThrow(`${name}: ${field} must be a Float32Array`);
+  });
+});
+
+describe.each([
+  ['decompose', { s: 5 }, 'decompose: s must be a Matrix2D'],
+  ['nnFilter', { s: 5 }, 'nnFilter: s must be a Matrix2D'],
+  [
+    'voiceChangeRealtime',
+    { channels: 5, sampleRate: 44100 },
+    'voiceChangeRealtime: channels must be an array of Float32Array',
+  ],
+  [
+    'voiceChangeRealtime',
+    { channels: [new Float64Array(8)], sampleRate: 44100 },
+    'voiceChangeRealtime: channels[0] must be a Float32Array',
+  ],
+])('%s request field', (name, request, message) => {
+  it(`refuses ${message}`, () => {
+    expect(() => fn(name as string)(request)).toThrow(TypeError);
+    expect(() => fn(name as string)(request)).toThrow(message as string);
+  });
+});
 
 describe('every export', () => {
   it('leaves none failing on a property read of a wrong-typed first argument', () => {

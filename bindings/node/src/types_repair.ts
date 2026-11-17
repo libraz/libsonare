@@ -3,6 +3,8 @@
  * denoise, dehum, dereverb and silence trim.
  */
 
+import type { ValidateOptions } from './validation.js';
+
 /** One channel's click detection, from {@link masteringRepairDeclickStereo}. Counts runs, not samples. */
 export interface ClickDetection {
   /** Runs meeting the repair criteria. A run inside a broadband transient such as a drum hit is not counted; the repair still acts on it. */
@@ -45,13 +47,13 @@ export interface DeclickReport {
  * A run either channel's detector selects is repaired in both, so a
  * common-mode click never moves the stereo image; only the selection is
  * shared, and each channel's fill comes from its own samples and its own
- * model, which is why `leftReport` and `rightReport` can differ.
+ * model, which is why `reports[0]` and `reports[1]` can differ.
  */
-export interface DeclickStereoResult {
-  left: Float32Array;
-  right: Float32Array;
-  leftReport: DeclickReport;
-  rightReport: DeclickReport;
+export interface MasteringRepairDeclickResult {
+  /** Output planes in input order: `[left, right]` for a stereo pair. */
+  channels: Float32Array[];
+  /** One report per channel: `[left, right]`. */
+  reports: DeclickReport[];
 }
 
 /**
@@ -120,13 +122,13 @@ export interface DeclipReport {
  *
  * Each channel reconstructs the whole of every union run it has at least one
  * clipped sample in; a channel with no clipped sample in a run is left
- * untouched there, so `leftReport` and `rightReport` can genuinely differ.
+ * untouched there, so `reports[0]` and `reports[1]` can genuinely differ.
  */
-export interface DeclipStereoResult {
-  left: Float32Array;
-  right: Float32Array;
-  leftReport: DeclipReport;
-  rightReport: DeclipReport;
+export interface MasteringRepairDeclipResult {
+  /** Output planes in input order: `[left, right]` for a stereo pair. */
+  channels: Float32Array[];
+  /** One report per channel: `[left, right]`. */
+  reports: DeclipReport[];
 }
 
 /**
@@ -176,11 +178,11 @@ export interface DecrackleReport {
  * declick and declip, no run is ever widened to match the other channel and
  * no report field counts such a widening.
  */
-export interface DecrackleStereoResult {
-  left: Float32Array;
-  right: Float32Array;
-  leftReport: DecrackleReport;
-  rightReport: DecrackleReport;
+export interface MasteringRepairDecrackleResult {
+  /** Output planes in input order: `[left, right]` for a stereo pair. */
+  channels: Float32Array[];
+  /** One report per channel: `[left, right]`. */
+  reports: DecrackleReport[];
 }
 
 /**
@@ -202,7 +204,7 @@ export interface NoiseDetection {
    * `bandEnergyDeltaDb` uses, so a noise floor and a tonal-balance change can
    * be read together.
    */
-  bandFloorDbfs: number[];
+  bandFloorDbfs: Float32Array;
 }
 
 /**
@@ -239,30 +241,11 @@ export interface DenoiseReport {
  * be two copies of one measurement and would read as though the two could
  * differ.
  */
-export interface DenoiseStereoResult {
-  left: Float32Array;
-  right: Float32Array;
-  report: DenoiseReport;
-}
-
-/**
- * A denoised channel set and the one mask that produced it, from
- * {@link masteringRepairDenoiseClassicalLinked}.
- *
- * The N-channel form of {@link DenoiseStereoResult}, carrying one `report` for
- * the same reason: the gain mask is built from the channel-summed power and
- * applied unchanged to every channel, so a per-channel pair would be N copies of
- * one measurement.
- *
- * `report.detected` is a measurement of the SET. Its levels are absolute dBFS
- * taken on the summed power, so N identical channels read `10*log10(N)` dB above
- * one of them alone. The attenuation figures on {@link DenoiseReport} are
- * fractions and do not move with the channel count.
- */
-export interface DenoiseLinkedResult {
-  /** One output per input channel, in input order. */
+export interface MasteringRepairDenoiseClassicalResult {
+  /** Output planes in input order: `[left, right]` for a stereo pair. */
   channels: Float32Array[];
-  report: DenoiseReport;
+  /** The one shared report: `[report]`. */
+  reports: DenoiseReport[];
 }
 
 /**
@@ -288,7 +271,7 @@ export interface HumDetection {
    * sample rate carries, not only the notched ones; a k*f0 at or past Nyquist
    * reads the dB floor because nothing is there to measure.
    */
-  harmonicDbfs: number[];
+  harmonicDbfs: Float32Array;
 }
 
 /**
@@ -315,17 +298,17 @@ export interface DehumReport {
  * {@link masteringRepairDehumStereo}.
  *
  * With `adaptive` set, the tracker reads the channel mean and both cascades
- * follow the one frequency it finds, so `leftReport` and `rightReport` share
+ * follow the one frequency it finds, so `reports[0]` and `reports[1]` share
  * the same `appliedFundamentalHz` and `fundamentalDriftHz` by construction;
  * only the frequency is shared, so each report's `detected` still measures
  * that channel's own input. Without `adaptive`, which is the default,
  * nothing is shared and the two channels are filtered independently.
  */
-export interface DehumStereoResult {
-  left: Float32Array;
-  right: Float32Array;
-  leftReport: DehumReport;
-  rightReport: DehumReport;
+export interface MasteringRepairDehumResult {
+  /** Output planes in input order: `[left, right]` for a stereo pair. */
+  channels: Float32Array[];
+  /** One report per channel: `[left, right]`. */
+  reports: DehumReport[];
 }
 
 /**
@@ -386,28 +369,11 @@ export interface DereverbReport {
  * ratio or a fraction, so unlike {@link NoiseDetection} nothing here shifts
  * with the channel count and a stereo figure is comparable against a mono one.
  */
-export interface DereverbStereoResult {
-  left: Float32Array;
-  right: Float32Array;
-  report: DereverbReport;
-}
-
-/**
- * A dereverberated channel set and the one mask that produced it, from
- * {@link masteringRepairDereverbClassicalLinked}.
- *
- * The N-channel form of {@link DereverbStereoResult}: one mask over the
- * channel-summed power and one WPE predictor set fitted over every channel's
- * statistics, so a per-channel report pair would be N copies of one measurement.
- *
- * Every field of that report is a ratio or a fraction, so unlike
- * {@link DenoiseLinkedResult} nothing here shifts with the channel count and a
- * figure measured over a set is comparable against a mono one.
- */
-export interface DereverbLinkedResult {
-  /** One output per input channel, in input order. */
+export interface MasteringRepairDereverbClassicalResult {
+  /** Output planes in input order: `[left, right]` for a stereo pair. */
   channels: Float32Array[];
-  report: DereverbReport;
+  /** The one shared report: `[report]`. */
+  reports: DereverbReport[];
 }
 
 /**
@@ -451,17 +417,25 @@ export interface TrimReport {
  * Unlike every other repair stereo result, `left` and `right` are SHORTER than
  * the input -- trimming is the point -- and they are empty when neither channel
  * carried signal, which is a success rather than an error. There is no separate
- * length field: `left.length` is the output length.
+ * length field: `channels[0].length` is the output length.
  *
- * `report.range` is the union that was applied to both channels. `leftRange`
- * and `rightRange` are the per-channel scans it was formed from, so a caller
+ * `reports[0].range` is the union that was applied to both channels. `ranges[0]`
+ * and `ranges[1]` are the per-channel scans it was formed from, so a caller
  * can see which channel decided each edge; a channel carrying nothing reports
  * an empty range and contributes nothing to the union.
  */
-export interface TrimSilenceStereoResult {
-  left: Float32Array;
-  right: Float32Array;
-  report: TrimReport;
-  leftRange: TrimRange;
-  rightRange: TrimRange;
+export interface MasteringRepairTrimSilenceResult {
+  /** `[left, right]`, both cut to the one shared range. */
+  channels: Float32Array[];
+  /** The one shared report: `[report]`. */
+  reports: TrimReport[];
+  /** The per-channel scans the shared range is the union of: `[leftRange, rightRange]`. */
+  ranges: TrimRange[];
+}
+
+/** Common input fields for offline repair processors. */
+export interface MasteringRepairSamplesRequest extends ValidateOptions {
+  samples: Float32Array;
+  /** Sample rate in Hz. Required. */
+  sampleRate: number;
 }

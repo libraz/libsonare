@@ -874,3 +874,28 @@ describe('type shapes', () => {
     expect(true).toBe(true);
   });
 });
+
+describe('noteSegments voicing input', () => {
+  const f0Hz = new Float32Array(60).fill(440);
+  const ones = new Float32Array(60).fill(1);
+
+  it('takes voicedFlags and equals the 0/1 voicedProb form', () => {
+    const voicedFlags = new Uint8Array(60).fill(1);
+    const fromFlags = sonare.noteSegments({ f0Hz, voicedFlags, frameRate: 100, minNoteMs: 100 });
+    const fromProb = sonare.noteSegments({
+      f0Hz,
+      voicedProb: ones,
+      frameRate: 100,
+      minNoteMs: 100,
+    });
+    expect(fromFlags).toEqual(fromProb);
+  });
+
+  it('requires exactly one of voicedFlags / voicedProb', () => {
+    const voicedFlags = new Uint8Array(60).fill(1);
+    expect(() => api.noteSegments({ f0Hz, frameRate: 100 })).toThrow(RangeError);
+    expect(() => api.noteSegments({ f0Hz, voicedFlags, voicedProb: ones, frameRate: 100 })).toThrow(
+      RangeError,
+    );
+  });
+});

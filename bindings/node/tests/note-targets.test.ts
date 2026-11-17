@@ -65,9 +65,12 @@ function matchedAndStranded(): NoteObject[] {
 const shift = (note: NoteObject): number => Number(note.edit.pitchSemitones.toFixed(4));
 
 it('keeps assigned note curves independent of the source notes', () => {
-  const note = noteAt(0, HALF_SECOND, A4_HZ);
-  note.amplitude = new Float32Array([0.2, 0.4]);
-  note.edit.amplitudeEnvelope = new Float32Array([1, 0.5]);
+  const base = noteAt(0, HALF_SECOND, A4_HZ);
+  const note: NoteObject = {
+    ...base,
+    amplitude: new Float32Array([0.2, 0.4]),
+    edit: { ...base.edit, amplitudeEnvelope: new Float32Array([1, 0.5]) },
+  };
   const result = assignNoteTargets({
     notes: [note],
     sampleRate: SR,

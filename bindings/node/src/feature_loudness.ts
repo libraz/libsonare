@@ -1,5 +1,6 @@
 import { addon } from './native.js';
 import type { LufsResult, LufsSeriesResult } from './types.js';
+import type { OptionsOf } from './validation.js';
 import { assertAudioInput, requestObject, sampleOneShot } from './validation.js';
 
 // Native names the loudness range `loudnessRange`; the public field carries its unit.
@@ -142,7 +143,7 @@ export function lufs(request: LufsRequest): LufsResult;
 export function lufs(
   samples: Float32Array,
   sampleRate: number,
-  options?: Omit<LufsRequest, 'samples' | 'sampleRate'>,
+  options?: OptionsOf<LufsRequest>,
 ): LufsResult;
 export function lufs(...args: unknown[]): LufsResult {
   const request = sampleOneShot<LufsRequest>('lufs', args);
@@ -155,7 +156,7 @@ export function momentaryLufs(request: MomentaryLufsRequest): Float32Array;
 export function momentaryLufs(
   samples: Float32Array,
   sampleRate: number,
-  options?: Omit<MomentaryLufsRequest, 'samples' | 'sampleRate'>,
+  options?: OptionsOf<MomentaryLufsRequest>,
 ): Float32Array;
 export function momentaryLufs(...args: unknown[]): Float32Array {
   const request = sampleOneShot<MomentaryLufsRequest>('momentaryLufs', args);
@@ -168,7 +169,7 @@ export function shortTermLufs(request: ShortTermLufsRequest): Float32Array;
 export function shortTermLufs(
   samples: Float32Array,
   sampleRate: number,
-  options?: Omit<ShortTermLufsRequest, 'samples' | 'sampleRate'>,
+  options?: OptionsOf<ShortTermLufsRequest>,
 ): Float32Array;
 export function shortTermLufs(...args: unknown[]): Float32Array {
   const request = sampleOneShot<ShortTermLufsRequest>('shortTermLufs', args);

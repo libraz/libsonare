@@ -26,8 +26,8 @@ import {
   realtimeVoiceChangerPresetConfig,
   realtimeVoiceChangerPresetJson,
   realtimeVoiceChangerPresetNames,
+  realtimeVoiceChangerValidatePresetJson,
   StreamingMasteringChain,
-  validateRealtimeVoiceChangerPresetJson,
 } from '../src/index.js';
 import { addon } from '../src/native.js';
 import { addonSources } from './_addon_sources.js';
@@ -50,6 +50,12 @@ function expectNulRefusal(call: () => unknown, field: string): void {
   const error = refusal(call);
   expect(error).toBeInstanceOf(RangeError);
   expect(error.message).toBe(`${field} must not contain NUL`);
+}
+
+function expectUnknownPresetRefusal(call: () => unknown): void {
+  const error = refusal(call);
+  expect(error).toBeInstanceOf(RangeError);
+  expect(error.message).toMatch(/must be one of/);
 }
 
 function withEngine<T>(body: (engine: RealtimeEngine) => T): T {
@@ -229,20 +235,20 @@ describe('embedded NUL refusal, by handoff kind', () => {
   it('a string handed to C++ as std::string (voice changer preset id)', () => {
     const [id] = realtimeVoiceChangerPresetNames();
     expect(realtimeVoiceChangerPresetJson(id).length).toBeGreaterThan(0);
-    expectNulRefusal(() => realtimeVoiceChangerPresetJson(`${id}${NUL}x` as typeof id), 'presetId');
+    // The facade resolves the id against the closed token set, so a NUL-bearing id is an unknown id.
+    expectUnknownPresetRefusal(() => realtimeVoiceChangerPresetJson(`${id}${NUL}x` as typeof id));
   });
 });
 
 describe('embedded NUL refusal, text handed to the core as std::string', () => {
-  it('a note name, scene preset, voice preset and JSON text are refused by name', () => {
+  it('a note name, scene preset, voice preset and JSON text are refused', () => {
     const [id] = realtimeVoiceChangerPresetNames();
     expectNulRefusal(() => noteToHz(`A4${NUL}junk`), 'note');
     expectNulRefusal(() => mixingScenePresetJson(`vocalReverbSend${NUL}junk`), 'preset');
-    expectNulRefusal(
-      () => realtimeVoiceChangerPresetConfig(`${id}${NUL}junk` as typeof id),
-      'preset',
+    expectUnknownPresetRefusal(() =>
+      realtimeVoiceChangerPresetConfig(`${id}${NUL}junk` as typeof id),
     );
-    expectNulRefusal(() => validateRealtimeVoiceChangerPresetJson(`{}${NUL}junk`), 'presetJson');
+    expectNulRefusal(() => realtimeVoiceChangerValidatePresetJson(`{}${NUL}junk`), 'presetJson');
     const json = Project.create().toJson();
     expectNulRefusal(() => Project.fromJson(`${json}${NUL}junk`), 'json');
   });

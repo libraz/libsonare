@@ -174,15 +174,17 @@ describe('spectralEdit op fields', () => {
       { ...whole, lowHz: Number.NaN, mode: 'attenuate' as const },
       { ...whole, highHz: Number.NaN, mode: 'mute' as const },
     ]) {
-      expectRefusal(() => spectralEdit(samples, SR, [op]), RangeError);
+      expectRefusal(() => spectralEdit(samples, SR, { ops: [op] }), RangeError);
     }
   });
 
   it('returns finite audio for an in-range gain and a band edge past the Nyquist', () => {
-    const out = spectralEdit(samples, SR, [
-      { ...whole, lowHz: 1e30, gainDb: 12, mode: 'gain' },
-      { ...whole, lowHz: 100, highHz: 2000, gainDb: 6, mode: 'gain' },
-    ]);
+    const out = spectralEdit(samples, SR, {
+      ops: [
+        { ...whole, lowHz: 1e30, gainDb: 12, mode: 'gain' },
+        { ...whole, lowHz: 100, highHz: 2000, gainDb: 6, mode: 'gain' },
+      ],
+    });
     expect(out.every(Number.isFinite)).toBe(true);
   });
 });

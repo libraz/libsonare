@@ -2,20 +2,23 @@ import { readFileSync } from 'node:fs';
 
 import { describe, expect, it } from 'vitest';
 import { ErrorCode } from '../src/errors.js';
-import type { VoicePresetId } from '../src/index.js';
+import type {
+  PitchCorrectOptions,
+  RealtimeVoiceChangerConfigInput,
+  VoicePresetId,
+} from '../src/index.js';
 import {
   Audio,
   noteMove,
   noteStretch,
   pitchCorrectTimevarying,
   pitchCorrectToMidi,
-  pitchCorrectToMidiTimevarying,
   pitchPyin,
   RealtimeVoiceChanger,
   realtimeVoiceChangerPresetConfig,
   realtimeVoiceChangerPresetJson,
   realtimeVoiceChangerPresetNames,
-  validateRealtimeVoiceChangerPresetJson,
+  realtimeVoiceChangerValidatePresetJson,
   voiceChange,
   voiceChangeRealtime,
   voiceCharacterPresetId,
@@ -23,6 +26,32 @@ import {
 import { expectRefusal } from './_helpers.js';
 
 const SR = 22050;
+
+// Contour correction toward a fixed MIDI note, spelled as the request fields.
+const midiCorrection = (
+  samples: Float32Array,
+  f0Hz: Float32Array,
+  targetMidi: number,
+  sampleRate: number,
+  hopLength: number,
+  voiced?: PitchCorrectOptions['voiced'],
+  voicedProb?: PitchCorrectOptions['voicedProb'],
+) =>
+  pitchCorrectTimevarying(samples, sampleRate, {
+    f0Hz,
+    hopLength,
+    targetMidi,
+    voiced,
+    voicedProb,
+  });
+
+const contourCorrection = (
+  samples: Float32Array,
+  f0Hz: Float32Array,
+  sampleRate: number,
+  hopLength: number,
+  options: Omit<PitchCorrectOptions, 'f0Hz' | 'hopLength'> = {},
+) => pitchCorrectTimevarying(samples, sampleRate, { f0Hz, hopLength, ...options });
 
 function generateSine(freq: number, sr: number, duration: number): Float32Array {
   const n = Math.floor(sr * duration);
@@ -54,7 +83,7 @@ describe('editing effects', () => {
 
   it('pitchCorrectToMidi reaches the requested pitch with default settings', () => {
     // 440 Hz is MIDI 69 (A4); correct toward MIDI 71 (B4).
-    const result = pitchCorrectToMidi(tone, SR, 69, 71);
+    const result = pitchCorrectToMidi(tone, SR, { currentMidi: 69, targetMidi: 71 });
     expect(result).toBeInstanceOf(Float32Array);
     expect(result.length).toBeGreaterThan(0);
 
@@ -72,21 +101,30 @@ describe('editing effects', () => {
   it('rejects out-of-range MIDI / F0 instead of returning garbage', () => {
     // The C ABI and Python reject these; Node previously returned best-effort
     // garbage. Validation now lives in the core (and currentMidi in the wrapper).
-    expectRefusal(() => pitchCorrectToMidi(tone, SR, 200, 71), RangeError); // currentMidi out of range
-    expectRefusal(() => pitchCorrectToMidi(tone, SR, 69, 200), RangeError); // targetMidi out of range
-    expectRefusal(() => pitchCorrectToMidi(tone, SR, 69, -1), RangeError);
+    expectRefusal(
+      () => pitchCorrectToMidi(tone, SR, { currentMidi: 200, targetMidi: 71 }),
+      RangeError,
+    ); // currentMidi out of range
+    expectRefusal(
+      () => pitchCorrectToMidi(tone, SR, { currentMidi: 69, targetMidi: 200 }),
+      RangeError,
+    ); // targetMidi out of range
+    expectRefusal(
+      () => pitchCorrectToMidi(tone, SR, { currentMidi: 69, targetMidi: -1 }),
+      RangeError,
+    );
     const hop = 512;
     const nFrames = Math.floor(tone.length / hop) + 1;
     const badF0 = new Float32Array(nFrames).fill(440);
     badF0[0] = -5; // negative F0
-    expectRefusal(() => pitchCorrectToMidiTimevarying(tone, badF0, 71, SR, hop), RangeError);
+    expectRefusal(() => midiCorrection(tone, badF0, 71, SR, hop), RangeError);
   });
 
-  it('pitchCorrectToMidiTimevarying follows a caller-supplied F0 contour', () => {
+  it('pitchCorrectTimevarying with targetMidi follows a caller-supplied F0 contour', () => {
     const hop = 512;
     const nFrames = Math.floor(tone.length / hop) + 1;
     const f0 = new Float32Array(nFrames).fill(440);
-    const result = pitchCorrectToMidiTimevarying(tone, f0, 71, SR, hop);
+    const result = midiCorrection(tone, f0, 71, SR, hop);
     expect(result).toBeInstanceOf(Float32Array);
     expect(result.length).toBe(tone.length);
     expect(result.every((x) => Number.isFinite(x))).toBe(true);
@@ -94,13 +132,13 @@ describe('editing effects', () => {
     // Optional voiced / voicedProb arrays are accepted.
     const voiced = new Int32Array(nFrames).fill(1);
     const voicedProb = new Float32Array(nFrames).fill(1);
-    const result2 = pitchCorrectToMidiTimevarying(tone, f0, 71, SR, hop, voiced, voicedProb);
+    const result2 = midiCorrection(tone, f0, 71, SR, hop, voiced, voicedProb);
     expect(result2.length).toBe(tone.length);
 
     // pYIN emits NaN F0 for unvoiced frames by default.
     f0[0] = Number.NaN;
     voiced[0] = 0;
-    const pyinResult = pitchCorrectToMidiTimevarying(tone, f0, 71, SR, hop, voiced, voicedProb);
+    const pyinResult = midiCorrection(tone, f0, 71, SR, hop, voiced, voicedProb);
     expect(pyinResult.every((x) => Number.isFinite(x))).toBe(true);
   });
 
@@ -126,22 +164,22 @@ describe('editing effects', () => {
     const baselineFlags = new Int32Array(nFrames).fill(1);
     baselineFlags[frame] = 0;
 
-    const zeroedBaseline = pitchCorrectToMidiTimevarying(tone, zeroed, 71, SR, hop, baselineFlags);
-    const unmasked = pitchCorrectToMidiTimevarying(tone, candidate, 71, SR, hop);
+    const zeroedBaseline = midiCorrection(tone, zeroed, 71, SR, hop, baselineFlags);
+    const unmasked = midiCorrection(tone, candidate, 71, SR, hop);
     expect(maxDifference(unmasked, zeroedBaseline)).toBeGreaterThan(1e-6);
     for (const voiced of flags) {
-      const masked = pitchCorrectToMidiTimevarying(tone, candidate, 71, SR, hop, voiced);
+      const masked = midiCorrection(tone, candidate, 71, SR, hop, voiced);
       expect(maxDifference(masked, zeroedBaseline)).toBeLessThan(1e-6);
 
-      const generalMasked = pitchCorrectTimevarying(tone, candidate, SR, hop, { voiced });
-      const generalBaseline = pitchCorrectTimevarying(tone, zeroed, SR, hop, {
+      const generalMasked = contourCorrection(tone, candidate, SR, hop, { voiced });
+      const generalBaseline = contourCorrection(tone, zeroed, SR, hop, {
         voiced: baselineFlags,
       });
       expect(maxDifference(generalMasked, generalBaseline)).toBeLessThan(1e-6);
     }
   });
 
-  it('pitchCorrectToMidiTimevarying derives voicing from voicedProb when voiced is omitted', () => {
+  it('pitchCorrectTimevarying with targetMidi derives voicing from voicedProb when voiced is omitted', () => {
     // voicedProb below 0.5 must behave exactly like an explicit all-unvoiced
     // array, and at/above 0.5 exactly like an explicit all-voiced one -- never
     // like "every frame voiced" regardless of what voicedProb says.
@@ -153,12 +191,12 @@ describe('editing effects', () => {
     const allUnvoiced = new Int32Array(nFrames).fill(0);
     const allVoiced = new Int32Array(nFrames).fill(1);
 
-    const viaLowProb = pitchCorrectToMidiTimevarying(tone, f0, 71, SR, hop, undefined, lowProb);
-    const viaExplicitUnvoiced = pitchCorrectToMidiTimevarying(tone, f0, 71, SR, hop, allUnvoiced);
+    const viaLowProb = midiCorrection(tone, f0, 71, SR, hop, undefined, lowProb);
+    const viaExplicitUnvoiced = midiCorrection(tone, f0, 71, SR, hop, allUnvoiced);
     expect(Array.from(viaLowProb)).toEqual(Array.from(viaExplicitUnvoiced));
 
-    const viaHighProb = pitchCorrectToMidiTimevarying(tone, f0, 71, SR, hop, undefined, highProb);
-    const viaExplicitVoiced = pitchCorrectToMidiTimevarying(tone, f0, 71, SR, hop, allVoiced);
+    const viaHighProb = midiCorrection(tone, f0, 71, SR, hop, undefined, highProb);
+    const viaExplicitVoiced = midiCorrection(tone, f0, 71, SR, hop, allVoiced);
     expect(Array.from(viaHighProb)).toEqual(Array.from(viaExplicitVoiced));
 
     // The two derived answers must actually differ, or this proves nothing.
@@ -172,31 +210,23 @@ describe('editing effects', () => {
     const voiced = new Int32Array(nFrames).fill(1);
     const voicedProb = new Float32Array(nFrames).fill(0.9);
 
-    const withProbability = pitchCorrectToMidiTimevarying(
-      tone,
-      f0,
-      71,
-      SR,
-      hop,
-      undefined,
-      voicedProb,
-    );
-    const withNullFlags = pitchCorrectToMidiTimevarying(tone, f0, 71, SR, hop, null, voicedProb);
+    const withProbability = midiCorrection(tone, f0, 71, SR, hop, undefined, voicedProb);
+    const withNullFlags = midiCorrection(tone, f0, 71, SR, hop, null, voicedProb);
     expect(Array.from(withNullFlags)).toEqual(Array.from(withProbability));
 
-    const explicitVoiced = pitchCorrectToMidiTimevarying(tone, f0, 71, SR, hop, voiced);
-    const withNullProbability = pitchCorrectToMidiTimevarying(tone, f0, 71, SR, hop, voiced, null);
+    const explicitVoiced = midiCorrection(tone, f0, 71, SR, hop, voiced);
+    const withNullProbability = midiCorrection(tone, f0, 71, SR, hop, voiced, null);
     expect(Array.from(withNullProbability)).toEqual(Array.from(explicitVoiced));
 
-    const generalWithProbability = pitchCorrectTimevarying(tone, f0, SR, hop, { voicedProb });
-    const generalWithNullFlags = pitchCorrectTimevarying(tone, f0, SR, hop, {
+    const generalWithProbability = contourCorrection(tone, f0, SR, hop, { voicedProb });
+    const generalWithNullFlags = contourCorrection(tone, f0, SR, hop, {
       voiced: null,
       voicedProb,
     });
     expect(Array.from(generalWithNullFlags)).toEqual(Array.from(generalWithProbability));
 
-    const generalExplicitVoiced = pitchCorrectTimevarying(tone, f0, SR, hop, { voiced });
-    const generalWithNullProbability = pitchCorrectTimevarying(tone, f0, SR, hop, {
+    const generalExplicitVoiced = contourCorrection(tone, f0, SR, hop, { voiced });
+    const generalWithNullProbability = contourCorrection(tone, f0, SR, hop, {
       voiced,
       voicedProb: null,
     });
@@ -213,12 +243,10 @@ describe('editing effects', () => {
       new Array(nFrames).fill('0'),
       new Array(nFrames).fill({}),
     ]) {
-      expect(() =>
-        pitchCorrectToMidiTimevarying(tone, f0, 71, SR, hop, malformed as never),
-      ).toThrow(TypeError);
-      expect(() =>
-        pitchCorrectTimevarying(tone, f0, SR, hop, { voiced: malformed as never }),
-      ).toThrow(TypeError);
+      expect(() => midiCorrection(tone, f0, 71, SR, hop, malformed as never)).toThrow(TypeError);
+      expect(() => contourCorrection(tone, f0, SR, hop, { voiced: malformed as never })).toThrow(
+        TypeError,
+      );
     }
   });
 
@@ -231,32 +259,32 @@ describe('editing effects', () => {
     const shortProb = new Float32Array(nFrames - 1);
 
     expectRefusal(
-      () => pitchCorrectToMidiTimevarying(tone, f0, 71, SR, hop, malformed as never),
-      TypeError,
-      /pitchCorrectToMidiTimevarying: voiced must be/,
-    );
-    expectRefusal(
-      () => pitchCorrectTimevarying(tone, f0, SR, hop, { voiced: malformed as never }),
+      () => midiCorrection(tone, f0, 71, SR, hop, malformed as never),
       TypeError,
       /pitchCorrectTimevarying: voiced must be/,
     );
     expectRefusal(
-      () => pitchCorrectToMidiTimevarying(tone, f0, 71, SR, hop, short),
-      RangeError,
-      /pitchCorrectToMidiTimevarying: voiced must have the same length as f0Hz/,
+      () => contourCorrection(tone, f0, SR, hop, { voiced: malformed as never }),
+      TypeError,
+      /pitchCorrectTimevarying: voiced must be/,
     );
     expectRefusal(
-      () => pitchCorrectToMidiTimevarying(tone, f0, 71, SR, hop, undefined, shortProb),
-      RangeError,
-      /pitchCorrectToMidiTimevarying: voicedProb must have the same length as f0Hz/,
-    );
-    expectRefusal(
-      () => pitchCorrectTimevarying(tone, f0, SR, hop, { voiced: short }),
+      () => midiCorrection(tone, f0, 71, SR, hop, short),
       RangeError,
       /pitchCorrectTimevarying: voiced must have the same length as f0Hz/,
     );
     expectRefusal(
-      () => pitchCorrectTimevarying(tone, f0, SR, hop, { voicedProb: shortProb }),
+      () => midiCorrection(tone, f0, 71, SR, hop, undefined, shortProb),
+      RangeError,
+      /pitchCorrectTimevarying: voicedProb must have the same length as f0Hz/,
+    );
+    expectRefusal(
+      () => contourCorrection(tone, f0, SR, hop, { voiced: short }),
+      RangeError,
+      /pitchCorrectTimevarying: voiced must have the same length as f0Hz/,
+    );
+    expectRefusal(
+      () => contourCorrection(tone, f0, SR, hop, { voicedProb: shortProb }),
       RangeError,
       /pitchCorrectTimevarying: voicedProb must have the same length as f0Hz/,
     );
@@ -267,8 +295,8 @@ describe('editing effects', () => {
     const nFrames = Math.floor(tone.length / hop) + 1;
     const f0 = new Float32Array(nFrames).fill(440);
     const voiced = new Int32Array(nFrames).fill(1);
-    const withoutProb = pitchCorrectToMidiTimevarying(tone, f0, 71, SR, hop, voiced);
-    const generalWithoutProb = pitchCorrectTimevarying(tone, f0, SR, hop, { voiced });
+    const withoutProb = midiCorrection(tone, f0, 71, SR, hop, voiced);
+    const generalWithoutProb = contourCorrection(tone, f0, SR, hop, { voiced });
 
     // Once voiced is supplied, voicedProb is ignored completely, including its
     // shape and value-domain checks.
@@ -278,16 +306,8 @@ describe('editing effects', () => {
       new Float32Array(nFrames).fill(1.1),
     ];
     for (const invalidProb of invalidProbabilities) {
-      const withInvalidProb = pitchCorrectToMidiTimevarying(
-        tone,
-        f0,
-        71,
-        SR,
-        hop,
-        voiced,
-        invalidProb,
-      );
-      const generalWithInvalidProb = pitchCorrectTimevarying(tone, f0, SR, hop, {
+      const withInvalidProb = midiCorrection(tone, f0, 71, SR, hop, voiced, invalidProb);
+      const generalWithInvalidProb = contourCorrection(tone, f0, SR, hop, {
         voiced,
         voicedProb: invalidProb,
       });
@@ -299,20 +319,12 @@ describe('editing effects', () => {
     for (const invalid of [Number.NaN, -0.1, 1.1]) {
       expectRefusal(
         () =>
-          pitchCorrectToMidiTimevarying(
-            tone,
-            f0,
-            71,
-            SR,
-            hop,
-            undefined,
-            new Float32Array(nFrames).fill(invalid),
-          ),
+          midiCorrection(tone, f0, 71, SR, hop, undefined, new Float32Array(nFrames).fill(invalid)),
         RangeError,
       );
       expectRefusal(
         () =>
-          pitchCorrectTimevarying(tone, f0, SR, hop, {
+          contourCorrection(tone, f0, SR, hop, {
             voicedProb: new Float32Array(nFrames).fill(invalid),
           }),
         RangeError,
@@ -328,22 +340,22 @@ describe('editing effects', () => {
     const shortProb = new Float32Array(nFrames - 1).fill(1);
 
     expectRefusal(
-      () => pitchCorrectToMidiTimevarying(tone, f0, 71, SR, hop, shortVoiced),
+      () => midiCorrection(tone, f0, 71, SR, hop, shortVoiced),
       RangeError,
       /same length/,
     );
     expectRefusal(
-      () => pitchCorrectToMidiTimevarying(tone, f0, 71, SR, hop, undefined, shortProb),
+      () => midiCorrection(tone, f0, 71, SR, hop, undefined, shortProb),
       RangeError,
       /same length/,
     );
     expectRefusal(
-      () => pitchCorrectTimevarying(tone, f0, SR, hop, { voiced: shortVoiced }),
+      () => contourCorrection(tone, f0, SR, hop, { voiced: shortVoiced }),
       RangeError,
       /same length/,
     );
     expectRefusal(
-      () => pitchCorrectTimevarying(tone, f0, SR, hop, { voicedProb: shortProb }),
+      () => contourCorrection(tone, f0, SR, hop, { voicedProb: shortProb }),
       RangeError,
       /same length/,
     );
@@ -355,18 +367,18 @@ describe('editing effects', () => {
     const f0 = new Float32Array(nFrames).fill(440);
 
     // Default (no options) behaves like the fixed-MIDI path and stays finite.
-    const base = pitchCorrectTimevarying(tone, f0, SR, hop);
+    const base = contourCorrection(tone, f0, SR, hop);
     expect(base.length).toBe(tone.length);
     expect(base.every((x) => Number.isFinite(x))).toBe(true);
 
     // Scale mode snaps to the configured key without throwing.
-    const scaled = pitchCorrectTimevarying(tone, f0, SR, hop, { mode: 'scale', scaleRoot: 0 });
+    const scaled = contourCorrection(tone, f0, SR, hop, { targetMode: 'scale', scaleRoot: 0 });
     expect(scaled.length).toBe(tone.length);
     expect(scaled.every((x) => Number.isFinite(x))).toBe(true);
 
     // A lower retuneAmount produces a different correction than a full snap.
-    const full = pitchCorrectTimevarying(tone, f0, SR, hop, { targetMidi: 71, retuneAmount: 1 });
-    const gentle = pitchCorrectTimevarying(tone, f0, SR, hop, {
+    const full = contourCorrection(tone, f0, SR, hop, { targetMidi: 71, retuneAmount: 1 });
+    const gentle = contourCorrection(tone, f0, SR, hop, {
       targetMidi: 71,
       retuneAmount: 0.25,
     });
@@ -374,32 +386,26 @@ describe('editing effects', () => {
 
     // Out-of-range knobs are rejected.
     expectRefusal(
-      () => pitchCorrectTimevarying(tone, f0, SR, hop, { targetMidi: 71, retuneAmount: 2 }),
+      () => contourCorrection(tone, f0, SR, hop, { targetMidi: 71, retuneAmount: 2 }),
+      RangeError,
+    );
+    expectRefusal(() => contourCorrection(tone, f0, SR, hop, { targetMidi: 200 }), RangeError);
+    expectRefusal(
+      () => contourCorrection(tone, f0, SR, hop, { targetMode: 'Scale' as never }),
+      RangeError,
+      /targetMode must be one of/,
+    );
+    expectRefusal(
+      () => contourCorrection(tone, f0, SR, hop, { maxCorrectionSemitones: -1 }),
       RangeError,
     );
     expectRefusal(
-      () => pitchCorrectTimevarying(tone, f0, SR, hop, { targetMidi: 200 }),
+      () => contourCorrection(tone, f0, SR, hop, { retuneSpeedMs: Number.NaN }),
       RangeError,
     );
-    expectRefusal(
-      () => pitchCorrectTimevarying(tone, f0, SR, hop, { mode: 'Scale' as never }),
-      RangeError,
-      /pitch correction mode/,
-    );
-    expectRefusal(
-      () => pitchCorrectTimevarying(tone, f0, SR, hop, { maxCorrectionSemitones: -1 }),
-      RangeError,
-    );
-    expectRefusal(
-      () => pitchCorrectTimevarying(tone, f0, SR, hop, { retuneSpeedMs: Number.NaN }),
-      RangeError,
-    );
-    expectRefusal(
-      () => pitchCorrectTimevarying(tone, f0, SR, hop, { scaleModeMask: 0 }),
-      RangeError,
-    );
-    expectRefusal(() => pitchCorrectTimevarying(tone, new Float32Array(), SR, hop), RangeError);
-    expectRefusal(() => pitchCorrectTimevarying(tone, f0, SR, 0), RangeError);
+    expectRefusal(() => contourCorrection(tone, f0, SR, hop, { scaleModeMask: 0 }), RangeError);
+    expectRefusal(() => contourCorrection(tone, new Float32Array(), SR, hop), RangeError);
+    expectRefusal(() => contourCorrection(tone, f0, SR, 0), RangeError);
   });
 
   it('noteStretch returns a non-empty Float32Array', () => {
@@ -413,8 +419,8 @@ describe('editing effects', () => {
   });
 
   it('noteStretch and noteMove default offset to the input length', () => {
-    const stretched = noteStretch(tone, SR);
-    const moved = noteMove(tone, SR);
+    const stretched = noteStretch(tone, SR, { stretchRatio: 1.5 });
+    const moved = noteMove(tone, SR, { targetOnsetSample: 100 });
     expect(stretched).toBeInstanceOf(Float32Array);
     expect(stretched.length).toBeGreaterThan(0);
     expect(moved).toBeInstanceOf(Float32Array);
@@ -465,81 +471,89 @@ describe('editing effects', () => {
     const changer = new RealtimeVoiceChanger({
       sampleRate: SR,
       maxBlockSize: 128,
-      channels: 1,
-      preset: 'bright-idol',
+      numChannels: 1,
+      config: 'brightIdol',
     });
     const input = tone.subarray(0, 128);
     const output = new Float32Array(input.length);
     changer.processMonoInto(input, output);
     expect(output.some((sample) => Number.isFinite(sample))).toBe(true);
-    expect(changer.latencySamples()).toBeGreaterThan(0);
-    changer.setConfig('deep-narrator');
+    expect(changer.latencySamples).toBeGreaterThan(0);
+    changer.setConfig('deepNarrator');
     expect(changer.configJson()).toContain('retune');
     changer.destroy();
 
     // The latency comparison below is a grain-engine property; the preset defaults to PSOLA.
     const grainPreset = {
-      ...realtimeVoiceChangerPresetConfig('soft-whisper'),
-      voiceEngineEngine: 'grain' as const,
+      ...realtimeVoiceChangerPresetConfig('softWhisper'),
+      voiceEngine: 'grain' as const,
     };
-    const offline = voiceChangeRealtime(tone.subarray(0, 512), SR, grainPreset);
+    const renderRealtime = (config: RealtimeVoiceChangerConfigInput) =>
+      voiceChangeRealtime({ channels: [tone.subarray(0, 512)], sampleRate: SR, config })[0];
+    const offline = renderRealtime(grainPreset) as Float32Array;
     expect(offline).toBeInstanceOf(Float32Array);
     expect(offline.length).toBe(512);
-    expect(voiceChangeRealtime(tone.subarray(0, 512), SR, grainPreset)).toEqual(offline);
+    expect(renderRealtime(grainPreset)).toEqual(offline);
 
     const uncompensated = new RealtimeVoiceChanger({
       sampleRate: SR,
       maxBlockSize: 512,
-      channels: 1,
-      preset: grainPreset,
+      numChannels: 1,
+      config: grainPreset,
     });
-    const latency = uncompensated.latencySamples();
+    const latency = uncompensated.latencySamples;
     expect(latency).toBeGreaterThan(0);
     const raw = uncompensated.processMono(tone.subarray(0, 512));
     uncompensated.destroy();
     expect(peak(raw.subarray(0, latency))).toBeLessThan(1e-4);
     expect(peak(offline.subarray(0, latency))).toBeGreaterThan(1e-3);
 
-    // Interleaved stereo path (mirrors the WASM voiceChangeRealtime channels
-    // option): a 512-frame stereo buffer is 1024 interleaved samples.
-    const stereoIn = new Float32Array(1024);
-    for (let i = 0; i < 512; i++) {
-      stereoIn[i * 2] = tone[i] ?? 0;
-      stereoIn[i * 2 + 1] = tone[i] ?? 0;
-    }
-    const stereoOut = voiceChangeRealtime(stereoIn, SR, 'soft-whisper', { channels: 2 });
-    expect(stereoOut.length).toBe(1024);
+    // Planar stereo: two equal-length channels in, two out.
+    const left = tone.subarray(0, 512);
+    const stereoOut = voiceChangeRealtime({
+      channels: [left, left],
+      sampleRate: SR,
+      config: 'softWhisper',
+    });
+    expect(stereoOut).toHaveLength(2);
+    expect(stereoOut[0]?.length).toBe(512);
+    expect(stereoOut[1]?.length).toBe(512);
     expectRefusal(
-      () => voiceChangeRealtime(new Float32Array(3), SR, 'soft-whisper', { channels: 2 }),
+      () =>
+        voiceChangeRealtime({
+          channels: [left, tone.subarray(0, 100)],
+          sampleRate: SR,
+          config: 'softWhisper',
+        }),
       RangeError,
-      /multiple of 2/,
     );
     expectRefusal(
-      () => voiceChangeRealtime(stereoIn, SR, 'soft-whisper', { channels: 3 as unknown as 2 }),
+      () =>
+        voiceChangeRealtime({
+          channels: [left, left, left],
+          sampleRate: SR,
+          config: 'softWhisper',
+        }),
       RangeError,
-      /channels must be 1 or 2/,
     );
-    expect(realtimeVoiceChangerPresetNames()).toContain('robot-mascot');
-    const presetJson = realtimeVoiceChangerPresetJson('bright-idol');
+    expect(realtimeVoiceChangerPresetNames()).toContain('robotMascot');
+    const presetJson = realtimeVoiceChangerPresetJson('brightIdol');
     expect(presetJson).toContain('bright-idol');
-    expect(validateRealtimeVoiceChangerPresetJson(presetJson).ok).toBe(true);
-    expect(validateRealtimeVoiceChangerPresetJson('{}').ok).toBe(false);
+    expect(realtimeVoiceChangerValidatePresetJson(presetJson).ok).toBe(true);
+    expect(realtimeVoiceChangerValidatePresetJson('{}').ok).toBe(false);
 
     // Unknown preset name throws (mirrors WASM/Python) rather than passing an
     // undefined ordinal to the native call.
-    expectRefusal(
-      () => voiceCharacterPresetId('not-a-preset' as never),
-      RangeError,
-      /Unknown voice character preset/,
-    );
+    expectRefusal(() => realtimeVoiceChangerPresetConfig('not-a-preset' as never), RangeError);
+    expectRefusal(() => voiceCharacterPresetId(999), RangeError);
   });
 
   it('RealtimeVoiceChanger sanitizes non-finite input without poisoning IIR state', () => {
     const changer = new RealtimeVoiceChanger({
       sampleRate: SR,
       maxBlockSize: 128,
-      channels: 1,
-      preset: 'neutral-monitor',
+      numChannels: 1,
+      config: 'neutralMonitor',
     });
     try {
       // The live block path has no JS-side finite preflight (it is the RT hot
@@ -563,22 +577,24 @@ describe('editing effects', () => {
     const changer = new RealtimeVoiceChanger({
       sampleRate: 48000,
       maxBlockSize: 128,
-      channels: 1,
-      preset: 'neutral-monitor',
+      numChannels: 1,
+      config: 'neutralMonitor',
     });
     changer.destroy();
     expectRefusal(() => changer.processMono(new Float32Array(16)), ErrorCode.InvalidState);
     expectRefusal(() => changer.reset(), ErrorCode.InvalidState);
     expectRefusal(() => changer.configJson(), ErrorCode.InvalidState);
-    expectRefusal(() => changer.latencySamples(), ErrorCode.InvalidState);
-    expectRefusal(() => changer.setConfig('neutral-monitor'), ErrorCode.InvalidState);
+    expectRefusal(() => changer.latencySamples, ErrorCode.InvalidState);
+    expectRefusal(() => changer.setConfig('neutralMonitor'), ErrorCode.InvalidState);
     expect(() => changer.destroy()).not.toThrow();
     expect(() => changer[Symbol.dispose]()).not.toThrow();
   });
 
   it('exposes editing methods on the Audio class', () => {
     const audio = Audio.fromBuffer(tone, SR);
-    expect(audio.pitchCorrectToMidi(69, 71)).toBeInstanceOf(Float32Array);
+    expect(audio.pitchCorrectToMidi({ currentMidi: 69, targetMidi: 71 })).toBeInstanceOf(
+      Float32Array,
+    );
     expect(
       audio.noteStretch({ onsetSample: 0, offsetSample: audio.length, stretchRatio: 1.5 }),
     ).toBeInstanceOf(Float32Array);
@@ -591,18 +607,18 @@ describe('editing effects', () => {
   it('mono RealtimeVoiceChanger with wetMix=0 returns aligned dry input (C-1 regression)', () => {
     // The strict input contract accepts the complete public flat POD. The
     // chain must short-circuit to the dry signal when only wetMix changes.
-    const preset = realtimeVoiceChangerPresetConfig('neutral-monitor');
+    const preset = realtimeVoiceChangerPresetConfig('neutralMonitor');
     preset.wetMix = 0;
     const changer = new RealtimeVoiceChanger({
       sampleRate: SR,
       maxBlockSize: 128,
-      channels: 1,
-      preset,
+      numChannels: 1,
+      config: preset,
     });
     // Stay below the final limiter's -1 dBTP ceiling: this checks the dry
     // path itself, rather than intentional output protection.
     const input = tone.subarray(0, 128).map((sample) => sample * 0.1);
-    const latency = changer.latencySamples();
+    const latency = changer.latencySamples;
     const output = new Float32Array(input.length);
     const captured = new Float32Array((Math.ceil(latency / input.length) + 1) * input.length);
     for (let block = 0; block * input.length < captured.length; block++) {
@@ -617,12 +633,12 @@ describe('editing effects', () => {
 
   it('WASM-style validate rejects empty objects and required-field omissions (C-2 regression)', () => {
     // The full validator must catch missing dsp / id / name and unknown keys.
-    expect(validateRealtimeVoiceChangerPresetJson('{}').ok).toBe(false);
+    expect(realtimeVoiceChangerValidatePresetJson('{}').ok).toBe(false);
     expect(
-      validateRealtimeVoiceChangerPresetJson('{"schemaVersion":1,"id":"x","name":"x"}').ok,
+      realtimeVoiceChangerValidatePresetJson('{"schemaVersion":1,"id":"x","name":"x"}').ok,
     ).toBe(false);
     expect(
-      validateRealtimeVoiceChangerPresetJson(
+      realtimeVoiceChangerValidatePresetJson(
         '{"schemaVersion":1,"id":"x","name":"x","category":"custom","dsp":{"retune":{"semitones":0,"mix":0,"grainSize":0},"formant":{"factor":1,"amount":0,"body":0,"brightness":0,"nasal":0},"eq":{"highpassHz":80,"bodyDb":0,"presenceDb":0,"airDb":0},"gate":{"thresholdDb":-55,"attackMs":2,"releaseMs":100,"rangeDb":18},"compressor":{"thresholdDb":-22,"ratio":2.5,"attackMs":6,"releaseMs":90,"makeupGainDb":1},"deesser":{"frequencyHz":7200,"thresholdDb":-28,"ratio":3,"rangeDb":8},"reverb":{"mix":0.04,"timeMs":320,"damping":0.55,"seed":1},"limiter":{"ceilingDb":-1,"releaseMs":50}}}',
       ).ok,
     ).toBe(true);
@@ -633,8 +649,8 @@ describe('editing effects', () => {
       const changer = new RealtimeVoiceChanger({
         sampleRate: 48000,
         maxBlockSize: 128,
-        channels: 1,
-        preset: 'neutral-monitor',
+        numChannels: 1,
+        config: 'neutralMonitor',
       });
       try {
         const oversized = new Float32Array(129); // maxBlockSize + 1
@@ -645,19 +661,16 @@ describe('editing effects', () => {
       }
     });
 
-    it('setConfig with invalid JSON string throws an Error', () => {
+    it('setConfig with a JSON string throws RangeError', () => {
       const changer = new RealtimeVoiceChanger({
         sampleRate: 48000,
         maxBlockSize: 128,
-        channels: 1,
-        preset: 'neutral-monitor',
+        numChannels: 1,
+        config: 'neutralMonitor',
       });
       try {
-        // The native C++ JSON parser rejects malformed JSON and throws.
-        expectRefusal(
-          () => changer.setConfig('{not valid json}' as unknown as never),
-          ErrorCode.InvalidFormat,
-        );
+        // A string is a preset id, never a JSON document.
+        expectRefusal(() => changer.setConfig('{not valid json}' as unknown as never), RangeError);
       } finally {
         changer.destroy();
       }
@@ -668,14 +681,18 @@ describe('editing effects', () => {
       const changer = new RealtimeVoiceChanger({
         sampleRate: 48000,
         maxBlockSize: 128,
-        channels: 1,
-        preset: 'neutral-monitor',
+        numChannels: 1,
+        config: 'neutralMonitor',
       });
       try {
         // 128 * 2 interleaved samples but only 1 channel was prepared — native
         // binding checks channels <= channels_ and rejects.
         const interleaved = new Float32Array(128 * 2);
-        expectRefusal(() => changer.processInterleaved(interleaved, 2), RangeError);
+        expectRefusal(
+          () =>
+            changer.processInterleavedInto(interleaved, 2, new Float32Array(interleaved.length)),
+          RangeError,
+        );
       } finally {
         changer.destroy();
       }
@@ -702,15 +719,15 @@ describe('editing effects', () => {
       const changer = new RealtimeVoiceChanger({
         sampleRate: 48000,
         maxBlockSize: FRAMES,
-        channels: CHANNELS,
-        preset: 'bright-idol',
+        numChannels: CHANNELS,
+        config: 'brightIdol',
       });
       try {
         // The voice changer reports a non-trivial latency (== retune grain),
         // so the first few blocks may be all-zero look-ahead. Feed enough
         // blocks to flush past latency_samples() before asserting that the
         // chain has produced non-zero output.
-        const latencyFrames = changer.latencySamples();
+        const latencyFrames = changer.latencySamples;
         const blocksToFlush = Math.ceil(latencyFrames / FRAMES) + 1;
         const input = makeStereoInterleaved();
         const output = new Float32Array(INTERLEAVED);
@@ -733,13 +750,13 @@ describe('editing effects', () => {
 
     it('with wetMix=0 preserves an aligned interleaved dry buffer', () => {
       // Mirrors the mono C-1 regression with a complete public flat POD.
-      const preset = realtimeVoiceChangerPresetConfig('neutral-monitor');
+      const preset = realtimeVoiceChangerPresetConfig('neutralMonitor');
       preset.wetMix = 0;
       const changer = new RealtimeVoiceChanger({
         sampleRate: 48000,
         maxBlockSize: FRAMES,
-        channels: CHANNELS,
-        preset,
+        numChannels: CHANNELS,
+        config: preset,
       });
       try {
         const input = makeStereoInterleaved();
@@ -749,7 +766,7 @@ describe('editing effects', () => {
           input[i] *= 0.1;
         }
         const output = new Float32Array(INTERLEAVED);
-        const latency = changer.latencySamples();
+        const latency = changer.latencySamples;
         const frames = INTERLEAVED / CHANNELS;
         const captured = new Float32Array((Math.ceil(latency / frames) + 1) * INTERLEAVED);
         for (let block = 0; block * INTERLEAVED < captured.length; block++) {
@@ -772,8 +789,8 @@ describe('editing effects', () => {
       const changer = new RealtimeVoiceChanger({
         sampleRate: 48000,
         maxBlockSize: FRAMES,
-        channels: CHANNELS,
-        preset: 'neutral-monitor',
+        numChannels: CHANNELS,
+        config: 'neutralMonitor',
       });
       try {
         const input = new Float32Array(INTERLEAVED);
@@ -788,8 +805,8 @@ describe('editing effects', () => {
       const changer = new RealtimeVoiceChanger({
         sampleRate: 48000,
         maxBlockSize: FRAMES,
-        channels: CHANNELS,
-        preset: 'neutral-monitor',
+        numChannels: CHANNELS,
+        config: 'neutralMonitor',
       });
       try {
         const input = new Float32Array(INTERLEAVED);
@@ -815,8 +832,8 @@ describe('editing effects', () => {
       const changer = new RealtimeVoiceChanger({
         sampleRate: 48000,
         maxBlockSize: FRAMES,
-        channels: CHANNELS,
-        preset: 'neutral-monitor',
+        numChannels: CHANNELS,
+        config: 'neutralMonitor',
       });
       try {
         // (FRAMES + 1) frames * 2 channels exceeds maxBlockSize per-frame budget.
@@ -849,7 +866,9 @@ describe('voiceChangeRealtime default preset', () => {
         ),
       ) as { defaults: Record<string, VoicePresetId> }
     ).defaults['voice_change_realtime.preset'];
-    expect(expected).toBe('neutral-monitor');
+    // The corpus spells ids in kebab case; this surface takes lowerCamel tokens.
+    const token = expected.replace(/-(\w)/g, (_m, c: string) => c.toUpperCase()) as VoicePresetId;
+    expect(token).toBe('neutralMonitor');
 
     const sampleRate = 22050;
     const samples = new Float32Array(2048);
@@ -858,8 +877,8 @@ describe('voiceChangeRealtime default preset', () => {
     }
     // A TypeScript default parameter is not introspectable, so compare renders:
     // omitting the preset must produce exactly what naming the default produces.
-    expect(voiceChangeRealtime(samples, sampleRate)).toEqual(
-      voiceChangeRealtime(samples, sampleRate, expected),
+    expect(voiceChangeRealtime({ channels: [samples], sampleRate })).toEqual(
+      voiceChangeRealtime({ channels: [samples], sampleRate, config: token }),
     );
   });
 });

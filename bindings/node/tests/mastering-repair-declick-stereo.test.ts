@@ -37,26 +37,26 @@ describe('masteringRepairDeclickStereo', () => {
     const { left, right } = fixture();
     const result = masteringRepairDeclickStereo({ left, right, sampleRate: SR });
 
-    expect(result.left).toHaveLength(left.length);
-    expect(result.right).toHaveLength(right.length);
-    expect(result.left.every(Number.isFinite)).toBe(true);
-    expect(result.right.every(Number.isFinite)).toBe(true);
+    expect(result.channels[0]).toHaveLength(left.length);
+    expect(result.channels[1]).toHaveLength(right.length);
+    expect(result.channels[0].every(Number.isFinite)).toBe(true);
+    expect(result.channels[1].every(Number.isFinite)).toBe(true);
 
     // The fixture only witnesses linking while each channel detects its own
     // clicks. A channel that detected nothing still satisfies "repaired more
     // than it detected" and reads exactly like linking working.
-    expect(result.leftReport.detected.count).toBe(LEFT_CLICKS.length);
-    expect(result.rightReport.detected.count).toBe(1);
+    expect(result.reports[0].detected.count).toBe(LEFT_CLICKS.length);
+    expect(result.reports[1].detected.count).toBe(1);
 
     // The discriminating property: a run only one channel selected is repaired
     // in both, so each side borrows what the other detected.
-    expect(result.leftReport.linkedRuns).toBeGreaterThan(0);
-    expect(result.rightReport.linkedRuns).toBeGreaterThan(0);
-    expect(result.leftReport.repairedRuns).toBeGreaterThan(result.leftReport.detected.count);
-    expect(result.rightReport.repairedRuns).toBeGreaterThan(result.rightReport.detected.count);
+    expect(result.reports[0].linkedRuns).toBeGreaterThan(0);
+    expect(result.reports[1].linkedRuns).toBeGreaterThan(0);
+    expect(result.reports[0].repairedRuns).toBeGreaterThan(result.reports[0].detected.count);
+    expect(result.reports[1].repairedRuns).toBeGreaterThan(result.reports[1].detected.count);
 
     // Not one channel restated.
-    expect(Array.from(result.left)).not.toEqual(Array.from(result.right));
+    expect(Array.from(result.channels[0])).not.toEqual(Array.from(result.channels[1]));
   });
 
   it('differs from the mono entry point at the other channels click', () => {
@@ -67,8 +67,8 @@ describe('masteringRepairDeclickStereo', () => {
     // The mono pass never sees the right channel's click, so it leaves the left
     // channel alone there. Without this the stereo entry could be the mono one
     // called twice.
-    expect(stereo.left[RIGHT_ONLY_CLICK]).not.toBe(mono[RIGHT_ONLY_CLICK]);
-    expect(stereo.left[LEFT_CLICKS[0]]).toBeCloseTo(mono[LEFT_CLICKS[0]], 5);
+    expect(stereo.channels[0][RIGHT_ONLY_CLICK]).not.toBe(mono[RIGHT_ONLY_CLICK]);
+    expect(stereo.channels[0][LEFT_CLICKS[0]]).toBeCloseTo(mono[LEFT_CLICKS[0]], 5);
   });
 
   it('carries the options bag through to the detector', () => {
@@ -83,9 +83,9 @@ describe('masteringRepairDeclickStereo', () => {
 
     // A ratio no run can clear leaves nothing to repair, so the option is
     // reaching the detector rather than being dropped on the way.
-    expect(tight.leftReport.detected.count).toBe(0);
-    expect(tight.leftReport.repairedRuns).toBe(0);
-    expect(loose.leftReport.detected.count).toBeGreaterThan(0);
+    expect(tight.reports[0].detected.count).toBe(0);
+    expect(tight.reports[0].repairedRuns).toBe(0);
+    expect(loose.reports[0].detected.count).toBeGreaterThan(0);
   });
 
   it('refuses bad arguments with a catchable error', () => {

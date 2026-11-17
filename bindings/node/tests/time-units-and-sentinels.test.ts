@@ -108,7 +108,9 @@ describe('spectralEdit time bounds', () => {
 
   it('keeps the positional form equivalent to the request form', () => {
     const ops = [{ ...op, startSec: 0.1, endSec: 0.4 }];
-    expect(spectralEdit(samples, SR, ops)).toEqual(spectralEdit({ samples, sampleRate: SR, ops }));
+    expect(spectralEdit(samples, SR, { ops })).toEqual(
+      spectralEdit({ samples, sampleRate: SR, ops }),
+    );
   });
 });
 
@@ -158,7 +160,9 @@ describe('note stretch and move time bounds', () => {
     expect(() =>
       noteStretch({ samples, sampleRate: SR, onsetSample: 0, onsetSec: 0, stretchRatio: 1 }),
     ).toThrow(/onsetSample.*onsetSec/);
-    expect(() => noteStretch({ samples, sampleRate: SR, offsetSample: -1 })).toThrow(RangeError);
+    expect(() =>
+      noteStretch({ samples, sampleRate: SR, offsetSample: -1, stretchRatio: 1 }),
+    ).toThrow(RangeError);
     expect(() =>
       noteMove({ samples, sampleRate: SR, targetOnsetSample: 5, targetOnsetSec: 1 }),
     ).toThrow(/targetOnsetSample.*targetOnsetSec/);
@@ -369,7 +373,7 @@ describe('mono normalize RMS default', () => {
     const samples = noise(SR, 7);
     const explicit = normalize({ samples, sampleRate: SR, targetDb: -20, mode: 'rms' });
     expect(normalize({ samples, sampleRate: SR, mode: 'rms' })).toEqual(explicit);
-    expect(normalize(samples, SR, undefined, 'rms')).toEqual(explicit);
+    expect(normalize(samples, SR, { mode: 'rms' })).toEqual(explicit);
     expect(normalize({ samples, sampleRate: SR })).toEqual(
       normalize({ samples, sampleRate: SR, targetDb: 0, mode: 'peak' }),
     );

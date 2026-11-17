@@ -1,6 +1,6 @@
 import { resolveFftOptions } from './internal/fft_options.js';
 import { KEY_MODES } from './internal/key_modes.js';
-import { centsToNativeTuning, nativeTuningToCents } from './internal/tuning_units.js';
+import { tempoRange } from './internal/tempo_range.js';
 import { addon } from './native.js';
 import type { RequestFn } from './request_keys.js';
 import type {
@@ -40,19 +40,20 @@ import type {
   ProgressCallback,
   RhythmResult,
   RirResult,
-  RirSynthOptions,
   RoomEstimateOptions,
   RoomEstimateResult,
-  RoomGeometryFromEstimateOptions,
   RoomGeometryOptions,
   RoomMorphOptions,
   RoomMorphResult,
   RoomMorphStereoResult,
+  RoomPlacement,
   Section,
   SectionType,
+  SynthesizeRirRequest,
   TimbreResult,
 } from './types.js';
 import { CHORD_QUALITIES } from './types_analysis.js';
+import type { OptionsOf } from './validation.js';
 import {
   assertAudioInput,
   assertClosedToken,
@@ -67,33 +68,121 @@ import {
   assertPitchClass,
   assertPositiveInteger,
   assertSampleRate,
-  optionsBag,
   requestObject,
   requestOnly,
   sampleOneShot,
   type ValidateOptions,
 } from './validation.js';
 
-/**
- * Check the room-option fields whose zero requests the library default, before
- * the addon narrows them. Truncation lands a fractional value on that zero, so
- * the call runs at the default and reports success.
- *
- * `materialPreset` is deliberately absent: it is a name, and its `'none'` is a
- * mode of its own rather than a stand-in for an absent value. So is
- * {@link analyzeImpulseResponse}'s `nOctaveBands`, which is passed through as a
- * literal band count and analyses no bands at zero.
- */
-function assertRoomOptions(
+/** Fields whose 0 the core reads as "use the library default": absent is the default, 0 is refused. */
+const ZERO_IS_DEFAULT_FIELDS = [
+  'mixingTimeMs',
+  'crossfadeMs',
+  'maxSec',
+  'aspectHintLw',
+  'aspectHintLh',
+  'referenceAbsorption',
+  'nOctaveBands',
+  'minDecayDb',
+  'noiseFloorMarginDb',
+] as const;
+
+/** Fields where 0 is a real quantity the native config cannot yet tell from absent. */
+const ZERO_UNSUPPORTED_FIELDS = ['airTemperatureC', 'airHumidityPercent', 'seed'] as const;
+
+const ACOUSTIC_MODES = ['auto', 'blind', 'impulseResponse'] as const;
+
+// The native side still spells the analyzer mode `impulse_response`.
+const ACOUSTIC_MODE_NATIVE: Readonly<Record<string, string>> = {
+  impulseResponse: 'impulse_response',
+};
+
+/** A placement the caller gave, checked; absent (`undefined` / `null`) stays `undefined`. */
+function checkedPlacement(
   fnName: string,
-  options: { seed?: number; nOctaveBands?: number },
-): void {
-  if (options.seed !== undefined) {
-    assertInt64(fnName, options.seed, 'seed');
+  name: 'source' | 'listener',
+  placement: unknown,
+): RoomPlacement | undefined {
+  if (placement === undefined || placement === null) {
+    return undefined;
   }
-  if (options.nOctaveBands !== undefined) {
-    assertInt32(fnName, options.nOctaveBands, 'nOctaveBands');
+  if (typeof placement !== 'object') {
+    throw new TypeError(`${fnName}: ${name} must be an object with x, y and z`);
   }
+  const { x, y, z } = placement as Record<string, unknown>;
+  assertFloatValue(fnName, x, `${name}.x`);
+  assertFloatValue(fnName, y, `${name}.y`);
+  assertFloatValue(fnName, z, `${name}.z`);
+  return { x, y, z } as RoomPlacement;
+}
+
+/**
+ * Turns the public room options into the addon's: `source` / `listener` become
+ * the flat position fields, `maxSec` becomes `maxSeconds`, `impulseResponse`
+ * becomes the native mode name, and an explicit 0 on a zero-means-default field
+ * is refused. Fractional `seed` / `nOctaveBands` are refused before the addon
+ * narrows them onto that zero.
+ */
+function nativeRoomOptions(fnName: string, options: object): Record<string, unknown> {
+  const given = options as Record<string, unknown>;
+  const resolved: Record<string, unknown> = { ...given };
+  const read = (field: string): number | undefined => {
+    const value = given[field];
+    if (value === undefined || value === null) {
+      return undefined;
+    }
+    if (typeof value !== 'number') {
+      throw new TypeError(`${fnName}: ${field} must be a number`);
+    }
+    return value;
+  };
+  for (const field of ZERO_IS_DEFAULT_FIELDS) {
+    if (read(field) === 0) {
+      throw new RangeError(`${fnName}: ${field} must not be 0; omit it for the default`);
+    }
+  }
+  for (const field of ZERO_UNSUPPORTED_FIELDS) {
+    if (read(field) === 0) {
+      throw new RangeError(`${fnName}: ${field} = 0 is not supported yet; omit it for the default`);
+    }
+  }
+  const seed = read('seed');
+  if (seed !== undefined) {
+    assertInt64(fnName, seed, 'seed');
+  }
+  const nOctaveBands = read('nOctaveBands');
+  if (nOctaveBands !== undefined) {
+    assertInt32(fnName, nOctaveBands, 'nOctaveBands');
+  }
+  const maxSec = read('maxSec');
+  delete resolved.maxSec;
+  if (maxSec !== undefined) {
+    resolved.maxSeconds = maxSec;
+  }
+  for (const name of ['source', 'listener'] as const) {
+    const placement = checkedPlacement(fnName, name, given[name]);
+    delete resolved[name];
+    if (placement !== undefined) {
+      resolved[`${name}X`] = placement.x;
+      resolved[`${name}Y`] = placement.y;
+      resolved[`${name}Z`] = placement.z;
+    }
+  }
+  if (given.mode !== undefined) {
+    assertClosedToken(fnName, given.mode, ACOUSTIC_MODES, 'mode');
+    resolved.mode = ACOUSTIC_MODE_NATIVE[given.mode] ?? given.mode;
+  }
+  return resolved;
+}
+
+/** The addon's flat estimate geometry as the public `source` / `listener` placements. */
+function publicRoomGeometry(native: Record<string, unknown>): RoomGeometryOptions {
+  const { sourceX, sourceY, sourceZ, listenerX, listenerY, listenerZ, ...rest } = native;
+  return {
+    ...rest,
+    source: { x: sourceX, y: sourceY, z: sourceZ },
+    listener: { x: listenerX, y: listenerY, z: listenerZ },
+  } as RoomGeometryOptions;
 }
 
 // The native layer answers in its own field names and ordinals; the facade
@@ -143,7 +232,7 @@ const SECTION_TYPES: readonly SectionType[] = [
   'unknown',
 ];
 
-/** Native tuning is a semitone fraction, so every site converts through the shared helper. */
+/** The tuning argument the addon reads: cents, `'auto'`, or absent. */
 function nativeTuning(fnName: string, tuningCents: unknown): number | 'auto' | undefined {
   if (tuningCents === undefined || tuningCents === null) {
     return undefined;
@@ -154,7 +243,7 @@ function nativeTuning(fnName: string, tuningCents: unknown): number | 'auto' | u
   if (typeof tuningCents !== 'number') {
     throw new TypeError(`${fnName}: tuningCents must be a number or 'auto'`);
   }
-  return centsToNativeTuning(tuningCents);
+  return tuningCents;
 }
 
 function pitchClassOf(value: number): PitchClass {
@@ -210,7 +299,6 @@ function analysisFromNative(raw: Native): AnalysisResult {
   const {
     beatTimes: _beatTimes,
     downbeatIndices,
-    tuning,
     bpmCandidates,
     chords,
     sections,
@@ -247,17 +335,15 @@ function analysisFromNative(raw: Native): AnalysisResult {
       vibratoRateHz: melody.vibratoRate,
       pitches: melody.pitches.map(melodyPointFromNative),
     },
-    tuningCents: nativeTuningToCents(tuning),
   };
 }
 
 function keyDetectionFromNative(raw: Native): KeyDetection {
-  const { tuning, ...key } = raw;
-  return { ...keyFromNative(key), tuningCents: nativeTuningToCents(tuning) };
+  return keyFromNative(raw) as KeyDetection;
 }
 
 function chordAnalysisFromNative(raw: Native): ChordAnalysisResult {
-  return { chords: raw.chords.map(chordFromNative), tuningCents: nativeTuningToCents(raw.tuning) };
+  return { chords: raw.chords.map(chordFromNative), tuningCents: raw.tuningCents };
 }
 
 /** Peak-picking configuration for {@link detectOnsets}. */
@@ -281,13 +367,21 @@ export interface DetectOnsetsRequest extends OnsetDetectOptions {
   sampleRate: number;
 }
 
+/** Tempo search range shared by {@link detectBpm} and {@link detectBeats}. */
+export interface TempoRangeOptions {
+  /** Lowest tempo searched, in BPM; default 60. Finite and positive, below `bpmMax`; a `RangeError` otherwise. */
+  bpmMin?: number;
+  /** Highest tempo searched, in BPM; default 200. Finite and positive, above `bpmMin`; a `RangeError` otherwise. */
+  bpmMax?: number;
+}
+
 /** Request for {@link detectBpm}. */
-export interface DetectBpmRequest extends ValidateOptions {
+export interface DetectBpmRequest extends ValidateOptions, TempoRangeOptions {
   samples: Float32Array;
   sampleRate: number;
 }
 /** Request for {@link detectBeats}. */
-export interface DetectBeatsRequest extends ValidateOptions {
+export interface DetectBeatsRequest extends ValidateOptions, TempoRangeOptions {
   samples: Float32Array;
   sampleRate: number;
 }
@@ -306,19 +400,24 @@ export interface DetectKeyCandidatesRequest extends KeyDetectionOptions {
   sampleRate: number;
 }
 
-export interface RoomEstimateRequest extends RoomEstimateOptions {
+/** Request for {@link estimateRoom}. */
+export interface EstimateRoomRequest extends RoomEstimateOptions {
   samples: Float32Array;
-  sampleRate?: number;
+  /** Sample rate in Hz, an integer in `[8000, 384000]`; there is no default. */
+  sampleRate: number;
 }
+/** Request for {@link roomMorph}. */
 export interface RoomMorphRequest extends RoomMorphOptions {
   samples: Float32Array;
-  sampleRate?: number;
+  /** Sample rate in Hz, an integer in `[8000, 384000]`; there is no default. */
+  sampleRate: number;
 }
 /** Request for {@link roomMorphStereo}. */
 export interface RoomMorphStereoRequest extends RoomMorphOptions {
   left: Float32Array;
   right: Float32Array;
-  sampleRate?: number;
+  /** Sample rate in Hz, an integer in `[8000, 384000]`; there is no default. */
+  sampleRate: number;
   /** Receiver spacing in metres, in (0, 4]; omitted = 0.5. */
   receiverSpacingM?: number;
 }
@@ -326,8 +425,13 @@ export interface RoomMorphStereoRequest extends RoomMorphOptions {
 export type RoomGeometryEstimate = Pick<RoomEstimateResult, 'lengthM' | 'widthM' | 'heightM'> & {
   bandAbsorption?: Float32Array | number[];
 };
-export interface RoomGeometryFromEstimateRequest extends RoomGeometryFromEstimateOptions {
+/** Request for {@link roomGeometryFromEstimate}. */
+export interface RoomGeometryFromEstimateRequest {
   estimate: RoomGeometryEstimate;
+  /** Replaces the source placement scaled into the estimated room. */
+  source?: RoomPlacement;
+  /** Replaces the listener placement scaled into the estimated room. */
+  listener?: RoomPlacement;
 }
 export interface ChordFunctionsRequest<T extends ChordFunctionsInput = Chord> {
   /** `detectChords`' timed result or its `chords` array, or the same shape built by hand. */
@@ -534,11 +638,11 @@ function nativeKeyOptions(fnName: string, request: KeyDetectionOptions): Record<
     hopLength: request.hopLength,
     useHpss: request.useHpss,
     loudnessWeighted: request.loudnessWeighted,
-    highPassHz: request.chromaHighPassHz,
+    chromaHighPassHz: request.chromaHighPassHz,
     modes: nativeModes,
     profile: profile === undefined || profile === null ? undefined : KEY_PROFILE_NATIVE[profile],
     genreHint,
-    tuning: nativeTuning(fnName, request.tuningCents),
+    tuningCents: nativeTuning(fnName, request.tuningCents),
   });
 }
 
@@ -548,18 +652,8 @@ function nativeAnalyzeOptions(fnName: string, request: AnalyzeRequest): Record<s
     assertFloatValue(fnName, request.chromaHighPassHz, 'chromaHighPassHz');
   }
   return compact({
-    ...without(
-      request,
-      'samples',
-      'sampleRate',
-      'validate',
-      'onProgress',
-      'cancel',
-      'chromaHighPassHz',
-      'tuningCents',
-    ),
-    chromaHighpassHz: request.chromaHighPassHz,
-    tuning: nativeTuning(fnName, request.tuningCents),
+    ...without(request, 'samples', 'sampleRate', 'validate', 'onProgress', 'cancel', 'tuningCents'),
+    tuningCents: nativeTuning(fnName, request.tuningCents),
   });
 }
 
@@ -573,11 +667,12 @@ export function detectBpm(request: DetectBpmRequest): number;
 export function detectBpm(
   samples: Float32Array,
   sampleRate: number,
-  options?: Omit<DetectBpmRequest, 'samples' | 'sampleRate'>,
+  options?: OptionsOf<DetectBpmRequest>,
 ): number;
 export function detectBpm(...args: unknown[]): number {
   const request = audioCall<DetectBpmRequest>('detectBpm', args);
-  return addon.detectBpm(request.samples, request.sampleRate);
+  const [bpmMin, bpmMax] = tempoRange('detectBpm', request);
+  return addon.detectBpm(request.samples, request.sampleRate, bpmMin, bpmMax);
 }
 
 /**
@@ -589,7 +684,7 @@ export function detectKey(request: DetectKeyRequest): KeyDetection;
 export function detectKey(
   samples: Float32Array,
   sampleRate: number,
-  options?: Omit<DetectKeyRequest, 'samples' | 'sampleRate'>,
+  options?: OptionsOf<DetectKeyRequest>,
 ): KeyDetection;
 export function detectKey(...args: unknown[]): KeyDetection {
   const request = audioCall<DetectKeyRequest>('detectKey', args);
@@ -603,7 +698,7 @@ export function detectKeyCandidates(request: DetectKeyCandidatesRequest): KeyCan
 export function detectKeyCandidates(
   samples: Float32Array,
   sampleRate: number,
-  options?: Omit<DetectKeyCandidatesRequest, 'samples' | 'sampleRate'>,
+  options?: OptionsOf<DetectKeyCandidatesRequest>,
 ): KeyCandidate[];
 export function detectKeyCandidates(...args: unknown[]): KeyCandidate[] {
   const request = audioCall<DetectKeyCandidatesRequest>('detectKeyCandidates', args);
@@ -620,11 +715,12 @@ export function detectBeats(request: DetectBeatsRequest): Float32Array;
 export function detectBeats(
   samples: Float32Array,
   sampleRate: number,
-  options?: Omit<DetectBeatsRequest, 'samples' | 'sampleRate'>,
+  options?: OptionsOf<DetectBeatsRequest>,
 ): Float32Array;
 export function detectBeats(...args: unknown[]): Float32Array {
   const request = audioCall<DetectBeatsRequest>('detectBeats', args);
-  return addon.detectBeats(request.samples, request.sampleRate);
+  const [bpmMin, bpmMax] = tempoRange('detectBeats', request);
+  return addon.detectBeats(request.samples, request.sampleRate, bpmMin, bpmMax);
 }
 
 /** Downbeat times in seconds. */
@@ -632,7 +728,7 @@ export function detectDownbeats(request: DetectDownbeatsRequest): Float32Array;
 export function detectDownbeats(
   samples: Float32Array,
   sampleRate: number,
-  options?: Omit<DetectDownbeatsRequest, 'samples' | 'sampleRate'>,
+  options?: OptionsOf<DetectDownbeatsRequest>,
 ): Float32Array;
 export function detectDownbeats(...args: unknown[]): Float32Array {
   const request = audioCall<DetectDownbeatsRequest>('detectDownbeats', args);
@@ -644,7 +740,7 @@ export function detectOnsets(request: DetectOnsetsRequest): Float32Array;
 export function detectOnsets(
   samples: Float32Array,
   sampleRate: number,
-  options?: Omit<DetectOnsetsRequest, 'samples' | 'sampleRate'>,
+  options?: OptionsOf<DetectOnsetsRequest>,
 ): Float32Array;
 export function detectOnsets(...args: unknown[]): Float32Array {
   const request = audioCall<DetectOnsetsRequest>('detectOnsets', args);
@@ -668,7 +764,7 @@ export function analyze(request: AnalyzeRequest): AnalysisResult;
 export function analyze(
   samples: Float32Array,
   sampleRate: number,
-  options?: Omit<AnalyzeRequest, 'samples' | 'sampleRate'>,
+  options?: OptionsOf<AnalyzeRequest>,
 ): AnalysisResult;
 export function analyze(...args: unknown[]): AnalysisResult {
   const request = audioCall<AnalyzeRequest>('analyze', args);
@@ -736,40 +832,39 @@ export function estimateMeter(request: EstimateMeterRequest): MeterEstimate {
 /**
  * Synthesize a room impulse response from shoebox geometry.
  *
- * @throws SonareError when the geometry, placement or timing is unusable (for
- *   example a source outside the room); the message leads with the diagnostic
- *   code, such as `acoustic.source_outside_room`.
+ * @throws {TypeError} when `sampleRate` is missing
+ * @throws {RangeError} when the geometry, placement or timing is unusable (for
+ *   example a source outside the room: the message leads with the diagnostic code,
+ *   such as `acoustic.source_outside_room`), on an out-of-range `sampleRate`, or
+ *   on an explicit 0 where omission selects the default
  */
-export function synthesizeRir(options: RirSynthOptions = {}): RirResult {
-  requestObject('synthesizeRir', options, 'request', true);
-  assertRoomOptions('synthesizeRir', options);
-  return addon.synthesizeRir(options);
+export function synthesizeRir(request: SynthesizeRirRequest): RirResult;
+export function synthesizeRir(...args: unknown[]): RirResult {
+  const r = requestOnly<SynthesizeRirRequest>('synthesizeRir', args);
+  assertSampleRate('synthesizeRir', r.sampleRate);
+  return addon.synthesizeRir(nativeRoomOptions('synthesizeRir', r));
 }
 
 /**
  * Estimate an equivalent room (volume/dimensions/absorption/DRR) from a
  * recording or impulse response. The volume scale is anchored by
  * `referenceAbsorption`; `confidence` reports how well the data support it.
+ *
+ * @throws {TypeError} when `sampleRate` is missing
+ * @throws {RangeError} on audio out of domain, an out-of-range `sampleRate`, an
+ *   unknown `mode`, or an explicit 0 where omission selects the default
  */
-export function estimateRoom(request: RoomEstimateRequest): RoomEstimateResult;
+export function estimateRoom(request: EstimateRoomRequest): RoomEstimateResult;
 export function estimateRoom(
   samples: Float32Array,
-  sampleRate?: number,
+  sampleRate: number,
   options?: RoomEstimateOptions,
 ): RoomEstimateResult;
-export function estimateRoom(
-  samples: Float32Array | RoomEstimateRequest,
-  sampleRate = 48000,
-  options: RoomEstimateOptions = {},
-): RoomEstimateResult {
-  const request =
-    samples instanceof Float32Array
-      ? { samples, sampleRate, ...optionsBag('estimateRoom', options) }
-      : requestObject('estimateRoom', samples);
-  assertRoomOptions('estimateRoom', request);
-  const resolvedSampleRate = request.sampleRate ?? 48000;
-  assertSampleRate('estimateRoom', resolvedSampleRate);
-  return addon.estimateRoom(request.samples, resolvedSampleRate, request);
+export function estimateRoom(...args: unknown[]): RoomEstimateResult {
+  const r = sampleOneShot<EstimateRoomRequest>('estimateRoom', args);
+  const native = nativeRoomOptions('estimateRoom', r);
+  assertAudioInput('estimateRoom', r.samples, r.sampleRate, r);
+  return addon.estimateRoom(r.samples, r.sampleRate, native);
 }
 
 /**
@@ -777,46 +872,29 @@ export function estimateRoom(
  *
  * The pair to {@link estimateRoom}: the estimate's `lengthM`, `widthM`,
  * `heightM` and `bandAbsorption` are already `synthesizeRir`'s names. The
- * result also carries a placement, the default source and listener positions
- * scaled per axis into the estimated room (the default 7 x 5 x 3 room maps to
- * the default placement exactly), and `absorption` as the mean of the finite
- * bands. `source` and `listener` override the scaled placement when given.
- * Absorption bands that did not converge are left out of `bandAbsorption`.
+ * result also carries a placement, the default `source` and `listener`
+ * positions scaled per axis into the estimated room (the default 7 x 5 x 3 room
+ * maps to the default placement exactly), and `absorption` as the mean of the
+ * finite bands. `source` and `listener` of the request override the scaled
+ * placement when given. Absorption bands that did not converge are left out of
+ * `bandAbsorption`.
  *
  * @throws SonareError when the estimate has no measurable dimensions (NaN).
  */
 export function roomGeometryFromEstimate(
   request: RoomGeometryFromEstimateRequest,
 ): RoomGeometryOptions;
-export function roomGeometryFromEstimate(
-  estimate: RoomGeometryEstimate,
-  options?: RoomGeometryFromEstimateOptions,
-): RoomGeometryOptions;
-export function roomGeometryFromEstimate(
-  estimate: RoomGeometryEstimate | RoomGeometryFromEstimateRequest,
-  options: RoomGeometryFromEstimateOptions = {},
-): RoomGeometryOptions {
-  if (typeof estimate !== 'object' || estimate === null) {
-    throw new TypeError('roomGeometryFromEstimate: estimate must be an object');
-  }
-  const request: RoomGeometryFromEstimateRequest =
-    'estimate' in estimate
-      ? requestObject('roomGeometryFromEstimate', estimate, 'estimate', true)
-      : { estimate, ...optionsBag('roomGeometryFromEstimate', options) };
+export function roomGeometryFromEstimate(...args: unknown[]): RoomGeometryOptions {
+  const request = requestOnly<RoomGeometryFromEstimateRequest>('roomGeometryFromEstimate', args);
   if (typeof request.estimate !== 'object' || request.estimate === null) {
     throw new TypeError('roomGeometryFromEstimate: estimate must be an object');
   }
-  const geometry: RoomGeometryOptions = addon.roomGeometryFromEstimate(request.estimate);
-  const { source, listener } = request;
-  if (source !== undefined) {
-    geometry.sourceX = source.x;
-    geometry.sourceY = source.y;
-    geometry.sourceZ = source.z;
-  }
-  if (listener !== undefined) {
-    geometry.listenerX = listener.x;
-    geometry.listenerY = listener.y;
-    geometry.listenerZ = listener.z;
+  const geometry = publicRoomGeometry(addon.roomGeometryFromEstimate(request.estimate));
+  for (const name of ['source', 'listener'] as const) {
+    const placement = checkedPlacement('roomGeometryFromEstimate', name, request[name]);
+    if (placement !== undefined) {
+      geometry[name] = placement;
+    }
   }
   return geometry;
 }
@@ -828,6 +906,10 @@ export function roomGeometryFromEstimate(
  * Returns the morphed samples in `audio` (input length plus the target room's
  * reverb tail) alongside the target-room synthesis's own `diagnostics`, which
  * report a room other than the one requested — see {@link RoomMorphResult}.
+ *
+ * @throws {TypeError} when `sampleRate` is missing
+ * @throws {RangeError} on audio out of domain, an out-of-range `sampleRate`, an
+ *   unusable room geometry, or an explicit 0 where omission selects the default
  */
 export function roomMorph(request: RoomMorphRequest): RoomMorphResult;
 export function roomMorph(
@@ -835,19 +917,11 @@ export function roomMorph(
   sampleRate: number,
   options?: RoomMorphOptions,
 ): RoomMorphResult;
-export function roomMorph(
-  samples: Float32Array | RoomMorphRequest,
-  sampleRate = 48000,
-  options: RoomMorphOptions = {},
-): RoomMorphResult {
-  const request =
-    samples instanceof Float32Array
-      ? { samples, sampleRate, ...optionsBag('roomMorph', options) }
-      : requestObject('roomMorph', samples);
-  assertRoomOptions('roomMorph', request);
-  const resolvedSampleRate = request.sampleRate ?? 48000;
-  assertSampleRate('roomMorph', resolvedSampleRate);
-  return addon.roomMorph(request.samples, resolvedSampleRate, request);
+export function roomMorph(...args: unknown[]): RoomMorphResult {
+  const r = sampleOneShot<RoomMorphRequest>('roomMorph', args);
+  const native = nativeRoomOptions('roomMorph', r);
+  assertAudioInput('roomMorph', r.samples, r.sampleRate, r);
+  return addon.roomMorph(r.samples, r.sampleRate, native);
 }
 
 /**
@@ -858,13 +932,16 @@ export function roomMorph(
  *
  * `left` and `right` must have the same length. The result carries both channels
  * (input length plus the reverb tail) and the synthesis `diagnostics`.
+ *
+ * @throws {TypeError} when `sampleRate` is missing
+ * @throws {RangeError} on a length mismatch, `receiverSpacingM` outside (0, 4], an
+ *   unusable room geometry, or an explicit 0 where omission selects the default
  */
 export function roomMorphStereo(request: RoomMorphStereoRequest): RoomMorphStereoResult {
   const req = requestObject('roomMorphStereo', request, 'left', true);
-  assertRoomOptions('roomMorphStereo', req);
-  const sampleRate = req.sampleRate ?? 48000;
-  assertAudioInput('roomMorphStereo', req.left, sampleRate, req, 'left');
-  assertAudioInput('roomMorphStereo', req.right, sampleRate, req, 'right');
+  const native = nativeRoomOptions('roomMorphStereo', req);
+  assertAudioInput('roomMorphStereo', req.left, req.sampleRate, req, 'left');
+  assertAudioInput('roomMorphStereo', req.right, req.sampleRate, req, 'right');
   if (req.left.length !== req.right.length) {
     throw new RangeError('roomMorphStereo: left and right must have the same length');
   }
@@ -877,7 +954,7 @@ export function roomMorphStereo(request: RoomMorphStereoRequest): RoomMorphStere
       throw new RangeError('roomMorphStereo: receiverSpacingM must be finite and in (0, 4]');
     }
   }
-  return addon.roomMorphStereo(req.left, req.right, sampleRate, req);
+  return addon.roomMorphStereo(req.left, req.right, req.sampleRate, native);
 }
 
 /**
@@ -890,7 +967,7 @@ export function analyzeAsync(request: AnalyzeAsyncRequest): Promise<AnalysisResu
 export function analyzeAsync(
   samples: Float32Array,
   sampleRate: number,
-  options?: Omit<AnalyzeAsyncRequest, 'samples' | 'sampleRate'>,
+  options?: OptionsOf<AnalyzeAsyncRequest>,
 ): Promise<AnalysisResult>;
 export function analyzeAsync(...args: unknown[]): Promise<AnalysisResult> {
   try {
@@ -909,7 +986,7 @@ export function analyzeSections(request: AnalyzeSectionsRequest): Section[];
 export function analyzeSections(
   samples: Float32Array,
   sampleRate: number,
-  options?: Omit<AnalyzeSectionsRequest, 'samples' | 'sampleRate'>,
+  options?: OptionsOf<AnalyzeSectionsRequest>,
 ): Section[];
 export function analyzeSections(...args: unknown[]): Section[] {
   const request = audioCall<AnalyzeSectionsRequest>('analyzeSections', args);
@@ -957,7 +1034,7 @@ export function detectBoundaries(request: DetectBoundariesRequest): BoundaryResu
 export function detectBoundaries(
   samples: Float32Array,
   sampleRate: number,
-  options?: Omit<DetectBoundariesRequest, 'samples' | 'sampleRate'>,
+  options?: OptionsOf<DetectBoundariesRequest>,
 ): BoundaryResult;
 export function detectBoundaries(...args: unknown[]): BoundaryResult {
   const request = audioCall<DetectBoundariesRequest>('detectBoundaries', args);
@@ -1003,7 +1080,7 @@ export function analyzeMelody(request: AnalyzeMelodyRequest): MelodyResult;
 export function analyzeMelody(
   samples: Float32Array,
   sampleRate: number,
-  options?: Omit<AnalyzeMelodyRequest, 'samples' | 'sampleRate'>,
+  options?: OptionsOf<AnalyzeMelodyRequest>,
 ): MelodyResult;
 export function analyzeMelody(...args: unknown[]): MelodyResult {
   const request = audioCall<AnalyzeMelodyRequest>('analyzeMelody', args);
@@ -1038,7 +1115,7 @@ export function analyzeBpm(request: AnalyzeBpmRequest): BpmAnalysisResult;
 export function analyzeBpm(
   samples: Float32Array,
   sampleRate: number,
-  options?: Omit<AnalyzeBpmRequest, 'samples' | 'sampleRate'>,
+  options?: OptionsOf<AnalyzeBpmRequest>,
 ): BpmAnalysisResult;
 export function analyzeBpm(...args: unknown[]): BpmAnalysisResult {
   const request = audioCall<AnalyzeBpmRequest>('analyzeBpm', args);
@@ -1061,7 +1138,7 @@ export function analyzeRhythm(request: AnalyzeRhythmRequest): RhythmResult;
 export function analyzeRhythm(
   samples: Float32Array,
   sampleRate: number,
-  options?: Omit<AnalyzeRhythmRequest, 'samples' | 'sampleRate'>,
+  options?: OptionsOf<AnalyzeRhythmRequest>,
 ): RhythmResult;
 export function analyzeRhythm(...args: unknown[]): RhythmResult {
   const request = audioCall<AnalyzeRhythmRequest>('analyzeRhythm', args);
@@ -1081,28 +1158,28 @@ export function analyzeDynamics(request: AnalyzeDynamicsRequest): DynamicsResult
 export function analyzeDynamics(
   samples: Float32Array,
   sampleRate: number,
-  options?: Omit<AnalyzeDynamicsRequest, 'samples' | 'sampleRate'>,
+  options?: OptionsOf<AnalyzeDynamicsRequest>,
 ): DynamicsResult;
 export function analyzeDynamics(...args: unknown[]): DynamicsResult {
   const request = audioCall<AnalyzeDynamicsRequest>('analyzeDynamics', args);
   assertPositiveInteger('analyzeDynamics', request.hopLength ?? 512, 'hopLength');
   const compressionThresholdDb = request.compressionThresholdDb ?? 6.0;
   assertNonNegativeFloatValue('analyzeDynamics', compressionThresholdDb, 'compressionThresholdDb');
-  const { loudnessRangeDb, loudnessTimes, ...raw }: Native = addon.analyzeDynamics(
+  const { loudnessRangeDb, ...raw }: Native = addon.analyzeDynamics(
     request.samples,
     request.sampleRate,
     request.windowSec ?? 0.4,
     request.hopLength ?? 512,
     compressionThresholdDb,
   );
-  return { ...raw, loudnessRangeLu: loudnessRangeDb, loudnessTimesSec: loudnessTimes };
+  return { ...raw, loudnessRangeLu: loudnessRangeDb };
 }
 
 export function analyzeImpulseResponse(request: AnalyzeImpulseResponseRequest): AcousticResult;
 export function analyzeImpulseResponse(
   samples: Float32Array,
   sampleRate: number,
-  options?: Omit<AnalyzeImpulseResponseRequest, 'samples' | 'sampleRate'>,
+  options?: OptionsOf<AnalyzeImpulseResponseRequest>,
 ): AcousticResult;
 export function analyzeImpulseResponse(...args: unknown[]): AcousticResult {
   const request = audioCall<AnalyzeImpulseResponseRequest>('analyzeImpulseResponse', args);
@@ -1126,7 +1203,7 @@ export function detectAcoustic(request: DetectAcousticRequest): AcousticResult;
 export function detectAcoustic(
   samples: Float32Array,
   sampleRate: number,
-  options?: Omit<DetectAcousticRequest, 'samples' | 'sampleRate'>,
+  options?: OptionsOf<DetectAcousticRequest>,
 ): AcousticResult;
 export function detectAcoustic(...args: unknown[]): AcousticResult {
   const request = audioCall<DetectAcousticRequest>('detectAcoustic', args);
@@ -1150,7 +1227,7 @@ export function analyzeTimbre(request: AnalyzeTimbreRequest): TimbreResult;
 export function analyzeTimbre(
   samples: Float32Array,
   sampleRate: number,
-  options?: Omit<AnalyzeTimbreRequest, 'samples' | 'sampleRate'>,
+  options?: OptionsOf<AnalyzeTimbreRequest>,
 ): TimbreResult;
 export function analyzeTimbre(...args: unknown[]): TimbreResult {
   const request = audioCall<AnalyzeTimbreRequest>('analyzeTimbre', args);
@@ -1187,7 +1264,7 @@ function resolveChordParams(
   keyMode: number;
   detectInversions: boolean;
   chromaMethod: number;
-  tuning: number;
+  tuningCents: number;
   tuningAuto: boolean;
 } {
   const fft = resolveFftOptions(fnName, request.nFft ?? 2048, request.hopLength ?? 512);
@@ -1219,7 +1296,7 @@ function resolveChordParams(
     keyMode: KEY_MODES.indexOf(keyMode),
     detectInversions: request.detectInversions ?? false,
     chromaMethod: chromaMethod === 'stft' ? 0 : chromaMethod === 'nnls' ? 1 : 2,
-    tuning: typeof tuning === 'number' ? tuning : 0,
+    tuningCents: typeof tuning === 'number' ? tuning : 0,
     tuningAuto: tuning === undefined || tuning === 'auto',
   };
 }
@@ -1234,7 +1311,7 @@ export function detectChords(request: DetectChordsRequest): ChordAnalysisResult;
 export function detectChords(
   samples: Float32Array,
   sampleRate: number,
-  options?: Omit<DetectChordsRequest, 'samples' | 'sampleRate'>,
+  options?: OptionsOf<DetectChordsRequest>,
 ): ChordAnalysisResult;
 export function detectChords(...args: unknown[]): ChordAnalysisResult {
   const request = audioCall<DetectChordsRequest>('detectChords', args);
@@ -1257,7 +1334,7 @@ export function detectChords(...args: unknown[]): ChordAnalysisResult {
       p.keyMode,
       p.detectInversions,
       p.chromaMethod,
-      p.tuning,
+      p.tuningCents,
       p.tuningAuto,
     ),
   );
@@ -1275,7 +1352,7 @@ export function chordFunctionalAnalysis(request: ChordFunctionalAnalysisRequest)
 export function chordFunctionalAnalysis(
   samples: Float32Array,
   sampleRate: number,
-  options: Omit<ChordFunctionalAnalysisRequest, 'samples' | 'sampleRate'>,
+  options: OptionsOf<ChordFunctionalAnalysisRequest>,
 ): FunctionalChord[];
 export function chordFunctionalAnalysis(...args: unknown[]): FunctionalChord[] {
   const request = audioCall<ChordFunctionalAnalysisRequest>('chordFunctionalAnalysis', args);
@@ -1301,7 +1378,7 @@ export function chordFunctionalAnalysis(...args: unknown[]): FunctionalChord[] {
       p.useKeyContext,
       p.detectInversions,
       p.chromaMethod,
-      p.tuning,
+      p.tuningCents,
       p.tuningAuto,
     );
   return analysed.chords.map((chord, i) => ({

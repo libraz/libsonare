@@ -3,11 +3,11 @@
  * that return a single component.
  */
 
-import type { EffectSamplesRequest } from './internal/effects_common.js';
 import { resolveEffectFftOptions } from './internal/fft_options.js';
 import { addon } from './native.js';
 import type { HpssResult } from './types.js';
-import { assertAudioInput, assertHpssKernels, requestObject } from './validation.js';
+import type { OptionsOf, ValidateOptions } from './validation.js';
+import { assertAudioInput, assertHpssKernels, sampleOneShot } from './validation.js';
 
 function resolveHardMask(fnName: string, hardMask: unknown): boolean {
   if (hardMask === undefined) {
@@ -19,7 +19,11 @@ function resolveHardMask(fnName: string, hardMask: unknown): boolean {
   return hardMask;
 }
 
-export interface HpssRequest extends EffectSamplesRequest {
+/** Request for {@link hpss}. `validate: false` skips the NaN/Inf pre-scan. */
+export interface HpssRequest extends ValidateOptions {
+  samples: Float32Array;
+  /** Sample rate in Hz, an integer in `[8000, 384000]`; there is no default. */
+  sampleRate: number;
   /**
    * Horizontal median filter size, in STFT frames: a positive odd integer at
    * most 524287. Default 31. The ceiling is 524288 and an even kernel is
@@ -28,73 +32,105 @@ export interface HpssRequest extends EffectSamplesRequest {
   kernelHarmonic?: number;
   /** Vertical median filter size, in STFT bins, under the same rule. Default 31. */
   kernelPercussive?: number;
+  /** FFT size in samples. Default 2048. */
   nFft?: number;
+  /** Hop in samples. Default 512. */
   hopLength?: number;
+  /** Threshold the masks into binary ones instead of the soft split. Default `false`. */
   hardMask?: boolean;
 }
 
+/** Harmonic / percussive / residual signals from `hpssWithResidual`. */
+export interface HpssWithResidualResult {
+  /** Harmonic component signal. */
+  harmonic: Float32Array;
+  /** Percussive component signal. */
+  percussive: Float32Array;
+  /** Residual (`original - harmonic - percussive`) signal. */
+  residual: Float32Array;
+  /** Shared sample rate of all three signals. */
+  sampleRate: number;
+}
+
+/** Request for {@link harmonic}. */
+export interface HarmonicRequest extends ValidateOptions {
+  samples: Float32Array;
+  /** Sample rate in Hz, an integer in `[8000, 384000]`; there is no default. */
+  sampleRate: number;
+}
+
+/** Request for {@link percussive}. */
+export interface PercussiveRequest extends ValidateOptions {
+  samples: Float32Array;
+  /** Sample rate in Hz, an integer in `[8000, 384000]`; there is no default. */
+  sampleRate: number;
+}
+
+/**
+ * Harmonic-percussive source separation.
+ *
+ * @throws {TypeError} when `sampleRate` is missing or `hardMask` is not a boolean
+ * @throws {RangeError} on audio out of domain, an out-of-range `sampleRate`, or a
+ *   kernel that is not an integer within the signed 32-bit range or one the core
+ *   rejects as even, non-positive or above its ceiling
+ */
 export function hpss(request: HpssRequest): HpssResult;
 export function hpss(
   samples: Float32Array,
-  sampleRate?: number,
-  kernelHarmonic?: number,
-  kernelPercussive?: number,
-  nFft?: number,
-  hopLength?: number,
-  hardMask?: boolean,
+  sampleRate: number,
+  options?: OptionsOf<HpssRequest>,
 ): HpssResult;
-export function hpss(
-  samples: Float32Array | HpssRequest,
-  sampleRate = 22050,
-  kernelHarmonic = 31,
-  kernelPercussive = 31,
-  nFft?: number,
-  hopLength?: number,
-  hardMask?: boolean,
-): HpssResult {
-  const request =
-    samples instanceof Float32Array
-      ? { samples, sampleRate, kernelHarmonic, kernelPercussive, nFft, hopLength, hardMask }
-      : requestObject('hpss', samples);
-  assertAudioInput('hpss', request.samples, request.sampleRate ?? 22050, request);
-  const fftOptions = resolveEffectFftOptions('hpss', request.nFft, request.hopLength);
-  const resolvedHardMask = resolveHardMask('hpss', request.hardMask);
-  const resolvedKernelHarmonic = request.kernelHarmonic ?? 31;
-  const resolvedKernelPercussive = request.kernelPercussive ?? 31;
-  assertHpssKernels('hpss', resolvedKernelHarmonic, resolvedKernelPercussive);
+export function hpss(...args: unknown[]): HpssResult {
+  const r = sampleOneShot<HpssRequest>('hpss', args);
+  assertAudioInput('hpss', r.samples, r.sampleRate, r);
+  const fftOptions = resolveEffectFftOptions('hpss', r.nFft, r.hopLength);
+  const hardMask = resolveHardMask('hpss', r.hardMask);
+  const kernelHarmonic = r.kernelHarmonic ?? 31;
+  const kernelPercussive = r.kernelPercussive ?? 31;
+  assertHpssKernels('hpss', kernelHarmonic, kernelPercussive);
   return addon.hpss(
-    request.samples,
-    request.sampleRate ?? 22050,
-    resolvedKernelHarmonic,
-    resolvedKernelPercussive,
+    r.samples,
+    r.sampleRate,
+    kernelHarmonic,
+    kernelPercussive,
     fftOptions.nFft,
     fftOptions.hopLength,
-    resolvedHardMask,
+    hardMask,
   );
 }
 
-export function harmonic(request: EffectSamplesRequest): Float32Array;
-export function harmonic(samples: Float32Array, sampleRate?: number): Float32Array;
+/**
+ * Extract the harmonic component of `samples`.
+ *
+ * @throws {TypeError} when `sampleRate` is missing
+ * @throws {RangeError} on audio out of domain or an out-of-range `sampleRate`
+ */
+export function harmonic(request: HarmonicRequest): Float32Array;
 export function harmonic(
-  samples: Float32Array | EffectSamplesRequest,
-  sampleRate = 22050,
-): Float32Array {
-  const request =
-    samples instanceof Float32Array ? { samples, sampleRate } : requestObject('harmonic', samples);
-  assertAudioInput('harmonic', request.samples, request.sampleRate ?? 22050, request);
-  return addon.harmonic(request.samples, request.sampleRate ?? 22050);
+  samples: Float32Array,
+  sampleRate: number,
+  options?: OptionsOf<HarmonicRequest>,
+): Float32Array;
+export function harmonic(...args: unknown[]): Float32Array {
+  const r = sampleOneShot<HarmonicRequest>('harmonic', args);
+  assertAudioInput('harmonic', r.samples, r.sampleRate, r);
+  return addon.harmonic(r.samples, r.sampleRate);
 }
 
-export function percussive(request: EffectSamplesRequest): Float32Array;
-export function percussive(samples: Float32Array, sampleRate?: number): Float32Array;
+/**
+ * Extract the percussive component of `samples`.
+ *
+ * @throws {TypeError} when `sampleRate` is missing
+ * @throws {RangeError} on audio out of domain or an out-of-range `sampleRate`
+ */
+export function percussive(request: PercussiveRequest): Float32Array;
 export function percussive(
-  samples: Float32Array | EffectSamplesRequest,
-  sampleRate = 22050,
-): Float32Array {
-  const request =
-    samples instanceof Float32Array
-      ? { samples, sampleRate }
-      : requestObject('percussive', samples);
-  assertAudioInput('percussive', request.samples, request.sampleRate ?? 22050, request);
-  return addon.percussive(request.samples, request.sampleRate ?? 22050);
+  samples: Float32Array,
+  sampleRate: number,
+  options?: OptionsOf<PercussiveRequest>,
+): Float32Array;
+export function percussive(...args: unknown[]): Float32Array {
+  const r = sampleOneShot<PercussiveRequest>('percussive', args);
+  assertAudioInput('percussive', r.samples, r.sampleRate, r);
+  return addon.percussive(r.samples, r.sampleRate);
 }

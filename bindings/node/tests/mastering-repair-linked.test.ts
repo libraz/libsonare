@@ -93,10 +93,10 @@ describe('masteringRepairDenoiseClassicalLinked', () => {
     });
 
     expect(linked.channels).toHaveLength(2);
-    expect(firstDifference(linked.channels[0], stereo.left)).toBe(-1);
-    expect(firstDifference(linked.channels[1], stereo.right)).toBe(-1);
+    expect(firstDifference(linked.channels[0], stereo.channels[0])).toBe(-1);
+    expect(firstDifference(linked.channels[1], stereo.channels[1])).toBe(-1);
     expect(firstDifference(linked.channels[0], linked.channels[1])).not.toBe(-1);
-    expect(linked.report).toEqual(stereo.report);
+    expect(linked.reports[0]).toEqual(stereo.reports[0]);
   });
 
   it('reports a set-level floor that rises with the channel count while the fractions hold', () => {
@@ -108,7 +108,7 @@ describe('masteringRepairDenoiseClassicalLinked', () => {
       masteringRepairDenoiseClassicalLinked({
         channels: Array.from({ length: count }, () => left),
         sampleRate: SR,
-      }).report;
+      }).reports[0];
 
     const one = floorOf(1);
     const two = floorOf(2);
@@ -221,10 +221,10 @@ describe('masteringRepairDereverbClassicalLinked', () => {
     });
 
     expect(linked.channels).toHaveLength(2);
-    expect(firstDifference(linked.channels[0], stereo.left)).toBe(-1);
-    expect(firstDifference(linked.channels[1], stereo.right)).toBe(-1);
+    expect(firstDifference(linked.channels[0], stereo.channels[0])).toBe(-1);
+    expect(firstDifference(linked.channels[1], stereo.channels[1])).toBe(-1);
     expect(firstDifference(linked.channels[0], linked.channels[1])).not.toBe(-1);
-    expect(linked.report).toEqual(stereo.report);
+    expect(linked.reports[0]).toEqual(stereo.reports[0]);
   });
 
   it('reports ratios that do not move with the channel count', () => {
@@ -232,11 +232,12 @@ describe('masteringRepairDereverbClassicalLinked', () => {
     // report exactly what that channel reports alone -- the asymmetry against
     // the denoise floor above.
     const { left } = pair();
-    const one = masteringRepairDereverbClassicalLinked({ channels: [left], sampleRate: SR }).report;
+    const one = masteringRepairDereverbClassicalLinked({ channels: [left], sampleRate: SR })
+      .reports[0];
     const three = masteringRepairDereverbClassicalLinked({
       channels: [left, left, left],
       sampleRate: SR,
-    }).report;
+    }).reports[0];
 
     expect(one.meanReductionDb).toBeGreaterThan(0.1);
     expect(one.suppressedFraction).toBeGreaterThan(0);
@@ -262,7 +263,7 @@ describe('masteringRepairDereverbClassicalLinked', () => {
         channels: Array.from({ length: count }, () => left),
         sampleRate: SR,
         wpeEnabled: true,
-      }).report;
+      }).reports[0];
 
     const one = run(1);
     const three = run(3);

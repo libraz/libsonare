@@ -2,7 +2,7 @@
  * Input shape and checks the effect families share.
  */
 
-import type { NoteEdit, VoicedFlags } from '../types.js';
+import type { VoicedFlags } from '../types.js';
 import { assertInt64, resolveSampleBound } from '../validation.js';
 
 // The addon reads the companion voicing array as an Int32Array and silently
@@ -115,7 +115,8 @@ export function resolveEntryTimes<T extends TimedEntry>(
 /** Common audio input fields for stateless effect requests. */
 export interface EffectSamplesRequest {
   samples: Float32Array;
-  sampleRate?: number;
+  /** Sample rate in Hz, an integer in `[8000, 384000]`; there is no default. */
+  sampleRate: number;
 }
 
 /**
@@ -138,46 +139,4 @@ export function assertPitchTrackLengths(
   if (voiced == null && voicedProb != null && voicedProb.length !== f0Hz.length) {
     throw new RangeError(`${fnName}: voicedProb must have the same length as f0Hz`);
   }
-}
-
-// The addon still spells the two edit shifts `pitchShiftSemitones` / `formantShiftSemitones`.
-/** A note's edit as the addon spells it. */
-export function nativeEdit(edit: Record<string, unknown>): Record<string, unknown> {
-  const { pitchSemitones, formantSemitones, ...rest } = edit;
-  const out: Record<string, unknown> = { ...rest };
-  if (pitchSemitones !== undefined) {
-    out.pitchShiftSemitones = pitchSemitones;
-  }
-  if (formantSemitones !== undefined) {
-    out.formantShiftSemitones = formantSemitones;
-  }
-  return out;
-}
-
-/** A note's edit as the facade spells it. */
-export function publicEdit(edit: Record<string, unknown>): NoteEdit {
-  const { pitchShiftSemitones, formantShiftSemitones, ...rest } = edit;
-  return {
-    ...rest,
-    pitchSemitones: pitchShiftSemitones,
-    formantSemitones: formantShiftSemitones,
-  } as NoteEdit;
-}
-
-/** A note with its edit in the addon's spelling; non-object entries pass through. */
-export function nativeNote<T>(note: T): T {
-  const edit = (note as { edit?: unknown } | null)?.edit;
-  if (edit === null || typeof edit !== 'object') {
-    return note;
-  }
-  return { ...note, edit: nativeEdit(edit as Record<string, unknown>) };
-}
-
-/** A note with its edit in the facade's spelling. */
-export function publicNote<T>(note: T): T {
-  const edit = (note as { edit?: unknown } | null)?.edit;
-  if (edit === null || typeof edit !== 'object') {
-    return note;
-  }
-  return { ...note, edit: publicEdit(edit as Record<string, unknown>) };
 }

@@ -34,7 +34,7 @@ function offsetPair(): { left: Float32Array; right: Float32Array } {
  * A quiet floor at 0.01 under a loud body at 0.5, the same in both channels.
  *
  * The two levels are what makes each knob observable: 0.01 sits above the
- * default peak threshold of 0.001 and below 0.1, and its -40 dBFS window RMS
+ * default peak threshold of -60 dB and below -20 dB, and its -40 dBFS window RMS
  * sits above a -60 gate and below a -20 one. So one fixture answers both modes.
  */
 function tieredPair(): { left: Float32Array; right: Float32Array } {
@@ -59,31 +59,31 @@ describe('masteringRepairTrimSilenceStereo', () => {
 
     // Each channel decided one edge: left the head at 1000, right the tail at
     // 3000. A scan on a downmix, or on either channel alone, lands elsewhere.
-    expect(result.leftRange).toEqual({ first: 1000, lastExclusive: 2000 });
-    expect(result.rightRange).toEqual({ first: 1500, lastExclusive: 3000 });
-    expect(result.report.range).toEqual({ first: 1000, lastExclusive: 3000 });
-    expect(result.report.range.first).toBe(
-      Math.min(result.leftRange.first, result.rightRange.first),
+    expect(result.ranges[0]).toEqual({ first: 1000, lastExclusive: 2000 });
+    expect(result.ranges[1]).toEqual({ first: 1500, lastExclusive: 3000 });
+    expect(result.reports[0].range).toEqual({ first: 1000, lastExclusive: 3000 });
+    expect(result.reports[0].range.first).toBe(
+      Math.min(result.ranges[0].first, result.ranges[1].first),
     );
-    expect(result.report.range.lastExclusive).toBe(
-      Math.max(result.leftRange.lastExclusive, result.rightRange.lastExclusive),
+    expect(result.reports[0].range.lastExclusive).toBe(
+      Math.max(result.ranges[0].lastExclusive, result.ranges[1].lastExclusive),
     );
 
     // The OUTPUT length, which is the union's width and not the input's length.
-    expect(result.left).toHaveLength(2000);
-    expect(result.right).toHaveLength(2000);
-    expect(result.left.length).not.toBe(LENGTH);
+    expect(result.channels[0]).toHaveLength(2000);
+    expect(result.channels[1]).toHaveLength(2000);
+    expect(result.channels[0].length).not.toBe(LENGTH);
 
     // The kept window is the input's, sample for sample, in both channels.
-    expect(Array.from(result.left)).toEqual(Array.from(pair.left.subarray(1000, 3000)));
-    expect(Array.from(result.right)).toEqual(Array.from(pair.right.subarray(1000, 3000)));
+    expect(Array.from(result.channels[0])).toEqual(Array.from(pair.left.subarray(1000, 3000)));
+    expect(Array.from(result.channels[1])).toEqual(Array.from(pair.right.subarray(1000, 3000)));
     // Independent regions, so a channel handed back as a copy of the other fails.
-    expect(Array.from(result.left)).not.toEqual(Array.from(result.right));
+    expect(Array.from(result.channels[0])).not.toEqual(Array.from(result.channels[1]));
 
-    expect(result.report.removedHeadSamples).toBe(1000);
-    expect(result.report.removedTailSamples).toBe(LENGTH - 3000);
-    expect(result.report.removedHeadSamples + result.report.removedTailSamples).toBe(
-      LENGTH - result.left.length,
+    expect(result.reports[0].removedHeadSamples).toBe(1000);
+    expect(result.reports[0].removedTailSamples).toBe(LENGTH - 3000);
+    expect(result.reports[0].removedHeadSamples + result.reports[0].removedTailSamples).toBe(
+      LENGTH - result.channels[0].length,
     );
   });
 
@@ -93,13 +93,13 @@ describe('masteringRepairTrimSilenceStereo', () => {
     const pair = { left: run(1000, 2000, 0.5), right: new Float32Array(LENGTH) };
     const result = trim(pair);
 
-    expect(result.rightRange).toEqual({ first: LENGTH, lastExclusive: LENGTH });
-    expect(result.leftRange).toEqual({ first: 1000, lastExclusive: 2000 });
-    expect(result.report.range).toEqual(result.leftRange);
-    expect(result.left).toHaveLength(1000);
-    expect(result.right).toHaveLength(1000);
+    expect(result.ranges[1]).toEqual({ first: LENGTH, lastExclusive: LENGTH });
+    expect(result.ranges[0]).toEqual({ first: 1000, lastExclusive: 2000 });
+    expect(result.reports[0].range).toEqual(result.ranges[0]);
+    expect(result.channels[0]).toHaveLength(1000);
+    expect(result.channels[1]).toHaveLength(1000);
     // The silent channel is still cut to the shared range, not dropped.
-    expect(Array.from(result.right)).toEqual(new Array(1000).fill(0));
+    expect(Array.from(result.channels[1])).toEqual(new Array(1000).fill(0));
   });
 
   it('returns two empty arrays for a pair with no signal at all, as a success', () => {
@@ -112,36 +112,38 @@ describe('masteringRepairTrimSilenceStereo', () => {
       throw new Error('unreachable');
     }
 
-    expect(result.left).toBeInstanceOf(Float32Array);
-    expect(result.right).toBeInstanceOf(Float32Array);
-    expect(result.left).toHaveLength(0);
-    expect(result.right).toHaveLength(0);
+    expect(result.channels[0]).toBeInstanceOf(Float32Array);
+    expect(result.channels[1]).toBeInstanceOf(Float32Array);
+    expect(result.channels[0]).toHaveLength(0);
+    expect(result.channels[1]).toHaveLength(0);
 
     // Nothing kept is reported as the range (LENGTH, LENGTH), which counts the
     // whole buffer as removed head and leaves removed tail at 0. The split
     // between the ends is arbitrary there; the total is not.
-    expect(result.report.range).toEqual({ first: LENGTH, lastExclusive: LENGTH });
-    expect(result.leftRange).toEqual({ first: LENGTH, lastExclusive: LENGTH });
-    expect(result.rightRange).toEqual({ first: LENGTH, lastExclusive: LENGTH });
-    expect(result.report.removedHeadSamples).toBe(LENGTH);
-    expect(result.report.removedTailSamples).toBe(0);
-    expect(result.report.removedHeadSamples + result.report.removedTailSamples).toBe(LENGTH);
+    expect(result.reports[0].range).toEqual({ first: LENGTH, lastExclusive: LENGTH });
+    expect(result.ranges[0]).toEqual({ first: LENGTH, lastExclusive: LENGTH });
+    expect(result.ranges[1]).toEqual({ first: LENGTH, lastExclusive: LENGTH });
+    expect(result.reports[0].removedHeadSamples).toBe(LENGTH);
+    expect(result.reports[0].removedTailSamples).toBe(0);
+    expect(result.reports[0].removedHeadSamples + result.reports[0].removedTailSamples).toBe(
+      LENGTH,
+    );
   });
 
-  it('reads threshold only in peak mode', () => {
+  it('reads thresholdDb only in peak mode', () => {
     const pair = tieredPair();
-    // 0.001 admits the 0.01 floor, 0.1 does not, so the head edge moves from
+    // -60 dB admits the 0.01 floor, -20 dB does not, so the head edge moves from
     // the floor's start to the body's.
-    const open = trim(pair, { mode: 'peak', threshold: 0.001 });
-    const closed = trim(pair, { mode: 'peak', threshold: 0.1 });
-    expect(open.report.range).toEqual({ first: 0, lastExclusive: 2000 });
-    expect(closed.report.range).toEqual({ first: 1000, lastExclusive: 2000 });
+    const open = trim(pair, { mode: 'peak', thresholdDb: -60 });
+    const closed = trim(pair, { mode: 'peak', thresholdDb: -20 });
+    expect(open.reports[0].range).toEqual({ first: 0, lastExclusive: 2000 });
+    expect(closed.reports[0].range).toEqual({ first: 1000, lastExclusive: 2000 });
 
     // The same two values in the gated mode, which never reads the field.
-    const gatedOpen = trim(pair, { mode: 'lufsGated', windowMs: 10, threshold: 0.001 });
-    const gatedClosed = trim(pair, { mode: 'lufsGated', windowMs: 10, threshold: 0.9 });
-    expect(gatedClosed.report.range).toEqual(gatedOpen.report.range);
-    expect(Array.from(gatedClosed.left)).toEqual(Array.from(gatedOpen.left));
+    const gatedOpen = trim(pair, { mode: 'lufsGated', windowMs: 10, thresholdDb: -60 });
+    const gatedClosed = trim(pair, { mode: 'lufsGated', windowMs: 10, thresholdDb: -1 });
+    expect(gatedClosed.reports[0].range).toEqual(gatedOpen.reports[0].range);
+    expect(Array.from(gatedClosed.channels[0])).toEqual(Array.from(gatedOpen.channels[0]));
   });
 
   it('reads gateLufs and windowMs only in the gated mode', () => {
@@ -153,33 +155,33 @@ describe('masteringRepairTrimSilenceStereo', () => {
     // the window half-width bleeding across each boundary.
     const low = trim(pair, { mode: 'lufsGated', windowMs: 10, gateLufs: -60 });
     const high = trim(pair, { mode: 'lufsGated', windowMs: 10, gateLufs: -20 });
-    expect(low.report.range.first).toBe(0);
-    expect(high.report.range.first).toBeGreaterThan(0);
+    expect(low.reports[0].range.first).toBe(0);
+    expect(high.reports[0].range.first).toBeGreaterThan(0);
     // The body still had to survive the tighter gate, or this would be
     // comparing an empty result against a full one.
-    expect(high.report.range.first).toBeLessThan(1000);
-    expect(high.report.range.lastExclusive).toBeGreaterThan(1000);
-    expect(high.left.length).toBeLessThan(low.left.length);
+    expect(high.reports[0].range.first).toBeLessThan(1000);
+    expect(high.reports[0].range.lastExclusive).toBeGreaterThan(1000);
+    expect(high.channels[0].length).toBeLessThan(low.channels[0].length);
 
     // windowMs sizes that window and does nothing else, so it moves the gated
     // edges too: at +/-1102 samples the floor and the body land in one window
     // and the -20 gate admits from 0, measured (0, 3014) against (898, 2102).
     const wide = trim(pair, { mode: 'lufsGated', windowMs: 100, gateLufs: -20 });
-    expect(wide.report.range).not.toEqual(high.report.range);
-    expect(wide.report.range.first).toBeLessThan(high.report.range.first);
+    expect(wide.reports[0].range).not.toEqual(high.reports[0].range);
+    expect(wide.reports[0].range.first).toBeLessThan(high.reports[0].range.first);
 
     // Neither field is read in peak mode: same two gates, same two windows.
     const peakLow = trim(pair, { mode: 'peak', gateLufs: -60, windowMs: 10 });
     const peakHigh = trim(pair, { mode: 'peak', gateLufs: -20, windowMs: 100 });
-    expect(peakHigh.report.range).toEqual(peakLow.report.range);
-    expect(peakLow.report.range).toEqual({ first: 0, lastExclusive: 2000 });
+    expect(peakHigh.reports[0].range).toEqual(peakLow.reports[0].range);
+    expect(peakLow.reports[0].range).toEqual({ first: 0, lastExclusive: 2000 });
   });
 
-  it('still validates threshold in the gated mode, where nothing reads it', () => {
+  it('still validates thresholdDb in the gated mode, where nothing reads it', () => {
     // "Read only by peak" is about the scan, not about validation: the config
     // validator checks every public field whichever mode is selected.
     const pair = tieredPair();
-    expect(() => trim(pair, { mode: 'lufsGated', threshold: -1 })).toThrow();
+    expect(() => trim(pair, { mode: 'lufsGated', thresholdDb: 1 })).toThrow();
     expect(() => trim(pair, { mode: 'peak', gateLufs: Number.NaN })).toThrow();
     expect(() => trim(pair, { mode: 'peak', windowMs: 0 })).toThrow();
   });
@@ -191,25 +193,25 @@ describe('masteringRepairTrimSilenceStereo', () => {
 
     // Padding is applied per channel scan, so each per-channel range widens and
     // the union widens with them.
-    expect(padded.leftRange).toEqual({ first: 1000 - 256, lastExclusive: 2000 + 256 });
-    expect(padded.rightRange).toEqual({ first: 1500 - 256, lastExclusive: 3000 + 256 });
-    expect(padded.report.range).toEqual({ first: 744, lastExclusive: 3256 });
-    expect(padded.left).toHaveLength(bare.left.length + 512);
+    expect(padded.ranges[0]).toEqual({ first: 1000 - 256, lastExclusive: 2000 + 256 });
+    expect(padded.ranges[1]).toEqual({ first: 1500 - 256, lastExclusive: 3000 + 256 });
+    expect(padded.reports[0].range).toEqual({ first: 744, lastExclusive: 3256 });
+    expect(padded.channels[0]).toHaveLength(bare.channels[0].length + 512);
 
     // Clamped rather than wrapped: a padding wider than the buffer keeps the
     // whole of it and reports nothing removed.
     const flooded = trim(pair, { paddingSamples: LENGTH * 4 });
-    expect(flooded.report.range).toEqual({ first: 0, lastExclusive: LENGTH });
-    expect(flooded.left).toHaveLength(LENGTH);
-    expect(flooded.report.removedHeadSamples).toBe(0);
-    expect(flooded.report.removedTailSamples).toBe(0);
+    expect(flooded.reports[0].range).toEqual({ first: 0, lastExclusive: LENGTH });
+    expect(flooded.channels[0]).toHaveLength(LENGTH);
+    expect(flooded.reports[0].removedHeadSamples).toBe(0);
+    expect(flooded.reports[0].removedTailSamples).toBe(0);
 
     // A pass that kept nothing is not padded.
     const empty = trim(
       { left: new Float32Array(LENGTH), right: new Float32Array(LENGTH) },
       { paddingSamples: 256 },
     );
-    expect(empty.left).toHaveLength(0);
+    expect(empty.channels[0]).toHaveLength(0);
   });
 
   it('refuses a negative paddingSamples by name instead of folding it to a default', () => {
@@ -223,7 +225,7 @@ describe('masteringRepairTrimSilenceStereo', () => {
       expect(() => trim(pair, { paddingSamples })).toThrow(/paddingSamples/);
     }
     // Not a rounding artefact of the refusal: 0 is accepted and is the default.
-    expect(trim(pair, { paddingSamples: 0 }).report.range).toEqual(trim(pair).report.range);
+    expect(trim(pair, { paddingSamples: 0 }).reports[0].range).toEqual(trim(pair).reports[0].range);
     // A non-number is refused by name too, rather than silently defaulting.
     expect(() => trim(pair, { paddingSamples: '256' as unknown as number })).toThrow(
       /paddingSamples/,
@@ -232,10 +234,10 @@ describe('masteringRepairTrimSilenceStereo', () => {
 
   it('agrees with the mono trimmer on a pair whose channels are identical', () => {
     const pair = tieredPair();
-    const stereo = trim(pair, { mode: 'peak', threshold: 0.1 });
-    const mono = masteringRepairTrimSilence(pair.left, SR, { mode: 'peak', threshold: 0.1 });
-    expect(Array.from(stereo.left)).toEqual(Array.from(mono));
-    expect(Array.from(stereo.right)).toEqual(Array.from(mono));
+    const stereo = trim(pair, { mode: 'peak', thresholdDb: -20 });
+    const mono = masteringRepairTrimSilence(pair.left, SR, { mode: 'peak', thresholdDb: -20 });
+    expect(Array.from(stereo.channels[0])).toEqual(Array.from(mono));
+    expect(Array.from(stereo.channels[1])).toEqual(Array.from(mono));
   });
 
   it('refuses bad arguments with a catchable error', () => {

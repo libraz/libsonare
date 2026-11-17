@@ -207,21 +207,21 @@ describe('effects', () => {
   });
 
   it('timeStretch changes length', () => {
-    const fast = timeStretch(tone, SR, 2.0);
+    const fast = timeStretch(tone, SR, { speedRatio: 2.0 });
     expect(fast.length).toBeLessThan(tone.length);
-    const slow = timeStretch(tone, SR, 0.5);
+    const slow = timeStretch(tone, SR, { speedRatio: 0.5 });
     expect(slow.length).toBeGreaterThan(tone.length);
   });
 
   it('pitchShift returns Float32Array', () => {
-    const result = pitchShift(tone, SR, 2);
+    const result = pitchShift(tone, SR, { pitchSemitones: 2 });
     expect(result).toBeInstanceOf(Float32Array);
     expect(result.length).toBeGreaterThan(0);
   });
 
   it('pitchShift rejects an unsupported effective rate before processing input', () => {
-    expect(() => pitchShift(new Float32Array(4), 48000, -120)).toThrow();
-    expect(pitchShift(tone, SR, 0)).toBeInstanceOf(Float32Array);
+    expect(() => pitchShift(new Float32Array(4), 48000, { pitchSemitones: -120 })).toThrow();
+    expect(pitchShift(tone, SR, { pitchSemitones: 0 })).toBeInstanceOf(Float32Array);
   });
 
   it('normalize sets peak close to target', () => {
@@ -229,7 +229,7 @@ describe('effects', () => {
     for (let i = 0; i < SR; i++) {
       quiet[i] = 0.1 * Math.sin((2 * Math.PI * 440 * i) / SR);
     }
-    const result = normalize(quiet, SR, 0.0);
+    const result = normalize(quiet, SR, { targetDb: 0.0 });
     let peak = 0;
     for (let i = 0; i < result.length; i++) {
       const abs = Math.abs(result[i]);
@@ -405,7 +405,7 @@ describe('effects', () => {
     for (let i = start; i < end; i++) {
       samples[i] = 0.5 * Math.sin((2 * Math.PI * 440 * i) / SR);
     }
-    const result = trim(samples, SR, -40.0);
+    const result = trim(samples, SR, { thresholdDb: -40.0 });
     expect(result.length).toBeLessThan(samples.length);
     expect(result.length).toBeGreaterThan(0);
   });

@@ -6,13 +6,23 @@
 import { resolveEntryTimes, toSamples } from './internal/effects_common.js';
 import { addon } from './native.js';
 import type { PercussiveEvent, PercussiveEventInput } from './types.js';
+import type { OptionsOf, ValidateOptions } from './validation.js';
 import {
   assertAudioInput,
   assertInt32,
   C_INT_MAX,
   C_INT_MIN,
-  requestObject,
+  sampleOneShot,
 } from './validation.js';
+
+// The plain-array samples form is read as the Float32Array it stands for before the shared normalizer sees it.
+function percussiveRequest<
+  R extends { samples: Float32Array | readonly number[]; sampleRate: number },
+>(fnName: 'extractPercussiveEvents' | 'renderPercussiveEvents', args: unknown[]): R {
+  const first = args[0];
+  const widened = Array.isArray(first) ? [Float32Array.from(first), ...args.slice(1)] : args;
+  return sampleOneShot<R & { samples: Float32Array }>(fnName, widened);
+}
 
 /**
  * Check the separation an extracted or rendered event set is measured against
@@ -67,7 +77,9 @@ export interface PercussiveSeparationOptions {
   hpssKernelPercussive?: number;
 }
 
-export interface ExtractPercussiveEventsRequest extends PercussiveSeparationOptions {
+export interface ExtractPercussiveEventsRequest
+  extends PercussiveSeparationOptions,
+    ValidateOptions {
   /**
    * Source audio. A plain number array is copied to a `Float32Array` first,
    * which is what the native side reads.
@@ -107,7 +119,9 @@ export interface ExtractPercussiveEventsRequest extends PercussiveSeparationOpti
   minPercussiveRatio?: number;
 }
 
-export interface RenderPercussiveEventsRequest extends PercussiveSeparationOptions {
+export interface RenderPercussiveEventsRequest
+  extends PercussiveSeparationOptions,
+    ValidateOptions {
   /**
    * Source audio. A plain number array is copied to a `Float32Array` first,
    * which is what the native side reads.
@@ -176,13 +190,20 @@ export interface RenderPercussiveEventsRequest extends PercussiveSeparationOptio
  * const edited = renderPercussiveEvents({ samples, sampleRate, events });
  * ```
  */
+export function extractPercussiveEvents(request: ExtractPercussiveEventsRequest): PercussiveEvent[];
 export function extractPercussiveEvents(
-  request: ExtractPercussiveEventsRequest,
-): PercussiveEvent[] {
-  requestObject('extractPercussiveEvents', request, 'request', true);
-  const { samples: input, sampleRate, ...options } = request;
+  samples: Float32Array | readonly number[],
+  sampleRate: number,
+  options?: OptionsOf<ExtractPercussiveEventsRequest>,
+): PercussiveEvent[];
+export function extractPercussiveEvents(...args: unknown[]): PercussiveEvent[] {
+  const request = percussiveRequest<ExtractPercussiveEventsRequest>(
+    'extractPercussiveEvents',
+    args,
+  );
+  const { samples: input, sampleRate, validate, ...options } = request;
   const samples = Array.isArray(input) ? toSamples(input) : input;
-  assertAudioInput('extractPercussiveEvents', samples, sampleRate, options);
+  assertAudioInput('extractPercussiveEvents', samples, sampleRate, { validate });
   assertPercussiveSeparation('extractPercussiveEvents', options);
   if (options.onsetWait !== undefined) {
     // Checked here with its four bag-siblings, and for the same reason: 0 is
@@ -241,11 +262,17 @@ export function extractPercussiveEvents(
  * const output = renderPercussiveEvents({ samples, sampleRate, events: tamed, fadeMs: 10 });
  * ```
  */
-export function renderPercussiveEvents(request: RenderPercussiveEventsRequest): Float32Array {
-  requestObject('renderPercussiveEvents', request, 'request', true);
-  const { samples: input, sampleRate, events, ...options } = request;
+export function renderPercussiveEvents(request: RenderPercussiveEventsRequest): Float32Array;
+export function renderPercussiveEvents(
+  samples: Float32Array | readonly number[],
+  sampleRate: number,
+  options: OptionsOf<RenderPercussiveEventsRequest>,
+): Float32Array;
+export function renderPercussiveEvents(...args: unknown[]): Float32Array {
+  const request = percussiveRequest<RenderPercussiveEventsRequest>('renderPercussiveEvents', args);
+  const { samples: input, sampleRate, events, validate, ...options } = request;
   const samples = Array.isArray(input) ? toSamples(input) : input;
-  assertAudioInput('renderPercussiveEvents', samples, sampleRate, options);
+  assertAudioInput('renderPercussiveEvents', samples, sampleRate, { validate });
   if (!Array.isArray(events)) {
     throw new TypeError('renderPercussiveEvents: events must be an array');
   }

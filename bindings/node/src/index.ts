@@ -25,6 +25,12 @@ export {
 // reach the package entry without a deliberate edit and read as a parity
 // coverage gap.
 export { SampleBank } from './sample_bank.js';
+export {
+  scaleCorrectionSemitones,
+  scaleMaskForMode,
+  scalePitchClassEnabled,
+  scaleQuantizeMidi,
+} from './scale.js';
 // Named for the same reason: the module's one entry point reaches the package
 // surface, and a helper added beside it later cannot follow without an edit.
 export { transcribe } from './transcribe.js';
@@ -90,19 +96,11 @@ export type {
   CqtResult,
   CrackleDetection,
   DeclickReport,
-  DeclickStereoResult,
   DeclipReport,
-  DeclipStereoResult,
   DecrackleReport,
-  DecrackleStereoResult,
   DehumReport,
-  DehumStereoResult,
-  DenoiseLinkedResult,
   DenoiseReport,
-  DenoiseStereoResult,
-  DereverbLinkedResult,
   DereverbReport,
-  DereverbStereoResult,
   DynamicsResult,
   EngineAutomationPoint,
   EngineBounceOptions,
@@ -192,6 +190,14 @@ export type {
   MasteringProcessorCatalogEntry,
   MasteringProcessorCategory,
   MasteringRealtimeCost,
+  MasteringRepairDeclickResult,
+  MasteringRepairDeclipResult,
+  MasteringRepairDecrackleResult,
+  MasteringRepairDehumResult,
+  MasteringRepairDenoiseClassicalResult,
+  MasteringRepairDereverbClassicalResult,
+  MasteringRepairSamplesRequest,
+  MasteringRepairTrimSilenceResult,
   MasteringReport,
   MasteringResult,
   MasteringStereoResult,
@@ -351,10 +357,8 @@ export type {
   RhythmResult,
   RirDiagnostic,
   RirResult,
-  RirSynthOptions,
   RoomEstimateOptions,
   RoomEstimateResult,
-  RoomGeometryFromEstimateOptions,
   RoomGeometryOptions,
   RoomMorphOptions,
   RoomMorphResult,
@@ -408,6 +412,7 @@ export type {
   SynthBodyType,
   SynthEngineMode,
   SynthEnumTables,
+  SynthesizeRirRequest,
   SynthFilterModel,
   SynthFilterOutput,
   SynthLfoShape,
@@ -431,7 +436,6 @@ export type {
   TrimRange,
   TrimReport,
   TrimResult,
-  TrimSilenceStereoResult,
   TypedJson,
   UmpWords,
   VocoderCarrierSource,
@@ -467,5 +471,5 @@ export {
 } from './types.js';
 export type * from './types_vocal_edit.js';
 export type * from './types_vocal_project.js';
-export type { ValidateOptions } from './validation.js';
+export type { OptionsOf, ValidateOptions } from './validation.js';
 export * from './vocal_edit.js';

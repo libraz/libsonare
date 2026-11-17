@@ -14,6 +14,7 @@ import {
   type StreamPatternScore,
   type StreamProgressiveEstimate,
   type StreamStats,
+  streamAnalyzerConfigDefault,
 } from '../../dist/index.js';
 
 const sampleRate = 22050;
@@ -387,5 +388,20 @@ describe('stream analyzer surface', () => {
     // @ts-expect-error removed
     type _C = import('../../dist/index.js').StreamAnalyzerConfig;
     expect(true).toBe(true);
+  });
+});
+
+describe('stream analyzer config default', () => {
+  it('names the config default in the singular and drops the plural alias', () => {
+    const defaults = streamAnalyzerConfigDefault();
+    expect(defaults.sampleRate).toBeGreaterThan(0);
+    expect(defaults.fminHz).toBeGreaterThanOrEqual(0);
+    expect(defaults.referenceHz).toBe(440);
+    expect(defaults.window).toBe('hann');
+    for (const removed of ['fmin', 'fmax', 'tuningRefHz', 'computeMagnitude', 'outputFormat']) {
+      expect(defaults).not.toHaveProperty(removed);
+    }
+    expect((indexModule as Record<string, unknown>).streamAnalyzerConfigDefaults).toBeUndefined();
+    expectTypeOf(defaults).toEqualTypeOf<Required<StreamConfig>>();
   });
 });

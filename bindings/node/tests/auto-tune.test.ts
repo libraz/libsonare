@@ -60,22 +60,22 @@ function medianMidi(audio: Float32Array, note: number): number {
 describe('scaleMaskForMode', () => {
   it('returns each mode as its 12-bit mask, for every root', () => {
     for (const [name, mask] of Object.entries(MASKS)) {
-      for (const root of [0, 5, 11]) {
+      for (const root of [0, 5, 11] as const) {
         expect(scaleMaskForMode(root, name as never)).toBe(mask);
       }
     }
   });
 
-  it('accepts the ordinal detectKey carries on other surfaces', () => {
-    expect(scaleMaskForMode(0, 0)).toBe(MASKS.major);
-    expect(scaleMaskForMode(0, 6)).toBe(MASKS.locrian);
+  it('refuses a mode ordinal', () => {
+    expect(() => scaleMaskForMode(0, 0 as never)).toThrow(TypeError);
+    expect(() => scaleMaskForMode(0, 6 as never)).toThrow(TypeError);
   });
 
   it('refuses an unknown mode and an out-of-range root', () => {
     expect(() => scaleMaskForMode(0, 'whole-tone' as never)).toThrow(RangeError);
-    expect(() => scaleMaskForMode(12, 'major')).toThrow();
-    expect(() => scaleMaskForMode(-1, 'major')).toThrow();
-    expect(() => scaleMaskForMode(0, 7)).toThrow(RangeError);
+    expect(() => scaleMaskForMode(12 as never, 'major')).toThrow();
+    expect(() => scaleMaskForMode(-1 as never, 'major')).toThrow();
+    expect(() => scaleMaskForMode(0, 7 as never)).toThrow(TypeError);
     expect(() => scaleMaskForMode(0, {} as never)).toThrow(TypeError);
   });
 });
@@ -84,7 +84,7 @@ describe('scaleModeMask as a mode name', () => {
   const samples = detunedMelody(DETUNE_CENTS);
   const pitch = pitchPyin({ samples, sampleRate: SR });
   const voiced = Uint8Array.from(pitch.voicedFlag, (flag) => (flag ? 1 : 0));
-  const base = { samples, sampleRate: SR, f0Hz: pitch.f0, voiced, mode: 'scale' as const };
+  const base = { samples, sampleRate: SR, f0Hz: pitch.f0, voiced, targetMode: 'scale' as const };
 
   it('corrects exactly as the numeric mask does', () => {
     for (const name of ['major', 'dorian'] as const) {

@@ -27,7 +27,6 @@ import type {
   AnalyzeTimbreOptions,
   MasteringOptions,
   MelodyOptions,
-  NoteStretchOptions,
 } from '../src/types.js';
 
 /**
@@ -157,12 +156,10 @@ describe('analysis options-bag defaults are pinned to the documented values', ()
     expect(mastering(x, SR)).toEqual(mastering(x, SR, defaults));
   });
 
-  it('noteStretch (stretchRatio default; onset/offset are required inputs)', () => {
-    // onsetSample/offsetSample select WHICH note, so their 0/0 defaults are
-    // placeholders (a zero-length region throws). Pin only the real default,
-    // stretchRatio, against an explicit valid region.
-    const region: NoteStretchOptions = { onsetSample: 0, offsetSample: x.length };
-    expect(noteStretch(x, SR, region)).toEqual(
+  it('noteStretch (stretchRatio is required; the region defaults to the whole input)', () => {
+    const region = { onsetSample: 0, offsetSample: x.length };
+    expect(() => noteStretch(x, SR, region as never)).toThrow(TypeError);
+    expect(noteStretch(x, SR, { stretchRatio: 1.0 })).toEqual(
       noteStretch(x, SR, { ...region, stretchRatio: 1.0 }),
     );
   });

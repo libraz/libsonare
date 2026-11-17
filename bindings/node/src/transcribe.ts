@@ -1,6 +1,7 @@
 import { nativeTranscribeRequest } from './internal/transcribe_request.js';
 import { addon } from './native.js';
 import type { TranscribeRequest, TranscribeResult } from './types.js';
+import type { OptionsOf } from './validation.js';
 import { assertAudioInput, assertPositiveFloatValue, sampleOneShot } from './validation.js';
 
 /**
@@ -40,7 +41,7 @@ export function transcribe(request: TranscribeRequest): TranscribeResult;
 export function transcribe(
   samples: Float32Array,
   sampleRate: number,
-  options?: Omit<TranscribeRequest, 'samples' | 'sampleRate'>,
+  options?: OptionsOf<TranscribeRequest>,
 ): TranscribeResult;
 export function transcribe(...args: unknown[]): TranscribeResult {
   const request = sampleOneShot<TranscribeRequest>('transcribe', args);

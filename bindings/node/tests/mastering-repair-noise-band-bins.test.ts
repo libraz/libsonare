@@ -98,7 +98,7 @@ describe('masteringRepairNoiseBandBins', () => {
   });
 
   it('defaults to the grid the default denoise reports on', () => {
-    expect(Array.from(masteringRepairNoiseBandBins({}))).toEqual(
+    expect(Array.from(masteringRepairNoiseBandBins({ sampleRate: 22050 }))).toEqual(
       Array.from(masteringRepairNoiseBandBins({ nFft: 1024, sampleRate: 22050 })),
     );
   });
@@ -107,7 +107,7 @@ describe('masteringRepairNoiseBandBins', () => {
     for (const nFft of [1000, 0, -1024]) {
       let caught: unknown;
       try {
-        masteringRepairNoiseBandBins({ nFft });
+        masteringRepairNoiseBandBins({ nFft, sampleRate: 22050 });
       } catch (error) {
         caught = error;
       }
@@ -142,6 +142,6 @@ describe('masteringRepairNoiseBandBins', () => {
   it('refuses a sampleRate that is not a number rather than substituting its default', () => {
     expect(() =>
       masteringRepairNoiseBandBins({ sampleRate: 'not-a-number' as unknown as number }),
-    ).toThrow(/sampleRate must be an integer/);
+    ).toThrow(/sampleRate must be a number/);
   });
 });

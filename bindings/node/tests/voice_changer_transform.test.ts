@@ -11,12 +11,12 @@ import { expectRefusal } from './_helpers.js';
 
 const SR = 48000;
 const NEW_PRESETS = [
-  'hard-tune',
-  'robot-monotone',
-  'choir-harmony',
-  'vocoder-strings',
+  'hardTune',
+  'robotMonotone',
+  'choirHarmony',
+  'vocoderStrings',
   'megaphone',
-  'radio-voice',
+  'radioVoice',
 ] as const;
 
 function tone(frames: number, freq = 220): Float32Array {
@@ -39,12 +39,12 @@ function codeOf(fn: () => unknown): number | undefined {
 function withChanger(
   preset: RealtimeVoiceChangerConfig,
   run: (changer: RealtimeVoiceChanger) => void,
-  options: { channels?: 1 | 2 } = {},
+  options: { numChannels?: 1 | 2 } = {},
 ): void {
   const changer = new RealtimeVoiceChanger({
     sampleRate: SR,
     maxBlockSize: 256,
-    preset,
+    config: preset,
     ...options,
   });
   try {
@@ -55,8 +55,8 @@ function withChanger(
 }
 
 const GRAIN = {
-  ...realtimeVoiceChangerPresetConfig('neutral-monitor'),
-  voiceEngineEngine: 'grain' as const,
+  ...realtimeVoiceChangerPresetConfig('neutralMonitor'),
+  voiceEngine: 'grain' as const,
 };
 
 describe('voice transformer presets and flat config', () => {
@@ -64,22 +64,24 @@ describe('voice transformer presets and flat config', () => {
     const names = realtimeVoiceChangerPresetNames();
     for (const id of NEW_PRESETS) {
       expect(names).toContain(id);
-      expect(realtimeVoiceChangerPresetConfig(id).voiceEngineEngine).toBeDefined();
+      expect(realtimeVoiceChangerPresetConfig(id).voiceEngine).toBeDefined();
     }
-    expect(NEW_PRESETS.map((id) => voiceCharacterPresetId(id))).toEqual([...NEW_PRESETS]);
-    expect(voiceCharacterPresetId(11)).toBe('radio-voice');
+    expect(NEW_PRESETS.map((id) => voiceCharacterPresetId(names.indexOf(id)))).toEqual([
+      ...NEW_PRESETS,
+    ]);
+    expect(voiceCharacterPresetId(11)).toBe('radioVoice');
   });
 
   it('returns the transformer fields of the default psola engine', () => {
-    const pod = realtimeVoiceChangerPresetConfig('neutral-monitor');
-    expect(pod.voiceEngineEngine).toBe('psola');
+    const pod = realtimeVoiceChangerPresetConfig('neutralMonitor');
+    expect(pod.voiceEngine).toBe('psola');
     expect(pod.pitchCorrectionMode).toBe('off');
     expect(pod.vocoderEnabled).toBe(false);
-    expect(Object.keys(pod)).toHaveLength(71);
+    expect(Object.keys(pod)).toHaveLength(69);
   });
 
   it('round-trips a changed transformer config through setConfig and configJson', () => {
-    const pod = realtimeVoiceChangerPresetConfig('neutral-monitor');
+    const pod = realtimeVoiceChangerPresetConfig('neutralMonitor');
     withChanger(pod, (changer) => {
       changer.setConfig({
         ...pod,
@@ -87,11 +89,10 @@ describe('voice transformer presets and flat config', () => {
         pitchCorrectionScale: 'naturalMinor',
         pitchCorrectionKeyRoot: 9,
         harmonyVoices: 2,
-        harmonyStep1: 2,
-        harmonyStep2: -3,
-        characterType: 'bbd_chorus',
-        reverbVariationVariation: 'tempo_delay',
-        reverbVariationDivision: 'dotted_eighth',
+        harmonySteps: [2, -3, 0],
+        characterType: 'bbdChorus',
+        reverbVariation: 'tempoDelay',
+        reverbVariationDivision: 'dottedEighth',
         midiRelease: 'input',
       });
       const applied = JSON.parse(changer.configJson()).dsp;
@@ -109,21 +110,21 @@ describe('voice transformer presets and flat config', () => {
   });
 
   it('refuses a flat config that lacks a transformer key', () => {
-    const { harmonyStep3: _omitted, ...partial } = realtimeVoiceChangerPresetConfig('bright-idol');
+    const { harmonySteps: _omitted, ...partial } = realtimeVoiceChangerPresetConfig('brightIdol');
     expectRefusal(
-      () => new RealtimeVoiceChanger({ sampleRate: SR, preset: partial as never }),
-      RangeError,
+      () => new RealtimeVoiceChanger({ sampleRate: SR, config: partial as never }),
+      TypeError,
     );
   });
 
   it('refuses out-of-range, fractional and unknown transformer values by name', () => {
-    const pod = realtimeVoiceChangerPresetConfig('neutral-monitor');
+    const pod = realtimeVoiceChangerPresetConfig('neutralMonitor');
     withChanger(pod, (changer) => {
       const before = changer.configJson();
       expect(() => changer.setConfig({ ...pod, voiceEngineF0MinHz: Number.NaN })).toThrow(
         RangeError,
       );
-      expect(() => changer.setConfig({ ...pod, harmonyStep1: 8 })).toThrow(RangeError);
+      expect(() => changer.setConfig({ ...pod, harmonySteps: [8, 0, 0] })).toThrow(RangeError);
       expect(() => changer.setConfig({ ...pod, vocoderBands: 20.5 })).toThrow(RangeError);
       expect(() => changer.setConfig({ ...pod, characterType: 'sideways' as never })).toThrow(
         RangeError,
@@ -140,18 +141,18 @@ describe('voice transformer presets and flat config', () => {
       () =>
         new RealtimeVoiceChanger({
           sampleRate: SR,
-          preset: { ...GRAIN, pitchCorrectionMode: 'auto' },
+          config: { ...GRAIN, pitchCorrectionMode: 'auto' },
         }),
     ).toThrow(RangeError);
-    const pod = realtimeVoiceChangerPresetConfig('neutral-monitor');
+    const pod = realtimeVoiceChangerPresetConfig('neutralMonitor');
     withChanger(pod, (changer) => {
-      expect(() => changer.setConfig({ ...pod, voiceEngineEngine: 'grain' })).toThrow(RangeError);
+      expect(() => changer.setConfig({ ...pod, voiceEngine: 'grain' })).toThrow(RangeError);
     });
   });
 });
 
 describe('RealtimeVoiceChanger note API', () => {
-  const psola = realtimeVoiceChangerPresetConfig('neutral-monitor');
+  const psola = realtimeVoiceChangerPresetConfig('neutralMonitor');
 
   it('accepts notes with and without a velocity', () => {
     withChanger(psola, (changer) => {
@@ -188,7 +189,7 @@ describe('RealtimeVoiceChanger note API', () => {
       expect(codeOf(() => changer.noteOff(60))).toBe(ErrorCode.InvalidState);
       expect(() => changer.allNotesOff()).not.toThrow();
     });
-    const destroyed = new RealtimeVoiceChanger({ sampleRate: SR, preset: psola });
+    const destroyed = new RealtimeVoiceChanger({ sampleRate: SR, config: psola });
     destroyed.destroy();
     expectRefusal(() => destroyed.noteOn(60), ErrorCode.InvalidState);
     expectRefusal(() => destroyed.noteOff(60), ErrorCode.InvalidState);
@@ -198,7 +199,7 @@ describe('RealtimeVoiceChanger note API', () => {
 
 describe('RealtimeVoiceChanger external vocoder carrier', () => {
   const external = {
-    ...realtimeVoiceChangerPresetConfig('vocoder-strings'),
+    ...realtimeVoiceChangerPresetConfig('vocoderStrings'),
     vocoderCarrierSource: 'external' as const,
   };
 
@@ -211,12 +212,14 @@ describe('RealtimeVoiceChanger external vocoder carrier', () => {
         expect(codeOf(() => changer.processMonoInto(block, new Float32Array(128)))).toBe(
           ErrorCode.InvalidState,
         );
-        expect(codeOf(() => changer.processInterleaved(tone(256), 2))).toBe(ErrorCode.InvalidState);
-        expect(codeOf(() => changer.processPlanarStereo(tone(128), tone(128)))).toBe(
+        expect(
+          codeOf(() => changer.processInterleavedInto(tone(256), 2, new Float32Array(256))),
+        ).toBe(ErrorCode.InvalidState);
+        expect(codeOf(() => changer.processPlanar([tone(128), tone(128)]))).toBe(
           ErrorCode.InvalidState,
         );
       },
-      { channels: 2 },
+      { numChannels: 2 },
     );
   });
 
@@ -229,55 +232,47 @@ describe('RealtimeVoiceChanger external vocoder carrier', () => {
         expect(changer.processMonoWithCarrier(block, carrier)).toHaveLength(128);
         // Run past the reported latency so the written block carries signal.
         const into = new Float32Array(128);
-        const blocks = Math.ceil(changer.latencySamples() / 128) + 1;
+        const blocks = Math.ceil(changer.latencySamples / 128) + 1;
         for (let i = 0; i < blocks; i += 1) {
           changer.processMonoWithCarrierInto(block, carrier, into);
         }
         expect(into.some((v) => v !== 0)).toBe(true);
-        expect(changer.processInterleavedWithCarrier(tone(256), carrier, 2)).toHaveLength(256);
         const interleavedOut = new Float32Array(256);
         changer.processInterleavedWithCarrierInto(tone(256), carrier, 2, interleavedOut);
         const left = tone(128);
         const right = tone(128);
-        changer.processPlanarStereoWithCarrier(left, right, carrier);
+        expect(changer.processPlanarWithCarrier([left, right], carrier)).toHaveLength(2);
         expect(() => changer.processMonoWithCarrier(block, new Float32Array(64))).toThrow(
           RangeError,
         );
-        expect(() => changer.processInterleavedWithCarrier(tone(256), tone(256), 2)).toThrow(
-          RangeError,
-        );
-        expect(() => changer.processPlanarStereoWithCarrier(left, right, tone(64))).toThrow(
-          RangeError,
-        );
+        expect(() =>
+          changer.processInterleavedWithCarrierInto(tone(256), tone(256), 2, new Float32Array(256)),
+        ).toThrow(RangeError);
+        expect(() => changer.processPlanarWithCarrier([left, right], tone(64))).toThrow(RangeError);
       },
-      { channels: 2 },
+      { numChannels: 2 },
     );
   });
 
-  it('takes the interleaved carrier right after the input, then the channel count', () => {
+  it('takes the interleaved carrier right after the input, then the channel count and the output', () => {
     withChanger(
       external,
       (changer) => {
         const carrier = tone(128, 110);
-        expect(changer.processInterleavedWithCarrier(tone(256), carrier, 2)).toHaveLength(256);
         const out = new Float32Array(256);
         changer.processInterleavedWithCarrierInto(tone(256), carrier, 2, out);
-        expectRefusal(
-          () => changer.processInterleavedWithCarrier(tone(256), 2 as never, carrier as never),
-          TypeError,
-        );
         expectRefusal(
           () =>
             changer.processInterleavedWithCarrierInto(tone(256), 2 as never, carrier as never, out),
           TypeError,
         );
       },
-      { channels: 2 },
+      { numChannels: 2 },
     );
   });
 
   it('ignores the carrier while the carrier source is internal', () => {
-    const internal = realtimeVoiceChangerPresetConfig('vocoder-strings');
+    const internal = realtimeVoiceChangerPresetConfig('vocoderStrings');
     expect(internal.vocoderCarrierSource).toBe('internal');
     withChanger(internal, (changer) => {
       const block = tone(128);

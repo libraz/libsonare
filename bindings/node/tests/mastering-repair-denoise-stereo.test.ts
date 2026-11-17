@@ -63,29 +63,29 @@ describe('masteringRepairDenoiseClassicalStereo', () => {
     const { left, right } = pair();
     const result = masteringRepairDenoiseClassicalStereo({ left, right, sampleRate: SR });
 
-    expect(result.left).toHaveLength(left.length);
-    expect(result.right).toHaveLength(right.length);
-    expect(result.left.every(Number.isFinite)).toBe(true);
-    expect(result.right.every(Number.isFinite)).toBe(true);
+    expect(result.channels[0]).toHaveLength(left.length);
+    expect(result.channels[1]).toHaveLength(right.length);
+    expect(result.channels[0].every(Number.isFinite)).toBe(true);
+    expect(result.channels[1].every(Number.isFinite)).toBe(true);
 
     // The two content tones survive the mask, so the channels stay distinct --
     // the assertion that would fail if one channel were a copy of the other.
-    expect(Array.from(result.left)).not.toEqual(Array.from(result.right));
+    expect(Array.from(result.channels[0])).not.toEqual(Array.from(result.channels[1]));
 
     // A real noise bed at -34 dBFS: the floor must land well inside the dB
     // range rather than on the report's floor sentinel or at 0.
-    expect(result.report.detected.floorDbfs).toBeGreaterThan(-90);
-    expect(result.report.detected.floorDbfs).toBeLessThan(-10);
-    expect(result.report.detected.bandFloorDbfs).toHaveLength(32);
-    expect(result.report.detected.bandFloorDbfs.every(Number.isFinite)).toBe(true);
+    expect(result.reports[0].detected.floorDbfs).toBeGreaterThan(-90);
+    expect(result.reports[0].detected.floorDbfs).toBeLessThan(-10);
+    expect(result.reports[0].detected.bandFloorDbfs).toHaveLength(32);
+    expect(result.reports[0].detected.bandFloorDbfs.every(Number.isFinite)).toBe(true);
 
     // A mask that actually attenuated something, bounded by the configured
     // depth: at the default reductionDb of 26 no cell may report more.
-    expect(result.report.meanReductionDb).toBeGreaterThan(0.5);
-    expect(result.report.maxReductionDb).toBeGreaterThan(result.report.meanReductionDb);
-    expect(result.report.maxReductionDb).toBeLessThanOrEqual(26.001);
-    expect(result.report.floorLimitedFraction).toBeGreaterThanOrEqual(0);
-    expect(result.report.floorLimitedFraction).toBeLessThanOrEqual(1);
+    expect(result.reports[0].meanReductionDb).toBeGreaterThan(0.5);
+    expect(result.reports[0].maxReductionDb).toBeGreaterThan(result.reports[0].meanReductionDb);
+    expect(result.reports[0].maxReductionDb).toBeLessThanOrEqual(26.001);
+    expect(result.reports[0].floorLimitedFraction).toBeGreaterThanOrEqual(0);
+    expect(result.reports[0].floorLimitedFraction).toBeLessThanOrEqual(1);
   });
 
   it('applies one mask unchanged to both channels, so an interchannel level difference survives', () => {
@@ -96,11 +96,11 @@ describe('masteringRepairDenoiseClassicalStereo', () => {
     const right = scaled(left, 0.5);
     const result = masteringRepairDenoiseClassicalStereo({ left, right, sampleRate: SR });
 
-    const reference = peak(result.left);
+    const reference = peak(result.channels[0]);
     expect(reference).toBeGreaterThan(0.01);
     let worst = 0;
-    for (let i = 0; i < result.left.length; i += 1) {
-      worst = Math.max(worst, Math.abs(result.right[i] - 0.5 * result.left[i]));
+    for (let i = 0; i < result.channels[0].length; i += 1) {
+      worst = Math.max(worst, Math.abs(result.channels[1][i] - 0.5 * result.channels[0][i]));
     }
     expect(worst).toBeLessThan(1e-4 * reference);
   });
@@ -120,9 +120,9 @@ describe('masteringRepairDenoiseClassicalStereo', () => {
     });
 
     for (const floor of [
-      both.report.detected.floorDbfs,
-      oneSided.report.detected.floorDbfs,
-      halved.report.detected.floorDbfs,
+      both.reports[0].detected.floorDbfs,
+      oneSided.reports[0].detected.floorDbfs,
+      halved.reports[0].detected.floorDbfs,
     ]) {
       expect(floor).toBeGreaterThan(-90);
       expect(floor).toBeLessThan(-10);
@@ -130,13 +130,16 @@ describe('masteringRepairDenoiseClassicalStereo', () => {
 
     // Twice the summed power is 3.01 dB, so carrying the same material in both
     // channels reads that much above carrying it in one.
-    expect(both.report.detected.floorDbfs - oneSided.report.detected.floorDbfs).toBeCloseTo(
+    expect(both.reports[0].detected.floorDbfs - oneSided.reports[0].detected.floorDbfs).toBeCloseTo(
       3.01,
       1,
     );
     // Half the amplitude is a quarter of the power: an absolute level follows
     // it, a ratio would not move at all.
-    expect(both.report.detected.floorDbfs - halved.report.detected.floorDbfs).toBeCloseTo(6.02, 1);
+    expect(both.reports[0].detected.floorDbfs - halved.reports[0].detected.floorDbfs).toBeCloseTo(
+      6.02,
+      1,
+    );
   });
 
   it('reports no floor-limited fraction in spectralSubtraction mode, which is the mode and not a measurement', () => {
@@ -150,7 +153,7 @@ describe('masteringRepairDenoiseClassicalStereo', () => {
       sampleRate: SR,
       reductionDb: 6,
     });
-    expect(logMmse.report.floorLimitedFraction).toBeGreaterThan(0);
+    expect(logMmse.reports[0].floorLimitedFraction).toBeGreaterThan(0);
 
     const spectral = masteringRepairDenoiseClassicalStereo({
       left,
@@ -161,15 +164,16 @@ describe('masteringRepairDenoiseClassicalStereo', () => {
     });
     // A mask genuinely ran in this mode, so the 0 is that mode flooring on
     // spectralFloor rather than nothing having happened.
-    expect(spectral.report.meanReductionDb).toBeGreaterThan(0.5);
-    expect(spectral.report.floorLimitedFraction).toBe(0);
+    expect(spectral.reports[0].meanReductionDb).toBeGreaterThan(0.5);
+    expect(spectral.reports[0].floorLimitedFraction).toBe(0);
   });
 
   it('reads overSubtraction and spectralFloor only in spectralSubtraction, and the gain options only in the others', () => {
     const { left, right } = pair();
     const run = (options: DenoiseClassicalOptions) =>
       Array.from(
-        masteringRepairDenoiseClassicalStereo({ left, right, sampleRate: SR, ...options }).left,
+        masteringRepairDenoiseClassicalStereo({ left, right, sampleRate: SR, ...options })
+          .channels[0],
       );
 
     // Default mode (logMmse): the Berouti knobs are dead and the gain knobs
@@ -195,12 +199,12 @@ describe('masteringRepairDenoiseClassicalStereo', () => {
     const right = add(tone(1900, 0.3, short), noise(98, 0.02, short));
 
     const denoised = masteringRepairDenoiseClassicalStereo({ left, right, sampleRate: SR });
-    expect(denoised.left).toHaveLength(short);
-    expect(denoised.right).toHaveLength(short);
-    expect(denoised.left.every(Number.isFinite)).toBe(true);
+    expect(denoised.channels[0]).toHaveLength(short);
+    expect(denoised.channels[1]).toHaveLength(short);
+    expect(denoised.channels[0].every(Number.isFinite)).toBe(true);
 
     const padded = masteringRepairDereverbClassicalStereo({ left, right, sampleRate: SR });
-    expect(padded.left).toHaveLength(short);
+    expect(padded.channels[0]).toHaveLength(short);
   });
 
   it('refuses bad arguments with a catchable error', () => {

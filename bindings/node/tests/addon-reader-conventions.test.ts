@@ -125,6 +125,17 @@ const facadeKeys = (
     }),
   );
 
+/** Native room keys re-keyed to the facade: placements travel as `source` / `listener` objects. */
+const ROOM_RENAMES: Record<string, string | null> = {
+  sourceX: null,
+  sourceY: null,
+  sourceZ: null,
+  listenerX: null,
+  listenerY: null,
+  listenerZ: null,
+  maxSeconds: 'maxSec',
+};
+
 /**
  * `file:key` reads that may stay in the bare form, each with the reason it is
  * already undefined-safe. Keyed by property name rather than line number so the
@@ -351,19 +362,21 @@ const UNDEFINED_EQUIVALENCE: ReadonlyArray<{
     jsName: 'spectralEdit',
     invoke: (o) =>
       Array.from(
-        spectralEdit(
-          sine(4096),
-          SR,
-          [{ ...o, lowHz: 1000, highHz: 3000, mode: 'mute' }],
-          requestFields('spectralEdit', o),
-        ),
+        spectralEdit(sine(4096), SR, {
+          ...requestFields('spectralEdit', o),
+          ops: [{ ...o, lowHz: 1000, highHz: 3000, mode: 'mute' }],
+        }),
       ),
   },
   {
     jsName: 'pitchCorrectTimevarying',
     invoke: (o) =>
       Array.from(
-        pitchCorrectTimevarying(sine(4096, 220), new Float32Array(16).fill(220), SR, 256, o),
+        pitchCorrectTimevarying(sine(4096, 220), SR, {
+          ...facadeKeys(o, { referenceMidi: 'scaleReferenceMidi' }),
+          f0Hz: new Float32Array(16).fill(220),
+          hopLength: 256,
+        }),
       ),
   },
   {
@@ -371,7 +384,7 @@ const UNDEFINED_EQUIVALENCE: ReadonlyArray<{
     invoke: (o) =>
       Array.from(
         autoTune({
-          ...o,
+          ...facadeKeys(o, { referenceMidi: 'scaleReferenceMidi' }),
           samples: sine(4096, 220),
           sampleRate: SR,
           key: { root: 9, mode: 'minor' },
@@ -538,14 +551,18 @@ const UNDEFINED_EQUIVALENCE: ReadonlyArray<{
   },
   {
     jsName: 'roomMorph',
-    invoke: (o) => Array.from(roomMorph(sine(4000, 440, 48000), 48000, o).audio).slice(0, 32),
+    invoke: (o) =>
+      Array.from(roomMorph(sine(4000, 440, 48000), 48000, facadeKeys(o, ROOM_RENAMES)).audio).slice(
+        0,
+        32,
+      ),
   },
   {
     jsName: 'roomMorphStereo',
     invoke: (o) =>
       Array.from(
         roomMorphStereo({
-          ...o,
+          ...facadeKeys(o, ROOM_RENAMES),
           left: sine(4000, 440, 48000),
           right: sine(4000, 440, 48000),
           sampleRate: 48000,
@@ -555,7 +572,7 @@ const UNDEFINED_EQUIVALENCE: ReadonlyArray<{
   {
     jsName: 'synthesizeRir',
     invoke: (o) => {
-      const result = synthesizeRir(o);
+      const result = synthesizeRir({ ...facadeKeys(o, ROOM_RENAMES), sampleRate: 48000 });
       return [result.sampleRate, Array.from(result.rir).slice(0, 32)];
     },
   },
@@ -599,23 +616,26 @@ const UNDEFINED_EQUIVALENCE: ReadonlyArray<{
           left: sine(2048),
           right: sine(2048),
           sampleRate: SR,
-        }).left,
+        }).channels[0],
       ).slice(0, 32),
   },
   {
     jsName: 'masteringRepairDeclip',
-    invoke: (o) => Array.from(masteringRepairDeclip(sine(2048), SR, o)).slice(0, 32),
+    invoke: (o) =>
+      Array.from(
+        masteringRepairDeclip(sine(2048), SR, facadeKeys(o, { clipThreshold: 'clipThresholdDb' })),
+      ).slice(0, 32),
   },
   {
     jsName: 'masteringRepairDeclipStereo',
     invoke: (o) =>
       Array.from(
         masteringRepairDeclipStereo({
-          ...o,
+          ...facadeKeys(o, { clipThreshold: 'clipThresholdDb' }),
           left: sine(2048),
           right: sine(2048),
           sampleRate: SR,
-        }).left,
+        }).channels[0],
       ).slice(0, 32),
   },
   {
@@ -631,7 +651,7 @@ const UNDEFINED_EQUIVALENCE: ReadonlyArray<{
           left: sine(2048),
           right: sine(2048),
           sampleRate: SR,
-        }).left,
+        }).channels[0],
       ).slice(0, 32),
   },
   {
@@ -647,12 +667,15 @@ const UNDEFINED_EQUIVALENCE: ReadonlyArray<{
           left: sine(2048),
           right: sine(2048),
           sampleRate: SR,
-        }).left,
+        }).channels[0],
       ).slice(0, 32),
   },
   {
     jsName: 'masteringRepairTrimSilence',
-    invoke: (o) => Array.from(masteringRepairTrimSilence(sine(2048), SR, o)).slice(0, 32),
+    invoke: (o) =>
+      Array.from(
+        masteringRepairTrimSilence(sine(2048), SR, facadeKeys(o, { threshold: 'thresholdDb' })),
+      ).slice(0, 32),
   },
   {
     // The whole result, not a slice of one channel: this entry's output length
@@ -661,17 +684,17 @@ const UNDEFINED_EQUIVALENCE: ReadonlyArray<{
     jsName: 'masteringRepairTrimSilenceStereo',
     invoke: (o) => {
       const result = masteringRepairTrimSilenceStereo({
-        ...o,
+        ...facadeKeys(o, { threshold: 'thresholdDb' }),
         left: sine(2048),
         right: sine(2048),
         sampleRate: SR,
       });
       return [
-        Array.from(result.left).slice(0, 32),
-        result.left.length,
-        result.report,
-        result.leftRange,
-        result.rightRange,
+        Array.from(result.channels[0] as Float32Array).slice(0, 32),
+        (result.channels[0] as Float32Array).length,
+        result.reports[0],
+        result.ranges[0],
+        result.ranges[1],
       ];
     },
   },
@@ -690,7 +713,7 @@ const UNDEFINED_EQUIVALENCE: ReadonlyArray<{
           left: sine(2048),
           right: sine(2048),
           sampleRate: SR,
-        }).left,
+        }).channels[0],
       ).slice(0, 32),
   },
   {
@@ -717,7 +740,7 @@ const UNDEFINED_EQUIVALENCE: ReadonlyArray<{
           left: sine(2048),
           right: sine(2048),
           sampleRate: SR,
-        }).left,
+        }).channels[0],
       ).slice(0, 32),
   },
   {
@@ -761,13 +784,18 @@ const UNDEFINED_EQUIVALENCE: ReadonlyArray<{
     invoke: (o) => masteringRepairDetectNoiseFloor({ ...o, samples: sine(2048), sampleRate: SR }),
   },
   {
-    // Reads its whole request off the bag, so nothing here may be overridden.
+    // Reads its request off the bag; only the required sampleRate is added.
     jsName: 'masteringRepairNoiseBandBins',
-    invoke: (o) => Array.from(masteringRepairNoiseBandBins(o)),
+    invoke: (o) => Array.from(masteringRepairNoiseBandBins({ ...o, sampleRate: SR })),
   },
   {
     jsName: 'masteringRepairDetectClipping',
-    invoke: (o) => masteringRepairDetectClipping({ ...o, samples: sine(2048), sampleRate: SR }),
+    invoke: (o) =>
+      masteringRepairDetectClipping({
+        ...facadeKeys(o, { clipThreshold: 'clipThresholdDb' }),
+        samples: sine(2048),
+        sampleRate: SR,
+      }),
   },
   {
     jsName: 'masteringRepairDetectCrackle',
@@ -783,13 +811,18 @@ const UNDEFINED_EQUIVALENCE: ReadonlyArray<{
   },
   {
     jsName: 'masteringRepairDetectTrimRange',
-    invoke: (o) => masteringRepairDetectTrimRange({ ...o, samples: sine(2048), sampleRate: SR }),
+    invoke: (o) =>
+      masteringRepairDetectTrimRange({
+        ...facadeKeys(o, { threshold: 'thresholdDb' }),
+        samples: sine(2048),
+        sampleRate: SR,
+      }),
   },
   {
     jsName: 'masteringRepairDetectTrimRangeStereo',
     invoke: (o) =>
       masteringRepairDetectTrimRangeStereo({
-        ...o,
+        ...facadeKeys(o, { threshold: 'thresholdDb' }),
         left: sine(2048),
         right: sine(2048),
         sampleRate: SR,
@@ -1175,11 +1208,7 @@ const UNDEFINED_EQUIVALENCE: ReadonlyArray<{
       const retune = new StreamingRetune({ ...o });
       try {
         retune.prepare(SR, 512);
-        return [
-          retune.latencySamples(),
-          retune.config(),
-          Array.from(retune.processMono(sine(512))),
-        ];
+        return [retune.latencySamples, retune.config(), Array.from(retune.processMono(sine(512)))];
       } finally {
         retune.destroy();
       }

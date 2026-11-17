@@ -101,48 +101,54 @@ function expectedOffsetSample(frameEnd: number, frameRate: number): number {
 }
 
 describe('a required facade scalar is consumed, then refused by name', () => {
-  it('timeStretch consumes rate', () => {
+  it('timeStretch consumes speedRatio', () => {
     // Half speed doubles the output, double speed halves it.
-    expect(timeStretch(tone.samples, SR, 0.5).length).toBe(LENGTH * 2);
-    expect(timeStretch(tone.samples, SR, 2).length).toBe(LENGTH / 2);
+    expect(timeStretch(tone.samples, SR, { speedRatio: 0.5 }).length).toBe(LENGTH * 2);
+    expect(timeStretch(tone.samples, SR, { speedRatio: 2 }).length).toBe(LENGTH / 2);
 
     for (const bad of NON_FINITE) {
-      expect(() => timeStretch(tone.samples, SR, bad)).toThrow(RangeError);
-      expect(() => timeStretch(tone.samples, SR, bad)).toThrow(
-        /timeStretch: rate must be a finite number/,
+      expect(() => timeStretch(tone.samples, SR, { speedRatio: bad })).toThrow(RangeError);
+      expect(() => timeStretch(tone.samples, SR, { speedRatio: bad })).toThrow(
+        /timeStretch: speedRatio must be a finite number/,
       );
     }
-    expect(() => timeStretch(tone.samples, SR, PAST_FLT_MAX)).toThrow(NARROWING_REFUSAL);
+    expect(() => timeStretch(tone.samples, SR, { speedRatio: PAST_FLT_MAX })).toThrow(
+      NARROWING_REFUSAL,
+    );
   });
 
-  it('pitchShift consumes semitones', () => {
+  it('pitchShift consumes pitchSemitones', () => {
     // A fifth up raises the fundamental, so the shifted tone crosses zero more
     // often; the length is unchanged, so only the content can tell them apart.
-    const unshifted = pitchShift(tone.samples, SR, 0);
-    const up = pitchShift(tone.samples, SR, 7);
+    const unshifted = pitchShift(tone.samples, SR, { pitchSemitones: 0 });
+    const up = pitchShift(tone.samples, SR, { pitchSemitones: 7 });
     expect(up.length).toBe(unshifted.length);
     expect(zeroCrossings(up)).toBeGreaterThan(zeroCrossings(unshifted) * 1.2);
 
     for (const bad of NON_FINITE) {
-      expect(() => pitchShift(tone.samples, SR, bad)).toThrow(RangeError);
-      expect(() => pitchShift(tone.samples, SR, bad)).toThrow(
-        /pitchShift: semitones must be a finite number/,
+      expect(() => pitchShift(tone.samples, SR, { pitchSemitones: bad })).toThrow(RangeError);
+      expect(() => pitchShift(tone.samples, SR, { pitchSemitones: bad })).toThrow(
+        /pitchShift: pitchSemitones must be a finite number/,
       );
     }
-    expect(() => pitchShift(tone.samples, SR, PAST_FLT_MAX)).toThrow(NARROWING_REFUSAL);
+    expect(() => pitchShift(tone.samples, SR, { pitchSemitones: PAST_FLT_MAX })).toThrow(
+      NARROWING_REFUSAL,
+    );
   });
 
-  it('phaseVocoder consumes rate', () => {
-    expect(phaseVocoder(tone.samples, SR, 0.5).length).toBe(LENGTH * 2);
-    expect(phaseVocoder(tone.samples, SR, 2).length).toBe(LENGTH / 2);
+  it('phaseVocoder consumes speedRatio', () => {
+    expect(phaseVocoder(tone.samples, SR, { speedRatio: 0.5 }).length).toBe(LENGTH * 2);
+    expect(phaseVocoder(tone.samples, SR, { speedRatio: 2 }).length).toBe(LENGTH / 2);
 
     for (const bad of NON_FINITE) {
-      expect(() => phaseVocoder(tone.samples, SR, bad)).toThrow(RangeError);
-      expect(() => phaseVocoder(tone.samples, SR, bad)).toThrow(
-        /phaseVocoder: rate must be a finite number/,
+      expect(() => phaseVocoder(tone.samples, SR, { speedRatio: bad })).toThrow(RangeError);
+      expect(() => phaseVocoder(tone.samples, SR, { speedRatio: bad })).toThrow(
+        /phaseVocoder: speedRatio must be a finite number/,
       );
     }
-    expect(() => phaseVocoder(tone.samples, SR, PAST_FLT_MAX)).toThrow(NARROWING_REFUSAL);
+    expect(() => phaseVocoder(tone.samples, SR, { speedRatio: PAST_FLT_MAX })).toThrow(
+      NARROWING_REFUSAL,
+    );
   });
 
   it('extractNotes consumes frameRate', () => {

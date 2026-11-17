@@ -758,9 +758,7 @@ const REQUIRED_FLOAT_ARGUMENTS: FloatArgument[] = [
     name: 'noteSegments frameRate',
     site: 'sonare_wrap_features.cpp NoteSegments frameRate',
     control: [100, 200],
-    call: (v) =>
-      native.noteSegments({ f0Hz: NOTE_F0, voicedProb: NOTE_PROB, frameRate: v }).at(-1)
-        ?.endSeconds,
+    call: (v) => native.noteSegments(NOTE_F0, NOTE_PROB, null, v).at(-1)?.endSec,
   },
   {
     name: 'timeStretch rate',
@@ -819,7 +817,7 @@ const REQUIRED_FLOAT_ARGUMENTS: FloatArgument[] = [
     name: 'decomposeNotePitch medianHz',
     site: 'effects/note_editing.cpp DecomposeNotePitch medianHz',
     control: [441, 220],
-    call: (v) => native.decomposeNotePitch(SUSTAINED_F0, NOTE_RATE, v, 3).centreHz,
+    call: (v) => native.decomposeNotePitch(SUSTAINED_F0, NOTE_RATE, v, 3).centerHz,
   },
   {
     name: 'decomposeNotePitch vibratoCutoffHz',
@@ -997,10 +995,10 @@ const REQUIRED_FLOAT_STATE_ARGUMENTS: FloatArgument[] = [
     call: (v) => magnitudeSum(analyzerFrames((a) => a.setNormalizationGain(v)).rmsEnergy),
   },
   {
-    name: 'StreamAnalyzer setTuningRefHz refHz',
-    site: 'streaming/stream_analyzer.cpp SetTuningRefHz refHz',
+    name: 'StreamAnalyzer setReferenceHz referenceHz',
+    site: 'streaming/stream_analyzer.cpp SetReferenceHz referenceHz',
     control: [440, 466.16],
-    call: (v) => magnitudeSum(analyzerFrames((a) => a.setTuningRefHz(v)).chroma),
+    call: (v) => magnitudeSum(analyzerFrames((a) => a.setReferenceHz(v)).chroma),
   },
   {
     name: 'Mixer setInputTrimDb db',
@@ -1315,6 +1313,13 @@ describe('an object key and an array element are refused rather than saturated',
  */
 const UNCONTROLLED_SITES = ['streaming/stream_analyzer.cpp SetExpectedDuration durationSeconds'];
 
+/**
+ * Sites in the required-argument table whose reader is the bail-out
+ * `RequiredFiniteFloatValue`, not `node_narrow_finite_float`: driven here for the
+ * refusal, but not part of the `node_narrow_finite_float` call-site population.
+ */
+const BAILOUT_READER_SITES = new Set(['sonare_wrap_features.cpp NoteSegments frameRate']);
+
 describe('the tables cover the whole required-read population', () => {
   it('keeps 1e39 the discriminating value it is documented to be', () => {
     // Finite as a caller wrote it, an infinity at float width: exactly what
@@ -1334,7 +1339,9 @@ describe('the tables cover the whole required-read population', () => {
       .filter((source) => source.file !== 'sonare_wrap_options.h')
       .flatMap((source) => source.text.match(/node_narrow_finite_float\(/g) ?? []);
     const sites = new Set([
-      ...REQUIRED_FLOAT_ARGUMENTS.map((argument) => argument.site),
+      ...REQUIRED_FLOAT_ARGUMENTS.map((argument) => argument.site).filter(
+        (site) => !BAILOUT_READER_SITES.has(site),
+      ),
       ...REQUIRED_FLOAT_STATE_ARGUMENTS.map((argument) => argument.site),
       ...UNCONTROLLED_SITES,
     ]);

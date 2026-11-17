@@ -204,9 +204,10 @@ describe('reported repros', () => {
     ).toThrow("analyze: unknown request key 'options'");
   });
 
-  it('detectBpm refuses a bound it does not take', () => {
-    expect(() => sonare.detectBpm({ samples, sampleRate: 22050, bpmMin: 60 } as never)).toThrow(
-      "detectBpm: unknown request key 'bpmMin'",
+  it('detectBpm refuses a key it does not take', () => {
+    expect(() => sonare.detectBpm({ samples, sampleRate: 22050, bpmMin: 60 })).not.toThrow();
+    expect(() => sonare.detectBpm({ samples, sampleRate: 22050, hopLength: 512 } as never)).toThrow(
+      "detectBpm: unknown request key 'hopLength'",
     );
     expect(() => sonare.detectBpm({ samples, sampleRate: 22050, bogus: 1 } as never)).toThrow(
       "detectBpm: unknown request key 'bogus'",

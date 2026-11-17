@@ -109,7 +109,9 @@ const CASES: Case[] = [
     key,
     wrongValue: `${key}`,
     run: (opFields: Record<string, unknown>) =>
-      spectralEdit(tone, SAMPLE_RATE, [{ startSample: 0, endSample: 1024, ...opFields }]),
+      spectralEdit(tone, SAMPLE_RATE, {
+        ops: [{ startSample: 0, endSample: 1024, ...opFields }],
+      }),
   })),
 
   // StreamAnalyzer construction config.

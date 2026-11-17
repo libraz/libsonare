@@ -7,11 +7,12 @@ import type {
   SplitSilenceCommonWithReportResult,
   TrimResult,
 } from './types.js';
+import type { OptionsOf, ValidateOptions } from './validation.js';
 import {
   assertAudioInput,
   assertAudioSamples,
+  assertFiniteScalar,
   assertPositiveInteger,
-  requestObject,
   requestOnly,
   resolveOptionalNonNegative,
   sampleOneShot,
@@ -108,60 +109,44 @@ export interface VectorNormalizeRequest {
 
 const NORM_ORDINALS: Readonly<Record<NormType, number>> = { max: 0, l1: 1, l2: 2, power: 3 };
 
-/** Peak-trims `samples` to what sounds above `thresholdDb`. Effects entry point, unchanged. */
-export function trim(request: {
+/** Request for {@link trim}. */
+export interface TrimRequest extends ValidateOptions {
   samples: Float32Array;
-  sampleRate?: number;
+  /** Sample rate in Hz, an integer in `[8000, 384000]`; there is no default. */
+  sampleRate: number;
+  /** Silence threshold in dBFS. Default -60. */
   thresholdDb?: number;
+  /** Framing window in samples. Default 2048. */
   frameLength?: number;
+  /** Hop in samples. Default 512. */
   hopLength?: number;
-}): Float32Array;
+}
+
+/**
+ * Trim silence from the beginning and end of `samples`.
+ *
+ * @throws {TypeError} when `sampleRate` is missing
+ * @throws {RangeError} on audio out of domain, an out-of-range `sampleRate`, a non-finite `thresholdDb` or a non-positive frame or hop
+ */
+export function trim(request: TrimRequest): Float32Array;
 export function trim(
   samples: Float32Array,
-  sampleRate?: number,
-  thresholdDb?: number,
-  frameLength?: number,
-  hopLength?: number,
+  sampleRate: number,
+  options?: OptionsOf<TrimRequest>,
 ): Float32Array;
-export function trim(
-  samples:
-    | Float32Array
-    | {
-        samples: Float32Array;
-        sampleRate?: number;
-        thresholdDb?: number;
-        frameLength?: number;
-        hopLength?: number;
-      },
-  sampleRate = 22050,
-  thresholdDb = -60.0,
-  frameLength?: number,
-  hopLength?: number,
-): Float32Array {
-  const request =
-    samples instanceof Float32Array
-      ? { samples, sampleRate, thresholdDb, frameLength, hopLength }
-      : requestObject('trim', samples);
-  assertAudioInput('trim', request.samples, request.sampleRate ?? 22050, request);
-  const resolvedFrameLength = resolvePositiveIntegerOption(
+export function trim(...args: unknown[]): Float32Array {
+  const request = sampleOneShot<TrimRequest>('trim', args);
+  assertAudioInput('trim', request.samples, request.sampleRate, request);
+  const thresholdDb = request.thresholdDb ?? -60.0;
+  assertFiniteScalar('trim', thresholdDb, 'thresholdDb');
+  const frameLength = resolvePositiveIntegerOption(
     'trim',
     'frameLength',
     request.frameLength,
     2048,
   );
-  const resolvedHopLength = resolvePositiveIntegerOption(
-    'trim',
-    'hopLength',
-    request.hopLength,
-    512,
-  );
-  return addon.trim(
-    request.samples,
-    request.sampleRate ?? 22050,
-    request.thresholdDb ?? -60.0,
-    resolvedFrameLength,
-    resolvedHopLength,
-  );
+  const hopLength = resolvePositiveIntegerOption('trim', 'hopLength', request.hopLength, 512);
+  return addon.trim(request.samples, request.sampleRate, thresholdDb, frameLength, hopLength);
 }
 
 /** First-order pre-emphasis filter. */
@@ -169,7 +154,7 @@ export function preemphasis(request: PreemphasisRequest): Float32Array;
 export function preemphasis(
   samples: Float32Array,
   sampleRate: number,
-  options?: Omit<PreemphasisRequest, 'samples' | 'sampleRate'>,
+  options?: OptionsOf<PreemphasisRequest>,
 ): Float32Array;
 export function preemphasis(...args: unknown[]): Float32Array {
   const request = sampleOneShot<PreemphasisRequest>('preemphasis', args);
@@ -184,7 +169,7 @@ export function deemphasis(request: DeemphasisRequest): Float32Array;
 export function deemphasis(
   samples: Float32Array,
   sampleRate: number,
-  options?: Omit<DeemphasisRequest, 'samples' | 'sampleRate'>,
+  options?: OptionsOf<DeemphasisRequest>,
 ): Float32Array;
 export function deemphasis(...args: unknown[]): Float32Array {
   const request = sampleOneShot<DeemphasisRequest>('deemphasis', args);
@@ -211,7 +196,7 @@ export function trimSilence(request: TrimSilenceRequest): TrimResult;
 export function trimSilence(
   samples: Float32Array,
   sampleRate: number,
-  options?: Omit<TrimSilenceRequest, 'samples' | 'sampleRate'>,
+  options?: OptionsOf<TrimSilenceRequest>,
 ): TrimResult;
 export function trimSilence(...args: unknown[]): TrimResult {
   const request = sampleOneShot<TrimSilenceRequest>('trimSilence', args);
@@ -230,7 +215,7 @@ export function splitSilence(request: SplitSilenceRequest): Int32Array;
 export function splitSilence(
   samples: Float32Array,
   sampleRate: number,
-  options?: Omit<SplitSilenceRequest, 'samples' | 'sampleRate'>,
+  options?: OptionsOf<SplitSilenceRequest>,
 ): Int32Array;
 export function splitSilence(...args: unknown[]): Int32Array {
   const request = sampleOneShot<SplitSilenceRequest>('splitSilence', args);
@@ -330,7 +315,7 @@ export function frameSignal(request: FrameSignalRequest): Matrix2D;
 export function frameSignal(
   samples: Float32Array,
   sampleRate: number,
-  options: Omit<FrameSignalRequest, 'samples' | 'sampleRate'>,
+  options: OptionsOf<FrameSignalRequest>,
 ): Matrix2D;
 export function frameSignal(...args: unknown[]): Matrix2D {
   const request = sampleOneShot<FrameSignalRequest>('frameSignal', args);

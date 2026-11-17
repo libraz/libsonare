@@ -1,7 +1,7 @@
 import { assertMatrix2D, toMatrix2D } from './internal/feature_matrix.js';
 import { resolvePositiveIntegerOption } from './internal/feature_options.js';
 import { resolveFftOptions } from './internal/fft_options.js';
-import { centsToNativeTuning, nativeTuningToCents } from './internal/tuning_units.js';
+import { nativeTuningToCents } from './internal/tuning_units.js';
 import { addon } from './native.js';
 import type {
   ChromaResult,
@@ -11,6 +11,7 @@ import type {
   PiptrackResult,
   PitchResult,
 } from './types.js';
+import type { OptionsOf } from './validation.js';
 import {
   assertAudioInput,
   assertFrequencyBounds,
@@ -146,19 +147,27 @@ export interface PiptrackRequest {
   validate?: boolean;
 }
 
-/** Request for {@link noteSegments}. */
+/** Request for {@link noteSegments}. Give exactly one of `voicedProb` and `voicedFlags`. */
 export interface NoteSegmentsRequest {
   f0Hz: Float32Array;
   /**
    * Per-frame voicing values in `[0, 1]`; anything below `voicedThreshold` is
    * unvoiced.
    *
-   * Pass `pitchPyin`'s `voicedFlag` converted to `0`/`1`. Do **not** pass its
-   * `voicedProb`: that value is the frame's voiced observation mass and rises
-   * with F0 for a fixed `frameLength`, so a fixed threshold silently returns no
-   * segments at all for low-register material.
+   * Pass `pitchPyin`'s `voicedFlag` converted to `0`/`1`, or give it as
+   * `voicedFlags`. Do **not** pass its `voicedProb`: that value is the frame's
+   * voiced observation mass and rises with F0 for a fixed `frameLength`, so a
+   * fixed threshold silently returns no segments at all for low-register
+   * material.
    */
-  voicedProb: Float32Array;
+  voicedProb?: Float32Array;
+  /**
+   * Per-frame voiced flags, nonzero = voiced, the same length as `f0Hz`;
+   * `voicedThreshold` does not apply. Build it from `pitchPyin`'s `voicedFlag`
+   * with `Uint8Array.from(flags, Number)`. A `RangeError` when both or neither of
+   * `voicedProb` and `voicedFlags` is given, or the length differs.
+   */
+  voicedFlags?: Uint8Array;
   /** Frames per second of the F0 track. */
   frameRate: number;
   /** Cents of pitch change that start a new segment. Default 50. */
@@ -261,7 +270,7 @@ export function chroma(request: ChromaRequest): ChromaResult;
 export function chroma(
   samples: Float32Array,
   sampleRate: number,
-  options?: Omit<ChromaRequest, 'samples' | 'sampleRate'>,
+  options?: OptionsOf<ChromaRequest>,
 ): ChromaResult;
 export function chroma(...args: unknown[]): ChromaResult {
   const request = sampleOneShot<ChromaRequest>('chroma', args);
@@ -275,7 +284,7 @@ export function chromaCens(request: ChromaCensRequest): ChromaResult;
 export function chromaCens(
   samples: Float32Array,
   sampleRate: number,
-  options?: Omit<ChromaCensRequest, 'samples' | 'sampleRate'>,
+  options?: OptionsOf<ChromaCensRequest>,
 ): ChromaResult;
 export function chromaCens(...args: unknown[]): ChromaResult {
   const request = sampleOneShot<ChromaCensRequest>('chromaCens', args);
@@ -299,7 +308,7 @@ export function chromaCqt(request: ChromaCqtRequest): ChromaResult;
 export function chromaCqt(
   samples: Float32Array,
   sampleRate: number,
-  options?: Omit<ChromaCqtRequest, 'samples' | 'sampleRate'>,
+  options?: OptionsOf<ChromaCqtRequest>,
 ): ChromaResult;
 export function chromaCqt(...args: unknown[]): ChromaResult {
   const request = sampleOneShot<ChromaCqtRequest>('chromaCqt', args);
@@ -323,7 +332,7 @@ export function bassChroma(request: BassChromaRequest): ChromaResult;
 export function bassChroma(
   samples: Float32Array,
   sampleRate: number,
-  options?: Omit<BassChromaRequest, 'samples' | 'sampleRate'>,
+  options?: OptionsOf<BassChromaRequest>,
 ): ChromaResult;
 export function bassChroma(...args: unknown[]): ChromaResult {
   const request = sampleOneShot<BassChromaRequest>('bassChroma', args);
@@ -345,7 +354,7 @@ export function cqt(request: CqtRequest): CqtResult;
 export function cqt(
   samples: Float32Array,
   sampleRate: number,
-  options?: Omit<CqtRequest, 'samples' | 'sampleRate'>,
+  options?: OptionsOf<CqtRequest>,
 ): CqtResult;
 export function cqt(...args: unknown[]): CqtResult {
   const request = sampleOneShot<CqtRequest>('cqt', args);
@@ -367,7 +376,7 @@ export function pseudoCqt(request: PseudoCqtRequest): CqtResult;
 export function pseudoCqt(
   samples: Float32Array,
   sampleRate: number,
-  options?: Omit<PseudoCqtRequest, 'samples' | 'sampleRate'>,
+  options?: OptionsOf<PseudoCqtRequest>,
 ): CqtResult;
 export function pseudoCqt(...args: unknown[]): CqtResult {
   const request = sampleOneShot<PseudoCqtRequest>('pseudoCqt', args);
@@ -389,7 +398,7 @@ export function hybridCqt(request: HybridCqtRequest): CqtResult;
 export function hybridCqt(
   samples: Float32Array,
   sampleRate: number,
-  options?: Omit<HybridCqtRequest, 'samples' | 'sampleRate'>,
+  options?: OptionsOf<HybridCqtRequest>,
 ): CqtResult;
 export function hybridCqt(...args: unknown[]): CqtResult {
   const request = sampleOneShot<HybridCqtRequest>('hybridCqt', args);
@@ -415,7 +424,7 @@ export function vqt(request: VqtRequest): CqtResult;
 export function vqt(
   samples: Float32Array,
   sampleRate: number,
-  options?: Omit<VqtRequest, 'samples' | 'sampleRate'>,
+  options?: OptionsOf<VqtRequest>,
 ): CqtResult;
 export function vqt(...args: unknown[]): CqtResult {
   const request = sampleOneShot<VqtRequest>('vqt', args);
@@ -455,7 +464,7 @@ export function estimateTuning(request: EstimateTuningRequest): number;
 export function estimateTuning(
   samples: Float32Array,
   sampleRate: number,
-  options?: Omit<EstimateTuningRequest, 'samples' | 'sampleRate'>,
+  options?: OptionsOf<EstimateTuningRequest>,
 ): number;
 export function estimateTuning(...args: unknown[]): number {
   const request = sampleOneShot<EstimateTuningRequest>('estimateTuning', args);
@@ -486,7 +495,7 @@ export function estimateTuning(...args: unknown[]): number {
  * @throws `SonareError` for a non-finite `tuningCents` or a non-positive `a4Hz`.
  */
 export function tuningToReferenceHz(tuningCents: number, a4Hz = 440): number {
-  return addon.tuningToReferenceHz(centsToNativeTuning(tuningCents), a4Hz);
+  return addon.tuningToReferenceHz(tuningCents, a4Hz);
 }
 
 /**
@@ -498,7 +507,7 @@ export function tuningToReferenceHz(tuningCents: number, a4Hz = 440): number {
  * @throws `SonareError` for a non-positive `referenceHz` or `a4Hz`.
  */
 export function referenceHzToTuning(referenceHz: number, a4Hz = 440): number {
-  return nativeTuningToCents(addon.referenceHzToTuning(referenceHz, a4Hz));
+  return addon.referenceHzToTuning(referenceHz, a4Hz);
 }
 
 /**
@@ -509,7 +518,7 @@ export function piptrack(request: PiptrackRequest): PiptrackResult;
 export function piptrack(
   samples: Float32Array,
   sampleRate: number,
-  options?: Omit<PiptrackRequest, 'samples' | 'sampleRate'>,
+  options?: OptionsOf<PiptrackRequest>,
 ): PiptrackResult;
 export function piptrack(...args: unknown[]): PiptrackResult {
   const request = sampleOneShot<PiptrackRequest>('piptrack', args);
@@ -559,7 +568,7 @@ export function pitchYin(request: PitchYinRequest): PitchResult;
 export function pitchYin(
   samples: Float32Array,
   sampleRate: number,
-  options?: Omit<PitchYinRequest, 'samples' | 'sampleRate'>,
+  options?: OptionsOf<PitchYinRequest>,
 ): PitchResult;
 export function pitchYin(...args: unknown[]): PitchResult {
   return pitchTrack('pitchYin', args);
@@ -570,7 +579,7 @@ export function pitchPyin(request: PitchPyinRequest): PitchResult;
 export function pitchPyin(
   samples: Float32Array,
   sampleRate: number,
-  options?: Omit<PitchPyinRequest, 'samples' | 'sampleRate'>,
+  options?: OptionsOf<PitchPyinRequest>,
 ): PitchResult;
 export function pitchPyin(...args: unknown[]): PitchResult {
   return pitchTrack('pitchPyin', args);
@@ -586,27 +595,30 @@ export function noteSegments(...args: unknown[]): NoteSegment[] {
     minNoteMs !== undefined ||
     referenceHz !== undefined ||
     voicedThreshold !== undefined;
-  const nativeRequest = { f0Hz: r.f0Hz, voicedProb: r.voicedProb, frameRate: r.frameRate };
-  const segments: Array<{
-    frameStart: number;
-    frameEnd: number;
-    startSeconds: number;
-    endSeconds: number;
-    medianCents: number;
-  }> = hasTuningOptions
-    ? addon.noteSegments({
-        ...nativeRequest,
-        config: { segmentationThresholdCents, minNoteMs, referenceHz, voicedThreshold },
-      })
-    : addon.noteSegments(nativeRequest);
-  // Native names the two times `*Seconds`.
-  return segments.map((s) => ({
-    frameStart: s.frameStart,
-    frameEnd: s.frameEnd,
-    startSec: s.startSeconds,
-    endSec: s.endSeconds,
-    medianCents: s.medianCents,
-  }));
+  const hasProb = r.voicedProb !== undefined && r.voicedProb !== null;
+  const hasFlags = r.voicedFlags !== undefined && r.voicedFlags !== null;
+  if (hasProb === hasFlags) {
+    throw new RangeError('noteSegments: exactly one of voicedProb and voicedFlags must be given');
+  }
+  const voicing = hasProb ? r.voicedProb : r.voicedFlags;
+  if (
+    ArrayBuffer.isView(r.f0Hz) &&
+    ArrayBuffer.isView(voicing) &&
+    r.f0Hz.length !== voicing.length
+  ) {
+    throw new RangeError(
+      `noteSegments: ${hasProb ? 'voicedProb' : 'voicedFlags'} must have the same length as f0Hz`,
+    );
+  }
+  return addon.noteSegments(
+    r.f0Hz,
+    r.voicedProb ?? null,
+    r.voicedFlags ?? null,
+    r.frameRate,
+    hasTuningOptions
+      ? { segmentationThresholdCents, minNoteMs, referenceHz, voicedThreshold }
+      : undefined,
+  );
 }
 
 /** Tonal centroid features of a chromagram. Returns rows = 6 tonnetz dims, cols = frames. */
@@ -623,7 +635,7 @@ export function nnlsChroma(request: NnlsChromaRequest): Matrix2D;
 export function nnlsChroma(
   samples: Float32Array,
   sampleRate: number,
-  options?: Omit<NnlsChromaRequest, 'samples' | 'sampleRate'>,
+  options?: OptionsOf<NnlsChromaRequest>,
 ): Matrix2D;
 export function nnlsChroma(...args: unknown[]): Matrix2D {
   const request = sampleOneShot<NnlsChromaRequest>('nnlsChroma', args);

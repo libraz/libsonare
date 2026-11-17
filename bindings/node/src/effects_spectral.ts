@@ -3,25 +3,25 @@
  * STFT and resynthesized.
  */
 
-import type { EffectSamplesRequest } from './internal/effects_common.js';
+import { WINDOW_TYPES } from './internal/window_type.js';
 import { addon } from './native.js';
 import type { SpectralEditOptions, SpectralRegionOp } from './types.js';
 import {
   assertAudioInput,
+  assertClosedToken,
   assertInt32,
-  optionsBag,
-  requestObject,
   resolveSampleBound,
+  sampleOneShot,
 } from './validation.js';
 
-export interface SpectralEditRequest extends EffectSamplesRequest, SpectralEditOptions {
+/** Spectral edit request: the audio and rate plus {@link SpectralEditOptions}. */
+export interface SpectralEditRequest extends SpectralEditOptions {
+  samples: Float32Array;
   /**
    * Sample rate in Hz. Required: region frequency boundaries are mapped to STFT
-   * bins using this rate, so a wrong/omitted value silently corrupts the edit
-   * (unlike the other effects, this has no safe default).
+   * bins using this rate, so a wrong/omitted value silently corrupts the edit.
    */
   sampleRate: number;
-  ops?: SpectralRegionOp[];
 }
 
 function resolveRegionTimes(
@@ -60,42 +60,32 @@ function resolveRegionTimes(
  * in array order (gain / attenuate / mute / heal). Its time bounds are samples
  * (`startSample` / `endSample`) or seconds (`startSec` / `endSec`), one spelling
  * per bound; an omitted end is the end of the signal and a negative bound is
- * refused. Passing an empty `ops` array
- * is the identity transform (the input is returned). Wraps the C
+ * refused. An empty `ops` array returns a copy of the input. Wraps the C
  * `sonare_spectral_edit`.
  *
  * @param samples - Mono input audio.
  * @param sampleRate - Sample rate in Hz (required; region frequency boundaries
- *   are mapped to STFT bins using this rate, so a wrong/omitted value silently
- *   corrupts the edit).
- * @param ops - Region ops applied in order.
- * @param options - Optional STFT + heal configuration.
+ *   are mapped to STFT bins using this rate).
+ * @param options - `ops` (required, applied in order) plus the optional STFT and heal configuration.
  * @returns The edited audio (same length as `samples`).
+ * @throws TypeError for a missing `sampleRate` or `ops`.
  */
 export function spectralEdit(request: SpectralEditRequest): Float32Array;
 export function spectralEdit(
   samples: Float32Array,
   sampleRate: number,
-  ops?: SpectralRegionOp[],
-  options?: SpectralEditOptions,
+  options: SpectralEditOptions,
 ): Float32Array;
-export function spectralEdit(
-  samples: Float32Array | SpectralEditRequest,
-  sampleRate?: number,
-  ops: SpectralRegionOp[] = [],
-  options: SpectralEditOptions = {},
-): Float32Array {
-  const request =
-    samples instanceof Float32Array
-      ? { samples, sampleRate, ops, ...optionsBag('spectralEdit', options) }
-      : requestObject('spectralEdit', samples);
-  const {
-    samples: input,
-    sampleRate: requestSampleRate,
-    ops: requestOps = [],
-    ...requestOptions
-  } = request;
-  assertAudioInput('spectralEdit', input, requestSampleRate, requestOptions);
+export function spectralEdit(...args: unknown[]): Float32Array {
+  const request = sampleOneShot<SpectralEditRequest>('spectralEdit', args);
+  const { samples: input, sampleRate, ops, validate, ...requestOptions } = request;
+  assertAudioInput('spectralEdit', input, sampleRate, { validate });
+  if (ops === undefined || ops === null) {
+    throw new TypeError('spectralEdit: ops is required');
+  }
+  if (requestOptions.window !== undefined) {
+    assertClosedToken('spectralEdit', requestOptions.window, WINDOW_TYPES, 'window');
+  }
   // Each of the three is its own "0 => the documented default" on the C side,
   // and the addon's narrowing truncates onto that 0.
   for (const field of ['nFft', 'hopLength', 'healRadiusFrames'] as const) {
@@ -104,12 +94,10 @@ export function spectralEdit(
       assertInt32('spectralEdit', value, field);
     }
   }
-  const nativeOps = Array.isArray(requestOps)
-    ? requestOps.map((op, index) =>
-        op === null || typeof op !== 'object'
-          ? op
-          : resolveRegionTimes(op, index, requestSampleRate as number),
+  const nativeOps = Array.isArray(ops)
+    ? ops.map((op, index) =>
+        op === null || typeof op !== 'object' ? op : resolveRegionTimes(op, index, sampleRate),
       )
-    : requestOps;
-  return addon.spectralEdit(input, requestSampleRate as number, nativeOps, requestOptions);
+    : ops;
+  return addon.spectralEdit(input, sampleRate, nativeOps, requestOptions);
 }

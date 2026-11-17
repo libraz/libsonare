@@ -56,9 +56,9 @@ describe('masteringRepairAnalyze', () => {
     );
   });
 
-  it('defaults the sample rate and streaming-safe preference', () => {
+  it('defaults the streaming-safe preference', () => {
     const channels = [clicked(material(440, 4), 2000, 6000)];
-    expect(masteringRepairAnalyze({ channels })).toEqual(
+    expect(masteringRepairAnalyze({ channels, sampleRate: 22050 })).toEqual(
       masteringRepairAnalyze({ channels, sampleRate: 22050, preferStreamingSafe: true }),
     );
   });
@@ -94,9 +94,9 @@ describe('masteringRepairApply', () => {
       stages: [{ stage: 'declick', lpcOrder: 16 }],
     });
     const pair = masteringRepairDeclickStereo({ left, right, sampleRate: SR, lpcOrder: 16 });
-    expect(declick.channels[0]).toEqual(pair.left);
-    expect(declick.channels[1]).toEqual(pair.right);
-    expect(declick.reports[0]?.reports[0]).toEqual(pair.leftReport);
+    expect(declick.channels[0]).toEqual(pair.channels[0]);
+    expect(declick.channels[1]).toEqual(pair.channels[1]);
+    expect(declick.reports[0]?.reports[0]).toEqual(pair.reports[0]);
 
     const denoise = masteringRepairApply({
       channels: [left, right, left],
@@ -110,7 +110,7 @@ describe('masteringRepairApply', () => {
       reductionDb: 18,
     });
     expect(denoise.channels).toEqual(linked.channels);
-    expect(denoise.reports[0]?.reports[0]).toEqual(linked.report);
+    expect(denoise.reports[0]?.reports[0]).toEqual(linked.reports[0]);
   });
 
   it('reports per channel for channel stages and once for linked ones', () => {
@@ -154,7 +154,7 @@ describe('masteringRepairApply', () => {
       masteringRepairApply({
         channels,
         sampleRate: SR,
-        stages: [{ stage: 'declick', lpcOdrer: 8 }],
+        stages: [{ stage: 'declick', lpcOdrer: 8 } as never],
       }),
     ).toThrow(/declick: unknown setting 'lpcOdrer'/);
     expect(() =>

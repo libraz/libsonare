@@ -716,7 +716,7 @@ export interface ProjectMidiFxPreviewRequest {
  * The tuning reference is the caller's by default: pass {@link referenceHz}, or
  * convert a measured tuning with {@link tuningToReferenceHz}. A take recorded
  * away from A440 can instead pass `referenceHz: 'auto'`, which measures it from
- * the audio before any pitch is tracked; {@link TranscribeResult.tuning}
+ * the audio before any pitch is tracked; {@link TranscribeResult.tuningCents}
  * reports what was used either way, so a wrong transcription can be traced to it.
  */
 export interface TranscribeOptions {
@@ -865,11 +865,11 @@ export interface TranscribeResult {
   /** The tempo the PPQ coordinates were built on — the supplied value when one was given, the detected one otherwise. */
   tempoBpm: number;
   /**
-   * Tuning the note numbers were measured against, in fractions of a semitone
-   * from concert A440: the measured value under `referenceHz: 'auto'`,
-   * otherwise the one `referenceHz` amounts to ({@link referenceHzToTuning}).
+   * Tuning the note numbers were measured against, in cents from concert A440:
+   * the measured value under `referenceHz: 'auto'`, otherwise the one
+   * `referenceHz` amounts to ({@link referenceHzToTuning}).
    */
-  tuning: number;
+  tuningCents: number;
 }
 
 /**

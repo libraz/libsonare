@@ -89,13 +89,13 @@ describe('empty-sample guards (Node)', () => {
     );
   });
   it('voiceChange rejects empty', () => {
-    expect(() => voiceChange(new Float32Array(0))).toThrow(
+    expect(() => voiceChange(new Float32Array(0), SR)).toThrow(
       /voiceChange: samples must not be empty/,
     );
   });
   it('voiceChangeRealtime rejects empty', () => {
-    expect(() => voiceChangeRealtime(new Float32Array(0))).toThrow(
-      /voiceChangeRealtime: samples must not be empty/,
+    expect(() => voiceChangeRealtime({ channels: [new Float32Array(0)], sampleRate: SR })).toThrow(
+      /voiceChangeRealtime: channels\[0\] must not be empty/,
     );
   });
 });

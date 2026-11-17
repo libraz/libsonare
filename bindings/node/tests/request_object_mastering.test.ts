@@ -170,7 +170,7 @@ describe('mastering request-object compatibility', () => {
   it('normalization and dynamics processors preserve positional results', () => {
     const samples = signal();
     expect(normalize({ samples, sampleRate, targetDb: -2 })).toEqual(
-      normalize(samples, sampleRate, -2),
+      normalize(samples, sampleRate, { targetDb: -2 }),
     );
     expect(
       masteringDynamicsCompressor({ samples, sampleRate, thresholdDb: -20, ratio: 2 }),
@@ -203,8 +203,8 @@ describe('mastering request-object compatibility', () => {
     expect(
       masteringRepairDereverbClassical({ samples, sampleRate, nFft: 512, hopLength: 128 }),
     ).toEqual(masteringRepairDereverbClassical(samples, sampleRate, { nFft: 512, hopLength: 128 }));
-    expect(masteringRepairTrimSilence({ samples, sampleRate, threshold: 0.01 })).toEqual(
-      masteringRepairTrimSilence(samples, sampleRate, { threshold: 0.01 }),
+    expect(masteringRepairTrimSilence({ samples, sampleRate, thresholdDb: -40 })).toEqual(
+      masteringRepairTrimSilence(samples, sampleRate, { thresholdDb: -40 }),
     );
   });
 

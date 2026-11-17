@@ -2,6 +2,7 @@
  * Input shape and geometry check the repair families share.
  */
 
+import type { DehumReport, DenoiseReport, HumDetection, NoiseDetection } from '../types_repair.js';
 import { assertIntegerValue, assertPositiveInteger } from '../validation.js';
 
 /**
@@ -27,8 +28,107 @@ export function assertRepairGeometry(
   }
 }
 
-/** Common input fields for offline repair processors. */
-export interface MasteringRepairSamplesRequest {
-  samples: Float32Array;
-  sampleRate?: number;
+/** Request fields that are audio, rate or JS-side validation and never reach the addon options. */
+const NON_NATIVE_FIELDS = new Set([
+  'samples',
+  'left',
+  'right',
+  'channels',
+  'sampleRate',
+  'validate',
+]);
+
+/** Public dBFS field and the linear field the addon still reads for it. */
+const DB_THRESHOLD_FIELDS: ReadonlyArray<readonly [string, string]> = [
+  ['thresholdDb', 'threshold'],
+  ['clipThresholdDb', 'clipThreshold'],
+];
+
+/** A dBFS level at or below 0 as a linear amplitude; `TypeError` unless a number, `RangeError` above 0 dBFS or NaN. */
+export function linearFromDb(fnName: string, field: string, db: unknown): number {
+  if (typeof db !== 'number') {
+    throw new TypeError(`${fnName}: ${field} must be a number`);
+  }
+  if (Number.isNaN(db) || db > 0) {
+    throw new RangeError(`${fnName}: ${field} must be at most 0 dBFS`);
+  }
+  return 10 ** (db / 20);
+}
+
+/** A linear amplitude as dBFS. */
+export function dbFromLinear(linear: number): number {
+  return 20 * Math.log10(linear);
+}
+
+/**
+ * The options object the addon reads: the request without audio, rate and `validate`, with the
+ * dBFS thresholds converted (the addon still takes the linear spelling). `null` is absence.
+ */
+export function repairNativeOptions(fnName: string, request: object): Record<string, unknown> {
+  const native: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(request)) {
+    if (!NON_NATIVE_FIELDS.has(key) && value !== undefined && value !== null) {
+      native[key] = value;
+    }
+  }
+  for (const [field, nativeField] of DB_THRESHOLD_FIELDS) {
+    if (field in native) {
+      native[nativeField] = linearFromDb(fnName, field, native[field]);
+      delete native[field];
+    }
+  }
+  return native;
+}
+
+/** A hum detection with the addon's `harmonicDbfs` array as a `Float32Array`. */
+export function humDetection(
+  native: Omit<HumDetection, 'harmonicDbfs'> & { harmonicDbfs: ArrayLike<number> },
+): HumDetection {
+  return { ...native, harmonicDbfs: Float32Array.from(native.harmonicDbfs) };
+}
+
+/** A noise detection with the addon's `bandFloorDbfs` array as a `Float32Array`. */
+export function noiseDetection(
+  native: Omit<NoiseDetection, 'bandFloorDbfs'> & { bandFloorDbfs: ArrayLike<number> },
+): NoiseDetection {
+  return { ...native, bandFloorDbfs: Float32Array.from(native.bandFloorDbfs) };
+}
+
+/** A dehum report with its detection's array typed. */
+export function dehumReport(
+  native: Omit<DehumReport, 'detected'> & { detected: Parameters<typeof humDetection>[0] },
+): DehumReport {
+  return { ...native, detected: humDetection(native.detected) };
+}
+
+/** A denoise report with its detection's array typed. */
+export function denoiseReport(
+  native: Omit<DenoiseReport, 'detected'> & { detected: Parameters<typeof noiseDetection>[0] },
+): DenoiseReport {
+  return { ...native, detected: noiseDetection(native.detected) };
+}
+
+/** Native per-channel pair result as `{channels, reports}`, in left, right order. */
+export function pairedResult<N, R = N>(
+  native: { left: Float32Array; right: Float32Array; leftReport: N; rightReport: N },
+  report: (native: N) => R = (r) => r as unknown as R,
+): { channels: Float32Array[]; reports: R[] } {
+  return {
+    channels: [native.left, native.right],
+    reports: [report(native.leftReport), report(native.rightReport)],
+  };
+}
+
+/** Native one-report result, stereo or linked, as `{channels, reports: [report]}`. */
+export function sharedReportResult<N, R = N>(
+  native: { report: N } & (
+    | { channels: Float32Array[] }
+    | { left: Float32Array; right: Float32Array }
+  ),
+  report: (native: N) => R = (r) => r as unknown as R,
+): { channels: Float32Array[]; reports: R[] } {
+  return {
+    channels: 'channels' in native ? native.channels : [native.left, native.right],
+    reports: [report(native.report)],
+  };
 }

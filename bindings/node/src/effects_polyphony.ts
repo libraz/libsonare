@@ -1,4 +1,3 @@
-import { nativeEdit, publicNote } from './internal/effects_common.js';
 import { addon } from './native.js';
 import type {
   NoteEditInput,
@@ -6,6 +5,7 @@ import type {
   PolyphonicAnalysisOptions,
   PolyphonicRenderOptions,
 } from './types.js';
+import type { OptionsOf } from './validation.js';
 import {
   assertAudioInput,
   assertFiniteScalar,
@@ -184,7 +184,7 @@ export class PolyphonicAnalysis {
    * that only edits a gain never pays for them.
    */
   notes(): NoteObject[] {
-    return this.native.notes().map((note: NoteObject) => publicNote(note));
+    return this.native.notes();
   }
 
   /**
@@ -224,7 +224,7 @@ export class PolyphonicAnalysis {
     if (offset !== undefined) {
       assertInt64('setNoteEdit', offset, 'edit.timeOffsetSamples');
     }
-    this.native.setNoteEdit(note, nativeEdit({ ...rest, timeOffsetSamples: offset }));
+    this.native.setNoteEdit(note, { ...rest, timeOffsetSamples: offset });
   }
 
   /**
@@ -401,7 +401,7 @@ export function analyzePolyphonic(request: AnalyzePolyphonicRequest): Polyphonic
 export function analyzePolyphonic(
   samples: Float32Array,
   sampleRate: number,
-  options?: Omit<AnalyzePolyphonicRequest, 'samples' | 'sampleRate'>,
+  options?: OptionsOf<AnalyzePolyphonicRequest>,
 ): PolyphonicAnalysis;
 export function analyzePolyphonic(...args: unknown[]): PolyphonicAnalysis {
   return new PolyphonicAnalysis(sampleOneShot<AnalyzePolyphonicRequest>('analyzePolyphonic', args));

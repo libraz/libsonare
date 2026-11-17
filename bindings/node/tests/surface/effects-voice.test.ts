@@ -1,0 +1,632 @@
+import { describe, expect, expectTypeOf, it } from 'vitest';
+import * as indexModule from '../../dist/index.js';
+import {
+  type CharacterType,
+  type MidiRelease,
+  type NoteDivision,
+  type PitchCorrectionMode,
+  RealtimeVoiceChanger,
+  type RealtimeVoiceChangerConfig,
+  type RealtimeVoiceChangerConfigInput,
+  type RealtimeVoiceChangerOptions,
+  type RealtimeVoiceChangerValidatePresetJsonResult,
+  type ReverbVariation,
+  realtimeVoiceChangerPresetConfig,
+  realtimeVoiceChangerPresetJson,
+  realtimeVoiceChangerPresetNames,
+  realtimeVoiceChangerValidatePresetJson,
+  type ScaleKind,
+  StreamingRetune,
+  type StreamingRetuneConfig,
+  type VocoderCarrierSource,
+  type VocoderCarrierWave,
+  type VoiceEngine,
+  type VoicePresetId,
+  voiceChange,
+  voiceChangeRealtime,
+  voiceCharacterPresetId,
+} from '../../dist/index.js';
+
+const sampleRate = 22050;
+const BLOCK = 128;
+
+function tone(frames: number, hz = 220, gain = 0.2): Float32Array {
+  const out = new Float32Array(frames);
+  for (let i = 0; i < frames; i++) {
+    out[i] = gain * Math.sin((2 * Math.PI * hz * i) / sampleRate);
+  }
+  return out;
+}
+
+function caught(fn: () => unknown): { name: string; code?: unknown } {
+  try {
+    fn();
+  } catch (error) {
+    return error as { name: string; code?: unknown };
+  }
+  throw new Error('expected a throw');
+}
+
+function expectClose(actual: ArrayLike<number>, expected: ArrayLike<number>, tolerance = 1e-5) {
+  expect(actual.length).toBe(expected.length);
+  for (let i = 0; i < actual.length; i++) {
+    expect(Math.abs((actual[i] as number) - (expected[i] as number))).toBeLessThanOrEqual(
+      tolerance,
+    );
+  }
+}
+
+function changer(
+  options: Partial<RealtimeVoiceChangerOptions> = {},
+  config?: RealtimeVoiceChangerConfigInput,
+): RealtimeVoiceChanger {
+  return new RealtimeVoiceChanger({
+    sampleRate,
+    maxBlockSize: BLOCK,
+    ...options,
+    ...(config === undefined ? {} : { config }),
+  });
+}
+
+describe('voice changer surface', () => {
+  describe('construction', () => {
+    it('takes one options object with sampleRate required', () => {
+      for (const bad of [{}, { maxBlockSize: 128 }]) {
+        expect(
+          caught(() => new RealtimeVoiceChanger(bad as unknown as RealtimeVoiceChangerOptions))
+            .name,
+        ).toBe('TypeError');
+      }
+      const c = changer();
+      try {
+        expect(c.latencySamples).toBeGreaterThanOrEqual(0);
+      } finally {
+        c.destroy();
+      }
+    });
+
+    it.each([
+      ['channels', { channels: 1 }],
+      ['preset', { preset: 'neutralMonitor' }],
+    ])('refuses the old option %s as an unknown key', (_name, extra) => {
+      const error = caught(
+        () =>
+          new RealtimeVoiceChanger({
+            sampleRate,
+            ...extra,
+          } as unknown as RealtimeVoiceChangerOptions),
+      );
+      expect(error.name).toBe('TypeError');
+    });
+
+    it.each([
+      ['maxBlockSize 0', { maxBlockSize: 0 }],
+      ['maxBlockSize fraction', { maxBlockSize: 12.5 }],
+      ['numChannels 3', { numChannels: 3 }],
+      ['numChannels 0', { numChannels: 0 }],
+      ['sampleRate fraction', { sampleRate: 22050.5 }],
+    ])('refuses an out-of-domain option: %s with a RangeError', (_name, extra) => {
+      expect(
+        caught(
+          () => new RealtimeVoiceChanger({ sampleRate, ...extra } as RealtimeVoiceChangerOptions),
+        ).name,
+      ).toBe('RangeError');
+    });
+
+    it('treats null as absent for the optional options', () => {
+      const c = new RealtimeVoiceChanger({
+        sampleRate,
+        maxBlockSize: null,
+        numChannels: null,
+        config: null,
+      } as unknown as RealtimeVoiceChangerOptions);
+      c.destroy();
+    });
+
+    it.each([
+      'processInterleaved',
+      'processInterleavedWithCarrier',
+      'processPlanarStereo',
+      'processPlanarStereoWithCarrier',
+    ])('no longer has the method %s', (name) => {
+      const c = changer();
+      try {
+        expect(name in c).toBe(false);
+      } finally {
+        c.destroy();
+      }
+    });
+
+    it('exposes latencySamples and nonFiniteDiscardCount as getters', () => {
+      const c = changer();
+      try {
+        expect(typeof c.latencySamples).toBe('number');
+        expect(c.nonFiniteDiscardCount).toBe(0);
+        expectTypeOf(c.latencySamples).toEqualTypeOf<number>();
+        expectTypeOf(c.nonFiniteDiscardCount).toEqualTypeOf<number>();
+      } finally {
+        c.destroy();
+      }
+    });
+  });
+
+  describe('planar and interleaved processing', () => {
+    it('processPlanar equals processInterleavedInto and leaves the input untouched', () => {
+      const left = tone(BLOCK);
+      const right = tone(BLOCK, 330);
+      const leftCopy = Float32Array.from(left);
+      const a = changer({ numChannels: 2 }, 'brightIdol');
+      const b = changer({ numChannels: 2 }, 'brightIdol');
+      try {
+        const planar = a.processPlanar([left, right]);
+        const interleaved = new Float32Array(BLOCK * 2);
+        for (let i = 0; i < BLOCK; i++) {
+          interleaved[2 * i] = left[i] as number;
+          interleaved[2 * i + 1] = right[i] as number;
+        }
+        const out = new Float32Array(BLOCK * 2);
+        b.processInterleavedInto(interleaved, 2, out);
+        expect(planar).toHaveLength(2);
+        const flat = new Float32Array(BLOCK * 2);
+        for (let i = 0; i < BLOCK; i++) {
+          flat[2 * i] = (planar[0] as Float32Array)[i] as number;
+          flat[2 * i + 1] = (planar[1] as Float32Array)[i] as number;
+        }
+        expectClose(flat, out);
+        expect(left).toEqual(leftCopy);
+        expectTypeOf(planar).toEqualTypeOf<Float32Array[]>();
+      } finally {
+        a.destroy();
+        b.destroy();
+      }
+    });
+
+    it('processPlanar with one channel equals processMono', () => {
+      const input = tone(BLOCK);
+      const a = changer();
+      const b = changer();
+      try {
+        const planar = a.processPlanar([input]);
+        expect(planar).toHaveLength(1);
+        expectClose(planar[0] as Float32Array, b.processMono(input));
+      } finally {
+        a.destroy();
+        b.destroy();
+      }
+    });
+
+    it('processPlanarWithCarrier equals processMonoWithCarrier for one channel', () => {
+      const input = tone(BLOCK);
+      const carrier = tone(BLOCK, 110, 0.3);
+      const a = changer();
+      const b = changer();
+      try {
+        const [out] = a.processPlanarWithCarrier([input], carrier);
+        expectClose(out as Float32Array, b.processMonoWithCarrier(input, carrier));
+      } finally {
+        a.destroy();
+        b.destroy();
+      }
+    });
+
+    it('processPlanarWithCarrier returns two planes for stereo', () => {
+      const a = changer({ numChannels: 2 });
+      try {
+        const out = a.processPlanarWithCarrier([tone(BLOCK), tone(BLOCK, 300)], tone(BLOCK, 110));
+        expect(out).toHaveLength(2);
+        expect((out[1] as Float32Array).length).toBe(BLOCK);
+      } finally {
+        a.destroy();
+      }
+    });
+
+    it.each([
+      ['empty list', [], 'RangeError'],
+      ['three planes', [tone(8), tone(8), tone(8)], 'RangeError'],
+      ['unequal lengths', [tone(8), tone(9)], 'RangeError'],
+      ['not an array', tone(8), 'TypeError'],
+      ['a non-Float32Array plane', [[0, 1, 2]], 'TypeError'],
+    ])('processPlanar refuses %s', (_name, channels, errorName) => {
+      const a = changer({ numChannels: 2 });
+      try {
+        expect(caught(() => a.processPlanar(channels as unknown as Float32Array[])).name).toBe(
+          errorName,
+        );
+      } finally {
+        a.destroy();
+      }
+    });
+
+    it('processInterleavedInto and its carrier twin require numChannels 1 or 2', () => {
+      const a = changer({ numChannels: 2 });
+      try {
+        const buf = new Float32Array(BLOCK * 2);
+        expect(caught(() => a.processInterleavedInto(buf, 3 as never, buf)).name).toBe(
+          'RangeError',
+        );
+        expect(
+          caught(() => a.processInterleavedWithCarrierInto(buf, tone(BLOCK), 0 as never, buf)).name,
+        ).toBe('RangeError');
+        expect(caught(() => a.processInterleavedInto(buf, '2' as never, buf)).name).toBe(
+          'TypeError',
+        );
+      } finally {
+        a.destroy();
+      }
+    });
+  });
+
+  describe('configuration', () => {
+    it('preset config uses the unified field names', () => {
+      const config = realtimeVoiceChangerPresetConfig('brightIdol');
+      for (const key of [
+        'voiceEngine',
+        'reverbVariation',
+        'eqHighPassHz',
+        'retunePitchSemitones',
+        'retuneGrainSizeSamples',
+        'harmonySteps',
+        'formantMode',
+      ]) {
+        expect(config).toHaveProperty(key);
+      }
+      for (const key of [
+        'voiceEngineEngine',
+        'reverbVariationVariation',
+        'eqHighpassHz',
+        'retuneSemitones',
+        'retuneGrainSize',
+        'harmonyStep1',
+        'harmonyStep2',
+        'harmonyStep3',
+      ]) {
+        expect(config).not.toHaveProperty(key);
+      }
+      expect(config.harmonySteps).toHaveLength(3);
+      expectTypeOf(config).toEqualTypeOf<RealtimeVoiceChangerConfig>();
+      expectTypeOf(config.harmonySteps).toEqualTypeOf<readonly [number, number, number]>();
+    });
+
+    it('feeds a preset config back through the constructor and setConfig', () => {
+      const config = realtimeVoiceChangerPresetConfig('choirHarmony');
+      const a = changer({}, config);
+      const b = changer({}, 'choirHarmony');
+      try {
+        expect(JSON.parse(a.configJson())).toEqual(JSON.parse(b.configJson()));
+        a.setConfig(realtimeVoiceChangerPresetConfig('hardTune'));
+        b.setConfig('hardTune');
+        expect(JSON.parse(a.configJson())).toEqual(JSON.parse(b.configJson()));
+      } finally {
+        a.destroy();
+        b.destroy();
+      }
+    });
+
+    it.each([
+      ['voiceEngineEngine', 'psola'],
+      ['reverbVariationVariation', 'reverb'],
+      ['eqHighpassHz', 80],
+      ['retuneSemitones', 0],
+      ['retuneGrainSize', 0],
+      ['harmonyStep1', 0],
+    ])('refuses the native-only config key %s', (key, value) => {
+      const config = { ...realtimeVoiceChangerPresetConfig('neutralMonitor'), [key]: value };
+      const a = changer();
+      try {
+        expect(caught(() => a.setConfig(config as RealtimeVoiceChangerConfig)).name).toBe(
+          'TypeError',
+        );
+      } finally {
+        a.destroy();
+      }
+    });
+
+    it.each([
+      ['characterType', 'bbd_chorus'],
+      ['reverbVariation', 'tempo_delay'],
+      ['reverbVariation', 'dub_echo'],
+      ['reverbVariationDivision', 'dotted_eighth'],
+      ['pitchCorrectionScale', 'natural_minor'],
+      ['characterType', 7],
+    ])('refuses the old token spelling %s=%s', (key, value) => {
+      const config = { ...realtimeVoiceChangerPresetConfig('neutralMonitor'), [key]: value };
+      const a = changer();
+      try {
+        const error = caught(() => a.setConfig(config as unknown as RealtimeVoiceChangerConfig));
+        expect(error.name).toBe(typeof value === 'number' ? 'TypeError' : 'RangeError');
+      } finally {
+        a.destroy();
+      }
+    });
+
+    it('accepts the lowerCamel tokens', () => {
+      const config = {
+        ...realtimeVoiceChangerPresetConfig('neutralMonitor'),
+        characterType: 'bbdChorus',
+        reverbVariation: 'tempoDelay',
+        reverbVariationDivision: 'dottedEighth',
+      } as RealtimeVoiceChangerConfig;
+      const a = changer({}, config);
+      try {
+        a.setConfig({ ...config, reverbVariation: 'dubEcho' });
+      } finally {
+        a.destroy();
+      }
+    });
+
+    it.each([
+      ['not an array', 5, 'TypeError'],
+      ['two entries', [0, 0], 'RangeError'],
+    ])('harmonySteps %s is refused', (_name, harmonySteps, errorName) => {
+      const config = { ...realtimeVoiceChangerPresetConfig('neutralMonitor'), harmonySteps };
+      const a = changer();
+      try {
+        expect(
+          caught(() => a.setConfig(config as unknown as RealtimeVoiceChangerConfig)).name,
+        ).toBe(errorName);
+      } finally {
+        a.destroy();
+      }
+    });
+
+    it.each([
+      ['an old kebab id', 'neutral-monitor', 'RangeError'],
+      ['an unknown id', 'nope', 'RangeError'],
+      ['a number', 3, 'TypeError'],
+    ])('setConfig and the constructor refuse %s', (_name, config, errorName) => {
+      const a = changer();
+      try {
+        expect(caught(() => a.setConfig(config as unknown as VoicePresetId)).name).toBe(errorName);
+        expect(caught(() => changer({}, config as unknown as VoicePresetId)).name).toBe(errorName);
+      } finally {
+        a.destroy();
+      }
+    });
+  });
+
+  describe('presets', () => {
+    const publicIds = [
+      'neutralMonitor',
+      'brightIdol',
+      'softWhisper',
+      'deepNarrator',
+      'robotMascot',
+      'darkVillain',
+      'hardTune',
+      'robotMonotone',
+      'choirHarmony',
+      'vocoderStrings',
+      'megaphone',
+      'radioVoice',
+    ];
+
+    it('names the presets in lowerCamel, in ordinal order', () => {
+      expect(realtimeVoiceChangerPresetNames()).toEqual(publicIds);
+      publicIds.forEach((id, ordinal) => {
+        expect(voiceCharacterPresetId(ordinal)).toBe(id);
+      });
+    });
+
+    it('builds a preset JSON and config for each public id', () => {
+      for (const id of publicIds as VoicePresetId[]) {
+        const json = realtimeVoiceChangerPresetJson(id);
+        expect(realtimeVoiceChangerValidatePresetJson(json).ok).toBe(true);
+        expect(realtimeVoiceChangerPresetConfig(id).formantMode).toMatch(/relative|absolute/);
+      }
+    });
+
+    it('renames the validator to its C name and declares its result', () => {
+      expect((indexModule as Record<string, unknown>).validateRealtimeVoiceChangerPresetJson).toBe(
+        undefined,
+      );
+      const result = realtimeVoiceChangerValidatePresetJson('{"not":"a preset"}');
+      expect(result.ok).toBe(false);
+      expect(typeof result.error).toBe('string');
+      expectTypeOf(result).toEqualTypeOf<RealtimeVoiceChangerValidatePresetJsonResult>();
+    });
+
+    it.each([
+      ['an old kebab id', 'bright-idol', 'RangeError'],
+      ['an unknown id', 'nope', 'RangeError'],
+      ['an ordinal', 0, 'TypeError'],
+    ])('preset config and preset JSON refuse %s', (_name, preset, errorName) => {
+      expect(
+        caught(() => realtimeVoiceChangerPresetConfig(preset as unknown as VoicePresetId)).name,
+      ).toBe(errorName);
+      expect(
+        caught(() => realtimeVoiceChangerPresetJson(preset as unknown as VoicePresetId)).name,
+      ).toBe(errorName);
+    });
+
+    it.each([
+      ['an unknown ordinal', 99, 'RangeError'],
+      ['a negative ordinal', -1, 'RangeError'],
+      ['a fractional ordinal', 1.5, 'RangeError'],
+      ['a preset id string', 'brightIdol', 'TypeError'],
+    ])('voiceCharacterPresetId refuses %s', (_name, ordinal, errorName) => {
+      expect(caught(() => voiceCharacterPresetId(ordinal as number)).name).toBe(errorName);
+    });
+  });
+
+  describe('one-shots', () => {
+    it('voiceChange requires sampleRate in both forms and agrees across them', () => {
+      const input = tone(sampleRate / 4);
+      expect(caught(() => voiceChange({ samples: input } as never)).name).toBe('TypeError');
+      expect(
+        caught(() => (voiceChange as unknown as (s: Float32Array) => unknown)(input)).name,
+      ).toBe('TypeError');
+      const positional = voiceChange(input, sampleRate, { pitchSemitones: 2 });
+      const request = voiceChange({ samples: input, sampleRate, pitchSemitones: 2 });
+      expectClose(positional, request);
+      expect(
+        caught(() =>
+          (voiceChange as unknown as (...a: unknown[]) => unknown)(
+            { samples: input, sampleRate },
+            1,
+          ),
+        ).name,
+      ).toBe('TypeError');
+    });
+
+    it('voiceChangeRealtime is request-only and planar', () => {
+      const left = tone(sampleRate / 4);
+      const right = tone(sampleRate / 4, 330);
+      const stereo = voiceChangeRealtime({ channels: [left, right], sampleRate });
+      expect(stereo).toHaveLength(2);
+      expect((stereo[0] as Float32Array).length).toBe(left.length);
+      expect((stereo[1] as Float32Array).length).toBe(right.length);
+      const mono = voiceChangeRealtime({ channels: [left], sampleRate, config: 'neutralMonitor' });
+      expect(mono).toHaveLength(1);
+      expectClose(
+        voiceChangeRealtime({ channels: [left], sampleRate })[0] as Float32Array,
+        mono[0] as Float32Array,
+      );
+      expectTypeOf(stereo).toEqualTypeOf<Float32Array[]>();
+    });
+
+    it('voiceChangeRealtime accepts a flat config and a preset id alike', () => {
+      const input = tone(sampleRate / 4);
+      const byId = voiceChangeRealtime({ channels: [input], sampleRate, config: 'hardTune' });
+      const byConfig = voiceChangeRealtime({
+        channels: [input],
+        sampleRate,
+        config: realtimeVoiceChangerPresetConfig('hardTune'),
+      });
+      expectClose(byConfig[0] as Float32Array, byId[0] as Float32Array);
+    });
+
+    it.each([
+      ['no sampleRate', { channels: [tone(64)] }, 'TypeError'],
+      ['a positional call', tone(64), 'TypeError'],
+      ['the old samples key', { samples: tone(64), sampleRate }, 'TypeError'],
+      [
+        'the old preset key',
+        { channels: [tone(64)], sampleRate, preset: 'neutralMonitor' },
+        'TypeError',
+      ],
+      ['the removed channels count', { channels: 2, sampleRate }, 'TypeError'],
+      ['three channels', { channels: [tone(64), tone(64), tone(64)], sampleRate }, 'RangeError'],
+      ['unequal channels', { channels: [tone(64), tone(65)], sampleRate }, 'RangeError'],
+      ['an empty channel list', { channels: [], sampleRate }, 'RangeError'],
+      ['a fractional sampleRate', { channels: [tone(64)], sampleRate: 22050.5 }, 'RangeError'],
+      [
+        'an old kebab preset',
+        { channels: [tone(64)], sampleRate, config: 'bright-idol' },
+        'RangeError',
+      ],
+    ])('voiceChangeRealtime refuses %s', (_name, request, errorName) => {
+      expect(caught(() => voiceChangeRealtime(request as never)).name).toBe(errorName);
+    });
+  });
+
+  describe('streaming retune', () => {
+    it('names its controls pitchSemitones and grainSizeSamples and reports them back', () => {
+      const retune = new StreamingRetune({ pitchSemitones: 3, mix: 0.5, grainSizeSamples: 1024 });
+      try {
+        retune.prepare(sampleRate, BLOCK);
+        const config = retune.config();
+        expect(config.pitchSemitones).toBe(3);
+        expect(config.mix).toBe(0.5);
+        expect(config.grainSizeSamples).toBe(1024);
+        expect(retune.grainSizeSamples).toBe(1024);
+        expect(retune.latencySamples).toBeGreaterThan(0);
+        expect(config).not.toHaveProperty('semitones');
+        expect(config).not.toHaveProperty('grainSize');
+        retune.setConfig({ pitchSemitones: -2 });
+        expect(retune.config().pitchSemitones).toBe(-2);
+        expectTypeOf(retune.grainSizeSamples).toEqualTypeOf<number>();
+        expectTypeOf(retune.config()).toEqualTypeOf<Required<StreamingRetuneConfig>>();
+      } finally {
+        retune.destroy();
+      }
+    });
+
+    it('derives the grain when grainSizeSamples is omitted', () => {
+      const retune = new StreamingRetune({});
+      try {
+        retune.prepare(sampleRate, BLOCK);
+        expect(retune.grainSizeSamples).toBeGreaterThan(0);
+      } finally {
+        retune.destroy();
+      }
+    });
+
+    it.each([
+      ['semitones', { semitones: 1 }, 'TypeError'],
+      ['grainSize', { grainSize: 512 }, 'TypeError'],
+      ['an explicit 0 grainSizeSamples', { grainSizeSamples: 0 }, 'RangeError'],
+      ['a string grainSizeSamples', { grainSizeSamples: '512' }, 'TypeError'],
+    ])('refuses %s', (_name, config, errorName) => {
+      expect(caught(() => new StreamingRetune(config as StreamingRetuneConfig)).name).toBe(
+        errorName,
+      );
+      const retune = new StreamingRetune({});
+      try {
+        expect(caught(() => retune.setConfig(config as StreamingRetuneConfig)).name).toBe(
+          errorName,
+        );
+      } finally {
+        retune.destroy();
+      }
+    });
+  });
+
+  describe('types', () => {
+    it('renames the enum types and lowers the tokens', () => {
+      expectTypeOf<VoiceEngine>().toEqualTypeOf<'grain' | 'psola'>();
+      expectTypeOf<PitchCorrectionMode>().toEqualTypeOf<'off' | 'auto' | 'robot'>();
+      expectTypeOf<ScaleKind>().toEqualTypeOf<'major' | 'naturalMinor' | 'chromatic'>();
+      expectTypeOf<VocoderCarrierSource>().toEqualTypeOf<'internal' | 'external'>();
+      expectTypeOf<VocoderCarrierWave>().toEqualTypeOf<'saw' | 'pulse' | 'ensemble'>();
+      expectTypeOf<CharacterType>().toEqualTypeOf<
+        'none' | 'megaphone' | 'radio' | 'bbdChorus' | 'strobo'
+      >();
+      expectTypeOf<ReverbVariation>().toEqualTypeOf<'reverb' | 'echo' | 'tempoDelay' | 'dubEcho'>();
+      expectTypeOf<NoteDivision>().toEqualTypeOf<
+        'quarter' | 'eighth' | 'dottedEighth' | 'sixteenth'
+      >();
+      expectTypeOf<MidiRelease>().toEqualTypeOf<'hold' | 'input'>();
+      expectTypeOf<VoicePresetId>().toEqualTypeOf<
+        | 'neutralMonitor'
+        | 'brightIdol'
+        | 'softWhisper'
+        | 'deepNarrator'
+        | 'robotMascot'
+        | 'darkVillain'
+        | 'hardTune'
+        | 'robotMonotone'
+        | 'choirHarmony'
+        | 'vocoderStrings'
+        | 'megaphone'
+        | 'radioVoice'
+      >();
+      expectTypeOf<RealtimeVoiceChangerConfig['formantMode']>().toEqualTypeOf<
+        'relative' | 'absolute'
+      >();
+      expectTypeOf<RealtimeVoiceChangerConfig['voiceEngine']>().toEqualTypeOf<VoiceEngine>();
+      expectTypeOf<
+        RealtimeVoiceChangerConfig['reverbVariation']
+      >().toEqualTypeOf<ReverbVariation>();
+      expectTypeOf<RealtimeVoiceChangerConfig['eqHighPassHz']>().toEqualTypeOf<number>();
+      // @ts-expect-error voiceEngineEngine is gone
+      expectTypeOf<RealtimeVoiceChangerConfig['voiceEngineEngine']>().toBeNever();
+      // @ts-expect-error harmonyStep1 is gone
+      expectTypeOf<RealtimeVoiceChangerConfig['harmonyStep1']>().toBeNever();
+    });
+
+    it('declares the constructor options', () => {
+      expectTypeOf<RealtimeVoiceChangerOptions>().toEqualTypeOf<{
+        sampleRate: number;
+        maxBlockSize?: number;
+        numChannels?: 1 | 2;
+        config?: RealtimeVoiceChangerConfigInput;
+      }>();
+    });
+
+    it('drops the old function names from the package root', () => {
+      for (const name of ['validateRealtimeVoiceChangerPresetJson']) {
+        expect(name in indexModule).toBe(false);
+      }
+    });
+  });
+});

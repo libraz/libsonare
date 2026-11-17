@@ -305,6 +305,26 @@ function poisoned(specs: Spec[], values: Args): Args {
   throw new Error('row has no audio buffer to poison');
 }
 
+/** An F0 track with a one-semitone step, a short voiced run and a gap, for the note-set rows. */
+const NOTE_FRAME_RATE = SR / 512;
+const NOTE_TRACK = (() => {
+  const frames = 44;
+  const f0Hz = new Float32Array(frames).fill(220);
+  const voicedProb = new Float32Array(frames).fill(0.9);
+  for (let i = 24; i < 34; i++) {
+    f0Hz[i] = 233.08;
+  }
+  for (let i = 4; i < 8; i++) {
+    f0Hz[i] = 0;
+    voicedProb[i] = 0;
+  }
+  // Voiced at the default threshold, unvoiced at a raised one.
+  voicedProb.fill(0.6, 40);
+  return { f0Hz, voicedProb, frameRate: NOTE_FRAME_RATE };
+})();
+const NOTE_SET = sonare.extractNotes({ samples: TONE, sampleRate: SR, ...NOTE_TRACK });
+const PERCUSSIVE_EVENTS = sonare.extractPercussiveEvents({ samples: SIG, sampleRate: SR });
+
 const ROWS: Row[] = [
   // analysis.ts
   {
@@ -497,14 +517,15 @@ const ROWS: Row[] = [
   {
     name: 'estimateRoom',
     fn: sonare.estimateRoom,
-    params: 'samples sampleRate? ...options?',
+    params: 'samples sampleRate ...options?',
     values: { samples: IR, sampleRate: ALT_SR, options: { referenceAbsorption: 0.5 } },
     invalid: { sampleRate: 0 },
   },
   {
     name: 'roomGeometryFromEstimate',
     fn: sonare.roomGeometryFromEstimate,
-    params: 'estimate ...options?',
+    requestOnly: true,
+    params: 'estimate source? listener?',
     values: {
       estimate: {
         lengthM: 6,
@@ -512,7 +533,8 @@ const ROWS: Row[] = [
         heightM: 3,
         bandAbsorption: new Float32Array([0.1, 0.12, 0.15, 0.2, 0.25, 0.3]),
       },
-      options: { source: { x: 1, y: 1, z: 1.2 }, listener: { x: 3, y: 2, z: 1.7 } },
+      source: { x: 1, y: 1, z: 1.2 },
+      listener: { x: 3, y: 2, z: 1.7 },
     },
     invalid: { estimate: 'room' },
   },
@@ -531,7 +553,7 @@ const ROWS: Row[] = [
   {
     name: 'noteMove',
     fn: sonare.noteMove,
-    params: 'samples sampleRate? ...options?',
+    params: 'samples sampleRate ...options?',
     values: {
       samples: SIG,
       sampleRate: ALT_SR,
@@ -542,7 +564,7 @@ const ROWS: Row[] = [
   {
     name: 'noteStretch',
     fn: sonare.noteStretch,
-    params: 'samples sampleRate? ...options?',
+    params: 'samples sampleRate ...options?',
     values: {
       samples: SIG,
       sampleRate: ALT_SR,
@@ -554,7 +576,7 @@ const ROWS: Row[] = [
   {
     name: 'harmonic',
     fn: sonare.harmonic,
-    params: 'samples sampleRate?',
+    params: 'samples sampleRate',
     values: { samples: SIG, sampleRate: ALT_SR },
     invalid: { sampleRate: 0 },
     inert: { sampleRate: 'median filtering in bins and frames reads no rate' },
@@ -562,7 +584,7 @@ const ROWS: Row[] = [
   {
     name: 'percussive',
     fn: sonare.percussive,
-    params: 'samples sampleRate?',
+    params: 'samples sampleRate',
     values: { samples: SIG, sampleRate: ALT_SR },
     invalid: { sampleRate: 0 },
     inert: { sampleRate: 'median filtering in bins and frames reads no rate' },
@@ -570,41 +592,44 @@ const ROWS: Row[] = [
   {
     name: 'hpss',
     fn: sonare.hpss,
-    params: 'samples sampleRate? kernelHarmonic? kernelPercussive? nFft? hopLength? hardMask?',
+    params: 'samples sampleRate ...options?',
     values: {
       samples: SIG,
       sampleRate: ALT_SR,
-      kernelHarmonic: 17,
-      kernelPercussive: 17,
-      nFft: 1024,
-      hopLength: 256,
-      hardMask: true,
+      options: {
+        kernelHarmonic: 17,
+        kernelPercussive: 17,
+        nFft: 1024,
+        hopLength: 256,
+        hardMask: true,
+      },
     },
     invalid: { nFft: 0 },
   },
   {
     name: 'hpssWithResidual',
     fn: sonare.hpssWithResidual,
-    params: 'samples sampleRate? kernelHarmonic? kernelPercussive? nFft? hopLength? hardMask?',
+    params: 'samples sampleRate ...options?',
     values: {
       samples: SIG,
       sampleRate: ALT_SR,
-      kernelHarmonic: 17,
-      kernelPercussive: 17,
-      nFft: 1024,
-      hopLength: 256,
-      hardMask: true,
+      options: {
+        kernelHarmonic: 17,
+        kernelPercussive: 17,
+        nFft: 1024,
+        hopLength: 256,
+        hardMask: true,
+      },
     },
     invalid: { nFft: 0 },
   },
   {
     name: 'decompose',
     fn: sonare.decompose,
-    params: 's nFeatures nFrames nComponents nIter? beta? init?',
+    requestOnly: true,
+    params: 's nComponents nIter? beta? init?',
     values: {
-      s: SMALL,
-      nFeatures: 8,
-      nFrames: 10,
+      s: { data: SMALL, rows: 8, cols: 10 },
       nComponents: 2,
       nIter: 20,
       beta: 1,
@@ -615,19 +640,19 @@ const ROWS: Row[] = [
   {
     name: 'nnFilter',
     fn: sonare.nnFilter,
-    params: 's nFeatures nFrames aggregate? k? width?',
-    values: { s: SMALL, nFeatures: 8, nFrames: 10, aggregate: 'median', k: 3, width: 2 },
-    invalid: { nFeatures: -1 },
+    requestOnly: true,
+    params: 's aggregate? k? width?',
+    values: { s: { data: SMALL, rows: 8, cols: 10 }, aggregate: 'median', k: 3, width: 2 },
+    invalid: { s: { data: SMALL, rows: 1000, cols: 1000 } },
   },
   {
     name: 'remix',
     fn: sonare.remix,
-    params: 'samples intervals sampleRate? alignZeros?',
+    params: 'samples sampleRate ...options',
     values: {
       samples: SIG,
-      intervals: [10000, 15001, 0, 5001],
       sampleRate: ALT_SR,
-      alignZeros: true,
+      options: { intervals: [10000, 15001, 0, 5001], alignZeros: false },
     },
     invalid: { intervals: [0] },
     inert: { sampleRate: 'intervals are in samples' },
@@ -635,12 +660,11 @@ const ROWS: Row[] = [
   {
     name: 'remixAlignedIntervals',
     fn: sonare.remixAlignedIntervals,
-    params: 'samples intervals sampleRate? alignZeros?',
+    params: 'samples sampleRate ...options',
     values: {
       samples: SIG,
-      intervals: [10000, 15001, 0, 5001],
       sampleRate: ALT_SR,
-      alignZeros: false,
+      options: { intervals: [10000, 15001, 0, 5001], alignZeros: false },
     },
     invalid: { intervals: [0] },
     inert: { sampleRate: 'intervals are in samples' },
@@ -649,60 +673,54 @@ const ROWS: Row[] = [
   {
     name: 'spectralEdit',
     fn: sonare.spectralEdit,
-    params: 'samples sampleRate ops? ...options?',
+    params: 'samples sampleRate ...options',
     values: {
       samples: SIG,
       sampleRate: SR,
-      ops: [{ startSample: 0, endSample: 12000, lowHz: 150, highHz: 2000, gainDb: -12 }],
-      options: { nFft: 1024 },
+      options: {
+        ops: [{ startSample: 0, endSample: 12000, lowHz: 150, highHz: 2000, gainDb: -12 }],
+        nFft: 1024,
+      },
     },
     invalid: { sampleRate: 0 },
   },
   {
     name: 'timeStretch',
     fn: sonare.timeStretch,
-    params: 'samples sampleRate rate nFft? hopLength?',
-    values: { samples: SIG, sampleRate: SR, rate: 1.25, nFft: 1024, hopLength: 256 },
-    invalid: { rate: 0 },
+    params: 'samples sampleRate ...options',
+    values: {
+      samples: SIG,
+      sampleRate: SR,
+      options: { speedRatio: 1.25, nFft: 1024, hopLength: 256 },
+    },
+    invalid: { speedRatio: 0 },
   },
   {
     name: 'pitchShift',
     fn: sonare.pitchShift,
-    params: 'samples sampleRate semitones nFft? hopLength?',
-    values: { samples: SIG, sampleRate: SR, semitones: 2, nFft: 1024, hopLength: 256 },
+    params: 'samples sampleRate ...options',
+    values: {
+      samples: SIG,
+      sampleRate: SR,
+      options: { pitchSemitones: 2, nFft: 1024, hopLength: 256 },
+    },
     invalid: { sampleRate: 0 },
   },
   {
     name: 'pitchCorrectToMidi',
     fn: sonare.pitchCorrectToMidi,
-    params: 'samples sampleRate? currentMidi? targetMidi?',
-    values: { samples: SIG, sampleRate: ALT_SR, currentMidi: 57, targetMidi: 59 },
+    params: 'samples sampleRate ...options',
+    values: { samples: SIG, sampleRate: ALT_SR, options: { currentMidi: 57, targetMidi: 59 } },
     invalid: { sampleRate: 0 },
   },
   {
     name: 'pitchCorrectTimevarying',
     fn: sonare.pitchCorrectTimevarying,
-    params: 'samples f0Hz sampleRate? hopLength? ...options?',
+    params: 'samples sampleRate ...options',
     values: {
       samples: SIG,
-      f0Hz: F0,
       sampleRate: ALT_SR,
-      hopLength: 256,
-      options: { targetMidi: 59, retuneAmount: 0.5 },
-    },
-    invalid: { sampleRate: 0 },
-  },
-  {
-    name: 'pitchCorrectToMidiTimevarying',
-    fn: sonare.pitchCorrectToMidiTimevarying,
-    params: 'samples f0Hz targetMidi sampleRate? hopLength? voiced? voicedProb?',
-    values: {
-      samples: SIG,
-      f0Hz: F0,
-      targetMidi: 59,
-      sampleRate: ALT_SR,
-      hopLength: 256,
-      voiced: Array.from(F0, (_, i) => i % 7 !== 0),
+      options: { f0Hz: F0, hopLength: 256, targetMidi: 59, retuneAmount: 0.5 },
     },
     invalid: { sampleRate: 0 },
   },
@@ -746,17 +764,15 @@ const ROWS: Row[] = [
   {
     name: 'trim',
     fn: sonare.trim,
-    params: 'samples sampleRate? thresholdDb? frameLength? hopLength?',
+    params: 'samples sampleRate ...options?',
     values: {
       samples: PADDED,
       sampleRate: ALT_SR,
-      thresholdDb: -20,
-      frameLength: 512,
-      hopLength: 64,
+      options: { thresholdDb: -20, frameLength: 512, hopLength: 64 },
     },
     invalid: { hopLength: 0 },
     inert: { sampleRate: 'frames are counted in samples' },
-    controlBase: { hopLength: { thresholdDb: undefined } },
+    controlBase: { hopLength: { options: { frameLength: 512, hopLength: 64 } } },
   },
   {
     name: 'frameSignal',
@@ -813,7 +829,7 @@ const ROWS: Row[] = [
     name: 'clicks',
     fn: sonare.clicks,
     requestOnly: true,
-    params: 'times sampleRate? length? frequencyHz? clickDurationSec?',
+    params: 'times sampleRate length? frequencyHz? clickDurationSec?',
     values: {
       times: new Float32Array([0.1, 0.5]),
       sampleRate: ALT_SR,
@@ -827,7 +843,7 @@ const ROWS: Row[] = [
     name: 'chirp',
     fn: sonare.chirp,
     requestOnly: true,
-    params: 'fminHz? fmaxHz? sampleRate? durationSec? linear?',
+    params: 'fminHz? fmaxHz? sampleRate durationSec? linear?',
     values: { fminHz: 200, fmaxHz: 2000, sampleRate: ALT_SR, durationSec: 0.2, linear: true },
     invalid: { sampleRate: 0 },
   },
@@ -835,7 +851,7 @@ const ROWS: Row[] = [
     name: 'tone',
     fn: sonare.tone,
     requestOnly: true,
-    params: 'frequencyHz? sampleRate? durationSec? phase? amplitude?',
+    params: 'frequencyHz? sampleRate durationSec? phase? amplitude?',
     values: { frequencyHz: 330, sampleRate: ALT_SR, durationSec: 0.2, phase: 0.5, amplitude: 0.3 },
     invalid: { sampleRate: 0 },
   },
@@ -843,7 +859,7 @@ const ROWS: Row[] = [
     name: 'cqtToAudio',
     fn: sonare.cqtToAudio,
     requestOnly: true,
-    params: 'magnitude sampleRate? hopLength? fminHz? binsPerOctave? nIter?',
+    params: 'magnitude sampleRate hopLength? fminHz? binsPerOctave? nIter?',
     values: {
       magnitude: CQT.magnitude,
       sampleRate: ALT_SR,
@@ -858,7 +874,7 @@ const ROWS: Row[] = [
     name: 'vqtToAudio',
     fn: sonare.vqtToAudio,
     requestOnly: true,
-    params: 'magnitude sampleRate? hopLength? fminHz? binsPerOctave? gamma? nIter?',
+    params: 'magnitude sampleRate hopLength? fminHz? binsPerOctave? gamma? nIter?',
     values: {
       magnitude: VQT.magnitude,
       sampleRate: ALT_SR,
@@ -875,7 +891,7 @@ const ROWS: Row[] = [
     fn: sonare.griffinLim,
     requestOnly: true,
     // nFft and hopLength are required: they have to agree with the magnitude's row count.
-    params: 'magnitude nFft hopLength sampleRate? nIter? momentum?',
+    params: 'magnitude nFft hopLength sampleRate nIter? momentum?',
     values: {
       magnitude: ST.magnitude,
       sampleRate: ALT_SR,
@@ -891,7 +907,7 @@ const ROWS: Row[] = [
     name: 'melToStft',
     fn: sonare.melToStft,
     requestOnly: true,
-    params: 'power sampleRate? nFft? fminHz? fmaxHz? htk?',
+    params: 'power sampleRate nFft? fminHz? fmaxHz? htk?',
     values: {
       power: MEL.power,
       sampleRate: ALT_SR,
@@ -906,7 +922,7 @@ const ROWS: Row[] = [
     name: 'melToAudio',
     fn: sonare.melToAudio,
     requestOnly: true,
-    params: 'power sampleRate? nFft? hopLength? fminHz? fmaxHz? nIter? htk?',
+    params: 'power sampleRate nFft? hopLength? fminHz? fmaxHz? nIter? htk?',
     values: {
       power: MEL.power,
       sampleRate: ALT_SR,
@@ -931,7 +947,7 @@ const ROWS: Row[] = [
     name: 'mfccToAudio',
     fn: sonare.mfccToAudio,
     requestOnly: true,
-    params: 'coefficients nMels? sampleRate? nFft? hopLength? fminHz? fmaxHz? nIter? htk? lifter?',
+    params: 'coefficients nMels? sampleRate nFft? hopLength? fminHz? fmaxHz? nIter? htk? lifter?',
     values: {
       coefficients: MFCC.coefficients,
       nMels: 32,
@@ -949,15 +965,19 @@ const ROWS: Row[] = [
   {
     name: 'phaseVocoder',
     fn: sonare.phaseVocoder,
-    params: 'samples sampleRate rate nFft? hopLength?',
-    values: { samples: SIG, sampleRate: SR, rate: 1.25, nFft: 1024, hopLength: 256 },
-    invalid: { rate: 0 },
+    params: 'samples sampleRate ...options',
+    values: {
+      samples: SIG,
+      sampleRate: SR,
+      options: { speedRatio: 1.25, nFft: 1024, hopLength: 256 },
+    },
+    invalid: { speedRatio: 0 },
   },
   // feature_loudness.ts
   {
     name: 'ebur128LoudnessRange',
     fn: sonare.ebur128LoudnessRange,
-    params: 'samples sampleRate?',
+    params: 'samples sampleRate',
     values: { samples: LONG, sampleRate: ALT_SR },
     invalid: { sampleRate: 0 },
   },
@@ -985,14 +1005,14 @@ const ROWS: Row[] = [
   {
     name: 'lufsInterleaved',
     fn: sonare.lufsInterleaved,
-    params: 'samples channels sampleRate?',
+    params: 'samples channels sampleRate',
     values: { samples: STEREO, channels: 2, sampleRate: ALT_SR },
     invalid: { channels: 0 },
   },
   {
     name: 'lufsSeriesInterleaved',
     fn: sonare.lufsSeriesInterleaved,
-    params: 'samples channels sampleRate?',
+    params: 'samples channels sampleRate',
     values: { samples: STEREO, channels: 2, sampleRate: ALT_SR },
     invalid: { channels: 0 },
   },
@@ -1190,7 +1210,7 @@ const ROWS: Row[] = [
     name: 'tempogram',
     fn: sonare.tempogram,
     requestOnly: true,
-    params: 'onsetEnvelope sampleRate? hopLength? winLength? mode? center? norm?',
+    params: 'onsetEnvelope sampleRate hopLength? winLength? mode? center? norm?',
     values: {
       onsetEnvelope: ENV,
       sampleRate: ALT_SR,
@@ -1211,7 +1231,7 @@ const ROWS: Row[] = [
     name: 'cyclicTempogram',
     fn: sonare.cyclicTempogram,
     requestOnly: true,
-    params: 'onsetEnvelope sampleRate? hopLength? winLength? bpmMin? nBins?',
+    params: 'onsetEnvelope sampleRate hopLength? winLength? bpmMin? nBins?',
     values: {
       onsetEnvelope: ENV,
       sampleRate: ALT_SR,
@@ -1227,7 +1247,7 @@ const ROWS: Row[] = [
     name: 'fourierTempogram',
     fn: sonare.fourierTempogram,
     requestOnly: true,
-    params: 'onsetEnvelope sampleRate? hopLength? winLength? center?',
+    params: 'onsetEnvelope sampleRate hopLength? winLength? center?',
     values: {
       onsetEnvelope: ENV,
       sampleRate: ALT_SR,
@@ -1245,7 +1265,7 @@ const ROWS: Row[] = [
     name: 'plp',
     fn: sonare.plp,
     requestOnly: true,
-    params: 'onsetEnvelope sampleRate? hopLength? bpmMin? bpmMax? winLength?',
+    params: 'onsetEnvelope sampleRate hopLength? bpmMin? bpmMax? winLength?',
     values: {
       onsetEnvelope: ENV,
       sampleRate: ALT_SR,
@@ -1260,7 +1280,7 @@ const ROWS: Row[] = [
     name: 'tempogramRatio',
     fn: sonare.tempogramRatio,
     requestOnly: true,
-    params: 'tempogram sampleRate? hopLength? factors?',
+    params: 'tempogram sampleRate hopLength? factors?',
     values: {
       tempogram: TG,
       sampleRate: ALT_SR,
@@ -1448,14 +1468,14 @@ const ROWS: Row[] = [
   {
     name: 'mastering',
     fn: sonare.mastering,
-    params: 'samples sampleRate? ...options?',
+    params: 'samples sampleRate ...options?',
     values: { samples: SIG, sampleRate: ALT_SR, options: { targetLufs: -18, ceilingDb: -3 } },
     invalid: { sampleRate: 0 },
   },
   {
     name: 'masteringChain',
     fn: sonare.masteringChain,
-    params: 'samples sampleRate? config? onProgress?',
+    params: 'samples sampleRate config? onProgress?',
     values: {
       samples: SIG,
       sampleRate: ALT_SR,
@@ -1467,7 +1487,7 @@ const ROWS: Row[] = [
   {
     name: 'masteringChainStereo',
     fn: sonare.masteringChainStereo,
-    params: 'left right sampleRate? config? onProgress?',
+    params: 'left right sampleRate config? onProgress?',
     values: {
       left: SIG,
       right: SIG2,
@@ -1480,7 +1500,7 @@ const ROWS: Row[] = [
   {
     name: 'masterAudio',
     fn: sonare.masterAudio,
-    params: 'samples sampleRate? presetName? overrides? onProgress?',
+    params: 'samples sampleRate presetName? overrides? onProgress?',
     rename: { presetName: 'preset' },
     values: {
       samples: SIG,
@@ -1494,7 +1514,7 @@ const ROWS: Row[] = [
   {
     name: 'masterAudioAsync',
     fn: sonare.masterAudioAsync,
-    params: 'samples sampleRate? presetName? overrides?',
+    params: 'samples sampleRate presetName? overrides?',
     rename: { presetName: 'preset' },
     values: {
       samples: SIG,
@@ -1507,7 +1527,7 @@ const ROWS: Row[] = [
   {
     name: 'masterAudioStereo',
     fn: sonare.masterAudioStereo,
-    params: 'left right sampleRate? presetName? overrides? onProgress?',
+    params: 'left right sampleRate presetName? overrides? onProgress?',
     rename: { presetName: 'preset' },
     values: {
       left: SIG,
@@ -1522,7 +1542,7 @@ const ROWS: Row[] = [
   {
     name: 'masterAudioStereoAsync',
     fn: sonare.masterAudioStereoAsync,
-    params: 'left right sampleRate? presetName? overrides?',
+    params: 'left right sampleRate presetName? overrides?',
     rename: { presetName: 'preset' },
     values: {
       left: SIG,
@@ -1536,7 +1556,7 @@ const ROWS: Row[] = [
   {
     name: 'masteringProcess',
     fn: sonare.masteringProcess,
-    params: 'processorName samples sampleRate? params?',
+    params: 'processorName samples sampleRate params?',
     values: {
       processorName: 'dynamics.compressor',
       samples: SIG,
@@ -1548,7 +1568,7 @@ const ROWS: Row[] = [
   {
     name: 'masteringProcessStereo',
     fn: sonare.masteringProcessStereo,
-    params: 'processorName left right sampleRate? params?',
+    params: 'processorName left right sampleRate params?',
     values: {
       processorName: 'stereo.imager',
       left: SIG,
@@ -1561,7 +1581,7 @@ const ROWS: Row[] = [
   {
     name: 'masteringPairProcess',
     fn: sonare.masteringPairProcess,
-    params: 'processorName source reference sampleRate? params?',
+    params: 'processorName source reference sampleRate params?',
     values: {
       processorName: 'match.abCrossfade',
       source: SIG,
@@ -1574,7 +1594,7 @@ const ROWS: Row[] = [
   {
     name: 'masteringPairProcessStereo',
     fn: sonare.masteringPairProcessStereo,
-    params: 'processorName sourceLeft sourceRight referenceLeft referenceRight sampleRate? params?',
+    params: 'processorName sourceLeft sourceRight referenceLeft referenceRight sampleRate params?',
     values: {
       processorName: 'match.abCrossfade',
       sourceLeft: SIG,
@@ -1589,7 +1609,7 @@ const ROWS: Row[] = [
   {
     name: 'masteringPairAnalyze',
     fn: sonare.masteringPairAnalyze,
-    params: 'analysisName source reference sampleRate? params?',
+    params: 'analysisName source reference sampleRate params?',
     values: {
       analysisName: 'match.tonalBalanceLogBands',
       source: SIG,
@@ -1602,7 +1622,7 @@ const ROWS: Row[] = [
   {
     name: 'masteringStereoAnalyze',
     fn: sonare.masteringStereoAnalyze,
-    params: 'analysisName left right sampleRate? params?',
+    params: 'analysisName left right sampleRate params?',
     values: {
       analysisName: 'stereo.monoCompatCheckLogBands',
       left: SIG,
@@ -1615,21 +1635,21 @@ const ROWS: Row[] = [
   {
     name: 'masteringAssistantSuggest',
     fn: sonare.masteringAssistantSuggest,
-    params: 'samples sampleRate? params?',
+    params: 'samples sampleRate params?',
     values: { samples: SIG, sampleRate: ALT_SR, params: { targetLufs: -13 } },
     invalid: { sampleRate: 0 },
   },
   {
     name: 'masteringAudioProfile',
     fn: sonare.masteringAudioProfile,
-    params: 'samples sampleRate? params?',
+    params: 'samples sampleRate params?',
     values: { samples: SIG, sampleRate: ALT_SR, params: { nFft: 1024, hopLength: 256 } },
     invalid: { sampleRate: 0 },
   },
   {
     name: 'masteringStreamingPreview',
     fn: sonare.masteringStreamingPreview,
-    params: 'samples sampleRate? platforms?',
+    params: 'samples sampleRate platforms?',
     values: {
       samples: SIG,
       sampleRate: ALT_SR,
@@ -1640,37 +1660,194 @@ const ROWS: Row[] = [
   {
     name: 'masteringDynamicsCompressor',
     fn: sonare.masteringDynamicsCompressor,
-    params: 'samples sampleRate? ...options?',
+    params: 'samples sampleRate ...options?',
     values: { samples: SIG, sampleRate: ALT_SR, options: { thresholdDb: -30, ratio: 6 } },
     invalid: { sampleRate: 0 },
   },
   {
     name: 'masteringDynamicsGate',
     fn: sonare.masteringDynamicsGate,
-    params: 'samples sampleRate? ...options?',
+    params: 'samples sampleRate ...options?',
     values: { samples: SIG, sampleRate: ALT_SR, options: { thresholdDb: -20, rangeDb: -30 } },
     invalid: { sampleRate: 0 },
   },
   {
     name: 'masteringDynamicsTransientShaper',
     fn: sonare.masteringDynamicsTransientShaper,
-    params: 'samples sampleRate? ...options?',
+    params: 'samples sampleRate ...options?',
     values: { samples: SIG, sampleRate: ALT_SR, options: { attackGainDb: 6, sustainGainDb: -3 } },
     invalid: { sampleRate: 0 },
   },
   {
     name: 'normalize',
     fn: sonare.normalize,
-    params: 'samples sampleRate? targetDb? mode?',
-    values: { samples: SIG, sampleRate: ALT_SR, targetDb: -6, mode: 'rms' },
+    params: 'samples sampleRate ...options?',
+    values: { samples: SIG, sampleRate: ALT_SR, options: { targetDb: -6, mode: 'rms' } },
     invalid: { mode: 'loud' },
     inert: { sampleRate: 'peak and RMS gain read no rate' },
   },
+  // effects_note_ops.ts / effects_percussive.ts / effects_timepitch.ts / feature_decompose.ts
+  {
+    name: 'autoTune',
+    fn: sonare.autoTune,
+    params: 'samples sampleRate ...options?',
+    values: {
+      samples: TONE,
+      sampleRate: ALT_SR,
+      options: { key: { root: 9, mode: 'minor' }, strength: 0.5 },
+    },
+    invalid: { sampleRate: 0 },
+  },
+  {
+    name: 'decomposeStems',
+    fn: sonare.decomposeStems,
+    params: 'samples sampleRate ...options?',
+    values: {
+      samples: SHORT,
+      sampleRate: SR,
+      options: { nComponents: 2, nFft: 512, hopLength: 128, nIter: 8, beta: 1, maskPower: 2 },
+    },
+    invalid: { nComponents: -1 },
+  },
+  {
+    name: 'extractNotes',
+    fn: sonare.extractNotes,
+    params: 'samples sampleRate ...options',
+    values: {
+      samples: TONE,
+      sampleRate: SR,
+      options: {
+        ...NOTE_TRACK,
+        segmentationThresholdCents: 150,
+        minNoteMs: 100,
+        referenceHz: 432,
+        voicedThreshold: 0.7,
+      },
+    },
+    invalid: { frameRate: -1 },
+  },
+  {
+    name: 'splitNote',
+    fn: sonare.splitNote,
+    params: 'samples sampleRate ...options',
+    values: {
+      samples: TONE,
+      sampleRate: SR,
+      options: { ...NOTE_TRACK, notes: NOTE_SET, index: 3, frame: 40, referenceHz: 432 },
+    },
+    invalid: { index: -1 },
+  },
+  {
+    name: 'mergeNotes',
+    fn: sonare.mergeNotes,
+    params: 'samples sampleRate ...options',
+    values: {
+      samples: TONE,
+      sampleRate: SR,
+      options: { ...NOTE_TRACK, notes: NOTE_SET, first: 0, last: 1, referenceHz: 432 },
+    },
+    invalid: { first: 1 },
+  },
+  {
+    name: 'renderNotes',
+    fn: sonare.renderNotes,
+    params: 'samples sampleRate ...options',
+    values: {
+      samples: TONE,
+      sampleRate: SR,
+      options: {
+        notes: NOTE_SET.map((note) => ({ ...note, edit: { ...note.edit, gainDb: -6 } })),
+        fadeMs: 40,
+      },
+    },
+    invalid: { notes: 'none' },
+  },
+  {
+    name: 'extractPercussiveEvents',
+    fn: sonare.extractPercussiveEvents,
+    params: 'samples sampleRate ...options?',
+    values: {
+      samples: SIG,
+      sampleRate: SR,
+      options: { onsetWait: 20, maxEventMs: 120 },
+    },
+    invalid: { minPercussiveRatio: 2 },
+  },
+  {
+    name: 'renderPercussiveEvents',
+    fn: sonare.renderPercussiveEvents,
+    params: 'samples sampleRate ...options',
+    values: {
+      samples: SIG,
+      sampleRate: SR,
+      options: {
+        events: PERCUSSIVE_EVENTS.map((event) => ({
+          ...event,
+          edit: { ...event.edit, gainDb: -6 },
+        })),
+        fadeMs: 30,
+      },
+    },
+    invalid: { events: 'none' },
+  },
   // repair
+  {
+    name: 'masteringRepairDetectClicks',
+    fn: sonare.masteringRepairDetectClicks,
+    params: 'samples sampleRate ...options?',
+    values: { samples: CLICKY, sampleRate: ALT_SR, options: { neighborRatio: 8 } },
+    invalid: { sampleRate: 0 },
+  },
+  {
+    name: 'masteringRepairDetectClipping',
+    fn: sonare.masteringRepairDetectClipping,
+    params: 'samples sampleRate ...options?',
+    values: { samples: CLIPPED, sampleRate: ALT_SR, options: { clipThresholdDb: -20 } },
+    invalid: { sampleRate: 0 },
+  },
+  {
+    name: 'masteringRepairDetectCrackle',
+    fn: sonare.masteringRepairDetectCrackle,
+    params: 'samples sampleRate ...options?',
+    values: { samples: CLICKY, sampleRate: ALT_SR, options: { threshold: 5 } },
+    invalid: { sampleRate: 0 },
+  },
+  {
+    name: 'masteringRepairDetectHum',
+    fn: sonare.masteringRepairDetectHum,
+    params: 'samples sampleRate ...options?',
+    values: {
+      samples: HUMMED,
+      sampleRate: ALT_SR,
+      options: { fundamentalHz: 60, searchRangeHz: 5 },
+    },
+    invalid: { sampleRate: 0 },
+  },
+  {
+    name: 'masteringRepairDetectNoiseFloor',
+    fn: sonare.masteringRepairDetectNoiseFloor,
+    params: 'samples sampleRate ...options?',
+    values: { samples: SIG, sampleRate: ALT_SR, options: { nFft: 512 } },
+    invalid: { sampleRate: 0 },
+  },
+  {
+    name: 'masteringRepairDetectReverb',
+    fn: sonare.masteringRepairDetectReverb,
+    params: 'samples sampleRate ...options?',
+    values: { samples: SIG, sampleRate: ALT_SR, options: { nFft: 512 } },
+    invalid: { sampleRate: 0 },
+  },
+  {
+    name: 'masteringRepairDetectTrimRange',
+    fn: sonare.masteringRepairDetectTrimRange,
+    params: 'samples sampleRate ...options?',
+    values: { samples: PADDED, sampleRate: ALT_SR, options: { thresholdDb: -20 } },
+    invalid: { sampleRate: 0 },
+  },
   {
     name: 'masteringRepairDeclick',
     fn: sonare.masteringRepairDeclick,
-    params: 'samples sampleRate? ...options?',
+    params: 'samples sampleRate ...options?',
     values: { samples: CLICKY, sampleRate: ALT_SR, options: { lpcOrder: 4, maxClickSamples: 1 } },
     invalid: { sampleRate: 0 },
     inert: { sampleRate: 'clicks are found and refilled in samples' },
@@ -1679,15 +1856,19 @@ const ROWS: Row[] = [
   {
     name: 'masteringRepairDeclip',
     fn: sonare.masteringRepairDeclip,
-    params: 'samples sampleRate? ...options?',
-    values: { samples: CLIPPED, sampleRate: ALT_SR, options: { clipThreshold: 0.1, lpcOrder: 8 } },
+    params: 'samples sampleRate ...options?',
+    values: {
+      samples: CLIPPED,
+      sampleRate: ALT_SR,
+      options: { clipThresholdDb: -20, lpcOrder: 8 },
+    },
     invalid: { sampleRate: 0 },
     inert: { sampleRate: 'clipped runs are found and refilled in samples' },
   },
   {
     name: 'masteringRepairDecrackle',
     fn: sonare.masteringRepairDecrackle,
-    params: 'samples sampleRate? ...options?',
+    params: 'samples sampleRate ...options?',
     values: { samples: CLICKY, sampleRate: ALT_SR, options: { threshold: 5 } },
     invalid: { sampleRate: 0 },
     inert: { sampleRate: 'crackle is found in samples' },
@@ -1695,14 +1876,14 @@ const ROWS: Row[] = [
   {
     name: 'masteringRepairDehum',
     fn: sonare.masteringRepairDehum,
-    params: 'samples sampleRate? ...options?',
+    params: 'samples sampleRate ...options?',
     values: { samples: HUMMED, sampleRate: ALT_SR, options: { fundamentalHz: 60, harmonics: 2 } },
     invalid: { sampleRate: 0 },
   },
   {
     name: 'masteringRepairDenoiseClassical',
     fn: sonare.masteringRepairDenoiseClassical,
-    params: 'samples sampleRate? ...options?',
+    params: 'samples sampleRate ...options?',
     values: { samples: SIG, sampleRate: ALT_SR, options: { reductionDb: 20, nFft: 512 } },
     invalid: { sampleRate: 0 },
     inert: { sampleRate: 'the STFT runs in bins and frames' },
@@ -1710,13 +1891,14 @@ const ROWS: Row[] = [
   {
     name: 'masteringRepairDereverbClassical',
     fn: sonare.masteringRepairDereverbClassical,
-    params: 'samples sampleRate? ...options?',
+    params: 'samples sampleRate ...options?',
     values: { samples: SIG, sampleRate: ALT_SR, options: { t60Sec: 1.2, nFft: 512 } },
     invalid: { sampleRate: 0 },
   },
   {
     name: 'masteringRepairDereverbConfigForRoom',
     fn: sonare.masteringRepairDereverbConfigForRoom,
+    requestOnly: true,
     params: 'estimate ...config?',
     values: {
       estimate: {
@@ -1736,7 +1918,7 @@ const ROWS: Row[] = [
   {
     name: 'masteringRepairTrimSilence',
     fn: sonare.masteringRepairTrimSilence,
-    params: 'samples sampleRate? ...options?',
+    params: 'samples sampleRate ...options?',
     values: { samples: SIG, sampleRate: ALT_SR, options: { paddingSamples: 300 } },
     invalid: { sampleRate: 0 },
     inert: { sampleRate: 'the threshold mode counts samples, not seconds' },
@@ -1745,7 +1927,7 @@ const ROWS: Row[] = [
   {
     name: 'meteringPeakDb',
     fn: sonare.meteringPeakDb,
-    params: 'samples sampleRate? ...options?',
+    params: 'samples sampleRate ...options?',
     values: { samples: SIG, sampleRate: ALT_SR, options: { validate: false } },
     invalid: { sampleRate: 0 },
     inert: { sampleRate: 'a sample peak reads no rate' },
@@ -1753,7 +1935,7 @@ const ROWS: Row[] = [
   {
     name: 'meteringRmsDb',
     fn: sonare.meteringRmsDb,
-    params: 'samples sampleRate? ...options?',
+    params: 'samples sampleRate ...options?',
     values: { samples: SIG, sampleRate: ALT_SR, options: { validate: false } },
     invalid: { sampleRate: 0 },
     inert: { sampleRate: 'a whole-buffer RMS reads no rate' },
@@ -1761,7 +1943,7 @@ const ROWS: Row[] = [
   {
     name: 'meteringCrestFactorDb',
     fn: sonare.meteringCrestFactorDb,
-    params: 'samples sampleRate? ...options?',
+    params: 'samples sampleRate ...options?',
     values: { samples: SIG, sampleRate: ALT_SR, options: { validate: false } },
     invalid: { sampleRate: 0 },
     inert: { sampleRate: 'a peak-to-RMS ratio reads no rate' },
@@ -1769,7 +1951,7 @@ const ROWS: Row[] = [
   {
     name: 'meteringDcOffset',
     fn: sonare.meteringDcOffset,
-    params: 'samples sampleRate? ...options?',
+    params: 'samples sampleRate ...options?',
     values: { samples: SIG, sampleRate: ALT_SR, options: { validate: false } },
     invalid: { sampleRate: 0 },
     inert: { sampleRate: 'a mean reads no rate' },
@@ -1777,7 +1959,7 @@ const ROWS: Row[] = [
   {
     name: 'meteringSilenceRatio',
     fn: sonare.meteringSilenceRatio,
-    params: 'samples sampleRate? thresholdDb? frameLength? hopLength? ...options?',
+    params: 'samples sampleRate thresholdDb? frameLength? hopLength? ...options?',
     values: {
       samples: SIG,
       sampleRate: ALT_SR,
@@ -1792,7 +1974,7 @@ const ROWS: Row[] = [
   {
     name: 'meteringTruePeakDb',
     fn: sonare.meteringTruePeakDb,
-    params: 'samples sampleRate? oversampleFactor? ...options?',
+    params: 'samples sampleRate oversampleFactor? ...options?',
     values: {
       samples: SIG,
       sampleRate: ALT_SR,
@@ -1805,7 +1987,7 @@ const ROWS: Row[] = [
   {
     name: 'meteringDetectClipping',
     fn: sonare.meteringDetectClipping,
-    params: 'samples sampleRate? ...options?',
+    params: 'samples sampleRate ...options?',
     values: { samples: SIG, sampleRate: ALT_SR, options: { threshold: 0.1, minRegionSamples: 2 } },
     invalid: { sampleRate: 0 },
     inert: { sampleRate: 'clipped regions are counted in samples' },
@@ -1813,14 +1995,14 @@ const ROWS: Row[] = [
   {
     name: 'meteringDynamicRange',
     fn: sonare.meteringDynamicRange,
-    params: 'samples sampleRate? ...options?',
+    params: 'samples sampleRate ...options?',
     values: { samples: SIG, sampleRate: ALT_SR, options: { windowSec: 0.1, hopSec: 0.05 } },
     invalid: { sampleRate: 0 },
   },
   {
     name: 'meteringStereoCorrelation',
     fn: sonare.meteringStereoCorrelation,
-    params: 'left right sampleRate? ...options?',
+    params: 'left right sampleRate ...options?',
     values: { left: SIG, right: SIG2, sampleRate: ALT_SR, options: { validate: false } },
     invalid: { sampleRate: 0 },
     inert: { sampleRate: 'a correlation reads no rate' },
@@ -1828,7 +2010,7 @@ const ROWS: Row[] = [
   {
     name: 'meteringStereoWidth',
     fn: sonare.meteringStereoWidth,
-    params: 'left right sampleRate? ...options?',
+    params: 'left right sampleRate ...options?',
     values: { left: SIG, right: SIG2, sampleRate: ALT_SR, options: { validate: false } },
     invalid: { sampleRate: 0 },
     inert: { sampleRate: 'a mid/side ratio reads no rate' },
@@ -1836,7 +2018,7 @@ const ROWS: Row[] = [
   {
     name: 'meteringVectorscope',
     fn: sonare.meteringVectorscope,
-    params: 'left right sampleRate? ...options?',
+    params: 'left right sampleRate ...options?',
     values: { left: SIG, right: SIG2, sampleRate: ALT_SR, options: { maxPoints: 64 } },
     invalid: { sampleRate: 0 },
     inert: { sampleRate: 'scope points are sample pairs' },
@@ -1844,7 +2026,7 @@ const ROWS: Row[] = [
   {
     name: 'meteringPhaseScope',
     fn: sonare.meteringPhaseScope,
-    params: 'left right sampleRate? ...options?',
+    params: 'left right sampleRate ...options?',
     values: { left: SIG, right: SIG2, sampleRate: ALT_SR, options: { maxPoints: 64 } },
     invalid: { sampleRate: 0 },
     inert: { sampleRate: 'scope points are sample pairs' },
@@ -1852,7 +2034,7 @@ const ROWS: Row[] = [
   {
     name: 'meteringSpectrum',
     fn: sonare.meteringSpectrum,
-    params: 'samples sampleRate? ...options?',
+    params: 'samples sampleRate ...options?',
     values: {
       samples: SIG,
       sampleRate: ALT_SR,
@@ -1863,7 +2045,7 @@ const ROWS: Row[] = [
   {
     name: 'meteringSpectrumFrame',
     fn: sonare.meteringSpectrumFrame,
-    params: 'samples sampleRate? frameOffset? ...options?',
+    params: 'samples sampleRate frameOffset? ...options?',
     values: { samples: SIG, sampleRate: ALT_SR, frameOffset: 4096, options: { nFft: 1024 } },
     invalid: { sampleRate: 0 },
   },
@@ -1885,7 +2067,7 @@ const ROWS: Row[] = [
   {
     name: 'mixStereo',
     fn: sonare.mixStereo,
-    params: 'leftChannels rightChannels sampleRate? ...options?',
+    params: 'leftChannels rightChannels sampleRate ...options?',
     values: {
       leftChannels: [SIG, SIG2],
       rightChannels: [SIG2, SIG],
@@ -1906,7 +2088,7 @@ const ROWS: Row[] = [
   {
     name: 'voiceChange',
     fn: sonare.voiceChange,
-    params: 'samples sampleRate? ...options?',
+    params: 'samples sampleRate ...options?',
     values: {
       samples: SIG,
       sampleRate: ALT_SR,
@@ -1917,13 +2099,9 @@ const ROWS: Row[] = [
   {
     name: 'voiceChangeRealtime',
     fn: sonare.voiceChangeRealtime,
-    params: 'samples sampleRate? preset? ...options?',
-    values: {
-      samples: STEREO,
-      sampleRate: ALT_SR,
-      preset: 'choir-harmony',
-      options: { channels: 2 },
-    },
+    requestOnly: true,
+    params: 'channels sampleRate config?',
+    values: { channels: [SIG, SIG2], sampleRate: ALT_SR, config: 'choirHarmony' },
     invalid: { sampleRate: 0 },
   },
 ];

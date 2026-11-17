@@ -43,7 +43,9 @@ import {
   detectKeyCandidates,
   detectOnsets,
   estimateMeter,
+  noteSegments,
   resample,
+  streamAnalyzerConfigDefault,
   transcribe,
 } from '../../dist/index.js';
 
@@ -661,5 +663,65 @@ describe('type surface', () => {
     type K = import('../../dist/index.js').SamplesRequest;
     expectTypeOf<[A, B, C, D, E, F, G, H, I, J, K]>().not.toBeNever();
     expect(true).toBe(true);
+  });
+});
+
+/** Clicks at 40 BPM (1.5 s apart) plus a faint 120 BPM pulse. */
+function slowPulse(): Float32Array {
+  const out = new Float32Array(sampleRate * 12);
+  for (let t = 0; t < 12; t += 1.5) {
+    const start = Math.round(t * sampleRate);
+    for (let i = 0; i < 300 && start + i < out.length; i++) {
+      out[start + i] = Math.exp(-i / 50) * Math.sin(i * 0.9);
+    }
+  }
+  return out;
+}
+
+describe('tempo range on detectBpm and detectBeats', () => {
+  const samples = slowPulse();
+
+  it('detectBpm honours bpmMin and bpmMax', () => {
+    const wide = detectBpm(samples, sampleRate, { bpmMin: 30, bpmMax: 300 });
+    const narrow = detectBpm(samples, sampleRate, { bpmMin: 60, bpmMax: 200 });
+    expect(narrow).toBeGreaterThanOrEqual(60);
+    expect(narrow).toBeLessThanOrEqual(200);
+    expect(wide).not.toBe(narrow);
+  });
+
+  it('detectBpm defaults to 60-200 BPM', () => {
+    expect(detectBpm(samples, sampleRate)).toBe(
+      detectBpm(samples, sampleRate, { bpmMin: 60, bpmMax: 200 }),
+    );
+  });
+
+  it('detectBeats honours bpmMin and bpmMax and defaults to 60-200', () => {
+    expect(detectBeats(samples, sampleRate)).toEqual(
+      detectBeats({ samples, sampleRate, bpmMin: 60, bpmMax: 200 }),
+    );
+  });
+
+  it('refuses an inverted range with a coded error', () => {
+    expect(() => detectBpm({ samples, sampleRate, bpmMin: 200, bpmMax: 60 })).toThrow();
+  });
+});
+
+describe('noteSegments voicedFlags', () => {
+  it('takes voicedFlags in place of voicedProb', () => {
+    const f0Hz = Float32Array.from({ length: 50 }, () => 440);
+    const voicedFlags = Uint8Array.from({ length: 50 }, () => 1);
+    const frameRate = 100;
+    const result = noteSegments({ f0Hz, frameRate, voicedFlags });
+    expect(result.length).toBeGreaterThan(0);
+    expect(() =>
+      noteSegments({ f0Hz, frameRate, voicedFlags, voicedProb: new Float32Array(50) }),
+    ).toThrow(RangeError);
+  });
+});
+
+describe('streamAnalyzerConfigDefault', () => {
+  it('is exported on Node as in C', () => {
+    expect(typeof streamAnalyzerConfigDefault).toBe('function');
+    expect(streamAnalyzerConfigDefault().sampleRate).toBeGreaterThan(0);
   });
 });

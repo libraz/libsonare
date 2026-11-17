@@ -36,44 +36,44 @@ describe('masteringRepairDehumStereo', () => {
     const { left, right } = fixedFixture();
     const result = masteringRepairDehumStereo({ left, right, sampleRate: SR });
 
-    expect(result.left).toHaveLength(left.length);
-    expect(result.right).toHaveLength(right.length);
-    expect(result.left.every(Number.isFinite)).toBe(true);
-    expect(result.right.every(Number.isFinite)).toBe(true);
+    expect(result.channels[0]).toHaveLength(left.length);
+    expect(result.channels[1]).toHaveLength(right.length);
+    expect(result.channels[0].every(Number.isFinite)).toBe(true);
+    expect(result.channels[1].every(Number.isFinite)).toBe(true);
 
     // The default search window [48, 52] Hz has 50.0 exactly on its grid, so
     // the search locks onto the actual hum frequency exactly, not merely
     // near it.
-    expect(result.leftReport.detected.fundamentalHz).toBe(50);
-    expect(result.rightReport.detected.fundamentalHz).toBe(50);
+    expect(result.reports[0].detected.fundamentalHz).toBe(50);
+    expect(result.reports[1].detected.fundamentalHz).toBe(50);
 
     // Only the fundamental clears the harmonic-detection margin; the higher
     // k*f0 slots (100, 150, ... Hz) carry nothing but numerical floor.
-    expect(result.leftReport.detected.harmonics).toBe(1);
-    expect(result.rightReport.detected.harmonics).toBe(1);
+    expect(result.reports[0].detected.harmonics).toBe(1);
+    expect(result.reports[1].detected.harmonics).toBe(1);
 
     // Fixed mode always applies the configured frequency verbatim, and never
     // tracks, so drift is the measurement of "none", not an unset field.
-    expect(result.leftReport.appliedFundamentalHz).toBe(50);
-    expect(result.rightReport.appliedFundamentalHz).toBe(50);
-    expect(result.leftReport.fundamentalDriftHz).toBe(0);
-    expect(result.rightReport.fundamentalDriftHz).toBe(0);
+    expect(result.reports[0].appliedFundamentalHz).toBe(50);
+    expect(result.reports[1].appliedFundamentalHz).toBe(50);
+    expect(result.reports[0].fundamentalDriftHz).toBe(0);
+    expect(result.reports[1].fundamentalDriftHz).toBe(0);
 
     // Default harmonics = 4, all of them under Nyquist.
-    expect(result.leftReport.notchedHarmonics).toBe(4);
-    expect(result.rightReport.notchedHarmonics).toBe(4);
+    expect(result.reports[0].notchedHarmonics).toBe(4);
+    expect(result.reports[1].notchedHarmonics).toBe(4);
 
     // Every one of the 16 measured slots is reported, and the fundamental
     // reads far above an unexcited harmonic slot.
-    expect(result.leftReport.detected.harmonicDbfs).toHaveLength(16);
-    expect(result.rightReport.detected.harmonicDbfs).toHaveLength(16);
-    expect(result.leftReport.detected.harmonicDbfs[0]).toBeGreaterThan(
-      result.leftReport.detected.harmonicDbfs[5],
+    expect(result.reports[0].detected.harmonicDbfs).toHaveLength(16);
+    expect(result.reports[1].detected.harmonicDbfs).toHaveLength(16);
+    expect(result.reports[0].detected.harmonicDbfs[0]).toBeGreaterThan(
+      result.reports[0].detected.harmonicDbfs[5],
     );
 
     // The two channels' own content tones (1000 Hz / 1500 Hz) sit well past
     // the notch cascade, so they survive and keep the outputs distinguishable.
-    expect(Array.from(result.left)).not.toEqual(Array.from(result.right));
+    expect(Array.from(result.channels[0])).not.toEqual(Array.from(result.channels[1]));
   });
 
   it('is bit-identical to two independent mono calls when adaptive is off', () => {
@@ -86,8 +86,8 @@ describe('masteringRepairDehumStereo', () => {
     const monoLeft = masteringRepairDehum(left, SR);
     const monoRight = masteringRepairDehum(right, SR);
 
-    expect(Array.from(stereo.left)).toEqual(Array.from(monoLeft));
-    expect(Array.from(stereo.right)).toEqual(Array.from(monoRight));
+    expect(Array.from(stereo.channels[0])).toEqual(Array.from(monoLeft));
+    expect(Array.from(stereo.channels[1])).toEqual(Array.from(monoRight));
   });
 
   it('shares the tracked fundamental across channels when adaptive, while detection stays per-channel', () => {
@@ -112,30 +112,28 @@ describe('masteringRepairDehumStereo', () => {
       harmonics: 1,
     });
 
-    expect(result.left).toHaveLength(left.length);
-    expect(result.right).toHaveLength(right.length);
-    expect(result.left.every(Number.isFinite)).toBe(true);
-    expect(result.right.every(Number.isFinite)).toBe(true);
+    expect(result.channels[0]).toHaveLength(left.length);
+    expect(result.channels[1]).toHaveLength(right.length);
+    expect(result.channels[0].every(Number.isFinite)).toBe(true);
+    expect(result.channels[1].every(Number.isFinite)).toBe(true);
 
     // Detection is per-channel and asymmetric: left's own hum sits near
     // 50 Hz, right's near 80 Hz. This is the non-vacuity guard for the
     // assertion below -- without it, two searches that happened to converge
     // to the same value would pass the equality check for the wrong reason.
     expect(
-      Math.abs(
-        result.leftReport.detected.fundamentalHz - result.rightReport.detected.fundamentalHz,
-      ),
+      Math.abs(result.reports[0].detected.fundamentalHz - result.reports[1].detected.fundamentalHz),
     ).toBeGreaterThan(10);
 
     // Applied frequency and drift are shared by construction: one tracker
     // run over the channel mean, copied to both reports.
-    expect(result.leftReport.appliedFundamentalHz).toBe(result.rightReport.appliedFundamentalHz);
-    expect(result.leftReport.fundamentalDriftHz).toBe(result.rightReport.fundamentalDriftHz);
-    expect(result.leftReport.fundamentalDriftHz).toBeGreaterThan(0);
+    expect(result.reports[0].appliedFundamentalHz).toBe(result.reports[1].appliedFundamentalHz);
+    expect(result.reports[0].fundamentalDriftHz).toBe(result.reports[1].fundamentalDriftHz);
+    expect(result.reports[0].fundamentalDriftHz).toBeGreaterThan(0);
 
     // The content tones (2500 Hz / 3500 Hz) are far outside the tracked
     // notch, so they survive and keep the two channels distinguishable.
-    expect(Array.from(result.left)).not.toEqual(Array.from(result.right));
+    expect(Array.from(result.channels[0])).not.toEqual(Array.from(result.channels[1]));
   });
 
   it('refuses bad arguments with a catchable error', () => {

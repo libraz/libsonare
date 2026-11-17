@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { mixStereo, resample, voiceChange, voiceChangeRealtime } from '../src/index.js';
+import { mixStereo, resample, voiceChange } from '../src/index.js';
 
 const sampleRate = 48000;
 const samples = new Float32Array(2048);
@@ -33,16 +33,6 @@ describe('mixer and voice request objects', () => {
     const positional = voiceChange(samples, sampleRate, absolute);
     expect(voiceChange({ samples, sampleRate, ...absolute })).toEqual(positional);
     expect(positional).not.toEqual(voiceChange(samples, sampleRate, options));
-  });
-
-  it('keeps realtime voice-change request and positional forms equivalent', () => {
-    // Two channels, not the default one, so a dropped field cannot pass.
-    const options = { channels: 2 as const };
-    const positional = voiceChangeRealtime(samples, sampleRate, 'neutral-monitor', options);
-    expect(
-      voiceChangeRealtime({ samples, sampleRate, preset: 'neutral-monitor', ...options }),
-    ).toEqual(positional);
-    expect(voiceChangeRealtime(samples, sampleRate, 'neutral-monitor')).not.toEqual(positional);
   });
 
   // Both call shapes funnel through one private normalizer, so an invalid input

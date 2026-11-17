@@ -257,7 +257,7 @@ describe('transcribe', () => {
         f0MinHz: 1800,
         tempoBpm: 120,
       }),
-    ).toThrow(/^fmax must be above fmin$/);
+    ).toThrow(/^f0_max_hz \(1760 Hz\) must be above f0_min_hz \(1800 Hz\)$/);
   });
 
   it('refuses a zero the C ABI would have read as its default', () => {

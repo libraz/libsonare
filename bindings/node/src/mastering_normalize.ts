@@ -1,11 +1,14 @@
 import { addon } from './native.js';
-import { assertAudioInput, requestObject } from './validation.js';
+import type { OptionsOf, ValidateOptions } from './validation.js';
+import { assertAudioInput, requestObject, sampleOneShot } from './validation.js';
 
 export type NormalizeMode = 'peak' | 'rms';
 
-export interface NormalizeRequest {
+/** Request for {@link normalize}. `validate: false` skips the NaN/Inf pre-scan. */
+export interface NormalizeRequest extends ValidateOptions {
   samples: Float32Array;
-  sampleRate?: number;
+  /** Sample rate in Hz, an integer in `[8000, 384000]`; there is no default. */
+  sampleRate: number;
   /**
    * Finite target level at or below 0 dBFS. Defaults to 0 for `mode: 'peak'` and
    * -20 for `mode: 'rms'`.
@@ -15,29 +18,26 @@ export interface NormalizeRequest {
   mode?: NormalizeMode;
 }
 
+/**
+ * Normalize audio to a target peak or RMS level.
+ *
+ * @throws {TypeError} when `sampleRate` is missing or `mode` is not a string
+ * @throws {RangeError} on audio out of domain, an out-of-range `sampleRate`, an unknown `mode`
+ *   or a `targetDb` that is not finite or sits above 0 dBFS
+ */
 export function normalize(request: NormalizeRequest): Float32Array;
 export function normalize(
   samples: Float32Array,
-  sampleRate?: number,
-  targetDb?: number,
-  mode?: NormalizeMode,
+  sampleRate: number,
+  options?: OptionsOf<NormalizeRequest>,
 ): Float32Array;
-export function normalize(
-  samples: Float32Array | NormalizeRequest,
-  sampleRate = 22050,
-  targetDb?: number,
-  mode?: NormalizeMode,
-): Float32Array {
-  const request =
-    samples instanceof Float32Array
-      ? { samples, sampleRate, targetDb, mode }
-      : requestObject('normalize', samples);
+export function normalize(...args: unknown[]): Float32Array {
+  const request = sampleOneShot<NormalizeRequest>('normalize', args);
   const resolvedMode = resolveNormalizeMode('normalize', request.mode);
-  const resolvedSampleRate = request.sampleRate ?? 22050;
-  assertAudioInput('normalize', request.samples, resolvedSampleRate, request);
+  assertAudioInput('normalize', request.samples, request.sampleRate, request);
   return addon.normalize(
     request.samples,
-    resolvedSampleRate,
+    request.sampleRate,
     request.targetDb ?? (resolvedMode === 'rms' ? -20.0 : 0.0),
     resolvedMode,
   );
@@ -57,10 +57,11 @@ function resolveNormalizeMode(fnName: string, value: unknown): NormalizeMode {
 }
 
 /** Canonical request form for {@link normalizeStereo}. */
-export interface NormalizeStereoRequest {
+export interface NormalizeStereoRequest extends ValidateOptions {
   left: Float32Array;
   right: Float32Array;
-  sampleRate?: number;
+  /** Sample rate in Hz, an integer in `[8000, 384000]`; there is no default. */
+  sampleRate: number;
   /**
    * Finite target level at or below 0 dBFS. Defaults to 0 for `mode: 'peak'`
    * and -20 for `mode: 'rms'`, matching the library and the other surfaces.
@@ -100,11 +101,12 @@ export interface NormalizeStereoResult {
  *
  * @param request.left Left channel.
  * @param request.right Right channel.
- * @param request.sampleRate Sample rate shared by both channels. Default 22050.
+ * @param request.sampleRate Sample rate shared by both channels, required.
  * @param request.targetDb Finite target level at or below 0 dBFS. Defaults to 0
  *   for `mode: 'peak'` and -20 for `mode: 'rms'`.
  * @param request.mode `'peak'` (default) or `'rms'`.
  * @returns The normalized pair and the gain that was applied.
+ * @throws `TypeError` when `sampleRate` is missing.
  * @throws `RangeError` for a pair that
  *   cannot be processed together — either channel empty, or the two channels of
  *   unequal length — and for a `targetDb` that is not finite or sits above
@@ -123,16 +125,15 @@ export interface NormalizeStereoResult {
 export function normalizeStereo(request: NormalizeStereoRequest): NormalizeStereoResult {
   requestObject('normalizeStereo', request, 'request', true);
   const resolvedMode = resolveNormalizeMode('normalizeStereo', request.mode);
-  const resolvedSampleRate = request.sampleRate ?? 22050;
-  assertAudioInput('normalizeStereo', request.left, resolvedSampleRate, request, 'left');
-  assertAudioInput('normalizeStereo', request.right, resolvedSampleRate, request, 'right');
+  assertAudioInput('normalizeStereo', request.left, request.sampleRate, request, 'left');
+  assertAudioInput('normalizeStereo', request.right, request.sampleRate, request, 'right');
   // Mode-dependent, as in the mono `normalize`: 0 dBFS RMS is not a usable
   // default -- the peaks sit well above the RMS, so effectively all of them clip.
   const resolvedTargetDb = request.targetDb ?? (resolvedMode === 'rms' ? -20.0 : 0.0);
   return addon.normalizeStereo(
     request.left,
     request.right,
-    resolvedSampleRate,
+    request.sampleRate,
     resolvedTargetDb,
     resolvedMode,
   );

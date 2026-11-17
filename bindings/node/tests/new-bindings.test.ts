@@ -115,7 +115,12 @@ describe('newly exposed Node functions', () => {
     for (let i = 0; i < s.length; i++) {
       s[i] = Math.abs(Math.sin(i));
     }
-    const r = decompose(s, nF, nT, nC, 20, 2.0);
+    const r = decompose({
+      s: { data: s, rows: nF, cols: nT },
+      nComponents: nC,
+      nIter: 20,
+      beta: 2.0,
+    });
     expect(r.w.data.length).toBe(nF * nC);
     expect(r.h.data.length).toBe(nC * nT);
     expect(allFinite(r.w.data) && allFinite(r.h.data)).toBe(true);
@@ -129,7 +134,13 @@ describe('newly exposed Node functions', () => {
     for (let i = 0; i < s.length; i++) {
       s[i] = Math.abs(Math.sin(i));
     }
-    const r = decompose(s, nF, nT, nC, 20, 2.0, 'nndsvd');
+    const r = decompose({
+      s: { data: s, rows: nF, cols: nT },
+      nComponents: nC,
+      nIter: 20,
+      beta: 2.0,
+      init: 'nndsvd',
+    });
     expect(r.w.data.length).toBe(nF * nC);
     expect(r.h.data.length).toBe(nC * nT);
     expect(allFinite(r.w.data) && allFinite(r.h.data)).toBe(true);
@@ -142,7 +153,7 @@ describe('newly exposed Node functions', () => {
     for (let i = 0; i < s.length; i++) {
       s[i] = Math.abs(Math.cos(i));
     }
-    const r = nnFilter(s, nF, nT);
+    const r = nnFilter({ s: { data: s, rows: nF, cols: nT } });
     expect(r.rows).toBe(nF);
     expect(r.cols).toBe(nT);
     expect(allFinite(r.data)).toBe(true);
@@ -150,8 +161,15 @@ describe('newly exposed Node functions', () => {
 
   it('decompose/nnFilter reject dims that exceed the input length (no OOB read)', () => {
     const small = new Float32Array(10);
-    expect(() => decompose(small, 1000, 1000, 3, 20, 2.0)).toThrow();
-    expect(() => nnFilter(small, 1000, 1000)).toThrow();
+    expect(() =>
+      decompose({
+        s: { data: small, rows: 1000, cols: 1000 },
+        nComponents: 3,
+        nIter: 20,
+        beta: 2.0,
+      }),
+    ).toThrow();
+    expect(() => nnFilter({ s: { data: small, rows: 1000, cols: 1000 } })).toThrow();
   });
 
   it('timeStretch/pitchShift reject a missing required argument instead of producing NaN', () => {
@@ -160,20 +178,20 @@ describe('newly exposed Node functions', () => {
     expect(() => (timeStretch as unknown as (s: Float32Array) => Float32Array)(x)).toThrow();
     expect(() => (pitchShift as unknown as (s: Float32Array) => Float32Array)(x)).toThrow();
     // Valid calls still work.
-    expect(allFinite(timeStretch(x, SR, 1.25))).toBe(true);
-    expect(allFinite(pitchShift(x, SR, 2))).toBe(true);
+    expect(allFinite(timeStretch(x, SR, { speedRatio: 1.25 }))).toBe(true);
+    expect(allFinite(pitchShift(x, SR, { pitchSemitones: 2 }))).toBe(true);
   });
 
   it('timeStretch rejects non-finite and oversized projected rates, then recovers', () => {
     const x = sine(0.1, 220);
-    expect(() => timeStretch(x, SR, Number.NaN)).toThrow();
-    expect(() => timeStretch(x, SR, Number.POSITIVE_INFINITY)).toThrow();
-    expect(() => timeStretch(x, SR, 1.1754943508222875e-38)).toThrow();
-    expect(allFinite(timeStretch(x, SR, 1))).toBe(true);
+    expect(() => timeStretch(x, SR, { speedRatio: Number.NaN })).toThrow();
+    expect(() => timeStretch(x, SR, { speedRatio: Number.POSITIVE_INFINITY })).toThrow();
+    expect(() => timeStretch(x, SR, { speedRatio: 1.1754943508222875e-38 })).toThrow();
+    expect(allFinite(timeStretch(x, SR, { speedRatio: 1 }))).toBe(true);
   });
 
   it('realtimeVoiceChangerPresetConfig exposes the ISP true-peak limiter fields', () => {
-    const cfg = realtimeVoiceChangerPresetConfig('neutral-monitor') as unknown as Record<
+    const cfg = realtimeVoiceChangerPresetConfig('neutralMonitor') as unknown as Record<
       string,
       unknown
     >;
@@ -185,7 +203,7 @@ describe('newly exposed Node functions', () => {
   it('remix concatenates interval slices', () => {
     const x = sine(0.5, 440);
     const half = Math.floor(x.length / 2);
-    const out = remix(x, new Int32Array([half, x.length, 0, half]));
+    const out = remix(x, SR, { intervals: new Int32Array([half, x.length, 0, half]) });
     expect(out.length).toBe(x.length);
     expect(allFinite(out)).toBe(true);
   });
@@ -194,14 +212,17 @@ describe('newly exposed Node functions', () => {
     const x = sine(0.5, 440);
     // The control: a whole-number interval end is load-bearing for the output
     // length, so a silent fold onto the same length would hide behind it.
-    expect(remix(x, [0, 1000], SR).length).not.toBe(remix(x, [0, 2000], SR).length);
-    expect(() => remix(x, [0, 1000.7], SR)).toThrow(/intervals\[1\]/);
+    expect(remix(x, SR, { intervals: [0, 1000] }).length).not.toBe(
+      remix(x, SR, { intervals: [0, 2000] }).length,
+    );
+    expect(() => remix(x, SR, { intervals: [0, 1000.7] })).toThrow(/intervals\[1\]/);
   });
 
   it('remixAlignedIntervals resolves one clamped pair per interval', () => {
     const x = sine(0.5, 440);
     const pairs = remixAlignedIntervals({
       samples: x,
+      sampleRate: SR,
       intervals: new Int32Array([0, 1000, 5000, 5500]),
     });
     expect(pairs.length).toBe(4);
@@ -213,7 +234,11 @@ describe('newly exposed Node functions', () => {
 
   it('remixAlignedIntervals leaves a signal with no sign change unsnapped', () => {
     const flat = new Float32Array(4096).fill(0.25);
-    const pairs = remixAlignedIntervals({ samples: flat, intervals: new Int32Array([100, 200]) });
+    const pairs = remixAlignedIntervals({
+      samples: flat,
+      sampleRate: SR,
+      intervals: new Int32Array([100, 200]),
+    });
     expect(Array.from(pairs)).toEqual([100, 200]);
   });
 
@@ -298,14 +323,14 @@ describe('newly exposed Node functions', () => {
 
   it('phaseVocoder time-scales the signal', () => {
     const x = sine(0.5, 440);
-    const out = phaseVocoder(x, SR, 2.0);
+    const out = phaseVocoder(x, SR, { speedRatio: 2.0 });
     expect(out.length).toBeGreaterThan(0);
     expect(out.length).toBeLessThan(x.length);
     expect(allFinite(out)).toBe(true);
   });
 
   it('hpssWithResidual splits into three signals', () => {
-    const r = hpssWithResidual(sine(1, 440));
+    const r = hpssWithResidual(sine(1, 440), SR);
     expect(r.harmonic.length).toBe(r.percussive.length);
     expect(r.percussive.length).toBe(r.residual.length);
     expect(allFinite(r.harmonic)).toBe(true);
@@ -422,23 +447,20 @@ describe('newly exposed Node functions', () => {
   });
 
   it('voiceCharacterPresetId maps a known ordinal to its id', () => {
-    expect(voiceCharacterPresetId(1)).toBe('bright-idol');
-    expect(voiceCharacterPresetId('neutral-monitor')).toBe('neutral-monitor');
-    // Out-of-range ordinal returns null.
-    expect(voiceCharacterPresetId(99)).toBeNull();
+    expect(voiceCharacterPresetId(1)).toBe('brightIdol');
+    // A preset id is not an ordinal, and an out-of-range ordinal is refused.
+    expect(() => voiceCharacterPresetId('neutralMonitor' as never)).toThrow(TypeError);
+    expect(() => voiceCharacterPresetId(99)).toThrow(RangeError);
   });
 
   it('realtimeVoiceChangerPresetConfig returns a config object with expected fields', () => {
-    const cfg = realtimeVoiceChangerPresetConfig('bright-idol') as unknown as Record<
-      string,
-      number
-    >;
+    const cfg = realtimeVoiceChangerPresetConfig('brightIdol') as unknown as Record<string, number>;
     for (const key of [
       'inputGainDb',
       'outputGainDb',
       'wetMix',
-      'retuneSemitones',
-      'retuneGrainSize',
+      'retunePitchSemitones',
+      'retuneGrainSizeSamples',
       'formantFactor',
       'compressorThresholdDb',
       'reverbSeed',
@@ -457,7 +479,7 @@ describe('newly exposed Node functions', () => {
 
   it('phaseVocoder rejects a non-number sampleRate', () => {
     const x = sine(0.1, 440);
-    expect(() => phaseVocoder(x, 'bad' as unknown as number, 2.0)).toThrow();
+    expect(() => phaseVocoder(x, 'bad' as unknown as number, { speedRatio: 2.0 })).toThrow();
   });
 
   it('analyzeTimbre exposes timbreOverTime', () => {

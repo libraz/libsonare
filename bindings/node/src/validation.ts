@@ -15,6 +15,9 @@ export interface ValidateOptions {
   validate?: boolean;
 }
 
+/** The options of request `R` in the positional form `(samples, sampleRate, options)`. */
+export type OptionsOf<R> = Omit<R, 'samples' | 'sampleRate'>;
+
 export function assertNonEmptySamples(
   fnName: string,
   samples: ArrayLike<number>,

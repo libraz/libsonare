@@ -46,30 +46,30 @@ describe('masteringRepairDecrackleStereo', () => {
     const { left, right } = fixture();
     const result = masteringRepairDecrackleStereo({ left, right, sampleRate: SR });
 
-    expect(result.left).toHaveLength(left.length);
-    expect(result.right).toHaveLength(right.length);
-    expect(result.left.every(Number.isFinite)).toBe(true);
-    expect(result.right.every(Number.isFinite)).toBe(true);
+    expect(result.channels[0]).toHaveLength(left.length);
+    expect(result.channels[1]).toHaveLength(right.length);
+    expect(result.channels[0].every(Number.isFinite)).toBe(true);
+    expect(result.channels[1].every(Number.isFinite)).toBe(true);
 
     // Exact counts: a fixture that stops witnessing its spikes must go red,
     // not merely satisfy a loose ">0".
-    expect(result.leftReport.detected.sampleCount).toBe(LEFT_SPIKE_POSITIONS.length);
-    expect(result.rightReport.detected.sampleCount).toBe(RIGHT_SPIKE_POSITIONS.length);
+    expect(result.reports[0].detected.sampleCount).toBe(LEFT_SPIKE_POSITIONS.length);
+    expect(result.reports[1].detected.sampleCount).toBe(RIGHT_SPIKE_POSITIONS.length);
 
     // Median mode: the filter overwrote exactly the samples it detected.
-    expect(result.leftReport.replacedSamples).toBe(result.leftReport.detected.sampleCount);
-    expect(result.rightReport.replacedSamples).toBe(result.rightReport.detected.sampleCount);
+    expect(result.reports[0].replacedSamples).toBe(result.reports[0].detected.sampleCount);
+    expect(result.reports[1].replacedSamples).toBe(result.reports[1].detected.sampleCount);
 
     // Wavelet-only fields stay unfilled in median mode.
-    expect(result.leftReport.detailCoefficients).toBe(0);
-    expect(result.leftReport.shrunkCoefficients).toBe(0);
-    expect(result.leftReport.noiseSigma).toBe(0);
+    expect(result.reports[0].detailCoefficients).toBe(0);
+    expect(result.reports[0].shrunkCoefficients).toBe(0);
+    expect(result.reports[0].noiseSigma).toBe(0);
 
     // Not one channel restated: no run is ever widened to match the other
     // side, so there is no linking to witness here, only independent content.
-    expect(Array.from(result.left)).not.toEqual(Array.from(result.right));
+    expect(Array.from(result.channels[0])).not.toEqual(Array.from(result.channels[1]));
     for (const i of LEFT_SPIKE_POSITIONS) {
-      expect(result.left[i]).not.toBe(0.95);
+      expect(result.channels[0][i]).not.toBe(0.95);
     }
   });
 
@@ -82,25 +82,25 @@ describe('masteringRepairDecrackleStereo', () => {
       mode: 'waveletShrinkage',
     });
 
-    expect(result.left).toHaveLength(left.length);
-    expect(result.right).toHaveLength(right.length);
+    expect(result.channels[0]).toHaveLength(left.length);
+    expect(result.channels[1]).toHaveLength(right.length);
 
     // `detected` is always the median criterion, whatever mode ran: still
     // exact, and nonzero even though the median filter itself never runs.
-    expect(result.leftReport.detected.sampleCount).toBe(LEFT_SPIKE_POSITIONS.length);
-    expect(result.rightReport.detected.sampleCount).toBe(RIGHT_SPIKE_POSITIONS.length);
+    expect(result.reports[0].detected.sampleCount).toBe(LEFT_SPIKE_POSITIONS.length);
+    expect(result.reports[1].detected.sampleCount).toBe(RIGHT_SPIKE_POSITIONS.length);
 
     // Median-only field stays unfilled in wavelet mode.
-    expect(result.leftReport.replacedSamples).toBe(0);
-    expect(result.rightReport.replacedSamples).toBe(0);
+    expect(result.reports[0].replacedSamples).toBe(0);
+    expect(result.reports[1].replacedSamples).toBe(0);
 
     // Wavelet-only fields are the ones actually witnessed by this mode.
-    expect(result.leftReport.detailCoefficients).toBeGreaterThan(0);
-    expect(result.leftReport.shrunkCoefficients).toBeGreaterThan(0);
-    expect(result.leftReport.noiseSigma).toBeGreaterThan(0);
-    expect(result.rightReport.detailCoefficients).toBeGreaterThan(0);
-    expect(result.rightReport.shrunkCoefficients).toBeGreaterThan(0);
-    expect(result.rightReport.noiseSigma).toBeGreaterThan(0);
+    expect(result.reports[0].detailCoefficients).toBeGreaterThan(0);
+    expect(result.reports[0].shrunkCoefficients).toBeGreaterThan(0);
+    expect(result.reports[0].noiseSigma).toBeGreaterThan(0);
+    expect(result.reports[1].detailCoefficients).toBeGreaterThan(0);
+    expect(result.reports[1].shrunkCoefficients).toBeGreaterThan(0);
+    expect(result.reports[1].noiseSigma).toBeGreaterThan(0);
   });
 
   it('carries threshold through to the median detector', () => {
@@ -131,12 +131,12 @@ describe('masteringRepairDecrackleStereo', () => {
       sampleRate: SR,
       threshold: LOOSE_THRESHOLD,
     });
-    expect(strict.leftReport.detected.sampleCount).toBe(LEFT_SPIKE_POSITIONS.length);
-    expect(strict.rightReport.detected.sampleCount).toBe(RIGHT_SPIKE_POSITIONS.length);
-    expect(loose.leftReport.detected.sampleCount).toBe(
+    expect(strict.reports[0].detected.sampleCount).toBe(LEFT_SPIKE_POSITIONS.length);
+    expect(strict.reports[1].detected.sampleCount).toBe(RIGHT_SPIKE_POSITIONS.length);
+    expect(loose.reports[0].detected.sampleCount).toBe(
       LEFT_SPIKE_POSITIONS.length + LEFT_SHORT_SPIKE_POSITIONS.length,
     );
-    expect(loose.rightReport.detected.sampleCount).toBe(
+    expect(loose.reports[1].detected.sampleCount).toBe(
       RIGHT_SPIKE_POSITIONS.length + RIGHT_SHORT_SPIKE_POSITIONS.length,
     );
   });
@@ -163,10 +163,8 @@ describe('masteringRepairDecrackleStereo', () => {
       mode: 'waveletShrinkage',
       threshold: 0.001,
     });
-    expect(bound.leftReport.shrunkCoefficients).toBeLessThan(unbound.leftReport.shrunkCoefficients);
-    expect(bound.rightReport.shrunkCoefficients).toBeLessThan(
-      unbound.rightReport.shrunkCoefficients,
-    );
+    expect(bound.reports[0].shrunkCoefficients).toBeLessThan(unbound.reports[0].shrunkCoefficients);
+    expect(bound.reports[1].shrunkCoefficients).toBeLessThan(unbound.reports[1].shrunkCoefficients);
   });
 
   it('refuses bad arguments with a catchable error', () => {

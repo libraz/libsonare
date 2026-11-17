@@ -6,6 +6,8 @@ import type {
   AnalyzeRhythmRequest,
   AnalyzeTimbreRequest,
   ChordFunctionalAnalysisRequest,
+  DetectBeatsRequest,
+  DetectBpmRequest,
   DetectKeyCandidatesRequest,
   DetectKeyRequest,
   DetectOnsetsRequest,
@@ -41,7 +43,14 @@ import {
   timeStretch as timeStretchFn,
   voiceChange as voiceChangeFn,
 } from './effects_mastering.js';
+import type { HarmonicRequest, HpssRequest, PercussiveRequest } from './effects_separation.js';
+import type {
+  PitchCorrectToMidiRequest,
+  PitchShiftRequest,
+  TimeStretchRequest,
+} from './effects_timepitch.js';
 import { ErrorCode, SonareError } from './errors.js';
+import type { TrimRequest } from './feature_framing.js';
 import type {
   ChromaRequest,
   NnlsChromaRequest,
@@ -82,6 +91,8 @@ import {
   trim as trimFn,
   zeroCrossingRate as zeroCrossingRateFn,
 } from './features.js';
+import { tempoRange } from './internal/tempo_range.js';
+import type { NormalizeRequest } from './mastering_normalize.js';
 import type {
   ClippingReport,
   DynamicRangeReport,
@@ -114,6 +125,7 @@ import type {
   Matrix2D,
   MelSpectrogramResult,
   MfccResult,
+  NoteMoveOptions,
   NoteStretchOptions,
   PitchResult,
   ProgressCallback,
@@ -122,7 +134,7 @@ import type {
   StftResult,
   TimbreResult,
 } from './types.js';
-import type { ValidateOptions } from './validation.js';
+import type { OptionsOf, ValidateOptions } from './validation.js';
 import { assertPositiveInteger } from './validation.js';
 
 /**
@@ -146,8 +158,6 @@ function audioRequest<R>(
   }
   return { ...bag, samples, sampleRate } as R;
 }
-
-type AudioOptions<R> = Omit<R, 'samples' | 'sampleRate'>;
 
 export class Audio {
   private native: InstanceType<typeof addon.Audio>;
@@ -288,24 +298,26 @@ export class Audio {
   // per-call finiteness scan and defensive copy the standalone metering
   // facades pay, because audio_ passed both once at construction.
 
-  detectBpm(): number {
+  detectBpm(options?: OptionsOf<DetectBpmRequest>): number {
     this.requireAlive();
-    return this.native.detectBpm();
+    const [bpmMin, bpmMax] = tempoRange('detectBpm', options ?? {});
+    return this.native.detectBpm(bpmMin, bpmMax);
   }
 
-  detectKey(options?: AudioOptions<DetectKeyRequest>): KeyDetection {
+  detectKey(options?: OptionsOf<DetectKeyRequest>): KeyDetection {
     return detectKeyFn(audioRequest('detectKey', this.data, this.sampleRate, options));
   }
 
-  detectKeyCandidates(options?: AudioOptions<DetectKeyCandidatesRequest>): KeyCandidate[] {
+  detectKeyCandidates(options?: OptionsOf<DetectKeyCandidatesRequest>): KeyCandidate[] {
     return detectKeyCandidatesFn(
       audioRequest('detectKeyCandidates', this.data, this.sampleRate, options),
     );
   }
 
-  detectBeats(): Float32Array {
+  detectBeats(options?: OptionsOf<DetectBeatsRequest>): Float32Array {
     this.requireAlive();
-    return this.native.detectBeats();
+    const [bpmMin, bpmMax] = tempoRange('detectBeats', options ?? {});
+    return this.native.detectBeats(bpmMin, bpmMax);
   }
 
   detectDownbeats(): Float32Array {
@@ -313,7 +325,7 @@ export class Audio {
     return this.native.detectDownbeats();
   }
 
-  detectOnsets(options?: AudioOptions<DetectOnsetsRequest>): Float32Array {
+  detectOnsets(options?: OptionsOf<DetectOnsetsRequest>): Float32Array {
     return detectOnsetsFn(audioRequest('detectOnsets', this.data, this.sampleRate, options));
   }
 
@@ -321,7 +333,7 @@ export class Audio {
    * Full music analysis of the held buffer. Takes the module {@link analyzeFn}
    * request without the audio; `onProgress` and `cancel` report and stop it.
    */
-  analyze(options?: AudioOptions<AnalyzeRequest>): AnalysisResult {
+  analyze(options?: OptionsOf<AnalyzeRequest>): AnalysisResult {
     return analyzeFn(audioRequest('analyze', this.data, this.sampleRate, options));
   }
 
@@ -394,11 +406,11 @@ export class Audio {
     return this.native.ebur128LoudnessRange();
   }
 
-  analyzeBpm(options?: AudioOptions<AnalyzeBpmRequest>): BpmAnalysisResult {
+  analyzeBpm(options?: OptionsOf<AnalyzeBpmRequest>): BpmAnalysisResult {
     return analyzeBpmFn(audioRequest('analyzeBpm', this.data, this.sampleRate, options));
   }
 
-  analyzeImpulseResponse(options?: AudioOptions<AnalyzeImpulseResponseRequest>): AcousticResult {
+  analyzeImpulseResponse(options?: OptionsOf<AnalyzeImpulseResponseRequest>): AcousticResult {
     return analyzeImpulseResponseFn(
       audioRequest('analyzeImpulseResponse', this.data, this.sampleRate, options),
     );
@@ -408,15 +420,15 @@ export class Audio {
     return detectAcousticFn(this.data, this.sampleRate, options);
   }
 
-  analyzeRhythm(options?: AudioOptions<AnalyzeRhythmRequest>): RhythmResult {
+  analyzeRhythm(options?: OptionsOf<AnalyzeRhythmRequest>): RhythmResult {
     return analyzeRhythmFn(audioRequest('analyzeRhythm', this.data, this.sampleRate, options));
   }
 
-  analyzeDynamics(options?: AudioOptions<AnalyzeDynamicsRequest>): DynamicsResult {
+  analyzeDynamics(options?: OptionsOf<AnalyzeDynamicsRequest>): DynamicsResult {
     return analyzeDynamicsFn(audioRequest('analyzeDynamics', this.data, this.sampleRate, options));
   }
 
-  analyzeTimbre(options?: AudioOptions<AnalyzeTimbreRequest>): TimbreResult {
+  analyzeTimbre(options?: OptionsOf<AnalyzeTimbreRequest>): TimbreResult {
     return analyzeTimbreFn(audioRequest('analyzeTimbre', this.data, this.sampleRate, options));
   }
 
@@ -425,9 +437,7 @@ export class Audio {
   }
 
   /** Chords with their roman numeral and function in the given key. `keyRoot` is required. */
-  chordFunctionalAnalysis(
-    options: AudioOptions<ChordFunctionalAnalysisRequest>,
-  ): FunctionalChord[] {
+  chordFunctionalAnalysis(options: OptionsOf<ChordFunctionalAnalysisRequest>): FunctionalChord[] {
     return chordFunctionalAnalysisFn(
       audioRequest('chordFunctionalAnalysis', this.data, this.sampleRate, options),
     );
@@ -435,44 +445,46 @@ export class Audio {
 
   // -- Effects --
 
-  hpss(kernelHarmonic = 31, kernelPercussive = 31): HpssResult {
-    return hpssFn(this.data, this.sampleRate, kernelHarmonic, kernelPercussive);
+  hpss(options?: OptionsOf<HpssRequest>): HpssResult {
+    return hpssFn(audioRequest('hpss', this.data, this.sampleRate, options));
   }
 
-  harmonic(): Float32Array {
-    return harmonicFn(this.data, this.sampleRate);
+  harmonic(options?: OptionsOf<HarmonicRequest>): Float32Array {
+    return harmonicFn(audioRequest('harmonic', this.data, this.sampleRate, options));
   }
 
-  percussive(): Float32Array {
-    return percussiveFn(this.data, this.sampleRate);
+  percussive(options?: OptionsOf<PercussiveRequest>): Float32Array {
+    return percussiveFn(audioRequest('percussive', this.data, this.sampleRate, options));
   }
 
-  timeStretch(rate: number): Float32Array {
-    return timeStretchFn(this.data, this.sampleRate, rate);
+  timeStretch(options: OptionsOf<TimeStretchRequest>): Float32Array {
+    return timeStretchFn(audioRequest('timeStretch', this.data, this.sampleRate, options));
   }
 
-  pitchShift(semitones: number): Float32Array {
-    return pitchShiftFn(this.data, this.sampleRate, semitones);
+  pitchShift(options: OptionsOf<PitchShiftRequest>): Float32Array {
+    return pitchShiftFn(audioRequest('pitchShift', this.data, this.sampleRate, options));
   }
 
-  pitchCorrectToMidi(currentMidi = 69.0, targetMidi = 69.0): Float32Array {
-    return pitchCorrectToMidiFn(this.data, this.sampleRate, currentMidi, targetMidi);
+  pitchCorrectToMidi(options: OptionsOf<PitchCorrectToMidiRequest>): Float32Array {
+    return pitchCorrectToMidiFn(
+      audioRequest('pitchCorrectToMidi', this.data, this.sampleRate, options),
+    );
   }
 
-  noteStretch(options: NoteStretchOptions = {}): Float32Array {
-    return noteStretchFn(this.data, this.sampleRate, options);
+  noteStretch(options: NoteStretchOptions): Float32Array {
+    return noteStretchFn(audioRequest('noteStretch', this.data, this.sampleRate, options));
   }
 
-  noteMove(options: import('./types_notes.js').NoteMoveOptions = {}): Float32Array {
-    return noteMoveFn(this.data, this.sampleRate, options);
+  noteMove(options: NoteMoveOptions): Float32Array {
+    return noteMoveFn(audioRequest('noteMove', this.data, this.sampleRate, options));
   }
 
-  voiceChange(options: VoiceChangeOptions = {}): Float32Array {
-    return voiceChangeFn(this.data, this.sampleRate, options);
+  voiceChange(options?: VoiceChangeOptions): Float32Array {
+    return voiceChangeFn(audioRequest('voiceChange', this.data, this.sampleRate, options));
   }
 
-  normalize(targetDb = 0.0): Float32Array {
-    return normalizeFn(this.data, this.sampleRate, targetDb);
+  normalize(options?: OptionsOf<NormalizeRequest>): Float32Array {
+    return normalizeFn(audioRequest('normalize', this.data, this.sampleRate, options));
   }
 
   mastering(options: MasteringOptions = {}): MasteringResult {
@@ -501,70 +513,70 @@ export class Audio {
     return masterAudioFn(this.data, this.sampleRate, preset, overrides, onProgress);
   }
 
-  trim(thresholdDb = -60.0): Float32Array {
-    return trimFn(this.data, this.sampleRate, thresholdDb);
+  trim(options?: OptionsOf<TrimRequest>): Float32Array {
+    return trimFn(audioRequest('trim', this.data, this.sampleRate, options));
   }
 
   // -- Features --
 
-  stft(options?: AudioOptions<StftRequest>): StftResult {
+  stft(options?: OptionsOf<StftRequest>): StftResult {
     return stftFn(audioRequest('stft', this.data, this.sampleRate, options));
   }
 
   /** Rows are frequency bins, cols are frames. */
-  stftDb(options?: AudioOptions<StftDbRequest>): Matrix2D {
+  stftDb(options?: OptionsOf<StftDbRequest>): Matrix2D {
     return stftDbFn(audioRequest('stftDb', this.data, this.sampleRate, options));
   }
 
-  melSpectrogram(options?: AudioOptions<MelSpectrogramRequest>): MelSpectrogramResult {
+  melSpectrogram(options?: OptionsOf<MelSpectrogramRequest>): MelSpectrogramResult {
     return melSpectrogramFn(audioRequest('melSpectrogram', this.data, this.sampleRate, options));
   }
 
-  mfcc(options?: AudioOptions<MfccRequest>): MfccResult {
+  mfcc(options?: OptionsOf<MfccRequest>): MfccResult {
     return mfccFn(audioRequest('mfcc', this.data, this.sampleRate, options));
   }
 
-  chroma(options?: AudioOptions<ChromaRequest>): ChromaResult {
+  chroma(options?: OptionsOf<ChromaRequest>): ChromaResult {
     return chromaFn(audioRequest('chroma', this.data, this.sampleRate, options));
   }
 
-  spectralCentroid(options?: AudioOptions<SpectralCentroidRequest>): Float32Array {
+  spectralCentroid(options?: OptionsOf<SpectralCentroidRequest>): Float32Array {
     return spectralCentroidFn(
       audioRequest('spectralCentroid', this.data, this.sampleRate, options),
     );
   }
 
-  spectralBandwidth(options?: AudioOptions<SpectralBandwidthRequest>): Float32Array {
+  spectralBandwidth(options?: OptionsOf<SpectralBandwidthRequest>): Float32Array {
     return spectralBandwidthFn(
       audioRequest('spectralBandwidth', this.data, this.sampleRate, options),
     );
   }
 
-  spectralRolloff(options?: AudioOptions<SpectralRolloffRequest>): Float32Array {
+  spectralRolloff(options?: OptionsOf<SpectralRolloffRequest>): Float32Array {
     return spectralRolloffFn(audioRequest('spectralRolloff', this.data, this.sampleRate, options));
   }
 
-  spectralFlatness(options?: AudioOptions<SpectralFlatnessRequest>): Float32Array {
+  spectralFlatness(options?: OptionsOf<SpectralFlatnessRequest>): Float32Array {
     return spectralFlatnessFn(
       audioRequest('spectralFlatness', this.data, this.sampleRate, options),
     );
   }
 
-  zeroCrossingRate(options?: AudioOptions<ZeroCrossingRateRequest>): Float32Array {
+  zeroCrossingRate(options?: OptionsOf<ZeroCrossingRateRequest>): Float32Array {
     return zeroCrossingRateFn(
       audioRequest('zeroCrossingRate', this.data, this.sampleRate, options),
     );
   }
 
-  rmsEnergy(options?: AudioOptions<RmsEnergyRequest>): Float32Array {
+  rmsEnergy(options?: OptionsOf<RmsEnergyRequest>): Float32Array {
     return rmsEnergyFn(audioRequest('rmsEnergy', this.data, this.sampleRate, options));
   }
 
-  pitchYin(options?: AudioOptions<PitchYinRequest>): PitchResult {
+  pitchYin(options?: OptionsOf<PitchYinRequest>): PitchResult {
     return pitchYinFn(audioRequest('pitchYin', this.data, this.sampleRate, options));
   }
 
-  pitchPyin(options?: AudioOptions<PitchPyinRequest>): PitchResult {
+  pitchPyin(options?: OptionsOf<PitchPyinRequest>): PitchResult {
     return pitchPyinFn(audioRequest('pitchPyin', this.data, this.sampleRate, options));
   }
 
@@ -572,12 +584,12 @@ export class Audio {
     return resampleFn(this.data, this.sampleRate, targetSampleRate);
   }
 
-  onsetStrength(options?: AudioOptions<OnsetStrengthRequest>): Float32Array {
+  onsetStrength(options?: OptionsOf<OnsetStrengthRequest>): Float32Array {
     return onsetStrengthFn(audioRequest('onsetStrength', this.data, this.sampleRate, options));
   }
 
   /** Rows are the 12 chroma bins, cols are frames. */
-  nnlsChroma(options?: AudioOptions<NnlsChromaRequest>): Matrix2D {
+  nnlsChroma(options?: OptionsOf<NnlsChromaRequest>): Matrix2D {
     return nnlsChromaFn(audioRequest('nnlsChroma', this.data, this.sampleRate, options));
   }
 

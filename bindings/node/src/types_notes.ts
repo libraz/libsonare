@@ -4,6 +4,7 @@
  */
 
 import type { Key, KeyMode, PitchClass } from './types_analysis.js';
+import type { ValidateOptions } from './validation.js';
 
 /**
  * Per-frame voicing decision, one entry per `f0Hz` frame. A truthy or non-zero
@@ -19,13 +20,24 @@ export type VoicedFlags =
   | readonly number[]
   | readonly boolean[];
 
-/** Options for {@link pitchCorrectTimevarying}. All fields are optional. */
-export interface PitchCorrectOptions {
+/** What {@link pitchCorrectTimevarying} retunes toward: a fixed MIDI note or the scale. */
+export type PitchTargetMode = 'midi' | 'scale';
+
+/** Options for {@link pitchCorrectTimevarying}: the F0 track is required, everything else is optional. */
+export interface PitchCorrectOptions extends ValidateOptions {
+  /** Per-frame measured F0 in Hz, one entry per analysis frame. */
+  f0Hz: Float32Array;
+  /**
+   * F0 frame-center spacing in samples: frame `i` is centered at sample
+   * `i * hopLength`, and nearest-frame voicing switches halfway between
+   * centers. Default 512.
+   */
+  hopLength?: number;
   /** `'midi'` retunes toward {@link targetMidi}; `'scale'` snaps to the key. Default `'midi'`. */
-  mode?: 'midi' | 'scale';
-  /** Fixed target note when `mode` is `'midi'`, in `[0, 127]`. Default 69 (A4). */
+  targetMode?: PitchTargetMode;
+  /** Fixed target note when `targetMode` is `'midi'`, in `[0, 127]`. Default 69 (A4). */
   targetMidi?: number;
-  /** Scale root pitch class (0=C .. 11=B) when `mode` is `'scale'`. Default 0. */
+  /** Scale root pitch class (0=C .. 11=B) when `targetMode` is `'scale'`. Default 0. */
   scaleRoot?: number;
   /**
    * Scale degrees enabled: a 12-bit mask (bit `i` = semitone `i` above the root)
@@ -33,7 +45,7 @@ export interface PitchCorrectOptions {
    */
   scaleModeMask?: number | KeyMode;
   /** Reference MIDI anchoring the scale grid. Default 69 (A4). */
-  referenceMidi?: number;
+  scaleReferenceMidi?: number;
   /** Correction strength in `[0, 1]`; 1 = full snap, 0 = bypass. Default 1. */
   retuneAmount?: number;
   /** Hard clamp on per-frame correction magnitude (semitones). Default 12. */
@@ -63,7 +75,15 @@ export interface AutoTuneKey {
 }
 
 /** Tuning knobs of {@link autoTune}. All fields are optional. */
-export interface AutoTuneOptions {
+export interface AutoTuneOptions extends ValidateOptions {
+  /**
+   * `'detect'` (default) finds the key with {@link detectKey}'s defaults; a
+   * `{ root, mode }` names it, as {@link detectKey}'s result does: `root` an
+   * integer pitch class `0..11` (`RangeError` otherwise, `TypeError` for a
+   * non-number), `mode` a {@link KeyMode} token (`RangeError` for an unknown one,
+   * `TypeError` for a non-string).
+   */
+  key?: 'detect' | AutoTuneKey;
   /** Correction strength in `[0, 1]`; 1 = full snap to the scale, 0 = bypass. Default 1. */
   strength?: number;
   /** Retune IIR time constant (ms); larger = slower glide. Default 50. */
@@ -73,7 +93,7 @@ export interface AutoTuneOptions {
   /** Hard clamp on per-frame correction magnitude (semitones). Default 12. */
   maxCorrectionSemitones?: number;
   /** Reference MIDI anchoring the scale grid. Default 69 (A4). */
-  referenceMidi?: number;
+  scaleReferenceMidi?: number;
 }
 
 /** Result of {@link autoTune}. */
@@ -87,8 +107,8 @@ export interface AutoTuneResult {
   key: Key;
 }
 
-/** Options for {@link noteStretch}. All fields are optional. */
-export interface NoteStretchOptions {
+/** Options for {@link noteStretch}. `stretchRatio` is required. */
+export interface NoteStretchOptions extends ValidateOptions {
   /** First sample of the note to stretch. Default 0. Not with `onsetSec`. */
   onsetSample?: number;
   /** First second of the note to stretch, rounded to the nearest sample. Not with `onsetSample`. */
@@ -99,10 +119,10 @@ export interface NoteStretchOptions {
   offsetSec?: number;
   /**
    * Duration ratio of the note: `> 1` lengthens it, `< 1` shortens it, 1 is
-   * unchanged (a finite number, default 1). This is the opposite sense of
-   * {@link timeStretch}'s `rate`, which is a speed (`> 1` shortens).
+   * unchanged (a finite number). This is the opposite sense of
+   * {@link timeStretch}'s `speedRatio`, which is a speed (`> 1` shortens).
    */
-  stretchRatio?: number;
+  stretchRatio: number;
 }
 
 /** Segmentation tuning for {@link extractNotes}. All fields are optional. */
@@ -129,13 +149,18 @@ export interface NoteExtractorOptions {
  * the identity edit (no move, no transpose, unity gain and stretch, unmuted) to
  * every note it returns; {@link renderNotes} applies whatever the caller has
  * changed.
+ *
+ * Readonly: edit a note by passing a modified copy to {@link renderNotes}.
+ *
+ * @example
+ * renderNotes({ samples, sampleRate, notes: notes.map((n) => ({ ...n, edit: { ...n.edit, gainDb: -6 } })) });
  */
 export interface NoteEdit {
   /**
    * Moves the note along the timeline; negative moves it earlier. Where the note
    * lands is not bounds-checked, so a moved note may overwrite a neighbour.
    */
-  timeOffsetSamples: number;
+  readonly timeOffsetSamples: number;
   /**
    * Per-frame linear gain over the note's span, on top of `gainDb`. Empty for no
    * envelope.
@@ -149,16 +174,16 @@ export interface NoteEdit {
    * level the note was measured at. Both are `Float32Array`, which is what the
    * core holds them as.
    */
-  amplitudeEnvelope: Float32Array;
+  readonly amplitudeEnvelope: Float32Array;
   /** Transpose applied to the note's span. */
-  pitchSemitones: number;
+  readonly pitchSemitones: number;
   /** Level change applied to the note's span. */
-  gainDb: number;
+  readonly gainDb: number;
   /**
    * Duration ratio: `>1` lengthens the note, `<1` shortens it; pitch is
    * preserved. The opposite sense of {@link timeStretch}'s `rate`, a speed.
    */
-  timeStretchRatio: number;
+  readonly timeStretchRatio: number;
   /**
    * Moves the spectral envelope, in semitones, on top of whatever the pitch
    * shift already did to it.
@@ -169,7 +194,7 @@ export interface NoteEdit {
    * chipmunk is the default. Saturates near -10.3 and +8.7 semitones rather than
    * being rejected.
    */
-  formantSemitones: number;
+  readonly formantSemitones: number;
   /**
    * Scales the vibrato measured over the note, stated as a change from it: 0
    * keeps it, -1 flattens it, +1 doubles it.
@@ -179,11 +204,11 @@ export interface NoteEdit {
    * none is rejected rather than left alone. The curve is split at the request's
    * `vibratoCutoffHz`.
    */
-  vibratoDepthChange: number;
+  readonly vibratoDepthChange: number;
   /** The same, for the slow drift around the note's centre pitch. */
-  driftChange: number;
+  readonly driftChange: number;
   /** Silences the note's span; the other fields then do not apply. */
-  muted: boolean;
+  readonly muted: boolean;
 }
 
 /**
@@ -216,17 +241,17 @@ export type NoteEditInput = Partial<Omit<NoteEdit, 'amplitudeEnvelope'>> & {
  */
 export interface NoteObject {
   /** First sample of the note's span. */
-  onsetSample: number;
+  readonly onsetSample: number;
   /** One past the last sample of the span. */
-  offsetSample: number;
+  readonly offsetSample: number;
   /** First frame of the span in the caller's `f0Hz` track. */
-  frameStart: number;
+  readonly frameStart: number;
   /** One past the last frame of the span. */
-  frameEnd: number;
+  readonly frameEnd: number;
   /** Median measured pitch over the span, in Hz. */
-  medianHz: number;
+  readonly medianHz: number;
   /** Median pitch in cents above the request's `referenceHz`. */
-  medianCents: number;
+  readonly medianCents: number;
   /**
    * Pitch steadiness in `[0, 1]`; 1 is perfectly steady.
    *
@@ -234,11 +259,11 @@ export interface NoteObject {
    * but the segmenter emits maximal voiced runs, so it is 1 for every note it
    * can produce and measures nothing.
    */
-  f0Stability: number;
+  readonly f0Stability: number;
   /** One RMS value per frame of the span (`frameEnd - frameStart` entries). */
-  amplitude: Float32Array;
+  readonly amplitude: Float32Array;
   /** This note's pending edit; the identity as returned. */
-  edit: NoteEdit;
+  readonly edit: NoteEdit;
 }
 
 /**
@@ -614,8 +639,8 @@ export interface PitchDecompositionResult {
   vibratoCents: Float32Array;
 }
 
-/** Options for {@link noteMove}. */
-export interface NoteMoveOptions {
+/** Options for {@link noteMove}. One of `targetOnsetSample` / `targetOnsetSec` is required. */
+export interface NoteMoveOptions extends ValidateOptions {
   /** First sample of the note to move. Default 0. Not with `onsetSec`. */
   onsetSample?: number;
   /** First second of the note to move, rounded to the nearest sample. Not with `onsetSample`. */

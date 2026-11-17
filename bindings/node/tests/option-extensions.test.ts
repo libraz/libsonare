@@ -18,7 +18,13 @@ const samples = Float32Array.from(
 describe('additive effect and feature options', () => {
   it('keeps explicit defaults byte-compatible and applies nondefault DSP settings', () => {
     const legacy = hpss(samples, sampleRate);
-    const explicit = hpss(samples, sampleRate, 31, 31, 2048, 512, false);
+    const explicit = hpss(samples, sampleRate, {
+      kernelHarmonic: 31,
+      kernelPercussive: 31,
+      nFft: 2048,
+      hopLength: 512,
+      hardMask: false,
+    });
     expect(Array.from(explicit.harmonic)).toEqual(Array.from(legacy.harmonic));
     expect(Array.from(explicit.percussive)).toEqual(Array.from(legacy.percussive));
 
@@ -31,18 +37,32 @@ describe('additive effect and feature options', () => {
     });
     expect(Array.from(changed.harmonic)).not.toEqual(Array.from(legacy.harmonic));
 
-    const stretched = timeStretch(samples, sampleRate, 1.2);
-    const changedStretch = timeStretch(samples, sampleRate, 1.2, 1024, 256);
+    const stretched = timeStretch(samples, sampleRate, { speedRatio: 1.2 });
+    const changedStretch = timeStretch(samples, sampleRate, {
+      speedRatio: 1.2,
+      nFft: 1024,
+      hopLength: 256,
+    });
     expect(Array.from(changedStretch)).not.toEqual(Array.from(stretched));
 
-    const shifted = pitchShift(samples, sampleRate, 3);
-    const changedShift = pitchShift(samples, sampleRate, 3, 1024, 256);
+    const shifted = pitchShift(samples, sampleRate, { pitchSemitones: 3 });
+    const changedShift = pitchShift(samples, sampleRate, {
+      pitchSemitones: 3,
+      nFft: 1024,
+      hopLength: 256,
+    });
     expect(Array.from(changedShift)).not.toEqual(Array.from(shifted));
   });
 
   it('forwards residual, NNLS hop, and impulse-response options', () => {
     const residual = hpssWithResidual(samples, sampleRate);
-    const changedResidual = hpssWithResidual(samples, sampleRate, 31, 31, 1024, 256, true);
+    const changedResidual = hpssWithResidual(samples, sampleRate, {
+      kernelHarmonic: 31,
+      kernelPercussive: 31,
+      nFft: 1024,
+      hopLength: 256,
+      hardMask: true,
+    });
     expect(Array.from(changedResidual.residual)).not.toEqual(Array.from(residual.residual));
 
     const chroma = nnlsChroma(samples, sampleRate);
@@ -55,9 +75,11 @@ describe('additive effect and feature options', () => {
   });
 
   it('rejects invalid option types and ranges before native dispatch', () => {
-    expect(() => hpss({ samples, nFft: 3 })).toThrow(RangeError);
-    expect(() => hpss({ samples, hardMask: 'yes' as never })).toThrow(TypeError);
-    expect(() => timeStretch(samples, sampleRate, 1, 2048, 0)).toThrow(RangeError);
+    expect(() => hpss({ samples, sampleRate, nFft: 3 })).toThrow(RangeError);
+    expect(() => hpss({ samples, sampleRate, hardMask: 'yes' as never })).toThrow(TypeError);
+    expect(() =>
+      timeStretch(samples, sampleRate, { speedRatio: 1, nFft: 2048, hopLength: 0 }),
+    ).toThrow(RangeError);
     // Fractional but a number: the out-of-domain half of the split, not the
     // wrong-type half that `hardMask: 'yes'` above stays on.
     expect(() => nnlsChroma(samples, sampleRate, { hopLength: 1.5 })).toThrow(RangeError);
@@ -69,13 +91,13 @@ describe('additive effect and feature options', () => {
     expect(() => hpss({ samples, sampleRate, nFft: 1024, hopLength: 1024 })).toThrow();
     expect(() => hpssWithResidual({ samples, sampleRate, nFft: 1024, hopLength: 1024 })).toThrow();
     expect(() =>
-      timeStretch({ samples, sampleRate, rate: 1.2, nFft: 512, hopLength: 2048 }),
+      timeStretch({ samples, sampleRate, speedRatio: 1.2, nFft: 512, hopLength: 2048 }),
     ).toThrow();
     expect(() =>
-      pitchShift({ samples, sampleRate, semitones: 3, nFft: 1024, hopLength: 1024 }),
+      pitchShift({ samples, sampleRate, pitchSemitones: 3, nFft: 1024, hopLength: 1024 }),
     ).toThrow();
     expect(() =>
-      phaseVocoder({ samples, sampleRate, rate: 1.2, nFft: 1024, hopLength: 1024 }),
+      phaseVocoder({ samples, sampleRate, speedRatio: 1.2, nFft: 1024, hopLength: 1024 }),
     ).toThrow();
   });
 
@@ -84,11 +106,15 @@ describe('additive effect and feature options', () => {
     // two, which made the same call succeed on the C ABI and fail here.
     const geometry = { nFft: 1500, hopLength: 250 };
     expect(hpss({ samples, sampleRate, ...geometry }).harmonic.length).toBe(samples.length);
-    expect(timeStretch({ samples, sampleRate, rate: 1.2, ...geometry }).length).toBeGreaterThan(0);
-    expect(pitchShift({ samples, sampleRate, semitones: 3, ...geometry }).length).toBeGreaterThan(
-      0,
-    );
-    expect(phaseVocoder({ samples, sampleRate, rate: 1.2, ...geometry }).length).toBeGreaterThan(0);
+    expect(
+      timeStretch({ samples, sampleRate, speedRatio: 1.2, ...geometry }).length,
+    ).toBeGreaterThan(0);
+    expect(
+      pitchShift({ samples, sampleRate, pitchSemitones: 3, ...geometry }).length,
+    ).toBeGreaterThan(0);
+    expect(
+      phaseVocoder({ samples, sampleRate, speedRatio: 1.2, ...geometry }).length,
+    ).toBeGreaterThan(0);
   });
 });
 
@@ -102,8 +128,8 @@ describe('STFT entry points share one nFft rule', () => {
     hpss: (nFft: number) => hpss({ samples, sampleRate, nFft, hopLength: 256 }),
     hpssWithResidual: (nFft: number) =>
       hpssWithResidual({ samples, sampleRate, nFft, hopLength: 256 }),
-    timeStretch: (nFft: number) => timeStretch({ samples, sampleRate, rate: 1.0, nFft }),
-    pitchShift: (nFft: number) => pitchShift({ samples, sampleRate, semitones: 0, nFft }),
+    timeStretch: (nFft: number) => timeStretch({ samples, sampleRate, speedRatio: 1.0, nFft }),
+    pitchShift: (nFft: number) => pitchShift({ samples, sampleRate, pitchSemitones: 0, nFft }),
   };
 
   it.each(Object.keys(stftEntryPoints))('%s accepts a non-power-of-two even nFft', (name) => {

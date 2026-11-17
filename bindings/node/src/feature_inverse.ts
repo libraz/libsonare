@@ -2,6 +2,7 @@ import { assertMatrix2D, toMatrix2D } from './internal/feature_matrix.js';
 import { resolvePositiveIntegerOption } from './internal/feature_options.js';
 import { addon } from './native.js';
 import type { Matrix2D } from './types.js';
+import type { OptionsOf, ValidateOptions } from './validation.js';
 import {
   assertAudioInput,
   assertFiniteScalar,
@@ -10,9 +11,9 @@ import {
   assertPositiveFloatValue,
   assertPositiveInteger,
   assertSampleRate,
-  requestObject,
   requestOnly,
   resolveOptionalNonNegative,
+  sampleOneShot,
 } from './validation.js';
 
 /** Request for {@link cqtToAudio}. */
@@ -100,11 +101,18 @@ export interface MfccToAudioRequest extends MfccToMelRequest {
 }
 
 /** Request for {@link phaseVocoder}. */
-export interface PhaseVocoderRequest {
+export interface PhaseVocoderRequest extends ValidateOptions {
   samples: Float32Array;
-  sampleRate?: number;
-  rate: number;
+  /** Sample rate in Hz, an integer in `[8000, 384000]`; there is no default. */
+  sampleRate: number;
+  /**
+   * Playback speed as a ratio, finite: above 1 is faster and shorter, below 1
+   * slower and longer, the opposite sense of a note's `stretchRatio`. Required.
+   */
+  speedRatio: number;
+  /** FFT size in samples. Default 2048. */
   nFft?: number;
+  /** Hop in samples. Default 512. */
   hopLength?: number;
 }
 
@@ -326,35 +334,29 @@ export function mfccToAudio(...args: unknown[]): Float32Array {
 }
 
 /**
- * Phase-vocoder time-scale modification. `rate` is a speed (> 1 faster and
- * shorter, < 1 slower and longer), the opposite sense of a note's `stretchRatio`.
+ * Phase-vocoder time-scale modification by `speedRatio`.
+ *
+ * @throws {TypeError} when `sampleRate` or `speedRatio` is missing
+ * @throws {RangeError} on audio out of domain, an out-of-range `sampleRate` or a non-finite `speedRatio`
  */
 export function phaseVocoder(request: PhaseVocoderRequest): Float32Array;
 export function phaseVocoder(
   samples: Float32Array,
   sampleRate: number,
-  rate: number,
-  nFft?: number,
-  hopLength?: number,
+  options: OptionsOf<PhaseVocoderRequest>,
 ): Float32Array;
-export function phaseVocoder(
-  samples: Float32Array | PhaseVocoderRequest,
-  sampleRate = 22050,
-  rate = Number.NaN,
-  nFft = 2048,
-  hopLength = 512,
-): Float32Array {
-  const request =
-    samples instanceof Float32Array
-      ? { samples, sampleRate, rate, nFft, hopLength }
-      : requestObject('phaseVocoder', samples);
-  assertFiniteScalar('phaseVocoder', request.rate, 'rate');
-  const resolvedSampleRate = request.sampleRate ?? 22050;
-  assertAudioInput('phaseVocoder', request.samples, resolvedSampleRate, request);
+export function phaseVocoder(...args: unknown[]): Float32Array {
+  const request = sampleOneShot<PhaseVocoderRequest>('phaseVocoder', args);
+  if (typeof request.speedRatio !== 'number') {
+    throw new TypeError('phaseVocoder: speedRatio must be a number');
+  }
+  assertFiniteScalar('phaseVocoder', request.speedRatio, 'speedRatio');
+  assertPositiveFloatValue('phaseVocoder', request.speedRatio, 'speedRatio');
+  assertAudioInput('phaseVocoder', request.samples, request.sampleRate, request);
   // Positivity only: the analysis geometry is an StftConfig, which requires a
   // positive size and hop and reports its own size ceiling by name.
-  const resolvedNFft = resolvePositiveIntegerOption('phaseVocoder', 'nFft', request.nFft, 2048);
-  const resolvedHopLength = resolvePositiveIntegerOption(
+  const nFft = resolvePositiveIntegerOption('phaseVocoder', 'nFft', request.nFft, 2048);
+  const hopLength = resolvePositiveIntegerOption(
     'phaseVocoder',
     'hopLength',
     request.hopLength,
@@ -362,10 +364,10 @@ export function phaseVocoder(
   );
   return addon.phaseVocoder(
     request.samples,
-    resolvedSampleRate,
-    request.rate,
-    resolvedNFft,
-    resolvedHopLength,
+    request.sampleRate,
+    request.speedRatio,
+    nFft,
+    hopLength,
   );
 }
 

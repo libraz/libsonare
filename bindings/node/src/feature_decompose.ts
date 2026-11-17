@@ -1,16 +1,26 @@
+import type { HpssWithResidualResult } from './effects_separation.js';
 import { assertMatrix2D, toMatrix2D, toNativeIndexList } from './internal/feature_matrix.js';
 import { resolvePositiveIntegerOption } from './internal/feature_options.js';
 import { resolveEffectFftOptions } from './internal/fft_options.js';
 import { addon } from './native.js';
 import type { Matrix2D } from './types.js';
+import type { OptionsOf, ValidateOptions } from './validation.js';
 import {
   assertAudioChannels,
   assertAudioInput,
+  assertClosedToken,
   assertHpssKernels,
   assertInt32,
-  requestObject,
+  assertIntegerValue,
+  assertPositiveInteger,
   requestOnly,
+  sampleOneShot,
 } from './validation.js';
+
+/** NMF initialisation: a deterministic random start or an SVD-based warm start. */
+type NmfInit = 'random' | 'nndsvd';
+
+const NMF_INITS: readonly NmfInit[] = ['random', 'nndsvd'];
 
 function resolveHardMaskOption(fnName: string, value: unknown): boolean {
   if (value === undefined) {
@@ -84,18 +94,33 @@ export interface SegmentPathEnhanceRequest {
   nFilters?: number;
 }
 
+/** Request for {@link decompose}. */
 export interface DecomposeRequest {
-  s: Float32Array;
-  nFeatures: number;
-  nFrames: number;
+  /** Non-negative spectrogram: rows = features, cols = frames. */
+  s: Matrix2D;
+  /** Number of NMF components, a positive integer. */
   nComponents: number;
+  /** Multiplicative-update iterations. Default 50. */
   nIter?: number;
+  /** Beta divergence: 2 = Frobenius (default), 1 = Kullback-Leibler. */
   beta?: number;
-  init?: 'random' | 'nndsvd';
+  /** Initialisation, `'random'` (default, deterministic seed) or `'nndsvd'`. */
+  init?: NmfInit;
 }
-export interface DecomposeStemsRequest {
+
+/** The two NMF factors of {@link decompose}. */
+export interface DecomposeResult {
+  /** Component matrix: rows = features, cols = components. */
+  w: Matrix2D;
+  /** Activation matrix: rows = components, cols = frames. */
+  h: Matrix2D;
+}
+
+/** Request for {@link decomposeStems}. */
+export interface DecomposeStemsRequest extends ValidateOptions {
   samples: Float32Array;
-  sampleRate?: number;
+  /** Sample rate in Hz, an integer in `[8000, 384000]`; there is no default. */
+  sampleRate: number;
   /** Number of NMF components (default 4). */
   nComponents?: number;
   /** STFT size (default 2048). */
@@ -125,18 +150,28 @@ export interface DecomposeStemsResult {
   h: Float32Array;
   sampleRate: number;
 }
+/** Closed set of aggregation methods of {@link nnFilter}. */
+export type NnFilterAggregate = 'mean' | 'median' | 'min' | 'max';
+
+const NN_FILTER_AGGREGATES: readonly NnFilterAggregate[] = ['mean', 'median', 'min', 'max'];
+
+/** Request for {@link nnFilter}. */
 export interface NnFilterRequest {
-  s: Float32Array;
-  nFeatures: number;
-  nFrames: number;
-  aggregate?: string;
+  /** Spectrogram to filter: rows = features, cols = frames. */
+  s: Matrix2D;
+  /** Neighbour aggregation. Default `'mean'`. */
+  aggregate?: NnFilterAggregate;
+  /** Neighbours per frame. Default 7. */
   k?: number;
+  /** Frames either side of a frame excluded from its neighbours. Default 1. */
   width?: number;
 }
 
-export interface HpssWithResidualRequest {
+/** Request for {@link hpssWithResidual}. */
+export interface HpssWithResidualRequest extends ValidateOptions {
   samples: Float32Array;
-  sampleRate?: number;
+  /** Sample rate in Hz, an integer in `[8000, 384000]`; there is no default. */
+  sampleRate: number;
   /**
    * Horizontal median filter size, in STFT frames: a positive odd integer at
    * most 524287. Default 31. The ceiling is 524288 and an even kernel is
@@ -145,8 +180,11 @@ export interface HpssWithResidualRequest {
   kernelHarmonic?: number;
   /** Vertical median filter size, in STFT bins, under the same rule. Default 31. */
   kernelPercussive?: number;
+  /** FFT size in samples. Default 2048. */
   nFft?: number;
+  /** Hop in samples. Default 512. */
   hopLength?: number;
+  /** Threshold the masks into binary ones instead of the soft split. Default `false`. */
   hardMask?: boolean;
 }
 
@@ -275,45 +313,34 @@ export function segmentPathEnhance(...args: unknown[]): Matrix2D {
 }
 
 /**
- * NMF of a flattened [nFeatures x nFrames] spectrogram (librosa.decompose.decompose).
+ * Non-negative matrix factorisation of a spectrogram (librosa.decompose.decompose).
  *
  * `init` selects the initialiser: `'random'` (default, deterministic seed) or
  * `'nndsvd'` (SVD-based warm start, which tends to converge in fewer iterations).
+ *
+ * @throws {TypeError} when `nComponents` is missing or `s` is not a Matrix2D
+ * @throws {RangeError} on a malformed matrix, a non-positive `nComponents` or `nIter`, or an unknown `init`
  */
-export function decompose(request: DecomposeRequest): { w: Matrix2D; h: Matrix2D };
-export function decompose(
-  s: Float32Array,
-  nFeatures?: number,
-  nFrames?: number,
-  nComponents?: number,
-  nIter?: number,
-  beta?: number,
-  init?: 'random' | 'nndsvd',
-): { w: Matrix2D; h: Matrix2D };
-export function decompose(
-  s: Float32Array | DecomposeRequest,
-  nFeatures = 0,
-  nFrames = 0,
-  nComponents = 0,
-  nIter = 50,
-  beta = 2.0,
-  init: 'random' | 'nndsvd' = 'random',
-): { w: Matrix2D; h: Matrix2D } {
-  const request =
-    s instanceof Float32Array
-      ? { s, nFeatures, nFrames, nComponents, nIter, beta, init }
-      : requestObject('decompose', s, 's');
+export function decompose(request: DecomposeRequest): DecomposeResult;
+export function decompose(...args: unknown[]): DecomposeResult {
+  const r = requestOnly<DecomposeRequest>('decompose', args);
+  assertMatrix2D('decompose', r.s, 's');
+  assertIntegerValue('decompose', r.nComponents, 'nComponents');
+  assertPositiveInteger('decompose', r.nComponents, 'nComponents');
+  if (r.init !== undefined) {
+    assertClosedToken('decompose', r.init, NMF_INITS, 'init');
+  }
   // Positivity only: 0 iterations returns the raw init matrices, which the C ABI
   // refuses for that reason and bounds no further.
-  const resolvedNIter = resolvePositiveIntegerOption('decompose', 'nIter', request.nIter, 50);
+  const nIter = resolvePositiveIntegerOption('decompose', 'nIter', r.nIter, 50);
   return addon.decompose(
-    request.s,
-    request.nFeatures,
-    request.nFrames,
-    request.nComponents,
-    resolvedNIter,
-    request.beta ?? 2,
-    request.init ?? 'random',
+    r.s.data,
+    r.s.rows,
+    r.s.cols,
+    r.nComponents,
+    nIter,
+    r.beta ?? 2,
+    r.init ?? 'random',
   );
 }
 
@@ -329,10 +356,15 @@ export function decompose(
  * model has energy and the inverse STFT is linear, so the components sum back
  * to the input.
  */
-export function decomposeStems(request: DecomposeStemsRequest): DecomposeStemsResult {
-  requestObject('decomposeStems', request, 'request', true);
-  const resolvedSampleRate = request.sampleRate ?? 22050;
-  assertAudioInput('decomposeStems', request.samples, resolvedSampleRate, {});
+export function decomposeStems(request: DecomposeStemsRequest): DecomposeStemsResult;
+export function decomposeStems(
+  samples: Float32Array,
+  sampleRate: number,
+  options?: OptionsOf<DecomposeStemsRequest>,
+): DecomposeStemsResult;
+export function decomposeStems(...args: unknown[]): DecomposeStemsResult {
+  const request = sampleOneShot<DecomposeStemsRequest>('decomposeStems', args);
+  assertAudioInput('decomposeStems', request.samples, request.sampleRate, request);
   // Each of the four is its own "0 => the documented default" on the C side, and
   // the addon's narrowing truncates onto that 0.
   for (const field of ['nComponents', 'nFft', 'hopLength', 'nIter'] as const) {
@@ -341,7 +373,7 @@ export function decomposeStems(request: DecomposeStemsRequest): DecomposeStemsRe
       assertInt32('decomposeStems', value, field);
     }
   }
-  return addon.decomposeStems(request.samples, resolvedSampleRate, {
+  return addon.decomposeStems(request.samples, request.sampleRate, {
     nComponents: request.nComponents,
     nFft: request.nFft,
     hopLength: request.hopLength,
@@ -352,10 +384,11 @@ export function decomposeStems(request: DecomposeStemsRequest): DecomposeStemsRe
   });
 }
 
-export interface DecomposeStemsLinkedRequest {
+export interface DecomposeStemsLinkedRequest extends ValidateOptions {
   /** One plane per channel, all of the same length. At least one. */
   channels: Float32Array[];
-  sampleRate?: number;
+  /** Sample rate in Hz, an integer in `[8000, 384000]`; there is no default. */
+  sampleRate: number;
   /** Number of NMF components (default 4). */
   nComponents?: number;
   /** STFT size (default 2048). */
@@ -399,12 +432,11 @@ export interface DecomposeStemsLinkedResult {
 export function decomposeStemsLinked(
   request: DecomposeStemsLinkedRequest,
 ): DecomposeStemsLinkedResult {
-  requestObject('decomposeStemsLinked', request, 'request', true);
+  requestOnly<DecomposeStemsLinkedRequest>('decomposeStemsLinked', [request]);
   if (!Array.isArray(request.channels) || request.channels.length === 0) {
     throw new RangeError('decomposeStemsLinked: channels must be a non-empty array');
   }
-  const resolvedSampleRate = request.sampleRate ?? 22050;
-  assertAudioChannels('decomposeStemsLinked', request.channels, resolvedSampleRate, request);
+  assertAudioChannels('decomposeStemsLinked', request.channels, request.sampleRate, request);
   const [first, ...rest] = request.channels;
   for (const channel of rest) {
     if (channel.length !== first.length) {
@@ -417,7 +449,7 @@ export function decomposeStemsLinked(
       assertInt32('decomposeStemsLinked', value, field);
     }
   }
-  return addon.decomposeStemsLinked(request.channels, resolvedSampleRate, {
+  return addon.decomposeStemsLinked(request.channels, request.sampleRate, {
     nComponents: request.nComponents,
     nFft: request.nFft,
     hopLength: request.hopLength,
@@ -428,77 +460,77 @@ export function decomposeStemsLinked(
   });
 }
 
-/** Nearest-neighbour filtering of a flattened [nFeatures x nFrames] spectrogram. */
+/**
+ * Nearest-neighbour filtering of a spectrogram (librosa.decompose.nn_filter).
+ *
+ * @returns {@link Matrix2D} of the input's shape: rows = features, cols = frames.
+ * @throws {TypeError} when `s` is not a Matrix2D
+ * @throws {RangeError} on a malformed matrix or an `aggregate` outside {@link NnFilterAggregate}
+ */
 export function nnFilter(request: NnFilterRequest): Matrix2D;
-export function nnFilter(
-  s: Float32Array,
-  nFeatures?: number,
-  nFrames?: number,
-  aggregate?: string,
-  k?: number,
-  width?: number,
-): Matrix2D;
-export function nnFilter(
-  s: Float32Array | NnFilterRequest,
-  nFeatures = 0,
-  nFrames = 0,
-  aggregate = 'mean',
-  k = 7,
-  width = 1,
-): Matrix2D {
-  const request =
-    s instanceof Float32Array
-      ? { s, nFeatures, nFrames, aggregate, k, width }
-      : requestObject('nnFilter', s, 's');
+export function nnFilter(...args: unknown[]): Matrix2D {
+  const r = requestOnly<NnFilterRequest>('nnFilter', args);
+  assertMatrix2D('nnFilter', r.s, 's');
+  if (r.aggregate !== undefined) {
+    assertClosedToken('nnFilter', r.aggregate, NN_FILTER_AGGREGATES, 'aggregate');
+  }
   return addon.nnFilter(
-    request.s,
-    request.nFeatures,
-    request.nFrames,
-    request.aggregate ?? 'mean',
-    request.k ?? 7,
-    request.width ?? 1,
+    r.s.data,
+    r.s.rows,
+    r.s.cols,
+    r.aggregate ?? 'mean',
+    r.k ?? 7,
+    r.width ?? 1,
   );
 }
 
-export interface RemixRequest {
+/** Request for {@link remix} and {@link remixAlignedIntervals}. */
+export interface RemixRequest extends ValidateOptions {
   samples: Float32Array;
-  sampleRate?: number;
+  /** Sample rate in Hz, an integer in `[8000, 384000]`; there is no default. */
+  sampleRate: number;
+  /** Flat (start, end) sample pairs (even length). */
   intervals: Int32Array | number[];
+  /** Snap the cut boundaries to zero crossings. Default `true`. */
   alignZeros?: boolean;
+}
+
+function resolveAlignZeros(fnName: string, value: unknown): boolean {
+  if (value === undefined) {
+    return true;
+  }
+  if (typeof value !== 'boolean') {
+    throw new TypeError(`${fnName}: alignZeros must be a boolean`);
+  }
+  return value;
 }
 
 /**
  * Reorder/concatenate a signal by (start,end) interval slices (librosa.effects.remix).
  *
- * With `alignZeros` the boundaries snap to the signal's zero-crossings, which is
- * a per-signal decision: calling this per channel snaps each channel to a
- * different frame and drifts a stereo take apart. Resolve one cut set with
- * {@link remixAlignedIntervals} and apply it to every channel instead.
+ * With `alignZeros` (the default) the boundaries snap to the signal's
+ * zero-crossings, which is a per-signal decision: calling this per channel snaps
+ * each channel to a different frame and drifts a stereo take apart. Resolve one
+ * cut set with {@link remixAlignedIntervals} and apply it to every channel instead.
+ *
+ * @throws {TypeError} when `sampleRate` or `intervals` is missing
+ * @throws {RangeError} on audio or intervals out of domain
  */
 export function remix(request: RemixRequest): Float32Array;
 export function remix(
   samples: Float32Array,
-  intervals: Int32Array | number[],
-  sampleRate?: number,
-  alignZeros?: boolean,
+  sampleRate: number,
+  options: OptionsOf<RemixRequest>,
 ): Float32Array;
-export function remix(
-  samples: Float32Array | RemixRequest,
-  intervals: Int32Array | number[] = new Int32Array(),
-  sampleRate = 22050,
-  alignZeros = false,
-): Float32Array {
-  const request =
-    samples instanceof Float32Array
-      ? { samples, intervals, sampleRate, alignZeros }
-      : requestObject('remix', samples);
-  const resolvedSampleRate = request.sampleRate ?? 22050;
-  assertAudioInput('remix', request.samples, resolvedSampleRate, request);
+export function remix(...args: unknown[]): Float32Array {
+  const request = sampleOneShot<RemixRequest>('remix', args);
+  assertAudioInput('remix', request.samples, request.sampleRate, request);
+  const alignZeros = resolveAlignZeros('remix', request.alignZeros);
   return addon.remix(
     request.samples,
-    request.intervals,
-    resolvedSampleRate,
-    request.alignZeros ?? false,
+    toNativeIndexList(request.intervals),
+    request.sampleRate,
+    alignZeros,
   );
 }
 
@@ -511,31 +543,25 @@ export function remix(
  * change at all (silence, a DC offset, any constant) is not snapped, and a
  * slice that had content but collapses to empty after snapping keeps its
  * unsnapped boundaries.
+ *
+ * @throws {TypeError} when `sampleRate` or `intervals` is missing
+ * @throws {RangeError} on audio or intervals out of domain
  */
 export function remixAlignedIntervals(request: RemixRequest): Int32Array;
 export function remixAlignedIntervals(
   samples: Float32Array,
-  intervals: Int32Array | number[],
-  sampleRate?: number,
-  alignZeros?: boolean,
+  sampleRate: number,
+  options: OptionsOf<RemixRequest>,
 ): Int32Array;
-export function remixAlignedIntervals(
-  samples: Float32Array | RemixRequest,
-  intervals: Int32Array | number[] = new Int32Array(),
-  sampleRate = 22050,
-  alignZeros = true,
-): Int32Array {
-  const request =
-    samples instanceof Float32Array
-      ? { samples, intervals, sampleRate, alignZeros }
-      : requestObject('remixAlignedIntervals', samples);
-  const resolvedSampleRate = request.sampleRate ?? 22050;
-  assertAudioInput('remixAlignedIntervals', request.samples, resolvedSampleRate, request);
+export function remixAlignedIntervals(...args: unknown[]): Int32Array {
+  const request = sampleOneShot<RemixRequest>('remixAlignedIntervals', args);
+  assertAudioInput('remixAlignedIntervals', request.samples, request.sampleRate, request);
+  const alignZeros = resolveAlignZeros('remixAlignedIntervals', request.alignZeros);
   return addon.remixAlignedIntervals(
     request.samples,
-    request.intervals,
-    resolvedSampleRate,
-    request.alignZeros ?? true,
+    toNativeIndexList(request.intervals),
+    request.sampleRate,
+    alignZeros,
   );
 }
 
@@ -557,58 +583,27 @@ export function remixAlignedIntervals(
  * // hard.residual carries what neither component claimed
  * ```
  */
-export function hpssWithResidual(request: HpssWithResidualRequest): {
-  harmonic: Float32Array;
-  percussive: Float32Array;
-  residual: Float32Array;
-  sampleRate: number;
-};
+export function hpssWithResidual(request: HpssWithResidualRequest): HpssWithResidualResult;
 export function hpssWithResidual(
   samples: Float32Array,
-  sampleRate?: number,
-  kernelHarmonic?: number,
-  kernelPercussive?: number,
-  nFft?: number,
-  hopLength?: number,
-  hardMask?: boolean,
-): {
-  harmonic: Float32Array;
-  percussive: Float32Array;
-  residual: Float32Array;
-  sampleRate: number;
-};
-export function hpssWithResidual(
-  samples: Float32Array | HpssWithResidualRequest,
-  sampleRate = 22050,
-  kernelHarmonic = 31,
-  kernelPercussive = 31,
-  nFft?: number,
-  hopLength?: number,
-  hardMask?: boolean,
-): {
-  harmonic: Float32Array;
-  percussive: Float32Array;
-  residual: Float32Array;
-  sampleRate: number;
-} {
-  const request =
-    samples instanceof Float32Array
-      ? { samples, sampleRate, kernelHarmonic, kernelPercussive, nFft, hopLength, hardMask }
-      : requestObject('hpssWithResidual', samples);
+  sampleRate: number,
+  options?: OptionsOf<HpssWithResidualRequest>,
+): HpssWithResidualResult;
+export function hpssWithResidual(...args: unknown[]): HpssWithResidualResult {
+  const request = sampleOneShot<HpssWithResidualRequest>('hpssWithResidual', args);
+  assertAudioInput('hpssWithResidual', request.samples, request.sampleRate, request);
   const fftOptions = resolveEffectFftOptions('hpssWithResidual', request.nFft, request.hopLength);
-  const resolvedHardMask = resolveHardMaskOption('hpssWithResidual', request.hardMask);
-  const resolvedKernelHarmonic = request.kernelHarmonic ?? 31;
-  const resolvedKernelPercussive = request.kernelPercussive ?? 31;
-  assertHpssKernels('hpssWithResidual', resolvedKernelHarmonic, resolvedKernelPercussive);
-  const resolvedSampleRate = request.sampleRate ?? 22050;
-  assertAudioInput('hpssWithResidual', request.samples, resolvedSampleRate, request);
+  const hardMask = resolveHardMaskOption('hpssWithResidual', request.hardMask);
+  const kernelHarmonic = request.kernelHarmonic ?? 31;
+  const kernelPercussive = request.kernelPercussive ?? 31;
+  assertHpssKernels('hpssWithResidual', kernelHarmonic, kernelPercussive);
   return addon.hpssWithResidual(
     request.samples,
-    resolvedSampleRate,
-    resolvedKernelHarmonic,
-    resolvedKernelPercussive,
+    request.sampleRate,
+    kernelHarmonic,
+    kernelPercussive,
     fftOptions.nFft,
     fftOptions.hopLength,
-    resolvedHardMask,
+    hardMask,
   );
 }

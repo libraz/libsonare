@@ -159,8 +159,9 @@ const DELEGATIONS: Delegation[] = [
       { index: 0, name: 'kernelHarmonic' },
       { index: 1, name: 'kernelPercussive' },
     ],
-    method: (audio, [a, b]) => audio.hpss(a, b),
-    facade: (samples, rate, [a, b]) => hpss(samples, rate, a, b),
+    method: (audio, [a, b]) => audio.hpss({ kernelHarmonic: a, kernelPercussive: b }),
+    facade: (samples, rate, [a, b]) =>
+      hpss(samples, rate, { kernelHarmonic: a, kernelPercussive: b }),
   },
   { name: 'harmonic', noIntArgs: 'takes no argument' },
   { name: 'percussive', noIntArgs: 'takes no argument' },
