@@ -295,6 +295,13 @@ import type {
 } from './repair_trim.js';
 import type { TranscribeRequest } from './transcribe.js';
 import type { SonareRenderOfflineRequest } from './worklet/engine-export.js';
+import type {
+  SonarePlaybackNodeOptions,
+  SonarePlaybackWorkletProcessorOptions,
+  SonareRealtimeVoiceChangerWorkletProcessorOptions,
+  SonareStreamAnalyzerNodeOptions,
+  SonareStreamAnalyzerWorkletProcessorOptions,
+} from './worklet/messages.js';
 
 /** Declared keys of `T`, without the index-signature widening. */
 type KnownKeys<T> = keyof {
@@ -2761,6 +2768,45 @@ export const REQUEST_SHAPES = {
   zeroCrossingRate: { keys: ZeroCrossingRateRequestKeys },
   zeroCrossings: { keys: ZeroCrossingsRequestKeys },
 } as const satisfies Readonly<Record<string, RequestShape>>;
+
+/**
+ * Declared `processorOptions` keys of each AudioWorklet processor, and the option
+ * keys of the main-thread factory that builds its node. Checked by
+ * `assertKnownProcessorOptions` on both sides of the port.
+ */
+export const PROCESSOR_OPTION_KEYS = {
+  voiceChangerProcessor: keysOf<SonareRealtimeVoiceChangerWorkletProcessorOptions>()([
+    'config',
+    'sampleRate',
+    'maxBlockSize',
+    'numChannels',
+    'wasmBinary',
+  ]),
+  playbackProcessor: keysOf<SonarePlaybackWorkletProcessorOptions>()([
+    'config',
+    'hrtf',
+    'maxBlockSize',
+    'sampleRate',
+    'wasmBinary',
+  ]),
+  playbackNode: keysOf<SonarePlaybackNodeOptions>()([
+    'config',
+    'hrtf',
+    'maxBlockSize',
+    'sampleRate',
+    'wasmBinary',
+    'processorName',
+    'nodeFactory',
+  ]),
+  streamAnalyzerProcessor: keysOf<SonareStreamAnalyzerWorkletProcessorOptions>()(['chunkFrames']),
+  streamAnalyzerNode: keysOf<SonareStreamAnalyzerNodeOptions>()([
+    'chunkFrames',
+    'config',
+    'processorName',
+    'moduleUrl',
+    'nodeFactory',
+  ]),
+} as const;
 
 /** Name of an entry point that declares a request shape. */
 export type RequestFn = keyof typeof REQUEST_SHAPES;

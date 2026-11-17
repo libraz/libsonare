@@ -10,6 +10,7 @@ import {
 } from './audio_types.js';
 import { initializeEmbindInWorklet, isEmbindReady } from './embind-init.js';
 import {
+  assertKnownProcessorOptions,
   isPlaybackMessage,
   requireIntegerOption,
   resolveContextSampleRate,
@@ -75,6 +76,7 @@ export class SonarePlaybackWorkletProcessor {
   private destroyed = false;
 
   constructor(options: SonarePlaybackWorkletProcessorOptions = {}, port?: WorkletPort) {
+    assertKnownProcessorOptions('SonarePlaybackWorkletProcessor', 'playbackProcessor', options);
     this.port = port;
     this.maxBlockSize = requireIntegerOption(options.maxBlockSize, 128, 'maxBlockSize', 1);
     const sampleRate = resolveScopeSampleRate(options.sampleRate, 'SonarePlaybackWorkletProcessor');
@@ -257,6 +259,7 @@ export function registerSonarePlaybackWorkletProcessor(name = 'sonare-playback-p
       super();
       const port = this.port;
       const processorOptions = options?.processorOptions ?? {};
+      assertKnownProcessorOptions(name, 'playbackProcessor', processorOptions);
       const start = () => {
         this.bridge = new SonarePlaybackWorkletProcessor(processorOptions, port);
         for (const message of this.pendingMessages.splice(0)) {
@@ -333,6 +336,7 @@ export function createSonarePlaybackNode(
   context: BaseAudioContext,
   options: SonarePlaybackNodeOptions = {},
 ): AudioWorkletNode {
+  assertKnownProcessorOptions('createSonarePlaybackNode', 'playbackNode', options);
   const config = configObject(options.config);
   const factory =
     options.nodeFactory ??

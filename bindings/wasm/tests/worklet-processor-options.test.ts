@@ -1,0 +1,127 @@
+/**
+ * `processorOptions` is a request object: an undeclared key, including every retired name, is a
+ * TypeError naming the key, from the main-thread factory and from the processor constructor alike.
+ */
+import { afterEach, beforeAll, describe, expect, it } from 'vitest';
+import { init } from '../dist/index.js';
+import {
+  createSonarePlaybackNode,
+  init as initWorklet,
+  registerSonarePlaybackWorkletProcessor,
+  registerSonareRealtimeVoiceChangerWorkletProcessor,
+  registerSonareStreamAnalyzerWorkletProcessor,
+  SonarePlaybackWorkletProcessor,
+  SonareRealtimeVoiceChangerWorkletProcessor,
+  SonareStreamAnalyzerNode,
+  SonareStreamAnalyzerWorkletProcessor,
+} from '../dist/worklet.js';
+
+type Ctor = new (options: unknown) => object;
+
+const scope = globalThis as unknown as Record<string, unknown>;
+
+/** Registers a processor against a fake scope and returns the class the host would construct. */
+function registered(register: (name: string) => void, name: string): Ctor {
+  let ctor: unknown;
+  Object.assign(scope, {
+    AudioWorkletProcessor: class {
+      port = {
+        postMessage: () => undefined,
+        addEventListener: () => undefined,
+        start: () => undefined,
+      };
+    },
+    registerProcessor: (_name: string, c: unknown) => {
+      ctor = c;
+    },
+  });
+  register(name);
+  return ctor as Ctor;
+}
+
+const nodeFactory = () => ({ port: {} }) as unknown as AudioWorkletNode;
+const context = { sampleRate: 48000 } as BaseAudioContext;
+
+describe('processorOptions refuses undeclared keys', () => {
+  beforeAll(async () => {
+    await init();
+    await initWorklet();
+  });
+
+  afterEach(() => {
+    delete scope.AudioWorkletProcessor;
+    delete scope.registerProcessor;
+  });
+
+  describe('voice changer', () => {
+    const base = { config: 'neutralMonitor', sampleRate: 48000 };
+
+    it.each([
+      ['preset', 'neutralMonitor'],
+      ['blockSize', 128],
+      ['channelCount', 2],
+    ])('the processor constructor refuses the retired %s by name', (key, value) => {
+      const Processor = registered(registerSonareRealtimeVoiceChangerWorkletProcessor, 'vc-test');
+      expect(() => new Processor({ processorOptions: { ...base, [key]: value } })).toThrow(
+        new TypeError(`vc-test: unknown option '${key}'`),
+      );
+      expect(
+        () => new SonareRealtimeVoiceChangerWorkletProcessor({ ...base, [key]: value } as never),
+      ).toThrow(
+        new TypeError(`SonareRealtimeVoiceChangerWorkletProcessor: unknown option '${key}'`),
+      );
+    });
+
+    it('accepts every declared key', () => {
+      const processor = new SonareRealtimeVoiceChangerWorkletProcessor({
+        ...base,
+        maxBlockSize: 128,
+        numChannels: 2,
+        config: 'neutralMonitor',
+      });
+      processor.destroy();
+    });
+  });
+
+  describe('playback', () => {
+    it.each([
+      ['blockSize', 128],
+      ['channelCount', 2],
+    ])('the node factory and the processor refuse the retired %s by name', (key, value) => {
+      expect(() =>
+        createSonarePlaybackNode(context, { nodeFactory, [key]: value } as never),
+      ).toThrow(new TypeError(`createSonarePlaybackNode: unknown option '${key}'`));
+      const Processor = registered(registerSonarePlaybackWorkletProcessor, 'pb-test');
+      expect(
+        () => new Processor({ processorOptions: { sampleRate: 48000, [key]: value } }),
+      ).toThrow(new TypeError(`pb-test: unknown option '${key}'`));
+      expect(
+        () => new SonarePlaybackWorkletProcessor({ sampleRate: 48000, [key]: value } as never),
+      ).toThrow(new TypeError(`SonarePlaybackWorkletProcessor: unknown option '${key}'`));
+    });
+
+    it('refuses processorOptions that are not an object', () => {
+      const Processor = registered(registerSonarePlaybackWorkletProcessor, 'pb-test');
+      expect(() => new Processor({ processorOptions: 'config' })).toThrow(
+        new TypeError('pb-test: options must be an object'),
+      );
+    });
+  });
+
+  describe('stream analyzer', () => {
+    it('the node factory and the processor refuse an undeclared key by name', async () => {
+      await expect(
+        SonareStreamAnalyzerNode.create(context, { nodeFactory, bufferSize: 4096 } as never),
+      ).rejects.toThrow(
+        new TypeError("SonareStreamAnalyzerNode.create: unknown option 'bufferSize'"),
+      );
+      const Processor = registered(registerSonareStreamAnalyzerWorkletProcessor, 'sa-test');
+      expect(() => new Processor({ processorOptions: { bufferSize: 4096 } })).toThrow(
+        new TypeError("sa-test: unknown option 'bufferSize'"),
+      );
+      expect(() => new SonareStreamAnalyzerWorkletProcessor({ bufferSize: 4096 } as never)).toThrow(
+        new TypeError("SonareStreamAnalyzerWorkletProcessor: unknown option 'bufferSize'"),
+      );
+    });
+  });
+});

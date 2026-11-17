@@ -2,7 +2,11 @@ import { ErrorCode, SonareError } from '../errors.js';
 import type { StreamFrames, StreamStats } from '../index.js';
 import { StreamAnalyzer } from '../index.js';
 import type { SonareStreamAnalyzerChunkMessage } from '../internal/stream_analyzer_messages.js';
-import { isStreamAnalyzerChunkMessage, resolveContextSampleRate } from './guards.js';
+import {
+  assertKnownProcessorOptions,
+  isStreamAnalyzerChunkMessage,
+  resolveContextSampleRate,
+} from './guards.js';
 import type {
   SonareStreamAnalyzerNodeOptions,
   SonareStreamAnalyzerWorkletProcessorOptions,
@@ -70,6 +74,7 @@ export class SonareStreamAnalyzerNode {
     context: BaseAudioContext,
     options: SonareStreamAnalyzerNodeOptions = {},
   ): Promise<SonareStreamAnalyzerNode> {
+    assertKnownProcessorOptions('SonareStreamAnalyzerNode.create', 'streamAnalyzerNode', options);
     const chunkFrames = resolveStreamAnalyzerChunkFrames(options.chunkFrames);
     const processorName = options.processorName ?? 'sonare-stream-analyzer-processor';
     if (options.moduleUrl && context.audioWorklet?.addModule) {

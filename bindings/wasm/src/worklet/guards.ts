@@ -1,4 +1,5 @@
 import type { EngineCaptureStatus } from '../index.js';
+import { PROCESSOR_OPTION_KEYS } from '../request_keys.js';
 import type {
   SonareEngineCaptureRequestMessage,
   SonareEngineCaptureResponseMessageInternal,
@@ -470,6 +471,36 @@ export function resolveContextSampleRate(
     );
   }
   return context.sampleRate;
+}
+
+/** A processor or node factory whose option keys {@link assertKnownProcessorOptions} checks. */
+export type ProcessorOptionsTable = keyof typeof PROCESSOR_OPTION_KEYS;
+
+/**
+ * Refuses a `processorOptions` (or node-factory option) key the table does not
+ * declare, and options that are not a plain object. Inside a processor
+ * constructor the throw surfaces only as `processorerror`, so the message names
+ * `what` and the key on its own. Absent options (`undefined` / `null`) are empty.
+ *
+ * @throws TypeError naming the first undeclared key.
+ */
+export function assertKnownProcessorOptions(
+  what: string,
+  table: ProcessorOptionsTable,
+  options: unknown,
+): void {
+  if (options === undefined || options === null) {
+    return;
+  }
+  if (typeof options !== 'object' || Array.isArray(options)) {
+    throw new TypeError(`${what}: options must be an object`);
+  }
+  const keys: readonly string[] = PROCESSOR_OPTION_KEYS[table];
+  for (const key of Object.keys(options)) {
+    if (!keys.includes(key)) {
+      throw new TypeError(`${what}: unknown option '${key}'`);
+    }
+  }
 }
 
 /**

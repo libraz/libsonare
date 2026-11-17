@@ -14,6 +14,7 @@ import {
 } from './audio_types.js';
 import { initializeEmbindInWorklet, isEmbindReady } from './embind-init.js';
 import {
+  assertKnownProcessorOptions,
   isRealtimeVoiceChangerMessage,
   requireIntegerOption,
   resolveScopeSampleRate,
@@ -36,6 +37,11 @@ export class SonareRealtimeVoiceChangerWorkletProcessor {
   private destroyed = false;
 
   constructor(options: SonareRealtimeVoiceChangerWorkletProcessorOptions = {}) {
+    assertKnownProcessorOptions(
+      'SonareRealtimeVoiceChangerWorkletProcessor',
+      'voiceChangerProcessor',
+      options,
+    );
     this.sampleRate = resolveScopeSampleRate(
       options.sampleRate,
       'SonareRealtimeVoiceChangerWorkletProcessor',
@@ -255,6 +261,7 @@ export function registerSonareRealtimeVoiceChangerWorkletProcessor(
       super();
       const port = this.port;
       const processorOptions = options?.processorOptions ?? {};
+      assertKnownProcessorOptions(name, 'voiceChangerProcessor', processorOptions);
       const reportError = (
         request: SonareRealtimeVoiceChangerErrorMessage['request'],
         error: unknown,
