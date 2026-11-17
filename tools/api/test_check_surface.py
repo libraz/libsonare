@@ -345,6 +345,56 @@ class Conventions(CheckerCase):
         )
 
 
+class NameTables(CheckerCase):
+    """The fixture's ErrorCodeName is ErrorCode's member names on python and node."""
+
+    def retoken(self, surface, old, new):
+        for r in self.inv["records"]:
+            if r["surface"] != surface:
+                continue
+            if r["kind"] == "type" and r["name"] == "ErrorCodeName":
+                r["literals"] = sorted(new if t == old else t for t in r["literals"])
+            elif r.get("owner") == "ErrorCodeName" and r.get("token") == old:
+                r.update(name=f"ErrorCodeName='{new}'", member=new, token=new)
+
+    def test_member_name_table_is_not_a_token_set(self):
+        code, lines = self.run_check("--check", "token-case,token-case:name-table")
+        self.assertEqual(code, 0, "\n".join(lines))
+        self.assertIn("  check token-case:name-table: checked 2, violations 0", lines)
+
+    def test_a_lower_camel_member_makes_it_a_token_set_again(self):
+        self.retoken("python", "InvalidParameter", "invalidParameter")
+        code, lines = self.run_check("--check", "token-case,token-case:name-table")
+        self.assertEqual(code, 1)
+        self.assertIn("    python value ErrorCodeName='Ok': token 'Ok' is not lowerCamel", lines)
+        self.assertIn(
+            "    node type ErrorCodeName: name table differs from python: InvalidParameter, invalidParameter",
+            lines,
+        )
+
+    def test_an_extra_non_member_value_makes_it_a_token_set_again(self):
+        self.retoken("node", "Ok", "Retry")
+        code, lines = self.run_check("--check", "token-case")
+        self.assertEqual(code, 1)
+        self.assertIn(
+            "    node value ErrorCodeName='Retry': token 'Retry' is not lowerCamel", lines
+        )
+
+    def test_a_python_member_missing_from_the_table_is_reported(self):
+        self.add(
+            _rec(
+                "python",
+                "value",
+                "ErrorCode.STALE_RESULT",
+                owner="ErrorCode",
+                member="STALE_RESULT",
+            )
+        )
+        code, lines = self.run_check("--check", "token-case,token-case:name-table")
+        self.assertEqual(code, 1)
+        self.assertIn("    python value ErrorCodeName='Ok': token 'Ok' is not lowerCamel", lines)
+
+
 def _py_fn(name, *params):
     """A public Python function; each param is (name, default-or-None)."""
     ps = [
@@ -742,7 +792,7 @@ class NameVote(unittest.TestCase):
 class FrozenDomains(CheckerCase):
     def test_baseline_counts(self):
         _, lines = self.run_check()
-        self.assertIn("domain vote: 11 names, 0 by tie-break", lines)
+        self.assertIn("domain vote: 12 names, 0 by tie-break", lines)
         self.assertIn("unassigned: 0", lines)
 
     def test_file_wins_over_the_per_surface_domain(self):
@@ -792,7 +842,7 @@ class FrozenDomains(CheckerCase):
         out = self.dir / "domains.json"
         _, lines = self.run_check("--regenerate-domains", domains_file=out)
         self.assertEqual(out.read_text(encoding="utf-8"), (TD / "domains.json").read_text())
-        self.assertIn("Regenerated domains.json: 11 names", lines)
+        self.assertIn("Regenerated domains.json: 12 names", lines)
 
 
 class SkipCheck(CheckerCase):

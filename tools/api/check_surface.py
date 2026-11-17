@@ -437,6 +437,7 @@ class Ctx:
     python_all: set[str]
     cli_only: dict[str, list[str]]
     by_owner: dict = field(default_factory=dict)
+    all_records: list[dict] = field(default_factory=list)
 
     def __post_init__(self):
         idx = collections.defaultdict(list)
@@ -939,14 +940,77 @@ def chk_no_positional_bools(ctx):
 _TOKEN = re.compile(r"^[a-z][a-zA-Z0-9.]*$")
 
 
+# How each binding spells an enum member, mapped onto the cross-binding member name.
+_MEMBER_NAME_MAP = {
+    "wasm": lambda n: n,
+    "node": lambda n: n,
+    "python": lambda n: "".join(w.capitalize() for w in n.split("_")),
+}
+
+
+def _name_tables(records, surface: str) -> dict[str, frozenset]:
+    """String sets on `surface` equal to one of its enums' member names under the surface's map."""
+    enums = collections.defaultdict(set)
+    for r in records:
+        if (
+            r["surface"] == surface
+            and r["kind"] == "value"
+            and r["owner"]
+            and r.get("token") is None
+        ):
+            enums[r["owner"]].add(_MEMBER_NAME_MAP[surface](r["member"]))
+    member_sets = {frozenset(v) for v in enums.values()}
+    return {
+        r["name"]: frozenset(r["literals"])
+        for r in records
+        if r["surface"] == surface
+        and r["kind"] == "type"
+        and r.get("literals")
+        and frozenset(r["literals"]) in member_sets
+    }
+
+
 def _tokens(ctx):
+    """Closed-set string tokens; an enum's name table is a set of member names, not tokens."""
+    tables = {s: _name_tables(ctx.records, s) for s in BINDINGS}
     for r in recs(ctx, BINDINGS, ("value",)):
-        if r.get("token") is not None:
+        if r.get("token") is not None and r["owner"] not in tables[r["surface"]]:
             yield r, r["token"]
     for r in recs(ctx, BINDINGS, ("option", "field")):
         if r.get("inline_literals"):
+            if frozenset(r.get("literals", [])) in tables[r["surface"]].values():
+                continue
             for t in r.get("literals", []):
                 yield r, t
+
+
+def chk_name_tables(ctx):
+    """An enum name table carries the same names on every binding that declares it."""
+    cands, bad = 0, []
+    tables = {s: _name_tables(ctx.all_records, s) for s in BINDINGS}
+    for r in recs(ctx, BINDINGS, ("type",)):
+        mine = tables[r["surface"]].get(r["name"])
+        if mine is None:
+            continue
+        for other in BINDINGS:
+            if other == r["surface"]:
+                continue
+            peer = next(
+                (
+                    q
+                    for q in ctx.all_records
+                    if q["surface"] == other and q["kind"] == "type" and q["name"] == r["name"]
+                ),
+                None,
+            )
+            if peer is None:
+                continue
+            cands += 1
+            theirs = frozenset(peer.get("literals") or [])
+            if theirs != mine:
+                diff = sorted(mine ^ theirs)
+                bad.append((r, f"name table differs from {other}: {', '.join(diff)}"))
+    return cands, bad
 
 
 def chk_token_case(ctx):
@@ -1223,6 +1287,7 @@ CHECKS: tuple[Check, ...] = (
     Check("one-positional-form", JS, chk_one_positional_form),
     Check("no-positional-bools", JS, chk_no_positional_bools),
     Check("token-case", BINDINGS, chk_token_case),
+    Check("token-case:name-table", BINDINGS, chk_name_tables),
     Check("digit-tokens", BINDINGS, chk_digit_tokens),
     Check("high-pass", ALL, chk_high_pass),
     Check("num-channels", LANG, chk_num_channels),
@@ -1406,6 +1471,7 @@ def run(args) -> tuple[int, list[str], dict]:
         mirrors,
         set(inv.get("python_all", [])),
         inv.get("cli_only", {}),
+        all_records=records,
     )
     table = collections.Counter()
     for f in lfail:

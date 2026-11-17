@@ -5,9 +5,9 @@
 // own node_modules. Output is a JSON array on stdout, one object per (entry, export):
 // name, kind, declaring file and line, doc presence, structured call signatures (params
 // with name / optional / type text / boolean / string-literal members, return text),
-// class and interface members (well-known symbols spelled `[Symbol.dispose]`), enum
-// members, and the string-literal members of exported type aliases. Paths are relative
-// to the repository root (two levels above the package directory).
+// class and interface members (well-known symbols spelled `[Symbol.dispose]`), enum and
+// `as const` object members, and the string-literal members of exported type aliases.
+// Paths are relative to the repository root (two levels above the package directory).
 'use strict';
 const path = require('path');
 
@@ -174,6 +174,24 @@ for (let i = 0; i < files.length; i++) {
         ...where(m),
         doc: declHasDoc(m),
       }));
+    }
+    // A `{ ... } as const` object is an enum in all but declaration form.
+    const constObject = (s.declarations || []).find(
+      (x) =>
+        ts.isVariableDeclaration(x) &&
+        x.initializer &&
+        ts.isAsExpression(x.initializer) &&
+        x.initializer.type.getText() === 'const' &&
+        ts.isObjectLiteralExpression(x.initializer.expression),
+    );
+    if (constObject) {
+      row.enumMembers = constObject.initializer.expression.properties
+        .filter(ts.isPropertyAssignment)
+        .map((m) => ({
+          name: m.name.getText().replace(/^['"]|['"]$/g, ''),
+          ...where(m),
+          doc: declHasDoc(m),
+        }));
     }
     if (kind === 'class' || kind === 'interface') {
       const inst = checker.getDeclaredTypeOfSymbol(s);

@@ -5,6 +5,7 @@
 "bpm_request": {"domain": "analysis", "surfaces": ["node", "wasm"]},
 "bpm_result": {"domain": "analysis", "surfaces": ["python"]},
 "detect_bpm": {"domain": "analysis", "surfaces": ["node", "python", "wasm"]},
+"error_code_name": {"domain": "analysis", "surfaces": ["node", "python"]},
 "free_string": {"domain": "analysis", "surfaces": ["c"]},
 "session": {"domain": "engine", "surfaces": ["c", "node", "python", "wasm"]},
 "session_create": {"domain": "analysis", "surfaces": ["c"]},

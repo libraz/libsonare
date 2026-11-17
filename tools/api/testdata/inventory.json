@@ -7,13 +7,13 @@
   "c": 9,
   "cli-native": 2,
   "cli-python": 2,
-  "node": 17,
-  "python": 10,
+  "node": 22,
+  "python": 15,
   "wasm": 17
  },
  "domain_paths": {
-  "declaring-file": 20,
-  "inherited": 37
+  "declaring-file": 22,
+  "inherited": 45
  },
  "errors": [],
  "files": {
@@ -1130,6 +1130,152 @@
    "owner": "BpmMode",
    "surface": "wasm",
    "token": "midi2"
+  },
+  {
+   "domain": "analysis",
+   "domain_path": "inherited",
+   "entries": [],
+   "file": "bindings/python/src/libsonare/_errors.py",
+   "has_doc": true,
+   "kind": "value",
+   "line": 1,
+   "member": "OK",
+   "name": "ErrorCode.OK",
+   "owner": "ErrorCode",
+   "surface": "python"
+  },
+  {
+   "domain": "analysis",
+   "domain_path": "inherited",
+   "entries": [],
+   "file": "bindings/python/src/libsonare/_errors.py",
+   "has_doc": true,
+   "kind": "value",
+   "line": 1,
+   "member": "INVALID_PARAMETER",
+   "name": "ErrorCode.INVALID_PARAMETER",
+   "owner": "ErrorCode",
+   "surface": "python"
+  },
+  {
+   "domain": "analysis",
+   "domain_path": "declaring-file",
+   "entries": [],
+   "file": "bindings/python/src/libsonare/_errors.py",
+   "has_doc": true,
+   "kind": "type",
+   "line": 1,
+   "literals": [
+    "InvalidParameter",
+    "Ok"
+   ],
+   "member": "",
+   "name": "ErrorCodeName",
+   "owner": "",
+   "py_kind": "alias",
+   "surface": "python",
+   "type": "ErrorCodeName = Literal['Ok', 'InvalidParameter']"
+  },
+  {
+   "domain": "analysis",
+   "domain_path": "inherited",
+   "entries": [],
+   "file": "bindings/python/src/libsonare/_errors.py",
+   "has_doc": true,
+   "kind": "value",
+   "line": 1,
+   "member": "InvalidParameter",
+   "name": "ErrorCodeName='InvalidParameter'",
+   "owner": "ErrorCodeName",
+   "surface": "python",
+   "token": "InvalidParameter"
+  },
+  {
+   "domain": "analysis",
+   "domain_path": "inherited",
+   "entries": [],
+   "file": "bindings/python/src/libsonare/_errors.py",
+   "has_doc": true,
+   "kind": "value",
+   "line": 1,
+   "member": "Ok",
+   "name": "ErrorCodeName='Ok'",
+   "owner": "ErrorCodeName",
+   "surface": "python",
+   "token": "Ok"
+  },
+  {
+   "domain": "analysis",
+   "domain_path": "inherited",
+   "entries": [],
+   "file": "bindings/node/src/errors.ts",
+   "has_doc": true,
+   "kind": "value",
+   "line": 1,
+   "member": "Ok",
+   "name": "ErrorCode.Ok",
+   "owner": "ErrorCode",
+   "surface": "node"
+  },
+  {
+   "domain": "analysis",
+   "domain_path": "inherited",
+   "entries": [],
+   "file": "bindings/node/src/errors.ts",
+   "has_doc": true,
+   "kind": "value",
+   "line": 1,
+   "member": "InvalidParameter",
+   "name": "ErrorCode.InvalidParameter",
+   "owner": "ErrorCode",
+   "surface": "node"
+  },
+  {
+   "domain": "analysis",
+   "domain_path": "declaring-file",
+   "entries": [],
+   "file": "bindings/node/src/errors.ts",
+   "has_doc": true,
+   "kind": "type",
+   "line": 1,
+   "literals": [
+    "InvalidParameter",
+    "Ok"
+   ],
+   "member": "",
+   "name": "ErrorCodeName",
+   "owner": "",
+   "surface": "node",
+   "ts_kind": "type",
+   "type": "export type ErrorCodeName = keyof typeof ErrorCode;"
+  },
+  {
+   "domain": "analysis",
+   "domain_path": "inherited",
+   "entries": [],
+   "file": "bindings/node/src/errors.ts",
+   "has_doc": true,
+   "kind": "value",
+   "line": 1,
+   "member": "InvalidParameter",
+   "name": "ErrorCodeName='InvalidParameter'",
+   "owner": "ErrorCodeName",
+   "surface": "node",
+   "token": "InvalidParameter"
+  },
+  {
+   "domain": "analysis",
+   "domain_path": "inherited",
+   "entries": [],
+   "file": "bindings/node/src/errors.ts",
+   "has_doc": true,
+   "kind": "value",
+   "line": 1,
+   "member": "Ok",
+   "name": "ErrorCodeName='Ok'",
+   "owner": "ErrorCodeName",
+   "surface": "node",
+   "token": "Ok"
   }
  ]
 }

@@ -335,6 +335,26 @@ def _docstring(node: ast.AST | None) -> bool:
     return False
 
 
+def _attr_doc(tree: ast.AST | None, node: ast.AST | None) -> bool:
+    """A module attribute is documented by a string literal statement right after it."""
+    if tree is None or node is None:
+        return False
+    for holder in ast.walk(tree):
+        for field in ("body", "orelse", "finalbody"):
+            block = getattr(holder, field, None)
+            if not isinstance(block, list):
+                continue
+            for i, stmt in enumerate(block[:-1]):
+                if stmt is node:
+                    nxt = block[i + 1]
+                    return (
+                        isinstance(nxt, ast.Expr)
+                        and isinstance(nxt.value, ast.Constant)
+                        and isinstance(nxt.value.value, str)
+                    )
+    return False
+
+
 def _unparse(node: ast.AST | None) -> str:
     return ast.unparse(node) if node is not None else ""
 
@@ -431,6 +451,26 @@ def _class_methods(pkg: _PyPackage, node: ast.ClassDef, seen: set[str] | None = 
     return names
 
 
+def _inherited_method(pkg: _PyPackage, node: ast.ClassDef, meth: str, seen: set[str] | None = None):
+    """The definition of `meth` on the nearest in-package base of `node`."""
+    seen = seen or set()
+    for b in node.bases:
+        bn = _unparse(b)
+        if bn in seen:
+            continue
+        seen.add(bn)
+        bnode, _ = pkg.class_node(bn)
+        if bnode is None:
+            continue
+        for c in bnode.body:
+            if isinstance(c, (ast.FunctionDef, ast.AsyncFunctionDef)) and c.name == meth:
+                return c
+        hit = _inherited_method(pkg, bnode, meth, seen)
+        if hit is not None:
+            return hit
+    return None
+
+
 def extract_python(root: Path) -> tuple[list[dict], dict[str, int], dict]:
     pkg = _PyPackage(root)
     init = pkg.py["__init__"]
@@ -502,13 +542,17 @@ def extract_python(root: Path) -> tuple[list[dict], dict[str, int], dict]:
                 )
             )
             toks = _literal_tokens(vtext)
+            stub_mod = pkg.pyi.get(stem)
+            documented = _attr_doc(pkg.py[stem].tree if stem in pkg.py else None, node) or (
+                _attr_doc(stub_mod.tree, stub) if stub_mod is not None else False
+            )
             rec = _record(
                 "python",
                 "type" if is_alias else "export",
                 name,
                 file,
                 line,
-                False,
+                documented,
                 py_kind="alias" if is_alias else "constant",
                 type=text,
                 literals=toks,
@@ -697,6 +741,8 @@ def _py_class(pkg, name, node, stub, stem, file, pick_sig, sig_names, common):
             )
         if mnode is None and f is not None:
             mnode = _node_at(pkg, f.file, f.line)
+        if mnode is None:
+            mnode = _inherited_method(pkg, node, meth)
         line = f.line if f else (mnode.lineno if mnode else node.lineno)
         extra = {"decorators": [_unparse(d) for d in getattr(mnode, "decorator_list", [])]}
         out.extend(
