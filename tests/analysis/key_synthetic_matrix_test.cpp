@@ -1218,7 +1218,7 @@ TEST_CASE("refine_key_with_chords recognizes repeated major authentic cadences",
   }
 
   SECTION("the ordinary posterior gate still accepts a scored key at and above one quarter") {
-    for (const auto [dominant_posterior, tonic_posterior] :
+    for (const auto& [dominant_posterior, tonic_posterior] :
          {std::pair<float, float>{0.8f, 0.2f}, std::pair<float, float>{0.79f, 0.21f}}) {
       for (int root = 0; root < 12; ++root) {
         const auto tonic = static_cast<PitchClass>(root);
