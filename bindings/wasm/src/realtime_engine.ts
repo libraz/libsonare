@@ -2761,14 +2761,17 @@ export class RealtimeEngine {
   }
 }
 
+/** Handle to a paged clip source on a {@link RealtimeEngine}; pages are supplied on demand. */
 export class ClipPageProvider {
   private disposed = false;
 
   constructor(
     private readonly engine: RealtimeEngine,
+    /** Provider id on the engine. */
     readonly id: number,
   ) {}
 
+  /** Hand the engine one page of planar channels. Throws `InvalidState` after `destroy()`. */
   supply(pageIndex: number, channels: Float32Array[]): void {
     if (this.disposed) {
       throw releasedHandleError('ClipPageProvider', 'is destroyed');
@@ -2776,6 +2779,7 @@ export class ClipPageProvider {
     this.engine.supplyClipPage(this.id, pageIndex, channels);
   }
 
+  /** Evict one resident page; a no-op after `destroy()`. */
   clear(pageIndex: number): void {
     if (this.disposed) {
       return;
@@ -2783,6 +2787,7 @@ export class ClipPageProvider {
     this.engine.clearClipPage(this.id, pageIndex);
   }
 
+  /** Release the provider on the engine. Idempotent. */
   destroy(): void {
     if (this.disposed) {
       return;

@@ -37,7 +37,9 @@ import {
 
 /** The message channel a vocal-edit Worker listens and replies on. */
 export interface VocalEditWorkerEndpoint {
+  /** Sends a response to the main thread, optionally transferring buffers. */
   postMessage(message: VocalWorkerResponseMessage, transfer?: Transferable[]): void;
+  /** Registers the listener that receives request messages. */
   addEventListener(
     type: 'message',
     listener: (event: MessageEvent<VocalWorkerRequestMessage>) => void,
@@ -46,43 +48,70 @@ export interface VocalEditWorkerEndpoint {
 
 /** The draft operations the Worker drives; {@link VocalEditDraft} satisfies it. */
 export interface VocalEditWorkerNativeDraft {
+  /** Current state token. */
   readonly token: VocalStateToken;
+  /** Notes of the draft. */
   notes(): VocalNotesResult;
+  /** Applies operations; `expectedGeneration` must match the draft's current generation. */
   apply(request: {
     expectedGeneration: string;
     operations: readonly VocalEditOperation[];
   }): VocalEditResult;
+  /** Commits the draft; `expectedRevision` must match the session's current revision. */
   commit(expectedRevision: string): VocalEditResult;
+  /** Discards the draft. */
   cancel(): void;
+  /** Pitch curves of a note after the draft's edits. */
   evaluatePitch(noteId: number): VocalPitchEvaluation;
+  /** Maps a sample position in a note's source to the output. */
   sourceSampleToDestinationSample(noteId: number, sourceSample: number): number;
+  /** Maps an output sample position in a note to the source. */
   destinationSampleToSourceSample(noteId: number, destinationSample: number): number;
+  /** Captures a snapshot to render from. */
   captureRenderSnapshot(): VocalRenderSnapshot;
+  /** Releases the draft. */
   destroy(): void;
 }
 
 /** The session operations the Worker drives; {@link VocalEditSession} satisfies it. */
 export interface VocalEditWorkerNativeSession {
+  /** Current state token. */
   readonly token: VocalStateToken;
+  /** Notes of the session. */
   notes(): VocalNotesResult;
+  /** Analysis of the source. */
   analysis(): VocalAnalysis;
+  /** Capabilities of the session. */
   capabilities(): VocalCapabilities;
+  /** Opens a draft; `expectedRevision`, when given, must match the current revision. */
   beginEdit(expectedRevision?: string): VocalEditWorkerNativeDraft;
+  /** Undoes the last edit; `expectedRevision`, when given, must match the current revision. */
   undo(expectedRevision?: string): VocalEditResult;
+  /** Redoes the last undone edit; `expectedRevision`, when given, must match the current revision. */
   redo(expectedRevision?: string): VocalEditResult;
+  /** Length of the output in samples. */
   outputLengthSamples(): number;
+  /** Undo/redo history. */
   history(): VocalHistory;
+  /** Pitch curves of a note after the session's edits. */
   evaluatePitch(noteId: number): VocalPitchEvaluation;
+  /** Maps a sample position in a note's source to the output. */
   sourceSampleToDestinationSample(noteId: number, sourceSample: number): number;
+  /** Maps an output sample position in a note to the source. */
   destinationSampleToSourceSample(noteId: number, destinationSample: number): number;
+  /** Captures a snapshot to render from. */
   captureRenderSnapshot(): VocalRenderSnapshot;
+  /** Serializes the session state for {@link VocalEditWorkerFactory.restore}. */
   exportState(): Uint8Array;
+  /** Releases the session. */
   destroy(): void;
 }
 
 /** Creates the native sessions a Worker serves; replaceable for tests. */
 export interface VocalEditWorkerFactory {
+  /** Creates a session from source audio. */
   create(request: VocalCreateRequest): VocalEditWorkerNativeSession;
+  /** Restores a session from exported state. */
   restore(request: VocalRestoreRequest): VocalEditWorkerNativeSession;
 }
 
@@ -506,7 +535,9 @@ function queueCommand(
 
 /** Seams a Worker entry point can replace: the native session factory and the module initialiser. */
 export interface VocalEditWorkerDependencies {
+  /** Native session factory; defaults to the production one. */
   factory?: VocalEditWorkerFactory;
+  /** Module initialiser awaited before serving; defaults to the production one. */
   initialize?: () => Promise<void>;
 }
 

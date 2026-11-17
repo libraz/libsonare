@@ -328,6 +328,7 @@ export interface OpfsClipStream {
 
 /** Structural seam implemented by the AudioWorklet-backed `SonareEngine`. */
 export interface WorkletOpfsClipStreamHost {
+  /** Wires an OPFS-backed streaming clip onto the worklet engine; see {@link attachOpfsClipStream}. */
   attachOpfsClipStream(options: OpfsClipStreamOptions): Promise<OpfsClipStream>;
 }
 

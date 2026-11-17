@@ -74,7 +74,9 @@ export interface ExternalSeparatedStemImportRequest {
 
 /** Ids of the normal tracks and clips created by the import. */
 export interface ExternalSeparatedStemImportResult {
+  /** Ids of the tracks created, one per stem. */
   trackIds: number[];
+  /** Ids of the clips created, one per stem. */
   clipIds: number[];
 }
 
@@ -257,16 +259,23 @@ export interface ProjectAudioSourceMetadataInput {
 
 /** One alternate take for {@link Project.setClipTakes}. */
 export interface ProjectClipTake {
+  /** Non-zero take id unique within the clip. */
   id: number;
+  /** Source id for this take; omitted reuses the clip's current source. */
   sourceId?: number;
+  /** Offset into the take source in PPQ. */
   sourceOffsetPpq?: number;
+  /** Optional UI/display name. */
   name?: string;
 }
 
 /** One comp segment for {@link Project.setClipCompSegments}. */
 export interface ProjectClipCompSegment {
+  /** Segment start in PPQ. */
   startPpq: number;
+  /** Segment end in PPQ. */
   endPpq: number;
+  /** Take id to play in this range; omitted falls back to the active/default take. */
   takeId?: number;
   /** Equal-power crossfade from the preceding segment, in PPQ (default 0 = butt join). */
   crossfadePpq?: number;
@@ -283,8 +292,11 @@ export interface ProjectClipCompSegment {
  * JSON (`toJson()`).
  */
 export interface ProjectLoopRecordingDesc {
+  /** Track the clip is added to. */
   trackId: number;
+  /** Clip start in PPQ. Default `0`. */
   startPpq?: number;
+  /** Length of one loop in PPQ; also the length of the added clip. */
   loopLengthPpq: number;
   /**
    * Interleaved capture (with `audioChannels`), or planar: one `Float32Array`
@@ -292,7 +304,9 @@ export interface ProjectLoopRecordingDesc {
    * makes `audioChannels` irrelevant.
    */
   audio: Float32Array | Float32Array[];
+  /** Channel count of an interleaved `audio`. Default `1`. */
   audioChannels?: number;
+  /** Sample rate of `audio` in Hz. Default `48000`. */
   audioSampleRate?: number;
   /** `'keep'` (default) keeps a partial last take; `'drop'` does not create it. */
   partialTail?: 'keep' | 'drop';
@@ -300,7 +314,9 @@ export interface ProjectLoopRecordingDesc {
 
 /** Result returned by {@link Project.addLoopRecordingTakes}. */
 export interface ProjectLoopRecordingResult {
+  /** Id of the clip added to the track. */
   clipId: number;
+  /** Number of takes created. */
   takeCount: number;
 }
 
@@ -459,7 +475,9 @@ export type ProjectChordQuality =
 
 /** Key segment for {@link Project.annotateKeys}. */
 export interface ProjectKeySegment {
+  /** Segment start in PPQ. */
   startPpq: number;
+  /** Segment end in PPQ. */
   endPpq: number;
   /** Tonic pitch class 0..11 (C=0) or 255 for unknown. */
   tonicPc?: number;
@@ -469,7 +487,9 @@ export interface ProjectKeySegment {
 
 /** Chord symbol for {@link Project.annotateChords}. */
 export interface ProjectChordSymbol {
+  /** Chord start in PPQ. */
   startPpq: number;
+  /** Chord end in PPQ. */
   endPpq: number;
   /** Root pitch class 0..11 (C=0) or 255 for unknown. */
   rootPc?: number;
@@ -503,11 +523,17 @@ export interface ProjectAssistSidecarInput {
 
 /** Assist sidecar snapshot returned by {@link Project.assistSidecars}. */
 export interface ProjectAssistSidecar {
+  /** Module id key. */
   moduleId: string;
+  /** Module-defined schema version. */
   schemaVersion: number;
+  /** Target track id (`0` = project scope). */
   targetTrackId: number;
+  /** Region start in PPQ. */
   regionStartPpq: number;
+  /** Region end in PPQ. */
   regionEndPpq: number;
+  /** Opaque module-owned payload bytes. */
   payload: Uint8Array;
 }
 
@@ -516,7 +542,9 @@ export type ProjectTrackKind = 'audio' | 'midi' | 'aux';
 
 /** Descriptor for {@link Project.addTrack}. */
 export interface ProjectTrackDesc {
+  /** Track kind. Default `'audio'`. */
   kind?: ProjectTrackKind;
+  /** Optional display name. */
   name?: string;
 }
 
@@ -526,13 +554,19 @@ export interface ProjectTrackDesc {
  * fields by `projectRate / referenceRate` before {@link Project.setWarpMap}.
  */
 export interface ProjectWarpAnchor {
+  /** Position on the warped timeline, in samples at the project sample rate. */
   warpSample: number;
+  /** Position in the clip source, in samples at the project sample rate. */
   sourceSample: number;
 }
 
+/** First-class project warp map referenced by clip `warpRefId`. */
 export interface ProjectWarpMapDesc {
+  /** Warp-map id, referenced by a clip's `warpRefId`. */
   id: number;
+  /** Optional display name. */
   name?: string;
+  /** Anchors of the map, in order. */
   anchors: ProjectWarpAnchor[];
 }
 
@@ -642,7 +676,9 @@ export interface ProjectClipDesc {
 
 /** Result returned by {@link Project.addMidiClip}. */
 export interface ProjectMidiClipResult {
+  /** Id of the MIDI track created for the clip. */
   trackId: number;
+  /** Id of the clip created. */
   clipId: number;
 }
 
@@ -657,23 +693,33 @@ export interface ProjectMidiClipResult {
  * serialization, and are destroyed by {@link Project.setMidiEvents}.
  */
 export interface ProjectMidiEvent {
+  /** Event position in PPQ. */
   ppq: number;
+  /** First UMP word of the message. */
   data0: number;
+  /** Second UMP word of the message. Default `0`. */
   data1?: number;
 }
 
 /** Options for {@link midiRouteEvents}. Omitted filter fields mean any/no remap; `null` reads as omitted. */
 export interface ProjectMidiRouteConfig {
+  /** Only events on this UMP group (0-15) pass. Omitted: any group. */
   filterGroup?: number;
+  /** Only events on this MIDI channel (0-15) pass. Omitted: any channel. */
   filterChannel?: number;
+  /** Rewrites a channel-voice message's channel to this value (0-15). Omitted: no remap. */
   remapChannel?: number;
+  /** When `false`, nothing is emitted. Default `true`. */
   thru?: boolean;
 }
 
 /** Result of {@link midiRouteEvents}. */
 export interface ProjectMidiRouteResult {
+  /** The events that passed the filter, remapped as configured. */
   events: ProjectMidiEvent[];
+  /** `true` when the output was too long and events were dropped. */
   overflowed: boolean;
+  /** Number of events dropped. */
   overflowCount: number;
 }
 
@@ -691,14 +737,19 @@ export interface MidiCcLearnOptions {
 
 /** MIDI CC <-> automation binding descriptor used by CC learn/conversion helpers. */
 export interface ProjectMidiCcBinding {
+  /** Controller number (the MSB controller for a 14-bit CC). */
   ccNumber: number;
   /** MIDI channel 0..15, or 255 for any channel. Omit for the any-channel sentinel `255`. */
   channel?: number;
   /** 0 = 7-bit CC, 1 = 14-bit CC, 2 = RPN, 3 = NRPN. Default `0`. */
   kind?: ProjectMidiCcBindingKind;
+  /** LSB controller number of a 14-bit CC (`ccNumber` + 32). Default `0`. */
   ccLsbNumber?: number;
+  /** Selector MSB of an RPN/NRPN binding. Default `0`. */
   selectorMsb?: number;
+  /** Selector LSB of an RPN/NRPN binding. Default `0`. */
   selectorLsb?: number;
+  /** Automation parameter id the controller drives. */
   paramId: number;
   /** Lower end of the mapped parameter range. Default `0`. */
   minValue?: number;
@@ -962,7 +1013,10 @@ export interface ProjectCompileTimelineResult extends ProjectCompileResult {
   readonly timeline: ProjectTimeline | null;
 }
 
+/** Result of {@link Project.fromJsonWithDiagnostics}. */
 export interface ProjectDeserializeResult {
+  /** The deserialized project. */
   project: Project;
+  /** Native warning diagnostics emitted by a successful load. */
   diagnostics: string;
 }

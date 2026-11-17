@@ -319,6 +319,12 @@ export class Project {
 
   private instrumentBounceActive = false;
 
+  /**
+   * Applies a vocal edit to a clip's audio.
+   *
+   * @param request - The edit and the original audio it applies to
+   * @returns The rendered result and the stored edit state
+   */
   applyVocalEdit(request: ProjectVocalEditApplyRequest): ProjectVocalEditApplyResult {
     return projectApplyVocalEdit(this.native, request);
   }
@@ -328,6 +334,13 @@ export class Project {
     return projectGetVocalEditDependencies(this.native);
   }
 
+  /**
+   * Re-renders the stored vocal edits against the original audio.
+   *
+   * @param originals - The original audio of each edited source
+   * @param options - `cancel` is polled between items; return `true` to stop
+   * @returns One entry per stored edit
+   */
   rehydrateVocalEdits(
     originals: readonly ProjectVocalOriginalSource[],
     options?: ProjectVocalRehydrateOptions,

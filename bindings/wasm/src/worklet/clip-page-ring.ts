@@ -15,15 +15,22 @@ import {
 // queue: the AudioWorklet is the sole writer and the main thread is the sole
 // reader. Unlike the telemetry rings, it must not overwrite unread requests:
 // the producer increments `dropped` when the fixed queue is full.
+/** Number of Int32 slots in the request ring header. */
 export const SONARE_CLIP_PAGE_REQUEST_RING_HEADER_INTS = 5;
+/** Number of uint32 words per request record: `[clipId, pageIndex]`. */
 export const SONARE_CLIP_PAGE_REQUEST_RING_RECORD_UINT32S = 2;
 
 export type { ClipPagePageRequest } from '../clip_page_streamer.js';
 
+/** Shared-memory clip-page request ring. */
 export interface SonareClipPageRequestRingBuffer {
+  /** Backing buffer holding the header and the records. */
   sharedBuffer: SharedArrayBuffer;
+  /** Ring header: write index, read index, capacity, record size and drop count. */
   header: Int32Array;
+  /** Request records, `[clipId, pageIndex]` each. */
   records: Uint32Array;
+  /** Number of records the ring holds. */
   capacity: number;
 }
 
@@ -33,7 +40,9 @@ export interface SharedClipPageRequestRingWriter {
   capacity: number;
 }
 
+/** Requests drained from a clip-page request ring. */
 export interface SonareClipPageRequestRingReadResult {
+  /** Requests read, oldest first. */
   requests: ClipPagePageRequest[];
   /** Cumulative uint32 drop count for native and SAB-ring overflows. */
   dropped: number;
