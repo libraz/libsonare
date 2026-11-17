@@ -283,18 +283,6 @@ export interface EngineMarker {
   keyMinor?: boolean;
 }
 
-export interface ProjectMarker {
-  id: number;
-  ppq: number;
-  name: string;
-  /** Marker kind (MarkerKind ordinal). */
-  kind: number;
-  /** Key signature only: -7..7 (sharps positive). */
-  keyFifths: number;
-  /** Key signature only: false = major, true = minor. */
-  keyMinor: boolean;
-}
-
 /**
  * Metronome configuration. Give at most one of `clickSamples` and `clickSec`;
  * both absent selects the sample-rate-derived click length. An explicit `0` for
@@ -423,12 +411,6 @@ export interface SidechainCheck {
   reason: SidechainRefusal | null;
 }
 
-export interface ClipPageRequest {
-  clipId: number;
-  channel: number;
-  sample: number;
-}
-
 export interface FileClipPageProviderOptions {
   numChannels: number;
   numSamples: number;
@@ -541,12 +523,16 @@ export interface EngineBounceOptions {
 /** Dither shape of {@link EngineBounceOptions.dither}. */
 export type EngineDither = 'rpdf' | 'tpdf' | 'noiseShaped';
 
+/** Planar audio rendered by {@link RealtimeEngine.bounceOffline}. */
 export interface EngineBounceResult {
-  interleaved: Float32Array;
-  frames: number;
-  numChannels: number;
-  sampleRate: number;
-  integratedLufs: number;
+  /** One plane per output channel, all the same length. */
+  readonly channels: Float32Array[];
+  /** Number of output channels; the length of {@link channels}. */
+  readonly numChannels: number;
+  /** Sample rate of the returned audio in Hz. */
+  readonly sampleRate: number;
+  /** Integrated loudness of the returned audio, in LUFS. */
+  readonly integratedLufs: number;
 }
 
 export interface EngineFreezeOptions {

@@ -206,13 +206,19 @@ describe('shared public-input conformance corpus', () => {
     expect(() => Project.midiCcLearn(learnEvents, 3, { minMovement: 128 })).toThrow(RangeError);
     expect(() => Project.midiCcLearn(learnEvents, 3, { minMovement: 255 })).toThrow(RangeError);
 
-    const project = Project.create();
+    const project = new Project();
     try {
       const { clipId } = project.addMidiClip(0, 4);
-      expect(() => project.setProgramOnChannel(clipId, 256, 0, 24)).toThrow(RangeError);
-      expect(() => project.setProgramOnChannel(clipId, 0, 271, 24)).toThrow(RangeError);
+      expect(() =>
+        project.setProgramOnChannel(clipId, { group: 256, channel: 0, program: 24 }),
+      ).toThrow(RangeError);
+      expect(() =>
+        project.setProgramOnChannel(clipId, { group: 0, channel: 271, program: 24 }),
+      ).toThrow(RangeError);
       // In-range values on the same entry points still succeed.
-      expect(() => project.setProgramOnChannel(clipId, 0, 3, 24)).not.toThrow();
+      expect(() =>
+        project.setProgramOnChannel(clipId, { group: 0, channel: 3, program: 24 }),
+      ).not.toThrow();
     } finally {
       project.destroy();
     }
@@ -230,18 +236,24 @@ describe('shared public-input conformance corpus', () => {
 // consumer's `catch (e) { if (e instanceof RangeError) }` cannot miss one.
 describe('a number no target C type can hold is a RangeError on every width', () => {
   it('refuses an unrepresentable number with RangeError', () => {
-    const project = Project.create();
+    const project = new Project();
     try {
       const { clipId } = project.addMidiClip(0, 4);
       // uint8_t: 256 would wrap to 0, a channel the C ABI accepts.
-      expect(() => project.setProgramOnChannel(clipId, 256, 0, 24)).toThrow(RangeError);
+      expect(() =>
+        project.setProgramOnChannel(clipId, { group: 256, channel: 0, program: 24 }),
+      ).toThrow(RangeError);
       // int: Int32Value() would wrap 2 ** 31 to -2147483648.
-      expect(() => project.setProgramOnChannel(clipId, 0, 0, 2 ** 31)).toThrow(RangeError);
+      expect(() =>
+        project.setProgramOnChannel(clipId, { group: 0, channel: 0, program: 2 ** 31 }),
+      ).toThrow(RangeError);
       // size_t: a negative index would wrap to an enormous positive one.
-      expect(() => project.markerByIndex(-1)).toThrow(RangeError);
+      expect(() => project.setMaxUndoDepth(-1)).toThrow(RangeError);
       // int, through the waveform resolver's own pre-narrowing check.
       expect(() =>
-        project.bounceWithBuiltinInstrument({ waveform: (2 ** 31) as unknown as 'sine' }),
+        project.bounceWithBuiltinInstruments({
+          instrument: { waveform: (2 ** 31) as unknown as 'sine' },
+        }),
       ).toThrow(RangeError);
     } finally {
       project.destroy();
@@ -254,10 +266,13 @@ describe('a number no target C type can hold is a RangeError on every width', ()
   // shared pan-law and automation-curve corpora.
   it('answers every unresolvable waveform with RangeError, whichever spelling', () => {
     for (const waveform of ['noise', 4, -1, 2 ** 31, Number.NaN]) {
-      const project = Project.create();
+      const project = new Project();
       try {
         expect(
-          () => project.bounceWithBuiltinInstrument({ waveform: waveform as unknown as 'sine' }),
+          () =>
+            project.bounceWithBuiltinInstruments({
+              instrument: { waveform: waveform as unknown as 'sine' },
+            }),
           `waveform ${waveform} must be refused as out of range`,
         ).toThrow(RangeError);
       } finally {
@@ -269,13 +284,17 @@ describe('a number no target C type can hold is a RangeError on every width', ()
   it('keeps TypeError for a value of the wrong JavaScript type', () => {
     // The contrast that stops the assertions above from being satisfied by a
     // reader that answers RangeError to everything.
-    const project = Project.create();
+    const project = new Project();
     try {
       const { clipId } = project.addMidiClip(0, 4);
-      expect(() => project.setProgramOnChannel(clipId, 0, 0, 'x' as never)).toThrow(TypeError);
-      expect(() => project.markerByIndex('x' as never)).toThrow(TypeError);
       expect(() =>
-        project.bounceWithBuiltinInstrument({ waveform: true as unknown as 'sine' }),
+        project.setProgramOnChannel(clipId, { group: 0, channel: 0, program: 'x' as never }),
+      ).toThrow(TypeError);
+      expect(() => project.setMaxUndoDepth('x' as never)).toThrow(TypeError);
+      expect(() =>
+        project.bounceWithBuiltinInstruments({
+          instrument: { waveform: true as unknown as 'sine' },
+        }),
       ).toThrow(TypeError);
     } finally {
       project.destroy();
@@ -285,11 +304,13 @@ describe('a number no target C type can hold is a RangeError on every width', ()
   it('still accepts every in-domain waveform, in both spellings', () => {
     // Vacuity guard: a resolver that refused everything would satisfy the two
     // cases above.
-    const project = Project.create();
+    const project = new Project();
     try {
       for (const waveform of ['sine', 'saw', 'sawtooth', 'square', 'triangle', 0, 1, 2, 3]) {
         expect(() =>
-          project.bounceWithBuiltinInstrument({ waveform: waveform as unknown as 'sine' }),
+          project.bounceWithBuiltinInstruments({
+            instrument: { waveform: waveform as unknown as 'sine' },
+          }),
         ).not.toThrow();
       }
     } finally {
@@ -758,10 +779,10 @@ describe('async entry points reject instead of throwing synchronously', () => {
 // throw-shaped assertion goes green on the fix while staying green on the
 // defect, which is the one thing it must not do.
 describe('a wrapping ordinal cannot reach a NativeSynth patch enum', () => {
-  const bounceOptions = { totalFrames: 4096, numChannels: 1, sampleRate: 48000 };
+  const bounceOptions = { totalFrames: 4096, numChannels: 1 };
 
   const midiProject = (): Project => {
-    const project = Project.create();
+    const project = new Project();
     project.setSampleRate(48000);
     const { trackId, clipId } = project.addMidiClip(0, 4);
     project.setTrackMidiDestination(trackId, 0);
@@ -776,8 +797,11 @@ describe('a wrapping ordinal cannot reach a NativeSynth patch enum', () => {
   const outcome = (patch: Record<string, unknown>): string => {
     const project = midiProject();
     try {
-      const audio = project.bounceWithSynthInstrument(patch as never, bounceOptions);
-      return `render:${audio.reduce((h, s) => (h * 31 + Math.round(s * 1e6)) | 0, 0)}`;
+      const audio = project.bounceWithSynthInstruments(
+        { instrument: patch as never },
+        bounceOptions,
+      );
+      return `render:${audio.channels[0].reduce((h, s) => (h * 31 + Math.round(s * 1e6)) | 0, 0)}`;
     } catch (error) {
       return (error as Error).constructor.name;
     } finally {
@@ -926,7 +950,7 @@ describe('an out-of-domain scalar is a RangeError across the addon readers', () 
   it('the mixer refuses a block past its configured size with RangeError', () => {
     const mixer = Mixer.fromJson(mixingScenePresetJson('commentaryDucking'), {
       sampleRate: 48000,
-      blockSize: 8,
+      maxBlockSize: 8,
     });
     try {
       const over = Array.from({ length: 3 }, () => new Float32Array(16));
@@ -942,7 +966,7 @@ describe('an out-of-domain scalar is a RangeError across the addon readers', () 
   it('the mixer keeps TypeError for a non-Float32Array strip', () => {
     const mixer = Mixer.fromJson(mixingScenePresetJson('commentaryDucking'), {
       sampleRate: 48000,
-      blockSize: 8,
+      maxBlockSize: 8,
     });
     try {
       const bad = Array.from({ length: 3 }, () => [0, 0, 0, 0] as never);

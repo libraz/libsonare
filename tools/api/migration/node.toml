@@ -10962,3 +10962,975 @@ changed = "returns TrimSilenceResult { samples, report } instead of a bare Float
 domain = "effects"
 rule = "typed-results"
 test = "bindings/node/tests/surface/effects-repair.test.ts::trim reports the range it cut to, and gives empty audio for pure silence"
+
+[[entry]]
+kind = "method"
+old = "Project.create"
+removed = true
+domain = "project"
+rule = "construction"
+
+[[entry]]
+kind = "method"
+old = "Project.getSampleRate"
+new = "Project.sampleRate"
+domain = "project"
+rule = "getters"
+
+[[entry]]
+kind = "method"
+old = "Project.getOverlapPolicy"
+new = "Project.overlapPolicy"
+domain = "project"
+rule = "getters"
+
+[[entry]]
+kind = "method"
+old = "Project.getPartRig"
+new = "Project.partRig"
+domain = "project"
+rule = "getters"
+
+[[entry]]
+kind = "method"
+old = "Project.getAssistSidecar"
+removed = true
+domain = "project"
+rule = "collections"
+
+[[entry]]
+kind = "method"
+old = "Project.getVocalEditDependencies"
+new = "Project.vocalEditDependencies"
+domain = "project"
+rule = "getters"
+
+[[entry]]
+kind = "method"
+old = "Project.trackCount"
+removed = true
+domain = "project"
+rule = "collections"
+
+[[entry]]
+kind = "method"
+old = "Project.trackByIndex"
+new = "Project.tracks"
+domain = "project"
+rule = "collections"
+
+[[entry]]
+kind = "method"
+old = "Project.clipCount"
+removed = true
+domain = "project"
+rule = "collections"
+
+[[entry]]
+kind = "method"
+old = "Project.clipByIndex"
+new = "Project.clips"
+domain = "project"
+rule = "collections"
+
+[[entry]]
+kind = "method"
+old = "Project.markerCount"
+removed = true
+domain = "project"
+rule = "collections"
+
+[[entry]]
+kind = "method"
+old = "Project.markerByIndex"
+new = "Project.markers"
+domain = "project"
+rule = "collections"
+
+[[entry]]
+kind = "method"
+old = "Project.sourceCount"
+removed = true
+domain = "project"
+rule = "collections"
+
+[[entry]]
+kind = "method"
+old = "Project.sourceByIndex"
+new = "Project.sources"
+domain = "project"
+rule = "collections"
+
+[[entry]]
+kind = "method"
+old = "Project.tempoSegmentCount"
+removed = true
+domain = "project"
+rule = "collections"
+
+[[entry]]
+kind = "method"
+old = "Project.tempoSegmentByIndex"
+new = "Project.tempoSegments"
+domain = "project"
+rule = "collections"
+
+[[entry]]
+kind = "method"
+old = "Project.timeSignatureCount"
+removed = true
+domain = "project"
+rule = "collections"
+
+[[entry]]
+kind = "method"
+old = "Project.timeSignatureByIndex"
+new = "Project.timeSignatures"
+domain = "project"
+rule = "collections"
+
+[[entry]]
+kind = "method"
+old = "Project.assistSidecarCount"
+removed = true
+domain = "project"
+rule = "collections"
+
+[[entry]]
+kind = "method"
+old = "Project.setMarkerEx"
+removed = true
+domain = "project"
+rule = "one-entry-per-operation"
+
+[[entry]]
+kind = "method"
+old = "Project.setMidiFx"
+removed = true
+domain = "project"
+rule = "one-entry-per-operation"
+
+[[entry]]
+kind = "method"
+old = "Project.bounceWithBuiltinInstrument"
+new = "Project.bounceWithBuiltinInstruments"
+domain = "project"
+rule = "one-entry-per-operation"
+
+[[entry]]
+kind = "method"
+old = "Project.bounceWithSynthInstrument"
+new = "Project.bounceWithSynthInstruments"
+domain = "project"
+rule = "one-entry-per-operation"
+
+[[entry]]
+kind = "method"
+old = "Project.bounceWithSf2Instrument"
+new = "Project.bounceWithSf2Instruments"
+domain = "project"
+rule = "one-entry-per-operation"
+
+[[entry]]
+kind = "method"
+old = "Project.bounceWithInstrument"
+new = "Project.bounceWithInstruments"
+domain = "project"
+rule = "one-entry-per-operation"
+
+[[entry]]
+kind = "method"
+old = "Project.setMarker"
+changed = "takes one ProjectMarkerInput; an omitted id allocates, an explicit 0 is a RangeError"
+domain = "project"
+rule = "absent-not-sentinel"
+test = "bindings/node/tests/surface/project.test.ts::sets a marker from one input object"
+
+[[entry]]
+kind = "method"
+old = "Project.moveClip"
+changed = "the track is options.trackId, omitted to keep the track; an explicit 0 is a RangeError"
+domain = "project"
+rule = "absent-not-sentinel"
+test = "bindings/node/tests/surface/project.test.ts::takes optional ids in an options object"
+
+[[entry]]
+kind = "method"
+old = "Project.setClipTakes"
+changed = "the active take is options.activeTakeId, omitted for the base source; an explicit 0 is a RangeError"
+domain = "project"
+rule = "absent-not-sentinel"
+test = "bindings/node/tests/surface/project.test.ts::takes optional ids in an options object"
+
+[[entry]]
+kind = "method"
+old = "Project.setClipFade"
+changed = "takes one { fadeInPpq, fadeInCurve, fadeOutPpq, fadeOutCurve } object"
+domain = "project"
+rule = "one-positional-form"
+test = "bindings/node/tests/surface/project.test.ts::sets a clip fade from one object"
+
+[[entry]]
+kind = "method"
+old = "Project.setClipLoop"
+changed = "takes one { loopMode, loopLengthPpq, loopCrossfadePpq } object"
+domain = "project"
+rule = "one-positional-form"
+test = "bindings/node/tests/surface/project.test.ts::sets clip loop, source audio and source metadata"
+
+[[entry]]
+kind = "method"
+old = "Project.setSourceAudio"
+changed = "takes one { sourceId, channels, sampleRate } object with planar channels"
+domain = "project"
+rule = "planar-channels"
+test = "bindings/node/tests/surface/project.test.ts::sets clip loop, source audio and source metadata"
+
+[[entry]]
+kind = "method"
+old = "Project.setAudioSourceMetadata"
+changed = "takes one { sourceId, contentHash, externalStemRole } object"
+domain = "project"
+rule = "one-positional-form"
+test = "bindings/node/tests/surface/project.test.ts::sets clip loop, source audio and source metadata"
+
+[[entry]]
+kind = "method"
+old = "Project.setProgramOnChannel"
+changed = "takes one { group, channel, program, bank } object with bank as { msb, lsb }"
+domain = "project"
+rule = "one-positional-form"
+test = "bindings/node/tests/surface/project.test.ts::sets a program and a part rig"
+
+[[entry]]
+kind = "method"
+old = "Project.setPartRig"
+changed = "takes one request object; the positional form is gone"
+domain = "project"
+rule = "one-positional-form"
+test = "bindings/node/tests/surface/project.test.ts::sets a program and a part rig"
+
+[[entry]]
+kind = "method"
+old = "Project.clearPartRig"
+changed = "takes one key object; the positional form is gone"
+domain = "project"
+rule = "one-positional-form"
+test = "bindings/node/tests/surface/project.test.ts::sets a program and a part rig"
+
+[[entry]]
+kind = "method"
+old = "Project.bakeMidiFx"
+changed = "takes one request object and always returns a result; the positional form is gone"
+domain = "project"
+rule = "one-positional-form"
+test = "bindings/node/tests/surface/project.test.ts::bounces to planar channels"
+
+[[entry]]
+kind = "method"
+old = "Project.setAssistSidecar"
+changed = "takes one input object"
+domain = "project"
+rule = "one-positional-form"
+test = "bindings/node/tests/surface/project.test.ts::sets a program and a part rig"
+
+[[entry]]
+kind = "method"
+old = "Project.autoTempo"
+changed = "takes (samples, sampleRate, options?) or one request; candidateIndex and applyTimeSignatures are options"
+domain = "project"
+rule = "no-positional-bools"
+test = "bindings/node/tests/surface/project.test.ts::installs a tempo from options"
+
+[[entry]]
+kind = "method"
+old = "Project.analyzeTempo"
+changed = "also takes one request object"
+domain = "project"
+rule = "one-positional-form"
+test = "bindings/node/tests/surface/project.test.ts::installs a tempo from options"
+
+[[entry]]
+kind = "method"
+old = "Project.bounce"
+changed = "returns planar { channels, sampleRate, numChannels }; blockSize, numChannels and totalFrames are omitted for the default"
+domain = "project"
+rule = "planar-channels"
+test = "bindings/node/tests/surface/project.test.ts::bounces to planar channels"
+
+[[entry]]
+kind = "method"
+old = "Project.bounceWithBuiltinInstruments"
+changed = "takes { destinationId?, instrument } pairs and returns planar audio"
+domain = "project"
+rule = "one-entry-per-operation"
+test = "bindings/node/tests/surface/project.test.ts::binds each instrument kind through one plural method"
+
+[[entry]]
+kind = "method"
+old = "Project.bounceWithSynthInstruments"
+changed = "takes { destinationId?, instrument } pairs and returns planar audio"
+domain = "project"
+rule = "one-entry-per-operation"
+test = "bindings/node/tests/surface/project.test.ts::binds each instrument kind through one plural method"
+
+[[entry]]
+kind = "method"
+old = "Project.bounceWithSf2Instruments"
+changed = "takes { destinationId?, instrument } pairs and returns planar audio"
+domain = "project"
+rule = "one-entry-per-operation"
+test = "bindings/node/tests/surface/project.test.ts::binds each instrument kind through one plural method"
+
+[[entry]]
+kind = "method"
+old = "Project.bounceWithInstruments"
+changed = "takes { destinationId?, instrument } pairs and returns planar audio"
+domain = "project"
+rule = "one-entry-per-operation"
+test = "bindings/node/tests/surface/project.test.ts::binds each instrument kind through one plural method"
+
+[[entry]]
+kind = "method"
+old = "Project.renameTrack"
+changed = "name is required"
+domain = "project"
+rule = "absent-not-sentinel"
+test = "bindings/node/tests/surface/project.test.ts::requires a name to rename a track"
+
+[[entry]]
+kind = "method"
+old = "Project.exportSmf"
+changed = "returns a plain Uint8Array, not a Buffer"
+domain = "project"
+rule = "typed-results"
+test = "bindings/node/tests/surface/project.test.ts::exports MIDI files as plain bytes"
+
+[[entry]]
+kind = "method"
+old = "Project.exportClipFile"
+changed = "returns a plain Uint8Array, not a Buffer"
+domain = "project"
+rule = "typed-results"
+test = "bindings/node/tests/surface/project.test.ts::exports MIDI files as plain bytes"
+
+[[entry]]
+kind = "method"
+old = "Project.setClipWarpMode"
+changed = "takes a ProjectWarpMode name; a number is a TypeError"
+domain = "project"
+rule = "string-closed-sets"
+test = "bindings/node/tests/surface/project.test.ts::refuses an ordinal with TypeError"
+
+[[entry]]
+kind = "method"
+old = "Project.addTrack"
+changed = "kind is a name; a number is a TypeError"
+domain = "project"
+rule = "string-closed-sets"
+test = "bindings/node/tests/surface/project.test.ts::refuses an ordinal with TypeError"
+
+[[entry]]
+kind = "method"
+old = "Project.setTrackKind"
+changed = "kind is a name; a number is a TypeError"
+domain = "project"
+rule = "string-closed-sets"
+test = "bindings/node/tests/surface/project.test.ts::refuses an ordinal with TypeError"
+
+[[entry]]
+kind = "method"
+old = "Project.setOverlapPolicy"
+changed = "policy is a name; a number is a TypeError"
+domain = "project"
+rule = "string-closed-sets"
+test = "bindings/node/tests/surface/project.test.ts::refuses an ordinal with TypeError"
+
+[[entry]]
+kind = "method"
+old = "Project.addClip"
+changed = "audio comes as planar channels with sampleRate"
+domain = "project"
+rule = "planar-channels"
+test = "bindings/node/tests/surface/project.test.ts::adds an audio clip from planar channels"
+
+[[entry]]
+kind = "method"
+old = "Project.importExternalStems"
+changed = "each stem carries channels instead of planarSamples, and layout is a name"
+domain = "project"
+rule = "planar-channels"
+test = "bindings/node/tests/surface/project.test.ts::adds an audio clip from planar channels"
+
+[[entry]]
+kind = "method"
+old = "Project.annotateKeys"
+changed = "mode is a name"
+domain = "project"
+rule = "string-closed-sets"
+test = "bindings/node/tests/surface/project.test.ts::spells fade curves, warp modes and automation targets"
+
+[[entry]]
+kind = "method"
+old = "Project.annotateChords"
+changed = "quality is a name"
+domain = "project"
+rule = "string-closed-sets"
+test = "bindings/node/tests/surface/project.test.ts::spells fade curves, warp modes and automation targets"
+
+[[entry]]
+kind = "method"
+old = "Project.addAutomationLane"
+changed = "targetKind is trackFaderDb / trackPan, not the hyphenated spelling"
+domain = "project"
+rule = "token-case"
+test = "bindings/node/tests/surface/project.test.ts::spells fade curves, warp modes and automation targets"
+
+[[entry]]
+kind = "method"
+old = "Project.compile"
+changed = "returns { diagnostics } only, with named codes and severities"
+domain = "project"
+rule = "typed-results"
+test = "bindings/node/tests/surface/project.test.ts::returns compile diagnostics as typed records only"
+
+[[entry]]
+kind = "method"
+old = "Project.compileTimeline"
+changed = "returns { diagnostics, timeline } only"
+domain = "project"
+rule = "typed-results"
+test = "bindings/node/tests/surface/project.test.ts::returns compile diagnostics as typed records only"
+
+[[entry]]
+kind = "method"
+old = "Project.lastBounceCompileResult"
+changed = "returns { diagnostics } only"
+domain = "project"
+rule = "typed-results"
+test = "bindings/node/tests/surface/project.test.ts::returns compile diagnostics as typed records only"
+
+[[entry]]
+kind = "method"
+old = "RealtimeEngine.bounceOffline"
+changed = "returns planar { channels, numChannels, sampleRate, integratedLufs }"
+domain = "engine"
+rule = "planar-channels"
+test = "bindings/node/tests/surface/project.test.ts::bounces to planar channels"
+
+[[entry]]
+kind = "field"
+old = "ProjectSource.channelCount"
+new = "ProjectSource.numChannels"
+domain = "project"
+rule = "num-channels"
+
+[[entry]]
+kind = "field"
+old = "ProjectClipDesc.audio"
+new = "ProjectClipDesc.channels"
+domain = "project"
+rule = "planar-channels"
+
+[[entry]]
+kind = "field"
+old = "ProjectClipDesc.audioChannels"
+removed = true
+domain = "project"
+rule = "planar-channels"
+
+[[entry]]
+kind = "field"
+old = "ProjectClipDesc.audioSampleRate"
+new = "ProjectClipDesc.sampleRate"
+domain = "project"
+rule = "sample-rate-name"
+
+[[entry]]
+kind = "field"
+old = "ExternalSeparatedStem.planarSamples"
+new = "ExternalSeparatedStem.channels"
+domain = "project"
+rule = "planar-channels"
+
+[[entry]]
+kind = "field"
+old = "ProjectBounceOptions.sampleRate"
+removed = true
+domain = "project"
+rule = "absent-not-sentinel"
+
+[[entry]]
+kind = "field"
+old = "ProjectCompileResult.messages"
+removed = true
+domain = "project"
+rule = "typed-results"
+
+[[entry]]
+kind = "field"
+old = "ProjectCompileResult.hasTimeline"
+removed = true
+domain = "project"
+rule = "typed-results"
+
+[[entry]]
+kind = "field"
+old = "ProjectTempoCandidate.timeSignature"
+new = "ProjectTempoCandidate.firstTimeSignature"
+domain = "project"
+rule = "type-names"
+
+[[entry]]
+kind = "field"
+old = "ProjectTempoSegment.startSample"
+removed = true
+domain = "project"
+rule = "absent-not-sentinel"
+
+[[entry]]
+kind = "field"
+old = "BuiltinSynthConfig.destinationId"
+removed = true
+domain = "project"
+rule = "one-entry-per-operation"
+
+[[entry]]
+kind = "field"
+old = "Sf2InstrumentConfig.destinationId"
+removed = true
+domain = "project"
+rule = "one-entry-per-operation"
+
+[[entry]]
+kind = "field"
+old = "SynthPatch.destinationId"
+removed = true
+domain = "engine"
+rule = "one-entry-per-operation"
+
+[[entry]]
+kind = "field"
+old = "ExternalInstrument.destinationId"
+removed = true
+domain = "engine"
+rule = "one-entry-per-operation"
+
+[[entry]]
+kind = "field"
+old = "EngineBounceResult.interleaved"
+new = "EngineBounceResult.channels"
+domain = "engine"
+rule = "planar-channels"
+
+[[entry]]
+kind = "field"
+old = "EngineBounceResult.frames"
+removed = true
+domain = "engine"
+rule = "planar-channels"
+
+[[entry]]
+kind = "type"
+old = "BuiltinInstrumentConfig"
+new = "BuiltinSynthConfig"
+domain = "engine"
+rule = "type-names"
+
+[[entry]]
+kind = "type"
+old = "WarpMode"
+new = "ProjectWarpMode"
+domain = "project"
+rule = "type-names"
+
+[[entry]]
+kind = "type"
+old = "ProjectClipFade"
+new = "ProjectClipFadeRequest"
+domain = "project"
+rule = "type-names"
+
+[[entry]]
+kind = "export"
+old = "PROJECT_TRACK_AUDIO"
+removed = true
+domain = "project"
+rule = "string-closed-sets"
+
+[[entry]]
+kind = "export"
+old = "PROJECT_TRACK_MIDI"
+removed = true
+domain = "project"
+rule = "string-closed-sets"
+
+[[entry]]
+kind = "export"
+old = "PROJECT_TRACK_AUX"
+removed = true
+domain = "project"
+rule = "string-closed-sets"
+
+[[entry]]
+kind = "export"
+old = "PROJECT_FADE_CURVE_LINEAR"
+removed = true
+domain = "project"
+rule = "string-closed-sets"
+
+[[entry]]
+kind = "export"
+old = "PROJECT_FADE_CURVE_EQUAL_POWER"
+removed = true
+domain = "project"
+rule = "string-closed-sets"
+
+[[entry]]
+kind = "export"
+old = "PROJECT_FADE_CURVE_EXPONENTIAL"
+removed = true
+domain = "project"
+rule = "string-closed-sets"
+
+[[entry]]
+kind = "export"
+old = "PROJECT_FADE_CURVE_LOGARITHMIC"
+removed = true
+domain = "project"
+rule = "string-closed-sets"
+
+[[entry]]
+kind = "export"
+old = "PROJECT_LOOP_MODE_OFF"
+removed = true
+domain = "project"
+rule = "string-closed-sets"
+
+[[entry]]
+kind = "export"
+old = "PROJECT_LOOP_MODE_LOOP"
+removed = true
+domain = "project"
+rule = "string-closed-sets"
+
+[[entry]]
+kind = "export"
+old = "PROJECT_AUTOMATION_TARGET_OPAQUE"
+removed = true
+domain = "project"
+rule = "string-closed-sets"
+
+[[entry]]
+kind = "export"
+old = "PROJECT_AUTOMATION_TARGET_TRACK_FADER_DB"
+removed = true
+domain = "project"
+rule = "string-closed-sets"
+
+[[entry]]
+kind = "export"
+old = "PROJECT_AUTOMATION_TARGET_TRACK_PAN"
+removed = true
+domain = "project"
+rule = "string-closed-sets"
+
+[[entry]]
+kind = "value"
+old = "ProjectFadeCurve='equal-power'"
+new = "ProjectFadeCurve='equalPower'"
+domain = "project"
+rule = "token-case"
+
+[[entry]]
+kind = "value"
+old = "ProjectFadeCurve='equal_power'"
+new = "ProjectFadeCurve='equalPower'"
+domain = "project"
+rule = "token-case"
+
+[[entry]]
+kind = "value"
+old = "ProjectAutomationTargetKind='track-fader-db'"
+new = "ProjectAutomationTargetKind='trackFaderDb'"
+domain = "project"
+rule = "token-case"
+
+[[entry]]
+kind = "value"
+old = "ProjectAutomationTargetKind='track-pan'"
+new = "ProjectAutomationTargetKind='trackPan'"
+domain = "project"
+rule = "token-case"
+
+[[entry]]
+kind = "value"
+old = "WarpMode='tempo-sync'"
+new = "ProjectWarpMode='tempoSync'"
+domain = "project"
+rule = "token-case"
+
+[[entry]]
+kind = "value"
+old = "WarpMode='time-stretch'"
+new = "ProjectWarpMode='timeStretch'"
+domain = "project"
+rule = "token-case"
+
+[[entry]]
+kind = "type"
+old = "VocalUint64"
+removed = true
+domain = "project"
+rule = "no-internal-types"
+
+[[entry]]
+kind = "type"
+old = "VocalError"
+removed = true
+domain = "project"
+rule = "error-class-by-cause"
+
+[[entry]]
+kind = "method"
+old = "VocalEditSession.token"
+changed = "read the token as a property: session.token"
+test = "bindings/node/tests/vocal_edit.test.ts::reads the session and draft token and revision as properties"
+domain = "project"
+rule = "getters"
+
+[[entry]]
+kind = "method"
+old = "VocalEditSession.revision"
+changed = "read the revision as a property: session.revision"
+test = "bindings/node/tests/vocal_edit.test.ts::reads the session and draft token and revision as properties"
+domain = "project"
+rule = "getters"
+
+[[entry]]
+kind = "method"
+old = "VocalEditDraft.token"
+changed = "read the token as a property: draft.token"
+test = "bindings/node/tests/vocal_edit.test.ts::reads the session and draft token and revision as properties"
+domain = "project"
+rule = "getters"
+
+[[entry]]
+kind = "field"
+old = "VocalApplyRequest.expectedGeneration"
+changed = "optional; omitted means the draft current generation"
+test = "bindings/node/tests/vocal_edit.test.ts::expectedGeneration"
+domain = "project"
+rule = "absent-not-sentinel"
+
+[[entry]]
+kind = "field"
+old = "VocalCreateRequest.validate"
+changed = "new optional validate flag"
+test = "bindings/node/tests/vocal_edit.test.ts::reads the validate flag of create and restore"
+domain = "project"
+rule = "input-types"
+
+[[entry]]
+kind = "field"
+old = "VocalRestoreRequest.validate"
+changed = "new optional validate flag"
+test = "bindings/node/tests/vocal_edit.test.ts::reads the validate flag of create and restore"
+domain = "project"
+rule = "input-types"
+
+[[entry]]
+kind = "field"
+old = "VocalSessionLimits.maxHistoryBytes"
+changed = "number instead of a decimal string"
+test = "bindings/node/tests/vocal_edit.test.ts::reads the limits byte fields as numbers"
+domain = "project"
+rule = "input-types"
+
+[[entry]]
+kind = "field"
+old = "VocalSessionLimits.maxCacheBytes"
+changed = "number instead of a decimal string"
+test = "bindings/node/tests/vocal_edit.test.ts::reads the limits byte fields as numbers"
+domain = "project"
+rule = "input-types"
+
+[[entry]]
+kind = "field"
+old = "VocalNote.analysisFrameStart"
+changed = "number instead of a decimal string"
+test = "bindings/node/tests/vocal_edit.test.ts::analysisFrameStart and analysisFrameEnd"
+domain = "project"
+rule = "input-types"
+
+[[entry]]
+kind = "field"
+old = "VocalNote.analysisFrameEnd"
+changed = "number instead of a decimal string"
+test = "bindings/node/tests/vocal_edit.test.ts::analysisFrameStart and analysisFrameEnd"
+domain = "project"
+rule = "input-types"
+
+[[entry]]
+kind = "field"
+old = "VocalRenderResult.cacheHitUnits"
+changed = "number instead of a decimal string"
+test = "bindings/node/tests/vocal_edit.test.ts::cacheHitUnits, dryPassedFrames and limitedCorrectionFrames"
+domain = "project"
+rule = "input-types"
+
+[[entry]]
+kind = "field"
+old = "VocalRenderResult.dryPassedFrames"
+changed = "number instead of a decimal string"
+test = "bindings/node/tests/vocal_edit.test.ts::cacheHitUnits, dryPassedFrames and limitedCorrectionFrames"
+domain = "project"
+rule = "input-types"
+
+[[entry]]
+kind = "field"
+old = "VocalRenderResult.limitedCorrectionFrames"
+changed = "number instead of a decimal string"
+test = "bindings/node/tests/vocal_edit.test.ts::cacheHitUnits, dryPassedFrames and limitedCorrectionFrames"
+domain = "project"
+rule = "input-types"
+
+[[entry]]
+kind = "field"
+old = "ProjectVocalEditApplyRequest.sve1"
+new = "ProjectVocalEditApplyRequest.vocalState"
+domain = "project"
+rule = "individual"
+
+[[entry]]
+kind = "field"
+old = "ProjectVocalEditApplyRequest.renderedStartSample"
+removed = true
+domain = "project"
+rule = "absent-not-sentinel"
+
+[[entry]]
+kind = "field"
+old = "ProjectVocalEditApplyRequest.takeId"
+changed = "absent selects the base source; an explicit 0 is refused with RangeError"
+test = "bindings/node/tests/vocal_project.test.ts::keeps takeId absent for the base source on apply"
+domain = "project"
+rule = "absent-not-sentinel"
+
+[[entry]]
+kind = "type"
+old = "ProjectVocalReason"
+new = "VocalReason"
+domain = "project"
+rule = "string-closed-sets"
+
+[[entry]]
+kind = "field"
+old = "ProjectVocalEditDependency.reason"
+changed = "VocalReason token string instead of a number"
+test = "bindings/node/tests/vocal_project.test.ts::reads vocalEditDependencies takeId as absent"
+domain = "project"
+rule = "string-closed-sets"
+
+[[entry]]
+kind = "field"
+old = "ProjectVocalRehydrateItem.reason"
+changed = "VocalReason token string instead of a number"
+test = "bindings/node/tests/vocal_project.test.ts::reads rehydrateVocalEdits takeId as absent"
+domain = "project"
+rule = "string-closed-sets"
+
+[[entry]]
+kind = "field"
+old = "ProjectVocalRehydrateItem.status"
+changed = "'rehydrated' | 'alreadyReady' | 'unresolved' instead of 0 | 1 | 2"
+test = "bindings/node/tests/vocal_project.test.ts::reads rehydrateVocalEdits takeId as absent"
+domain = "project"
+rule = "string-closed-sets"
+
+[[entry]]
+kind = "method"
+old = "VocalRenderSnapshot.render"
+changed = "an aborted signal rejects with SonareError code Cancelled instead of a DOMException AbortError"
+test = "bindings/node/tests/vocal_edit.test.ts::already-aborted signal"
+domain = "project"
+rule = "error-class-by-cause"
+
+[[entry]]
+kind = "field"
+old = "ProjectVocalEditApplyResult.takeId"
+changed = "absent for the base source instead of 0"
+test = "bindings/node/tests/vocal_project.test.ts::keeps takeId absent for the base source on apply"
+domain = "project"
+rule = "absent-not-sentinel"
+
+[[entry]]
+kind = "field"
+old = "ProjectVocalEditDependency.takeId"
+changed = "absent for the base source instead of 0"
+test = "bindings/node/tests/vocal_project.test.ts::reads vocalEditDependencies takeId as absent"
+domain = "project"
+rule = "absent-not-sentinel"
+
+[[entry]]
+kind = "field"
+old = "ProjectVocalRehydrateItem.takeId"
+changed = "absent for the base source instead of 0"
+test = "bindings/node/tests/vocal_project.test.ts::reads rehydrateVocalEdits takeId as absent"
+domain = "project"
+rule = "absent-not-sentinel"
+
+[[entry]]
+kind = "field"
+old = "MixerConfig.blockSize"
+new = "MixerConfig.maxBlockSize"
+domain = "engine"
+rule = "num-channels"
+
+
+[[entry]]
+kind = "field"
+old = "MixerJsonOptions.blockSize"
+new = "MixerJsonOptions.maxBlockSize"
+domain = "engine"
+rule = "num-channels"
+
+
+[[entry]]
+kind = "type"
+old = "ClipPageRequest"
+new = "ClipPageSampleRequest"
+domain = "engine"
+rule = "individual"
+
+[[entry]]
+kind = "function"
+old = "chordSymbolFromAnalysis"
+changed = "quality is a ProjectChordQuality token ('major', 'halfDiminished', ...) instead of an ordinal"
+domain = "project"
+rule = "string-closed-sets"
+test = "bindings/node/tests/chord-annotation.test.ts::to annotation quality"
+
+[[entry]]
+kind = "function"
+old = "keyModeFromAnalysis"
+changed = "returns a ProjectKeyMode token ('major', 'dorian', ...) instead of an ordinal"
+domain = "project"
+rule = "string-closed-sets"
+test = "bindings/node/tests/chord-annotation.test.ts::annotation mode"
+
+[[entry]]
+kind = "field"
+old = "ProjectKeySegment.mode"
+changed = "a ProjectKeyMode token instead of an ordinal; a number is refused with TypeError"
+domain = "project"
+rule = "string-closed-sets"
+test = "bindings/node/tests/chord-annotation.test.ts::annotation mode"
+
+[[entry]]
+kind = "field"
+old = "ProjectChordSymbol.quality"
+changed = "a ProjectChordQuality token instead of an ordinal; a number is refused with TypeError"
+domain = "project"
+rule = "string-closed-sets"
+test = "bindings/node/tests/chord-annotation.test.ts::produces annotations annotateChords accepts"

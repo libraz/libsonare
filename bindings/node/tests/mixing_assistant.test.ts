@@ -335,7 +335,7 @@ describe('mixing assistant option keys reach the core', () => {
 describe('suggestMixSceneJson', () => {
   it('returns a scene the Mixer can instantiate', () => {
     const json = suggestMixSceneJson({ tracks: baseTracks(), sampleRate: SR });
-    const mixer = Mixer.fromJson(json, { sampleRate: SR, blockSize: 256 });
+    const mixer = Mixer.fromJson(json, { sampleRate: SR, maxBlockSize: 256 });
     try {
       // Three tracks plus the reverb and delay returns the named lead feeds.
       expect(mixer.stripCount).toBe(5);

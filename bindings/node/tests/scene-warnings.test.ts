@@ -7,7 +7,7 @@ const sceneStrip = (json: string): MixSceneStrip => JSON.parse(json).strips[0];
 
 describe('unknown mixing scene keys', () => {
   it('Project.setMixerSceneJson returns one warning per unknown key', () => {
-    const project = Project.create();
+    const project = new Project();
     try {
       const typo =
         '{"version":1,"$schema":"s","strips":[{"id":"lead","faderDB":-3,"x-note":1}],"buses":[]}';

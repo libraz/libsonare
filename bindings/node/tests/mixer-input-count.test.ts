@@ -14,7 +14,7 @@ function inputs(count: number): Float32Array[] {
 describe('Mixer input count (Node)', () => {
   const mixer = Mixer.fromJson(mixingScenePresetJson('commentaryDucking'), {
     sampleRate: 48000,
-    blockSize: BLOCK,
+    maxBlockSize: BLOCK,
   });
   const strips = mixer.stripCount;
 

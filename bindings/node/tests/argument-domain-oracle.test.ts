@@ -193,7 +193,7 @@ describe('Mixer send index', () => {
   function mixerWithTwoSends(): Mixer {
     const mixer = Mixer.fromJson(mixingScenePresetJson('commentaryDucking'), {
       sampleRate: 48000,
-      blockSize: 8,
+      maxBlockSize: 8,
     });
     expect(
       mixer.addSend('host', {

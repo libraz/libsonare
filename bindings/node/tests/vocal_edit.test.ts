@@ -105,7 +105,7 @@ describe('Node vocal edit facade', () => {
       const first = session.notes();
       const second = session.notes();
       expect(first).not.toBe(second);
-      expect(session.token().revision).toMatch(/^\d+$/);
+      expect(session.token.revision).toMatch(/^\d+$/);
       const analysis = session.analysis();
       analysis.f0Hz[0] = 220;
       expect(session.analysis().f0Hz[0]).toBe(440);
@@ -179,7 +179,7 @@ describe('Node vocal edit facade', () => {
       const draft = session.beginEdit();
       const envelope = [0.25, 0.5, 0.75];
       draft.apply({
-        expectedGeneration: draft.token().generation,
+        expectedGeneration: draft.token.generation,
         operations: [
           {
             kind: 'setEdit',
@@ -218,10 +218,10 @@ describe('Node vocal edit facade', () => {
     try {
       const note = session.notes().notes[0];
       expect(note).toBeDefined();
-      const draft = session.beginEdit({ expectedRevision: session.revision() });
+      const draft = session.beginEdit({ expectedRevision: session.revision });
       const edit = identityEdit(note);
       edit.pitch = { ...edit.pitch, target: { mode: 'center', midi: 69 }, amount: 1 };
-      const generation = draft.token().generation;
+      const generation = draft.token.generation;
       const result = draft.apply({
         expectedGeneration: generation,
         operations: [{ kind: 'setEdit', noteId: note.id, edit }],
@@ -252,7 +252,7 @@ describe('Node vocal edit facade', () => {
       expect(notes).toHaveLength(2);
       const draft = session.beginEdit();
       const result = draft.apply({
-        expectedGeneration: draft.token().generation,
+        expectedGeneration: draft.token.generation,
         operations: [
           {
             kind: 'setTransition',
@@ -290,12 +290,14 @@ describe('Node vocal edit facade', () => {
         error = caught;
       }
       expect(error).toMatchObject({
-        reason: 2,
-        field: 'generation',
-        expectedText: '999999999999999999',
-        actualText: '1',
+        detail: {
+          reason: 'revisionConflict',
+          field: 'generation',
+          expectedText: '999999999999999999',
+          actualText: '1',
+        },
       });
-      expect(session.token().revision).toBe('0');
+      expect(session.token.revision).toBe('0');
       draft.cancel();
     } finally {
       session.destroy();
@@ -328,8 +330,7 @@ describe('Node vocal edit facade', () => {
       controller.abort();
       await expect(render).rejects.toMatchObject({
         code: ErrorCode.Cancelled,
-        reason: 5,
-        field: 'render',
+        detail: { reason: 'cancelled', field: 'render' },
       });
     } finally {
       snapshot.destroy();
@@ -357,18 +358,17 @@ describe('Node vocal edit facade', () => {
     await expect(lifecycle).rejects.toMatchObject({ code: ErrorCode.InvalidState });
   });
 
-  it('refuses an already-aborted signal on every render entry point as an AbortError', async () => {
+  it('refuses an already-aborted signal on every render entry point as Cancelled', async () => {
     const session = createVocalEditSession(request());
     const snapshot = session.captureRenderSnapshot();
     try {
       const signal = AbortSignal.abort();
-      expect(() => snapshot.render({ signal })).toThrow(
-        expect.objectContaining({ name: 'AbortError' }),
-      );
-      expect(() => snapshot.beginRenderJob({ signal })).toThrow(
-        expect.objectContaining({ name: 'AbortError' }),
-      );
-      await expect(snapshot.renderAsync({ signal })).rejects.toMatchObject({ name: 'AbortError' });
+      const cancelled = expect.objectContaining({ code: ErrorCode.Cancelled });
+      expect(() => snapshot.render({ signal })).toThrow(cancelled);
+      expect(() => snapshot.beginRenderJob({ signal })).toThrow(cancelled);
+      await expect(snapshot.renderAsync({ signal })).rejects.toMatchObject({
+        code: ErrorCode.Cancelled,
+      });
     } finally {
       snapshot.destroy();
       session.destroy();
@@ -493,15 +493,19 @@ describe('Node vocal edit facade', () => {
     draft.destroy();
   });
 
-  it('requires expectedGeneration on draft apply', () => {
+  it('reads an omitted expectedGeneration as the draft current one and refuses a non-string', () => {
     const session = create();
     try {
       const note = session.notes().notes[0];
       const draft = session.beginEdit();
       expect(() =>
+        draft.apply({ operations: [{ kind: 'reset', noteIds: [note.id] }] }),
+      ).not.toThrow();
+      expect(() =>
         draft.apply({
+          expectedGeneration: 1 as unknown as string,
           operations: [{ kind: 'reset', noteIds: [note.id] }],
-        } as unknown as Parameters<typeof draft.apply>[0]),
+        }),
       ).toThrow(TypeError);
       draft.cancel();
     } finally {
@@ -518,7 +522,7 @@ describe('Node vocal edit facade', () => {
         const error = (() => {
           try {
             draft.apply({
-              expectedGeneration: draft.token().generation,
+              expectedGeneration: draft.token.generation,
               operations: [build(note)],
             } as unknown as Parameters<typeof draft.apply>[0]);
           } catch (caught) {
@@ -567,5 +571,106 @@ describe('Node vocal edit facade', () => {
         return { kind: 'setEdit', noteId: note.id, edit };
       }, /destinationStartSample/);
     });
+  });
+
+  it('reads the session and draft token and revision as properties', () => {
+    const session = create();
+    try {
+      expect(typeof session.token).toBe('object');
+      expect(session.token.revision).toMatch(/^\d+$/);
+      expect(typeof session.revision).toBe('string');
+      expect(session.revision).toBe(session.token.revision);
+      const draft = session.beginEdit({ expectedRevision: session.revision });
+      expect(typeof draft.token).toBe('object');
+      expect(draft.token.generation).toMatch(/^\d+$/);
+      draft.cancel();
+    } finally {
+      session.destroy();
+    }
+  });
+
+  it('reads the validate flag of create and restore as the finiteness-scan switch', () => {
+    const bad = sine();
+    bad[10] = Number.NaN;
+    expect(() => createVocalEditSession({ ...request(bad) })).toThrow(/NaN or Inf at index 10/);
+    expect(() => createVocalEditSession({ ...request(bad), validate: true })).toThrow(
+      /NaN or Inf at index 10/,
+    );
+    expect(() =>
+      restoreVocalEditSession({
+        samples: bad,
+        sampleRate: SAMPLE_RATE,
+        state: new Uint8Array(8),
+      }),
+    ).toThrow(/NaN or Inf at index 10/);
+    // validate:false is a facade-only key; a refusal now comes from further down, not this scan.
+    for (const attempt of [
+      () => createVocalEditSession({ ...request(bad), validate: false }),
+      () =>
+        restoreVocalEditSession({
+          samples: bad,
+          sampleRate: SAMPLE_RATE,
+          state: new Uint8Array(8),
+          validate: false,
+        }),
+    ]) {
+      try {
+        attempt().destroy();
+      } catch (error) {
+        expect((error as Error).message).not.toMatch(/NaN or Inf at index/);
+      }
+    }
+    const good = createVocalEditSession({ ...request(), validate: false });
+    good.destroy();
+  });
+
+  it('reads the limits byte fields as numbers and refuses a decimal string', () => {
+    const limits = { maxHistoryBytes: 1 << 20, maxCacheBytes: 1 << 22 };
+    const session = createVocalEditSession({ ...request(), limits });
+    session.destroy();
+    for (const key of ['maxHistoryBytes', 'maxCacheBytes'] as const) {
+      expect(() =>
+        createVocalEditSession({ ...request(), limits: { [key]: '1048576' as never } }),
+      ).toThrow(TypeError);
+      expect(() => createVocalEditSession({ ...request(), limits: { [key]: -1 } })).toThrow(
+        RangeError,
+      );
+    }
+  });
+
+  it('returns the analysisFrameStart and analysisFrameEnd of a note as numbers', () => {
+    const session = create();
+    try {
+      const { notes } = session.notes();
+      expect(notes.length).toBeGreaterThan(0);
+      for (const note of notes) {
+        expect(typeof note.analysisFrameStart).toBe('number');
+        expect(typeof note.analysisFrameEnd).toBe('number');
+        expect(Number.isInteger(note.analysisFrameStart)).toBe(true);
+        expect(note.analysisFrameEnd).toBeGreaterThan(note.analysisFrameStart);
+      }
+    } finally {
+      session.destroy();
+    }
+  });
+
+  it('returns the cacheHitUnits, dryPassedFrames and limitedCorrectionFrames as numbers', () => {
+    const session = create();
+    const snapshot = session.captureRenderSnapshot();
+    try {
+      const result = snapshot.render({ range: { startSample: 0, endSample: 512 } });
+      for (const value of [
+        result.cacheHitUnits,
+        result.dryPassedFrames,
+        result.limitedCorrectionFrames,
+      ]) {
+        expect(typeof value).toBe('number');
+        expect(Number.isSafeInteger(value)).toBe(true);
+        expect(value).toBeGreaterThanOrEqual(0);
+      }
+    } finally {
+      snapshot.destroy();
+      session.destroy();
+    }
   });
 });

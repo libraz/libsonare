@@ -3,9 +3,28 @@ import type { BuiltinSynthConfig } from '../src/index.js';
 import { ErrorCode, Project, projectAbiVersion } from '../src/index.js';
 import { EXPECTED_PROJECT_ABI_VERSION } from '../src/types_project.js';
 
+/** A byte view for subsequence search and ASCII reads on an exported file. */
+function bytes(data: Uint8Array): Buffer {
+  return Buffer.from(data.buffer, data.byteOffset, data.byteLength);
+}
+
+/** Largest absolute sample over every channel of a bounce. */
+function peak(result: { channels: Float32Array[] }): number {
+  let p = 0;
+  for (const channel of result.channels) {
+    for (let i = 0; i < channel.length; i++) {
+      const a = Math.abs(channel[i]);
+      if (a > p) {
+        p = a;
+      }
+    }
+  }
+  return p;
+}
+
 /** Build a small deterministic project: a track + an audio clip + a MIDI clip + tempo. */
 function buildProject(): Project {
-  const project = Project.create();
+  const project = new Project();
   project.setSampleRate(48000);
 
   const track = project.addTrack({ kind: 'audio', name: 'lead' });
@@ -18,9 +37,8 @@ function buildProject(): Project {
     startPpq: 0,
     lengthPpq: 4,
     gain: 0.8,
-    audio,
-    audioChannels: 1,
-    audioSampleRate: 48000,
+    channels: [audio],
+    sampleRate: 48000,
   });
 
   const { clipId } = project.addMidiClip(0, 4);
@@ -33,7 +51,7 @@ function buildProject(): Project {
 }
 
 it('accepts a metadata-only audio clip with a source URI', () => {
-  const project = Project.create();
+  const project = new Project();
   const trackId = project.addTrack({ kind: 'audio' });
   expect(() =>
     project.addClip({ trackId, startPpq: 0, lengthPpq: 4, sourceUri: 'asset://lead.wav' }),
@@ -42,8 +60,8 @@ it('accepts a metadata-only audio clip with a source URI', () => {
   project.destroy();
 });
 
-it('reads stored tracks, clips, and sources by index', () => {
-  const project = Project.create();
+it('reads stored tracks, clips, and sources as arrays', () => {
+  const project = new Project();
   const trackId = project.addTrack({ kind: 'audio', name: 'readback' });
   const clipId = project.addClip({
     trackId,
@@ -54,88 +72,91 @@ it('reads stored tracks, clips, and sources by index', () => {
     sourceUri: 'asset://readback.wav',
   });
   try {
-    expect(project.trackByIndex(0)).toMatchObject({
+    expect(project.tracks()).toHaveLength(1);
+    expect(project.tracks()[0]).toMatchObject({
       id: trackId,
-      kind: 0,
+      kind: 'audio',
       name: 'readback',
       gain: 1,
       pan: 0,
       mute: false,
       solo: false,
     });
-    expect(project.clipByIndex(0)).toMatchObject({
+    expect(project.clips()).toHaveLength(1);
+    expect(project.clips()[0]).toMatchObject({
       id: clipId,
       trackId,
-      sourceKind: 0,
+      sourceKind: 'audio',
       startPpq: 2,
       lengthPpq: 4,
       sourceOffsetPpq: 1,
       gain: 0.75,
-      loopMode: 0,
+      loopMode: 'off',
       loopLengthPpq: 0,
     });
-    expect(project.sourceByIndex(0)).toMatchObject({
-      id: project.clipByIndex(0).sourceId,
-      kind: 0,
+    expect(project.sources()).toHaveLength(1);
+    expect(project.sources()[0]).toMatchObject({
+      id: project.clips()[0].sourceId,
+      kind: 'audio',
       nameOrUri: 'asset://readback.wav',
     });
-    expect(() => project.trackByIndex(1)).toThrow();
-    expect(() => project.clipByIndex(1)).toThrow();
-    expect(() => project.sourceByIndex(1)).toThrow();
+    expect(project.tracks()[1]).toBeUndefined();
+    expect(project.clips()[1]).toBeUndefined();
+    expect(project.sources()[1]).toBeUndefined();
   } finally {
     project.destroy();
   }
 });
 
 it('reads and edits audio source metadata without mutating input', () => {
-  const project = Project.create();
+  const project = new Project();
   const trackId = project.addTrack({ kind: 'audio' });
   project.addClip({ trackId, lengthPpq: 4, sourceUri: 'asset://metadata.wav' });
-  const sourceId = project.clipByIndex(0).sourceId;
+  const sourceId = project.clips()[0].sourceId;
   const { clipId: midiClipId } = project.addMidiClip(0, 1);
-  const midiSourceId = project.clipByIndex(1).sourceId;
+  const midiSourceId = project.clips()[1].sourceId;
   const metadata = { contentHash: 'sha256:deadbeef', externalStemRole: 'lead' };
 
   try {
-    expect(project.sourceByIndex(0)).toMatchObject({
+    expect(project.sources()[0]).toMatchObject({
       id: sourceId,
-      kind: 0,
+      kind: 'audio',
       nameOrUri: 'asset://metadata.wav',
       contentHash: '',
       externalStemRole: '',
     });
 
-    project.setAudioSourceMetadata(sourceId, metadata);
+    project.setAudioSourceMetadata({ sourceId, ...metadata });
     expect(metadata).toEqual({ contentHash: 'sha256:deadbeef', externalStemRole: 'lead' });
-    expect(project.sourceByIndex(0)).toMatchObject(metadata);
+    expect(project.sources()[0]).toMatchObject(metadata);
 
-    project.setAudioSourceMetadata(sourceId, '', '');
-    expect(project.sourceByIndex(0)).toMatchObject({
+    project.setAudioSourceMetadata({ sourceId, contentHash: '', externalStemRole: '' });
+    expect(project.sources()[0]).toMatchObject({
       id: sourceId,
       nameOrUri: 'asset://metadata.wav',
       contentHash: '',
       externalStemRole: '',
     });
     project.undo();
-    expect(project.sourceByIndex(0)).toMatchObject(metadata);
+    expect(project.sources()[0]).toMatchObject(metadata);
     project.redo();
-    expect(project.sourceByIndex(0)).toMatchObject({ contentHash: '', externalStemRole: '' });
+    expect(project.sources()[0]).toMatchObject({ contentHash: '', externalStemRole: '' });
 
-    project.setAudioSourceMetadata(sourceId, metadata);
+    project.setAudioSourceMetadata({ sourceId, ...metadata });
     const restored = Project.fromJson(project.toJson());
     try {
-      expect(restored.sourceByIndex(0)).toMatchObject(metadata);
+      expect(restored.sources()[0]).toMatchObject(metadata);
     } finally {
       restored.destroy();
     }
 
-    expect(() => project.setAudioSourceMetadata(999999, metadata)).toThrow();
-    expect(() => project.setAudioSourceMetadata(midiSourceId, metadata)).toThrow();
-    expect(project.clipByIndex(1).id).toBe(midiClipId);
-    expect(project.sourceByIndex(0)).toMatchObject(metadata);
-    expect(project.sourceByIndex(1)).toMatchObject({
+    expect(() => project.setAudioSourceMetadata({ sourceId: 999999, ...metadata })).toThrow();
+    expect(() => project.setAudioSourceMetadata({ sourceId: midiSourceId, ...metadata })).toThrow();
+    expect(project.clips()[1].id).toBe(midiClipId);
+    expect(project.sources()[0]).toMatchObject(metadata);
+    expect(project.sources()[1]).toMatchObject({
       id: midiSourceId,
-      kind: 1,
+      kind: 'midi',
       contentHash: '',
       externalStemRole: '',
     });
@@ -145,30 +166,31 @@ it('reads and edits audio source metadata without mutating input', () => {
 });
 
 it('rebinds deserialized source audio before bouncing', () => {
-  const project = Project.create();
+  const project = new Project();
   const trackId = project.addTrack({ kind: 'audio' });
   const audio = new Float32Array(480).fill(0.25);
   project.addClip({
     trackId,
     startPpq: 0,
     lengthPpq: 1,
-    audio,
-    audioChannels: 1,
-    audioSampleRate: 48000,
+    channels: [audio],
+    sampleRate: 48000,
     sourceUri: 'asset://lead.wav',
   });
   const restored = Project.fromJson(project.toJson());
   const sourceIds = restored.unresolvedAudioSourceIds();
   expect(sourceIds).toHaveLength(1);
-  restored.setSourceAudio(sourceIds[0], audio, 1, 48000);
+  restored.setSourceAudio({ sourceId: sourceIds[0], channels: [audio], sampleRate: 48000 });
   expect(restored.unresolvedAudioSourceIds()).toEqual([]);
-  expect(restored.bounce({ totalFrames: 480, numChannels: 1 })).toHaveLength(480);
+  const bounced = restored.bounce({ totalFrames: 480, numChannels: 1 });
+  expect(bounced.channels).toHaveLength(1);
+  expect(bounced.channels[0]).toHaveLength(480);
   restored.destroy();
   project.destroy();
 });
 
 it('describes unresolved audio sources with the full untruncated URI', () => {
-  const project = Project.create();
+  const project = new Project();
   const trackId = project.addTrack({ kind: 'audio' });
   const longUri = `asset://${'a'.repeat(300)}.wav`;
   project.addClip({ trackId, startPpq: 0, lengthPpq: 1, sourceUri: longUri });
@@ -176,23 +198,31 @@ it('describes unresolved audio sources with the full untruncated URI', () => {
   const restored = Project.fromJson(project.toJson());
   const ids = restored.unresolvedAudioSourceIds();
   expect(ids).toHaveLength(2);
-  restored.setAudioSourceMetadata(ids[1], 'sha256:abc', 'vocals');
+  restored.setAudioSourceMetadata({
+    sourceId: ids[1],
+    contentHash: 'sha256:abc',
+    externalStemRole: 'vocals',
+  });
   const sources = restored.unresolvedAudioSources();
   expect(sources.map((source) => source.id)).toEqual(ids);
   expect(sources[0].nameOrUri).toBe(longUri);
-  expect(sources[0].kind).toBe(0);
+  expect(sources[0].kind).toBe('audio');
   expect(sources[1].nameOrUri).toBe('asset://stem.wav');
   expect(sources[1].contentHash).toBe('sha256:abc');
   expect(sources[1].externalStemRole).toBe('vocals');
-  expect(restored.sourceByIndex(0).nameOrUri).toBe(longUri);
-  restored.setSourceAudio(ids[0], new Float32Array(480).fill(0.25), 1, 48000);
+  expect(restored.sources()[0].nameOrUri).toBe(longUri);
+  restored.setSourceAudio({
+    sourceId: ids[0],
+    channels: [new Float32Array(480).fill(0.25)],
+    sampleRate: 48000,
+  });
   expect(restored.unresolvedAudioSources().map((source) => source.id)).toEqual([ids[1]]);
   restored.destroy();
   project.destroy();
 });
 
 it('reports no unresolved audio sources for a MIDI-only project', () => {
-  const project = Project.create();
+  const project = new Project();
   const trackId = project.addTrack({ kind: 'midi' });
   project.addClip({ trackId, startPpq: 0, lengthPpq: 1, isMidi: true });
   expect(project.unresolvedAudioSources()).toEqual([]);
@@ -272,9 +302,6 @@ function accelerando(sampleRate = 22050, startBpm = 100, endBpm = 160, seconds =
   return audio;
 }
 
-/** Project markers still carry the kind as an ordinal (`marker, text, lyric, cuePoint, keySignature`). */
-const MarkerKind = { Marker: 0, KeySignature: 4 } as const;
-
 describe('Project native binding', () => {
   it('reports the expected project ABI version', () => {
     expect(projectAbiVersion()).toBe(EXPECTED_PROJECT_ABI_VERSION);
@@ -282,7 +309,7 @@ describe('Project native binding', () => {
   });
 
   it('imports external planar stems through the project C ABI', () => {
-    const project = Project.create();
+    const project = new Project();
     project.setSampleRate(48000);
     const result = project.importExternalStems({
       sampleRate: 48000,
@@ -291,31 +318,31 @@ describe('Project native binding', () => {
           name: 'vocals',
           role: 'lead',
           layout: 'stereo',
-          planarSamples: [new Float32Array([1, 0, 0]), new Float32Array([-0.5, 0, 0])],
+          channels: [new Float32Array([1, 0, 0]), new Float32Array([-0.5, 0, 0])],
           startFrame: 113,
         },
         {
           name: 'drums',
           layout: 'mono',
-          planarSamples: [new Float32Array([0.25, 0, 0])],
+          channels: [new Float32Array([0.25, 0, 0])],
         },
       ],
     });
     expect(result.trackIds).toHaveLength(2);
     expect(result.clipIds).toHaveLength(2);
-    expect(project.trackCount()).toBe(2);
-    expect(project.clipCount()).toBe(2);
+    expect(project.tracks().length).toBe(2);
+    expect(project.clips().length).toBe(2);
     expect(() =>
       project.importExternalStems({
         sampleRate: 48000,
         stems: [
-          { name: 'duplicate', layout: 'mono', planarSamples: [new Float32Array([0])] },
-          { name: 'duplicate', layout: 'mono', planarSamples: [new Float32Array([0])] },
+          { name: 'duplicate', layout: 'mono', channels: [new Float32Array([0])] },
+          { name: 'duplicate', layout: 'mono', channels: [new Float32Array([0])] },
         ],
       }),
     ).toThrow();
-    expect(project.trackCount()).toBe(2);
-    expect(project.clipCount()).toBe(2);
+    expect(project.tracks().length).toBe(2);
+    expect(project.clips().length).toBe(2);
     project.destroy();
   });
 
@@ -327,7 +354,7 @@ describe('Project native binding', () => {
     expect(() => Project.fromJsonWithDiagnostics(document)).toThrow(
       expect.objectContaining({ code: ErrorCode.InvalidFormat }),
     );
-    const project = Project.create();
+    const project = new Project();
     expect(() => project.setSampleRate(44100.5)).toThrow(/whole number of hertz/);
     expect(() => project.setSampleRate(44100.5)).toThrow(RangeError);
   });
@@ -349,25 +376,28 @@ describe('Project native binding', () => {
     const project = buildProject();
     const result = project.compile();
 
-    expect(result.hasTimeline).toBe(true);
+    expect(result).not.toHaveProperty('hasTimeline');
+    expect(result).not.toHaveProperty('messages');
     expect(result.diagnostics.length).toBe(1);
-    expect(result.diagnostics[0].code).toBe(10);
+    expect(result.diagnostics[0].code).toBe('midiClipNoInstrument');
+    expect(result.diagnostics[0].severity).toBe('warning');
     expect(result.diagnostics[0].message).toContain('project contains MIDI clips');
-    expect(result.messages.split('\n')[0]).toBe(result.diagnostics[0].message);
 
     project.destroy();
   });
 
   it('bounces deterministically (bit-exact across two calls)', () => {
     const project = buildProject();
-    const options = { totalFrames: 1024, blockSize: 128, numChannels: 2, sampleRate: 48000 };
+    const options = { totalFrames: 1024, blockSize: 128, numChannels: 2 };
 
     const first = project.bounce(options);
     const second = project.bounce(options);
 
-    expect(first.length).toBe(second.length);
-    expect(first.length).toBeGreaterThan(0);
-    expect(Array.from(first)).toEqual(Array.from(second));
+    expect(first.channels).toHaveLength(2);
+    expect(first.channels[0].length).toBe(1024);
+    expect(first.channels.map((c) => Array.from(c))).toEqual(
+      second.channels.map((c) => Array.from(c)),
+    );
 
     project.destroy();
   });
@@ -387,17 +417,17 @@ describe('Project native binding', () => {
   });
 
   it('setMaxUndoDepth caps how far undo can rewind', () => {
-    const project = Project.create();
+    const project = new Project();
     for (let i = 0; i < 5; i++) {
       project.addTrack({ kind: 'midi', name: `t${i}` });
     }
-    expect(project.trackCount()).toBe(5);
+    expect(project.tracks().length).toBe(5);
 
     // Keep only the two most-recent edits in history.
     project.setMaxUndoDepth(2);
     project.undo();
     project.undo();
-    expect(project.trackCount()).toBe(3);
+    expect(project.tracks().length).toBe(3);
     // The third undo has no surviving history entry to rewind.
     expect(() => project.undo()).toThrow();
 
@@ -405,7 +435,7 @@ describe('Project native binding', () => {
   });
 
   it('setMaxUndoDepth validates input and leaves the installed cap alone', () => {
-    const project = Project.create();
+    const project = new Project();
     // Bound: an unbound method reference loses `this` and fails inside the
     // facade before the addon is ever reached, which would make every rejection
     // below pass for the wrong reason.
@@ -415,7 +445,7 @@ describe('Project native binding', () => {
     project.setMaxUndoDepth(1);
     project.addTrack({ kind: 'midi', name: 'a' });
     project.addTrack({ kind: 'midi', name: 'b' });
-    expect(project.trackCount()).toBe(2);
+    expect(project.tracks().length).toBe(2);
 
     // A raw double -> size_t conversion made each of these SIZE_MAX, which
     // disables the cap instead of rejecting the call.
@@ -437,7 +467,7 @@ describe('Project native binding', () => {
 
     // The depth-one cap installed before the rejections is still in force.
     project.undo();
-    expect(project.trackCount()).toBe(1);
+    expect(project.tracks().length).toBe(1);
     expect(() => project.undo()).toThrow();
 
     // A valid depth is accepted and rewinds that many edits.
@@ -445,17 +475,17 @@ describe('Project native binding', () => {
     for (let i = 0; i < 3; i++) {
       project.addTrack({ kind: 'midi', name: `t${i}` });
     }
-    expect(project.trackCount()).toBe(4);
+    expect(project.tracks().length).toBe(4);
     project.undo();
     project.undo();
     project.undo();
-    expect(project.trackCount()).toBe(1);
+    expect(project.tracks().length).toBe(1);
 
     project.destroy();
   });
 
   it('setMaxHistoryBytes validates input and supports zero retention', () => {
-    const project = Project.create();
+    const project = new Project();
     project.addTrack({ kind: 'midi', name: 'before-validation' });
 
     const invalidValues: unknown[] = [
@@ -478,63 +508,63 @@ describe('Project native binding', () => {
 
     // Validation must not disturb an existing undo entry.
     project.undo();
-    expect(project.trackCount()).toBe(0);
+    expect(project.tracks().length).toBe(0);
 
     // A regular edit remains undoable under a positive byte cap.
     project.setMaxHistoryBytes(Number.MAX_SAFE_INTEGER);
     project.addTrack({ kind: 'midi', name: 'undoable' });
-    expect(project.trackCount()).toBe(1);
+    expect(project.tracks().length).toBe(1);
     project.undo();
-    expect(project.trackCount()).toBe(0);
+    expect(project.tracks().length).toBe(0);
 
     // Zero is a valid no-retention policy: mutation succeeds, but has no undo.
     project.setMaxHistoryBytes(0);
     project.addTrack({ kind: 'midi', name: 'not-undoable' });
-    expect(project.trackCount()).toBe(1);
+    expect(project.tracks().length).toBe(1);
     expect(() => project.undo()).toThrow();
-    expect(project.trackCount()).toBe(1);
+    expect(project.tracks().length).toBe(1);
 
     project.destroy();
   });
 
   it('clearHistory leaves nothing to undo', () => {
-    const project = Project.create();
+    const project = new Project();
     project.addTrack({ kind: 'midi', name: 'a' });
     project.addTrack({ kind: 'midi', name: 'b' });
-    expect(project.trackCount()).toBe(2);
+    expect(project.tracks().length).toBe(2);
 
     project.clearHistory();
-    expect(project.trackCount()).toBe(2);
+    expect(project.tracks().length).toBe(2);
     expect(() => project.undo()).toThrow();
 
     project.destroy();
   });
 
   it('addMidiClip undoes and redoes track, source, and clip as one edit', () => {
-    const project = Project.create();
+    const project = new Project();
     const before = project.toJson();
     project.addMidiClip(2, 4);
     const added = project.toJson();
-    expect(project.trackCount()).toBe(1);
-    expect(project.sourceCount()).toBe(1);
-    expect(project.clipCount()).toBe(1);
+    expect(project.tracks().length).toBe(1);
+    expect(project.sources().length).toBe(1);
+    expect(project.clips().length).toBe(1);
 
     project.undo();
     expect(project.toJson()).toBe(before);
-    expect(project.trackCount()).toBe(0);
-    expect(project.sourceCount()).toBe(0);
-    expect(project.clipCount()).toBe(0);
+    expect(project.tracks().length).toBe(0);
+    expect(project.sources().length).toBe(0);
+    expect(project.clips().length).toBe(0);
 
     project.redo();
     expect(project.toJson()).toBe(added);
-    expect(project.trackCount()).toBe(1);
-    expect(project.sourceCount()).toBe(1);
-    expect(project.clipCount()).toBe(1);
+    expect(project.tracks().length).toBe(1);
+    expect(project.sources().length).toBe(1);
+    expect(project.clips().length).toBe(1);
     project.destroy();
   });
 
   it('routes a track to a MIDI destination and undoes it', () => {
-    const project = Project.create();
+    const project = new Project();
     const trackId = project.addTrack({ kind: 'midi', name: 'lead' });
     const before = project.toJson();
 
@@ -550,7 +580,7 @@ describe('Project native binding', () => {
   });
 
   it('sets track gain / mute / solo / pan and undoes them', () => {
-    const project = Project.create();
+    const project = new Project();
     const trackId = project.addTrack({ kind: 'audio', name: 'lead' });
     const before = project.toJson();
 
@@ -576,9 +606,9 @@ describe('Project native binding', () => {
   });
 
   it('sets a clip warp reference and undoes it', () => {
-    const project = Project.create();
+    const project = new Project();
     const trackId = project.addTrack({ kind: 'audio', name: 'audio' });
-    const clipId = project.addClip({ trackId, startPpq: 0, lengthPpq: 4, audioChannels: 0 });
+    const clipId = project.addClip({ trackId, startPpq: 0, lengthPpq: 4 });
     const before = project.toJson();
 
     // A warp ref must name a registered warp map.
@@ -608,16 +638,16 @@ describe('Project native binding', () => {
     project.undo();
     expect(project.toJson()).toBe(before);
 
-    project.setClipWarpMode(clipId, 'tempo-sync');
+    project.setClipWarpMode(clipId, 'tempoSync');
     expect(project.toJson()).toContain('"warp_mode":2');
 
     project.destroy();
   });
 
   it('clears clip warp references when removing a warp map and restores them on undo', () => {
-    const project = Project.create();
+    const project = new Project();
     const trackId = project.addTrack({ kind: 'audio', name: 'audio' });
-    const clipId = project.addClip({ trackId, startPpq: 0, lengthPpq: 4, audioChannels: 0 });
+    const clipId = project.addClip({ trackId, startPpq: 0, lengthPpq: 4 });
     project.setWarpMap({
       id: 123,
       anchors: [
@@ -639,7 +669,7 @@ describe('Project native binding', () => {
   });
 
   it('rejects routing an unknown track', () => {
-    const project = Project.create();
+    const project = new Project();
     expect(() => project.setTrackMidiDestination(9999, 1)).toThrow();
     project.destroy();
   });
@@ -649,15 +679,15 @@ describe('Project native binding', () => {
     const smf = project.exportSmf();
     expect(smf.length).toBeGreaterThan(0);
     // Standard MIDI File header chunk magic.
-    expect(smf.subarray(0, 4).toString('ascii')).toBe('MThd');
+    expect(bytes(smf.subarray(0, 4)).toString('ascii')).toBe('MThd');
     project.destroy();
   });
 
   it('rejects MIDI loop export that exceeds the expansion budget', () => {
-    const project = Project.create();
+    const project = new Project();
     const { clipId } = project.addMidiClip(0, 4);
     project.setMidiEvents(clipId, [Project.midiNoteOn(0, 0, 0, 60, 100)]);
-    project.setClipLoop(clipId, 'loop', 1e-9);
+    project.setClipLoop(clipId, { loopMode: 'loop', loopLengthPpq: 1e-9 });
     expect(() => project.exportSmf()).toThrow();
     expect(() => project.exportClipFile()).toThrow();
     project.destroy();
@@ -675,17 +705,17 @@ describe('Project native binding', () => {
     const clipFile = project.exportClipFile();
     expect(clipFile.length).toBeGreaterThan(8);
     // MIDI 2.0 Clip File header magic.
-    expect(clipFile.subarray(0, 8).toString('ascii')).toBe('SMF2CLIP');
+    expect(bytes(clipFile.subarray(0, 8)).toString('ascii')).toBe('SMF2CLIP');
 
-    const reimported = Project.create();
+    const reimported = new Project();
     const firstClip = reimported.importClipFile(clipFile);
     expect(firstClip).toBeGreaterThan(0);
-    expect(reimported.exportClipFile().subarray(0, 8).toString('ascii')).toBe('SMF2CLIP');
+    expect(bytes(reimported.exportClipFile().subarray(0, 8)).toString('ascii')).toBe('SMF2CLIP');
     reimported.destroy();
     project.destroy();
   });
 
-  it('reports MIDI-FX provenance and matches the positional bake', () => {
+  it('reports MIDI-FX provenance and matches the bare bake', () => {
     const seed = (project: Project, clip: number) => {
       project.setMidiEvents(clip, [
         Project.midiNoteOn(0, 0, 0, 60, 100),
@@ -715,22 +745,20 @@ describe('Project native binding', () => {
     }
     expect(perInput).toEqual([3, 3, 3, 3]);
 
-    // The positional form must land on identical bytes, and the request form
-    // without the flag must behave like it.
-    const positional = buildProject();
-    const { clipId: positionalClip } = positional.addMidiClip(0, 4);
-    seed(positional, positionalClip);
-    positional.bakeMidiFx(positionalClip, config);
-    expect(request.exportSmf()).toEqual(positional.exportSmf());
-
+    // The request without the flag must land on identical bytes.
     const bare = buildProject();
     const { clipId: bareClip } = bare.addMidiClip(0, 4);
     seed(bare, bareClip);
     expect(bare.bakeMidiFx({ clipId: bareClip, configJson: config })).toEqual({});
-    expect(bare.exportSmf()).toEqual(positional.exportSmf());
+    expect(bare.exportSmf()).toEqual(request.exportSmf());
 
-    // Errors travel the same path in both forms.
-    expect(() => positional.bakeMidiFx(positionalClip, '{bad json')).toThrow();
+    // The positional form is gone.
+    expect(() =>
+      (bare as unknown as { bakeMidiFx(...args: unknown[]): unknown }).bakeMidiFx(bareClip, config),
+    ).toThrow(TypeError);
+
+    // Errors travel the same path with and without the flag.
+    expect(() => bare.bakeMidiFx({ clipId: bareClip, configJson: '{bad json' })).toThrow();
     expect(() =>
       request.bakeMidiFx({ clipId: requestClip, configJson: '{bad json', withSourceIndex: true }),
     ).toThrow();
@@ -739,7 +767,6 @@ describe('Project native binding', () => {
     ).toThrow();
 
     request.destroy();
-    positional.destroy();
     bare.destroy();
   });
 
@@ -753,55 +780,60 @@ describe('Project native binding', () => {
       Project.midiPitchBend(0.4, 0, 0, 8192),
       Project.midiNoteOff(1.1, 0, 0, 60, 0),
     ]);
-    project.bakeMidiFx(
+    project.bakeMidiFx({
       clipId,
-      '{"transpose_semitones":12,"quantize_ppq":0.25,"quantize_strength":1.0}',
-    );
+      configJson: '{"transpose_semitones":12,"quantize_ppq":0.25,"quantize_strength":1.0}',
+    });
     project.setProgram(clipId, 42);
-    project.setProgramOnChannel(clipId, 0, 3, 24, 0x0123);
+    project.setProgramOnChannel(clipId, {
+      group: 0,
+      channel: 3,
+      program: 24,
+      bank: { msb: 0x0123 >> 7, lsb: 0x0123 & 0x7f },
+    });
     const smf = project.exportSmf();
-    expect(smf.includes(Buffer.from([0xc0, 42]))).toBe(true);
-    expect(smf.includes(Buffer.from([0xc3, 24]))).toBe(true);
+    expect(bytes(smf).includes(Buffer.from([0xc0, 42]))).toBe(true);
+    expect(bytes(smf).includes(Buffer.from([0xc3, 24]))).toBe(true);
     // Pressure and bend survive the export. Poly pressure carries the transposed
     // note (60 + 12), because aftertouch left on the source note would address a
     // note the shifted voice never played.
-    expect(smf.includes(Buffer.from([0xa0, 72, 70]))).toBe(true);
-    expect(smf.includes(Buffer.from([0xa0, 60, 70]))).toBe(false);
-    expect(smf.includes(Buffer.from([0xd0, 80]))).toBe(true);
-    expect(smf.includes(Buffer.from([0xe0, 0x00, 0x40]))).toBe(true);
+    expect(bytes(smf).includes(Buffer.from([0xa0, 72, 70]))).toBe(true);
+    expect(bytes(smf).includes(Buffer.from([0xa0, 60, 70]))).toBe(false);
+    expect(bytes(smf).includes(Buffer.from([0xd0, 80]))).toBe(true);
+    expect(bytes(smf).includes(Buffer.from([0xe0, 0x00, 0x40]))).toBe(true);
     project.destroy();
 
-    const sysexProject = Project.create();
+    const sysexProject = new Project();
     const firstClip = sysexProject.importSmf(makeSysexSmf());
     expect(firstClip).toBeGreaterThan(0);
     const json = sysexProject.toJson();
     expect(json).toContain('__sysex_payloads');
     const restored = Project.fromJson(json);
     const restoredSmf = restored.exportSmf();
-    expect(restoredSmf.includes(Buffer.from([0xf0, 0x05, 0x7e, 0x7f, 0x09, 0x01, 0xf7]))).toBe(
-      true,
-    );
+    expect(
+      bytes(restoredSmf).includes(Buffer.from([0xf0, 0x05, 0x7e, 0x7f, 0x09, 0x01, 0xf7])),
+    ).toBe(true);
     sysexProject.destroy();
     restored.destroy();
   });
 
   it('preserves more than 512 events when baking MIDI FX', () => {
-    const project = Project.create();
+    const project = new Project();
     const { clipId } = project.addMidiClip(0, 8);
     const events = Array.from({ length: 600 }, (_, i) =>
       Project.midiCc(i / 80, 0, 0, i % 128, (i * 3) % 128),
     );
     project.setMidiEvents(clipId, events);
-    project.bakeMidiFx(clipId, '{}');
+    project.bakeMidiFx({ clipId, configJson: '{}' });
 
     const payload = JSON.parse(project.toJson()) as {
       midi_content: Record<string, Array<{ ppq: number; data0: number; data1: number }>>;
     };
     expect(payload.midi_content[String(clipId)]).toEqual(events);
 
-    const round = Project.create();
+    const round = new Project();
     const roundClip = round.importSmf(project.exportSmf());
-    round.bakeMidiFx(roundClip, '{}');
+    round.bakeMidiFx({ clipId: roundClip, configJson: '{}' });
     const roundPayload = JSON.parse(round.toJson()) as {
       midi_content: Record<string, Array<{ ppq: number; data0: number; data1: number }>>;
     };
@@ -811,13 +843,13 @@ describe('Project native binding', () => {
   });
 
   it('imports the valid prefix of a truncated SMF', () => {
-    const project = Project.create();
+    const project = new Project();
     expect(project.importSmf(makeTruncatedSmf())).toBeGreaterThan(0);
     project.destroy();
   });
 
   it('validates MIDI event inputs before native conversion', () => {
-    const project = Project.create();
+    const project = new Project();
     const { clipId } = project.addMidiClip(0, 1);
 
     expect(() => project.setMidiEvents(clipId, [{ ppq: Number.NaN, data0: 0, data1: 0 }])).toThrow(
@@ -838,13 +870,13 @@ describe('Project native binding', () => {
   it('fromJsonWithDiagnostics returns warnings from successful loads', () => {
     const { project, diagnostics } = Project.fromJsonWithDiagnostics(danglingSourceJson());
     expect(diagnostics).toContain('dangling_clip_source');
-    expect(project.trackCount()).toBe(1);
+    expect(project.tracks().length).toBe(1);
     project.destroy();
   });
 
   /** A MIDI-only project: one MIDI clip holding a sustained note routed to dest 0. */
   function buildMidiOnlyProject(): Project {
-    const project = Project.create();
+    const project = new Project();
     project.setSampleRate(48000);
     const { trackId, clipId } = project.addMidiClip(0, 4);
     project.setTrackMidiDestination(trackId, 0);
@@ -855,85 +887,94 @@ describe('Project native binding', () => {
     return project;
   }
 
-  function peak(audio: Float32Array): number {
-    let p = 0;
-    for (let i = 0; i < audio.length; i++) {
-      const a = Math.abs(audio[i]);
-      if (a > p) {
-        p = a;
-      }
-    }
-    return p;
-  }
-
   it('bounces a MIDI-only project to silence without a bound instrument', () => {
     const project = buildMidiOnlyProject();
-    const audio = project.bounce({ totalFrames: 4096, numChannels: 2, sampleRate: 48000 });
-    expect(audio.length).toBe(4096 * 2);
+    const audio = project.bounce({ totalFrames: 4096, numChannels: 2 });
+    expect(audio.channels).toHaveLength(2);
+    expect(audio.channels[0]).toHaveLength(4096);
     expect(peak(audio)).toBe(0);
     project.destroy();
   });
 
   it('bounces MIDI through the built-in synth to non-silent audio (instrument-first)', () => {
     const project = buildMidiOnlyProject();
-    const audio = project.bounceWithBuiltinInstrument(
-      { waveform: 'saw', destinationId: 0, gain: 0.5 },
-      { totalFrames: 4096, numChannels: 2, sampleRate: 48000 },
+    const audio = project.bounceWithBuiltinInstruments(
+      { destinationId: 0, instrument: { waveform: 'saw', gain: 0.5 } },
+      { totalFrames: 4096, numChannels: 2 },
     );
-    expect(audio.length).toBe(4096 * 2);
+    expect(audio.channels).toHaveLength(2);
+    expect(audio.channels[0]).toHaveLength(4096);
     expect(peak(audio)).toBeGreaterThan(0);
     project.destroy();
   });
 
   it('keeps the base patch when builtin synth numeric fields are explicitly zero', () => {
     const project = buildMidiOnlyProject();
-    const options = { totalFrames: 4096, numChannels: 2, sampleRate: 48000 };
+    const options = { totalFrames: 4096, numChannels: 2 };
     // This facade binds the minimal oscillator synth, whose numeric fields all
     // use "0 / omit => default". The NativeSynth patch vocabulary (preset,
     // ampSustain, filterSustain) is not read here, so only the oscillator
     // fields are exercised.
-    const base = project.bounceWithBuiltinInstrument({ waveform: 'saw' }, options);
-    const explicitZero = project.bounceWithBuiltinInstrument(
-      { waveform: 'saw', gain: 0, attackMs: 0, decayMs: 0, sustain: 0, releaseMs: 0, polyphony: 0 },
+    const base = project.bounceWithBuiltinInstruments({ instrument: { waveform: 'saw' } }, options);
+    const explicitZero = project.bounceWithBuiltinInstruments(
+      {
+        instrument: {
+          waveform: 'saw',
+          gain: 0,
+          attackMs: 0,
+          decayMs: 0,
+          sustain: 0,
+          releaseMs: 0,
+          polyphony: 0,
+        },
+      },
       options,
     );
     expect(explicitZero).toEqual(base);
     // Guard against a vacuous pass: a non-default value must move the render,
     // otherwise the equality above would hold for an unrelated reason.
-    const moved = project.bounceWithBuiltinInstrument({ waveform: 'saw', sustain: 0.1 }, options);
+    const moved = project.bounceWithBuiltinInstruments(
+      { instrument: { waveform: 'saw', sustain: 0.1 } },
+      options,
+    );
     expect(moved).not.toEqual(base);
     project.destroy();
   });
 
-  it('accepts a bare waveform name and an explicit bindings array (instrument-first)', () => {
+  it('accepts a waveform alias in a binding and an explicit bindings array', () => {
     const project = buildMidiOnlyProject();
-    const byName = project.bounceWithBuiltinInstrument('sine', {
-      totalFrames: 2048,
-      numChannels: 1,
-      sampleRate: 48000,
-    });
+    const byName = project.bounceWithBuiltinInstruments(
+      { instrument: { waveform: 'sine' } },
+      { totalFrames: 2048, numChannels: 1 },
+    );
     expect(peak(byName)).toBeGreaterThan(0);
 
-    const byAlias = project.bounceWithBuiltinInstrument('sawtooth', {
-      totalFrames: 2048,
-      numChannels: 1,
-      sampleRate: 48000,
-    });
+    const byAlias = project.bounceWithBuiltinInstruments(
+      { instrument: { waveform: 'sawtooth' } },
+      { totalFrames: 2048, numChannels: 1 },
+    );
     expect(peak(byAlias)).toBeGreaterThan(0);
 
     const byArray = project.bounceWithBuiltinInstruments(
-      [{ destinationId: 0, waveform: 'square' }],
-      { totalFrames: 2048, numChannels: 1, sampleRate: 48000 },
+      [{ destinationId: 0, instrument: { waveform: 'square' } }],
+      { totalFrames: 2048, numChannels: 1 },
     );
     expect(peak(byArray)).toBeGreaterThan(0);
+
+    // A bare waveform name or a bare config is not a binding.
+    const loose = project as unknown as {
+      bounceWithBuiltinInstruments(...args: unknown[]): unknown;
+    };
+    expect(() => loose.bounceWithBuiltinInstruments('sine')).toThrow(TypeError);
+    expect(() => loose.bounceWithBuiltinInstruments({ waveform: 'sine' })).toThrow(TypeError);
     project.destroy();
   });
 
   it('auto-derives the render length when options/totalFrames is omitted (instrument-first)', () => {
     const project = buildMidiOnlyProject();
     // Pass only the instrument; options defaults to {} and length auto-derives.
-    const audio = project.bounceWithBuiltinInstrument({ waveform: 'triangle' });
-    expect(audio.length).toBeGreaterThan(0);
+    const audio = project.bounceWithBuiltinInstruments({ instrument: { waveform: 'triangle' } });
+    expect(audio.channels[0].length).toBeGreaterThan(0);
     expect(peak(audio)).toBeGreaterThan(0);
     project.destroy();
   });
@@ -944,8 +985,8 @@ describe('Project native binding', () => {
     // lets portable code share that name (tsc validates the alias accepts the
     // same shape as BuiltinInstrumentConfig).
     const patch: BuiltinSynthConfig = { waveform: 'square', gain: 0.3 };
-    const audio = project.bounceWithBuiltinInstrument(patch);
-    expect(audio.length).toBeGreaterThan(0);
+    const audio = project.bounceWithBuiltinInstruments({ instrument: patch });
+    expect(audio.channels[0].length).toBeGreaterThan(0);
     expect(peak(audio)).toBeGreaterThan(0);
     project.destroy();
   });
@@ -953,8 +994,8 @@ describe('Project native binding', () => {
   it('rejects an unknown built-in synth waveform name', () => {
     const project = buildMidiOnlyProject();
     expect(() =>
-      project.bounceWithBuiltinInstrument({
-        waveform: 'noise' as unknown as 'sine',
+      project.bounceWithBuiltinInstruments({
+        instrument: { waveform: 'noise' as unknown as 'sine' },
       }),
     ).toThrow(/sawtooth/);
     project.destroy();
@@ -970,8 +1011,8 @@ describe('Project native binding', () => {
       const project = buildMidiOnlyProject();
       expect(
         () =>
-          project.bounceWithBuiltinInstrument({
-            waveform: waveform as unknown as 'sine',
+          project.bounceWithBuiltinInstruments({
+            instrument: { waveform: waveform as unknown as 'sine' },
           }),
         `waveform ${waveform} must be rejected, not resolved to sine`,
       ).toThrow(/sawtooth/);
@@ -988,8 +1029,8 @@ describe('Project native binding', () => {
       const project = buildMidiOnlyProject();
       expect(
         () =>
-          project.bounceWithBuiltinInstrument({
-            waveform: waveform as unknown as 'sine',
+          project.bounceWithBuiltinInstruments({
+            instrument: { waveform: waveform as unknown as 'sine' },
           }),
         `waveform ${waveform} must be rejected as out of range`,
       ).toThrow(/32-bit integer range/);
@@ -1002,11 +1043,14 @@ describe('Project native binding', () => {
     // would satisfy it. Four ordinals, four different renders.
     const renders = [0, 1, 2, 3].map((waveform) => {
       const project = buildMidiOnlyProject();
-      const audio = project.bounceWithBuiltinInstrument({
-        waveform: waveform as unknown as 'sine',
+      const audio = project.bounceWithBuiltinInstruments({
+        instrument: { waveform: waveform as unknown as 'sine' },
       });
       project.destroy();
-      return audio.reduce((hash, sample) => (hash * 31 + Math.round(sample * 1e6)) | 0, 0);
+      return audio.channels[0].reduce(
+        (hash, sample) => (hash * 31 + Math.round(sample * 1e6)) | 0,
+        0,
+      );
     });
     expect(new Set(renders).size, 'the four waveforms must render differently').toBe(4);
   });
@@ -1014,53 +1058,52 @@ describe('Project native binding', () => {
 
 describe('Project value-model accessors', () => {
   it('round-trips track and source counts', () => {
-    const project = Project.create();
-    expect(project.trackCount()).toBe(0);
-    expect(project.clipCount()).toBe(0);
+    const project = new Project();
+    expect(project.tracks().length).toBe(0);
+    expect(project.clips().length).toBe(0);
     project.addTrack({ kind: 'audio', name: 'lead' });
-    expect(project.trackCount()).toBe(1);
+    expect(project.tracks().length).toBe(1);
     const audio = new Float32Array(64).fill(0.1);
     const clipId = project.addClip({
       trackId: 1,
       startPpq: 0,
       lengthPpq: 4,
-      audio,
-      audioChannels: 1,
-      audioSampleRate: 48000,
+      channels: [audio],
+      sampleRate: 48000,
     });
-    expect(project.clipCount()).toBe(1);
-    expect(project.sourceCount()).toBeGreaterThanOrEqual(1);
+    expect(project.clips().length).toBe(1);
+    expect(project.sources().length).toBeGreaterThanOrEqual(1);
     const restored = Project.fromJson(project.toJson());
-    expect(restored.clipCount()).toBe(1);
+    expect(restored.clips().length).toBe(1);
     restored.destroy();
     project.removeClip(clipId);
-    expect(project.clipCount()).toBe(0);
+    expect(project.clips().length).toBe(0);
     project.destroy();
   });
 
   it('reads and sets the sample rate', () => {
-    const project = Project.create();
+    const project = new Project();
     project.setSampleRate(44100);
-    expect(project.getSampleRate()).toBe(44100);
+    expect(project.sampleRate).toBe(44100);
     project.destroy();
   });
 
   it('reads and sets the overlap policy', () => {
-    const project = Project.create();
-    project.setOverlapPolicy(1);
-    expect(project.getOverlapPolicy()).toBe(1);
-    project.setOverlapPolicy(0);
-    expect(project.getOverlapPolicy()).toBe(0);
+    const project = new Project();
+    project.setOverlapPolicy('allow');
+    expect(project.overlapPolicy).toBe('allow');
+    project.setOverlapPolicy('disallow');
+    expect(project.overlapPolicy).toBe('disallow');
     project.destroy();
   });
 
   it('replaces tempo segments and counts them', () => {
-    const project = Project.create();
+    const project = new Project();
     project.setTempoSegments([
       { startPpq: 0, bpm: 120 },
       { startPpq: 4, bpm: 140, endBpm: 160 },
     ]);
-    expect(project.tempoSegmentCount()).toBe(2);
+    expect(project.tempoSegments().length).toBe(2);
     project.destroy();
   });
 
@@ -1068,100 +1111,99 @@ describe('Project value-model accessors', () => {
     // The count is only usable alongside a way to read what it counts, and a
     // segment that reads back in the setter's own shape can be moved between
     // projects without a translation step.
-    const source = Project.create();
+    const source = new Project();
     const segments = [
       { startPpq: 0, bpm: 120, endBpm: 0 },
       { startPpq: 4, bpm: 140, endBpm: 160 },
     ];
     source.setTempoSegments(segments);
-    const readBack = [source.tempoSegmentByIndex(0), source.tempoSegmentByIndex(1)];
+    const readBack = source.tempoSegments();
     expect(readBack).toEqual(segments);
     // startSample is never returned: the setter ignores it and a project keeps
     // musical positions only.
     expect('startSample' in readBack[0]).toBe(false);
-    expect(() => source.tempoSegmentByIndex(2)).toThrow();
+    expect(readBack).toHaveLength(2);
 
-    const target = Project.create();
+    const target = new Project();
     target.setTempoSegments(readBack);
-    expect(target.tempoSegmentByIndex(1)).toEqual(readBack[1]);
+    expect(target.tempoSegments()[1]).toEqual(readBack[1]);
     source.destroy();
     target.destroy();
   });
 
   it('replaces time signatures and counts them', () => {
-    const project = Project.create();
+    const project = new Project();
     project.setTimeSignatures([
       { startPpq: 0, numerator: 4, denominator: 4 },
       { startPpq: 8, numerator: 3, denominator: 4 },
     ]);
-    expect(project.timeSignatureCount()).toBe(2);
-    expect(project.timeSignatureByIndex(1)).toEqual({
+    expect(project.timeSignatures().length).toBe(2);
+    expect(project.timeSignatures()[1]).toEqual({
       startPpq: 8,
       numerator: 3,
       denominator: 4,
     });
-    expect(() => project.timeSignatureByIndex(2)).toThrow();
+    expect(project.timeSignatures()[2]).toBeUndefined();
     project.destroy();
   });
 
   it('adds a marker and returns its id', () => {
-    const project = Project.create();
-    const id = project.setMarker(0, 1.5, 'verse');
+    const project = new Project();
+    const id = project.setMarker({ ppq: 1.5, name: 'verse' });
     expect(typeof id).toBe('number');
     expect(id).toBeGreaterThan(0);
     project.destroy();
   });
 
-  it('round-trips a structured marker through setMarkerEx / markerByIndex', () => {
-    const project = Project.create();
-    const id = project.setMarkerEx({
+  it('round-trips a structured marker through setMarker / markers', () => {
+    const project = new Project();
+    const id = project.setMarker({
       ppq: 2,
       name: 'E minor',
-      kind: MarkerKind.KeySignature,
+      kind: 'keySignature',
       keyFifths: 1,
       keyMinor: true,
     });
     expect(id).toBeGreaterThan(0);
-    const marker = project.markerByIndex(0);
+    const marker = project.markers()[0];
     expect(marker.id).toBe(id);
     expect(marker.ppq).toBe(2);
     expect(marker.name).toBe('E minor');
-    expect(marker.kind).toBe(MarkerKind.KeySignature);
+    expect(marker.kind).toBe('keySignature');
     expect(marker.keyFifths).toBe(1);
     expect(marker.keyMinor).toBe(true);
 
-    // A second structured marker; markerCount lets a host iterate by index.
-    project.setMarkerEx({ ppq: 5, name: 'chorus' });
-    expect(project.markerCount()).toBe(2);
+    // A second structured marker; markers() lists them.
+    project.setMarker({ ppq: 5, name: 'chorus' });
+    expect(project.markers().length).toBe(2);
     const names: string[] = [];
-    for (let i = 0; i < project.markerCount(); i++) {
-      const m = project.markerByIndex(i);
+    for (const m of project.markers()) {
       expect(typeof m.id).toBe('number');
       names.push(m.name);
     }
     expect(names).toContain('E minor');
     expect(names).toContain('chorus');
 
-    // A plain setMarkerEx keeps the default Marker kind with neutral key fields.
-    const plain = project.markerByIndex(1);
-    expect(plain.kind).toBe(MarkerKind.Marker);
+    // A plain setMarker keeps the default Marker kind with neutral key fields.
+    const plain = project.markers()[1];
+    expect(plain.kind).toBe('marker');
     expect(plain.keyFifths).toBe(0);
     expect(plain.keyMinor).toBe(false);
     project.destroy();
   });
 
   it('round-trips a long UTF-8 marker name without splitting or truncating it', () => {
-    const project = Project.create();
+    const project = new Project();
     const name = 'あいうえお'.repeat(7);
     expect(Array.from(name).length).toBeGreaterThan(30);
-    project.setMarkerEx({ ppq: 3, name });
-    expect(project.markerByIndex(0).name).toBe(name);
+    project.setMarker({ ppq: 3, name });
+    expect(project.markers()[0].name).toBe(name);
     expect(JSON.parse(project.toJson()).markers[0].name).toBe(name);
     project.destroy();
   });
 
   it('accepts a mixer scene JSON without throwing', () => {
-    const project = Project.create();
+    const project = new Project();
     expect(() => project.setMixerSceneJson('{}')).not.toThrow();
     project.destroy();
   });
@@ -1170,18 +1212,17 @@ describe('Project value-model accessors', () => {
     const project = buildProject();
     project.bounce({ totalFrames: 256 });
     const result = project.lastBounceCompileResult();
-    expect(typeof result.hasTimeline).toBe('boolean');
+    expect(result).not.toHaveProperty('hasTimeline');
     expect(Array.isArray(result.diagnostics)).toBe(true);
     project.destroy();
   });
 
   it('reports an empty compile result on a project no bounce has run on', () => {
     // No bounce has run, so the result is empty in full. A failed bounce is
-    // told apart by its diagnostics, never by hasTimeline alone: losing the
-    // timeline always leaves an error diagnostic behind.
-    const project = Project.create();
+    // told apart by its diagnostics: losing the timeline always leaves an error
+    // diagnostic behind.
+    const project = new Project();
     const result = project.lastBounceCompileResult();
-    expect(result.hasTimeline).toBe(false);
     expect(result.diagnostics).toHaveLength(0);
     project.destroy();
   });
@@ -1189,7 +1230,7 @@ describe('Project value-model accessors', () => {
 
 describe('Project validateMidiNotes', () => {
   it('reports fully paired note-on/note-off as ok', () => {
-    const project = Project.create();
+    const project = new Project();
     project.setSampleRate(48000);
     const { clipId } = project.addMidiClip(0, 4);
     project.setMidiEvents(clipId, [
@@ -1205,7 +1246,7 @@ describe('Project validateMidiNotes', () => {
   });
 
   it('flags a hanging note-on as not ok', () => {
-    const project = Project.create();
+    const project = new Project();
     project.setSampleRate(48000);
     const { clipId } = project.addMidiClip(0, 4);
     project.setMidiEvents(clipId, [Project.midiNoteOn(0, 0, 0, 60, 100)]);
@@ -1218,7 +1259,7 @@ describe('Project validateMidiNotes', () => {
   });
 
   it('keeps note pairing separate across UMP groups', () => {
-    const project = Project.create();
+    const project = new Project();
     project.setSampleRate(48000);
     const { clipId } = project.addMidiClip(0, 4);
     project.setMidiEvents(clipId, [
@@ -1234,7 +1275,7 @@ describe('Project validateMidiNotes', () => {
   });
 
   it('closes a note still sounding at the half-open clip end', () => {
-    const project = Project.create();
+    const project = new Project();
     const { clipId } = project.addMidiClip(0, 1);
     project.setMidiEvents(clipId, [
       Project.midiNoteOn(0, 0, 0, 60, 100),
@@ -1361,12 +1402,10 @@ describe('UMP MIDI-1.0 packing matches the canonical word layout', () => {
     // map it produces describes the take's average rather than its shape.
     const audio = accelerando();
     const segmentsFor = (options?: Record<string, unknown>) => {
-      const project = Project.create();
+      const project = new Project();
       try {
-        project.autoTempo(audio, 22050, 0, false, options);
-        return Array.from({ length: project.tempoSegmentCount() }, (_, i) =>
-          project.tempoSegmentByIndex(i),
-        );
+        project.autoTempo(audio, 22050, options);
+        return project.tempoSegments();
       } finally {
         project.destroy();
       }
@@ -1390,11 +1429,9 @@ describe('UMP MIDI-1.0 packing matches the canonical word layout', () => {
 
   it('rejects a tempo option value the bridge cannot use', () => {
     const audio = accelerando();
-    const project = Project.create();
+    const project = new Project();
     try {
-      expect(() =>
-        project.autoTempo(audio, 22050, 0, false, { tempoUpdateIntervalBeats: 0 }),
-      ).toThrow();
+      expect(() => project.autoTempo(audio, 22050, { tempoUpdateIntervalBeats: 0 })).toThrow();
       expect(() => project.analyzeTempo(audio, 22050, { rampThreshold: -1 })).toThrow();
       expect(project.analyzeTempo(audio, 22050, { includeOctaveCandidates: false })).toHaveLength(
         1,

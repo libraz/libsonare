@@ -11,19 +11,32 @@ const FRAMES = BLOCK_SIZE * 500;
 const DESTINATION = 9;
 const SYNTH = { waveform: 1, gain: 0.3, attackMs: 1, releaseMs: 20, polyphony: 4 };
 
-function stereoTone(frames: number): Float32Array {
-  const data = new Float32Array(frames * 2);
+function stereoTone(frames: number): Float32Array[] {
+  const left = new Float32Array(frames);
+  const right = new Float32Array(frames);
   for (let i = 0; i < frames; i++) {
     const t = i / SAMPLE_RATE;
-    data[i * 2] = 0.25 * Math.sin(2 * Math.PI * 220 * t);
-    data[i * 2 + 1] = 0.2 * Math.sin(2 * Math.PI * 330 * t);
+    left[i] = 0.25 * Math.sin(2 * Math.PI * 220 * t);
+    right[i] = 0.2 * Math.sin(2 * Math.PI * 330 * t);
   }
-  return data;
+  return [left, right];
+}
+
+/** Interleaves planar channels so two bounce paths compare as one array. */
+function interleave(channels: Float32Array[]): Float32Array {
+  const frames = channels[0].length;
+  const out = new Float32Array(frames * channels.length);
+  channels.forEach((channel, c) => {
+    for (let i = 0; i < frames; i++) {
+      out[i * channels.length + c] = channel[i];
+    }
+  });
+  return out;
 }
 
 /** One audio clip and one MIDI clip routed to DESTINATION, at 120 BPM. */
 function buildProject(): { project: Project; audioClip: number; audioTrack: number } {
-  const project = Project.create();
+  const project = new Project();
   project.setSampleRate(SAMPLE_RATE);
   const audioTrack = project.addTrack({ kind: 'audio', name: 'audio' });
   const audioClip = project.addClip({
@@ -31,9 +44,8 @@ function buildProject(): { project: Project; audioClip: number; audioTrack: numb
     startPpq: 0,
     lengthPpq: 1.5,
     gain: 1,
-    audio: stereoTone(SAMPLE_RATE),
-    audioChannels: 2,
-    audioSampleRate: SAMPLE_RATE,
+    channels: stereoTone(SAMPLE_RATE),
+    sampleRate: SAMPLE_RATE,
   });
   const { trackId, clipId } = project.addMidiClip(0, 2);
   project.setMidiEvents(clipId, [
@@ -97,16 +109,20 @@ function engineBounce(engine: RealtimeEngine): Float32Array {
   engine.seekSample(0);
   processBlock(engine);
   expect(engine.transportState().playing).toBe(false);
-  return result.interleaved;
+  return interleave(result.channels);
 }
 
 function projectBounce(project: Project): Float32Array {
-  return project.bounceWithBuiltinInstruments([{ ...SYNTH, destinationId: DESTINATION }], {
-    totalFrames: FRAMES,
-    blockSize: BLOCK_SIZE,
-    numChannels: 2,
-    sampleRate: SAMPLE_RATE,
-  });
+  const result = project.bounceWithBuiltinInstruments(
+    [{ destinationId: DESTINATION, instrument: SYNTH }],
+    {
+      totalFrames: FRAMES,
+      blockSize: BLOCK_SIZE,
+      numChannels: 2,
+    },
+  );
+  expect(result.sampleRate).toBe(SAMPLE_RATE);
+  return interleave(result.channels);
 }
 
 function peak(data: Float32Array): number {
@@ -120,8 +136,7 @@ function peak(data: Float32Array): number {
 /** Binds a fresh instrument (so voice state cannot leak), compiles and applies. */
 function applyProject(engine: RealtimeEngine, project: Project): void {
   engine.setBuiltinInstrument(DESTINATION, SYNTH);
-  const { timeline, hasTimeline } = project.compileTimeline();
-  expect(hasTimeline).toBe(true);
+  const { timeline } = project.compileTimeline();
   expect(timeline).toBeInstanceOf(ProjectTimeline);
   engine.applyProjectTimeline(timeline as ProjectTimeline);
   (timeline as ProjectTimeline).destroy();
@@ -181,18 +196,18 @@ describe('project timeline', () => {
   });
 
   it('reports a compile failure as a null timeline with diagnostics', () => {
-    const project = Project.create();
+    const project = new Project();
     project.setSampleRate(SAMPLE_RATE);
     const trackId = project.addTrack({ kind: 'audio' });
     // A clip whose audio source was never supplied cannot be compiled.
     project.addClip({ trackId, startPpq: 0, lengthPpq: 1, sourceUri: 'asset://missing.wav' });
     const result = project.compileTimeline();
-    expect(result.hasTimeline).toBe(false);
+    expect(result).not.toHaveProperty('hasTimeline');
     expect(result.timeline).toBeNull();
     expect(result.diagnostics.length).toBeGreaterThan(0);
+    expect(result.diagnostics.some((diagnostic) => diagnostic.severity === 'error')).toBe(true);
     const plain = project.compile();
     expect(result.diagnostics).toEqual(plain.diagnostics);
-    expect(result.messages).toBe(plain.messages);
     project.destroy();
   });
 

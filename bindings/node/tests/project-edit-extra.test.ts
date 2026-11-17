@@ -1,12 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { ProjectAutomationPoint, ProjectFadeCurve } from '../src/index.js';
-import {
-  masteringInsertNames,
-  PROJECT_AUTOMATION_TARGET_TRACK_FADER_DB,
-  PROJECT_AUTOMATION_TARGET_TRACK_PAN,
-  Project,
-  RealtimeEngine,
-} from '../src/index.js';
+import { masteringInsertNames, Project, RealtimeEngine } from '../src/index.js';
 
 /** Per clip, the ids of the takes the project JSON marks partial. */
 function partialTakeIds(project: { toJson(): string }): number[][] {
@@ -20,7 +14,7 @@ function partialTakeIds(project: { toJson(): string }): number[][] {
 
 /** A small project with one audio track + clip; returns the ids alongside it. */
 function buildProject(): { project: Project; track: number; clip: number } {
-  const project = Project.create();
+  const project = new Project();
   project.setSampleRate(48000);
   const track = project.addTrack({ kind: 'audio', name: 'lead' });
   const audio = new Float32Array(480);
@@ -32,9 +26,8 @@ function buildProject(): { project: Project; track: number; clip: number } {
     startPpq: 0,
     lengthPpq: 4,
     gain: 0.8,
-    audio,
-    audioChannels: 1,
-    audioSampleRate: 48000,
+    channels: [audio],
+    sampleRate: 48000,
   });
   return { project, track, clip };
 }
@@ -53,9 +46,9 @@ describe('Project edit ops (new bindings)', () => {
   });
 
   it('setClipGain mutates and undoes', () => {
-    const project = Project.create();
+    const project = new Project();
     const track = project.addTrack({ kind: 'audio' });
-    const clip = project.addClip({ trackId: track, startPpq: 0, lengthPpq: 4, audioChannels: 0 });
+    const clip = project.addClip({ trackId: track, startPpq: 0, lengthPpq: 4 });
     const before = project.toJson();
     project.setClipGain(clip, 0.5);
     expect(project.toJson()).not.toBe(before);
@@ -65,11 +58,15 @@ describe('Project edit ops (new bindings)', () => {
   });
 
   it('setClipFade sets fade in/out and undoes', () => {
-    const project = Project.create();
+    const project = new Project();
     const track = project.addTrack({ kind: 'audio' });
-    const clip = project.addClip({ trackId: track, startPpq: 0, lengthPpq: 4, audioChannels: 0 });
+    const clip = project.addClip({ trackId: track, startPpq: 0, lengthPpq: 4 });
     const before = project.toJson();
-    project.setClipFade(clip, { lengthPpq: 0.5, curve: 1 }, { lengthPpq: 0.25 });
+    project.setClipFade(clip, {
+      fadeInPpq: 0.5,
+      fadeInCurve: 'equalPower',
+      fadeOutPpq: 0.25,
+    });
     expect(project.toJson()).not.toBe(before);
     project.undo();
     expect(project.toJson()).toBe(before);
@@ -77,35 +74,47 @@ describe('Project edit ops (new bindings)', () => {
   });
 
   it('setClipFade accepts named fade curves', () => {
-    const project = Project.create();
+    const project = new Project();
     const track = project.addTrack({ kind: 'audio' });
-    const clip = project.addClip({ trackId: track, startPpq: 0, lengthPpq: 4, audioChannels: 0 });
-    project.setClipFade(clip, { lengthPpq: 0.5, curve: 'EXP' as never }, { curve: 'equal_power' });
+    const clip = project.addClip({ trackId: track, startPpq: 0, lengthPpq: 4 });
+    project.setClipFade(clip, {
+      fadeInPpq: 0.5,
+      fadeInCurve: 'exponential',
+      fadeOutCurve: 'equalPower',
+    });
     const json = project.toJson();
     expect(json).toContain('"fade_in":{"curve":2,"length_ppq":0.5}');
     expect(json).toContain('"fade_out":{"curve":1,"length_ppq":0}');
+    // Aliases and ordinals are refused rather than resolved.
+    expect(() => project.setClipFade(clip, { fadeInCurve: 'EXP' as never })).toThrow(RangeError);
+    expect(() => project.setClipFade(clip, { fadeOutCurve: 'equal_power' as never })).toThrow(
+      RangeError,
+    );
+    expect(() => project.setClipFade(clip, { fadeInCurve: 1 as never })).toThrow(TypeError);
     project.destroy();
   });
 
   it('setClipFade accepts omitted sides and partial fade objects', () => {
-    const project = Project.create();
+    const project = new Project();
     const track = project.addTrack({ kind: 'audio' });
-    const clip = project.addClip({ trackId: track, startPpq: 0, lengthPpq: 4, audioChannels: 0 });
+    const clip = project.addClip({ trackId: track, startPpq: 0, lengthPpq: 4 });
 
-    expect(() => project.setClipFade(clip, { curve: 1 })).not.toThrow();
+    expect(() => project.setClipFade(clip, { fadeInCurve: 'equalPower' })).not.toThrow();
     let json = project.toJson();
     expect(json).toContain('"fade_in":{"curve":1,"length_ppq":0}');
     expect(json).toContain('"fade_out":{"curve":0,"length_ppq":0}');
 
-    expect(() => project.setClipFade(clip, {}, { curve: 1 })).not.toThrow();
+    expect(() => project.setClipFade(clip, { fadeOutCurve: 'equalPower' })).not.toThrow();
     json = project.toJson();
     expect(json).toContain('"fade_in":{"curve":0,"length_ppq":0}');
     expect(json).toContain('"fade_out":{"curve":1,"length_ppq":0}');
 
     expect(() =>
       project.setClipFade(clip, {
-        lengthPpq: null as unknown as number,
-        curve: null as unknown as ProjectFadeCurve,
+        fadeInPpq: null as unknown as number,
+        fadeInCurve: null as unknown as ProjectFadeCurve,
+        fadeOutPpq: null as unknown as number,
+        fadeOutCurve: null as unknown as ProjectFadeCurve,
       }),
     ).not.toThrow();
     json = project.toJson();
@@ -123,7 +132,7 @@ describe('Project edit ops (new bindings)', () => {
         { id: 1, sourceOffsetPpq: 0, name: 'take A' },
         { id: 2, sourceOffsetPpq: 0.5, name: 'take B' },
       ],
-      1,
+      { activeTakeId: 1 },
     );
     const withTakes = project.toJson();
     expect(withTakes).not.toBe(before);
@@ -152,7 +161,7 @@ describe('Project edit ops (new bindings)', () => {
           { id: 1, name: 'duplicate A' },
           { id: 1, name: 'duplicate B' },
         ],
-        1,
+        { activeTakeId: 1 },
       ),
     ).toThrow();
     expect(() =>
@@ -169,7 +178,7 @@ describe('Project edit ops (new bindings)', () => {
       project.setClipTakes(
         clip,
         [{ sourceId: 5 }, { id: 2 }] as unknown as Parameters<typeof project.setClipTakes>[1],
-        1,
+        { activeTakeId: 1 },
       ),
     ).toThrow(/id must be a number/);
     expect(project.toJson()).toBe(before);
@@ -202,7 +211,7 @@ describe('Project edit ops (new bindings)', () => {
   });
 
   it('addLoopRecordingTakes splits captured loops into takes', () => {
-    const project = Project.create();
+    const project = new Project();
     project.setSampleRate(48000);
     const track = project.addTrack({ kind: 'audio', name: 'record' });
     const before = project.toJson();
@@ -222,19 +231,19 @@ describe('Project edit ops (new bindings)', () => {
     expect(result.takeCount).toBe(2);
     expect(project.toJson()).not.toContain('"partial"');
     expect(project.toJson()).toContain('"active_take_id":2');
-    expect(project.sourceCount()).toBe(2);
+    expect(project.sources().length).toBe(2);
     const added = project.toJson();
     project.undo();
     expect(project.toJson()).toBe(before);
-    expect(project.sourceCount()).toBe(0);
+    expect(project.sources().length).toBe(0);
     project.redo();
     expect(project.toJson()).toBe(added);
-    expect(project.sourceCount()).toBe(2);
+    expect(project.sources().length).toBe(2);
     project.destroy();
   });
 
   it('addLoopRecordingTakes keeps a partial last take inactive and honours partialTail', () => {
-    const project = Project.create();
+    const project = new Project();
     project.setSampleRate(48000);
     const track = project.addTrack({ kind: 'audio', name: 'record' });
     const base = { trackId: track, startPpq: 0, loopLengthPpq: 1, audioSampleRate: 48000 };
@@ -273,7 +282,7 @@ describe('Project edit ops (new bindings)', () => {
   });
 
   it('addLoopRecordingTakes treats a one-frame remainder as rounding and the partial mark round-trips', () => {
-    const project = Project.create();
+    const project = new Project();
     project.setSampleRate(48000);
     const track = project.addTrack({ kind: 'audio', name: 'record' });
     const base = { trackId: track, loopLengthPpq: 1, audioSampleRate: 48000 };
@@ -305,7 +314,7 @@ describe('Project edit ops (new bindings)', () => {
       interleaved[2 * i + 1] = right[i];
     }
     const run = (audio: Float32Array | Float32Array[], audioChannels?: number) => {
-      const project = Project.create();
+      const project = new Project();
       project.setSampleRate(48000);
       const track = project.addTrack({ kind: 'audio', name: 'record' });
       project.addLoopRecordingTakes({
@@ -324,7 +333,7 @@ describe('Project edit ops (new bindings)', () => {
   });
 
   it('addLoopRecordingTakes refuses planar channels of different lengths', () => {
-    const project = Project.create();
+    const project = new Project();
     const track = project.addTrack({ kind: 'audio', name: 'record' });
     expect(() =>
       project.addLoopRecordingTakes({
@@ -337,19 +346,18 @@ describe('Project edit ops (new bindings)', () => {
     project.destroy();
   });
 
-  it('rejects interleaved audio lengths that do not match audioChannels', () => {
-    const project = Project.create();
+  it('rejects planar clip channels of unequal length and interleaved loop audio that does not divide', () => {
+    const project = new Project();
     const track = project.addTrack({ kind: 'audio', name: 'record' });
     expect(() =>
       project.addClip({
         trackId: track,
         startPpq: 0,
         lengthPpq: 1,
-        audio: new Float32Array(5),
-        audioChannels: 2,
-        audioSampleRate: 48000,
+        channels: [new Float32Array(5), new Float32Array(4)],
+        sampleRate: 48000,
       }),
-    ).toThrow(/audio length must be a multiple of audioChannels/);
+    ).toThrow(/must all have the same length/);
     expect(() =>
       project.addLoopRecordingTakes({
         trackId: track,
@@ -364,11 +372,11 @@ describe('Project edit ops (new bindings)', () => {
   });
 
   it('setClipLoop enables looping and undoes', () => {
-    const project = Project.create();
+    const project = new Project();
     const track = project.addTrack({ kind: 'audio' });
-    const clip = project.addClip({ trackId: track, startPpq: 0, lengthPpq: 4, audioChannels: 0 });
+    const clip = project.addClip({ trackId: track, startPpq: 0, lengthPpq: 4 });
     const before = project.toJson();
-    project.setClipLoop(clip, 1, 2);
+    project.setClipLoop(clip, { loopMode: 'loop', loopLengthPpq: 2 });
     expect(project.toJson()).not.toBe(before);
     project.undo();
     expect(project.toJson()).toBe(before);
@@ -376,30 +384,32 @@ describe('Project edit ops (new bindings)', () => {
   });
 
   it('setClipLoop accepts named loop modes', () => {
-    const project = Project.create();
+    const project = new Project();
     const track = project.addTrack({ kind: 'audio' });
-    const clip = project.addClip({ trackId: track, startPpq: 0, lengthPpq: 4, audioChannels: 0 });
-    project.setClipLoop(clip, 'loop', 2);
+    const clip = project.addClip({ trackId: track, startPpq: 0, lengthPpq: 4 });
+    project.setClipLoop(clip, { loopMode: 'loop', loopLengthPpq: 2 });
     expect(project.toJson()).toContain('"loop_mode":1');
-    project.setClipLoop(clip, 'off');
+    project.setClipLoop(clip, { loopMode: 'off' });
     expect(project.toJson()).toContain('"loop_mode":0');
     project.destroy();
   });
 
   it('setClipLoop accepts an optional loop crossfade and rejects a negative one', () => {
-    const project = Project.create();
+    const project = new Project();
     const track = project.addTrack({ kind: 'audio' });
-    const clip = project.addClip({ trackId: track, startPpq: 0, lengthPpq: 4, audioChannels: 0 });
-    project.setClipLoop(clip, 'loop', 2, 0.5);
+    const clip = project.addClip({ trackId: track, startPpq: 0, lengthPpq: 4 });
+    project.setClipLoop(clip, { loopMode: 'loop', loopLengthPpq: 2, loopCrossfadePpq: 0.5 });
     expect(project.toJson()).toContain('loop_crossfade_ppq');
-    expect(() => project.setClipLoop(clip, 'loop', 2, -1)).toThrow();
+    expect(() =>
+      project.setClipLoop(clip, { loopMode: 'loop', loopLengthPpq: 2, loopCrossfadePpq: -1 }),
+    ).toThrow();
     project.destroy();
   });
 
   it('duplicateClip returns a fresh id and undoes', () => {
-    const project = Project.create();
+    const project = new Project();
     const track = project.addTrack({ kind: 'audio' });
-    const clip = project.addClip({ trackId: track, startPpq: 0, lengthPpq: 4, audioChannels: 0 });
+    const clip = project.addClip({ trackId: track, startPpq: 0, lengthPpq: 4 });
     const before = project.toJson();
     const dup = project.duplicateClip(clip, 8);
     expect(dup).toBeGreaterThan(0);
@@ -410,7 +420,7 @@ describe('Project edit ops (new bindings)', () => {
   });
 
   it('removeTrack removes a track and undo restores it', () => {
-    const project = Project.create();
+    const project = new Project();
     const track = project.addTrack({ kind: 'midi', name: 'gone' });
     const before = project.toJson();
     project.removeTrack(track);
@@ -421,7 +431,7 @@ describe('Project edit ops (new bindings)', () => {
   });
 
   it('renameTrack changes the name and undoes', () => {
-    const project = Project.create();
+    const project = new Project();
     const track = project.addTrack({ kind: 'audio', name: 'old' });
     project.renameTrack(track, 'renamed');
     expect(project.toJson()).toContain('renamed');
@@ -431,7 +441,7 @@ describe('Project edit ops (new bindings)', () => {
   });
 
   it('setTrackRoute sets strip / output and undoes', () => {
-    const project = Project.create();
+    const project = new Project();
     const track = project.addTrack({ kind: 'audio' });
     const before = project.toJson();
     project.setTrackRoute(track, 'strip-1', 'master');
@@ -444,7 +454,7 @@ describe('Project edit ops (new bindings)', () => {
   });
 
   it('addAutomationLane returns its stable target id; edit + remove undo cleanly', () => {
-    const project = Project.create();
+    const project = new Project();
     const track = project.addTrack({ kind: 'audio' });
     const targetParamId = project.addAutomationLane(track, {
       targetParamId: 1,
@@ -475,16 +485,16 @@ describe('Project edit ops (new bindings)', () => {
   });
 
   it('adds typed fader and pan lanes and round-trips schema v2 JSON', () => {
-    const project = Project.create();
+    const project = new Project();
     const track = project.addTrack({ kind: 'audio' });
     project.addAutomationLane(track, {
       targetParamId: 101,
-      targetKind: 'track-fader-db',
+      targetKind: 'trackFaderDb',
       points: [{ ppq: 0, value: -3 }],
     });
     project.addAutomationLane(track, {
       targetParamId: 102,
-      targetKind: PROJECT_AUTOMATION_TARGET_TRACK_PAN,
+      targetKind: 'trackPan',
       points: [{ ppq: 0, value: 0 }],
     });
 
@@ -500,16 +510,16 @@ describe('Project edit ops (new bindings)', () => {
   });
 
   it('rejects a conflicting typed lane atomically', () => {
-    const project = Project.create();
+    const project = new Project();
     const track = project.addTrack({ kind: 'audio' });
     project.addAutomationLane(track, {
       targetParamId: 201,
-      targetKind: PROJECT_AUTOMATION_TARGET_TRACK_FADER_DB,
+      targetKind: 'trackFaderDb',
       points: [{ ppq: 0, value: -3 }],
     });
     project.addAutomationLane(track, {
       targetParamId: 203,
-      targetKind: PROJECT_AUTOMATION_TARGET_TRACK_PAN,
+      targetKind: 'trackPan',
       points: [{ ppq: 0, value: 0 }],
     });
     const before = project.toJson();
@@ -517,7 +527,7 @@ describe('Project edit ops (new bindings)', () => {
     expect(() =>
       project.addAutomationLane(track, {
         targetParamId: 202,
-        targetKind: 'track-fader-db',
+        targetKind: 'trackFaderDb',
         points: [{ ppq: 0, value: -6 }],
       }),
     ).toThrow();
@@ -526,7 +536,7 @@ describe('Project edit ops (new bindings)', () => {
     expect(() =>
       project.editAutomationLane(track, 201, {
         targetParamId: 201,
-        targetKind: 'track-pan',
+        targetKind: 'trackPan',
         points: [{ ppq: 0, value: -6 }],
       }),
     ).toThrow();
@@ -546,7 +556,7 @@ describe('Project edit ops (new bindings)', () => {
       { ppq: 0, value: 1, curveToNext: 'scurve' },
     ];
     const serialized = spellings.map((point) => {
-      const project = Project.create();
+      const project = new Project();
       try {
         const track = project.addTrack({ kind: 'audio' });
         project.addAutomationLane(track, { targetParamId: 1, points: [point] });
@@ -565,11 +575,11 @@ describe('Project edit ops (new bindings)', () => {
   });
 
   it('legacy automation edits preserve a typed lane kind', () => {
-    const project = Project.create();
+    const project = new Project();
     const track = project.addTrack({ kind: 'audio' });
     project.addAutomationLane(track, {
       targetParamId: 301,
-      targetKind: 'track-fader-db',
+      targetKind: 'trackFaderDb',
       points: [{ ppq: 0, value: -3 }],
     });
     project.editAutomationLane(track, 301, {
@@ -583,24 +593,30 @@ describe('Project edit ops (new bindings)', () => {
   });
 
   it('rejects unknown, out-of-width, and non-finite automation target kinds', () => {
-    const project = Project.create();
+    const project = new Project();
     const track = project.addTrack({ kind: 'audio' });
     const before = project.toJson();
-    for (const targetKind of ['unknown', 3, Number.NaN, Number.POSITIVE_INFINITY]) {
+    // A name outside the set is a RangeError; any number is a TypeError.
+    for (const [targetKind, error] of [
+      ['unknown', RangeError],
+      [3, TypeError],
+      [Number.NaN, TypeError],
+      [Number.POSITIVE_INFINITY, TypeError],
+    ] as const) {
       expect(() =>
         project.addAutomationLane(track, {
           targetParamId: 401,
           targetKind: targetKind as never,
           points: [{ ppq: 0, value: 0 }],
         }),
-      ).toThrow(RangeError);
+      ).toThrow(error);
       expect(project.toJson()).toBe(before);
     }
     project.destroy();
   });
 
   it('rejects zero as the reserved automation target id before mutating', () => {
-    const project = Project.create();
+    const project = new Project();
     const track = project.addTrack({ kind: 'audio' });
     const before = project.toJson();
     expect(() =>
@@ -619,12 +635,12 @@ describe('Project edit ops (new bindings)', () => {
 
 describe('Project annotation bindings', () => {
   it('annotateKeys installs a key stream (undoable)', () => {
-    const project = Project.create();
+    const project = new Project();
     project.addTrack({ kind: 'audio' });
     const before = project.toJson();
     project.annotateKeys([
-      { startPpq: 0, endPpq: 16, tonicPc: 0, mode: 1 },
-      { startPpq: 16, endPpq: 32, tonicPc: 9, mode: 2 },
+      { startPpq: 0, endPpq: 16, tonicPc: 0, mode: 'major' },
+      { startPpq: 16, endPpq: 32, tonicPc: 9, mode: 'minor' },
     ]);
     expect(project.toJson()).not.toBe(before);
     project.undo();
@@ -633,16 +649,16 @@ describe('Project annotation bindings', () => {
   });
 
   it('annotateChords installs a chord stream (undoable)', () => {
-    const project = Project.create();
+    const project = new Project();
     project.addTrack({ kind: 'audio' });
     const before = project.toJson();
     project.annotateChords([
-      { startPpq: 0, endPpq: 4, rootPc: 0, quality: 1, extensions: [7], romanNumeral: 'I' },
+      { startPpq: 0, endPpq: 4, rootPc: 0, quality: 'major', extensions: [7], romanNumeral: 'I' },
       {
         startPpq: 4,
         endPpq: 8,
         rootPc: 7,
-        quality: 5,
+        quality: 'dominant',
         extensions: [10],
         slashBassPc: 11,
         modulationBoundary: true,
@@ -656,8 +672,8 @@ describe('Project annotation bindings', () => {
 });
 
 describe('Project assist sidecar bindings', () => {
-  it('round-trips a sidecar through set / count / get / list', () => {
-    const project = Project.create();
+  it('round-trips a sidecar through set / list', () => {
+    const project = new Project();
     const track = project.addTrack({ kind: 'audio' });
     const payload = new Uint8Array([1, 2, 3, 4, 5]);
     project.setAssistSidecar({
@@ -669,9 +685,9 @@ describe('Project assist sidecar bindings', () => {
       payload,
     });
 
-    expect(project.assistSidecarCount()).toBe(1);
+    expect(project.assistSidecars()).toHaveLength(1);
 
-    const got = project.getAssistSidecar(0);
+    const got = project.assistSidecars()[0];
     expect(got.moduleId).toBe('demo.module');
     expect(got.schemaVersion).toBe(2);
     expect(got.targetTrackId).toBe(track);
@@ -687,12 +703,12 @@ describe('Project assist sidecar bindings', () => {
   });
 
   it('replaces a sidecar with the same key (undoable)', () => {
-    const project = Project.create();
+    const project = new Project();
     project.setAssistSidecar({ moduleId: 'm', payload: new Uint8Array([1]) });
-    expect(project.assistSidecarCount()).toBe(1);
+    expect(project.assistSidecars()).toHaveLength(1);
     project.setAssistSidecar({ moduleId: 'm', payload: new Uint8Array([2, 3]) });
-    expect(project.assistSidecarCount()).toBe(1);
-    expect(Array.from(project.getAssistSidecar(0).payload)).toEqual([2, 3]);
+    expect(project.assistSidecars()).toHaveLength(1);
+    expect(Array.from(project.assistSidecars()[0].payload)).toEqual([2, 3]);
     project.destroy();
   });
 });

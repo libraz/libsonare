@@ -568,10 +568,10 @@ describe('RealtimeEngine native binding', () => {
     });
     bounce.destroy();
 
-    expect(bounced.frames).toBe(128);
+    expect(bounced.channels).toHaveLength(2);
+    expect(bounced.channels[0]).toHaveLength(128);
     expect(bounced.numChannels).toBe(2);
     expect(bounced.sampleRate).toBe(24000);
-    expect(bounced.interleaved.length).toBe(256);
     // Silent input integrates to -Infinity LUFS, which is the correct gating
     // result for digital silence; just assert a numeric value is reported.
     expect(typeof bounced.integratedLufs).toBe('number');
@@ -611,7 +611,7 @@ describe('RealtimeEngine native binding', () => {
     try {
       const result = engine.bounceOffline({ totalFrames: 441, blockSize: 128 });
       expect(result.sampleRate).toBe(44100);
-      expect(result.frames).toBe(441);
+      expect(result.channels[0]).toHaveLength(441);
 
       const resampled = engine.bounceOffline({
         totalFrames: 44100,
@@ -619,7 +619,7 @@ describe('RealtimeEngine native binding', () => {
         targetSampleRate: 48000,
       });
       expect(resampled.sampleRate).toBe(48000);
-      expect(resampled.frames).toBe(48000);
+      expect(resampled.channels[0]).toHaveLength(48000);
 
       expect(() =>
         engine.bounceOffline({ totalFrames: 441, blockSize: 128, sourceSampleRate: 48000 }),
@@ -654,7 +654,10 @@ describe('RealtimeEngine native binding', () => {
         ...options,
       });
       engine.destroy();
-      return { samples: result.interleaved, lufs: result.integratedLufs };
+      return {
+        samples: Float32Array.from(result.channels.flatMap((channel) => Array.from(channel))),
+        lufs: result.integratedLufs,
+      };
     };
 
     const peak = (samples: Float32Array): number =>

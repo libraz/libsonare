@@ -33,66 +33,66 @@ describe('part rig on a project', () => {
   });
 
   it('reports an absent entry as null', () => {
-    using project = Project.create();
-    expect(project.getPartRig({ destinationId: 4, part: 0 })).toBeNull();
+    using project = new Project();
+    expect(project.partRig({ destinationId: 4, part: 0 })).toBeNull();
   });
 
   it('round-trips none, bank and chain entries', () => {
-    using project = Project.create();
+    using project = new Project();
     project.setPartRig({ destinationId: 4, part: 1, mode: 'none' });
     project.setPartRig({ destinationId: 4, part: PART_RIG_ALL_PARTS, mode: 'bank' });
     project.setPartRig({ destinationId: 4, part: 2, mode: 'chain', inserts: chain });
-    expect(project.getPartRig({ destinationId: 4, part: 1 })).toEqual({ mode: 'none' });
-    expect(project.getPartRig({ destinationId: 4, part: PART_RIG_ALL_PARTS })).toEqual({
+    expect(project.partRig({ destinationId: 4, part: 1 })).toEqual({ mode: 'none' });
+    expect(project.partRig({ destinationId: 4, part: PART_RIG_ALL_PARTS })).toEqual({
       mode: 'bank',
     });
-    const got = project.getPartRig({ destinationId: 4, part: 2 });
+    const got = project.partRig({ destinationId: 4, part: 2 });
     expect(got?.mode).toBe('chain');
     expect(got?.inserts?.map((i) => i.processor)).toEqual(['saturation.overdrive']);
     expect((got?.inserts?.[0]?.params as { gainDb: number } | undefined)?.gainDb).toBe(12);
   });
 
   it('accepts params as a JSON string', () => {
-    using project = Project.create();
+    using project = new Project();
     project.setPartRig({
       destinationId: 1,
       part: 0,
       mode: 'chain',
       inserts: [{ processor: 'saturation.overdrive', params: '{"gainDb":6}' }],
     });
-    const got = project.getPartRig({ destinationId: 1, part: 0 });
+    const got = project.partRig({ destinationId: 1, part: 0 });
     expect((got?.inserts?.[0]?.params as { gainDb: number } | undefined)?.gainDb).toBe(6);
   });
 
   it('defaults omitted insert params to an empty object', () => {
-    using project = Project.create();
+    using project = new Project();
     project.setPartRig({
       destinationId: 1,
       part: 0,
       mode: 'chain',
       inserts: [{ processor: 'saturation.overdrive' }],
     });
-    expect(project.getPartRig({ destinationId: 1, part: 0 })).toEqual({
+    expect(project.partRig({ destinationId: 1, part: 0 })).toEqual({
       mode: 'chain',
       inserts: [{ processor: 'saturation.overdrive', params: {} }],
     });
   });
 
   it('clears an entry and undo restores it', () => {
-    using project = Project.create();
+    using project = new Project();
     project.setPartRig({ destinationId: 4, part: 3, mode: 'none' });
     project.clearPartRig({ destinationId: 4, part: 3 });
-    expect(project.getPartRig({ destinationId: 4, part: 3 })).toBeNull();
+    expect(project.partRig({ destinationId: 4, part: 3 })).toBeNull();
     project.undo();
-    expect(project.getPartRig({ destinationId: 4, part: 3 })).toEqual({ mode: 'none' });
+    expect(project.partRig({ destinationId: 4, part: 3 })).toEqual({ mode: 'none' });
     project.undo();
-    expect(project.getPartRig({ destinationId: 4, part: 3 })).toBeNull();
+    expect(project.partRig({ destinationId: 4, part: 3 })).toBeNull();
     project.redo();
-    expect(project.getPartRig({ destinationId: 4, part: 3 })).toEqual({ mode: 'none' });
+    expect(project.partRig({ destinationId: 4, part: 3 })).toEqual({ mode: 'none' });
   });
 
   it('refuses invalid input by name', () => {
-    using project = Project.create();
+    using project = new Project();
     const set = (request: object) => () =>
       project.setPartRig({ destinationId: 4, part: 0, mode: 'none', ...request } as never);
     expect(() => set({ mode: 'loud' })()).toThrow(/mode/);
@@ -132,7 +132,7 @@ describe('part rig on a project', () => {
       inserts: [{ processor: 'saturation.overdrive', params: '{' }],
     });
     expect(set({ mode: 'none', inserts: chain })).toThrow(RangeError);
-    expect(project.getPartRig({ destinationId: 4, part: 0 })).toBeNull();
+    expect(project.partRig({ destinationId: 4, part: 0 })).toBeNull();
   });
 });
 
@@ -169,62 +169,57 @@ describe('part rig on the realtime engine', () => {
   });
 });
 
-describe('part rig request and positional forms', () => {
+describe('part rig request form', () => {
   const louder = [{ processor: 'saturation.overdrive', params: { gainDb: 24 } }];
 
-  it('stores, reads and clears the same entry through either form', () => {
-    using byRequest = Project.create();
-    using byPosition = Project.create();
-    byRequest.setPartRig({ destinationId: 4, part: 2, mode: 'chain', inserts: chain });
-    byPosition.setPartRig(4, 2, 'chain', chain);
-    const stored = byRequest.getPartRig({ destinationId: 4, part: 2 });
+  it('stores, reads and clears entries through the request object', () => {
+    using project = new Project();
+    project.setPartRig({ destinationId: 4, part: 2, mode: 'chain', inserts: chain });
+    const stored = project.partRig({ destinationId: 4, part: 2 });
     expect(stored?.inserts?.[0].params).toEqual({ gainDb: 12 });
-    expect(byPosition.getPartRig(4, 2)).toEqual(stored);
-    expect(byPosition.getPartRig({ destinationId: 4, part: 2 })).toEqual(stored);
-    // The control: other inserts read back differently, so the equality above
-    // cannot hold because a form dropped the inserts.
-    byPosition.setPartRig(4, 3, 'chain', louder);
-    expect(byPosition.getPartRig(4, 3)).not.toEqual(stored);
-    byRequest.clearPartRig({ destinationId: 4, part: 2 });
-    byPosition.clearPartRig(4, 2);
-    expect(byRequest.getPartRig(4, 2)).toBeNull();
-    expect(byPosition.getPartRig({ destinationId: 4, part: 2 })).toBeNull();
+    // The control: other inserts read back differently, so the equality below
+    // cannot hold because the inserts were dropped.
+    project.setPartRig({ destinationId: 4, part: 3, mode: 'chain', inserts: louder });
+    expect(project.partRig({ destinationId: 4, part: 3 })).not.toEqual(stored);
+    project.clearPartRig({ destinationId: 4, part: 2 });
+    expect(project.partRig({ destinationId: 4, part: 2 })).toBeNull();
+    expect(project.partRig({ destinationId: 4, part: 3 })?.inserts?.[0].params).toEqual({
+      gainDb: 24,
+    });
+  });
+
+  it('refuses the removed positional forms', () => {
+    using project = new Project();
+    // @ts-expect-error the positional form is gone.
+    expect(() => project.setPartRig(4, 2, 'chain', chain)).toThrow(TypeError);
+    // @ts-expect-error the positional form is gone.
+    expect(() => project.partRig(4, 2)).toThrow(TypeError);
+    // @ts-expect-error the positional form is gone.
+    expect(() => project.clearPartRig(4, 2)).toThrow(TypeError);
+    expect(project.partRig({ destinationId: 4, part: 2 })).toBeNull();
   });
 
   it.each([
-    ['an unknown mode', { mode: 'loud' }],
-    ['a non-numeric part', { part: 'x' }],
-    ['a non-numeric destination', { destinationId: 'x' }],
-    ['a non-array inserts', { mode: 'chain', inserts: 'nope' }],
-    ['an insert without a processor', { mode: 'chain', inserts: [{ params: {} }] }],
-    ['an out-of-range part', { part: 16 }],
-  ])('refuses %s identically in both forms', (_, change) => {
-    using project = Project.create();
-    const r = { destinationId: 4, part: 0, mode: 'none', ...change } as Record<string, unknown>;
-    const capture = (call: () => unknown): string => {
-      try {
-        call();
-      } catch (error) {
-        return `${(error as Error).name}: ${(error as Error).message}`;
-      }
-      return 'did not throw';
-    };
-    const viaRequest = capture(() => project.setPartRig(r as never));
-    const positional = [r.destinationId, r.part, r.mode, r.inserts] as [never, never, never, never];
-    expect(viaRequest).not.toBe('did not throw');
-    expect(capture(() => project.setPartRig(...positional))).toBe(viaRequest);
+    ['an unknown mode', { mode: 'loud' }, /mode/],
+    ['a non-numeric part', { part: 'x' }, /part/],
+    ['a non-numeric destination', { destinationId: 'x' }, /destinationId/],
+    ['a non-array inserts', { mode: 'chain', inserts: 'nope' }, /inserts/],
+    ['an insert without a processor', { mode: 'chain', inserts: [{ params: {} }] }, /processor/],
+    ['an out-of-range part', { part: 16 }, RangeError],
+  ])('refuses %s', (_, change, message) => {
+    using project = new Project();
+    const r = { destinationId: 4, part: 0, mode: 'none', ...change };
+    expect(() => project.setPartRig(r as never)).toThrow(message);
+    expect(project.partRig({ destinationId: 4, part: 0 })).toBeNull();
   });
 
-  it('refuses a request object followed by positional arguments', () => {
-    using project = Project.create();
+  it('refuses an unknown request key by name', () => {
+    using project = new Project();
     expect(() =>
-      (project.setPartRig as (...args: unknown[]) => void)(
-        { destinationId: 4, part: 0, mode: 'none' },
-        0,
-      ),
-    ).toThrow(new TypeError('setPartRig: a request object takes no further arguments'));
-    expect(() => project.getPartRig({ destinationId: 4, part: 0 } as never, 0 as never)).toThrow(
-      /getPartRig: a request object/,
+      project.setPartRig({ destinationId: 4, part: 0, mode: 'none', extra: 1 } as never),
+    ).toThrow(/unknown request key 'extra'/);
+    expect(() => project.partRig({ destinationId: 4, part: 0, extra: 1 } as never)).toThrow(
+      /unknown request key 'extra'/,
     );
   });
 

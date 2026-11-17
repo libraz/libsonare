@@ -107,7 +107,7 @@ describe('Project MIDI 2.0 builders', () => {
   });
 
   it('produces events the project accepts', () => {
-    const project = Project.create();
+    const project = new Project();
     const { clipId } = project.addMidiClip(0, 4);
     expect(() =>
       project.setMidiEvents(clipId, [

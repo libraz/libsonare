@@ -46,7 +46,7 @@ const SETTLE_SCENE = JSON.stringify({
 });
 
 function buildMixer(): Mixer {
-  const mixer = Mixer.fromJson(SETTLE_SCENE, { sampleRate: SAMPLE_RATE, blockSize: BLOCK_SIZE });
+  const mixer = Mixer.fromJson(SETTLE_SCENE, { sampleRate: SAMPLE_RATE, maxBlockSize: BLOCK_SIZE });
   mixer.compile();
   return mixer;
 }

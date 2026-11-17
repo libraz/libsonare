@@ -328,9 +328,14 @@ describe('note and event edit offsets', () => {
   });
 });
 
+/** Order-sensitive digest of every plane of a bounce. */
+function bounceDigest(result: { channels: Float32Array[] }): string {
+  return result.channels.map((channel) => digest(channel)).join('|');
+}
+
 /** A project with one audio track, one clip and a second source to switch takes to. */
 function buildProject(): { project: Project; clipId: number; altSourceId: number } {
-  const project = Project.create();
+  const project = new Project();
   project.setSampleRate(PROJECT_SAMPLE_RATE);
   const trackId = project.addTrack({ kind: 'audio', name: 'lead' });
   const audio = new Float32Array(4800);
@@ -342,9 +347,8 @@ function buildProject(): { project: Project; clipId: number; altSourceId: number
     startPpq: 0,
     lengthPpq: 4,
     gain: 0.8,
-    audio,
-    audioChannels: 1,
-    audioSampleRate: PROJECT_SAMPLE_RATE,
+    channels: [audio],
+    sampleRate: PROJECT_SAMPLE_RATE,
   });
   const alternate = new Float32Array(4800);
   for (let i = 0; i < alternate.length; i += 1) {
@@ -354,11 +358,10 @@ function buildProject(): { project: Project; clipId: number; altSourceId: number
     trackId,
     startPpq: 8,
     lengthPpq: 4,
-    audio: alternate,
-    audioChannels: 1,
-    audioSampleRate: PROJECT_SAMPLE_RATE,
+    channels: [alternate],
+    sampleRate: PROJECT_SAMPLE_RATE,
   });
-  return { project, clipId, altSourceId: project.sourceByIndex(1).id };
+  return { project, clipId, altSourceId: project.sources()[1].id };
 }
 
 /** Runs `body` against a fresh project, since each case mutates persistent state. */
@@ -378,8 +381,9 @@ describe('project bounce and take selection', () => {
         onProject(({ project }) =>
           project.bounce(totalFrames === undefined ? {} : { totalFrames }),
         ),
-      digest,
+      bounceDigest,
       9600,
+      'refused',
     );
   });
 
@@ -389,8 +393,9 @@ describe('project bounce and take selection', () => {
         onProject(({ project }) =>
           project.bounce(numChannels === undefined ? {} : { numChannels }),
         ),
-      digest,
+      bounceDigest,
       1,
+      'refused',
     );
   });
 
@@ -402,7 +407,7 @@ describe('project bounce and take selection', () => {
           project.setClipTakes(
             clipId,
             [{ id: 1, sourceOffsetPpq: 0, ...(sourceId === undefined ? {} : { sourceId }) }],
-            1,
+            { activeTakeId: 1 },
           );
           return project.toJson();
         }),
@@ -422,12 +427,13 @@ describe('project bounce and take selection', () => {
           if (activeTakeId === undefined) {
             project.setClipTakes(clipId, takes);
           } else {
-            project.setClipTakes(clipId, takes, activeTakeId);
+            project.setClipTakes(clipId, takes, { activeTakeId });
           }
           return project.toJson();
         }),
       (json) => json.match(/"active_take_id":\d+/)?.[0] ?? 'absent',
       2,
+      'refused',
     );
   });
 
@@ -441,7 +447,7 @@ describe('project bounce and take selection', () => {
               { id: 1, sourceOffsetPpq: 0 },
               { id: 2, sourceOffsetPpq: 1 },
             ],
-            1,
+            { activeTakeId: 1 },
           );
           project.setClipCompSegments(clipId, [
             { startPpq: 0, endPpq: 4, ...(takeId === undefined ? {} : { takeId }) },
@@ -456,9 +462,16 @@ describe('project bounce and take selection', () => {
 
 describe('bounce fields whose value the render cannot report', () => {
   it('renders identically whichever block size the caller asks for', () => {
-    const omitted = onProject(({ project }) => digest(project.bounce()));
-    expect(onProject(({ project }) => digest(project.bounce({ blockSize: 0 })))).toBe(omitted);
-    expect(onProject(({ project }) => digest(project.bounce({ blockSize: 64 })))).toBe(omitted);
+    const omitted = onProject(({ project }) => bounceDigest(project.bounce()));
+    expect(onProject(({ project }) => bounceDigest(project.bounce({ blockSize: 64 })))).toBe(
+      omitted,
+    );
+  });
+
+  it('refuses an explicit zero block size, which would otherwise select the default', () => {
+    const call = () => onProject(({ project }) => project.bounce({ blockSize: 0 }));
+    expect(call).toThrow(RangeError);
+    expect(call).toThrow(/omit it for the default/);
   });
 
   it('refuses a fractional block size even though no render could tell', () => {
@@ -467,15 +480,16 @@ describe('bounce fields whose value the render cannot report', () => {
     // leaves the caller no way to learn the value was not the one they asked for.
     const call = () => onProject(({ project }) => project.bounce({ blockSize: 0.5 }));
     expect(call).toThrow(RangeError);
-    expect(call).toThrow(/blockSize must be a whole number/);
+    expect(call).toThrow(/blockSize must be an integer/);
   });
 
-  it('accepts no sample rate but the project rate, which is what zero selects', () => {
-    const omitted = onProject(({ project }) => digest(project.bounce()));
-    expect(onProject(({ project }) => digest(project.bounce({ sampleRate: 0 })))).toBe(omitted);
-    expect(
-      onProject(({ project }) => digest(project.bounce({ sampleRate: PROJECT_SAMPLE_RATE }))),
-    ).toBe(omitted);
-    expect(() => onProject(({ project }) => project.bounce({ sampleRate: 1.5 }))).toThrow();
+  it('takes no sample rate option and reports the project rate', () => {
+    const omitted = onProject(({ project }) => project.bounce());
+    expect(omitted.sampleRate).toBe(PROJECT_SAMPLE_RATE);
+    for (const sampleRate of [0, PROJECT_SAMPLE_RATE, 1.5]) {
+      expect(() => onProject(({ project }) => project.bounce({ sampleRate } as never))).toThrow(
+        /unknown request key 'sampleRate'/,
+      );
+    }
   });
 });

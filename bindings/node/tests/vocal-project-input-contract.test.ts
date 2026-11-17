@@ -22,7 +22,7 @@ const request = {
   renderedMono: new Float32Array([0, 0.25, 0.5]),
   renderedSampleRate: 48000,
   renderToken: TOKEN,
-  sve1: new Uint8Array([83, 86, 69, 49]),
+  vocalState: new Uint8Array([83, 86, 69, 49]),
 };
 const native = {
   applyVocalEdit: () => {
@@ -49,7 +49,6 @@ describe('Node Project vocal input number errors', () => {
     ['clipId', '7'],
     ['takeId', '0'],
     ['expectedSourceId', '11'],
-    ['renderedStartSample', '0'],
     ['renderToken', { ...TOKEN, profileId: '4' }],
   ])('reports TypeError for a non-number %s', (field, value) => {
     expect(() => apply({ [field]: value })).toThrow(TypeError);
@@ -61,10 +60,15 @@ describe('Node Project vocal input number errors', () => {
     ['expectedSourceSampleRate', Number.NaN],
     ['expectedSourceSampleCount', Number.POSITIVE_INFINITY],
     ['clipId', Number.NaN],
-    ['renderedStartSample', Number.NaN],
     ['renderToken', { ...TOKEN, profileId: Number.NaN }],
   ])('reports RangeError for a numeric value outside the %s domain', (field, value) => {
     expect(() => apply({ [field]: value })).toThrow(RangeError);
+  });
+
+  it('refuses the removed renderedStartSample as an unknown key', () => {
+    expect(() => apply({ renderedStartSample: 0 })).toThrow(
+      new TypeError("applyProjectVocalEdit: unknown request key 'renderedStartSample'"),
+    );
   });
 
   it.each([

@@ -21,19 +21,18 @@ export type ProjectAutomationCurve = 0 | 1 | 2 | 3 | keyof typeof PROJECT_AUTOMA
  */
 export const EXPECTED_PROJECT_ABI_VERSION = 2;
 
-/** Track kind for {@link ProjectTrackDesc} (mirrors SonareProjectTrackKind). */
-export type ProjectTrackKind = 'audio' | 'midi' | 'aux' | 0 | 1 | 2;
+/** What a track carries. */
+export type ProjectTrackKind = 'audio' | 'midi' | 'aux';
 
-/** Track-kind ordinals (mirror SonareProjectTrackKind). */
-export const PROJECT_TRACK_AUDIO = 0;
+/** What a source or a clip's source holds. */
+export type ProjectSourceKind = 'audio' | 'midi';
 
-export const PROJECT_TRACK_MIDI = 1;
-
-export const PROJECT_TRACK_AUX = 2;
+/** Whether clips on one track may overlap in time. */
+export type ProjectOverlapPolicy = 'disallow' | 'allow';
 
 /** Descriptor for {@link Project.addTrack}. */
 export interface ProjectTrackDesc {
-  /** Track kind: `'audio'` | `'midi'` | `'aux'` or the ordinal 0/1/2. */
+  /** Track kind. Default `'audio'`. */
   kind?: ProjectTrackKind;
   /** Optional track name. */
   name?: string;
@@ -41,42 +40,101 @@ export interface ProjectTrackDesc {
 
 /** Read-only stored track descriptor. */
 export interface ProjectTrack {
-  id: number;
-  kind: number;
-  midiDestinationId: number;
-  gain: number;
-  pan: number;
-  mute: boolean;
-  solo: boolean;
-  name: string;
+  /** Stable track id. */
+  readonly id: number;
+  /** What the track carries. */
+  readonly kind: ProjectTrackKind;
+  /** MIDI destination id the track's MIDI clips are routed to. */
+  readonly midiDestinationId: number;
+  /** Linear playback gain. */
+  readonly gain: number;
+  /** Stereo balance in `[-1, 1]`. */
+  readonly pan: number;
+  /** Whether the track is muted. */
+  readonly mute: boolean;
+  /** Whether the track is soloed. */
+  readonly solo: boolean;
+  /** Track name; empty when unnamed. */
+  readonly name: string;
 }
 
 /** Read-only stored clip descriptor. */
 export interface ProjectClip {
-  id: number;
-  trackId: number;
-  sourceId: number;
-  sourceKind: number;
-  startPpq: number;
-  lengthPpq: number;
-  sourceOffsetPpq: number;
-  gain: number;
-  loopMode: number;
-  loopLengthPpq: number;
+  /** Stable clip id. */
+  readonly id: number;
+  /** Owning track id. */
+  readonly trackId: number;
+  /** Id of the source the clip plays. */
+  readonly sourceId: number;
+  /** What the clip's source holds. */
+  readonly sourceKind: ProjectSourceKind;
+  /** Clip start in PPQ. */
+  readonly startPpq: number;
+  /** Clip length in PPQ. */
+  readonly lengthPpq: number;
+  /** Offset into the source content in PPQ. */
+  readonly sourceOffsetPpq: number;
+  /** Linear clip gain. */
+  readonly gain: number;
+  /** Whether the clip loops. */
+  readonly loopMode: ProjectLoopMode;
+  /** Loop length in PPQ; `0` loops the whole clip. */
+  readonly loopLengthPpq: number;
 }
 
 /** Read-only stored audio or MIDI source descriptor. */
 export interface ProjectSource {
-  id: number;
-  kind: number;
-  channelCount: number;
-  storageHandleId: number;
-  sampleRateHint: number;
-  nameOrUri: string;
+  /** Stable source id. */
+  readonly id: number;
+  /** What the source holds. */
+  readonly kind: ProjectSourceKind;
+  /** Channel count of the decoded audio; `0` for a MIDI source or one not yet resolved. */
+  readonly numChannels: number;
+  /** Id of the storage handle holding the decoded audio. */
+  readonly storageHandleId: number;
+  /** Sample rate the audio was recorded at, in Hz; `0` when unknown. */
+  readonly sampleRateHint: number;
+  /** Source name or host-local URI. */
+  readonly nameOrUri: string;
   /** Owning content hash for audio sources; empty for MIDI sources. */
-  contentHash: string;
+  readonly contentHash: string;
   /** External source-separation role for audio sources; empty for MIDI sources. */
-  externalStemRole: string;
+  readonly externalStemRole: string;
+}
+
+/** What a {@link ProjectMarker} marks. */
+export type ProjectMarkerKind = 'marker' | 'text' | 'lyric' | 'cuePoint' | 'keySignature';
+
+/** A stored project marker. */
+export interface ProjectMarker {
+  /** Stable marker id. */
+  readonly id: number;
+  /** Position in PPQ. */
+  readonly ppq: number;
+  /** Marker text. */
+  readonly name: string;
+  /** What the marker marks. */
+  readonly kind: ProjectMarkerKind;
+  /** Key signature only: -7..7 (sharps positive); `0` otherwise. */
+  readonly keyFifths: number;
+  /** Key signature only: `false` is major, `true` minor; `false` otherwise. */
+  readonly keyMinor: boolean;
+}
+
+/** Input of {@link Project.setMarker}. */
+export interface ProjectMarkerInput {
+  /** Id of the marker to replace. Omitted, a new id is allocated; an explicit `0` is a `RangeError`. */
+  id?: number;
+  /** Position in PPQ. */
+  ppq: number;
+  /** Marker text. Default empty. */
+  name?: string;
+  /** What the marker marks. Default `'marker'`. */
+  kind?: ProjectMarkerKind;
+  /** Key signature only: -7..7 (sharps positive). Default `0`. */
+  keyFifths?: number;
+  /** Key signature only: `false` is major, `true` minor. Default `false`. */
+  keyMinor?: boolean;
 }
 
 /**
@@ -103,13 +161,13 @@ export interface ProjectWarpMapDesc {
  * - `'off'` — no warping.
  * - `'repitch'` — resample along the map, so a rate change moves the pitch with
  *   the timing (tape-style).
- * - `'tempo-sync'` — control-thread bake against the tempo map.
- * - `'time-stretch'` — realtime pitch-preserving stretch. Follows the same map
+ * - `'tempoSync'` — control-thread bake against the tempo map.
+ * - `'timeStretch'` — realtime pitch-preserving stretch. Follows the same map
  *   as `'repitch'` but overlap-adds instead of resampling, so a new anchor set
  *   takes effect from the next block with no re-bake. Falls back to `'repitch'`
  *   behaviour when the stretcher's voice budget is exhausted.
  */
-export type WarpMode = 'off' | 'repitch' | 'tempo-sync' | 'time-stretch';
+export type ProjectWarpMode = 'off' | 'repitch' | 'tempoSync' | 'timeStretch';
 
 /**
  * Request form of {@link alignTakeToReference}.
@@ -210,21 +268,22 @@ export interface ProjectClipDesc {
   /** Linear clip gain (default 1). */
   gain?: number;
   /**
-   * Decoded interleaved audio for an audio clip. When provided, the clip is
-   * bound to a fresh renderable audio source; omit for a metadata-only source.
+   * Decoded audio for an audio clip, one `Float32Array` per channel, all the
+   * same length; the array length is the channel count. When provided, the clip
+   * is bound to a fresh renderable audio source; omit for a metadata-only source.
    */
-  audio?: Float32Array;
-  /** Channel count of `audio` (default 1). */
-  audioChannels?: number;
+  channels?: Float32Array[];
   /**
-   * Sample rate of `audio` in Hz. Required whenever `audio` is supplied, and
-   * must be in `[8000, 384000]`: omitting it sends 0, which the native side
-   * rejects. Ignored for a metadata-only clip.
+   * Sample rate of {@link channels} in Hz, within `[8000, 384000]`. Required
+   * whenever `channels` is supplied; ignored for a metadata-only clip.
    */
-  audioSampleRate?: number;
+  sampleRate?: number;
   /** Optional host-local source reference for a metadata-only audio source. */
   sourceUri?: string;
 }
+
+/** Channel layout of an {@link ExternalSeparatedStem}. */
+export type ProjectStemLayout = 'mono' | 'stereo';
 
 /** One decoded output of an external source-separation model. */
 export interface ExternalSeparatedStem {
@@ -233,9 +292,9 @@ export interface ExternalSeparatedStem {
   /** Optional semantic metadata such as `'vocals'`; it has no DSP effect. */
   role?: string;
   /** Mono or stereo layout. */
-  layout: 'mono' | 'stereo' | 1 | 2;
+  layout: ProjectStemLayout;
   /** One Float32Array per layout channel, all with the same frame count. */
-  planarSamples: Float32Array[];
+  channels: Float32Array[];
   /** Absolute project-rate frame where the stem begins (default 0). */
   startFrame?: number;
 }
@@ -356,62 +415,91 @@ export interface ProjectMidiCcBinding {
   maxValue?: number;
 }
 
-/** One compile diagnostic (mirrors SonareProjectDiagnostic). */
+/** Whether a {@link ProjectDiagnostic} blocks the timeline. */
+export type ProjectDiagnosticSeverity = 'error' | 'warning';
+
+/** What a {@link ProjectDiagnostic} reports. */
+export type ProjectDiagnosticCode =
+  | 'ok'
+  | 'danglingSourceRef'
+  | 'clipOverlap'
+  | 'invalidTempo'
+  | 'invalidPpq'
+  | 'unsupportedGraph'
+  | 'unsupportedMixing'
+  | 'emptyAudioSource'
+  | 'invalidSampleRate'
+  | 'sourceKindMismatch'
+  | 'midiClipNoInstrument'
+  | 'raggedAudioSource'
+  | 'loopCrossfadeUnavailable'
+  | 'sharedChannelStrip'
+  | 'automationLaneConflict'
+  | 'invalidAutomationTargetKind'
+  | 'automationLaneCapacity'
+  | 'reservedAutomationRouteConflict'
+  | 'automationTargetUnrouted';
+
+/** Result of {@link Project.validateMidiNotes}. */
+export interface ProjectNotePairValidation {
+  /** `true` when every note-on has its note-off. */
+  readonly ok: boolean;
+  /** Note-ons with no matching note-off. */
+  readonly unmatchedNoteOns: number;
+  /** Note-offs with no matching note-on. */
+  readonly unmatchedNoteOffs: number;
+}
+
+/** One compile diagnostic. */
 export interface ProjectDiagnostic {
-  code: number;
-  /** 0 = error, 1 = warning. */
-  severity: number;
-  /** Affected clip / track / source id (0 = n/a). */
-  targetId: number;
+  /** What the diagnostic reports. */
+  readonly code: ProjectDiagnosticCode;
+  /** `'error'` means no timeline was produced. */
+  readonly severity: ProjectDiagnosticSeverity;
+  /** Affected clip / track / source id; absent when the diagnostic names none. */
+  readonly targetId?: number;
   /** Human-readable message for this diagnostic. */
-  message: string;
+  readonly message: string;
 }
 
 /** Result of {@link Project.compile}. */
 export interface ProjectCompileResult {
-  /** `true` when compilation produced a renderable timeline (no error diagnostics). */
-  hasTimeline: boolean;
-  /** Newline-joined human-readable diagnostic detail. */
-  messages: string;
-  diagnostics: ProjectDiagnostic[];
+  /** Every diagnostic the compile produced; empty when it was clean. */
+  readonly diagnostics: readonly ProjectDiagnostic[];
 }
 
 /** Result of {@link Project.compileTimeline}. */
-export interface ProjectCompileTimelineResult extends ProjectCompileResult {
+export interface ProjectCompileTimelineResult {
+  /** Every diagnostic the compile produced; empty when it was clean. */
+  readonly diagnostics: readonly ProjectDiagnostic[];
   /**
    * The compiled playback snapshot, or `null` when compilation produced none
    * (see `diagnostics`). Owned by the caller: destroy it when done.
    */
-  timeline: ProjectTimeline | null;
+  readonly timeline: ProjectTimeline | null;
 }
 
 /**
  * One tempo segment, as {@link Project.setTempoSegments} accepts it and
- * {@link Project.tempoSegmentByIndex} returns it.
+ * {@link Project.tempoSegments} returns it.
  *
  * @remarks
  * A segment read back carries the fields the setter reads, so it can be written
- * straight to another project. `startSample` is never among them — see its own
- * note.
+ * straight to another project. A project stores musical positions only, so there
+ * is no sample position: it is derived when the project is compiled.
  */
 export interface ProjectTempoSegment {
   /** Segment start position in PPQ. */
   startPpq: number;
   /** Tempo in BPM at the segment start. */
   bpm: number;
-  /**
-   * Derived segment start in samples. Accepted for compatibility and ignored on
-   * input; never returned, because a project stores musical positions only and
-   * sample positions are derived when it is compiled.
-   */
-  startSample?: number;
   /** Tempo in BPM at the segment end for a ramp; `0` / omitted = constant tempo. */
   endBpm?: number;
 }
 
 /**
  * One time-signature segment, as {@link Project.setTimeSignatures} accepts it
- * and {@link Project.timeSignatureByIndex} returns it.
+ * and {@link Project.timeSignatures} returns it.
  */
 export interface ProjectTimeSignatureSegment {
   /** Segment start position in PPQ. */
@@ -458,93 +546,188 @@ export interface ProjectTempoOptions {
 
 /** A ranked primary/half/double tempo hypothesis from {@link Project.analyzeTempo}. */
 export interface ProjectTempoCandidate {
-  bpm: number;
-  confidence: number;
-  label: 'primary' | 'half' | 'double';
-  timeSignatureCount: number;
-  timeSignature: ProjectTimeSignatureSegment;
+  /** Tempo in BPM. */
+  readonly bpm: number;
+  /** Ranking confidence in `[0, 1]`. */
+  readonly confidence: number;
+  /** Which tempo octave the candidate is. */
+  readonly label: 'primary' | 'half' | 'double';
+  /** Number of time-signature segments the candidate would install. */
+  readonly timeSignatureCount: number;
+  /** The first time-signature segment the candidate would install. */
+  readonly firstTimeSignature: ProjectTimeSignatureSegment;
 }
 
-/** Options for {@link Project.bounce}. Zero / omitted fields take native defaults. */
+/**
+ * Request form of {@link Project.analyzeTempo}; it is the positional
+ * `(samples, sampleRate, options?)` call spelt as one object.
+ */
+export interface ProjectAnalyzeTempoRequest extends ProjectTempoOptions {
+  /** Mono audio to analyse. */
+  samples: Float32Array;
+  /** Sample rate of {@link samples}, in Hz. */
+  sampleRate: number;
+}
+
+/**
+ * Request form of {@link Project.autoTempo}; it is the positional
+ * `(samples, sampleRate, options?)` call spelt as one object.
+ */
+export interface ProjectAutoTempoRequest extends ProjectAnalyzeTempoRequest {
+  /** Index into the ranking {@link Project.analyzeTempo} produced. Default `0`. */
+  candidateIndex?: number;
+  /** Also install the candidate's detected time signatures. Default `false`. */
+  applyTimeSignatures?: boolean;
+}
+
+/** Options of the positional form of {@link Project.autoTempo}. */
+export type ProjectAutoTempoOptions = Omit<ProjectAutoTempoRequest, 'samples' | 'sampleRate'>;
+
+/**
+ * Options for {@link Project.bounce} and the `bounceWith*Instruments` methods.
+ * Omit a field for its default; an explicit `0` on `totalFrames`, `blockSize` or
+ * `numChannels` is a `RangeError`.
+ */
 export interface ProjectBounceOptions {
   /**
-   * Render length in frames at the output sample rate. Omit / `<= 0` lets the
-   * native side auto-derive the length from the arrangement (musical end plus
-   * any instrument release tail). It does NOT produce an empty render.
+   * Render length in frames at the project sample rate. Omitted, the length is
+   * derived from the arrangement (musical end plus any instrument release tail);
+   * it is never an empty render.
    */
   totalFrames?: number;
-  /** Render block size; <= 0 / omit => 128. */
+  /** Render block size in frames. Default 128. */
   blockSize?: number;
   /**
    * Output channel count: 1, 2, 6 or 8, and at most the width of the scene
    * master's layout (mono/stereo/no master allow 2). The master is mixed at
-   * this width; 1 folds a 2-channel master to 0.5(L+R). <= 0 / omit => 2.
+   * this width; 1 folds a 2-channel master to 0.5(L+R). Default 2.
    */
   numChannels?: number;
-  /**
-   * Output sample rate. This is not a resample: a positive value must equal
-   * the project's own sample rate, or the bounce is refused. <= 0 / omit =>
-   * the project's.
-   */
-  sampleRate?: number;
-  /** Host-instrument PDC (samples) fed to the compiler. */
+  /** Host-instrument plugin delay compensation, in samples, fed to the compiler. Default 0. */
   instrumentLatencySamples?: number;
 }
 
-/** Clip fade-curve ordinals/names (mirror SonareProjectFadeCurve). */
-export type ProjectFadeCurve =
-  | 0
-  | 1
-  | 2
-  | 3
-  | 'linear'
-  | 'equal-power'
-  | 'equal_power'
-  | 'equalPower'
-  | 'equalpower'
-  | 'exponential'
-  | 'exp'
-  | 'logarithmic'
-  | 'log';
+/** Planar audio rendered by {@link Project.bounce}. */
+export interface ProjectBounceResult {
+  /** One plane per output channel, all the same length. */
+  readonly channels: Float32Array[];
+  /** Sample rate of the render in Hz; always the project's own. */
+  readonly sampleRate: number;
+  /** Number of output channels; the length of {@link channels}. */
+  readonly numChannels: number;
+}
 
-export const PROJECT_FADE_CURVE_LINEAR = 0;
+/**
+ * One instrument bound to a MIDI destination for a `bounceWith*Instruments`
+ * call. An omitted `destinationId` is destination `0`, which is a real id.
+ */
+export interface ProjectInstrumentBinding<T> {
+  /** MIDI destination id the instrument renders (see {@link Project.setTrackMidiDestination}). Default `0`. */
+  destinationId?: number;
+  /** The instrument that renders the destination. */
+  instrument: T;
+}
 
-export const PROJECT_FADE_CURVE_EQUAL_POWER = 1;
+/** Clip fade-curve names. */
+export type ProjectFadeCurve = 'linear' | 'equalPower' | 'exponential' | 'logarithmic';
 
-export const PROJECT_FADE_CURVE_EXPONENTIAL = 2;
-
-export const PROJECT_FADE_CURVE_LOGARITHMIC = 3;
-
-/** Clip loop-mode ordinals/names (mirror SonareProjectLoopMode). */
-export type ProjectLoopMode = 0 | 1 | 'off' | 'loop';
-
-export const PROJECT_LOOP_MODE_OFF = 0;
-
-export const PROJECT_LOOP_MODE_LOOP = 1;
+/** Whether a clip loops. */
+export type ProjectLoopMode = 'off' | 'loop';
 
 /** Persistent target classification for a project automation lane. */
-export type ProjectAutomationTargetKind = 'opaque' | 'track-fader-db' | 'track-pan' | 0 | 1 | 2;
+export type ProjectAutomationTargetKind = 'opaque' | 'trackFaderDb' | 'trackPan';
 
-/** Automation target-kind ordinals (mirror SonareAutomationTargetKind). */
-export const PROJECT_AUTOMATION_TARGET_OPAQUE = 0;
+/**
+ * Fade regions of {@link Project.setClipFade}. An omitted side, or an omitted
+ * length, is a zero-length linear fade.
+ */
+export interface ProjectClipFadeRequest {
+  /** Fade-in length in PPQ; finite and >= 0. Default `0` (no fade). */
+  fadeInPpq?: number;
+  /** Fade-in curve. Default `'linear'`. */
+  fadeInCurve?: ProjectFadeCurve;
+  /** Fade-out length in PPQ; finite and >= 0. Default `0` (no fade). */
+  fadeOutPpq?: number;
+  /** Fade-out curve. Default `'linear'`. */
+  fadeOutCurve?: ProjectFadeCurve;
+}
 
-export const PROJECT_AUTOMATION_TARGET_TRACK_FADER_DB = 1;
+/** Options of {@link Project.moveClip}. */
+export interface ProjectClipMoveOptions {
+  /** Track to move the clip to. Omitted, the clip stays on its track. */
+  trackId?: number;
+}
 
-export const PROJECT_AUTOMATION_TARGET_TRACK_PAN = 2;
+/** Options of {@link Project.setClipTakes}. */
+export interface ProjectClipTakesOptions {
+  /** Take that plays. Omitted, the clip's base source plays. */
+  activeTakeId?: number;
+}
 
-/** One clip fade region for {@link Project.setClipFade}. */
-export interface ProjectClipFade {
-  /** Fade length in PPQ; finite and >= 0. Default `0` (no fade). */
-  lengthPpq?: number;
-  /** Interpolation curve ({@link ProjectFadeCurve}); default linear (0). */
-  curve?: ProjectFadeCurve;
+/** Request of {@link Project.setClipLoop}. */
+export interface ProjectClipLoopRequest {
+  /** Whether the clip loops. */
+  loopMode: ProjectLoopMode;
+  /**
+   * Loop length in PPQ, finite and >= 0. Omitted or `0` loops the entire clip
+   * (the effective length is resolved from the clip's own duration).
+   */
+  loopLengthPpq?: number;
+  /**
+   * Equal-power crossfade at the loop seam in PPQ, finite and >= 0; omitted or
+   * `0` is a hard loop. The engine clamps it to the clip's pre-roll and half the loop.
+   */
+  loopCrossfadePpq?: number;
+}
+
+/** Request of {@link Project.setSourceAudio}. */
+export interface ProjectSourceAudioRequest {
+  /** Id of an existing audio source. */
+  sourceId: number;
+  /** Decoded audio, one `Float32Array` per channel, all the same length. */
+  channels: Float32Array[];
+  /** Sample rate of {@link channels} in Hz. */
+  sampleRate: number;
+}
+
+/**
+ * Request of {@link Project.setAudioSourceMetadata}. Both strings are replaced;
+ * an omitted one is stored empty.
+ */
+export interface ProjectAudioSourceMetadataRequest {
+  /** Id of an existing audio source. */
+  sourceId: number;
+  /** Owning content hash. */
+  contentHash?: string;
+  /** External source-separation role such as `'vocals'`. */
+  externalStemRole?: string;
+}
+
+/** Request of {@link Project.setProgramOnChannel}. */
+export interface ProjectProgramRequest {
+  /** UMP group, `0`..`15`. */
+  group: number;
+  /** MIDI channel, `0`..`15`. */
+  channel: number;
+  /** Program number, `0`..`127`. */
+  program: number;
+  /** Bank Select to emit before the program. Omitted, none is emitted. */
+  bank?: ProjectProgramBank;
+}
+
+/** Bank Select of a {@link ProjectProgramRequest}. */
+export interface ProjectProgramBank {
+  /** Bank Select MSB (CC 0), `0`..`127`. */
+  msb: number;
+  /** Bank Select LSB (CC 32), `0`..`127`. */
+  lsb: number;
 }
 
 /** One alternate take for {@link Project.setClipTakes}. */
 export interface ProjectClipTake {
   /** Non-zero take id unique within the clip. */
   id: number;
-  /** Source id for this take; 0 reuses the clip's current source. */
+  /** Source id for this take; omitted reuses the clip's current source. */
   sourceId?: number;
   /** Offset into the take source in PPQ. */
   sourceOffsetPpq?: number;
@@ -556,7 +739,7 @@ export interface ProjectClipTake {
 export interface ProjectClipCompSegment {
   startPpq: number;
   endPpq: number;
-  /** Take id to play in this range; 0 falls back to the active/default take. */
+  /** Take id to play in this range; omitted falls back to the active/default take. */
   takeId?: number;
   /**
    * Equal-power crossfade length in PPQ, fading this segment in over the part
@@ -597,30 +780,50 @@ export interface ProjectAutomationLaneDesc {
   points: ProjectAutomationPoint[];
 }
 
+/** Mode of a {@link ProjectKeySegment}. */
+export type ProjectKeyMode =
+  | 'unknown'
+  | 'major'
+  | 'minor'
+  | 'dorian'
+  | 'phrygian'
+  | 'lydian'
+  | 'mixolydian'
+  | 'locrian';
+
+/** Quality of a {@link ProjectChordSymbol}. */
+export type ProjectChordQuality =
+  | 'unknown'
+  | 'major'
+  | 'minor'
+  | 'diminished'
+  | 'augmented'
+  | 'dominant'
+  | 'halfDiminished'
+  | 'suspended';
+
 /** One key segment for {@link Project.annotateKeys}. */
 export interface ProjectKeySegment {
+  /** Segment start in PPQ. */
   startPpq: number;
+  /** Segment end in PPQ. */
   endPpq: number;
   /** Tonic pitch class 0..11 (C=0) or 255 for unknown. Default 255. */
   tonicPc?: number;
-  /**
-   * KeyMode ordinal: 0 unknown, 1 major, 2 minor, 3 dorian, 4 phrygian,
-   * 5 lydian, 6 mixolydian, 7 locrian. Default 0.
-   */
-  mode?: number;
+  /** Key mode. Default `'unknown'`. */
+  mode?: ProjectKeyMode;
 }
 
 /** One chord symbol for {@link Project.annotateChords}. */
 export interface ProjectChordSymbol {
+  /** Chord start in PPQ. */
   startPpq: number;
+  /** Chord end in PPQ. */
   endPpq: number;
   /** Root pitch class 0..11 (C=0) or 255 for unknown. Default 255. */
   rootPc?: number;
-  /**
-   * ChordQuality ordinal: 0 unknown, 1 major, 2 minor, 3 diminished,
-   * 4 augmented, 5 dominant, 6 half-diminished, 7 suspended. Default 0.
-   */
-  quality?: number;
+  /** Chord quality. Default `'unknown'`. */
+  quality?: ProjectChordQuality;
   /** Extension scale degrees (for example 7, 9, 13; 2 or 4 for a suspension), up to 32. */
   extensions?: number[];
   /** Slash-bass pitch class 0..11 or 255 for none. Default 255. */
@@ -647,7 +850,7 @@ export interface ProjectAssistSidecarInput {
   payload?: Uint8Array;
 }
 
-/** A stored assist sidecar returned by {@link Project.getAssistSidecar}. */
+/** A stored assist sidecar returned by {@link Project.assistSidecars}. */
 export interface ProjectAssistSidecar {
   moduleId: string;
   schemaVersion: number;
@@ -657,10 +860,7 @@ export interface ProjectAssistSidecar {
   payload: Uint8Array;
 }
 
-/**
- * Request form of {@link Project.bakeMidiFx}. The positional
- * `(clipId, configJson)` call stays supported and normalizes to this shape.
- */
+/** Request of {@link Project.bakeMidiFx}. */
 export interface ProjectMidiFxBakeRequest {
   /** Target MIDI clip id. */
   clipId: number;

@@ -1,5 +1,11 @@
-import { ClipPageProvider, FileClipPageProvider } from './clip_page_provider.js';
+import {
+  ClipPageProvider,
+  type ClipPageSampleRequest,
+  FileClipPageProvider,
+} from './clip_page_provider.js';
 import { ErrorCode, SonareError } from './errors.js';
+import { deinterleave } from './internal/planar.js';
+import { timelineHandle } from './internal/project_handles.js';
 import { addon } from './native.js';
 import type { ProjectTimeline } from './project.js';
 import type {
@@ -8,7 +14,6 @@ import type {
   BuiltinSynthConfig,
   CaptureOptions,
   CapturePunch,
-  ClipPageRequest,
   ControllerBinding,
   EngineAutomationPoint,
   EngineBounceOptions,
@@ -1086,7 +1091,7 @@ export class RealtimeEngine {
    * another rate is refused until the timeline's clips are cleared.
    */
   applyProjectTimeline(timeline: ProjectTimeline): void {
-    this.native.applyProjectTimeline((timeline as unknown as { native: unknown }).native);
+    this.native.applyProjectTimeline(timelineHandle(timeline));
     this.laneOrder = 'timeline';
   }
 
@@ -1618,7 +1623,7 @@ export class RealtimeEngine {
     this.native.destroyClipPageProvider(providerId);
   }
 
-  popClipPageRequest(): ClipPageRequest | null {
+  popClipPageRequest(): ClipPageSampleRequest | null {
     return this.native.popClipPageRequest();
   }
 
@@ -1856,7 +1861,15 @@ export class RealtimeEngine {
   }
 
   bounceOffline(options: EngineBounceOptions): EngineBounceResult {
-    return this.native.bounceOffline(bounceToNative(options));
+    const { interleaved, numChannels, sampleRate, integratedLufs } = this.native.bounceOffline(
+      bounceToNative(options),
+    );
+    return {
+      channels: deinterleave(interleaved, numChannels),
+      numChannels,
+      sampleRate,
+      integratedLufs,
+    };
   }
 
   /**

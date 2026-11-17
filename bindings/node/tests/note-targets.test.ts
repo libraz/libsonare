@@ -105,7 +105,7 @@ it('assigns sparse JavaScript notes without curves or an edit object', () => {
  * — drop a note-on that never closes.
  */
 function twoQuarterNotesSmf(): Buffer {
-  const project = Project.create();
+  const project = new Project();
   try {
     project.setTempoSegments([{ startPpq: 0, bpm: 120 }]);
     const { clipId } = project.addMidiClip(0, 3);
@@ -115,7 +115,7 @@ function twoQuarterNotesSmf(): Buffer {
       Project.midiNoteOn(1, 0, 0, 67, 100),
       Project.midiNoteOff(2, 0, 0, 67, 0),
     ]);
-    return project.exportSmf();
+    return Buffer.from(project.exportSmf());
   } finally {
     project.destroy();
   }

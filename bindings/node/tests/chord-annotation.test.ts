@@ -39,12 +39,12 @@ const byOrdinal = (quality: number, root = 2, bass = root): AnalysisChord =>
 
 describe('chordSymbolFromAnalysis', () => {
   it.each([
-    ['minor', 2, [] as number[]],
-    ['dominant7', 5, [7]],
-    ['halfDim7', 6, [7]],
-    ['sus4', 7, [4]],
-    ['dominant13', 5, [7, 9, 13]],
-  ])('maps %s to annotation quality %i', (name, quality, extensions) => {
+    ['minor', 'minor', [] as number[]],
+    ['dominant7', 'dominant', [7]],
+    ['halfDim7', 'halfDiminished', [7]],
+    ['sus4', 'suspended', [4]],
+    ['dominant13', 'dominant', [7, 9, 13]],
+  ])('maps %s to annotation quality %s', (name, quality, extensions) => {
     expect(chordSymbolFromAnalysis(chord(name))).toEqual({
       rootPc: 2,
       quality,
@@ -56,7 +56,7 @@ describe('chordSymbolFromAnalysis', () => {
   it('keeps the root of an unknown chord', () => {
     expect(chordSymbolFromAnalysis(chord('unknown', 'F#'))).toEqual({
       rootPc: 6,
-      quality: 0,
+      quality: 'unknown',
       extensions: [],
       slashBassPc: 255,
     });
@@ -76,7 +76,7 @@ describe('chordSymbolFromAnalysis', () => {
   });
 
   it('produces annotations annotateChords accepts and a round trip leaves unchanged', () => {
-    const project = Project.create();
+    const project = new Project();
     try {
       project.annotateChords(
         QUALITIES.map((name, i) => ({
@@ -130,19 +130,19 @@ describe('chordSymbolFromAnalysis', () => {
 
 describe('keyModeFromAnalysis', () => {
   it.each([
-    ['major', 1],
-    ['minor', 2],
-    ['dorian', 3],
-    ['phrygian', 4],
-    ['lydian', 5],
-    ['mixolydian', 6],
-    ['locrian', 7],
-  ])('maps %s to annotation mode %i', (name, mode) => {
+    ['major', 'major'],
+    ['minor', 'minor'],
+    ['dorian', 'dorian'],
+    ['phrygian', 'phrygian'],
+    ['lydian', 'lydian'],
+    ['mixolydian', 'mixolydian'],
+    ['locrian', 'locrian'],
+  ])('maps %s to annotation mode %s', (name, mode) => {
     expect(keyModeFromAnalysis(name)).toBe(mode);
   });
 
   it('feeds annotateKeys', () => {
-    const project = Project.create();
+    const project = new Project();
     try {
       project.annotateKeys([
         { startPpq: 0, endPpq: 4, tonicPc: 9, mode: keyModeFromAnalysis('minor') },

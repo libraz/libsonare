@@ -11,14 +11,8 @@ import type {
   ProjectAutomationCurve,
   ProjectAutomationLaneDesc,
   ProjectAutomationPoint,
-  ProjectAutomationTargetKind,
-  ProjectClipFade,
-  ProjectFadeCurve,
-  ProjectLoopMode,
-  ProjectTrackDesc,
   SendTiming,
   SynthPatch,
-  WarpMode,
 } from './types.js';
 import type { ChannelLayout } from './types_engine.js';
 
@@ -61,18 +55,6 @@ export function resolveEnumOrdinal(
   throw new TypeError(`${enumName} must be a name or an ordinal, got ${typeof value}`);
 }
 
-export function trackKindValue(kind: ProjectTrackDesc['kind']): number {
-  return resolveEnumOrdinal(kind ?? 'audio', { audio: 0, midi: 1, aux: 2 }, 'track kind');
-}
-
-export function warpModeValue(mode: WarpMode | number | undefined): number {
-  return resolveEnumOrdinal(
-    mode ?? 'off',
-    { off: 0, repitch: 1, 'tempo-sync': 2, 'time-stretch': 3 },
-    'warp mode',
-  );
-}
-
 /**
  * Automation curve spellings and their `SonareAutomationCurve` ordinals.
  *
@@ -103,35 +85,6 @@ export function projectAutomationCurveValue(curve: ProjectAutomationCurve | unde
   return resolveEnumOrdinal(curve ?? 'linear', PROJECT_AUTOMATION_CURVE_VALUES, 'automation curve');
 }
 
-export function projectFadeCurveValue(
-  curve: ProjectFadeCurve | undefined | null,
-): number | undefined {
-  if (curve === undefined || curve === null) {
-    return undefined;
-  }
-  const normalized = typeof curve === 'string' ? curve.replace(/[_-]/g, '').toLowerCase() : curve;
-  return resolveEnumOrdinal(
-    normalized,
-    { linear: 0, equalpower: 1, exponential: 2, exp: 2, logarithmic: 3, log: 3 },
-    'project fade curve',
-  );
-}
-
-export function projectClipFadeValue(
-  fade: ProjectClipFade | undefined,
-): ProjectClipFade | undefined {
-  if (fade === undefined) {
-    return undefined;
-  }
-  // Keep names intact so the addon resolves them through the C ABI's shared
-  // fade-curve parser. This prevents the three bindings from drifting.
-  return { ...fade };
-}
-
-export function projectLoopModeValue(mode: ProjectLoopMode): number {
-  return resolveEnumOrdinal(mode, { off: 0, loop: 1 }, 'project loop mode');
-}
-
 export function projectAutomationPointValue(point: ProjectAutomationPoint): ProjectAutomationPoint {
   const curve = projectAutomationCurveValue(point.curve ?? point.curveToNext);
   return {
@@ -141,32 +94,17 @@ export function projectAutomationPointValue(point: ProjectAutomationPoint): Proj
   };
 }
 
-/** Resolve the public project automation target kind to its C ABI ordinal. */
-export function projectAutomationTargetKindValue(
-  targetKind: ProjectAutomationTargetKind,
-): 0 | 1 | 2 {
-  return resolveEnumOrdinal(
-    targetKind,
-    { opaque: 0, 'track-fader-db': 1, 'track-pan': 2 },
-    'automation target kind',
-  ) as 0 | 1 | 2;
-}
+export type NativeAutomationLaneDesc = Omit<ProjectAutomationLaneDesc, 'targetKind'> & {
+  targetKind?: 0 | 1 | 2;
+};
 
 export function projectAutomationLaneValue(
-  desc: ProjectAutomationLaneDesc,
-): ProjectAutomationLaneDesc {
+  desc: NativeAutomationLaneDesc,
+): NativeAutomationLaneDesc {
   if (desc.targetParamId === 0) {
     throw new RangeError('project automation lane targetParamId must be non-zero');
   }
-  const normalized = { ...desc, points: desc.points.map(projectAutomationPointValue) };
-  if (desc.targetKind === undefined) {
-    // Keep the legacy descriptor shape intact: the addon uses property
-    // presence to choose the legacy C ABI versus the typed `_ex` form.
-    delete normalized.targetKind;
-  } else {
-    normalized.targetKind = projectAutomationTargetKindValue(desc.targetKind);
-  }
-  return normalized;
+  return { ...desc, points: desc.points.map(projectAutomationPointValue) };
 }
 
 const PAN_LAW_VALUES: Readonly<Record<string, number>> = {
@@ -242,43 +180,6 @@ export function normalizeSynthInstrument(patch: SynthPatch | string): SynthPatch
   // TypeScript type of its own; only the native layer looks at it again.
   const handle = (patch.sampleBank as unknown as { native: SampleBank }).native;
   return { ...patch, sampleBank: handle };
-}
-
-/**
- * Resolve a `bounceWith*Instrument(s)` binding argument to the list the native
- * layer reads, so the singular and plural forms share one shape check. `null`
- * means no bindings; the singular form also takes one binding on its own. Each
- * element must be a plain object, or a name where the family has a string
- * shorthand (`allowName`); anything else — an array included — is refused by
- * name before any render starts.
- */
-export function normalizeInstrumentBindings<E, R>(
-  method: string,
-  plural: boolean,
-  value: E | ReadonlyArray<E> | null,
-  allowName: boolean,
-  entry: (binding: E) => R,
-): R[] {
-  if (value === null) {
-    return [];
-  }
-  const isList = Array.isArray(value);
-  if (!isList && plural) {
-    throw new TypeError(`${method}: instruments must be an array`);
-  }
-  const list = (isList ? value : [value]) as ReadonlyArray<E>;
-  const out: R[] = [];
-  for (let index = 0; index < list.length; index += 1) {
-    const binding = list[index];
-    const isObject = typeof binding === 'object' && binding !== null && !Array.isArray(binding);
-    if (!isObject && !(allowName && typeof binding === 'string')) {
-      const label = isList ? `${plural ? 'instruments' : 'instrument'}[${index}]` : 'instrument';
-      const expected = allowName ? 'an object or a name' : 'an object';
-      throw new TypeError(`${method}: ${label} must be ${expected}`);
-    }
-    out.push(entry(binding));
-  }
-  return out;
 }
 
 /**

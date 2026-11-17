@@ -41,9 +41,17 @@ function request(
     renderedMono: new Float32Array([0, -0, 0.25]),
     renderedSampleRate: 48000,
     renderToken: TOKEN,
-    sve1: new Uint8Array([0x53, 0x56, 0x45, 0x31]),
+    vocalState: new Uint8Array([0x53, 0x56, 0x45, 0x31]),
     ...overrides,
   };
+}
+
+/** The apply request as the addon reads it. */
+type NativeApply = Omit<ProjectVocalEditApplyRequest, 'vocalState'> & { sve1: Uint8Array };
+
+function nativeRequest(overrides: Partial<NativeApply> = {}): NativeApply {
+  const { vocalState, ...rest } = request();
+  return { ...rest, sve1: vocalState, ...overrides };
 }
 
 const applyResult = {
@@ -118,12 +126,14 @@ describe('Vocal uint64 and digest input rules', () => {
   });
 
   it.each(NON_CANONICAL_UINT64)('refuses %s at the Project entry point', (_label, value) => {
-    const project = Project.create();
+    const project = new Project();
     const native = (project as unknown as { native: { applyVocalEdit(r: unknown): unknown } })
       .native;
     try {
       expect(() =>
-        native.applyVocalEdit({ ...request(), renderToken: { ...TOKEN, revision: value } }),
+        native.applyVocalEdit(
+          nativeRequest({ renderToken: { ...TOKEN, revision: value as never } }),
+        ),
       ).toThrow(/decimal uint64 string/);
     } finally {
       project.destroy();
@@ -131,9 +141,9 @@ describe('Vocal uint64 and digest input rules', () => {
   });
 
   it('accepts an upper-case expected digest and passes it on lower-cased', () => {
-    let received: ProjectVocalEditApplyRequest | undefined;
+    let received: NativeApply | undefined;
     const native = {
-      applyVocalEdit(value: ProjectVocalEditApplyRequest): typeof applyResult {
+      applyVocalEdit(value: NativeApply): typeof applyResult {
         received = value;
         return applyResult;
       },
@@ -145,12 +155,12 @@ describe('Vocal uint64 and digest input rules', () => {
   });
 
   it('reads an upper-case expected digest in the native reader', () => {
-    const project = Project.create();
+    const project = new Project();
     const native = (project as unknown as { native: { applyVocalEdit(r: unknown): unknown } })
       .native;
     try {
       expect(() =>
-        native.applyVocalEdit({ ...request(), expectedSourceSha256: SHA.toUpperCase() }),
+        native.applyVocalEdit(nativeRequest({ expectedSourceSha256: SHA.toUpperCase() })),
       ).not.toThrow(/hex/);
     } finally {
       project.destroy();
@@ -160,18 +170,18 @@ describe('Vocal uint64 and digest input rules', () => {
 
 describe('Node Project vocal edit helpers', () => {
   it('enumerates an empty Project through the native facade', () => {
-    const project = Project.create();
+    const project = new Project();
     try {
-      expect(project.getVocalEditDependencies()).toEqual([]);
+      expect(project.vocalEditDependencies()).toEqual([]);
     } finally {
       project.destroy();
     }
   });
 
   it('normalizes defaults and copies apply buffers before entering native code', () => {
-    let received: ProjectVocalEditApplyRequest | undefined;
+    let received: NativeApply | undefined;
     const native = {
-      applyVocalEdit(value: ProjectVocalEditApplyRequest): typeof applyResult {
+      applyVocalEdit(value: NativeApply): typeof applyResult {
         received = value;
         return applyResult;
       },
@@ -182,15 +192,17 @@ describe('Node Project vocal edit helpers', () => {
     const result = projectApplyVocalEdit(native, input);
 
     expect(received).toBeDefined();
-    expect(received?.takeId).toBe(0);
-    expect(received?.renderedStartSample).toBe(0);
+    expect(received).not.toHaveProperty('takeId');
+    expect(received).not.toHaveProperty('renderedStartSample');
     expect(received?.renderedMono).not.toBe(input.renderedMono);
-    expect(received?.sve1).not.toBe(input.sve1);
+    expect(received?.sve1).not.toBe(input.vocalState);
     input.renderedMono[0] = 0.9;
-    input.sve1[0] = 0;
+    input.vocalState[0] = 0;
     expect(received?.renderedMono[0]).toBe(0);
     expect(received?.sve1[0]).toBe(0x53);
-    expect(result).toEqual(applyResult);
+    // The base source's native take id 0 is an absent takeId.
+    const { takeId: _base, ...expectedResult } = applyResult;
+    expect(result).toEqual(expectedResult);
   });
 
   it('rejects non-hex SHA, draft tokens, partial renders, and rate changes', () => {
@@ -239,7 +251,8 @@ describe('Node Project vocal edit helpers', () => {
     } as Parameters<typeof projectGetVocalEditDependencies>[0];
     const result = projectGetVocalEditDependencies(native);
 
-    expect(result).toEqual(dependencies);
+    const { takeId: _base, ...record } = dependencies[0];
+    expect(result).toEqual([{ ...record, reason: 'none' }]);
     expect(result).not.toBe(dependencies);
     expect(result[0]).not.toBe(dependencies[0]);
     dependencies[0].sourceSampleCount = 99;
@@ -271,10 +284,86 @@ describe('Node Project vocal edit helpers', () => {
       ],
     } as Parameters<typeof projectGetVocalEditDependencies>[0];
 
-    expect(projectGetVocalEditDependencies(native)).toEqual([malformed]);
-    expect(projectRehydrateVocalEdits(native, [])).toEqual([
-      { clipId: 7, takeId: 0, derivedSourceId: 0, status: 2, reason: 1 },
+    const { takeId: _base, ...expected } = malformed;
+    expect(projectGetVocalEditDependencies(native)).toEqual([
+      { ...expected, reason: 'unsupported' },
     ]);
+    expect(projectRehydrateVocalEdits(native, [])).toEqual([
+      { clipId: 7, derivedSourceId: 0, status: 'unresolved', reason: 'invalidInput' },
+    ]);
+  });
+
+  it('keeps takeId absent for the base source on apply, and refuses an explicit 0', () => {
+    let received: NativeApply | undefined;
+    const native = {
+      applyVocalEdit(value: NativeApply): typeof applyResult {
+        received = value;
+        return value.takeId === 5 ? { ...applyResult, takeId: 5 } : applyResult;
+      },
+      getVocalEditDependencies: () => [],
+      rehydrateVocalEdits: () => [],
+    } as Parameters<typeof projectApplyVocalEdit>[0];
+
+    const base = projectApplyVocalEdit(native, request());
+    expect(received).not.toHaveProperty('takeId');
+    expect(base).not.toHaveProperty('takeId');
+
+    const take = projectApplyVocalEdit(native, request({ takeId: 5 }));
+    expect(received?.takeId).toBe(5);
+    expect(take.takeId).toBe(5);
+
+    expect(() => projectApplyVocalEdit(native, request({ takeId: 0 }))).toThrow(RangeError);
+  });
+
+  it('reads vocalEditDependencies takeId as absent for the base source and the reason as a token', () => {
+    const record = {
+      clipId: 7,
+      originalSourceId: 11,
+      derivedSourceId: 19,
+      sourceSampleRate: 48000,
+      profileId: 4,
+      sourceSampleCount: 3,
+      committedRevision: '8',
+      originalSourceSha256: SHA,
+      derivedSourceSha256: SHA,
+      originalPcmAvailable: true,
+      derivedPcmAvailable: true,
+      sidecarKey: 'libsonare.vocal-edit/clip/7/take/0',
+    };
+    const native = {
+      applyVocalEdit: () => applyResult,
+      getVocalEditDependencies: () => [
+        { ...record, takeId: 0, reason: 0 },
+        { ...record, takeId: 5, reason: 1 },
+        { ...record, takeId: 6, reason: 4 },
+      ],
+      rehydrateVocalEdits: () => [],
+    } as Parameters<typeof projectGetVocalEditDependencies>[0];
+    const result = projectGetVocalEditDependencies(native);
+
+    expect(result[0]).not.toHaveProperty('takeId');
+    expect(result[1]?.takeId).toBe(5);
+    expect(result[2]?.takeId).toBe(6);
+    expect(result.map((item) => item.reason)).toEqual(['none', 'invalidInput', 'unsupported']);
+  });
+
+  it('reads rehydrateVocalEdits takeId as absent for the base source and status and reason as tokens', () => {
+    const native = {
+      applyVocalEdit: () => applyResult,
+      getVocalEditDependencies: () => [],
+      rehydrateVocalEdits: () => [
+        { clipId: 7, takeId: 0, derivedSourceId: 19, status: 0, reason: 0 },
+        { clipId: 7, takeId: 5, derivedSourceId: 20, status: 1, reason: 0 },
+        { clipId: 8, takeId: 0, derivedSourceId: 21, status: 2, reason: 1 },
+      ],
+    } as Parameters<typeof projectRehydrateVocalEdits>[0];
+    const result = projectRehydrateVocalEdits(native, []);
+
+    expect(result[0]).not.toHaveProperty('takeId');
+    expect(result[1]?.takeId).toBe(5);
+    expect(result[2]).not.toHaveProperty('takeId');
+    expect(result.map((item) => item.status)).toEqual(['rehydrated', 'alreadyReady', 'unresolved']);
+    expect(result.map((item) => item.reason)).toEqual(['none', 'none', 'invalidInput']);
   });
 
   it('refuses sample rates outside the supported range', () => {
@@ -315,17 +404,17 @@ describe('Node Project vocal edit helpers', () => {
     } as Parameters<typeof projectRehydrateVocalEdits>[0];
     const mono = new Float32Array([0, -0, 0.25]);
     const cancel = (): boolean => true;
-    const result = projectRehydrateVocalEdits(
-      native,
-      [{ sourceId: 11, mono, sampleRate: 48000 }],
+    const result = projectRehydrateVocalEdits(native, [{ sourceId: 11, mono, sampleRate: 48000 }], {
       cancel,
-    );
+    });
 
     expect(received?.[0]?.mono).not.toBe(mono);
     expect(received?.[0]?.mono[1]).toBe(-0);
     expect(callbackSeen).toBe(cancel);
     expect(callbackSeen?.()).toBe(true);
-    expect(result).toEqual([{ clipId: 7, takeId: 0, derivedSourceId: 19, status: 0, reason: 0 }]);
+    expect(result).toEqual([
+      { clipId: 7, derivedSourceId: 19, status: 'rehydrated', reason: 'none' },
+    ]);
     expect(() =>
       projectRehydrateVocalEdits(native, [
         { sourceId: 11, mono: new Float32Array([0]), sampleRate: 48000 },
@@ -344,9 +433,9 @@ describe('Node Project vocal edit helpers', () => {
     try {
       const note = session.notes().notes[0];
       expect(note).toBeDefined();
-      draft = session.beginEdit({ expectedRevision: session.revision() });
+      draft = session.beginEdit({ expectedRevision: session.revision });
       draft.apply({
-        expectedGeneration: draft.token().generation,
+        expectedGeneration: draft.token.generation,
         operations: [
           {
             kind: 'setEdit',
@@ -363,7 +452,7 @@ describe('Node Project vocal edit helpers', () => {
           },
         ],
       });
-      draft.commit({ expectedRevision: session.revision() });
+      draft.commit({ expectedRevision: session.revision });
 
       snapshot = session.captureRenderSnapshot();
       const rendered = snapshot.render({
@@ -373,19 +462,18 @@ describe('Node Project vocal edit helpers', () => {
       expect(rendered.some((sample, index) => sample !== samples[index])).toBe(true);
 
       const sourceDigest = pcmSha256(samples);
-      project = Project.create();
+      project = new Project();
       project.setSampleRate(REAL_SAMPLE_RATE);
       const trackId = project.addTrack({ kind: 'audio', name: 'lead' });
       const clipId = project.addClip({
         trackId,
         startPpq: 0,
         lengthPpq: 4,
-        audio: samples,
-        audioChannels: 1,
-        audioSampleRate: REAL_SAMPLE_RATE,
+        channels: [samples],
+        sampleRate: REAL_SAMPLE_RATE,
       });
-      const sourceId = project.sourceByIndex(0).id;
-      project.setAudioSourceMetadata(sourceId, `sha256:${sourceDigest}`, '');
+      const sourceId = project.sources()[0].id;
+      project.setAudioSourceMetadata({ sourceId, contentHash: `sha256:${sourceDigest}` });
 
       const applied = project.applyVocalEdit({
         clipId,
@@ -397,29 +485,28 @@ describe('Node Project vocal edit helpers', () => {
         expectedSourceOffsetPpq: 0,
         renderedMono: rendered,
         renderedSampleRate: REAL_SAMPLE_RATE,
-        renderToken: session.token(),
-        sve1: session.exportState(),
+        renderToken: session.token,
+        vocalState: session.exportState(),
       });
+      expect(applied).not.toHaveProperty('takeId');
       expect(applied).toMatchObject({
         clipId,
-        takeId: 0,
         originalSourceId: sourceId,
         committedRevision: '1',
         profileId: 1,
       });
       expect(applied.derivedSourceId).not.toBe(sourceId);
 
-      expect(project.getVocalEditDependencies()).toEqual([
+      expect(project.vocalEditDependencies()).toEqual([
         expect.objectContaining({
           clipId,
-          takeId: 0,
           originalSourceId: sourceId,
           derivedSourceId: applied.derivedSourceId,
           sourceSampleRate: REAL_SAMPLE_RATE,
           sourceSampleCount: samples.length,
           originalPcmAvailable: true,
           derivedPcmAvailable: true,
-          reason: 0,
+          reason: 'none',
         }),
       ]);
       const beforeRestoreBounce = project.bounce({
@@ -428,11 +515,11 @@ describe('Node Project vocal edit helpers', () => {
       });
 
       restored = Project.fromJson(project.toJson());
-      expect(restored.getVocalEditDependencies()).toEqual([
+      expect(restored.vocalEditDependencies()).toEqual([
         expect.objectContaining({
           originalPcmAvailable: false,
           derivedPcmAvailable: false,
-          reason: 0,
+          reason: 'none',
         }),
       ]);
       expect(
@@ -440,40 +527,37 @@ describe('Node Project vocal edit helpers', () => {
       ).toEqual([
         {
           clipId,
-          takeId: 0,
           derivedSourceId: applied.derivedSourceId,
-          status: 0,
-          reason: 0,
+          status: 'rehydrated',
+          reason: 'none',
         },
       ]);
-      expect(restored.getVocalEditDependencies()).toEqual([
+      expect(restored.vocalEditDependencies()).toEqual([
         expect.objectContaining({
           originalPcmAvailable: true,
           derivedPcmAvailable: true,
-          reason: 0,
+          reason: 'none',
         }),
       ]);
       expect(restored.bounce({ totalFrames: samples.length, numChannels: 1 })).toEqual(
         beforeRestoreBounce,
       );
       expect(
-        restored.rehydrateVocalEdits(
-          [{ sourceId, mono: samples, sampleRate: REAL_SAMPLE_RATE }],
-          () => {
+        restored.rehydrateVocalEdits([{ sourceId, mono: samples, sampleRate: REAL_SAMPLE_RATE }], {
+          cancel: () => {
             restored?.destroy();
             return false;
           },
-        ),
+        }),
       ).toEqual([
         {
           clipId,
-          takeId: 0,
           derivedSourceId: applied.derivedSourceId,
-          status: 1,
-          reason: 0,
+          status: 'alreadyReady',
+          reason: 'none',
         },
       ]);
-      expect(() => restored?.getVocalEditDependencies()).toThrow(/disposed/);
+      expect(() => restored?.vocalEditDependencies()).toThrow(/disposed/);
 
       // Any truthy cancel return cancels, not only boolean true.
       const cancelled = Project.fromJson(project.toJson());
@@ -481,7 +565,7 @@ describe('Node Project vocal edit helpers', () => {
         expect(() =>
           cancelled.rehydrateVocalEdits(
             [{ sourceId, mono: samples, sampleRate: REAL_SAMPLE_RATE }],
-            (() => 1) as unknown as () => boolean,
+            { cancel: (() => 1) as unknown as () => boolean },
           ),
         ).toThrow(/Cancelled/);
       } finally {

@@ -9,22 +9,16 @@ import type { MasteringInsertParamUnit } from './types_capabilities.js';
 /** Names accepted by the minimal built-in oscillator synth. */
 export const BUILTIN_SYNTH_WAVEFORMS = ['sine', 'saw', 'sawtooth', 'square', 'triangle'] as const;
 
-/** Oscillator waveform for the {@link BuiltinInstrumentConfig built-in synth}. */
+/** Oscillator waveform for the {@link BuiltinSynthConfig built-in synth}. */
 export type SynthWaveform = (typeof BUILTIN_SYNTH_WAVEFORMS)[number];
 
 /**
  * Patch for the built-in minimal polyphonic oscillator synth used by
- * {@link Project.bounceWithBuiltinInstrument} /
  * {@link Project.bounceWithBuiltinInstruments}. Every numeric field uses
  * "0 / omit => sensible default", so an empty object is the default sine patch
  * and callers override only what they need.
  */
-export interface BuiltinInstrumentConfig {
-  /**
-   * MIDI destination id this patch renders (the value set by
-   * {@link Project.setTrackMidiDestination}). Defaults to `0`.
-   */
-  destinationId?: number;
+export interface BuiltinSynthConfig {
   /**
    * Oscillator waveform: a {@link SynthWaveform} name or numeric enum (0=sine).
    * The one config field with no nearest sensible value — a name or an ordinal
@@ -71,8 +65,6 @@ export interface ExternalInstrumentEvent {
  * thread and must not return a Promise.
  */
 export interface ExternalInstrument {
-  /** MIDI destination id this instrument renders. Defaults to `0`. */
-  destinationId?: number;
   /**
    * Called once per render pass, before the first block, with the sample rate,
    * the largest block `render` will receive, and the number of arrays `render`
@@ -96,25 +88,12 @@ export interface ExternalInstrument {
 }
 
 /**
- * Cross-binding alias of {@link BuiltinInstrumentConfig}. The same built-in-synth
- * patch concept is named `BuiltinSynthConfig` in the Python binding; this alias
- * lets portable code use that shared name on the Node surface too.
- */
-export type BuiltinSynthConfig = BuiltinInstrumentConfig;
-
-/**
  * Patch for the GS-compatible SoundFont player used by
- * {@link Project.bounceWithSf2Instrument} /
  * {@link Project.bounceWithSf2Instruments} and
  * {@link RealtimeEngine.setSf2Instrument}. Every field uses
  * "0 / omit => sensible default".
  */
 export interface Sf2InstrumentConfig {
-  /**
-   * MIDI destination id this player renders (the value set by
-   * {@link Project.setTrackMidiDestination}). Defaults to `0`.
-   */
-  destinationId?: number;
   /** Master output gain (linear); 0 / omit => 0.5. */
   gain?: number;
   /** Max simultaneous voices; 0 / omit => 48, clamped to [1, 64]. */
@@ -556,8 +535,7 @@ export type MpeDimension = (typeof MPE_DIMENSIONS)[number];
 export type NoteTracking = (typeof NOTE_TRACKINGS)[number];
 
 /**
- * Versioned NativeSynth patch for {@link Project.bounceWithSynthInstrument} /
- * {@link Project.bounceWithSynthInstruments} and
+ * Versioned NativeSynth patch for {@link Project.bounceWithSynthInstruments} and
  * {@link RealtimeEngine.setSynthInstrument}.
  *
  * The patch starts from a BASE — the named `preset` (see
@@ -587,14 +565,8 @@ export type NoteTracking = (typeof NOTE_TRACKINGS)[number];
  */
 export interface SynthPatch {
   /**
-   * Optional binding convenience for JS realtime/offline helpers. It is not
-   * part of the NativeSynth patch itself; Python uses explicit
-   * `(destination_id, patch)` bindings instead. Defaults to `0`.
-   */
-  destinationId?: number;
-  /**
    * Follow incoming GM bank/program changes and route channel 10 through the
-   * GM drum map, for offline project bounces ({@link Project.bounceWithSynthInstrument})
+   * GM drum map, for offline project bounces ({@link Project.bounceWithSynthInstruments})
    * and for {@link RealtimeEngine.setSynthInstrument} alike. Defaults to
    * `false`, preserving the fixed-patch behavior. This is a binding option,
    * not a NativeSynth patch field.
@@ -822,7 +794,7 @@ export interface PartRigKey {
 
 /** Request for {@link Project.setPartRig} and {@link RealtimeEngine.setPartRig}. */
 export interface PartRigRequest extends PartRigKey {
-  mode: PartRigMode | number;
+  mode: PartRigMode;
   /** 1-8 inserts; required for `'chain'` and refused for the other modes. */
   inserts?: PartRigInsert[];
 }

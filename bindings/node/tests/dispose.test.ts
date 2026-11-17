@@ -82,7 +82,7 @@ describe('Symbol.dispose / using', () => {
 
   it('Project supports `using`', () => {
     expect(() => {
-      using project = Project.create();
+      using project = new Project();
       expect(project).toBeDefined();
     }).not.toThrow();
   });

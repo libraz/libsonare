@@ -1203,7 +1203,7 @@ const TRANSCRIBE_REQUEST_KEYS = keySet(
   'channel',
   'validate',
 );
-const VOCAL_RESTORE_REQUEST_KEYS = keySet('samples', 'sampleRate', 'state', 'limits');
+const VOCAL_RESTORE_REQUEST_KEYS = keySet('samples', 'sampleRate', 'state', 'limits', 'validate');
 const MASTER_AUDIO_REQUEST_KEYS = keySet(
   'samples',
   'sampleRate',
@@ -1280,6 +1280,7 @@ const VOCAL_CREATE_REQUEST_KEYS = keySet(
   'referenceHz',
   'limits',
   'analysis',
+  'validate',
 );
 
 const PLAYBACK_RENDERER_CONFIG_KEYS = keySet(
@@ -1362,8 +1363,8 @@ const SET_METRONOME_REQUEST_KEYS = keySet(
 );
 const SET_TRACK_SOLO_MUTE_REQUEST_KEYS = keySet('solo', 'mute');
 const MIDI_BANK_REQUEST_KEYS = keySet('msb', 'lsb');
-const MIXER_CONFIG_REQUEST_KEYS = keySet('scene', 'sampleRate', 'blockSize');
-const MIXER_JSON_OPTIONS_REQUEST_KEYS = keySet('sampleRate', 'blockSize');
+const MIXER_CONFIG_REQUEST_KEYS = keySet('scene', 'sampleRate', 'maxBlockSize');
+const MIXER_JSON_OPTIONS_REQUEST_KEYS = keySet('sampleRate', 'maxBlockSize');
 const SET_POLARITY_INVERT_REQUEST_KEYS = keySet('left', 'right');
 const MIXER_ADD_SEND_REQUEST_KEYS = keySet('id', 'destinationBusId', 'sendDb', 'timing');
 const SCHEDULE_INSERT_AUTOMATION_REQUEST_KEYS = keySet('paramId', 'samplePos', 'value', 'curve');
@@ -1406,9 +1407,8 @@ const APPLY_PROJECT_VOCAL_EDIT_REQUEST_KEYS = keySet(
   'expectedSourceOffsetPpq',
   'renderedMono',
   'renderedSampleRate',
-  'renderedStartSample',
   'renderToken',
-  'sve1',
+  'vocalState',
 );
 const VOCAL_APPLY_REQUEST_KEYS = keySet('expectedGeneration', 'operations');
 const VOCAL_RENDER_REQUEST_KEYS = keySet('range', 'requestId', 'signal');
@@ -1428,8 +1428,70 @@ const MASTERING_REPAIR_DEREVERB_CONFIG_FOR_ROOM_REQUEST_KEYS = keySet(
   'wpeStrength',
 );
 
+const PROJECT_BOUNCE_OPTIONS_REQUEST_KEYS = keySet(
+  'totalFrames',
+  'blockSize',
+  'numChannels',
+  'instrumentLatencySamples',
+);
+const PROJECT_INSTRUMENT_BINDING_REQUEST_KEYS = keySet('destinationId', 'instrument');
+const PROJECT_TEMPO_OPTION_KEYS = [
+  'adaptiveTempo',
+  'tempoUpdateIntervalBeats',
+  'rampThreshold',
+  'includeOctaveCandidates',
+] as const;
+const ANALYZE_TEMPO_REQUEST_KEYS = keySet('samples', 'sampleRate', ...PROJECT_TEMPO_OPTION_KEYS);
+const AUTO_TEMPO_REQUEST_KEYS = keySet(
+  'samples',
+  'sampleRate',
+  'candidateIndex',
+  'applyTimeSignatures',
+  ...PROJECT_TEMPO_OPTION_KEYS,
+);
+const PROJECT_PART_RIG_KEY_REQUEST_KEYS = keySet('destinationId', 'part');
+
 export const REQUEST_KEYS = {
   setPartRig: SET_PART_RIG_REQUEST_KEYS,
+  partRig: PROJECT_PART_RIG_KEY_REQUEST_KEYS,
+  clearPartRig: PROJECT_PART_RIG_KEY_REQUEST_KEYS,
+  bounce: PROJECT_BOUNCE_OPTIONS_REQUEST_KEYS,
+  bounceWithBuiltinInstruments: PROJECT_BOUNCE_OPTIONS_REQUEST_KEYS,
+  bounceWithSynthInstruments: PROJECT_BOUNCE_OPTIONS_REQUEST_KEYS,
+  bounceWithSf2Instruments: PROJECT_BOUNCE_OPTIONS_REQUEST_KEYS,
+  bounceWithInstruments: PROJECT_BOUNCE_OPTIONS_REQUEST_KEYS,
+  ProjectInstrumentBinding: PROJECT_INSTRUMENT_BINDING_REQUEST_KEYS,
+  addClip: keySet(
+    'trackId',
+    'isMidi',
+    'startPpq',
+    'lengthPpq',
+    'sourceOffsetPpq',
+    'gain',
+    'channels',
+    'sampleRate',
+    'sourceUri',
+  ),
+  importExternalStems: keySet('sampleRate', 'stems'),
+  ExternalSeparatedStem: keySet('name', 'role', 'layout', 'channels', 'startFrame'),
+  setMarker: keySet('id', 'ppq', 'name', 'kind', 'keyFifths', 'keyMinor'),
+  moveClip: keySet('trackId'),
+  setClipTakes: keySet('activeTakeId'),
+  setClipFade: keySet('fadeInPpq', 'fadeInCurve', 'fadeOutPpq', 'fadeOutCurve'),
+  setClipLoop: keySet('loopMode', 'loopLengthPpq', 'loopCrossfadePpq'),
+  setSourceAudio: keySet('sourceId', 'channels', 'sampleRate'),
+  setAudioSourceMetadata: keySet('sourceId', 'contentHash', 'externalStemRole'),
+  setProgramOnChannel: keySet('group', 'channel', 'program', 'bank'),
+  setAssistSidecar: keySet(
+    'moduleId',
+    'schemaVersion',
+    'targetTrackId',
+    'regionStartPpq',
+    'regionEndPpq',
+    'payload',
+  ),
+  analyzeTempo: ANALYZE_TEMPO_REQUEST_KEYS,
+  autoTempo: AUTO_TEMPO_REQUEST_KEYS,
   renderOffline: RENDER_OFFLINE_REQUEST_KEYS,
   RealtimeEngine: ENGINE_CONFIG_REQUEST_KEYS,
   prepare: ENGINE_CONFIG_REQUEST_KEYS,
@@ -1900,6 +1962,7 @@ export const REQUEST_KEYS = {
 } as const;
 
 export const NESTED_REQUEST_KEYS = {
+  setProgramOnChannel: { bank: keySet('msb', 'lsb') },
   configureCapture: { inputMonitor: CAPTURE_INPUT_MONITOR_KEYS, punch: CAPTURE_PUNCH_KEYS },
   renderPlayback: { config: PLAYBACK_RENDERER_CONFIG_KEYS },
   restoreVocalEditSession: { limits: VOCAL_SESSION_LIMITS_KEYS },

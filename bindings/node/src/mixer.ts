@@ -115,7 +115,7 @@ export interface MixerConfig {
   /** Sample rate in Hz, integer in `[8000, 384000]`. Required; there is no default rate. */
   sampleRate: number;
   /** Maximum block size per {@link Mixer.processStereo} call, in samples. Default `512`; `0` is refused. */
-  blockSize?: number;
+  maxBlockSize?: number;
 }
 
 /** Options of {@link Mixer.fromJson}; the same rate and block size as {@link MixerConfig}. */
@@ -123,7 +123,7 @@ export interface MixerJsonOptions {
   /** Sample rate in Hz, integer in `[8000, 384000]`. Required. */
   sampleRate: number;
   /** Maximum block size per {@link Mixer.processStereo} call, in samples. Default `512`; `0` is refused. */
-  blockSize?: number;
+  maxBlockSize?: number;
 }
 
 /** Polarity of a strip's channels for {@link Mixer.setPolarityInvert}. */
@@ -244,16 +244,16 @@ function tokenArg(
 
 const curveToken = (token: string): number => automationCurveValue(token as AutomationCurve);
 
-function blockSizeOf(fnName: string, value: unknown): number {
+function maxBlockSizeOf(fnName: string, value: unknown): number {
   if (isAbsent(value)) {
     return DEFAULT_BLOCK_SIZE;
   }
-  assertIntegerValue(fnName, value, 'blockSize');
+  assertIntegerValue(fnName, value, 'maxBlockSize');
   if (value === 0) {
-    throw new RangeError(`${fnName}: blockSize must not be 0 (omit it for the default)`);
+    throw new RangeError(`${fnName}: maxBlockSize must not be 0 (omit it for the default)`);
   }
   if (value < 0) {
-    throw new RangeError(`${fnName}: blockSize must be a positive integer`);
+    throw new RangeError(`${fnName}: maxBlockSize must be a positive integer`);
   }
   return value;
 }
@@ -282,14 +282,14 @@ export class Mixer {
    *
    * @param config - See {@link MixerConfig}. An absent `scene` gives an empty mixer.
    * @throws TypeError for a wrong-typed field or an unknown key; RangeError for
-   *   a sample rate outside `[8000, 384000]` or a `blockSize` of `0` or below.
+   *   a sample rate outside `[8000, 384000]` or a `maxBlockSize` of `0` or below.
    */
   constructor(config: MixerConfig) {
     const json = adoptedSceneJson;
     adoptedSceneJson = undefined;
     const bag = requestObject('Mixer', config, 'config', true);
     assertSampleRate('Mixer', bag.sampleRate);
-    const blockSize = blockSizeOf('Mixer', bag.blockSize);
+    const maxBlockSize = maxBlockSizeOf('Mixer', bag.maxBlockSize);
     let sceneJson = json;
     if (sceneJson === undefined) {
       if (!isAbsent(bag.scene) && !isObject(bag.scene)) {
@@ -297,7 +297,7 @@ export class Mixer {
       }
       sceneJson = JSON.stringify(bag.scene ?? { strips: [], buses: [] });
     }
-    this.native = new addon.Mixer(sceneJson, bag.sampleRate as number, blockSize);
+    this.native = new addon.Mixer(sceneJson, bag.sampleRate as number, maxBlockSize);
   }
 
   /**
@@ -306,14 +306,17 @@ export class Mixer {
    * @param json - Scene JSON (strips, buses, sends, connections, inserts)
    * @param options - Sample rate (required) and block size, see {@link MixerJsonOptions}
    * @throws TypeError for a non-string `json`, a wrong-typed field or an unknown key;
-   *   RangeError for a sample rate outside `[8000, 384000]` or a `blockSize` of `0` or below.
+   *   RangeError for a sample rate outside `[8000, 384000]` or a `maxBlockSize` of `0` or below.
    */
   static fromJson(json: string, options: MixerJsonOptions): Mixer {
     requiredString('Mixer.fromJson', json, 'json');
     const bag = requestObject('Mixer.fromJson', options, 'options', true);
     adoptedSceneJson = json;
     try {
-      return new Mixer({ sampleRate: bag.sampleRate, blockSize: bag.blockSize } as MixerConfig);
+      return new Mixer({
+        sampleRate: bag.sampleRate,
+        maxBlockSize: bag.maxBlockSize,
+      } as MixerConfig);
     } finally {
       adoptedSceneJson = undefined;
     }

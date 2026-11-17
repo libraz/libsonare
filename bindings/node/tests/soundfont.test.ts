@@ -13,7 +13,7 @@ const fixturePath = join(
 const sf2Bytes = new Uint8Array(readFileSync(fixturePath));
 
 function buildMidiOnlyProject(): Project {
-  const project = Project.create();
+  const project = new Project();
   project.setSampleRate(48000);
   const { trackId, clipId } = project.addMidiClip(0, 4);
   project.setTrackMidiDestination(trackId, 0);
@@ -24,7 +24,10 @@ function buildMidiOnlyProject(): Project {
   return project;
 }
 
-function peak(audio: Float32Array): number {
+function peak(audio: Float32Array | Float32Array[]): number {
+  if (Array.isArray(audio)) {
+    return Math.max(0, ...audio.map(peak));
+  }
   let p = 0;
   for (let i = 0; i < audio.length; i++) {
     const a = Math.abs(audio[i]);
@@ -37,7 +40,7 @@ function peak(audio: Float32Array): number {
 
 describe('Project SoundFont (SF2) binding', () => {
   it('loads, counts presets and clears a SoundFont', () => {
-    const project = Project.create();
+    const project = new Project();
     expect(project.soundFontPresetCount()).toBe(0);
     project.loadSoundFont(sf2Bytes);
     expect(project.soundFontPresetCount()).toBe(3);
@@ -47,7 +50,7 @@ describe('Project SoundFont (SF2) binding', () => {
   });
 
   it('rejects malformed SoundFont bytes and keeps the previous state', () => {
-    const project = Project.create();
+    const project = new Project();
     project.loadSoundFont(sf2Bytes);
     expect(() => project.loadSoundFont(new Uint8Array([1, 2, 3, 4]))).toThrow();
     expect(project.soundFontPresetCount()).toBe(3);
@@ -71,7 +74,7 @@ describe('Project SoundFont (SF2) binding', () => {
     // Program 30 is one of six the bank binds a rig to, program 0 is not, so
     // the flag has to move the first render and leave the second untouched.
     const render = (program: number, clearBankRig: boolean) => {
-      const project = Project.create();
+      const project = new Project();
       project.setSampleRate(48000);
       const { clipId, trackId } = project.addMidiClip(0, 2);
       project.setTrackMidiDestination(trackId, 0);
@@ -80,12 +83,12 @@ describe('Project SoundFont (SF2) binding', () => {
         Project.midiNoteOn(0.05, 0, 0, 52, 110),
         Project.midiNoteOff(1, 0, 0, 52, 0),
       ]);
-      const out = project.bounceWithSf2Instrument(
-        { destinationId: 0, gain: 1, clearBankRig },
-        { totalFrames: 48000, numChannels: 2, sampleRate: 48000 },
+      const out = project.bounceWithSf2Instruments(
+        { destinationId: 0, instrument: { gain: 1, clearBankRig } },
+        { totalFrames: 48000, numChannels: 2 },
       );
       project.destroy();
-      return out;
+      return out.channels;
     };
     const rigged = render(30, false);
     const direct = render(30, true);
@@ -98,43 +101,38 @@ describe('Project SoundFont (SF2) binding', () => {
     const project = buildMidiOnlyProject();
     // Without a loaded SoundFont the bounce still sounds: the built-in
     // synthesizer GM fallback is the data-free floor.
-    const fallback = project.bounceWithSf2Instrument(
-      {},
-      { totalFrames: 4096, numChannels: 2, sampleRate: 48000 },
+    const fallback = project.bounceWithSf2Instruments(
+      { instrument: {} },
+      { totalFrames: 4096, numChannels: 2 },
     );
-    expect(peak(fallback)).toBeGreaterThan(0.01);
+    expect(peak(fallback.channels)).toBeGreaterThan(0.01);
 
     project.loadSoundFont(sf2Bytes);
-    const audio = project.bounceWithSf2Instrument(
-      { destinationId: 0, gain: 1 },
-      { totalFrames: 4096, numChannels: 2, sampleRate: 48000 },
-    );
-    expect(audio.length).toBe(4096 * 2);
+    const bound = { destinationId: 0, instrument: { gain: 1 } };
+    const rendered = project.bounceWithSf2Instruments(bound, { totalFrames: 4096, numChannels: 2 });
+    const audio = rendered.channels;
+    expect(audio.map((plane) => plane.length)).toEqual([4096, 4096]);
     expect(peak(audio)).toBeGreaterThan(0.01);
 
     // Deterministic: a second bounce is bit-identical.
-    const again = project.bounceWithSf2Instrument(
-      { destinationId: 0, gain: 1 },
-      { totalFrames: 4096, numChannels: 2, sampleRate: 48000 },
-    );
-    expect(again).toEqual(audio);
+    const again = project.bounceWithSf2Instruments(bound, { totalFrames: 4096, numChannels: 2 });
+    expect(again.channels).toEqual(audio);
 
     // Program 0 is a dedicated piano model. The opt-in must bypass the
     // loaded Piano 1 preset, while the default above remains SF2-first.
-    const modeled = project.bounceWithSf2Instrument(
-      { destinationId: 0, gain: 1, preferModelForModeledFamilies: true },
-      { totalFrames: 4096, numChannels: 2, sampleRate: 48000 },
+    const modeled = project.bounceWithSf2Instruments(
+      { destinationId: 0, instrument: { gain: 1, preferModelForModeledFamilies: true } },
+      { totalFrames: 4096, numChannels: 2 },
     );
-    expect(peak(modeled)).toBeGreaterThan(0.01);
-    expect(modeled).not.toEqual(audio);
+    expect(peak(modeled.channels)).toBeGreaterThan(0.01);
+    expect(modeled.channels).not.toEqual(audio);
 
     // An explicitly empty bindings array renders silence.
     const silent = project.bounceWithSf2Instruments([], {
       totalFrames: 2048,
       numChannels: 2,
-      sampleRate: 48000,
     });
-    expect(peak(silent)).toBe(0);
+    expect(peak(silent.channels)).toBe(0);
     project.destroy();
   });
 });
@@ -213,11 +211,11 @@ describe('SF2 instrument gsEfxRealization', () => {
     }
     engine.setSf2Instrument(7, { gsEfxRealization: 'classic' });
     engine.destroy();
-    const project = Project.create();
+    const project = new Project();
     expect(() =>
-      project.bounceWithSf2Instrument(
-        { gsEfxRealization: 'vintage' as never },
-        { totalFrames: 128, numChannels: 2, sampleRate: 48000 },
+      project.bounceWithSf2Instruments(
+        { instrument: { gsEfxRealization: 'vintage' as never } },
+        { totalFrames: 128, numChannels: 2 },
       ),
     ).toThrow(/gsEfxRealization/);
     project.destroy();

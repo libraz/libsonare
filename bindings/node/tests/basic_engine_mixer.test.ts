@@ -147,7 +147,7 @@ describe('Mixer (scene-based routing)', () => {
   it('routes a preset scene and schedules insert automation', () => {
     const mixer = Mixer.fromJson(mixingScenePresetJson('vocalReverbSend'), {
       sampleRate: 48000,
-      blockSize: 512,
+      maxBlockSize: 512,
     });
     try {
       mixer.compile();
@@ -192,7 +192,7 @@ describe('Mixer (scene-based routing)', () => {
   it('reports a non-zero discard count once a strip processes a near-FLT_MAX input', () => {
     const mixer = Mixer.fromJson(mixingScenePresetJson('vocalReverbSend'), {
       sampleRate: 48000,
-      blockSize: 512,
+      maxBlockSize: 512,
     });
     try {
       mixer.compile();
@@ -223,7 +223,7 @@ describe('Mixer (scene-based routing)', () => {
   });
 
   it('reports a rising bus discard count once a bus insert overflows', () => {
-    const mixer = Mixer.fromJson(sceneWithBusEq(200.0), { sampleRate: 48000, blockSize: 64 });
+    const mixer = Mixer.fromJson(sceneWithBusEq(200.0), { sampleRate: 48000, maxBlockSize: 64 });
     try {
       const block = new Float32Array(64);
       for (let i = 0; i < block.length; i += 1) {
@@ -245,7 +245,7 @@ describe('Mixer (scene-based routing)', () => {
   it('rejects an uncompiled or unknown bus', () => {
     const mixer = Mixer.fromJson(mixingScenePresetJson('vocalReverbSend'), {
       sampleRate: 48000,
-      blockSize: 512,
+      maxBlockSize: 512,
     });
     try {
       mixer.compile();

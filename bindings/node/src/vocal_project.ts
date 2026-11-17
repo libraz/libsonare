@@ -1,12 +1,15 @@
-import type { VocalStateToken, VocalUint64 } from './types_vocal_edit.js';
+import type { VocalReason, VocalStateToken } from './types_vocal_edit.js';
 import type {
   ProjectVocalEditApplyRequest,
   ProjectVocalEditApplyResult,
   ProjectVocalEditDependency,
   ProjectVocalOriginalSource,
   ProjectVocalRehydrateItem,
+  ProjectVocalRehydrateOptions,
   ProjectVocalRehydrateStatus,
 } from './types_vocal_project.js';
+import { requestObject } from './validation.js';
+import { VOCAL_REASONS } from './vocal_edit.js';
 
 const UINT32_MAX = 0xffffffff;
 const MAX_PROJECT_ID = UINT32_MAX - 1;
@@ -14,8 +17,19 @@ const UINT64_MAX = 0xffffffffffffffffn;
 const MIN_SAMPLE_RATE = 8000;
 const MAX_SAMPLE_RATE = 384000;
 
+const REHYDRATE_STATUSES: readonly ProjectVocalRehydrateStatus[] = [
+  'rehydrated',
+  'alreadyReady',
+  'unresolved',
+];
+
+/** The apply request as the addon reads it. */
+interface NativeApplyRequest extends Omit<ProjectVocalEditApplyRequest, 'vocalState'> {
+  sve1: Uint8Array;
+}
+
 interface NativeProjectVocal {
-  applyVocalEdit(request: ProjectVocalEditApplyRequest): unknown;
+  applyVocalEdit(request: NativeApplyRequest): unknown;
   getVocalEditDependencies(): unknown;
   rehydrateVocalEdits(
     originals: readonly ProjectVocalOriginalSource[],
@@ -64,6 +78,12 @@ function safeInteger(
   return value;
 }
 
+/** The native base-source id 0 becomes an absent `takeId`. */
+function optionalTakeId(value: unknown, field: string): { takeId?: number } {
+  const id = projectId(value, field, true);
+  return id === 0 ? {} : { takeId: id };
+}
+
 function uint32(value: unknown, field: string): number {
   return safeInteger(value, field, 0, UINT32_MAX);
 }
@@ -92,7 +112,7 @@ function projectId(value: unknown, field: string, allowZero = false): number {
   return safeInteger(value, field, allowZero ? 0 : 1, MAX_PROJECT_ID);
 }
 
-function uint64String(value: unknown, field: string): VocalUint64 {
+function uint64String(value: unknown, field: string): string {
   if (typeof value !== 'string' || !/^(0|[1-9][0-9]*)$/.test(value)) {
     throw new TypeError(`${field} must be a decimal uint64 string`);
   }
@@ -146,12 +166,11 @@ function tokenCopy(value: unknown, field: string): VocalStateToken {
   };
 }
 
-function normalizeApplyRequest(
-  request: ProjectVocalEditApplyRequest,
-): ProjectVocalEditApplyRequest {
+function normalizeApplyRequest(request: ProjectVocalEditApplyRequest): NativeApplyRequest {
   const input = objectValue(request, 'request');
+  requestObject('applyProjectVocalEdit', request, 'request', true);
   const renderedMono = float32Copy(input.renderedMono, 'request.renderedMono');
-  const sve1 = uint8Copy(input.sve1, 'request.sve1');
+  const sve1 = uint8Copy(input.vocalState, 'request.vocalState');
   const expectedSourceSampleCount = requestSafeInteger(
     input.expectedSourceSampleCount,
     'request.expectedSourceSampleCount',
@@ -177,20 +196,15 @@ function normalizeApplyRequest(
   if (renderedSampleRate !== expectedSourceSampleRate) {
     throw new RangeError('request.renderedSampleRate must equal request.expectedSourceSampleRate');
   }
-  const renderedStartSample = requestSafeInteger(
-    input.renderedStartSample ?? 0,
-    'request.renderedStartSample',
-  );
-  if (renderedStartSample !== 0) {
-    throw new RangeError('request.renderedStartSample must be zero for the v1 Project vocal API');
-  }
   const token = tokenCopy(input.renderToken, 'request.renderToken');
   if (token.draftId !== '0' || token.generation !== '0') {
     throw new RangeError('request.renderToken must be a committed session token');
   }
   return {
     clipId: requestProjectId(input.clipId, 'request.clipId'),
-    takeId: requestProjectId(input.takeId ?? 0, 'request.takeId', true),
+    ...(input.takeId === undefined
+      ? {}
+      : { takeId: requestProjectId(input.takeId, 'request.takeId') }),
     expectedSourceId: requestProjectId(input.expectedSourceId, 'request.expectedSourceId'),
     expectedSourceSampleRate,
     expectedSourceSampleCount,
@@ -205,7 +219,6 @@ function normalizeApplyRequest(
     ),
     renderedMono,
     renderedSampleRate,
-    renderedStartSample,
     renderToken: token,
     sve1,
   };
@@ -215,7 +228,7 @@ function applyResult(value: unknown): ProjectVocalEditApplyResult {
   const result = objectValue(value, 'native applyVocalEdit result');
   return {
     clipId: projectId(result.clipId, 'result.clipId'),
-    takeId: projectId(result.takeId, 'result.takeId', true),
+    ...optionalTakeId(result.takeId, 'result.takeId'),
     originalSourceId: projectId(result.originalSourceId, 'result.originalSourceId'),
     derivedSourceId: projectId(result.derivedSourceId, 'result.derivedSourceId'),
     committedRevision: uint64String(result.committedRevision, 'result.committedRevision'),
@@ -232,11 +245,16 @@ function stringValue(value: unknown, field: string): string {
   return value;
 }
 
+function reasonName(value: unknown, field: string): VocalReason {
+  const index = safeInteger(value, field, 0, VOCAL_REASONS.length - 1);
+  return VOCAL_REASONS[index];
+}
+
 function dependency(value: unknown, index: number): ProjectVocalEditDependency {
   const result = objectValue(value, `native dependency[${index}]`);
   return {
     clipId: projectId(result.clipId, `dependency[${index}].clipId`),
-    takeId: projectId(result.takeId, `dependency[${index}].takeId`, true),
+    ...optionalTakeId(result.takeId, `dependency[${index}].takeId`),
     originalSourceId: projectId(
       result.originalSourceId,
       `dependency[${index}].originalSourceId`,
@@ -273,7 +291,7 @@ function dependency(value: unknown, index: number): ProjectVocalEditDependency {
       result.derivedPcmAvailable,
       `dependency[${index}].derivedPcmAvailable`,
     ),
-    reason: safeInteger(result.reason, `dependency[${index}].reason`, 0, UINT32_MAX),
+    reason: reasonName(result.reason, `dependency[${index}].reason`),
     sidecarKey: stringValue(result.sidecarKey, `dependency[${index}].sidecarKey`),
   };
 }
@@ -306,10 +324,10 @@ function rehydrateItem(value: unknown, index: number): ProjectVocalRehydrateItem
   const status = safeInteger(item.status, `rehydrate[${index}].status`, 0, 2);
   return {
     clipId: projectId(item.clipId, `rehydrate[${index}].clipId`),
-    takeId: projectId(item.takeId, `rehydrate[${index}].takeId`, true),
+    ...optionalTakeId(item.takeId, `rehydrate[${index}].takeId`),
     derivedSourceId: projectId(item.derivedSourceId, `rehydrate[${index}].derivedSourceId`, true),
-    status: status as ProjectVocalRehydrateStatus,
-    reason: safeInteger(item.reason, `rehydrate[${index}].reason`, 0, UINT32_MAX),
+    status: REHYDRATE_STATUSES[status],
+    reason: reasonName(item.reason, `rehydrate[${index}].reason`),
   };
 }
 
@@ -333,15 +351,22 @@ export function projectGetVocalEditDependencies(
   return result;
 }
 
-/** Rehydrate unresolved vocal PCM; any truthy return from `cancel` cancels the call. */
+/** Rehydrate unresolved vocal PCM; any truthy return from `options.cancel` cancels the call. */
 export function projectRehydrateVocalEdits(
   native: NativeProjectVocal,
   originals: readonly ProjectVocalOriginalSource[],
-  cancel?: () => boolean,
+  options: ProjectVocalRehydrateOptions = {},
 ): ProjectVocalRehydrateItem[] {
   if (!Array.isArray(originals)) {
     throw new TypeError('originals must be an array');
   }
+  const opts = objectValue(options, 'options');
+  for (const key of Object.keys(opts)) {
+    if (key !== 'cancel') {
+      throw new TypeError(`rehydrateVocalEdits: unknown option "${key}"`);
+    }
+  }
+  const cancel = opts.cancel as (() => boolean) | undefined;
   if (cancel !== undefined && typeof cancel !== 'function') {
     throw new TypeError('cancel must be a function');
   }

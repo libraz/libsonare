@@ -1,3 +1,4 @@
+import type { VocalErrorDetail } from './types_vocal_edit.js';
 /**
  * Numeric error codes carried by a {@link SonareError}. Mirrors the C ABI
  * `SonareError` enum (and the Python `SonareError.code`), so the same failure
@@ -58,6 +59,8 @@ export class SonareError extends Error {
   readonly code: ErrorCode;
   /** Canonical name of `code`, e.g. `'InvalidParameter'`. */
   readonly codeName: ErrorCodeName;
+  /** Structured detail of a vocal-edit failure: the reason token and the field it concerns. */
+  declare readonly detail?: VocalErrorDetail;
 
   /**
    * @param code Numeric code; a value outside {@link ErrorCode} reads back as `codeName` `'Unknown'`.

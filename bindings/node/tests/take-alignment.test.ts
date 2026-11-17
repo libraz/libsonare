@@ -45,7 +45,7 @@ describe('alignTakeToReference', () => {
 
     // The assertion the whole reduction is for: a repeated coordinate is refused
     // as a warp map, so anchors that install prove they were reduced.
-    const project = Project.create();
+    const project = new Project();
     try {
       project.setWarpMap({ id: 101, name: 'aligned take', anchors });
     } finally {

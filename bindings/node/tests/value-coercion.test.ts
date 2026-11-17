@@ -11,10 +11,7 @@ import {
   panLawValue,
   projectAutomationCurveValue,
   projectAutomationPointValue,
-  projectLoopModeValue,
   resolveEnumOrdinal,
-  trackKindValue,
-  warpModeValue,
 } from '../src/value_coercion.js';
 
 interface PanLawCorpus {
@@ -53,12 +50,6 @@ describe('enum ordinal coercion', () => {
   });
 
   it('does not pass unknown values through to the C ABI', () => {
-    // biome-ignore lint/suspicious/noExplicitAny: exercise direct JavaScript callers.
-    expect(() => trackKindValue(3 as any)).toThrow(RangeError);
-    // biome-ignore lint/suspicious/noExplicitAny: exercise direct JavaScript callers.
-    expect(() => warpModeValue(-1 as any)).toThrow(RangeError);
-    // biome-ignore lint/suspicious/noExplicitAny: exercise direct JavaScript callers.
-    expect(() => projectLoopModeValue(8 as any)).toThrow(RangeError);
     // biome-ignore lint/suspicious/noExplicitAny: exercise direct JavaScript callers.
     expect(() => meterTapValue(2 as any)).toThrow(RangeError);
   });

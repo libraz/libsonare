@@ -3,7 +3,7 @@ import { Project } from '../src/index.js';
 
 describe('Project snapToGrid', () => {
   const withProject = (body: (project: Project) => void): void => {
-    const project = Project.create();
+    const project = new Project();
     try {
       project.setSampleRate(48000);
       body(project);
@@ -62,7 +62,7 @@ describe('Project MIR integer arguments are range-checked', () => {
   ] as const;
 
   const withProject = (body: (project: Project) => void): void => {
-    const project = Project.create();
+    const project = new Project();
     try {
       project.setSampleRate(48000);
       body(project);
@@ -83,11 +83,18 @@ describe('Project MIR integer arguments are range-checked', () => {
     ['setProgram bank', (project, clipId, value) => project.setProgram(clipId, 24, value)],
     [
       'setProgramOnChannel program',
-      (project, clipId, value) => project.setProgramOnChannel(clipId, 0, 0, value),
+      (project, clipId, value) =>
+        project.setProgramOnChannel(clipId, { group: 0, channel: 0, program: value }),
     ],
     [
       'setProgramOnChannel bank',
-      (project, clipId, value) => project.setProgramOnChannel(clipId, 0, 0, 24, value),
+      (project, clipId, value) =>
+        project.setProgramOnChannel(clipId, {
+          group: 0,
+          channel: 0,
+          program: 24,
+          bank: { msb: value, lsb: 0 },
+        }),
     ],
     ['autoTempo sampleRate', (project, _clipId, value) => project.autoTempo(silence(), value)],
     [
@@ -100,9 +107,8 @@ describe('Project MIR integer arguments are range-checked', () => {
   const SIZE_SITES: readonly Site[] = [
     [
       'autoTempo candidateIndex',
-      (project, _clipId, value) => project.autoTempo(silence(), 22050, value),
+      (project, _clipId, value) => project.autoTempo(silence(), 22050, { candidateIndex: value }),
     ],
-    ['getAssistSidecar index', (project, _clipId, value) => project.getAssistSidecar(value)],
   ];
 
   for (const [site, invoke] of INT_SITES) {
@@ -135,7 +141,6 @@ describe('Project MIR integer arguments are range-checked', () => {
     withProject((project) => {
       const { clipId } = project.addMidiClip(0, 4);
       expect(() => project.setProgram(clipId, '24' as never)).toThrow(TypeError);
-      expect(() => project.getAssistSidecar('0' as never)).toThrow(TypeError);
       // An optional argument reads null like an omitted one, matching the
       // group/channel readers on the same entry points.
       expect(project.snapToGrid(1.02, 1.0, null as never)).toBe(project.snapToGrid(1.02, 1.0));
@@ -150,11 +155,11 @@ describe('Project MIR integer arguments are range-checked', () => {
       expect(() => project.setProgram(clipId, 24)).not.toThrow();
       // An omitted bank emits no Bank Select; an explicit bank is a real value.
       expect(() => project.setProgram(clipId, 24, 0)).not.toThrow();
-      expect(() => project.setProgramOnChannel(clipId, 0, 3, 24)).not.toThrow();
+      expect(() =>
+        project.setProgramOnChannel(clipId, { group: 0, channel: 3, program: 24 }),
+      ).not.toThrow();
       expect(project.snapToGrid(0.27, 1.0, 4)).toBe(0.25);
-      // An in-range index on an empty sidecar list is the C ABI's rejection,
-      // which surfaces as a RangeError because the index is the caller's value.
-      expect(() => project.getAssistSidecar(0)).toThrow(RangeError);
+      expect(project.assistSidecars()).toEqual([]);
     });
   });
 });

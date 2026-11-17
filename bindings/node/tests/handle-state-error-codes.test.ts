@@ -94,7 +94,7 @@ describe('a destroyed native handle reports InvalidState on every method', () =>
   it('read-only Project accessors do not answer for a released project', () => {
     const project = new addon.Project() as Loose;
     project.destroy();
-    expect(codeOf(capture(() => project.assistSidecarCount()))).toBe(ErrorCode.InvalidState);
+    expect(codeOf(capture(() => project.assistSidecars().length))).toBe(ErrorCode.InvalidState);
     expect(codeOf(capture(() => project.assistSidecars()))).toBe(ErrorCode.InvalidState);
   });
 
@@ -126,7 +126,7 @@ describe('a released handle passed as an argument reports InvalidState', () => {
   });
 
   it('a disposed ProjectTimeline applied to an engine', () => {
-    const project = Project.create();
+    const project = new Project();
     const engine = new RealtimeEngine({ sampleRate: 48000, maxBlockSize: 128 });
     try {
       const track = project.addTrack({ kind: 'midi' });
@@ -172,7 +172,7 @@ describe('setAssistSidecar validates before it commits', () => {
   const base = { moduleId: 'mod', schemaVersion: 1, targetTrackId: 0 };
 
   const withProject = (body: (project: Project) => void): void => {
-    const project = Project.create();
+    const project = new Project();
     try {
       body(project);
     } finally {
@@ -183,11 +183,11 @@ describe('setAssistSidecar validates before it commits', () => {
   for (const field of ['regionStartPpq', 'regionEndPpq'] as const) {
     it(`refuses a string ${field} by name and leaves the sidecar count unchanged`, () => {
       withProject((project) => {
-        const before = project.assistSidecarCount();
+        const before = project.assistSidecars().length;
         const error = capture(() => project.setAssistSidecar({ ...base, [field]: '1' as never }));
         expect(error).toBeInstanceOf(TypeError);
         expect((error as Error).message).toMatch(new RegExp(field));
-        expect(project.assistSidecarCount()).toBe(before);
+        expect(project.assistSidecars().length).toBe(before);
       });
     });
   }
@@ -200,7 +200,7 @@ describe('setAssistSidecar validates before it commits', () => {
       );
       expect(error).toBeInstanceOf(TypeError);
       expect((error as Error).message).toMatch(/payload/);
-      expect(project.assistSidecarCount()).toBe(0);
+      expect(project.assistSidecars().length).toBe(0);
       expect(project.toJson()).toBe(before);
     });
   });
@@ -209,7 +209,7 @@ describe('setAssistSidecar validates before it commits', () => {
     withProject((project) => {
       project.setAssistSidecar({ ...base, moduleId: 'empty' });
       project.setAssistSidecar({ ...base, moduleId: 'bytes', payload: new Uint8Array([1, 2]) });
-      expect(project.assistSidecarCount()).toBe(2);
+      expect(project.assistSidecars().length).toBe(2);
     });
   });
 });

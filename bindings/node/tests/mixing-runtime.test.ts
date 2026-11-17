@@ -13,7 +13,7 @@ const DIRECT_PRESET = 'commentaryDucking';
 function buildMixer(): Mixer {
   return Mixer.fromJson(mixingScenePresetJson(DIRECT_PRESET), {
     sampleRate: SAMPLE_RATE,
-    blockSize: BLOCK_SIZE,
+    maxBlockSize: BLOCK_SIZE,
   });
 }
 
@@ -503,7 +503,7 @@ describe('Mixer argument validation', () => {
   it('reports the longest serial send tail', () => {
     const routed = Mixer.fromJson(serialTailScene(), {
       sampleRate: SAMPLE_RATE,
-      blockSize: BLOCK_SIZE,
+      maxBlockSize: BLOCK_SIZE,
     });
     try {
       expect(routed.tailSamples).toBeGreaterThan(1440);
@@ -549,7 +549,7 @@ describe('Mixer.setOutputBus', () => {
   function emptyMixer(): Mixer {
     return Mixer.fromJson(JSON.stringify({ version: 1 }), {
       sampleRate: SAMPLE_RATE,
-      blockSize: BLOCK_SIZE,
+      maxBlockSize: BLOCK_SIZE,
     });
   }
 

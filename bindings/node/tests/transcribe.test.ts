@@ -67,7 +67,7 @@ const noteNumbers = (result: TranscribeResult): number[] =>
 const audio = line();
 
 function withProject<T>(body: (project: Project, clipId: number) => T): T {
-  const project = Project.create();
+  const project = new Project();
   try {
     project.setSampleRate(SR);
     const { clipId } = project.addMidiClip(0, 8);

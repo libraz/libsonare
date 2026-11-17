@@ -29,20 +29,34 @@ const refusals = /unknown (request key|option)/;
 
 /** Shapes of class-method requests; they are not index functions and carry their own unknown-key cases. */
 const methodShapes = [
+  'ExternalSeparatedStem',
   'Mixer',
   'Mixer.fromJson',
+  'ProjectInstrumentBinding',
   'RealtimeEngine',
+  'addClip',
   'addSend',
+  'analyzeTempo',
   'applyBusInsertParamNow',
   'applyProjectVocalEdit',
   'applyStripInsertParamNow',
   'armCapture',
+  'autoTempo',
   'bakeMidiFx',
+  'bounce',
   'bounceOffline',
+  'bounceWithBuiltinInstruments',
+  'bounceWithInstruments',
+  'bounceWithSf2Instruments',
+  'bounceWithSynthInstruments',
   'canSetBusSidechain',
   'canSetStripSidechain',
+  'clearPartRig',
   'configureCapture',
   'importExternalSeparatedStem',
+  'importExternalStems',
+  'moveClip',
+  'partRig',
   'prepare',
   'previewMidiFx',
   'pushMidiInputProgram',
@@ -55,14 +69,22 @@ const methodShapes = [
   'schedulePanAutomation',
   'scheduleSendAutomation',
   'scheduleWidthAutomation',
+  'setAssistSidecar',
+  'setAudioSourceMetadata',
   'setBusInsertBypassed',
   'setBusInsertParam',
   'setBusSidechain',
+  'setClipFade',
+  'setClipLoop',
+  'setClipTakes',
   'setGraph',
   'setLoop',
+  'setMarker',
   'setMetronome',
   'setPartRig',
   'setPolarityInvert',
+  'setProgramOnChannel',
+  'setSourceAudio',
   'setStripInsertBypassed',
   'setStripInsertParam',
   'setStripSidechain',
@@ -237,5 +259,73 @@ describe('reported repros', () => {
 
   it('positional calls are not request objects and keep their forms', () => {
     expect(typeof sonare.detectBpm(samples, 22050)).toBe('number');
+  });
+});
+
+describe('a Project request method refuses an unknown key', () => {
+  const extra = { notAField: 1 };
+  const calls: Array<[string, (project: sonare.Project) => unknown]> = [
+    ['addClip', (p) => p.addClip({ trackId: 1, startPpq: 0, lengthPpq: 1, ...extra } as never)],
+    [
+      'analyzeTempo',
+      (p) => p.analyzeTempo({ samples: new Float32Array(8), sampleRate: 48000, ...extra } as never),
+    ],
+    [
+      'autoTempo',
+      (p) => p.autoTempo({ samples: new Float32Array(8), sampleRate: 48000, ...extra } as never),
+    ],
+    ['bounce', (p) => p.bounce(extra as never)],
+    ['bounceWithBuiltinInstruments', (p) => p.bounceWithBuiltinInstruments([], extra as never)],
+    ['bounceWithInstruments', (p) => p.bounceWithInstruments([], extra as never)],
+    ['bounceWithSf2Instruments', (p) => p.bounceWithSf2Instruments([], extra as never)],
+    ['bounceWithSynthInstruments', (p) => p.bounceWithSynthInstruments([], extra as never)],
+    [
+      'ProjectInstrumentBinding',
+      (p) => p.bounceWithInstruments([{ destinationId: 1, ...extra } as never]),
+    ],
+    ['clearPartRig', (p) => p.clearPartRig({ destinationId: 1, part: 0, ...extra } as never)],
+    [
+      'importExternalStems',
+      (p) => p.importExternalStems({ sampleRate: 48000, stems: [], ...extra } as never),
+    ],
+    [
+      'ExternalSeparatedStem',
+      (p) => p.importExternalStems({ sampleRate: 48000, stems: [extra] } as never),
+    ],
+    ['moveClip', (p) => p.moveClip(1, 0, extra as never)],
+    ['partRig', (p) => p.partRig({ destinationId: 1, part: 0, ...extra } as never)],
+    ['setAssistSidecar', (p) => p.setAssistSidecar(extra as never)],
+    ['setAudioSourceMetadata', (p) => p.setAudioSourceMetadata({ sourceId: 1, ...extra } as never)],
+    ['setClipFade', (p) => p.setClipFade(1, extra as never)],
+    ['setClipLoop', (p) => p.setClipLoop(1, extra as never)],
+    ['setClipTakes', (p) => p.setClipTakes(1, [], extra as never)],
+    ['setMarker', (p) => p.setMarker({ ppq: 0, ...extra } as never)],
+    ['setProgramOnChannel', (p) => p.setProgramOnChannel(1, { program: 0, ...extra } as never)],
+    ['setSourceAudio', (p) => p.setSourceAudio({ sourceId: 1, ...extra } as never)],
+  ];
+
+  it.each(calls)('%s refuses an unknown key, naming it', (name, call) => {
+    const project = new sonare.Project();
+    try {
+      expect(() => call(project)).toThrow(
+        new TypeError(`${name}: unknown request key 'notAField'`),
+      );
+    } finally {
+      project.destroy();
+    }
+  });
+
+  it('setProgramOnChannel refuses an unknown bank key and points a misplaced one at bank', () => {
+    const project = new sonare.Project();
+    try {
+      expect(() =>
+        project.setProgramOnChannel(1, { program: 0, bank: { notAnOption: 1 } } as never),
+      ).toThrow("setProgramOnChannel: unknown option 'notAnOption' in 'bank'");
+      expect(() => project.setProgramOnChannel(1, { program: 0, msb: 0 } as never)).toThrow(
+        "setProgramOnChannel: unknown request key 'msb' ('msb' belongs under 'bank')",
+      );
+    } finally {
+      project.destroy();
+    }
   });
 });

@@ -107,7 +107,7 @@ describe('insert param validation', () => {
       ],
       connections: [{ source: 'vocal', destination: 'master' }],
     });
-    const mixer = Mixer.fromJson(ignored, { sampleRate: 48000, blockSize: 512 });
+    const mixer = Mixer.fromJson(ignored, { sampleRate: 48000, maxBlockSize: 512 });
     const warnings = mixer.sceneWarnings();
     expect(warnings.length).toBe(1);
     expect(warnings[0]).toContain('eq.parametric');
@@ -132,7 +132,7 @@ describe('insert param validation', () => {
       ],
       connections: [{ source: 'vocal', destination: 'master' }],
     });
-    expect(Mixer.fromJson(clean, { sampleRate: 48000, blockSize: 512 }).sceneWarnings()).toEqual(
+    expect(Mixer.fromJson(clean, { sampleRate: 48000, maxBlockSize: 512 }).sceneWarnings()).toEqual(
       [],
     );
   });
@@ -149,12 +149,12 @@ describe('insert param validation', () => {
     expect(
       Mixer.fromJson(scene({}, { faderDB: -3 }), {
         sampleRate: 48000,
-        blockSize: 512,
+        maxBlockSize: 512,
       }).sceneWarnings(),
     ).toEqual(["unknown scene key 'strips[0].faderDB'"]);
     const annotated = scene({ $schema: 'x', 'x-note': 1 }, { 'x-color': 'red' });
     expect(
-      Mixer.fromJson(annotated, { sampleRate: 48000, blockSize: 512 }).sceneWarnings(),
+      Mixer.fromJson(annotated, { sampleRate: 48000, maxBlockSize: 512 }).sceneWarnings(),
     ).toEqual([]);
   });
 
@@ -170,7 +170,7 @@ describe('insert param validation', () => {
   it("flushes a streaming mixer's meters on request", () => {
     const mixer = Mixer.fromJson(mixingScenePresetJson('vocalReverbSend'), {
       sampleRate: 48000,
-      blockSize: 256,
+      maxBlockSize: 256,
     });
     try {
       expect(() => mixer.flushMeters()).not.toThrow();

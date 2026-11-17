@@ -1,6 +1,7 @@
+import { CHORD_QUALITY, KEY_MODE, tokenName } from './internal/project_tokens.js';
 import { addon } from './native.js';
 import type { AnalysisChord, Chord } from './types_analysis.js';
-import type { ProjectChordSymbol } from './types_project.js';
+import type { ProjectChordSymbol, ProjectKeyMode } from './types_project.js';
 
 /** The annotation fields {@link chordSymbolFromAnalysis} fills; spreads into a {@link ProjectChordSymbol}. */
 export type ChordSymbolFields = Required<
@@ -27,7 +28,8 @@ export type ChordSymbolFields = Required<
  * ```
  */
 export function chordSymbolFromAnalysis(chord: Chord | AnalysisChord): ChordSymbolFields {
-  return addon.chordSymbolFromAnalysis(chord);
+  const native = addon.chordSymbolFromAnalysis(chord);
+  return { ...native, quality: tokenName(CHORD_QUALITY, native.quality, 'chord quality') };
 }
 
 /**
@@ -37,6 +39,6 @@ export function chordSymbolFromAnalysis(chord: Chord | AnalysisChord): ChordSymb
  * @throws `TypeError` when `mode` is not a string; `RangeError` for an
  *         unrecognised mode name.
  */
-export function keyModeFromAnalysis(mode: string): number {
-  return addon.keyModeFromAnalysis(mode);
+export function keyModeFromAnalysis(mode: string): ProjectKeyMode {
+  return tokenName(KEY_MODE, addon.keyModeFromAnalysis(mode), 'key mode');
 }

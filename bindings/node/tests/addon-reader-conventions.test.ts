@@ -533,7 +533,7 @@ const UNDEFINED_EQUIVALENCE: ReadonlyArray<{
   },
   {
     jsName: 'analyzeTempo',
-    invoke: (o) => Project.create().analyzeTempo(clicks(120, 6), SR, o),
+    invoke: (o) => new Project().analyzeTempo(clicks(120, 6), SR, o),
   },
   {
     // Reads the installed map back rather than only the returned BPM: the option
@@ -541,12 +541,9 @@ const UNDEFINED_EQUIVALENCE: ReadonlyArray<{
     // one number would miss a divergence in how the map was cut.
     jsName: 'autoTempo',
     invoke: (o) => {
-      const project = Project.create();
-      const bpm = project.autoTempo(clicks(120, 6), SR, 0, false, o);
-      const segments = Array.from({ length: project.tempoSegmentCount() }, (_, i) =>
-        project.tempoSegmentByIndex(i),
-      );
-      return [bpm, segments];
+      const project = new Project();
+      const bpm = project.autoTempo(clicks(120, 6), SR, o);
+      return [bpm, project.tempoSegments()];
     },
   },
   {
@@ -605,7 +602,7 @@ const UNDEFINED_EQUIVALENCE: ReadonlyArray<{
   },
   {
     jsName: 'masteringRepairDeclick',
-    invoke: (o) => Array.from(masteringRepairDeclick(sine(2048), SR, o)).slice(0, 32),
+    invoke: (o) => Array.from(masteringRepairDeclick(sine(2048), SR, o).samples).slice(0, 32),
   },
   {
     jsName: 'masteringRepairDeclickStereo',
@@ -623,7 +620,8 @@ const UNDEFINED_EQUIVALENCE: ReadonlyArray<{
     jsName: 'masteringRepairDeclip',
     invoke: (o) =>
       Array.from(
-        masteringRepairDeclip(sine(2048), SR, facadeKeys(o, { clipThreshold: 'clipThresholdDb' })),
+        masteringRepairDeclip(sine(2048), SR, facadeKeys(o, { clipThreshold: 'clipThresholdDb' }))
+          .samples,
       ).slice(0, 32),
   },
   {
@@ -640,7 +638,7 @@ const UNDEFINED_EQUIVALENCE: ReadonlyArray<{
   },
   {
     jsName: 'masteringRepairDecrackle',
-    invoke: (o) => Array.from(masteringRepairDecrackle(sine(2048), SR, o)).slice(0, 32),
+    invoke: (o) => Array.from(masteringRepairDecrackle(sine(2048), SR, o).samples).slice(0, 32),
   },
   {
     jsName: 'masteringRepairDecrackleStereo',
@@ -656,7 +654,7 @@ const UNDEFINED_EQUIVALENCE: ReadonlyArray<{
   },
   {
     jsName: 'masteringRepairDehum',
-    invoke: (o) => Array.from(masteringRepairDehum(sine(2048), SR, o)).slice(0, 32),
+    invoke: (o) => Array.from(masteringRepairDehum(sine(2048), SR, o).samples).slice(0, 32),
   },
   {
     jsName: 'masteringRepairDehumStereo',
@@ -674,7 +672,8 @@ const UNDEFINED_EQUIVALENCE: ReadonlyArray<{
     jsName: 'masteringRepairTrimSilence',
     invoke: (o) =>
       Array.from(
-        masteringRepairTrimSilence(sine(2048), SR, facadeKeys(o, { threshold: 'thresholdDb' })),
+        masteringRepairTrimSilence(sine(2048), SR, facadeKeys(o, { threshold: 'thresholdDb' }))
+          .samples,
       ).slice(0, 32),
   },
   {
@@ -702,7 +701,8 @@ const UNDEFINED_EQUIVALENCE: ReadonlyArray<{
   // one analysis window, so these cannot be trimmed below the default nFft.
   {
     jsName: 'masteringRepairDenoiseClassical',
-    invoke: (o) => Array.from(masteringRepairDenoiseClassical(sine(2048), SR, o)).slice(0, 32),
+    invoke: (o) =>
+      Array.from(masteringRepairDenoiseClassical(sine(2048), SR, o).samples).slice(0, 32),
   },
   {
     jsName: 'masteringRepairDenoiseClassicalStereo',
@@ -729,7 +729,8 @@ const UNDEFINED_EQUIVALENCE: ReadonlyArray<{
   },
   {
     jsName: 'masteringRepairDereverbClassical',
-    invoke: (o) => Array.from(masteringRepairDereverbClassical(sine(2048), SR, o)).slice(0, 32),
+    invoke: (o) =>
+      Array.from(masteringRepairDereverbClassical(sine(2048), SR, o).samples).slice(0, 32),
   },
   {
     jsName: 'masteringRepairDereverbClassicalStereo',
@@ -1072,7 +1073,7 @@ const UNDEFINED_EQUIVALENCE: ReadonlyArray<{
         p.setMidiEvents(clipId, [
           { ...o, ppq: 0, data0: Project.midiNoteOn(0, 0, 0, 60, 100).data0 },
         ]);
-        return p.clipCount();
+        return p.clips().length;
       }),
   },
   {
@@ -1252,7 +1253,7 @@ function withSampleBank<T>(body: (bank: SampleBank) => T): T {
 function withMixer<T>(body: (mixer: Mixer) => T): T {
   const mixer = Mixer.fromJson(mixingScenePresetJson('commentaryDucking'), {
     sampleRate: 48000,
-    blockSize: 8,
+    maxBlockSize: 8,
   });
   try {
     return body(mixer);
@@ -1262,7 +1263,7 @@ function withMixer<T>(body: (mixer: Mixer) => T): T {
 }
 
 function withProject<T>(body: (project: Project) => T): T {
-  const project = Project.create();
+  const project = new Project();
   try {
     return body(project);
   } finally {

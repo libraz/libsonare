@@ -1,8 +1,19 @@
 import { closeSync, openSync, readSync } from 'node:fs';
 import { ErrorCode, SonareError } from './errors.js';
 import type { RealtimeEngine } from './realtime_engine.js';
-import type { ClipPageRequest, FileClipPageProviderOptions } from './types.js';
+import type { FileClipPageProviderOptions } from './types.js';
 
+/** A clip page the player missed or is about to need, positioned by sample. */
+export interface ClipPageSampleRequest {
+  /** Clip schedule id passed to `setClips`. */
+  clipId: number;
+  /** Channel the miss happened on. */
+  channel: number;
+  /** Sample position within the clip source that missed. */
+  sample: number;
+}
+
+/** Handle to a paged clip source on a {@link RealtimeEngine}; pages are supplied on demand. */
 export class ClipPageProvider {
   private disposed = false;
 
@@ -11,6 +22,7 @@ export class ClipPageProvider {
     readonly id: number,
   ) {}
 
+  /** Hand the engine one page of planar channels. Throws `InvalidState` after `destroy()`. */
   supply(pageIndex: number, channels: Float32Array[]): void {
     if (this.disposed) {
       throw new SonareError(ErrorCode.InvalidState, 'ClipPageProvider is destroyed');
@@ -18,6 +30,7 @@ export class ClipPageProvider {
     this.engine.supplyClipPage(this.id, pageIndex, channels);
   }
 
+  /** Evict one resident page; a no-op after `destroy()`. */
   clear(pageIndex: number): void {
     if (this.disposed) {
       return;
@@ -25,6 +38,7 @@ export class ClipPageProvider {
     this.engine.clearClipPage(this.id, pageIndex);
   }
 
+  /** Release the provider on the engine. Idempotent. */
   destroy(): void {
     if (this.disposed) {
       return;
@@ -38,6 +52,7 @@ export class ClipPageProvider {
   }
 }
 
+/** A {@link ClipPageProvider} fed from a headerless interleaved float32 file. */
 export class FileClipPageProvider extends ClipPageProvider {
   private fd: number | null;
   private readonly numChannels: number;
@@ -62,6 +77,7 @@ export class FileClipPageProvider extends ClipPageProvider {
     this.dataOffsetBytes = options.dataOffsetBytes ?? 0;
   }
 
+  /** Read one page from the file and supply it; `false` when the page lies outside the file. */
   supplyPage(pageIndex: number): boolean {
     if (this.fd === null) {
       throw new SonareError(ErrorCode.InvalidState, 'FileClipPageProvider is destroyed');
@@ -97,7 +113,8 @@ export class FileClipPageProvider extends ClipPageProvider {
     return true;
   }
 
-  supplyRequest(request: ClipPageRequest): boolean {
+  /** Supply the page a sample-positioned miss falls in. */
+  supplyRequest(request: ClipPageSampleRequest): boolean {
     return this.supplyPage(Math.floor(request.sample / this.pageFrames));
   }
 

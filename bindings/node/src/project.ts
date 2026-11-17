@@ -1,4 +1,23 @@
 import { ErrorCode, SonareError } from './errors.js';
+import { deinterleave, interleavePlanar } from './internal/planar.js';
+import { setTimelineHandle } from './internal/project_handles.js';
+import {
+  AUTOMATION_TARGET_KIND,
+  CHORD_QUALITY,
+  DIAGNOSTIC_CODE,
+  DIAGNOSTIC_SEVERITY,
+  FADE_CURVE,
+  KEY_MODE,
+  LOOP_MODE,
+  MARKER_KIND,
+  OVERLAP_POLICY,
+  SOURCE_KIND,
+  STEM_LAYOUT,
+  TRACK_KIND,
+  tokenName,
+  tokenOrdinal,
+  WARP_MODE,
+} from './internal/project_tokens.js';
 import { nativeTranscribeRequest } from './internal/transcribe_request.js';
 import {
   midi2Byte,
@@ -10,34 +29,43 @@ import {
 } from './internal/ump_events.js';
 import { addon } from './native.js';
 import type {
-  BuiltinInstrumentConfig,
+  BuiltinSynthConfig,
   ExternalInstrument,
   ExternalSeparatedStemImportRequest,
   ExternalSeparatedStemImportResult,
   MidiCcLearnOptions,
   PartRigEntry,
-  PartRigInsert,
   PartRigKey,
   PartRigMode,
   PartRigRequest,
+  ProjectAnalyzeTempoRequest,
   ProjectAssistSidecar,
   ProjectAssistSidecarInput,
+  ProjectAudioSourceMetadataRequest,
   ProjectAutomationLaneDesc,
   ProjectAutomationPoint,
+  ProjectAutoTempoOptions,
+  ProjectAutoTempoRequest,
   ProjectBounceOptions,
+  ProjectBounceResult,
   ProjectChordSymbol,
   ProjectClip,
   ProjectClipCompSegment,
   ProjectClipDesc,
-  ProjectClipFade,
+  ProjectClipFadeRequest,
+  ProjectClipLoopRequest,
+  ProjectClipMoveOptions,
   ProjectClipTake,
+  ProjectClipTakesOptions,
   ProjectCompileResult,
   ProjectCompileTimelineResult,
+  ProjectDiagnostic,
+  ProjectInstrumentBinding,
   ProjectKeySegment,
-  ProjectLoopMode,
   ProjectLoopRecordingDesc,
   ProjectLoopRecordingResult,
   ProjectMarker,
+  ProjectMarkerInput,
   ProjectMidiCcBinding,
   ProjectMidiClipResult,
   ProjectMidiEvent,
@@ -46,29 +74,37 @@ import type {
   ProjectMidiFxPreviewRequest,
   ProjectMidiRouteConfig,
   ProjectMidiRouteResult,
+  ProjectNotePairValidation,
+  ProjectOverlapPolicy,
+  ProjectProgramRequest,
   ProjectSource,
+  ProjectSourceAudioRequest,
   ProjectTempoCandidate,
   ProjectTempoOptions,
   ProjectTempoSegment,
   ProjectTimeSignatureSegment,
   ProjectTrack,
   ProjectTrackDesc,
+  ProjectTrackKind,
   ProjectTranscribeRequest,
+  ProjectWarpMode,
   Sf2InstrumentConfig,
   Sf2ProgramStatus,
   SynthPatch,
-  SynthWaveform,
-  WarpMode,
 } from './types.js';
+import { PART_RIG_MODES } from './types_instrument.js';
 import type {
   ProjectVocalEditApplyRequest,
   ProjectVocalEditApplyResult,
   ProjectVocalEditDependency,
   ProjectVocalOriginalSource,
   ProjectVocalRehydrateItem,
+  ProjectVocalRehydrateOptions,
 } from './types_vocal_project.js';
 import {
+  assertAudioInput,
   assertBoundedInteger,
+  assertClosedToken,
   assertInt32,
   assertInt64,
   assertProjectMidiEvents,
@@ -77,17 +113,15 @@ import {
   assertU7,
   assertU32,
   midi1Event,
+  requestObject,
   resolveOptionalNonNegative,
+  sampleOneShot,
 } from './validation.js';
 import {
-  normalizeInstrumentBindings,
+  type NativeAutomationLaneDesc,
   normalizePartRig,
   normalizeSynthInstrument,
   projectAutomationLaneValue,
-  projectClipFadeValue,
-  projectLoopModeValue,
-  trackKindValue,
-  warpModeValue,
 } from './value_coercion.js';
 import {
   projectApplyVocalEdit,
@@ -98,13 +132,6 @@ import {
 export * from './synth_catalog.js';
 export * from './take_alignment.js';
 
-export type { ProjectAutomationTargetKind } from './types.js';
-export {
-  PROJECT_AUTOMATION_TARGET_OPAQUE,
-  PROJECT_AUTOMATION_TARGET_TRACK_FADER_DB,
-  PROJECT_AUTOMATION_TARGET_TRACK_PAN,
-} from './types.js';
-
 /**
  * ABI version of the flat project layout in the loaded native binding. `undefined` when the
  * build has no project subsystem; check `capabilities().features` for presence.
@@ -114,53 +141,229 @@ export function projectAbiVersion(): number | undefined {
   return version > 0 ? version : undefined;
 }
 
-/**
- * Check the two bounce fields whose zero is a native default, on every entry
- * point that takes the bag.
- *
- * The addon refuses a fraction on every one of these rather than truncating it, so
- * `0.5` can never arrive as the zero that auto-derives the render length / picks
- * the stereo default. The checks here name the field before the call. `blockSize`
- * and `sampleRate` are absent: the render is block-size independent and the only
- * sample rate the core accepts is the project's own, so the addon's own refusal
- * of a fraction is all they need. `instrumentLatencySamples` is a plain quantity
- * whose zero means no latency.
- */
-function assertBounceOptions(fnName: string, options: ProjectBounceOptions): void {
-  if (options.totalFrames !== undefined) {
-    assertInt64(fnName, options.totalFrames, 'totalFrames');
-  }
-  if (options.numChannels !== undefined) {
-    assertInt32(fnName, options.numChannels, 'numChannels');
-  }
+type NativeProject = InstanceType<typeof addon.Project>;
+
+/** Carries a native handle the module adopts instead of allocating a fresh project. */
+class AdoptedProject {
+  constructor(readonly native: NativeProject) {}
 }
 
-/**
- * Folds the positional and request call forms of `bakeMidiFx` into one shape,
- * so defaults, validation and errors cannot diverge between them.
- */
-function normalizeMidiFxBakeRequest(
-  clipIdOrRequest: number | ProjectMidiFxBakeRequest,
-  configJson?: string,
-): Required<ProjectMidiFxBakeRequest> {
-  if (typeof clipIdOrRequest === 'number') {
-    return {
-      clipId: clipIdOrRequest,
-      configJson: configJson ?? '',
-      withSourceIndex: false,
-    };
+/** Proves a {@link ProjectTimeline} is built by this module. */
+const TIMELINE_TOKEN = Symbol('ProjectTimeline');
+
+const isAbsent = (value: unknown): value is undefined | null =>
+  value === undefined || value === null;
+
+function requireNumber(fnName: string, value: unknown, argName: string): number {
+  if (typeof value !== 'number') {
+    throw new TypeError(`${fnName}: ${argName} must be a number`);
   }
+  return value;
+}
+
+/** An optional field where `0` would mean "the default": absent stays absent, `0` is refused. */
+function optionalNonZero(
+  fnName: string,
+  value: unknown,
+  argName: string,
+  check: (fn: string, v: number, arg: string) => void,
+): number | undefined {
+  if (isAbsent(value)) {
+    return undefined;
+  }
+  const number = requireNumber(fnName, value, argName);
+  check(fnName, number, argName);
+  if (number === 0) {
+    throw new RangeError(`${fnName}: ${argName} must not be 0 (omit it for the default)`);
+  }
+  if (number < 0) {
+    throw new RangeError(`${fnName}: ${argName} must be positive (omit it for the default)`);
+  }
+  return number;
+}
+
+/** Render settings the native bounce reads, plus the channel count of its result. */
+function bounceSettings(
+  fnName: BounceFn,
+  options: ProjectBounceOptions | undefined,
+): { native: Record<string, unknown>; numChannels: number } {
+  const request = requestObject(fnName, options ?? {}, 'options', true);
+  const native: Record<string, unknown> = {};
+  const totalFrames = optionalNonZero(fnName, request.totalFrames, 'totalFrames', assertInt64);
+  const blockSize = optionalNonZero(fnName, request.blockSize, 'blockSize', assertInt32);
+  const numChannels = optionalNonZero(fnName, request.numChannels, 'numChannels', assertInt32);
+  if (totalFrames !== undefined) {
+    native.totalFrames = totalFrames;
+  }
+  if (blockSize !== undefined) {
+    native.blockSize = blockSize;
+  }
+  if (numChannels !== undefined) {
+    native.numChannels = numChannels;
+  }
+  if (!isAbsent(request.instrumentLatencySamples)) {
+    native.instrumentLatencySamples = request.instrumentLatencySamples;
+  }
+  return { native, numChannels: numChannels ?? DEFAULT_BOUNCE_CHANNELS };
+}
+
+type BounceFn =
+  | 'bounce'
+  | 'bounceWithBuiltinInstruments'
+  | 'bounceWithSynthInstruments'
+  | 'bounceWithSf2Instruments'
+  | 'bounceWithInstruments';
+
+/** Output width when `numChannels` is omitted. */
+const DEFAULT_BOUNCE_CHANNELS = 2;
+
+/**
+ * Resolve the bindings of a `bounceWith*Instruments` call to the list the native
+ * layer reads: each pair's `destinationId` is folded into a copy of its instrument.
+ * One pair or an array of pairs is accepted.
+ */
+function bindInstruments<T extends object>(
+  fnName: BounceFn,
+  value: ProjectInstrumentBinding<T> | readonly ProjectInstrumentBinding<T>[],
+  entry: (instrument: T) => T,
+  withDestination: (instrument: T, destinationId: number) => T,
+): T[] {
+  const list = Array.isArray(value) ? value : [value];
+  return list.map((pair) => {
+    const binding = requestObject('ProjectInstrumentBinding', pair, 'binding', true);
+    const instrument = binding.instrument as unknown;
+    if (typeof instrument !== 'object' || instrument === null || Array.isArray(instrument)) {
+      throw new TypeError(`${fnName}: binding.instrument must be an object`);
+    }
+    if ('destinationId' in instrument) {
+      throw new TypeError(
+        `${fnName}: unknown request key 'destinationId' in 'instrument' (give it on the binding)`,
+      );
+    }
+    const resolved = entry(instrument as T);
+    if (isAbsent(binding.destinationId)) {
+      return resolved;
+    }
+    assertU32(
+      fnName,
+      requireNumber(fnName, binding.destinationId, 'destinationId'),
+      'destinationId',
+    );
+    return withDestination(resolved, binding.destinationId);
+  });
+}
+
+const withDestinationCopy = <T extends object>(instrument: T, destinationId: number): T => ({
+  ...instrument,
+  destinationId,
+});
+
+/** Same as {@link withDestinationCopy} but keeps the instrument's prototype callbacks reachable. */
+const withDestinationLayer = <T extends object>(instrument: T, destinationId: number): T =>
+  Object.assign(Object.create(instrument) as T, { destinationId });
+
+function planarBounce(
+  data: Float32Array,
+  numChannels: number,
+  sampleRate: number,
+): ProjectBounceResult {
+  return { channels: deinterleave(data, numChannels), sampleRate, numChannels };
+}
+
+function diagnosticsFromNative(raw: unknown): ProjectDiagnostic[] {
+  const list = raw as Array<{
+    code: number;
+    severity: number;
+    targetId: number;
+    message: string;
+  }>;
+  return list.map((d) => ({
+    code: tokenName(DIAGNOSTIC_CODE, d.code, 'diagnostic code'),
+    severity: tokenName(DIAGNOSTIC_SEVERITY, d.severity, 'diagnostic severity'),
+    ...(d.targetId === 0 ? {} : { targetId: d.targetId }),
+    message: d.message,
+  }));
+}
+
+/** Copy of an addon record under the key set the public type declares. */
+function trackFromNative(raw: Record<string, unknown>): ProjectTrack {
+  return { ...raw, kind: tokenName(TRACK_KIND, raw.kind as number, 'track kind') } as ProjectTrack;
+}
+
+function clipFromNative(raw: Record<string, unknown>): ProjectClip {
   return {
-    clipId: clipIdOrRequest.clipId,
-    configJson: clipIdOrRequest.configJson,
-    withSourceIndex: clipIdOrRequest.withSourceIndex ?? false,
-  };
+    ...raw,
+    sourceKind: tokenName(SOURCE_KIND, raw.sourceKind as number, 'source kind'),
+    loopMode: tokenName(LOOP_MODE, raw.loopMode as number, 'loop mode'),
+  } as ProjectClip;
 }
 
-function builtinInstrumentConfig(
-  binding: BuiltinInstrumentConfig | SynthWaveform,
-): BuiltinInstrumentConfig {
-  return typeof binding === 'string' ? { waveform: binding } : binding;
+function sourceFromNative(raw: Record<string, unknown>): ProjectSource {
+  const { channelCount, kind, ...rest } = raw;
+  return {
+    ...rest,
+    kind: tokenName(SOURCE_KIND, kind as number, 'source kind'),
+    numChannels: channelCount,
+  } as ProjectSource;
+}
+
+function markerFromNative(raw: Record<string, unknown>): ProjectMarker {
+  return {
+    id: raw.id,
+    ppq: raw.ppq,
+    name: raw.name,
+    kind: tokenName(MARKER_KIND, raw.kind as number, 'marker kind'),
+    keyFifths: raw.keyFifths,
+    keyMinor: raw.keyMinor,
+  } as ProjectMarker;
+}
+
+function tempoOptionsToNative(request: ProjectTempoOptions): ProjectTempoOptions | undefined {
+  const native: Record<string, unknown> = {};
+  for (const key of [
+    'adaptiveTempo',
+    'tempoUpdateIntervalBeats',
+    'rampThreshold',
+    'includeOctaveCandidates',
+  ] as const) {
+    if (!isAbsent(request[key])) {
+      native[key] = request[key];
+    }
+  }
+  return Object.keys(native).length === 0 ? undefined : (native as ProjectTempoOptions);
+}
+
+function tempoCandidateFromNative(raw: Record<string, unknown>): ProjectTempoCandidate {
+  const { timeSignature, ...rest } = raw;
+  return { ...rest, firstTimeSignature: timeSignature } as unknown as ProjectTempoCandidate;
+}
+
+function automationLaneToNative(
+  fnName: string,
+  desc: ProjectAutomationLaneDesc,
+): NativeAutomationLaneDesc {
+  const { targetKind, ...rest } = desc;
+  const resolved =
+    targetKind === undefined
+      ? rest
+      : {
+          ...rest,
+          targetKind: tokenOrdinal(fnName, targetKind, AUTOMATION_TARGET_KIND, 'targetKind'),
+        };
+  return projectAutomationLaneValue(resolved as NativeAutomationLaneDesc);
+}
+
+/**
+ * Folds the request forms of `bakeMidiFx` into the native argument shape,
+ * refusing an unknown key by name.
+ */
+function midiFxBakeRequest(request: ProjectMidiFxBakeRequest): Required<ProjectMidiFxBakeRequest> {
+  const record = requestObject('bakeMidiFx', request, 'request', true);
+  return {
+    clipId: record.clipId,
+    configJson: record.configJson,
+    withSourceIndex: record.withSourceIndex ?? false,
+  };
 }
 
 /** Interleave planar loop-recording audio; an interleaved array passes through. */
@@ -169,35 +372,31 @@ function interleaveLoopRecording(desc: ProjectLoopRecordingDesc): ProjectLoopRec
   if (!Array.isArray(audio)) {
     return desc;
   }
-  const channels = audio.length;
-  const frames = channels > 0 ? audio[0].length : 0;
-  if (audio.some((plane) => plane.length !== frames)) {
-    throw new RangeError('addLoopRecordingTakes: planar audio channels must have equal lengths');
-  }
-  const interleaved = new Float32Array(frames * channels);
-  for (let c = 0; c < channels; c++) {
-    const plane = audio[c];
-    for (let i = 0; i < frames; i++) {
-      interleaved[i * channels + c] = plane[i];
-    }
-  }
-  return { ...desc, audio: interleaved, audioChannels: channels };
+  const { data, numChannels } = interleavePlanar('addLoopRecordingTakes', audio, 'audio');
+  return { ...desc, audio: data, audioChannels: numChannels };
 }
+
+let createTimeline: (native: InstanceType<typeof addon.ProjectTimeline>) => ProjectTimeline;
 
 /**
  * Immutable compiled playback snapshot of a {@link Project}, produced by
  * {@link Project.compileTimeline} and installed with
  * {@link RealtimeEngine.applyProjectTimeline}. The native handle is not
- * garbage-collected, so release it with {@link destroy} (or `using`).
+ * garbage-collected, so release it with {@link destroy} (or `using`). It cannot
+ * be constructed directly.
  */
 export class ProjectTimeline {
-  private native: InstanceType<typeof addon.ProjectTimeline>;
   private disposed = false;
 
-  /** @internal Created by {@link Project.compileTimeline}. */
-  constructor(native: InstanceType<typeof addon.ProjectTimeline>) {
-    this.native = native;
+  private constructor(token: symbol, native: InstanceType<typeof addon.ProjectTimeline>) {
+    if (token !== TIMELINE_TOKEN) {
+      throw new TypeError('ProjectTimeline cannot be constructed; use Project.compileTimeline()');
+    }
+    this.nativeTimeline = native;
+    setTimelineHandle(this, native);
   }
+
+  private readonly nativeTimeline: InstanceType<typeof addon.ProjectTimeline>;
 
   /**
    * Release the native timeline. Idempotent. An engine the timeline was
@@ -209,18 +408,19 @@ export class ProjectTimeline {
       return;
     }
     this.disposed = true;
-    this.native.destroy();
+    this.nativeTimeline.destroy();
   }
 
   /**
-
    * Releases the native timeline; lets `using` free it automatically (needs TypeScript 5.2+
-
    * or a runtime with native explicit resource management; Node 22 does not parse `using`).
-
    */
   [Symbol.dispose](): void {
     this.destroy();
+  }
+
+  static {
+    createTimeline = (native) => new ProjectTimeline(TIMELINE_TOKEN, native);
   }
 }
 
@@ -237,7 +437,7 @@ export class ProjectTimeline {
  *
  * @example
  * ```typescript
- * const project = Project.create();
+ * const project = new Project();
  * const track = project.addTrack({ kind: 'audio', name: 'lead' });
  * const clip = project.addClip({ trackId: track, startPpq: 0, lengthPpq: 4 });
  * const json = project.toJson();
@@ -245,10 +445,10 @@ export class ProjectTimeline {
  * ```
  */
 export class Project {
-  private readonly handle: InstanceType<typeof addon.Project>;
+  private readonly handle: NativeProject;
 
   /** The native project; refused while an instrument bounce is calling back into JavaScript. */
-  private get native(): InstanceType<typeof addon.Project> {
+  private get native(): NativeProject {
     if (this.instrumentBounceActive) {
       throw new SonareError(
         ErrorCode.InvalidState,
@@ -260,22 +460,36 @@ export class Project {
 
   private instrumentBounceActive = false;
 
+  /**
+   * Applies a vocal edit to a clip's audio.
+   *
+   * @param request - The edit and the original audio it applies to
+   * @returns The rendered result and the stored edit state
+   */
   applyVocalEdit(request: ProjectVocalEditApplyRequest): ProjectVocalEditApplyResult {
     this.assertAlive();
     return projectApplyVocalEdit(this.native, request);
   }
 
-  getVocalEditDependencies(): ProjectVocalEditDependency[] {
+  /** Vocal-edit dependencies of every clip that carries a stored edit. */
+  vocalEditDependencies(): ProjectVocalEditDependency[] {
     this.assertAlive();
     return projectGetVocalEditDependencies(this.native);
   }
 
+  /**
+   * Re-renders the stored vocal edits against the original audio.
+   *
+   * @param originals - The original audio of each edited source
+   * @param options - `cancel` is polled between items; return `true` to stop
+   * @returns One entry per stored edit
+   */
   rehydrateVocalEdits(
     originals: readonly ProjectVocalOriginalSource[],
-    cancel?: () => boolean,
+    options?: ProjectVocalRehydrateOptions,
   ): ProjectVocalRehydrateItem[] {
     this.assertAlive();
-    return projectRehydrateVocalEdits(this.native, originals, cancel);
+    return projectRehydrateVocalEdits(this.native, originals, options);
   }
 
   private assertAlive(): void {
@@ -286,13 +500,13 @@ export class Project {
 
   private disposed = false;
 
-  private constructor(native: InstanceType<typeof addon.Project>) {
-    this.handle = native;
-  }
-
   /** Create a new empty project (throws on a project ABI mismatch). */
-  static create(): Project {
-    return new Project(new addon.Project());
+  constructor();
+  constructor(adopted?: unknown) {
+    if (adopted !== undefined && !(adopted instanceof AdoptedProject)) {
+      throw new TypeError('Project takes no arguments');
+    }
+    this.handle = adopted === undefined ? new addon.Project() : adopted.native;
   }
 
   /** Pack a MIDI 1.0 note-on event accepted by {@link setMidiEvents}. */
@@ -722,7 +936,7 @@ export class Project {
    * native diagnostic messages) on malformed input.
    */
   static fromJson(json: string): Project {
-    return new Project(addon.Project.fromJson(json));
+    return adoptProject(addon.Project.fromJson(json));
   }
 
   /**
@@ -732,7 +946,7 @@ export class Project {
   static fromJsonWithDiagnostics(json: string): { project: Project; diagnostics: string } {
     const result = addon.Project.fromJsonWithDiagnostics(json);
     return {
-      project: new Project(result.project),
+      project: adoptProject(result.project),
       diagnostics: result.diagnostics,
     };
   }
@@ -753,19 +967,21 @@ export class Project {
     this.native.setSampleRate(sampleRate);
   }
 
-  /** Read the project sample rate in Hz. */
-  getSampleRate(): number {
+  /** The project sample rate in Hz. */
+  get sampleRate(): number {
     return this.native.getSampleRate();
   }
 
-  /** Set the project's clip-overlap policy (ordinal). */
-  setOverlapPolicy(policy: number): void {
-    this.native.setOverlapPolicy(policy);
+  /** Set the project's clip-overlap policy. */
+  setOverlapPolicy(policy: ProjectOverlapPolicy): void {
+    this.native.setOverlapPolicy(
+      tokenOrdinal('setOverlapPolicy', policy, OVERLAP_POLICY, 'policy'),
+    );
   }
 
-  /** Read the project's clip-overlap policy (ordinal). */
-  getOverlapPolicy(): number {
-    return this.native.getOverlapPolicy();
+  /** The project's clip-overlap policy. */
+  get overlapPolicy(): ProjectOverlapPolicy {
+    return tokenName(OVERLAP_POLICY, this.native.getOverlapPolicy(), 'overlap policy');
   }
 
   /**
@@ -779,44 +995,70 @@ export class Project {
     return this.native.setMixerSceneJson(sceneJson);
   }
 
-  /** Add or replace a marker; `markerId` 0 allocates a new id. Returns the marker id. */
-  setMarker(markerId: number, ppq: number, name: string): number {
-    return this.native.setMarker(markerId, ppq, name);
-  }
-
   /**
-   * Add or replace a marker from a full descriptor, including its kind and key
-   * signature. `marker.id` 0 (or omitted) allocates a new id. Returns the id.
+   * Add or replace a marker. An omitted `id` allocates a new one; an explicit
+   * `0` is a `RangeError`.
+   *
+   * @returns The marker id
    */
-  setMarkerEx(marker: {
-    id?: number;
-    ppq: number;
-    name?: string;
-    kind?: number;
-    keyFifths?: number;
-    keyMinor?: boolean;
-  }): number {
+  setMarker(input: ProjectMarkerInput): number {
+    const fnName = 'setMarker';
+    const request = requestObject(fnName, input, 'input', true);
+    const marker: Record<string, unknown> = {
+      ppq: requireNumber(fnName, request.ppq, 'ppq'),
+    };
+    if (!isAbsent(request.id)) {
+      assertU32(fnName, requireNumber(fnName, request.id, 'id'), 'id');
+      if (request.id === 0) {
+        throw new RangeError(`${fnName}: id must not be 0 (omit it for the default)`);
+      }
+      marker.id = request.id;
+    }
+    if (!isAbsent(request.name)) {
+      marker.name = request.name;
+    }
+    if (!isAbsent(request.kind)) {
+      marker.kind = tokenOrdinal(fnName, request.kind, MARKER_KIND, 'kind');
+    }
+    if (!isAbsent(request.keyFifths)) {
+      marker.keyFifths = request.keyFifths;
+    }
+    if (!isAbsent(request.keyMinor)) {
+      marker.keyMinor = request.keyMinor;
+    }
     return this.native.setMarkerEx(marker);
   }
 
-  /** Read a project marker by index (0-based, in stored order). */
-  markerByIndex(index: number): ProjectMarker {
-    return this.native.markerByIndex(index);
+  /** Every marker, in stored order. */
+  markers(): ProjectMarker[] {
+    const native = this.native;
+    return Array.from({ length: native.markerCount() }, (_, i) =>
+      markerFromNative(native.markerByIndex(i) as unknown as Record<string, unknown>),
+    );
   }
 
-  trackByIndex(index: number): ProjectTrack {
-    return this.native.trackByIndex(index);
-  }
-  clipByIndex(index: number): ProjectClip {
-    return this.native.clipByIndex(index);
-  }
-  sourceByIndex(index: number): ProjectSource {
-    return this.native.sourceByIndex(index);
+  /** Every track, in stored order. */
+  tracks(): ProjectTrack[] {
+    const native = this.native;
+    return Array.from({ length: native.trackCount() }, (_, i) =>
+      trackFromNative(native.trackByIndex(i) as unknown as Record<string, unknown>),
+    );
   }
 
-  /** Number of markers in the project value model. */
-  markerCount(): number {
-    return this.native.markerCount();
+  /** Every clip, in stored order. */
+  clips(): ProjectClip[] {
+    const native = this.native;
+    return Array.from({ length: native.clipCount() }, (_, i) =>
+      clipFromNative(native.clipByIndex(i) as unknown as Record<string, unknown>),
+    );
+  }
+
+  /** Every source, in stored order. */
+  sources(): ProjectSource[] {
+    const native = this.native;
+    return Array.from({ length: native.sourceCount() }, (_, i) =>
+      sourceFromNative(native.sourceByIndex(i) as unknown as Record<string, unknown>),
+    );
   }
 
   /** Replace the project's tempo segment list. */
@@ -829,19 +1071,20 @@ export class Project {
     this.native.setTimeSignatures(segments);
   }
 
-  /** Number of tracks in the project value model. */
-  trackCount(): number {
-    return this.native.trackCount();
+  /** Every tempo segment, in stored order, in the shape {@link setTempoSegments} accepts. */
+  tempoSegments(): ProjectTempoSegment[] {
+    const native = this.native;
+    return Array.from({ length: native.tempoSegmentCount() }, (_, i) =>
+      native.tempoSegmentByIndex(i),
+    );
   }
 
-  /** Number of clips in the project value model. */
-  clipCount(): number {
-    return this.native.clipCount();
-  }
-
-  /** Number of sources in the project value model. */
-  sourceCount(): number {
-    return this.native.sourceCount();
+  /** Every time-signature segment, in stored order, in the shape {@link setTimeSignatures} accepts. */
+  timeSignatures(): ProjectTimeSignatureSegment[] {
+    const native = this.native;
+    return Array.from({ length: native.timeSignatureCount() }, (_, i) =>
+      native.timeSignatureByIndex(i),
+    );
   }
 
   /** Audio source ids that need decoded PCM after deserialization. */
@@ -851,88 +1094,70 @@ export class Project {
 
   /** Unresolved audio source descriptors, in the order of {@link unresolvedAudioSourceIds}; `nameOrUri` is the full URI. */
   unresolvedAudioSources(): ProjectSource[] {
-    return this.native.unresolvedAudioSources();
-  }
-
-  /** Register decoded interleaved PCM for an existing audio source (undoable). */
-  setSourceAudio(
-    sourceId: number,
-    audio: Float32Array,
-    channels: number,
-    sampleRate: number,
-  ): void {
-    this.native.setSourceAudio(sourceId, audio, channels, sampleRate);
-  }
-
-  /** Replace an audio source's metadata strings as one undoable edit. */
-  setAudioSourceMetadata(
-    sourceId: number,
-    metadata: { contentHash: string; externalStemRole: string },
-  ): void;
-  setAudioSourceMetadata(sourceId: number, contentHash: string, externalStemRole: string): void;
-  setAudioSourceMetadata(
-    sourceId: number,
-    contentHashOrMetadata: string | { contentHash: string; externalStemRole: string },
-    externalStemRole?: string,
-  ): void {
-    if (typeof contentHashOrMetadata === 'string') {
-      if (typeof externalStemRole !== 'string') {
-        throw new TypeError(
-          'setAudioSourceMetadata expects (sourceId, contentHash, externalStemRole)',
-        );
-      }
-      this.native.setAudioSourceMetadata(sourceId, contentHashOrMetadata, externalStemRole);
-      return;
-    }
-    this.native.setAudioSourceMetadata(
-      sourceId,
-      contentHashOrMetadata.contentHash,
-      contentHashOrMetadata.externalStemRole,
+    return (this.native.unresolvedAudioSources() as unknown as Record<string, unknown>[]).map(
+      sourceFromNative,
     );
   }
 
-  /** Number of tempo segments in the project value model. */
-  tempoSegmentCount(): number {
-    return this.native.tempoSegmentCount();
+  /** Register decoded PCM for an existing audio source (undoable). */
+  setSourceAudio(request: ProjectSourceAudioRequest): void {
+    const fnName = 'setSourceAudio';
+    const record = requestObject(fnName, request, 'request', true);
+    assertSampleRate(fnName, record.sampleRate);
+    const { data, numChannels } = interleavePlanar(fnName, record.channels);
+    this.native.setSourceAudio(
+      requireNumber(fnName, record.sourceId, 'sourceId'),
+      data,
+      numChannels,
+      record.sampleRate,
+    );
   }
 
-  /** Number of time-signature segments in the project value model. */
-  timeSignatureCount(): number {
-    return this.native.timeSignatureCount();
-  }
-
-  /**
-   * Reads a tempo segment by index, in stored order.
-   *
-   * @param index - Zero-based index below {@link tempoSegmentCount}
-   * @returns The segment, in the shape {@link setTempoSegments} accepts
-   * @throws {RangeError} When the index is at or past the count
-   */
-  tempoSegmentByIndex(index: number): ProjectTempoSegment {
-    return this.native.tempoSegmentByIndex(index);
-  }
-
-  /**
-   * Reads a time-signature segment by index, in stored order.
-   *
-   * @param index - Zero-based index below {@link timeSignatureCount}
-   * @returns The segment, in the shape {@link setTimeSignatures} accepts
-   * @throws {RangeError} When the index is at or past the count
-   */
-  timeSignatureByIndex(index: number): ProjectTimeSignatureSegment {
-    return this.native.timeSignatureByIndex(index);
+  /** Replace an audio source's metadata strings as one undoable edit. */
+  setAudioSourceMetadata(request: ProjectAudioSourceMetadataRequest): void {
+    const fnName = 'setAudioSourceMetadata';
+    const record = requestObject(fnName, request, 'request', true);
+    for (const field of ['contentHash', 'externalStemRole'] as const) {
+      if (!isAbsent(record[field]) && typeof record[field] !== 'string') {
+        throw new TypeError(`${fnName}: ${field} must be a string`);
+      }
+    }
+    this.native.setAudioSourceMetadata(
+      requireNumber(fnName, record.sourceId, 'sourceId'),
+      record.contentHash ?? '',
+      record.externalStemRole ?? '',
+    );
   }
 
   // -- edit --
 
   /** Add a track and return its allocated stable id. */
   addTrack(desc: ProjectTrackDesc = {}): number {
-    return this.native.addTrack({ ...desc, kind: trackKindValue(desc.kind) });
+    return this.native.addTrack({
+      ...desc,
+      kind: tokenOrdinal('addTrack', desc.kind ?? 'audio', TRACK_KIND, 'kind'),
+    });
   }
 
-  /** Add an audio or MIDI clip and return its allocated clip id. */
+  /**
+   * Add an audio or MIDI clip and return its allocated clip id. An audio clip
+   * with `channels` is bound to a fresh renderable source; without it the source
+   * is metadata-only.
+   */
   addClip(desc: ProjectClipDesc): number {
-    return this.native.addClip(desc);
+    const fnName = 'addClip';
+    const { channels, sampleRate, ...rest } = requestObject(fnName, desc, 'desc', true);
+    if (channels === undefined) {
+      return this.native.addClip(rest);
+    }
+    assertSampleRate(fnName, sampleRate);
+    const { data, numChannels } = interleavePlanar(fnName, channels);
+    return this.native.addClip({
+      ...rest,
+      audio: data,
+      audioChannels: numChannels,
+      audioSampleRate: sampleRate,
+    });
   }
 
   /**
@@ -943,12 +1168,22 @@ export class Project {
   importExternalStems(
     request: ExternalSeparatedStemImportRequest,
   ): ExternalSeparatedStemImportResult {
+    const fnName = 'importExternalStems';
+    const record = requestObject(fnName, request, 'request', true);
+    if (!Array.isArray(record.stems)) {
+      throw new TypeError(`${fnName}: stems must be an array`);
+    }
     return this.native.importExternalStems({
-      ...request,
-      stems: request.stems.map((stem) => ({
-        ...stem,
-        layout: stem.layout === 'mono' ? 1 : stem.layout === 'stereo' ? 2 : stem.layout,
-      })),
+      ...record,
+      stems: record.stems.map((entry) => {
+        const stem = requestObject('ExternalSeparatedStem', entry, 'stem', true);
+        const { channels, layout, ...rest } = stem;
+        return {
+          ...rest,
+          layout: tokenOrdinal(fnName, layout, STEM_LAYOUT, 'layout'),
+          planarSamples: channels,
+        };
+      }),
     });
   }
 
@@ -986,14 +1221,24 @@ export class Project {
     this.native.trimClip(clipId, newStartPpq, newLengthPpq);
   }
 
-  /** Move a clip to `newStartPpq` (and optionally `newTrackId`; 0 = keep track). */
-  moveClip(clipId: number, newStartPpq: number, newTrackId = 0): void {
-    this.native.moveClip(clipId, newStartPpq, newTrackId);
+  /** Move a clip to `newStartPpq`; with `options.trackId` it also moves to that track. */
+  moveClip(clipId: number, newStartPpq: number, options?: ProjectClipMoveOptions): void {
+    const fnName = 'moveClip';
+    const record = options === undefined ? {} : requestObject(fnName, options, 'options', true);
+    let trackId = 0;
+    if (!isAbsent(record.trackId)) {
+      assertU32(fnName, requireNumber(fnName, record.trackId, 'trackId'), 'trackId');
+      if (record.trackId === 0) {
+        throw new RangeError(`${fnName}: trackId must not be 0 (omit it to keep the track)`);
+      }
+      trackId = record.trackId;
+    }
+    this.native.moveClip(clipId, newStartPpq, trackId);
   }
 
   /** Change a track kind via an undoable edit. */
-  setTrackKind(trackId: number, kind: ProjectTrackDesc['kind']): void {
-    this.native.setTrackKind(trackId, trackKindValue(kind));
+  setTrackKind(trackId: number, kind: ProjectTrackKind): void {
+    this.native.setTrackKind(trackId, tokenOrdinal('setTrackKind', kind, TRACK_KIND, 'kind'));
   }
 
   /** Set a clip's warp reference id (0 clears it). */
@@ -1002,8 +1247,8 @@ export class Project {
   }
 
   /** Set a clip's warp playback mode. */
-  setClipWarpMode(clipId: number, mode: WarpMode | number): void {
-    this.native.setClipWarpMode(clipId, warpModeValue(mode));
+  setClipWarpMode(clipId: number, mode: ProjectWarpMode): void {
+    this.native.setClipWarpMode(clipId, tokenOrdinal('setClipWarpMode', mode, WARP_MODE, 'mode'));
   }
 
   /** Add or replace a first-class warp map referenced by clip warp ids. */
@@ -1036,33 +1281,22 @@ export class Project {
    * (the instrument's own rig), `'none'`, or `'chain'` with 1-8 `inserts`.
    * Entries are stored whether or not a track routes to the destination and take
    * effect when a bounce binds an instrument that carries part rigs.
-   *
-   * The {@link PartRigRequest} object is the canonical form; the positional
-   * form is the same call.
    */
-  setPartRig(request: PartRigRequest): void;
-  setPartRig(
-    destinationId: number,
-    part: number,
-    mode: PartRigMode | number,
-    inserts?: PartRigInsert[],
-  ): void;
-  setPartRig(
-    requestOrDestinationId: PartRigRequest | number,
-    part?: number,
-    mode?: PartRigMode | number,
-    inserts?: PartRigInsert[],
-  ): void {
-    const rig = normalizePartRig('setPartRig', requestOrDestinationId, part, mode, inserts);
+  setPartRig(request: PartRigRequest): void {
+    const fnName = 'setPartRig';
+    requestObject(fnName, request, 'request', true);
+    const rig = normalizePartRig(fnName, request);
+    assertClosedToken(fnName, rig.mode, PART_RIG_MODES, 'mode');
     this.native.setPartRig(rig.destinationId, rig.part, rig.mode as PartRigMode, rig.insertsJson);
   }
 
   /** Read one part rig entry, or `null` when none is set. */
-  getPartRig(key: PartRigKey): PartRigEntry | null;
-  getPartRig(destinationId: number, part: number): PartRigEntry | null;
-  getPartRig(keyOrDestinationId: PartRigKey | number, part?: number): PartRigEntry | null {
-    const rig = normalizePartRig('getPartRig', keyOrDestinationId, part);
-    const raw = this.native.getPartRig(rig.destinationId, rig.part);
+  partRig(key: PartRigKey): PartRigEntry | null {
+    const record = requestObject('partRig', key, 'key', true);
+    const raw = this.native.getPartRig(
+      requireNumber('partRig', record.destinationId, 'destinationId'),
+      requireNumber('partRig', record.part, 'part'),
+    );
     if (raw === null) {
       return null;
     }
@@ -1079,11 +1313,12 @@ export class Project {
   }
 
   /** Remove one part rig entry through an undoable edit. */
-  clearPartRig(key: PartRigKey): void;
-  clearPartRig(destinationId: number, part: number): void;
-  clearPartRig(keyOrDestinationId: PartRigKey | number, part?: number): void {
-    const rig = normalizePartRig('clearPartRig', keyOrDestinationId, part);
-    this.native.clearPartRig(rig.destinationId, rig.part);
+  clearPartRig(key: PartRigKey): void {
+    const record = requestObject('clearPartRig', key, 'key', true);
+    this.native.clearPartRig(
+      requireNumber('clearPartRig', record.destinationId, 'destinationId'),
+      requireNumber('clearPartRig', record.part, 'part'),
+    );
   }
 
   /**
@@ -1147,24 +1382,56 @@ export class Project {
   }
 
   /**
-   * Set a clip's fade-in / fade-out regions via an undoable edit. Each fade is
-   * an optional `{ lengthPpq, curve? }` ({@link ProjectClipFade}); omitted
-   * fields and omitted sides become a zero-length linear fade.
+   * Set a clip's fade-in / fade-out regions via an undoable edit. An omitted side,
+   * or an omitted length, is a zero-length linear fade.
    */
-  setClipFade(clipId: number, fadeIn?: ProjectClipFade, fadeOut?: ProjectClipFade): void {
-    this.native.setClipFade(clipId, projectClipFadeValue(fadeIn), projectClipFadeValue(fadeOut));
+  setClipFade(clipId: number, request: ProjectClipFadeRequest): void {
+    const fnName = 'setClipFade';
+    const record = requestObject(fnName, request, 'request', true);
+    const side = (ppq: unknown, curve: unknown, lengthName: string, curveName: string) => {
+      if (isAbsent(ppq) && isAbsent(curve)) {
+        return undefined;
+      }
+      return {
+        lengthPpq: isAbsent(ppq) ? 0 : requireNumber(fnName, ppq, lengthName),
+        curve: isAbsent(curve)
+          ? FADE_CURVE.linear
+          : tokenOrdinal(fnName, curve, FADE_CURVE, curveName),
+      };
+    };
+    this.native.setClipFade(
+      clipId,
+      side(record.fadeInPpq, record.fadeInCurve, 'fadeInPpq', 'fadeInCurve'),
+      side(record.fadeOutPpq, record.fadeOutCurve, 'fadeOutPpq', 'fadeOutCurve'),
+    );
   }
 
-  /** Replace a clip's take list and active take id via an undoable edit. */
-  setClipTakes(clipId: number, takes: ReadonlyArray<ProjectClipTake>, activeTakeId = 0): void {
+  /**
+   * Replace a clip's take list and active take id via an undoable edit. An
+   * omitted `options.activeTakeId` plays the clip's base source; an explicit `0`
+   * is a `RangeError`.
+   */
+  setClipTakes(
+    clipId: number,
+    takes: ReadonlyArray<ProjectClipTake>,
+    options?: ProjectClipTakesOptions,
+  ): void {
+    const fnName = 'setClipTakes';
+    const record = options === undefined ? {} : requestObject(fnName, options, 'options', true);
     takes.forEach((take, index) => {
       if (take.sourceId !== undefined) {
         // 0 reuses the clip's current source, and the addon truncates onto it.
-        assertU32('setClipTakes', take.sourceId, `takes[${index}].sourceId`);
+        assertU32(fnName, take.sourceId, `takes[${index}].sourceId`);
       }
     });
-    // Same sentinel one argument over: 0 here selects the clip's base source.
-    assertU32('setClipTakes', activeTakeId, 'activeTakeId');
+    let activeTakeId = 0;
+    if (!isAbsent(record.activeTakeId)) {
+      assertU32(fnName, requireNumber(fnName, record.activeTakeId, 'activeTakeId'), 'activeTakeId');
+      if (record.activeTakeId === 0) {
+        throw new RangeError(`${fnName}: activeTakeId must not be 0 (omit it for the default)`);
+      }
+      activeTakeId = record.activeTakeId;
+    }
     this.native.setClipTakes(clipId, takes, activeTakeId);
   }
 
@@ -1179,26 +1446,19 @@ export class Project {
     this.native.setClipCompSegments(clipId, segments);
   }
 
-  /**
-   * Set a clip's loop mode + loop length (PPQ) via an undoable edit.
-   * `loopMode` is a {@link ProjectLoopMode} ordinal/name (0/off, 1/loop). When
-   * looping, `loopLengthPpq` must be finite and >= 0, where `0` means "loop the
-   * entire clip" (the effective length is resolved from the clip's own
-   * duration). `loopCrossfadePpq` is an optional equal-power crossfade at the
-   * loop seam (PPQ, finite and >= 0; 0 = hard loop); the engine clamps it to the
-   * clip's pre-roll and half the loop.
-   */
-  setClipLoop(
-    clipId: number,
-    loopMode: ProjectLoopMode,
-    loopLengthPpq = 0,
-    loopCrossfadePpq = 0,
-  ): void {
+  /** Set a clip's loop mode and loop length via an undoable edit; see {@link ProjectClipLoopRequest}. */
+  setClipLoop(clipId: number, request: ProjectClipLoopRequest): void {
+    const fnName = 'setClipLoop';
+    const record = requestObject(fnName, request, 'request', true);
     this.native.setClipLoop(
       clipId,
-      projectLoopModeValue(loopMode),
-      loopLengthPpq,
-      loopCrossfadePpq,
+      tokenOrdinal(fnName, record.loopMode, LOOP_MODE, 'loopMode'),
+      isAbsent(record.loopLengthPpq)
+        ? 0
+        : requireNumber(fnName, record.loopLengthPpq, 'loopLengthPpq'),
+      isAbsent(record.loopCrossfadePpq)
+        ? 0
+        : requireNumber(fnName, record.loopCrossfadePpq, 'loopCrossfadePpq'),
     );
   }
 
@@ -1220,9 +1480,12 @@ export class Project {
     this.native.removeTrack(trackId);
   }
 
-  /** Rename a track via an undoable edit (omit / null `name` = empty). */
-  renameTrack(trackId: number, name?: string): void {
-    this.native.renameTrack(trackId, name ?? null);
+  /** Rename a track via an undoable edit; an empty `name` clears it. */
+  renameTrack(trackId: number, name: string): void {
+    if (typeof name !== 'string') {
+      throw new TypeError('renameTrack: name must be a string');
+    }
+    this.native.renameTrack(trackId, name);
   }
 
   /**
@@ -1239,7 +1502,10 @@ export class Project {
    * opaque target; supply it to persist a typed fader or pan target.
    */
   addAutomationLane(trackId: number, desc: ProjectAutomationLaneDesc): number {
-    return this.native.addAutomationLane(trackId, projectAutomationLaneValue(desc));
+    return this.native.addAutomationLane(
+      trackId,
+      automationLaneToNative('addAutomationLane', desc),
+    );
   }
 
   /**
@@ -1252,7 +1518,11 @@ export class Project {
     targetParamId: number,
     desc: ProjectAutomationLaneDesc,
   ): void {
-    this.native.editAutomationLane(trackId, targetParamId, projectAutomationLaneValue(desc));
+    this.native.editAutomationLane(
+      trackId,
+      targetParamId,
+      automationLaneToNative('editAutomationLane', desc),
+    );
   }
 
   /** Remove the lane identified by its stable target parameter id. */
@@ -1329,9 +1599,9 @@ export class Project {
     return this.native.importSmf(data);
   }
 
-  /** Export the project's tempo map + MIDI clips to an SMF byte buffer. */
-  exportSmf(): Buffer {
-    return this.native.exportSmf();
+  /** Export the project's tempo map + MIDI clips to SMF bytes. */
+  exportSmf(): Uint8Array {
+    return new Uint8Array(this.native.exportSmf());
   }
 
   /**
@@ -1345,62 +1615,55 @@ export class Project {
   }
 
   /**
-   * Export the project's tempo map + MIDI clips to a MIDI 2.0 Clip File
-   * (`SMF2CLIP`) byte buffer. MIDI 2.0-only events are written without loss —
+   * Export the project's tempo map + MIDI clips to MIDI 2.0 Clip File
+   * (`SMF2CLIP`) bytes. MIDI 2.0-only events are written without loss —
    * prefer this over {@link exportSmf} when MIDI 2.0 fidelity matters.
    */
-  exportClipFile(): Buffer {
-    return this.native.exportClipFile();
+  exportClipFile(): Uint8Array {
+    return new Uint8Array(this.native.exportClipFile());
   }
 
   /**
    * Set a MIDI clip's channel-0 program / bank at source PPQ 0. Omit `bank` for
-   * no Bank Select, matching `setProgramOnChannel` and the Python/WASM surfaces;
+   * no Bank Select, matching {@link setProgramOnChannel} and the Python/WASM surfaces;
    * pass `>= 0` to emit a Bank Select. A negative `bank` is refused.
    */
   setProgram(clipId: number, program: number, bank?: number): void {
     this.native.setProgram(clipId, program, resolveOptionalNonNegative('setProgram', bank, 'bank'));
   }
 
-  /** Set a MIDI clip's program / bank for one UMP group and channel. */
-  setProgramOnChannel(
-    clipId: number,
-    group: number,
-    channel: number,
-    program: number,
-    bank?: number,
-  ): void {
+  /** Set a MIDI clip's program, and optionally its Bank Select, for one UMP group and channel. */
+  setProgramOnChannel(clipId: number, request: ProjectProgramRequest): void {
+    const fnName = 'setProgramOnChannel';
+    const record = requestObject(fnName, request, 'request', true);
+    let bank = -1;
+    if (!isAbsent(record.bank)) {
+      const msb = assertU7(fnName, requireNumber(fnName, record.bank.msb, 'bank.msb'), 'bank.msb');
+      const lsb = assertU7(fnName, requireNumber(fnName, record.bank.lsb, 'bank.lsb'), 'bank.lsb');
+      bank = (msb << 7) | lsb;
+    }
     this.native.setProgramOnChannel(
       clipId,
-      group,
-      channel,
-      program,
-      resolveOptionalNonNegative('setProgramOnChannel', bank, 'bank'),
+      requireNumber(fnName, record.group, 'group'),
+      requireNumber(fnName, record.channel, 'channel'),
+      requireNumber(fnName, record.program, 'program'),
+      bank,
     );
   }
 
   /**
    * Destructively bake a MIDI-FX chain into all stored events. Large clips are
    * drained without truncation; failure leaves the original clip unchanged.
+   * Setting `withSourceIndex` also returns per-event provenance, so a selection
+   * or an editorial annotation can be carried across the bake.
    */
-  bakeMidiFx(clipId: number, configJson: string): void;
-  /**
-   * Request form. Setting `withSourceIndex` also returns per-event provenance,
-   * so a selection or an editorial annotation can be carried across the bake.
-   */
-  bakeMidiFx(request: ProjectMidiFxBakeRequest): ProjectMidiFxBakeResult;
-  bakeMidiFx(
-    clipIdOrRequest: number | ProjectMidiFxBakeRequest,
-    configJson?: string,
-  ): ProjectMidiFxBakeResult {
-    const request = normalizeMidiFxBakeRequest(clipIdOrRequest, configJson);
-    if (!request.withSourceIndex) {
-      this.native.bakeMidiFx(request.clipId, request.configJson);
+  bakeMidiFx(request: ProjectMidiFxBakeRequest): ProjectMidiFxBakeResult {
+    const { clipId, configJson, withSourceIndex } = midiFxBakeRequest(request);
+    if (!withSourceIndex) {
+      this.native.bakeMidiFx(clipId, configJson);
       return {};
     }
-    return {
-      sourceIndex: this.native.bakeMidiFxWithSourceIndex(request.clipId, request.configJson),
-    };
+    return { sourceIndex: this.native.bakeMidiFxWithSourceIndex(clipId, configJson) };
   }
 
   /**
@@ -1409,12 +1672,8 @@ export class Project {
    * deterministic, so the count matches what the bake goes on to produce.
    */
   previewMidiFxCount(request: ProjectMidiFxPreviewRequest): number {
-    return this.native.previewMidiFxCount(request.clipId, request.configJson);
-  }
-
-  /** Backward alias for {@link bakeMidiFx}. */
-  setMidiFx(clipId: number, configJson: string): void {
-    this.bakeMidiFx(clipId, configJson);
+    const record = requestObject('previewMidiFx', request, 'request', true);
+    return this.native.previewMidiFxCount(record.clipId, record.configJson);
   }
 
   /**
@@ -1428,11 +1687,7 @@ export class Project {
    *          `unmatchedNoteOffs` count the dangling events of each kind.
    * @throws If `clipId` is not a MIDI clip.
    */
-  validateMidiNotes(clipId: number): {
-    ok: boolean;
-    unmatchedNoteOns: number;
-    unmatchedNoteOffs: number;
-  } {
+  validateMidiNotes(clipId: number): ProjectNotePairValidation {
     return this.native.validateMidiNotes(clipId);
   }
 
@@ -1459,31 +1714,52 @@ export class Project {
 
   // -- MIR --
 
-  /** Return ranked tempo-octave and detected-meter candidates without editing the project. */
+  /**
+   * Return ranked tempo-octave and detected-meter candidates without editing the
+   * project. Takes `(samples, sampleRate, options?)` or one
+   * {@link ProjectAnalyzeTempoRequest}.
+   */
+  analyzeTempo(request: ProjectAnalyzeTempoRequest): ProjectTempoCandidate[];
   analyzeTempo(
-    audio: Float32Array,
+    samples: Float32Array,
     sampleRate: number,
     options?: ProjectTempoOptions,
-  ): ProjectTempoCandidate[] {
-    return this.native.analyzeTempo(audio, sampleRate, options);
+  ): ProjectTempoCandidate[];
+  analyzeTempo(...args: unknown[]): ProjectTempoCandidate[] {
+    const fnName = 'analyzeTempo';
+    const request = sampleOneShot<ProjectAnalyzeTempoRequest>(fnName, args);
+    assertAudioInput(fnName, request.samples, request.sampleRate);
+    return (
+      this.native.analyzeTempo(
+        request.samples,
+        request.sampleRate,
+        tempoOptionsToNative(request),
+      ) as unknown as Record<string, unknown>[]
+    ).map(tempoCandidateFromNative);
   }
 
   /**
    * Detect and install a ranked tempo candidate; optionally apply its detected meter.
+   * Takes `(samples, sampleRate, options?)` or one {@link ProjectAutoTempoRequest}.
    *
    * @remarks
    * `candidateIndex` indexes the ranking {@link analyzeTempo} produced, so pair
-   * the two on the same `options`. Read the installed map back with
-   * {@link tempoSegmentCount} and {@link tempoSegmentByIndex}.
+   * the two on the same options. Read the installed map back with
+   * {@link tempoSegments}.
    */
-  autoTempo(
-    audio: Float32Array,
-    sampleRate: number,
-    candidateIndex = 0,
-    applyTimeSignatures = false,
-    options?: ProjectTempoOptions,
-  ): number {
-    return this.native.autoTempo(audio, sampleRate, candidateIndex, applyTimeSignatures, options);
+  autoTempo(request: ProjectAutoTempoRequest): number;
+  autoTempo(samples: Float32Array, sampleRate: number, options?: ProjectAutoTempoOptions): number;
+  autoTempo(...args: unknown[]): number {
+    const fnName = 'autoTempo';
+    const request = sampleOneShot<ProjectAutoTempoRequest>(fnName, args);
+    assertAudioInput(fnName, request.samples, request.sampleRate);
+    return this.native.autoTempo(
+      request.samples,
+      request.sampleRate,
+      request.candidateIndex ?? 0,
+      request.applyTimeSignatures ?? false,
+      tempoOptionsToNative(request),
+    );
   }
 
   /**
@@ -1500,12 +1776,26 @@ export class Project {
    * chord / section / onset annotations are preserved).
    */
   annotateKeys(keys: ProjectKeySegment[]): void {
-    this.native.annotateKeys(keys);
+    this.native.annotateKeys(
+      keys.map((key) => ({
+        ...key,
+        ...(key.mode === undefined
+          ? {}
+          : { mode: tokenOrdinal('annotateKeys', key.mode, KEY_MODE, 'mode') }),
+      })),
+    );
   }
 
   /** Replace the project's chord-symbol annotation stream via an undoable edit. */
   annotateChords(chords: ProjectChordSymbol[]): void {
-    this.native.annotateChords(chords);
+    this.native.annotateChords(
+      chords.map((chord) => ({
+        ...chord,
+        ...(chord.quality === undefined
+          ? {}
+          : { quality: tokenOrdinal('annotateChords', chord.quality, CHORD_QUALITY, 'quality') }),
+      })),
+    );
   }
 
   // -- assist sidecars --
@@ -1515,20 +1805,10 @@ export class Project {
    * via an undoable edit. The payload bytes are copied.
    */
   setAssistSidecar(sidecar: ProjectAssistSidecarInput): void {
-    this.native.setAssistSidecar(sidecar);
+    this.native.setAssistSidecar(requestObject('setAssistSidecar', sidecar, 'sidecar', true));
   }
 
-  /** Number of assist sidecars currently stored on the project. */
-  assistSidecarCount(): number {
-    return this.native.assistSidecarCount();
-  }
-
-  /** Read one assist sidecar by stable project order. */
-  getAssistSidecar(index: number): ProjectAssistSidecar {
-    return this.native.getAssistSidecar(index);
-  }
-
-  /** Read every stored assist sidecar as an array (stable project order). */
+  /** Every stored assist sidecar, in stable project order. */
   assistSidecars(): ProjectAssistSidecar[] {
     return this.native.assistSidecars();
   }
@@ -1537,53 +1817,58 @@ export class Project {
 
   /** Compile the project into an RT-readable timeline, surfacing diagnostics. */
   compile(): ProjectCompileResult {
-    return this.native.compile();
+    return { diagnostics: diagnosticsFromNative(this.native.compile().diagnostics) };
   }
 
   /**
    * Compile the project and keep the resulting timeline. Returns the same
-   * result as {@link compile} plus `timeline`, which is `null` when compilation
-   * produced none. Install it with {@link RealtimeEngine.applyProjectTimeline};
+   * diagnostics as {@link compile} plus `timeline`, which is `null` when
+   * compilation produced none. Install it with {@link RealtimeEngine.applyProjectTimeline};
    * later project edits do not change an already compiled timeline.
    */
   compileTimeline(): ProjectCompileTimelineResult {
-    const { timeline, ...result } = this.native.compileTimeline();
-    return { ...result, timeline: timeline === null ? null : new ProjectTimeline(timeline) };
+    const raw = this.native.compileTimeline();
+    return {
+      diagnostics: diagnosticsFromNative(raw.diagnostics),
+      timeline: raw.timeline === null ? null : createTimeline(raw.timeline),
+    };
   }
 
   /**
    * Retrieve the compile result captured by the most recent {@link bounce}.
    *
-   * On a project no bounce has ever run on, the result is empty in full:
-   * `hasTimeline` is `false` and `diagnostics` is empty. A failed bounce is
-   * distinguishable from that state, because a bounce only loses its timeline
-   * through an error diagnostic and so always reports at least one.
+   * On a project no bounce has ever run on, the diagnostics are empty. A failed
+   * bounce is distinguishable from that state, because a bounce only loses its
+   * timeline through an error diagnostic and so always reports at least one.
    */
   lastBounceCompileResult(): ProjectCompileResult {
-    return this.native.lastBounceCompileResult();
+    return {
+      diagnostics: diagnosticsFromNative(this.native.lastBounceCompileResult().diagnostics),
+    };
   }
 
   /**
-   * Compile + render the project offline to an interleaved float buffer
-   * (`totalFrames * channels` samples). Deterministic: the same project +
-   * options yields a bit-identical array within one build.
+   * Compile + render the project offline to planar float audio at the project
+   * sample rate. Deterministic: the same project + options yields bit-identical
+   * output within one build.
    *
-   * Omitting `options.totalFrames` (or passing `<= 0`) auto-derives the render
-   * length from the arrangement rather than producing an empty render.
+   * Omitting `options.totalFrames` derives the render length from the arrangement
+   * rather than producing an empty render.
    *
    * MIDI tracks routed to a destination render as silence here, because no
    * instrument is bound. To audition MIDI through the built-in synth, use
-   * {@link bounceWithBuiltinInstrument} / {@link bounceWithBuiltinInstruments}.
+   * {@link bounceWithBuiltinInstruments}.
    */
-  bounce(options: ProjectBounceOptions = {}): Float32Array {
-    assertBounceOptions('bounce', options);
-    return this.native.bounce(options);
+  bounce(options?: ProjectBounceOptions): ProjectBounceResult {
+    const { native, numChannels } = bounceSettings('bounce', options);
+    return planarBounce(this.native.bounce(native), numChannels, this.sampleRate);
   }
 
   /**
    * Like {@link bounce}, but drives MIDI tracks routed to a destination through
-   * instruments you implement in JavaScript. Each entry of `instruments` binds
-   * an {@link ExternalInstrument} to its `destinationId` (default `0`).
+   * instruments you implement in JavaScript. Each pair binds an
+   * {@link ExternalInstrument} to its `destinationId` (default `0`); one pair or an
+   * array is accepted.
    *
    * Every callback runs synchronously on the calling thread while this method
    * is blocked, so there is no async instrument: a callback that returns a
@@ -1599,163 +1884,87 @@ export class Project {
    * One instrument shared by tracks that feed different channel strips throws
    * a `SonareError` with `NOT_SUPPORTED`, because callback audio carries no
    * source-track attribution; bind one destination per strip instead.
-   *
-   * Argument order is instrument-first to match the built-in families.
    */
   bounceWithInstruments(
-    instruments: ReadonlyArray<ExternalInstrument> = [],
-    options: ProjectBounceOptions = {},
-  ): Float32Array {
-    assertBounceOptions('bounceWithInstruments', options);
-    return this.bounceWithExternalInstruments(
-      normalizeInstrumentBindings('bounceWithInstruments', true, instruments, false, (b) => b),
-      options,
-    );
-  }
-
-  /**
-   * Convenience wrapper over {@link bounceWithInstruments} for the common
-   * single-instrument case; an array is the list form.
-   */
-  bounceWithInstrument(
-    instrument: ExternalInstrument | ReadonlyArray<ExternalInstrument>,
-    options: ProjectBounceOptions = {},
-  ): Float32Array {
-    assertBounceOptions('bounceWithInstrument', options);
-    return this.bounceWithExternalInstruments(
-      normalizeInstrumentBindings('bounceWithInstrument', false, instrument, false, (b) => b),
-      options,
-    );
-  }
-
-  private bounceWithExternalInstruments(
-    instruments: ExternalInstrument[],
-    options: ProjectBounceOptions,
-  ): Float32Array {
+    instruments:
+      | ProjectInstrumentBinding<ExternalInstrument>
+      | readonly ProjectInstrumentBinding<ExternalInstrument>[] = [],
+    options?: ProjectBounceOptions,
+  ): ProjectBounceResult {
+    const fnName = 'bounceWithInstruments';
+    const { native: settings, numChannels } = bounceSettings(fnName, options);
+    const bindings = bindInstruments(fnName, instruments, (i) => i, withDestinationLayer);
     const native = this.native;
     this.instrumentBounceActive = true;
     try {
-      return native.bounceWithInstruments(instruments, options);
+      return planarBounce(
+        native.bounceWithInstruments(bindings, settings),
+        numChannels,
+        native.getSampleRate(),
+      );
     } finally {
       this.instrumentBounceActive = false;
     }
   }
 
-  private bounceNativeBindings<E, R>(
-    fnName: string,
-    plural: boolean,
-    instruments: E | ReadonlyArray<E>,
-    options: ProjectBounceOptions,
-    entry: (binding: E) => R,
-    render: (native: InstanceType<typeof addon.Project>, bindings: R[]) => Float32Array,
-  ): Float32Array {
-    assertBounceOptions(fnName, options);
-    const native = this.native;
-    return render(native, normalizeInstrumentBindings(fnName, plural, instruments, true, entry));
-  }
-
   /**
    * Like {@link bounce}, but renders MIDI tracks routed to a destination
    * through the built-in oscillator synth so a MIDI-only arrangement bounces
-   * to audible audio. Each entry of `instruments` binds a
-   * {@link BuiltinInstrumentConfig} patch to a `destinationId` (default `0`).
-   * An empty array renders silence, identical to {@link bounce}.
-   *
-   * Argument order is instrument-first to match the WASM and Python bindings.
+   * to audible audio. Each pair binds a {@link BuiltinSynthConfig} patch to a
+   * `destinationId` (default `0`); one pair or an array is accepted. An empty
+   * array renders silence, identical to {@link bounce}.
    */
   bounceWithBuiltinInstruments(
-    instruments: ReadonlyArray<BuiltinInstrumentConfig | SynthWaveform> = [],
-    options: ProjectBounceOptions = {},
-  ): Float32Array {
-    return this.bounceNativeBindings(
-      'bounceWithBuiltinInstruments',
-      true,
-      instruments,
-      options,
-      builtinInstrumentConfig,
-      (native, bindings) => native.bounceWithBuiltinInstruments(bindings, options),
+    instruments:
+      | ProjectInstrumentBinding<BuiltinSynthConfig>
+      | readonly ProjectInstrumentBinding<BuiltinSynthConfig>[] = [],
+    options?: ProjectBounceOptions,
+  ): ProjectBounceResult {
+    const fnName = 'bounceWithBuiltinInstruments';
+    const { native: settings, numChannels } = bounceSettings(fnName, options);
+    const bindings = bindInstruments(fnName, instruments, (i) => i, withDestinationCopy);
+    const native = this.native;
+    return planarBounce(
+      native.bounceWithBuiltinInstruments(bindings, settings),
+      numChannels,
+      native.getSampleRate(),
     );
   }
 
   /**
-   * Convenience wrapper over {@link bounceWithBuiltinInstruments} for the
-   * common single-instrument case. Pass a {@link BuiltinInstrumentConfig}
-   * (e.g. `{ waveform: 'saw', destinationId: 0 }`) or a bare
-   * {@link SynthWaveform} name to bind one built-in synth patch; an array of
-   * either is the list form, as on the WASM binding. The
-   * `destinationId` field is a JS binding convenience, not part of the
-   * oscillator patch itself.
-   *
-   * Argument order is instrument-first to match the WASM and Python bindings.
-   */
-  bounceWithBuiltinInstrument(
-    instrument:
-      | BuiltinInstrumentConfig
-      | SynthWaveform
-      | ReadonlyArray<BuiltinInstrumentConfig | SynthWaveform> = {},
-    options: ProjectBounceOptions = {},
-  ): Float32Array {
-    return this.bounceNativeBindings(
-      'bounceWithBuiltinInstrument',
-      false,
-      instrument,
-      options,
-      builtinInstrumentConfig,
-      (native, bindings) => native.bounceWithBuiltinInstruments(bindings, options),
-    );
-  }
-
-  /**
-   * Like {@link bounce}, but renders MIDI tracks routed to a destination
-   * through the patch-driven NativeSynth — the full synthesizer (every
+   * Like {@link bounce}, but renders MIDI tracks routed to a destination through
+   * the patch-driven NativeSynth — the full synthesizer (every
    * {@link SynthEngineMode} engine plus the realism layer; the modes are
-   * enumerated by {@link SYNTH_ENGINE_MODES}). Each entry of
-   * `instruments` binds a {@link SynthPatch} (or a preset-name string such as
-   * `'saw-lead'` / `'va:saw-lead'`; see {@link synthPresetNames}) to a
-   * `destinationId` (default `0`). An object descriptor may also set
-   * `useGmPrograms: true` to follow incoming GM bank/program changes (and use
+   * enumerated by {@link SYNTH_ENGINE_MODES}). Each pair binds a {@link SynthPatch}
+   * to a `destinationId` (default `0`); one pair or an array is accepted. Name a
+   * catalog preset with `preset` (see {@link synthPresetNames}). A patch may also
+   * set `useGmPrograms: true` to follow incoming GM bank/program changes (and use
    * the GM drum map on channel 10); it defaults to `false`, preserving the
    * fixed-patch behavior. An `engineMode: 'sample'` patch also takes a
    * `sampleBank` ({@link SampleBank}) holding the PCM its keymap names.
-   * `destinationId`, `useGmPrograms` and `sampleBank` are JS binding
-   * conveniences, not part of the NativeSynth patch itself. An empty array
-   * renders silence. Unknown preset names throw. Deterministic for a fixed
-   * project + options + patch.
-   *
-   * Argument order is instrument-first to match the WASM and Python bindings.
+   * `useGmPrograms` and `sampleBank` are JS binding conveniences, not part of the
+   * NativeSynth patch itself. An empty array renders silence. Unknown preset names
+   * throw. Deterministic for a fixed project + options + patch.
    */
   bounceWithSynthInstruments(
-    instruments: ReadonlyArray<SynthPatch | string> = [],
-    options: ProjectBounceOptions = {},
-  ): Float32Array {
-    return this.bounceNativeBindings(
-      'bounceWithSynthInstruments',
-      true,
+    instruments:
+      | ProjectInstrumentBinding<SynthPatch>
+      | readonly ProjectInstrumentBinding<SynthPatch>[] = [],
+    options?: ProjectBounceOptions,
+  ): ProjectBounceResult {
+    const fnName = 'bounceWithSynthInstruments';
+    const { native: settings, numChannels } = bounceSettings(fnName, options);
+    const bindings = bindInstruments(
+      fnName,
       instruments,
-      options,
-      normalizeSynthInstrument,
-      (native, bindings) => native.bounceWithSynthInstruments(bindings, options),
+      (i) => normalizeSynthInstrument(i) as SynthPatch,
+      withDestinationCopy,
     );
-  }
-
-  /**
-   * Convenience wrapper over {@link bounceWithSynthInstruments} for the common
-   * single-instrument case. Pass a {@link SynthPatch} or a bare preset name
-   * (`'saw-lead'` / `'va:saw-lead'`), or an array of either as the list form.
-   * Set `useGmPrograms: true` on an object descriptor to follow incoming GM
-   * bank/program changes.
-   */
-  bounceWithSynthInstrument(
-    instrument: SynthPatch | string | ReadonlyArray<SynthPatch | string> = {},
-    options: ProjectBounceOptions = {},
-  ): Float32Array {
-    return this.bounceNativeBindings(
-      'bounceWithSynthInstrument',
-      false,
-      instrument,
-      options,
-      normalizeSynthInstrument,
-      (native, bindings) => native.bounceWithSynthInstruments(bindings, options),
+    const native = this.native;
+    return planarBounce(
+      native.bounceWithSynthInstruments(bindings, settings),
+      numChannels,
+      native.getSampleRate(),
     );
   }
 
@@ -1799,32 +2008,21 @@ export class Project {
    * no SoundFont loaded at all — play through the built-in synthesizer GM
    * fallback bank (the data-free floor; see {@link soundFontManifest} for the
    * per-program backend). An empty array renders silence.
-   *
-   * Argument order is instrument-first to match the WASM and Python bindings.
    */
   bounceWithSf2Instruments(
-    instruments: ReadonlyArray<Sf2InstrumentConfig> = [],
-    options: ProjectBounceOptions = {},
-  ): Float32Array {
-    assertBounceOptions('bounceWithSf2Instruments', options);
-    return this.native.bounceWithSf2Instruments(
-      normalizeInstrumentBindings('bounceWithSf2Instruments', true, instruments, false, (b) => b),
-      options,
-    );
-  }
-
-  /**
-   * Convenience wrapper over {@link bounceWithSf2Instruments} for the common
-   * single-instrument case; an array is the list form, as on the WASM binding.
-   */
-  bounceWithSf2Instrument(
-    instrument: Sf2InstrumentConfig | ReadonlyArray<Sf2InstrumentConfig> = {},
-    options: ProjectBounceOptions = {},
-  ): Float32Array {
-    assertBounceOptions('bounceWithSf2Instrument', options);
-    return this.native.bounceWithSf2Instruments(
-      normalizeInstrumentBindings('bounceWithSf2Instrument', false, instrument, false, (b) => b),
-      options,
+    instruments:
+      | ProjectInstrumentBinding<Sf2InstrumentConfig>
+      | readonly ProjectInstrumentBinding<Sf2InstrumentConfig>[] = [],
+    options?: ProjectBounceOptions,
+  ): ProjectBounceResult {
+    const fnName = 'bounceWithSf2Instruments';
+    const { native: settings, numChannels } = bounceSettings(fnName, options);
+    const bindings = bindInstruments(fnName, instruments, (i) => i, withDestinationCopy);
+    const native = this.native;
+    return planarBounce(
+      native.bounceWithSf2Instruments(bindings, settings),
+      numChannels,
+      native.getSampleRate(),
     );
   }
 
@@ -1838,13 +2036,16 @@ export class Project {
   }
 
   /**
-
    * Releases the native project; lets `using` free it automatically (needs TypeScript 5.2+
-
    * or a runtime with native explicit resource management; Node 22 does not parse `using`).
-
    */
   [Symbol.dispose](): void {
     this.destroy();
   }
+}
+
+function adoptProject(native: NativeProject): Project {
+  return new (Project as unknown as new (adopted: AdoptedProject) => Project)(
+    new AdoptedProject(native),
+  );
 }
