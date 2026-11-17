@@ -709,7 +709,7 @@ surface-coverage-check:
 # that is red by design must not sit upstream of a gate that has to pass.
 # Narrow it with SURFACE_CHECK_ARGS, e.g. "--surface python --domain core".
 surface-check:
-	python3 -m unittest tools/api/test_check_surface.py
+	python3 -m unittest tools/api/test_check_surface.py tools/api/test_ts_exports.py
 	python3 tools/api/check_surface.py $(if $(SURFACE_CHECK_ARGS),$(SURFACE_CHECK_ARGS),--all)
 
 # UPGRADING.md is generated from tools/api/migration/rules.toml and the ledgers.

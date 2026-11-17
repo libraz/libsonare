@@ -92,7 +92,8 @@ const describeMember = (m, isStatic) => {
   const name = memberName(m, md);
   if (name.startsWith('#')) return null;
   const mt = checker.getTypeOfSymbolAtLocation(m, md);
-  const cs = mt.getCallSignatures();
+  // An optional method (`f?(...)`) is typed `F | undefined`, which has no call signatures itself.
+  const cs = checker.getNonNullableType(mt).getCallSignatures();
   let kind;
   if (m.flags & ts.SymbolFlags.Method) kind = 'method';
   else if (m.flags & ts.SymbolFlags.Accessor) kind = 'accessor';
