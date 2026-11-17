@@ -11884,7 +11884,7 @@ rule = "absent-not-sentinel"
 kind = "field"
 old = "MixerConfig.blockSize"
 new = "MixerConfig.maxBlockSize"
-domain = "engine"
+domain = "mastering"
 rule = "num-channels"
 
 
@@ -11892,7 +11892,7 @@ rule = "num-channels"
 kind = "field"
 old = "MixerJsonOptions.blockSize"
 new = "MixerJsonOptions.maxBlockSize"
-domain = "engine"
+domain = "mastering"
 rule = "num-channels"
 
 
