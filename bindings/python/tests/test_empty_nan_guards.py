@@ -529,6 +529,24 @@ class TestDocumentedBufferInputForms:
         with pytest.raises(SonareValueError, match=r"metering_rms_db: samples must not be empty"):
             metering_rms_db(empty, sample_rate=22050)
 
+    INTEGER = {
+        "ndarray_int16": lambda: np.zeros(1024, dtype=np.int16),
+        "ndarray_int32": lambda: np.zeros(1024, dtype=np.int32),
+        "ndarray_uint8": lambda: np.zeros(1024, dtype=np.uint8),
+        "ndarray_bool": lambda: np.zeros(1024, dtype=bool),
+        "array.array_h": lambda: array.array("h", [0] * 1024),
+        "memoryview_int16": lambda: memoryview(np.zeros(1024, dtype=np.int16)),
+    }
+
+    @pytest.mark.parametrize("form", sorted(INTEGER))
+    def test_an_integer_typed_buffer_is_a_type_error(self, form):
+        # Integer PCM has an implied full scale; casting it would read codes as amplitudes.
+        with pytest.raises(TypeError, match=r"metering_rms_db: samples must have a floating dtype"):
+            metering_rms_db(self.INTEGER[form](), sample_rate=22050)
+
+    def test_a_list_of_python_ints_is_still_cast(self):
+        assert math.isfinite(metering_rms_db([1, 0, -1, 0] * 256, sample_rate=22050))
+
     def test_generator_is_rejected_by_the_guard_not_by_numpy(self):
         # Not a documented form, but it must still fail the way the binding
         # promises rather than leaking NumPy's own TypeError.

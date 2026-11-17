@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import array
 import contextlib
 import ctypes
 import functools
@@ -358,6 +359,19 @@ def _not_a_buffer(samples: object, fn_name: str, arg_name: str) -> SonareValueEr
     )
 
 
+def _integer_samples(dtype: np.dtype[Any], fn_name: str, arg_name: str) -> TypeError:
+    """Build the rejection for a typed buffer whose elements are integers or booleans.
+
+    Integer audio is PCM with an implied full scale, so a plain cast would read
+    16-bit codes as amplitudes up to 32767; the caller has to scale it.
+    """
+    prefix = f"{fn_name}: " if fn_name else ""
+    return TypeError(
+        f"{prefix}{arg_name} must have a floating dtype (float32 or float64), not {dtype}; "
+        "scale integer PCM to [-1, 1] first"
+    )
+
+
 def _past_float32_range(samples: object, fn_name: str, arg_name: str) -> SonareValueError:
     """Build the rejection for an element the float32 cast turned into an infinity.
 
@@ -425,10 +439,20 @@ def _as_float32_buffer(
     reported as a NaN sample at index 0 — sending the caller to look at audio
     data for a bug in whatever produced the ``None``.
 
+    A typed buffer (ndarray, ``array.array``, ``memoryview``) with an integer or
+    boolean element type is a ``TypeError``: its values are PCM codes, not
+    amplitudes. A list of Python numbers carries no element type and is cast.
+
     ``fn_name`` / ``arg_name`` only shape those messages, so a rejection names
     the facade the caller invoked exactly as :func:`_validate_samples` does.
     """
+    if isinstance(samples, (array.array, memoryview)):
+        typed = np.asarray(samples)
+        if typed.dtype.kind in "biu":
+            raise _integer_samples(typed.dtype, fn_name, arg_name)
     if isinstance(samples, np.ndarray):
+        if samples.dtype.kind in "biu":
+            raise _integer_samples(samples.dtype, fn_name, arg_name)
         if (
             samples.dtype == np.float32
             and samples.flags["C_CONTIGUOUS"]

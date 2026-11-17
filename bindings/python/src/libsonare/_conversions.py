@@ -526,7 +526,6 @@ def fix_length(
     )
 
 
-@_guard_buffer("frames")
 def fix_frames(
     frames: Sequence[int] | list[int],
     x_min: int = 0,
@@ -539,7 +538,10 @@ def fix_frames(
     negative value is refused.
     """
     lib = _get_lib()
-    c_array, length = _to_c_int_array(frames, "frames")
+    # Frame indices take the int path, which keeps an integer dtype exact.
+    c_array, length = _to_c_int_array(frames, "fix_frames: frames")
+    if length == 0:
+        raise SonareValueError("fix_frames: frames must not be empty")
     with _out_int_array(lib) as (out, out_length):
         rc = lib.sonare_fix_frames(
             c_array,
