@@ -645,14 +645,14 @@ def test_declip_cli_writes_repaired_audio(monkeypatch, tmp_path, capsys) -> None
         lpc_order: int,
         iterations: int,
         lpc_blend: float,
-    ) -> list[float]:
+    ) -> SimpleNamespace:
         calls["samples"] = samples
         calls["sample_rate"] = sample_rate
         calls["clip_threshold"] = clip_threshold
         calls["lpc_order"] = lpc_order
         calls["iterations"] = iterations
         calls["lpc_blend"] = lpc_blend
-        return [0.8, -0.8, 0.25]
+        return SimpleNamespace(samples=[0.8, -0.8, 0.25])
 
     monkeypatch.setattr(libsonare, "mastering_repair_declip", fake_declip)
 
