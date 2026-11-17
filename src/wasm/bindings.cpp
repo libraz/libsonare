@@ -279,6 +279,10 @@ val js_sonare_exception_info(std::uintptr_t exception_ptr) {
           code = 9;
           code_name = "EncodeFailed";
           break;
+        case sonare::ErrorCode::StaleResult:
+          code = 11;
+          code_name = "StaleResult";
+          break;
       }
     } else {
       // Not a SonareException: classify by RTTI the same way the C-ABI catch

@@ -100,6 +100,8 @@ enum class ErrorCode : int {
   ///        and callers routing on the code cannot recover the distinction once
   ///        the two are merged.
   EncodeFailed,
+  /// @brief An operation was attempted on a result its source has since invalidated.
+  StaleResult,
 };
 
 /// @brief Pitch class (0-11, C=0).
@@ -263,6 +265,8 @@ inline const char* error_message(ErrorCode code) {
       return "Cancelled";
     case ErrorCode::EncodeFailed:
       return "Encode failed";
+    case ErrorCode::StaleResult:
+      return "Stale result";
     default:
       return "Unknown error";
   }

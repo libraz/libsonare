@@ -61,6 +61,8 @@ int project_exit_code(SonareError err) {
       return cli_exit_code_for_error(sonare::ErrorCode::Cancelled, false);
     case SONARE_ERROR_ENCODE_FAILED:
       return cli_exit_code_for_error(sonare::ErrorCode::EncodeFailed, false);
+    case SONARE_ERROR_STALE_RESULT:
+      return cli_exit_code_for_error(sonare::ErrorCode::StaleResult, false);
     case SONARE_OK:
     case SONARE_ERROR_UNKNOWN:
     default:

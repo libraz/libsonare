@@ -45,6 +45,8 @@ typedef enum SONARE_ENUM_BASE {
   /// A binding found that the loaded native library implements a different ABI
   /// than the binding was built for. The C library never returns it itself.
   SONARE_ERROR_ABI_MISMATCH = 10,
+  /// An operation was attempted on a result its source has since invalidated.
+  SONARE_ERROR_STALE_RESULT = 11,
   SONARE_ERROR_UNKNOWN = 99
 } SonareError;
 

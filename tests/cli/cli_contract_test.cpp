@@ -1122,6 +1122,11 @@ TEST_CASE("CLI exception exit codes include cancellation", "[cli][contract]") {
   REQUIRE(cli_exit_code_for_error(sonare::ErrorCode::Cancelled, true) == 1);
 }
 
+TEST_CASE("CLI exit code for StaleResult is 14, not its error code", "[cli][contract]") {
+  REQUIRE(cli_exit_code_for_error(sonare::ErrorCode::StaleResult, false) == 14);
+  REQUIRE(cli_exit_code_for_error(sonare::ErrorCode::StaleResult, true) == 1);
+}
+
 #if defined(SONARE_WITH_VOICE_CHANGER)
 TEST_CASE("CLI voice-preset-validate emits the Batch-0 JSON envelope", "[cli][contract]") {
   const std::string valid_path = unique_temp_path("_contract_valid_preset.json");

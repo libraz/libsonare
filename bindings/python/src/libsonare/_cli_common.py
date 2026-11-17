@@ -147,6 +147,7 @@ from ._ffi import (
     SONARE_ERROR_INVALID_STATE,
     SONARE_ERROR_NOT_SUPPORTED,
     SONARE_ERROR_OUT_OF_MEMORY,
+    SONARE_ERROR_STALE_RESULT,
     resolved_library_path,
 )
 from ._runtime import SonareError
@@ -180,6 +181,9 @@ EXIT_CANCELLED = 11
 EXIT_ENCODE_FAILED = 12
 # Python-only: the native CLI links its library statically and cannot skew.
 EXIT_ABI_MISMATCH = 13
+# Exit codes and C-ABI error codes are separate numbering spaces: error 11 is
+# StaleResult while exit 11 is a cancellation, so StaleResult exits 14.
+EXIT_STALE_RESULT = 14
 
 # Mirrors kAnalysisSampleRate and kMaxStftNFft: analysis windows are held as
 # samples at this rate and rescaled to the input rate.
@@ -216,6 +220,7 @@ _SONARE_CODE_TO_EXIT = {
     SONARE_ERROR_CANCELLED: EXIT_CANCELLED,
     SONARE_ERROR_ENCODE_FAILED: EXIT_ENCODE_FAILED,
     SONARE_ERROR_ABI_MISMATCH: EXIT_ABI_MISMATCH,
+    SONARE_ERROR_STALE_RESULT: EXIT_STALE_RESULT,
 }
 
 

@@ -35,6 +35,8 @@ inline constexpr SonareError c_error_from_error_code(sonare::ErrorCode code) noe
       return SONARE_ERROR_CANCELLED;
     case sonare::ErrorCode::EncodeFailed:
       return SONARE_ERROR_ENCODE_FAILED;
+    case sonare::ErrorCode::StaleResult:
+      return SONARE_ERROR_STALE_RESULT;
   }
   // A scoped enum can hold an out-of-range underlying value.
   return SONARE_ERROR_UNKNOWN;
@@ -62,6 +64,8 @@ inline sonare::ErrorCode error_code_from_c_error(SonareError err) {
       return sonare::ErrorCode::Cancelled;
     case SONARE_ERROR_ENCODE_FAILED:
       return sonare::ErrorCode::EncodeFailed;
+    case SONARE_ERROR_STALE_RESULT:
+      return sonare::ErrorCode::StaleResult;
     case SONARE_OK:
     case SONARE_ERROR_UNKNOWN:
     default:

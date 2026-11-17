@@ -22,6 +22,7 @@ class ErrorCode(IntEnum):
     CANCELLED = 8
     ENCODE_FAILED = 9
     ABI_MISMATCH = 10
+    STALE_RESULT = 11
     UNKNOWN = 99
 
 
@@ -47,6 +48,7 @@ class SonareError(RuntimeError):
             ErrorCode.CANCELLED: "Cancelled",
             ErrorCode.ENCODE_FAILED: "EncodeFailed",
             ErrorCode.ABI_MISMATCH: "AbiMismatch",
+            ErrorCode.STALE_RESULT: "StaleResult",
             ErrorCode.UNKNOWN: "Unknown",
         }
         try:

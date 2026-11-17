@@ -5,7 +5,7 @@ from __future__ import annotations
 import pytest
 
 from libsonare import ErrorCode, Mixer, SonareError, cli
-from libsonare._cli_common import EXIT_ABI_MISMATCH
+from libsonare._cli_common import EXIT_ABI_MISMATCH, EXIT_STALE_RESULT
 
 from ._helpers import LIB_AVAILABLE
 
@@ -71,3 +71,11 @@ def test_abi_mismatch_maps_to_python_only_exit_code() -> None:
     assert EXIT_ABI_MISMATCH == 13
     exc = SonareError(ErrorCode.ABI_MISMATCH, "libsonare ABI mismatch")
     assert cli._exit_code_for(exc) == EXIT_ABI_MISMATCH
+
+
+def test_stale_result_code_and_exit_code() -> None:
+    assert int(ErrorCode.STALE_RESULT) == 11
+    exc = SonareError(ErrorCode.STALE_RESULT, "stale")
+    assert exc.code_name == "StaleResult"
+    assert EXIT_STALE_RESULT == 14
+    assert cli._exit_code_for(exc) == EXIT_STALE_RESULT

@@ -188,6 +188,13 @@ TEST_CASE("C error mapping preserves cancellation", "[c_api][abi]") {
           sonare::ErrorCode::InvalidParameter);
 }
 
+TEST_CASE("C error mapping round-trips StaleResult", "[c_api][abi]") {
+  STATIC_REQUIRE(sonare_c_detail::c_error_from_error_code(sonare::ErrorCode::StaleResult) ==
+                 SONARE_ERROR_STALE_RESULT);
+  REQUIRE(sonare_c_detail::error_code_from_c_error(SONARE_ERROR_STALE_RESULT) ==
+          sonare::ErrorCode::StaleResult);
+}
+
 TEST_CASE("length-checked inverse transforms reject a short input buffer", "[c_api][abi]") {
   const int n_mfcc = 13;
   const int n_frames = 8;

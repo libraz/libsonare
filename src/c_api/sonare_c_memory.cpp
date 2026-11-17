@@ -189,6 +189,8 @@ const char* sonare_error_message(SonareError error) {
       return "Encode failed";
     case SONARE_ERROR_ABI_MISMATCH:
       return "Native library ABI mismatch";
+    case SONARE_ERROR_STALE_RESULT:
+      return "Stale result";
     case SONARE_ERROR_UNKNOWN:
       return "Unknown error";
   }
