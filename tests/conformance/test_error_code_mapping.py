@@ -194,12 +194,15 @@ def wasm_mapping(root: Path) -> dict[str, tuple[int, str]]:
 
 
 def ts_enumerators(root: Path, relative: str) -> dict[str, int]:
-    """A TypeScript ``ErrorCode`` enum, name to numeric code."""
+    """A TypeScript ``ErrorCode`` table (enum or ``as const`` object), name to numeric code."""
     text = _strip_comments(_read(root, relative))
-    body = _braced_body(text, text.index("export enum ErrorCode"))
+    head = re.search(r"export\s+(?:enum\s+ErrorCode|const\s+ErrorCode\s*=)", text)
+    if head is None:
+        raise ValueError(f"{relative}: no exported ErrorCode table")
+    body = _braced_body(text, head.start())
     return {
         m.group(1): int(m.group(2))
-        for m in re.finditer(r"(\w+)\s*=\s*(-?\d+)\s*,", body)
+        for m in re.finditer(r"(\w+)\s*[=:]\s*(-?\d+)\s*,", body)
     }
 
 
@@ -469,7 +472,9 @@ class NonVacuityTest(unittest.TestCase):
         with holder:
             path = root / NODE_TYPES
             text = path.read_text(encoding="utf-8")
-            path.write_text(text.replace("Cancelled = 8,", "Cancelled = 88,"), encoding="utf-8")
+            moved, count = re.subn(r"\bCancelled(\s*[=:]\s*)8,", r"Cancelled\g<1>88,", text)
+            self.assertEqual(count, 1, "the Node ErrorCode table no longer spells Cancelled this way")
+            path.write_text(moved, encoding="utf-8")
             problems = inconsistencies(Tables(root))
         self.assertEqual(
             problems,
