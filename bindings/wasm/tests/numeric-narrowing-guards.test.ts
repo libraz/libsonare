@@ -817,7 +817,7 @@ describe('uint32 ids keep their whole domain on every WASM id path', () => {
         expectRangeRefusal(() => project.setMarkerEx({ id, ppq: 0, name: 'm' }));
       }
     } finally {
-      project.delete();
+      project.destroy();
     }
   });
 });

@@ -131,7 +131,7 @@ describe('Sonare WASM sample bank', () => {
       bank.addZone({ setIndex: 3, sampleIndex: 0 });
       expect(bank.setCount()).toBe(4);
     } finally {
-      bank.delete();
+      bank.destroy();
     }
   });
 
@@ -164,8 +164,8 @@ describe('Sonare WASM sample bank', () => {
         );
         expect(peak(audio) > 0, label).toBe(sounds);
       } finally {
-        project.delete();
-        bank.delete();
+        project.destroy();
+        bank.destroy();
       }
     }
   });
@@ -209,8 +209,8 @@ describe('Sonare WASM sample bank', () => {
       expect(peak(first)).toBeGreaterThan(0);
       expect(Array.from(second)).toEqual(Array.from(first));
     } finally {
-      project.delete();
-      bank.delete();
+      project.destroy();
+      bank.destroy();
     }
   });
 
@@ -223,7 +223,7 @@ describe('Sonare WASM sample bank', () => {
       );
       expect(peak(audio)).toBe(0);
     } finally {
-      project.delete();
+      project.destroy();
     }
   });
 
@@ -232,7 +232,7 @@ describe('Sonare WASM sample bank', () => {
     const released = new SampleBank();
     try {
       released.addSample(tone(261.6256, 0.1));
-      released.delete();
+      released.destroy();
 
       // The id outlives the handle, so a released bank has to be refused
       // rather than left to a pointer that still looks plausible.
@@ -249,7 +249,7 @@ describe('Sonare WASM sample bank', () => {
         ),
       ).toThrow(TypeError);
     } finally {
-      project.delete();
+      project.destroy();
     }
   });
 
@@ -260,7 +260,7 @@ describe('Sonare WASM sample bank', () => {
     const bank = new SampleBank();
     try {
       const releasedId = bank.nativeId;
-      bank.delete();
+      bank.destroy();
       const native = (
         engine as unknown as {
           native: { setSynthInstrument(destination: number, patch: object): void };
@@ -287,7 +287,7 @@ describe('Sonare WASM sample bank', () => {
       const index = bank.addSample(tone(261.6256, 0.2));
       bank.addZone({ sampleIndex: index });
       engine.setSynthInstrument({ engineMode: 'sample', sampleBank: bank }, 7);
-      bank.delete();
+      bank.destroy();
 
       engine.pushMidiNoteOn(7, 0, 0, 60, 100);
       let p = 0;

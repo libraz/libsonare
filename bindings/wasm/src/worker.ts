@@ -4,7 +4,7 @@
  * Only value-based calls are exposed here: analysis and preset mastering. Do
  * not add `Project`, `Mixer`, or realtime handles. Their native lifetime is
  * bound to one JavaScript realm, so moving them across a Worker boundary would
- * make ownership and `delete()` semantics unsound.
+ * make ownership and `destroy()` semantics unsound.
  */
 
 import { failurePayload } from './internal/failure_payload.js';

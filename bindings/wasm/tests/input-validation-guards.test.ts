@@ -91,7 +91,7 @@ describe('RealtimeEngine prepare/time-signature/loop guards', () => {
     expect(maxChannels).toBeGreaterThan(2);
 
     const atLimit = new RealtimeEngine(48000, 128, 1024, 1024, maxChannels);
-    atLimit.delete();
+    atLimit.destroy();
     expect(() => new RealtimeEngine(48000, 128, 1024, 1024, maxChannels + 1)).toThrow();
 
     const engine = new RealtimeEngine(48000, 128, 1024, 1024, 2);
@@ -104,7 +104,7 @@ describe('RealtimeEngine prepare/time-signature/loop guards', () => {
       expect(() => engine.prepareMonitorChannels(maxChannels, 128)).not.toThrow();
       expect(() => engine.prepareMonitorChannels(maxChannels + 1, 128)).toThrow();
     } finally {
-      engine.delete();
+      engine.destroy();
     }
   });
 
@@ -269,7 +269,7 @@ describe('StreamAnalyzer rejects an out-of-range window ordinal instead of silen
   it('accepts every valid window ordinal', () => {
     for (const window of [0, 1, 2, 3] as const) {
       const analyzer = new StreamAnalyzer({ window });
-      analyzer.delete();
+      analyzer.destroy();
     }
   });
 });
@@ -544,7 +544,7 @@ describe('StreamingRetune refuses non-finite input and clamps finite ranges', ()
       expect(() => retune.processMono(new Float32Array(65))).toThrow(/maxBlockSize/);
       expect(retune.processMono(new Float32Array(64))).toHaveLength(64);
     } finally {
-      retune.delete();
+      retune.destroy();
     }
   });
 
@@ -570,7 +570,7 @@ describe('StreamingRetune refuses non-finite input and clamps finite ranges', ()
       const clean = retune.processMono(new Float32Array(256).fill(0.1));
       expect(Array.from(clean).every((v) => Number.isFinite(v))).toBe(true);
     } finally {
-      retune.delete();
+      retune.destroy();
     }
   });
 
@@ -591,7 +591,7 @@ describe('StreamingRetune refuses non-finite input and clamps finite ranges', ()
       // a partial write that applied the keys it read before the bad one.
       expect(retune.config()).toEqual(before);
     } finally {
-      retune.delete();
+      retune.destroy();
     }
   });
 
@@ -608,7 +608,7 @@ describe('StreamingRetune refuses non-finite input and clamps finite ranges', ()
         Array.from(retune.processMono(new Float32Array(128).fill(0.1))).every(Number.isFinite),
       ).toBe(true);
     } finally {
-      retune.delete();
+      retune.destroy();
     }
   });
 });

@@ -198,6 +198,7 @@ export class SonareRealtimeEngineNode {
   private resolveReady!: () => void;
   private rejectReady!: (reason?: unknown) => void;
   private readonly epoch = new OwnerEpoch('Realtime engine node');
+  private destroying: Promise<void> | undefined;
   /** Sequence number of the last sync posted; SAB ring commands carry it. */
   private syncSequence = 0;
 
@@ -810,7 +811,23 @@ export class SonareRealtimeEngineNode {
     };
   }
 
-  destroy(): void {
+  /**
+   * Stops the node and releases its resources; pending requests reject with
+   * `InvalidState`. Resolves once the node can no longer deliver a message to
+   * the caller. A second call returns the same promise.
+   */
+  destroy(): Promise<void> {
+    this.shutdown();
+    this.destroying ??= Promise.resolve();
+    return this.destroying;
+  }
+
+  /** Same as {@link destroy}, for `await using`. */
+  [Symbol.asyncDispose](): Promise<void> {
+    return this.destroy();
+  }
+
+  private shutdown(): void {
     if (this.epoch.closed) {
       return;
     }

@@ -75,7 +75,7 @@ describe('boolean options', () => {
       expect(() => mixer.setPolarityInvert(0, true, 'x' as never)).toThrow(TypeError);
       expect(() => mixer.configureMeter('on' as never)).toThrow(TypeError);
     } finally {
-      mixer.delete();
+      mixer.destroy();
     }
     const engine = new RealtimeEngine(48000, 128);
     try {
@@ -181,7 +181,7 @@ describe('surround pan', () => {
       }
       expect(() => mixer.setSurroundPan(0, { azimuth: 'x' as never })).toThrow(TypeError);
     } finally {
-      mixer.delete();
+      mixer.destroy();
       engine.destroy();
     }
   });

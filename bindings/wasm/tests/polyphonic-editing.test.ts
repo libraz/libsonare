@@ -467,7 +467,7 @@ describe('PolyphonicAnalysis reattackRatio', () => {
 describe('PolyphonicAnalysis disposal', () => {
   it('accepts both delete() and destroy(), and refuses use afterwards', () => {
     const handle = analyzePolyphonic({ samples, sampleRate });
-    expect(typeof handle.delete).toBe('function');
+    expect(typeof handle.destroy).toBe('function');
     expect(typeof handle.destroy).toBe('function');
     expect(handle.noteCount).toBeGreaterThanOrEqual(0);
 

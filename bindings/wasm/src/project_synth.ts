@@ -6,16 +6,19 @@ import {
   type SynthParamInfo,
   type SynthPatch,
 } from './instrument_types.js';
+import { getSonareModule } from './module_state.js';
 import { type ProjectModule, projectModule } from './project_internal.js';
 import { assertString } from './validation.js';
 
 /**
- * ABI version of the flat project layout in the loaded module, or `0` when the
- * arrangement subsystem is not compiled in. Mirrors the C-ABI
- * `sonare_project_abi_version`.
+ * ABI version of the flat project layout in the loaded module. Mirrors the
+ * C-ABI `sonare_project_abi_version`. `undefined` when the build has no
+ * arrangement subsystem; check `capabilities().features` for presence.
  */
-export function projectAbiVersion(): number {
-  return projectModule().projectAbiVersion();
+export function projectAbiVersion(): number | undefined {
+  const probe = (getSonareModule() as unknown as Partial<ProjectModule>).projectAbiVersion;
+  const version = typeof probe === 'function' ? probe() : 0;
+  return version > 0 ? version : undefined;
 }
 
 /**

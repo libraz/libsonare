@@ -195,7 +195,7 @@ describe('argument refusal classes shared with the Node surface', () => {
         thrown(() => eq.magnitudeResponse(new Float32Array(1), 'bogus' as never)),
       ).toBeInstanceOf(RangeError);
     } finally {
-      eq.delete();
+      eq.destroy();
     }
   });
 

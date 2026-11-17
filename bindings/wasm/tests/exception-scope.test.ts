@@ -56,7 +56,7 @@ describe('WASM exception scope', () => {
       expect(typeof thrown.code).toBe('number');
       expect(thrown.code).not.toBe(ErrorCode.Unknown);
     } finally {
-      engine.delete();
+      engine.destroy();
     }
   });
 });

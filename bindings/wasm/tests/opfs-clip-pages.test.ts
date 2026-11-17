@@ -646,7 +646,7 @@ describe('attachOpfsClipStream', () => {
         worker: worker as unknown as Worker,
       });
       await settle();
-      streamer.close();
+      streamer.destroy();
       worker.respond(0, 1);
       await expect(attach).rejects.toThrow();
       expect(worker.listeners.size).toBe(0);
@@ -692,7 +692,7 @@ describe('attachOpfsClipStream', () => {
     const second = engine.process([new Float32Array(8)]);
     expect(Array.from(second[0])).toEqual([1, 2, 3, 4, 5, 6, 7, 8]);
 
-    streamer.close();
+    streamer.destroy();
     engine.destroy();
   });
 });

@@ -117,7 +117,7 @@ describe('mastering nonFiniteSubstitutionCount (WASM)', () => {
       chain.prepare(sampleRate, 512, 1);
       expectCleanCount(chain.nonFiniteSubstitutionCount());
     } finally {
-      chain.delete();
+      chain.destroy();
     }
   });
 });

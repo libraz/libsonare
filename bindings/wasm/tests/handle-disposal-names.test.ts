@@ -1,16 +1,7 @@
 /**
- * Disposal-method naming across the WASM handle classes.
- *
- * embind names its release method `delete()`, the Node binding names it
- * `destroy()`, and a host that cleans up both surfaces with one code path needs
- * every class to answer to the same name. Each handle class therefore accepts
- * both spellings; `StreamAnalyzer` additionally keeps its historical
- * `dispose()`.
- *
- * Every class is also idempotent under repeated disposal: embind's own
- * `delete()` throws a raw BindingError on a second call, and the generic
- * cross-surface cleanup path (`finally { h.destroy() }` running twice, a React
- * effect cleanup firing twice) must not surface that raw error on any class.
+ * Teardown naming across the WASM handle classes: every class releases through
+ * `destroy()` (idempotent, so a cleanup path that runs twice never surfaces
+ * embind's raw BindingError) and carries no other release name.
  */
 
 import { readFileSync } from 'node:fs';
@@ -49,11 +40,10 @@ function hrtfBytes(): Uint8Array {
 }
 
 interface Disposable {
-  delete(): void;
   destroy(): void;
 }
 
-describe('WASM handle disposal names', () => {
+describe('WASM handle teardown names', () => {
   beforeAll(async () => {
     await init();
   });
@@ -79,34 +69,18 @@ describe('WASM handle disposal names', () => {
   ];
 
   for (const [name, create] of handles) {
-    it(`${name} accepts both delete() and destroy()`, () => {
+    it(`${name} releases through destroy() only`, () => {
       const handle = create();
-      expect(typeof handle.delete).toBe('function');
       expect(typeof handle.destroy).toBe('function');
+      expect('delete' in handle).toBe(false);
+      expect('dispose' in handle).toBe(false);
       handle.destroy();
     });
 
-    it(`${name} is idempotent under a second delete()/destroy() in either order`, () => {
-      // Two independent handles, driven through both name orderings: embind's
-      // own delete() throws a raw BindingError on a second call, which is
-      // exactly the defect this test is written to catch.
-      const first = create();
-      first.delete();
-      expect(() => first.delete()).not.toThrow();
-
-      const second = create();
-      second.destroy();
-      expect(() => second.destroy()).not.toThrow();
-      expect(() => second.delete()).not.toThrow();
+    it(`${name} is idempotent under a second destroy()`, () => {
+      const handle = create();
+      handle.destroy();
+      expect(() => handle.destroy()).not.toThrow();
     });
   }
-
-  it('keeps the historical StreamAnalyzer.dispose() alias', () => {
-    const analyzer = new StreamAnalyzer({ sampleRate: 22050 });
-    expect(typeof analyzer.dispose).toBe('function');
-    analyzer.dispose();
-    // dispose() is also delete(), so it must be idempotent through every name.
-    expect(() => analyzer.dispose()).not.toThrow();
-    expect(() => analyzer.destroy()).not.toThrow();
-  });
 });

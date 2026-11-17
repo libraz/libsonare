@@ -81,7 +81,7 @@ function convergedOutput(): { left: number; right: number } {
     }
     return { left: last.left[BLOCK - 1], right: last.right[BLOCK - 1] };
   } finally {
-    mixer.delete();
+    mixer.destroy();
   }
 }
 
@@ -122,7 +122,7 @@ describe('Mixer.settle (WASM)', () => {
       expect(spread(out.left)).toBeGreaterThan(0.2);
       expect(out.left[BLOCK - 1]).toBeGreaterThan(converged.left);
     } finally {
-      mixer.delete();
+      mixer.destroy();
     }
   });
 
@@ -146,7 +146,7 @@ describe('Mixer.settle (WASM)', () => {
       expect(spread(out.left)).toBeLessThan(1e-6);
       expect(spread(out.right)).toBeLessThan(1e-6);
     } finally {
-      mixer.delete();
+      mixer.destroy();
     }
   });
 
@@ -158,7 +158,7 @@ describe('Mixer.settle (WASM)', () => {
       mixer.settle(0);
       expect(mixer.toSceneJson()).toBe(before);
     } finally {
-      mixer.delete();
+      mixer.destroy();
     }
   });
 
@@ -167,7 +167,7 @@ describe('Mixer.settle (WASM)', () => {
     try {
       expect(() => mixer.settle(mixer.stripCount())).toThrow();
     } finally {
-      mixer.delete();
+      mixer.destroy();
     }
   });
 });

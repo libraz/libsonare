@@ -190,7 +190,7 @@ const runFlow = async () => {
   });
   const worker = new VocalEditWorkerClient({
     worker: nativeWorker,
-    terminateWorkerOnDispose: true,
+    terminateWorkerOnDestroy: true,
   });
   let session;
   let restored;
@@ -345,15 +345,15 @@ const runFlow = async () => {
   } finally {
     if (restored) {
       try {
-        await restored.dispose();
+        await restored.destroy();
       } catch {}
     }
     if (session) {
       try {
-        await session.dispose();
+        await session.destroy();
       } catch {}
     }
-    worker.dispose();
+    await worker.destroy();
   }
 };
 

@@ -55,7 +55,7 @@ export interface VocalEditWorkerNativeDraft {
   destinationSampleToSourceSample(noteId: number, destinationSample: number): number;
   captureRenderSnapshot(): VocalRenderSnapshot;
   exportState?(): VocalStateBytes;
-  dispose(): void;
+  destroy(): void;
 }
 
 export interface VocalEditWorkerNativeSession {
@@ -73,7 +73,7 @@ export interface VocalEditWorkerNativeSession {
   destinationSampleToSourceSample(noteId: number, destinationSample: number): number;
   captureRenderSnapshot(): VocalRenderSnapshot;
   exportState(): Uint8Array;
-  dispose(): void;
+  destroy(): void;
 }
 
 export interface VocalEditWorkerFactory {
@@ -317,8 +317,8 @@ async function runPreview(
       await nextMacrotask();
     }
   } finally {
-    job?.dispose();
-    snapshot.dispose();
+    job?.destroy();
+    snapshot.destroy();
   }
 }
 
@@ -350,12 +350,12 @@ async function execute(
           break;
         case 'commit':
           result = draftRequired(session).commit(mutation.expectedRevision);
-          session.draft?.dispose();
+          session.draft?.destroy();
           session.draft = undefined;
           break;
         case 'cancel':
           draftRequired(session).cancel();
-          session.draft?.dispose();
+          session.draft?.destroy();
           session.draft = undefined;
           result = null;
           break;
@@ -732,7 +732,7 @@ export function installVocalEditWorkerEndpoint(
         result.token,
       );
     } catch (error) {
-      value?.dispose();
+      value?.destroy();
       postError(endpoint, message.id, message.sessionId, message.clientIntentSequence, error);
     } finally {
       creating.delete(message.id);
@@ -763,8 +763,8 @@ export function installVocalEditWorkerEndpoint(
       while (session.draining) {
         await nextMacrotask();
       }
-      session.draft?.dispose();
-      session.value.dispose();
+      session.draft?.destroy();
+      session.value.destroy();
       sessions.delete(message.sessionId);
     })();
     void session.released.then(() =>

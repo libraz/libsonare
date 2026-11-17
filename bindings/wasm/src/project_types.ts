@@ -817,7 +817,7 @@ export interface ProjectCompileTimelineResult extends ProjectCompileResult {
   /**
    * The compiled timeline, or `null` when compilation produced none (an error
    * diagnostic; read {@link ProjectCompileResult.diagnostics}). Release it with
-   * {@link ProjectTimeline.dispose}.
+   * {@link ProjectTimeline.destroy}.
    */
   timeline: ProjectTimeline | null;
 }

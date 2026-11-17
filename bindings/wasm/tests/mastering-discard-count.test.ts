@@ -43,7 +43,7 @@ describe('mastering nonFiniteDiscardCount (WASM)', () => {
       chain.processMono(clean);
       expect(chain.nonFiniteDiscardCount()).toBe(1);
     } finally {
-      chain.delete();
+      chain.destroy();
     }
   });
 });

@@ -90,7 +90,7 @@ describe('RealtimeVoiceChanger setConfig / process() interleaving (regression)',
         expect(isAllFinite(output)).toBe(true);
       }
     } finally {
-      changer.delete();
+      changer.destroy();
     }
   });
 
@@ -119,7 +119,7 @@ describe('RealtimeVoiceChanger setConfig / process() interleaving (regression)',
         expect(isAllFinite(output)).toBe(true);
       }
     } finally {
-      changer.delete();
+      changer.destroy();
     }
   });
 
@@ -157,7 +157,7 @@ describe('RealtimeVoiceChanger setConfig / process() interleaving (regression)',
       // block should produce non-silent output (no all-zero regression).
       expect(maxBlockRms).toBeGreaterThan(0);
     } finally {
-      changer.delete();
+      changer.destroy();
     }
   });
 
@@ -186,7 +186,7 @@ describe('RealtimeVoiceChanger setConfig / process() interleaving (regression)',
         expect(isAllFinite(rightIn)).toBe(true);
       }
     } finally {
-      changer.delete();
+      changer.destroy();
     }
   });
 });

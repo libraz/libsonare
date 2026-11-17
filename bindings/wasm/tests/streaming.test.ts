@@ -63,14 +63,15 @@ describe('StreamAnalyzer', () => {
 
       const analyzer = new StreamAnalyzer();
       expect(analyzer.sampleRate()).toBe(defaults.sampleRate);
-      analyzer.delete();
+      analyzer.destroy();
     });
 
-    it('exposes delete() like every other WASM wrapper, with dispose() as alias', () => {
+    it('exposes destroy() as its only release method', () => {
       const analyzer = new StreamAnalyzer({ sampleRate: 22050 });
-      expect(typeof analyzer.delete).toBe('function');
-      expect(typeof analyzer.dispose).toBe('function');
-      analyzer.delete();
+      expect(typeof analyzer.destroy).toBe('function');
+      expect('delete' in analyzer).toBe(false);
+      expect('dispose' in analyzer).toBe(false);
+      analyzer.destroy();
     });
 
     it('publishes exactly one SOA read name, which the Node alias doc cites', () => {
@@ -82,7 +83,7 @@ describe('StreamAnalyzer', () => {
       const analyzer = new StreamAnalyzer({ sampleRate: 22050 });
       expect(typeof analyzer.readFrames).toBe('function');
       expect((analyzer as unknown as Record<string, unknown>).readFramesSoa).toBeUndefined();
-      analyzer.delete();
+      analyzer.destroy();
     });
 
     it('rejects computeMagnitude because there is no magnitude read path', () => {
@@ -121,7 +122,7 @@ describe('StreamAnalyzer', () => {
       expect(stats.pendingFrames + stats.droppedOutputFrames).toBe(stats.totalFrames);
       expect(stats.droppedChordProgressionEntries).toBe(0);
       expect(stats.droppedBarProgressionEntries).toBe(0);
-      analyzer.delete();
+      analyzer.destroy();
     });
 
     it('counts a process call whose input it had to scrub, once per call', () => {
@@ -162,7 +163,7 @@ describe('StreamAnalyzer', () => {
         analyzer.reset();
         expect(analyzer.stats().nonFiniteDiscardBlocks).toBe(0);
       } finally {
-        analyzer.delete();
+        analyzer.destroy();
       }
     });
   });
@@ -218,7 +219,7 @@ describe('StreamAnalyzer', () => {
         expect(chord.confidence).toBeGreaterThanOrEqual(0);
       }
 
-      analyzer.dispose();
+      analyzer.destroy();
     });
 
     it('names every chord and the estimate consistently with the numeric fields', () => {
@@ -248,7 +249,7 @@ describe('StreamAnalyzer', () => {
       expect(estimate.keyShortName).toBe(
         estimate.keyMinor ? `${PITCH_NAMES[estimate.key]}m` : PITCH_NAMES[estimate.key],
       );
-      analyzer.dispose();
+      analyzer.destroy();
     });
 
     it('spells the key the way batch analysis does', () => {
@@ -267,7 +268,7 @@ describe('StreamAnalyzer', () => {
       expect(estimate.keyName).toBe(batch.name);
       expect(estimate.keyShortName).toBe(batch.shortName);
       expect(estimate.keyName).toBe('C major');
-      analyzer.dispose();
+      analyzer.destroy();
     });
 
     it('reports no key name and N.C. before any estimate exists', () => {
@@ -277,7 +278,7 @@ describe('StreamAnalyzer', () => {
       expect(estimate.keyName).toBeNull();
       expect(estimate.keyShortName).toBeNull();
       expect(estimate.chordName).toBe('N.C.');
-      analyzer.dispose();
+      analyzer.destroy();
     });
 
     it('should detect current chord', () => {
@@ -303,7 +304,7 @@ describe('StreamAnalyzer', () => {
       expect(stats.estimate.chordRoot).toBeLessThanOrEqual(11);
       expect(stats.estimate.chordConfidence).toBeGreaterThan(0);
 
-      analyzer.dispose();
+      analyzer.destroy();
     });
   });
 
@@ -325,7 +326,7 @@ describe('StreamAnalyzer', () => {
       expect(stats.totalFrames).toBeGreaterThan(0);
       expect(stats.estimate.accumulatedSeconds).toBeGreaterThan(0);
 
-      analyzer.dispose();
+      analyzer.destroy();
     });
 
     it('should track key with confidence', () => {
@@ -350,7 +351,7 @@ describe('StreamAnalyzer', () => {
       expect(stats.estimate.key).toBeLessThanOrEqual(11);
       expect(stats.estimate.keyConfidence).toBeGreaterThanOrEqual(0);
 
-      analyzer.dispose();
+      analyzer.destroy();
     });
   });
 
@@ -420,7 +421,7 @@ describe('StreamAnalyzer', () => {
         }
       }
 
-      analyzer.dispose();
+      analyzer.destroy();
     });
 
     it('should have correct bar duration based on BPM', () => {
@@ -464,7 +465,7 @@ describe('StreamAnalyzer', () => {
         expect(stats.estimate.barDuration).toBeCloseTo(expectedBarDuration, 1);
       }
 
-      analyzer.dispose();
+      analyzer.destroy();
     });
 
     it('should not have bar chords before BPM stabilizes', () => {
@@ -485,7 +486,7 @@ describe('StreamAnalyzer', () => {
       expect(stats.estimate.currentBar).toBe(-1);
       expect(stats.estimate.barDuration).toBe(0);
 
-      analyzer.dispose();
+      analyzer.destroy();
     });
 
     it('should reset bar chord progression on reset', () => {
@@ -516,7 +517,7 @@ describe('StreamAnalyzer', () => {
       expect(stats.estimate.currentBar).toBe(-1);
       expect(stats.estimate.barDuration).toBe(0);
 
-      analyzer.dispose();
+      analyzer.destroy();
     });
 
     it('should detect correct bar chords with C-G-Am-F progression', () => {
@@ -603,7 +604,7 @@ describe('StreamAnalyzer', () => {
         }
       }
 
-      analyzer.dispose();
+      analyzer.destroy();
     });
   });
 
@@ -671,7 +672,7 @@ describe('StreamAnalyzer', () => {
         }
       }
 
-      analyzer.dispose();
+      analyzer.destroy();
     });
 
     it('should detect pattern name and score', () => {
@@ -727,7 +728,7 @@ describe('StreamAnalyzer', () => {
       expect(stats.estimate.detectedPatternScore).toBeGreaterThanOrEqual(0);
       expect(stats.estimate.detectedPatternScore).toBeLessThanOrEqual(1);
 
-      analyzer.dispose();
+      analyzer.destroy();
     });
 
     it('should return all pattern scores', () => {
@@ -785,7 +786,7 @@ describe('StreamAnalyzer', () => {
         }
       }
 
-      analyzer.dispose();
+      analyzer.destroy();
     });
 
     it('should reset pattern detection on reset', () => {
@@ -814,7 +815,7 @@ describe('StreamAnalyzer', () => {
       expect(stats.estimate.detectedPatternScore).toBe(0);
       expect(stats.estimate.allPatternScores.length).toBe(0);
 
-      analyzer.dispose();
+      analyzer.destroy();
     });
   });
 
@@ -839,8 +840,8 @@ describe('StreamAnalyzer', () => {
       analyzer.reset(5000);
       expect(() => analyzer.processWithOffset(audio.subarray(0, 128), 5000)).not.toThrow();
 
-      analyzer.dispose();
-      reference.dispose();
+      analyzer.destroy();
+      reference.destroy();
     });
   });
 
@@ -867,7 +868,7 @@ describe('StreamAnalyzer', () => {
       expect(stats.totalSamples).toBeGreaterThanOrEqual(baseOffset);
       expect(Number.isFinite(stats.totalSamples)).toBe(true);
 
-      analyzer.dispose();
+      analyzer.destroy();
     });
   });
 
@@ -875,11 +876,11 @@ describe('StreamAnalyzer', () => {
     it('should return the configured sample rate', () => {
       const analyzer44 = new StreamAnalyzer({ sampleRate: 44100 });
       expect(analyzer44.sampleRate()).toBe(44100);
-      analyzer44.dispose();
+      analyzer44.destroy();
 
       const analyzer22 = new StreamAnalyzer({ sampleRate: 22050 });
       expect(analyzer22.sampleRate()).toBe(22050);
-      analyzer22.dispose();
+      analyzer22.destroy();
     });
   });
 
@@ -902,7 +903,7 @@ describe('StreamAnalyzer', () => {
       const stats = analyzer.stats();
       expect(stats.totalFrames).toBeGreaterThan(0);
 
-      analyzer.dispose();
+      analyzer.destroy();
     });
   });
 
@@ -922,7 +923,7 @@ describe('StreamAnalyzer', () => {
       const stats = analyzer.stats();
       expect(stats.totalFrames).toBeGreaterThan(0);
 
-      analyzer.dispose();
+      analyzer.destroy();
     });
   });
 
@@ -942,7 +943,7 @@ describe('StreamAnalyzer', () => {
       const stats = analyzer.stats();
       expect(stats.totalFrames).toBeGreaterThan(0);
 
-      analyzer.dispose();
+      analyzer.destroy();
     });
   });
 
@@ -969,7 +970,7 @@ describe('StreamAnalyzer', () => {
       const stats = analyzer.stats();
       expect(stats.estimate.chordProgression.length).toBe(0);
 
-      analyzer.dispose();
+      analyzer.destroy();
     });
 
     it('should handle chunked processing', () => {
@@ -991,7 +992,7 @@ describe('StreamAnalyzer', () => {
       expect(stats.durationSeconds).toBeGreaterThan(1.8);
       expect(stats.durationSeconds).toBeLessThan(2.2);
 
-      analyzer.dispose();
+      analyzer.destroy();
     });
   });
 
@@ -1014,7 +1015,7 @@ describe('StreamAnalyzer', () => {
       expect(buffer.timestamps.length).toBe(availableFrames);
       expect(buffer.chroma.length).toBe(availableFrames * 12);
 
-      analyzer.dispose();
+      analyzer.destroy();
     });
 
     it('should include per-frame chord data', () => {
@@ -1051,7 +1052,7 @@ describe('StreamAnalyzer', () => {
         expect(buffer.chordConfidence[i]).toBeGreaterThanOrEqual(0);
       }
 
-      analyzer.dispose();
+      analyzer.destroy();
     });
 
     it('should detect chord changes in real-time', () => {
@@ -1091,7 +1092,7 @@ describe('StreamAnalyzer', () => {
       // Should have detected at least 2 different chords (C and G)
       expect(uniqueChords.size).toBeGreaterThanOrEqual(2);
 
-      analyzer.dispose();
+      analyzer.destroy();
     });
   });
 
@@ -1131,7 +1132,7 @@ describe('StreamAnalyzer', () => {
             expect(frames.spectralCentroid.length).toBe(mask & 8 ? 1 : 0);
             expect(frames.spectralFlatness.length).toBe(mask & 8 ? 1 : 0);
           } finally {
-            analyzer.dispose();
+            analyzer.destroy();
           }
         }
       }
@@ -1178,8 +1179,8 @@ describe('StreamAnalyzer', () => {
         const fallback = wide.readFramesU8(4);
         expect(fallback.nMels).toBe(32);
       } finally {
-        tight.dispose();
-        wide.dispose();
+        tight.destroy();
+        wide.destroy();
       }
     });
   });

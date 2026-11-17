@@ -111,8 +111,8 @@ describe('RealtimeVoiceChanger voice transformer', () => {
         try {
           expect(fromPod.configJson(), id).toBe(fromId.configJson());
         } finally {
-          fromId.delete();
-          fromPod.delete();
+          fromId.destroy();
+          fromPod.destroy();
         }
       }
     });
@@ -132,7 +132,7 @@ describe('RealtimeVoiceChanger voice transformer', () => {
         expect(() => changer.noteOn(127)).not.toThrow();
         expect(() => changer.processMono(new Float32Array(BLOCK))).not.toThrow();
       } finally {
-        changer.delete();
+        changer.destroy();
       }
     });
 
@@ -151,7 +151,7 @@ describe('RealtimeVoiceChanger voice transformer', () => {
         expect(() => changer.noteOn(60, true as unknown as number)).toThrow(TypeError);
         expect(() => changer.noteOff(null as unknown as number)).toThrow(TypeError);
       } finally {
-        changer.delete();
+        changer.destroy();
       }
     });
 
@@ -183,15 +183,15 @@ describe('RealtimeVoiceChanger voice transformer', () => {
         // allNotesOff bypasses the queue, so it still succeeds.
         expect(() => psola.allNotesOff()).not.toThrow();
       } finally {
-        grain.delete();
-        unprepared.delete();
-        psola.delete();
+        grain.destroy();
+        unprepared.destroy();
+        psola.destroy();
       }
     });
 
     it('refuses note calls after delete', () => {
       const changer = new RealtimeVoiceChanger(basePod(), SR, BLOCK, 1);
-      changer.delete();
+      changer.destroy();
       expectInvalidState(() => changer.noteOn(60));
       expectInvalidState(() => changer.noteOff(60));
       expectInvalidState(() => changer.allNotesOff());
@@ -212,7 +212,7 @@ describe('RealtimeVoiceChanger voice transformer', () => {
         expectInvalidState(() => changer.processMonoInto(new Float32Array(BLOCK), output));
         expect(output.every((sample) => sample === 7)).toBe(true);
       } finally {
-        changer.delete();
+        changer.destroy();
       }
     });
 
@@ -231,7 +231,7 @@ describe('RealtimeVoiceChanger voice transformer', () => {
           ),
         ).toThrow(RangeError);
       } finally {
-        changer.delete();
+        changer.destroy();
       }
     });
 
@@ -245,8 +245,8 @@ describe('RealtimeVoiceChanger voice transformer', () => {
         expect(energy(highOut)).toBeGreaterThan(0);
         expect(Array.from(lowOut)).not.toEqual(Array.from(highOut));
       } finally {
-        low.delete();
-        high.delete();
+        low.destroy();
+        high.destroy();
       }
     });
 
@@ -259,8 +259,8 @@ describe('RealtimeVoiceChanger voice transformer', () => {
         const actual = renderMono(withCarrier, 20, 330);
         expect(Array.from(actual)).toEqual(Array.from(expected));
       } finally {
-        plain.delete();
-        withCarrier.delete();
+        plain.destroy();
+        withCarrier.destroy();
       }
     });
 
@@ -281,8 +281,8 @@ describe('RealtimeVoiceChanger voice transformer', () => {
         }
         expect(Array.from(actual)).toEqual(Array.from(expected));
       } finally {
-        copying.delete();
-        prepared.delete();
+        copying.destroy();
+        prepared.destroy();
       }
     });
 
@@ -320,8 +320,8 @@ describe('RealtimeVoiceChanger voice transformer', () => {
           expect(interleavedOut[i * 2 + 1]).toBe(planarRight[i]);
         }
       } finally {
-        interleaved.delete();
-        planar.delete();
+        interleaved.destroy();
+        planar.destroy();
       }
     });
   });

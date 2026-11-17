@@ -215,7 +215,7 @@ export class SonareEngine {
       // is ready or fail explicitly; it may never be silently truncated.
       await realtimeNode.ready;
     } catch (error) {
-      realtimeNode.destroy();
+      await realtimeNode.destroy();
       throw error;
     }
     const offlineEngine = options.offlineEngine ?? new RealtimeEngine(sampleRate, blockSize);
@@ -1635,7 +1635,7 @@ export class SonareEngine {
     }
     this.unsubscribeWorkletClipRequests?.();
     this.unsubscribeWorkletClipRequests = undefined;
-    this.workletClipStreamer?.close();
+    this.workletClipStreamer?.destroy();
     this.workletClipStreamer = undefined;
     if (this.workletClipPagePollTimer !== undefined) {
       clearInterval(this.workletClipPagePollTimer);
@@ -1647,8 +1647,13 @@ export class SonareEngine {
     this.epoch.close();
     this.transport.stop();
     this.realtimeNode.pollTelemetry();
-    this.realtimeNode.destroy();
+    void this.realtimeNode.destroy();
     this.offlineEngine.destroy();
+  }
+
+  /** Same as {@link destroy}, for `using`. */
+  [Symbol.dispose](): void {
+    this.destroy();
   }
 
   private ensureWorkletClipStreamer(): ClipPageStreamer {

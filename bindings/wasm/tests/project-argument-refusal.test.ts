@@ -40,7 +40,7 @@ describe('Project argument refusal', () => {
       expectArgumentRefusal(caught, RangeError, name);
       expect(isSonareError(caught)).toBe(false);
     } finally {
-      project.delete();
+      project.destroy();
     }
   });
 
@@ -52,13 +52,13 @@ describe('Project argument refusal', () => {
       expect(isSonareError(caught) && caught.code).toBe(ErrorCode.InvalidState);
       expect(caught).not.toBeInstanceOf(RangeError);
     } finally {
-      project.delete();
+      project.destroy();
     }
   });
 
   it('a call on a released project stays a coded InvalidState', () => {
     const project = new Project();
-    project.delete();
+    project.destroy();
     const caught = thrownBy(() => project.setTrackPan(1, 0));
     expect(isSonareError(caught)).toBe(true);
     expect(isSonareError(caught) && caught.code).toBe(ErrorCode.InvalidState);

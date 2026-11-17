@@ -84,7 +84,7 @@ export interface MixerRealtimeBuffer {
  * compiled lazily on the first {@link processStereo} call (or eagerly via
  * {@link compile}).
  *
- * Call {@link delete} (or use a `try/finally`) to release the underlying WASM
+ * Call {@link destroy} (or use a `try/finally`) to release the underlying WASM
  * object — the embind handle is not garbage-collected automatically.
  *
  * @example
@@ -93,7 +93,7 @@ export interface MixerRealtimeBuffer {
  * try {
  *   const out = mixer.processStereo([stripL], [stripR]);
  * } finally {
- *   mixer.delete();
+ *   mixer.destroy();
  * }
  * ```
  */
@@ -198,7 +198,7 @@ export class Mixer {
    *
    * Fill `leftInputs[i]` / `rightInputs[i]`, call `process()`, then read
    * `outLeft` / `outRight`. The views are owned by this mixer and become invalid
-   * after {@link delete}.
+   * after {@link destroy}.
    */
   createRealtimeBuffer(): MixerRealtimeBuffer {
     const leftInputs: Float32Array[] = [];
@@ -840,7 +840,7 @@ export class Mixer {
   }
 
   /** Release the underlying WASM object. Idempotent, as the Node facade is. */
-  delete(): void {
+  destroy(): void {
     if (this.released) {
       return;
     }
@@ -848,13 +848,8 @@ export class Mixer {
     this.mixerHandle.delete();
   }
 
-  /** Alias for {@link delete}, provided for cross-binding (Node) compatibility. */
-  destroy(): void {
-    this.delete();
-  }
-
-  /** Releases the handle through {@link delete}, so the instance works with `using`. */
+  /** Releases the handle through {@link destroy}, so the instance works with `using`. */
   [Symbol.dispose](): void {
-    this.delete();
+    this.destroy();
   }
 }

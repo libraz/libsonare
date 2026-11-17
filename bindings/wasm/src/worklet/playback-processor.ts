@@ -88,7 +88,7 @@ export class SonarePlaybackWorkletProcessor {
       });
     } finally {
       // The renderer keeps its own copy of the set.
-      hrtf?.delete();
+      hrtf?.destroy();
     }
     // One reviewed read of the facade's private handle, for the heap-plane path.
     this.native = (this.renderer as unknown as { native: WasmPlaybackRenderer }).native;
@@ -199,7 +199,12 @@ export class SonarePlaybackWorkletProcessor {
       return;
     }
     this.destroyed = true;
-    this.renderer.delete();
+    this.renderer.destroy();
+  }
+
+  /** Same as {@link destroy}, for `using`. */
+  [Symbol.dispose](): void {
+    this.destroy();
   }
 
   private acquirePlanes(): void {

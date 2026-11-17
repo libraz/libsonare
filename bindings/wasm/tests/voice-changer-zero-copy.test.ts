@@ -23,7 +23,7 @@ describe('RealtimeVoiceChanger prepared (zero-copy) API', () => {
     try {
       expect(() => changer.processMono(new Float32Array(BLOCK))).not.toThrow();
     } finally {
-      changer.delete();
+      changer.destroy();
     }
   });
 
@@ -33,7 +33,7 @@ describe('RealtimeVoiceChanger prepared (zero-copy) API', () => {
     const initial = changer.bufferGeneration();
     changer.prepare(SR, BLOCK * 2, 1);
     expect(changer.bufferGeneration()).toBeGreaterThan(initial);
-    changer.delete();
+    changer.destroy();
   });
 
   it('mono prepared path matches processMonoInto bit-for-bit', () => {
@@ -60,8 +60,8 @@ describe('RealtimeVoiceChanger prepared (zero-copy) API', () => {
     for (let i = 0; i < BLOCK; i++) {
       expect(outB[i]).toBe(outA[i]);
     }
-    changerA.delete();
-    changerB.delete();
+    changerA.destroy();
+    changerB.destroy();
   });
 
   it('input/output views are typed_memory_view onto the WASM heap', () => {
@@ -83,7 +83,7 @@ describe('RealtimeVoiceChanger prepared (zero-copy) API', () => {
     for (let i = 0; i < BLOCK; i++) {
       expect(Number.isFinite(outView[i])).toBe(true);
     }
-    changer.delete();
+    changer.destroy();
   });
 
   it('rejects out-of-range prepared call', () => {
@@ -91,7 +91,7 @@ describe('RealtimeVoiceChanger prepared (zero-copy) API', () => {
     changer.prepare(SR, BLOCK, 1);
     // numSamples > maxBlockSize must throw.
     expect(() => changer.processPreparedMono(BLOCK * 4)).toThrow();
-    changer.delete();
+    changer.destroy();
   });
 
   it('rejects an interleaved channel count above the prepared layout', () => {
@@ -110,7 +110,7 @@ describe('RealtimeVoiceChanger prepared (zero-copy) API', () => {
     expect(() => changer.processPreparedInterleaved(BLOCK, 2)).toThrow();
     // The prepared count still works.
     expect(() => changer.processInterleaved(new Float32Array(BLOCK), 1)).not.toThrow();
-    changer.delete();
+    changer.destroy();
   });
 
   it('accepts a narrower interleaved channel count than the prepared layout', () => {
@@ -133,7 +133,7 @@ describe('RealtimeVoiceChanger prepared (zero-copy) API', () => {
     expect(() => changer.processInterleaved(wide, 3)).toThrow();
     // A non-positive count is still rejected.
     expect(() => changer.processInterleaved(mono, 0)).toThrow();
-    changer.delete();
+    changer.destroy();
   });
 
   it('interleaved stereo prepared path matches processInterleavedInto', () => {
@@ -160,8 +160,8 @@ describe('RealtimeVoiceChanger prepared (zero-copy) API', () => {
     for (let i = 0; i < BLOCK * channels; i++) {
       expect(outB[i]).toBe(outA[i]);
     }
-    changerA.delete();
-    changerB.delete();
+    changerA.destroy();
+    changerB.destroy();
   });
 
   it('planar stereo prepared path matches the interleaved prepared path', () => {
@@ -194,8 +194,8 @@ describe('RealtimeVoiceChanger prepared (zero-copy) API', () => {
       expect(leftIn[frame]).toBe(outA[frame * 2 + 0]);
       expect(rightIn[frame]).toBe(outA[frame * 2 + 1]);
     }
-    changerA.delete();
-    changerB.delete();
+    changerA.destroy();
+    changerB.destroy();
   });
 
   it('createRealtimePlanarBuffer wires up reusable views and a process thunk', () => {
@@ -213,7 +213,7 @@ describe('RealtimeVoiceChanger prepared (zero-copy) API', () => {
       expect(Number.isFinite(buf.channels[0]?.[i] ?? Number.NaN)).toBe(true);
       expect(Number.isFinite(buf.channels[1]?.[i] ?? Number.NaN)).toBe(true);
     }
-    changer.delete();
+    changer.destroy();
   });
 
   it('voiceChangerAbiVersion is exported and finite', () => {

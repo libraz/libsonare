@@ -456,7 +456,7 @@ describe('Sonare worklet ring buffers', () => {
         const sceneJson = mixingScenePresetJson('vocalReverbSend');
         const reference = Mixer.fromSceneJson(sceneJson, 48000, 128);
         const stripCount = reference.stripCount();
-        reference.delete();
+        reference.destroy();
         const processor = new SonareWorkletProcessor(
           {
             sceneJson,
@@ -563,7 +563,7 @@ describe('Sonare worklet ring buffers', () => {
       // One meter record is published per processed block.
       const reference = Mixer.fromSceneJson(sceneJson, sampleRate, blockSize);
       const stripCount = reference.stripCount();
-      reference.delete();
+      reference.destroy();
       return { processor, stripCount };
     }
 

@@ -52,7 +52,7 @@ describe('Sonare WASM SoundFont (SF2)', () => {
     expect(project.soundFontPresetCount()).toBe(3);
     project.clearSoundFont();
     expect(project.soundFontPresetCount()).toBe(0);
-    project.delete();
+    project.destroy();
   });
 
   it('rejects malformed SoundFont bytes and keeps the previous state', () => {
@@ -76,7 +76,7 @@ describe('Sonare WASM SoundFont (SF2)', () => {
     // caller under two different codes depending on which door it came through.
     expect(caught.code).toBe(ErrorCode.InvalidFormat);
     expect(project.soundFontPresetCount()).toBe(3);
-    project.delete();
+    project.destroy();
   });
 
   it('reports per-program backends in the bounce manifest', () => {
@@ -88,7 +88,7 @@ describe('Sonare WASM SoundFont (SF2)', () => {
     expect(project.soundFontManifest()).toEqual([
       { channel: 0, bank: 0, program: 0, backend: 'sf2', presetName: 'Piano 1' },
     ]);
-    project.delete();
+    project.destroy();
   });
 
   it('clears the amplifier the bank binds after an electric guitar', () => {
@@ -108,7 +108,7 @@ describe('Sonare WASM SoundFont (SF2)', () => {
         { destinationId: 0, gain: 1, clearBankRig },
         { totalFrames: 48000, numChannels: 2, sampleRate: 48000 },
       );
-      project.delete();
+      project.destroy();
       return out;
     };
     const rigged = render(30, false);
@@ -159,7 +159,7 @@ describe('Sonare WASM SoundFont (SF2)', () => {
       sampleRate: 48000,
     });
     expect(peak(silent)).toBe(0);
-    project.delete();
+    project.destroy();
   });
 
   it('renders live MIDI input through an engine-bound SF2 instrument', () => {
@@ -248,7 +248,7 @@ describe('SF2 instrument gsEfxRealization', () => {
         ),
       ).toThrow(/gsEfxRealization/);
     }
-    project.delete();
+    project.destroy();
   });
 
   it('defaults to modern and the classic realisation renders differently', () => {

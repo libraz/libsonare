@@ -533,18 +533,17 @@ function normalizeRequest(
 
 /** Whether this build has the C vocal-edit surface linked. */
 function vocalEditAvailable(): boolean {
-  const raw = module();
-  return typeof raw.vocalEditAvailable === 'function' && raw.vocalEditAvailable() !== 0;
+  return module().capabilities().features.vocalEdit === true;
 }
 
 /**
- * ABI version of the vocal-edit layout in the loaded module, or `0` when the
- * module has no vocal-edit surface. Whether vocal editing is built in at all is
- * `capabilities().features.vocalEdit`.
+ * ABI version of the vocal-edit layout in the loaded module. `undefined` when
+ * the build has no vocal edit; check `capabilities().features` for presence.
  */
-export function vocalEditAbiVersion(): number {
+export function vocalEditAbiVersion(): number | undefined {
   const raw = module();
-  return typeof raw.vocalEditApiVersion === 'function' ? raw.vocalEditApiVersion() : 0;
+  const version = typeof raw.vocalEditApiVersion === 'function' ? raw.vocalEditApiVersion() : 0;
+  return version > 0 ? version : undefined;
 }
 
 /** Analyse mono PCM, or adopt a host analysis, and open an editing session. */
@@ -591,12 +590,12 @@ export class VocalEditSession {
     this.sampleRate = sampleRate;
   }
 
-  dispose(): void {
+  destroy(): void {
     if (this.disposed) {
       return;
     }
     for (const draft of this.drafts) {
-      draft.dispose();
+      draft.destroy();
     }
     this.drafts.clear();
     module().vocalEditSessionDestroy(this.handle);
@@ -604,17 +603,9 @@ export class VocalEditSession {
     this.disposed = true;
   }
 
-  delete(): void {
-    this.dispose();
-  }
-
-  destroy(): void {
-    this.dispose();
-  }
-
-  /** Releases the handle through {@link dispose}, so the instance works with `using`. */
+  /** Releases the handle through {@link destroy}, so the instance works with `using`. */
   [Symbol.dispose](): void {
-    this.dispose();
+    this.destroy();
   }
 
   private native(): number {
@@ -783,7 +774,7 @@ export class VocalEditDraft {
     const result = copyEditResult(
       module().vocalEditDraftCommit(this.native(), resolveRevision(options, this.owner.revision())),
     );
-    this.dispose();
+    this.destroy();
     return result;
   }
 
@@ -792,7 +783,7 @@ export class VocalEditDraft {
       return;
     }
     module().vocalEditDraftCancel(this.native());
-    this.dispose();
+    this.destroy();
   }
 
   evaluatePitch(noteId: number): VocalPitchEvaluation {
@@ -830,7 +821,7 @@ export class VocalEditDraft {
     );
   }
 
-  dispose(): void {
+  destroy(): void {
     if (this.disposed) {
       return;
     }
@@ -840,17 +831,9 @@ export class VocalEditDraft {
     this.owner._forgetDraft(this);
   }
 
-  delete(): void {
-    this.dispose();
-  }
-
-  destroy(): void {
-    this.dispose();
-  }
-
-  /** Releases the handle through {@link dispose}, so the instance works with `using`. */
+  /** Releases the handle through {@link destroy}, so the instance works with `using`. */
   [Symbol.dispose](): void {
-    this.dispose();
+    this.destroy();
   }
 }
 
@@ -947,12 +930,12 @@ export class VocalRenderSnapshot {
         job.abort();
         throw error;
       } finally {
-        job.dispose();
+        job.destroy();
       }
     })();
   }
 
-  dispose(): void {
+  destroy(): void {
     if (this.disposed) {
       return;
     }
@@ -961,17 +944,9 @@ export class VocalRenderSnapshot {
     this.disposed = true;
   }
 
-  delete(): void {
-    this.dispose();
-  }
-
-  destroy(): void {
-    this.dispose();
-  }
-
-  /** Releases the handle through {@link dispose}, so the instance works with `using`. */
+  /** Releases the handle through {@link destroy}, so the instance works with `using`. */
   [Symbol.dispose](): void {
-    this.dispose();
+    this.destroy();
   }
 }
 
@@ -999,7 +974,7 @@ export class VocalRenderJob {
 
   finalize(): VocalRenderResult {
     const result = copyRender(module().vocalEditRenderJobFinalize(this.native()));
-    this.dispose();
+    this.destroy();
     return result;
   }
 
@@ -1009,7 +984,7 @@ export class VocalRenderJob {
     }
   }
 
-  dispose(): void {
+  destroy(): void {
     if (this.disposed) {
       return;
     }
@@ -1018,17 +993,9 @@ export class VocalRenderJob {
     this.disposed = true;
   }
 
-  delete(): void {
-    this.dispose();
-  }
-
-  destroy(): void {
-    this.dispose();
-  }
-
-  /** Releases the handle through {@link dispose}, so the instance works with `using`. */
+  /** Releases the handle through {@link destroy}, so the instance works with `using`. */
   [Symbol.dispose](): void {
-    this.dispose();
+    this.destroy();
   }
 }
 

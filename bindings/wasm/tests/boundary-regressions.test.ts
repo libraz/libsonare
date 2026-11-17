@@ -175,7 +175,7 @@ describe('boundary regressions (WASM)', () => {
       expect(mixer.drainTailStereo(BLOCK - 1).left.length).toBe(BLOCK - 1);
       expect(mixer.drainTailStereo(BLOCK).left.length).toBe(BLOCK);
     } finally {
-      mixer.delete();
+      mixer.destroy();
     }
 
     const raw = getSonareModule().createMixerFromSceneJson(

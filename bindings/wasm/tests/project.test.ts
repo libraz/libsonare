@@ -100,10 +100,10 @@ describe('Sonare WASM Project', () => {
           externalStemRole: 'vocals',
         });
       } finally {
-        restored.delete();
+        restored.destroy();
       }
     } finally {
-      project.delete();
+      project.destroy();
     }
   });
 
@@ -145,7 +145,7 @@ describe('Sonare WASM Project', () => {
         externalStemRole: '',
       });
     } finally {
-      project.delete();
+      project.destroy();
     }
   });
 
@@ -190,8 +190,8 @@ describe('Sonare WASM Project', () => {
       });
       expect(Array.from(project.assistSidecars()[1].payload)).toEqual([3, 4]);
     } finally {
-      project.delete();
-      constructed.delete();
+      project.destroy();
+      constructed.destroy();
     }
   });
 
@@ -214,7 +214,7 @@ describe('Sonare WASM Project', () => {
         project.setAssistSidecar('legacy', 0, 0, 0, 0),
       ).toThrow(/requires six arguments/);
     } finally {
-      project.delete();
+      project.destroy();
     }
   });
 
@@ -235,7 +235,7 @@ describe('Sonare WASM Project', () => {
       expect(() => native.addTrack({ kind: 3 })).toThrow(/project track kind is out of range/);
       expect(() => native.addTrack({ kind: 1.5 })).toThrow(/project track kind must be an integer/);
     } finally {
-      project.delete();
+      project.destroy();
     }
   });
 
@@ -331,7 +331,7 @@ describe('Sonare WASM Project', () => {
     ).toThrow();
     expect(project.trackCount()).toBe(2);
     expect(project.clipCount()).toBe(2);
-    project.delete();
+    project.destroy();
   });
 
   it('round-trips toJson -> fromJson -> toJson byte-for-byte', () => {
@@ -347,10 +347,10 @@ describe('Sonare WASM Project', () => {
         // deterministic and the round-trip must reproduce identical bytes.
         expect(restoredJson).toBe(json);
       } finally {
-        restored.delete();
+        restored.destroy();
       }
     } finally {
-      project.delete();
+      project.destroy();
     }
   });
 
@@ -367,10 +367,10 @@ describe('Sonare WASM Project', () => {
       try {
         expect(restored.toJson()).toBe(before);
       } finally {
-        restored.delete();
+        restored.destroy();
       }
     } finally {
-      project.delete();
+      project.destroy();
     }
   });
 
@@ -396,7 +396,7 @@ describe('Sonare WASM Project', () => {
       expect(project.sourceCount()).toBe(1);
       expect(project.clipCount()).toBe(1);
     } finally {
-      project.delete();
+      project.destroy();
     }
   });
 
@@ -412,7 +412,7 @@ describe('Sonare WASM Project', () => {
       project.undo();
       expect(project.toJson()).toBe(before);
     } finally {
-      project.delete();
+      project.destroy();
     }
   });
 
@@ -441,7 +441,7 @@ describe('Sonare WASM Project', () => {
       expect(after).toContain('"warp_mode":1');
       const restored = Project.fromJson(after);
       expect(restored.toJson()).toBe(after);
-      restored.delete();
+      restored.destroy();
       project.undo();
       expect(project.toJson()).toContain('"warp_mode":0');
       project.undo();
@@ -453,7 +453,7 @@ describe('Sonare WASM Project', () => {
       expect(() => project.setClipWarpMode(clipId, 'typo' as 'repitch')).toThrow();
       expect(() => project.setClipWarpMode(clipId, 99 as 1)).toThrow();
     } finally {
-      project.delete();
+      project.destroy();
     }
   });
 
@@ -480,7 +480,7 @@ describe('Sonare WASM Project', () => {
         project.setWarpMap({ id: 124, anchors: [{ warpSample: 0, sourceSample: 0 }] }),
       ).toThrow();
     } finally {
-      project.delete();
+      project.destroy();
     }
   });
 
@@ -495,7 +495,7 @@ describe('Sonare WASM Project', () => {
       expect(Array.isArray(result.diagnostics)).toBe(true);
       expect(result.diagnostics.length).toBe(result.diagnosticCount);
     } finally {
-      project.delete();
+      project.destroy();
     }
   });
 
@@ -509,7 +509,7 @@ describe('Sonare WASM Project', () => {
       expect(result.diagnostics[0].message).toContain('project contains MIDI clips');
       expect(result.messages.split('\n')[0]).toBe(result.diagnostics[0].message);
     } finally {
-      project.delete();
+      project.destroy();
     }
   });
 
@@ -533,7 +533,7 @@ describe('Sonare WASM Project', () => {
         expect(second[i]).toBeCloseTo(first[i], 6);
       }
     } finally {
-      project.delete();
+      project.destroy();
     }
   });
 
@@ -556,7 +556,7 @@ describe('Sonare WASM Project', () => {
       expectInvalidParameter(() => project.bounceWithSynthInstrument({}, invalidOptions));
       expectInvalidParameter(() => project.bounceWithSf2Instrument({}, invalidOptions));
     } finally {
-      project.delete();
+      project.destroy();
     }
   });
 
@@ -613,7 +613,7 @@ describe('Sonare WASM Project', () => {
       expect(audible.length).toBe(48000 * 2);
       expect(maxAbs(audible)).toBeGreaterThan(0.01);
     } finally {
-      project.delete();
+      project.destroy();
     }
   });
 
@@ -635,7 +635,7 @@ describe('Sonare WASM Project', () => {
       expect(maxAbs(project.bounceWithSf2Instrument(undefined, options))).toBeGreaterThan(0.01);
       expect(maxAbs(project.bounceWithSf2Instrument([], options))).toBe(0);
     } finally {
-      project.delete();
+      project.destroy();
     }
   });
 
@@ -683,7 +683,7 @@ describe('Sonare WASM Project', () => {
       expect(explicitLow).not.toEqual(explicitZero);
       expect(tailEnergy(explicitLow)).toBeGreaterThan(tailEnergy(explicitZero));
     } finally {
-      project.delete();
+      project.destroy();
     }
   });
 
@@ -697,7 +697,7 @@ describe('Sonare WASM Project', () => {
       expect(audio.length).toBeGreaterThan(0);
       expect(maxAbs(audio)).toBeGreaterThan(0.01);
     } finally {
-      project.delete();
+      project.destroy();
     }
   });
 
@@ -710,7 +710,7 @@ describe('Sonare WASM Project', () => {
       expect(audio).toBeInstanceOf(Float32Array);
       expect(audio.length).toBeGreaterThan(0);
     } finally {
-      project.delete();
+      project.destroy();
     }
   });
 
@@ -730,7 +730,7 @@ describe('Sonare WASM Project', () => {
       expect(arr.length).toBe(24000);
       expect(maxAbs(arr)).toBeGreaterThan(0.01);
     } finally {
-      project.delete();
+      project.destroy();
     }
   });
 
@@ -772,7 +772,7 @@ describe('Sonare WASM Project', () => {
         expectArgumentRefusal(caught, TypeError);
       }
     } finally {
-      project.delete();
+      project.destroy();
     }
   });
 
@@ -791,7 +791,7 @@ describe('Sonare WASM Project', () => {
         expect(maxAbs(audio)).toBeGreaterThan(0);
         return audio;
       } finally {
-        project.delete();
+        project.destroy();
       }
     };
 
@@ -846,7 +846,7 @@ describe('Sonare WASM Project', () => {
       expect(bytes).toContain('208,80');
       expect(bytes).toContain('224,0,64');
     } finally {
-      project.delete();
+      project.destroy();
     }
 
     const sysexProject = new Project();
@@ -859,10 +859,10 @@ describe('Sonare WASM Project', () => {
       try {
         expect(Array.from(restored.exportSmf()).join(',')).toContain('240,5,126,127,9,1,247');
       } finally {
-        restored.delete();
+        restored.destroy();
       }
     } finally {
-      sysexProject.delete();
+      sysexProject.destroy();
     }
   });
 
@@ -920,9 +920,9 @@ describe('Sonare WASM Project', () => {
         request.previewMidiFxCount({ clipId: requestClip, configJson: '{bad json' }),
       ).toThrow();
     } finally {
-      request.delete();
-      positional.delete();
-      bare.delete();
+      request.destroy();
+      positional.destroy();
+      bare.destroy();
     }
   });
 
@@ -950,10 +950,10 @@ describe('Sonare WASM Project', () => {
         };
         expect(roundPayload.midi_content[String(roundClip)]).toHaveLength(600);
       } finally {
-        roundtrip.delete();
+        roundtrip.destroy();
       }
     } finally {
-      project.delete();
+      project.destroy();
     }
   });
 
@@ -962,7 +962,7 @@ describe('Sonare WASM Project', () => {
     try {
       expect(project.importSmf(makeTruncatedSmf())).toBeGreaterThan(0);
     } finally {
-      project.delete();
+      project.destroy();
     }
   });
 
@@ -975,7 +975,7 @@ describe('Sonare WASM Project', () => {
       expect(() => project.exportSmf()).toThrow();
       expect(() => project.exportClipFile()).toThrow();
     } finally {
-      project.delete();
+      project.destroy();
     }
   });
 
@@ -1003,10 +1003,10 @@ describe('Sonare WASM Project', () => {
           0x53, 0x4d, 0x46, 0x32, 0x43, 0x4c, 0x49, 0x50,
         ]);
       } finally {
-        reimported.delete();
+        reimported.destroy();
       }
     } finally {
-      project.delete();
+      project.destroy();
     }
   });
 
@@ -1025,7 +1025,7 @@ describe('Sonare WASM Project', () => {
         project.setMidiEvents(clipId, [[0, 0] as unknown as [number, number, number]]),
       ).toThrow(/\[ppq, data0, data1\]/);
     } finally {
-      project.delete();
+      project.destroy();
     }
   });
 
@@ -1072,7 +1072,7 @@ describe('Sonare WASM Project', () => {
       expect(boundary.unmatchedNoteOns).toBe(0);
       expect(boundary.unmatchedNoteOffs).toBe(0);
     } finally {
-      project.delete();
+      project.destroy();
     }
   });
 
@@ -1083,7 +1083,7 @@ describe('Sonare WASM Project', () => {
       const clipId = project.addClip({ trackId, startPpq: 0, lengthPpq: 4, audioChannels: 0 });
       expect(() => project.validateMidiNotes(clipId)).toThrow();
     } finally {
-      project.delete();
+      project.destroy();
     }
   });
 
@@ -1117,7 +1117,7 @@ describe('Sonare WASM Project', () => {
       expectArgumentRefusal(caught, RangeError);
       expect(String((caught as Error).message)).toContain('whole number of hertz');
     } finally {
-      project.delete();
+      project.destroy();
     }
   });
 
@@ -1132,12 +1132,12 @@ describe('Sonare WASM Project', () => {
       try {
         expect(restored.clipCount()).toBe(1);
       } finally {
-        restored.delete();
+        restored.destroy();
       }
       project.removeClip(clipId);
       expect(project.clipCount()).toBe(0);
     } finally {
-      project.delete();
+      project.destroy();
     }
   });
 
@@ -1147,7 +1147,7 @@ describe('Sonare WASM Project', () => {
       expect(diagnostics).toContain('dangling_clip_source');
       expect(project.trackCount()).toBe(1);
     } finally {
-      project.delete();
+      project.destroy();
     }
   });
 

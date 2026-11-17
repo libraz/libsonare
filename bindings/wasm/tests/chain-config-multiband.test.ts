@@ -100,7 +100,7 @@ describe('typed multiband crossover + bands', () => {
         }
         return Float32Array.from(out);
       } finally {
-        chain.delete();
+        chain.destroy();
       }
     };
     expect(Array.from(run(typed))).toEqual(Array.from(run(flat())));

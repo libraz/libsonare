@@ -121,7 +121,7 @@ describe('Project MIDI 2.0 builders', () => {
         ]),
       ).not.toThrow();
     } finally {
-      project.delete();
+      project.destroy();
     }
   });
 });

@@ -50,7 +50,7 @@ describe('WASM vocal edit facade', () => {
       expect(notes.notes[0]?.amplitude).toBeInstanceOf(Float32Array);
       expect(session.analysis().f0Hz).toBeInstanceOf(Float32Array);
     } finally {
-      session.dispose();
+      session.destroy();
     }
   });
 
@@ -101,7 +101,7 @@ describe('WASM vocal edit facade', () => {
         expect(detail.actualText).toBe('0');
       }
     } finally {
-      session.dispose();
+      session.destroy();
     }
   });
 
@@ -113,7 +113,7 @@ describe('WASM vocal edit facade', () => {
       expect(() => draft.token()).toThrow();
       expect(() => session.beginEdit()).not.toThrow();
     } finally {
-      session.dispose();
+      session.destroy();
     }
   });
 
@@ -128,10 +128,10 @@ describe('WASM vocal edit facade', () => {
         expect(rendered.startSample).toBe(0);
         expect(rendered.samples.length).toBe(source.length);
       } finally {
-        snapshot.dispose();
+        snapshot.destroy();
       }
     } finally {
-      session.dispose();
+      session.destroy();
     }
   });
 
@@ -152,10 +152,10 @@ describe('WASM vocal edit facade', () => {
         );
         expect(restored.token().revision).toBe(session.token().revision);
       } finally {
-        restored.dispose();
+        restored.destroy();
       }
     } finally {
-      session.dispose();
+      session.destroy();
     }
   });
 
@@ -185,11 +185,11 @@ describe('WASM vocal edit facade', () => {
       midway.abort();
       await expect(pending).rejects.toMatchObject({ code: ErrorCode.Cancelled });
 
-      snapshot.dispose();
+      snapshot.destroy();
       await expect(snapshot.renderAsync({})).rejects.toThrow(/disposed/);
     } finally {
-      snapshot.dispose();
-      session.dispose();
+      snapshot.destroy();
+      session.destroy();
     }
   });
 
@@ -204,7 +204,7 @@ describe('WASM vocal edit facade', () => {
     expect(() => snapshot.outputLengthSamples()).toThrow(/disposed/);
     session.destroy();
     expect(() => session.token()).toThrow(/disposed/);
-    expect(() => session.delete()).not.toThrow();
+    expect(() => session.destroy()).not.toThrow();
   });
 
   it('accepts only canonical decimal uint64 strings for state-token inputs', () => {
@@ -227,10 +227,10 @@ describe('WASM vocal edit facade', () => {
       try {
         expect(() => snapshot.render({ requestId: '01' })).toThrow(RangeError);
       } finally {
-        snapshot.dispose();
+        snapshot.destroy();
       }
     } finally {
-      session.dispose();
+      session.destroy();
     }
   });
 
@@ -238,7 +238,7 @@ describe('WASM vocal edit facade', () => {
     const source = tone(SAMPLE_RATE);
     const session = createVocalEditSession({ samples: source, sampleRate: SAMPLE_RATE });
     const state = session.exportState();
-    session.dispose();
+    session.destroy();
     expect(() =>
       restoreVocalEditSession({
         samples: source,
@@ -258,10 +258,10 @@ describe('WASM vocal edit facade', () => {
       const range = { startSample: 0, endSample: 256 };
       const first = snapshot.beginRenderJob({ range });
       expect(() => snapshot.beginRenderJob({ range })).toThrow();
-      first.dispose();
+      first.destroy();
     } finally {
-      snapshot.dispose();
-      restored.dispose();
+      snapshot.destroy();
+      restored.destroy();
     }
   });
 
@@ -269,7 +269,7 @@ describe('WASM vocal edit facade', () => {
     const valid = suppliedOneFrameRequest({ maxHistoryBytes: '0', maxCacheBytes: '7' });
     const session = createVocalEditSession(valid);
     const state = session.exportState();
-    session.dispose();
+    session.destroy();
 
     for (const limits of [{ maxHistoryBytes: '007' }, { maxCacheBytes: '007' }]) {
       expect(() => createVocalEditSession(suppliedOneFrameRequest(limits))).toThrow();
@@ -284,14 +284,14 @@ describe('WASM vocal edit facade', () => {
     }
 
     const accepted = createVocalEditSession(suppliedOneFrameRequest({ maxHistoryBytes: '0' }));
-    accepted.dispose();
+    accepted.destroy();
     const restored = restoreVocalEditSession({
       samples: valid.samples,
       sampleRate: SAMPLE_RATE,
       state,
       limits: { maxCacheBytes: '7' },
     });
-    restored.dispose();
+    restored.destroy();
   });
 
   it('enforces canonical limits through the native WASM vocal exports', () => {
@@ -299,7 +299,7 @@ describe('WASM vocal edit facade', () => {
     const valid = suppliedOneFrameRequest({ maxHistoryBytes: '0', maxCacheBytes: '7' });
     const session = createVocalEditSession(valid);
     const state = session.exportState();
-    session.dispose();
+    session.destroy();
 
     for (const limits of [{ maxHistoryBytes: '007' }, { maxCacheBytes: '007' }]) {
       const createRequest = suppliedOneFrameRequest(limits);
@@ -336,7 +336,7 @@ describe('WASM vocal edit facade', () => {
   it('disposes live drafts when their session is disposed', () => {
     const session = createVocalEditSession({ samples: tone(512), sampleRate: SAMPLE_RATE });
     const draft = session.beginEdit();
-    session.dispose();
+    session.destroy();
     expect(() => draft.token()).toThrow(/disposed/);
     expect(() => draft.apply({ expectedGeneration: '0', operations: [] })).toThrow(/disposed/);
     expect(() => draft.cancel()).not.toThrow();
@@ -351,7 +351,7 @@ describe('WASM vocal edit facade', () => {
       ).toThrow(TypeError);
       draft.cancel();
     } finally {
-      session.dispose();
+      session.destroy();
     }
   });
 
@@ -382,7 +382,7 @@ describe('WASM vocal edit facade', () => {
       expect(() => apply({ ...base, strength: 2 })).toThrow(/strength/);
       draft.cancel();
     } finally {
-      session.dispose();
+      session.destroy();
     }
   });
 
@@ -431,7 +431,7 @@ describe('WASM vocal edit facade', () => {
       expect(draft.token().generation).toBe(generation);
       draft.cancel();
     } finally {
-      session.dispose();
+      session.destroy();
     }
   });
 });

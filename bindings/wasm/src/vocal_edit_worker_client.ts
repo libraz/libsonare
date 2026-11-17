@@ -1,3 +1,4 @@
+import { ErrorCode, isSonareError } from './errors.js';
 import { failureFromPayload } from './internal/failure_payload.js';
 import { releasedHandleError } from './internal/handle_guard.js';
 import type {
@@ -47,7 +48,7 @@ export interface VocalEditWorkerClientOptions {
   worker?: VocalEditWorker;
   workerUrl?: string | URL;
   workerFactory?: (url: URL) => VocalEditWorker;
-  terminateWorkerOnDispose?: boolean;
+  terminateWorkerOnDestroy?: boolean;
 }
 
 /** Per-call transfer behaviour for a request that carries typed arrays. */
@@ -233,10 +234,11 @@ export class VocalEditWorkerClient {
   private nextId = 1;
   private nextSession = 1;
   private closed = false;
+  private destroying: Promise<void> | undefined;
   private usesEventTarget = false;
 
   constructor(options: VocalEditWorkerClientOptions = {}) {
-    this.ownsWorker = options.worker === undefined || options.terminateWorkerOnDispose === true;
+    this.ownsWorker = options.worker === undefined || options.terminateWorkerOnDestroy === true;
     if (options.worker) {
       this.worker = options.worker;
     } else {
@@ -308,10 +310,26 @@ export class VocalEditWorkerClient {
     }
   }
 
-  dispose(): void {
-    if (this.closed) {
-      return;
+  /**
+   * Stop accepting calls, cancel outstanding work (rejected with `InvalidState`),
+   * release every open session, and terminate the Worker when this client owns
+   * it. Resolves once the Worker has been released; a second call returns the
+   * same promise.
+   */
+  destroy(): Promise<void> {
+    if (this.destroying) {
+      return this.destroying;
     }
+    this.destroying = this.shutdown();
+    return this.destroying;
+  }
+
+  /** Same as {@link destroy}, for `await using`. */
+  [Symbol.asyncDispose](): Promise<void> {
+    return this.destroy();
+  }
+
+  private async shutdown(): Promise<void> {
     const pendingEntries = [...this.pending.entries()];
     const sessionIntents = new Map<string, VocalUint64>();
     for (const session of this.sessions) {
@@ -347,7 +365,7 @@ export class VocalEditWorkerClient {
     this.sessions.clear();
     this.latestIntent.clear();
     if (this.ownsWorker) {
-      this.worker.terminate();
+      await this.worker.terminate();
     }
   }
 
@@ -430,7 +448,7 @@ export class VocalEditWorkerClient {
       // The Worker finished before it saw the cancellation; release its session.
       if (cancelled || options.signal?.aborted) {
         if (!this.closed) {
-          session.dispose().result.catch(() => {});
+          session.destroy().catch(() => {});
         }
         throw abortError();
       }
@@ -637,6 +655,7 @@ export class VocalEditWorkerSession {
   readonly sessionId: string;
   private tokenValue: VocalStateToken;
   private disposed = false;
+  private destroying: Promise<void> | undefined;
   readonly created: VocalWorkerCreateResult;
   private readonly client: VocalEditWorkerClient;
 
@@ -811,13 +830,32 @@ export class VocalEditWorkerSession {
     return this.client.callPreview(this, request, options);
   }
 
-  /** Releases the Worker session and any open draft; later calls on it are rejected. */
-  dispose(): VocalEditWorkerTask<null> {
-    if (this.disposed) {
-      return new VocalEditWorkerTask(Promise.resolve(null), () => {});
+  /**
+   * Releases the Worker session and any open draft, resolving once the Worker
+   * has acknowledged it; later calls on the session are rejected. A second
+   * call returns the same promise.
+   */
+  destroy(): Promise<void> {
+    if (this.destroying) {
+      return this.destroying;
     }
     this.disposed = true;
-    return this.client.disposeSession(this);
+    this.destroying = (async () => {
+      try {
+        await this.client.disposeSession(this).result;
+      } catch (error) {
+        // A client destroyed meanwhile has already released the session.
+        if (!isSonareError(error) || error.code !== ErrorCode.InvalidState) {
+          throw error;
+        }
+      }
+    })();
+    return this.destroying;
+  }
+
+  /** Same as {@link destroy}, for `await using`. */
+  [Symbol.asyncDispose](): Promise<void> {
+    return this.destroy();
   }
 
   private requireAlive(): void {

@@ -41,6 +41,7 @@ export class SonareStreamAnalyzerNode {
   private resolveReady!: () => void;
   private rejectReady!: (reason?: unknown) => void;
   private destroyed = false;
+  private destroying: Promise<void> | undefined;
 
   private constructor(node: AudioWorkletNode, analyzer: StreamAnalyzer) {
     this.node = node;
@@ -124,7 +125,23 @@ export class SonareStreamAnalyzerNode {
     };
   }
 
-  destroy(): void {
+  /**
+   * Stops the node and releases its resources; pending requests reject with
+   * `InvalidState`. Resolves once the node can no longer deliver a message to
+   * the caller. A second call returns the same promise.
+   */
+  destroy(): Promise<void> {
+    this.shutdown();
+    this.destroying ??= Promise.resolve();
+    return this.destroying;
+  }
+
+  /** Same as {@link destroy}, for `await using`. */
+  [Symbol.asyncDispose](): Promise<void> {
+    return this.destroy();
+  }
+
+  private shutdown(): void {
     if (this.destroyed) {
       return;
     }

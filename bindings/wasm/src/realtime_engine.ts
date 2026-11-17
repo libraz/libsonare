@@ -1440,7 +1440,7 @@ export class RealtimeEngine {
    * Throws while the transport is playing, for a timeline the engine cannot
    * hold, and for a scene strip routed from several tracks. A validation
    * failure leaves the engine unchanged. The engine keeps its own reference, so
-   * {@link ProjectTimeline.dispose} may follow immediately.
+   * {@link ProjectTimeline.destroy} may follow immediately.
    *
    * Also throws on an unprepared engine and on a timeline whose sample rate
    * differs from the engine's. Once a timeline is applied, a later prepare at
@@ -2328,11 +2328,6 @@ export class RealtimeEngine {
     this.nativeHandle.delete();
   }
 
-  /** Alias for {@link destroy}, matching embind's own release method name. */
-  delete(): void {
-    this.destroy();
-  }
-
   /** Releases the handle through {@link destroy}, so the instance works with `using`. */
   [Symbol.dispose](): void {
     this.destroy();
@@ -2367,11 +2362,6 @@ export class ClipPageProvider {
     }
     this.disposed = true;
     this.engine.destroyClipPageProvider(this.id);
-  }
-
-  /** Alias for {@link destroy}, provided for cross-binding compatibility. */
-  delete(): void {
-    this.destroy();
   }
 
   /** Releases the provider through {@link destroy}, so the instance works with `using`. */

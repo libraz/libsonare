@@ -529,7 +529,7 @@ describe('telemetry scratch readers refuse an index past their record instead of
         expect(() => mixer.meterScratchValue(field)).toThrow(RangeError);
       }
     } finally {
-      mixer.delete();
+      mixer.destroy();
     }
   });
 });

@@ -169,7 +169,7 @@ describe('vocal edit Worker client', () => {
         expect(worker.lastMutation?.clientIntentSequence).toBe(String(index + 2));
       }
     } finally {
-      client.dispose();
+      client.destroy();
     }
   });
 
@@ -187,9 +187,9 @@ describe('vocal edit Worker client', () => {
     if (worker.lastMutation?.type === 'sonare:vocal-mutate') {
       expect(worker.lastMutation.baseToken?.requestId).toBe('0');
     }
-    await session.dispose();
+    await session.destroy();
     expect(() => session.notes()).toThrow(/disposed/);
-    client.dispose();
+    client.destroy();
   });
 
   it('rejects a render result whose state token is stale', async () => {
@@ -203,8 +203,8 @@ describe('vocal edit Worker client', () => {
     await expect(
       session.preview({ range: { startSample: 0, endSample: 1 }, requestId: '9' }),
     ).rejects.toMatchObject({ name: 'StaleResultError' });
-    await session.dispose();
-    client.dispose();
+    await session.destroy();
+    client.destroy();
   });
 
   it('removes a preview abort listener when the Worker emits an error', async () => {
@@ -228,7 +228,7 @@ describe('vocal edit Worker client', () => {
     expect(worker.posted.filter((message) => message.type === 'sonare:vocal-cancel')).toHaveLength(
       0,
     );
-    client.dispose();
+    client.destroy();
   });
 });
 
@@ -270,9 +270,9 @@ class BridgeWorker implements VocalEditWorker {
             limitedCorrectionFrames: '0',
           }),
           abort: () => {},
-          dispose: () => {},
+          destroy: () => {},
         }),
-        dispose: () => {},
+        destroy: () => {},
       };
     };
     const pitch = (scope: number): VocalPitchEvaluation => ({
@@ -307,7 +307,7 @@ class BridgeWorker implements VocalEditWorker {
         generation = 0;
       },
       captureRenderSnapshot: snapshot as never,
-      dispose: () => {},
+      destroy: () => {},
     };
     const session: VocalEditWorkerNativeSession = {
       token: stateToken,
@@ -332,7 +332,7 @@ class BridgeWorker implements VocalEditWorker {
       redo: editResult,
       captureRenderSnapshot: snapshot as never,
       exportState: () => new Uint8Array([1]),
-      dispose: () => {
+      destroy: () => {
         this.disposedSessions += 1;
       },
     };
@@ -392,7 +392,7 @@ describe('vocal edit Worker client pipelining and failure paths', () => {
     const client = new VocalEditWorkerClient({ worker });
     await client.create({ samples: new Float32Array([0]), sampleRate: 16000 });
 
-    client.dispose();
+    client.destroy();
     await new Promise((resolve) => setTimeout(resolve, 0));
 
     expect(worker.disposedSessions).toBe(1);
@@ -417,7 +417,7 @@ describe('vocal edit Worker client pipelining and failure paths', () => {
     releaseInitialization();
     await new Promise((resolve) => setTimeout(resolve, 0));
     expect(worker.createdSessions).toBe(1);
-    client.dispose();
+    client.destroy();
 
     await expect(task).rejects.toThrow(/disposed/);
     await new Promise((resolve) => setTimeout(resolve, 0));
@@ -436,7 +436,7 @@ describe('vocal edit Worker client pipelining and failure paths', () => {
     const task = client.create({ samples: new Float32Array([0]), sampleRate: 16000 });
 
     await new Promise((resolve) => setTimeout(resolve, 0));
-    client.dispose();
+    client.destroy();
     releaseInitialization();
 
     await expect(task).rejects.toThrow(/disposed/);
@@ -465,7 +465,7 @@ describe('vocal edit Worker client pipelining and failure paths', () => {
       const latestPreview = await session.preview({ requestId: '4' });
       expect(latestPreview.token.generation).toBe('2');
     } finally {
-      client.dispose();
+      client.destroy();
     }
   });
 
@@ -480,7 +480,7 @@ describe('vocal edit Worker client pipelining and failure paths', () => {
       expect(settled.map((outcome) => outcome.status)).toEqual(['fulfilled', 'fulfilled']);
       expect(session.token().generation).toBe('2');
     } finally {
-      client.dispose();
+      client.destroy();
     }
   });
 
@@ -501,7 +501,7 @@ describe('vocal edit Worker client pipelining and failure paths', () => {
       expect(await applyOutcome).toMatchObject({ token: { generation: '1' } });
       expect(session.token().generation).toBe('1');
     } finally {
-      client.dispose();
+      client.destroy();
     }
   });
 
@@ -534,7 +534,7 @@ describe('vocal edit Worker client pipelining and failure paths', () => {
     };
     controller.abort();
     expect(posted).toBe(0);
-    client.dispose();
+    client.destroy();
   });
 
   it('rejects a create aborted after the Worker created it and disposes that session', async () => {
@@ -557,7 +557,7 @@ describe('vocal edit Worker client pipelining and failure paths', () => {
     await expect(task).rejects.toMatchObject({ name: 'AbortError' });
     await new Promise((resolve) => setTimeout(resolve, 0));
     expect(sent.some((message) => message.type === 'sonare:vocal-dispose')).toBe(true);
-    client.dispose();
+    client.destroy();
   });
 
   it('transfers apply and preview arrays by default and copies them on request', async () => {
@@ -586,7 +586,7 @@ describe('vocal edit Worker client pipelining and failure paths', () => {
       await session.preview({ range, requestId: '5' }, { copy: true });
       expect(range.probe.length).toBe(1);
     } finally {
-      client.dispose();
+      client.destroy();
     }
   });
 
@@ -608,7 +608,7 @@ describe('vocal edit Worker client pipelining and failure paths', () => {
       expect(await session.sourceSampleToDestinationSample(1, 5, { draft: true })).toBe(105);
       expect(await session.destinationSampleToSourceSample(1, 105, { draft: true })).toBe(5);
     } finally {
-      client.dispose();
+      client.destroy();
     }
   });
 
@@ -627,7 +627,7 @@ describe('vocal edit Worker client pipelining and failure paths', () => {
       ).toThrow(TypeError);
       expect(worker.posted.length).toBe(before);
     } finally {
-      client.dispose();
+      client.destroy();
     }
   });
 
@@ -668,7 +668,7 @@ describe('vocal edit Worker client pipelining and failure paths', () => {
           : undefined,
       ).toEqual([{ kind: 'setTransition', transition }]);
     } finally {
-      client.dispose();
+      client.destroy();
     }
   });
 
@@ -706,14 +706,14 @@ describe('vocal edit Worker client pipelining and failure paths', () => {
         actualText: 'revision 1',
       });
     } finally {
-      client.dispose();
+      client.destroy();
     }
   });
 
   it('rejects a request still pending at dispose with InvalidState, like a new call', async () => {
     const client = new VocalEditWorkerClient({ worker: new FakeWorker() });
     const pending = client.create({ samples: new Float32Array([0]), sampleRate: 16000 });
-    client.dispose();
+    client.destroy();
     await expect(pending).rejects.toSatisfy(
       (error: unknown) =>
         isSonareError(error) && error.code === 7 && /disposed/.test(error.message),

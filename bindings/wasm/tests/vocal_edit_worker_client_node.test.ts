@@ -34,7 +34,7 @@ describe('VocalEditWorkerClient under Node', () => {
       () =>
         new VocalEditWorkerClient({
           worker: new NodeWorker(entry),
-          terminateWorkerOnDispose: true,
+          terminateWorkerOnDestroy: true,
         }),
     ],
     ['a factory', () => new VocalEditWorkerClient({ workerFactory: () => new NodeWorker(entry) })],
@@ -51,9 +51,9 @@ describe('VocalEditWorkerClient under Node', () => {
       const session = await client.create({ samples: voice(), sampleRate: SR });
       expect(session.sessionId).toMatch(/\S/);
       expect(session.created.capabilities.apiVersion).toBeGreaterThan(0);
-      await session.dispose().result;
+      await session.destroy();
     } finally {
-      client.dispose();
+      await client.destroy();
     }
   });
 });

@@ -68,7 +68,7 @@ describe('WASM cross-binding consistency', () => {
           ),
         ).toThrow();
       } finally {
-        project.delete();
+        project.destroy();
       }
     });
 
@@ -91,7 +91,7 @@ describe('WASM cross-binding consistency', () => {
             `waveform ${waveform} must be rejected, not resolved to sine`,
           ).toThrow(/sawtooth/);
         } finally {
-          project.delete();
+          project.destroy();
         }
       }
     });
@@ -113,7 +113,7 @@ describe('WASM cross-binding consistency', () => {
             `waveform ${waveform} must be rejected as out of range`,
           ).toThrow(/32-bit integer range/);
         } finally {
-          project.delete();
+          project.destroy();
         }
       }
     });
@@ -130,7 +130,7 @@ describe('WASM cross-binding consistency', () => {
           );
           return audio.reduce((hash, sample) => (hash * 31 + Math.round(sample * 1e6)) | 0, 0);
         } finally {
-          project.delete();
+          project.destroy();
         }
       });
       expect(new Set(renders).size, 'the four waveforms must render differently').toBe(4);
@@ -146,7 +146,7 @@ describe('WASM cross-binding consistency', () => {
         expect(audio).toBeInstanceOf(Float32Array);
         expect(maxAbs(audio)).toBeGreaterThan(0.01);
       } finally {
-        project.delete();
+        project.destroy();
       }
     });
 
@@ -164,7 +164,7 @@ describe('WASM cross-binding consistency', () => {
         expect(audio).toBeInstanceOf(Float32Array);
         expect(maxAbs(audio)).toBeGreaterThan(0.01);
       } finally {
-        project.delete();
+        project.destroy();
       }
     });
 
@@ -178,7 +178,7 @@ describe('WASM cross-binding consistency', () => {
         expect(audio).toBeInstanceOf(Float32Array);
         expect(maxAbs(audio)).toBe(0);
       } finally {
-        project.delete();
+        project.destroy();
       }
     });
   });
@@ -205,7 +205,7 @@ describe('WASM cross-binding consistency', () => {
         };
         expect(scene2.strips.find((s) => s.id === 'vocal')?.panMode).toBe(0);
       } finally {
-        mixer.delete();
+        mixer.destroy();
       }
     });
 
@@ -227,7 +227,7 @@ describe('WASM cross-binding consistency', () => {
         expect(Number.isFinite(postTap.peakDbL)).toBe(true);
         expect(Number.isFinite(preTap.peakDbL)).toBe(true);
       } finally {
-        mixer.delete();
+        mixer.destroy();
       }
     });
   });

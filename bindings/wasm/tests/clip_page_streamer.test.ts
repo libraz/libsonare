@@ -235,7 +235,7 @@ describe('ClipPageStreamer', () => {
 
   it('refuses a source once closed', () => {
     const streamer = new ClipPageStreamer(fakeEngine([]));
-    streamer.close();
+    streamer.destroy();
     expect(() =>
       streamer.addSource({
         clipId: 1,
@@ -307,7 +307,7 @@ describe('ClipPageStreamer', () => {
     streamer.addSource({ clipId: 1, binding: a as never, pageFrames: 4, numSamples: 400 });
     streamer.addSource({ clipId: 2, binding: b as never, pageFrames: 4, numSamples: 400 });
 
-    streamer.close();
+    streamer.destroy();
     expect(a.closed).toBe(true);
     expect(b.closed).toBe(true);
   });

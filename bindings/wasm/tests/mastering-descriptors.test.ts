@@ -137,7 +137,7 @@ describe('streaming denoise', () => {
     chain.prepare(SR, 512, 1);
     expect(chain.stageNames()).toEqual(['repair.denoise']);
     expect(chain.processMono(noise(512)).length).toBe(512);
-    chain.delete();
+    chain.destroy();
   });
 
   it('takes an estimator by name and still refuses the whole-signal one', () => {
@@ -146,7 +146,7 @@ describe('streaming denoise', () => {
         repair: { denoise: { enabled: true, noiseEstimator: name } },
       });
       chain.prepare(SR, 512, 1);
-      chain.delete();
+      chain.destroy();
     }
     expect(() => {
       const chain = new StreamingMasteringChain({

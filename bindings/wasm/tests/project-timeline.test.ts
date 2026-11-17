@@ -121,7 +121,7 @@ describe('Project timeline applied to a RealtimeEngine', () => {
     const engine = new RealtimeEngine(SAMPLE_RATE, BLOCK_SIZE);
     try {
       const requireMatch = (): Float32Array => {
-        compileAndApply(engine, project).dispose();
+        compileAndApply(engine, project).destroy();
         const live = engineBounce(engine);
         const bounced = projectBounce(project);
         expect(peak(bounced)).toBeGreaterThan(0.01);
@@ -134,7 +134,7 @@ describe('Project timeline applied to a RealtimeEngine', () => {
       expect(moved).not.toEqual(initial);
     } finally {
       engine.destroy();
-      project.delete();
+      project.destroy();
     }
   });
 
@@ -143,15 +143,15 @@ describe('Project timeline applied to a RealtimeEngine', () => {
     const engine = new RealtimeEngine(SAMPLE_RATE, BLOCK_SIZE);
     try {
       const timeline = compileAndApply(engine, project);
-      timeline.dispose();
-      timeline.dispose();
+      timeline.destroy();
+      timeline.destroy();
       expect(() => engine.applyProjectTimeline(timeline)).toThrow(
         expect.objectContaining({ code: ErrorCode.InvalidState }),
       );
       expect(engineBounce(engine)).toEqual(projectBounce(project));
     } finally {
       engine.destroy();
-      project.delete();
+      project.destroy();
     }
   });
 
@@ -169,10 +169,10 @@ describe('Project timeline applied to a RealtimeEngine', () => {
         /transport is stopped/,
       );
       expect(engine.clipCount()).toBe(before);
-      (timeline as ProjectTimeline).dispose();
+      (timeline as ProjectTimeline).destroy();
     } finally {
       engine.destroy();
-      project.delete();
+      project.destroy();
     }
   });
 
@@ -185,7 +185,7 @@ describe('Project timeline applied to a RealtimeEngine', () => {
       expect(result.timeline).toBeNull();
       expect(result.diagnosticCount).toBeGreaterThan(0);
     } finally {
-      project.delete();
+      project.destroy();
     }
   });
 
@@ -206,7 +206,7 @@ describe('Project timeline applied to a RealtimeEngine', () => {
       const { timeline } = project.compileTimeline();
       expect(timeline).not.toBeNull();
       const releasedId = (timeline as unknown as { nativeId: number }).nativeId;
-      (timeline as ProjectTimeline).dispose();
+      (timeline as ProjectTimeline).destroy();
       const native = (engine as unknown as { native: { applyProjectTimeline(id: number): void } })
         .native;
       expect(() => native.applyProjectTimeline(releasedId)).toThrow(
@@ -215,7 +215,7 @@ describe('Project timeline applied to a RealtimeEngine', () => {
       expect(() => native.applyProjectTimeline(0x7fffffff)).toThrow(RangeError);
     } finally {
       engine.destroy();
-      project.delete();
+      project.destroy();
     }
   });
 
@@ -240,11 +240,11 @@ describe('Project timeline applied to a RealtimeEngine', () => {
       expect(() => engine.applyProjectTimeline(inherited)).toThrow(TypeError);
       expect(engine.clipCount()).toBe(before);
     } finally {
-      forgedTimeline?.dispose();
-      currentTimeline?.dispose();
+      forgedTimeline?.destroy();
+      currentTimeline?.destroy();
       engine.destroy();
-      forgedSource.delete();
-      current.delete();
+      forgedSource.destroy();
+      current.destroy();
     }
   });
 });

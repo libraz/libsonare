@@ -26,7 +26,7 @@
           downloadPcm16Wav('midi-phrase.wav', samples, 48000, 2);
           result.textContent = 'Downloaded midi-phrase.wav';
         } finally {
-          project.delete();
+          project.destroy();
         }
       } catch (error) {
         result.textContent = error instanceof Error ? error.message : String(error);

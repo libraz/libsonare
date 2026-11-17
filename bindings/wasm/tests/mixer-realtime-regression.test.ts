@@ -58,7 +58,7 @@ describe('Mixer realtime topology and heap views (WASM)', () => {
       expect(energy(fresh.outLeft)).toBeGreaterThan(1e-3);
       expect(energy(fresh.outRight)).toBeGreaterThan(1e-3);
     } finally {
-      mixer.delete();
+      mixer.destroy();
     }
   });
 
@@ -80,7 +80,7 @@ describe('Mixer realtime topology and heap views (WASM)', () => {
       expect(energy(outLeft)).toBeGreaterThan(1e-3);
       expect(energy(outRight)).toBeGreaterThan(1e-3);
     } finally {
-      mixer.delete();
+      mixer.destroy();
     }
   });
 
@@ -116,7 +116,7 @@ describe('Mixer realtime topology and heap views (WASM)', () => {
       expect(energy(fresh.outLeft)).toBeGreaterThan(1e-3);
       expect(energy(fresh.outRight)).toBeGreaterThan(1e-3);
     } finally {
-      mixer.delete();
+      mixer.destroy();
     }
   });
 });

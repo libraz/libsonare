@@ -431,7 +431,7 @@ describe('WASM note targets', () => {
         ]);
         return project.exportSmf();
       } finally {
-        project.delete();
+        project.destroy();
       }
     }
 

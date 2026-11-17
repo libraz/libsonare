@@ -736,7 +736,7 @@ describe('v1.2 feature additions (WASM)', () => {
       expect(master.channelCount).toBe(2);
       expect(Number.isFinite(master.peakDb[0])).toBe(true);
 
-      mixer.delete();
+      mixer.destroy();
     });
 
     it('schedules insert-parameter automation without throwing', () => {
@@ -765,7 +765,7 @@ describe('v1.2 feature additions (WASM)', () => {
       const out = mixer.processStereo([vocalL, silentL], [vocalR, silentR]);
       expect(blockEnergy(out)).toBeGreaterThan(0);
 
-      mixer.delete();
+      mixer.destroy();
     });
 
     it('round-trips the scene topology to JSON', () => {
@@ -777,8 +777,8 @@ describe('v1.2 feature additions (WASM)', () => {
 
       const restored = Mixer.fromSceneJson(scene, 48000, BLOCK);
       restored.compile();
-      restored.delete();
-      mixer.delete();
+      restored.destroy();
+      mixer.destroy();
     });
 
     it('processes 128-sample render quanta through the single WASM module', () => {
@@ -798,7 +798,7 @@ describe('v1.2 feature additions (WASM)', () => {
       expect(out.right.length).toBe(quantum);
       expect(blockEnergy(out)).toBeGreaterThan(0);
 
-      mixer.delete();
+      mixer.destroy();
     });
 
     it('can render a block into caller-owned output arrays', () => {
@@ -824,8 +824,8 @@ describe('v1.2 feature additions (WASM)', () => {
       expect(Array.from(outL)).toEqual(Array.from(expected.left));
       expect(Array.from(outR)).toEqual(Array.from(expected.right));
 
-      offline.delete();
-      inplace.delete();
+      offline.destroy();
+      inplace.destroy();
     });
 
     it('bulk-copies processStereoInto with frame-independent boundary calls', () => {
@@ -885,8 +885,8 @@ describe('v1.2 feature additions (WASM)', () => {
           setSpy.mockRestore();
         }
       } finally {
-        reference.delete();
-        inplace.delete();
+        reference.destroy();
+        inplace.destroy();
       }
     });
 
@@ -916,8 +916,8 @@ describe('v1.2 feature additions (WASM)', () => {
       expect(Array.from(buffer.outLeft)).toEqual(Array.from(expected.left));
       expect(Array.from(buffer.outRight)).toEqual(Array.from(expected.right));
 
-      offline.delete();
-      realtime.delete();
+      offline.destroy();
+      realtime.destroy();
     });
 
     it('exposes live mixer controls and meter readers', () => {
@@ -956,7 +956,7 @@ describe('v1.2 feature additions (WASM)', () => {
       expect(Number.isFinite(mixer.stripMeter(vocal, 'postFader').rmsDbL)).toBe(true);
       expect(mixer.readGoniometerLatest(vocal, 8).length).toBeGreaterThan(0);
 
-      mixer.delete();
+      mixer.destroy();
     });
   });
 
@@ -1371,7 +1371,7 @@ describe('v1.2 feature additions (WASM)', () => {
         const out = eq.processMono(new Float32Array(128).fill(0.25));
         expect(out.length).toBe(128);
       } finally {
-        eq.delete();
+        eq.destroy();
       }
     });
   });
@@ -1400,7 +1400,7 @@ describe('v1.2 feature additions (WASM)', () => {
 
         mixer.compile();
       } finally {
-        mixer.delete();
+        mixer.destroy();
       }
     });
   });

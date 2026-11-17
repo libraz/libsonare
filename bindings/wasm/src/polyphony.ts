@@ -236,7 +236,7 @@ export class PolyphonicAnalysis {
    * as the Node facade is; any other method called after this one still
    * throws `InvalidState` rather than reaching a freed native object.
    */
-  delete(): void {
+  destroy(): void {
     if (this.native === null) {
       return;
     }
@@ -245,14 +245,9 @@ export class PolyphonicAnalysis {
     native.delete();
   }
 
-  /** Alias for {@link delete}, provided for cross-binding (Node) compatibility. */
-  destroy(): void {
-    this.delete();
-  }
-
-  /** Releases the handle through {@link delete}, so the instance works with `using`. */
+  /** Releases the handle through {@link destroy}, so the instance works with `using`. */
   [Symbol.dispose](): void {
-    this.delete();
+    this.destroy();
   }
 }
 

@@ -42,7 +42,7 @@
 kind = "option"
 old = "detectKey(useHpss)"
 changed = "null is now accepted for optional boolean options and reads as omitted (was TypeError); the same holds for every optional boolean reader"
-domain = "core"
+domain = "analysis"
 rule = "absent-not-sentinel"
 test = "bindings/wasm/tests/surface/core-requests.test.ts::treats null for an optional boolean"
 
@@ -50,7 +50,7 @@ test = "bindings/wasm/tests/surface/core-requests.test.ts::treats null for an op
 kind = "option"
 old = "detectKey(genreHint)"
 changed = "null is now accepted for optional string options and reads as omitted (was TypeError); the same holds for every optional string reader"
-domain = "core"
+domain = "analysis"
 rule = "absent-not-sentinel"
 test = "bindings/wasm/tests/surface/core-requests.test.ts::treats null for an optional string"
 
@@ -132,7 +132,7 @@ entry = "./worklet"
 kind = "function"
 old = "createSonareScopeRingBuffer"
 changed = "takes one options object { capacity, bands, maxPoints } instead of positional numbers; an unknown key is a TypeError, a non-integer or out-of-domain value a RangeError"
-domain = "engine"
+domain = "core"
 rule = "individual"
 entry = "./worklet"
 test = "bindings/wasm/tests/surface/core-worklet-errors.test.ts::creates each ring from named options"
@@ -141,7 +141,7 @@ test = "bindings/wasm/tests/surface/core-worklet-errors.test.ts::creates each ri
 kind = "function"
 old = "createSonareMeterRingBuffer"
 changed = "takes one options object { capacity } instead of positional numbers; an unknown key is a TypeError, a non-integer or out-of-domain value a RangeError"
-domain = "engine"
+domain = "mastering"
 rule = "individual"
 entry = "./worklet"
 test = "bindings/wasm/tests/surface/core-worklet-errors.test.ts::creates each ring from named options"
@@ -150,7 +150,7 @@ test = "bindings/wasm/tests/surface/core-worklet-errors.test.ts::creates each ri
 kind = "function"
 old = "createSonareSpectrumRingBuffer"
 changed = "takes one options object { capacity, bands } instead of positional numbers; an unknown key is a TypeError, a non-integer or out-of-domain value a RangeError"
-domain = "engine"
+domain = "mastering"
 rule = "individual"
 entry = "./worklet"
 test = "bindings/wasm/tests/surface/core-worklet-errors.test.ts::creates each ring from named options"
@@ -159,7 +159,7 @@ test = "bindings/wasm/tests/surface/core-worklet-errors.test.ts::creates each ri
 kind = "function"
 old = "createSonareClipPageRequestRingBuffer"
 changed = "takes one options object { capacity } instead of positional numbers; an unknown key is a TypeError, a non-integer or out-of-domain value a RangeError"
-domain = "engine"
+domain = "project"
 rule = "individual"
 entry = "./worklet"
 test = "bindings/wasm/tests/surface/core-worklet-errors.test.ts::creates each ring from named options"
@@ -195,7 +195,7 @@ test = "bindings/wasm/tests/surface/core-worklet-errors.test.ts::creates each ri
 kind = "function"
 old = "sonareScopeRingBufferByteLength"
 changed = "takes one options object { capacity, bands, maxPoints } instead of positional numbers; an unknown key is a TypeError, a non-integer or out-of-domain value a RangeError"
-domain = "engine"
+domain = "core"
 rule = "individual"
 entry = "./worklet"
 test = "bindings/wasm/tests/surface/core-worklet-errors.test.ts::sizes each ring from named options"
@@ -204,7 +204,7 @@ test = "bindings/wasm/tests/surface/core-worklet-errors.test.ts::sizes each ring
 kind = "function"
 old = "sonareMeterRingBufferByteLength"
 changed = "takes one options object { capacity } instead of positional numbers; an unknown key is a TypeError, a non-integer or out-of-domain value a RangeError"
-domain = "engine"
+domain = "mastering"
 rule = "individual"
 entry = "./worklet"
 test = "bindings/wasm/tests/surface/core-worklet-errors.test.ts::sizes each ring from named options"
@@ -213,7 +213,7 @@ test = "bindings/wasm/tests/surface/core-worklet-errors.test.ts::sizes each ring
 kind = "function"
 old = "sonareSpectrumRingBufferByteLength"
 changed = "takes one options object { capacity, bands } instead of positional numbers; an unknown key is a TypeError, a non-integer or out-of-domain value a RangeError"
-domain = "engine"
+domain = "mastering"
 rule = "individual"
 entry = "./worklet"
 test = "bindings/wasm/tests/surface/core-worklet-errors.test.ts::sizes each ring from named options"
@@ -222,7 +222,7 @@ test = "bindings/wasm/tests/surface/core-worklet-errors.test.ts::sizes each ring
 kind = "function"
 old = "sonareClipPageRequestRingBufferByteLength"
 changed = "takes one options object { capacity } instead of positional numbers; an unknown key is a TypeError, a non-integer or out-of-domain value a RangeError"
-domain = "engine"
+domain = "project"
 rule = "individual"
 entry = "./worklet"
 test = "bindings/wasm/tests/surface/core-worklet-errors.test.ts::sizes each ring from named options"
@@ -258,7 +258,7 @@ test = "bindings/wasm/tests/surface/core-worklet-errors.test.ts::sizes each ring
 kind = "type"
 old = "SonareRingCapacityOptions"
 changed = "new exported options type for the ring helpers"
-domain = "engine"
+domain = "core"
 rule = "individual"
 entry = "./worklet"
 test = "bindings/wasm/tests/surface/core-worklet-errors.test.ts::creates each ring from named options"
@@ -267,7 +267,7 @@ test = "bindings/wasm/tests/surface/core-worklet-errors.test.ts::creates each ri
 kind = "type"
 old = "SonareScopeRingOptions"
 changed = "new exported options type for the ring helpers"
-domain = "engine"
+domain = "core"
 rule = "individual"
 entry = "./worklet"
 test = "bindings/wasm/tests/surface/core-worklet-errors.test.ts::creates each ring from named options"
@@ -276,7 +276,7 @@ test = "bindings/wasm/tests/surface/core-worklet-errors.test.ts::creates each ri
 kind = "type"
 old = "SonareSpectrumRingOptions"
 changed = "new exported options type for the ring helpers"
-domain = "engine"
+domain = "mastering"
 rule = "individual"
 entry = "./worklet"
 test = "bindings/wasm/tests/surface/core-worklet-errors.test.ts::creates each ring from named options"
@@ -392,7 +392,7 @@ test = "bindings/wasm/tests/surface/core-worker.test.ts::no Worker global and no
 kind = "function"
 old = "vocalEditApiVersion"
 new = "vocalEditAbiVersion"
-domain = "core"
+domain = "project"
 rule = "abi-probes"
 
 [[entry]]
@@ -420,7 +420,7 @@ rule = "abi-probes"
 kind = "value"
 old = "EXPECTED_ENGINE_ABI_VERSION"
 removed = true
-domain = "engine"
+domain = "core"
 rule = "abi-probes"
 
 [[entry]]
@@ -540,7 +540,7 @@ entry = "./worklet"
 kind = "type"
 old = "Matrix2dResult"
 new = "Matrix2D"
-domain = "analysis"
+domain = "core"
 rule = "matrix-2d"
 
 [[entry]]
@@ -563,7 +563,7 @@ test = "bindings/wasm/tests/surface/core-types.test.ts::exports one Matrix2D fro
 kind = "function"
 old = "nnFilter"
 changed = "returns Matrix2D (rows = features, cols = frames)"
-domain = "analysis"
+domain = "effects"
 rule = "matrix-2d"
 test = "bindings/wasm/tests/surface/core-types.test.ts::exports one Matrix2D from both entries"
 
@@ -596,3 +596,255 @@ changed = "fallback failures throw SonareError NotSupported (no decoding context
 domain = "core"
 rule = "error-class-by-cause"
 test = "bindings/wasm/tests/surface/core-audio.test.ts::reports a failed browser decode as DecodeFailed"
+
+[[entry]]
+kind = "method"
+old = "ClipPageProvider.delete"
+removed = true
+domain = "project"
+rule = "teardown"
+
+[[entry]]
+kind = "method"
+old = "ClipPageStreamer.delete"
+removed = true
+domain = "project"
+rule = "teardown"
+
+[[entry]]
+kind = "method"
+old = "HrtfSet.delete"
+removed = true
+domain = "engine"
+rule = "teardown"
+
+[[entry]]
+kind = "method"
+old = "Mixer.delete"
+removed = true
+domain = "engine"
+rule = "teardown"
+
+[[entry]]
+kind = "method"
+old = "PlaybackLoudnessMeter.delete"
+removed = true
+domain = "engine"
+rule = "teardown"
+
+[[entry]]
+kind = "method"
+old = "PlaybackRenderer.delete"
+removed = true
+domain = "engine"
+rule = "teardown"
+
+[[entry]]
+kind = "method"
+old = "PolyphonicAnalysis.delete"
+removed = true
+domain = "analysis"
+rule = "teardown"
+
+[[entry]]
+kind = "method"
+old = "Project.delete"
+removed = true
+domain = "project"
+rule = "teardown"
+
+[[entry]]
+kind = "method"
+old = "ProjectTimeline.delete"
+removed = true
+domain = "project"
+rule = "teardown"
+
+[[entry]]
+kind = "method"
+old = "ProjectTimeline.dispose"
+removed = true
+domain = "project"
+rule = "teardown"
+
+[[entry]]
+kind = "method"
+old = "RealtimeEngine.delete"
+removed = true
+domain = "engine"
+rule = "teardown"
+
+[[entry]]
+kind = "method"
+old = "RealtimeVoiceChanger.delete"
+removed = true
+domain = "effects"
+rule = "teardown"
+
+[[entry]]
+kind = "method"
+old = "SampleBank.delete"
+removed = true
+domain = "engine"
+rule = "teardown"
+
+[[entry]]
+kind = "method"
+old = "StreamAnalyzer.delete"
+removed = true
+domain = "analysis"
+rule = "teardown"
+
+[[entry]]
+kind = "method"
+old = "StreamAnalyzer.dispose"
+removed = true
+domain = "analysis"
+rule = "teardown"
+
+[[entry]]
+kind = "method"
+old = "StreamingEqualizer.delete"
+removed = true
+domain = "mastering"
+rule = "teardown"
+
+[[entry]]
+kind = "method"
+old = "StreamingMasteringChain.delete"
+removed = true
+domain = "mastering"
+rule = "teardown"
+
+[[entry]]
+kind = "method"
+old = "StreamingRetune.delete"
+removed = true
+domain = "effects"
+rule = "teardown"
+
+[[entry]]
+kind = "method"
+old = "VocalEditDraft.delete"
+removed = true
+domain = "project"
+rule = "teardown"
+
+[[entry]]
+kind = "method"
+old = "VocalEditDraft.dispose"
+removed = true
+domain = "project"
+rule = "teardown"
+
+[[entry]]
+kind = "method"
+old = "VocalEditSession.delete"
+removed = true
+domain = "project"
+rule = "teardown"
+
+[[entry]]
+kind = "method"
+old = "VocalEditSession.dispose"
+removed = true
+domain = "project"
+rule = "teardown"
+
+[[entry]]
+kind = "method"
+old = "VocalRenderJob.delete"
+removed = true
+domain = "project"
+rule = "teardown"
+
+[[entry]]
+kind = "method"
+old = "VocalRenderJob.dispose"
+removed = true
+domain = "project"
+rule = "teardown"
+
+[[entry]]
+kind = "method"
+old = "VocalRenderSnapshot.delete"
+removed = true
+domain = "project"
+rule = "teardown"
+
+[[entry]]
+kind = "method"
+old = "VocalRenderSnapshot.dispose"
+removed = true
+domain = "project"
+rule = "teardown"
+
+[[entry]]
+kind = "method"
+old = "ClipPageStreamer.close"
+removed = true
+domain = "project"
+rule = "teardown"
+
+[[entry]]
+kind = "method"
+old = "VocalEditWorkerClient.dispose"
+new = "VocalEditWorkerClient.destroy"
+domain = "project"
+rule = "async-teardown"
+
+[[entry]]
+kind = "method"
+old = "VocalEditWorkerSession.dispose"
+new = "VocalEditWorkerSession.destroy"
+domain = "project"
+rule = "async-teardown"
+
+[[entry]]
+kind = "field"
+old = "VocalEditWorkerClientOptions.terminateWorkerOnDispose"
+new = "VocalEditWorkerClientOptions.terminateWorkerOnDestroy"
+domain = "project"
+rule = "async-teardown"
+
+[[entry]]
+kind = "function"
+old = "vocalEditAbiVersion"
+changed = "returns undefined instead of 0 when the feature is compiled out"
+domain = "core"
+rule = "absent-not-sentinel"
+test = "bindings/wasm/tests/surface/core-teardown.test.ts::declare number | undefined"
+
+[[entry]]
+kind = "function"
+old = "projectAbiVersion"
+changed = "returns undefined instead of 0 when the feature is compiled out"
+domain = "core"
+rule = "absent-not-sentinel"
+test = "bindings/wasm/tests/surface/core-teardown.test.ts::declare number | undefined"
+
+[[entry]]
+kind = "method"
+old = "SonareRealtimeEngineNode.destroy"
+changed = "destroy() returns Promise<void>; await it or use await using"
+domain = "engine"
+rule = "async-teardown"
+entry = "./worklet"
+test = "bindings/wasm/tests/surface/core-teardown.test.ts::declares destroy() as returning Promise<void>"
+
+[[entry]]
+kind = "method"
+old = "SonareStreamAnalyzerNode.destroy"
+changed = "destroy() returns Promise<void>; await it or use await using"
+domain = "analysis"
+rule = "async-teardown"
+entry = "./worklet"
+test = "bindings/wasm/tests/surface/core-teardown.test.ts::declares destroy() as returning Promise<void>"
+
+[[entry]]
+kind = "method"
+old = "OfflineWorkerClient.destroy"
+changed = "a second destroy() returns the same promise"
+domain = "core"
+rule = "async-teardown"
+test = "bindings/wasm/tests/surface/core-teardown.test.ts::OfflineWorkerClient returns the same promise"

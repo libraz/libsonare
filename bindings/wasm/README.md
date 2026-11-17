@@ -35,7 +35,7 @@ const { bpm, key } = audio.analyze();
 console.log(`BPM: ${bpm}  Key: ${key.name}`);
 ```
 
-Render a MIDI arrangement through a built-in instrument with the headless `Project`. The embind handle is not garbage-collected — call `delete()` when done.
+Render a MIDI arrangement through a built-in instrument with the headless `Project`. The embind handle is not garbage-collected — call `destroy()` when done.
 
 ```typescript
 import { init, Project } from '@libraz/libsonare';
@@ -51,7 +51,7 @@ try {
   ]);
   const audio = project.bounceWithSynthInstrument('saw-lead', { numChannels: 2 });
 } finally {
-  project.delete();
+  project.destroy();
 }
 ```
 

@@ -79,7 +79,7 @@ describe('streamingLoudnessGain (WASM)', () => {
       chain.prepare(SR, 512, 1);
       expect(chain.processMono(new Float32Array(512)).length).toBe(512);
     } finally {
-      chain.delete();
+      chain.destroy();
     }
   });
 

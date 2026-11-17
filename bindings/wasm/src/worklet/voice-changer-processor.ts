@@ -68,7 +68,7 @@ export class SonareRealtimeVoiceChangerWorkletProcessor {
         }
       }
     } catch (error) {
-      this.changer.delete();
+      this.changer.destroy();
       throw error;
     }
   }
@@ -177,7 +177,12 @@ export class SonareRealtimeVoiceChangerWorkletProcessor {
       return;
     }
     this.destroyed = true;
-    this.changer.delete();
+    this.changer.destroy();
+  }
+
+  /** Same as {@link destroy}, for `using`. */
+  [Symbol.dispose](): void {
+    this.destroy();
   }
 
   // Re-acquires the cached WASM-heap views after a memory-growth detachment.

@@ -36,7 +36,7 @@ describe('Project counts and timeline metadata (WASM)', () => {
       expect(project.trackCount()).toBe(2);
       expect(typeof project.sourceCount()).toBe('number');
     } finally {
-      project.delete();
+      project.destroy();
     }
   });
 
@@ -81,7 +81,7 @@ describe('Project counts and timeline metadata (WASM)', () => {
       expect(() => project.clipByIndex(1)).toThrow();
       expect(() => project.sourceByIndex(1)).toThrow();
     } finally {
-      project.delete();
+      project.destroy();
     }
   });
 
@@ -94,7 +94,7 @@ describe('Project counts and timeline metadata (WASM)', () => {
       ]);
       expect(project.tempoSegmentCount()).toBe(2);
     } finally {
-      project.delete();
+      project.destroy();
     }
   });
 
@@ -120,8 +120,8 @@ describe('Project counts and timeline metadata (WASM)', () => {
       target.setTempoSegments(readBack);
       expect(target.tempoSegmentByIndex(1)).toEqual(readBack[1]);
     } finally {
-      source.delete();
-      target.delete();
+      source.destroy();
+      target.destroy();
     }
   });
 
@@ -140,7 +140,7 @@ describe('Project counts and timeline metadata (WASM)', () => {
       });
       expect(() => project.timeSignatureByIndex(2)).toThrow();
     } finally {
-      project.delete();
+      project.destroy();
     }
   });
 
@@ -151,7 +151,7 @@ describe('Project counts and timeline metadata (WASM)', () => {
       expect(typeof id).toBe('number');
       expect(id).toBeGreaterThan(0);
     } finally {
-      project.delete();
+      project.destroy();
     }
   });
 
@@ -194,7 +194,7 @@ describe('Project counts and timeline metadata (WASM)', () => {
 
       expect(() => project.markerByIndex(count)).toThrow();
     } finally {
-      project.delete();
+      project.destroy();
     }
   });
 
@@ -207,7 +207,7 @@ describe('Project counts and timeline metadata (WASM)', () => {
       expect(project.markerByIndex(0).name).toBe(name);
       expect(JSON.parse(project.toJson()).markers[0].name).toBe(name);
     } finally {
-      project.delete();
+      project.destroy();
     }
   });
 
@@ -219,7 +219,7 @@ describe('Project counts and timeline metadata (WASM)', () => {
       project.setOverlapPolicy(1);
       expect(project.getOverlapPolicy()).toBe(1);
     } finally {
-      project.delete();
+      project.destroy();
     }
   });
 
@@ -229,7 +229,7 @@ describe('Project counts and timeline metadata (WASM)', () => {
       const sceneJson = mixingScenePresetJson('vocalReverbSend');
       expect(() => project.setMixerSceneJson(sceneJson)).not.toThrow();
     } finally {
-      project.delete();
+      project.destroy();
     }
   });
 
@@ -247,7 +247,7 @@ describe('Project counts and timeline metadata (WASM)', () => {
       expect(result.diagnostics).toHaveLength(0);
       expect(result.diagnosticCount).toBe(0);
     } finally {
-      project.delete();
+      project.destroy();
     }
   });
 });
@@ -265,7 +265,7 @@ describe('Mixer tail draining (WASM)', () => {
       expect(typeof tail).toBe('number');
       expect(tail).toBeGreaterThanOrEqual(0);
     } finally {
-      mixer.delete();
+      mixer.destroy();
     }
   });
 
@@ -277,7 +277,7 @@ describe('Mixer tail draining (WASM)', () => {
       expect(typeof latency).toBe('number');
       expect(latency).toBeGreaterThanOrEqual(0);
     } finally {
-      mixer.delete();
+      mixer.destroy();
     }
   });
 
@@ -292,7 +292,7 @@ describe('Mixer tail draining (WASM)', () => {
       expect(result.right.length).toBe(256);
       expect(result.sampleRate).toBe(48000);
     } finally {
-      mixer.delete();
+      mixer.destroy();
     }
   });
 
@@ -308,7 +308,7 @@ describe('Mixer tail draining (WASM)', () => {
           project.tempoSegmentByIndex(i),
         );
       } finally {
-        project.delete();
+        project.destroy();
       }
     };
 
@@ -343,7 +343,7 @@ describe('Mixer tail draining (WASM)', () => {
         project.analyzeTempo(audio, 22050, { includeOctaveCandidates: true }).length,
       ).toBeGreaterThan(1);
     } finally {
-      project.delete();
+      project.destroy();
     }
   });
 
@@ -356,7 +356,7 @@ describe('Mixer tail draining (WASM)', () => {
       expect(project.snapToGrid(4.02, 1.0, 0)).toBe(4.0);
       expect(() => project.snapToGrid(1.0, 1.0, -1)).toThrow();
     } finally {
-      project.delete();
+      project.destroy();
     }
   });
 });

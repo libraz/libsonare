@@ -77,7 +77,7 @@ const EQ_PHASE_MODES: Record<string, number> = {
  * {@link StreamingMasteringChainConfig.loudnessStaticGainDb} supplies a
  * precomputed normalization gain.
  *
- * Call {@link delete} (or use a `try/finally`) to release the underlying WASM
+ * Call {@link destroy} (or use a `try/finally`) to release the underlying WASM
  * object — the embind handle is not garbage-collected automatically.
  *
  * Reachable from the AudioWorklet realm through the `sonare/worklet` entry, but
@@ -106,7 +106,7 @@ const EQ_PHASE_MODES: Record<string, number> = {
  *   chain.prepare(44100, 512, 1);
  *   const out = chain.processMono(blockSamples);
  * } finally {
- *   chain.delete();
+ *   chain.destroy();
  * }
  * ```
  */
@@ -260,7 +260,7 @@ export class StreamingMasteringChain {
   }
 
   /** Release the underlying WASM object. Idempotent, as the Node facade is. */
-  delete(): void {
+  destroy(): void {
     if (this.released) {
       return;
     }
@@ -268,14 +268,9 @@ export class StreamingMasteringChain {
     this.chainHandle.delete();
   }
 
-  /** Alias for {@link delete}, provided for cross-binding (Node) compatibility. */
-  destroy(): void {
-    this.delete();
-  }
-
-  /** Releases the handle through {@link delete}, so the instance works with `using`. */
+  /** Releases the handle through {@link destroy}, so the instance works with `using`. */
   [Symbol.dispose](): void {
-    this.delete();
+    this.destroy();
   }
 }
 
@@ -289,7 +284,7 @@ export class StreamingMasteringChain {
  * linear-phase FIR, mid/side processing, and auto-gain).
  *
  * State is maintained across {@link processMono}/{@link processStereo} calls.
- * Call {@link delete} (or use `try/finally`) to release the underlying WASM
+ * Call {@link destroy} (or use `try/finally`) to release the underlying WASM
  * object — the embind handle is not garbage-collected automatically.
  *
  * @example
@@ -300,7 +295,7 @@ export class StreamingMasteringChain {
  *   const out = eq.processStereo(left, right);
  *   const snapshot = eq.spectrum();
  * } finally {
- *   eq.delete();
+ *   eq.destroy();
  * }
  * ```
  */
@@ -496,7 +491,7 @@ export class StreamingEqualizer {
   }
 
   /** Release the underlying WASM object. Idempotent, as the Node facade is. */
-  delete(): void {
+  destroy(): void {
     if (this.released) {
       return;
     }
@@ -504,14 +499,9 @@ export class StreamingEqualizer {
     this.eqHandle.delete();
   }
 
-  /** Alias for {@link delete}, provided for cross-binding (Node) compatibility. */
-  destroy(): void {
-    this.delete();
-  }
-
-  /** Releases the handle through {@link delete}, so the instance works with `using`. */
+  /** Releases the handle through {@link destroy}, so the instance works with `using`. */
   [Symbol.dispose](): void {
-    this.delete();
+    this.destroy();
   }
 }
 
@@ -523,7 +513,7 @@ export class StreamingEqualizer {
  * Block-by-block mono voice retune / pitch shifter.
  *
  * State is maintained across {@link processMono} calls. Call {@link prepare}
- * before processing, and call {@link delete} (or use `try/finally`) to release
+ * before processing, and call {@link destroy} (or use `try/finally`) to release
  * the underlying WASM object.
  */
 export class StreamingRetune {
@@ -584,7 +574,7 @@ export class StreamingRetune {
   }
 
   /** Release the underlying WASM object. Idempotent, as the Node facade is. */
-  delete(): void {
+  destroy(): void {
     if (this.released) {
       return;
     }
@@ -592,13 +582,8 @@ export class StreamingRetune {
     this.retuneHandle.delete();
   }
 
-  /** Alias for {@link delete}, provided for cross-binding (Node) compatibility. */
-  destroy(): void {
-    this.delete();
-  }
-
-  /** Releases the handle through {@link delete}, so the instance works with `using`. */
+  /** Releases the handle through {@link destroy}, so the instance works with `using`. */
   [Symbol.dispose](): void {
-    this.delete();
+    this.destroy();
   }
 }

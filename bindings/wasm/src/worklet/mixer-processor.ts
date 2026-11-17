@@ -218,9 +218,14 @@ export class SonareWorkletProcessor {
 
   destroy(): void {
     if (!this.closed) {
-      this.mixer.delete();
+      this.mixer.destroy();
       this.closed = true;
     }
+  }
+
+  /** Same as {@link destroy}, for `using`. */
+  [Symbol.dispose](): void {
+    this.destroy();
   }
 
   private publishMeter(): void {

@@ -29,7 +29,7 @@ describe('StreamingMasteringChain from the worklet entry', () => {
       const flushed = chain.flushMono();
       expect(flushed.every((value) => Number.isFinite(value))).toBe(true);
     } finally {
-      chain.delete();
+      chain.destroy();
     }
   });
 
@@ -51,7 +51,7 @@ describe('StreamingMasteringChain from the worklet entry', () => {
       expect(processed.right).toHaveLength(256);
       expect(processed.left.every((value) => Number.isFinite(value))).toBe(true);
     } finally {
-      chain.delete();
+      chain.destroy();
     }
   });
 });

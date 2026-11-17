@@ -64,24 +64,24 @@ describe('Symbol.dispose / using', () => {
     const analyzer = new StreamAnalyzer();
     for (const handle of [mixer, bank, analyzer]) {
       handle[Symbol.dispose]();
-      expect(() => handle.delete()).not.toThrow();
+      expect(() => handle.destroy()).not.toThrow();
     }
     expectInvalidState(() => mixer.drainTailStereo(BLOCK));
     expectInvalidState(() => bank.sampleCount());
     expectInvalidState(() => analyzer.frameCount());
   });
 
-  it('delete() is idempotent', () => {
+  it('destroy() is idempotent', () => {
     const project = new Project();
-    project.delete();
-    expect(() => project.delete()).not.toThrow();
+    project.destroy();
+    expect(() => project.destroy()).not.toThrow();
     expect(() => project.destroy()).not.toThrow();
     expect(() => project[Symbol.dispose]()).not.toThrow();
   });
 
   it('use after release throws SonareError InvalidState', () => {
     const project = new Project();
-    project.delete();
+    project.destroy();
     expectInvalidState(() => project.toJson());
   });
 
@@ -93,7 +93,7 @@ describe('Symbol.dispose / using', () => {
 
   const releasedHandleCases: Array<{
     name: string;
-    make: () => { delete(): void };
+    make: () => { destroy(): void };
     call: (handle: never) => unknown;
   }> = [
     {
@@ -101,7 +101,7 @@ describe('Symbol.dispose / using', () => {
       make: () => {
         const hrtf = HrtfSet.fromBytes(hrtfBytes());
         const renderer = new PlaybackRenderer({ config: {}, hrtf, sampleRate: SR });
-        hrtf.delete();
+        hrtf.destroy();
         return renderer;
       },
       call: (h: PlaybackRenderer) => h.reset(),
@@ -150,9 +150,12 @@ describe('Symbol.dispose / using', () => {
     { name: 'Project', make: () => new Project(), call: (h: Project) => h.toJson() },
   ];
 
-  it.each(releasedHandleCases)('$name refuses use after delete() with InvalidState', (testCase) => {
-    const handle = testCase.make();
-    handle.delete();
-    expectInvalidState(() => testCase.call(handle as never));
-  });
+  it.each(releasedHandleCases)(
+    '$name refuses use after destroy() with InvalidState',
+    (testCase) => {
+      const handle = testCase.make();
+      handle.destroy();
+      expectInvalidState(() => testCase.call(handle as never));
+    },
+  );
 });

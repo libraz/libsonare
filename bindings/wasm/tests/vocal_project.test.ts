@@ -278,7 +278,7 @@ describe('WASM Project vocal edit adapter', () => {
         fromJson(json: string): {
           rehydrateVocalEdits(originals: unknown[], cancel?: () => boolean): unknown[];
           getVocalEditDependencies(): unknown[];
-          delete(): void;
+          destroy(): void;
         };
       } & (new () => {
         setSampleRate(sampleRate: number): void;
@@ -315,7 +315,7 @@ describe('WASM Project vocal edit adapter', () => {
         native: {
           rehydrateVocalEdits(originals: unknown, cancel: unknown): unknown;
         };
-        delete(): void;
+        destroy(): void;
       });
       createVocalEditSession(request: unknown): {
         analysis(): { sourceSha256: string };
@@ -324,10 +324,10 @@ describe('WASM Project vocal edit adapter', () => {
             samples: Float32Array;
             token: VocalStateToken;
           };
-          dispose(): void;
+          destroy(): void;
         };
         exportState(): Uint8Array;
-        dispose(): void;
+        destroy(): void;
       };
     };
     await runtime.init();
@@ -391,21 +391,21 @@ describe('WASM Project vocal edit adapter', () => {
       expect(applied.derivedSourceId).not.toBe(clip.sourceId);
       expect(project.getVocalEditDependencies()[0].derivedPcmAvailable).toBe(true);
 
-      // A delete requested from the cancel callback is deferred until the call returns.
+      // A destroy requested from the cancel callback is deferred until the call returns.
       const doomed = runtime.Project.fromJson(project.toJson());
-      let deleteThrew: unknown;
+      let destroyThrew: unknown;
       const deferred = doomed.rehydrateVocalEdits([], () => {
         try {
-          doomed.delete();
+          doomed.destroy();
         } catch (error) {
-          deleteThrew = error;
+          destroyThrew = error;
         }
         return false;
       });
-      expect(deleteThrew).toBeUndefined();
+      expect(destroyThrew).toBeUndefined();
       expect(deferred).toHaveLength(1);
       expect(() => doomed.getVocalEditDependencies()).toThrow();
-      expect(() => doomed.delete()).not.toThrow();
+      expect(() => doomed.destroy()).not.toThrow();
       expect(project.getVocalEditDependencies()[0].derivedPcmAvailable).toBe(true);
 
       // Embind's raw `native.delete()` bypasses the TypeScript active-call guard.
@@ -439,7 +439,7 @@ try {
   }
   process.stdout.write(JSON.stringify({ callbackCalled, resultLength: result.length }));
 } finally {
-  for (const replacement of replacements) replacement.delete();
+  for (const replacement of replacements) replacement.destroy();
 }
 `,
         ],
@@ -463,13 +463,13 @@ try {
       }) as { cancelFailure?: unknown };
       expect(rawOutcome.cancelFailure).toBe(rawCallbackFailure);
     } finally {
-      project.delete();
-      snapshot.dispose();
-      session.dispose();
+      project.destroy();
+      snapshot.destroy();
+      session.destroy();
     }
   });
 
-  it('defers a Project delete requested during rehydration until the outermost call returns', async () => {
+  it('defers a Project destroy requested during rehydration until the outermost call returns', async () => {
     const { init } = await import('../src/index');
     const { Project } = await import('../src/project_class');
     await init();
@@ -495,7 +495,7 @@ try {
 
     const result = project.rehydrateVocalEdits([], () => {
       nestedResult = project.rehydrateVocalEdits([], () => {
-        project.delete();
+        project.destroy();
         return false;
       });
       expect(nativeDeletes).toBe(0);
@@ -505,7 +505,7 @@ try {
     expect(nestedResult).toEqual([]);
     expect(deletesSeenInside).toBe(0);
     expect(nativeDeletes).toBe(1);
-    project.delete();
+    project.destroy();
     project.destroy();
     expect(nativeDeletes).toBe(1);
 
@@ -526,7 +526,7 @@ try {
     } as VocalProjectNative & { delete(): void };
     expect(() =>
       failing.rehydrateVocalEdits([], () => {
-        failing.delete();
+        failing.destroy();
         return false;
       }),
     ).toThrow(failure);

@@ -163,7 +163,7 @@ describe('Sonare WASM Module', () => {
         // the same way, so zero is the counter answering rather than a stub.
         expect(engine.clipPageRequestOverflowCount()).toBe(0);
       } finally {
-        engine.delete();
+        engine.destroy();
       }
     });
 

@@ -108,7 +108,7 @@ describe('Mixer runtime controls (WASM)', () => {
           polarityInvertRight: false,
         });
       } finally {
-        mixer.delete();
+        mixer.destroy();
       }
     });
 
@@ -117,7 +117,7 @@ describe('Mixer runtime controls (WASM)', () => {
       try {
         expect(mixer.tailSamples()).toBeGreaterThan(1440);
       } finally {
-        mixer.delete();
+        mixer.destroy();
       }
     });
 
@@ -242,7 +242,7 @@ describe('Mixer runtime controls (WASM)', () => {
         // Zero stays a legal empty read.
         expect(mixer.readGoniometerLatest(vocal, 0)).toEqual([]);
       } finally {
-        mixer.delete();
+        mixer.destroy();
       }
     });
 
@@ -270,7 +270,7 @@ describe('Mixer runtime controls (WASM)', () => {
         expect(blockEnergy(out)).toBeGreaterThan(0);
         expect(Number.isFinite(mixer.meterTap(vocal, 'preFader').peakDbL)).toBe(true);
       } finally {
-        mixer.delete();
+        mixer.destroy();
       }
     });
 
@@ -304,7 +304,7 @@ describe('Mixer runtime controls (WASM)', () => {
         );
         expect(blockEnergy(out)).toBeGreaterThan(0);
       } finally {
-        mixer.delete();
+        mixer.destroy();
       }
     });
   });
@@ -373,7 +373,7 @@ describe('Mixer runtime controls (WASM)', () => {
         mixer.processStereo([clean], [clean]);
         expect(mixer.stripNonFiniteDiscardCount(0)).toBe(afterPoisonedBlock);
       } finally {
-        mixer.delete();
+        mixer.destroy();
       }
     });
 
@@ -382,7 +382,7 @@ describe('Mixer runtime controls (WASM)', () => {
       try {
         expect(() => mixer.stripNonFiniteDiscardCount(mixer.stripCount())).toThrow();
       } finally {
-        mixer.delete();
+        mixer.destroy();
       }
     });
 
@@ -418,7 +418,7 @@ describe('Mixer runtime controls (WASM)', () => {
         mixer.processStereo([clean], [clean]);
         expect(mixer.busNonFiniteDiscardCount('master')).toBe(1);
       } finally {
-        mixer.delete();
+        mixer.destroy();
       }
     });
 
@@ -432,7 +432,7 @@ describe('Mixer runtime controls (WASM)', () => {
         mixer.addBus('late', 'aux');
         expect(() => mixer.busNonFiniteDiscardCount('late')).toThrow();
       } finally {
-        mixer.delete();
+        mixer.destroy();
       }
     });
 
@@ -441,7 +441,7 @@ describe('Mixer runtime controls (WASM)', () => {
       try {
         expect(() => mixer.busNonFiniteDiscardCount('does-not-exist')).toThrow();
       } finally {
-        mixer.delete();
+        mixer.destroy();
       }
     });
   });
@@ -468,7 +468,7 @@ describe('Mixer runtime controls (WASM)', () => {
         );
         expect(mixer.stripCount()).toBe(before + 1);
       } finally {
-        mixer.delete();
+        mixer.destroy();
       }
     });
 
@@ -498,7 +498,7 @@ describe('Mixer runtime controls (WASM)', () => {
         expect(strips.find((entry) => entry.id === 'omitted')?.metering).toBeUndefined();
         expect(strips.find((entry) => entry.id === 'explicit-undefined')?.metering).toBeUndefined();
       } finally {
-        mixer.delete();
+        mixer.destroy();
       }
     });
 
@@ -522,7 +522,7 @@ describe('Mixer runtime controls (WASM)', () => {
         });
         expect(strips.find((entry) => entry.id === 'plain')?.metering).toBeUndefined();
       } finally {
-        mixer.delete();
+        mixer.destroy();
       }
     });
   });
@@ -567,7 +567,7 @@ describe('Mixer runtime controls (WASM)', () => {
           { source: 'sub', destination: 'master' },
         ]);
       } finally {
-        mixer.delete();
+        mixer.destroy();
       }
     });
 
@@ -594,7 +594,7 @@ describe('Mixer runtime controls (WASM)', () => {
         // No compile ran in any refused call: the buses were never compiled.
         expect(() => mixer.busNonFiniteDiscardCount('sub')).toThrow();
       } finally {
-        mixer.delete();
+        mixer.destroy();
       }
     });
   });
@@ -641,7 +641,7 @@ describe('Mixer runtime controls (WASM)', () => {
         }
         return energy;
       } finally {
-        mixer.delete();
+        mixer.destroy();
       }
     }
 
@@ -716,7 +716,7 @@ describe('Mixer runtime controls (WASM)', () => {
     try {
       expect(() => mixer.flushMeters()).not.toThrow();
     } finally {
-      mixer.delete();
+      mixer.destroy();
     }
   });
 
@@ -747,7 +747,7 @@ describe('Mixer runtime controls (WASM)', () => {
       expect(Math.abs(after.truePeakDbL - offlineDb)).toBeLessThan(1e-3);
       expect(after.truePeakDbL).toBeGreaterThanOrEqual(after.peakDbL);
     } finally {
-      mixer.delete();
+      mixer.destroy();
     }
   });
 
@@ -764,7 +764,7 @@ describe('Mixer runtime controls (WASM)', () => {
         expect(() => mixer.configureMeter(true, factor)).toThrow(/truePeakOversample/);
       }
     } finally {
-      mixer.delete();
+      mixer.destroy();
     }
   });
 });

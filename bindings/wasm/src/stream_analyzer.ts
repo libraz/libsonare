@@ -332,7 +332,7 @@ export class StreamAnalyzer {
   }
 
   /** Release the underlying WASM object. Idempotent, as the Node facade is. */
-  delete(): void {
+  destroy(): void {
     if (this.released) {
       return;
     }
@@ -340,18 +340,8 @@ export class StreamAnalyzer {
     this.analyzerHandle.delete();
   }
 
-  /** Alias for {@link delete}, provided for cross-binding (Node) compatibility. */
-  destroy(): void {
-    this.delete();
-  }
-
-  /** Alias for {@link delete}, kept for backward compatibility (historical name). */
-  dispose(): void {
-    this.delete();
-  }
-
-  /** Releases the handle through {@link delete}, so the instance works with `using`. */
+  /** Releases the handle through {@link destroy}, so the instance works with `using`. */
   [Symbol.dispose](): void {
-    this.delete();
+    this.destroy();
   }
 }

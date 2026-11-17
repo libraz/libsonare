@@ -14,7 +14,7 @@ describe('unknown mixing scene keys (WASM)', () => {
       expect(project.setMixerSceneJson(typo)).toEqual(["unknown scene key 'strips[0].faderDB'"]);
       expect(project.setMixerSceneJson('{"version":1,"strips":[{"id":"lead"}]}')).toEqual([]);
     } finally {
-      project.delete();
+      project.destroy();
     }
   });
 

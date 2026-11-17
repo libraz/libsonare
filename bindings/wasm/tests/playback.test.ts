@@ -83,7 +83,7 @@ describe('playback renderer (WASM)', () => {
 
   it('builds an HRTF set from bytes and refuses malformed data', () => {
     const hrtf = HrtfSet.fromBytes(hrtfBytes());
-    hrtf.delete();
+    hrtf.destroy();
     let caught: unknown;
     try {
       HrtfSet.fromBytes(new Uint8Array([1, 2, 3, 4]));
@@ -106,13 +106,13 @@ describe('playback renderer (WASM)', () => {
   it('reports the target latency and channel counts', () => {
     const hrtf = HrtfSet.fromBytes(hrtfBytes());
     const headphones = new PlaybackRenderer({ config: {}, hrtf, sampleRate: SR });
-    hrtf.delete();
+    hrtf.destroy();
     try {
       expect(headphones.latencySamples()).toBe(1312);
       expect(headphones.outputChannels()).toBe(2);
       expect(headphones.inputChannels()).toBe(2);
     } finally {
-      headphones.delete();
+      headphones.destroy();
     }
     const cases: Array<['stereo' | '5.1' | '7.1', number, number]> = [
       ['stereo', 2, 288],
@@ -128,7 +128,7 @@ describe('playback renderer (WASM)', () => {
         expect(renderer.outputChannels()).toBe(channels);
         expect(renderer.latencySamples()).toBe(latency);
       } finally {
-        renderer.delete();
+        renderer.destroy();
       }
     }
   });
@@ -155,7 +155,7 @@ describe('playback renderer (WASM)', () => {
         Math.abs(onset(Float32Array.from(center)) - (at + renderer.latencySamples())),
       ).toBeLessThanOrEqual(1);
     } finally {
-      renderer.delete();
+      renderer.destroy();
     }
   });
 
@@ -168,7 +168,7 @@ describe('playback renderer (WASM)', () => {
       sampleRate: SR,
       maxBlockSize: 256,
     });
-    hrtf.delete();
+    hrtf.destroy();
     try {
       for (let block = 0; block < 12; block++) {
         const planes = noisePlanes(2, 256, block + 1);
@@ -178,8 +178,8 @@ describe('playback renderer (WASM)', () => {
         expect(a.every((plane) => plane.every(Number.isFinite))).toBe(true);
       }
     } finally {
-      planar.delete();
-      interleaved.delete();
+      planar.destroy();
+      interleaved.destroy();
     }
   });
 
@@ -211,7 +211,7 @@ describe('playback renderer (WASM)', () => {
       renderer.processInterleaved(samples, 6);
       expect(renderer.nonFiniteDiscardCount()).toBeGreaterThan(afterPlanar);
     } finally {
-      renderer.delete();
+      renderer.destroy();
     }
   });
 
@@ -227,7 +227,7 @@ describe('playback renderer (WASM)', () => {
       expect(out).toHaveLength(6);
       expect(out.every((plane) => plane.length === 0)).toBe(true);
     } finally {
-      renderer.delete();
+      renderer.destroy();
     }
     expect(() =>
       renderPlayback({
@@ -276,7 +276,7 @@ describe('playback renderer (WASM)', () => {
       expect(diagnostics.latency.samples).toBe(renderer.latencySamples());
       expect(structuredClone(diagnostics)).toEqual(diagnostics);
     } finally {
-      renderer.delete();
+      renderer.destroy();
     }
   });
 
@@ -293,7 +293,7 @@ describe('playback renderer (WASM)', () => {
         renderer.setConfig({ ...config, target: { ...config.target, layout: '7.1' } }),
       ).toThrow(/requires a new renderer/);
     } finally {
-      renderer.delete();
+      renderer.destroy();
     }
   });
 
@@ -312,7 +312,7 @@ describe('playback renderer (WASM)', () => {
       sampleRate: SR,
       maxBlockSize: 512,
     });
-    hrtf.delete();
+    hrtf.destroy();
     try {
       expected.setHeadOrientation(90, -20, 10);
       rejected.setHeadOrientation(90, -20, 10);
@@ -339,9 +339,9 @@ describe('playback renderer (WASM)', () => {
       }
       expect(differs).toBe(true);
     } finally {
-      still.delete();
-      expected.delete();
-      rejected.delete();
+      still.destroy();
+      expected.destroy();
+      rejected.destroy();
     }
   });
 
@@ -400,7 +400,7 @@ describe('playback renderer (WASM)', () => {
         /pitchDeg/,
       );
     } finally {
-      renderer.delete();
+      renderer.destroy();
     }
   });
 
@@ -436,7 +436,7 @@ describe('playback renderer (WASM)', () => {
       expect(binaural.samples).toHaveLength(2048 * 2);
       expect(binaural.samples.every(Number.isFinite)).toBe(true);
     } finally {
-      hrtf.delete();
+      hrtf.destroy();
     }
   });
 
@@ -456,7 +456,7 @@ describe('playback renderer (WASM)', () => {
       expect(lufs).toBeLessThan(0);
       expect(() => meter.pushInterleaved(new Float32Array(3))).toThrow(/whole number of frames/);
     } finally {
-      meter.delete();
+      meter.destroy();
     }
     expect(() => new PlaybackLoudnessMeter(3, SR)).toThrow(RangeError);
   });
@@ -481,7 +481,7 @@ describe('playback renderer (WASM)', () => {
       expect(out.length).toBe((input.length / 2) * renderer.outputChannels());
       expect(Array.from(out)).toEqual(Array.from(expected.samples));
     } finally {
-      renderer.delete();
+      renderer.destroy();
     }
   });
 
@@ -498,13 +498,13 @@ describe('playback renderer (WASM)', () => {
       expect(() => renderer.renderOffline(bad, 2)).toThrow(RangeError);
       expect(() => renderer.renderOffline(new Float32Array(0), 2)).toThrow(RangeError);
     } finally {
-      renderer.delete();
+      renderer.destroy();
     }
   });
 
   it('throws InvalidState from renderOffline on a released renderer', () => {
     const renderer = new PlaybackRenderer({ config: SPEAKERS_5_1, sampleRate: SR });
-    renderer.delete();
+    renderer.destroy();
     let caught: unknown;
     try {
       renderer.renderOffline(new Float32Array(12), 6);
@@ -515,17 +515,16 @@ describe('playback renderer (WASM)', () => {
     expect((caught as SonareError).codeName).toBe('InvalidState');
   });
 
-  it('releases every handle through delete() or destroy()', () => {
-    for (const release of ['delete', 'destroy'] as const) {
-      const handles = [
-        new PlaybackRenderer({ config: SPEAKERS_5_1, sampleRate: SR }),
-        new PlaybackLoudnessMeter(6, SR),
-        HrtfSet.fromBytes(hrtfBytes()),
-      ];
-      for (const handle of handles) {
-        expect('dispose' in handle).toBe(false);
-        handle[release]();
-      }
+  it('releases every handle through destroy()', () => {
+    const handles = [
+      new PlaybackRenderer({ config: SPEAKERS_5_1, sampleRate: SR }),
+      new PlaybackLoudnessMeter(6, SR),
+      HrtfSet.fromBytes(hrtfBytes()),
+    ];
+    for (const handle of handles) {
+      expect('dispose' in handle).toBe(false);
+      expect('delete' in handle).toBe(false);
+      handle.destroy();
     }
   });
 });

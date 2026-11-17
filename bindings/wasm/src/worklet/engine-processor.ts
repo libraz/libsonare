@@ -1070,6 +1070,11 @@ export class SonareRealtimeEngineWorkletProcessor {
     }
   }
 
+  /** Same as {@link destroy}, for `using`. */
+  [Symbol.dispose](): void {
+    this.destroy();
+  }
+
   private drainCommands(limit = 64): void {
     if (!this.commandRing) {
       return;

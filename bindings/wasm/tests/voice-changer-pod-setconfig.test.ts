@@ -194,7 +194,7 @@ describe('RealtimeVoiceChanger flat POD setConfig', () => {
         midi: { release: pod.midiRelease },
       });
     } finally {
-      vc.delete();
+      vc.destroy();
     }
   });
 
@@ -206,7 +206,7 @@ describe('RealtimeVoiceChanger flat POD setConfig', () => {
     vc.setConfig(preset);
     const applied = JSON.parse(vc.configJson()).dsp;
     expect(applied.retune.semitones).toBeCloseTo(3, 4);
-    vc.delete();
+    vc.destroy();
   });
 
   it('rejects a partial nested preset instead of applying defaults', () => {
@@ -216,7 +216,7 @@ describe('RealtimeVoiceChanger flat POD setConfig', () => {
       // @ts-expect-error preset metadata is deliberately omitted; the runtime rejects it
       vc.setConfig({ schemaVersion: 1, dsp: { retune: { semitones: 3 } } }),
     ).toThrow(/missing field|field must/i);
-    vc.delete();
+    vc.destroy();
   });
 
   it('accepts a flat preset POD in the constructor', () => {
@@ -228,7 +228,7 @@ describe('RealtimeVoiceChanger flat POD setConfig', () => {
     pod.retuneSemitones = -9;
     const vc = new RealtimeVoiceChanger(pod);
     expect(JSON.parse(vc.configJson()).dsp.retune.semitones).toBeCloseTo(-9, 4);
-    vc.delete();
+    vc.destroy();
   });
 
   it('carries the formant mode, fixed once the changer is prepared', () => {
@@ -253,8 +253,8 @@ describe('RealtimeVoiceChanger flat POD setConfig', () => {
       expect(() => absolute.setConfig({ ...grain, formantMode: 'relative' })).toThrow();
       expect(() => relative.setConfig({ ...grain, formantMode: 'absolute' })).toThrow();
     } finally {
-      relative.delete();
-      absolute.delete();
+      relative.destroy();
+      absolute.destroy();
     }
   });
 
@@ -293,7 +293,7 @@ describe('RealtimeVoiceChanger flat POD setConfig', () => {
       );
       expect(changer.configJson()).toBe(before);
     } finally {
-      changer.delete();
+      changer.destroy();
     }
     expect(() => new RealtimeVoiceChanger({ ...pod, formantFactor: 3.0 })).toThrow(RangeError);
     expect(() => new RealtimeVoiceChanger({ ...pod, formantFactor: 3.0 })).toThrow(
@@ -319,7 +319,7 @@ describe('RealtimeVoiceChanger flat POD setConfig', () => {
       // A preset id and a nested preset document keep their own defaults.
       expect(() => changer.setConfig('neutral-monitor')).not.toThrow();
     } finally {
-      changer.delete();
+      changer.destroy();
     }
   });
 
@@ -335,7 +335,7 @@ describe('RealtimeVoiceChanger flat POD setConfig', () => {
         changer.setPodConfig(partial as unknown as RealtimeVoiceChangerPodConfig),
       ).toThrow(/formantMode/);
     } finally {
-      changer.delete();
+      changer.destroy();
     }
   });
 
@@ -355,7 +355,7 @@ describe('RealtimeVoiceChanger flat POD setConfig', () => {
         }
       }
     } finally {
-      changer.delete();
+      changer.destroy();
     }
   });
 
@@ -375,7 +375,7 @@ describe('RealtimeVoiceChanger flat POD setConfig', () => {
       expect(() => changer.setPodConfig(bad({ pitchCorrectionAmount: 1.5 }))).toThrow(RangeError);
       expect(changer.configJson()).toBe(before);
     } finally {
-      changer.delete();
+      changer.destroy();
     }
   });
 
@@ -390,7 +390,7 @@ describe('RealtimeVoiceChanger flat POD setConfig', () => {
       expect(() => changer.setPodConfig({ ...pod, voiceEngineF0MinHz: 120 })).toThrow(/fixed at/);
       expect(() => changer.setPodConfig({ ...pod, vocoderBands: 24 })).toThrow(/fixed at/);
     } finally {
-      changer.delete();
+      changer.destroy();
     }
   });
 
@@ -414,7 +414,7 @@ describe('RealtimeVoiceChanger flat POD setConfig', () => {
       try {
         changer.setPodConfig(pod);
       } finally {
-        changer.delete();
+        changer.destroy();
       }
     }
   });

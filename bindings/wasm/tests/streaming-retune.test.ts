@@ -38,7 +38,7 @@ describe('StreamingRetune setConfig merges', () => {
       expect(config.semitones).toBeCloseTo(5, 5);
       expect(config.mix).toBeCloseTo(0.75, 5);
     } finally {
-      retune.delete();
+      retune.destroy();
     }
   });
 
@@ -51,7 +51,7 @@ describe('StreamingRetune setConfig merges', () => {
       expect(retune.config().semitones).toBeCloseTo(7, 5);
       expect(retune.config().mix).toBeCloseTo(0.5, 5);
     } finally {
-      retune.delete();
+      retune.destroy();
     }
   });
 
@@ -65,7 +65,7 @@ describe('StreamingRetune setConfig merges', () => {
       retune.setConfig({});
       expect(retune.config()).toEqual(baseline);
     } finally {
-      retune.delete();
+      retune.destroy();
     }
   });
 
@@ -81,7 +81,7 @@ describe('StreamingRetune setConfig merges', () => {
       retune.prepare(22050, BLOCK);
       expect(retune.grainSize()).toBe(1024);
     } finally {
-      retune.delete();
+      retune.destroy();
     }
   });
 
@@ -98,7 +98,7 @@ describe('StreamingRetune setConfig merges', () => {
       retune.prepare(SR, BLOCK);
       expect(retune.grainSize()).toBe(512);
     } finally {
-      retune.delete();
+      retune.destroy();
     }
   });
 });

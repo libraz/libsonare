@@ -63,7 +63,7 @@ function nativeHrtf(hrtf: HrtfSet | undefined): WasmHrtfSet | null {
  * const bytes = new Uint8Array(await (await fetch(hrtfUrl)).arrayBuffer());
  * const hrtf = HrtfSet.fromBytes(bytes);
  * const renderer = new PlaybackRenderer({ config: {}, hrtf, sampleRate: 48000 });
- * hrtf.delete();
+ * hrtf.destroy();
  * ```
  */
 export class HrtfSet {
@@ -86,7 +86,7 @@ export class HrtfSet {
   }
 
   /** Releases the native handle. Idempotent, as the Node facade is. */
-  delete(): void {
+  destroy(): void {
     if (this.released) {
       return;
     }
@@ -94,14 +94,9 @@ export class HrtfSet {
     this.nativeHandle.delete();
   }
 
-  /** Alias for {@link delete}, provided for cross-binding (Node) compatibility. */
-  destroy(): void {
-    this.delete();
-  }
-
-  /** Releases the handle through {@link delete}, so the instance works with `using`. */
+  /** Releases the handle through {@link destroy}, so the instance works with `using`. */
   [Symbol.dispose](): void {
-    this.delete();
+    this.destroy();
   }
 }
 
@@ -234,7 +229,7 @@ export class PlaybackRenderer {
   }
 
   /** Releases the native handle. Idempotent, as the Node facade is. */
-  delete(): void {
+  destroy(): void {
     if (this.released) {
       return;
     }
@@ -242,14 +237,9 @@ export class PlaybackRenderer {
     this.nativeHandle.delete();
   }
 
-  /** Alias for {@link delete}, provided for cross-binding (Node) compatibility. */
-  destroy(): void {
-    this.delete();
-  }
-
-  /** Releases the handle through {@link delete}, so the instance works with `using`. */
+  /** Releases the handle through {@link destroy}, so the instance works with `using`. */
   [Symbol.dispose](): void {
-    this.delete();
+    this.destroy();
   }
 }
 
@@ -282,7 +272,7 @@ export class PlaybackLoudnessMeter {
   }
 
   /** Releases the native handle. Idempotent, as the Node facade is. */
-  delete(): void {
+  destroy(): void {
     if (this.released) {
       return;
     }
@@ -290,14 +280,9 @@ export class PlaybackLoudnessMeter {
     this.nativeHandle.delete();
   }
 
-  /** Alias for {@link delete}, provided for cross-binding (Node) compatibility. */
-  destroy(): void {
-    this.delete();
-  }
-
-  /** Releases the handle through {@link delete}, so the instance works with `using`. */
+  /** Releases the handle through {@link destroy}, so the instance works with `using`. */
   [Symbol.dispose](): void {
-    this.delete();
+    this.destroy();
   }
 }
 

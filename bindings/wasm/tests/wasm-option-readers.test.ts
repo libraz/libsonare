@@ -122,7 +122,7 @@ describe('wrong-typed option values are refused by name', () => {
           new RegExp(key),
         );
       } finally {
-        mixer.delete();
+        mixer.destroy();
       }
     });
 
@@ -136,7 +136,7 @@ describe('wrong-typed option values are refused by name', () => {
           mixer.setSurroundPan(vocal, { azimuth: undefined, lfe: null } as never),
         ).not.toThrow();
       } finally {
-        mixer.delete();
+        mixer.destroy();
       }
     });
   });
@@ -185,7 +185,7 @@ describe('sample-rate range', () => {
   it('accepts the range ends', () => {
     expect(() => mixStereo([leftOnly()], [silence()], 8000)).not.toThrow();
     const mixer = Mixer.fromSceneJson(mixingScenePresetJson('vocalReverbSend'), 384000, BLOCK);
-    mixer.delete();
+    mixer.destroy();
   });
 });
 

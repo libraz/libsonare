@@ -12,7 +12,7 @@ import { assertString } from './validation.js';
  * processing. The `input` / `output` `Float32Array`s are typed-memory views
  * onto the WASM heap — write samples into `input`, call `process()`, then
  * read from `output`. The views are owned by the {@link RealtimeVoiceChanger}
- * and remain valid until `delete()` is called on it.
+ * and remain valid until `destroy()` is called on it.
  */
 export interface RealtimeVoiceChangerMonoBuffer {
   input: Float32Array;
@@ -286,7 +286,7 @@ export class RealtimeVoiceChanger {
    * Write your input samples into the returned `Float32Array` directly (e.g.
    * via `input.set(source)`); no copy crosses the JS↔C++ bridge until
    * {@link processPreparedMono} is called. The view is owned by this
-   * RealtimeVoiceChanger and becomes invalid after {@link delete}; it may
+   * RealtimeVoiceChanger and becomes invalid after {@link destroy}; it may
    * also be invalidated if you later call this method with a larger
    * `numSamples` value (the underlying buffer may be reallocated).
    */
@@ -347,7 +347,7 @@ export class RealtimeVoiceChanger {
   /**
    * Convenience factory for the mono zero-copy path: returns the input/output
    * heap views plus a `process()` thunk wired to the same `numSamples`. The
-   * views are reused across calls and become invalid after {@link delete}.
+   * views are reused across calls and become invalid after {@link destroy}.
    */
   createRealtimeMonoBuffer(numSamples: number): RealtimeVoiceChangerMonoBuffer {
     let input = this.getMonoInputBuffer(numSamples);
@@ -426,7 +426,7 @@ export class RealtimeVoiceChanger {
    * Convenience factory for the planar zero-copy path. Acquires one
    * heap-backed Float32Array per channel and returns a `process()` thunk
    * wired to the same `numFrames`. Buffers are reused across calls and
-   * become invalid after {@link delete}.
+   * become invalid after {@link destroy}.
    */
   createRealtimePlanarBuffer(
     numFrames: number,
@@ -462,7 +462,7 @@ export class RealtimeVoiceChanger {
   }
 
   /** Releases the native handle. Idempotent, as the Node facade is. */
-  delete(): void {
+  destroy(): void {
     if (this.released) {
       return;
     }
@@ -470,14 +470,9 @@ export class RealtimeVoiceChanger {
     this.changerHandle.delete();
   }
 
-  /** Alias for {@link delete}, provided for cross-binding (Node) compatibility. */
-  destroy(): void {
-    this.delete();
-  }
-
-  /** Releases the handle through {@link delete}, so the instance works with `using`. */
+  /** Releases the handle through {@link destroy}, so the instance works with `using`. */
   [Symbol.dispose](): void {
-    this.delete();
+    this.destroy();
   }
 }
 

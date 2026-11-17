@@ -198,8 +198,8 @@ export class ClipPageStreamer {
     await Promise.all(fetches);
   }
 
-  /** Close every registered clip's binding and stop tracking. */
-  close(): void {
+  /** Close every registered clip's binding and stop tracking. Idempotent. */
+  destroy(): void {
     if (this.epoch.closed) {
       return;
     }
@@ -213,19 +213,9 @@ export class ClipPageStreamer {
     this.epoch.close();
   }
 
-  /** Alias for {@link close}, provided for cross-binding compatibility. */
-  delete(): void {
-    this.close();
-  }
-
-  /** Alias for {@link close}, provided for cross-binding compatibility. */
-  destroy(): void {
-    this.close();
-  }
-
-  /** Releases the streamer through {@link close}, so the instance works with `using`. */
+  /** Releases the streamer through {@link destroy}, so the instance works with `using`. */
   [Symbol.dispose](): void {
-    this.close();
+    this.destroy();
   }
 
   private serviceFrontier(state: SourceState, frontier: number): Promise<unknown>[] {

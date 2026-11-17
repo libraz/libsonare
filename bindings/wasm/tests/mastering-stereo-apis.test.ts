@@ -22,7 +22,7 @@ describe('WASM stereo mastering design APIs', () => {
   it('rejects streaming updates after delete', () => {
     const chain = new StreamingMasteringChain({ 'eq.tilt.enabled': true });
     chain.prepare(SAMPLE_RATE, 128, 1);
-    chain.delete();
+    chain.destroy();
     expect(() => chain.setParameter('eq.tilt.tiltDb', 3)).toThrow(
       /StreamingMasteringChain has been released/,
     );
@@ -169,8 +169,8 @@ describe('WASM stereo mastering design APIs', () => {
       const next = tone(128, 0.7, 0.1);
       expect(edited.processMono(next)).not.toEqual(control.processMono(next));
     } finally {
-      edited.delete();
-      control.delete();
+      edited.destroy();
+      control.destroy();
     }
   });
 
@@ -198,7 +198,7 @@ describe('WASM stereo mastering design APIs', () => {
         chain.setParameter('dynamics.compressor.thresholdDb', 'bad' as unknown as number),
       ).toThrow();
     } finally {
-      chain.delete();
+      chain.destroy();
     }
   });
 });

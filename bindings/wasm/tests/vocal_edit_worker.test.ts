@@ -148,9 +148,9 @@ function fakeFactory(renderUnits = 1): {
               limitedCorrectionFrames: '0',
             }),
             abort: () => {},
-            dispose: () => {},
+            destroy: () => {},
           }),
-          dispose: () => {},
+          destroy: () => {},
         };
       };
       const draft: VocalEditWorkerNativeDraft = {
@@ -161,7 +161,7 @@ function fakeFactory(renderUnits = 1): {
         commit: () => ({ token: sessionToken(), dirtyRanges: [], idChanges: [] }),
         cancel: () => {},
         captureRenderSnapshot: renderSnapshot as never,
-        dispose: () => {},
+        destroy: () => {},
       };
       return {
         token: sessionToken,
@@ -174,7 +174,7 @@ function fakeFactory(renderUnits = 1): {
         redo: () => ({ token: sessionToken(), dirtyRanges: [], idChanges: [] }),
         captureRenderSnapshot: renderSnapshot as never,
         exportState: () => new Uint8Array([1, 2, 3]),
-        dispose: () => {},
+        destroy: () => {},
       };
     },
     restore: () => {
@@ -410,9 +410,9 @@ function statefulFactory(
               limitedCorrectionFrames: '0',
             }),
             abort: () => {},
-            dispose: () => {},
+            destroy: () => {},
           }),
-          dispose: () => {},
+          destroy: () => {},
         };
       };
       const draft: VocalEditWorkerNativeDraft = {
@@ -438,7 +438,7 @@ function statefulFactory(
           draftOpen = false;
         },
         captureRenderSnapshot: renderSnapshot as never,
-        dispose: () => {},
+        destroy: () => {},
       };
       return {
         token: stateToken,
@@ -454,7 +454,7 @@ function statefulFactory(
         redo: editResult,
         captureRenderSnapshot: renderSnapshot as never,
         exportState: () => new Uint8Array([1, 2, 3]),
-        dispose: () => {
+        destroy: () => {
           disposedSessions += 1;
         },
       };

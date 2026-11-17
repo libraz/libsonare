@@ -64,7 +64,7 @@ describe('SonareWorkletProcessor', () => {
       expect(Array.from(outR)).toEqual(Array.from(expected.right));
     } finally {
       processor.destroy();
-      offline.delete();
+      offline.destroy();
     }
   });
 

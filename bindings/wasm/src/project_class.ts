@@ -195,7 +195,7 @@ function interleaveLoopRecording(desc: ProjectLoopRecordingDesc): ProjectLoopRec
  * {@link Project.compileTimeline} and installed into a stopped realtime engine
  * with `RealtimeEngine.applyProjectTimeline`.
  *
- * An engine keeps its own reference after an apply, so {@link dispose} may be
+ * An engine keeps its own reference after an apply, so {@link destroy} may be
  * called right afterwards. The embind handle is not garbage-collected; release
  * it when no further apply needs it.
  */
@@ -221,7 +221,7 @@ export class ProjectTimeline {
   }
 
   /** Release the underlying WASM object. Idempotent. */
-  dispose(): void {
+  destroy(): void {
     if (this.native === null) {
       return;
     }
@@ -230,19 +230,9 @@ export class ProjectTimeline {
     this.native = null;
   }
 
-  /** Alias for {@link dispose}, provided for cross-binding compatibility. */
-  delete(): void {
-    this.dispose();
-  }
-
-  /** Alias for {@link dispose}, provided for cross-binding compatibility. */
-  destroy(): void {
-    this.dispose();
-  }
-
-  /** Releases the timeline through {@link dispose}, so the instance works with `using`. */
+  /** Releases the timeline through {@link destroy}, so the instance works with `using`. */
   [Symbol.dispose](): void {
-    this.dispose();
+    this.destroy();
   }
 }
 
@@ -256,7 +246,7 @@ export class ProjectTimeline {
  * offline to interleaved float audio with {@link bounce}. The edit and MIDI
  * methods mirror the Node/Python project bindings.
  *
- * Call {@link delete} (or use a `try/finally`) to release the underlying WASM
+ * Call {@link destroy} (or use a `try/finally`) to release the underlying WASM
  * object — the embind handle is not garbage-collected automatically.
  *
  * @example
@@ -266,9 +256,9 @@ export class ProjectTimeline {
  *   project.setSampleRate(48000);
  *   const json = project.toJson();
  *   const restored = Project.fromJson(json);
- *   restored.delete();
+ *   restored.destroy();
  * } finally {
- *   project.delete();
+ *   project.destroy();
  * }
  * ```
  */
@@ -1922,7 +1912,7 @@ export class Project {
    * Called from a rehydrate cancel callback, the release happens when the
    * outermost {@link rehydrateVocalEdits} call returns.
    */
-  delete(): void {
+  destroy(): void {
     if (this.released) {
       return;
     }
@@ -1935,13 +1925,8 @@ export class Project {
     this.nativeHandle.delete();
   }
 
-  /** Alias for {@link delete}, provided for cross-binding (Node) compatibility. */
-  destroy(): void {
-    this.delete();
-  }
-
-  /** Releases the handle through {@link delete}, so the instance works with `using`. */
+  /** Releases the handle through {@link destroy}, so the instance works with `using`. */
   [Symbol.dispose](): void {
-    this.delete();
+    this.destroy();
   }
 }

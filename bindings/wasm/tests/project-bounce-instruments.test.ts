@@ -309,7 +309,7 @@ describe('bounceWithInstruments', () => {
       ['setSampleRate', () => project.setSampleRate(44100)],
       ['bounce', () => project.bounce(OPTIONS)],
       ['nested bounceWithInstruments', () => project.bounceWithInstruments([], OPTIONS)],
-      ['delete', () => project.delete()],
+      ['delete', () => project.destroy()],
     ];
     for (const [name, attempt] of attempts) {
       let refusal: unknown;

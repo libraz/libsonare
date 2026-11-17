@@ -34,7 +34,7 @@ describe('Sonare WASM Module', () => {
         const stages = chain.stageNames();
         expect(stages).toContain('eq.tilt');
       } finally {
-        chain.delete();
+        chain.destroy();
       }
     });
 
@@ -57,7 +57,7 @@ describe('Sonare WASM Module', () => {
         expect(tail.length).toBeGreaterThanOrEqual(chain.latencySamples());
         expect(chain.flushMono()).toHaveLength(0);
       } finally {
-        chain.delete();
+        chain.destroy();
       }
     });
 
@@ -70,7 +70,7 @@ describe('Sonare WASM Module', () => {
         chain.prepare(44100, 512, 1);
         expect(chain.stageNames()).toEqual(['eq.tilt']);
       } finally {
-        chain.delete();
+        chain.destroy();
       }
     });
 
@@ -96,7 +96,7 @@ describe('Sonare WASM Module', () => {
         // The loudness stage is wired in once a static gain is provided.
         expect(chain.stageNames()).toContain('loudness.optimize');
       } finally {
-        chain.delete();
+        chain.destroy();
       }
     });
 
@@ -147,7 +147,7 @@ describe('Sonare WASM Module', () => {
         expect(snapshot.preLeft.length).toBe(snapshot.postLeft.length);
         expect(eq.latencySamples()).toBeGreaterThanOrEqual(0);
       } finally {
-        eq.delete();
+        eq.destroy();
       }
     });
 
@@ -192,7 +192,7 @@ describe('Sonare WASM Module', () => {
         eq.processStereo(left, right);
         expect(eq.nonFiniteDiscardCount()).toBe(1);
       } finally {
-        eq.delete();
+        eq.destroy();
       }
     });
 
@@ -214,7 +214,7 @@ describe('Sonare WASM Module', () => {
         expect(Math.abs(db[0])).toBeLessThan(1);
         expect(Math.abs(db[2])).toBeLessThan(1);
       } finally {
-        eq.delete();
+        eq.destroy();
       }
     });
 
@@ -234,7 +234,7 @@ describe('Sonare WASM Module', () => {
         expect(Math.abs(eq.magnitudeResponse(freqs, 'Left')[0])).toBeLessThan(0.5);
         expect(() => eq.magnitudeResponse(freqs, 'Bogus' as unknown as 'Mid')).toThrow();
       } finally {
-        eq.delete();
+        eq.destroy();
       }
     });
 
@@ -247,7 +247,7 @@ describe('Sonare WASM Module', () => {
           expect(Math.abs(value)).toBeLessThan(0.05);
         }
       } finally {
-        eq.delete();
+        eq.destroy();
       }
     });
 
@@ -274,8 +274,8 @@ describe('Sonare WASM Module', () => {
         });
         expect(aliasEq.latencySamples()).toBeGreaterThanOrEqual(0);
       } finally {
-        linearEq.delete();
-        aliasEq.delete();
+        linearEq.destroy();
+        aliasEq.destroy();
       }
     });
 
@@ -300,8 +300,8 @@ describe('Sonare WASM Module', () => {
           expect(omittedGain[i]).toBeCloseTo(explicitGain[i], 6);
         }
       } finally {
-        omitted.delete();
-        explicit.delete();
+        omitted.destroy();
+        explicit.destroy();
       }
     });
 
@@ -325,7 +325,7 @@ describe('Sonare WASM Module', () => {
         retune.setConfig({ semitones: -5, mix: 0.5, grainSize: 512 });
         expect(retune.config().mix).toBeCloseTo(0.5, 6);
       } finally {
-        retune.delete();
+        retune.destroy();
       }
     });
   });

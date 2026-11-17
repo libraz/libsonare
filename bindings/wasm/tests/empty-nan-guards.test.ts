@@ -136,7 +136,7 @@ describe('NaN/Inf guards (WASM)', () => {
   it('StreamingEqualizer.match rejects non-finite reference audio', () => {
     const equalizer = new StreamingEqualizer({ sampleRate: SR, maxBlockSize: 128 });
     expect(() => equalizer.match(sine(), withNaN(), { maxBands: 4 })).toThrow();
-    equalizer.delete();
+    equalizer.destroy();
   });
   it('lufs rejects NaN with index', () => {
     expect(() => lufs(withNaN(), SR)).toThrow(/lufs: samples contains NaN or Inf at index 100/);

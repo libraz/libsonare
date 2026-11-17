@@ -19,7 +19,7 @@ import { projectModule, type WasmSampleBank } from './project_internal.js';
  * invalidates the voices reading it.
  *
  * The embind handle is not garbage-collected, so release it with
- * {@link SampleBank.delete} once every bounce that names it has finished.
+ * {@link SampleBank.destroy} once every bounce that names it has finished.
  *
  * @example
  * ```typescript
@@ -32,7 +32,7 @@ import { projectModule, type WasmSampleBank } from './project_internal.js';
  *     { totalFrames: 24000 },
  *   );
  * } finally {
- *   bank.delete();
+ *   bank.destroy();
  * }
  * ```
  */
@@ -104,7 +104,7 @@ export class SampleBank {
   }
 
   /** Release the underlying WASM object. Idempotent, as the Node facade is. */
-  delete(): void {
+  destroy(): void {
     if (this.released) {
       return;
     }
@@ -112,13 +112,8 @@ export class SampleBank {
     this.nativeHandle.delete();
   }
 
-  /** Alias for {@link SampleBank.delete}, provided for cross-binding (Node) compatibility. */
-  destroy(): void {
-    this.delete();
-  }
-
-  /** Releases the handle through {@link delete}, so the instance works with `using`. */
+  /** Releases the handle through {@link destroy}, so the instance works with `using`. */
   [Symbol.dispose](): void {
-    this.delete();
+    this.destroy();
   }
 }

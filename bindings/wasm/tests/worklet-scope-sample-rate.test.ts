@@ -103,7 +103,7 @@ function mixerReference(rate: number): Float32Array {
       return buffer.outLeft.slice(0, BLOCK);
     });
   } finally {
-    mixer.delete();
+    mixer.destroy();
   }
 }
 
@@ -130,7 +130,7 @@ function voiceChangerReference(
     const latency = changer.latencySamples();
     return { output: renderBlocks((input) => changer.processMono(input), blocks), latency };
   } finally {
-    changer.delete();
+    changer.destroy();
   }
 }
 
@@ -299,7 +299,7 @@ describe('worklet processors take their rate from the AudioWorkletGlobalScope', 
       try {
         return renderer.latencySamples();
       } finally {
-        renderer.delete();
+        renderer.destroy();
       }
     }
 
