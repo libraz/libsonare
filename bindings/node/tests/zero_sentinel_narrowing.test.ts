@@ -91,18 +91,21 @@ function digest(samples: Float32Array | number[]): string {
 }
 
 /**
- * Drives one field through the four cases: omitted, an explicit zero (the default, or refused), a
- * control value that has to move the result, and the two fractional requests.
+ * Drives one field through the four cases: omitted, an explicit zero (the default, refused, or a
+ * value of its own that differs from the omitted call), a control value that has to move the
+ * result, and the two fractional requests.
  */
 function expectSentinelRefused<T>(
   call: (value?: number) => T,
   read: (result: T) => string,
   control: number,
-  zero: 'default' | 'refused' = 'default',
+  zero: 'default' | 'refused' | 'distinct' = 'default',
 ): void {
   const omitted = read(call());
   if (zero === 'refused') {
     expect(() => call(0)).toThrow(RangeError);
+  } else if (zero === 'distinct') {
+    expect(read(call(0))).not.toBe(omitted);
   } else {
     expect(read(call(0))).toBe(omitted);
   }
@@ -221,7 +224,7 @@ describe('acoustic room options', () => {
       (seed) => synthesizeRir({ seed, sampleRate: SR, maxSec: 0.4 }),
       (result) => digest(result.rir),
       987654,
-      'refused',
+      'distinct',
     );
   });
 
@@ -230,7 +233,7 @@ describe('acoustic room options', () => {
       (seed) => roomMorph({ samples: SHORT, sampleRate: SR, seed }).audio,
       digest,
       987654,
-      'refused',
+      'distinct',
     );
   });
 
