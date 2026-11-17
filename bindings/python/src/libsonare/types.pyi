@@ -79,6 +79,9 @@ class CapabilitiesFeatures(TypedDict):
     vocalEdit: bool
     voiceChanger: bool
     playback: bool
+    project: bool
+    graph: bool
+    assist: bool
 
 class CapabilitiesDecode(TypedDict):
     builtin: list[str]

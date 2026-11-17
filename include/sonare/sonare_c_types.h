@@ -14,6 +14,10 @@
 ///        layout or function-contract mismatch before calling into the library.
 #define SONARE_FEATURE_ABI_VERSION 8u
 
+/// @brief ABI version of the realtime command-queue record layout, as returned
+///        by sonare_engine_abi_version(). Not folded into SONARE_ABI_VERSION.
+#define SONARE_ENGINE_ABI_VERSION 3u
+
 /// @brief Single aggregate C-ABI version. Encodes the per-subsystem versions so a
 ///        prebuilt binding linked against a different libsonare can detect a
 ///        layout/contract mismatch with one comparison. The byte layout is:

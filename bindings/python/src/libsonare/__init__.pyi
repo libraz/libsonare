@@ -257,9 +257,6 @@ from .analyzer import (
     harmonic as harmonic,
 )
 from .analyzer import (
-    has_ffmpeg_support as has_ffmpeg_support,
-)
-from .analyzer import (
     hpss as hpss,
 )
 from .analyzer import (
@@ -1413,10 +1410,7 @@ from .vocal_edit import (
     restore_vocal_edit_session as restore_vocal_edit_session,
 )
 from .vocal_edit import (
-    vocal_edit_api_version as vocal_edit_api_version,
-)
-from .vocal_edit import (
-    vocal_edit_available as vocal_edit_available,
+    vocal_edit_abi_version as vocal_edit_abi_version,
 )
 from .vocal_project import (
     ProjectVocalEditApplyResult as ProjectVocalEditApplyResult,

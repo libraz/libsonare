@@ -37,3 +37,93 @@
 # method entry with changed + test, not old/new.
 # A parameter that becomes a request field is an option entry with removed = true, plus a
 # changed entry (with test) on the function that now takes the request.
+
+[[entry]]
+kind = "function"
+old = "sonare_vocal_edit_api_version"
+new = "sonare_vocal_edit_abi_version"
+domain = "core"
+rule = "abi-probes"
+
+[[entry]]
+kind = "export"
+old = "SONARE_VOCAL_EDIT_API_VERSION"
+new = "SONARE_VOCAL_EDIT_ABI_VERSION"
+domain = "core"
+rule = "abi-probes"
+
+[[entry]]
+kind = "export"
+old = "SONARE_VOCAL_PROJECT_API_VERSION"
+new = "SONARE_VOCAL_PROJECT_ABI_VERSION"
+domain = "core"
+rule = "abi-probes"
+
+[[entry]]
+kind = "field"
+old = "SonareVocalCapabilities.api_version"
+new = "SonareVocalCapabilities.abi_version"
+domain = "project"
+rule = "abi-probes"
+
+[[entry]]
+kind = "function"
+old = "sonare_has_ffmpeg_support"
+removed = true
+domain = "core"
+rule = "abi-probes"
+
+[[entry]]
+kind = "function"
+old = "sonare_vocal_available"
+removed = true
+domain = "core"
+rule = "abi-probes"
+
+[[entry]]
+kind = "function"
+old = "sonare_has_feature"
+changed = "new: returns 1 when the named capabilities features key is compiled in, 0 for an absent, unknown or NULL name"
+domain = "core"
+rule = "abi-probes"
+test = "tests/api/surface_core_test.cpp::sonare_has_feature agrees with every capabilities feature"
+
+[[entry]]
+kind = "export"
+old = "SONARE_ENGINE_ABI_VERSION"
+changed = "new: the engine ABI counter as a macro, equal to sonare_engine_abi_version()"
+domain = "core"
+rule = "abi-probes"
+test = "tests/api/surface_core_test.cpp::Each ABI counter accessor returns its macro"
+
+[[entry]]
+kind = "export"
+old = "SONARE_VERSION_MAJOR"
+changed = "now reachable from sonare_c.h through sonare_c_version.h"
+domain = "core"
+rule = "abi-probes"
+test = "tests/api/surface_core_test.cpp::Version macros are reachable from sonare_c.h"
+
+[[entry]]
+kind = "export"
+old = "SONARE_VERSION_MINOR"
+changed = "now reachable from sonare_c.h through sonare_c_version.h"
+domain = "core"
+rule = "abi-probes"
+test = "tests/api/surface_core_test.cpp::Version macros are reachable from sonare_c.h"
+
+[[entry]]
+kind = "export"
+old = "SONARE_VERSION_PATCH"
+changed = "now reachable from sonare_c.h through sonare_c_version.h"
+domain = "core"
+rule = "abi-probes"
+test = "tests/api/surface_core_test.cpp::Version macros are reachable from sonare_c.h"
+
+[[entry]]
+kind = "export"
+old = "SONARE_VERSION_STRING"
+changed = "now reachable from sonare_c.h through sonare_c_version.h"
+domain = "core"
+rule = "abi-probes"
+test = "tests/api/surface_core_test.cpp::Version macros are reachable from sonare_c.h"

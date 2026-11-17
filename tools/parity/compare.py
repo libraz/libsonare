@@ -242,8 +242,6 @@ _ALIAS_COVERAGE = {
     "vocal_render_job_begin": ("begin_render_job",),
     "vocal_session_create": ("create_vocal_edit_session",),
     "vocal_session_restore": ("restore", "restore_vocal_edit_session"),
-    # Every facade exposes the availability probe under the same name.
-    "vocal_available": ("vocal_edit_available",),
     # Project helpers are free-function ergonomic wrappers around the Project
     # methods. The aliases also keep the Python helper names out of
     # surface-only findings without weakening the Project handle check.
@@ -698,7 +696,7 @@ def build_report(
                     alias_methods = _class_method_keys(extractions.get(s), alias_owner)
                 if alias_owner is not None:
                     # A class-scoped alias may still have a direct free export
-                    # (WASM's vocalEditApiVersion is one), but must not fall
+                    # (WASM's vocalEditAbiVersion is one), but must not fall
                     # back to every class on a surface.
                     alias_symbols = alias_methods | free_keys.get(s, set())
                 else:

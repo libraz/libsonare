@@ -119,7 +119,6 @@ from .analyzer import (
     frames_to_time,
     griffin_lim,
     harmonic,
-    has_ffmpeg_support,
     hpss,
     hpss_with_residual,
     hybrid_cqt,
@@ -574,8 +573,7 @@ from .vocal_edit import (
     VocalTransition,
     create_vocal_edit_session,
     restore_vocal_edit_session,
-    vocal_edit_api_version,
-    vocal_edit_available,
+    vocal_edit_abi_version,
 )
 
 __all__ = [
@@ -612,8 +610,7 @@ __all__ = [
     "VocalRenderJob",
     "create_vocal_edit_session",
     "restore_vocal_edit_session",
-    "vocal_edit_api_version",
-    "vocal_edit_available",
+    "vocal_edit_abi_version",
     "AcousticResult",
     "AnalysisBeatObservations",
     "AnalysisDynamics",
@@ -916,7 +913,6 @@ __all__ = [
     "frames_to_samples",
     "frames_to_time",
     "harmonic",
-    "has_ffmpeg_support",
     "hpss",
     "hpss_with_residual",
     "hybrid_cqt",

@@ -1099,18 +1099,18 @@ TEST_CASE("vocal project entry points define an initialized result on a rejected
   SonareProjectVocalEditApplyResult result;
   std::memset(&result, 0, sizeof(result));
   result.struct_size = sizeof(result);
-  result.schema_version = SONARE_VOCAL_PROJECT_API_VERSION;
+  result.schema_version = SONARE_VOCAL_PROJECT_ABI_VERSION;
   result.clip_id = 99;
   REQUIRE(sonare_project_apply_vocal_edit(nullptr, &desc, &result) ==
           SONARE_ERROR_INVALID_PARAMETER);
   CHECK(result.clip_id == 0);
   CHECK(result.struct_size == sizeof(result));
-  CHECK(result.schema_version == SONARE_VOCAL_PROJECT_API_VERSION);
+  CHECK(result.schema_version == SONARE_VOCAL_PROJECT_ABI_VERSION);
 
   SonareProjectVocalEditDependenciesResult dependencies;
   std::memset(&dependencies, 0, sizeof(dependencies));
   dependencies.struct_size = sizeof(dependencies);
-  dependencies.schema_version = SONARE_VOCAL_PROJECT_API_VERSION;
+  dependencies.schema_version = SONARE_VOCAL_PROJECT_ABI_VERSION;
   dependencies.dependency_count = 5;
   REQUIRE(sonare_project_get_vocal_edit_dependencies(nullptr, &dependencies) ==
           SONARE_ERROR_INVALID_PARAMETER);

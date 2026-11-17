@@ -1890,8 +1890,7 @@ export interface WasmSynthEnumTables {
 }
 
 export interface SonareModule {
-  vocalEditApiVersion: VocalWasmExports['vocalEditApiVersion'];
-  vocalEditAvailable: VocalWasmExports['vocalEditAvailable'];
+  vocalEditAbiVersion: () => number;
   vocalEditSessionCreate: VocalWasmExports['vocalEditSessionCreate'];
   vocalEditSessionRestore: VocalWasmExports['vocalEditSessionRestore'];
   vocalEditSessionDestroy: VocalWasmExports['vocalEditSessionDestroy'];
@@ -2169,7 +2168,6 @@ export interface SonareModule {
     windowSec: number,
   ) => WasmTimbreAnalysisResult;
   detectKeyCandidates: (samples: Float32Array, sampleRate: number) => WasmKeyCandidateResult[];
-  hasFfmpegSupport: () => boolean;
   version: () => string;
   capabilities: () => Capabilities;
   capabilityCatalog: () => string;

@@ -37,3 +37,55 @@
 # method entry with changed + test, not old/new.
 # A parameter that becomes a request field is an option entry with removed = true, plus a
 # changed entry (with test) on the function that now takes the request.
+
+[[entry]]
+kind = "function"
+old = "vocal_edit_api_version"
+new = "vocal_edit_abi_version"
+domain = "core"
+rule = "abi-probes"
+
+[[entry]]
+kind = "function"
+old = "vocal_edit_abi_version"
+changed = "returns None instead of a number when vocal edit is compiled out"
+domain = "core"
+rule = "absent-not-sentinel"
+test = "bindings/python/tests/test_analyzer_core.py::test_vocal_edit_abi_version_is_none_when_feature_is_compiled_out"
+
+[[entry]]
+kind = "function"
+old = "voice_changer_abi_version"
+changed = "returns None instead of 0 when the voice changer is compiled out"
+domain = "core"
+rule = "absent-not-sentinel"
+test = "bindings/python/tests/test_analyzer_core.py::test_abi_versions_are_none_when_feature_is_compiled_out"
+
+[[entry]]
+kind = "function"
+old = "project_abi_version"
+changed = "returns None instead of 0 when arrangement support is compiled out"
+domain = "core"
+rule = "absent-not-sentinel"
+test = "bindings/python/tests/test_analyzer_core.py::test_abi_versions_are_none_when_feature_is_compiled_out"
+
+[[entry]]
+kind = "function"
+old = "has_ffmpeg_support"
+removed = true
+domain = "core"
+rule = "abi-probes"
+
+[[entry]]
+kind = "function"
+old = "vocal_edit_available"
+removed = true
+domain = "core"
+rule = "abi-probes"
+
+[[entry]]
+kind = "field"
+old = "VocalCapabilities.api_version"
+new = "VocalCapabilities.abi_version"
+domain = "project"
+rule = "abi-probes"

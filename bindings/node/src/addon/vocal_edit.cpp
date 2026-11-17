@@ -256,7 +256,7 @@ bool ReadTransition(Napi::Env env, const Napi::Value& value, SonareVocalTransiti
   if (!RequiredObjectValue(env, value, "transition", &object)) return false;
   *out = {};
   out->struct_size = sizeof(*out);
-  out->schema_version = SONARE_VOCAL_EDIT_API_VERSION;
+  out->schema_version = SONARE_VOCAL_EDIT_ABI_VERSION;
   const Napi::Value left = object.Get("leftNoteId");
   const Napi::Value right = object.Get("rightNoteId");
   if (!ReadNoteId(env, left, "transition.leftNoteId", &out->left_note_id) ||
@@ -546,7 +546,7 @@ Napi::Object AnalysisResultToObject(Napi::Env env, const SonareVocalAnalysisResu
 
 Napi::Object CapabilitiesToObject(Napi::Env env, const SonareVocalCapabilities& capabilities) {
   Napi::Object object = Napi::Object::New(env);
-  object.Set("apiVersion", capabilities.api_version);
+  object.Set("abiVersion", capabilities.abi_version);
   object.Set("profileId", capabilities.profile_id);
   object.Set("monophonicOnly", Napi::Boolean::New(env, capabilities.monophonic_only != 0));
   object.Set("analysisCancellable",
@@ -1841,17 +1841,10 @@ Napi::Value RestoreVocalEditSession(const Napi::CallbackInfo& info) {
   SONARE_NODE_CATCH(env)
 }
 
-Napi::Value VocalEditAvailable(const Napi::CallbackInfo& info) {
+Napi::Value VocalEditAbiVersion(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
-  return Napi::Boolean::New(env, sonare_vocal_available() != 0);
-  SONARE_NODE_CATCH(env)
-}
-
-Napi::Value VocalEditApiVersion(const Napi::CallbackInfo& info) {
-  Napi::Env env = info.Env();
-  SONARE_NODE_TRY
-  return Napi::Number::New(env, sonare_vocal_edit_api_version());
+  return Napi::Number::New(env, sonare_vocal_edit_abi_version());
   SONARE_NODE_CATCH(env)
 }
 
@@ -1862,10 +1855,8 @@ Napi::Object InitVocalEdit(Napi::Env env, Napi::Object exports) {
   VocalEditDraftWrap::Init(env, exports);
   VocalRenderSnapshotWrap::Init(env, exports);
   VocalRenderJobWrap::Init(env, exports);
-  exports.Set("vocalEditAvailable",
-              Napi::Function::New(env, VocalEditAvailable, "vocalEditAvailable"));
-  exports.Set("vocalEditApiVersion",
-              Napi::Function::New(env, VocalEditApiVersion, "vocalEditApiVersion"));
+  exports.Set("vocalEditAbiVersion",
+              Napi::Function::New(env, VocalEditAbiVersion, "vocalEditAbiVersion"));
   exports.Set("createVocalEditSession",
               Napi::Function::New(env, CreateVocalEditSession, "createVocalEditSession"));
   exports.Set("restoreVocalEditSession",

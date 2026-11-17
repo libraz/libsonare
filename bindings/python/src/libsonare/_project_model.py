@@ -10,7 +10,7 @@ owns storage. Heap buffers returned by the C layer are freed here (no leaks).
 
 Availability: the symbols are always exported, but when libsonare was built
 without ``SONARE_WITH_ARRANGEMENT`` every call returns
-``SONARE_ERROR_NOT_SUPPORTED`` and :func:`project_abi_version` returns 0. The
+``SONARE_ERROR_NOT_SUPPORTED`` and :func:`project_abi_version` returns ``None``. The
 :class:`Project` constructor checks the ABI version and raises a clear
 ``RuntimeError`` in that case.
 """
@@ -144,7 +144,7 @@ from ._runtime import (
 # bindings' expected project ABI constant. A mismatch means the loaded native
 # binary lays out the flat project PODs differently than this wrapper expects,
 # or the arrangement subsystem was compiled out (runtime version 0).
-EXPECTED_PROJECT_ABI_VERSION = 2
+_EXPECTED_PROJECT_ABI_VERSION = 2
 
 # Track kind ordinals (mirror SonareProjectTrackKind).
 TRACK_AUDIO = 0
@@ -534,16 +534,16 @@ class ProjectDeserializeResult:
     diagnostics: str
 
 
-def project_abi_version() -> int:
-    """Return the runtime project ABI version of the loaded native library.
+def project_abi_version() -> int | None:
+    """Return the project C ABI version of the loaded native library.
 
-    Equals :data:`EXPECTED_PROJECT_ABI_VERSION` when the arrangement subsystem
-    is compiled in, ``0`` when libsonare was built without it.
+    ``None`` when libsonare was built without the arrangement subsystem;
+    presence is ``capabilities()["features"]["project"]``.
     """
     lib = _get_lib()
     if not hasattr(lib, "sonare_project_abi_version"):
-        return 0
-    return int(lib.sonare_project_abi_version())
+        return None
+    return int(lib.sonare_project_abi_version()) or None
 
 
 def _check_project_abi(lib: Any) -> None:
@@ -551,11 +551,11 @@ def _check_project_abi(lib: Any) -> None:
         lib, "sonare_project_abi_version", "libsonare was built without arrangement support"
     )
     abi = int(lib.sonare_project_abi_version())
-    if abi != EXPECTED_PROJECT_ABI_VERSION:
+    if abi != _EXPECTED_PROJECT_ABI_VERSION:
         raise SonareError(
             int(ErrorCode.ABI_MISMATCH),
             f"libsonare project ABI mismatch: native binary reports {abi}, "
-            f"expected {EXPECTED_PROJECT_ABI_VERSION}. The installed shared "
+            f"expected {_EXPECTED_PROJECT_ABI_VERSION}. The installed shared "
             "library is incompatible with this Python binding (0 = arrangement "
             "support not compiled in).",
         )

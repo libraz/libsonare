@@ -42,8 +42,8 @@ def test_project_abi_mismatch_raises_coded_error(monkeypatch: pytest.MonkeyPatch
 
     monkeypatch.setattr(
         _project_model,
-        "EXPECTED_PROJECT_ABI_VERSION",
-        _project_model.EXPECTED_PROJECT_ABI_VERSION + 1,
+        "_EXPECTED_PROJECT_ABI_VERSION",
+        _project_model._EXPECTED_PROJECT_ABI_VERSION + 1,
     )
     with pytest.raises(SonareError) as raised:
         _project_model._check_project_abi(_project_model._get_lib())

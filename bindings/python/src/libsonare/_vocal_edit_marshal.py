@@ -12,7 +12,7 @@ import numpy as np
 
 from ._errors import SonareError, SonareValueError, _unknown_error
 from ._ffi_types_vocal import (
-    SONARE_VOCAL_EDIT_API_VERSION,
+    SONARE_VOCAL_EDIT_ABI_VERSION,
     VOCAL_MAX_SAMPLE_RATE,
     VOCAL_MIN_SAMPLE_RATE,
     SonareVocalAnalysis,
@@ -422,7 +422,7 @@ def _edit_to_c(lib: ctypes.CDLL, edit: VocalNoteEdit) -> tuple[SonareVocalNoteEd
 def _transition_to_c(lib: ctypes.CDLL, transition: VocalTransition) -> SonareVocalTransition:
     raw = SonareVocalTransition()
     raw.struct_size = ctypes.sizeof(SonareVocalTransition)
-    raw.schema_version = SONARE_VOCAL_EDIT_API_VERSION
+    raw.schema_version = SONARE_VOCAL_EDIT_ABI_VERSION
     raw.left_note_id = _uint32(transition.left_note_id, "left_note_id", allow_zero=False)
     raw.right_note_id = _uint32(transition.right_note_id, "right_note_id", allow_zero=False)
     raw.left_window_samples = _narrow_int(

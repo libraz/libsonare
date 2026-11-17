@@ -244,10 +244,9 @@ def test_vocal_abi_initializers_are_credited_only_by_name() -> None:
     assert ("decompose_with_init", "python") in _active(genuine), _active(genuine)
 
 
-def test_vocal_availability_and_project_helpers_use_explicit_aliases() -> None:
-    """Availability and Project vocal helpers keep their public ergonomic names."""
+def test_vocal_project_helpers_use_explicit_aliases() -> None:
+    """Project vocal helpers keep their public ergonomic names."""
     cases = (
-        ("vocal_available", "vocal_edit_available", False),
         ("project_apply_vocal_edit", "apply_project_vocal_edit", False),
         (
             "project_get_vocal_edit_dependencies",
@@ -262,28 +261,28 @@ def test_vocal_availability_and_project_helpers_use_explicit_aliases() -> None:
         rep = _report(_c(c_key), _py(methods=methods, frees=frees))
         assert (c_key, "python") not in _active(rep), (c_key, _active(rep))
 
-    missing = _report(_c("vocal_available"), _py())
-    assert ("vocal_available", "python") in _active(missing), _active(missing)
+    missing = _report(_c("project_apply_vocal_edit"), _py())
+    assert ("project_apply_vocal_edit", "python") in _active(missing), _active(missing)
 
     factory = _report(_c("vocal_session_create"), _py(frees=["create_vocal_edit_session"]))
     assert ("create_vocal_edit_session", "python") not in _active(factory), _active(factory)
     other = _report(_c("vocal_session_create"), _py(frees=["create_other_session"]))
     assert ("create_other_session", "python") in _active(other), _active(other)
 
-    factory_only = _report(_c("vocal_available"), _py(frees=["create_vocal_edit_session"]))
-    assert ("vocal_available", "python") in _active(factory_only), _active(factory_only)
+    factory_only = _report(_c("project_apply_vocal_edit"), _py(frees=["create_vocal_edit_session"]))
+    assert ("project_apply_vocal_edit", "python") in _active(factory_only), _active(factory_only)
 
 
-def test_vocal_api_version_needs_the_direct_export() -> None:
-    """A session's capabilities no longer stand in for the module-level API version."""
+def test_vocal_abi_version_needs_the_direct_export() -> None:
+    """A session's capabilities no longer stand in for the module-level ABI version."""
     session = _report(
-        _c("vocal_edit_api_version"),
+        _c("vocal_edit_abi_version"),
         _py(methods={"capabilities": "VocalEditSession"}),
     )
-    assert ("vocal_edit_api_version", "python") in _active(session), _active(session)
+    assert ("vocal_edit_abi_version", "python") in _active(session), _active(session)
 
-    direct = _report(_c("vocal_edit_api_version"), _py(frees=["vocal_edit_api_version"]))
-    assert ("vocal_edit_api_version", "python") not in _active(direct), _active(direct)
+    direct = _report(_c("vocal_edit_abi_version"), _py(frees=["vocal_edit_abi_version"]))
+    assert ("vocal_edit_abi_version", "python") not in _active(direct), _active(direct)
 
 
 def test_optional_callback_parser_sentinel_matches_none() -> None:
@@ -324,11 +323,11 @@ def test_vocal_threadlocal_error_helper_is_explicitly_allowlisted() -> None:
     assert ("vocal_last_error_detail", "python") not in _active(rep), _active(rep)
 
     unrelated = compare.build_report(
-        {"c": _c("vocal_available"), "python": _py()},
+        {"c": _c("project_apply_vocal_edit"), "python": _py()},
         allow,
         ["c", "python"],
     )
-    assert ("vocal_available", "python") in _active(unrelated), _active(unrelated)
+    assert ("project_apply_vocal_edit", "python") in _active(unrelated), _active(unrelated)
 
 
 _ADDITIVE_DSP_ALIASES = (

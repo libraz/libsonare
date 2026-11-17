@@ -12,7 +12,9 @@
 extern "C" {
 #endif
 
-#define SONARE_VOCAL_EDIT_API_VERSION 1u
+/// @brief ABI version of the vocal-edit structs and functions in this header;
+///        every struct's @c schema_version must carry it.
+#define SONARE_VOCAL_EDIT_ABI_VERSION 1u
 
 typedef struct SonareVocalEditSession SonareVocalEditSession;
 typedef struct SonareVocalEditDraft SonareVocalEditDraft;
@@ -295,7 +297,7 @@ typedef struct {
 typedef struct {
   uint32_t struct_size;
   uint32_t schema_version;
-  uint32_t api_version;
+  uint32_t abi_version;
   uint32_t profile_id;
   uint32_t monophonic_only;
   uint32_t analysis_cancellable;
@@ -317,7 +319,8 @@ typedef struct {
 /// @brief Nonzero requests cancellation; user_data is used only during the call.
 typedef int (*SonareVocalCancelCallback)(void* user_data);
 
-uint32_t sonare_vocal_edit_api_version(void);
+/// @brief Returns SONARE_VOCAL_EDIT_ABI_VERSION as compiled into the library.
+uint32_t sonare_vocal_edit_abi_version(void);
 void sonare_vocal_analysis_init(SonareVocalAnalysis* analysis);
 void sonare_vocal_create_options_init(SonareVocalCreateOptions* options);
 void sonare_vocal_restore_options_init(SonareVocalRestoreOptions* options);
@@ -332,7 +335,6 @@ void sonare_vocal_render_result_init(SonareVocalRenderResult* result);
 void sonare_vocal_state_bytes_init(SonareVocalStateBytes* result);
 void sonare_vocal_capabilities_init(SonareVocalCapabilities* result);
 void sonare_vocal_error_detail_init(SonareVocalErrorDetail* result);
-int sonare_vocal_available(void);
 void sonare_vocal_last_error_detail(SonareVocalErrorDetail* detail);
 
 /// @brief Creates a session over mono source PCM; @p sample_rate must lie in [8000, 384000] Hz.

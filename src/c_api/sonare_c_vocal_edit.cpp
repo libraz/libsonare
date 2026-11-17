@@ -34,7 +34,7 @@ namespace {
 thread_local SonareVocalErrorDetail last_detail = [] {
   SonareVocalErrorDetail detail{};
   detail.struct_size = sizeof(detail);
-  detail.schema_version = SONARE_VOCAL_EDIT_API_VERSION;
+  detail.schema_version = SONARE_VOCAL_EDIT_ABI_VERSION;
   return detail;
 }();
 
@@ -43,7 +43,7 @@ void initialize(T* value) {
   if (!value) return;
   *value = {};
   value->struct_size = sizeof(T);
-  value->schema_version = SONARE_VOCAL_EDIT_API_VERSION;
+  value->schema_version = SONARE_VOCAL_EDIT_ABI_VERSION;
 }
 
 template <typename T>
@@ -54,7 +54,7 @@ void require_pointer(const T* value, const char* field) {
 template <typename T>
 void require_header(const T* value, const char* field) {
   require_pointer(value, field);
-  if (value->struct_size < sizeof(T) || value->schema_version != SONARE_VOCAL_EDIT_API_VERSION) {
+  if (value->struct_size < sizeof(T) || value->schema_version != SONARE_VOCAL_EDIT_ABI_VERSION) {
     throw sonare::SonareException(sonare::ErrorCode::InvalidParameter, field);
   }
 }
@@ -139,13 +139,13 @@ SonareError invoke(F&& action) {
 }
 }  // namespace
 
-uint32_t sonare_vocal_edit_api_version(void) { return SONARE_VOCAL_EDIT_API_VERSION; }
+uint32_t sonare_vocal_edit_abi_version(void) { return SONARE_VOCAL_EDIT_ABI_VERSION; }
 
 void sonare_vocal_analysis_init(SonareVocalAnalysis* analysis) {
   if (!analysis) return;
   *analysis = {};
   analysis->struct_size = sizeof(*analysis);
-  analysis->schema_version = SONARE_VOCAL_EDIT_API_VERSION;
+  analysis->schema_version = SONARE_VOCAL_EDIT_ABI_VERSION;
   const sonare::PitchConfig pitch;
   analysis->samples_per_frame = pitch.hop_length;
   analysis->frame_length_samples = static_cast<uint32_t>(pitch.frame_length);
@@ -165,7 +165,7 @@ void sonare_vocal_create_options_init(SonareVocalCreateOptions* options) {
   if (!options) return;
   *options = {};
   options->struct_size = sizeof(*options);
-  options->schema_version = SONARE_VOCAL_EDIT_API_VERSION;
+  options->schema_version = SONARE_VOCAL_EDIT_ABI_VERSION;
   options->edge_fade_ms = 5.0;
   options->vibrato_cutoff_hz = 3.0;
   options->segmentation_threshold_cents = 50.0;
@@ -191,7 +191,7 @@ void sonare_vocal_restore_options_init(SonareVocalRestoreOptions* options) {
   sonare_vocal_create_options_init(&create);
   *options = {};
   options->struct_size = sizeof(*options);
-  options->schema_version = SONARE_VOCAL_EDIT_API_VERSION;
+  options->schema_version = SONARE_VOCAL_EDIT_ABI_VERSION;
   options->max_history_bytes = create.max_history_bytes;
   options->max_cache_bytes = create.max_cache_bytes;
   options->max_undo_depth = create.max_undo_depth;
@@ -202,7 +202,7 @@ void sonare_vocal_note_edit_init(SonareVocalNoteEdit* edit) {
   if (!edit) return;
   *edit = {};
   edit->struct_size = sizeof(*edit);
-  edit->schema_version = SONARE_VOCAL_EDIT_API_VERSION;
+  edit->schema_version = SONARE_VOCAL_EDIT_ABI_VERSION;
   edit->max_correction_semitones = 12.0;
   edit->drift_scale = 1.0;
   edit->vibrato_scale = 1.0;
@@ -212,11 +212,11 @@ void sonare_vocal_operation_init(SonareVocalOperation* operation) {
   if (!operation) return;
   *operation = {};
   operation->struct_size = sizeof(*operation);
-  operation->schema_version = SONARE_VOCAL_EDIT_API_VERSION;
+  operation->schema_version = SONARE_VOCAL_EDIT_ABI_VERSION;
   operation->merge_policy = SONARE_VOCAL_MERGE_PRESERVE;
   sonare_vocal_note_edit_init(&operation->edit);
   operation->transition.struct_size = sizeof(operation->transition);
-  operation->transition.schema_version = SONARE_VOCAL_EDIT_API_VERSION;
+  operation->transition.schema_version = SONARE_VOCAL_EDIT_ABI_VERSION;
 }
 
 void sonare_vocal_notes_result_init(SonareVocalNotesResult* v) { initialize(v); }
@@ -228,15 +228,15 @@ void sonare_vocal_state_bytes_init(SonareVocalStateBytes* v) { initialize(v); }
 void sonare_vocal_capabilities_init(SonareVocalCapabilities* v) { initialize(v); }
 void sonare_vocal_error_detail_init(SonareVocalErrorDetail* v) { initialize(v); }
 void sonare_vocal_last_error_detail(SonareVocalErrorDetail* v) {
-  if (v && v->struct_size >= sizeof(*v) && v->schema_version == SONARE_VOCAL_EDIT_API_VERSION)
+  if (v && v->struct_size >= sizeof(*v) && v->schema_version == SONARE_VOCAL_EDIT_ABI_VERSION)
     *v = last_detail;
 }
 
-int sonare_vocal_available(void) {
+bool sonare_c_detail::vocal_edit_compiled_in() noexcept {
 #if defined(SONARE_WITH_PITCH_EDITOR)
-  return 1;
+  return true;
 #else
-  return 0;
+  return false;
 #endif
 }
 
@@ -294,6 +294,8 @@ static_assert(static_cast<int>(vocal::PitchTargetMode::kCurve) == SONARE_VOCAL_T
                   static_cast<int>(vocal::FormantMode::kShift) == SONARE_VOCAL_FORMANT_SHIFT &&
                   static_cast<int>(vocal::MergeMode::kResetEdits) == SONARE_VOCAL_MERGE_RESET,
               "SonareVocal* ordinals must mirror the vocal edit enums");
+static_assert(vocal::VocalCapabilities{}.abi_version == SONARE_VOCAL_EDIT_ABI_VERSION,
+              "VocalCapabilities::abi_version must equal SONARE_VOCAL_EDIT_ABI_VERSION");
 SonareVocalStateToken map_token(const vocal::VocalStateToken& v) {
   return {v.epoch, v.committed_revision, v.draft_id, v.draft_generation, 0, 1};
 }
@@ -737,7 +739,7 @@ SonareError sonare_vocal_session_capabilities(const SonareVocalEditSession* s,
   SONARE_C_API_ENTRY;
   VOCAL_OUTPUT_ACTION(
       out, require_pointer(s, "session"); const auto c = s->value.capabilities();
-      out->api_version = c.api_version; out->profile_id = static_cast<uint32_t>(c.profile);
+      out->abi_version = c.abi_version; out->profile_id = static_cast<uint32_t>(c.profile);
       out->monophonic_only = c.monophonic_only; out->analysis_cancellable = c.analysis_cancellable;
       out->minimum_formant_shift_semitones = c.min_formant_shift_semitones;
       out->maximum_formant_shift_semitones = c.max_formant_shift_semitones);

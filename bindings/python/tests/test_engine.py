@@ -31,6 +31,8 @@ def test_engine_abi_version() -> None:
 def test_voice_changer_abi_version() -> None:
     """The RVC POD ABI version is exposed for parity with Node/WASM."""
     v = voice_changer_abi_version()
+    if v is None:
+        pytest.skip("voice changer is compiled out")
     assert isinstance(v, int)
     assert v > 0
 

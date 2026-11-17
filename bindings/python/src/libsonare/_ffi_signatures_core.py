@@ -1094,10 +1094,9 @@ def configure_core_signatures(lib: ctypes.CDLL) -> None:
     lib.sonare_voice_changer_abi_version.restype = ctypes.c_uint32
     lib.sonare_voice_changer_abi_version.argtypes = []
 
-    # sonare_has_ffmpeg_support: returns 1 if the shared library was compiled
-    # with FFmpeg-backed decoding for M4A/AAC/FLAC/OGG, 0 otherwise.
-    lib.sonare_has_ffmpeg_support.restype = ctypes.c_int
-    lib.sonare_has_ffmpeg_support.argtypes = []
+    # sonare_has_feature: 1 if the named capabilities() feature key is compiled in.
+    lib.sonare_has_feature.restype = ctypes.c_int
+    lib.sonare_has_feature.argtypes = [ctypes.c_char_p]
 
     # --- Full analysis JSON ---
 

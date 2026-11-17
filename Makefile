@@ -894,6 +894,7 @@ conformance:
 	python3 -m unittest tests/conformance/test_playback_cli.py
 	python3 -m unittest tests/conformance/test_wasm_exception_scope.py
 	python3 -m unittest tests/conformance/test_wasm_feature_gate_scope.py
+	python3 -m unittest tests/conformance/test_capability_feature_gates.py
 	python3 -m unittest tests/conformance/test_binding_warning_flags.py
 	python3 tests/conformance/check_wasm_narrowing_scope.py
 	python3 -m unittest tests/conformance/test_wasm_narrowing_scope.py tests/conformance/test_wasm_pointer_return_scope.py

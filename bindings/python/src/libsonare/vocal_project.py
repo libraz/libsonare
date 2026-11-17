@@ -19,7 +19,7 @@ from ._ffi_types_vocal import (
     SonareVocalStateToken,
 )
 from ._ffi_types_vocal_project import (
-    SONARE_VOCAL_PROJECT_API_VERSION,
+    SONARE_VOCAL_PROJECT_ABI_VERSION,
     SONARE_VOCAL_REHYDRATE_ALREADY_READY,
     SONARE_VOCAL_REHYDRATE_REHYDRATED,
     SONARE_VOCAL_REHYDRATE_UNRESOLVED,
@@ -361,7 +361,7 @@ def _original_sources_to_c(
         )
         buffers.append(buffer)
         rows[index].struct_size = ctypes.sizeof(SonareProjectVocalOriginalSource)
-        rows[index].schema_version = SONARE_VOCAL_PROJECT_API_VERSION
+        rows[index].schema_version = SONARE_VOCAL_PROJECT_ABI_VERSION
         rows[index].source_id = source_id
         rows[index].mono = buffer.ctypes.data_as(ctypes.POINTER(ctypes.c_float))
         rows[index].sample_count = int(buffer.size)

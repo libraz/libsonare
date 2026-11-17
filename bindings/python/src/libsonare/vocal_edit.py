@@ -376,7 +376,7 @@ class VocalEditSession(_HandleOwner):
         **option_overrides: Any,
     ) -> None:
         lib = _get_lib()
-        if not int(lib.sonare_vocal_available()):
+        if not int(lib.sonare_has_feature(b"vocalEdit")):
             raise VocalEditError(6, "libsonare was built without vocal-edit support")
         source = _validate_samples("create_vocal_edit_session", samples)
         rate = _vocal_sample_rate(sample_rate)
@@ -491,7 +491,7 @@ class VocalEditSession(_HandleOwner):
             lib.sonare_vocal_session_capabilities(self._require_handle(), ctypes.byref(raw))
         )
         return VocalCapabilities(
-            api_version=int(raw.api_version),
+            abi_version=int(raw.abi_version),
             profile_id=int(raw.profile_id),
             monophonic_only=bool(raw.monophonic_only),
             analysis_cancellable=bool(raw.analysis_cancellable),
@@ -853,14 +853,16 @@ def _coordinate(
     return float(out.value)
 
 
-def vocal_edit_available() -> bool:
-    """Return whether the loaded native library includes vocal-edit support."""
-    return bool(_get_lib().sonare_vocal_available())
+def vocal_edit_abi_version() -> int | None:
+    """Return the vocal-edit C ABI version of the loaded native library.
 
-
-def vocal_edit_api_version() -> int:
-    """Return the vocal-edit C API version reported by the loaded native library."""
-    return int(_get_lib().sonare_vocal_edit_api_version())
+    ``None`` when libsonare was built without vocal-edit support; presence is
+    ``capabilities()["features"]["vocalEdit"]``.
+    """
+    lib = _get_lib()
+    if not int(lib.sonare_has_feature(b"vocalEdit")):
+        return None
+    return int(lib.sonare_vocal_edit_abi_version())
 
 
 def create_vocal_edit_session(
@@ -951,8 +953,7 @@ __all__ = [
     "VocalRenderJob",
     "create_vocal_edit_session",
     "restore_vocal_edit_session",
-    "vocal_edit_api_version",
-    "vocal_edit_available",
+    "vocal_edit_abi_version",
 ]
 
 _rebind_facade_exports(globals(), "libsonare._vocal_edit_")

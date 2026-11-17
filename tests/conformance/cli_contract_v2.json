@@ -13287,14 +13287,17 @@
               "keys": {
                 "acousticSim": "boolean",
                 "arrangement": "boolean",
+                "assist": "boolean",
                 "ffmpeg": "boolean",
                 "fx": "boolean",
+                "graph": "boolean",
                 "instrumentParamAutomation": "boolean",
                 "mastering": "boolean",
                 "mixing": "boolean",
                 "mixingAssistant": "boolean",
                 "pitchEditor": "boolean",
                 "playback": "boolean",
+                "project": "boolean",
                 "vocalEdit": "boolean",
                 "voiceChanger": "boolean"
               }

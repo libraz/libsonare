@@ -7,6 +7,7 @@
 #include <emscripten/emscripten.h>
 
 #include "bindings/common/common.h"
+#include "c_api/capability_features.h"
 #include "c_api/sonare_c_error_mapping.h"
 #include "util/error_classification.h"
 
@@ -125,6 +126,27 @@ constexpr bool capability_voice_changer_enabled() {
 #endif
 }
 
+constexpr bool capability_project_enabled() { return capability_arrangement_enabled(); }
+
+constexpr bool capability_graph_enabled() {
+#if defined(SONARE_WITH_GRAPH)
+  return true;
+#else
+  return false;
+#endif
+}
+
+// The composition-assist seam is never linked into this module.
+constexpr bool capability_assist_enabled() { return false; }
+
+constexpr bool capability_vocal_edit_enabled() {
+#if defined(SONARE_WITH_PITCH_EDITOR) && !defined(SONARE_WASM_ANALYSIS_ONLY)
+  return true;
+#else
+  return false;
+#endif
+}
+
 constexpr const char* capability_simd() {
 #if defined(__wasm_simd128__)
   return "wasm-simd128";
@@ -174,22 +196,9 @@ val js_capabilities() {
   result.set("platform", std::string("wasm32"));
 
   val features = val::object();
-  features.set("mastering", capability_mastering_enabled());
-  features.set("mixing", capability_mixing_enabled());
-  features.set("mixingAssistant", capability_mixing_assistant_enabled());
-  features.set("fx", capability_fx_enabled());
-  features.set("ffmpeg", capability_ffmpeg_enabled());
-  features.set("instrumentParamAutomation", capability_instrument_param_automation_enabled());
-  features.set("arrangement", capability_arrangement_enabled());
-  features.set("acousticSim", capability_acoustic_sim_enabled());
-  features.set("pitchEditor", capability_pitch_editor_enabled());
-#if defined(SONARE_WITH_PITCH_EDITOR) && !defined(SONARE_WASM_ANALYSIS_ONLY)
-  features.set("vocalEdit", true);
-#else
-  features.set("vocalEdit", false);
-#endif
-  features.set("voiceChanger", capability_voice_changer_enabled());
-  features.set("playback", capability_playback_enabled());
+#define SONARE_CAPABILITY_ROW(key, suffix, gate) features.set(key, capability_##suffix##_enabled());
+  SONARE_CAPABILITY_FEATURES(SONARE_CAPABILITY_ROW)
+#undef SONARE_CAPABILITY_ROW
   result.set("features", features);
 
   val decode = val::object();

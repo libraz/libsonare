@@ -154,7 +154,7 @@ class VocalAnalysisResult:
 
 @dataclass(frozen=True, slots=True)
 class VocalCapabilities:
-    api_version: int
+    abi_version: int
     profile_id: int
     monophonic_only: bool
     analysis_cancellable: bool

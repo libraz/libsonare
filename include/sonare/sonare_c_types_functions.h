@@ -569,6 +569,7 @@ SonareDiagnosticSeverity sonare_last_diagnostic_severity(size_t index);
 /// @details A string literal with static storage duration: never NULL, never
 ///          invalidated by any later call, and never to be freed.
 const char* sonare_version(void);
+/// @brief Returns SONARE_ENGINE_ABI_VERSION as compiled into the library.
 uint32_t sonare_engine_abi_version(void);
 
 /// @brief Returns a JSON document describing the capabilities of this build, or
@@ -585,12 +586,11 @@ uint32_t sonare_engine_abi_version(void);
 /// @return Pointer to a NUL-terminated JSON document, or NULL on failure.
 const char* sonare_capabilities_json(void);
 
-/// @brief Returns 1 if libsonare was compiled with FFmpeg-backed decoding for
-///        M4A/AAC/FLAC/OGG, 0 otherwise.
-/// @details This reflects the value of the @c SONARE_WITH_FFMPEG CMake option at
-///   build time. Language bindings expose this so test suites can conditionally
-///   exercise the FFmpeg decode path without false failures.
-int sonare_has_ffmpeg_support(void);
+/// @brief Returns 1 when the named feature is compiled into this build, 0 otherwise.
+/// @details Reads the same table as the @c features object of
+///   sonare_capabilities_json(), and takes its key names (@c "ffmpeg",
+///   @c "vocalEdit", @c "mastering", ...). An unknown name or NULL returns 0.
+int sonare_has_feature(const char* name);
 
 #ifdef __cplusplus
 }

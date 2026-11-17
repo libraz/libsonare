@@ -276,7 +276,7 @@ SonareVocalTransition transitionFromVal(const val& object) {
   }
   SonareVocalTransition result{};
   result.struct_size = sizeof(result);
-  result.schema_version = SONARE_VOCAL_EDIT_API_VERSION;
+  result.schema_version = SONARE_VOCAL_EDIT_ABI_VERSION;
   result.left_note_id =
       nonZeroId(checkedUintFromVal(property(object, "leftNoteId"), "leftNoteId"), "leftNoteId");
   result.right_note_id =
@@ -646,7 +646,7 @@ val renderResultToVal(const SonareVocalRenderResult& result) {
 
 val capabilitiesToVal(const SonareVocalCapabilities& capabilities) {
   val out = val::object();
-  out.set("apiVersion", capabilities.api_version);
+  out.set("abiVersion", capabilities.abi_version);
   out.set("profileId", capabilities.profile_id);
   out.set("monophonicOnly", capabilities.monophonic_only != 0);
   out.set("analysisCancellable", capabilities.analysis_cancellable != 0);
@@ -1024,13 +1024,10 @@ val js_vocal_edit_last_error_detail() {
   return result;
 }
 
-uint32_t js_vocal_edit_api_version() { return sonare_vocal_edit_api_version(); }
-
-int js_vocal_edit_available() { return sonare_vocal_available(); }
+uint32_t js_vocal_edit_abi_version() { return sonare_vocal_edit_abi_version(); }
 
 void registerVocalEditBindingsImpl() {
-  function("vocalEditApiVersion", &js_vocal_edit_api_version);
-  function("vocalEditAvailable", &js_vocal_edit_available);
+  function("vocalEditAbiVersion", &js_vocal_edit_abi_version);
   function("vocalEditSessionCreate", &js_vocal_edit_session_create);
   function("vocalEditSessionRestore", &js_vocal_edit_session_restore);
   function("vocalEditSessionDestroy", &js_vocal_edit_session_destroy);

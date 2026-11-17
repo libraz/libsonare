@@ -7,7 +7,7 @@
 
 // ============================================================================
 // Detailed per-domain analyzers (BPM / Rhythm / Dynamics / Timbre).
-// Public detect_key_candidates (default config); has_ffmpeg_support.
+// Public detect_key_candidates (default config).
 // These match the Node binding surface so feature parity holds across
 // languages.
 // ============================================================================
@@ -185,21 +185,12 @@ val js_detect_key_candidates_default(val samples, const val& sample_rate) {
   return out;
 }
 
-bool js_has_ffmpeg_support() {
-#ifdef SONARE_WITH_FFMPEG
-  return true;
-#else
-  return false;
-#endif
-}
-
 void registerQuickDetailedAnalysisBindings() {
   function("analyzeBpm", &js_analyze_bpm);
   function("analyzeRhythm", &js_analyze_rhythm);
   function("analyzeDynamics", &js_analyze_dynamics);
   function("analyzeTimbre", &js_analyze_timbre);
   function("detectKeyCandidates", &js_detect_key_candidates_default);
-  function("hasFfmpegSupport", &js_has_ffmpeg_support);
 }
 
 #endif  // __EMSCRIPTEN__

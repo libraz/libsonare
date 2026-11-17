@@ -34,7 +34,6 @@ from ._analysis import (
     detect_onsets,
     engine_abi_version,
     estimate_meter,
-    has_ffmpeg_support,
     version,
     voice_changer_abi_version,
 )
@@ -332,7 +331,6 @@ __all__ = [
     "capabilities",
     "engine_abi_version",
     "voice_changer_abi_version",
-    "has_ffmpeg_support",
     "version",
     "harmonic",
     "hpss",

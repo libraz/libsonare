@@ -6,8 +6,8 @@ The C ABI carries several *independent* version counters, not one:
     SONARE_PROJECT_ABI_VERSION         (include/sonare/sonare_c_project.h)
     SONARE_VOICE_CHANGER_ABI_VERSION   (include/sonare/sonare_c_voice_changer.h)
     SONARE_ACOUSTIC_ABI_VERSION        (include/sonare/sonare_c_acoustic.h)
-    SONARE_VOCAL_EDIT_API_VERSION      (include/sonare/sonare_c_vocal_edit.h)
-    SONARE_VOCAL_PROJECT_API_VERSION   (include/sonare/sonare_c_vocal_project.h)
+    SONARE_VOCAL_EDIT_ABI_VERSION      (include/sonare/sonare_c_vocal_edit.h)
+    SONARE_VOCAL_PROJECT_ABI_VERSION   (include/sonare/sonare_c_vocal_project.h)
     kEngineAbiVersion                  (src/rt/command.h)
 
 ``SONARE_ABI_VERSION`` (include/sonare/sonare_c.h) packs feature/project/voice-changer/
@@ -75,12 +75,12 @@ def c_source_of_truth() -> dict[str, int]:
     )
     vocal_edit = _find_int(
         public_header("sonare_c_vocal_edit.h").read_text(),
-        r"#define\s+SONARE_VOCAL_EDIT_API_VERSION\s+(\w+)",
+        r"#define\s+SONARE_VOCAL_EDIT_ABI_VERSION\s+(\w+)",
         "sonare_c_vocal_edit.h",
     )
     vocal_project = _find_int(
         public_header("sonare_c_vocal_project.h").read_text(),
-        r"#define\s+SONARE_VOCAL_PROJECT_API_VERSION\s+(\w+)",
+        r"#define\s+SONARE_VOCAL_PROJECT_ABI_VERSION\s+(\w+)",
         "sonare_c_vocal_project.h",
     )
     engine = _find_int(
@@ -117,7 +117,7 @@ MIRRORS: tuple[tuple[str, str, str], ...] = (
     # Project ABI.
     (
         "bindings/python/src/libsonare/_project_model.py",
-        r"EXPECTED_PROJECT_ABI_VERSION\s*=\s*(\w+)",
+        r"_EXPECTED_PROJECT_ABI_VERSION\s*=\s*(\w+)",
         "project",
     ),
     ("bindings/node/src/types_project.ts", r"EXPECTED_PROJECT_ABI_VERSION\s*=\s*(\w+)", "project"),
@@ -125,12 +125,12 @@ MIRRORS: tuple[tuple[str, str, str], ...] = (
     # Vocal edit / vocal project API (standalone counters).
     (
         "bindings/python/src/libsonare/_ffi_types_vocal.py",
-        r"SONARE_VOCAL_EDIT_API_VERSION\s*=\s*(\w+)",
+        r"SONARE_VOCAL_EDIT_ABI_VERSION\s*=\s*(\w+)",
         "vocal_edit",
     ),
     (
         "bindings/python/src/libsonare/_ffi_types_vocal_project.py",
-        r"SONARE_VOCAL_PROJECT_API_VERSION\s*=\s*(\w+)",
+        r"SONARE_VOCAL_PROJECT_ABI_VERSION\s*=\s*(\w+)",
         "vocal_project",
     ),
     # Engine ABI.

@@ -11104,7 +11104,7 @@
       },
       {
         "kind": "unsigned",
-        "name": "api_version",
+        "name": "abi_version",
         "offset": 8,
         "size": 4
       },

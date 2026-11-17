@@ -196,7 +196,7 @@ class VocalAnalysisResult:
     ) -> None: ...
 
 class VocalCapabilities:
-    api_version: int
+    abi_version: int
     profile_id: int
     monophonic_only: bool
     analysis_cancellable: bool
@@ -204,7 +204,7 @@ class VocalCapabilities:
     maximum_formant_shift_semitones: float
     def __init__(
         self,
-        api_version: int,
+        abi_version: int,
         profile_id: int,
         monophonic_only: bool,
         analysis_cancellable: bool,
@@ -498,8 +498,7 @@ class VocalRenderJob:
     def next(self, cancel: Callable[[], bool] | None = ...) -> bool: ...
     def finalize(self, cancel: Callable[[], bool] | None = ...) -> VocalRenderResult: ...
 
-def vocal_edit_api_version() -> int: ...
-def vocal_edit_available() -> bool: ...
+def vocal_edit_abi_version() -> int | None: ...
 def create_vocal_edit_session(
     samples: Sequence[float] | NDArray[Any],
     sample_rate: int,

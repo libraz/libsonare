@@ -341,7 +341,7 @@ def test_project_cli_exports_smf_and_midi_render_smoke() -> None:
     """The Python CLI exposes project validation, SMF export/import, and MIDI render."""
     from libsonare import Project, project_abi_version
 
-    if project_abi_version() == 0:
+    if project_abi_version() is None:
         pytest.skip("arrangement/project ABI is not available")
 
     with tempfile.TemporaryDirectory() as tmpdir:

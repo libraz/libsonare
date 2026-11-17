@@ -140,7 +140,7 @@ TEST_CASE("CLI doctor command", "[cli]") {
     REQUIRE(capabilities["version"].as_string() == version());
     REQUIRE(capabilities["abi"]["project"].as_number() == SONARE_PROJECT_ABI_VERSION);
     REQUIRE(capabilities["abi"]["engine"].as_number() == sonare_engine_abi_version());
-    REQUIRE(capabilities["features"]["ffmpeg"].as_bool() == (sonare_has_ffmpeg_support() != 0));
+    REQUIRE(capabilities["features"]["ffmpeg"].as_bool() == (sonare_has_feature("ffmpeg") != 0));
   }
 }
 

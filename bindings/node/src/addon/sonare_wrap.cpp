@@ -197,8 +197,6 @@ Napi::Object SonareWrap::Init(Napi::Env env, Napi::Object exports) {
   exports.Set("capabilities", Napi::Function::New(env, &SonareWrap::Capabilities, "capabilities"));
   exports.Set("capabilityCatalog",
               Napi::Function::New(env, &SonareWrap::CapabilityCatalog, "capabilityCatalog"));
-  exports.Set("hasFfmpegSupport",
-              Napi::Function::New(env, &SonareWrap::HasFfmpegSupport, "hasFfmpegSupport"));
 
   // Effects
   exports.Set("hpss", Napi::Function::New(env, &SonareWrap::Hpss, "hpss"));

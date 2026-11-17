@@ -128,6 +128,8 @@ std::vector<sonare::Diagnostic>& last_diagnostics_storage() noexcept;
 /// same call.
 void set_last_diagnostics(const std::vector<sonare::Diagnostic>& diagnostics);
 SonareError map_sonare_exception(const SonareException& e);
+/// @brief Whether the vocal-edit surface was compiled into this build.
+bool vocal_edit_compiled_in() noexcept;
 /// @brief Records the exception currently being handled by an active catch.
 /// @pre Must be called from a `catch (...)` handler while the exception is
 ///      active; it rethrows that exception to classify it.

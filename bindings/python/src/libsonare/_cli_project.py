@@ -440,7 +440,8 @@ def cmd_project(args: argparse.Namespace) -> int:
     if subcommand in _PROJECT_NO_OUTPUT and getattr(args, "output", None):
         raise ValueError(f"project {subcommand} does not write an output file; remove --output")
     if subcommand == "abi":
-        version = project_abi_version()
+        # The CLI contract prints 0 when arrangement support is compiled out.
+        version = project_abi_version() or 0
         print(_strict_json_dumps({"abi_version": version}) if args.json else version)
         return 0
     if subcommand == "new":

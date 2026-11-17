@@ -1188,10 +1188,3 @@ Napi::Value SonareWrap::Capabilities(const Napi::CallbackInfo& info) {
   return parsed;
   SONARE_NODE_CATCH(env)
 }
-
-Napi::Value SonareWrap::HasFfmpegSupport(const Napi::CallbackInfo& info) {
-  Napi::Env env = info.Env();
-  SONARE_NODE_TRY
-  return Napi::Boolean::New(env, sonare_has_ffmpeg_support() != 0);
-  SONARE_NODE_CATCH(env)
-}

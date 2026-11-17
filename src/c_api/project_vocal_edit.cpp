@@ -38,13 +38,13 @@ void init_value(T* value) {
   if (value == nullptr) return;
   *value = {};
   value->struct_size = sizeof(T);
-  value->schema_version = SONARE_VOCAL_PROJECT_API_VERSION;
+  value->schema_version = SONARE_VOCAL_PROJECT_ABI_VERSION;
 }
 
 template <typename T>
 bool initialized(const T* value) noexcept {
   return value != nullptr && value->struct_size >= sizeof(T) &&
-         value->schema_version == SONARE_VOCAL_PROJECT_API_VERSION;
+         value->schema_version == SONARE_VOCAL_PROJECT_ABI_VERSION;
 }
 
 template <size_t N>
@@ -369,7 +369,7 @@ SonareError sonare_project_apply_vocal_edit(SonareProject* project,
   if (!result || !initialized(result)) return SONARE_ERROR_INVALID_PARAMETER;
   *result = {};
   result->struct_size = sizeof(*result);
-  result->schema_version = SONARE_VOCAL_PROJECT_API_VERSION;
+  result->schema_version = SONARE_VOCAL_PROJECT_ABI_VERSION;
 #if defined(SONARE_WITH_ARRANGEMENT) && defined(SONARE_WITH_PITCH_EDITOR)
   if (project == nullptr || desc == nullptr || !initialized(desc) || !valid_id(desc->clip_id) ||
       desc->take_id == std::numeric_limits<uint32_t>::max()) {
@@ -563,7 +563,7 @@ SonareError sonare_project_get_vocal_edit_dependencies(
   if (!result || !initialized(result)) return SONARE_ERROR_INVALID_PARAMETER;
   *result = {};
   result->struct_size = sizeof(*result);
-  result->schema_version = SONARE_VOCAL_PROJECT_API_VERSION;
+  result->schema_version = SONARE_VOCAL_PROJECT_ABI_VERSION;
 #if defined(SONARE_WITH_ARRANGEMENT)
   if (project == nullptr) return SONARE_ERROR_INVALID_PARAMETER;
   SONARE_C_TRY
@@ -655,7 +655,7 @@ SonareError sonare_project_rehydrate_vocal_edits(SonareProject* project,
   if (!result || !initialized(result)) return SONARE_ERROR_INVALID_PARAMETER;
   *result = {};
   result->struct_size = sizeof(*result);
-  result->schema_version = SONARE_VOCAL_PROJECT_API_VERSION;
+  result->schema_version = SONARE_VOCAL_PROJECT_ABI_VERSION;
 #if defined(SONARE_WITH_ARRANGEMENT) && defined(SONARE_WITH_PITCH_EDITOR)
   if (project == nullptr || (original_count != 0 && originals == nullptr) ||
       original_count > sonare::resource::kDefaultProjectImportResourceLimits.max_entities) {

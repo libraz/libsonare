@@ -177,17 +177,18 @@ endif()
 # then advertises a subsystem the build actually has as missing. Deriving them
 # once from the resolved options, after every dependency rule above has run, is
 # what keeps the per-target copies from disagreeing.
-add_compile_definitions(
-  SONARE_BUILD_MASTERING=$<IF:$<BOOL:${BUILD_MASTERING}>,1,0>
-  SONARE_BUILD_MIXING=$<IF:$<BOOL:${BUILD_MIXING}>,1,0>
-  SONARE_BUILD_MIXING_ASSISTANT=$<IF:$<BOOL:${BUILD_MIXING_ASSISTANT}>,1,0>
-  SONARE_BUILD_FX=$<IF:$<BOOL:${BUILD_FX}>,1,0>
-  SONARE_BUILD_ARRANGEMENT=$<IF:$<BOOL:${BUILD_ARRANGEMENT}>,1,0>
-  SONARE_BUILD_ACOUSTIC_SIM=$<IF:$<BOOL:${BUILD_ACOUSTIC_SIM}>,1,0>
-  SONARE_BUILD_PITCH_EDITOR=$<IF:$<BOOL:${BUILD_PITCH_EDITOR}>,1,0>
-  SONARE_BUILD_VOICE_CHANGER=$<IF:$<BOOL:${BUILD_VOICE_CHANGER}>,1,0>
-  SONARE_BUILD_PLAYBACK=$<IF:$<BOOL:${BUILD_PLAYBACK}>,1,0>
-)
+#
+# Every BUILD_<X> option is either a feature gate, listed here and reported as a
+# `features` key, or a build-shape option listed below. A conformance test
+# fails on an option in neither list, so a new gate cannot ship without a key.
+set(SONARE_FEATURE_GATES
+  MASTERING MIXING MIXING_ASSISTANT GRAPH FX ACOUSTIC_SIM PITCH_EDITOR VOICE_CHANGER PLAYBACK
+  ARRANGEMENT ASSIST)
+set(SONARE_BUILD_SHAPE_OPTIONS
+  TESTING WASM SHARED CLI BENCH TUNING COREAUDIO COREMIDI AU_HOST)
+foreach(gate IN LISTS SONARE_FEATURE_GATES)
+  add_compile_definitions(SONARE_BUILD_${gate}=$<IF:$<BOOL:${BUILD_${gate}}>,1,0>)
+endforeach()
 
 set(SONARE_WITH_FFMPEG "AUTO" CACHE STRING
     "FFmpeg-based decoding for M4A/AAC/FLAC/OGG: ON (require), OFF (disable), AUTO (detect via pkg-config, default)")

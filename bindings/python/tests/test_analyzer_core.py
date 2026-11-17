@@ -17,11 +17,59 @@ def test_version() -> None:
     assert len(v) > 0
 
 
-def test_has_ffmpeg_support_returns_bool() -> None:
-    """has_ffmpeg_support is exposed and returns a bool."""
+def test_ffmpeg_presence_is_a_capabilities_feature() -> None:
+    """FFmpeg presence is read from capabilities(); no standalone probe exists."""
     import libsonare
+    from libsonare._runtime import _get_lib
 
-    assert isinstance(libsonare.has_ffmpeg_support(), bool)
+    ffmpeg = libsonare.capabilities()["features"]["ffmpeg"]
+    assert isinstance(ffmpeg, bool)
+    assert ffmpeg == bool(_get_lib().sonare_has_feature(b"ffmpeg"))
+    assert not hasattr(libsonare, "has_ffmpeg_support")
+
+
+def test_capabilities_features_agree_with_has_feature() -> None:
+    """Every capabilities() feature key matches the native sonare_has_feature probe."""
+    import libsonare
+    from libsonare._runtime import _get_lib
+
+    lib = _get_lib()
+    features = libsonare.capabilities()["features"]
+    assert features
+    for key, present in features.items():
+        assert bool(lib.sonare_has_feature(key.encode())) is bool(present), key
+
+
+def test_vocal_edit_abi_version_is_none_when_feature_is_compiled_out() -> None:
+    """vocal_edit_abi_version reports None when sonare_has_feature says vocalEdit is absent."""
+    from unittest import mock
+
+    from libsonare import vocal_edit
+
+    lib = mock.Mock()
+    lib.sonare_has_feature.return_value = 0
+    with mock.patch.object(vocal_edit, "_get_lib", return_value=lib):
+        assert vocal_edit.vocal_edit_abi_version() is None
+    lib.sonare_has_feature.assert_called_once_with(b"vocalEdit")
+    lib.sonare_vocal_edit_abi_version.assert_not_called()
+
+
+def test_abi_versions_are_none_when_feature_is_compiled_out() -> None:
+    """voice_changer_abi_version / project_abi_version report None for a zero ABI."""
+    from unittest import mock
+
+    import libsonare
+    from libsonare import _analysis_music, _project_model
+
+    lib = mock.Mock()
+    lib.sonare_voice_changer_abi_version.return_value = 0
+    lib.sonare_project_abi_version.return_value = 0
+    with (
+        mock.patch.object(_analysis_music, "_get_lib", return_value=lib),
+        mock.patch.object(_project_model, "_get_lib", return_value=lib),
+    ):
+        assert libsonare.voice_changer_abi_version() is None
+        assert libsonare.project_abi_version() is None
 
 
 def test_capabilities_returns_native_build_descriptor() -> None:
@@ -32,9 +80,8 @@ def test_capabilities_returns_native_build_descriptor() -> None:
 
     assert isinstance(descriptor, dict)
     assert descriptor["version"] == libsonare.version()
-    assert descriptor["abi"]["project"] == libsonare.project_abi_version()
+    assert descriptor["abi"]["project"] == (libsonare.project_abi_version() or 0)
     assert descriptor["abi"]["engine"] == libsonare.engine_abi_version()
-    assert descriptor["features"]["ffmpeg"] is libsonare.has_ffmpeg_support()
     assert descriptor["decode"]["builtin"] == ["wav", "mp3"]
     assert isinstance(descriptor["platform"], str)
     assert isinstance(descriptor["simd"], str)

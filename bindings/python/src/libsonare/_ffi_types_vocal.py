@@ -11,7 +11,7 @@ import ctypes
 
 from ._cstruct import CStruct
 
-SONARE_VOCAL_EDIT_API_VERSION = 1
+SONARE_VOCAL_EDIT_ABI_VERSION = 1
 
 # Supported source sample-rate range for vocal sessions and project vocal edits.
 VOCAL_MIN_SAMPLE_RATE = 8000
@@ -264,7 +264,7 @@ class SonareVocalCapabilities(CStruct):
     _fields_ = [
         ("struct_size", ctypes.c_uint32),
         ("schema_version", ctypes.c_uint32),
-        ("api_version", ctypes.c_uint32),
+        ("abi_version", ctypes.c_uint32),
         ("profile_id", ctypes.c_uint32),
         ("monophonic_only", ctypes.c_uint32),
         ("analysis_cancellable", ctypes.c_uint32),

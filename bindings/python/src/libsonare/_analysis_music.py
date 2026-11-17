@@ -681,8 +681,11 @@ def engine_abi_version() -> int:
     return int(_get_lib().sonare_engine_abi_version())
 
 
-def voice_changer_abi_version() -> int:
+def voice_changer_abi_version() -> int | None:
     """Return the realtime voice-changer ABI version.
+
+    ``None`` when libsonare was built without the voice changer; presence is
+    ``capabilities()["features"]["voiceChanger"]``.
 
     Bindings that rely on the flat POD ``SonareRealtimeVoiceChangerConfig``
     layout (Rust FFI, raw C consumers) should call this at attach time and
@@ -690,16 +693,4 @@ def voice_changer_abi_version() -> int:
     JSON-based callers (this binding) do not need to gate on this; it is
     exposed for parity with the C/Node/WASM surfaces.
     """
-    return int(_get_lib().sonare_voice_changer_abi_version())
-
-
-def has_ffmpeg_support() -> bool:
-    """Return whether the loaded libsonare was compiled with FFmpeg support.
-
-    When ``True``, :meth:`Audio.from_file` / :meth:`Audio.from_memory` can
-    decode M4A, AAC, FLAC, OGG, Opus and any other container/codec supported
-    by the linked FFmpeg. When ``False``, only WAV and MP3 are supported
-    and unsupported formats raise an actionable :class:`RuntimeError`.
-    """
-    lib = _get_lib()
-    return bool(lib.sonare_has_ffmpeg_support())
+    return int(_get_lib().sonare_voice_changer_abi_version()) or None

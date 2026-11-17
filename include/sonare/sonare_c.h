@@ -26,6 +26,7 @@ extern "C" {
 #include "sonare_c_streaming.h"
 #include "sonare_c_transcribe.h"
 #include "sonare_c_types.h"
+#include "sonare_c_version.h"
 #include "sonare_c_vocal_edit.h"
 
 // ============================================================================

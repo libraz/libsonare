@@ -11,7 +11,7 @@ import pytest
 from libsonare import ErrorCode
 from libsonare._errors import SonareError, SonareValueError
 from libsonare._ffi_types_vocal import (
-    SONARE_VOCAL_EDIT_API_VERSION,
+    SONARE_VOCAL_EDIT_ABI_VERSION,
     SonareVocalAnalysis,
     SonareVocalAnalysisResult,
     SonareVocalCreateOptions,
@@ -32,7 +32,7 @@ from libsonare.vocal_edit import (
     VocalTransition,
     create_vocal_edit_session,
     restore_vocal_edit_session,
-    vocal_edit_api_version,
+    vocal_edit_abi_version,
 )
 
 from ._helpers import raises_coded
@@ -45,7 +45,7 @@ class _CancelProbeError(Exception):
 def _native_vocal_available() -> bool:
     try:
         lib = _get_lib()
-        return bool(hasattr(lib, "sonare_vocal_available") and lib.sonare_vocal_available())
+        return bool(lib.sonare_has_feature(b"vocalEdit"))
     except Exception:
         return False
 
@@ -369,8 +369,8 @@ def test_cancellation_callback_exception_is_propagated(operation: str) -> None:
                         job.finalize(cancel=failing_probe)
 
 
-def test_vocal_edit_api_version_is_module_level() -> None:
-    assert vocal_edit_api_version() == SONARE_VOCAL_EDIT_API_VERSION
+def test_vocal_edit_abi_version_is_module_level() -> None:
+    assert vocal_edit_abi_version() == SONARE_VOCAL_EDIT_ABI_VERSION
 
 
 def test_restore_honours_limits_and_refuses_zero_render_jobs() -> None:
@@ -445,12 +445,12 @@ def test_transition_rejects_negative_window_and_out_of_range_strength(
         )
 
 
-def test_vocal_api_version_mismatch_is_refused_when_configuring_signatures() -> None:
+def test_vocal_abi_version_mismatch_is_refused_when_configuring_signatures() -> None:
     from unittest.mock import MagicMock
 
     from libsonare._ffi_vocal import configure_vocal_signatures
 
     lib = MagicMock()
-    lib.sonare_vocal_edit_api_version.return_value = SONARE_VOCAL_EDIT_API_VERSION + 1
+    lib.sonare_vocal_edit_abi_version.return_value = SONARE_VOCAL_EDIT_ABI_VERSION + 1
     with raises_coded(ErrorCode.ABI_MISMATCH, match="ABI mismatch"):
         configure_vocal_signatures(lib)

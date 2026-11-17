@@ -28,7 +28,7 @@ from pathlib import Path
 
 import pytest
 
-from libsonare._ffi_types_vocal import SONARE_VOCAL_EDIT_API_VERSION
+from libsonare._ffi_types_vocal import SONARE_VOCAL_EDIT_ABI_VERSION
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 INCLUDE_DIR = REPO_ROOT / "include" / "sonare"
@@ -257,7 +257,7 @@ def _actual_shape(ctypes_type: object) -> str:
 
 
 # Probes a configure function calls, with the value its own version check accepts.
-_VERSION_PROBES = {"sonare_vocal_edit_api_version": SONARE_VOCAL_EDIT_API_VERSION}
+_VERSION_PROBES = {"sonare_vocal_edit_abi_version": SONARE_VOCAL_EDIT_ABI_VERSION}
 
 
 class _SignatureRecorder:

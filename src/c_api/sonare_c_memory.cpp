@@ -1,8 +1,10 @@
 #include <sonare/sonare_c.h>
 
+#include <cstring>
 #include <string>
 #include <thread>
 
+#include "capability_features.h"
 #include "rt/command.h"
 #include "sonare.h"
 #include "sonare_c_internal.h"
@@ -141,6 +143,46 @@ constexpr bool capability_voice_changer_enabled() {
 #endif
 }
 
+constexpr bool capability_ffmpeg_enabled() {
+#ifdef SONARE_WITH_FFMPEG
+  return true;
+#else
+  return false;
+#endif
+}
+
+constexpr bool capability_graph_enabled() {
+#if defined(SONARE_BUILD_GRAPH) && SONARE_BUILD_GRAPH
+  return true;
+#else
+  return false;
+#endif
+}
+
+constexpr bool capability_assist_enabled() {
+#if defined(SONARE_BUILD_ASSIST) && SONARE_BUILD_ASSIST
+  return true;
+#else
+  return false;
+#endif
+}
+
+constexpr bool capability_project_enabled() { return capability_arrangement_enabled(); }
+
+bool capability_vocal_edit_enabled() { return vocal_edit_compiled_in(); }
+
+struct CapabilityFeature {
+  const char* name;
+  bool (*enabled)();
+};
+
+// The one table behind both the `features` object of sonare_capabilities_json()
+// and sonare_has_feature(), so the two can never disagree on a name or a value.
+#define SONARE_CAPABILITY_ROW(key, suffix, gate) {key, capability_##suffix##_enabled},
+constexpr CapabilityFeature kCapabilityFeatures[] = {
+    SONARE_CAPABILITY_FEATURES(SONARE_CAPABILITY_ROW)};
+#undef SONARE_CAPABILITY_ROW
+
 }  // namespace
 
 void sonare_free_floats(float* ptr) { delete[] ptr; }
@@ -236,7 +278,10 @@ SonareDiagnosticSeverity sonare_last_diagnostic_severity(size_t index) {
 
 const char* sonare_version(void) { return SONARE_VERSION_STRING; }
 
-uint32_t sonare_engine_abi_version(void) { return sonare::rt::kEngineAbiVersion; }
+static_assert(SONARE_ENGINE_ABI_VERSION == sonare::rt::kEngineAbiVersion,
+              "SONARE_ENGINE_ABI_VERSION must equal rt::kEngineAbiVersion");
+
+uint32_t sonare_engine_abi_version(void) { return SONARE_ENGINE_ABI_VERSION; }
 
 const char* sonare_capabilities_json(void) {
   SONARE_C_TRY
@@ -244,21 +289,17 @@ const char* sonare_capabilities_json(void) {
   capabilities = "{\"version\":\"" SONARE_VERSION_STRING "\",\"abi\":{\"project\":" +
                  std::to_string(SONARE_PROJECT_ABI_VERSION) +
                  ",\"engine\":" + std::to_string(sonare::rt::kEngineAbiVersion) +
-                 "},\"platform\":\"" + capability_platform() +
-                 "\",\"features\":{\"mastering\":" + json_bool(capability_mastering_enabled()) +
-                 ",\"mixing\":" + json_bool(capability_mixing_enabled()) +
-                 ",\"mixingAssistant\":" + json_bool(capability_mixing_assistant_enabled()) +
-                 ",\"fx\":" + json_bool(capability_fx_enabled()) +
-                 ",\"ffmpeg\":" + json_bool(sonare_has_ffmpeg_support() != 0) +
-                 ",\"instrumentParamAutomation\":" +
-                 json_bool(capability_instrument_param_automation_enabled()) +
-                 ",\"arrangement\":" + json_bool(capability_arrangement_enabled()) +
-                 ",\"acousticSim\":" + json_bool(capability_acoustic_sim_enabled()) +
-                 ",\"playback\":" + json_bool(capability_playback_enabled()) +
-                 ",\"pitchEditor\":" + json_bool(capability_pitch_editor_enabled()) +
-                 ",\"vocalEdit\":" + json_bool(sonare_vocal_available() != 0) +
-                 ",\"voiceChanger\":" + json_bool(capability_voice_changer_enabled()) +
-                 "},\"decode\":{\"builtin\":[\"wav\",\"mp3\"],\"ffmpeg\":[";
+                 "},\"platform\":\"" + capability_platform() + "\",\"features\":{";
+  bool first = true;
+  for (const CapabilityFeature& feature : kCapabilityFeatures) {
+    if (!first) capabilities += ',';
+    first = false;
+    capabilities += '"';
+    capabilities += feature.name;
+    capabilities += "\":";
+    capabilities += json_bool(feature.enabled());
+  }
+  capabilities += "},\"decode\":{\"builtin\":[\"wav\",\"mp3\"],\"ffmpeg\":[";
 #ifdef SONARE_WITH_FFMPEG
   capabilities += "\"m4a\",\"aac\",\"flac\",\"ogg\",\"opus\",\"wma\"";
 #endif
@@ -272,15 +313,15 @@ const char* sonare_capabilities_json(void) {
   SONARE_C_CATCH_RETURN(nullptr)
 }
 
-uint32_t sonare_abi_version(void) { return SONARE_ABI_VERSION; }
-
-int sonare_has_ffmpeg_support(void) {
-#ifdef SONARE_WITH_FFMPEG
-  return 1;
-#else
+int sonare_has_feature(const char* name) {
+  if (name == nullptr) return 0;
+  for (const CapabilityFeature& feature : kCapabilityFeatures) {
+    if (std::strcmp(feature.name, name) == 0) return feature.enabled() ? 1 : 0;
+  }
   return 0;
-#endif
 }
+
+uint32_t sonare_abi_version(void) { return SONARE_ABI_VERSION; }
 
 void sonare_free_stft_result(SonareStftResult* r) {
   if (r) {

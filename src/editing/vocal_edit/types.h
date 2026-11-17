@@ -258,7 +258,7 @@ struct StateChangeResult {
 };
 
 struct VocalCapabilities {
-  uint32_t api_version = 1;
+  uint32_t abi_version = 1;
   RenderProfile profile = RenderProfile::kVocalPsolaV1;
   bool monophonic_only = true;
   bool analysis_cancellable = false;

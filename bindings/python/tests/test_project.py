@@ -24,7 +24,7 @@ from libsonare import (
     SonareError,
     project_abi_version,
 )
-from libsonare._project import EXPECTED_PROJECT_ABI_VERSION
+from libsonare._project_model import _EXPECTED_PROJECT_ABI_VERSION
 
 from ._helpers import raises_coded
 from ._project_helpers import _build_project
@@ -48,7 +48,7 @@ def _dangling_source_json() -> str:
 
 def test_project_abi_version_matches_expected() -> None:
     """The runtime project ABI version is exposed and matches the binding."""
-    assert project_abi_version() == EXPECTED_PROJECT_ABI_VERSION
+    assert project_abi_version() == _EXPECTED_PROJECT_ABI_VERSION
     assert project_abi_version() > 0
 
 

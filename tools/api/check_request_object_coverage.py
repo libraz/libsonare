@@ -96,7 +96,6 @@ METADATA_HELPERS = {
     "voiceChangerAbiVersion",
     "projectAbiVersion",
     "checkAbiVersion",
-    "hasFfmpegSupport",
     "isInitialized",
     "engineCapabilities",
     "masteringPresetNames",
