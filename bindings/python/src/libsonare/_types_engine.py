@@ -8,6 +8,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from enum import IntEnum
+from typing import Any
 
 import numpy as np
 
@@ -598,31 +599,20 @@ class Section:
     end: float
     energy_level: float
     confidence: float
-    canonical_name: str = ""
     group: int = 0
-
-    @property
-    def name(self) -> str:
-        if self.canonical_name:
-            return self.canonical_name
-        names = {
-            SectionType.INTRO: "Intro",
-            SectionType.VERSE: "Verse",
-            SectionType.PRE_CHORUS: "Pre-Chorus",
-            SectionType.CHORUS: "Chorus",
-            SectionType.BRIDGE: "Bridge",
-            SectionType.INSTRUMENTAL: "Instrumental",
-            SectionType.OUTRO: "Outro",
-            SectionType.UNKNOWN: "Unknown",
-        }
-        return names[self.type]
+    name: str = ""
 
 
-@dataclass(frozen=True, slots=True)
-class SectionResult:
-    """Song-structure analysis result."""
-
-    sections: list[Section]
+_SECTION_NAMES: dict[Any, str] = {
+    SectionType.INTRO: "Intro",
+    SectionType.VERSE: "Verse",
+    SectionType.PRE_CHORUS: "Pre-Chorus",
+    SectionType.CHORUS: "Chorus",
+    SectionType.BRIDGE: "Bridge",
+    SectionType.INSTRUMENTAL: "Instrumental",
+    SectionType.OUTRO: "Outro",
+    SectionType.UNKNOWN: "Unknown",
+}
 
 
 @dataclass(frozen=True, slots=True)
@@ -640,12 +630,12 @@ class Boundary:
     """Novelty score at the boundary."""
 
 
-@dataclass(frozen=True, slots=True)
+@dataclass(frozen=True, slots=True, eq=False)
 class BoundaryResult:
-    """Structural boundaries and the novelty curve they were picked from."""
+    """Structural boundaries and the novelty curve (float32) they were picked from."""
 
     boundaries: list[Boundary]
-    novelty_curve: list[float]
+    novelty_curve: np.ndarray
     """Scaled by its own maximum, so values are in [0, 1] and a peak of 1.0 means
     "the most novel frame here" rather than "a large change". Multiply by
     :attr:`novelty_peak` to recover the raw response ``absolute_threshold`` is
@@ -655,7 +645,6 @@ class BoundaryResult:
     sample_rate: int
     """The rate the analysis ran at, not the input's."""
     hop_length: int
-    n_frames: int
     frame_stride: int
     """Raw frames averaged per analysis frame; 1 unless the input was pooled."""
 

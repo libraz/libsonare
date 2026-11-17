@@ -71,24 +71,19 @@ def native_option_defaults() -> Any:
 
 
 def test_analyze_reports_downbeats_as_indices_into_beats(four_four_result) -> None:
-    """downbeat_indices addresses beat_times; it is not a parallel array."""
+    """downbeats are the beats that open a bar, drawn from beats in time order."""
     result = four_four_result
 
-    assert isinstance(result.downbeat_indices, list)
-    assert all(isinstance(index, int) for index in result.downbeat_indices)
+    assert isinstance(result.downbeats, list)
+    assert all(isinstance(beat, libsonare.Beat) for beat in result.downbeats)
     assert isinstance(result.downbeat_phase, int)
 
-    assert result.downbeat_indices, "an accented click track should yield at least one bar start"
-    assert len(result.downbeat_indices) <= len(result.beat_times)
-    for index in result.downbeat_indices:
-        assert 0 <= index < len(result.beat_times)
-    assert result.downbeat_indices == sorted(set(result.downbeat_indices))
-
-
-def test_downbeat_camel_case_aliases_mirror_snake_case(four_four_result) -> None:
-    """The camelCase aliases return the same objects as the snake_case fields."""
-    assert four_four_result.downbeatIndices == four_four_result.downbeat_indices
-    assert four_four_result.downbeatPhase == four_four_result.downbeat_phase
+    assert result.downbeats, "an accented click track should yield at least one bar start"
+    assert len(result.downbeats) <= len(result.beats)
+    beat_ids = {id(beat) for beat in result.beats}
+    assert all(id(beat) in beat_ids for beat in result.downbeats)
+    times = [beat.time_sec for beat in result.downbeats]
+    assert times == sorted(set(times))
 
 
 def test_analyze_keyword_defaults_match_native_option_defaults(native_option_defaults) -> None:

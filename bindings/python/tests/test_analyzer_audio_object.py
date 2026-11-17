@@ -160,9 +160,6 @@ def test_analyze_with_signal(analyze_sine_result) -> None:
     assert result.key.confidence >= 0.0
     assert result.time_signature.numerator > 0
     assert result.time_signature.denominator > 0
-    assert result.bpmConfidence == result.bpm_confidence
-    assert result.timeSignature == result.time_signature
-    assert result.beatTimes == result.beat_times
 
 
 ## Audio class properties
@@ -429,9 +426,9 @@ def test_analysis_result_types(analyze_sine_result) -> None:
     assert isinstance(result.key.confidence, float)
     assert isinstance(result.time_signature.numerator, int)
     assert isinstance(result.time_signature.denominator, int)
-    assert isinstance(result.beat_times, list)
-    for t in result.beat_times:
-        assert isinstance(t, float)
+    assert isinstance(result.beats, list)
+    for beat in result.beats:
+        assert isinstance(beat.time_sec, float)
 
 
 def test_audio_from_file_channel_keeps_the_channels_apart(tmp_path) -> None:

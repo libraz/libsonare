@@ -13,6 +13,7 @@ from .types import (
     AnalysisResult,
     AutomationCurve,
     AutoTuneResult,
+    Beat,
     BoundaryResult,
     BpmAnalysisResult,
     Capabilities,
@@ -82,7 +83,7 @@ from .types import (
     RoomGeometry,
     RoomMorphResult,
     RoomMorphStereoResult,
-    SectionResult,
+    Section,
     SendTiming,
     SpectrumReport,
     StftResult,
@@ -121,7 +122,7 @@ MasteringSoloParams: TypeAlias = dict[str, MasteringParamValue | str]
 # suggestion starts from (see mastering_preset_names; default "streaming").
 MasteringAssistantParams: TypeAlias = dict[str, MasteringParamValue | str]
 MasteringChainParams: TypeAlias = dict[str, float | bool]
-ProgressCallback: TypeAlias = Callable[[float, str], None]
+ProgressCallback: TypeAlias = Callable[[float, str], object]
 CancelCallback: TypeAlias = Callable[[], bool]
 
 # Restoration presets' repair stages, like every classical denoise
@@ -287,7 +288,7 @@ def detect_key(
     hop_length: int = 512,
     use_hpss: bool = False,
     loudness_weighted: bool = False,
-    high_pass_hz: float = 80.0,
+    chroma_high_pass_hz: float = 80.0,
     modes: Sequence[Mode | str] | str | None = None,
     profile: KeyProfile | str | None = None,
     genre_hint: str | None = None,
@@ -300,7 +301,7 @@ def detect_key_candidates(
     hop_length: int = 512,
     use_hpss: bool = False,
     loudness_weighted: bool = False,
-    high_pass_hz: float = 80.0,
+    chroma_high_pass_hz: float = 80.0,
     modes: Sequence[Mode | str] | str | None = None,
     profile: KeyProfile | str | None = None,
     genre_hint: str | None = None,
@@ -341,7 +342,7 @@ def analyze(
     start_bpm: float = 120.0,
     use_triads_only: bool = True,
     use_hpss: bool = False,
-    chroma_highpass_hz: float = 80.0,
+    chroma_high_pass_hz: float = 80.0,
     use_bass_weighted: bool = True,
     chroma_hop_multiplier: int = 4,
     use_chord_hmm: bool = True,
@@ -354,37 +355,11 @@ def analyze(
     meter_candidate_numerators: Sequence[int] | None = None,
     meter_denominator: int = 4,
     tuning_cents: float | str = "auto",
-) -> AnalysisResult: ...
-def analyze_with_progress(
-    samples: FloatSamples,
-    sample_rate: int,
     on_progress: ProgressCallback | None = None,
-    *,
     cancel: CancelCallback | None = None,
-    n_fft: int = 2048,
-    hop_length: int = 512,
-    bpm_min: float = 60.0,
-    bpm_max: float = 200.0,
-    start_bpm: float = 120.0,
-    use_triads_only: bool = True,
-    use_hpss: bool = False,
-    chroma_highpass_hz: float = 80.0,
-    use_bass_weighted: bool = True,
-    chroma_hop_multiplier: int = 4,
-    use_chord_hmm: bool = True,
-    use_chord_key_context: bool = False,
-    chord_hmm_beam_width: int = 24,
-    detect_chord_inversions: bool = False,
-    adaptive_tempo: bool = False,
-    tempo_update_interval_beats: int = 8,
-    compute_tempo_curve: bool = False,
-    meter_candidate_numerators: Sequence[int] | None = None,
-    meter_denominator: int = 4,
-    tuning_cents: float | str = "auto",
 ) -> AnalysisResult: ...
 def estimate_meter(
-    beat_times: Sequence[float],
-    beat_strengths: Sequence[float],
+    beats: Sequence[Beat],
     *,
     candidate_numerators: Sequence[int] | None = None,
     denominator: int = 4,
@@ -592,7 +567,7 @@ def analyze_sections(
     n_fft: int = 2048,
     hop_length: int = 512,
     min_section_sec: float = 4.0,
-) -> SectionResult: ...
+) -> list[Section]: ...
 def detect_boundaries(
     samples: FloatSamples,
     sample_rate: int,

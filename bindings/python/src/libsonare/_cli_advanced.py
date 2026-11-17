@@ -42,7 +42,7 @@ def cmd_rhythm(args: argparse.Namespace) -> int:
                     "syncopation": r.syncopation,
                     "pattern_regularity": r.pattern_regularity,
                     "tempo_stability": r.tempo_stability,
-                    "beat_intervals": _native_array_stats(r.beat_intervals),
+                    "beat_intervals": _native_array_stats(r.beat_intervals.tolist()),
                 }
             )
         )
@@ -95,7 +95,7 @@ def cmd_dynamics(args: argparse.Namespace) -> int:
                     "crest_factor": r.crest_factor,
                     "loudness_range_db": r.loudness_range_db,
                     "is_compressed": r.is_compressed,
-                    "loudness": _array_stats(r.loudness_rms_db),
+                    "loudness": _array_stats(r.loudness_rms_db.tolist()),
                 }
             )
         )
@@ -127,9 +127,9 @@ def cmd_timbre(args: argparse.Namespace) -> int:
                     "density": r.density,
                     "roughness": r.roughness,
                     "complexity": r.complexity,
-                    "spectral_centroid": _array_stats(r.spectral_centroid),
-                    "spectral_flatness": _array_stats(r.spectral_flatness),
-                    "spectral_rolloff": _array_stats(r.spectral_rolloff),
+                    "spectral_centroid": _array_stats(r.spectral_centroid.tolist()),
+                    "spectral_flatness": _array_stats(r.spectral_flatness.tolist()),
+                    "spectral_rolloff": _array_stats(r.spectral_rolloff.tolist()),
                 }
             )
         )

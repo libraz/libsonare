@@ -7,7 +7,10 @@ between languages see the same names. They intentionally violate PEP8 N802.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Literal, NotRequired, TypedDict
+from typing import TYPE_CHECKING, Literal, NotRequired, TypedDict
+
+if TYPE_CHECKING:
+    import numpy as np
 
 #: Names accepted for ``material_preset`` (the ``SONARE_MATERIAL_PRESET_*`` values).
 MaterialPresetName = Literal["none", "concrete", "wood", "curtain", "carpet", "glass"]
@@ -15,7 +18,7 @@ MaterialPresetName = Literal["none", "concrete", "wood", "curtain", "carpet", "g
 AcousticModeName = Literal["auto", "blind", "impulse_response"]
 
 
-@dataclass(frozen=True, slots=True)
+@dataclass(frozen=True, slots=True, eq=False)
 class AcousticResult:
     """Room acoustic parameters from a blind recording or a measured
     impulse response (``is_blind`` distinguishes the two).
@@ -25,8 +28,8 @@ class AcousticResult:
     time, which only a measured impulse response provides, so they are NaN when
     ``is_blind`` is true -- ``edt`` measures the 0 to -10 dB decay and the blind
     estimator only fits the late decay ``rt60`` comes from. ``c50_bands`` and
-    ``c80_bands`` are then empty lists (not computed), while ``edt_bands`` stays
-    a full-length list of NaNs so it can be indexed by the same band index as
+    ``c80_bands`` are then empty arrays (not computed), while ``edt_bands`` stays
+    a full-length array of NaNs so it can be indexed by the same band index as
     ``rt60_bands``."""
 
     rt60: float
@@ -34,32 +37,12 @@ class AcousticResult:
     c50: float
     c80: float
     d50: float
-    rt60_bands: list[float]
-    edt_bands: list[float]
-    c50_bands: list[float]
-    c80_bands: list[float]
+    rt60_bands: np.ndarray
+    edt_bands: np.ndarray
+    c50_bands: np.ndarray
+    c80_bands: np.ndarray
     confidence: float
     is_blind: bool
-
-    @property
-    def rt60Bands(self) -> list[float]:  # noqa: N802
-        return self.rt60_bands
-
-    @property
-    def edtBands(self) -> list[float]:  # noqa: N802
-        return self.edt_bands
-
-    @property
-    def c50Bands(self) -> list[float]:  # noqa: N802
-        return self.c50_bands
-
-    @property
-    def c80Bands(self) -> list[float]:  # noqa: N802
-        return self.c80_bands
-
-    @property
-    def isBlind(self) -> bool:  # noqa: N802
-        return self.is_blind
 
 
 @dataclass(frozen=True, slots=True)

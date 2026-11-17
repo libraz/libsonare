@@ -384,7 +384,7 @@ def test_analyze_options_forward_existing_api_keywords(monkeypatch, capsys) -> N
             ),
             time_signature=SimpleNamespace(numerator=4, denominator=4, confidence=0.5),
             beats=[],
-            downbeat_indices=[],
+            downbeats=[],
             downbeat_phase=0,
             chords=[],
             sections=[],
@@ -414,7 +414,7 @@ def test_analyze_options_forward_existing_api_keywords(monkeypatch, capsys) -> N
         "sample_rate": 22050,
         "use_triads_only": False,
         "use_hpss": True,
-        "chroma_highpass_hz": 123.5,
+        "chroma_high_pass_hz": 123.5,
         # Not given, so the core seeds its own candidate set rather than being
         # handed an empty one.
         "meter_candidate_numerators": None,

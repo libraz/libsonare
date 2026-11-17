@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import math
 
+import numpy as np
 import pytest
 
 import libsonare
@@ -50,11 +51,12 @@ def steady() -> list[float]:
 
 def test_tempo_curve_is_withheld_until_asked_for(steady: list[float]) -> None:
     without = libsonare.analyze(steady, SR)
-    assert without.beat_local_bpm == []
+    assert len(without.beat_local_bpm) == 0
 
     with_curve = libsonare.analyze(steady, SR, compute_tempo_curve=True)
-    assert len(with_curve.beat_local_bpm) == len(with_curve.beat_times)
-    assert with_curve.beat_local_bpm
+    assert len(with_curve.beat_local_bpm) == len(with_curve.beats)
+    assert with_curve.beat_local_bpm.size > 0
+    assert with_curve.beat_local_bpm.dtype == np.float32
     for bpm in with_curve.beat_local_bpm:
         assert math.isfinite(bpm)
         assert bpm > 0.0
@@ -65,14 +67,14 @@ def test_tempo_curve_adds_an_output_without_moving_the_analysis(steady: list[flo
     with_curve = libsonare.analyze(steady, SR, compute_tempo_curve=True)
 
     assert with_curve.bpm == without.bpm
-    assert len(with_curve.beat_times) == len(without.beat_times)
+    assert len(with_curve.beats) == len(without.beats)
     assert with_curve.time_signature.numerator == without.time_signature.numerator
     assert with_curve.time_signature.denominator == without.time_signature.denominator
 
 
-def test_camel_case_alias_reads_the_same_curve(steady: list[float]) -> None:
+def test_camel_case_alias_is_gone(steady: list[float]) -> None:
     result = libsonare.analyze(steady, SR, compute_tempo_curve=True)
-    assert result.beatLocalBpm == result.beat_local_bpm
+    assert not hasattr(result, "beatLocalBpm")
 
 
 @pytest.mark.slow

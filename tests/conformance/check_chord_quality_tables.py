@@ -199,20 +199,13 @@ ORDINAL_TABLES = (
         "the hand-written declaration of the embind enum",
     ),
     Table(
-        "bindings/python/src/libsonare/_analysis_detection.py",
-        "_QUALITY_NAMES",
-        "python_dict",
+        "bindings/python/src/libsonare/_types_analysis.py",
+        "CHORD_QUALITIES",
+        "python_tuple",
         "camel",
         "python",
-        "the quality string on every chord `analyze()` returns",
-    ),
-    Table(
-        "bindings/python/src/libsonare/_analysis_music.py",
-        "_CHORD_QUALITY_NAMES",
-        "python_dict",
-        "camel",
-        "python",
-        "the quality string on every chord `detect_chords()` returns",
+        "the exported token tuple a Python caller decodes an ordinal through, and the "
+        "quality on every chord the analysis returns",
     ),
     Table(
         "bindings/node/src/addon/sonare_wrap_utils.cpp",
@@ -243,14 +236,6 @@ ORDINAL_TABLES = (
 # Tables keyed on a name. Ordering carries nothing, but the set is a public
 # surface: a name missing here is a value the facade cannot represent.
 NAME_TABLES = (
-    Table(
-        "bindings/python/src/libsonare/_analysis_detection.py",
-        "chord_quality_str",
-        "python_dict",
-        "camel",
-        "python",
-        "accepts a quality already spelled as a name; an absent key falls back to `unknown`",
-    ),
     Table(
         "bindings/python/src/libsonare/_types_analysis.py",
         "suffixes",
@@ -336,8 +321,8 @@ SUFFIX_EXCEPTIONS: dict[tuple[str, int], SuffixException] = {
 # tables, and it is vacuous with fewer than two of them in it.
 FLOOR = {
     "qualities": 25,
-    "ordinal_tables": 9,
-    "name_tables": 2,
+    "ordinal_tables": 8,
+    "name_tables": 1,
     "suffix_tables": 4,
     "suffix_symbol_tables": 2,
 }
@@ -612,6 +597,28 @@ def cpp_switch_appends(text: str, table: SuffixTable) -> tuple[int, dict[str, st
     return (line, by_enumerator) if by_enumerator else None
 
 
+def python_tuple(text: str, table: Table) -> tuple[int, dict[int, str]] | None:
+    """The one assignment of a tuple of string literals to @p symbol, indexed by position."""
+    found = []
+    for node in ast.walk(ast.parse(text)):
+        if isinstance(node, ast.Assign) and len(node.targets) == 1:
+            target = node.targets[0]
+        elif isinstance(node, ast.AnnAssign):
+            target = node.target
+        else:
+            continue
+        if isinstance(target, ast.Name) and target.id == table.symbol:
+            found.append(node)
+    if len(found) != 1 or not isinstance(found[0].value, ast.Tuple):
+        return None
+    names = []
+    for element in found[0].value.elts:
+        if not isinstance(element, ast.Constant) or not isinstance(element.value, str):
+            return None
+        names.append(element.value)
+    return found[0].lineno, dict(enumerate(names))
+
+
 def python_dict(text: str, table: Table) -> tuple[int, dict] | None:
     """The one assignment of a dict literal to @p symbol, at any nesting depth."""
     found = []
@@ -717,6 +724,8 @@ def locate(root: Path, table: Table, core: dict[int, str] | None, c_abi: dict[in
         result = ts_object(text, table)
     elif table.parser == "ts_tuple":
         result = ts_tuple(text, table)
+    elif table.parser == "python_tuple":
+        result = python_tuple(text, table)
     elif table.parser == "python_dict":
         found = python_dict(text, table)
         if found is None:

@@ -8,7 +8,7 @@ from typing import Any, cast
 
 import numpy as np
 
-from ._analysis_detection import _QUALITY_NAMES, _UNKNOWN_QUALITY_ORDINAL
+from ._analysis_detection import _UNKNOWN_QUALITY_ORDINAL
 from ._errors import _not_supported, _require_open
 from ._narrowing import _narrow_double
 from ._runtime import (
@@ -35,7 +35,7 @@ from ._runtime import (
     _to_c_float_array,
     _to_c_size_t,
 )
-from ._types_analysis import Chord, Key
+from ._types_analysis import CHORD_QUALITIES, Key, _chord_symbol
 from ._types_enums import Mode, PitchClass
 
 
@@ -388,13 +388,11 @@ def _i16s(ptr: object, count: int) -> list[int]:
 
 
 def _chord_name(root: int, quality: int) -> str:
-    """Spell a chord through ``Chord.name``, the table the batch analysis uses."""
+    """Spell a chord symbol through the table the batch analysis uses."""
     if not 0 <= root < len(PitchClass):
         return "N.C."
-    quality_name = _QUALITY_NAMES.get(quality, _QUALITY_NAMES[_UNKNOWN_QUALITY_ORDINAL])
-    return Chord(
-        root=PitchClass(root), quality=quality_name, start=0.0, end=0.0, confidence=0.0
-    ).name
+    ordinal = quality if 0 <= quality < len(CHORD_QUALITIES) else _UNKNOWN_QUALITY_ORDINAL
+    return _chord_symbol(PitchClass(root), CHORD_QUALITIES[ordinal])
 
 
 def _key_names(key: int, minor: bool) -> tuple[str | None, str | None]:

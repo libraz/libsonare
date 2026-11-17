@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from ._cancellation import CancelCallback as CancelCallback
+from ._cancellation import ProgressCallback as ProgressCallback
 from ._effects_polyphony import PolyphonicAnalysis as PolyphonicAnalysis
 from ._playback import HrtfSet as HrtfSet
 from ._playback import PlaybackLoudnessMeter as PlaybackLoudnessMeter
@@ -122,9 +124,6 @@ from .analyzer import (
 )
 from .analyzer import (
     analyze_timbre as analyze_timbre,
-)
-from .analyzer import (
-    analyze_with_progress as analyze_with_progress,
 )
 from .analyzer import (
     assign_note_targets as assign_note_targets,
@@ -818,15 +817,14 @@ from .mixing_assistant import mix_source_class_names as mix_source_class_names
 from .mixing_assistant import suggest_mix_scene as suggest_mix_scene
 from .mixing_assistant import suggest_mix_scene_json as suggest_mix_scene_json
 from .streaming import StreamAnalyzer as StreamAnalyzer
+from .types import CHORD_QUALITIES as CHORD_QUALITIES
 from .types import (
     AcousticModeName as AcousticModeName,
 )
 from .types import (
     AcousticResult as AcousticResult,
 )
-from .types import (
-    AnalysisBeatObservations as AnalysisBeatObservations,
-)
+from .types import AnalysisChord as AnalysisChord
 from .types import (
     AnalysisDynamics as AnalysisDynamics,
 )
@@ -840,9 +838,6 @@ from .types import (
     AnalysisRhythm as AnalysisRhythm,
 )
 from .types import (
-    AnalysisTimbre as AnalysisTimbre,
-)
-from .types import (
     AutomationCurve as AutomationCurve,
 )
 from .types import (
@@ -851,14 +846,15 @@ from .types import (
 from .types import (
     AutoTuneResult as AutoTuneResult,
 )
+from .types import Beat as Beat
+from .types import BeatObservations as BeatObservations
+from .types import Boundary as Boundary
+from .types import BoundaryResult as BoundaryResult
 from .types import (
     BpmAnalysisResult as BpmAnalysisResult,
 )
 from .types import (
     BpmCandidate as BpmCandidate,
-)
-from .types import (
-    BpmHypothesis as BpmHypothesis,
 )
 from .types import Capabilities as Capabilities
 from .types import CapabilitiesAbi as CapabilitiesAbi
@@ -1224,9 +1220,6 @@ from .types import (
 )
 from .types import (
     Section as Section,
-)
-from .types import (
-    SectionResult as SectionResult,
 )
 from .types import (
     SectionType as SectionType,

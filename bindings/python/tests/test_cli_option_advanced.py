@@ -34,7 +34,7 @@ def test_rhythm_and_dynamics_forward_analysis_options(
             syncopation=0.0,
             pattern_regularity=1.0,
             tempo_stability=1.0,
-            beat_intervals=[],
+            beat_intervals=np.zeros(0, dtype=np.float32),
         )
 
     def dynamics_spy(samples: list[float], sample_rate: int, **kwargs: object) -> object:
@@ -46,7 +46,7 @@ def test_rhythm_and_dynamics_forward_analysis_options(
             crest_factor=1.2,
             loudness_range_db=0.5,
             is_compressed=False,
-            loudness_rms_db=[],
+            loudness_rms_db=np.zeros(0, dtype=np.float32),
         )
 
     monkeypatch.setattr(libsonare, "analyze_rhythm", rhythm_spy)

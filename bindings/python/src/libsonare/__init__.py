@@ -3,6 +3,7 @@
 from importlib.metadata import PackageNotFoundError
 from importlib.metadata import version as _pkg_version
 
+from ._cancellation import CancelCallback, ProgressCallback
 from ._effects_polyphony import PolyphonicAnalysis
 from ._playback import (
     HrtfSet,
@@ -71,7 +72,6 @@ from .analyzer import (
     analyze_rhythm,
     analyze_sections,
     analyze_timbre,
-    analyze_with_progress,
     assign_note_targets,
     auto_tune,
     bass_chroma,
@@ -335,20 +335,23 @@ from .mixing_assistant import (
 )
 from .streaming import StreamAnalyzer
 from .types import (
+    CHORD_QUALITIES,
     AcousticModeName,
     AcousticResult,
-    AnalysisBeatObservations,
+    AnalysisChord,
     AnalysisDynamics,
     AnalysisMelody,
     AnalysisResult,
     AnalysisRhythm,
-    AnalysisTimbre,
     AutomationCurve,
     AutomationPoint,
     AutoTuneResult,
+    Beat,
+    BeatObservations,
+    Boundary,
+    BoundaryResult,
     BpmAnalysisResult,
     BpmCandidate,
-    BpmHypothesis,
     Capabilities,
     CapabilitiesAbi,
     CapabilitiesDecode,
@@ -498,7 +501,6 @@ from .types import (
     RoomMorphStereoResult,
     ScopeTelemetryRecord,
     Section,
-    SectionResult,
     SectionType,
     SendTiming,
     SidechainCheck,
@@ -575,6 +577,14 @@ from .vocal_edit import (
 )
 
 __all__ = [
+    "ProgressCallback",
+    "CancelCallback",
+    "CHORD_QUALITIES",
+    "BoundaryResult",
+    "Boundary",
+    "BeatObservations",
+    "Beat",
+    "AnalysisChord",
     "VocalTargetMode",
     "VocalFormantMode",
     "VocalOperationKind",
@@ -610,12 +620,10 @@ __all__ = [
     "restore_vocal_edit_session",
     "vocal_edit_abi_version",
     "AcousticResult",
-    "AnalysisBeatObservations",
     "AnalysisDynamics",
     "AnalysisMelody",
     "AnalysisResult",
     "AnalysisRhythm",
-    "AnalysisTimbre",
     "AutoTuneResult",
     "AssistSidecar",
     "Audio",
@@ -645,7 +653,6 @@ __all__ = [
     "AutomationCurve",
     "BpmAnalysisResult",
     "BpmCandidate",
-    "BpmHypothesis",
     "BuiltinSynthConfig",
     "ChannelLayout",
     "Chord",
@@ -779,7 +786,6 @@ __all__ = [
     "ScopeTelemetryRecord",
     "SampleBank",
     "Section",
-    "SectionResult",
     "SectionType",
     "SendTiming",
     "Sf2InstrumentConfig",
@@ -854,7 +860,6 @@ __all__ = [
     "analyze_rhythm",
     "analyze_sections",
     "analyze_timbre",
-    "analyze_with_progress",
     "auto_tune",
     "amplitude_to_db",
     "bass_chroma",

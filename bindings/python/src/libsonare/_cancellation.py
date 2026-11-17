@@ -8,9 +8,16 @@ and the facade re-raises that exception once the call has returned.
 from __future__ import annotations
 
 from collections.abc import Callable
-from typing import Any
+from typing import Any, TypeAlias
 
 from ._ffi import SONARE_OK, SonareCancelCallback
+
+#: ``(progress, stage)`` callable invoked during an offline operation, with
+#: ``progress`` in ``[0, 1]`` and the stage name. Its return value is ignored.
+ProgressCallback: TypeAlias = Callable[[float, str], object]
+#: Zero-argument callable polled by an offline operation; a true return value
+#: requests cancellation.
+CancelCallback: TypeAlias = Callable[[], bool]
 
 
 class CancellationState:
@@ -57,7 +64,7 @@ def make_cancel_trampoline(state: CancellationState) -> Any:
 
 def make_progress_trampoline(
     callback_type: Callable[[Any], Any],
-    on_progress: Callable[[float, str], None],
+    on_progress: Callable[[float, str], object],
     state: CancellationState,
 ) -> Any:
     """Wrap ``on_progress`` as a C progress callback of ``callback_type``.

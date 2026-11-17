@@ -6,6 +6,7 @@ from __future__ import annotations
 import numpy as np
 
 from ._analyzer_helpers import *
+from ._helpers import same_value
 
 
 def test_audio_analyze() -> None:
@@ -20,7 +21,6 @@ def test_audio_analyze() -> None:
     assert result.key.root == PitchClass.C
     assert result.key.mode == Mode.MAJOR
     assert result.key.name == "C major"
-    assert isinstance(result.beatTimes, list)
     assert isinstance(result.beats, list)
 
 
@@ -41,7 +41,7 @@ def test_audio_analyze_matches_the_module_level_function_field_for_field() -> No
     samples = _generate_sine(220.0, 22050, 3.0)
     via_handle = Audio.from_buffer(samples, sample_rate=22050).analyze()
     via_module = analyze(samples, 22050)
-    assert via_handle == via_module
+    assert same_value(via_handle, via_module)
 
 
 def test_audio_analyze_forwards_its_keyword_options() -> None:
@@ -55,7 +55,7 @@ def test_audio_analyze_forwards_its_keyword_options() -> None:
     narrow = audio.analyze(bpm_min=190.0, bpm_max=210.0)
     wide = audio.analyze(bpm_min=60.0, bpm_max=200.0)
     assert narrow.bpm != wide.bpm
-    assert narrow == analyze(samples, 22050, bpm_min=190.0, bpm_max=210.0)
+    assert same_value(narrow, analyze(samples, 22050, bpm_min=190.0, bpm_max=210.0))
 
 
 def test_analysis_primitives() -> None:
@@ -95,7 +95,7 @@ def test_analysis_primitives() -> None:
 
     dynamics = analyze_dynamics(samples, sample_rate=sr)
     assert dynamics.peak_db <= 1.0
-    assert len(dynamics.loudness_times) == len(dynamics.loudness_rms_db)
+    assert len(dynamics.loudness_times_sec) == len(dynamics.loudness_rms_db)
 
     tone = [
         0.25
@@ -115,13 +115,11 @@ def test_analysis_primitives() -> None:
     for chord in chords.chords:
         assert chord.root_name == str(chord.root)
         assert chord.bass_name == str(chord.root if chord.bass is None else chord.bass)
-        assert chord.rootName == chord.root_name
-        assert chord.bassName == chord.bass_name
 
     audio = Audio.from_buffer(samples, sample_rate=sr)
     assert audio.analyze_bpm().bpm > 0
     assert audio.analyze_rhythm().bpm > 0
-    assert len(audio.analyze_dynamics().loudness_times) > 0
+    assert len(audio.analyze_dynamics().loudness_times_sec) > 0
     assert len(audio.analyze_timbre().spectral_centroid) > 0
     assert isinstance(audio.detect_chords(use_beat_sync=False).chords, list)
 
@@ -157,7 +155,7 @@ def test_chord_functional_analysis() -> None:
     )
     assert isinstance(romans, list)
     assert len(romans) == len(chords.chords)
-    assert all(label.roman and label.function for label in romans)
+    assert all(label.roman_numeral and label.function for label in romans)
     # Detection followed by chord_functions gives the same entries.
     assert romans == chord_functions(chords, (PitchClass.C, Mode.MAJOR))
 

@@ -708,14 +708,13 @@ def test_mixing_preset_cli_commands_smoke() -> None:
     assert "strips" in json.loads(default_preset.stdout)
 
 
-def test_analyze_sections_returns_section_result() -> None:
-    from libsonare import Section, SectionResult, SectionType, analyze_sections
+def test_analyze_sections_returns_a_section_list() -> None:
+    from libsonare import Section, SectionType, analyze_sections
 
     samples = _generate_sine(220, 22050, 6.0) + _generate_sine(440, 22050, 6.0)
     result = analyze_sections(samples, sample_rate=22050, min_section_sec=2.0)
-    assert isinstance(result, SectionResult)
-    assert isinstance(result.sections, list)
-    for section in result.sections:
+    assert isinstance(result, list)
+    for section in result:
         assert isinstance(section, Section)
         assert isinstance(section.type, SectionType)
         assert section.end >= section.start

@@ -40,7 +40,7 @@ def test_hand_built_progression_is_labelled_in_c_major() -> None:
         Chord(PitchClass.C, "major", 3.0, 4.0, 0.9),
     ]
     result = libsonare.chord_functions(chords, key=C_MAJOR)
-    assert [entry.roman for entry in result] == ["I", "IV", "V", "I"]
+    assert [entry.roman_numeral for entry in result] == ["I", "IV", "V", "I"]
     assert [entry.function for entry in result] == ["tonic", "subdominant", "dominant", "tonic"]
     assert [(e.start, e.end, e.root, e.quality) for e in result] == [
         (c.start, c.end, c.root, c.quality) for c in chords
@@ -57,7 +57,11 @@ def test_detected_progression_keeps_its_timing_and_gains_the_labels() -> None:
         (c.start, c.end, c.root, c.quality) for c in detected.chords
     ]
     # Consecutive duplicates collapse to the progression C F G C.
-    collapsed = [e.roman for i, e in enumerate(result) if i == 0 or e.roman != result[i - 1].roman]
+    collapsed = [
+        e.roman_numeral
+        for i, e in enumerate(result)
+        if i == 0 or e.roman_numeral != result[i - 1].roman_numeral
+    ]
     assert collapsed == ["I", "IV", "V", "I"]
     # The result object and its chord list are interchangeable inputs.
     assert libsonare.chord_functions(detected.chords, key=C_MAJOR) == result
@@ -66,7 +70,7 @@ def test_detected_progression_keeps_its_timing_and_gains_the_labels() -> None:
 def test_key_may_be_a_mapping_or_a_pair() -> None:
     chords = [Chord(PitchClass.G, "dominant7", 0.0, 1.0, 0.9)]
     expected = libsonare.chord_functions(chords, key=C_MAJOR)
-    assert expected[0].roman == "V7"
+    assert expected[0].roman_numeral == "V7"
     assert libsonare.chord_functions(chords, key={"root": PitchClass.C, "mode": Mode.MAJOR}) == (
         expected
     )
@@ -89,7 +93,7 @@ def test_minor_key_unknown_and_chromatic_chords() -> None:
         "none",
         "chromatic",
     ]
-    assert result[3].roman == "N.C."
+    assert result[3].roman_numeral == "N.C."
 
 
 def test_empty_input_and_refusals() -> None:
@@ -117,7 +121,6 @@ def test_chord_detection_defaults_and_cqt_front_end() -> None:
 
 
 def test_analyze_defaults_skip_hpss_and_decode_chords_with_the_hmm() -> None:
-    for fn in (libsonare.analyze, libsonare.analyze_with_progress):
-        params = inspect.signature(fn).parameters
-        assert params["use_hpss"].default is False
-        assert params["use_chord_hmm"].default is True
+    params = inspect.signature(libsonare.analyze).parameters
+    assert params["use_hpss"].default is False
+    assert params["use_chord_hmm"].default is True

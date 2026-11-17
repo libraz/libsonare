@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+import dataclasses
 from collections.abc import Iterator
 from contextlib import contextmanager
+from typing import Any
 
 import numpy as np
 import pytest
@@ -18,6 +20,32 @@ def sine(freq: float, duration_sec: float, sr: int = 22050, amp: float = 0.5) ->
     """
     n = int(sr * duration_sec)
     return (amp * np.sin(2.0 * np.pi * freq * np.arange(n) / sr)).astype(np.float32)
+
+
+def same_value(a: Any, b: Any) -> bool:
+    """Structural equality for result values: dataclasses field by field, arrays by content.
+
+    Result dataclasses holding ndarrays are ``eq=False``, so ``==`` is identity;
+    this compares what two results actually carry (NaN equal to NaN).
+    """
+    if isinstance(a, np.ndarray) or isinstance(b, np.ndarray):
+        return (
+            isinstance(a, np.ndarray)
+            and isinstance(b, np.ndarray)
+            and a.dtype == b.dtype
+            and np.array_equal(a, b, equal_nan=a.dtype.kind == "f")
+        )
+    if dataclasses.is_dataclass(a) and not isinstance(a, type):
+        return type(a) is type(b) and all(
+            same_value(getattr(a, f.name), getattr(b, f.name)) for f in dataclasses.fields(a)
+        )
+    if isinstance(a, list | tuple):
+        return (
+            type(a) is type(b)
+            and len(a) == len(b)
+            and all(same_value(x, y) for x, y in zip(a, b, strict=True))
+        )
+    return bool(a == b)
 
 
 def is_lib_available() -> bool:

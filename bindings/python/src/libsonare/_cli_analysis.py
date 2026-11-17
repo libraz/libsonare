@@ -113,7 +113,7 @@ def cmd_key(args: argparse.Namespace) -> int:
         "hop_length": args.hop_length,
         "use_hpss": use_hpss,
         "loudness_weighted": args.loudness_weighted,
-        "high_pass_hz": args.high_pass_hz,
+        "chroma_high_pass_hz": args.high_pass_hz,
         "modes": _parse_modes(args.modes) if args.modes else None,
         "profile": _parse_key_profile(args.profile) if args.profile else None,
         "genre_hint": args.genre_hint or None,
@@ -281,7 +281,7 @@ def cmd_sections(args: argparse.Namespace) -> int:
         hop_length=args.hop_length,
         min_section_sec=args.min_duration,
     )
-    sections = result.sections
+    sections = result
     if args.json:
         print(
             _strict_json_dumps(
@@ -326,7 +326,7 @@ def cmd_analyze(args: argparse.Namespace) -> int:
         sample_rate=sr,
         use_triads_only=not args.with_seventh,
         use_hpss=args.hpss,
-        chroma_highpass_hz=args.chroma_highpass,
+        chroma_high_pass_hz=args.chroma_highpass,
         # An empty list means the option was not given: pass None so the core
         # seeds its own default rather than being handed a set it rejects.
         meter_candidate_numerators=candidates or None,
@@ -335,10 +335,11 @@ def cmd_analyze(args: argparse.Namespace) -> int:
     key_name = f"{PITCH_NAMES[r.key.root.value]} {MODE_NAMES[r.key.mode.value]}"
 
     if args.json:
-        beats = [
-            {"time": beat.time, "strength": beat.strength if beat.strength is not None else 0.0}
-            for beat in r.beats
-        ]
+        beats = [{"time": beat.time_sec, "strength": beat.strength} for beat in r.beats]
+        # The downbeats are the beats that open a bar; the document spells them
+        # as positions in ``beats``.
+        downbeat_ids = {id(beat) for beat in r.downbeats}
+        downbeat_indices = [i for i, beat in enumerate(r.beats) if id(beat) in downbeat_ids]
         chords = [
             {
                 "name": chord.name,
@@ -377,7 +378,7 @@ def cmd_analyze(args: argparse.Namespace) -> int:
                         "confidence": r.time_signature.confidence,
                     },
                     "beats": beats,
-                    "downbeat_indices": list(r.downbeat_indices),
+                    "downbeat_indices": downbeat_indices,
                     "downbeat_phase": r.downbeat_phase,
                     "chords": chords,
                     "sections": sections,
@@ -419,7 +420,7 @@ def cmd_analyze(args: argparse.Namespace) -> int:
             f"(conf {r.key.confidence * 100:.1f}%){reset}"
         )
         print(f"  > Time Signature: {r.time_signature.numerator}/{r.time_signature.denominator}")
-        print(f"  > Beats: {len(r.beat_times)}")
+        print(f"  > Beats: {len(r.beats)}")
     return 0
 
 

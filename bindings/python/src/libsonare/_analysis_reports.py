@@ -6,12 +6,16 @@ import ctypes
 import json
 import math
 import operator
-from collections.abc import Callable, Sequence
-from typing import Any, Literal, cast
+from collections.abc import Sequence
+from typing import Any
+
+import numpy as np
 
 from ._analysis_detection import _parse_analysis_json
 from ._cancellation import (
+    CancelCallback,
     CancellationState,
+    ProgressCallback,
     make_cancel_trampoline,
     make_progress_trampoline,
     raise_callback_error,
@@ -37,23 +41,24 @@ from ._runtime import (
     SonareError,
     SonareValueError,
     _check,
-    _float_array_result,
+    _from_c_float_array,
     _get_lib,
     _guard_buffer,
     _narrow_int,
-    _optional_float_array_result,
+    _optional_from_c_float_array,
     _to_c_float,
     _to_c_float_array,
     _to_c_int,
     _to_c_size_t,
     _tuning_arg,
+    _validate_samples,
 )
 from .types import (
     AcousticResult,
     AnalysisResult,
+    Beat,
     BpmAnalysisResult,
     BpmCandidate,
-    BpmHypothesis,
     DynamicsResult,
     Key,
     MeterEstimate,
@@ -87,7 +92,7 @@ def _music_analyze_options(
     start_bpm: float,
     use_triads_only: bool,
     use_hpss: bool,
-    chroma_highpass_hz: float,
+    chroma_high_pass_hz: float,
     use_bass_weighted: bool,
     chroma_hop_multiplier: int,
     use_chord_hmm: bool,
@@ -101,7 +106,7 @@ def _music_analyze_options(
     meter_denominator: int,
     tuning_cents: float | str,
 ) -> SonareMusicAnalyzeOptions:
-    """Build the options struct shared by :func:`analyze` and :func:`analyze_with_progress`."""
+    """Build the options struct shared by :func:`analyze`."""
     numerators = (
         tuple(_DEFAULT_METER_CANDIDATE_NUMERATORS)
         if meter_candidate_numerators is None
@@ -126,7 +131,7 @@ def _music_analyze_options(
         start_bpm=start_bpm,
         use_triads_only=int(use_triads_only),
         use_hpss=int(use_hpss),
-        chroma_high_pass_hz=chroma_highpass_hz,
+        chroma_high_pass_hz=chroma_high_pass_hz,
         use_bass_weighted=int(use_bass_weighted),
         chroma_hop_multiplier=chroma_hop_multiplier,
         use_chord_hmm=int(use_chord_hmm),
@@ -169,7 +174,7 @@ def analyze(
     start_bpm: float = 120.0,
     use_triads_only: bool = True,
     use_hpss: bool = False,
-    chroma_highpass_hz: float = 80.0,
+    chroma_high_pass_hz: float = 80.0,
     use_bass_weighted: bool = True,
     chroma_hop_multiplier: int = 4,
     use_chord_hmm: bool = True,
@@ -182,6 +187,8 @@ def analyze(
     meter_candidate_numerators: Sequence[int] | None = None,
     meter_denominator: int = 4,
     tuning_cents: float | str = "auto",
+    on_progress: ProgressCallback | None = None,
+    cancel: CancelCallback | None = None,
 ) -> AnalysisResult:
     """Run full audio analysis on samples.
 
@@ -215,33 +222,40 @@ def analyze(
             The value used, given or measured, is ``AnalysisResult.tuning_cents``.
             Every chroma the analysis builds (key, chords, sections) is shifted
             by it. 0 is concert A440.
+        on_progress: Optional callable ``(progress: float, stage: str)``
+            invoked periodically with a progress fraction in ``[0, 1]`` and a
+            stage name. Its return value is ignored. An exception it raises
+            stops the analysis at its next cancellation point and is raised
+            from this call.
+        cancel: Optional zero-argument callable polled by the native
+            operation. A true return value requests cancellation, which raises
+            :class:`SonareError` with code ``ErrorCode.CANCELLED``; an
+            exception it raises is raised from this call.
 
     Returns:
         :class:`libsonare.AnalysisResult` with all fields:
 
         - ``bpm`` (``float``) and ``bpm_confidence`` (``float`` in ``[0, 1]``)
         - ``key`` (:class:`Key`), ``time_signature`` (:class:`TimeSignature`)
-        - ``beat_times`` (``list[float]`` in seconds)
-        - ``beat_strengths`` (``list[float]``) — one raw onset-envelope frame
-          per beat, sampled at the beat's own frame. Not normalized, scaled by
-          the material, and sensitive to beat-position jitter, so it is not a
-          salience comparable across beats; score accents with
-          ``beat_observations.onset_strength`` instead
-        - ``downbeat_indices`` (``list[int]``) — positions in ``beat_times``
-          that are bar starts, not a separate time series
+        - ``beats`` (``list[Beat]``) — each with ``time_sec`` and a raw
+          onset-envelope ``strength`` sampled at the beat's own frame. Not
+          normalized, scaled by the material, and sensitive to beat-position
+          jitter, so it is not a salience comparable across beats; score
+          accents with ``beat_observations.onset_strength`` instead
+        - ``downbeats`` (``list[Beat]``) — the beats that are bar starts
         - ``downbeat_phase`` (``int``) — which beat of the first bar the
           analysis starts on
-        - ``beat_observations`` (:class:`AnalysisBeatObservations`) — the
+        - ``beat_observations`` (:class:`BeatObservations`) — the
           beat-level evidence the downbeat and meter pass scores
-        - ``beat_local_bpm`` (``list[float]``) — smoothed local tempo at each
-          beat, parallel to ``beat_times``: continuous values, each a weighted
+        - ``beat_local_bpm`` (float32 array) — smoothed local tempo at each
+          beat, parallel to ``beats``: continuous values, each a weighted
           average of the surrounding beat intervals, so a steady tempo reads
           within about 1% at every beat. Empty unless
           ``compute_tempo_curve`` was set
-        - ``chords`` (``list[Chord]``) — detected chord segments, each with a
-          ``roman_numeral`` relative to ``key`` (empty for N.C.)
+        - ``chords`` (``list[AnalysisChord]``) — detected chord segments, each
+          with a ``roman_numeral`` relative to ``key`` (empty for N.C.)
         - ``sections`` (``list[Section]``) — detected structural sections
-        - ``timbre`` (:class:`AnalysisTimbre`) — spectral character summary
+        - ``timbre`` (:class:`TimbreFrame`) — spectral character summary
         - ``dynamics`` (:class:`AnalysisDynamics`) — loudness/dynamics summary
         - ``rhythm`` (:class:`AnalysisRhythm`) — groove/syncopation summary
         - ``melody`` (:class:`AnalysisMelody`) — melody contour and statistics
@@ -262,7 +276,7 @@ def analyze(
         start_bpm=start_bpm,
         use_triads_only=use_triads_only,
         use_hpss=use_hpss,
-        chroma_highpass_hz=chroma_highpass_hz,
+        chroma_high_pass_hz=chroma_high_pass_hz,
         use_bass_weighted=use_bass_weighted,
         chroma_hop_multiplier=chroma_hop_multiplier,
         use_chord_hmm=use_chord_hmm,
@@ -278,6 +292,11 @@ def analyze(
     )
     lib = _get_lib()
     c_array, length = _to_c_float_array(samples)
+
+    if on_progress is not None or cancel is not None:
+        return _analyze_with_callbacks(
+            lib, c_array, length, sample_rate, options, on_progress, cancel
+        )
 
     if hasattr(lib, "sonare_analyze_json"):
         out_json = ctypes.c_char_p()
@@ -315,7 +334,7 @@ def analyze(
     )
     _check(rc)
     try:
-        beat_times = _float_array_result(out.beat_times, out.beat_count)
+        beat_times = _from_c_float_array(out.beat_times, out.beat_count)
         relation_names = ("primary", "half", "double", "other")
         return AnalysisResult(
             bpm=float(out.bpm),
@@ -330,16 +349,15 @@ def analyze(
                 denominator=int(out.time_signature.denominator),
                 confidence=float(out.time_signature.confidence),
             ),
-            beat_times=beat_times,
+            beats=[Beat(time_sec=float(t), strength=0.0) for t in beat_times],
             bpm_candidates=[
-                BpmHypothesis(
-                    value=float(out.bpm_candidates[i].value),
+                BpmCandidate(
+                    bpm=float(out.bpm_candidates[i].value),
                     confidence=float(out.bpm_candidates[i].confidence),
-                    relation=cast(
-                        Literal["primary", "half", "double", "other"],
+                    relation=(
                         relation_names[out.bpm_candidates[i].relation]
                         if 0 <= out.bpm_candidates[i].relation < len(relation_names)
-                        else "other",
+                        else "other"
                     ),
                 )
                 for i in range(out.bpm_candidate_count)
@@ -363,101 +381,25 @@ def _free_json(lib: ctypes.CDLL, out_json: ctypes.c_char_p) -> None:
 
 
 def _make_analyze_progress_trampoline(
-    on_progress: Callable[[float, str], None], state: CancellationState
+    on_progress: ProgressCallback, state: CancellationState
 ) -> Any:
     """Wrap a Python callback for use as a C SonareAnalyzeProgressCallback."""
     return make_progress_trampoline(SonareAnalyzeProgressCallback, on_progress, state)
 
 
-@_guard_buffer("samples")
-def analyze_with_progress(
-    samples: Sequence[float] | list[float],
+def _analyze_with_callbacks(
+    lib: ctypes.CDLL,
+    c_array: Any,
+    length: int,
     sample_rate: int,
-    on_progress: Callable[[float, str], None] | None = None,
-    *,
-    cancel: Callable[[], bool] | None = None,
-    n_fft: int = 2048,
-    hop_length: int = 512,
-    bpm_min: float = 60.0,
-    bpm_max: float = 200.0,
-    start_bpm: float = 120.0,
-    use_triads_only: bool = True,
-    use_hpss: bool = False,
-    chroma_highpass_hz: float = 80.0,
-    use_bass_weighted: bool = True,
-    chroma_hop_multiplier: int = 4,
-    use_chord_hmm: bool = True,
-    use_chord_key_context: bool = False,
-    chord_hmm_beam_width: int = 24,
-    detect_chord_inversions: bool = False,
-    adaptive_tempo: bool = False,
-    tempo_update_interval_beats: int = 8,
-    compute_tempo_curve: bool = False,
-    meter_candidate_numerators: Sequence[int] | None = None,
-    meter_denominator: int = 4,
-    tuning_cents: float | str = "auto",
+    options: SonareMusicAnalyzeOptions,
+    on_progress: ProgressCallback | None,
+    cancel: CancelCallback | None,
 ) -> AnalysisResult:
-    """Run full audio analysis with optional progress callbacks.
-
-    Takes the same analysis keywords as :func:`analyze`, with the same
-    defaults. Calls ``sonare_analyze_json_ex_with_progress``. The ``on_progress`` callable
-    is invoked periodically during analysis with a progress fraction ``[0, 1]``
-    and a stage name string. Calls the cancellation-capable ABI whenever a
-    progress or cancellation callback is supplied; falls back to
-    :func:`analyze` if neither progress entry point exists in the loaded library.
-
-    Args:
-        samples: Mono audio samples (1D float). See :func:`detect_bpm` for
-            accepted types.
-        sample_rate: Sample rate in Hz.
-        on_progress: Optional callable ``(progress: float, stage: str) -> object``
-            invoked during analysis. Progress is in ``[0, 1]``. Its return
-            value is ignored. If ``None``, no callback is registered. An
-            exception it raises stops the analysis at its next cancellation
-            point and is raised from this call.
-        cancel: Optional zero-argument callable polled by the native operation.
-            A true return value requests cancellation; an exception it raises
-            is raised from this call.
-        n_fft, hop_length, bpm_min, bpm_max, start_bpm, use_triads_only,
-        use_hpss, chroma_highpass_hz, use_bass_weighted, chroma_hop_multiplier,
-        use_chord_hmm, use_chord_key_context, chord_hmm_beam_width,
-        detect_chord_inversions, adaptive_tempo, tempo_update_interval_beats,
-        compute_tempo_curve, meter_candidate_numerators, meter_denominator,
-        tuning_cents: As for :func:`analyze`.
-
-    Returns:
-        Same rich :class:`libsonare.AnalysisResult` as :func:`analyze`.
-
-    Raises:
-        RuntimeError: If analysis fails.
-    """
-    options = _music_analyze_options(
-        n_fft=n_fft,
-        hop_length=hop_length,
-        bpm_min=bpm_min,
-        bpm_max=bpm_max,
-        start_bpm=start_bpm,
-        use_triads_only=use_triads_only,
-        use_hpss=use_hpss,
-        chroma_highpass_hz=chroma_highpass_hz,
-        use_bass_weighted=use_bass_weighted,
-        chroma_hop_multiplier=chroma_hop_multiplier,
-        use_chord_hmm=use_chord_hmm,
-        use_chord_key_context=use_chord_key_context,
-        chord_hmm_beam_width=chord_hmm_beam_width,
-        detect_chord_inversions=detect_chord_inversions,
-        adaptive_tempo=adaptive_tempo,
-        tempo_update_interval_beats=tempo_update_interval_beats,
-        compute_tempo_curve=compute_tempo_curve,
-        meter_candidate_numerators=meter_candidate_numerators,
-        meter_denominator=meter_denominator,
-        tuning_cents=tuning_cents,
-    )
-    lib = _get_lib()
+    """Run the cancellation-capable analysis entry point and parse its result."""
     if not hasattr(lib, "sonare_analyze_json_ex_with_progress"):
         raise _unsupported_feature_symbol("sonare_analyze_json_ex_with_progress")
 
-    c_array, length = _to_c_float_array(samples)
     out_json = ctypes.c_char_p()
     state = CancellationState(cancel)
     c_cb = (
@@ -487,10 +429,8 @@ def analyze_with_progress(
     return _parse_analysis_json(data)
 
 
-@_guard_buffer("beat_times")
 def estimate_meter(
-    beat_times: Sequence[float],
-    beat_strengths: Sequence[float],
+    beats: Sequence[Beat],
     *,
     candidate_numerators: Sequence[int] | None = None,
     denominator: int = 4,
@@ -506,14 +446,14 @@ def estimate_meter(
     its beats — without running the pipeline again.
 
     Args:
-        beat_times: Beat positions in seconds, non-decreasing.
-        beat_strengths: Per-beat accent value, the same length as
-            ``beat_times``. Pass
-            :attr:`AnalysisResult.beat_observations` ``.onset_strength``: it is
-            the windowed value the library's own downbeat pass scores.
-            ``AnalysisResult.beat_strengths`` also works, but it is a single
-            unwindowed envelope frame per beat and scores accordingly. Neither
-            needs pre-scaling: the series is divided by its own maximum before
+        beats: The beat series, positions non-decreasing in ``time_sec``.
+            ``Beat.strength`` is the per-beat accent value. The ``beats`` of
+            :func:`analyze` carry a single unwindowed envelope frame per beat
+            and score accordingly; for the windowed value the library's own
+            downbeat pass scores, build the series from
+            :attr:`AnalysisResult.beat_observations` ``.onset_strength``,
+            e.g. ``[Beat(b.time_sec, s) for b, s in zip(result.beats, onset)]``.
+            Neither needs pre-scaling: the series is divided by its own maximum before
             scoring, so only the accent contrast within it is read and the
             absolute units it arrives in do not matter. A series assembled by
             hand from :func:`onset_strength` — one frame read at each beat time
@@ -561,9 +501,10 @@ def estimate_meter(
         summed support.
 
     Raises:
-        SonareValueError: If ``beat_times`` and ``beat_strengths`` differ in
-            length, or ``candidate_numerators`` holds more entries than the
-            native array can carry.
+        TypeError: If an entry of ``beats`` is not a :class:`Beat`.
+        SonareValueError: If ``beats`` is empty or holds a non-finite value, or
+            ``candidate_numerators`` holds more entries than the native array
+            can carry.
         SonareError: If the core rejects an option value or a beat series it
             cannot answer.
     """
@@ -587,15 +528,17 @@ def estimate_meter(
     if not hasattr(lib, "sonare_estimate_meter_json"):
         raise _unsupported_feature_symbol("sonare_estimate_meter_json")
 
-    c_times, time_count = _to_c_float_array(beat_times)
-    c_strengths, strength_count = _to_c_float_array(beat_strengths, arg_name="beat_strengths")
-    # The C entry point carries one beat count for both arrays, so a mismatch
-    # never reaches the core's own check — reject it with the same meaning.
-    if time_count != strength_count:
-        raise SonareValueError(
-            "estimate_meter: beat_times and beat_strengths must be the same length "
-            f"(got {time_count} and {strength_count})"
-        )
+    entries = list(beats)
+    if not all(isinstance(entry, Beat) for entry in entries):
+        raise TypeError("estimate_meter: beats must be a sequence of Beat")
+    times = _validate_samples(
+        "estimate_meter", [entry.time_sec for entry in entries], arg_name="beats.time_sec"
+    )
+    strengths = _validate_samples(
+        "estimate_meter", [entry.strength for entry in entries], arg_name="beats.strength"
+    )
+    c_times, time_count = _to_c_float_array(times)
+    c_strengths, _ = _to_c_float_array(strengths)
 
     options = SonareMeterOptions(
         # Both the array and its count must be written: ctypes zeroes any field
@@ -643,8 +586,8 @@ def estimate_meter(
         # Absent only if the payload predates the field; the conservative
         # reading of a missing flag is that nothing was searched.
         searched=bool(data.get("searched", False)),
-        grouping=[int(part) for part in data.get("grouping", [])],
-        candidate_scores=[float(score) for score in data.get("candidateScores", [])],
+        grouping=np.asarray(data.get("grouping", []), dtype=np.int32),
+        candidate_scores=np.asarray(data.get("candidateScores", []), dtype=np.float32),
         candidates=[
             TimeSignature(
                 numerator=int(candidate.get("numerator", 4)),
@@ -703,11 +646,12 @@ def analyze_bpm(
                 BpmCandidate(
                     bpm=float(out.candidates[i].bpm),
                     confidence=float(out.candidates[i].confidence),
+                    relation=None,
                 )
                 for i in range(out.candidate_count)
             ],
-            autocorrelation=_float_array_result(out.autocorrelation, out.autocorrelation_count),
-            tempogram=_float_array_result(out.tempogram, out.tempogram_count),
+            autocorrelation=_from_c_float_array(out.autocorrelation, out.autocorrelation_count),
+            tempogram=_from_c_float_array(out.tempogram, out.tempogram_count),
         )
     finally:
         lib.sonare_free_bpm_analysis_result(ctypes.byref(out))
@@ -780,10 +724,10 @@ def analyze_impulse_response(
             c50=float(out.c50),
             c80=float(out.c80),
             d50=float(out.d50),
-            rt60_bands=_float_array_result(out.rt60_bands, count),
-            edt_bands=_float_array_result(out.edt_bands, count),
-            c50_bands=_optional_float_array_result(out.c50_bands, count),
-            c80_bands=_optional_float_array_result(out.c80_bands, count),
+            rt60_bands=_from_c_float_array(out.rt60_bands, count),
+            edt_bands=_from_c_float_array(out.edt_bands, count),
+            c50_bands=_optional_from_c_float_array(out.c50_bands, count),
+            c80_bands=_optional_from_c_float_array(out.c80_bands, count),
             confidence=float(out.confidence),
             is_blind=bool(out.is_blind),
         )
@@ -823,10 +767,10 @@ def detect_acoustic(
             c50=float(out.c50),
             c80=float(out.c80),
             d50=float(out.d50),
-            rt60_bands=_float_array_result(out.rt60_bands, count),
-            edt_bands=_float_array_result(out.edt_bands, count),
-            c50_bands=_optional_float_array_result(out.c50_bands, count),
-            c80_bands=_optional_float_array_result(out.c80_bands, count),
+            rt60_bands=_from_c_float_array(out.rt60_bands, count),
+            edt_bands=_from_c_float_array(out.edt_bands, count),
+            c50_bands=_optional_from_c_float_array(out.c50_bands, count),
+            c80_bands=_optional_from_c_float_array(out.c80_bands, count),
             confidence=float(out.confidence),
             is_blind=bool(out.is_blind),
         )
@@ -890,7 +834,7 @@ def analyze_rhythm(
             syncopation=float(out.syncopation),
             pattern_regularity=float(out.pattern_regularity),
             tempo_stability=float(out.tempo_stability),
-            beat_intervals=_float_array_result(out.beat_intervals, out.beat_interval_count),
+            beat_intervals=_from_c_float_array(out.beat_intervals, out.beat_interval_count),
         )
     finally:
         lib.sonare_free_rhythm_result(ctypes.byref(out))
@@ -926,8 +870,8 @@ def analyze_dynamics(
             crest_factor=float(out.crest_factor),
             loudness_range_db=float(out.loudness_range_db),
             is_compressed=bool(out.is_compressed),
-            loudness_times=_float_array_result(out.loudness_times_sec, out.loudness_count),
-            loudness_rms_db=_float_array_result(out.loudness_rms_db, out.loudness_count),
+            loudness_times_sec=_from_c_float_array(out.loudness_times_sec, out.loudness_count),
+            loudness_rms_db=_from_c_float_array(out.loudness_rms_db, out.loudness_count),
         )
     finally:
         lib.sonare_free_dynamics_result(ctypes.byref(out))
@@ -970,13 +914,13 @@ def analyze_timbre(
             density=float(out.density),
             roughness=float(out.roughness),
             complexity=float(out.complexity),
-            spectral_centroid=_float_array_result(
+            spectral_centroid=_from_c_float_array(
                 out.spectral_centroid, out.spectral_centroid_count
             ),
-            spectral_flatness=_float_array_result(
+            spectral_flatness=_from_c_float_array(
                 out.spectral_flatness, out.spectral_flatness_count
             ),
-            spectral_rolloff=_float_array_result(out.spectral_rolloff, out.spectral_rolloff_count),
+            spectral_rolloff=_from_c_float_array(out.spectral_rolloff, out.spectral_rolloff_count),
             timbre_over_time=[
                 TimbreFrame(
                     brightness=float(out.timbre_over_time[i].brightness),

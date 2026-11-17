@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import math
 
+import numpy as np
 import pytest
 
 import libsonare
@@ -38,11 +39,25 @@ def _beat_series(
     return times, strengths
 
 
+def _beats(times: list[float], strengths: list[float]) -> list[libsonare.Beat]:
+    return [
+        libsonare.Beat(time_sec=t, strength=float(v)) for t, v in zip(times, strengths, strict=True)
+    ]
+
+
+def _observed(result: libsonare.AnalysisResult, strengths) -> list[libsonare.Beat]:
+    """The beats of an analysis re-weighted by an observation stream."""
+    return [
+        libsonare.Beat(time_sec=beat.time_sec, strength=float(value))
+        for beat, value in zip(result.beats, strengths, strict=True)
+    ]
+
+
 def test_default_candidate_set_reports_four_four() -> None:
     """A four-beat accent pattern resolves as 4/4 with the native defaults."""
     times, strengths = _beat_series(4)
 
-    result = libsonare.estimate_meter(times, strengths)
+    result = libsonare.estimate_meter(_beats(times, strengths))
 
     assert result.time_signature.numerator == 4
     assert result.time_signature.denominator == 4
@@ -58,9 +73,9 @@ def test_widened_candidate_set_is_what_detects_an_odd_meter(beats_per_bar: int) 
     """The odd meter is reachable only once its numerator is requested."""
     times, strengths = _beat_series(beats_per_bar)
 
-    default_result = libsonare.estimate_meter(times, strengths)
+    default_result = libsonare.estimate_meter(_beats(times, strengths))
     widened_result = libsonare.estimate_meter(
-        times, strengths, candidate_numerators=[3, 4, 5, 6, 7]
+        _beats(times, strengths), candidate_numerators=[3, 4, 5, 6, 7]
     )
 
     assert widened_result.time_signature.numerator == beats_per_bar
@@ -71,7 +86,7 @@ def test_requested_denominator_is_reported() -> None:
     """The beat unit comes back as requested rather than as the 4 default."""
     times, strengths = _beat_series(4)
 
-    result = libsonare.estimate_meter(times, strengths, denominator=8)
+    result = libsonare.estimate_meter(_beats(times, strengths), denominator=8)
 
     assert result.time_signature.denominator == 8
     assert all(candidate.denominator == 8 for candidate in result.candidates)
@@ -82,10 +97,10 @@ def test_candidate_scores_index_by_request_order() -> None:
     times, strengths = _beat_series(4)
     requested = [7, 4, 3]
 
-    result = libsonare.estimate_meter(times, strengths, candidate_numerators=requested)
+    result = libsonare.estimate_meter(_beats(times, strengths), candidate_numerators=requested)
 
     assert len(result.candidate_scores) == len(requested)
-    best_requested = requested[result.candidate_scores.index(max(result.candidate_scores))]
+    best_requested = requested[int(np.argmax(result.candidate_scores))]
     assert best_requested == 4
     # The candidate list is ordered by support, so its head is the winner while
     # the score list's head is whatever numerator was asked for first.
@@ -98,32 +113,32 @@ def test_downbeat_phase_is_within_the_reported_numerator(beats_per_bar: int) -> 
     """The phase names a beat of the reported bar, so it cannot reach it."""
     times, strengths = _beat_series(beats_per_bar)
 
-    result = libsonare.estimate_meter(times, strengths, candidate_numerators=[3, 4, 5, 6, 7])
+    result = libsonare.estimate_meter(
+        _beats(times, strengths), candidate_numerators=[3, 4, 5, 6, 7]
+    )
 
     assert 0 <= result.downbeat_phase < result.time_signature.numerator
 
 
-def test_mismatched_beat_array_lengths_are_rejected() -> None:
-    """One C beat count covers both arrays, so Python has to catch the pairing."""
-    times, strengths = _beat_series(4)
-
-    with pytest.raises(ValueError, match="same length"):
-        libsonare.estimate_meter(times, strengths[:-1])
+def test_entries_that_are_not_beats_are_rejected() -> None:
+    """The series is Beat objects, so a bare time is a TypeError rather than a guess."""
+    with pytest.raises(TypeError, match="Beat"):
+        libsonare.estimate_meter([0.0, 0.5, 1.0])  # type: ignore[list-item]
 
 
 def test_empty_beat_series_is_rejected_by_the_facade() -> None:
     """No beats is unanswerable, so it is an error rather than a fabricated 4/4.
 
     The rejection now comes from the facade preflight rather than from the core:
-    ``beat_times`` is a buffer parameter like any other, and letting only this
+    ``beats`` is a buffer parameter like any other, and letting only this
     one report through the core gave the same class of mistake two different
     diagnostics — a :class:`SonareError` naming the C field ``beatTimes`` here,
     a :class:`SonareValueError` naming the Python argument everywhere else. The
     message keeps the argument name, because a bare "must not be empty" also
     matches the empty candidate-list guard and would pass for the wrong reason.
     """
-    with pytest.raises(SonareValueError, match="beat_times must not be empty") as excinfo:
-        libsonare.estimate_meter([], [])
+    with pytest.raises(SonareValueError, match="beats.time_sec must not be empty") as excinfo:
+        libsonare.estimate_meter([])
     assert excinfo.value.code == int(ErrorCode.INVALID_PARAMETER)
 
 
@@ -134,7 +149,7 @@ def test_negative_beat_times_still_reach_the_core_check() -> None:
     stays reachable and keeps reporting under its own wording.
     """
     with pytest.raises(SonareValueError, match="beatTimes") as excinfo:
-        libsonare.estimate_meter([-1.0, 0.5], [1.0, 1.0])
+        libsonare.estimate_meter(_beats([-1.0, 0.5], [1.0, 1.0]))
     assert excinfo.value.code == int(ErrorCode.INVALID_PARAMETER)
 
 
@@ -144,7 +159,7 @@ def test_single_beat_series_still_returns_the_unmeasured_default() -> None:
     Answered with a zero confidence, so a caller reading the confidence alone
     lands on "no idea" rather than on a value that reads as a weak detection.
     """
-    result = libsonare.estimate_meter([0.0], [1.0])
+    result = libsonare.estimate_meter(_beats([0.0], [1.0]))
 
     assert result.time_signature.numerator == 4
     assert result.time_signature.denominator == 4
@@ -162,20 +177,20 @@ def test_searched_separates_the_fallback_from_a_detection() -> None:
     ran" from a search that found nothing; only this flag does that.
     """
     times, strengths = _beat_series(4, bars=8)
-    detected = libsonare.estimate_meter(times, strengths)
+    detected = libsonare.estimate_meter(_beats(times, strengths))
     assert detected.searched is True
 
     for count in range(1, 8):
-        result = libsonare.estimate_meter(times[:count], strengths[:count])
+        result = libsonare.estimate_meter(_beats(times[:count], strengths[:count]))
         assert result.searched is False, count
         # Every field belongs to the fallback rather than to a candidate.
         assert result.time_signature.numerator == 4
         assert result.time_signature.confidence == pytest.approx(0.0)
-        assert result.grouping == [4]
+        assert result.grouping.tolist() == [4]
         assert all(score == 0.0 for score in result.candidate_scores)
 
     # Eight beats is the first span that is actually searched.
-    assert libsonare.estimate_meter(times[:8], strengths[:8]).searched is True
+    assert libsonare.estimate_meter(_beats(times[:8], strengths[:8])).searched is True
 
 
 def test_scores_grow_with_the_span_and_so_do_not_rank_spans() -> None:
@@ -183,8 +198,8 @@ def test_scores_grow_with_the_span_and_so_do_not_rank_spans() -> None:
     short_times, short_strengths = _beat_series(4, bars=4)
     long_times, long_strengths = _beat_series(4, bars=16)
 
-    short = libsonare.estimate_meter(short_times, short_strengths)
-    long = libsonare.estimate_meter(long_times, long_strengths)
+    short = libsonare.estimate_meter(_beats(short_times, short_strengths))
+    long = libsonare.estimate_meter(_beats(long_times, long_strengths))
 
     assert short.time_signature.numerator == long.time_signature.numerator == 4
     # Same meter, same accent contrast, four times the beats: about twice the
@@ -198,7 +213,7 @@ def test_empty_candidate_numerators_is_rejected_by_the_core() -> None:
     times, strengths = _beat_series(4)
 
     with pytest.raises(SonareValueError) as excinfo:
-        libsonare.estimate_meter(times, strengths, candidate_numerators=[])
+        libsonare.estimate_meter(_beats(times, strengths), candidate_numerators=[])
     assert excinfo.value.code == int(ErrorCode.INVALID_PARAMETER)
 
 
@@ -207,7 +222,7 @@ def test_over_long_candidate_list_names_the_limit() -> None:
     times, strengths = _beat_series(4)
 
     with pytest.raises(ValueError, match="16"):
-        libsonare.estimate_meter(times, strengths, candidate_numerators=list(range(2, 19)))
+        libsonare.estimate_meter(_beats(times, strengths), candidate_numerators=list(range(2, 19)))
 
 
 def test_a_numerator_too_large_for_the_c_array_is_refused_not_folded() -> None:
@@ -218,23 +233,24 @@ def test_a_numerator_too_large_for_the_c_array_is_refused_not_folded() -> None:
     """
     times, strengths = _beat_series(5)
 
-    accepted = libsonare.estimate_meter(times, strengths, candidate_numerators=[3, 4, 5])
+    accepted = libsonare.estimate_meter(_beats(times, strengths), candidate_numerators=[3, 4, 5])
     assert accepted.time_signature.numerator == 5
     assert len(accepted.candidate_scores) == 3
 
     with pytest.raises(SonareValueError, match=r"candidate_numerators\[2\]"):
-        libsonare.estimate_meter(times, strengths, candidate_numerators=[3, 4, 2**32 + 5])
+        libsonare.estimate_meter(_beats(times, strengths), candidate_numerators=[3, 4, 2**32 + 5])
 
 
-def test_camel_case_aliases_mirror_snake_case() -> None:
-    """The camelCase aliases return the same values as the snake_case fields."""
+def test_the_estimate_carries_arrays_and_no_camel_case_aliases() -> None:
     times, strengths = _beat_series(4)
 
-    result = libsonare.estimate_meter(times, strengths)
+    result = libsonare.estimate_meter(_beats(times, strengths))
 
-    assert result.timeSignature == result.time_signature
-    assert result.downbeatPhase == result.downbeat_phase
-    assert result.candidateScores == result.candidate_scores
+    assert isinstance(result.grouping, np.ndarray) and result.grouping.dtype == np.int32
+    assert isinstance(result.candidate_scores, np.ndarray)
+    assert result.candidate_scores.dtype == np.float32
+    for alias in ("timeSignature", "downbeatPhase", "candidateScores"):
+        assert not hasattr(result, alias)
 
 
 def test_candidate_scores_sit_below_zero_without_meter() -> None:
@@ -249,10 +265,12 @@ def test_candidate_scores_sit_below_zero_without_meter() -> None:
     times = [index * 0.5 for index in range(48)]
     strengths = [0.5] * 48
 
-    result = libsonare.estimate_meter(times, strengths, candidate_numerators=[3, 4, 13])
+    result = libsonare.estimate_meter(_beats(times, strengths), candidate_numerators=[3, 4, 13])
 
     assert all(score < 0.0 for score in result.candidate_scores)
-    assert result.candidate_scores == sorted(result.candidate_scores, reverse=True)
+    assert result.candidate_scores.tolist() == sorted(
+        result.candidate_scores.tolist(), reverse=True
+    )
     assert result.time_signature.confidence < 0.6
 
 
@@ -261,9 +279,9 @@ def test_widening_the_candidate_set_keeps_a_clear_meter() -> None:
     times = [index * 0.5 for index in range(48)]
     strengths = [1.0 if index % 4 == 0 else 0.3 for index in range(48)]
 
-    narrow = libsonare.estimate_meter(times, strengths)
+    narrow = libsonare.estimate_meter(_beats(times, strengths))
     wide = libsonare.estimate_meter(
-        times, strengths, candidate_numerators=[3, 4, 5, 6, 7, 9, 11, 12, 13]
+        _beats(times, strengths), candidate_numerators=[3, 4, 5, 6, 7, 9, 11, 12, 13]
     )
 
     assert narrow.time_signature.numerator == 4
@@ -325,8 +343,7 @@ def test_analyze_reports_beat_observations(analyzed: libsonare.AnalysisResult) -
     observations = analyzed.beat_observations
 
     assert observations is not None
-    assert isinstance(observations, libsonare.AnalysisBeatObservations)
-    assert analyzed.beatObservations is observations
+    assert isinstance(observations, libsonare.BeatObservations)
 
 
 def test_non_empty_observation_streams_are_beat_indexed(
@@ -336,14 +353,14 @@ def test_non_empty_observation_streams_are_beat_indexed(
     observations = analyzed.beat_observations
     assert observations is not None
 
-    beat_count = len(analyzed.beat_times)
+    beat_count = len(analyzed.beats)
     assert beat_count > 0
     for stream in (
         observations.onset_strength,
         observations.low_frequency_energy,
         observations.chord_change,
     ):
-        assert stream == [] or len(stream) == beat_count
+        assert len(stream) == 0 or len(stream) == beat_count
 
 
 def test_onset_strength_is_not_the_raw_beat_strength(
@@ -351,7 +368,7 @@ def test_onset_strength_is_not_the_raw_beat_strength(
 ) -> None:
     """The windowed observation and the raw envelope frame are different values.
 
-    ``beat_strengths`` is a single unwindowed frame of the onset envelope at
+    ``Beat.strength`` is a single unwindowed frame of the onset envelope at
     the beat's frame; ``beat_observations.onset_strength`` is the windowed
     aggregate the downbeat pass scores. They are genuinely distinct
     quantities, so an element-wise match would mean one of them stopped being
@@ -359,9 +376,10 @@ def test_onset_strength_is_not_the_raw_beat_strength(
     """
     observations = analyzed.beat_observations
     assert observations is not None
-    assert observations.onset_strength, "the click track should produce an onset stream"
+    assert observations.onset_strength.size > 0, "the click track should produce an onset stream"
 
-    assert observations.onset_strength != analyzed.beat_strengths
+    raw = np.array([beat.strength for beat in analyzed.beats], dtype=np.float32)
+    assert not np.array_equal(observations.onset_strength, raw)
 
 
 def test_observations_feed_estimate_meter(analyzed: libsonare.AnalysisResult) -> None:
@@ -375,15 +393,15 @@ def test_observations_feed_estimate_meter(analyzed: libsonare.AnalysisResult) ->
     """
     observations = analyzed.beat_observations
     assert observations is not None
-    assert len(observations.onset_strength) == len(analyzed.beat_times)
-    assert len(analyzed.beat_times) >= 8, "the estimator only searches above its beat floor"
+    assert len(observations.onset_strength) == len(analyzed.beats)
+    assert len(analyzed.beats) >= 8, "the estimator only searches above its beat floor"
 
-    result = libsonare.estimate_meter(analyzed.beat_times, observations.onset_strength)
+    result = libsonare.estimate_meter(_observed(analyzed, observations.onset_strength))
 
     assert result.time_signature.numerator == 4
     assert result.time_signature.denominator == 4
     assert 0 <= result.downbeat_phase < result.time_signature.numerator
-    assert result.candidate_scores.index(max(result.candidate_scores)) == 1
+    assert int(np.argmax(result.candidate_scores)) == 1
 
 
 def test_estimate_meter_reads_accent_contrast_not_absolute_level(
@@ -404,14 +422,14 @@ def test_estimate_meter_reads_accent_contrast_not_absolute_level(
     peak = max(observations.onset_strength)
     normalized = [value / peak for value in observations.onset_strength]
 
-    raw_result = libsonare.estimate_meter(analyzed.beat_times, observations.onset_strength)
-    normalized_result = libsonare.estimate_meter(analyzed.beat_times, normalized)
+    raw_result = libsonare.estimate_meter(_observed(analyzed, observations.onset_strength))
+    normalized_result = libsonare.estimate_meter(_observed(analyzed, normalized))
 
     assert raw_result.time_signature.numerator == normalized_result.time_signature.numerator
     assert raw_result.time_signature.denominator == normalized_result.time_signature.denominator
     assert raw_result.time_signature.confidence == normalized_result.time_signature.confidence
     assert raw_result.downbeat_phase == normalized_result.downbeat_phase
-    assert raw_result.candidate_scores == normalized_result.candidate_scores
+    assert np.array_equal(raw_result.candidate_scores, normalized_result.candidate_scores)
 
     # A tie across every candidate is exactly what saturation produces, so name
     # it rather than leaving it to the equality above.
@@ -462,11 +480,11 @@ def test_grouping_reports_how_the_bar_divides(grouping: tuple[int, ...]) -> None
     times, strengths = _grouped_series(grouping)
 
     result = libsonare.estimate_meter(
-        times, strengths, candidate_numerators=[3, 4, 5, 6, 7, 9, 11, 13]
+        _beats(times, strengths), candidate_numerators=[3, 4, 5, 6, 7, 9, 11, 13]
     )
 
     assert result.time_signature.numerator == sum(grouping)
-    assert tuple(result.grouping) == grouping
+    assert tuple(result.grouping.tolist()) == grouping
 
 
 def test_grouping_always_sums_to_the_reported_numerator() -> None:
@@ -477,9 +495,11 @@ def test_grouping_always_sums_to_the_reported_numerator() -> None:
     """
     for numerator in range(2, 33):
         times, strengths = _beat_series(numerator, bars=6)
-        result = libsonare.estimate_meter(times, strengths, candidate_numerators=[numerator])
+        result = libsonare.estimate_meter(
+            _beats(times, strengths), candidate_numerators=[numerator]
+        )
 
-        assert result.grouping, f"{numerator} reported no grouping"
+        assert result.grouping.size > 0, f"{numerator} reported no grouping"
         assert sum(result.grouping) == result.time_signature.numerator
         assert all(part > 0 for part in result.grouping)
 
@@ -489,10 +509,10 @@ def test_grouping_is_a_single_group_below_the_search_floor() -> None:
     times, strengths = _beat_series(4, bars=1)
     assert len(times) < 8
 
-    result = libsonare.estimate_meter(times[:4], strengths[:4])
+    result = libsonare.estimate_meter(_beats(times[:4], strengths[:4]))
 
     assert result.time_signature.confidence <= 0.5
-    assert result.grouping == [result.time_signature.numerator]
+    assert result.grouping.tolist() == [result.time_signature.numerator]
 
 
 def test_how_a_six_divides_is_reported_as_a_grouping_not_a_beat_unit() -> None:
@@ -502,24 +522,24 @@ def test_how_a_six_divides_is_reported_as_a_grouping_not_a_beat_unit() -> None:
     entry point never sees, so the compound reading is not one it can reach.
     """
     compound_times, compound_strengths = _grouped_series((3, 3))
-    compound = libsonare.estimate_meter(compound_times, compound_strengths)
+    compound = libsonare.estimate_meter(_beats(compound_times, compound_strengths))
 
     assert compound.time_signature.numerator == 6
     assert compound.time_signature.denominator == 4
-    assert compound.grouping == [3, 3]
+    assert compound.grouping.tolist() == [3, 3]
     assert all(candidate.denominator == 4 for candidate in compound.candidates)
 
     simple_times, simple_strengths = _grouped_series((2, 2, 2))
-    simple = libsonare.estimate_meter(simple_times, simple_strengths)
+    simple = libsonare.estimate_meter(_beats(simple_times, simple_strengths))
 
     assert simple.time_signature.numerator == 6
     assert simple.time_signature.denominator == 4
-    assert simple.grouping == [2, 2, 2]
+    assert simple.grouping.tolist() == [2, 2, 2]
 
     # The unit follows the request even for the bar that divides into threes.
-    in_eighths = libsonare.estimate_meter(compound_times, compound_strengths, denominator=8)
+    in_eighths = libsonare.estimate_meter(_beats(compound_times, compound_strengths), denominator=8)
     assert in_eighths.time_signature.denominator == 8
-    assert in_eighths.grouping == [3, 3]
+    assert in_eighths.grouping.tolist() == [3, 3]
 
 
 def test_observations_feed_the_grouping(analyzed: libsonare.AnalysisResult) -> None:
@@ -527,7 +547,7 @@ def test_observations_feed_the_grouping(analyzed: libsonare.AnalysisResult) -> N
     observations = analyzed.beat_observations
     assert observations is not None
 
-    result = libsonare.estimate_meter(analyzed.beat_times, observations.onset_strength)
+    result = libsonare.estimate_meter(_observed(analyzed, observations.onset_strength))
 
     assert sum(result.grouping) == result.time_signature.numerator
-    assert result.grouping == [2, 2]
+    assert result.grouping.tolist() == [2, 2]

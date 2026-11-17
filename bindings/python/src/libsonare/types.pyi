@@ -552,8 +552,6 @@ class Key:
     def name(self) -> str: ...
     @property
     def short_name(self) -> str: ...
-    @property
-    def shortName(self) -> str: ...
 
 class KeyDetection(Key):
     tuning_cents: float
@@ -585,20 +583,9 @@ class Beat:
     ``AnalysisResult.beat_observations.onset_strength``, the windowed value the
     library's own downbeat pass uses."""
 
-    time: float
-    strength: float | None
-    def __init__(self, time: float, strength: float | None = None) -> None: ...
-
-class BpmHypothesis:
-    value: float
-    confidence: float
-    relation: Literal["primary", "half", "double", "other"]
-    def __init__(
-        self,
-        value: float,
-        confidence: float,
-        relation: Literal["primary", "half", "double", "other"],
-    ) -> None: ...
+    time_sec: float
+    strength: float
+    def __init__(self, time_sec: float, strength: float) -> None: ...
 
 class AnalysisDynamics:
     dynamic_range_db: float
@@ -616,33 +603,6 @@ class AnalysisDynamics:
         loudness_range_db: float,
         is_compressed: bool,
     ) -> None: ...
-    @property
-    def dynamicRangeDb(self) -> float: ...
-    @property
-    def peakDb(self) -> float: ...
-    @property
-    def rmsDb(self) -> float: ...
-    @property
-    def crestFactor(self) -> float: ...
-    @property
-    def loudnessRangeDb(self) -> float: ...
-    @property
-    def isCompressed(self) -> bool: ...
-
-class AnalysisTimbre:
-    brightness: float
-    warmth: float
-    density: float
-    roughness: float
-    complexity: float
-    def __init__(
-        self,
-        brightness: float,
-        warmth: float,
-        density: float,
-        roughness: float,
-        complexity: float,
-    ) -> None: ...
 
 class AnalysisRhythm:
     time_signature: TimeSignature
@@ -658,14 +618,6 @@ class AnalysisRhythm:
         pattern_regularity: float,
         tempo_stability: float,
     ) -> None: ...
-    @property
-    def timeSignature(self) -> TimeSignature: ...
-    @property
-    def grooveType(self) -> str: ...
-    @property
-    def patternRegularity(self) -> float: ...
-    @property
-    def tempoStability(self) -> float: ...
 
 class AnalysisMelody:
     pitch_range_octaves: float
@@ -681,39 +633,25 @@ class AnalysisMelody:
         vibrato_rate: float,
         pitches: list[MelodyPoint],
     ) -> None: ...
-    @property
-    def pitchRangeOctaves(self) -> float: ...
-    @property
-    def pitchStability(self) -> float: ...
-    @property
-    def meanFrequency(self) -> float: ...
-    @property
-    def vibratoRate(self) -> float: ...
 
-class AnalysisBeatObservations:
+class BeatObservations:
     """Beat-level evidence the downbeat and meter pass scores, one value per
-    beat and parallel to ``AnalysisResult.beat_times``. An empty stream means
-    the analysis could not produce it, not that every beat scored zero:
+    beat and parallel to ``AnalysisResult.beats``. An empty stream means the
+    analysis could not produce it, not that every beat scored zero:
     ``low_frequency_energy`` is empty without audio, and ``chord_change`` is
     empty until chords are analyzed. ``onset_strength`` is the windowed
-    aggregate around each beat, distinct from ``AnalysisResult.beat_strengths``
-    (a single raw unwindowed envelope frame)."""
+    aggregate around each beat, distinct from ``Beat.strength`` (a single raw
+    unwindowed envelope frame)."""
 
-    onset_strength: list[float]
-    low_frequency_energy: list[float]
-    chord_change: list[float]
+    onset_strength: NDArray[np.float32]
+    low_frequency_energy: NDArray[np.float32]
+    chord_change: NDArray[np.float32]
     def __init__(
         self,
-        onset_strength: list[float] = ...,
-        low_frequency_energy: list[float] = ...,
-        chord_change: list[float] = ...,
+        onset_strength: NDArray[np.float32] = ...,
+        low_frequency_energy: NDArray[np.float32] = ...,
+        chord_change: NDArray[np.float32] = ...,
     ) -> None: ...
-    @property
-    def onsetStrength(self) -> list[float]: ...
-    @property
-    def lowFrequencyEnergy(self) -> list[float]: ...
-    @property
-    def chordChange(self) -> list[float]: ...
 
 class AnalysisResult:
     """Full audio analysis result.
@@ -728,20 +666,19 @@ class AnalysisResult:
     bpm_confidence: float
     key: Key
     time_signature: TimeSignature
-    beat_times: list[float]
-    beat_strengths: list[float]
-    downbeat_indices: list[int]
+    beats: list[Beat]
+    downbeats: list[Beat]
     downbeat_phase: int
-    bpm_candidates: list[BpmHypothesis]
+    bpm_candidates: list[BpmCandidate]
     time_signature_candidates: list[TimeSignature]
-    chords: list[Chord]
+    chords: list[AnalysisChord]
     sections: list[Section]
-    timbre: AnalysisTimbre | None
+    timbre: TimbreFrame | None
     dynamics: AnalysisDynamics | None
     rhythm: AnalysisRhythm | None
     melody: AnalysisMelody | None
-    beat_observations: AnalysisBeatObservations | None
-    beat_local_bpm: list[float]
+    beat_observations: BeatObservations | None
+    beat_local_bpm: NDArray[np.float32]
     form: str
     tuning_cents: float
     def __init__(
@@ -750,45 +687,22 @@ class AnalysisResult:
         bpm_confidence: float,
         key: Key,
         time_signature: TimeSignature,
-        beat_times: list[float],
-        beat_strengths: list[float] = ...,
-        downbeat_indices: list[int] = ...,
+        beats: list[Beat] = ...,
+        downbeats: list[Beat] = ...,
         downbeat_phase: int = 0,
-        bpm_candidates: list[BpmHypothesis] = ...,
+        bpm_candidates: list[BpmCandidate] = ...,
         time_signature_candidates: list[TimeSignature] = ...,
-        chords: list[Chord] = ...,
+        chords: list[AnalysisChord] = ...,
         sections: list[Section] = ...,
-        timbre: AnalysisTimbre | None = None,
+        timbre: TimbreFrame | None = None,
         dynamics: AnalysisDynamics | None = None,
         rhythm: AnalysisRhythm | None = None,
         melody: AnalysisMelody | None = None,
-        beat_observations: AnalysisBeatObservations | None = None,
-        beat_local_bpm: list[float] = ...,
+        beat_observations: BeatObservations | None = None,
+        beat_local_bpm: NDArray[np.float32] = ...,
         form: str = "",
         tuning_cents: float = 0.0,
     ) -> None: ...
-    @property
-    def bpmConfidence(self) -> float: ...
-    @property
-    def timeSignature(self) -> TimeSignature: ...
-    @property
-    def bpmCandidates(self) -> list[BpmHypothesis]: ...
-    @property
-    def timeSignatureCandidates(self) -> list[TimeSignature]: ...
-    @property
-    def beatTimes(self) -> list[float]: ...
-    @property
-    def beatStrengths(self) -> list[float]: ...
-    @property
-    def downbeatIndices(self) -> list[int]: ...
-    @property
-    def downbeatPhase(self) -> int: ...
-    @property
-    def beatObservations(self) -> AnalysisBeatObservations | None: ...
-    @property
-    def beatLocalBpm(self) -> list[float]: ...
-    @property
-    def beats(self) -> list[Beat]: ...
 
 class MeterEstimate:
     """Meter estimated over a caller-supplied beat series. ``candidate_scores``
@@ -811,29 +725,24 @@ class MeterEstimate:
     time_signature: TimeSignature
     downbeat_phase: int
     searched: bool
-    grouping: list[int]
-    candidate_scores: list[float]
+    grouping: NDArray[np.int32]
+    candidate_scores: NDArray[np.float32]
     candidates: list[TimeSignature]
     def __init__(
         self,
         time_signature: TimeSignature,
         downbeat_phase: int,
         searched: bool,
-        grouping: list[int] = ...,
-        candidate_scores: list[float] = ...,
+        grouping: NDArray[np.int32] = ...,
+        candidate_scores: NDArray[np.float32] = ...,
         candidates: list[TimeSignature] = ...,
     ) -> None: ...
-    @property
-    def timeSignature(self) -> TimeSignature: ...
-    @property
-    def downbeatPhase(self) -> int: ...
-    @property
-    def candidateScores(self) -> list[float]: ...
 
 class BpmCandidate:
     bpm: float
     confidence: float
-    def __init__(self, bpm: float, confidence: float) -> None: ...
+    relation: str | None
+    def __init__(self, bpm: float, confidence: float, relation: str | None = None) -> None: ...
 
 class BpmAnalysisResult:
     """Detailed BPM analysis result.
@@ -849,15 +758,15 @@ class BpmAnalysisResult:
     bpm: float
     confidence: float
     candidates: list[BpmCandidate]
-    autocorrelation: list[float]
-    tempogram: list[float]
+    autocorrelation: NDArray[np.float32]
+    tempogram: NDArray[np.float32]
     def __init__(
         self,
         bpm: float,
         confidence: float,
         candidates: list[BpmCandidate],
-        autocorrelation: list[float],
-        tempogram: list[float],
+        autocorrelation: NDArray[np.float32],
+        tempogram: NDArray[np.float32],
     ) -> None: ...
 
 class AcousticResult:
@@ -869,8 +778,8 @@ class AcousticResult:
     time, which only a measured impulse response provides, so they are NaN when
     ``is_blind`` is true -- ``edt`` measures the 0 to -10 dB decay and the blind
     estimator only fits the late decay ``rt60`` comes from. ``c50_bands`` and
-    ``c80_bands`` are then empty lists (not computed), while ``edt_bands`` stays
-    a full-length list of NaNs so it can be indexed by the same band index as
+    ``c80_bands`` are then empty arrays (not computed), while ``edt_bands`` stays
+    a full-length array of NaNs so it can be indexed by the same band index as
     ``rt60_bands``."""
 
     rt60: float
@@ -878,10 +787,10 @@ class AcousticResult:
     c50: float
     c80: float
     d50: float
-    rt60_bands: list[float]
-    edt_bands: list[float]
-    c50_bands: list[float]
-    c80_bands: list[float]
+    rt60_bands: NDArray[np.float32]
+    edt_bands: NDArray[np.float32]
+    c50_bands: NDArray[np.float32]
+    c80_bands: NDArray[np.float32]
     confidence: float
     is_blind: bool
     def __init__(
@@ -891,23 +800,19 @@ class AcousticResult:
         c50: float,
         c80: float,
         d50: float,
-        rt60_bands: list[float],
-        edt_bands: list[float],
-        c50_bands: list[float],
-        c80_bands: list[float],
+        rt60_bands: NDArray[np.float32],
+        edt_bands: NDArray[np.float32],
+        c50_bands: NDArray[np.float32],
+        c80_bands: NDArray[np.float32],
         confidence: float,
         is_blind: bool,
     ) -> None: ...
     @property
     def rt60Bands(self) -> list[float]: ...
     @property
-    def edtBands(self) -> list[float]: ...
-    @property
     def c50Bands(self) -> list[float]: ...
     @property
     def c80Bands(self) -> list[float]: ...
-    @property
-    def isBlind(self) -> bool: ...
 
 class RirDiagnostic:
     code: str
@@ -1030,18 +935,6 @@ class LufsResult:
         max_short_term_lufs: float,
         loudness_range: float,
     ) -> None: ...
-    @property
-    def integratedLufs(self) -> float: ...
-    @property
-    def momentaryLufs(self) -> float: ...
-    @property
-    def shortTermLufs(self) -> float: ...
-    @property
-    def maxMomentaryLufs(self) -> float: ...
-    @property
-    def maxShortTermLufs(self) -> float: ...
-    @property
-    def loudnessRange(self) -> float: ...
 
 class EqSpectrumSnapshot:
     """Realtime equalizer snapshot.
@@ -1096,7 +989,7 @@ class RhythmResult:
     syncopation: float
     pattern_regularity: float
     tempo_stability: float
-    beat_intervals: list[float]
+    beat_intervals: NDArray[np.float32]
     def __init__(
         self,
         bpm: float,
@@ -1105,18 +998,8 @@ class RhythmResult:
         syncopation: float,
         pattern_regularity: float,
         tempo_stability: float,
-        beat_intervals: list[float],
+        beat_intervals: NDArray[np.float32],
     ) -> None: ...
-    @property
-    def timeSignature(self) -> TimeSignature: ...
-    @property
-    def grooveType(self) -> str: ...
-    @property
-    def patternRegularity(self) -> float: ...
-    @property
-    def tempoStability(self) -> float: ...
-    @property
-    def beatIntervals(self) -> list[float]: ...
 
 class DynamicsResult:
     dynamic_range_db: float
@@ -1125,8 +1008,8 @@ class DynamicsResult:
     crest_factor: float
     loudness_range_db: float
     is_compressed: bool
-    loudness_times: list[float]
-    loudness_rms_db: list[float]
+    loudness_times_sec: NDArray[np.float32]
+    loudness_rms_db: NDArray[np.float32]
     def __init__(
         self,
         dynamic_range_db: float,
@@ -1135,25 +1018,9 @@ class DynamicsResult:
         crest_factor: float,
         loudness_range_db: float,
         is_compressed: bool,
-        loudness_times: list[float],
-        loudness_rms_db: list[float],
+        loudness_times_sec: NDArray[np.float32],
+        loudness_rms_db: NDArray[np.float32],
     ) -> None: ...
-    @property
-    def dynamicRangeDb(self) -> float: ...
-    @property
-    def peakDb(self) -> float: ...
-    @property
-    def rmsDb(self) -> float: ...
-    @property
-    def crestFactor(self) -> float: ...
-    @property
-    def loudnessRangeDb(self) -> float: ...
-    @property
-    def isCompressed(self) -> bool: ...
-    @property
-    def loudnessTimes(self) -> list[float]: ...
-    @property
-    def loudnessRmsDb(self) -> list[float]: ...
 
 class ClickDetection:
     count: int
@@ -1295,9 +1162,9 @@ class TimbreResult:
     density: float
     roughness: float
     complexity: float
-    spectral_centroid: list[float]
-    spectral_flatness: list[float]
-    spectral_rolloff: list[float]
+    spectral_centroid: NDArray[np.float32]
+    spectral_flatness: NDArray[np.float32]
+    spectral_rolloff: NDArray[np.float32]
     timbre_over_time: list[TimbreFrame]
     def __init__(
         self,
@@ -1306,29 +1173,25 @@ class TimbreResult:
         density: float,
         roughness: float,
         complexity: float,
-        spectral_centroid: list[float],
-        spectral_flatness: list[float],
-        spectral_rolloff: list[float],
+        spectral_centroid: NDArray[np.float32],
+        spectral_flatness: NDArray[np.float32],
+        spectral_rolloff: NDArray[np.float32],
         timbre_over_time: list[TimbreFrame],
     ) -> None: ...
-    @property
-    def spectralCentroid(self) -> list[float]: ...
-    @property
-    def spectralFlatness(self) -> list[float]: ...
-    @property
-    def spectralRolloff(self) -> list[float]: ...
-    @property
-    def timbreOverTime(self) -> list[TimbreFrame]: ...
+
+CHORD_QUALITIES: tuple[str, ...]
 
 class Chord:
+    """Detected chord. ``name`` is the chord symbol (``"Am7"``, ``"C/E"``; ``"N.C."``
+    for no chord), filled by the analysis functions."""
+
     root: PitchClass
     quality: str
     start: float
     end: float
     confidence: float
     bass: PitchClass | None
-    canonical_name: str
-    roman_numeral: str | None
+    name: str
     def __init__(
         self,
         root: PitchClass,
@@ -1337,8 +1200,7 @@ class Chord:
         end: float,
         confidence: float,
         bass: PitchClass | None = None,
-        canonical_name: str = "",
-        roman_numeral: str | None = None,
+        name: str = "",
     ) -> None: ...
     @property
     def duration(self) -> float: ...
@@ -1346,12 +1208,20 @@ class Chord:
     def root_name(self) -> str: ...
     @property
     def bass_name(self) -> str: ...
-    @property
-    def rootName(self) -> str: ...
-    @property
-    def bassName(self) -> str: ...
-    @property
-    def name(self) -> str: ...
+
+class AnalysisChord(Chord):
+    roman_numeral: str
+    def __init__(
+        self,
+        root: PitchClass,
+        quality: str,
+        start: float,
+        end: float,
+        confidence: float,
+        bass: PitchClass | None = None,
+        name: str = "",
+        roman_numeral: str = "",
+    ) -> None: ...
 
 class ChordAnalysisResult:
     chords: list[Chord]
@@ -1361,7 +1231,7 @@ class ChordAnalysisResult:
 ChordFunctionName: TypeAlias = Literal["tonic", "subdominant", "dominant", "chromatic", "none"]
 
 class FunctionalChord(Chord):
-    roman: str
+    roman_numeral: str
     function: ChordFunctionName
     def __init__(
         self,
@@ -1371,9 +1241,8 @@ class FunctionalChord(Chord):
         end: float,
         confidence: float,
         bass: PitchClass | None = None,
-        canonical_name: str = "",
-        roman_numeral: str | None = None,
-        roman: str = "",
+        name: str = "",
+        roman_numeral: str = "",
         function: ChordFunctionName = "none",
     ) -> None: ...
 
@@ -2781,8 +2650,8 @@ class Section:
     end: float
     energy_level: float  # median frame RMS in the section over the loudest section's, [0, 1]
     confidence: float
-    canonical_name: str
     group: int  # sections sharing a value repeat the same material; 0, 1, ... by first appearance
+    name: str
     def __init__(
         self,
         type: SectionType,
@@ -2790,15 +2659,9 @@ class Section:
         end: float,
         energy_level: float,
         confidence: float,
-        canonical_name: str = "",
         group: int = 0,
+        name: str = "",
     ) -> None: ...
-    @property
-    def name(self) -> str: ...
-
-class SectionResult:
-    sections: list[Section]
-    def __init__(self, sections: list[Section]) -> None: ...
 
 class Boundary:
     time: float
@@ -2808,20 +2671,18 @@ class Boundary:
 
 class BoundaryResult:
     boundaries: list[Boundary]
-    novelty_curve: list[float]
+    novelty_curve: NDArray[np.float32]
     novelty_peak: float
     sample_rate: int
     hop_length: int
-    n_frames: int
     frame_stride: int
     def __init__(
         self,
         boundaries: list[Boundary],
-        novelty_curve: list[float],
+        novelty_curve: NDArray[np.float32],
         novelty_peak: float,
         sample_rate: int,
         hop_length: int,
-        n_frames: int,
         frame_stride: int,
     ) -> None: ...
 

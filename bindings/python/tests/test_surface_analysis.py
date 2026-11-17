@@ -26,7 +26,6 @@ OPERATIONS = (
     "analyze_rhythm",
     "analyze_sections",
     "analyze_timbre",
-    "analyze_with_progress",
     "auto_tune",
     "bass_chroma",
     "chord_functional_analysis",
@@ -803,3 +802,210 @@ def test_stream_names_carry_their_unit() -> None:
             assert hasattr(stats, name), name
     finally:
         analyzer.close()
+
+
+# ---------------------------------------------------------------------------
+# Analysis result classes: typed beats, arrays, names and the progress option
+# ---------------------------------------------------------------------------
+
+
+def _clicks(seconds: float = 8.0, bpm: float = 120.0) -> np.ndarray:
+    """An accented click track: a decaying 1 kHz burst on every beat, louder every fourth."""
+    out = np.zeros(int(SR * seconds), dtype=np.float32)
+    burst = np.exp(-np.arange(1500) / 200.0) * np.sin(2 * np.pi * 1000.0 * np.arange(1500) / SR)
+    step = int(SR * 60.0 / bpm)
+    for index, start in enumerate(range(0, len(out) - len(burst), step)):
+        out[start : start + len(burst)] += (0.9 if index % 4 == 0 else 0.5) * burst.astype(
+            np.float32
+        )
+    return out
+
+
+@pytest.fixture(scope="module")
+def analysis() -> libsonare.AnalysisResult:
+    return libsonare.analyze(_clicks(), SR, compute_tempo_curve=True)
+
+
+def test_beats_and_downbeats_are_beat_objects(analysis: libsonare.AnalysisResult) -> None:
+    assert analysis.beats
+    for beat in (*analysis.beats, *analysis.downbeats):
+        assert isinstance(beat, libsonare.Beat)
+        assert isinstance(beat.time_sec, float)
+        assert isinstance(beat.strength, float)
+    beat_times = [beat.time_sec for beat in analysis.beats]
+    assert beat_times == sorted(beat_times)
+    ids = {id(beat) for beat in analysis.beats}
+    assert all(id(beat) in ids for beat in analysis.downbeats)
+    assert all(isinstance(chord, libsonare.AnalysisChord) for chord in analysis.chords)
+    assert all(isinstance(c, libsonare.BpmCandidate) for c in analysis.bpm_candidates)
+    assert {c.relation for c in analysis.bpm_candidates} <= {"primary", "half", "double", "other"}
+    assert analysis.timbre is None or isinstance(analysis.timbre, libsonare.TimbreFrame)
+    assert isinstance(analysis.beat_observations, libsonare.BeatObservations)
+
+
+def test_bpm_analysis_candidates_carry_no_relation() -> None:
+    result = libsonare.analyze_bpm(_clicks(), SR)
+    assert result.candidates
+    assert all(
+        isinstance(c, libsonare.BpmCandidate) and c.relation is None for c in result.candidates
+    )
+
+
+def test_removed_result_attributes_are_absent(analysis: libsonare.AnalysisResult) -> None:
+    for name in (
+        "beat_times",
+        "beat_strengths",
+        "downbeat_indices",
+        "beatTimes",
+        "bpmConfidence",
+        "timeSignature",
+        "beatObservations",
+        "beatLocalBpm",
+    ):
+        assert not hasattr(analysis, name), name
+    assert not hasattr(libsonare, "analyze_with_progress")
+    for removed in ("AnalysisTimbre", "SectionResult", "BpmHypothesis", "AnalysisBeatObservations"):
+        assert not hasattr(libsonare, removed), removed
+    key = libsonare.detect_key(_signal(), SR)
+    assert not hasattr(key, "shortName")
+    chord = analysis.chords[0] if analysis.chords else None
+    if chord is not None:
+        assert not any(hasattr(chord, name) for name in ("rootName", "bassName", "canonical_name"))
+    assert not hasattr(analysis.dynamics, "dynamicRangeDb")
+
+
+def test_analysis_arrays_are_float32_ndarrays(analysis: libsonare.AnalysisResult) -> None:
+    assert isinstance(analysis.beat_local_bpm, np.ndarray)
+    assert analysis.beat_local_bpm.dtype == np.float32
+    observations = analysis.beat_observations
+    assert observations is not None
+    for name in ("onset_strength", "low_frequency_energy", "chord_change"):
+        values = getattr(observations, name)
+        assert isinstance(values, np.ndarray) and values.dtype == np.float32, name
+
+    signal = _signal()
+    rhythm = libsonare.analyze_rhythm(signal, SR)
+    dynamics = libsonare.analyze_dynamics(signal, SR)
+    timbre = libsonare.analyze_timbre(signal, SR)
+    bpm = libsonare.analyze_bpm(signal, SR)
+    acoustic = libsonare.analyze_impulse_response(signal, SR)
+    boundaries = libsonare.detect_boundaries(signal, SR)
+    meter = libsonare.estimate_meter(analysis.beats)
+    arrays = {
+        "RhythmResult.beat_intervals": rhythm.beat_intervals,
+        "DynamicsResult.loudness_times_sec": dynamics.loudness_times_sec,
+        "DynamicsResult.loudness_rms_db": dynamics.loudness_rms_db,
+        "TimbreResult.spectral_centroid": timbre.spectral_centroid,
+        "TimbreResult.spectral_flatness": timbre.spectral_flatness,
+        "TimbreResult.spectral_rolloff": timbre.spectral_rolloff,
+        "BpmAnalysisResult.autocorrelation": bpm.autocorrelation,
+        "BpmAnalysisResult.tempogram": bpm.tempogram,
+        "AcousticResult.rt60_bands": acoustic.rt60_bands,
+        "AcousticResult.edt_bands": acoustic.edt_bands,
+        "AcousticResult.c50_bands": acoustic.c50_bands,
+        "AcousticResult.c80_bands": acoustic.c80_bands,
+        "BoundaryResult.novelty_curve": boundaries.novelty_curve,
+        "MeterEstimate.candidate_scores": meter.candidate_scores,
+    }
+    for label, values in arrays.items():
+        assert isinstance(values, np.ndarray) and values.dtype == np.float32, label
+    assert isinstance(meter.grouping, np.ndarray) and meter.grouping.dtype == np.int32
+    assert not hasattr(boundaries, "n_frames")
+    assert not hasattr(dynamics, "loudness_times")
+
+
+def test_boundary_and_beat_types_are_importable() -> None:
+    for name in (
+        "Beat",
+        "AnalysisChord",
+        "BeatObservations",
+        "Boundary",
+        "BoundaryResult",
+        "BpmCandidate",
+        "CHORD_QUALITIES",
+        "ProgressCallback",
+        "CancelCallback",
+    ):
+        assert getattr(libsonare, name) is not None
+        assert name in libsonare.__all__
+
+
+def test_analyze_reports_monotone_progress_and_cancels() -> None:
+    calls: list[tuple[float, str]] = []
+    result = libsonare.analyze(
+        _tone(2.0), SR, on_progress=lambda progress, stage: calls.append((progress, stage))
+    )
+    assert isinstance(result, libsonare.AnalysisResult)
+    assert calls
+    fractions = [progress for progress, _ in calls]
+    assert fractions == sorted(fractions)
+    assert all(0.0 <= value <= 1.0 for value in fractions)
+    assert all(isinstance(stage, str) for _, stage in calls)
+
+    with pytest.raises(libsonare.SonareError) as caught:
+        libsonare.analyze(_tone(2.0), SR, cancel=lambda: True)
+    assert caught.value.code == libsonare.ErrorCode.CANCELLED
+
+
+def test_estimate_meter_takes_the_beats_of_an_analysis(analysis: libsonare.AnalysisResult) -> None:
+    meter = libsonare.estimate_meter(analysis.beats)
+    assert meter.searched
+    assert isinstance(meter.time_signature, libsonare.TimeSignature)
+    assert "beat_times" not in inspect.signature(libsonare.estimate_meter).parameters
+    with pytest.raises(TypeError):
+        libsonare.estimate_meter([0.5, 1.0, 1.5])  # type: ignore[list-item]
+    with pytest.raises(SonareValueError):
+        libsonare.estimate_meter([])
+
+
+def test_chord_qualities_index_the_c_ordinals() -> None:
+    assert len(libsonare.CHORD_QUALITIES) == 25
+    assert libsonare.CHORD_QUALITIES[0] == "major"
+    assert libsonare.CHORD_QUALITIES[9] == "unknown"
+    assert libsonare.CHORD_QUALITIES[24] == "dominant7Sharp9"
+    # A known A-minor-seventh detection reports the token its ordinal indexes.
+    minor7 = libsonare.CHORD_QUALITIES.index("minor7")
+    assert minor7 == 6
+    names = {
+        quality: libsonare.Chord(libsonare.PitchClass.A, quality, 0.0, 1.0, 1.0).name
+        for quality in libsonare.CHORD_QUALITIES
+    }
+    assert set(names) == set(libsonare.CHORD_QUALITIES)
+    detected = libsonare.detect_chords(_signal(), SR, use_beat_sync=False).chords
+    assert all(chord.quality in libsonare.CHORD_QUALITIES for chord in detected)
+    assert all(chord.name for chord in detected)
+
+
+def test_chord_names_and_roman_numerals_are_fields() -> None:
+    chord = libsonare.Chord(libsonare.PitchClass.C, "major", 0.0, 1.0, 1.0, name="C")
+    assert chord.name == "C"
+    assert not hasattr(chord, "roman_numeral")
+    functional = libsonare.chord_functions([chord], (libsonare.PitchClass.C, libsonare.Mode.MAJOR))
+    assert functional[0].roman_numeral == "I"
+    assert functional[0].name == "C"
+    assert not hasattr(functional[0], "roman")
+
+
+def test_sections_are_a_named_list() -> None:
+    sections = libsonare.analyze_sections(_tone(8.0), SR, min_section_sec=2.0)
+    assert isinstance(sections, list)
+    for section in sections:
+        assert isinstance(section, libsonare.Section)
+        assert section.name
+    assert "canonical_name" not in {f.name for f in libsonare.Section.__dataclass_fields__.values()}
+
+
+def test_key_detection_names_the_chroma_high_pass() -> None:
+    for name in ("detect_key", "detect_key_candidates"):
+        parameters = inspect.signature(getattr(libsonare, name)).parameters
+        assert "chroma_high_pass_hz" in parameters
+        assert "high_pass_hz" not in parameters
+    assert "chroma_high_pass_hz" in inspect.signature(libsonare.analyze).parameters
+    assert "chroma_highpass_hz" not in inspect.signature(libsonare.analyze).parameters
+    libsonare.detect_key(_signal(), SR, chroma_high_pass_hz=120.0)
+
+
+def test_transcribe_result_is_frozen() -> None:
+    result = libsonare.transcribe(_signal(), SR, tempo_bpm=120.0)
+    with pytest.raises(Exception, match="frozen|assign"):
+        result.note_count = 0  # type: ignore[misc]

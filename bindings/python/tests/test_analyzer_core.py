@@ -320,7 +320,7 @@ def test_analyze_with_silence() -> None:
     # Time signature falls back to 4/4 when no rhythmic content is present.
     assert result.time_signature.numerator == 4
     assert result.time_signature.denominator == 4
-    assert isinstance(result.beat_times, list)
+    assert isinstance(result.beats, list)
 
 
 def test_compat_numeric_and_signal_utilities() -> None:
@@ -419,7 +419,6 @@ def test_audio_detect_key() -> None:
     # Name accessors must agree with the resolved root/mode.
     assert key.name == "C major"
     assert key.short_name == "C"
-    assert key.shortName == key.short_name
 
 
 def test_audio_detect_beats() -> None:

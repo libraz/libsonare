@@ -5,7 +5,7 @@ These cover the full analysis result surface:
   rhythm/melody/form plus per-beat strengths) via ``sonare_analyze_json``.
 - ``analyze_melody(use_pyin=...)`` / ``center=...`` routing through
   ``sonare_analyze_melody_ex``.
-- ``analyze_with_progress`` invoking the progress callback.
+- ``analyze(on_progress=...)`` invoking the progress callback.
 """
 
 from __future__ import annotations
@@ -104,7 +104,7 @@ def test_parse_analysis_json_retains_tempo_and_meter_hypotheses() -> None:
         }
     )
 
-    assert [(candidate.value, candidate.relation) for candidate in result.bpm_candidates] == [
+    assert [(candidate.bpm, candidate.relation) for candidate in result.bpm_candidates] == [
         (120.0, "primary"),
         (60.0, "half"),
     ]
@@ -124,15 +124,13 @@ def analyze_result():
 
 @pytest.fixture(scope="module")
 def progress_result():
-    """One analyze_with_progress() pass plus its recorded callback calls."""
+    """One analyze(on_progress=...) pass plus its recorded callback calls."""
     calls: list[tuple[float, str]] = []
 
     def _on_progress(progress: float, stage: str) -> None:
         calls.append((progress, stage))
 
-    result = libsonare.analyze_with_progress(
-        _generate_test_signal(), sample_rate=22050, on_progress=_on_progress
-    )
+    result = libsonare.analyze(_generate_test_signal(), sample_rate=22050, on_progress=_on_progress)
     return result, calls
 
 
@@ -143,8 +141,8 @@ def test_analyze_returns_extended_fields(analyze_result) -> None:
         AnalysisMelody,
         AnalysisResult,
         AnalysisRhythm,
-        AnalysisTimbre,
         Key,
+        TimbreFrame,
         TimeSignature,
     )
     from libsonare.types import Mode, PitchClass
@@ -160,18 +158,19 @@ def test_analyze_returns_extended_fields(analyze_result) -> None:
     assert isinstance(result.key.root, PitchClass)
     assert isinstance(result.key.mode, Mode)
     assert isinstance(result.time_signature, TimeSignature)
-    assert isinstance(result.beat_times, list)
-    assert all(isinstance(t, float) for t in result.beat_times)
+    assert isinstance(result.beats, list)
+    assert all(isinstance(b, libsonare.Beat) for b in result.beats)
+    assert all(isinstance(b.time_sec, float) for b in result.beats)
 
     # New fields present.
-    assert isinstance(result.beat_strengths, list)
+    assert isinstance(result.downbeats, list)
     assert isinstance(result.chords, list)
     assert isinstance(result.sections, list)
     assert isinstance(result.form, str)
 
     if _has_analyze_json():
         # JSON path: rich sub-results are populated.
-        assert isinstance(result.timbre, AnalysisTimbre)
+        assert isinstance(result.timbre, TimbreFrame)
         assert isinstance(result.dynamics, AnalysisDynamics)
         assert isinstance(result.rhythm, AnalysisRhythm)
         assert isinstance(result.melody, AnalysisMelody)
@@ -214,17 +213,18 @@ def test_analysis_json_uses_canonical_display_names() -> None:
 
 
 @requires_json
-def test_analyze_beat_strengths_align_with_beat_times(analyze_result) -> None:
-    """beat_strengths has the same length as beat_times (JSON path)."""
+def test_analyze_beats_carry_a_strength_each(analyze_result) -> None:
+    """Every beat has a float strength and downbeats are drawn from the beats (JSON path)."""
     result = analyze_result
-    assert len(result.beat_strengths) == len(result.beat_times)
-    assert all(isinstance(s, float) for s in result.beat_strengths)
+    assert all(isinstance(b.strength, float) for b in result.beats)
+    beat_ids = {id(b) for b in result.beats}
+    assert all(id(d) in beat_ids for d in result.downbeats)
 
 
 @requires_json
 def test_analyze_sub_result_types(analyze_result) -> None:
     """The JSON-decoded sub-results expose the expected scalar fields."""
-    from libsonare import Chord, Section
+    from libsonare import AnalysisChord, Section
     from libsonare.types import PitchClass, SectionType
 
     result = analyze_result
@@ -241,17 +241,12 @@ def test_analyze_sub_result_types(analyze_result) -> None:
 
     # Chords map to Chord with enum roots; sections to Section with enum types.
     for chord in result.chords:
-        assert isinstance(chord, Chord)
+        assert isinstance(chord, AnalysisChord)
         assert isinstance(chord.root, PitchClass)
         assert isinstance(chord.quality, str)
     for section in result.sections:
         assert isinstance(section, Section)
         assert isinstance(section.type, SectionType)
-
-    # camelCase aliases mirror the snake_case fields.
-    assert result.dynamics.dynamicRangeDb == result.dynamics.dynamic_range_db
-    assert result.rhythm.grooveType == result.rhythm.groove_type
-    assert result.melody.meanFrequency == result.melody.mean_frequency
 
 
 def test_analyze_melody_default_runs() -> None:
@@ -289,7 +284,7 @@ def test_analyze_melody_center_flag_runs() -> None:
 
 
 @requires_json_progress
-def test_analyze_with_progress_invokes_callback(progress_result) -> None:
+def test_analyze_progress_invokes_callback(progress_result) -> None:
     """A void progress callback remains compatible and returns a rich result."""
     from libsonare import AnalysisResult
 
@@ -303,7 +298,7 @@ def test_analyze_with_progress_invokes_callback(progress_result) -> None:
 
 
 @requires_json_progress
-def test_analyze_with_progress_false_result_does_not_cancel() -> None:
+def test_analyze_progress_false_result_does_not_cancel() -> None:
     """A progress callback's boolean return value is ignored."""
     calls: list[float] = []
 
@@ -311,7 +306,7 @@ def test_analyze_with_progress_false_result_does_not_cancel() -> None:
         calls.append(progress)
         return False
 
-    result = libsonare.analyze_with_progress(
+    result = libsonare.analyze(
         _generate_test_signal(duration=1.0), sample_rate=22050, on_progress=on_progress
     )
 
@@ -320,12 +315,12 @@ def test_analyze_with_progress_false_result_does_not_cancel() -> None:
 
 
 @requires_json_progress
-def test_analyze_with_progress_cancel_callable_cancels_without_a_result() -> None:
+def test_analyze_progress_cancel_callable_cancels_without_a_result() -> None:
     """The keyword-only cancel callable maps to the native cancellation callback."""
     result = None
 
     with pytest.raises(libsonare.SonareError) as exc:
-        result = libsonare.analyze_with_progress(
+        result = libsonare.analyze(
             _generate_test_signal(duration=1.0), sample_rate=22050, cancel=lambda: True
         )
 
@@ -334,25 +329,25 @@ def test_analyze_with_progress_cancel_callable_cancels_without_a_result() -> Non
 
 
 @requires_json_progress
-def test_analyze_with_progress_no_callback() -> None:
-    """analyze_with_progress works with on_progress=None (null callback)."""
+def test_analyze_progress_no_callback() -> None:
+    """analyze takes the cancellable path with no progress callback registered."""
     from libsonare import AnalysisResult
 
     # A short signal suffices: only the NULL-callback code path is under test.
     samples = _generate_test_signal(duration=1.0)
-    result = libsonare.analyze_with_progress(samples, sample_rate=22050)
+    result = libsonare.analyze(samples, sample_rate=22050, cancel=lambda: False)
     assert isinstance(result, AnalysisResult)
 
 
 @requires_json_progress
-def test_analyze_with_progress_matches_analyze_shape(analyze_result, progress_result) -> None:
-    """analyze_with_progress returns the same-shaped result as analyze()."""
+def test_analyze_progress_matches_analyze_shape(analyze_result, progress_result) -> None:
+    """analyze with a callback returns the same-shaped result as without."""
     a = analyze_result
     b, _ = progress_result
 
     # Same field presence / list lengths align (deterministic on identical input).
-    assert len(a.beat_times) == len(b.beat_times)
-    assert len(a.beat_strengths) == len(b.beat_strengths)
+    assert len(a.beats) == len(b.beats)
+    assert len(a.downbeats) == len(b.downbeats)
     assert len(a.chords) == len(b.chords)
     assert len(a.sections) == len(b.sections)
     assert a.form == b.form

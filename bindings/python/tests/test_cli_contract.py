@@ -875,7 +875,7 @@ def _minimal_analysis_result(*, sections: list[object] | None = None) -> SimpleN
         ),
         time_signature=SimpleNamespace(numerator=4, denominator=4, confidence=0.5),
         beats=[],
-        downbeat_indices=[],
+        downbeats=[],
         downbeat_phase=0,
         chords=[],
         sections=[] if sections is None else sections,
@@ -925,7 +925,7 @@ def test_analyze_flags_are_accepted_and_forwarded(monkeypatch, capsys) -> None:
         "sample_rate": 22050,
         "use_triads_only": False,
         "use_hpss": True,
-        "chroma_highpass_hz": 123.5,
+        "chroma_high_pass_hz": 123.5,
         # Omitted on the command line, so the core keeps its own default set
         # rather than receiving an empty one, which it rejects.
         "meter_candidate_numerators": None,

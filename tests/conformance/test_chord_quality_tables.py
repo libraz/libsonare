@@ -41,29 +41,32 @@ C_HEADER = check.ORDINAL_TABLES[0].path
 EMBIND = check.ORDINAL_TABLES[1].path
 WASM_CONST = check.ORDINAL_TABLES[2].path
 WASM_DTS = check.ORDINAL_TABLES[3].path
-PY_DETECTION = check.ORDINAL_TABLES[4].path
-PY_MUSIC = check.ORDINAL_TABLES[5].path
-NODE_ADDON = check.ORDINAL_TABLES[6].path
-CORE_NAMES = check.ORDINAL_TABLES[7].path
-NODE_TYPES = check.ORDINAL_TABLES[8].path
-PY_SUFFIXES = check.NAME_TABLES[1].path
+PY_TYPES = check.ORDINAL_TABLES[4].path
+NODE_ADDON = check.ORDINAL_TABLES[5].path
+CORE_NAMES = check.ORDINAL_TABLES[6].path
+NODE_TYPES = check.ORDINAL_TABLES[7].path
+PY_SUFFIXES = check.NAME_TABLES[0].path
 # Both chord-symbol suffix tables the core carries live in this one file, and
 # `chord_quality_to_string` shares CORE_NAMES with the quality-name switch.
 ANALYZER = check.SUFFIX_TABLES[1].path
 
-FILES = (
-    TYPES,
-    C_HEADER,
-    EMBIND,
-    WASM_CONST,
-    WASM_DTS,
-    PY_DETECTION,
-    PY_MUSIC,
-    NODE_ADDON,
-    CORE_NAMES,
-    NODE_TYPES,
-    PY_SUFFIXES,
-    ANALYZER,
+# The Python tuple and suffix map share one file, so the list is deduplicated.
+FILES = tuple(
+    dict.fromkeys(
+        (
+            TYPES,
+            C_HEADER,
+            EMBIND,
+            WASM_CONST,
+            WASM_DTS,
+            PY_TYPES,
+            NODE_ADDON,
+            CORE_NAMES,
+            NODE_TYPES,
+            PY_SUFFIXES,
+            ANALYZER,
+        )
+    )
 )
 
 # A quality appended to the core, in the three spellings the surfaces use.
@@ -123,7 +126,7 @@ class ShippingTreeTest(unittest.TestCase):
 
     def test_the_tables_are_compared_against_spelled_core_names(self) -> None:
         scan = check.Scan()
-        node = scan.ordinal[check.ORDINAL_TABLES[6]]
+        node = scan.ordinal[check.ORDINAL_TABLES[5]]
         self.assertEqual(node.by_ordinal[13], "halfDim7")
         self.assertEqual(check.expected_name(scan.core[13], "camel"), "halfDim7")
         self.assertEqual(check.expected_name(scan.core[13], "c_macro"), "SONARE_CHORD_HALF_DIM7")
@@ -142,7 +145,7 @@ class TsTupleParserTest(unittest.TestCase):
 
     def test_the_shipping_tuples_follow_the_core_order(self) -> None:
         scan = check.Scan()
-        for index in (2, 8):
+        for index in (2, 4, 7):
             located = scan.ordinal[check.ORDINAL_TABLES[index]]
             self.assertEqual(list(located.by_ordinal), list(range(len(scan.core))))
             self.assertEqual(located.by_ordinal[5], "major7")
@@ -198,8 +201,7 @@ class SwappedEntriesTest(_CopiedTree):
         WASM_CONST: ("  'major7',\n  'minor7',", "  'minor7',\n  'major7',")
     }
     PY_SWAP: ClassVar[dict[Path, tuple[str, str]]] = {
-        PY_DETECTION: ('    5: "major7",\n    6: "minor7",',
-                       '    5: "minor7",\n    6: "major7",')
+        PY_TYPES: ('    "major7",\n    "minor7",', '    "minor7",\n    "major7",')
     }
 
     def test_a_swap_in_the_wasm_constant_is_reported_at_both_ordinals(self) -> None:
@@ -268,7 +270,7 @@ class RenamedEntryTest(_CopiedTree):
     def test_a_renamed_python_entry_is_reported(self) -> None:
         lines = self.lines(
             check.evaluate(
-                self.tree({PY_DETECTION: ('    13: "halfDim7",', '    13: "halfDiminished7",')})
+                self.tree({PY_TYPES: ('    "halfDim7",', '    "halfDiminished7",')})
             ),
             "disagree with the core enum at an ordinal",
         )
@@ -308,25 +310,34 @@ class MissingTableTest(_CopiedTree):
     """A table the scan cannot read is a table nothing compares."""
 
     def test_a_deleted_table_file_is_reported_and_drops_the_count(self) -> None:
-        failures = check.evaluate(self.tree(omit=(PY_MUSIC,)))
+        failures = check.evaluate(self.tree(omit=(WASM_DTS,)))
         missing = self.lines(failures, "could not be located")
         self.assertEqual(len(missing), 1, missing)
-        self.assertIn(PY_MUSIC, missing[0])
+        self.assertIn(WASM_DTS, missing[0])
         floor = self.lines(failures, "no longer locates the population")
-        self.assertTrue(any("ordinal_tables: found 8, floor is 9" in line for line in floor), floor)
+        self.assertTrue(any("ordinal_tables: found 7, floor is 8" in line for line in floor), floor)
 
     def test_a_renamed_table_symbol_is_reported(self) -> None:
         missing = self.lines(
-            check.evaluate(self.tree({PY_MUSIC: ("_CHORD_QUALITY_NAMES = {", "_NAMES = {")})),
+            check.evaluate(
+                self.tree({PY_TYPES: ("CHORD_QUALITIES: tuple[str, ...] = (", "QUALITIES: tuple[str, ...] = (")})
+            ),
             "could not be located",
         )
         self.assertEqual(len(missing), 1, missing)
-        self.assertIn("_CHORD_QUALITY_NAMES", missing[0])
+        self.assertIn("CHORD_QUALITIES", missing[0])
 
     def test_a_second_table_of_the_same_name_is_ambiguous_rather_than_guessed(self) -> None:
         missing = self.lines(
             check.evaluate(
-                self.tree({PY_MUSIC: ("_CHORD_QUALITY_NAMES = {", "_CHORD_QUALITY_NAMES = {}\n_CHORD_QUALITY_NAMES = {")})
+                self.tree(
+                    {
+                        PY_TYPES: (
+                            "CHORD_QUALITIES: tuple[str, ...] = (",
+                            "CHORD_QUALITIES: tuple[str, ...] = ()\nCHORD_QUALITIES: tuple[str, ...] = (",
+                        )
+                    }
+                )
             ),
             "could not be located",
         )
@@ -593,12 +604,12 @@ class SuffixKeySetTest(_CopiedTree):
         root = self.tree()
         path = root / PY_SUFFIXES
         text = path.read_text(encoding="utf-8")
-        start = text.index("        suffixes = {")
-        end = text.index("\n        }\n", start)
+        start = text.index("    suffixes: dict[str, str] = {")
+        end = text.index("\n    }\n", start)
         body = text[start:end]
-        self.assertEqual(body.count('\n            "'), len(check.Scan().core))
+        self.assertEqual(body.count('\n        "'), len(check.Scan().core))
         path.write_text(
-            text[:start] + body.replace('\n            "', '\n            "x') + text[end:],
+            text[:start] + body.replace('\n        "', '\n        "x') + text[end:],
             encoding="utf-8",
         )
         stray = self.lines(check.evaluate(root), "a key that is not one can never be hit")
@@ -613,10 +624,10 @@ class SuffixKeySetTest(_CopiedTree):
         root = self.tree()
         path = root / PY_SUFFIXES
         text = path.read_text(encoding="utf-8")
-        start = text.index("        suffixes = {")
-        end = text.index("\n        }\n", start)
+        start = text.index("    suffixes: dict[str, str] = {")
+        end = text.index("\n    }\n", start)
         path.write_text(
-            text[:start] + text[start:end].replace('\n            "', '\n            "x') + text[end:],
+            text[:start] + text[start:end].replace('\n        "', '\n        "x') + text[end:],
             encoding="utf-8",
         )
         self.assertTrue(self.value_only_passes(root))

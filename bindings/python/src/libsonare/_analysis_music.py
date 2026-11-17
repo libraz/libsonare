@@ -23,7 +23,7 @@ from ._runtime import (
     SonareValueError,
     _call_string,
     _check,
-    _float_array_result,
+    _from_c_float_array,
     _get_lib,
     _guard_buffer,
     _require_export,
@@ -34,8 +34,11 @@ from ._runtime import (
     _to_c_size_t,
     _tuning_arg,
 )
+from ._types_analysis import _chord_symbol
 from ._types_capabilities import _from_wire
+from ._types_engine import _SECTION_NAMES
 from .types import (
+    CHORD_QUALITIES,
     Boundary,
     BoundaryResult,
     Capabilities,
@@ -48,54 +51,32 @@ from .types import (
     Mode,
     PitchClass,
     Section,
-    SectionResult,
     SectionType,
 )
 
-# SonareChordQuality ordinals (sonare_c_types_analysis.h) by the name a Chord carries.
-_CHORD_QUALITY_NAMES = {
-    0: "major",
-    1: "minor",
-    2: "diminished",
-    3: "augmented",
-    4: "dominant7",
-    5: "major7",
-    6: "minor7",
-    7: "sus2",
-    8: "sus4",
-    9: "unknown",
-    10: "add9",
-    11: "minorAdd9",
-    12: "dim7",
-    13: "halfDim7",
-    14: "major9",
-    15: "dominant9",
-    16: "sus2Add4",
-    17: "major6",
-    18: "minor6",
-    19: "minorMajor7",
-    20: "dominant7Sus4",
-    21: "dominant11",
-    22: "dominant13",
-    23: "dominant7Flat9",
-    24: "dominant7Sharp9",
-}
-_CHORD_QUALITY_ORDINALS = {name: ordinal for ordinal, name in _CHORD_QUALITY_NAMES.items()}
+_CHORD_QUALITY_ORDINALS = {name: ordinal for ordinal, name in enumerate(CHORD_QUALITIES)}
 
 
 def _chords_from_c(out: SonareChordAnalysisResult) -> list[Chord]:
     """Copies the chords of a C detection result into :class:`Chord` entries."""
-    return [
-        Chord(
-            root=PitchClass(out.chords[i].root),
-            quality=_CHORD_QUALITY_NAMES.get(int(out.chords[i].quality), "unknown"),
-            start=float(out.chords[i].start),
-            end=float(out.chords[i].end),
-            confidence=float(out.chords[i].confidence),
-            bass=PitchClass(out.chords[i].bass),
+    chords = []
+    for i in range(out.chord_count):
+        ordinal = int(out.chords[i].quality)
+        quality = CHORD_QUALITIES[ordinal] if 0 <= ordinal < len(CHORD_QUALITIES) else "unknown"
+        root = PitchClass(out.chords[i].root)
+        bass = PitchClass(out.chords[i].bass)
+        chords.append(
+            Chord(
+                root=root,
+                quality=quality,
+                start=float(out.chords[i].start),
+                end=float(out.chords[i].end),
+                confidence=float(out.chords[i].confidence),
+                bass=bass,
+                name=_chord_symbol(root, quality, bass),
+            )
         )
-        for i in range(out.chord_count)
-    ]
+    return chords
 
 
 @_guard_buffer("samples")
@@ -251,8 +232,7 @@ def chord_functional_analysis(
                 chord.end,
                 chord.confidence,
                 chord.bass,
-                chord.canonical_name,
-                chord.roman_numeral,
+                chord.name,
                 roman.items[i].decode("utf-8"),
                 functions.items[i].decode("utf-8"),
             )
@@ -333,8 +313,7 @@ def chord_functions(
                 chord.end,
                 chord.confidence,
                 chord.bass,
-                chord.canonical_name,
-                chord.roman_numeral,
+                chord.name,
                 roman.items[i].decode("utf-8"),
                 functions.items[i].decode("utf-8"),
             )
@@ -352,7 +331,7 @@ def analyze_sections(
     n_fft: int = 2048,
     hop_length: int = 512,
     min_section_sec: float = 4.0,
-) -> SectionResult:
+) -> list[Section]:
     """Detect song-structure sections (intro/verse/chorus/...).
 
     Args:
@@ -363,14 +342,7 @@ def analyze_sections(
         min_section_sec: Minimum section duration in seconds.
 
     Returns:
-        A :class:`SectionResult` with a list of detected :class:`Section`.
-
-    Note:
-        The Python binding deliberately returns a :class:`SectionResult`
-        wrapper object (with a ``.sections`` list of :class:`Section`),
-        whereas the WASM/Node bindings return a flat array of section
-        records. This Pythonic shape is intentional; access the sections via
-        ``result.sections`` rather than indexing the result directly.
+        The detected :class:`Section` list, in time order.
     """
     lib = _get_lib()
     _require_export(
@@ -389,19 +361,18 @@ def analyze_sections(
     )
     _check(rc)
     try:
-        return SectionResult(
-            sections=[
-                Section(
-                    type=SectionType(int(out.sections[i].type)),
-                    start=float(out.sections[i].start),
-                    end=float(out.sections[i].end),
-                    energy_level=float(out.sections[i].energy_level),
-                    confidence=float(out.sections[i].confidence),
-                    group=int(out.sections[i].group),
-                )
-                for i in range(out.section_count)
-            ]
-        )
+        return [
+            Section(
+                type=SectionType(int(out.sections[i].type)),
+                start=float(out.sections[i].start),
+                end=float(out.sections[i].end),
+                energy_level=float(out.sections[i].energy_level),
+                confidence=float(out.sections[i].confidence),
+                group=int(out.sections[i].group),
+                name=_SECTION_NAMES[SectionType(int(out.sections[i].type))],
+            )
+            for i in range(out.section_count)
+        ]
     finally:
         lib.sonare_free_section_result(ctypes.byref(out))
 
@@ -509,11 +480,10 @@ def detect_boundaries(
                 )
                 for i in range(out.boundary_count)
             ],
-            novelty_curve=_float_array_result(out.novelty_curve, out.novelty_length),
+            novelty_curve=_from_c_float_array(out.novelty_curve, out.novelty_length),
             novelty_peak=float(out.novelty_peak),
             sample_rate=int(out.sample_rate),
             hop_length=int(out.hop_length),
-            n_frames=int(out.n_frames),
             frame_stride=int(out.frame_stride),
         )
     finally:

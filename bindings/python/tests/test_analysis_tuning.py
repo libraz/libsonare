@@ -1,11 +1,11 @@
-"""Tuning offset on batch analysis, options on ``analyze_with_progress``, and the
+"""Tuning offset on batch analysis, progress and cancel on ``analyze``, and the
 Roman numerals ``analyze`` attaches to its chords."""
 
 from __future__ import annotations
 
-import inspect
 import math
 
+import numpy as np
 import pytest
 
 import libsonare
@@ -135,7 +135,7 @@ def test_analyze_tuning_recentres_key_and_numerals(detuned: list[float]) -> None
     )
     detected = libsonare.detect_chords(detuned, _SR, tuning_cents=estimate).chords
     assert [c.name for c in labels] == [c.name for c in detected]
-    label_by_name = {c.name: c.roman for c in labels}
+    label_by_name = {c.name: c.roman_numeral for c in labels}
     compared = 0
     for chord in on.chords:
         if chord.quality != "unknown" and chord.name in label_by_name:
@@ -147,7 +147,9 @@ def test_analyze_tuning_recentres_key_and_numerals(detuned: list[float]) -> None
 def test_tuning_out_of_range_is_invalid(detuned: list[float]) -> None:
     for call in (
         lambda: libsonare.analyze(detuned[:_SR], _SR, tuning_cents=50.0),
-        lambda: libsonare.analyze_with_progress(detuned[:_SR], _SR, tuning_cents=-60.0),
+        lambda: libsonare.analyze(
+            detuned[:_SR], _SR, tuning_cents=-60.0, on_progress=lambda _p, _s: None
+        ),
         lambda: libsonare.detect_chords(detuned[:_SR], _SR, tuning_cents=50.0),
         lambda: libsonare.detect_key_candidates(detuned[:_SR], _SR, tuning_cents=50.0),
         lambda: libsonare.chord_functional_analysis(
@@ -159,37 +161,26 @@ def test_tuning_out_of_range_is_invalid(detuned: list[float]) -> None:
         assert info.value.code == ErrorCode.INVALID_PARAMETER
 
 
-def test_analyze_with_progress_takes_the_analyze_keywords() -> None:
-    analyze_params = inspect.signature(libsonare.analyze).parameters
-    progress_params = inspect.signature(libsonare.analyze_with_progress).parameters
-    for name, param in analyze_params.items():
-        if param.kind is inspect.Parameter.KEYWORD_ONLY:
-            assert name in progress_params
-            assert progress_params[name].default == param.default
-
-
-def test_analyze_with_progress_matches_analyze_under_options(detuned: list[float]) -> None:
+def test_analyze_progress_matches_analyze_under_options(detuned: list[float]) -> None:
     samples = detuned[: 4 * _SR]
     stages: list[str] = []
     options = {"compute_tempo_curve": True, "tuning_cents": -45.0}
-    with_progress = libsonare.analyze_with_progress(
-        samples, _SR, lambda _p, stage: stages.append(stage), **options
+    with_progress = libsonare.analyze(
+        samples, _SR, on_progress=lambda _p, stage: stages.append(stage), **options
     )
     plain = libsonare.analyze(samples, _SR, **options)
     assert stages
-    assert with_progress.beat_local_bpm == plain.beat_local_bpm
+    np.testing.assert_array_equal(with_progress.beat_local_bpm, plain.beat_local_bpm)
     assert len(with_progress.beat_local_bpm) > 0
     assert (with_progress.key.root, with_progress.key.mode) == (plain.key.root, plain.key.mode)
     assert [c.roman_numeral for c in with_progress.chords] == [
         c.roman_numeral for c in plain.chords
     ]
-    default = libsonare.analyze_with_progress(samples, _SR)
-    assert default.beat_local_bpm == []
+    default = libsonare.analyze(samples, _SR, on_progress=lambda _p, _s: None)
+    assert len(default.beat_local_bpm) == 0
 
 
-def test_analyze_with_progress_cancel_still_honoured(detuned: list[float]) -> None:
+def test_analyze_cancel_still_honoured(detuned: list[float]) -> None:
     with pytest.raises(SonareError) as info:
-        libsonare.analyze_with_progress(
-            detuned[: 2 * _SR], _SR, cancel=lambda: True, tuning_cents=10.0
-        )
+        libsonare.analyze(detuned[: 2 * _SR], _SR, cancel=lambda: True, tuning_cents=10.0)
     assert info.value.code == ErrorCode.CANCELLED

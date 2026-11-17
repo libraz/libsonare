@@ -38,7 +38,10 @@ from ._types_acoustic import (
     RoomMorphStereoResult as RoomMorphStereoResult,
 )
 from ._types_analysis import (
-    AnalysisBeatObservations as AnalysisBeatObservations,
+    CHORD_QUALITIES as CHORD_QUALITIES,
+)
+from ._types_analysis import (
+    AnalysisChord as AnalysisChord,
 )
 from ._types_analysis import (
     AnalysisDynamics as AnalysisDynamics,
@@ -53,22 +56,19 @@ from ._types_analysis import (
     AnalysisRhythm as AnalysisRhythm,
 )
 from ._types_analysis import (
-    AnalysisTimbre as AnalysisTimbre,
-)
-from ._types_analysis import (
     AutoTuneResult as AutoTuneResult,
 )
 from ._types_analysis import (
     Beat as Beat,
 )
 from ._types_analysis import (
+    BeatObservations as BeatObservations,
+)
+from ._types_analysis import (
     BpmAnalysisResult as BpmAnalysisResult,
 )
 from ._types_analysis import (
     BpmCandidate as BpmCandidate,
-)
-from ._types_analysis import (
-    BpmHypothesis as BpmHypothesis,
 )
 from ._types_analysis import (
     Chord as Chord,
@@ -369,9 +369,6 @@ from ._types_engine import (
 )
 from ._types_engine import (
     Section as Section,
-)
-from ._types_engine import (
-    SectionResult as SectionResult,
 )
 from ._types_engine import (
     SidechainCheck as SidechainCheck,

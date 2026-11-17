@@ -349,8 +349,7 @@ def test_note_segments_preserves_vibrato_and_separates_unvoiced_intervals() -> N
 def test_analyze_timbre_exposes_timbre_over_time() -> None:
     result = libsonare.analyze_timbre(_tone(seconds=2.0), SR)
     assert len(result.timbre_over_time) > 0
-    # camelCase alias mirrors the JS binding.
-    assert result.timbreOverTime is result.timbre_over_time
+    assert not hasattr(result, "timbreOverTime")
     for frame in result.timbre_over_time:
         assert math.isfinite(frame.brightness)
         assert math.isfinite(frame.warmth)

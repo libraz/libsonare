@@ -1,8 +1,4 @@
-"""Analysis result shapes: key, beats, chords, spectra, metering and stems.
-
-camelCase property aliases mirror the JS binding's public API so users moving
-between languages see the same names. They intentionally violate PEP8 N802.
-"""
+"""Analysis result shapes: key, beats, chords, spectra, metering and stems."""
 
 from __future__ import annotations
 
@@ -10,13 +6,22 @@ import dataclasses
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Literal
 
+import numpy as np
+
 from ._types_enums import Mode, PitchClass
 
 if TYPE_CHECKING:
-    import numpy as np
     from numpy.typing import NDArray
 
     from ._types_engine import MelodyPoint, Section
+
+
+def _empty_float32() -> np.ndarray:
+    return np.empty(0, dtype=np.float32)
+
+
+def _empty_int32() -> np.ndarray:
+    return np.empty(0, dtype=np.int32)
 
 
 @dataclass(frozen=True, slots=True)
@@ -55,10 +60,6 @@ class Key:
         if self.mode == Mode.MINOR:
             return f"{self.root}m"
         return f"{self.root} {self.mode}"
-
-    @property
-    def shortName(self) -> str:  # noqa: N802
-        return self.short_name
 
     def __str__(self) -> str:
         return self.name
@@ -114,17 +115,8 @@ class Beat:
     windowed aggregate the library's own downbeat pass scores.
     """
 
-    time: float
-    strength: float | None = None
-
-
-@dataclass(frozen=True, slots=True)
-class BpmHypothesis:
-    """A tempo hypothesis retained by the unified music analysis."""
-
-    value: float
-    confidence: float
-    relation: Literal["primary", "half", "double", "other"]
+    time_sec: float
+    strength: float
 
 
 @dataclass(frozen=True, slots=True)
@@ -138,41 +130,6 @@ class AnalysisDynamics:
     loudness_range_db: float
     is_compressed: bool
 
-    @property
-    def dynamicRangeDb(self) -> float:  # noqa: N802
-        return self.dynamic_range_db
-
-    @property
-    def peakDb(self) -> float:  # noqa: N802
-        return self.peak_db
-
-    @property
-    def rmsDb(self) -> float:  # noqa: N802
-        return self.rms_db
-
-    @property
-    def crestFactor(self) -> float:  # noqa: N802
-        return self.crest_factor
-
-    @property
-    def loudnessRangeDb(self) -> float:  # noqa: N802
-        return self.loudness_range_db
-
-    @property
-    def isCompressed(self) -> bool:  # noqa: N802
-        return self.is_compressed
-
-
-@dataclass(frozen=True, slots=True)
-class AnalysisTimbre:
-    """Timbre summary embedded in :class:`AnalysisResult`."""
-
-    brightness: float
-    warmth: float
-    density: float
-    roughness: float
-    complexity: float
-
 
 @dataclass(frozen=True, slots=True)
 class AnalysisRhythm:
@@ -183,22 +140,6 @@ class AnalysisRhythm:
     groove_type: str
     pattern_regularity: float
     tempo_stability: float
-
-    @property
-    def timeSignature(self) -> TimeSignature:  # noqa: N802
-        return self.time_signature
-
-    @property
-    def grooveType(self) -> str:  # noqa: N802
-        return self.groove_type
-
-    @property
-    def patternRegularity(self) -> float:  # noqa: N802
-        return self.pattern_regularity
-
-    @property
-    def tempoStability(self) -> float:  # noqa: N802
-        return self.tempo_stability
 
 
 @dataclass(frozen=True, slots=True)
@@ -211,54 +152,28 @@ class AnalysisMelody:
     vibrato_rate: float
     pitches: list[MelodyPoint]
 
-    @property
-    def pitchRangeOctaves(self) -> float:  # noqa: N802
-        return self.pitch_range_octaves
 
-    @property
-    def pitchStability(self) -> float:  # noqa: N802
-        return self.pitch_stability
-
-    @property
-    def meanFrequency(self) -> float:  # noqa: N802
-        return self.mean_frequency
-
-    @property
-    def vibratoRate(self) -> float:  # noqa: N802
-        return self.vibrato_rate
-
-
-@dataclass(frozen=True, slots=True)
-class AnalysisBeatObservations:
+@dataclass(frozen=True, slots=True, eq=False)
+class BeatObservations:
     """Beat-level evidence behind the downbeat and meter decisions.
 
     These are the inputs the library's own downbeat and meter pass scores, not
-    outputs of it. Each stream is parallel to ``AnalysisResult.beat_times``,
-    one value per beat. An empty stream means the analysis could not produce
-    it, *not* that every beat scored zero: ``low_frequency_energy`` is empty
-    when the analysis ran without audio, and ``chord_change`` is empty until
-    chords have been analyzed.
+    outputs of it. Each stream is parallel to ``AnalysisResult.beats``, one
+    value per beat. An empty stream means the analysis could not produce it,
+    *not* that every beat scored zero: ``low_frequency_energy`` is empty when
+    the analysis ran without audio, and ``chord_change`` is empty until chords
+    have been analyzed.
+
+    ``onset_strength`` is the windowed onset aggregate around each beat -- the
+    accent value the downbeat pass scores, and the strength source
+    :func:`libsonare.estimate_meter` expects. It is distinct from
+    ``Beat.strength``, which is a single raw unwindowed envelope frame at the
+    beat's frame.
     """
 
-    # Windowed onset aggregate around each beat — the accent value the downbeat
-    # pass scores, and the strength source :func:`libsonare.estimate_meter`
-    # expects. Distinct from ``AnalysisResult.beat_strengths``, which is a
-    # single raw unwindowed envelope frame at the beat's frame.
-    onset_strength: list[float] = dataclasses.field(default_factory=list)
-    low_frequency_energy: list[float] = dataclasses.field(default_factory=list)
-    chord_change: list[float] = dataclasses.field(default_factory=list)
-
-    @property
-    def onsetStrength(self) -> list[float]:  # noqa: N802
-        return self.onset_strength
-
-    @property
-    def lowFrequencyEnergy(self) -> list[float]:  # noqa: N802
-        return self.low_frequency_energy
-
-    @property
-    def chordChange(self) -> list[float]:  # noqa: N802
-        return self.chord_change
+    onset_strength: np.ndarray = dataclasses.field(default_factory=_empty_float32)
+    low_frequency_energy: np.ndarray = dataclasses.field(default_factory=_empty_float32)
+    chord_change: np.ndarray = dataclasses.field(default_factory=_empty_float32)
 
 
 @dataclass(frozen=True, slots=True)
@@ -273,7 +188,7 @@ class KeyDetection(Key):
     tuning_cents: float = 0.0
 
 
-@dataclass(frozen=True, slots=True)
+@dataclass(frozen=True, slots=True, eq=False)
 class AnalysisResult:
     """Full audio analysis result.
 
@@ -287,108 +202,44 @@ class AnalysisResult:
     bpm_confidence: float
     key: Key
     time_signature: TimeSignature
-    beat_times: list[float]
-    # Extended fields (populated when sonare_analyze_json is available).
+    beats: list[Beat] = dataclasses.field(default_factory=list)
+    # The bar starts, drawn from ``beats``: each is the beat that opens a bar.
+    downbeats: list[Beat] = dataclasses.field(default_factory=list)
+    # Which beat of the first bar the analysis starts on. The meter estimator's
+    # own phase, so it can disagree with the first downbeat once downbeats are
+    # refined from chord and low-frequency evidence.
+    downbeat_phase: int = 0
+    bpm_candidates: list[BpmCandidate] = dataclasses.field(default_factory=list)
+    time_signature_candidates: list[TimeSignature] = dataclasses.field(default_factory=list)
+    chords: list[AnalysisChord] = dataclasses.field(default_factory=list)
+    sections: list[Section] = dataclasses.field(default_factory=list)
     # timbre/dynamics/rhythm/melody are intentionally Optional here, unlike the
     # Node/WASM surfaces which type them as required: Python keeps a legacy
     # fallback to the older flat sonare_analyze struct (for builds without
     # sonare_analyze_json) that returns only bpm/key/time-signature/beats and
-    # leaves these four unset. The compiled bindings always ship the JSON path,
-    # so they can guarantee presence; Python cannot without dropping the
-    # fallback. Guard with `is not None` before use.
-    # One raw onset-envelope frame per beat, sampled at the beat's own frame.
-    # Not normalized and not comparable across material, and it moves with
-    # beat-position jitter — ``beat_observations.onset_strength`` is the
-    # windowed aggregate to score accents with.
-    beat_strengths: list[float] = dataclasses.field(default_factory=list)
-    # Positions of the bar starts within ``beat_times``, so
-    # ``beat_times[downbeat_indices[k]]`` is the k-th downbeat. This is an
-    # index list, not a parallel array: it is shorter than ``beat_times``, and
-    # testing a beat for downbeat status is a membership check on it rather
-    # than a time comparison against a separate downbeat series.
-    downbeat_indices: list[int] = dataclasses.field(default_factory=list)
-    # Which beat of the first bar the analysis starts on. The meter estimator's
-    # own phase, so it can disagree with ``downbeat_indices[0]`` once downbeats
-    # are refined from chord and low-frequency evidence.
-    downbeat_phase: int = 0
-    bpm_candidates: list[BpmHypothesis] = dataclasses.field(default_factory=list)
-    time_signature_candidates: list[TimeSignature] = dataclasses.field(default_factory=list)
-    chords: list[Chord] = dataclasses.field(default_factory=list)
-    sections: list[Section] = dataclasses.field(default_factory=list)
-    timbre: AnalysisTimbre | None = None
+    # leaves these four unset. Guard with `is not None` before use.
+    timbre: TimbreFrame | None = None
     dynamics: AnalysisDynamics | None = None
     rhythm: AnalysisRhythm | None = None
     melody: AnalysisMelody | None = None
-    beat_observations: AnalysisBeatObservations | None = None
-    # Smoothed local tempo at each beat, in BPM, parallel to ``beat_times``.
+    beat_observations: BeatObservations | None = None
+    # Smoothed local tempo at each beat, in BPM, parallel to ``beats``.
     # Empty unless ``compute_tempo_curve`` was set, and empty regardless when
     # fewer than two beats were detected, since a tempo is a property of the
     # interval between two beats. The last entry repeats the tempo of the
     # interval leading into the final beat, which opens no interval of its own.
     # Values are continuous, not points on a tempo grid: each is a weighted
-    # average, in log tempo, of the beat intervals around it, so a steady tempo
-    # reads within about 1% at every beat and a moving one is followed a few
-    # beats late.
-    # This is the local tempo rather than ``bpm`` resampled: on material whose
-    # tempo moves it departs from ``bpm``, and reading a single number out of it
-    # is not how to get the global tempo.
-    beat_local_bpm: list[float] = dataclasses.field(default_factory=list)
+    # average, in log tempo, of the beat intervals around it. This is the local
+    # tempo rather than ``bpm`` resampled: on material whose tempo moves it
+    # departs from ``bpm``.
+    beat_local_bpm: np.ndarray = dataclasses.field(default_factory=_empty_float32)
     form: str = ""
     # Tuning the chromagrams were built with, in cents: the
     # given value, or the measured one under ``tuning_cents="auto"``.
     tuning_cents: float = 0.0
 
-    @property
-    def bpmConfidence(self) -> float:  # noqa: N802
-        return self.bpm_confidence
 
-    @property
-    def timeSignature(self) -> TimeSignature:  # noqa: N802
-        return self.time_signature
-
-    @property
-    def bpmCandidates(self) -> list[BpmHypothesis]:  # noqa: N802
-        return self.bpm_candidates
-
-    @property
-    def timeSignatureCandidates(self) -> list[TimeSignature]:  # noqa: N802
-        return self.time_signature_candidates
-
-    @property
-    def beatTimes(self) -> list[float]:  # noqa: N802
-        return self.beat_times
-
-    @property
-    def beatStrengths(self) -> list[float]:  # noqa: N802
-        return self.beat_strengths
-
-    @property
-    def downbeatIndices(self) -> list[int]:  # noqa: N802
-        return self.downbeat_indices
-
-    @property
-    def downbeatPhase(self) -> int:  # noqa: N802
-        return self.downbeat_phase
-
-    @property
-    def beatObservations(self) -> AnalysisBeatObservations | None:  # noqa: N802
-        return self.beat_observations
-
-    @property
-    def beatLocalBpm(self) -> list[float]:  # noqa: N802
-        return self.beat_local_bpm
-
-    @property
-    def beats(self) -> list[Beat]:
-        if self.beat_strengths:
-            return [
-                Beat(time=t, strength=s)
-                for t, s in zip(self.beat_times, self.beat_strengths, strict=False)
-            ]
-        return [Beat(time=t) for t in self.beat_times]
-
-
-@dataclass(frozen=True, slots=True)
+@dataclass(frozen=True, slots=True, eq=False)
 class MeterEstimate:
     """Meter estimated over a caller-supplied beat series.
 
@@ -410,7 +261,7 @@ class MeterEstimate:
     segmentation search that compares them across candidate span boundaries has
     to normalize for length first.
 
-    ``grouping`` is how the bar divides, in beats per accent group: ``[3, 2, 2]``
+    ``grouping`` is an int32 array of how the bar divides, in beats per accent group: ``[3, 2, 2]``
     is the 7/8 an aksak meter notates as 3+2+2, and ``[2, 2]`` an ordinary four.
     It always sums to ``time_signature.numerator``. A single entry means no
     internal division was resolved — the numerator has none to find, it was too
@@ -433,32 +284,26 @@ class MeterEstimate:
     time_signature: TimeSignature
     downbeat_phase: int
     searched: bool
-    grouping: list[int] = dataclasses.field(default_factory=list)
-    candidate_scores: list[float] = dataclasses.field(default_factory=list)
+    grouping: np.ndarray = dataclasses.field(default_factory=_empty_int32)
+    candidate_scores: np.ndarray = dataclasses.field(default_factory=_empty_float32)
     candidates: list[TimeSignature] = dataclasses.field(default_factory=list)
-
-    @property
-    def timeSignature(self) -> TimeSignature:  # noqa: N802
-        return self.time_signature
-
-    @property
-    def downbeatPhase(self) -> int:  # noqa: N802
-        return self.downbeat_phase
-
-    @property
-    def candidateScores(self) -> list[float]:  # noqa: N802
-        return self.candidate_scores
 
 
 @dataclass(frozen=True, slots=True)
 class BpmCandidate:
-    """BPM candidate with confidence."""
+    """A tempo candidate with its confidence.
+
+    ``relation`` is the candidate's relation to the chosen tempo --
+    ``"primary"``, ``"half"``, ``"double"`` or ``"other"`` -- on the candidates
+    of :class:`AnalysisResult`, and ``None`` on those of :func:`analyze_bpm`.
+    """
 
     bpm: float
     confidence: float
+    relation: str | None = None
 
 
-@dataclass(frozen=True, slots=True)
+@dataclass(frozen=True, slots=True, eq=False)
 class BpmAnalysisResult:
     """Detailed BPM analysis result.
 
@@ -473,8 +318,8 @@ class BpmAnalysisResult:
     bpm: float
     confidence: float
     candidates: list[BpmCandidate]
-    autocorrelation: list[float]
-    tempogram: list[float]
+    autocorrelation: np.ndarray
+    tempogram: np.ndarray
 
 
 @dataclass(frozen=True, slots=True)
@@ -491,30 +336,6 @@ class LufsResult:
     max_momentary_lufs: float
     max_short_term_lufs: float
     loudness_range: float
-
-    @property
-    def integratedLufs(self) -> float:  # noqa: N802
-        return self.integrated_lufs
-
-    @property
-    def momentaryLufs(self) -> float:  # noqa: N802
-        return self.momentary_lufs
-
-    @property
-    def shortTermLufs(self) -> float:  # noqa: N802
-        return self.short_term_lufs
-
-    @property
-    def maxMomentaryLufs(self) -> float:  # noqa: N802
-        return self.max_momentary_lufs
-
-    @property
-    def maxShortTermLufs(self) -> float:  # noqa: N802
-        return self.max_short_term_lufs
-
-    @property
-    def loudnessRange(self) -> float:  # noqa: N802
-        return self.loudness_range
 
 
 @dataclass(frozen=True, slots=True)
@@ -642,7 +463,7 @@ class EqSpectrumSnapshot:
         return self.last_auto_gain_db
 
 
-@dataclass(frozen=True, slots=True)
+@dataclass(frozen=True, slots=True, eq=False)
 class RhythmResult:
     """Rhythm analysis primitives."""
 
@@ -652,30 +473,10 @@ class RhythmResult:
     syncopation: float
     pattern_regularity: float
     tempo_stability: float
-    beat_intervals: list[float]
-
-    @property
-    def timeSignature(self) -> TimeSignature:  # noqa: N802
-        return self.time_signature
-
-    @property
-    def grooveType(self) -> str:  # noqa: N802
-        return self.groove_type
-
-    @property
-    def patternRegularity(self) -> float:  # noqa: N802
-        return self.pattern_regularity
-
-    @property
-    def tempoStability(self) -> float:  # noqa: N802
-        return self.tempo_stability
-
-    @property
-    def beatIntervals(self) -> list[float]:  # noqa: N802
-        return self.beat_intervals
+    beat_intervals: np.ndarray
 
 
-@dataclass(frozen=True, slots=True)
+@dataclass(frozen=True, slots=True, eq=False)
 class DynamicsResult:
     """Dynamics and loudness analysis primitives."""
 
@@ -685,40 +486,8 @@ class DynamicsResult:
     crest_factor: float
     loudness_range_db: float
     is_compressed: bool
-    loudness_times: list[float]
-    loudness_rms_db: list[float]
-
-    @property
-    def dynamicRangeDb(self) -> float:  # noqa: N802
-        return self.dynamic_range_db
-
-    @property
-    def peakDb(self) -> float:  # noqa: N802
-        return self.peak_db
-
-    @property
-    def rmsDb(self) -> float:  # noqa: N802
-        return self.rms_db
-
-    @property
-    def crestFactor(self) -> float:  # noqa: N802
-        return self.crest_factor
-
-    @property
-    def loudnessRangeDb(self) -> float:  # noqa: N802
-        return self.loudness_range_db
-
-    @property
-    def isCompressed(self) -> bool:  # noqa: N802
-        return self.is_compressed
-
-    @property
-    def loudnessTimes(self) -> list[float]:  # noqa: N802
-        return self.loudness_times
-
-    @property
-    def loudnessRmsDb(self) -> list[float]:  # noqa: N802
-        return self.loudness_rms_db
+    loudness_times_sec: np.ndarray
+    loudness_rms_db: np.ndarray
 
 
 @dataclass(frozen=True, slots=True)
@@ -732,7 +501,7 @@ class TimbreFrame:
     complexity: float
 
 
-@dataclass(frozen=True, slots=True)
+@dataclass(frozen=True, slots=True, eq=False)
 class TimbreResult:
     """Timbre and spectral-shape analysis primitives."""
 
@@ -741,31 +510,85 @@ class TimbreResult:
     density: float
     roughness: float
     complexity: float
-    spectral_centroid: list[float]
-    spectral_flatness: list[float]
-    spectral_rolloff: list[float]
+    spectral_centroid: np.ndarray
+    spectral_flatness: np.ndarray
+    spectral_rolloff: np.ndarray
     timbre_over_time: list[TimbreFrame]
 
-    @property
-    def spectralCentroid(self) -> list[float]:  # noqa: N802
-        return self.spectral_centroid
 
-    @property
-    def spectralFlatness(self) -> list[float]:  # noqa: N802
-        return self.spectral_flatness
+#: Chord quality tokens, indexed by the C ``SonareChordQuality`` ordinal.
+CHORD_QUALITIES: tuple[str, ...] = (
+    "major",
+    "minor",
+    "diminished",
+    "augmented",
+    "dominant7",
+    "major7",
+    "minor7",
+    "sus2",
+    "sus4",
+    "unknown",
+    "add9",
+    "minorAdd9",
+    "dim7",
+    "halfDim7",
+    "major9",
+    "dominant9",
+    "sus2Add4",
+    "major6",
+    "minor6",
+    "minorMajor7",
+    "dominant7Sus4",
+    "dominant11",
+    "dominant13",
+    "dominant7Flat9",
+    "dominant7Sharp9",
+)
 
-    @property
-    def spectralRolloff(self) -> list[float]:  # noqa: N802
-        return self.spectral_rolloff
 
-    @property
-    def timbreOverTime(self) -> list[TimbreFrame]:  # noqa: N802
-        return self.timbre_over_time
+def _chord_symbol(root: object, quality: str, bass: object | None = None) -> str:
+    """Spell a chord symbol: ``"N.C."`` for ``unknown``, else root, suffix and slash bass."""
+    if quality == "unknown":
+        return "N.C."
+    suffixes: dict[str, str] = {
+        "major": "",
+        "minor": "m",
+        "diminished": "dim",
+        "augmented": "aug",
+        "dominant7": "7",
+        "major7": "maj7",
+        "minor7": "m7",
+        "sus2": "sus2",
+        "sus4": "sus4",
+        "unknown": "",
+        "add9": "add9",
+        "minorAdd9": "madd9",
+        "dim7": "dim7",
+        "halfDim7": "m7b5",
+        "major9": "maj9",
+        "dominant9": "9",
+        "sus2Add4": "sus2add4",
+        "major6": "6",
+        "minor6": "m6",
+        "minorMajor7": "mM7",
+        "dominant7Sus4": "7sus4",
+        "dominant11": "11",
+        "dominant13": "13",
+        "dominant7Flat9": "7b9",
+        "dominant7Sharp9": "7#9",
+    }
+    slash = "" if bass is None or bass == root else f"/{bass}"
+    return f"{root}{suffixes.get(quality, '')}{slash}"
 
 
 @dataclass(frozen=True, slots=True)
 class Chord:
-    """Detected chord with timing and confidence."""
+    """Detected chord with timing and confidence.
+
+    ``name`` is the chord symbol (``"Am7"``, ``"C/E"``; ``"N.C."`` for no chord).
+    The analysis functions fill it; a chord built by hand carries whatever
+    ``name`` it is given.
+    """
 
     root: PitchClass
     quality: str
@@ -773,10 +596,7 @@ class Chord:
     end: float
     confidence: float
     bass: PitchClass | None = None
-    canonical_name: str = ""
-    #: Roman numeral relative to the analysis key, set on :func:`analyze` chords
-    #: only (``None`` elsewhere); an empty string for a chord that is N.C.
-    roman_numeral: str | None = None
+    name: str = ""
 
     @property
     def duration(self) -> float:
@@ -792,50 +612,15 @@ class Chord:
         """Canonical core spelling, stable across all language bindings."""
         return str(self.root if self.bass is None else self.bass)
 
-    @property
-    def rootName(self) -> str:  # noqa: N802
-        return self.root_name
 
-    @property
-    def bassName(self) -> str:  # noqa: N802
-        return self.bass_name
+@dataclass(frozen=True, slots=True)
+class AnalysisChord(Chord):
+    """A chord of :func:`analyze`, labelled with a Roman numeral in the analysis key.
 
-    @property
-    def name(self) -> str:
-        if self.canonical_name:
-            return self.canonical_name
-        if self.quality == "unknown":
-            return "N.C."
-        suffixes = {
-            "major": "",
-            "minor": "m",
-            "diminished": "dim",
-            "augmented": "aug",
-            "dominant7": "7",
-            "major7": "maj7",
-            "minor7": "m7",
-            "sus2": "sus2",
-            "sus4": "sus4",
-            "unknown": "",
-            "add9": "add9",
-            "minorAdd9": "madd9",
-            "dim7": "dim7",
-            "halfDim7": "m7b5",
-            "major9": "maj9",
-            "dominant9": "9",
-            "sus2Add4": "sus2add4",
-            "major6": "6",
-            "minor6": "m6",
-            "minorMajor7": "mM7",
-            "dominant7Sus4": "7sus4",
-            "dominant11": "11",
-            "dominant13": "13",
-            "dominant7Flat9": "7b9",
-            "dominant7Sharp9": "7#9",
-        }
-        bass = self.root if self.bass is None else self.bass
-        slash = "" if bass == self.root else f"/{bass}"
-        return f"{self.root}{suffixes.get(self.quality, '')}{slash}"
+    ``roman_numeral`` is empty for a chord that is N.C.
+    """
+
+    roman_numeral: str = ""
 
 
 ChordFunctionName = Literal["tonic", "subdominant", "dominant", "chromatic", "none"]
@@ -845,14 +630,14 @@ ChordFunctionName = Literal["tonic", "subdominant", "dominant", "chromatic", "no
 class FunctionalChord(Chord):
     """A timed chord labelled relative to a key by :func:`chord_functions`.
 
-    Every :class:`Chord` field is carried over unchanged. ``roman`` is the Roman
-    numeral (``"I"``, ``"V7"``, ``"vi"``; ``"N.C."`` for an unknown chord) and
-    ``function`` its harmonic function: ``"tonic"``, ``"subdominant"``,
-    ``"dominant"``, ``"chromatic"`` for a root outside the key's scale, or
-    ``"none"`` for an unknown chord.
+    Every :class:`Chord` field is carried over unchanged. ``roman_numeral`` is
+    the Roman numeral (``"I"``, ``"V7"``, ``"vi"``; ``"N.C."`` for an unknown
+    chord) and ``function`` its harmonic function: ``"tonic"``,
+    ``"subdominant"``, ``"dominant"``, ``"chromatic"`` for a root outside the
+    key's scale, or ``"none"`` for an unknown chord.
     """
 
-    roman: str = ""
+    roman_numeral: str = ""
     function: ChordFunctionName = "none"
 
 

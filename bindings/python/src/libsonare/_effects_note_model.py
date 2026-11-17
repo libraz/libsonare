@@ -269,7 +269,7 @@ def _note_extractor_config(
     )
 
 
-@dataclasses.dataclass
+@dataclasses.dataclass(frozen=True)
 class TranscribeResult:
     """What one transcription found, ready to hand to a MIDI clip.
 

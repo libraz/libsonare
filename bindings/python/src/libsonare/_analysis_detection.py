@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import ctypes
 from collections.abc import Sequence
-from typing import Any, Literal, cast
+from typing import Any
 
 import numpy as np
 
@@ -31,15 +31,18 @@ from ._runtime import (
     _tuning_arg,
     _utf8_arg,
 )
+from ._types_analysis import _chord_symbol
+from ._types_engine import _SECTION_NAMES
 from .types import (
-    AnalysisBeatObservations,
+    CHORD_QUALITIES,
+    AnalysisChord,
     AnalysisDynamics,
     AnalysisMelody,
     AnalysisResult,
     AnalysisRhythm,
-    AnalysisTimbre,
-    BpmHypothesis,
-    Chord,
+    Beat,
+    BeatObservations,
+    BpmCandidate,
     Key,
     KeyCandidate,
     KeyDetection,
@@ -49,6 +52,7 @@ from .types import (
     PitchClass,
     Section,
     SectionType,
+    TimbreFrame,
     TimeSignature,
 )
 
@@ -109,7 +113,7 @@ def detect_key(
     hop_length: int = 512,
     use_hpss: bool = False,
     loudness_weighted: bool = False,
-    high_pass_hz: float = 80.0,
+    chroma_high_pass_hz: float = 80.0,
     modes: Sequence[Mode | str] | str | None = None,
     profile: KeyProfile | str | None = None,
     genre_hint: str | None = None,
@@ -128,7 +132,7 @@ def detect_key(
         hop_length: Hop length used for chroma analysis.
         use_hpss: Use harmonic-percussive separation before chroma analysis.
         loudness_weighted: Weight chroma frames by RMS loudness.
-        high_pass_hz: Optional high-pass cutoff before chroma analysis.
+        chroma_high_pass_hz: Optional high-pass cutoff before chroma analysis.
         profile: Key-profile family to pin; it outranks ``genre_hint``. ``None``
             lets ``genre_hint`` choose it, or the chroma under the default
             ``"auto"`` hint.
@@ -163,7 +167,7 @@ def detect_key(
         _to_c_int(hop_length, "hop_length"),
         ctypes.c_int(1 if use_hpss else 0),
         ctypes.c_int(1 if loudness_weighted else 0),
-        _to_c_float(high_pass_hz, "high_pass_hz"),
+        _to_c_float(chroma_high_pass_hz, "chroma_high_pass_hz"),
         mode_array,
         _to_c_size_t(mode_count, "mode_count"),
         ctypes.c_int32(_profile_value(profile)),
@@ -190,7 +194,7 @@ def detect_key_candidates(
     hop_length: int = 512,
     use_hpss: bool = False,
     loudness_weighted: bool = False,
-    high_pass_hz: float = 80.0,
+    chroma_high_pass_hz: float = 80.0,
     modes: Sequence[Mode | str] | str | None = None,
     profile: KeyProfile | str | None = None,
     genre_hint: str | None = None,
@@ -216,7 +220,7 @@ def detect_key_candidates(
         _to_c_int(hop_length, "hop_length"),
         ctypes.c_int(1 if use_hpss else 0),
         ctypes.c_int(1 if loudness_weighted else 0),
-        _to_c_float(high_pass_hz, "high_pass_hz"),
+        _to_c_float(chroma_high_pass_hz, "chroma_high_pass_hz"),
         mode_array,
         _to_c_size_t(mode_count, "mode_count"),
         ctypes.c_int32(_profile_value(profile)),
@@ -365,40 +369,15 @@ def detect_onsets(
         return _from_c_float_array(out_times, count)
 
 
-# camelCase → snake_case quality name table (mirrors detect_chords).
-_QUALITY_NAMES: dict[int, str] = {
-    0: "major",
-    1: "minor",
-    2: "diminished",
-    3: "augmented",
-    4: "dominant7",
-    5: "major7",
-    6: "minor7",
-    7: "sus2",
-    8: "sus4",
-    9: "unknown",
-    10: "add9",
-    11: "minorAdd9",
-    12: "dim7",
-    13: "halfDim7",
-    14: "major9",
-    15: "dominant9",
-    16: "sus2Add4",
-    17: "major6",
-    18: "minor6",
-    19: "minorMajor7",
-    20: "dominant7Sus4",
-    21: "dominant11",
-    22: "dominant13",
-    23: "dominant7Flat9",
-    24: "dominant7Sharp9",
-}
+_UNKNOWN_QUALITY_ORDINAL: int = CHORD_QUALITIES.index("unknown")
 
-# Derived from the table rather than written out, so renumbering the mirror
-# cannot leave the fallback pointing at a different quality.
-_UNKNOWN_QUALITY_ORDINAL: int = next(
-    ordinal for ordinal, name in _QUALITY_NAMES.items() if name == "unknown"
-)
+_BPM_RELATIONS = frozenset({"primary", "half", "double", "other"})
+
+
+def _bpm_relation(raw: Any) -> str:
+    """Spell a candidate's relation token; an unrecognized one reads ``"other"``."""
+    token = str(raw) if raw is not None else "other"
+    return token if token in _BPM_RELATIONS else "other"
 
 
 def _section_type_from_ordinal(raw: Any) -> SectionType:
@@ -425,8 +404,7 @@ def _parse_analysis_json(data: dict[str, Any]) -> AnalysisResult:
     """Parse the camelCase JSON dict returned by ``sonare_analyze_json`` into
     an :class:`AnalysisResult`.
 
-    This is an internal helper shared by :func:`analyze` and
-    :func:`analyze_with_progress`.
+    This is an internal helper of :func:`analyze`.
     """
     # Key
     key_d = data.get("key", {})
@@ -444,18 +422,14 @@ def _parse_analysis_json(data: dict[str, Any]) -> AnalysisResult:
         confidence=float(ts_d.get("confidence", 0.0)),
     )
 
-    bpm_candidates: list[BpmHypothesis] = []
-    for candidate in data.get("bpmCandidates", []):
-        relation = str(candidate.get("relation", "other"))
-        if relation not in {"primary", "half", "double", "other"}:
-            relation = "other"
-        bpm_candidates.append(
-            BpmHypothesis(
-                value=float(candidate.get("value", 0.0)),
-                confidence=float(candidate.get("confidence", 0.0)),
-                relation=cast(Literal["primary", "half", "double", "other"], relation),
-            )
+    bpm_candidates = [
+        BpmCandidate(
+            bpm=float(candidate.get("value", 0.0)),
+            confidence=float(candidate.get("confidence", 0.0)),
+            relation=_bpm_relation(candidate.get("relation")),
         )
+        for candidate in data.get("bpmCandidates", [])
+    ]
 
     time_signature_candidates = [
         TimeSignature(
@@ -466,13 +440,14 @@ def _parse_analysis_json(data: dict[str, Any]) -> AnalysisResult:
         for candidate in data.get("timeSignatureCandidates", [])
     ]
 
-    # Beats (list of {time, strength})
-    beats_raw = data.get("beats", [])
-    beat_times = [float(b.get("time", 0.0)) for b in beats_raw]
-    beat_strengths = [float(b.get("strength", 0.0)) for b in beats_raw]
-
-    # Downbeats are indices into ``beats``, not a parallel array.
-    downbeat_indices = [int(i) for i in data.get("downbeatIndices", [])]
+    # Beats (list of {time, strength}); downbeats are indices into them.
+    beats = [
+        Beat(time_sec=float(b.get("time", 0.0)), strength=float(b.get("strength", 0.0)))
+        for b in data.get("beats", [])
+    ]
+    downbeats = [
+        beats[i] for i in (int(i) for i in data.get("downbeatIndices", [])) if 0 <= i < len(beats)
+    ]
     downbeat_phase = int(data.get("downbeatPhase", 0))
 
     # Beat-level evidence the downbeat and meter pass scores. Each stream is
@@ -480,10 +455,10 @@ def _parse_analysis_json(data: dict[str, Any]) -> AnalysisResult:
     # than that every beat scored zero.
     obs_d = data.get("beatObservations", {})
     beat_observations = (
-        AnalysisBeatObservations(
-            onset_strength=[float(v) for v in obs_d.get("onsetStrength", [])],
-            low_frequency_energy=[float(v) for v in obs_d.get("lowFrequencyEnergy", [])],
-            chord_change=[float(v) for v in obs_d.get("chordChange", [])],
+        BeatObservations(
+            onset_strength=np.asarray(obs_d.get("onsetStrength", []), dtype=np.float32),
+            low_frequency_energy=np.asarray(obs_d.get("lowFrequencyEnergy", []), dtype=np.float32),
+            chord_change=np.asarray(obs_d.get("chordChange", []), dtype=np.float32),
         )
         if obs_d
         else None
@@ -491,37 +466,10 @@ def _parse_analysis_json(data: dict[str, Any]) -> AnalysisResult:
 
     # Beat-indexed like the streams above, and likewise empty rather than absent
     # when it was not produced -- here because the caller did not ask for it.
-    beat_local_bpm = [float(v) for v in data.get("beatLocalBpm", [])]
+    beat_local_bpm = np.asarray(data.get("beatLocalBpm", []), dtype=np.float32)
 
     # Chords
-    chord_quality_str: dict[str, str] = {
-        "major": "major",
-        "minor": "minor",
-        "diminished": "diminished",
-        "augmented": "augmented",
-        "dominant7": "dominant7",
-        "major7": "major7",
-        "minor7": "minor7",
-        "sus2": "sus2",
-        "sus4": "sus4",
-        "unknown": "unknown",
-        "add9": "add9",
-        "minorAdd9": "minorAdd9",
-        "dim7": "dim7",
-        "halfDim7": "halfDim7",
-        "major9": "major9",
-        "dominant9": "dominant9",
-        "sus2Add4": "sus2Add4",
-        "major6": "major6",
-        "minor6": "minor6",
-        "minorMajor7": "minorMajor7",
-        "dominant7Sus4": "dominant7Sus4",
-        "dominant11": "dominant11",
-        "dominant13": "dominant13",
-        "dominant7Flat9": "dominant7Flat9",
-        "dominant7Sharp9": "dominant7Sharp9",
-    }
-    chords: list[Chord] = []
+    chords: list[AnalysisChord] = []
     for c in data.get("chords", []):
         q_raw = c.get("quality", _UNKNOWN_QUALITY_ORDINAL)
         # quality field may be int (enum value) or str (name from JSON)
@@ -530,20 +478,22 @@ def _parse_analysis_json(data: dict[str, Any]) -> AnalysisResult:
             # ordinal of its own. An ordinal outside the table is something else
             # -- the mirror has drifted -- and folding the two together would
             # present that as a detection result.
-            if q_raw not in _QUALITY_NAMES:
+            if not 0 <= q_raw < len(CHORD_QUALITIES):
                 raise SonareValueError(f"unknown analysis chord quality ordinal: {q_raw}")
-            quality_str = _QUALITY_NAMES[q_raw]
+            quality_str = CHORD_QUALITIES[q_raw]
         else:
-            quality_str = chord_quality_str.get(str(q_raw), "unknown")
+            quality_str = str(q_raw) if str(q_raw) in CHORD_QUALITIES else "unknown"
+        root = PitchClass(int(c.get("root", 0)))
+        bass = PitchClass(int(c.get("bass", c.get("root", 0))))
         chords.append(
-            Chord(
-                root=PitchClass(int(c.get("root", 0))),
-                bass=PitchClass(int(c.get("bass", c.get("root", 0)))),
+            AnalysisChord(
+                root=root,
+                bass=bass,
                 quality=quality_str,
                 start=float(c.get("start", 0.0)),
                 end=float(c.get("end", 0.0)),
                 confidence=float(c.get("confidence", 0.0)),
-                canonical_name=str(c.get("name", "")),
+                name=str(c.get("name", "")) or _chord_symbol(root, quality_str, bass),
                 roman_numeral=str(c.get("romanNumeral", "")),
             )
         )
@@ -551,22 +501,23 @@ def _parse_analysis_json(data: dict[str, Any]) -> AnalysisResult:
     # Sections
     sections: list[Section] = []
     for s in data.get("sections", []):
+        section_type = _section_type_from_ordinal(s.get("type"))
         sections.append(
             Section(
-                type=_section_type_from_ordinal(s.get("type")),
+                type=section_type,
                 start=float(s.get("start", 0.0)),
                 end=float(s.get("end", 0.0)),
                 energy_level=float(s.get("energyLevel", 0.0)),
                 confidence=float(s.get("confidence", 0.0)),
-                canonical_name=str(s.get("name", "")),
                 group=int(s["group"]),
+                name=str(s.get("name", "")) or _SECTION_NAMES[section_type],
             )
         )
 
     # Timbre
     timbre_d = data.get("timbre", {})
     timbre = (
-        AnalysisTimbre(
+        TimbreFrame(
             brightness=float(timbre_d.get("brightness", 0.0)),
             warmth=float(timbre_d.get("warmth", 0.0)),
             density=float(timbre_d.get("density", 0.0)),
@@ -636,9 +587,8 @@ def _parse_analysis_json(data: dict[str, Any]) -> AnalysisResult:
         bpm_confidence=float(data.get("bpmConfidence", 0.0)),
         key=key,
         time_signature=time_signature,
-        beat_times=beat_times,
-        beat_strengths=beat_strengths,
-        downbeat_indices=downbeat_indices,
+        beats=beats,
+        downbeats=downbeats,
         downbeat_phase=downbeat_phase,
         bpm_candidates=bpm_candidates,
         time_signature_candidates=time_signature_candidates,

@@ -70,9 +70,8 @@ def test_default_tuning_is_measured_on_every_entry_point(loop: list[float]) -> N
     assert key.tuning_cents == pytest.approx(_DETUNE_CENTS, abs=5.0)
     assert (key.root, key.mode) == (libsonare.PitchClass.C, libsonare.Mode.MAJOR)
     assert libsonare.analyze(loop, _SR).tuning_cents == pytest.approx(_DETUNE_CENTS, abs=5.0)
-    assert libsonare.analyze_with_progress(loop, _SR).tuning_cents == pytest.approx(
-        _DETUNE_CENTS, abs=5.0
-    )
+    progressed = libsonare.analyze(loop, _SR, on_progress=lambda _p, _stage: None)
+    assert progressed.tuning_cents == pytest.approx(_DETUNE_CENTS, abs=5.0)
     names = {c.name for c in libsonare.detect_chords(loop, _SR).chords}
     assert {"C", "G", "Am", "F"} <= names
     functional = libsonare.chord_functional_analysis(

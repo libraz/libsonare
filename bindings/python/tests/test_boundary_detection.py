@@ -61,7 +61,8 @@ def test_boundaries_land_on_the_transitions(three_sections) -> None:
 def test_the_novelty_curve_is_returned_and_scaled_by_its_own_peak(three_sections) -> None:
     result = libsonare.detect_boundaries(three_sections, sample_rate=_SR)
 
-    assert len(result.novelty_curve) == result.n_frames
+    assert result.novelty_curve.dtype == np.float32
+    assert len(result.novelty_curve) > 0
     assert all(0.0 <= value <= 1.0 for value in result.novelty_curve)
     # Scaled by its own maximum, so the top of the curve is exactly 1.
     assert max(result.novelty_curve) == pytest.approx(1.0, abs=1e-6)
@@ -88,7 +89,7 @@ def test_the_absolute_threshold_reaches_the_detector(three_sections) -> None:
     )
     assert above_peak.boundaries == []
     # The curve is still computed; only the picking changed.
-    assert len(above_peak.novelty_curve) == default.n_frames
+    assert len(above_peak.novelty_curve) == len(default.novelty_curve)
 
 
 def test_the_absolute_threshold_is_what_keeps_stationary_input_unsegmented(stationary) -> None:
@@ -136,9 +137,21 @@ def test_disabling_both_feature_streams_is_refused(three_sections) -> None:
 
     # Either one alone is accepted, so the refusal is about the combination.
     assert (
-        libsonare.detect_boundaries(three_sections, sample_rate=_SR, use_chroma=False).n_frames > 0
+        len(
+            libsonare.detect_boundaries(
+                three_sections, sample_rate=_SR, use_chroma=False
+            ).novelty_curve
+        )
+        > 0
     )
-    assert libsonare.detect_boundaries(three_sections, sample_rate=_SR, use_mfcc=False).n_frames > 0
+    assert (
+        len(
+            libsonare.detect_boundaries(
+                three_sections, sample_rate=_SR, use_mfcc=False
+            ).novelty_curve
+        )
+        > 0
+    )
 
 
 @pytest.mark.parametrize("option", ["n_fft", "hop_length", "kernel_size", "n_mfcc", "n_chroma"])

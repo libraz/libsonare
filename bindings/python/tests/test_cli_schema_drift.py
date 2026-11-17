@@ -33,7 +33,7 @@ def test_rhythm_json_uses_native_fields_and_unrounded_numbers(monkeypatch, capsy
             syncopation=0.123456789,
             pattern_regularity=0.234567891,
             tempo_stability=0.345678912,
-            beat_intervals=[0.1, 0.2, 0.4],
+            beat_intervals=np.array([0.1, 0.2, 0.4]),
         ),
     )
 

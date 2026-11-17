@@ -1320,6 +1320,13 @@ def _optional_float_array_result(out: object, count: int) -> list[float]:
     return cast(list[float], _from_c_float_array(out, count).tolist())
 
 
+def _optional_from_c_float_array(out: object, count: int) -> np.ndarray:
+    # A null pointer means the array was not computed; it reads as an empty array.
+    if not out:
+        return np.empty(0, dtype=np.float32)
+    return _from_c_float_array(out, count)
+
+
 def _int_array_result(out: object, count: int) -> list[int]:
     return cast(list[int], _from_c_int_array(out, count).tolist())
 

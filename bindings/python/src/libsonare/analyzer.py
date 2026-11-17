@@ -19,7 +19,6 @@ from ._analysis import (
     analyze_rhythm,
     analyze_sections,
     analyze_timbre,
-    analyze_with_progress,
     capabilities,
     chord_functional_analysis,
     chord_functions,
@@ -300,7 +299,6 @@ from ._mixing import (
 __all__ = [
     "analyze",
     "analyze_bpm",
-    "analyze_with_progress",
     "auto_tune",
     "estimate_room",
     "room_geometry_from_estimate",

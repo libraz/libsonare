@@ -11,6 +11,7 @@ from __future__ import annotations
 import pytest
 
 from libsonare import (
+    CHORD_QUALITIES,
     Chord,
     Mode,
     PitchClass,
@@ -19,7 +20,6 @@ from libsonare import (
     chord_symbol_from_analysis,
     key_mode_from_analysis,
 )
-from libsonare._analysis_music import _CHORD_QUALITY_NAMES
 
 from ._helpers import LIB_AVAILABLE
 
@@ -62,10 +62,10 @@ def test_a_bass_below_the_root_is_a_slash_and_bass_equal_to_root_is_not() -> Non
 
 
 def test_every_quality_is_accepted_by_annotate_chords_and_survives_serialization() -> None:
-    assert len(_CHORD_QUALITY_NAMES) == 25
+    assert len(CHORD_QUALITIES) == 25
     project = Project()
     entries = []
-    for ordinal, name in _CHORD_QUALITY_NAMES.items():
+    for ordinal, name in enumerate(CHORD_QUALITIES):
         entries.append(
             {
                 "start_ppq": float(ordinal),

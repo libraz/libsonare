@@ -2,9 +2,6 @@
 
 from ._analysis_detection import *  # noqa: F403
 from ._analysis_detection import (
-    _QUALITY_NAMES as _QUALITY_NAMES,
-)
-from ._analysis_detection import (
     _parse_analysis_json as _parse_analysis_json,
 )
 from ._analysis_music import *  # noqa: F403

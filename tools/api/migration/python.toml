@@ -3267,13 +3267,6 @@ rule = "unit-in-name"
 
 [[entry]]
 kind = "option"
-old = "analyze_with_progress(tuning)"
-new = "analyze_with_progress(tuning_cents)"
-domain = "analysis"
-rule = "unit-in-name"
-
-[[entry]]
-kind = "option"
 old = "Audio.detect_key(tuning)"
 new = "Audio.detect_key(tuning_cents)"
 domain = "core"
@@ -3600,3 +3593,892 @@ old = "StreamStats.accumulated_seconds"
 new = "StreamStats.accumulated_sec"
 domain = "analysis"
 rule = "seconds-suffix"
+
+[[entry]]
+kind = "field"
+old = "AnalysisResult.beat_times"
+removed = true
+domain = "analysis"
+rule = "typed-results"
+
+[[entry]]
+kind = "field"
+old = "AnalysisResult.beat_strengths"
+removed = true
+domain = "analysis"
+rule = "typed-results"
+
+[[entry]]
+kind = "field"
+old = "AnalysisResult.downbeat_indices"
+removed = true
+domain = "analysis"
+rule = "typed-results"
+
+[[entry]]
+kind = "field"
+old = "AnalysisResult.beats"
+changed = "list[Beat] with time_sec and strength (1.x: a derived property)"
+domain = "analysis"
+rule = "typed-results"
+test = "bindings/python/tests/test_surface_analysis.py::test_beats_and_downbeats_are_beat_objects"
+
+[[entry]]
+kind = "field"
+old = "AnalysisResult.chords"
+changed = "list[AnalysisChord], each with roman_numeral"
+domain = "analysis"
+rule = "typed-results"
+test = "bindings/python/tests/test_surface_analysis.py::test_beats_and_downbeats_are_beat_objects"
+
+[[entry]]
+kind = "field"
+old = "AnalysisResult.bpm_candidates"
+changed = "list[BpmCandidate] with bpm, confidence and relation"
+domain = "analysis"
+rule = "typed-results"
+test = "bindings/python/tests/test_surface_analysis.py::test_beats_and_downbeats_are_beat_objects"
+
+[[entry]]
+kind = "field"
+old = "AnalysisResult.timbre"
+changed = "TimbreFrame | None"
+domain = "analysis"
+rule = "typed-results"
+test = "bindings/python/tests/test_surface_analysis.py::test_beats_and_downbeats_are_beat_objects"
+
+[[entry]]
+kind = "field"
+old = "AnalysisResult.beat_observations"
+changed = "BeatObservations | None"
+domain = "analysis"
+rule = "typed-results"
+test = "bindings/python/tests/test_surface_analysis.py::test_beats_and_downbeats_are_beat_objects"
+
+[[entry]]
+kind = "field"
+old = "Beat.time"
+new = "Beat.time_sec"
+domain = "analysis"
+rule = "seconds-suffix"
+
+[[entry]]
+kind = "field"
+old = "BpmHypothesis.value"
+new = "BpmCandidate.bpm"
+domain = "analysis"
+rule = "typed-results"
+
+[[entry]]
+kind = "field"
+old = "BpmHypothesis.confidence"
+new = "BpmCandidate.confidence"
+domain = "analysis"
+rule = "typed-results"
+
+[[entry]]
+kind = "field"
+old = "BpmHypothesis.relation"
+new = "BpmCandidate.relation"
+domain = "analysis"
+rule = "typed-results"
+
+[[entry]]
+kind = "type"
+old = "SectionResult"
+removed = true
+domain = "analysis"
+rule = "typed-results"
+
+[[entry]]
+kind = "field"
+old = "SectionResult.sections"
+removed = true
+domain = "analysis"
+rule = "typed-results"
+
+[[entry]]
+kind = "function"
+old = "analyze_sections"
+changed = "returns list[Section] (1.x: SectionResult wrapping .sections)"
+domain = "analysis"
+rule = "typed-results"
+test = "bindings/python/tests/test_surface_analysis.py::test_sections_are_a_named_list"
+
+[[entry]]
+kind = "option"
+old = "estimate_meter(beat_times)"
+new = "estimate_meter(beats)"
+domain = "analysis"
+rule = "typed-results"
+
+[[entry]]
+kind = "option"
+old = "estimate_meter(beat_strengths)"
+removed = true
+domain = "analysis"
+rule = "typed-results"
+
+[[entry]]
+kind = "function"
+old = "estimate_meter"
+changed = "takes beats: Sequence[Beat] (time_sec and strength) instead of parallel beat_times and beat_strengths"
+domain = "analysis"
+rule = "typed-results"
+test = "bindings/python/tests/test_surface_analysis.py::test_estimate_meter_takes_the_beats_of_an_analysis"
+
+[[entry]]
+kind = "type"
+old = "AnalysisTimbre"
+new = "TimbreFrame"
+domain = "analysis"
+rule = "type-names"
+
+[[entry]]
+kind = "type"
+old = "AnalysisBeatObservations"
+new = "BeatObservations"
+domain = "analysis"
+rule = "type-names"
+
+[[entry]]
+kind = "type"
+old = "BpmHypothesis"
+new = "BpmCandidate"
+domain = "analysis"
+rule = "type-names"
+
+[[entry]]
+kind = "field"
+old = "AnalysisBeatObservations.onset_strength"
+new = "BeatObservations.onset_strength"
+domain = "analysis"
+rule = "array-results"
+
+[[entry]]
+kind = "field"
+old = "AnalysisBeatObservations.low_frequency_energy"
+new = "BeatObservations.low_frequency_energy"
+domain = "analysis"
+rule = "array-results"
+
+[[entry]]
+kind = "field"
+old = "AnalysisBeatObservations.chord_change"
+new = "BeatObservations.chord_change"
+domain = "analysis"
+rule = "array-results"
+
+[[entry]]
+kind = "field"
+old = "Chord.canonical_name"
+new = "Chord.name"
+domain = "analysis"
+rule = "individual"
+
+[[entry]]
+kind = "method"
+old = "Chord.name"
+changed = "a field filled by the analysis functions, with no fallback spelling built from root and quality"
+domain = "analysis"
+rule = "individual"
+test = "bindings/python/tests/test_surface_analysis.py::test_chord_names_and_roman_numerals_are_fields"
+
+[[entry]]
+kind = "field"
+old = "Chord.roman_numeral"
+new = "AnalysisChord.roman_numeral"
+domain = "analysis"
+rule = "individual"
+
+[[entry]]
+kind = "field"
+old = "FunctionalChord.roman"
+new = "FunctionalChord.roman_numeral"
+domain = "analysis"
+rule = "individual"
+
+[[entry]]
+kind = "field"
+old = "Section.canonical_name"
+new = "Section.name"
+domain = "analysis"
+rule = "individual"
+
+[[entry]]
+kind = "method"
+old = "Section.name"
+changed = "a field filled by the analysis functions, with no fallback spelling built from type"
+domain = "analysis"
+rule = "individual"
+test = "bindings/python/tests/test_surface_analysis.py::test_sections_are_a_named_list"
+
+[[entry]]
+kind = "function"
+old = "analyze_with_progress"
+new = "analyze"
+domain = "analysis"
+rule = "progress-callback"
+
+[[entry]]
+kind = "option"
+old = "analyze(on_progress)"
+changed = "keyword-only progress callback (progress, stage); replaces analyze_with_progress"
+domain = "analysis"
+rule = "progress-callback"
+test = "bindings/python/tests/test_surface_analysis.py::test_analyze_reports_monotone_progress_and_cancels"
+
+[[entry]]
+kind = "option"
+old = "analyze(cancel)"
+changed = "keyword-only zero-argument cancel callable; a true return raises SonareError with code CANCELLED"
+domain = "analysis"
+rule = "progress-callback"
+test = "bindings/python/tests/test_surface_analysis.py::test_analyze_reports_monotone_progress_and_cancels"
+
+[[entry]]
+kind = "option"
+old = "detect_key(high_pass_hz)"
+new = "detect_key(chroma_high_pass_hz)"
+domain = "analysis"
+rule = "high-pass"
+
+[[entry]]
+kind = "option"
+old = "Audio.detect_key(high_pass_hz)"
+new = "Audio.detect_key(chroma_high_pass_hz)"
+domain = "core"
+rule = "high-pass"
+
+[[entry]]
+kind = "option"
+old = "detect_key_candidates(high_pass_hz)"
+new = "detect_key_candidates(chroma_high_pass_hz)"
+domain = "analysis"
+rule = "high-pass"
+
+[[entry]]
+kind = "option"
+old = "Audio.detect_key_candidates(high_pass_hz)"
+new = "Audio.detect_key_candidates(chroma_high_pass_hz)"
+domain = "core"
+rule = "high-pass"
+
+[[entry]]
+kind = "option"
+old = "analyze(chroma_highpass_hz)"
+new = "analyze(chroma_high_pass_hz)"
+domain = "analysis"
+rule = "high-pass"
+
+[[entry]]
+kind = "field"
+old = "DynamicsResult.loudness_times"
+new = "DynamicsResult.loudness_times_sec"
+domain = "analysis"
+rule = "unit-in-name"
+
+[[entry]]
+kind = "field"
+old = "AnalysisResult.beat_local_bpm"
+changed = "float32 ndarray instead of list"
+domain = "analysis"
+rule = "array-results"
+test = "bindings/python/tests/test_surface_analysis.py::test_analysis_arrays_are_float32_ndarrays"
+
+[[entry]]
+kind = "field"
+old = "BpmAnalysisResult.autocorrelation"
+changed = "float32 ndarray instead of list"
+domain = "analysis"
+rule = "array-results"
+test = "bindings/python/tests/test_surface_analysis.py::test_analysis_arrays_are_float32_ndarrays"
+
+[[entry]]
+kind = "field"
+old = "BpmAnalysisResult.tempogram"
+changed = "float32 ndarray instead of list"
+domain = "analysis"
+rule = "array-results"
+test = "bindings/python/tests/test_surface_analysis.py::test_analysis_arrays_are_float32_ndarrays"
+
+[[entry]]
+kind = "field"
+old = "AcousticResult.rt60_bands"
+changed = "float32 ndarray instead of list"
+domain = "effects"
+rule = "array-results"
+test = "bindings/python/tests/test_surface_analysis.py::test_analysis_arrays_are_float32_ndarrays"
+
+[[entry]]
+kind = "field"
+old = "AcousticResult.edt_bands"
+changed = "float32 ndarray instead of list"
+domain = "effects"
+rule = "array-results"
+test = "bindings/python/tests/test_surface_analysis.py::test_analysis_arrays_are_float32_ndarrays"
+
+[[entry]]
+kind = "field"
+old = "AcousticResult.c50_bands"
+changed = "float32 ndarray instead of list"
+domain = "effects"
+rule = "array-results"
+test = "bindings/python/tests/test_surface_analysis.py::test_analysis_arrays_are_float32_ndarrays"
+
+[[entry]]
+kind = "field"
+old = "AcousticResult.c80_bands"
+changed = "float32 ndarray instead of list"
+domain = "effects"
+rule = "array-results"
+test = "bindings/python/tests/test_surface_analysis.py::test_analysis_arrays_are_float32_ndarrays"
+
+[[entry]]
+kind = "field"
+old = "RhythmResult.beat_intervals"
+changed = "float32 ndarray instead of list"
+domain = "analysis"
+rule = "array-results"
+test = "bindings/python/tests/test_surface_analysis.py::test_analysis_arrays_are_float32_ndarrays"
+
+[[entry]]
+kind = "field"
+old = "DynamicsResult.loudness_rms_db"
+changed = "float32 ndarray instead of list"
+domain = "analysis"
+rule = "array-results"
+test = "bindings/python/tests/test_surface_analysis.py::test_analysis_arrays_are_float32_ndarrays"
+
+[[entry]]
+kind = "field"
+old = "TimbreResult.spectral_centroid"
+changed = "float32 ndarray instead of list"
+domain = "analysis"
+rule = "array-results"
+test = "bindings/python/tests/test_surface_analysis.py::test_analysis_arrays_are_float32_ndarrays"
+
+[[entry]]
+kind = "field"
+old = "TimbreResult.spectral_flatness"
+changed = "float32 ndarray instead of list"
+domain = "analysis"
+rule = "array-results"
+test = "bindings/python/tests/test_surface_analysis.py::test_analysis_arrays_are_float32_ndarrays"
+
+[[entry]]
+kind = "field"
+old = "TimbreResult.spectral_rolloff"
+changed = "float32 ndarray instead of list"
+domain = "analysis"
+rule = "array-results"
+test = "bindings/python/tests/test_surface_analysis.py::test_analysis_arrays_are_float32_ndarrays"
+
+[[entry]]
+kind = "field"
+old = "BoundaryResult.novelty_curve"
+changed = "float32 ndarray instead of list"
+domain = "analysis"
+rule = "array-results"
+test = "bindings/python/tests/test_surface_analysis.py::test_analysis_arrays_are_float32_ndarrays"
+
+[[entry]]
+kind = "field"
+old = "MeterEstimate.candidate_scores"
+changed = "float32 ndarray instead of list"
+domain = "analysis"
+rule = "array-results"
+test = "bindings/python/tests/test_surface_analysis.py::test_analysis_arrays_are_float32_ndarrays"
+
+[[entry]]
+kind = "field"
+old = "MeterEstimate.grouping"
+changed = "int32 ndarray instead of list"
+domain = "analysis"
+rule = "array-results"
+test = "bindings/python/tests/test_surface_analysis.py::test_analysis_arrays_are_float32_ndarrays"
+
+[[entry]]
+kind = "field"
+old = "BoundaryResult.n_frames"
+removed = true
+domain = "analysis"
+rule = "array-results"
+
+[[entry]]
+kind = "method"
+old = "AnalysisResult.bpmConfidence"
+removed = true
+domain = "analysis"
+rule = "aliases-removed"
+
+[[entry]]
+kind = "method"
+old = "AnalysisResult.timeSignature"
+removed = true
+domain = "analysis"
+rule = "aliases-removed"
+
+[[entry]]
+kind = "method"
+old = "AnalysisResult.bpmCandidates"
+removed = true
+domain = "analysis"
+rule = "aliases-removed"
+
+[[entry]]
+kind = "method"
+old = "AnalysisResult.timeSignatureCandidates"
+removed = true
+domain = "analysis"
+rule = "aliases-removed"
+
+[[entry]]
+kind = "method"
+old = "AnalysisResult.beatTimes"
+removed = true
+domain = "analysis"
+rule = "aliases-removed"
+
+[[entry]]
+kind = "method"
+old = "AnalysisResult.beatStrengths"
+removed = true
+domain = "analysis"
+rule = "aliases-removed"
+
+[[entry]]
+kind = "method"
+old = "AnalysisResult.downbeatIndices"
+removed = true
+domain = "analysis"
+rule = "aliases-removed"
+
+[[entry]]
+kind = "method"
+old = "AnalysisResult.downbeatPhase"
+removed = true
+domain = "analysis"
+rule = "aliases-removed"
+
+[[entry]]
+kind = "method"
+old = "AnalysisResult.beatObservations"
+removed = true
+domain = "analysis"
+rule = "aliases-removed"
+
+[[entry]]
+kind = "method"
+old = "AnalysisResult.beatLocalBpm"
+removed = true
+domain = "analysis"
+rule = "aliases-removed"
+
+[[entry]]
+kind = "method"
+old = "AnalysisDynamics.dynamicRangeDb"
+removed = true
+domain = "analysis"
+rule = "aliases-removed"
+
+[[entry]]
+kind = "method"
+old = "AnalysisDynamics.peakDb"
+removed = true
+domain = "analysis"
+rule = "aliases-removed"
+
+[[entry]]
+kind = "method"
+old = "AnalysisDynamics.rmsDb"
+removed = true
+domain = "analysis"
+rule = "aliases-removed"
+
+[[entry]]
+kind = "method"
+old = "AnalysisDynamics.crestFactor"
+removed = true
+domain = "analysis"
+rule = "aliases-removed"
+
+[[entry]]
+kind = "method"
+old = "AnalysisDynamics.loudnessRangeDb"
+removed = true
+domain = "analysis"
+rule = "aliases-removed"
+
+[[entry]]
+kind = "method"
+old = "AnalysisDynamics.isCompressed"
+removed = true
+domain = "analysis"
+rule = "aliases-removed"
+
+[[entry]]
+kind = "method"
+old = "AnalysisRhythm.timeSignature"
+removed = true
+domain = "analysis"
+rule = "aliases-removed"
+
+[[entry]]
+kind = "method"
+old = "AnalysisRhythm.grooveType"
+removed = true
+domain = "analysis"
+rule = "aliases-removed"
+
+[[entry]]
+kind = "method"
+old = "AnalysisRhythm.patternRegularity"
+removed = true
+domain = "analysis"
+rule = "aliases-removed"
+
+[[entry]]
+kind = "method"
+old = "AnalysisRhythm.tempoStability"
+removed = true
+domain = "analysis"
+rule = "aliases-removed"
+
+[[entry]]
+kind = "method"
+old = "AnalysisMelody.pitchRangeOctaves"
+removed = true
+domain = "analysis"
+rule = "aliases-removed"
+
+[[entry]]
+kind = "method"
+old = "AnalysisMelody.pitchStability"
+removed = true
+domain = "analysis"
+rule = "aliases-removed"
+
+[[entry]]
+kind = "method"
+old = "AnalysisMelody.meanFrequency"
+removed = true
+domain = "analysis"
+rule = "aliases-removed"
+
+[[entry]]
+kind = "method"
+old = "AnalysisMelody.vibratoRate"
+removed = true
+domain = "analysis"
+rule = "aliases-removed"
+
+[[entry]]
+kind = "method"
+old = "Key.shortName"
+removed = true
+domain = "analysis"
+rule = "aliases-removed"
+
+[[entry]]
+kind = "method"
+old = "Chord.rootName"
+removed = true
+domain = "analysis"
+rule = "aliases-removed"
+
+[[entry]]
+kind = "method"
+old = "Chord.bassName"
+removed = true
+domain = "analysis"
+rule = "aliases-removed"
+
+[[entry]]
+kind = "method"
+old = "MeterEstimate.timeSignature"
+removed = true
+domain = "analysis"
+rule = "aliases-removed"
+
+[[entry]]
+kind = "method"
+old = "MeterEstimate.downbeatPhase"
+removed = true
+domain = "analysis"
+rule = "aliases-removed"
+
+[[entry]]
+kind = "method"
+old = "MeterEstimate.candidateScores"
+removed = true
+domain = "analysis"
+rule = "aliases-removed"
+
+[[entry]]
+kind = "method"
+old = "AcousticResult.rt60Bands"
+removed = true
+domain = "effects"
+rule = "aliases-removed"
+
+[[entry]]
+kind = "method"
+old = "AcousticResult.edtBands"
+removed = true
+domain = "effects"
+rule = "aliases-removed"
+
+[[entry]]
+kind = "method"
+old = "AcousticResult.c50Bands"
+removed = true
+domain = "effects"
+rule = "aliases-removed"
+
+[[entry]]
+kind = "method"
+old = "AcousticResult.c80Bands"
+removed = true
+domain = "effects"
+rule = "aliases-removed"
+
+[[entry]]
+kind = "method"
+old = "AcousticResult.isBlind"
+removed = true
+domain = "effects"
+rule = "aliases-removed"
+
+[[entry]]
+kind = "method"
+old = "RhythmResult.timeSignature"
+removed = true
+domain = "analysis"
+rule = "aliases-removed"
+
+[[entry]]
+kind = "method"
+old = "RhythmResult.grooveType"
+removed = true
+domain = "analysis"
+rule = "aliases-removed"
+
+[[entry]]
+kind = "method"
+old = "RhythmResult.patternRegularity"
+removed = true
+domain = "analysis"
+rule = "aliases-removed"
+
+[[entry]]
+kind = "method"
+old = "RhythmResult.tempoStability"
+removed = true
+domain = "analysis"
+rule = "aliases-removed"
+
+[[entry]]
+kind = "method"
+old = "RhythmResult.beatIntervals"
+removed = true
+domain = "analysis"
+rule = "aliases-removed"
+
+[[entry]]
+kind = "method"
+old = "DynamicsResult.dynamicRangeDb"
+removed = true
+domain = "analysis"
+rule = "aliases-removed"
+
+[[entry]]
+kind = "method"
+old = "DynamicsResult.peakDb"
+removed = true
+domain = "analysis"
+rule = "aliases-removed"
+
+[[entry]]
+kind = "method"
+old = "DynamicsResult.rmsDb"
+removed = true
+domain = "analysis"
+rule = "aliases-removed"
+
+[[entry]]
+kind = "method"
+old = "DynamicsResult.crestFactor"
+removed = true
+domain = "analysis"
+rule = "aliases-removed"
+
+[[entry]]
+kind = "method"
+old = "DynamicsResult.loudnessRangeDb"
+removed = true
+domain = "analysis"
+rule = "aliases-removed"
+
+[[entry]]
+kind = "method"
+old = "DynamicsResult.isCompressed"
+removed = true
+domain = "analysis"
+rule = "aliases-removed"
+
+[[entry]]
+kind = "method"
+old = "DynamicsResult.loudnessTimes"
+removed = true
+domain = "analysis"
+rule = "aliases-removed"
+
+[[entry]]
+kind = "method"
+old = "DynamicsResult.loudnessRmsDb"
+removed = true
+domain = "analysis"
+rule = "aliases-removed"
+
+[[entry]]
+kind = "method"
+old = "TimbreResult.spectralCentroid"
+removed = true
+domain = "analysis"
+rule = "aliases-removed"
+
+[[entry]]
+kind = "method"
+old = "TimbreResult.spectralFlatness"
+removed = true
+domain = "analysis"
+rule = "aliases-removed"
+
+[[entry]]
+kind = "method"
+old = "TimbreResult.spectralRolloff"
+removed = true
+domain = "analysis"
+rule = "aliases-removed"
+
+[[entry]]
+kind = "method"
+old = "TimbreResult.timbreOverTime"
+removed = true
+domain = "analysis"
+rule = "aliases-removed"
+
+[[entry]]
+kind = "method"
+old = "LufsResult.integratedLufs"
+removed = true
+domain = "analysis"
+rule = "aliases-removed"
+
+[[entry]]
+kind = "method"
+old = "LufsResult.momentaryLufs"
+removed = true
+domain = "analysis"
+rule = "aliases-removed"
+
+[[entry]]
+kind = "method"
+old = "LufsResult.shortTermLufs"
+removed = true
+domain = "analysis"
+rule = "aliases-removed"
+
+[[entry]]
+kind = "method"
+old = "LufsResult.maxMomentaryLufs"
+removed = true
+domain = "analysis"
+rule = "aliases-removed"
+
+[[entry]]
+kind = "method"
+old = "LufsResult.maxShortTermLufs"
+removed = true
+domain = "analysis"
+rule = "aliases-removed"
+
+[[entry]]
+kind = "method"
+old = "LufsResult.loudnessRange"
+removed = true
+domain = "analysis"
+rule = "aliases-removed"
+
+[[entry]]
+kind = "type"
+old = "TranscribeResult"
+changed = "a frozen dataclass; assigning a field raises"
+domain = "analysis"
+rule = "frozen-results"
+test = "bindings/python/tests/test_surface_analysis.py::test_transcribe_result_is_frozen"
+
+[[entry]]
+kind = "type"
+old = "Beat"
+changed = "importable from libsonare"
+domain = "analysis"
+rule = "no-internal-types"
+test = "bindings/python/tests/test_surface_analysis.py::test_boundary_and_beat_types_are_importable"
+
+[[entry]]
+kind = "type"
+old = "Boundary"
+changed = "importable from libsonare"
+domain = "analysis"
+rule = "no-internal-types"
+test = "bindings/python/tests/test_surface_analysis.py::test_boundary_and_beat_types_are_importable"
+
+[[entry]]
+kind = "type"
+old = "BoundaryResult"
+changed = "importable from libsonare"
+domain = "analysis"
+rule = "no-internal-types"
+test = "bindings/python/tests/test_surface_analysis.py::test_boundary_and_beat_types_are_importable"
+
+[[entry]]
+kind = "type"
+old = "AnalysisChord"
+changed = "importable from libsonare"
+domain = "analysis"
+rule = "no-internal-types"
+test = "bindings/python/tests/test_surface_analysis.py::test_boundary_and_beat_types_are_importable"
+
+[[entry]]
+kind = "type"
+old = "BeatObservations"
+changed = "importable from libsonare"
+domain = "analysis"
+rule = "no-internal-types"
+test = "bindings/python/tests/test_surface_analysis.py::test_boundary_and_beat_types_are_importable"
+
+[[entry]]
+kind = "export"
+old = "CHORD_QUALITIES"
+changed = "the chord quality tokens, indexed by the C ordinal"
+domain = "analysis"
+rule = "individual"
+test = "bindings/python/tests/test_surface_analysis.py::test_boundary_and_beat_types_are_importable"
+
+[[entry]]
+kind = "export"
+old = "ProgressCallback"
+changed = "importable from libsonare"
+domain = "core"
+rule = "no-internal-types"
+test = "bindings/python/tests/test_surface_analysis.py::test_boundary_and_beat_types_are_importable"
+
+[[entry]]
+kind = "export"
+old = "CancelCallback"
+changed = "importable from libsonare"
+domain = "core"
+rule = "no-internal-types"
+test = "bindings/python/tests/test_surface_analysis.py::test_boundary_and_beat_types_are_importable"

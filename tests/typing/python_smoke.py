@@ -13,12 +13,12 @@ downbeats: np.ndarray[Any, Any] = libsonare.detect_downbeats(samples, sample_rat
 key: libsonare.Key = libsonare.detect_key(
     samples,
     22050,
-    high_pass_hz=80.0,
+    chroma_high_pass_hz=80.0,
     profile=libsonare.KeyProfile.FARALDO_EDMA,
     genre_hint="edm",
 )
 key_candidates: list[libsonare.KeyCandidate] = libsonare.detect_key_candidates(
-    samples, 22050, high_pass_hz=80.0, modes=[libsonare.Mode.MAJOR, "dorian"], profile="edma"
+    samples, 22050, chroma_high_pass_hz=80.0, modes=[libsonare.Mode.MAJOR, "dorian"], profile="edma"
 )
 analysis: libsonare.AnalysisResult = libsonare.analyze(samples, 22050)
 acoustic: libsonare.AcousticResult = libsonare.analyze_impulse_response(ir_samples, 48000)
@@ -58,11 +58,11 @@ assist_sidecars: list[libsonare.AssistSidecar] = project.assist_sidecars()
 
 assert_type(bpm, float)
 assert_type(downbeats, np.ndarray[Any, Any])
-assert_type(key.shortName, str)
+assert_type(key.short_name, str)
 assert_type(key_candidates[0].correlation, float)
-assert_type(analysis.beatTimes, list[float])
-assert_type(acoustic.rt60Bands, list[float])
-assert_type(blind_acoustic.isBlind, bool)
+assert_type(analysis.beats, list[libsonare.Beat])
+assert_type(acoustic.rt60_bands, np.ndarray[Any, Any])
+assert_type(blind_acoustic.is_blind, bool)
 assert_type(rir.rir, list[float])
 assert_type(rir.sample_rate, int)
 assert_type(room_estimate.rt60_bands, list[float])

@@ -38,7 +38,7 @@ def _assert_first_appearance_numbering(groups: list[int]) -> None:
 
 
 def test_analyze_sections_exposes_group_as_int(abab) -> None:
-    sections = libsonare.analyze_sections(abab, sample_rate=_SR, min_section_sec=4.0).sections
+    sections = libsonare.analyze_sections(abab, sample_rate=_SR, min_section_sec=4.0)
 
     assert sections
     assert all(type(s.group) is int for s in sections)
@@ -54,7 +54,7 @@ def test_analyze_exposes_group_as_int(abab) -> None:
 
 
 def test_alternating_material_yields_distinct_groups(abab) -> None:
-    sections = libsonare.analyze_sections(abab, sample_rate=_SR, min_section_sec=4.0).sections
+    sections = libsonare.analyze_sections(abab, sample_rate=_SR, min_section_sec=4.0)
     groups = [s.group for s in sections]
 
     assert len(set(groups)) >= 2
