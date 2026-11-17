@@ -10,9 +10,10 @@ document, whose keys are camelCase, and ignores a key no field names.
 from __future__ import annotations
 
 import types
+from collections.abc import Hashable
 from dataclasses import dataclass, fields, is_dataclass
 from functools import cache
-from typing import Any, Literal, TypeVar, Union, get_args, get_origin, get_type_hints
+from typing import Any, Literal, TypeVar, Union, cast, get_args, get_origin, get_type_hints
 
 MasteringProcessorKind = Literal["realtime", "offline", "pair"]
 MasteringChannelPolicy = Literal["multichannel", "stereoPairOnly", "perChannel", "passthrough"]
@@ -458,7 +459,7 @@ def _wire_key(name: str) -> str:
 
 
 @cache
-def _hints(cls: type) -> dict[str, Any]:
+def _hints(cls: Hashable) -> dict[str, Any]:
     # The public module rebinds __module__, so resolve names against this file.
     return get_type_hints(cls, globalns=globals())
 
@@ -469,7 +470,7 @@ def _convert(hint: Any, value: Any) -> Any:
         if value is None:
             return None
         for arm in get_args(hint):
-            if is_dataclass(arm) and isinstance(value, dict):
+            if isinstance(arm, type) and is_dataclass(arm) and isinstance(value, dict):
                 return _from_wire(arm, value)
             if get_origin(arm) is tuple and isinstance(value, list):
                 return _convert(arm, value)
@@ -477,14 +478,14 @@ def _convert(hint: Any, value: Any) -> Any:
     if origin is tuple:
         item = get_args(hint)[0]
         return tuple(_convert(item, element) for element in value)
-    if is_dataclass(hint):
+    if isinstance(hint, type) and is_dataclass(hint):
         return _from_wire(hint, value)
     return value
 
 
 def _from_wire(cls: type[_T], document: dict[str, Any]) -> _T:
     """Build ``cls`` from a library JSON object keyed in camelCase."""
-    hints = _hints(cls)
+    hints = _hints(cast(Hashable, cls))
     values = {
         field.name: _convert(hints[field.name], document[_wire_key(field.name)])
         for field in fields(cls)  # type: ignore[arg-type]
