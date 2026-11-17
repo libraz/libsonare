@@ -32,6 +32,7 @@ import check_parity
 import compare
 import report as report_mod
 from core_defaults import CoreConfig
+from extractors import c_api
 from model import SURFACES, Extraction, FunctionSig, Param
 
 
@@ -234,3 +235,19 @@ def _main() -> int:
 
 if __name__ == "__main__":
     raise SystemExit(_main())
+
+
+def test_a_config_struct_before_the_itemized_params_is_the_options_bag() -> None:
+    assert compare._order_verdict("k", ["config", "ops"], ["ops"]) == compare.AGREED
+    assert compare._order_verdict("k", ["config", "ops", "gain"], ["gain"]) == compare.DIVERGED
+
+
+def test_a_count_after_its_array_is_derived_but_matrix_dimensions_are_not() -> None:
+    def structural(decl: str) -> list[str]:
+        params = c_api._mark_derived_counts([c_api._parse_param(p) for p in decl.split(",")])
+        return [p.name for p in params if p.structural]
+
+    assert "n_ops" in structural("const SonareSpectralEditOp* ops, size_t n_ops, float** out")
+    assert "frames" in structural("const float* samples, size_t frames, int channels")
+    matrix = structural("const float* features, int n_features, int n_frames, int width")
+    assert "n_features" not in matrix and "n_frames" not in matrix

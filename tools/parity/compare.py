@@ -1010,6 +1010,10 @@ def _order_verdict(key: str, c_cfg: list[str], s_cfg: list[str]) -> str:
     # explicitly an opaque bag.
     if c_cfg[-1] in _STRUCT_BAG_NAMES and s_cfg[: len(c_cfg) - 1] == c_cfg[:-1]:
         return AGREED
+    # A config struct anywhere in the C list is the facade's options bag, which has no position.
+    c_itemized = [n for n in c_cfg if n not in _STRUCT_BAG_NAMES]
+    if len(c_itemized) < len(c_cfg) and s_cfg == c_itemized[: len(s_cfg)]:
+        return AGREED
     # Facades fold variadic C scalar tails into an options bag, so a facade
     # exposing a STRICT PREFIX of the C config order is fine.
     if s_cfg == c_cfg[: len(s_cfg)]:

@@ -126,6 +126,23 @@ def _parse_param(decl: str) -> Param:
     return Param(name=name, raw_name=name, default=None, type=full_type, structural=structural)
 
 
+# A count right after its array is that array's length, which the facades derive:
+# ``ops, n_ops`` (not ``features, n_features, n_frames``, a matrix's dimensions)
+# and the ``frames, channels`` of an interleaved buffer.
+_INTEGER_TYPES = {"int", "int32_t", "size_t", "uint32_t", "int64_t", "uint64_t"}
+
+
+def _mark_derived_counts(params: list[Param]) -> list[Param]:
+    """Mark an integer count that directly follows the array it measures as structural."""
+    padded = [*params, Param(name="")]
+    for prev, cur, nxt in zip(padded, padded[1:], padded[2:]):
+        if "*" not in prev.type or cur.type.replace("const", "").strip() not in _INTEGER_TYPES:
+            continue
+        if cur.name == f"n_{prev.name}" and not nxt.name.startswith("n_") or cur.name == "frames" and nxt.name == "channels":
+            cur.structural = True
+    return params
+
+
 # Local public-API includes: ``#include <sonare/sonare_c_effects.h>`` etc.
 # ``sonare_c.h`` is an umbrella over per-domain headers, so the canonical C
 # surface is spread across the headers it pulls in. We follow those local
@@ -357,7 +374,7 @@ def extract(root: Path) -> Extraction:
             args = m.group("args")
             try:
                 parts = _split_args(args)
-                params = [_parse_param(p) for p in parts]
+                params = _mark_derived_counts([_parse_param(p) for p in parts])
             except Exception:  # noqa: BLE001 - record, do not crash
                 ex.unparsed += 1
                 ex.unparsed_notes.append(f"{path.name}: {name} (arg parse failed)")
