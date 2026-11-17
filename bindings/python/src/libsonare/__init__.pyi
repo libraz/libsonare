@@ -1314,10 +1314,6 @@ from .types import (
 from .types import (
     WaveformPeaksReport as WaveformPeaksReport,
 )
-
-__version__: str
-"""Installed package version, or the native library version in a source checkout."""
-
 from .vocal_edit import (
     VocalAnalysis as VocalAnalysis,
 )
@@ -1447,3 +1443,6 @@ from .vocal_project import (
 from .vocal_project import (
     rehydrate_project_vocal_edits as rehydrate_project_vocal_edits,
 )
+
+__version__: str
+"""Installed package version, or the native library version in a source checkout."""
