@@ -1405,7 +1405,8 @@ TEST_CASE("sonare_vector_normalize refuses a norm_type outside 0..3", "[c_api][f
     CAPTURE(norm_type);
     float* out = reinterpret_cast<float*>(&norm_type);
     size_t out_length = 99;
-    REQUIRE(sonare_vector_normalize(values.data(), values.size(), norm_type, 0.0f, &out,
+    REQUIRE(sonare_vector_normalize(values.data(), values.size(),
+                                    static_cast<SonareNormType>(norm_type), 0.0f, &out,
                                     &out_length) == SONARE_ERROR_INVALID_PARAMETER);
     REQUIRE(out == nullptr);
     REQUIRE(out_length == 0);
@@ -1416,7 +1417,8 @@ TEST_CASE("sonare_vector_normalize refuses a norm_type outside 0..3", "[c_api][f
     CAPTURE(norm_type);
     float* out = nullptr;
     size_t out_length = 0;
-    REQUIRE(sonare_vector_normalize(values.data(), values.size(), norm_type, 0.0f, &out,
+    REQUIRE(sonare_vector_normalize(values.data(), values.size(),
+                                    static_cast<SonareNormType>(norm_type), 0.0f, &out,
                                     &out_length) == SONARE_OK);
     REQUIRE(out_length == values.size());
     REQUIRE(std::abs(out[0] - expected_first[norm_type]) <= 1e-6f);

@@ -122,10 +122,10 @@ void fill_note(const sonare::editing::note_model::NoteObject& from, SonareNoteOb
   to.edit.time_offset_samples = from.edit.time_offset_samples;
   to.edit.envelope_offset = 0;
   to.edit.envelope_count = from.edit.amplitude_envelope.size();
-  to.edit.pitch_shift_semitones = from.edit.pitch_shift_semitones;
+  to.edit.pitch_semitones = from.edit.pitch_shift_semitones;
   to.edit.gain_db = from.edit.gain_db;
   to.edit.time_stretch_ratio = from.edit.time_stretch_ratio;
-  to.edit.formant_shift_semitones = from.edit.formant_shift_semitones;
+  to.edit.formant_semitones = from.edit.formant_shift_semitones;
   to.edit.vibrato_depth_change = from.edit.vibrato_depth_change;
   to.edit.drift_change = from.edit.drift_change;
   to.edit.muted = from.edit.muted ? 1 : 0;
@@ -245,14 +245,14 @@ SonareError sonare_polyphonic_set_note_edit(SonarePolyphonicAnalysis* analysis, 
   SONARE_C_TRY
   sonare::editing::note_model::NoteEdit replacement;
   if (edit != nullptr) {
-    replacement.pitch_shift_semitones = edit->pitch_shift_semitones;
+    replacement.pitch_shift_semitones = edit->pitch_semitones;
     replacement.gain_db = edit->gain_db;
     replacement.time_offset_samples = edit->time_offset_samples;
     // The by-value door's 0-reads-as-1 rule, kept so one struct means one thing.
     replacement.time_stretch_ratio =
         edit->time_stretch_ratio == 0.0f ? 1.0f : edit->time_stretch_ratio;
     replacement.muted = edit->muted != 0;
-    replacement.formant_shift_semitones = edit->formant_shift_semitones;
+    replacement.formant_shift_semitones = edit->formant_semitones;
     replacement.vibrato_depth_change = edit->vibrato_depth_change;
     replacement.drift_change = edit->drift_change;
   }

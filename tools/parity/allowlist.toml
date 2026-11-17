@@ -258,7 +258,6 @@ node = [
   # analysis options through sonare_analyze_json_ex_with_progress). analyze_melody_ex is
   # folded into analyzeMelody's usePyin/center options.
   "analyze_json",
-  "analyze_json_with_progress",
   "analyze_json_ex_with_progress",
   "analyze_melody_ex",
   # C-ABI-internal length-checked inverse variants: bindings build their own
@@ -410,7 +409,6 @@ wasm = [
   # Unified-analysis variants folded into the base facade analyze /
   # analyzeWithProgress / analyzeMelody (WASM keeps its native analyze() object).
   "analyze_json",
-  "analyze_json_with_progress",
   "analyze_json_ex_with_progress",
   "analyze_melody_ex",
   # --- Internal default-struct seeders (see node note above) ---
@@ -538,7 +536,6 @@ python = [
   # Unified-analysis variants folded into the base facade `analyze` /
   # `analyze_with_progress` / `analyze_melody` (use_pyin/center params).
   "analyze_json",
-  "analyze_json_with_progress",
   "analyze_json_ex_with_progress",
   "analyze_melody_ex",
   # --- Internal default-struct seeders (see node note above) ---

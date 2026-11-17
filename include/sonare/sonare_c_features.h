@@ -522,11 +522,11 @@ void sonare_free_inverse_result(SonareInverseResult* result);
 /// @details The chroma filterbank uses a fixed tuning of 0 (concert A440). Unlike
 ///   librosa.feature.chroma_stft, which estimates tuning from the signal when
 ///   none is supplied, this entry point does NOT auto-estimate and takes no
-///   tuning argument. A tuning offset (a fraction of a semitone, which
-///   @ref sonare_estimate_tuning returns at 12 bins per octave) is applied
-///   through SonareMusicAnalyzeOptions.tuning (analysis) and
-///   SonareChordDetectionOptions.tuning (chord detection); both also measure it
-///   themselves under @c tuning_auto.
+///   tuning argument. A tuning offset in cents (@ref sonare_estimate_tuning
+///   returns a fraction of a bin; 100 cents at 12 bins per octave per unit) is
+///   applied through SonareMusicAnalyzeOptions.tuning_cents (analysis) and
+///   SonareChordDetectionOptions.tuning_cents (chord detection); both also
+///   measure it themselves under @c tuning_auto.
 /// @param out Receives heap-owned arrays; free with sonare_free_chroma_result.
 SonareError sonare_chroma(const float* samples, size_t length, int sample_rate, int n_fft,
                           int hop_length, SonareChromaResult* out);
@@ -541,11 +541,12 @@ SonareError sonare_chroma_cens_ex(const float* samples, size_t length, int sampl
                                   SonareChromaResult* out);
 /// @brief Constant-Q chromagram (librosa.feature.chroma_cqt).
 /// @details Fixed tuning of 0 (concert A440); no auto-tuning estimation, matching
-///   the other chroma entry points. A tuning offset (a fraction of a semitone,
-///   which @ref sonare_estimate_tuning returns at 12 bins per octave) is applied
-///   through SonareMusicAnalyzeOptions.tuning (analysis) and
-///   SonareChordDetectionOptions.tuning (chord detection); both also measure it
-///   themselves under @c tuning_auto.
+///   the other chroma entry points. A tuning offset in cents
+///   (@ref sonare_estimate_tuning returns a fraction of a bin; 100 cents at 12
+///   bins per octave per unit) is applied through
+///   SonareMusicAnalyzeOptions.tuning_cents (analysis) and
+///   SonareChordDetectionOptions.tuning_cents (chord detection); both also
+///   measure it themselves under @c tuning_auto.
 /// @param out Receives heap-owned arrays; free with sonare_free_chroma_result.
 SonareError sonare_chroma_cqt(const float* samples, size_t length, int sample_rate, int hop_length,
                               int n_chroma, SonareChromaResult* out);
@@ -659,10 +660,9 @@ SonareError sonare_pitch_tuning(const float* frequencies, size_t length, float r
 /// @brief Global tuning offset of an audio signal (librosa.estimate_tuning).
 /// @details Uses piptrack to find spectral peaks, then aggregates via pitch_tuning.
 ///          A librosa mirror: the offset is in fractions of a bin of
-///          @p bins_per_octave, which is the semitone fraction the analysis
-///          options take only at 12 (otherwise multiply by 12 /
-///          @p bins_per_octave). Analysis measures it in that unit itself under
-///          @c tuning_auto; @ref sonare_tuning_to_reference_hz converts it to Hz.
+///          @p bins_per_octave, not the cents the analysis options and
+///          @ref sonare_tuning_to_reference_hz take; multiply by
+///          1200 / @p bins_per_octave to get cents.
 /// @param resolution Tuning resolution in fractions of a bin (e.g. 0.01 = 1 cent).
 /// @param bins_per_octave Number of pitch bins per octave (e.g. 12).
 /// @param out_tuning Receives the tuning offset in fractions of a bin
@@ -672,27 +672,27 @@ SonareError sonare_estimate_tuning(const float* samples, size_t length, int samp
                                    int hop_length, float resolution, int bins_per_octave,
                                    float* out_tuning);
 
-/// @brief Reference frequency of an A4 raised by @p tuning fractions of a semitone.
-/// @details The converter from the analysis unit (a fraction of a semitone, in
-///          [-0.5, 0.5) for the analysis options) to the Hz a pitch reference is
-///          stated in: @p a4 * 2^(@p tuning / 12). Not range-checked beyond
+/// @brief Reference frequency of an A4 raised by @p tuning_cents.
+/// @details The converter from the analysis unit (cents, in [-50, 50) for the
+///          analysis options) to the Hz a pitch reference is stated in:
+///          @p a4_hz * 2^(@p tuning_cents / 1200). Not range-checked beyond
 ///          finiteness, so a streaming reference several semitones from A440
 ///          converts exactly.
-/// @param tuning Finite fraction of a semitone.
-/// @param a4 Concert pitch the tuning is measured from, finite and positive
+/// @param tuning_cents Finite tuning in cents.
+/// @param a4_hz Concert pitch the tuning is measured from, finite and positive
 ///        (440 for the library's default).
 /// @param out_hz Receives the frequency in Hz.
-SonareError sonare_tuning_to_reference_hz(float tuning, float a4, float* out_hz);
+SonareError sonare_tuning_to_reference_hz(float tuning_cents, float a4_hz, float* out_hz);
 
-/// @brief Tuning, in fractions of a semitone, of a recording whose A4 sits at @p hz.
-/// @details Inverse of @ref sonare_tuning_to_reference_hz: 12 * log2(@p hz /
-///          @p a4). The live streaming reference (@c tuning_ref_hz) and the
-///          transcription reference (@c reference_hz) stay in Hz; this is the
-///          bridge to the analysis options' unit.
-/// @param hz Finite positive reference frequency.
-/// @param a4 Finite positive concert pitch (440 for the library's default).
-/// @param out_tuning Receives the tuning in fractions of a semitone.
-SonareError sonare_reference_hz_to_tuning(float hz, float a4, float* out_tuning);
+/// @brief Tuning, in cents, of a recording whose A4 sits at @p reference_hz.
+/// @details Inverse of @ref sonare_tuning_to_reference_hz: 1200 * log2(
+///          @p reference_hz / @p a4_hz). The live streaming reference
+///          (@c reference_hz) and the transcription reference (@c reference_hz)
+///          stay in Hz; this is the bridge to the analysis options' unit.
+/// @param reference_hz Finite positive reference frequency.
+/// @param a4_hz Finite positive concert pitch (440 for the library's default).
+/// @param out_tuning_cents Receives the tuning in cents.
+SonareError sonare_reference_hz_to_tuning(float reference_hz, float a4_hz, float* out_tuning_cents);
 
 /// @brief Detects per-frame spectral pitch peaks (librosa.piptrack).
 /// @details @p pitches and @p magnitudes are row-major [n_bins x n_frames]
@@ -829,8 +829,8 @@ SonareError sonare_pitch_yin(const float* samples, size_t length, int sample_rat
 ///       Two consequences worth designing around:
 ///        - a fixed 0.5 threshold on @c voiced_prob (the default in
 ///          @ref sonare_note_segments) drops entire low registers. Pass
-///          @c voiced_flag as 0.0/1.0 there, or set the config's
-///          @c voiced_threshold.
+///          @c voiced_flag as the @c voiced argument there, or set the
+///          config's @c voiced_threshold.
 ///        - @c voiced_prob is not a correction weight.
 ///          @ref sonare_pitch_correct_timevarying does not scale its correction
 ///          by it; it uses it only to derive voicing when no explicit @c voiced
@@ -858,7 +858,8 @@ typedef struct {
      In particular, pYIN's voiced_prob is a frame's voiced observation mass and
      rises with F0 for a fixed frame_length, so the 0.5 default silently drops
      low-register material: see sonare_pitch_pyin. Passing the pYIN voiced_flag
-     as 0.0/1.0 is the recommended form and needs no threshold change. */
+     through the @c voiced argument is the recommended form and needs no
+     threshold change. */
   float voiced_threshold;
 } SonareNoteSegmenterConfig;
 
@@ -867,8 +868,8 @@ typedef struct {
 typedef struct {
   int frame_start;
   int frame_end;
-  float start_seconds;
-  float end_seconds;
+  float start_sec;
+  float end_sec;
   float median_cents;
 } SonareNoteSegment;
 
@@ -884,20 +885,25 @@ typedef struct {
 ///        negative value or a non-finite one -- sonare_pitch_pyin emits NaN
 ///        there unless asked to fill it -- and all three read the same: that
 ///        frame contributes no measurement.
-/// @param f0_count Number of F0 frames; must be non-zero.
-/// @param voiced_prob Per-frame voicing values in [0, 1]. A value below the
-///        config's @c voiced_threshold (default 0.5) is treated as unvoiced;
-///        @p voiced_prob_count must equal @p f0_count.
-///        Pass @ref sonare_pitch_pyin's @c voiced_flag as 0.0/1.0 here.
-///        Passing its @c voiced_prob instead returns no segments at all for
-///        low-register material, because that value is a frame's voiced
-///        observation mass and rises with F0 rather than with signal quality.
+/// @param voiced_prob Per-frame voicing values in [0, 1] (@p n_frames entries),
+///        or NULL. A value below the config's @c voiced_threshold (default 0.5)
+///        is treated as unvoiced. Passing @ref sonare_pitch_pyin's
+///        @c voiced_prob returns no segments at all for low-register material,
+///        because that value is a frame's voiced observation mass and rises with
+///        F0 rather than with signal quality; pass @p voiced instead.
+/// @param voiced Per-frame voiced flags (@p n_frames entries, non-zero = voiced),
+///        or NULL; @ref sonare_pitch_pyin's @c voiced_flag goes here. A flag of
+///        1 reads as a voiced_prob of 1.0 and 0 as 0.0, so flags give the same
+///        segments as the same values passed as 0/1 probabilities. Exactly one
+///        of @p voiced_prob and @p voiced is given; both or neither is
+///        INVALID_PARAMETER.
+/// @param n_frames Number of F0 frames; must be non-zero.
 /// @param frame_rate Number of F0 frames per second; must be finite and > 0.
 /// @param config Optional versioned configuration; NULL selects defaults.
 /// @param out Receives a heap-owned result, cleared before validation. Empty
 ///        segmentation is returned as (@c NULL, 0).
-SonareError sonare_note_segments(const float* f0_hz, size_t f0_count, const float* voiced_prob,
-                                 size_t voiced_prob_count, float frame_rate,
+SonareError sonare_note_segments(const float* f0_hz, const float* voiced_prob,
+                                 const int32_t* voiced, size_t n_frames, float frame_rate,
                                  const SonareNoteSegmenterConfig* config,
                                  SonareNoteSegmentsResult* out);
 void sonare_free_note_segments(SonareNoteSegmentsResult* result);
@@ -921,12 +927,12 @@ SonareError sonare_hz_to_note(float hz, char** out_string);
 ///   outside the representable range; @ref sonare_last_error_code is then
 ///   SONARE_ERROR_INVALID_PARAMETER (detail in @ref sonare_last_error_message).
 float sonare_note_to_hz(const char* note);
-/// @brief Frame index to seconds. Returns NaN when @p sr or @p hop_length is not positive
+/// @brief Frame index to seconds. Returns NaN when @p sample_rate or @p hop_length is not positive
 ///   (detail in @ref sonare_last_error_message).
-float sonare_frames_to_time(int frames, int sr, int hop_length);
-/// @brief Seconds to frame index. Returns 0 when @p sr or @p hop_length is not positive
+float sonare_frames_to_time(int frames, int sample_rate, int hop_length);
+/// @brief Seconds to frame index. Returns 0 when @p sample_rate or @p hop_length is not positive
 ///   (detail in @ref sonare_last_error_message).
-int sonare_time_to_frames(float time, int sr, int hop_length);
+int sonare_time_to_frames(float time_sec, int sample_rate, int hop_length);
 
 int sonare_frames_to_samples(int frames, int hop_length, int n_fft);
 int sonare_samples_to_frames(int samples, int hop_length, int n_fft);
@@ -1116,10 +1122,10 @@ SonareError sonare_peak_pick(const float* values, size_t length, int pre_max, in
 ///   independent of the caller's data; read one off the norm your own input
 ///   produces. Values at or below @c 1e-10 are raised to that floor, so passing
 ///   0 means "normalize everything that is not numerically zero". @p norm_type
-///   is 0 (max-abs), 1 (L1), 2 (L2) or 3 (power); any other value is refused
-///   with SONARE_ERROR_INVALID_PARAMETER.
+///   is a @ref SonareNormType; any other value is refused with
+///   SONARE_ERROR_INVALID_PARAMETER.
 /// @note Free @p out with @ref sonare_free_floats.
-SonareError sonare_vector_normalize(const float* values, size_t length, int norm_type,
+SonareError sonare_vector_normalize(const float* values, size_t length, SonareNormType norm_type,
                                     float threshold, float** out, size_t* out_length);
 
 /// @note Free @p out with @ref sonare_free_floats.

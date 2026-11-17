@@ -224,8 +224,8 @@ bool ReadMusicAnalyzeOptions(const Napi::Value& value, SonareMusicAnalyzeOptions
   options->use_triads_only =
       BoolProperty(object, "useTriadsOnly", options->use_triads_only != 0) ? 1 : 0;
   options->use_hpss = BoolProperty(object, "useHpss", options->use_hpss != 0) ? 1 : 0;
-  options->chroma_highpass_hz =
-      FiniteFloatProperty(object, "chromaHighpassHz", options->chroma_highpass_hz);
+  options->chroma_high_pass_hz =
+      FiniteFloatProperty(object, "chromaHighPassHz", options->chroma_high_pass_hz);
   options->use_bass_weighted =
       BoolProperty(object, "useBassWeighted", options->use_bass_weighted != 0) ? 1 : 0;
   options->chroma_hop_multiplier =
@@ -246,8 +246,9 @@ bool ReadMusicAnalyzeOptions(const Napi::Value& value, SonareMusicAnalyzeOptions
   options->meter_denominator = IntProperty(object, "meterDenominator", options->meter_denominator);
   // Absent keeps the defaults' measured tuning; a given number is used as given.
   bool tuning_auto = false;
-  options->tuning = AutoFiniteFloatProperty(object, "tuning", options->tuning, &tuning_auto);
-  const Napi::Value tuning_value = object.Get("tuning");
+  options->tuning_cents =
+      AutoFiniteFloatProperty(object, "tuningCents", options->tuning_cents, &tuning_auto);
+  const Napi::Value tuning_value = object.Get("tuningCents");
   if (!tuning_value.IsUndefined() && !tuning_value.IsNull()) {
     options->tuning_auto = tuning_auto ? 1 : 0;
   }

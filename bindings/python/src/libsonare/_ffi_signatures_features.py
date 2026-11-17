@@ -408,8 +408,8 @@ def configure_features_signatures(lib: ctypes.CDLL) -> None:
     lib.sonare_note_segments.restype = ctypes.c_int32
     lib.sonare_note_segments.argtypes = [
         ctypes.POINTER(ctypes.c_float),
-        ctypes.c_size_t,
         ctypes.POINTER(ctypes.c_float),
+        ctypes.POINTER(ctypes.c_int32),
         ctypes.c_size_t,
         ctypes.c_float,
         ctypes.POINTER(SonareNoteSegmenterConfig),

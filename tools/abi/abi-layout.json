@@ -592,7 +592,7 @@
       },
       {
         "kind": "float",
-        "name": "tuning",
+        "name": "tuning_cents",
         "offset": 4,
         "size": 4
       },
@@ -706,7 +706,7 @@
       },
       {
         "kind": "float",
-        "name": "tuning",
+        "name": "tuning_cents",
         "offset": 60,
         "size": 4
       },
@@ -2014,7 +2014,7 @@
       },
       {
         "kind": "pointer",
-        "name": "loudness_times",
+        "name": "loudness_times_sec",
         "offset": 24,
         "size": 8
       },
@@ -5002,7 +5002,7 @@
       },
       {
         "kind": "float",
-        "name": "chroma_highpass_hz",
+        "name": "chroma_high_pass_hz",
         "offset": 32,
         "size": 4
       },
@@ -5080,7 +5080,7 @@
       },
       {
         "kind": "float",
-        "name": "tuning",
+        "name": "tuning_cents",
         "offset": 144,
         "size": 4
       },
@@ -5164,7 +5164,7 @@
       },
       {
         "kind": "float",
-        "name": "pitch_shift_semitones",
+        "name": "pitch_semitones",
         "offset": 24,
         "size": 4
       },
@@ -5182,7 +5182,7 @@
       },
       {
         "kind": "float",
-        "name": "formant_shift_semitones",
+        "name": "formant_semitones",
         "offset": 36,
         "size": 4
       },
@@ -5410,13 +5410,13 @@
       },
       {
         "kind": "float",
-        "name": "start_seconds",
+        "name": "start_sec",
         "offset": 8,
         "size": 4
       },
       {
         "kind": "float",
-        "name": "end_seconds",
+        "name": "end_sec",
         "offset": 12,
         "size": 4
       },
@@ -9136,7 +9136,7 @@
       },
       {
         "kind": "float",
-        "name": "start_time",
+        "name": "start_sec",
         "offset": 12,
         "size": 4
       },
@@ -9166,7 +9166,7 @@
       },
       {
         "kind": "float",
-        "name": "start_time",
+        "name": "start_sec",
         "offset": 8,
         "size": 4
       },
@@ -9220,7 +9220,7 @@
       },
       {
         "kind": "float",
-        "name": "tuning_ref_hz",
+        "name": "reference_hz",
         "offset": 24,
         "size": 4
       },
@@ -9322,7 +9322,7 @@
       },
       {
         "kind": "pointer",
-        "name": "timestamps",
+        "name": "timestamps_sec",
         "offset": 8,
         "size": 8
       },
@@ -9412,7 +9412,7 @@
       },
       {
         "kind": "pointer",
-        "name": "timestamps",
+        "name": "timestamps_sec",
         "offset": 8,
         "size": 8
       },
@@ -9484,7 +9484,7 @@
       },
       {
         "kind": "pointer",
-        "name": "timestamps",
+        "name": "timestamps_sec",
         "offset": 8,
         "size": 8
       },
@@ -9610,7 +9610,7 @@
       },
       {
         "kind": "float",
-        "name": "duration_seconds",
+        "name": "duration_sec",
         "offset": 16,
         "size": 4
       },
@@ -9682,7 +9682,7 @@
       },
       {
         "kind": "float",
-        "name": "chord_start_time",
+        "name": "chord_start_sec",
         "offset": 76,
         "size": 4
       },
@@ -9694,7 +9694,7 @@
       },
       {
         "kind": "float",
-        "name": "bar_duration",
+        "name": "bar_duration_sec",
         "offset": 84,
         "size": 4
       },
@@ -9766,7 +9766,7 @@
       },
       {
         "kind": "float",
-        "name": "accumulated_seconds",
+        "name": "accumulated_sec",
         "offset": 232,
         "size": 4
       },
@@ -10528,13 +10528,13 @@
       },
       {
         "kind": "float",
-        "name": "fmin",
+        "name": "f0_min_hz",
         "offset": 12,
         "size": 4
       },
       {
         "kind": "float",
-        "name": "fmax",
+        "name": "f0_max_hz",
         "offset": 16,
         "size": 4
       },
@@ -10630,7 +10630,7 @@
       },
       {
         "kind": "float",
-        "name": "tuning",
+        "name": "tuning_cents",
         "offset": 4,
         "size": 4
       },

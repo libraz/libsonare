@@ -409,8 +409,8 @@ Napi::Value SonareWrap::Remix(const Napi::CallbackInfo& info) {
   std::vector<int> intervals = ReadRemixIntervals(env, info[1]);
   int sr{};
   if (!OptionalIntArg(env, info, 2, "sampleRate", 22050, &sr)) return env.Undefined();
-  bool align_zeros = false;
-  if (!OptionalBoolArg(env, info, 3, "alignZeros", false, &align_zeros)) {
+  bool align_zeros = true;
+  if (!OptionalBoolArg(env, info, 3, "alignZeros", true, &align_zeros)) {
     return env.Undefined();
   }
   float* out = nullptr;

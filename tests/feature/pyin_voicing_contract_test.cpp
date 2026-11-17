@@ -72,7 +72,7 @@ size_t segment_count(const std::vector<float>& f0, const std::vector<float>& voi
   config.struct_version = 2;
   config.voiced_threshold = voiced_threshold;
   SonareNoteSegmentsResult result{};
-  REQUIRE(sonare_note_segments(f0.data(), f0.size(), voicing.data(), voicing.size(),
+  REQUIRE(sonare_note_segments(f0.data(), voicing.data(), nullptr, f0.size(),
                                static_cast<float>(kSampleRate) / kHopLength, &config,
                                &result) == SONARE_OK);
   const size_t count = result.count;

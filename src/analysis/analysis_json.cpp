@@ -1,11 +1,13 @@
 #include "analysis/analysis_json.h"
 
+#include "util/constants.h"
 #include "util/json.h"
 
 namespace sonare {
 
 namespace {
 
+using sonare::constants::kCentsPerSemitone;
 using sonare::util::json::Array;
 using sonare::util::json::Object;
 using sonare::util::json::Value;
@@ -115,7 +117,7 @@ const std::vector<std::string>& analysis_result_schema_paths() {
       "melody.pitches[].frequency",
       "melody.pitches[].confidence",
       "form",
-      "tuning",
+      "tuning_cents",
   };
   return paths;
 }
@@ -300,7 +302,7 @@ std::string analysis_result_to_json(const AnalysisResult& result) {
   }
 
   root["form"] = Value(result.form);
-  root["tuning"] = Value(result.tuning);
+  root["tuning_cents"] = Value(result.tuning * kCentsPerSemitone);
 
   return sonare::util::json::dump(Value(std::move(root)));
 }

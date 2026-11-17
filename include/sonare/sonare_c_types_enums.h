@@ -62,6 +62,21 @@ typedef enum SONARE_ENUM_BASE {
   SONARE_DIAGNOSTIC_ERROR = 2
 } SonareDiagnosticSeverity;
 
+/// Vector norm selector of sonare_vector_normalize; ordinals mirror sonare::NormType.
+typedef enum SONARE_ENUM_BASE {
+  SONARE_NORM_MAX = 0,
+  SONARE_NORM_L1 = 1,
+  SONARE_NORM_L2 = 2,
+  SONARE_NORM_POWER = 3
+} SonareNormType;
+
+/// Chroma front end of the chord-detection options.
+typedef enum SONARE_ENUM_BASE {
+  SONARE_CHROMA_METHOD_STFT = 0,
+  SONARE_CHROMA_METHOD_NNLS = 1,
+  SONARE_CHROMA_METHOD_CQT = 2
+} SonareChromaMethod;
+
 // Pitch class enum
 typedef enum SONARE_ENUM_BASE {
   SONARE_PITCH_C = 0,

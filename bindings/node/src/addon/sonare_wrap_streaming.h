@@ -225,10 +225,10 @@ Napi::Value ValidateRealtimeVoiceChangerPresetJson(const Napi::CallbackInfo& inf
 ///   a.readFramesI16(maxFrames);          // quantized 16-bit frame buffer
 ///   a.reset(baseSampleOffset?);
 ///   a.stats();                           // progressive estimate
-///   a.frameCount(); a.currentTime(); a.sampleRate();
+///   a.frameCount(); a.currentTimeSec(); a.sampleRate();
 ///   a.setExpectedDuration(seconds);
 ///   a.setNormalizationGain(gain);
-///   a.setTuningRefHz(hz);
+///   a.setReferenceHz(hz);
 class StreamAnalyzerWrap : public Napi::ObjectWrap<StreamAnalyzerWrap> {
  public:
   static Napi::Object Init(Napi::Env env, Napi::Object exports);
@@ -255,11 +255,11 @@ class StreamAnalyzerWrap : public Napi::ObjectWrap<StreamAnalyzerWrap> {
   Napi::Value Reset(const Napi::CallbackInfo& info);
   Napi::Value Stats(const Napi::CallbackInfo& info);
   Napi::Value FrameCount(const Napi::CallbackInfo& info);
-  Napi::Value CurrentTime(const Napi::CallbackInfo& info);
+  Napi::Value CurrentTimeSec(const Napi::CallbackInfo& info);
   Napi::Value SampleRate(const Napi::CallbackInfo& info);
   Napi::Value SetExpectedDuration(const Napi::CallbackInfo& info);
   Napi::Value SetNormalizationGain(const Napi::CallbackInfo& info);
-  Napi::Value SetTuningRefHz(const Napi::CallbackInfo& info);
+  Napi::Value SetReferenceHz(const Napi::CallbackInfo& info);
   Napi::Value Destroy(const Napi::CallbackInfo& info);
 
   sonare::StreamConfig config_;

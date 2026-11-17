@@ -15,6 +15,8 @@
 #include <cstddef>
 #include <vector>
 
+#include "analysis/beat_analyzer.h"
+#include "analysis/bpm_analyzer.h"
 #include "analysis/key_analyzer.h"
 #include "analysis/music_analyzer.h"
 #include "analysis/onset_analyzer.h"
@@ -28,6 +30,9 @@ namespace quick {
 /// @param sample_rate Sample rate in Hz
 /// @return Estimated BPM
 float detect_bpm(const float* samples, size_t size, int sample_rate);
+
+/// @brief Detects BPM within the tempo search range of @p config.
+float detect_bpm(const float* samples, size_t size, int sample_rate, const BpmConfig& config);
 
 /// @brief Detects musical key from audio samples.
 /// @param samples Pointer to audio samples (mono, float32)
@@ -83,6 +88,10 @@ std::vector<float> detect_onsets(const float* samples, size_t size, int sample_r
 /// @param sample_rate Sample rate in Hz
 /// @return Vector of beat times in seconds
 std::vector<float> detect_beats(const float* samples, size_t size, int sample_rate);
+
+/// @brief Detects beat times within the tempo search range of @p config.
+std::vector<float> detect_beats(const float* samples, size_t size, int sample_rate,
+                                const BeatConfig& config);
 
 /// @brief Detects downbeat times from audio samples.
 /// @param samples Pointer to audio samples (mono, float32)

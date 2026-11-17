@@ -794,13 +794,12 @@ TEST_CASE("sonare split and merge validate negative stretch on every note",
 
   using EditSetter = void (*)(SonareNoteEdit&, float);
   const std::array<std::pair<const char*, EditSetter>, 6> fields = {{
-      {"pitch_shift_semitones",
-       [](SonareNoteEdit& edit, float value) { edit.pitch_shift_semitones = value; }},
+      {"pitch_semitones", [](SonareNoteEdit& edit, float value) { edit.pitch_semitones = value; }},
       {"gain_db", [](SonareNoteEdit& edit, float value) { edit.gain_db = value; }},
       {"time_stretch_ratio",
        [](SonareNoteEdit& edit, float value) { edit.time_stretch_ratio = value; }},
-      {"formant_shift_semitones",
-       [](SonareNoteEdit& edit, float value) { edit.formant_shift_semitones = value; }},
+      {"formant_semitones",
+       [](SonareNoteEdit& edit, float value) { edit.formant_semitones = value; }},
       {"vibrato_depth_change",
        [](SonareNoteEdit& edit, float value) { edit.vibrato_depth_change = value; }},
       {"drift_change", [](SonareNoteEdit& edit, float value) { edit.drift_change = value; }},
@@ -1109,7 +1108,7 @@ TEST_CASE("sonare_merge_notes takes the first note's edit", "[c_api][note_split_
   REQUIRE(extract_from(source, &extracted) == SONARE_OK);
   REQUIRE(extracted.count == 3);
   extracted.notes[0].edit.gain_db = -3.0f;
-  extracted.notes[0].edit.pitch_shift_semitones = 2.0f;
+  extracted.notes[0].edit.pitch_semitones = 2.0f;
   extracted.notes[1].edit.gain_db = 9.0f;
   extracted.notes[1].edit.muted = 1;
 
@@ -1118,7 +1117,7 @@ TEST_CASE("sonare_merge_notes takes the first note's edit", "[c_api][note_split_
           SONARE_OK);
   REQUIRE(merged.count == 2);
   REQUIRE(merged.notes[0].edit.gain_db == -3.0f);
-  REQUIRE(merged.notes[0].edit.pitch_shift_semitones == 2.0f);
+  REQUIRE(merged.notes[0].edit.pitch_semitones == 2.0f);
   // The second note's edit does not survive: the rule is the first note's edit,
   // not a merge of the two.
   REQUIRE(merged.notes[0].edit.muted == 0);

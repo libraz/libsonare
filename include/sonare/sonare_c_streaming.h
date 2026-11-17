@@ -25,10 +25,10 @@ typedef struct {
   int n_mels;                /* Number of Mel bands (default 128) */
   float fmin;                /* Minimum Mel frequency */
   float fmax;                /* Maximum Mel frequency (0 = Nyquist) */
-  float tuning_ref_hz;       /* A4 tuning reference in Hz (default 440; must be
-                                within 220..880, the same range
-                                sonare_stream_analyzer_set_tuning_ref_hz
-                                accepts) */
+  float reference_hz;        /* A4 tuning reference in Hz (default 440; must be
+                                 within 220..880, the same range
+                                 sonare_stream_analyzer_set_reference_hz
+                                 accepts) */
   int compute_magnitude;     /* Magnitude readout is not yet supported through the
                                 C ABI; must be 0 (non-zero is rejected with
                                 SONARE_ERROR_INVALID_PARAMETER). */
@@ -61,7 +61,7 @@ typedef enum SONARE_ENUM_BASE {
 } SonareStreamOutputFormat;
 
 /* Feature arrays physically present in a SonareStreamFrames* result. RMS and
-   timestamps are always present and therefore need no flag. */
+   timestamps_sec are always present and therefore need no flag. */
 typedef enum SONARE_ENUM_BASE {
   SONARE_STREAM_FEATURE_MEL = 1u << 0,
   SONARE_STREAM_FEATURE_CHROMA = 1u << 1,
@@ -72,7 +72,7 @@ typedef enum SONARE_ENUM_BASE {
 typedef struct {
   int root;
   int quality;
-  float start_time;
+  float start_sec;
   float confidence;
 } SonareStreamChordChange;
 
@@ -84,18 +84,18 @@ typedef struct {
    reached. Anything that groups bars by their position in a repeating pattern
    must key on bar_index.
 
-   start_time is on the same timeline as SonareStreamFrames.timestamps, offset
-   included, and consecutive bars are spaced by bar_duration rather than snapped
+   start_sec is on the same timeline as SonareStreamFrames.timestamps_sec, offset
+   included, and consecutive bars are spaced by bar_duration_sec rather than snapped
    to the analysis frame grid.
 
    In voted_pattern, root is in [0,11] or -1 (unknown) and quality is a valid
-   chord-quality index; bar_index is the pattern position and start_time is
+   chord-quality index; bar_index is the pattern position and start_sec is
    unused. */
 typedef struct {
   int bar_index;
   int root;
   int quality;
-  float start_time;
+  float start_sec;
   float confidence;
 } SonareStreamBarChord;
 
@@ -110,7 +110,7 @@ typedef struct {
 typedef struct {
   int n_frames;             /* Number of frames in this batch */
   int n_mels;               /* Mel stride; 0 when MEL is absent */
-  float* timestamps;        /* [n_frames] */
+  float* timestamps_sec;    /* [n_frames] */
   float* mel;               /* [n_frames * n_mels] linear mel power (NOT dB; the
                                U8/I16 quantized variants pack dB instead) */
   float* chroma;            /* [n_frames * n_chroma], NULL when CHROMA is absent */
@@ -128,7 +128,7 @@ typedef struct {
 typedef struct {
   int n_frames;
   int n_mels;
-  float* timestamps;
+  float* timestamps_sec;
   uint8_t* mel; /* [n_frames * n_mels] mel in dB, quantized over [mel_db_min, mel_db_max] */
   uint8_t* chroma;
   uint8_t* onset_strength;
@@ -142,7 +142,7 @@ typedef struct {
 typedef struct {
   int n_frames;
   int n_mels;
-  float* timestamps;
+  float* timestamps_sec;
   int16_t* mel; /* [n_frames * n_mels] mel in dB, quantized over [mel_db_min, mel_db_max] */
   int16_t* chroma;
   int16_t* onset_strength;
@@ -172,7 +172,7 @@ typedef struct {
 typedef struct {
   int total_frames;             /* Total frames processed */
   size_t total_samples;         /* Total samples processed */
-  float duration_seconds;       /* Total audio processed (s) */
+  float duration_sec;           /* Total audio processed (s) */
   size_t pending_frames;        /* Unread frames currently retained */
   size_t dropped_output_frames; /* New output frames dropped at the configured cap */
   float bpm;                    /* Estimated BPM (0 if not yet estimated) */
@@ -186,9 +186,9 @@ typedef struct {
   int chord_root;               /* Current chord root (0-11, -1 = unknown) */
   int chord_quality;            /* Current chord quality (0=Maj, 1=Min, ...) */
   float chord_confidence;       /* Current chord confidence (0-1) */
-  float chord_start_time;       /* Start time of current chord (s) */
+  float chord_start_sec;        /* Start time of current chord (s) */
   int current_bar;              /* Current bar index (-1 if BPM not stable) */
-  float bar_duration;           /* Duration of one bar (s, 0 if not stable) */
+  float bar_duration_sec;       /* Duration of one bar (s, 0 if not stable) */
   size_t chord_progression_count;
   SonareStreamChordChange* chord_progression;
   size_t bar_chord_progression_count;
@@ -200,7 +200,7 @@ typedef struct {
   float detected_pattern_score;
   size_t all_pattern_scores_count;
   SonareStreamPatternScore* all_pattern_scores;
-  float accumulated_seconds;                /* Total audio processed for estimation (s) */
+  float accumulated_sec;                    /* Total audio processed for estimation (s) */
   int used_frames;                          /* Number of frames used for estimation */
   int updated;                              /* Non-zero if the key or BPM was
                                                re-estimated since the previous
@@ -229,7 +229,7 @@ SonareError sonare_stream_analyzer_config_default(SonareStreamConfig* config);
 /// @par Threading and lifecycle
 /// A handle supports one producer thread calling process, process_with_offset,
 /// or finalize concurrently with one consumer thread calling available_frames,
-/// a read_frames variant, stats, frame_count, or current_time. Calls within
+/// a read_frames variant, stats, frame_count, or current_time_sec. Calls within
 /// either role must be serialized. Completed frames and stats snapshots use an
 /// allocation-free release/acquire handoff; when the pending ring is full the
 /// newly produced output frame is dropped, while analysis totals still advance.
@@ -324,7 +324,7 @@ void sonare_free_stream_stats(SonareStreamStats* stats);
 SonareError sonare_stream_analyzer_frame_count(SonareStreamAnalyzer* analyzer, int* out_count);
 
 /// @brief Returns the current stream time position in seconds.
-SonareError sonare_stream_analyzer_current_time(SonareStreamAnalyzer* analyzer, float* out_seconds);
+SonareError sonare_stream_analyzer_current_time_sec(SonareStreamAnalyzer* analyzer, float* out_sec);
 
 /// @brief Returns the configured input sample rate (Hz).
 SonareError sonare_stream_analyzer_sample_rate(SonareStreamAnalyzer* analyzer,
@@ -332,7 +332,7 @@ SonareError sonare_stream_analyzer_sample_rate(SonareStreamAnalyzer* analyzer,
 
 /// @brief Sets the expected total duration (s) for pattern-lock timing.
 SonareError sonare_stream_analyzer_set_expected_duration(SonareStreamAnalyzer* analyzer,
-                                                         float duration_seconds);
+                                                         float duration_sec);
 
 /// @brief Sets a normalization gain applied to input samples.
 /// @details @p gain is a linear factor within 0.01..100 (±40 dB), assuming
@@ -348,12 +348,13 @@ SonareError sonare_stream_analyzer_set_normalization_gain(SonareStreamAnalyzer* 
                                                           float gain);
 
 /// @brief Sets the A4 tuning reference (Hz) and rebuilds the chroma filterbank.
-/// @details @p ref_hz must be within 220..880, the same range
-///   SonareStreamConfig::tuning_ref_hz accepts at create time. A value outside
+/// @details @p reference_hz must be within 220..880, the same range
+///   SonareStreamConfig::reference_hz accepts at create time. A value outside
 ///   it returns SONARE_ERROR_INVALID_PARAMETER and leaves the filterbank alone;
 ///   it is not clamped, so a live change and a create-time setting of the same
 ///   value always bin the chromagram identically.
-SonareError sonare_stream_analyzer_set_tuning_ref_hz(SonareStreamAnalyzer* analyzer, float ref_hz);
+SonareError sonare_stream_analyzer_set_reference_hz(SonareStreamAnalyzer* analyzer,
+                                                    float reference_hz);
 
 /// @brief Frees all arrays held by a SonareStreamFrames batch.
 void sonare_free_stream_frames(SonareStreamFrames* frames);

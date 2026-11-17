@@ -51,7 +51,7 @@ SonareStreamPatternScore* copy_pattern_scores(const std::vector<std::pair<std::s
 template <typename Frames>
 void free_stream_frame_arrays(Frames* frames) {
   if (!frames) return;
-  delete[] frames->timestamps;
+  delete[] frames->timestamps_sec;
   delete[] frames->mel;
   delete[] frames->chroma;
   delete[] frames->onset_strength;
@@ -71,7 +71,7 @@ void copy_stream_frame_arrays(const Buffer& buffer, Frames* out) {
   sonare_c_detail::StagedOutput<Frames, &free_stream_frame_arrays<Frames>> staged;
   staged->n_frames = static_cast<int>(buffer.n_frames);
   staged->n_mels = buffer.n_mels;
-  staged->timestamps = copy_vector(buffer.timestamps);
+  staged->timestamps_sec = copy_vector(buffer.timestamps);
   staged->mel = copy_vector(buffer.mel);
   staged->chroma = copy_vector(buffer.chroma);
   staged->onset_strength = copy_vector(buffer.onset_strength);
@@ -100,7 +100,7 @@ SonareError sonare_stream_analyzer_config_default(SonareStreamConfig* config) {
   config->n_mels = defaults.n_mels;
   config->fmin = defaults.fmin;
   config->fmax = defaults.fmax;
-  config->tuning_ref_hz = defaults.tuning_ref_hz;
+  config->reference_hz = defaults.tuning_ref_hz;
   // The C ABI streaming surface has no magnitude read path, so the default
   // config advertises it as off (an explicit non-zero is rejected by _create).
   config->compute_magnitude = 0;
@@ -133,9 +133,8 @@ SonareError sonare_stream_analyzer_create(const SonareStreamConfig* config,
       config->max_progression_entries > kMaxStreamProgressionEntries ||
       !finite_non_negative(config->fmin) || !finite_non_negative(config->fmax) ||
       (config->fmax > 0.0f && config->fmax <= config->fmin) ||
-      !finite_positive(config->tuning_ref_hz) || config->tuning_ref_hz < kMinTuningRefHz ||
-      config->tuning_ref_hz > kMaxTuningRefHz ||
-      !finite_positive(config->key_update_interval_sec) ||
+      !finite_positive(config->reference_hz) || config->reference_hz < kMinTuningRefHz ||
+      config->reference_hz > kMaxTuningRefHz || !finite_positive(config->key_update_interval_sec) ||
       !finite_positive(config->bpm_update_interval_sec) || !valid_window(config->window) ||
       config->output_format != SONARE_STREAM_OUTPUT_FLOAT32) {
     return SONARE_ERROR_INVALID_PARAMETER;
@@ -155,7 +154,7 @@ SonareError sonare_stream_analyzer_create(const SonareStreamConfig* config,
   cfg.n_mels = config->n_mels;
   cfg.fmin = config->fmin;
   cfg.fmax = config->fmax;
-  cfg.tuning_ref_hz = config->tuning_ref_hz;
+  cfg.tuning_ref_hz = config->reference_hz;
   cfg.window = to_window_type(config->window);
   // The SOA read paths (read_frames / read_frames_u8 / read_frames_i16) do not
   // surface the per-frame magnitude spectrum. An explicit compute_magnitude is
@@ -345,7 +344,7 @@ SonareError sonare_stream_analyzer_stats(SonareStreamAnalyzer* analyzer, SonareS
   sonare_c_detail::StagedOutput<SonareStreamStats, &sonare_free_stream_stats> staged;
   staged->total_frames = s.total_frames;
   staged->total_samples = s.total_samples;
-  staged->duration_seconds = s.duration_seconds;
+  staged->duration_sec = s.duration_seconds;
   staged->pending_frames = s.pending_frames;
   staged->dropped_output_frames = s.dropped_output_frames;
   staged->bpm = s.estimate.bpm;
@@ -357,9 +356,9 @@ SonareError sonare_stream_analyzer_stats(SonareStreamAnalyzer* analyzer, SonareS
   staged->chord_root = s.estimate.chord_root;
   staged->chord_quality = s.estimate.chord_quality;
   staged->chord_confidence = s.estimate.chord_confidence;
-  staged->chord_start_time = s.estimate.chord_start_time;
+  staged->chord_start_sec = s.estimate.chord_start_time;
   staged->current_bar = s.estimate.current_bar;
-  staged->bar_duration = s.estimate.bar_duration;
+  staged->bar_duration_sec = s.estimate.bar_duration;
   staged->chord_progression_count = s.estimate.chord_progression.size();
   staged->chord_progression = copy_chord_changes(s.estimate.chord_progression);
   staged->bar_chord_progression_count = s.estimate.bar_chord_progression.size();
@@ -372,7 +371,7 @@ SonareError sonare_stream_analyzer_stats(SonareStreamAnalyzer* analyzer, SonareS
   staged->detected_pattern_score = s.estimate.detected_pattern_score;
   staged->all_pattern_scores_count = s.estimate.all_pattern_scores.size();
   staged->all_pattern_scores = copy_pattern_scores(s.estimate.all_pattern_scores);
-  staged->accumulated_seconds = s.estimate.accumulated_seconds;
+  staged->accumulated_sec = s.estimate.accumulated_seconds;
   staged->used_frames = s.estimate.used_frames;
   staged->updated = s.estimate.updated ? 1 : 0;
   staged->dropped_chord_progression_entries = s.dropped_chord_progression_entries;
@@ -401,12 +400,12 @@ SonareError sonare_stream_analyzer_frame_count(SonareStreamAnalyzer* analyzer, i
   SONARE_C_CATCH
 }
 
-SonareError sonare_stream_analyzer_current_time(SonareStreamAnalyzer* analyzer,
-                                                float* out_seconds) {
+SonareError sonare_stream_analyzer_current_time_sec(SonareStreamAnalyzer* analyzer,
+                                                    float* out_sec) {
   SONARE_C_API_ENTRY;
-  if (!analyzer || !analyzer->analyzer || !out_seconds) return SONARE_ERROR_INVALID_PARAMETER;
+  if (!analyzer || !analyzer->analyzer || !out_sec) return SONARE_ERROR_INVALID_PARAMETER;
   SONARE_C_TRY
-  *out_seconds = analyzer->analyzer->current_time();
+  *out_sec = analyzer->analyzer->current_time();
   return SONARE_OK;
   SONARE_C_CATCH
 }
@@ -422,11 +421,11 @@ SonareError sonare_stream_analyzer_sample_rate(SonareStreamAnalyzer* analyzer,
 }
 
 SonareError sonare_stream_analyzer_set_expected_duration(SonareStreamAnalyzer* analyzer,
-                                                         float duration_seconds) {
+                                                         float duration_sec) {
   SONARE_C_API_ENTRY;
   if (!analyzer || !analyzer->analyzer) return SONARE_ERROR_INVALID_PARAMETER;
   SONARE_C_TRY
-  analyzer->analyzer->set_expected_duration(duration_seconds);
+  analyzer->analyzer->set_expected_duration(duration_sec);
   return SONARE_OK;
   SONARE_C_CATCH
 }
@@ -441,11 +440,12 @@ SonareError sonare_stream_analyzer_set_normalization_gain(SonareStreamAnalyzer* 
   SONARE_C_CATCH
 }
 
-SonareError sonare_stream_analyzer_set_tuning_ref_hz(SonareStreamAnalyzer* analyzer, float ref_hz) {
+SonareError sonare_stream_analyzer_set_reference_hz(SonareStreamAnalyzer* analyzer,
+                                                    float reference_hz) {
   SONARE_C_API_ENTRY;
   if (!analyzer || !analyzer->analyzer) return SONARE_ERROR_INVALID_PARAMETER;
   SONARE_C_TRY
-  analyzer->analyzer->set_tuning_ref_hz(ref_hz);
+  analyzer->analyzer->set_tuning_ref_hz(reference_hz);
   return SONARE_OK;
   SONARE_C_CATCH
 }

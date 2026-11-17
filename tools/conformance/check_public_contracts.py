@@ -78,13 +78,13 @@ def main() -> int:
     contract = corpus["streaming_contract"]
     snake_fields = contract["frame_fields"]
     camel_fields = [_camel(field) for field in snake_fields]
-    # The JS facades fold the band counts into Matrix2D rows, report a disabled
-    # feature by absence, and name the time axis in seconds.
+    # The JS facades fold the band counts into Matrix2D rows and report a
+    # disabled feature by absence.
     facade_fields = [
-        "timestampsSec" if field == "timestamps" else field
-        for field in camel_fields
-        if field not in ("nMels", "nChroma", "featureFlags")
+        field for field in camel_fields if field not in ("nMels", "nChroma", "featureFlags")
     ]
+    # The C++ core buffer keeps the unsuffixed time axis the public surfaces name in seconds.
+    core_fields = ["timestamps" if field == "timestamps_sec" else field for field in snake_fields]
 
     c_header = public_header("sonare_c_streaming.h").read_text(encoding="utf-8")
     cpp_header = _read("src/streaming/stream_frame.h")
@@ -113,7 +113,7 @@ def main() -> int:
                 "C++ FrameBuffer",
                 errors,
             ),
-            snake_fields,
+            core_fields,
         ),
         (
             "Node StreamFrames",

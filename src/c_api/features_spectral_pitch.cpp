@@ -3,7 +3,10 @@
 #include "c_api/features_internal.h"
 #include "core/synthesis.h"
 #include "feature/chroma.h"
+#include "util/constants.h"
 #include "util/numeric_validation.h"
+
+using sonare::constants::kCentsPerSemitone;
 
 // Core - Synthetic audio generation
 // ============================================================================
@@ -321,30 +324,31 @@ SonareError sonare_estimate_tuning(const float* samples, size_t length, int samp
   });
 }
 
-SonareError sonare_tuning_to_reference_hz(float tuning, float a4, float* out_hz) {
+SonareError sonare_tuning_to_reference_hz(float tuning_cents, float a4_hz, float* out_hz) {
   SONARE_C_API_ENTRY;
   SONARE_C_TRY
   if (!out_hz) return SONARE_ERROR_INVALID_PARAMETER;
   *out_hz = 0.0f;
-  if (!std::isfinite(tuning) || !numeric::finite_positive(a4)) {
+  if (!std::isfinite(tuning_cents) || !numeric::finite_positive(a4_hz)) {
     return SONARE_ERROR_INVALID_PARAMETER;
   }
-  const float hz = tuning_to_reference_hz(tuning, a4);
+  const float hz = tuning_to_reference_hz(tuning_cents / kCentsPerSemitone, a4_hz);
   if (!numeric::finite_positive(hz)) return SONARE_ERROR_INVALID_PARAMETER;
   *out_hz = hz;
   return SONARE_OK;
   SONARE_C_CATCH
 }
 
-SonareError sonare_reference_hz_to_tuning(float hz, float a4, float* out_tuning) {
+SonareError sonare_reference_hz_to_tuning(float reference_hz, float a4_hz,
+                                          float* out_tuning_cents) {
   SONARE_C_API_ENTRY;
   SONARE_C_TRY
-  if (!out_tuning) return SONARE_ERROR_INVALID_PARAMETER;
-  *out_tuning = 0.0f;
-  if (!numeric::finite_positive(hz) || !numeric::finite_positive(a4)) {
+  if (!out_tuning_cents) return SONARE_ERROR_INVALID_PARAMETER;
+  *out_tuning_cents = 0.0f;
+  if (!numeric::finite_positive(reference_hz) || !numeric::finite_positive(a4_hz)) {
     return SONARE_ERROR_INVALID_PARAMETER;
   }
-  *out_tuning = reference_hz_to_tuning(hz, a4);
+  *out_tuning_cents = reference_hz_to_tuning(reference_hz, a4_hz) * kCentsPerSemitone;
   return SONARE_OK;
   SONARE_C_CATCH
 }
@@ -488,8 +492,8 @@ SonareError sonare_pitch_pyin(const float* samples, size_t length, int sample_ra
       [](const Audio& audio, const PitchConfig& config) { return pyin(audio, config); });
 }
 
-SonareError sonare_note_segments(const float* f0_hz, size_t f0_count, const float* voiced_prob,
-                                 size_t voiced_prob_count, float frame_rate,
+SonareError sonare_note_segments(const float* f0_hz, const float* voiced_prob,
+                                 const int32_t* voiced, size_t n_frames, float frame_rate,
                                  const SonareNoteSegmenterConfig* config,
                                  SonareNoteSegmentsResult* out) {
   SONARE_C_API_ENTRY;
@@ -500,9 +504,14 @@ SonareError sonare_note_segments(const float* f0_hz, size_t f0_count, const floa
   out->segments = nullptr;
   out->count = 0;
 #if defined(SONARE_WITH_PITCH_EDITOR)
-  if (f0_hz == nullptr || voiced_prob == nullptr || f0_count == 0 ||
-      f0_count != voiced_prob_count ||
-      f0_count > static_cast<size_t>(std::numeric_limits<int>::max()) ||
+  if ((voiced_prob == nullptr) == (voiced == nullptr)) {
+    sonare_c_detail::set_last_error(
+        SONARE_ERROR_INVALID_PARAMETER,
+        "exactly one of voiced_prob and voiced must be given, not both and not neither");
+    return SONARE_ERROR_INVALID_PARAMETER;
+  }
+  if (f0_hz == nullptr || n_frames == 0 ||
+      n_frames > static_cast<size_t>(std::numeric_limits<int>::max()) ||
       !numeric::finite_positive(frame_rate)) {
     return SONARE_ERROR_INVALID_PARAMETER;
   }
@@ -535,13 +544,14 @@ SonareError sonare_note_segments(const float* f0_hz, size_t f0_count, const floa
 
   SONARE_C_TRY
   sonare::editing::pitch_editor::F0Track track;
-  track.f0_hz.reserve(f0_count);
-  track.voiced_prob.reserve(f0_count);
-  track.voiced.reserve(f0_count);
+  track.f0_hz.reserve(n_frames);
+  track.voiced_prob.reserve(n_frames);
+  track.voiced.reserve(n_frames);
   track.frame_rate_hz = frame_rate;
-  for (size_t i = 0; i < f0_count; ++i) {
+  for (size_t i = 0; i < n_frames; ++i) {
     const float f0 = f0_hz[i];
-    const float probability = voiced_prob[i];
+    // A flag reads as the probability it stands for, so flags and 0/1 probabilities agree.
+    const float probability = voiced != nullptr ? (voiced[i] != 0 ? 1.0f : 0.0f) : voiced_prob[i];
     // The F0 value is not checked: a frame carrying no pitch is spelled zero,
     // negative or non-finite, and the segmenter reads all three the same way.
     // The probability is, because it is compared against a threshold below and
@@ -569,8 +579,7 @@ SonareError sonare_note_segments(const float* f0_hz, size_t f0_count, const floa
   return SONARE_OK;
   SONARE_C_CATCH
 #else
-  SONARE_C_STUB_NOT_SUPPORTED(f0_hz, f0_count, voiced_prob, voiced_prob_count, frame_rate, config,
-                              out);
+  SONARE_C_STUB_NOT_SUPPORTED(f0_hz, voiced_prob, voiced, n_frames, frame_rate, config, out);
 #endif
 }
 
@@ -607,15 +616,15 @@ float sonare_note_to_hz(const char* note) {
   SONARE_C_CATCH_RETURN(std::numeric_limits<float>::quiet_NaN())
 }
 
-float sonare_frames_to_time(int frames, int sr, int hop_length) {
+float sonare_frames_to_time(int frames, int sample_rate, int hop_length) {
   SONARE_C_TRY
-  return frames_to_time(frames, sr, hop_length);
+  return frames_to_time(frames, sample_rate, hop_length);
   SONARE_C_CATCH_RETURN(std::numeric_limits<float>::quiet_NaN())
 }
 
-int sonare_time_to_frames(float time, int sr, int hop_length) {
+int sonare_time_to_frames(float time_sec, int sample_rate, int hop_length) {
   SONARE_C_TRY
-  return time_to_frames(time, sr, hop_length);
+  return time_to_frames(time_sec, sample_rate, hop_length);
   SONARE_C_CATCH_RETURN(0)
 }
 

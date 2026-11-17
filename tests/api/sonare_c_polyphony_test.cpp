@@ -214,7 +214,7 @@ TEST_CASE("the polyphonic handle reports what the chain found", "[c_api][polypho
       CHECK(note.onset_sample < note.offset_sample);
       CHECK(note.frame_start < note.frame_end);
       CHECK(note.median_hz > 0.0f);
-      CHECK(note.edit.pitch_shift_semitones == 0.0f);
+      CHECK(note.edit.pitch_semitones == 0.0f);
       CHECK(note.edit.gain_db == 0.0f);
       CHECK(note.edit.time_offset_samples == 0);
       CHECK(note.edit.muted == 0);
@@ -345,14 +345,14 @@ TEST_CASE("the edit is the one thing a host writes, and it reaches the render",
 
   SECTION("a pitch shift on one note changes the render") {
     SonareNoteEdit edit{};
-    edit.pitch_shift_semitones = 1.0f;
+    edit.pitch_semitones = 1.0f;
     REQUIRE(sonare_polyphonic_set_note_edit(handle.get(), 0, &edit, nullptr, 0) == SONARE_OK);
 
     // The edit came back, so the handle holds it rather than having validated and
     // dropped it.
     const std::vector<SonareNoteObject> notes = notes_of(handle.get());
-    CHECK(notes[0].edit.pitch_shift_semitones == 1.0f);
-    CHECK(notes[1].edit.pitch_shift_semitones == 0.0f);
+    CHECK(notes[0].edit.pitch_semitones == 1.0f);
+    CHECK(notes[1].edit.pitch_semitones == 0.0f);
 
     const std::vector<float> edited = render(handle.get());
     REQUIRE(edited.size() == unedited.size());

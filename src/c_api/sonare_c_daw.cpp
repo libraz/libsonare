@@ -271,11 +271,11 @@ SonareError read_envelope(const SonareNoteEdit& edit, const float* envelopes, si
 SonareError to_core_edit(const SonareNoteEdit& edit, const float* envelopes, size_t envelope_count,
                          editing::note_model::NoteEdit& out) {
   out.time_offset_samples = edit.time_offset_samples;
-  out.pitch_shift_semitones = edit.pitch_shift_semitones;
+  out.pitch_shift_semitones = edit.pitch_semitones;
   out.gain_db = edit.gain_db;
   // A zeroed SonareNoteEdit must be the identity, so 0 reads as 1 here.
   out.time_stretch_ratio = edit.time_stretch_ratio == 0.0f ? 1.0f : edit.time_stretch_ratio;
-  out.formant_shift_semitones = edit.formant_shift_semitones;
+  out.formant_shift_semitones = edit.formant_semitones;
   out.vibrato_depth_change = edit.vibrato_depth_change;
   out.drift_change = edit.drift_change;
   out.muted = edit.muted != 0;
@@ -288,10 +288,10 @@ void from_core_edit(const editing::note_model::NoteEdit& edit, int64_t envelope_
   out.time_offset_samples = edit.time_offset_samples;
   out.envelope_offset = envelope_offset;
   out.envelope_count = edit.amplitude_envelope.size();
-  out.pitch_shift_semitones = edit.pitch_shift_semitones;
+  out.pitch_semitones = edit.pitch_shift_semitones;
   out.gain_db = edit.gain_db;
   out.time_stretch_ratio = edit.time_stretch_ratio;
-  out.formant_shift_semitones = edit.formant_shift_semitones;
+  out.formant_semitones = edit.formant_shift_semitones;
   out.vibrato_depth_change = edit.vibrato_depth_change;
   out.drift_change = edit.drift_change;
   out.muted = edit.muted ? 1 : 0;
@@ -934,7 +934,7 @@ SonareError sonare_assign_note_targets(SonareNoteObject* notes, size_t note_coun
   for (size_t i = 0; i < target_count; ++i) {
     // Rejected here rather than downstream: every overlap comparison is false for
     // a NaN, so a non-finite target would be selected and then written into
-    // pitch_shift_semitones with nothing left to catch it.
+    // pitch_semitones with nothing left to catch it.
     if (!std::isfinite(targets[i].start_sec) || !std::isfinite(targets[i].end_sec) ||
         !std::isfinite(targets[i].target_midi)) {
       return SONARE_ERROR_INVALID_PARAMETER;
@@ -952,13 +952,13 @@ SonareError sonare_assign_note_targets(SonareNoteObject* notes, size_t note_coun
     core_notes[i].onset_sample = notes[i].onset_sample;
     core_notes[i].offset_sample = notes[i].offset_sample;
     core_notes[i].median_hz = notes[i].median_hz;
-    core_notes[i].edit.pitch_shift_semitones = notes[i].edit.pitch_shift_semitones;
+    core_notes[i].edit.pitch_shift_semitones = notes[i].edit.pitch_semitones;
     core_notes[i].edit.muted = notes[i].edit.muted != 0;
   }
   const size_t assigned = editing::note_model::assign_note_targets(core_notes, sample_rate,
                                                                    core_targets, assign_config);
   for (size_t i = 0; i < note_count; ++i) {
-    notes[i].edit.pitch_shift_semitones = core_notes[i].edit.pitch_shift_semitones;
+    notes[i].edit.pitch_semitones = core_notes[i].edit.pitch_shift_semitones;
     notes[i].edit.muted = core_notes[i].edit.muted ? 1 : 0;
   }
   *out_assigned_count = assigned;

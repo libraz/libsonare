@@ -273,7 +273,7 @@ class SonareDynamicsResult(CStruct):
         ("crest_factor", ctypes.c_float),
         ("loudness_range_db", ctypes.c_float),
         ("is_compressed", ctypes.c_int),
-        ("loudness_times", ctypes.POINTER(ctypes.c_float)),
+        ("loudness_times_sec", ctypes.POINTER(ctypes.c_float)),
         ("loudness_rms_db", ctypes.POINTER(ctypes.c_float)),
         ("loudness_count", ctypes.c_size_t),
     ]
@@ -407,7 +407,7 @@ class SonareMusicAnalyzeOptions(CStruct):
         ("start_bpm", ctypes.c_float),
         ("use_triads_only", ctypes.c_int),
         ("use_hpss", ctypes.c_int),
-        ("chroma_highpass_hz", ctypes.c_float),
+        ("chroma_high_pass_hz", ctypes.c_float),
         ("use_bass_weighted", ctypes.c_int),
         ("chroma_hop_multiplier", ctypes.c_int),
         ("use_chord_hmm", ctypes.c_int),
@@ -420,7 +420,7 @@ class SonareMusicAnalyzeOptions(CStruct):
         ("meter_candidate_numerators", ctypes.c_int * SONARE_MAX_METER_CANDIDATE_NUMERATORS),
         ("meter_candidate_numerator_count", ctypes.c_int),
         ("meter_denominator", ctypes.c_int),
-        ("tuning", ctypes.c_float),
+        ("tuning_cents", ctypes.c_float),
         ("tuning_auto", ctypes.c_int),
     ]
 

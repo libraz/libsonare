@@ -220,7 +220,7 @@ typedef struct {
   float crest_factor;
   float loudness_range_db;
   int is_compressed;
-  float* loudness_times;
+  float* loudness_times_sec;
   float* loudness_rms_db;
   size_t loudness_count;
 } SonareDynamicsResult;
@@ -266,10 +266,10 @@ typedef struct {
 typedef struct {
   /* SONARE_CHORD_ANALYSIS_RESULT_VERSION, written by the filling function. */
   int struct_version;
-  /* Tuning the chroma was built with, in fractions of a semitone: the options'
-     value, or the measured one when tuning_auto was set. The entry points that
-     take no tuning measure it. */
-  float tuning;
+  /* Tuning the chroma was built with, in cents: the options' value, or the
+     measured one when tuning_auto was set. The entry points that take no
+     tuning measure it. */
+  float tuning_cents;
   SonareChord* chords;
   size_t chord_count;
 } SonareChordAnalysisResult;
@@ -404,15 +404,14 @@ typedef struct {
   SonarePitchClass key_root;
   SonareMode key_mode;
   int detect_inversions;
-  int chroma_method;  // 0 = STFT, 1 = NNLS, 2 = CQT (the library default)
-  /* Tuning offset of the recording in fractions of a semitone; 0 is concert
-     A440. Must be in [-0.5, 0.5). sonare_reference_hz_to_tuning converts a
-     reference pitch to this unit, and sonare_estimate_tuning at 12 bins per
-     octave returns it. */
-  float tuning;
-  /* Non-zero measures the tuning from the audio instead of reading @c tuning;
-     a zeroed struct reads @c tuning. The value used, given or measured, is
-     SonareChordAnalysisResult.tuning. */
+  SonareChromaMethod chroma_method;  // STFT, NNLS or CQT (the library default)
+  /* Tuning offset of the recording in cents; 0 is concert A440. Must be in
+     [-50, 50). sonare_reference_hz_to_tuning converts a reference pitch to
+     this unit. */
+  float tuning_cents;
+  /* Non-zero measures the tuning from the audio instead of reading
+     @c tuning_cents; a zeroed struct reads @c tuning_cents. The value used,
+     given or measured, is SonareChordAnalysisResult.tuning_cents. */
   int tuning_auto;
 } SonareChordDetectionOptions;
 

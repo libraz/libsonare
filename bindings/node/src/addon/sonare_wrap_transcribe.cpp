@@ -21,14 +21,14 @@ namespace {
 // for -- indistinguishable downstream from a deliberate one. hasProperty-class
 // knowledge is what makes this reachable here and not there.
 //
-// fmin, fmax and minNoteMs are the fields whose C defaults are themselves 0
+// f0MinHz, f0MaxHz and minNoteMs are the fields whose C defaults are themselves 0
 // sentinels: an omitted key must stay 0 so the C layer can resolve it from the
 // selected source. Their presence is therefore carried separately and only present values are
 // checked here. fixedVelocity is handled at its read for the same reason. group
 // and channel are absent on purpose -- there 0 is a value a caller can mean, and
 // that is the distinction deciding the whole set.
-bool RefuseOutOfDomain(Napi::Env env, const SonareTranscribeConfig& config, bool has_fmin,
-                       bool has_fmax, bool has_min_note_ms) {
+bool RefuseOutOfDomain(Napi::Env env, const SonareTranscribeConfig& config, bool has_f0_min,
+                       bool has_f0_max, bool has_min_note_ms) {
   struct PositiveField {
     const char* key;
     float value;
@@ -36,8 +36,8 @@ bool RefuseOutOfDomain(Napi::Env env, const SonareTranscribeConfig& config, bool
   };
   const PositiveField positive[] = {
       {"referenceHz", config.reference_hz, true},
-      {"fmin", config.fmin, has_fmin},
-      {"fmax", config.fmax, has_fmax},
+      {"f0MinHz", config.f0_min_hz, has_f0_min},
+      {"f0MaxHz", config.f0_max_hz, has_f0_max},
       {"minNoteMs", config.min_note_ms, has_min_note_ms},
       {"segmentationThresholdCents", config.segmentation_threshold_cents, true},
   };
@@ -60,7 +60,7 @@ bool RefuseOutOfDomain(Napi::Env env, const SonareTranscribeConfig& config, bool
 // Seeds the C ABI's own defaults, then applies whichever keys the caller wrote.
 // Seeding rather than zeroing keeps the documented default of every field in one
 // place — sonare_transcribe_config_default() — so this file cannot drift from
-// the header a caller reads. fmin/fmax intentionally remain zero when omitted:
+// the header a caller reads. f0MinHz/f0MaxHz intentionally remain zero when omitted:
 // the C layer resolves those sentinels against the selected tracker source, and
 // so does minNoteMs, whose default is the source's.
 //
@@ -81,12 +81,12 @@ bool ReadTranscribeConfig(Napi::Env env, const Napi::Object& request, SonareTran
   out->reference_hz =
       AutoFiniteFloatProperty(request, "referenceHz", out->reference_hz, &reference_auto);
   out->reference_auto = reference_auto ? 1 : 0;
-  const Napi::Value fmin = request.Get("fmin");
-  const bool wrote_fmin = !fmin.IsUndefined() && !fmin.IsNull();
-  out->fmin = FiniteFloatProperty(request, "fmin", out->fmin);
-  const Napi::Value fmax = request.Get("fmax");
-  const bool wrote_fmax = !fmax.IsUndefined() && !fmax.IsNull();
-  out->fmax = FiniteFloatProperty(request, "fmax", out->fmax);
+  const Napi::Value f0_min = request.Get("f0MinHz");
+  const bool wrote_f0_min = !f0_min.IsUndefined() && !f0_min.IsNull();
+  out->f0_min_hz = FiniteFloatProperty(request, "f0MinHz", out->f0_min_hz);
+  const Napi::Value f0_max = request.Get("f0MaxHz");
+  const bool wrote_f0_max = !f0_max.IsUndefined() && !f0_max.IsNull();
+  out->f0_max_hz = FiniteFloatProperty(request, "f0MaxHz", out->f0_max_hz);
   const Napi::Value min_note_ms = request.Get("minNoteMs");
   const bool wrote_min_note_ms = !min_note_ms.IsUndefined() && !min_note_ms.IsNull();
   out->min_note_ms = FiniteFloatProperty(request, "minNoteMs", out->min_note_ms);
@@ -100,7 +100,7 @@ bool ReadTranscribeConfig(Napi::Env env, const Napi::Object& request, SonareTran
   const Napi::Value fixed_velocity = request.Get("fixedVelocity");
   const bool wrote_fixed_velocity = !fixed_velocity.IsUndefined() && !fixed_velocity.IsNull();
   out->fixed_velocity = IntProperty(request, "fixedVelocity", 0);
-  // maxPolyphony, minNoteDivision and the three ratios carry presence for the same reason as
+  // maxPolyphony, minNoteDivision and the two peak ratios carry presence for the same reason as
   // fixedVelocity: the C ABI's 0 means "default", so an omitted key stays 0 while
   // a written 0 is either refused (maxPolyphony) or mapped to the C ABI's spelling
   // of a real zero (the ratios, where a negative value means 0 / no split).
@@ -117,8 +117,7 @@ bool ReadTranscribeConfig(Napi::Env env, const Napi::Object& request, SonareTran
   const Napi::Value ridge_ratio = request.Get("minRidgePeakRatio");
   const bool wrote_ridge_ratio = !ridge_ratio.IsUndefined() && !ridge_ratio.IsNull();
   out->min_ridge_peak_ratio = FiniteFloatProperty(request, "minRidgePeakRatio", 0.0f);
-  const Napi::Value reattack = request.Get("reattackRatio");
-  const bool wrote_reattack = !reattack.IsUndefined() && !reattack.IsNull();
+  // 0 is the C meaning "no split"; any other value is validated by the C layer.
   out->reattack_ratio = FiniteFloatProperty(request, "reattackRatio", 0.0f);
   // A string name rather than the ordinal: undefined/null keeps the C default
   // (segments), a non-string is a TypeError and an unknown name a RangeError.
@@ -169,16 +168,7 @@ bool ReadTranscribeConfig(Napi::Env env, const Napi::Object& request, SonareTran
     // A written 0 is a real zero; the C ABI spells that as a negative value.
     if (*ratio.value == 0.0f) *ratio.value = -1.0f;
   }
-  if (wrote_reattack) {
-    if (out->reattack_ratio == 0.0f) {
-      out->reattack_ratio = -1.0f;
-    } else if (!(out->reattack_ratio > 1.0f)) {
-      ThrowSonareErrorMessage(env, SONARE_ERROR_INVALID_PARAMETER,
-                              "reattackRatio must be 0 (no split) or greater than 1");
-      return false;
-    }
-  }
-  return RefuseOutOfDomain(env, *out, wrote_fmin, wrote_fmax, wrote_min_note_ms);
+  return RefuseOutOfDomain(env, *out, wrote_f0_min, wrote_f0_max, wrote_min_note_ms);
 }
 
 // The request shape both entry points share: mono audio plus its rate. Returns
@@ -256,7 +246,7 @@ Napi::Value Transcribe(const Napi::CallbackInfo& info) {
   out.Set("events", events);
   out.Set("noteCount", Napi::Number::New(env, static_cast<double>(result.value.note_count)));
   out.Set("tempoBpm", Napi::Number::New(env, result.value.tempo_bpm));
-  out.Set("tuning", Napi::Number::New(env, result.value.tuning));
+  out.Set("tuningCents", Napi::Number::New(env, result.value.tuning_cents));
   return out;
   SONARE_NODE_CATCH(env)
 }

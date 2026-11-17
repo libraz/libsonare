@@ -278,3 +278,389 @@ old = "sonare_downmix_ex"
 removed = true
 domain = "analysis"
 rule = "options-struct"
+
+[[entry]]
+kind = "field"
+old = "SonareStreamConfig.tuning_ref_hz"
+new = "SonareStreamConfig.reference_hz"
+domain = "analysis"
+rule = "unit-in-name"
+
+[[entry]]
+kind = "function"
+old = "sonare_stream_analyzer_set_tuning_ref_hz"
+new = "sonare_stream_analyzer_set_reference_hz"
+domain = "analysis"
+rule = "unit-in-name"
+
+[[entry]]
+kind = "function"
+old = "sonare_stream_analyzer_current_time"
+new = "sonare_stream_analyzer_current_time_sec"
+domain = "analysis"
+rule = "seconds-suffix"
+
+[[entry]]
+kind = "option"
+old = "sonare_stream_analyzer_set_expected_duration(duration_seconds)"
+new = "sonare_stream_analyzer_set_expected_duration(duration_sec)"
+domain = "analysis"
+rule = "seconds-suffix"
+
+[[entry]]
+kind = "field"
+old = "SonareStreamChordChange.start_time"
+new = "SonareStreamChordChange.start_sec"
+domain = "analysis"
+rule = "seconds-suffix"
+
+[[entry]]
+kind = "field"
+old = "SonareStreamBarChord.start_time"
+new = "SonareStreamBarChord.start_sec"
+domain = "analysis"
+rule = "seconds-suffix"
+
+[[entry]]
+kind = "field"
+old = "SonareStreamFrames.timestamps"
+new = "SonareStreamFrames.timestamps_sec"
+domain = "analysis"
+rule = "seconds-suffix"
+
+[[entry]]
+kind = "field"
+old = "SonareStreamFramesU8.timestamps"
+new = "SonareStreamFramesU8.timestamps_sec"
+domain = "analysis"
+rule = "seconds-suffix"
+
+[[entry]]
+kind = "field"
+old = "SonareStreamFramesI16.timestamps"
+new = "SonareStreamFramesI16.timestamps_sec"
+domain = "analysis"
+rule = "seconds-suffix"
+
+[[entry]]
+kind = "field"
+old = "SonareStreamStats.duration_seconds"
+new = "SonareStreamStats.duration_sec"
+domain = "analysis"
+rule = "seconds-suffix"
+
+[[entry]]
+kind = "field"
+old = "SonareStreamStats.chord_start_time"
+new = "SonareStreamStats.chord_start_sec"
+domain = "analysis"
+rule = "seconds-suffix"
+
+[[entry]]
+kind = "field"
+old = "SonareStreamStats.bar_duration"
+new = "SonareStreamStats.bar_duration_sec"
+domain = "analysis"
+rule = "seconds-suffix"
+
+[[entry]]
+kind = "field"
+old = "SonareStreamStats.accumulated_seconds"
+new = "SonareStreamStats.accumulated_sec"
+domain = "analysis"
+rule = "seconds-suffix"
+
+[[entry]]
+kind = "field"
+old = "SonareNoteSegment.start_seconds"
+new = "SonareNoteSegment.start_sec"
+domain = "analysis"
+rule = "seconds-suffix"
+
+[[entry]]
+kind = "field"
+old = "SonareNoteSegment.end_seconds"
+new = "SonareNoteSegment.end_sec"
+domain = "analysis"
+rule = "seconds-suffix"
+
+[[entry]]
+kind = "function"
+old = "sonare_note_segments"
+changed = "takes (f0_hz, voiced_prob, voiced, n_frames, frame_rate, config, out): exactly one of voiced_prob and voiced is non-NULL, and voiced flags read as 0/1 probabilities"
+domain = "analysis"
+rule = "absent-not-sentinel"
+test = "tests/api/sonare_c_features_extra_test.cpp::sonare_note_segments reads voiced flags as 0/1 probabilities"
+
+[[entry]]
+kind = "function"
+old = "sonare_detect_bpm"
+changed = "takes bpm_min and bpm_max before out_bpm; pass 60 and 200 for the shared search, an inverted range is INVALID_PARAMETER"
+domain = "analysis"
+rule = "tempo-range"
+test = "tests/api/sonare_c_core_test.cpp::sonare_detect_bpm"
+
+[[entry]]
+kind = "function"
+old = "sonare_detect_beats"
+changed = "takes bpm_min and bpm_max before out_times; pass 60 and 200 for the shared search, an inverted range is INVALID_PARAMETER"
+domain = "analysis"
+rule = "tempo-range"
+test = "tests/api/sonare_c_core_test.cpp::sonare_detect_beats"
+
+[[entry]]
+kind = "field"
+old = "SonareTranscribeConfig.fmin"
+new = "SonareTranscribeConfig.f0_min_hz"
+domain = "analysis"
+rule = "frequency-bounds"
+
+[[entry]]
+kind = "field"
+old = "SonareTranscribeConfig.fmax"
+new = "SonareTranscribeConfig.f0_max_hz"
+domain = "analysis"
+rule = "frequency-bounds"
+
+[[entry]]
+kind = "field"
+old = "SonareTranscribeConfig.reattack_ratio"
+changed = "0 now means no split (1.x: 0 was the default 2.0 and a negative value meant no split); a non-zero value must be finite and above 1"
+domain = "analysis"
+rule = "absent-not-sentinel"
+test = "tests/api/sonare_c_transcribe_test.cpp::reattack_ratio 0 is no split"
+
+[[entry]]
+kind = "field"
+old = "SonareTranscribeResult.tuning"
+new = "SonareTranscribeResult.tuning_cents"
+domain = "analysis"
+rule = "pitch-semitones"
+
+[[entry]]
+kind = "field"
+old = "SonareMusicAnalyzeOptions.chroma_highpass_hz"
+new = "SonareMusicAnalyzeOptions.chroma_high_pass_hz"
+domain = "analysis"
+rule = "high-pass"
+
+[[entry]]
+kind = "option"
+old = "sonare_detect_key_with_options(high_pass_hz)"
+new = "sonare_detect_key_with_options(chroma_high_pass_hz)"
+domain = "analysis"
+rule = "high-pass"
+
+[[entry]]
+kind = "option"
+old = "sonare_detect_key_with_options_and_modes(high_pass_hz)"
+new = "sonare_detect_key_with_options_and_modes(chroma_high_pass_hz)"
+domain = "analysis"
+rule = "high-pass"
+
+[[entry]]
+kind = "option"
+old = "sonare_detect_key_with_extended_options(high_pass_hz)"
+new = "sonare_detect_key_with_extended_options(chroma_high_pass_hz)"
+domain = "analysis"
+rule = "high-pass"
+
+[[entry]]
+kind = "option"
+old = "sonare_detect_key_with_tuning(high_pass_hz)"
+new = "sonare_detect_key_with_tuning(chroma_high_pass_hz)"
+domain = "analysis"
+rule = "high-pass"
+
+[[entry]]
+kind = "option"
+old = "sonare_detect_key_candidates(high_pass_hz)"
+new = "sonare_detect_key_candidates(chroma_high_pass_hz)"
+domain = "analysis"
+rule = "high-pass"
+
+[[entry]]
+kind = "option"
+old = "sonare_detect_key_candidates_with_modes(high_pass_hz)"
+new = "sonare_detect_key_candidates_with_modes(chroma_high_pass_hz)"
+domain = "analysis"
+rule = "high-pass"
+
+[[entry]]
+kind = "option"
+old = "sonare_detect_key_candidates_with_extended_options(high_pass_hz)"
+new = "sonare_detect_key_candidates_with_extended_options(chroma_high_pass_hz)"
+domain = "analysis"
+rule = "high-pass"
+
+[[entry]]
+kind = "option"
+old = "sonare_detect_key_candidates_with_tuning(high_pass_hz)"
+new = "sonare_detect_key_candidates_with_tuning(chroma_high_pass_hz)"
+domain = "analysis"
+rule = "high-pass"
+
+[[entry]]
+kind = "option"
+old = "sonare_tuning_to_reference_hz(a4)"
+new = "sonare_tuning_to_reference_hz(a4_hz)"
+domain = "analysis"
+rule = "unit-in-name"
+
+[[entry]]
+kind = "option"
+old = "sonare_reference_hz_to_tuning(hz)"
+new = "sonare_reference_hz_to_tuning(reference_hz)"
+domain = "analysis"
+rule = "unit-in-name"
+
+[[entry]]
+kind = "option"
+old = "sonare_reference_hz_to_tuning(a4)"
+new = "sonare_reference_hz_to_tuning(a4_hz)"
+domain = "analysis"
+rule = "unit-in-name"
+
+[[entry]]
+kind = "option"
+old = "sonare_frames_to_time(sr)"
+new = "sonare_frames_to_time(sample_rate)"
+domain = "analysis"
+rule = "sample-rate-name"
+
+[[entry]]
+kind = "option"
+old = "sonare_time_to_frames(sr)"
+new = "sonare_time_to_frames(sample_rate)"
+domain = "analysis"
+rule = "sample-rate-name"
+
+[[entry]]
+kind = "option"
+old = "sonare_time_to_frames(time)"
+new = "sonare_time_to_frames(time_sec)"
+domain = "analysis"
+rule = "seconds-suffix"
+
+[[entry]]
+kind = "option"
+old = "sonare_tuning_to_reference_hz(tuning)"
+new = "sonare_tuning_to_reference_hz(tuning_cents)"
+domain = "analysis"
+rule = "pitch-semitones"
+
+[[entry]]
+kind = "function"
+old = "sonare_tuning_to_reference_hz"
+changed = "tuning_cents is in cents (1.x: a fraction of a semitone)"
+domain = "analysis"
+rule = "pitch-semitones"
+test = "tests/analysis/analysis_tuning_test.cpp::C ABI auto tuning, tuning converters"
+
+[[entry]]
+kind = "function"
+old = "sonare_reference_hz_to_tuning"
+changed = "out_tuning_cents is in cents (1.x: a fraction of a semitone)"
+domain = "analysis"
+rule = "pitch-semitones"
+test = "tests/analysis/analysis_tuning_test.cpp::C ABI auto tuning, tuning converters"
+
+[[entry]]
+kind = "field"
+old = "SonareMusicAnalyzeOptions.tuning"
+new = "SonareMusicAnalyzeOptions.tuning_cents"
+domain = "analysis"
+rule = "pitch-semitones"
+
+[[entry]]
+kind = "field"
+old = "SonareChordDetectionOptions.tuning"
+new = "SonareChordDetectionOptions.tuning_cents"
+domain = "analysis"
+rule = "pitch-semitones"
+
+[[entry]]
+kind = "field"
+old = "SonareChordAnalysisResult.tuning"
+new = "SonareChordAnalysisResult.tuning_cents"
+domain = "analysis"
+rule = "pitch-semitones"
+
+[[entry]]
+kind = "option"
+old = "sonare_detect_key_with_tuning(tuning)"
+new = "sonare_detect_key_with_tuning(tuning_cents)"
+domain = "analysis"
+rule = "pitch-semitones"
+
+[[entry]]
+kind = "option"
+old = "sonare_detect_key_with_tuning(out_tuning)"
+new = "sonare_detect_key_with_tuning(out_tuning_cents)"
+domain = "analysis"
+rule = "pitch-semitones"
+
+[[entry]]
+kind = "option"
+old = "sonare_detect_key_candidates_with_tuning(tuning)"
+new = "sonare_detect_key_candidates_with_tuning(tuning_cents)"
+domain = "analysis"
+rule = "pitch-semitones"
+
+[[entry]]
+kind = "option"
+old = "sonare_detect_key_candidates_with_tuning(out_tuning)"
+new = "sonare_detect_key_candidates_with_tuning(out_tuning_cents)"
+domain = "analysis"
+rule = "pitch-semitones"
+
+[[entry]]
+kind = "option"
+old = "sonare_vector_normalize(norm_type)"
+changed = "norm_type is a SonareNormType (SONARE_NORM_MAX, _L1, _L2, _POWER); the ordinals are unchanged"
+domain = "analysis"
+rule = "string-closed-sets"
+test = "tests/api/sonare_c_features_metering_test.cpp::sonare_vector_normalize refuses a norm_type outside 0..3"
+
+[[entry]]
+kind = "field"
+old = "SonareChordDetectionOptions.chroma_method"
+changed = "chroma_method is a SonareChromaMethod (SONARE_CHROMA_METHOD_STFT, _NNLS, _CQT); the ordinals are unchanged"
+domain = "analysis"
+rule = "string-closed-sets"
+test = "tests/api/sonare_c_music_test.cpp::sonare_detect_chords_ex chroma_method range"
+
+[[entry]]
+kind = "field"
+old = "SonareNoteEdit.pitch_shift_semitones"
+new = "SonareNoteEdit.pitch_semitones"
+domain = "effects"
+rule = "pitch-semitones"
+
+[[entry]]
+kind = "field"
+old = "SonareNoteEdit.formant_shift_semitones"
+new = "SonareNoteEdit.formant_semitones"
+domain = "effects"
+rule = "pitch-semitones"
+
+[[entry]]
+kind = "field"
+old = "SonareDynamicsResult.loudness_times"
+new = "SonareDynamicsResult.loudness_times_sec"
+domain = "analysis"
+rule = "seconds-suffix"
+
+[[entry]]
+kind = "function"
+old = "sonare_analyze_json_with_progress"
+removed = true
+domain = "analysis"
+rule = "progress-callback"
+
+[[entry]]
+kind = "function"
+old = "sonare_analyze_json_with_progress_ex"
+removed = true
+domain = "analysis"
+rule = "progress-callback"

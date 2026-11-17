@@ -421,9 +421,9 @@ void sonare_free_rhythm_result(SonareRhythmResult* r) {
 
 void sonare_free_dynamics_result(SonareDynamicsResult* r) {
   if (r) {
-    delete[] r->loudness_times;
+    delete[] r->loudness_times_sec;
     delete[] r->loudness_rms_db;
-    r->loudness_times = nullptr;
+    r->loudness_times_sec = nullptr;
     r->loudness_rms_db = nullptr;
     r->loudness_count = 0;
   }

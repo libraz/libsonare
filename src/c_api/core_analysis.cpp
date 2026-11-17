@@ -55,7 +55,7 @@ ChordConfig chord_config_from_options(const SonareChordDetectionOptions& options
       break;
   }
   // A non-zero tuning_auto leaves the tuning unset, which measures it.
-  if (options.tuning_auto == 0) config.tuning = options.tuning;
+  if (options.tuning_auto == 0) config.tuning = tuning_from_cents(options.tuning_cents);
   return config;
 }
 
@@ -238,7 +238,7 @@ SonareError sonare_analyze_dynamics(const float* samples, size_t length, int sam
   // Zero the owned out-pointers BEFORE any validating early-return so a
   // rejected input always leaves NULL owned pointers; otherwise
   // sonare_free_dynamics_result(&r) would delete[] uninitialised pointers.
-  out->loudness_times = nullptr;
+  out->loudness_times_sec = nullptr;
   out->loudness_rms_db = nullptr;
   out->loudness_count = 0;
   DynamicsConfig config;
@@ -268,7 +268,7 @@ SonareError sonare_analyze_dynamics(const float* samples, size_t length, int sam
       std::unique_ptr<float[]> rms_db(new float[count]);
       std::memcpy(times.get(), curve.times.data(), count * sizeof(float));
       std::memcpy(rms_db.get(), curve.rms_db.data(), count * sizeof(float));
-      out->loudness_times = release_array(times);
+      out->loudness_times_sec = release_array(times);
       out->loudness_rms_db = release_array(rms_db);
     }
     return SONARE_OK;

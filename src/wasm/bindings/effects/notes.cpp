@@ -361,7 +361,7 @@ val js_decompose_note_pitch(val f0_hz, const val& voiced, const val& frame_rate_
   // A note with no usable pitch comes back with a zero centre and two empty
   // curves, which needs no special case here.
   val out = val::object();
-  out.set("centreHz", split.centre_hz);
+  out.set("centerHz", split.centre_hz);
   out.set("driftCents", vectorToFloat32Array(split.drift));
   out.set("vibratoCents", vectorToFloat32Array(split.vibrato));
   return out;
@@ -498,7 +498,7 @@ editing::note_model::NoteObject assignableNoteFromVal(const val& row) {
   // also NoteObject::median_hz's own default, so an absent field means the same.
   note.median_hz = floatOption(row, "medianHz", 0.0f);
   const val edit = objectProperty(row, "edit");
-  note.edit.pitch_shift_semitones = floatProperty(edit, "pitchShiftSemitones", 0.0f);
+  note.edit.pitch_shift_semitones = floatProperty(edit, "pitchSemitones", 0.0f);
   note.edit.muted = boolProperty(edit, "muted", false);
   return note;
 }
@@ -509,7 +509,7 @@ val assignedNoteToVal(const val& row, const editing::note_model::NoteEdit& edit)
   const val object_ctor = val::global("Object");
   val out = object_ctor.call<val>("assign", val::object(), row);
   val out_edit = object_ctor.call<val>("assign", val::object(), objectProperty(row, "edit"));
-  out_edit.set("pitchShiftSemitones", edit.pitch_shift_semitones);
+  out_edit.set("pitchSemitones", edit.pitch_shift_semitones);
   out_edit.set("muted", edit.muted);
   // Copy note arrays so edits to the returned object do not mutate the input.
   const val envelope = objectProperty(out_edit, "amplitudeEnvelope");

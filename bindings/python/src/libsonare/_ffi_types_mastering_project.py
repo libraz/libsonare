@@ -360,8 +360,8 @@ class SonareTranscribeConfig(CStruct):
         ("struct_version", ctypes.c_int32),
         ("polyphonic", ctypes.c_int32),
         ("reference_hz", ctypes.c_float),
-        ("fmin", ctypes.c_float),
-        ("fmax", ctypes.c_float),
+        ("f0_min_hz", ctypes.c_float),
+        ("f0_max_hz", ctypes.c_float),
         ("min_note_ms", ctypes.c_float),
         ("segmentation_threshold_cents", ctypes.c_float),
         ("velocity_floor_db", ctypes.c_float),
@@ -387,7 +387,7 @@ class SonareTranscribeResult(CStruct):
 
     _fields_ = [
         ("struct_version", ctypes.c_int32),
-        ("tuning", ctypes.c_float),
+        ("tuning_cents", ctypes.c_float),
         ("events", ctypes.POINTER(SonareMidiEventPod)),
         ("count", ctypes.c_size_t),
         ("note_count", ctypes.c_size_t),

@@ -998,9 +998,14 @@ Napi::Value SonareWrap::DetectBpmInstance(const Napi::CallbackInfo& info) {
     return env.Undefined();
   }
 
+  float bpm_min{};
+  if (!RequiredFloatArg(env, info, 0, "bpmMin", &bpm_min)) return env.Undefined();
+  float bpm_max{};
+  if (!RequiredFloatArg(env, info, 1, "bpmMax", &bpm_max)) return env.Undefined();
+
   float bpm = 0.0f;
   SonareError err = sonare_detect_bpm(sonare_audio_data(audio_), sonare_audio_length(audio_),
-                                      sonare_audio_sample_rate(audio_), &bpm);
+                                      sonare_audio_sample_rate(audio_), bpm_min, bpm_max, &bpm);
   if (err != SONARE_OK) {
     sonare_node::ThrowSonareError(env, err);
     return env.Undefined();
@@ -1021,7 +1026,7 @@ Napi::Value SonareWrap::DetectKeyInstance(const Napi::CallbackInfo& info) {
   int hop_length = 512;
   bool use_hpss = false;
   bool loudness_weighted = false;
-  float high_pass_hz = 80.0f;
+  float chroma_high_pass_hz = 80.0f;
   std::vector<SonareMode> modes;
   SonareKeyProfileType profile = SONARE_KEY_PROFILE_AUTO;
   std::string genre_hint;
@@ -1032,7 +1037,7 @@ Napi::Value SonareWrap::DetectKeyInstance(const Napi::CallbackInfo& info) {
     hop_length = IntProperty(options, "hopLength", hop_length);
     use_hpss = BoolProperty(options, "useHpss", use_hpss);
     loudness_weighted = BoolProperty(options, "loudnessWeighted", loudness_weighted);
-    high_pass_hz = FloatProperty(options, "highPassHz", high_pass_hz);
+    chroma_high_pass_hz = FloatProperty(options, "chromaHighPassHz", chroma_high_pass_hz);
     modes = node_modes_option(options);
     profile = node_profile_from_value(options.Get("profile"));
     genre_hint = StringProperty(options, "genreHint", "");
@@ -1046,16 +1051,16 @@ Napi::Value SonareWrap::DetectKeyInstance(const Napi::CallbackInfo& info) {
   float tuning_used = 0.0f;
   SonareError err = sonare_detect_key_with_tuning(
       sonare_audio_data(audio_), sonare_audio_length(audio_), sonare_audio_sample_rate(audio_),
-      n_fft, hop_length, use_hpss ? 1 : 0, loudness_weighted ? 1 : 0, high_pass_hz,
+      n_fft, hop_length, use_hpss ? 1 : 0, loudness_weighted ? 1 : 0, chroma_high_pass_hz,
       modes.empty() ? nullptr : modes.data(), modes.size(), profile,
-      genre_hint.empty() ? nullptr : genre_hint.c_str(), tuning.tuning, tuning.measure ? 1 : 0,
-      &key, &tuning_used);
+      genre_hint.empty() ? nullptr : genre_hint.c_str(), tuning.tuning_cents,
+      tuning.measure ? 1 : 0, &key, &tuning_used);
   if (err != SONARE_OK) {
     sonare_node::ThrowSonareError(env, err);
     return env.Undefined();
   }
   Napi::Object result = KeyToObject(env, key.root, key.mode, key.confidence);
-  result.Set("tuning", Napi::Number::New(env, static_cast<double>(tuning_used)));
+  result.Set("tuningCents", Napi::Number::New(env, static_cast<double>(tuning_used)));
   return result;
   SONARE_NODE_CATCH(env)
 }
@@ -1072,7 +1077,7 @@ Napi::Value SonareWrap::DetectKeyCandidatesInstance(const Napi::CallbackInfo& in
   int hop_length = 512;
   bool use_hpss = false;
   bool loudness_weighted = false;
-  float high_pass_hz = 80.0f;
+  float chroma_high_pass_hz = 80.0f;
   std::vector<SonareMode> modes;
   SonareKeyProfileType profile = SONARE_KEY_PROFILE_AUTO;
   std::string genre_hint;
@@ -1083,7 +1088,7 @@ Napi::Value SonareWrap::DetectKeyCandidatesInstance(const Napi::CallbackInfo& in
     hop_length = IntProperty(options, "hopLength", hop_length);
     use_hpss = BoolProperty(options, "useHpss", use_hpss);
     loudness_weighted = BoolProperty(options, "loudnessWeighted", loudness_weighted);
-    high_pass_hz = FloatProperty(options, "highPassHz", high_pass_hz);
+    chroma_high_pass_hz = FloatProperty(options, "chromaHighPassHz", chroma_high_pass_hz);
     modes = node_modes_option(options);
     profile = node_profile_from_value(options.Get("profile"));
     genre_hint = StringProperty(options, "genreHint", "");
@@ -1097,10 +1102,10 @@ Napi::Value SonareWrap::DetectKeyCandidatesInstance(const Napi::CallbackInfo& in
   size_t count = 0;
   SonareError err = sonare_detect_key_candidates_with_tuning(
       sonare_audio_data(audio_), sonare_audio_length(audio_), sonare_audio_sample_rate(audio_),
-      n_fft, hop_length, use_hpss ? 1 : 0, loudness_weighted ? 1 : 0, high_pass_hz,
+      n_fft, hop_length, use_hpss ? 1 : 0, loudness_weighted ? 1 : 0, chroma_high_pass_hz,
       modes.empty() ? nullptr : modes.data(), modes.size(), profile,
-      genre_hint.empty() ? nullptr : genre_hint.c_str(), tuning.tuning, tuning.measure ? 1 : 0,
-      &candidates, &count, nullptr);
+      genre_hint.empty() ? nullptr : genre_hint.c_str(), tuning.tuning_cents,
+      tuning.measure ? 1 : 0, &candidates, &count, nullptr);
   if (err != SONARE_OK) {
     sonare_node::ThrowSonareError(env, err);
     return env.Undefined();
@@ -1128,10 +1133,16 @@ Napi::Value SonareWrap::DetectBeatsInstance(const Napi::CallbackInfo& info) {
     return env.Undefined();
   }
 
+  float bpm_min{};
+  if (!RequiredFloatArg(env, info, 0, "bpmMin", &bpm_min)) return env.Undefined();
+  float bpm_max{};
+  if (!RequiredFloatArg(env, info, 1, "bpmMax", &bpm_max)) return env.Undefined();
+
   float* times = nullptr;
   size_t count = 0;
-  SonareError err = sonare_detect_beats(sonare_audio_data(audio_), sonare_audio_length(audio_),
-                                        sonare_audio_sample_rate(audio_), &times, &count);
+  SonareError err =
+      sonare_detect_beats(sonare_audio_data(audio_), sonare_audio_length(audio_),
+                          sonare_audio_sample_rate(audio_), bpm_min, bpm_max, &times, &count);
   if (err != SONARE_OK) {
     sonare_node::ThrowSonareError(env, err);
     return env.Undefined();

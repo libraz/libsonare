@@ -646,21 +646,44 @@ TEST_CASE("sonare_detect_bpm", "[c_api]") {
     auto samples = generate_clicks(120.0f, 22050, 4.0f);
     float bpm = 0.0f;
 
-    SonareError err = sonare_detect_bpm(samples.data(), samples.size(), 22050, &bpm);
+    SonareError err = sonare_detect_bpm(samples.data(), samples.size(), 22050, 30.0f, 300.0f, &bpm);
 
     REQUIRE(err == SONARE_OK);
     REQUIRE(bpm > 0.0f);
   }
 
+  SECTION("a narrow range limits the search") {
+    auto samples = generate_clicks(120.0f, 22050, 6.0f);
+    float wide = 0.0f;
+    float narrow = 0.0f;
+    REQUIRE(sonare_detect_bpm(samples.data(), samples.size(), 22050, 30.0f, 300.0f, &wide) ==
+            SONARE_OK);
+    REQUIRE(sonare_detect_bpm(samples.data(), samples.size(), 22050, 60.0f, 100.0f, &narrow) ==
+            SONARE_OK);
+    CHECK(wide == Catch::Approx(120.0f).margin(3.0f));
+    CHECK(narrow <= 100.0f);
+    CHECK(narrow >= 60.0f);
+  }
+
+  SECTION("an inverted or non-positive range is refused") {
+    auto samples = generate_clicks(120.0f, 22050, 2.0f);
+    float bpm = 0.0f;
+    CHECK(sonare_detect_bpm(samples.data(), samples.size(), 22050, 200.0f, 60.0f, &bpm) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+    CHECK(sonare_detect_bpm(samples.data(), samples.size(), 22050, 0.0f, 200.0f, &bpm) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+  }
+
   SECTION("returns error for null samples") {
     float bpm = 0.0f;
-    SonareError err = sonare_detect_bpm(nullptr, 100, 22050, &bpm);
+    SonareError err = sonare_detect_bpm(nullptr, 100, 22050, 30.0f, 300.0f, &bpm);
     REQUIRE(err == SONARE_ERROR_INVALID_PARAMETER);
   }
 
   SECTION("returns error for null output") {
     auto samples = generate_clicks(120.0f, 22050, 1.0f);
-    SonareError err = sonare_detect_bpm(samples.data(), samples.size(), 22050, nullptr);
+    SonareError err =
+        sonare_detect_bpm(samples.data(), samples.size(), 22050, 30.0f, 300.0f, nullptr);
     REQUIRE(err == SONARE_ERROR_INVALID_PARAMETER);
   }
 }
@@ -990,21 +1013,21 @@ TEST_CASE("sonare_stream_analyzer C API validates config and reads quantized fra
     // The same value must be accepted or refused identically whether it arrives
     // in the create config or through the setter; neither clamps.
     SonareStreamConfig bad = config;
-    bad.tuning_ref_hz = 100.0f;
+    bad.reference_hz = 100.0f;
     SonareStreamAnalyzer* rejected = nullptr;
     REQUIRE(sonare_stream_analyzer_create(&bad, &rejected) == SONARE_ERROR_INVALID_PARAMETER);
     REQUIRE(rejected == nullptr);
-    bad.tuning_ref_hz = 1000.0f;
+    bad.reference_hz = 1000.0f;
     REQUIRE(sonare_stream_analyzer_create(&bad, &rejected) == SONARE_ERROR_INVALID_PARAMETER);
     REQUIRE(rejected == nullptr);
 
     SonareStreamAnalyzer* analyzer = nullptr;
     REQUIRE(sonare_stream_analyzer_create(&config, &analyzer) == SONARE_OK);
-    REQUIRE(sonare_stream_analyzer_set_tuning_ref_hz(analyzer, 100.0f) ==
+    REQUIRE(sonare_stream_analyzer_set_reference_hz(analyzer, 100.0f) ==
             SONARE_ERROR_INVALID_PARAMETER);
-    REQUIRE(sonare_stream_analyzer_set_tuning_ref_hz(analyzer, 1000.0f) ==
+    REQUIRE(sonare_stream_analyzer_set_reference_hz(analyzer, 1000.0f) ==
             SONARE_ERROR_INVALID_PARAMETER);
-    REQUIRE(sonare_stream_analyzer_set_tuning_ref_hz(analyzer, 466.16f) == SONARE_OK);
+    REQUIRE(sonare_stream_analyzer_set_reference_hz(analyzer, 466.16f) == SONARE_OK);
     sonare_stream_analyzer_destroy(analyzer);
   }
 
@@ -1019,7 +1042,7 @@ TEST_CASE("sonare_stream_analyzer C API validates config and reads quantized fra
             SONARE_ERROR_INVALID_PARAMETER);
     REQUIRE(sonare_stream_analyzer_set_normalization_gain(analyzer, inf) ==
             SONARE_ERROR_INVALID_PARAMETER);
-    REQUIRE(sonare_stream_analyzer_set_tuning_ref_hz(analyzer, nan) ==
+    REQUIRE(sonare_stream_analyzer_set_reference_hz(analyzer, nan) ==
             SONARE_ERROR_INVALID_PARAMETER);
     REQUIRE(sonare_stream_analyzer_set_expected_duration(analyzer, -inf) ==
             SONARE_ERROR_INVALID_PARAMETER);
@@ -1053,7 +1076,7 @@ TEST_CASE("sonare_stream_analyzer C API validates config and reads quantized fra
     REQUIRE(u8.n_chroma == 12);
     REQUIRE(u8.feature_flags == (SONARE_STREAM_FEATURE_MEL | SONARE_STREAM_FEATURE_CHROMA |
                                  SONARE_STREAM_FEATURE_ONSET | SONARE_STREAM_FEATURE_SPECTRAL));
-    REQUIRE(u8.timestamps != nullptr);
+    REQUIRE(u8.timestamps_sec != nullptr);
     REQUIRE(u8.mel != nullptr);
     REQUIRE(u8.chroma != nullptr);
     sonare_free_stream_frames_u8(&u8);
@@ -1099,9 +1122,9 @@ TEST_CASE("sonare_stream_analyzer C API validates config and reads quantized fra
     REQUIRE(sonare_stream_analyzer_read_frames(analyzer, 2, &frames) == SONARE_OK);
     REQUIRE(frames.n_frames == 2);
     REQUIRE(frames.n_mels == config.n_mels);
-    REQUIRE(frames.timestamps != nullptr);
-    REQUIRE(frames.timestamps[0] == Catch::Approx(0.0f));
-    REQUIRE(frames.timestamps[1] == Catch::Approx(256.0f / 22050.0f));
+    REQUIRE(frames.timestamps_sec != nullptr);
+    REQUIRE(frames.timestamps_sec[0] == Catch::Approx(0.0f));
+    REQUIRE(frames.timestamps_sec[1] == Catch::Approx(256.0f / 22050.0f));
     sonare_free_stream_frames(&frames);
 
     sonare_stream_analyzer_destroy(analyzer);
@@ -1194,7 +1217,8 @@ TEST_CASE("sonare_detect_beats", "[c_api]") {
     float* times = nullptr;
     size_t count = 0;
 
-    SonareError err = sonare_detect_beats(samples.data(), samples.size(), 22050, &times, &count);
+    SonareError err =
+        sonare_detect_beats(samples.data(), samples.size(), 22050, 30.0f, 300.0f, &times, &count);
 
     REQUIRE(err == SONARE_OK);
     REQUIRE(count >= 1);
@@ -1206,6 +1230,27 @@ TEST_CASE("sonare_detect_beats", "[c_api]") {
       }
       sonare_free_floats(times);
     }
+  }
+
+  SECTION("a narrow range limits the beat spacing and an inverted one is refused") {
+    auto samples = generate_clicks(120.0f, 22050, 8.0f);
+    float* times = nullptr;
+    size_t count = 0;
+    REQUIRE(sonare_detect_beats(samples.data(), samples.size(), 22050, 60.0f, 100.0f, &times,
+                                &count) == SONARE_OK);
+    if (count > 1) {
+      // 100 BPM is the fastest the range allows: beats are at least 0.6 s apart on average.
+      const float mean_spacing = (times[count - 1] - times[0]) / static_cast<float>(count - 1);
+      CHECK(mean_spacing >= 0.55f);
+    }
+    sonare_free_floats(times);
+
+    times = nullptr;
+    count = 0;
+    CHECK(sonare_detect_beats(samples.data(), samples.size(), 22050, 200.0f, 60.0f, &times,
+                              &count) == SONARE_ERROR_INVALID_PARAMETER);
+    CHECK(times == nullptr);
+    CHECK(count == 0);
   }
 }
 
@@ -1399,9 +1444,10 @@ TEST_CASE("sonare_analyze_json", "[.][slow][c_api]") {
       s->last = progress;
     };
 
+    const SonareMusicAnalyzeOptions defaults = sonare_music_analyze_options_default();
     char* json = nullptr;
-    SonareError err =
-        sonare_analyze_json_with_progress(samples.data(), samples.size(), 22050, cb, &state, &json);
+    SonareError err = sonare_analyze_json_ex_with_progress(
+        samples.data(), samples.size(), 22050, &defaults, cb, &state, &json, nullptr, nullptr);
     REQUIRE(err == SONARE_OK);
     REQUIRE(json != nullptr);
     REQUIRE(state.calls > 0);
@@ -1411,8 +1457,9 @@ TEST_CASE("sonare_analyze_json", "[.][slow][c_api]") {
 
     // A null callback runs silently and still produces output.
     char* json2 = nullptr;
-    REQUIRE(sonare_analyze_json_with_progress(samples.data(), samples.size(), 22050, nullptr,
-                                              nullptr, &json2) == SONARE_OK);
+    REQUIRE(sonare_analyze_json_ex_with_progress(samples.data(), samples.size(), 22050, &defaults,
+                                                 nullptr, nullptr, &json2, nullptr,
+                                                 nullptr) == SONARE_OK);
     REQUIRE(json2 != nullptr);
     sonare_free_string(json2);
   }
@@ -1430,13 +1477,15 @@ TEST_CASE("sonare_analyze_json", "[.][slow][c_api]") {
       int calls = 0;
     };
 
+    const SonareMusicAnalyzeOptions defaults = sonare_music_analyze_options_default();
     char* reference_json = nullptr;
     MutateState quiet{nullptr, 0};
     auto count_only = [](float, const char*, void* user_data) {
       ++static_cast<MutateState*>(user_data)->calls;
     };
-    REQUIRE(sonare_analyze_json_with_progress(samples.data(), samples.size(), 22050, count_only,
-                                              &quiet, &reference_json) == SONARE_OK);
+    REQUIRE(sonare_analyze_json_ex_with_progress(samples.data(), samples.size(), 22050, &defaults,
+                                                 count_only, &quiet, &reference_json, nullptr,
+                                                 nullptr) == SONARE_OK);
     REQUIRE(reference_json != nullptr);
     REQUIRE(quiet.calls > 0);
     const std::string reference(reference_json);
@@ -1450,8 +1499,9 @@ TEST_CASE("sonare_analyze_json", "[.][slow][c_api]") {
       std::fill(s->buffer->begin(), s->buffer->end(), -1.0f);
     };
     char* mutated_json = nullptr;
-    REQUIRE(sonare_analyze_json_with_progress(victim.data(), victim.size(), 22050, mutate, &state,
-                                              &mutated_json) == SONARE_OK);
+    REQUIRE(sonare_analyze_json_ex_with_progress(victim.data(), victim.size(), 22050, &defaults,
+                                                 mutate, &state, &mutated_json, nullptr,
+                                                 nullptr) == SONARE_OK);
     REQUIRE(mutated_json != nullptr);
     const std::string mutated(mutated_json);
     sonare_free_string(mutated_json);
@@ -1485,9 +1535,10 @@ TEST_CASE("sonare_analyze_json", "[.][slow][c_api]") {
       return static_cast<CancelState*>(user_data)->should_cancel ? 1 : 0;
     };
 
+    const SonareMusicAnalyzeOptions defaults = sonare_music_analyze_options_default();
     char* json = nullptr;
-    REQUIRE(sonare_analyze_json_with_progress_ex(samples.data(), samples.size(), 22050, progress,
-                                                 &state, &json, cancel,
+    REQUIRE(sonare_analyze_json_ex_with_progress(samples.data(), samples.size(), 22050, &defaults,
+                                                 progress, &state, &json, cancel,
                                                  &state) == SONARE_ERROR_CANCELLED);
     REQUIRE(state.progress_calls > 0);
     REQUIRE(state.last_progress > 0.5f);
@@ -1972,14 +2023,14 @@ TEST_CASE("sonare_analyze_dynamics", "[c_api]") {
     REQUIRE(result.loudness_range_db >= 0.0f);
     REQUIRE((result.is_compressed == 0 || result.is_compressed == 1));
     REQUIRE(result.loudness_count > 0);
-    REQUIRE(result.loudness_times != nullptr);
+    REQUIRE(result.loudness_times_sec != nullptr);
     REQUIRE(result.loudness_rms_db != nullptr);
     for (size_t i = 1; i < result.loudness_count; ++i) {
-      REQUIRE(result.loudness_times[i] >= result.loudness_times[i - 1]);
+      REQUIRE(result.loudness_times_sec[i] >= result.loudness_times_sec[i - 1]);
     }
 
     sonare_free_dynamics_result(&result);
-    REQUIRE(result.loudness_times == nullptr);
+    REQUIRE(result.loudness_times_sec == nullptr);
     REQUIRE(result.loudness_rms_db == nullptr);
     REQUIRE(result.loudness_count == 0);
   }
@@ -2000,13 +2051,13 @@ TEST_CASE("sonare_analyze_dynamics", "[c_api]") {
 
   SECTION("free is safe on partially initialized struct") {
     SonareDynamicsResult result = {};
-    result.loudness_times = new float[1]{0.0f};
+    result.loudness_times_sec = new float[1]{0.0f};
     result.loudness_rms_db = new float[1]{-12.0f};
     result.loudness_count = 1;
 
     sonare_free_dynamics_result(&result);
 
-    REQUIRE(result.loudness_times == nullptr);
+    REQUIRE(result.loudness_times_sec == nullptr);
     REQUIRE(result.loudness_rms_db == nullptr);
     REQUIRE(result.loudness_count == 0);
   }
@@ -2134,7 +2185,7 @@ TEST_CASE("C analysis windows reject non-finite durations and thresholds", "[c_a
             SONARE_ERROR_INVALID_PARAMETER);
     REQUIRE(sonare_analyze_dynamics(clicks.data(), clicks.size(), 22050, 0.1f, 256, -inf,
                                     &result) == SONARE_ERROR_INVALID_PARAMETER);
-    REQUIRE(result.loudness_times == nullptr);
+    REQUIRE(result.loudness_times_sec == nullptr);
     REQUIRE(result.loudness_rms_db == nullptr);
   }
 
@@ -2188,11 +2239,12 @@ TEST_CASE("C CQT and key entry points reject a non-finite frequency", "[c_api][v
     REQUIRE(sonare_detect_key_with_options(tone.data(), tone.size(), 22050, 2048, 512, 0, 0, 80.0f,
                                            &key) == SONARE_OK);
 
-    for (float high_pass_hz : {nan, inf, -inf}) {
+    for (float chroma_high_pass_hz : {nan, inf, -inf}) {
       REQUIRE(sonare_detect_key_with_options(tone.data(), tone.size(), 22050, 2048, 512, 0, 0,
-                                             high_pass_hz, &key) == SONARE_ERROR_INVALID_PARAMETER);
+                                             chroma_high_pass_hz,
+                                             &key) == SONARE_ERROR_INVALID_PARAMETER);
       REQUIRE(sonare_detect_key_with_extended_options(
-                  tone.data(), tone.size(), 22050, 2048, 512, 0, 0, high_pass_hz, nullptr, 0,
+                  tone.data(), tone.size(), 22050, 2048, 512, 0, 0, chroma_high_pass_hz, nullptr, 0,
                   SONARE_KEY_PROFILE_KRUMHANSL_SCHMUCKLER, nullptr,
                   &key) == SONARE_ERROR_INVALID_PARAMETER);
     }
@@ -2205,11 +2257,11 @@ TEST_CASE("C CQT and key entry points reject a non-finite frequency", "[c_api][v
                                          &candidates, &count) == SONARE_OK);
     sonare_free_key_candidates(candidates);
 
-    for (float high_pass_hz : {nan, inf, -inf}) {
+    for (float chroma_high_pass_hz : {nan, inf, -inf}) {
       candidates = nullptr;
       count = 0;
       REQUIRE(sonare_detect_key_candidates(tone.data(), tone.size(), 22050, 2048, 512, 0, 0,
-                                           high_pass_hz, &candidates,
+                                           chroma_high_pass_hz, &candidates,
                                            &count) == SONARE_ERROR_INVALID_PARAMETER);
       REQUIRE(candidates == nullptr);
       REQUIRE(count == 0);
@@ -2426,7 +2478,8 @@ TEST_CASE("C BPM and rhythm entries agree with detect_bpm across input rates",
     const auto clicks = generate_clicks(120.0f, rate, 6.0f);
 
     float quick = 0.0f;
-    REQUIRE(sonare_detect_bpm(clicks.data(), clicks.size(), rate, &quick) == SONARE_OK);
+    REQUIRE(sonare_detect_bpm(clicks.data(), clicks.size(), rate, 30.0f, 300.0f, &quick) ==
+            SONARE_OK);
 
     SonareBpmAnalysisResult detailed = {};
     REQUIRE(sonare_analyze_bpm(clicks.data(), clicks.size(), rate, 60.0f, 200.0f, 120.0f, 2048, 512,

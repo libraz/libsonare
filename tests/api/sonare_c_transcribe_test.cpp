@@ -232,8 +232,8 @@ TEST_CASE("sonare_transcribe_config_default is the core's defaults, spelled out"
   CHECK(config.monophonic_model ==
         (core.monophonic_model == ntm::MonophonicModel::kSinging ? 1 : 0));
   CHECK(config.reference_hz == core.reference_hz);
-  CHECK(config.fmin == core.fmin);
-  CHECK(config.fmax == core.fmax);
+  CHECK(config.f0_min_hz == core.fmin);
+  CHECK(config.f0_max_hz == core.fmax);
   CHECK(config.min_note_ms == core.min_note_ms);
   CHECK(config.segmentation_threshold_cents == core.segmentation_threshold_cents);
   CHECK(config.velocity_floor_db == core.velocity_floor_db);
@@ -245,7 +245,6 @@ TEST_CASE("sonare_transcribe_config_default is the core's defaults, spelled out"
   CHECK(config.min_frame_peak_ratio == core.min_frame_peak_ratio);
   CHECK(config.min_ridge_peak_ratio == core.min_ridge_peak_ratio);
   CHECK(config.min_note_division == core.min_note_division);
-  CHECK(config.reattack_ratio == core.reattack_ratio);
 
   // Every one of those is a value, not a zero the struct happened to arrive
   // with: a default seeder that stopped copying would leave these at 0. The
@@ -253,8 +252,8 @@ TEST_CASE("sonare_transcribe_config_default is the core's defaults, spelled out"
   // the tracker endpoints, min_note_ms and the four polyphonic limits stay 0, so
   // the selected source supplies each when the config is read.
   CHECK(config.reference_hz > 0.0f);
-  CHECK(config.fmin == 0.0f);
-  CHECK(config.fmax == 0.0f);
+  CHECK(config.f0_min_hz == 0.0f);
+  CHECK(config.f0_max_hz == 0.0f);
   CHECK(config.min_note_ms == 0.0f);
   CHECK(config.max_polyphony == 0);
   CHECK(config.min_frame_peak_ratio == 0.0f);
@@ -336,8 +335,8 @@ TEST_CASE("sonare_transcribe refuses what it cannot read", "[c_api][transcribe]"
       reference.reference_hz = bad;
       add("reference_hz", reference);
       SonareTranscribeConfig low{};
-      low.fmin = bad;
-      add("fmin", low);
+      low.f0_min_hz = bad;
+      add("f0_min_hz", low);
       SonareTranscribeConfig shortest{};
       shortest.min_note_ms = bad;
       add("min_note_ms", shortest);
@@ -347,9 +346,9 @@ TEST_CASE("sonare_transcribe refuses what it cannot read", "[c_api][transcribe]"
     }
     {
       SonareTranscribeConfig inverted{};
-      inverted.fmin = 2093.0f;
-      inverted.fmax = 65.0f;
-      add("fmin above fmax", inverted);
+      inverted.f0_min_hz = 2093.0f;
+      inverted.f0_max_hz = 65.0f;
+      add("f0_min_hz above f0_max_hz", inverted);
     }
     for (const float bad : {nan, inf, 1.0f}) {
       SonareTranscribeConfig floor_db{};
@@ -679,8 +678,8 @@ TEST_CASE("the C door forwards the polyphonic tracker range", "[c_api][transcrib
 
   SonareTranscribeConfig inclusive = sonare_transcribe_config_default();
   inclusive.polyphonic = 1;
-  inclusive.fmin = 400.0f;
-  inclusive.fmax = 500.0f;
+  inclusive.f0_min_hz = 400.0f;
+  inclusive.f0_max_hz = 500.0f;
   Result in_range;
   transcribe_into(&in_range, samples, 120.0f, &inclusive);
   bool found_a4 = false;
@@ -691,8 +690,8 @@ TEST_CASE("the C door forwards the polyphonic tracker range", "[c_api][transcrib
   REQUIRE(found_a4);
 
   SonareTranscribeConfig exclusive = inclusive;
-  exclusive.fmin = 600.0f;
-  exclusive.fmax = 700.0f;
+  exclusive.f0_min_hz = 600.0f;
+  exclusive.f0_max_hz = 700.0f;
   Result out_of_range;
   REQUIRE(sonare_transcribe(samples.data(), samples.size(), kSampleRate, 120.0f, &exclusive,
                             out_of_range.out()) == SONARE_OK);
@@ -708,8 +707,8 @@ TEST_CASE("the C door resolves a partial tracker range from its source", "[c_api
   const std::vector<float> samples = separated_notes({69});
 
   SonareTranscribeConfig monophonic = sonare_transcribe_config_default();
-  monophonic.fmin = 1800.0f;
-  monophonic.fmax = 0.0f;
+  monophonic.f0_min_hz = 1800.0f;
+  monophonic.f0_max_hz = 0.0f;
   Result mono_result;
   REQUIRE(sonare_transcribe(samples.data(), samples.size(), kSampleRate, 120.0f, &monophonic,
                             mono_result.out()) == SONARE_OK);
@@ -720,7 +719,8 @@ TEST_CASE("the C door resolves a partial tracker range from its source", "[c_api
   CHECK(sonare_transcribe(samples.data(), samples.size(), kSampleRate, 120.0f, &polyphonic,
                           poly_result.out()) == SONARE_ERROR_INVALID_PARAMETER);
   CHECK(poly_result.get().events == nullptr);
-  CHECK(std::string(sonare_last_error_message()) == "fmax must be above fmin");
+  CHECK(std::string(sonare_last_error_message()) ==
+        "f0_max_hz (1760 Hz) must be above f0_min_hz (1800 Hz)");
 }
 
 // --- The tuning reference --------------------------------------------------
@@ -744,11 +744,11 @@ TEST_CASE("reference_auto measures the tuning and the result reports what was us
     Result result;
     transcribe_into(&result, samples, 120.0f, &config);
     CHECK(result.get().struct_version == 2);
-    CHECK_THAT(result.get().tuning, WithinAbs(expected, 1e-5));
+    CHECK_THAT(result.get().tuning_cents, WithinAbs(expected, 1e-3));
 
     Result defaulted;
     transcribe_into(&defaulted, samples, 120.0f, nullptr);
-    CHECK(defaulted.get().tuning == 0.0f);
+    CHECK(defaulted.get().tuning_cents == 0.0f);
   }
 
   SECTION("reference_auto reads the recording's own tuning, and the notes stay on their pitches") {
@@ -756,7 +756,7 @@ TEST_CASE("reference_auto measures the tuning and the result reports what was us
     config.reference_auto = 1;
     Result result;
     transcribe_into(&result, samples, 120.0f, &config);
-    CHECK_THAT(result.get().tuning, WithinAbs(kDetune, 0.03));
+    CHECK_THAT(result.get().tuning_cents, WithinAbs(kDetune * 100.0f, 3.0));
 
     std::set<int> notes;
     for (const SonareMidiEventPod& pod : result.events()) {
@@ -769,7 +769,7 @@ TEST_CASE("reference_auto measures the tuning and the result reports what was us
     config.struct_version = 1;
     Result v1;
     transcribe_into(&v1, samples, 120.0f, &config);
-    CHECK(v1.get().tuning == 0.0f);
+    CHECK(v1.get().tuning_cents == 0.0f);
   }
 }
 
@@ -852,7 +852,6 @@ TEST_CASE("a monophonic config carrying a polyphonic limit is refused by name",
       {"min_frame_peak_ratio", [](SonareTranscribeConfig* c) { c->min_frame_peak_ratio = 0.3f; }},
       {"min_ridge_peak_ratio", [](SonareTranscribeConfig* c) { c->min_ridge_peak_ratio = -1.0f; }},
       {"min_ridge_peak_ratio", [](SonareTranscribeConfig* c) { c->min_ridge_peak_ratio = 0.3f; }},
-      {"reattack_ratio", [](SonareTranscribeConfig* c) { c->reattack_ratio = -1.0f; }},
       {"reattack_ratio", [](SonareTranscribeConfig* c) { c->reattack_ratio = 2.5f; }},
   };
   for (const Case& entry : cases) {
@@ -923,7 +922,7 @@ TEST_CASE("the polyphonic limits refuse out of domain and resolve 0 as the expli
     if (row.max_polyphony == 65) offending.emplace_back("max_polyphony");
     if (row.frame_ratio > 1.0f) offending.emplace_back("min_frame_peak_ratio");
     if (row.ridge_ratio > 1.0f) offending.emplace_back("min_ridge_peak_ratio");
-    if (row.reattack > 0.0f && row.reattack <= 1.0f) offending.emplace_back("reattack_ratio");
+    if (row.reattack != 0.0f && row.reattack <= 1.0f) offending.emplace_back("reattack_ratio");
     if (offending.empty() && !row.polyphonic) {
       if (row.max_polyphony != 0) offending.emplace_back("max_polyphony");
       if (row.frame_ratio != 0.0f) offending.emplace_back("min_frame_peak_ratio");
@@ -948,8 +947,8 @@ TEST_CASE("the polyphonic limits refuse out of domain and resolve 0 as the expli
 
     ++accepted;
     REQUIRE(error == SONARE_OK);
-    // Each 0 is the core's resolved default spelled out; a negative stays negative,
-    // since the struct has no other spelling of a real 0 or of "no split".
+    // Each 0 is the core's resolved default spelled out, except reattack_ratio, whose 0 is
+    // "no split" and whose negatives are refused; a negative ratio stays negative.
     ntm::TranscribeConfig source;
     source.source = ntm::TranscribeSource::kPolyphonic;
     source.tempo_bpm = 120.0f;
@@ -963,7 +962,6 @@ TEST_CASE("the polyphonic limits refuse out of domain and resolve 0 as the expli
     if (spelled.min_ridge_peak_ratio == 0.0f) {
       spelled.min_ridge_peak_ratio = defaults.min_ridge_peak_ratio;
     }
-    if (spelled.reattack_ratio == 0.0f) spelled.reattack_ratio = defaults.reattack_ratio;
     if (spelled.min_note_ms == 0.0f) spelled.min_note_ms = defaults.min_note_ms;
     Result explicit_result;
     REQUIRE(sonare_transcribe(samples.data(), samples.size(), kSampleRate, 120.0f, &spelled,
@@ -971,8 +969,35 @@ TEST_CASE("the polyphonic limits refuse out of domain and resolve 0 as the expli
     require_same_events(result.events(), explicit_result.events());
   }
   // Both outcomes are reached, so neither half of the table is vacuous.
-  CHECK(accepted == 5);
-  CHECK(refused == 21);
+  CHECK(accepted == 2);
+  CHECK(refused == 24);
+}
+
+TEST_CASE("reattack_ratio 0 is no split and anything else must be above 1", "[c_api][transcribe]") {
+  const std::vector<float> samples = held_chord();
+  const float nan = std::numeric_limits<float>::quiet_NaN();
+  const float inf = std::numeric_limits<float>::infinity();
+  const float neg_inf = -inf;
+  for (const float bad : {-1.0f, -0.5f, 0.5f, 1.0f, nan, inf, neg_inf}) {
+    INFO("reattack_ratio " << bad);
+    SonareTranscribeConfig config = sonare_transcribe_config_default();
+    config.polyphonic = 1;
+    config.reattack_ratio = bad;
+    Result result;
+    CHECK(sonare_transcribe(samples.data(), samples.size(), kSampleRate, 120.0f, &config,
+                            result.out()) == SONARE_ERROR_INVALID_PARAMETER);
+    CHECK(std::string(sonare_last_error_message()).find("reattack_ratio") != std::string::npos);
+  }
+  SonareTranscribeConfig off = sonare_transcribe_config_default();
+  off.polyphonic = 1;
+  Result no_split;
+  CHECK(sonare_transcribe(samples.data(), samples.size(), kSampleRate, 120.0f, &off,
+                          no_split.out()) == SONARE_OK);
+  SonareTranscribeConfig split = off;
+  split.reattack_ratio = 2.0f;
+  Result with_split;
+  CHECK(sonare_transcribe(samples.data(), samples.size(), kSampleRate, 120.0f, &split,
+                          with_split.out()) == SONARE_OK);
 }
 
 namespace {

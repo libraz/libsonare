@@ -51,12 +51,12 @@ inline sonare::editing::note_model::NoteEdit noteEditFromVal(const val& edit, co
     // throws on absence, which a partial edit must not trigger.
     out.time_offset_samples = requireInt64Property(edit, "timeOffsetSamples", subject);
   }
-  out.pitch_shift_semitones = floatProperty(edit, "pitchShiftSemitones", 0.0f);
+  out.pitch_shift_semitones = floatProperty(edit, "pitchSemitones", 0.0f);
   out.gain_db = floatProperty(edit, "gainDb", 0.0f);
   const float stretch_ratio = floatProperty(edit, "timeStretchRatio", 0.0f);
   // A zeroed edit must be the identity, so 0 reads as 1 (SonareNoteEdit).
   out.time_stretch_ratio = stretch_ratio == 0.0f ? 1.0f : stretch_ratio;
-  out.formant_shift_semitones = floatProperty(edit, "formantShiftSemitones", 0.0f);
+  out.formant_shift_semitones = floatProperty(edit, "formantSemitones", 0.0f);
   out.vibrato_depth_change = floatProperty(edit, "vibratoDepthChange", 0.0f);
   out.drift_change = floatProperty(edit, "driftChange", 0.0f);
   out.muted = boolProperty(edit, "muted", false);
@@ -82,10 +82,10 @@ inline val noteEditToVal(const sonare::editing::note_model::NoteEdit& edit) {
   // Sample positions cross as plain JS numbers rather than BigInt, matching every
   // other int64 field on this surface.
   out.set("timeOffsetSamples", static_cast<double>(edit.time_offset_samples));
-  out.set("pitchShiftSemitones", edit.pitch_shift_semitones);
+  out.set("pitchSemitones", edit.pitch_shift_semitones);
   out.set("gainDb", edit.gain_db);
   out.set("timeStretchRatio", edit.time_stretch_ratio);
-  out.set("formantShiftSemitones", edit.formant_shift_semitones);
+  out.set("formantSemitones", edit.formant_shift_semitones);
   out.set("vibratoDepthChange", edit.vibrato_depth_change);
   out.set("driftChange", edit.drift_change);
   out.set("muted", edit.muted);

@@ -290,7 +290,7 @@ typedef struct {
   /// length the note renders at, so it survives a time stretch and need not
   /// match the note's frame count. One entry is a constant gain.
   size_t envelope_count;
-  float pitch_shift_semitones;
+  float pitch_semitones;
   float gain_db;
   /// >1 lengthens the note, <1 shortens it; pitch is preserved. 0 reads as 1.
   float time_stretch_ratio;
@@ -299,10 +299,10 @@ typedef struct {
   ///
   /// 0 runs no warp at all, so a pitch-only edit is not charged for an LPC
   /// analysis-resynthesis round it did not ask for. A pitch shift drags the
-  /// formants with it, so holding them still is -@c pitch_shift_semitones and
+  /// formants with it, so holding them still is -@c pitch_semitones and
   /// the chipmunk is the default. Saturates near -10.3 and +8.7 semitones
   /// rather than being rejected.
-  float formant_shift_semitones;
+  float formant_semitones;
   /// Scales the vibrato measured over the note, stated as a change from it:
   /// 0 keeps it, -1 flattens it, +1 doubles it.
   ///
@@ -591,7 +591,7 @@ typedef struct {
   /// own meaning -- any overlap at all counts -- not a request for the default.
   float min_overlap_ratio;
   /// The assigned shift saturates here rather than being refused, matching
-  /// @c SonareNoteEdit::formant_shift_semitones: a reference an octave out is a
+  /// @c SonareNoteEdit::formant_semitones: a reference an octave out is a
   /// wrong reference, and a rejected call tells the caller less than a bounded
   /// correction does. 0 is its own meaning, as above.
   float max_correction_semitones;
@@ -628,7 +628,7 @@ SonareError sonare_note_targets_from_smf(const uint8_t* bytes, size_t len, int t
                                          SonareNoteTarget** out, size_t* out_count);
 void sonare_free_note_targets(SonareNoteTarget* targets);
 
-/// @brief Writes each note's @c pitch_shift_semitones from the target it overlaps.
+/// @brief Writes each note's @c pitch_semitones from the target it overlaps.
 /// @details Rewrites @p notes in place, so @c edit means the same field going in
 ///          and coming out and no second note-object result is produced.
 ///

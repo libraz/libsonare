@@ -40,33 +40,44 @@ TEST_CASE("sonare_note_segments validates and returns frame-accurate regions",
   SonareNoteSegmenterConfig config{};
   config.struct_version = 1;
 
-  REQUIRE(sonare_note_segments(f0.data(), f0.size(), voiced.data(), voiced.size(), 100.0f, &config,
+  REQUIRE(sonare_note_segments(f0.data(), voiced.data(), nullptr, f0.size(), 100.0f, &config,
                                &out) == SONARE_OK);
   REQUIRE(out.count == 2);
   REQUIRE(out.segments != nullptr);
   REQUIRE(out.segments[0].frame_start == 0);
   REQUIRE(out.segments[0].frame_end == 5);
-  REQUIRE(out.segments[0].start_seconds == Catch::Approx(0.0f));
-  REQUIRE(out.segments[0].end_seconds == Catch::Approx(0.05f));
+  REQUIRE(out.segments[0].start_sec == Catch::Approx(0.0f));
+  REQUIRE(out.segments[0].end_sec == Catch::Approx(0.05f));
   REQUIRE(out.segments[1].frame_start == 7);
   REQUIRE(out.segments[1].frame_end == 12);
-  REQUIRE(out.segments[1].start_seconds == Catch::Approx(0.07f));
-  REQUIRE(out.segments[1].end_seconds == Catch::Approx(0.12f));
+  REQUIRE(out.segments[1].start_sec == Catch::Approx(0.07f));
+  REQUIRE(out.segments[1].end_sec == Catch::Approx(0.12f));
   sonare_free_note_segments(&out);
   REQUIRE(out.segments == nullptr);
   REQUIRE(out.count == 0);
 
   out.segments = reinterpret_cast<SonareNoteSegment*>(static_cast<std::uintptr_t>(0x1));
   out.count = 7;
-  REQUIRE(sonare_note_segments(f0.data(), f0.size(), voiced.data(), voiced.size() - 1, 100.0f,
-                               &config, &out) == SONARE_ERROR_INVALID_PARAMETER);
+  // Exactly one of voiced_prob and voiced is given: both and neither are refused, naming both.
+  const std::vector<int32_t> flags(voiced.size(), 1);
+  REQUIRE(sonare_note_segments(f0.data(), voiced.data(), flags.data(), f0.size(), 100.0f, &config,
+                               &out) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(std::string(sonare_last_error_message()).find("voiced_prob") != std::string::npos);
+  CHECK(std::string(sonare_last_error_message()).find("voiced") != std::string::npos);
+  REQUIRE(out.segments == nullptr);
+  REQUIRE(out.count == 0);
+  out.segments = reinterpret_cast<SonareNoteSegment*>(static_cast<std::uintptr_t>(0x1));
+  out.count = 7;
+  REQUIRE(sonare_note_segments(f0.data(), nullptr, nullptr, f0.size(), 100.0f, &config, &out) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(std::string(sonare_last_error_message()).find("voiced_prob") != std::string::npos);
   REQUIRE(out.segments == nullptr);
   REQUIRE(out.count == 0);
 
   // A frame carrying no pitch is spelled zero, negative or non-finite, and the
   // segmenter reads all three as unvoiced rather than refusing the track.
   const float non_finite = std::numeric_limits<float>::quiet_NaN();
-  REQUIRE(sonare_note_segments(&non_finite, 1, voiced.data(), 1, 100.0f, &config, &out) ==
+  REQUIRE(sonare_note_segments(&non_finite, voiced.data(), nullptr, 1, 100.0f, &config, &out) ==
           SONARE_OK);
   sonare_free_note_segments(&out);
 
@@ -75,8 +86,35 @@ TEST_CASE("sonare_note_segments validates and returns frame-accurate regions",
   // what keeps the acceptance above from reading as a dropped check.
   const float bad_prob = std::numeric_limits<float>::quiet_NaN();
   const float good_f0 = 220.0f;
-  REQUIRE(sonare_note_segments(&good_f0, 1, &bad_prob, 1, 100.0f, &config, &out) ==
+  REQUIRE(sonare_note_segments(&good_f0, &bad_prob, nullptr, 1, 100.0f, &config, &out) ==
           SONARE_ERROR_INVALID_PARAMETER);
+}
+
+TEST_CASE("sonare_note_segments reads voiced flags as 0/1 probabilities", "[c_api][features]") {
+  const std::vector<float> f0 = {440.0f, 445.0f, 435.0f, 444.0f, 436.0f, 0.0f, 0.0f,
+                                 660.0f, 666.0f, 654.0f, 665.0f, 655.0f, 0.0f};
+  const std::vector<int32_t> flags = {1, 1, 1, 1, 1, 0, 0, 1, 1, 1, 1, 1, 0};
+  const std::vector<float> probabilities(flags.begin(), flags.end());
+  SonareNoteSegmenterConfig config{};
+  config.struct_version = 1;
+
+  SonareNoteSegmentsResult from_flags{};
+  SonareNoteSegmentsResult from_probabilities{};
+  REQUIRE(sonare_note_segments(f0.data(), nullptr, flags.data(), f0.size(), 100.0f, &config,
+                               &from_flags) == SONARE_OK);
+  REQUIRE(sonare_note_segments(f0.data(), probabilities.data(), nullptr, f0.size(), 100.0f, &config,
+                               &from_probabilities) == SONARE_OK);
+  REQUIRE(from_flags.count == 2);
+  REQUIRE(from_flags.count == from_probabilities.count);
+  for (size_t i = 0; i < from_flags.count; ++i) {
+    CHECK(from_flags.segments[i].frame_start == from_probabilities.segments[i].frame_start);
+    CHECK(from_flags.segments[i].frame_end == from_probabilities.segments[i].frame_end);
+    CHECK(from_flags.segments[i].start_sec == from_probabilities.segments[i].start_sec);
+    CHECK(from_flags.segments[i].end_sec == from_probabilities.segments[i].end_sec);
+    CHECK(from_flags.segments[i].median_cents == from_probabilities.segments[i].median_cents);
+  }
+  sonare_free_note_segments(&from_flags);
+  sonare_free_note_segments(&from_probabilities);
 }
 
 TEST_CASE("sonare_note_segments treats an oversized finite duration as empty",
@@ -90,7 +128,7 @@ TEST_CASE("sonare_note_segments treats an oversized finite duration as empty",
   SonareNoteSegmentsResult out;
   out.segments = reinterpret_cast<SonareNoteSegment*>(static_cast<std::uintptr_t>(0x1));
   out.count = 9;
-  REQUIRE(sonare_note_segments(f0.data(), f0.size(), voiced.data(), voiced.size(), 100.0f, &config,
+  REQUIRE(sonare_note_segments(f0.data(), voiced.data(), nullptr, f0.size(), 100.0f, &config,
                                &out) == SONARE_OK);
   REQUIRE(out.segments == nullptr);
   REQUIRE(out.count == 0);
@@ -111,8 +149,8 @@ TEST_CASE("sonare_note_segments rejects invalid timing controls and clears outpu
     config.min_note_ms = 0.0f;
     out.segments = reinterpret_cast<SonareNoteSegment*>(static_cast<std::uintptr_t>(0x1));
     out.count = 7;
-    REQUIRE(sonare_note_segments(f0.data(), f0.size(), voiced.data(), voiced.size(), 100.0f,
-                                 &config, &out) == SONARE_ERROR_INVALID_PARAMETER);
+    REQUIRE(sonare_note_segments(f0.data(), voiced.data(), nullptr, f0.size(), 100.0f, &config,
+                                 &out) == SONARE_ERROR_INVALID_PARAMETER);
     REQUIRE(out.segments == nullptr);
     REQUIRE(out.count == 0);
   }
@@ -121,8 +159,8 @@ TEST_CASE("sonare_note_segments rejects invalid timing controls and clears outpu
     config.min_note_ms = bad_min_note_ms;
     out.segments = reinterpret_cast<SonareNoteSegment*>(static_cast<std::uintptr_t>(0x1));
     out.count = 7;
-    REQUIRE(sonare_note_segments(f0.data(), f0.size(), voiced.data(), voiced.size(), 100.0f,
-                                 &config, &out) == SONARE_ERROR_INVALID_PARAMETER);
+    REQUIRE(sonare_note_segments(f0.data(), voiced.data(), nullptr, f0.size(), 100.0f, &config,
+                                 &out) == SONARE_ERROR_INVALID_PARAMETER);
     REQUIRE(out.segments == nullptr);
     REQUIRE(out.count == 0);
   }

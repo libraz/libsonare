@@ -89,7 +89,7 @@ SonareError validate_interleaved_lufs_input(const float* samples, size_t frames,
   return SONARE_OK;
 }
 
-// norm_type is the NormType ordinal itself: 0 max-abs, 1 L1, 2 L2, 3 power.
+// SonareNormType carries the NormType ordinal itself.
 static_assert(static_cast<int>(NormType::Inf) == 0 && static_cast<int>(NormType::L1) == 1 &&
                   static_cast<int>(NormType::L2) == 2 && static_cast<int>(NormType::Power) == 3,
               "sonare_vector_normalize's norm_type ordinals must match NormType");
@@ -297,12 +297,12 @@ SonareError sonare_peak_pick(const float* values, size_t length, int pre_max, in
   });
 }
 
-SonareError sonare_vector_normalize(const float* values, size_t length, int norm_type,
+SonareError sonare_vector_normalize(const float* values, size_t length, SonareNormType norm_type,
                                     float threshold, float** out, size_t* out_length) {
   SONARE_C_API_ENTRY;
   if (!begin_vector_output(out, out_length)) return SONARE_ERROR_INVALID_PARAMETER;
   NormType norm = NormType::Inf;
-  if (!ordinal_to_enum(norm_type, 0, static_cast<int>(NormType::Power), &norm)) {
+  if (!ordinal_to_enum(static_cast<int>(norm_type), 0, static_cast<int>(NormType::Power), &norm)) {
     return SONARE_ERROR_INVALID_PARAMETER;
   }
   return transform_buffer(values, length, out, out_length,

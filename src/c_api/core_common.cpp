@@ -125,7 +125,7 @@ bool fill_key_modes(const SonareMode* modes, size_t mode_count, KeyConfig* confi
 void fill_chord_result(const std::vector<Chord>& chords, float tuning,
                        SonareChordAnalysisResult* out) {
   out->struct_version = SONARE_CHORD_ANALYSIS_RESULT_VERSION;
-  out->tuning = tuning;
+  out->tuning_cents = tuning_to_cents(tuning);
   out->chord_count = chords.size();
   if (chords.empty()) {
     // Own the empty-result contract like fill_cqt_result: never leave the

@@ -218,6 +218,8 @@ def configure_core_signatures(lib: ctypes.CDLL) -> None:
         ctypes.POINTER(ctypes.c_float),
         ctypes.c_size_t,
         ctypes.c_int,
+        ctypes.c_float,
+        ctypes.c_float,
         ctypes.POINTER(ctypes.c_float),
     ]
 
@@ -373,6 +375,8 @@ def configure_core_signatures(lib: ctypes.CDLL) -> None:
         ctypes.POINTER(ctypes.c_float),
         ctypes.c_size_t,
         ctypes.c_int,
+        ctypes.c_float,
+        ctypes.c_float,
         ctypes.POINTER(ctypes.POINTER(ctypes.c_float)),
         ctypes.POINTER(ctypes.c_size_t),
     ]
@@ -959,8 +963,8 @@ def configure_core_signatures(lib: ctypes.CDLL) -> None:
             ctypes.c_void_p,
             ctypes.POINTER(ctypes.c_int),
         ]
-        lib.sonare_stream_analyzer_current_time.restype = ctypes.c_int32
-        lib.sonare_stream_analyzer_current_time.argtypes = [
+        lib.sonare_stream_analyzer_current_time_sec.restype = ctypes.c_int32
+        lib.sonare_stream_analyzer_current_time_sec.argtypes = [
             ctypes.c_void_p,
             ctypes.POINTER(ctypes.c_float),
         ]
@@ -979,8 +983,8 @@ def configure_core_signatures(lib: ctypes.CDLL) -> None:
             ctypes.c_void_p,
             ctypes.c_float,
         ]
-        lib.sonare_stream_analyzer_set_tuning_ref_hz.restype = ctypes.c_int32
-        lib.sonare_stream_analyzer_set_tuning_ref_hz.argtypes = [
+        lib.sonare_stream_analyzer_set_reference_hz.restype = ctypes.c_int32
+        lib.sonare_stream_analyzer_set_reference_hz.argtypes = [
             ctypes.c_void_p,
             ctypes.c_float,
         ]
@@ -1117,32 +1121,6 @@ def configure_core_signatures(lib: ctypes.CDLL) -> None:
             ctypes.c_size_t,
             ctypes.POINTER(SonareMeterOptions),
             ctypes.POINTER(ctypes.c_char_p),
-        ]
-
-    # sonare_analyze_json_with_progress: same as sonare_analyze_json but emits
-    # progress callbacks. The callback signature is:
-    #   void (*)(float progress, const char* stage, void* user_data)
-    if hasattr(lib, "sonare_analyze_json_with_progress"):
-        lib.sonare_analyze_json_with_progress.restype = ctypes.c_int32
-        lib.sonare_analyze_json_with_progress.argtypes = [
-            ctypes.POINTER(ctypes.c_float),
-            ctypes.c_size_t,
-            ctypes.c_int,
-            SonareAnalyzeProgressCallback,
-            ctypes.c_void_p,
-            ctypes.POINTER(ctypes.c_char_p),
-        ]
-    if hasattr(lib, "sonare_analyze_json_with_progress_ex"):
-        lib.sonare_analyze_json_with_progress_ex.restype = ctypes.c_int32
-        lib.sonare_analyze_json_with_progress_ex.argtypes = [
-            ctypes.POINTER(ctypes.c_float),
-            ctypes.c_size_t,
-            ctypes.c_int,
-            SonareAnalyzeProgressCallback,
-            ctypes.c_void_p,
-            ctypes.POINTER(ctypes.c_char_p),
-            SonareCancelCallback,
-            ctypes.c_void_p,
         ]
 
     if hasattr(lib, "sonare_analyze_json_ex_with_progress"):

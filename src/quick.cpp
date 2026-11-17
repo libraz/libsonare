@@ -28,6 +28,11 @@ float detect_bpm(const float* samples, size_t size, int sample_rate) {
   return sonare::detect_bpm(audio);
 }
 
+float detect_bpm(const float* samples, size_t size, int sample_rate, const BpmConfig& config) {
+  Audio audio = prepare_audio(samples, size, sample_rate);
+  return sonare::detect_bpm(audio, config);
+}
+
 Key detect_key(const float* samples, size_t size, int sample_rate) {
   Audio audio = prepare_audio(samples, size, sample_rate);
   return sonare::detect_key(audio);
@@ -67,6 +72,12 @@ std::vector<float> detect_onsets(const float* samples, size_t size, int sample_r
 std::vector<float> detect_beats(const float* samples, size_t size, int sample_rate) {
   Audio audio = prepare_audio(samples, size, sample_rate);
   return sonare::detect_beats(audio);
+}
+
+std::vector<float> detect_beats(const float* samples, size_t size, int sample_rate,
+                                const BeatConfig& config) {
+  Audio audio = prepare_audio(samples, size, sample_rate);
+  return sonare::detect_beats(audio, config);
 }
 
 std::vector<float> detect_downbeats(const float* samples, size_t size, int sample_rate) {

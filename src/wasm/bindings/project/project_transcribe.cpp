@@ -32,10 +32,9 @@ namespace {
 // domain or, for the ratio kinds, a real "none" that the C ABI spells as a
 // negative.
 enum class FloatDomain {
-  kPositive,    // > 0
-  kNegative,    // < 0
-  kUnitRatio,   // [0, 1]; a written 0 is the real 0, sent as -1
-  kSplitRatio,  // 0 (never split, sent as -1) or > 1
+  kPositive,   // > 0
+  kNegative,   // < 0
+  kUnitRatio,  // [0, 1]; a written 0 is the real 0, sent as -1
 };
 
 // A field whose domain excludes 0 spells "use the documented default" as 0 in
@@ -59,11 +58,6 @@ float signedField(val config, const char* key, FloatDomain domain) {
     case FloatDomain::kUnitRatio:
       if (!(value >= 0.0f && value <= 1.0f)) {
         throw WasmRangeError(name + " must be a number in [0, 1]");
-      }
-      return value == 0.0f ? -1.0f : value;
-    case FloatDomain::kSplitRatio:
-      if (!(value == 0.0f || value > 1.0f)) {
-        throw WasmRangeError(name + " must be 0 or a number greater than 1");
       }
       return value == 0.0f ? -1.0f : value;
   }
@@ -104,8 +98,8 @@ SonareTranscribeConfig transcribeConfigFromVal(val config) {
   } else {
     out.reference_hz = signedField(config, "referenceHz", FloatDomain::kPositive);
   }
-  out.fmin = signedField(config, "fmin", FloatDomain::kPositive);
-  out.fmax = signedField(config, "fmax", FloatDomain::kPositive);
+  out.f0_min_hz = signedField(config, "f0MinHz", FloatDomain::kPositive);
+  out.f0_max_hz = signedField(config, "f0MaxHz", FloatDomain::kPositive);
   out.min_note_ms = signedField(config, "minNoteMs", FloatDomain::kPositive);
   // Both spellings written is forwarded; the C ABI refuses it naming min_note_division.
   out.min_note_division = rangeField(config, "minNoteDivision", 1, 128);
@@ -117,7 +111,8 @@ SonareTranscribeConfig transcribeConfigFromVal(val config) {
   out.max_polyphony = rangeField(config, "maxPolyphony", 1, 64);
   out.min_frame_peak_ratio = signedField(config, "minFramePeakRatio", FloatDomain::kUnitRatio);
   out.min_ridge_peak_ratio = signedField(config, "minRidgePeakRatio", FloatDomain::kUnitRatio);
-  out.reattack_ratio = signedField(config, "reattackRatio", FloatDomain::kSplitRatio);
+  // 0 (absent) never splits; any other value is forwarded and the C ABI refuses an invalid one.
+  out.reattack_ratio = floatProperty(config, "reattackRatio", 0.0f);
   // Absence is the segments model; the C ABI refuses a non-segments model on the polyphonic path.
   const std::string model = stringProperty(config, "monophonicModel", "segments");
   if (model == "singing") {
@@ -162,7 +157,7 @@ val js_transcribe(val samples, const val& sample_rate_val, const val& tempo_bpm_
   }
   const double note_count = static_cast<double>(result.note_count);
   const float tempo = result.tempo_bpm;
-  const float tuning = result.tuning;
+  const float tuning_cents = result.tuning_cents;
   const std::vector<SonareMidiEventPod> events = takeTranscribeEvents(&result);
 
   val list = val::array();
@@ -173,7 +168,7 @@ val js_transcribe(val samples, const val& sample_rate_val, const val& tempo_bpm_
   out.set("events", list);
   out.set("noteCount", note_count);
   out.set("tempoBpm", tempo);
-  out.set("tuning", tuning);
+  out.set("tuningCents", tuning_cents);
   return out;
 }
 

@@ -108,8 +108,8 @@ TEST_CASE("assignment writes the shift its target asks for", "[c_api][note_targe
   REQUIRE(sonare_assign_note_targets(notes.data(), notes.size(), kSampleRate, targets.data(),
                                      targets.size(), nullptr, &assigned) == SONARE_OK);
   REQUIRE(assigned == 2);
-  REQUIRE(notes[0].edit.pitch_shift_semitones == Catch::Approx(-9.0).margin(1e-4));
-  REQUIRE(notes[1].edit.pitch_shift_semitones == Catch::Approx(3.0).margin(1e-4));
+  REQUIRE(notes[0].edit.pitch_semitones == Catch::Approx(-9.0).margin(1e-4));
+  REQUIRE(notes[1].edit.pitch_semitones == Catch::Approx(3.0).margin(1e-4));
   REQUIRE(notes[0].edit.muted == 0);
 }
 
@@ -125,7 +125,7 @@ TEST_CASE("the overlap ratio decides whether a target counts", "[c_api][note_tar
   REQUIRE(sonare_assign_note_targets(notes.data(), notes.size(), kSampleRate, targets.data(),
                                      targets.size(), &config, &assigned) == SONARE_OK);
   REQUIRE(assigned == 0);
-  REQUIRE(notes[0].edit.pitch_shift_semitones == 0.0f);
+  REQUIRE(notes[0].edit.pitch_semitones == 0.0f);
 
   // The same call with the threshold below the measured overlap: the input, the
   // target and the note are unchanged, so only the ratio can explain the answer.
@@ -133,7 +133,7 @@ TEST_CASE("the overlap ratio decides whether a target counts", "[c_api][note_tar
   REQUIRE(sonare_assign_note_targets(notes.data(), notes.size(), kSampleRate, targets.data(),
                                      targets.size(), &config, &assigned) == SONARE_OK);
   REQUIRE(assigned == 1);
-  REQUIRE(notes[0].edit.pitch_shift_semitones == Catch::Approx(3.0).margin(1e-4));
+  REQUIRE(notes[0].edit.pitch_semitones == Catch::Approx(3.0).margin(1e-4));
 }
 
 TEST_CASE("each unmatched policy does what it says", "[c_api][note_targets]") {
@@ -149,7 +149,7 @@ TEST_CASE("each unmatched policy does what it says", "[c_api][note_targets]") {
     REQUIRE(sonare_assign_note_targets(notes.data(), notes.size(), kSampleRate, targets.data(),
                                        targets.size(), &config, &assigned) == SONARE_OK);
     REQUIRE(assigned == 1);
-    REQUIRE(notes[1].edit.pitch_shift_semitones == 0.0f);
+    REQUIRE(notes[1].edit.pitch_semitones == 0.0f);
     REQUIRE(notes[1].edit.muted == 0);
   }
 
@@ -162,7 +162,7 @@ TEST_CASE("each unmatched policy does what it says", "[c_api][note_targets]") {
                                        targets.size(), &config, &assigned) == SONARE_OK);
     REQUIRE(assigned == 1);
     REQUIRE(notes[1].edit.muted == 1);
-    REQUIRE(notes[1].edit.pitch_shift_semitones == 0.0f);
+    REQUIRE(notes[1].edit.pitch_semitones == 0.0f);
     // The matched note is not muted, so the policy reached only the other one.
     REQUIRE(notes[0].edit.muted == 0);
   }
@@ -175,7 +175,7 @@ TEST_CASE("each unmatched policy does what it says", "[c_api][note_targets]") {
     REQUIRE(sonare_assign_note_targets(notes.data(), notes.size(), kSampleRate, targets.data(),
                                        targets.size(), &config, &assigned) == SONARE_OK);
     REQUIRE(assigned == 2);
-    REQUIRE(notes[1].edit.pitch_shift_semitones == Catch::Approx(3.0).margin(1e-4));
+    REQUIRE(notes[1].edit.pitch_semitones == Catch::Approx(3.0).margin(1e-4));
     REQUIRE(notes[1].edit.muted == 0);
   }
 }
@@ -198,7 +198,7 @@ TEST_CASE("a note with no measured pitch is never edited, whatever the policy",
       REQUIRE(sonare_assign_note_targets(notes.data(), notes.size(), kSampleRate, targets.data(),
                                          targets.size(), &config, &assigned) == SONARE_OK);
       REQUIRE(assigned == 0);
-      REQUIRE(notes[0].edit.pitch_shift_semitones == 0.0f);
+      REQUIRE(notes[0].edit.pitch_semitones == 0.0f);
       REQUIRE(notes[0].edit.muted == 0);
     }
   }
@@ -220,19 +220,19 @@ TEST_CASE("a correction past the bound saturates rather than being refused",
   REQUIRE(sonare_assign_note_targets(notes.data(), notes.size(), kSampleRate, targets.data(),
                                      targets.size(), &config, &assigned) == SONARE_OK);
   REQUIRE(assigned == 2);
-  REQUIRE(notes[0].edit.pitch_shift_semitones == Catch::Approx(12.0).margin(1e-4));
-  REQUIRE(notes[1].edit.pitch_shift_semitones == Catch::Approx(-12.0).margin(1e-4));
+  REQUIRE(notes[0].edit.pitch_semitones == Catch::Approx(12.0).margin(1e-4));
+  REQUIRE(notes[1].edit.pitch_semitones == Catch::Approx(-12.0).margin(1e-4));
 
   // A zero bound is its own value, not a request for the default: the notes are
   // still counted as assigned and neither one moves.
-  notes[0].edit.pitch_shift_semitones = 0.0f;
-  notes[1].edit.pitch_shift_semitones = 0.0f;
+  notes[0].edit.pitch_semitones = 0.0f;
+  notes[1].edit.pitch_semitones = 0.0f;
   config.max_correction_semitones = 0.0f;
   REQUIRE(sonare_assign_note_targets(notes.data(), notes.size(), kSampleRate, targets.data(),
                                      targets.size(), &config, &assigned) == SONARE_OK);
   REQUIRE(assigned == 2);
-  REQUIRE(notes[0].edit.pitch_shift_semitones == 0.0f);
-  REQUIRE(notes[1].edit.pitch_shift_semitones == 0.0f);
+  REQUIRE(notes[0].edit.pitch_semitones == 0.0f);
+  REQUIRE(notes[1].edit.pitch_semitones == 0.0f);
 }
 
 TEST_CASE("assignment leaves every field it does not write", "[c_api][note_targets]") {
@@ -249,7 +249,7 @@ TEST_CASE("assignment leaves every field it does not write", "[c_api][note_targe
   notes[0].edit.envelope_count = 5;
   notes[0].edit.gain_db = -3.0f;
   notes[0].edit.time_stretch_ratio = 1.5f;
-  notes[0].edit.formant_shift_semitones = 2.0f;
+  notes[0].edit.formant_semitones = 2.0f;
   notes[0].edit.vibrato_depth_change = 0.25f;
   notes[0].edit.drift_change = -0.5f;
   const SonareNoteObject before = notes[0];
@@ -259,7 +259,7 @@ TEST_CASE("assignment leaves every field it does not write", "[c_api][note_targe
   REQUIRE(sonare_assign_note_targets(notes.data(), notes.size(), kSampleRate, targets.data(),
                                      targets.size(), nullptr, &assigned) == SONARE_OK);
   REQUIRE(assigned == 1);
-  REQUIRE(notes[0].edit.pitch_shift_semitones == Catch::Approx(3.0).margin(1e-4));
+  REQUIRE(notes[0].edit.pitch_semitones == Catch::Approx(3.0).margin(1e-4));
 
   REQUIRE(notes[0].onset_sample == before.onset_sample);
   REQUIRE(notes[0].offset_sample == before.offset_sample);
@@ -274,7 +274,7 @@ TEST_CASE("assignment leaves every field it does not write", "[c_api][note_targe
   REQUIRE(notes[0].edit.envelope_count == before.edit.envelope_count);
   REQUIRE(notes[0].edit.gain_db == before.edit.gain_db);
   REQUIRE(notes[0].edit.time_stretch_ratio == before.edit.time_stretch_ratio);
-  REQUIRE(notes[0].edit.formant_shift_semitones == before.edit.formant_shift_semitones);
+  REQUIRE(notes[0].edit.formant_semitones == before.edit.formant_semitones);
   REQUIRE(notes[0].edit.vibrato_depth_change == before.edit.vibrato_depth_change);
   REQUIRE(notes[0].edit.drift_change == before.edit.drift_change);
 }
@@ -291,10 +291,10 @@ TEST_CASE("assignment catches a target staging allocation failure before touchin
   note.edit.time_offset_samples = 64;
   note.edit.envelope_offset = 2;
   note.edit.envelope_count = 5;
-  note.edit.pitch_shift_semitones = -4.0f;
+  note.edit.pitch_semitones = -4.0f;
   note.edit.gain_db = -3.0f;
   note.edit.time_stretch_ratio = 1.5f;
-  note.edit.formant_shift_semitones = 2.0f;
+  note.edit.formant_semitones = 2.0f;
   note.edit.vibrato_depth_change = 0.25f;
   note.edit.drift_change = -0.5f;
   note.edit.muted = 1;
@@ -324,10 +324,10 @@ TEST_CASE("assignment catches a target staging allocation failure before touchin
   CHECK(note.edit.time_offset_samples == before.edit.time_offset_samples);
   CHECK(note.edit.envelope_offset == before.edit.envelope_offset);
   CHECK(note.edit.envelope_count == before.edit.envelope_count);
-  CHECK(note.edit.pitch_shift_semitones == before.edit.pitch_shift_semitones);
+  CHECK(note.edit.pitch_semitones == before.edit.pitch_semitones);
   CHECK(note.edit.gain_db == before.edit.gain_db);
   CHECK(note.edit.time_stretch_ratio == before.edit.time_stretch_ratio);
-  CHECK(note.edit.formant_shift_semitones == before.edit.formant_shift_semitones);
+  CHECK(note.edit.formant_semitones == before.edit.formant_semitones);
   CHECK(note.edit.vibrato_depth_change == before.edit.vibrato_depth_change);
   CHECK(note.edit.drift_change == before.edit.drift_change);
   CHECK(note.edit.muted == before.edit.muted);
@@ -339,7 +339,7 @@ TEST_CASE("assignment keeps an edit the caller already made when no target reach
   // LEAVE has to leave the caller's own shift alone rather than reset it, and a
   // note already muted stays muted.
   std::vector<SonareNoteObject> notes{note_at(3 * kHalfSecond, 4 * kHalfSecond, kA4Hz)};
-  notes[0].edit.pitch_shift_semitones = -4.0f;
+  notes[0].edit.pitch_semitones = -4.0f;
   notes[0].edit.muted = 1;
 
   const std::vector<SonareNoteTarget> targets{target_at(0.0, 0.5, 72.0f)};
@@ -347,7 +347,7 @@ TEST_CASE("assignment keeps an edit the caller already made when no target reach
   REQUIRE(sonare_assign_note_targets(notes.data(), notes.size(), kSampleRate, targets.data(),
                                      targets.size(), nullptr, &assigned) == SONARE_OK);
   REQUIRE(assigned == 0);
-  REQUIRE(notes[0].edit.pitch_shift_semitones == -4.0f);
+  REQUIRE(notes[0].edit.pitch_semitones == -4.0f);
   REQUIRE(notes[0].edit.muted == 1);
 }
 
@@ -387,7 +387,7 @@ TEST_CASE("assignment refuses arguments it cannot act on", "[c_api][note_targets
     REQUIRE(sonare_assign_note_targets(notes.data(), notes.size(), kSampleRate, one.data(),
                                        one.size(), nullptr,
                                        &assigned) == SONARE_ERROR_INVALID_PARAMETER);
-    REQUIRE(notes[0].edit.pitch_shift_semitones == 0.0f);
+    REQUIRE(notes[0].edit.pitch_semitones == 0.0f);
   }
 
   // An empty note set and an empty reference are both legitimate.
@@ -485,8 +485,8 @@ TEST_CASE("a take assigned from an SMF ends up at the pitches the file wrote",
   REQUIRE(assigned == 2);
   // 69 + shift is the pitch the note will render at, and that is what the file
   // said: 60 and 67.
-  REQUIRE(69.0f + notes[0].edit.pitch_shift_semitones == Catch::Approx(60.0).margin(1e-4));
-  REQUIRE(69.0f + notes[1].edit.pitch_shift_semitones == Catch::Approx(67.0).margin(1e-4));
+  REQUIRE(69.0f + notes[0].edit.pitch_semitones == Catch::Approx(60.0).margin(1e-4));
+  REQUIRE(69.0f + notes[1].edit.pitch_semitones == Catch::Approx(67.0).margin(1e-4));
 
   sonare_free_note_targets(targets);
 }

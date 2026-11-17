@@ -203,10 +203,18 @@ val js_nn_filter(val s, const val& n_features_val, const val& n_frames_val, std:
   return out;
 }
 
+// Absent or null `alignZeros` is true; anything else must be a boolean.
+static bool alignZerosFromVal(const val& value) {
+  if (value.isUndefined() || value.isNull()) return true;
+  if (!value.isTrue() && !value.isFalse()) throw WasmTypeError("alignZeros must be a boolean");
+  return value.isTrue();
+}
+
 // Time-domain remix: reorders / concatenates a signal by (start, end) interval
 // slices. Mirrors the C ABI sonare_remix / librosa.effects.remix. @p intervals
 // is a flat Int32Array of (start, end) pairs.
-val js_remix(val samples, val intervals, const val& sample_rate, bool align_zeros) {
+val js_remix(val samples, val intervals, const val& sample_rate, const val& align_zeros_val) {
+  const bool align_zeros = alignZerosFromVal(align_zeros_val);
   // Validate finite samples, non-empty input, and the sample-rate range up front
   // so js_remix rejects exactly what the C ABI's run_offline (sonare_remix) does,
   // rather than copying NaN/Inf through or silently accepting a bad rate.
@@ -232,7 +240,8 @@ val js_remix(val samples, val intervals, const val& sample_rate, bool align_zero
 // pairs so a host can apply ONE cut set to every channel of a multichannel
 // take; calling remix() per channel snaps each channel independently.
 val js_remix_aligned_intervals(val samples, val intervals, const val& sample_rate,
-                               bool align_zeros) {
+                               const val& align_zeros_val) {
+  const bool align_zeros = alignZerosFromVal(align_zeros_val);
   Audio audio = loadValidatedAudio(samples, checkedIntFromVal(sample_rate, "sampleRate"));
   std::vector<int32_t> interval_ints = int32ArrayToVector(intervals);
   if (interval_ints.size() % 2 != 0) {

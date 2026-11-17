@@ -157,7 +157,7 @@ class SonareChordAnalysisResult(CStruct):
 
     _fields_ = [
         ("struct_version", ctypes.c_int),
-        ("tuning", ctypes.c_float),
+        ("tuning_cents", ctypes.c_float),
         ("chords", ctypes.POINTER(SonareChord)),
         ("chord_count", ctypes.c_size_t),
     ]
@@ -182,7 +182,7 @@ class SonareChordDetectionOptions(CStruct):
         ("key_mode", ctypes.c_int32),
         ("detect_inversions", ctypes.c_int),
         ("chroma_method", ctypes.c_int),
-        ("tuning", ctypes.c_float),
+        ("tuning_cents", ctypes.c_float),
         ("tuning_auto", ctypes.c_int),
     ]
 
@@ -318,7 +318,7 @@ class SonareStreamConfig(CStruct):
         ("n_mels", ctypes.c_int32),
         ("fmin", ctypes.c_float),
         ("fmax", ctypes.c_float),
-        ("tuning_ref_hz", ctypes.c_float),
+        ("reference_hz", ctypes.c_float),
         ("compute_magnitude", ctypes.c_int32),
         ("compute_mel", ctypes.c_int32),
         ("compute_chroma", ctypes.c_int32),
@@ -351,7 +351,7 @@ class SonareStreamChordChange(CStruct):
     _fields_ = [
         ("root", ctypes.c_int32),
         ("quality", ctypes.c_int32),
-        ("start_time", ctypes.c_float),
+        ("start_sec", ctypes.c_float),
         ("confidence", ctypes.c_float),
     ]
 
@@ -361,7 +361,7 @@ class SonareStreamBarChord(CStruct):
         ("bar_index", ctypes.c_int32),
         ("root", ctypes.c_int32),
         ("quality", ctypes.c_int32),
-        ("start_time", ctypes.c_float),
+        ("start_sec", ctypes.c_float),
         ("confidence", ctypes.c_float),
     ]
 
@@ -379,7 +379,7 @@ class SonareStreamFrames(CStruct):
     _fields_ = [
         ("n_frames", ctypes.c_int32),
         ("n_mels", ctypes.c_int32),
-        ("timestamps", ctypes.POINTER(ctypes.c_float)),
+        ("timestamps_sec", ctypes.POINTER(ctypes.c_float)),
         ("mel", ctypes.POINTER(ctypes.c_float)),
         ("chroma", ctypes.POINTER(ctypes.c_float)),
         ("onset_strength", ctypes.POINTER(ctypes.c_float)),
@@ -398,7 +398,7 @@ class SonareStreamFramesU8(CStruct):
     _fields_ = [
         ("n_frames", ctypes.c_int32),
         ("n_mels", ctypes.c_int32),
-        ("timestamps", ctypes.POINTER(ctypes.c_float)),
+        ("timestamps_sec", ctypes.POINTER(ctypes.c_float)),
         ("mel", ctypes.POINTER(ctypes.c_uint8)),
         ("chroma", ctypes.POINTER(ctypes.c_uint8)),
         ("onset_strength", ctypes.POINTER(ctypes.c_uint8)),
@@ -414,7 +414,7 @@ class SonareStreamFramesI16(CStruct):
     _fields_ = [
         ("n_frames", ctypes.c_int32),
         ("n_mels", ctypes.c_int32),
-        ("timestamps", ctypes.POINTER(ctypes.c_float)),
+        ("timestamps_sec", ctypes.POINTER(ctypes.c_float)),
         ("mel", ctypes.POINTER(ctypes.c_int16)),
         ("chroma", ctypes.POINTER(ctypes.c_int16)),
         ("onset_strength", ctypes.POINTER(ctypes.c_int16)),
@@ -432,7 +432,7 @@ class SonareStreamStats(CStruct):
     _fields_ = [
         ("total_frames", ctypes.c_int32),
         ("total_samples", ctypes.c_size_t),
-        ("duration_seconds", ctypes.c_float),
+        ("duration_sec", ctypes.c_float),
         ("pending_frames", ctypes.c_size_t),
         ("dropped_output_frames", ctypes.c_size_t),
         ("bpm", ctypes.c_float),
@@ -444,9 +444,9 @@ class SonareStreamStats(CStruct):
         ("chord_root", ctypes.c_int32),
         ("chord_quality", ctypes.c_int32),
         ("chord_confidence", ctypes.c_float),
-        ("chord_start_time", ctypes.c_float),
+        ("chord_start_sec", ctypes.c_float),
         ("current_bar", ctypes.c_int32),
-        ("bar_duration", ctypes.c_float),
+        ("bar_duration_sec", ctypes.c_float),
         ("chord_progression_count", ctypes.c_size_t),
         ("chord_progression", ctypes.POINTER(SonareStreamChordChange)),
         ("bar_chord_progression_count", ctypes.c_size_t),
@@ -458,7 +458,7 @@ class SonareStreamStats(CStruct):
         ("detected_pattern_score", ctypes.c_float),
         ("all_pattern_scores_count", ctypes.c_size_t),
         ("all_pattern_scores", ctypes.POINTER(SonareStreamPatternScore)),
-        ("accumulated_seconds", ctypes.c_float),
+        ("accumulated_sec", ctypes.c_float),
         ("used_frames", ctypes.c_int32),
         ("updated", ctypes.c_int32),
         ("dropped_chord_progression_entries", ctypes.c_size_t),
@@ -615,8 +615,8 @@ class SonareNoteSegment(CStruct):
     _fields_ = [
         ("frame_start", ctypes.c_int),
         ("frame_end", ctypes.c_int),
-        ("start_seconds", ctypes.c_float),
-        ("end_seconds", ctypes.c_float),
+        ("start_sec", ctypes.c_float),
+        ("end_sec", ctypes.c_float),
         ("median_cents", ctypes.c_float),
     ]
 

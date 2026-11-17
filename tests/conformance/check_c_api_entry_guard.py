@@ -102,6 +102,7 @@ _NOTHROW_FREE = frozenset(
         "isnan",
         "memset",
         "memcpy",
+        "snprintf",
         "min",
         "max",
         "abs",

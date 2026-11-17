@@ -42,7 +42,7 @@ extern "C" {
 /// @details Every numeric field takes its documented default at 0, so a
 ///          zero-filled struct with @c struct_version set is the defaults.
 ///          @ref sonare_transcribe_config_default initializes the configuration
-///          and keeps @c fmin, @c fmax, @c min_note_ms and the version-3 and -4
+///          and keeps @c f0_min_hz, @c f0_max_hz, @c min_note_ms and the version-3 and -4
 ///          fields at 0, so each resolves from the selected source.
 ///
 ///          **A struct field has no way to spell "absent", which is why 0 means
@@ -50,7 +50,7 @@ extern "C" {
 ///          Node and WASM each have a spelling for absence -- an omitted keyword
 ///          or an omitted request field -- so a 0 written there carries no
 ///          meaning except a value the field's domain excludes, and all three
-///          refuse it by name for @c reference_hz, @c fmin, @c fmax,
+///          refuse it by name for @c reference_hz, @c f0_min_hz, @c f0_max_hz,
 ///          @c min_note_ms, @c min_note_division,
 ///          @c segmentation_threshold_cents, @c velocity_floor_db and
 ///          @c fixed_velocity. @c group and
@@ -76,8 +76,8 @@ typedef struct {
   /// polyphonic path. Both use the resolved bounds. The polyphonic path applies
   /// them to its salience estimator's F0 axis; its cent-spectrum bounds remain
   /// independent.
-  float fmin;
-  float fmax;
+  float f0_min_hz;
+  float f0_max_hz;
   /// Shortest span kept as a note, in milliseconds; 0 => @c min_note_division
   /// if set, else the source's default: 30 for the monophonic segments model,
   /// 45 for the monophonic singing model, and for the polyphonic path, where it
@@ -118,9 +118,9 @@ typedef struct {
   /// 0 => 0.10, negative => 0.
   float min_ridge_peak_ratio;
   /// Splits a ridge where its salience climbs past this multiple of the level
-  /// just before, the same pitch struck again while it sounds. 0 => the
-  /// transcription default (2.0); negative => no split; otherwise finite and
-  /// above 1.
+  /// just before, the same pitch struck again while it sounds. 0 => no split
+  /// (as @ref SonarePolyphonicConfig); otherwise finite and above 1, and
+  /// anything else, negative included, is refused naming the field.
   float reattack_ratio;
   /// Shortest span kept as a note, as a note value on either path: n is a 1/n
   /// note at the transcription tempo (32 => a thirty-second note), 1..128.
@@ -143,11 +143,10 @@ typedef struct {
 typedef struct {
   /// 2; written by the function that fills the result.
   int32_t struct_version;
-  /// Tuning the MIDI note numbers were measured against, in fractions of a
-  /// semitone from concert A440: the measured value under @c reference_auto,
-  /// otherwise the one @c reference_hz amounts to
-  /// (@ref sonare_reference_hz_to_tuning).
-  float tuning;
+  /// Tuning the MIDI note numbers were measured against, in cents from
+  /// concert A440: the measured value under @c reference_auto, otherwise the
+  /// one @c reference_hz amounts to (@ref sonare_reference_hz_to_tuning).
+  float tuning_cents;
   /// Note-on / note-off pairs in canonical PPQ order, ready to hand to
   /// @ref sonare_project_set_midi_events. NULL when @c count is 0.
   SonareMidiEventPod* events;

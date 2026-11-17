@@ -231,7 +231,7 @@ TEST_CASE("sonare_extract_notes returns one editable note for a sustained track"
 
   // Every returned note carries the identity edit, in its 1.0 spelling.
   REQUIRE(out.notes[0].edit.time_offset_samples == 0);
-  REQUIRE(out.notes[0].edit.pitch_shift_semitones == 0.0f);
+  REQUIRE(out.notes[0].edit.pitch_semitones == 0.0f);
   REQUIRE(out.notes[0].edit.gain_db == 0.0f);
   REQUIRE(out.notes[0].edit.time_stretch_ratio == 1.0f);
   REQUIRE(out.notes[0].edit.muted == 0);
@@ -843,7 +843,7 @@ TEST_CASE(
     extracted.notes[i].edit = SonareNoteEdit{};
     REQUIRE(extracted.notes[i].edit.envelope_offset == 0);
     REQUIRE(extracted.notes[i].edit.envelope_count == 0);
-    REQUIRE(extracted.notes[i].edit.formant_shift_semitones == 0.0f);
+    REQUIRE(extracted.notes[i].edit.formant_semitones == 0.0f);
     REQUIRE(extracted.notes[i].edit.vibrato_depth_change == 0.0f);
     REQUIRE(extracted.notes[i].edit.drift_change == 0.0f);
   }
@@ -872,7 +872,7 @@ TEST_CASE(
     return moved;
   };
 
-  extracted.notes[0].edit.formant_shift_semitones = 2.0f;
+  extracted.notes[0].edit.formant_semitones = 2.0f;
   REQUIRE(moves_the_output(nullptr, 0));
   extracted.notes[0].edit.vibrato_depth_change = -1.0f;
   REQUIRE(moves_the_output(nullptr, 0));
@@ -977,7 +977,7 @@ TEST_CASE("sonare_render_notes warps the spectral envelope only when the formant
 
   auto rendered_with = [&](float formant_semitones, float gain_db) {
     SonareNoteObject note = hand_note(0, 6400, 200.0f);
-    note.edit.formant_shift_semitones = formant_semitones;
+    note.edit.formant_semitones = formant_semitones;
     note.edit.gain_db = gain_db;
     float* out = nullptr;
     size_t out_length = 0;
@@ -1355,7 +1355,7 @@ TEST_CASE("sonare_render_notes rejects malformed spans, edits and config",
 
   for (const float bad : {kNaN, kInf, -kInf}) {
     SonareNoteObject pitch = edited(1920, 6080);
-    pitch.edit.pitch_shift_semitones = bad;
+    pitch.edit.pitch_semitones = bad;
     REQUIRE(render_at(samples, &pitch, 1, nullptr, &out, &out_length) ==
             SONARE_ERROR_INVALID_PARAMETER);
 
@@ -1468,13 +1468,12 @@ TEST_CASE("sonare_render_notes validates workflow bounds, scalar edits and finit
 
   using EditSetter = void (*)(SonareNoteEdit&, float);
   const std::array<std::pair<const char*, EditSetter>, 6> fields = {{
-      {"pitch_shift_semitones",
-       [](SonareNoteEdit& edit, float value) { edit.pitch_shift_semitones = value; }},
+      {"pitch_semitones", [](SonareNoteEdit& edit, float value) { edit.pitch_semitones = value; }},
       {"gain_db", [](SonareNoteEdit& edit, float value) { edit.gain_db = value; }},
       {"time_stretch_ratio",
        [](SonareNoteEdit& edit, float value) { edit.time_stretch_ratio = value; }},
-      {"formant_shift_semitones",
-       [](SonareNoteEdit& edit, float value) { edit.formant_shift_semitones = value; }},
+      {"formant_semitones",
+       [](SonareNoteEdit& edit, float value) { edit.formant_semitones = value; }},
       {"vibrato_depth_change",
        [](SonareNoteEdit& edit, float value) { edit.vibrato_depth_change = value; }},
       {"drift_change", [](SonareNoteEdit& edit, float value) { edit.drift_change = value; }},

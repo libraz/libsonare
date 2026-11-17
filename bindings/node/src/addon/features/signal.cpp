@@ -387,7 +387,8 @@ Napi::Value SonareWrap::VectorNormalize(const Napi::CallbackInfo& info) {
   float* out = nullptr;
   size_t count = 0;
   SonareError err =
-      sonare_vector_normalize(arr.Data(), arr.ElementLength(), norm_type, threshold, &out, &count);
+      sonare_vector_normalize(arr.Data(), arr.ElementLength(),
+                              static_cast<SonareNormType>(norm_type), threshold, &out, &count);
   if (err != SONARE_OK) return CheckCResult(env, err);
   return FloatResult(env, out, count);
   SONARE_NODE_CATCH(env)

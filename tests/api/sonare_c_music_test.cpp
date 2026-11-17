@@ -303,7 +303,7 @@ TEST_CASE("sonare_detect_chords", "[.][slow][c_api]") {
     options.key_root = SONARE_PITCH_C;
     options.key_mode = SONARE_MODE_MAJOR;
     options.detect_inversions = 1;
-    options.chroma_method = 1;
+    options.chroma_method = SONARE_CHROMA_METHOD_NNLS;
 
     SonareError err =
         sonare_detect_chords_ex(samples.data(), samples.size(), 22050, &options, &result);
@@ -345,7 +345,7 @@ TEST_CASE("sonare_detect_chords_ex chroma_method range", "[c_api]") {
   options.key_mode = SONARE_MODE_MAJOR;
 
   SECTION("CQT is accepted and returns chords") {
-    options.chroma_method = 2;
+    options.chroma_method = SONARE_CHROMA_METHOD_CQT;
     SonareChordAnalysisResult result = {};
     REQUIRE(sonare_detect_chords_ex(samples.data(), samples.size(), 22050, &options, &result) ==
             SONARE_OK);
@@ -355,7 +355,7 @@ TEST_CASE("sonare_detect_chords_ex chroma_method range", "[c_api]") {
 
   SECTION("values outside 0..2 are rejected") {
     for (int method : {3, -1}) {
-      options.chroma_method = method;
+      options.chroma_method = static_cast<SonareChromaMethod>(method);
       SonareChordAnalysisResult result = {};
       REQUIRE(sonare_detect_chords_ex(samples.data(), samples.size(), 22050, &options, &result) ==
               SONARE_ERROR_INVALID_PARAMETER);
@@ -378,7 +378,7 @@ TEST_CASE("sonare_chord_functional_analysis", "[c_api]") {
   options.key_root = SONARE_PITCH_C;
   options.key_mode = SONARE_MODE_MAJOR;
   options.detect_inversions = 0;
-  options.chroma_method = 0;
+  options.chroma_method = SONARE_CHROMA_METHOD_STFT;
 
   SECTION("returns the timed chords with a numeral and a function each") {
     auto samples = generate_chord({261.63f, 329.63f, 392.00f}, 22050, 2.0f);
@@ -583,7 +583,7 @@ TEST_CASE(
     REQUIRE(sonare_analyze_dynamics(samples.data(), samples.size(), 22050, 0.0f, 512, 0.5f,
                                     &result) == SONARE_ERROR_INVALID_PARAMETER);
     sonare_free_dynamics_result(&result);
-    REQUIRE(result.loudness_times == nullptr);
+    REQUIRE(result.loudness_times_sec == nullptr);
     REQUIRE(result.loudness_rms_db == nullptr);
     REQUIRE(result.loudness_count == 0);
   }

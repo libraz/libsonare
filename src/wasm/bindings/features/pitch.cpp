@@ -73,10 +73,30 @@ val js_pitch_pyin(val samples, const val& sample_rate_val, const val& frame_leng
       fill_na, [](const Audio& audio, const PitchConfig& config) { return pyin(audio, config); });
 }
 
-val js_note_segments(val f0_hz, val voiced_prob, const val& frame_rate_val, val options) {
+// Exactly one of `voiced_prob` (Float32Array) and `voiced_flags` (Uint8Array) is given.
+val js_note_segments(val f0_hz, val voiced_prob, val voiced_flags, const val& frame_rate_val,
+                     val options) {
   const float frame_rate = checkedFloatFromVal(frame_rate_val, "frameRate");
+  const bool has_prob = !voiced_prob.isUndefined() && !voiced_prob.isNull();
+  const bool has_flags = !voiced_flags.isUndefined() && !voiced_flags.isNull();
+  if (has_prob == has_flags) {
+    throw WasmRangeError("noteSegments: exactly one of voicedProb and voicedFlags must be given");
+  }
   std::vector<float> f0 = float32ArrayToVector(f0_hz);
-  std::vector<float> probabilities = float32ArrayToVector(voiced_prob);
+  std::vector<float> probabilities;
+  std::vector<int32_t> flags;
+  if (has_prob) {
+    probabilities = float32ArrayToVector(voiced_prob);
+    if (probabilities.size() != f0.size()) {
+      throw WasmRangeError("noteSegments: voicedProb must have the same length as f0Hz");
+    }
+  } else {
+    const std::vector<uint8_t> raw = uint8ArrayToVector(voiced_flags);
+    if (raw.size() != f0.size()) {
+      throw WasmRangeError("noteSegments: voicedFlags must have the same length as f0Hz");
+    }
+    flags.assign(raw.begin(), raw.end());
+  }
   SonareNoteSegmenterConfig config{};
   config.struct_version = 2;
   config.segmentation_threshold_cents = floatProperty(options, "segmentationThresholdCents", 0.0f);
@@ -84,9 +104,9 @@ val js_note_segments(val f0_hz, val voiced_prob, const val& frame_rate_val, val 
   config.reference_hz = floatProperty(options, "referenceHz", 0.0f);
   config.voiced_threshold = floatProperty(options, "voicedThreshold", 0.0f);
   SonareNoteSegmentsResult result{};
-  const SonareError error =
-      sonare_note_segments(f0.data(), f0.size(), probabilities.data(), probabilities.size(),
-                           frame_rate, &config, &result);
+  const SonareError error = sonare_note_segments(
+      f0.data(), has_prob ? probabilities.data() : nullptr, has_flags ? flags.data() : nullptr,
+      f0.size(), frame_rate, &config, &result);
   if (error != SONARE_OK) {
     throwCodedCError(error, "noteSegments");
   }
@@ -97,8 +117,8 @@ val js_note_segments(val f0_hz, val voiced_prob, const val& frame_rate_val, val 
     val row = val::object();
     row.set("frameStart", segment.frame_start);
     row.set("frameEnd", segment.frame_end);
-    row.set("startSeconds", segment.start_seconds);
-    row.set("endSeconds", segment.end_seconds);
+    row.set("startSec", segment.start_sec);
+    row.set("endSec", segment.end_sec);
     row.set("medianCents", segment.median_cents);
     out.call<void>("push", row);
   }
@@ -129,10 +149,10 @@ float js_estimate_tuning(val samples, const val& sample_rate_val, const val& n_f
   return estimate_tuning(audio, n_fft, hop_length, resolution, bins_per_octave);
 }
 
-// Mirrors the C ABI sonare_tuning_to_reference_hz / sonare_reference_hz_to_tuning, whose
-// validation they reuse so the refusals read the same everywhere.
+// Mirrors the C ABI sonare_tuning_to_reference_hz / sonare_reference_hz_to_tuning (tuning in
+// cents), whose validation they reuse so the refusals read the same everywhere.
 float js_tuning_to_reference_hz(const val& tuning_val, const val& a4_val) {
-  const float tuning = checkedFloatFromVal(tuning_val, "tuning");
+  const float tuning = checkedFloatFromVal(tuning_val, "tuningCents");
   const float a4 = checkedFloatFromVal(a4_val, "a4");
   float hz = 0.0f;
   const SonareError error = sonare_tuning_to_reference_hz(tuning, a4, &hz);

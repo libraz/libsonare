@@ -259,13 +259,13 @@ TEST_CASE("C ABI maps tuning and analyzes with options and progress", "[c_api][a
   const Audio audio = detuned_pop_loop(kDetuneSemitones, 1);
 
   SECTION("defaults measure the tuning") {
-    CHECK(sonare_music_analyze_options_default().tuning == 0.0f);
+    CHECK(sonare_music_analyze_options_default().tuning_cents == 0.0f);
     CHECK(sonare_music_analyze_options_default().tuning_auto == 1);
   }
 
   SECTION("out-of-range tuning is an invalid parameter on every entry point") {
     SonareMusicAnalyzeOptions options = sonare_music_analyze_options_default();
-    options.tuning = 0.5f;
+    options.tuning_cents = 50.0f;
     options.tuning_auto = 0;
     char* json = nullptr;
     CHECK(sonare_analyze_json_ex(audio.data(), audio.size(), kSampleRate, &options, &json) ==
@@ -283,7 +283,7 @@ TEST_CASE("C ABI maps tuning and analyzes with options and progress", "[c_api][a
     chord.n_fft = 2048;
     chord.hop_length = 512;
     chord.hmm_beam_width = 24;
-    chord.tuning = -0.6f;
+    chord.tuning_cents = -60.0f;
     SonareChordAnalysisResult chords{};
     CHECK(sonare_detect_chords_ex(audio.data(), audio.size(), kSampleRate, &chord, &chords) ==
           SONARE_ERROR_INVALID_PARAMETER);
@@ -297,7 +297,7 @@ TEST_CASE("C ABI maps tuning and analyzes with options and progress", "[c_api][a
 
   SECTION("the progress variant matches the plain one under the same options") {
     SonareMusicAnalyzeOptions options = sonare_music_analyze_options_default();
-    options.tuning = -0.45f;
+    options.tuning_cents = -45.0f;
     options.tuning_auto = 0;
     options.compute_tempo_curve = 1;
     char* plain = nullptr;
@@ -316,9 +316,10 @@ TEST_CASE("C ABI maps tuning and analyzes with options and progress", "[c_api][a
     CHECK(std::string(plain).find("\"beatLocalBpm\":[]") == std::string::npos);
 
     char* defaults = nullptr;
-    REQUIRE(sonare_analyze_json_with_progress_ex(audio.data(), audio.size(), kSampleRate, nullptr,
-                                                 nullptr, &defaults, nullptr,
-                                                 nullptr) == SONARE_OK);
+    const SonareMusicAnalyzeOptions default_options = sonare_music_analyze_options_default();
+    REQUIRE(sonare_analyze_json_ex_with_progress(audio.data(), audio.size(), kSampleRate,
+                                                 &default_options, nullptr, nullptr, &defaults,
+                                                 nullptr, nullptr) == SONARE_OK);
     CHECK(std::string(defaults) != std::string(plain));
     sonare_free_string(plain);
     sonare_free_string(with_progress);
@@ -433,7 +434,7 @@ TEST_CASE("MusicAnalyzer by default re-centres a detuned recording and lands in 
   CHECK(result.tuning == measure_tuning(audio));
   CHECK(result.tuning == Catch::Approx(kDetuneSemitones).margin(0.05));
   CHECK(is_c_major(result.key));
-  CHECK(analysis_result_to_json(result).find("\"tuning\":-0.4") != std::string::npos);
+  CHECK(analysis_result_to_json(result).find("\"tuning_cents\":-4") != std::string::npos);
 }
 
 TEST_CASE("C ABI auto tuning, tuning converters and the key tuning entry",
@@ -463,18 +464,18 @@ TEST_CASE("C ABI auto tuning, tuning converters and the key tuning entry",
     options.use_beat_sync = 0;
 
     SonareChordAnalysisResult given{};
-    options.tuning = 0.1f;
+    options.tuning_cents = 10.0f;
     REQUIRE(sonare_detect_chords_ex(audio.data(), audio.size(), kSampleRate, &options, &given) ==
             SONARE_OK);
     CHECK(given.struct_version == SONARE_CHORD_ANALYSIS_RESULT_VERSION);
-    CHECK(given.tuning == 0.1f);
+    CHECK(given.tuning_cents == Catch::Approx(10.0f).margin(1e-4));
     sonare_free_chord_analysis_result(&given);
 
     SonareChordAnalysisResult measured_result{};
     options.tuning_auto = 1;
     REQUIRE(sonare_detect_chords_ex(audio.data(), audio.size(), kSampleRate, &options,
                                     &measured_result) == SONARE_OK);
-    CHECK(measured_result.tuning == measured);
+    CHECK(measured_result.tuning_cents == Catch::Approx(measured * 100.0f).margin(1e-3));
     sonare_free_chord_analysis_result(&measured_result);
 
     options.struct_version = 1;
@@ -489,17 +490,17 @@ TEST_CASE("C ABI auto tuning, tuning converters and the key tuning entry",
     REQUIRE(sonare_detect_key_with_tuning(audio.data(), audio.size(), kSampleRate, 4096, 512, 0, 0,
                                           0.0f, nullptr, 0, SONARE_KEY_PROFILE_KRUMHANSL_SCHMUCKLER,
                                           nullptr, 0.0f, 1, &key, &used) == SONARE_OK);
-    CHECK(used == measured);
+    CHECK(used == Catch::Approx(measured * 100.0f).margin(1e-3));
     CHECK(key.root == SONARE_PITCH_C);
     CHECK(key.mode == SONARE_MODE_MAJOR);
 
     REQUIRE(sonare_detect_key_with_tuning(audio.data(), audio.size(), kSampleRate, 4096, 512, 0, 0,
                                           0.0f, nullptr, 0, SONARE_KEY_PROFILE_KRUMHANSL_SCHMUCKLER,
-                                          nullptr, 0.2f, 0, &key, &used) == SONARE_OK);
-    CHECK(used == 0.2f);
+                                          nullptr, 20.0f, 0, &key, &used) == SONARE_OK);
+    CHECK(used == Catch::Approx(20.0f).margin(1e-4));
     CHECK(sonare_detect_key_with_tuning(audio.data(), audio.size(), kSampleRate, 4096, 512, 0, 0,
                                         0.0f, nullptr, 0, SONARE_KEY_PROFILE_KRUMHANSL_SCHMUCKLER,
-                                        nullptr, 0.7f, 0, &key,
+                                        nullptr, 70.0f, 0, &key,
                                         &used) == SONARE_ERROR_INVALID_PARAMETER);
     CHECK(used == 0.0f);
   }
@@ -512,7 +513,7 @@ TEST_CASE("C ABI auto tuning, tuning converters and the key tuning entry",
                 audio.data(), audio.size(), kSampleRate, 4096, 512, 0, 0, 0.0f, nullptr, 0,
                 SONARE_KEY_PROFILE_KRUMHANSL_SCHMUCKLER, nullptr, 0.0f, 1, &candidates, &count,
                 &used) == SONARE_OK);
-    CHECK(used == measured);
+    CHECK(used == Catch::Approx(measured * 100.0f).margin(1e-3));
     REQUIRE(count == 24);
     CHECK(candidates[0].key.root == SONARE_PITCH_C);
     CHECK(candidates[0].key.mode == SONARE_MODE_MAJOR);
@@ -539,7 +540,7 @@ TEST_CASE("C ABI auto tuning, tuning converters and the key tuning entry",
     count = 0;
     CHECK(sonare_detect_key_candidates_with_tuning(
               audio.data(), audio.size(), kSampleRate, 4096, 512, 0, 0, 0.0f, nullptr, 0,
-              SONARE_KEY_PROFILE_KRUMHANSL_SCHMUCKLER, nullptr, 0.7f, 0, &candidates, &count,
+              SONARE_KEY_PROFILE_KRUMHANSL_SCHMUCKLER, nullptr, 70.0f, 0, &candidates, &count,
               &used) == SONARE_ERROR_INVALID_PARAMETER);
     CHECK(used == 0.0f);
     CHECK(candidates == nullptr);
@@ -548,11 +549,11 @@ TEST_CASE("C ABI auto tuning, tuning converters and the key tuning entry",
 
   SECTION("converters validate and round-trip") {
     float hz = 0.0f;
-    REQUIRE(sonare_tuning_to_reference_hz(kA446Tuning, 440.0f, &hz) == SONARE_OK);
+    REQUIRE(sonare_tuning_to_reference_hz(kA446Tuning * 100.0f, 440.0f, &hz) == SONARE_OK);
     CHECK(hz == Catch::Approx(446.0f).margin(0.02));
     float tuning = 0.0f;
     REQUIRE(sonare_reference_hz_to_tuning(hz, 440.0f, &tuning) == SONARE_OK);
-    CHECK(tuning == Catch::Approx(kA446Tuning).margin(1e-4));
+    CHECK(tuning == Catch::Approx(kA446Tuning * 100.0f).margin(1e-2));
     CHECK(sonare_tuning_to_reference_hz(std::nanf(""), 440.0f, &hz) ==
           SONARE_ERROR_INVALID_PARAMETER);
     CHECK(sonare_tuning_to_reference_hz(0.0f, 0.0f, &hz) == SONARE_ERROR_INVALID_PARAMETER);

@@ -654,7 +654,7 @@ TEST_CASE("sonare_stream_analyzer_read_frames publishes no array when a copy fai
     if (code != SONARE_OK) {
       ++refused;
       CHECK(failed.n_frames == 0);
-      CHECK(failed.timestamps == nullptr);
+      CHECK(failed.timestamps_sec == nullptr);
       CHECK(failed.mel == nullptr);
       CHECK(failed.chroma == nullptr);
       CHECK(failed.onset_strength == nullptr);

@@ -115,7 +115,7 @@ val js_analyze_dynamics(val samples, const val& sample_rate, const val& window_s
   out.set("isCompressed", dyn.is_compressed);
 
   const auto& curve = analyzer.loudness_curve();
-  out.set("loudnessTimes", vectorToFloat32Array(curve.times));
+  out.set("loudnessTimesSec", vectorToFloat32Array(curve.times));
   out.set("loudnessRmsDb", vectorToFloat32Array(curve.rms_db));
   return out;
 }

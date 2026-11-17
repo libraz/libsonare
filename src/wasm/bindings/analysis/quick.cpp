@@ -4,6 +4,7 @@
 #ifdef __EMSCRIPTEN__
 
 #include <algorithm>
+#include <cmath>
 #include <limits>
 #include <optional>
 #include <string>
@@ -13,6 +14,7 @@
 #include "analysis/meter_analyzer.h"
 #include "analysis/music_analyzer.h"
 #include "analysis/onset_analyzer.h"
+#include "util/constants.h"
 #include "util/numeric_validation.h"
 #include "util/zero_is_default.h"
 #include "wasm/bindings/common/common.h"
@@ -287,7 +289,7 @@ val analysisResultToVal(const AnalysisResult& result) {
 
   // Form
   out.set("form", result.form);
-  out.set("tuning", result.tuning);
+  out.set("tuningCents", result.tuning * sonare::constants::kCentsPerSemitone);
 
   return out;
 }
@@ -296,10 +298,15 @@ val analysisResultToVal(const AnalysisResult& result) {
 // Quick API (high-level)
 // ============================================================================
 
-float js_detect_bpm(val samples, const val& sample_rate_val) {
+float js_detect_bpm(val samples, const val& sample_rate_val, const val& bpm_min_val,
+                    const val& bpm_max_val) {
   const int sample_rate = checkedIntFromVal(sample_rate_val, "sampleRate");
+  BpmConfig config;
+  config.bpm_min = checkedFloatFromVal(bpm_min_val, "bpmMin");
+  config.bpm_max = checkedFloatFromVal(bpm_max_val, "bpmMax");
+  validate_bpm_config(config);
   Audio audio = loadValidatedAudio(samples, sample_rate);
-  return quick::detect_bpm(audio.data(), audio.size(), sample_rate);
+  return quick::detect_bpm(audio.data(), audio.size(), sample_rate, config);
 }
 
 val js_detect_key(val samples, const val& sample_rate_val) {
@@ -318,14 +325,16 @@ val js_detect_key(val samples, const val& sample_rate_val) {
 
 namespace {
 
-// A `tuning` value: a semitone fraction, or the string "auto" to measure it from the audio.
+// A `tuningCents` value: cents from concert A440, or the string "auto" to measure it from the
+// audio. The core holds it as a semitone fraction.
 struct TuningArg {
-  float tuning = 0.0f;
+  float tuning_cents = 0.0f;
   bool measure = true;
 
   // The core's form: unset measures.
   std::optional<float> value() const {
-    return measure ? std::nullopt : std::optional<float>(tuning);
+    return measure ? std::nullopt
+                   : std::optional<float>(tuning_cents / sonare::constants::kCentsPerSemitone);
   }
 };
 
@@ -337,7 +346,12 @@ TuningArg tuningFromVal(const val& value, const char* key) {
     }
     return out;
   }
-  out.tuning = checkedFloatFromVal(value, key);
+  out.tuning_cents = checkedFloatFromVal(value, key);
+  constexpr float kMaxTuningCents = 50.0f;
+  if (!std::isfinite(out.tuning_cents) || out.tuning_cents < -kMaxTuningCents ||
+      out.tuning_cents >= kMaxTuningCents) {
+    throw WasmRangeError(std::string(key) + " must be finite and in [-50, 50) cents");
+  }
   out.measure = false;
   return out;
 }
@@ -372,11 +386,11 @@ val js_detect_key_with_options(val samples, const val& sample_rate_val, const va
   const int n_fft = checkedIntFromVal(n_fft_val, "nFft");
   const int hop_length = checkedIntFromVal(hop_length_val, "hopLength");
   const int profile_type = checkedIntFromVal(profile_type_val, "profileType");
-  const float high_pass_hz = checkedFloatFromVal(high_pass_hz_val, "highPassHz");
+  const float high_pass_hz = checkedFloatFromVal(high_pass_hz_val, "chromaHighPassHz");
   Audio audio = loadValidatedAudio(samples, sample_rate);
   KeyConfig config = makeKeyConfig(n_fft, hop_length, use_hpss, loudness_weighted, high_pass_hz,
                                    modes, profile_type, genre_hint);
-  config.tuning = tuningFromVal(tuning_val, "tuning").value();
+  config.tuning = tuningFromVal(tuning_val, "tuningCents").value();
   float tuning_used = 0.0f;
   Key key = quick::detect_key(audio.data(), audio.size(), sample_rate, config, &tuning_used);
 
@@ -386,7 +400,7 @@ val js_detect_key_with_options(val samples, const val& sample_rate_val, const va
   result.set("confidence", key.confidence);
   result.set("name", key.to_string());
   result.set("shortName", key.to_short_string());
-  result.set("tuning", tuning_used);
+  result.set("tuningCents", tuning_used * sonare::constants::kCentsPerSemitone);
   return result;
 }
 
@@ -398,11 +412,11 @@ val js_detect_key_candidates(val samples, const val& sample_rate_val, const val&
   const int n_fft = checkedIntFromVal(n_fft_val, "nFft");
   const int hop_length = checkedIntFromVal(hop_length_val, "hopLength");
   const int profile_type = checkedIntFromVal(profile_type_val, "profileType");
-  const float high_pass_hz = checkedFloatFromVal(high_pass_hz_val, "highPassHz");
+  const float high_pass_hz = checkedFloatFromVal(high_pass_hz_val, "chromaHighPassHz");
   Audio audio = loadValidatedAudio(samples, sample_rate);
   KeyConfig config = makeKeyConfig(n_fft, hop_length, use_hpss, loudness_weighted, high_pass_hz,
                                    modes, profile_type, genre_hint);
-  config.tuning = tuningFromVal(tuning_val, "tuning").value();
+  config.tuning = tuningFromVal(tuning_val, "tuningCents").value();
   const auto candidates =
       quick::detect_key_candidates(audio.data(), audio.size(), sample_rate, config);
   val out = val::array();
@@ -449,10 +463,18 @@ val js_detect_onsets(val samples, const val& sample_rate_val, val options) {
   return vectorToFloat32Array(onsets);
 }
 
-val js_detect_beats(val samples, const val& sample_rate_val) {
+val js_detect_beats(val samples, const val& sample_rate_val, const val& bpm_min_val,
+                    const val& bpm_max_val) {
   const int sample_rate = checkedIntFromVal(sample_rate_val, "sampleRate");
+  BpmConfig tempo;
+  tempo.bpm_min = checkedFloatFromVal(bpm_min_val, "bpmMin");
+  tempo.bpm_max = checkedFloatFromVal(bpm_max_val, "bpmMax");
+  validate_bpm_config(tempo);
+  BeatConfig config;
+  config.bpm_min = tempo.bpm_min;
+  config.bpm_max = tempo.bpm_max;
   Audio audio = loadValidatedAudio(samples, sample_rate);
-  std::vector<float> beats = quick::detect_beats(audio.data(), audio.size(), sample_rate);
+  std::vector<float> beats = quick::detect_beats(audio.data(), audio.size(), sample_rate, config);
   return vectorToFloat32Array(beats);
 }
 
@@ -471,7 +493,7 @@ static ChordConfig makeChordConfig(float min_duration, float smoothing_window, f
                                    bool use_key_context, int key_root, int key_mode,
                                    bool detect_inversions, int chroma_method,
                                    const val& tuning_val) {
-  const TuningArg tuning = tuningFromVal(tuning_val, "tuning");
+  const TuningArg tuning = tuningFromVal(tuning_val, "tuningCents");
   ChordConfig config;
   config.min_duration = min_duration;
   config.smoothing_window = smoothing_window;
@@ -537,7 +559,7 @@ val js_detect_chords(val samples, const val& sample_rate_val, const val& min_dur
   const ChordAnalyzer analyzer(audio, config);
   val result = val::object();
   result.set("chords", chordsToVal(analyzer.chords()));
-  result.set("tuning", analyzer.tuning());
+  result.set("tuningCents", analyzer.tuning() * sonare::constants::kCentsPerSemitone);
   return result;
 }
 
@@ -587,7 +609,7 @@ val js_chord_functional_analysis(val samples, const val& key_root_val, const val
   }
   val out = val::object();
   out.set("chords", chordsToVal(analyzer.chords()));
-  out.set("tuning", analyzer.tuning());
+  out.set("tuningCents", analyzer.tuning() * sonare::constants::kCentsPerSemitone);
   out.set("roman", roman);
   out.set("functions", functions);
   return out;
@@ -655,7 +677,7 @@ MusicAnalyzerConfig musicAnalyzerConfigFromVal(const val& options) {
   set_number("startBpm", config.start_bpm);
   set_bool("useTriadsOnly", config.use_triads_only);
   set_bool("useHpss", config.use_hpss);
-  set_number("chromaHighpassHz", config.chroma_highpass_hz);
+  set_number("chromaHighPassHz", config.chroma_highpass_hz);
   set_bool("useBassWeighted", config.use_bass_weighted);
   set_number("chromaHopMultiplier", config.chroma_hop_multiplier);
   set_bool("useChordHmm", config.use_chord_hmm);
@@ -666,9 +688,9 @@ MusicAnalyzerConfig musicAnalyzerConfigFromVal(const val& options) {
   set_number("tempoUpdateIntervalBeats", config.tempo_update_interval_beats);
   set_bool("computeTempoCurve", config.compute_tempo_curve);
   set_number("meterDenominator", config.meter_denominator);
-  const val tuning = options["tuning"];
+  const val tuning = options["tuningCents"];
   if (!tuning.isUndefined() && !tuning.isNull()) {
-    config.tuning = tuningFromVal(tuning, "analyze: tuning").value();
+    config.tuning = tuningFromVal(tuning, "analyze: tuningCents").value();
   }
   // meterCandidateNumerators is an array, so set_number (a scalar reader) does
   // not apply. An undefined/null value leaves the core default {3, 4, 6} in

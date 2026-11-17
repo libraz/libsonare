@@ -77,7 +77,7 @@ void SetFrameBufferMetadata(Napi::Env env, Napi::Object& out, const Buffer& buff
 Napi::Object FrameBufferToObject(Napi::Env env, const sonare::FrameBuffer& buffer) {
   Napi::Object out = Napi::Object::New(env);
   SetFrameBufferMetadata(env, out, buffer);
-  out.Set("timestamps", Float32FromVec(env, buffer.timestamps));
+  out.Set("timestampsSec", Float32FromVec(env, buffer.timestamps));
   out.Set("mel", Float32FromVec(env, buffer.mel));
   out.Set("chroma", Float32FromVec(env, buffer.chroma));
   out.Set("onsetStrength", Float32FromVec(env, buffer.onset_strength));
@@ -94,7 +94,7 @@ template <typename Array, typename Buffer>
 Napi::Object QuantizedFrameBufferToObject(Napi::Env env, const Buffer& buffer) {
   Napi::Object out = Napi::Object::New(env);
   SetFrameBufferMetadata(env, out, buffer);
-  out.Set("timestamps", Float32FromVec(env, buffer.timestamps));
+  out.Set("timestampsSec", Float32FromVec(env, buffer.timestamps));
   out.Set("mel", TypedArrayFromVec<Array>(env, buffer.mel));
   out.Set("chroma", TypedArrayFromVec<Array>(env, buffer.chroma));
   out.Set("onsetStrength", TypedArrayFromVec<Array>(env, buffer.onset_strength));
@@ -147,6 +147,44 @@ bool ParseWindowOption(const Napi::Object& options, Napi::Env env, sonare::Windo
   return true;
 }
 
+// Returns the C ABI's real-time defaults as a plain object whose keys are the
+// StreamAnalyzer constructor's option names.
+Napi::Value StreamAnalyzerConfigDefault(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  SONARE_NODE_TRY
+  SonareStreamConfig config{};
+  const SonareError err = sonare_stream_analyzer_config_default(&config);
+  if (err != SONARE_OK) {
+    ThrowSonareError(env, err);
+    return env.Undefined();
+  }
+  Napi::Object out = Napi::Object::New(env);
+  out.Set("sampleRate", Napi::Number::New(env, config.sample_rate));
+  out.Set("nFft", Napi::Number::New(env, config.n_fft));
+  out.Set("hopLength", Napi::Number::New(env, config.hop_length));
+  out.Set("nMels", Napi::Number::New(env, config.n_mels));
+  out.Set("fmin", Napi::Number::New(env, config.fmin));
+  out.Set("fmax", Napi::Number::New(env, config.fmax));
+  out.Set("referenceHz", Napi::Number::New(env, config.reference_hz));
+  out.Set("computeMagnitude", Napi::Boolean::New(env, config.compute_magnitude != 0));
+  out.Set("computeMel", Napi::Boolean::New(env, config.compute_mel != 0));
+  out.Set("computeChroma", Napi::Boolean::New(env, config.compute_chroma != 0));
+  out.Set("computeOnset", Napi::Boolean::New(env, config.compute_onset != 0));
+  out.Set("computeSpectral", Napi::Boolean::New(env, config.compute_spectral != 0));
+  out.Set("emitEveryNFrames", Napi::Number::New(env, config.emit_every_n_frames));
+  out.Set("magnitudeDownsample", Napi::Number::New(env, config.magnitude_downsample));
+  out.Set("maxPendingFrames",
+          Napi::Number::New(env, static_cast<double>(config.max_pending_frames)));
+  out.Set("keyUpdateIntervalSec", Napi::Number::New(env, config.key_update_interval_sec));
+  out.Set("bpmUpdateIntervalSec", Napi::Number::New(env, config.bpm_update_interval_sec));
+  out.Set("window", Napi::Number::New(env, config.window));
+  out.Set("outputFormat", Napi::Number::New(env, config.output_format));
+  out.Set("maxProgressionEntries",
+          Napi::Number::New(env, static_cast<double>(config.max_progression_entries)));
+  return out;
+  SONARE_NODE_CATCH(env)
+}
+
 }  // namespace
 
 Napi::Object StreamAnalyzerWrap::Init(Napi::Env env, Napi::Object exports) {
@@ -163,15 +201,17 @@ Napi::Object StreamAnalyzerWrap::Init(Napi::Env env, Napi::Object exports) {
           InstanceMethod<&StreamAnalyzerWrap::Reset>("reset"),
           InstanceMethod<&StreamAnalyzerWrap::Stats>("stats"),
           InstanceMethod<&StreamAnalyzerWrap::FrameCount>("frameCount"),
-          InstanceMethod<&StreamAnalyzerWrap::CurrentTime>("currentTime"),
+          InstanceMethod<&StreamAnalyzerWrap::CurrentTimeSec>("currentTimeSec"),
           InstanceMethod<&StreamAnalyzerWrap::SampleRate>("sampleRate"),
           InstanceMethod<&StreamAnalyzerWrap::SetExpectedDuration>("setExpectedDuration"),
           InstanceMethod<&StreamAnalyzerWrap::SetNormalizationGain>("setNormalizationGain"),
-          InstanceMethod<&StreamAnalyzerWrap::SetTuningRefHz>("setTuningRefHz"),
+          InstanceMethod<&StreamAnalyzerWrap::SetReferenceHz>("setReferenceHz"),
           InstanceMethod<&StreamAnalyzerWrap::Destroy>("destroy"),
       });
 
   exports.Set("StreamAnalyzer", func);
+  exports.Set("streamAnalyzerConfigDefault", Napi::Function::New(env, &StreamAnalyzerConfigDefault,
+                                                                 "streamAnalyzerConfigDefault"));
   return exports;
 }
 
@@ -203,7 +243,7 @@ StreamAnalyzerWrap::StreamAnalyzerWrap(const Napi::CallbackInfo& info)
       config.fmin = static_cast<float>(DoubleProperty(opts, "fmin", config.fmin));
       config.fmax = static_cast<float>(DoubleProperty(opts, "fmax", config.fmax));
       config.tuning_ref_hz =
-          static_cast<float>(DoubleProperty(opts, "tuningRefHz", config.tuning_ref_hz));
+          static_cast<float>(DoubleProperty(opts, "referenceHz", config.tuning_ref_hz));
       config.compute_magnitude = BoolProperty(opts, "computeMagnitude", config.compute_magnitude);
       config.compute_mel = BoolProperty(opts, "computeMel", config.compute_mel);
       config.compute_chroma = BoolProperty(opts, "computeChroma", config.compute_chroma);
@@ -395,7 +435,7 @@ Napi::Value StreamAnalyzerWrap::Stats(const Napi::CallbackInfo& info) {
   Napi::Object out = Napi::Object::New(env);
   out.Set("totalFrames", Napi::Number::New(env, s.total_frames));
   out.Set("totalSamples", Napi::Number::New(env, static_cast<double>(s.total_samples)));
-  out.Set("durationSeconds", Napi::Number::New(env, s.duration_seconds));
+  out.Set("durationSec", Napi::Number::New(env, s.duration_seconds));
   out.Set("pendingFrames", Napi::Number::New(env, static_cast<double>(s.pending_frames)));
   out.Set("droppedOutputFrames",
           Napi::Number::New(env, static_cast<double>(s.dropped_output_frames)));
@@ -428,7 +468,7 @@ Napi::Value StreamAnalyzerWrap::Stats(const Napi::CallbackInfo& info) {
   estimate.Set("chordRoot", Napi::Number::New(env, est.chord_root));
   estimate.Set("chordQuality", Napi::Number::New(env, est.chord_quality));
   estimate.Set("chordConfidence", Napi::Number::New(env, est.chord_confidence));
-  estimate.Set("chordStartTime", Napi::Number::New(env, est.chord_start_time));
+  estimate.Set("chordStartSec", Napi::Number::New(env, est.chord_start_time));
 
   Napi::Array chordProgression = Napi::Array::New(env, est.chord_progression.size());
   for (size_t i = 0; i < est.chord_progression.size(); ++i) {
@@ -436,7 +476,7 @@ Napi::Value StreamAnalyzerWrap::Stats(const Napi::CallbackInfo& info) {
     Napi::Object c = Napi::Object::New(env);
     c.Set("root", Napi::Number::New(env, chord.root));
     c.Set("quality", Napi::Number::New(env, chord.quality));
-    c.Set("startTime", Napi::Number::New(env, chord.start_time));
+    c.Set("startSec", Napi::Number::New(env, chord.start_time));
     c.Set("confidence", Napi::Number::New(env, chord.confidence));
     c.Set("name", Napi::String::New(env, sonare::chord_symbol(chord.root, chord.quality)));
     chordProgression.Set(static_cast<uint32_t>(i), c);
@@ -450,14 +490,14 @@ Napi::Value StreamAnalyzerWrap::Stats(const Napi::CallbackInfo& info) {
     c.Set("barIndex", Napi::Number::New(env, chord.bar_index));
     c.Set("root", Napi::Number::New(env, chord.root));
     c.Set("quality", Napi::Number::New(env, chord.quality));
-    c.Set("startTime", Napi::Number::New(env, chord.start_time));
+    c.Set("startSec", Napi::Number::New(env, chord.start_time));
     c.Set("confidence", Napi::Number::New(env, chord.confidence));
     c.Set("name", Napi::String::New(env, sonare::chord_symbol(chord.root, chord.quality)));
     barChordProgression.Set(static_cast<uint32_t>(i), c);
   }
   estimate.Set("barChordProgression", barChordProgression);
   estimate.Set("currentBar", Napi::Number::New(env, est.current_bar));
-  estimate.Set("barDuration", Napi::Number::New(env, est.bar_duration));
+  estimate.Set("barDurationSec", Napi::Number::New(env, est.bar_duration));
 
   Napi::Array votedPattern = Napi::Array::New(env, est.voted_pattern.size());
   for (size_t i = 0; i < est.voted_pattern.size(); ++i) {
@@ -466,7 +506,7 @@ Napi::Value StreamAnalyzerWrap::Stats(const Napi::CallbackInfo& info) {
     c.Set("barIndex", Napi::Number::New(env, chord.bar_index));
     c.Set("root", Napi::Number::New(env, chord.root));
     c.Set("quality", Napi::Number::New(env, chord.quality));
-    c.Set("startTime", Napi::Number::New(env, chord.start_time));
+    c.Set("startSec", Napi::Number::New(env, chord.start_time));
     c.Set("confidence", Napi::Number::New(env, chord.confidence));
     c.Set("name", Napi::String::New(env, sonare::chord_symbol(chord.root, chord.quality)));
     votedPattern.Set(static_cast<uint32_t>(i), c);
@@ -486,7 +526,7 @@ Napi::Value StreamAnalyzerWrap::Stats(const Napi::CallbackInfo& info) {
   }
   estimate.Set("allPatternScores", allPatternScores);
 
-  estimate.Set("accumulatedSeconds", Napi::Number::New(env, est.accumulated_seconds));
+  estimate.Set("accumulatedSec", Napi::Number::New(env, est.accumulated_seconds));
   estimate.Set("usedFrames", Napi::Number::New(env, est.used_frames));
   estimate.Set("updated", Napi::Boolean::New(env, est.updated));
   out.Set("estimate", estimate);
@@ -502,7 +542,7 @@ Napi::Value StreamAnalyzerWrap::FrameCount(const Napi::CallbackInfo& info) {
   SONARE_NODE_CATCH(env)
 }
 
-Napi::Value StreamAnalyzerWrap::CurrentTime(const Napi::CallbackInfo& info) {
+Napi::Value StreamAnalyzerWrap::CurrentTimeSec(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
   SONARE_NODE_REQUIRE_OPEN(env, analyzer_, "StreamAnalyzer");
@@ -521,11 +561,11 @@ Napi::Value StreamAnalyzerWrap::SetExpectedDuration(const Napi::CallbackInfo& in
   Napi::Env env = info.Env();
   SONARE_NODE_REQUIRE_OPEN(env, analyzer_, "StreamAnalyzer");
   if (info.Length() < 1 || !info[0].IsNumber()) {
-    Napi::TypeError::New(env, "Expected (durationSeconds)").ThrowAsJavaScriptException();
+    Napi::TypeError::New(env, "Expected (durationSec)").ThrowAsJavaScriptException();
     return env.Undefined();
   }
   SONARE_NODE_TRY
-  analyzer_->set_expected_duration(node_narrow_finite_float(env, info[0], "durationSeconds"));
+  analyzer_->set_expected_duration(node_narrow_finite_float(env, info[0], "durationSec"));
   return env.Undefined();
   SONARE_NODE_CATCH(env)
 }
@@ -543,15 +583,15 @@ Napi::Value StreamAnalyzerWrap::SetNormalizationGain(const Napi::CallbackInfo& i
   SONARE_NODE_CATCH(env)
 }
 
-Napi::Value StreamAnalyzerWrap::SetTuningRefHz(const Napi::CallbackInfo& info) {
+Napi::Value StreamAnalyzerWrap::SetReferenceHz(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_REQUIRE_OPEN(env, analyzer_, "StreamAnalyzer");
   if (info.Length() < 1 || !info[0].IsNumber()) {
-    Napi::TypeError::New(env, "Expected (refHz)").ThrowAsJavaScriptException();
+    Napi::TypeError::New(env, "Expected (referenceHz)").ThrowAsJavaScriptException();
     return env.Undefined();
   }
   SONARE_NODE_TRY
-  analyzer_->set_tuning_ref_hz(node_narrow_finite_float(env, info[0], "refHz"));
+  analyzer_->set_tuning_ref_hz(node_narrow_finite_float(env, info[0], "referenceHz"));
   return env.Undefined();
   SONARE_NODE_CATCH(env)
 }

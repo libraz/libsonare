@@ -1,5 +1,7 @@
 #include <sonare/sonare_c_transcribe.h>
 
+#include <cstdio>
+
 #include "c_api/project_internal.h"
 
 #if defined(SONARE_WITH_ARRANGEMENT) && defined(SONARE_WITH_PITCH_EDITOR)
@@ -10,6 +12,8 @@
 #include "feature/pitch.h"
 #include "util/insertion_sort.h"
 #endif
+
+using sonare::constants::kCentsPerSemitone;
 
 // ============================================================================
 // Transcription
@@ -59,16 +63,21 @@ SonareError read_config(const SonareTranscribeConfig* in, ntm::TranscribeConfig*
     if (!finite_positive(in->reference_hz)) return refuse("reference_hz must be a positive number");
     out->reference_hz = in->reference_hz;
   }
-  if (in->fmin != 0.0f) {
-    if (!finite_positive(in->fmin)) return refuse("fmin must be a positive number");
-    out->fmin = in->fmin;
+  if (in->f0_min_hz != 0.0f) {
+    if (!finite_positive(in->f0_min_hz)) return refuse("f0_min_hz must be a positive number");
+    out->fmin = in->f0_min_hz;
   }
-  if (in->fmax != 0.0f) {
-    if (!finite_positive(in->fmax)) return refuse("fmax must be a positive number");
-    out->fmax = in->fmax;
+  if (in->f0_max_hz != 0.0f) {
+    if (!finite_positive(in->f0_max_hz)) return refuse("f0_max_hz must be a positive number");
+    out->fmax = in->f0_max_hz;
   }
   const ntm::TranscribeF0Range range = ntm::resolve_transcribe_f0_range(*out);
-  if (range.fmax <= range.fmin) return refuse("fmax must be above fmin");
+  if (range.fmax <= range.fmin) {
+    char message[96];
+    std::snprintf(message, sizeof(message), "f0_max_hz (%g Hz) must be above f0_min_hz (%g Hz)",
+                  static_cast<double>(range.fmax), static_cast<double>(range.fmin));
+    return refuse(message);
+  }
   if (in->min_note_ms != 0.0f) {
     if (!finite_positive(in->min_note_ms)) return refuse("min_note_ms must be a positive number");
     out->min_note_ms = in->min_note_ms;
@@ -99,7 +108,8 @@ SonareError read_config(const SonareTranscribeConfig* in, ntm::TranscribeConfig*
   *out_channel = static_cast<uint8_t>(in->channel);
   if (in->struct_version < 3) return SONARE_OK;
 
-  // The core shares these sentinels (0 => default, negative => 0 / off), so they are copied as-is.
+  // The core shares these sentinels (0 => default, negative => 0 / off), so they are copied as-is,
+  // except reattack_ratio.
   if (in->max_polyphony < 0 ||
       in->max_polyphony > sonare::editing::polyphony::kMaxPolyphonyVoices) {
     return refuse("max_polyphony must be 0 or an integer in [1, 64]");
@@ -110,9 +120,9 @@ SonareError read_config(const SonareTranscribeConfig* in, ntm::TranscribeConfig*
   if (!std::isfinite(in->min_ridge_peak_ratio) || in->min_ridge_peak_ratio > 1.0f) {
     return refuse("min_ridge_peak_ratio must be a finite number no greater than 1");
   }
-  if (!std::isfinite(in->reattack_ratio) ||
-      (in->reattack_ratio > 0.0f && in->reattack_ratio <= 1.0f)) {
-    return refuse("reattack_ratio must be 0, negative, or a finite number above 1");
+  if (in->reattack_ratio != 0.0f &&
+      (!std::isfinite(in->reattack_ratio) || in->reattack_ratio <= 1.0f)) {
+    return refuse("reattack_ratio must be 0 (no split) or a finite number above 1");
   }
   if (in->min_note_division < 0 || in->min_note_division > kMaxMinNoteDivision) {
     return refuse("min_note_division must be 0 or an integer in [1, 128]");
@@ -136,7 +146,11 @@ SonareError read_config(const SonareTranscribeConfig* in, ntm::TranscribeConfig*
   out->max_polyphony = in->max_polyphony;
   out->min_frame_peak_ratio = in->min_frame_peak_ratio;
   out->min_ridge_peak_ratio = in->min_ridge_peak_ratio;
-  out->reattack_ratio = in->reattack_ratio;
+  // The core spells "no split" as a negative ratio and reads 0 as its own default.
+  out->reattack_ratio =
+      (in->reattack_ratio == 0.0f && out->source == ntm::TranscribeSource::kPolyphonic)
+          ? -1.0f
+          : in->reattack_ratio;
   if (in->struct_version < 4) return SONARE_OK;
 
   if (in->monophonic_model != 0 && in->monophonic_model != 1) {
@@ -251,7 +265,7 @@ void sonare_free_transcribe_result(SonareTranscribeResult* result) {
   result->count = 0;
   result->note_count = 0;
   result->tempo_bpm = 0.0f;
-  result->tuning = 0.0f;
+  result->tuning_cents = 0.0f;
 }
 
 SonareError sonare_transcribe(const float* samples, size_t length, int sample_rate, float tempo_bpm,
@@ -291,7 +305,7 @@ SonareError sonare_transcribe(const float* samples, size_t length, int sample_ra
       build_events(notes, map, sample_rate, group, channel);
 
   out->tempo_bpm = tempo;
-  out->tuning = tuning;
+  out->tuning_cents = tuning * kCentsPerSemitone;
   out->note_count = events.size() / 2u;
   if (events.empty()) return SONARE_OK;
   auto owned = std::make_unique<SonareMidiEventPod[]>(events.size());

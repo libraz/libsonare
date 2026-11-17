@@ -34,7 +34,7 @@ TEST_CASE("fill_chord_result populates a non-empty result", "[c_api]") {
   fill_chord_result(chords, 0.25f, &out);
 
   REQUIRE(out.struct_version == SONARE_CHORD_ANALYSIS_RESULT_VERSION);
-  REQUIRE(out.tuning == 0.25f);
+  REQUIRE(out.tuning_cents == 25.0f);
   REQUIRE(out.chord_count == 1);
   REQUIRE(out.chords != nullptr);
   REQUIRE(out.chords[0].start == 0.0f);

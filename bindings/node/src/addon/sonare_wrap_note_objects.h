@@ -32,10 +32,10 @@ inline Napi::Float32Array CopyToFloat32(Napi::Env env, const float* values, size
 inline void ReadNoteEditFields(const Napi::Object& edit, std::vector<float>* envelopes,
                                SonareNoteEdit* out) {
   out->time_offset_samples = Int64Property(edit, "timeOffsetSamples", 0);
-  out->pitch_shift_semitones = FloatProperty(edit, "pitchShiftSemitones", 0.0f);
+  out->pitch_semitones = FloatProperty(edit, "pitchSemitones", 0.0f);
   out->gain_db = FloatProperty(edit, "gainDb", 0.0f);
   out->time_stretch_ratio = FloatProperty(edit, "timeStretchRatio", 0.0f);
-  out->formant_shift_semitones = FloatProperty(edit, "formantShiftSemitones", 0.0f);
+  out->formant_semitones = FloatProperty(edit, "formantSemitones", 0.0f);
   out->vibrato_depth_change = FloatProperty(edit, "vibratoDepthChange", 0.0f);
   out->drift_change = FloatProperty(edit, "driftChange", 0.0f);
   out->muted = BoolProperty(edit, "muted", false) ? 1 : 0;
@@ -69,10 +69,10 @@ inline Napi::Object NoteEditToJs(Napi::Env env, const SonareNoteEdit& edit, cons
   // Number.MAX_SAFE_INTEGER (2^53-1 samples, millennia of audio).
   out.Set("timeOffsetSamples",
           Napi::Number::New(env, static_cast<double>(edit.time_offset_samples)));
-  out.Set("pitchShiftSemitones", Napi::Number::New(env, edit.pitch_shift_semitones));
+  out.Set("pitchSemitones", Napi::Number::New(env, edit.pitch_semitones));
   out.Set("gainDb", Napi::Number::New(env, edit.gain_db));
   out.Set("timeStretchRatio", Napi::Number::New(env, edit.time_stretch_ratio));
-  out.Set("formantShiftSemitones", Napi::Number::New(env, edit.formant_shift_semitones));
+  out.Set("formantSemitones", Napi::Number::New(env, edit.formant_semitones));
   out.Set("vibratoDepthChange", Napi::Number::New(env, edit.vibrato_depth_change));
   out.Set("driftChange", Napi::Number::New(env, edit.drift_change));
   out.Set("muted", Napi::Boolean::New(env, edit.muted != 0));

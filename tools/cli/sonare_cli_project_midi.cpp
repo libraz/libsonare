@@ -10,6 +10,9 @@
 
 namespace {
 
+// The transcription default for the re-attack split; the C ABI reads 0 as "no split".
+constexpr float kDefaultReattackRatio = 2.0f;
+
 using ProjectMidiImportFn = SonareError (*)(SonareProject*, const uint8_t*, size_t, uint32_t*);
 
 struct ProjectMidiImportSpec {
@@ -136,8 +139,8 @@ int cmd_transcribe(const CliArgs& args, const Audio& audio) {
   config.struct_version = 4;
   config.polyphonic = args.has("polyphonic") ? 1 : 0;
   config.reference_hz = args.get_float("reference-hz", 0.0f);
-  config.fmin = args.get_float("fmin", 0.0f);
-  config.fmax = args.get_float("fmax", 0.0f);
+  config.f0_min_hz = args.get_float("fmin", 0.0f);
+  config.f0_max_hz = args.get_float("fmax", 0.0f);
   config.min_note_ms = args.get_float("min-note-ms", 0.0f);
   config.segmentation_threshold_cents = args.get_float("segmentation-threshold-cents", 0.0f);
   config.velocity_floor_db = args.get_float("velocity-floor-db", 0.0f);
@@ -145,8 +148,8 @@ int cmd_transcribe(const CliArgs& args, const Audio& audio) {
   config.group = args.get_int("group", 0);
   config.channel = args.get_int("channel", 0);
 
-  // A written 0 means a real zero (ratios) or "no split" (reattack), which the C
-  // ABI spells as a negative value; its own 0 would mean the default.
+  // A written 0 means a real zero (ratios), which the C ABI spells as a negative
+  // value (its own 0 would mean the default); reattack's own 0 is "no split".
   if (args.has("max-polyphony")) {
     const int max_polyphony = args.get_int("max-polyphony", 0);
     if (max_polyphony < 1 || max_polyphony > 64) {
@@ -169,13 +172,13 @@ int cmd_transcribe(const CliArgs& args, const Audio& audio) {
   }
   if (args.has("reattack-ratio")) {
     const float value = args.get_float("reattack-ratio", 0.0f);
-    if (value == 0.0f) {
-      config.reattack_ratio = -1.0f;
-    } else if (std::isfinite(value) && value > 1.0f) {
-      config.reattack_ratio = value;
-    } else {
+    if (value != 0.0f && !(std::isfinite(value) && value > 1.0f)) {
       throw std::invalid_argument("--reattack-ratio must be 0 (no split) or greater than 1");
     }
+    config.reattack_ratio = value;
+  } else if (config.polyphonic != 0) {
+    // The C ABI reads 0 as "no split", so the polyphonic transcription default is spelled out.
+    config.reattack_ratio = kDefaultReattackRatio;
   }
 
   // Both paths read the division; giving it with --min-note-ms is refused by the

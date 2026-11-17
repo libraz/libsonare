@@ -79,7 +79,7 @@ val js_stream_analyzer_config_default() {
   out.set("nMels", defaults.n_mels);
   out.set("fmin", defaults.fmin);
   out.set("fmax", defaults.fmax);
-  out.set("tuningRefHz", defaults.tuning_ref_hz);
+  out.set("referenceHz", defaults.tuning_ref_hz);
   out.set("computeMagnitude", false);
   out.set("computeMel", defaults.compute_mel);
   out.set("computeChroma", defaults.compute_chroma);
@@ -121,7 +121,7 @@ class StreamAnalyzerWrapper {
     const int output_format = checkedIntFromVal(output_format_val, "outputFormat");
     const float fmin = checkedFloatFromVal(fmin_val, "fmin");
     const float fmax = checkedFloatFromVal(fmax_val, "fmax");
-    const float tuning_ref_hz = checkedFloatFromVal(tuning_ref_hz_val, "tuningRefHz");
+    const float tuning_ref_hz = checkedFloatFromVal(tuning_ref_hz_val, "referenceHz");
     const float key_update_interval_sec =
         checkedFloatFromVal(key_update_interval_sec_val, "keyUpdateIntervalSec");
     const float bpm_update_interval_sec =
@@ -203,7 +203,7 @@ class StreamAnalyzerWrapper {
     out.set("nMels", buffer.n_mels);
     out.set("nChroma", buffer.n_chroma);
     out.set("featureFlags", buffer.feature_flags);
-    out.set("timestamps", vectorToFloat32Array(buffer.timestamps));
+    out.set("timestampsSec", vectorToFloat32Array(buffer.timestamps));
     out.set("mel", vectorToFloat32Array(buffer.mel));
     out.set("chroma", vectorToFloat32Array(buffer.chroma));
     out.set("onsetStrength", vectorToFloat32Array(buffer.onset_strength));
@@ -231,7 +231,7 @@ class StreamAnalyzerWrapper {
     out.set("nMels", buffer.n_mels);
     out.set("nChroma", buffer.n_chroma);
     out.set("featureFlags", buffer.feature_flags);
-    out.set("timestamps", vectorToFloat32Array(buffer.timestamps));
+    out.set("timestampsSec", vectorToFloat32Array(buffer.timestamps));
     out.set("mel", vectorToUint8Array(buffer.mel));
     out.set("chroma", vectorToUint8Array(buffer.chroma));
     out.set("onsetStrength", vectorToUint8Array(buffer.onset_strength));
@@ -256,7 +256,7 @@ class StreamAnalyzerWrapper {
     out.set("nMels", buffer.n_mels);
     out.set("nChroma", buffer.n_chroma);
     out.set("featureFlags", buffer.feature_flags);
-    out.set("timestamps", vectorToFloat32Array(buffer.timestamps));
+    out.set("timestampsSec", vectorToFloat32Array(buffer.timestamps));
     out.set("mel", vectorToInt16Array(buffer.mel));
     out.set("chroma", vectorToInt16Array(buffer.chroma));
     out.set("onsetStrength", vectorToInt16Array(buffer.onset_strength));
@@ -280,7 +280,7 @@ class StreamAnalyzerWrapper {
     // numbers are doubles; static_cast<int> would truncate/wrap streams past
     // 2^31 samples (~13.5h @44.1kHz) or a reset() with a large base offset.
     out.set("totalSamples", static_cast<double>(s.total_samples));
-    out.set("durationSeconds", s.duration_seconds);
+    out.set("durationSec", s.duration_seconds);
     out.set("pendingFrames", s.pending_frames);
     out.set("droppedOutputFrames", s.dropped_output_frames);
     out.set("droppedChordProgressionEntries", s.dropped_chord_progression_entries);
@@ -305,7 +305,7 @@ class StreamAnalyzerWrapper {
     estimate.set("chordRoot", s.estimate.chord_root);
     estimate.set("chordQuality", s.estimate.chord_quality);
     estimate.set("chordConfidence", s.estimate.chord_confidence);
-    estimate.set("chordStartTime", s.estimate.chord_start_time);
+    estimate.set("chordStartSec", s.estimate.chord_start_time);
 
     // Chord progression (time-based)
     val chordProgression = val::array();
@@ -313,7 +313,7 @@ class StreamAnalyzerWrapper {
       val c = val::object();
       c.set("root", chord.root);
       c.set("quality", chord.quality);
-      c.set("startTime", chord.start_time);
+      c.set("startSec", chord.start_time);
       c.set("confidence", chord.confidence);
       c.set("name", chord_symbol(chord.root, chord.quality));
       chordProgression.call<void>("push", c);
@@ -327,14 +327,14 @@ class StreamAnalyzerWrapper {
       c.set("barIndex", chord.bar_index);
       c.set("root", chord.root);
       c.set("quality", chord.quality);
-      c.set("startTime", chord.start_time);
+      c.set("startSec", chord.start_time);
       c.set("confidence", chord.confidence);
       c.set("name", chord_symbol(chord.root, chord.quality));
       barChordProgression.call<void>("push", c);
     }
     estimate.set("barChordProgression", barChordProgression);
     estimate.set("currentBar", s.estimate.current_bar);
-    estimate.set("barDuration", s.estimate.bar_duration);
+    estimate.set("barDurationSec", s.estimate.bar_duration);
 
     // Voted chord pattern (computed from repetitions)
     val votedPattern = val::array();
@@ -343,7 +343,7 @@ class StreamAnalyzerWrapper {
       c.set("barIndex", chord.bar_index);
       c.set("root", chord.root);
       c.set("quality", chord.quality);
-      c.set("startTime", chord.start_time);
+      c.set("startSec", chord.start_time);
       c.set("confidence", chord.confidence);
       c.set("name", chord_symbol(chord.root, chord.quality));
       votedPattern.call<void>("push", c);
@@ -365,7 +365,7 @@ class StreamAnalyzerWrapper {
     }
     estimate.set("allPatternScores", allPatternScores);
 
-    estimate.set("accumulatedSeconds", s.estimate.accumulated_seconds);
+    estimate.set("accumulatedSec", s.estimate.accumulated_seconds);
     estimate.set("usedFrames", s.estimate.used_frames);
     estimate.set("updated", s.estimate.updated);
     out.set("estimate", estimate);
@@ -374,12 +374,12 @@ class StreamAnalyzerWrapper {
   }
 
   int frameCount() const { return analyzer_->frame_count(); }
-  float currentTime() const { return analyzer_->current_time(); }
+  float currentTimeSec() const { return analyzer_->current_time(); }
 
   /// @brief Sets the expected total duration for pattern lock timing.
-  void setExpectedDuration(const val& duration_seconds_val) {
-    const float duration_seconds = checkedFloatFromVal(duration_seconds_val, "durationSeconds");
-    analyzer_->set_expected_duration(duration_seconds);
+  void setExpectedDuration(const val& duration_sec_val) {
+    const float duration_sec = checkedFloatFromVal(duration_sec_val, "durationSec");
+    analyzer_->set_expected_duration(duration_sec);
   }
 
   /// @brief Sets normalization gain for loud audio.
@@ -391,8 +391,8 @@ class StreamAnalyzerWrapper {
   /// @brief Sets tuning reference frequency (A4).
   /// @param ref_hz_val Reference frequency for A4 (default 440 Hz)
   /// @details Use 466.16 if audio is 1 semitone sharp, 415.30 if 1 semitone flat.
-  void setTuningRefHz(const val& ref_hz_val) {
-    const float ref_hz = checkedFloatFromVal(ref_hz_val, "refHz");
+  void setReferenceHz(const val& ref_hz_val) {
+    const float ref_hz = checkedFloatFromVal(ref_hz_val, "referenceHz");
     analyzer_->set_tuning_ref_hz(ref_hz);
   }
 
@@ -418,11 +418,11 @@ void registerStreamAnalyzerBindings() {
       .function("reset", &StreamAnalyzerWrapper::reset)
       .function("stats", &StreamAnalyzerWrapper::stats)
       .function("frameCount", &StreamAnalyzerWrapper::frameCount)
-      .function("currentTime", &StreamAnalyzerWrapper::currentTime)
+      .function("currentTimeSec", &StreamAnalyzerWrapper::currentTimeSec)
       .function("sampleRate", &StreamAnalyzerWrapper::sampleRate)
       .function("setExpectedDuration", &StreamAnalyzerWrapper::setExpectedDuration)
       .function("setNormalizationGain", &StreamAnalyzerWrapper::setNormalizationGain)
-      .function("setTuningRefHz", &StreamAnalyzerWrapper::setTuningRefHz);
+      .function("setReferenceHz", &StreamAnalyzerWrapper::setReferenceHz);
 }
 
 #endif  // __EMSCRIPTEN__

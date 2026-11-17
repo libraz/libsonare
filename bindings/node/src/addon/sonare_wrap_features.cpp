@@ -1,3 +1,4 @@
+#include <cstdint>
 #include <cstring>
 #include <string>
 #include <vector>
@@ -715,26 +716,39 @@ Napi::Value SonareWrap::PitchPyin(const Napi::CallbackInfo& info) {
 Napi::Value SonareWrap::NoteSegments(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
-  if (info.Length() != 1 || !info[0].IsObject() || info[0].IsArray()) {
-    Napi::TypeError::New(env, "noteSegments expects one request object")
+  Napi::Float32Array f0;
+  if (!RequiredFloat32ArrayValue(env, info[0], "f0Hz", &f0)) return env.Undefined();
+  const bool has_prob = !info[1].IsUndefined() && !info[1].IsNull();
+  const bool has_flags = !info[2].IsUndefined() && !info[2].IsNull();
+  if (has_prob == has_flags) {
+    Napi::RangeError::New(env, "noteSegments takes exactly one of voicedProb or voicedFlags")
         .ThrowAsJavaScriptException();
     return env.Undefined();
   }
-  Napi::Object request = info[0].As<Napi::Object>();
-  const Napi::Value f0_value = request.Get("f0Hz");
-  const Napi::Value voiced_value = request.Get("voicedProb");
-  const Napi::Value rate_value = request.Get("frameRate");
-  if (!sonare_node::IsFloat32Array(f0_value) || !sonare_node::IsFloat32Array(voiced_value) ||
-      !rate_value.IsNumber()) {
-    Napi::TypeError::New(env, "noteSegments requires f0Hz, voicedProb, and frameRate")
+  Napi::Float32Array voiced_prob;
+  Napi::Uint8Array voiced_flags;
+  if (has_prob && !RequiredFloat32ArrayValue(env, info[1], "voicedProb", &voiced_prob)) {
+    return env.Undefined();
+  }
+  if (has_flags && !RequiredUint8ArrayValue(env, info[2], "voicedFlags", &voiced_flags)) {
+    return env.Undefined();
+  }
+  const size_t voicing_length =
+      has_prob ? voiced_prob.ElementLength() : voiced_flags.ElementLength();
+  if (voicing_length != f0.ElementLength()) {
+    Napi::RangeError::New(env, std::string(has_prob ? "voicedProb" : "voicedFlags") +
+                                   " length must equal f0Hz length")
         .ThrowAsJavaScriptException();
     return env.Undefined();
   }
+  float frame_rate{};
+  if (!RequiredFiniteFloatValue(env, info[3], "frameRate", &frame_rate)) return env.Undefined();
 
-  const Napi::Float32Array f0 = f0_value.As<Napi::Float32Array>();
-  const Napi::Float32Array voiced = voiced_value.As<Napi::Float32Array>();
+  std::vector<int32_t> flags_i32;
+  if (has_flags) flags_i32.assign(voiced_flags.Data(), voiced_flags.Data() + voicing_length);
+
   SonareNoteSegmenterConfig config{};
-  const Napi::Value config_value = request.Get("config");
+  const Napi::Value config_value = info[4];
   if (!config_value.IsUndefined() && !config_value.IsNull()) {
     if (!config_value.IsObject() || config_value.IsArray()) {
       Napi::TypeError::New(env, "noteSegments config must be an object")
@@ -754,9 +768,9 @@ Napi::Value SonareWrap::NoteSegments(const Napi::CallbackInfo& info) {
   }
 
   SonareNoteSegmentsResult result{};
-  const SonareError error = sonare_note_segments(
-      f0.Data(), f0.ElementLength(), voiced.Data(), voiced.ElementLength(),
-      node_narrow_finite_float(env, rate_value, "frameRate"), &config, &result);
+  const SonareError error = sonare_note_segments(f0.Data(), has_prob ? voiced_prob.Data() : nullptr,
+                                                 has_flags ? flags_i32.data() : nullptr,
+                                                 f0.ElementLength(), frame_rate, &config, &result);
   if (error != SONARE_OK) {
     ThrowIfError(env, error);
     return env.Undefined();
@@ -767,8 +781,8 @@ Napi::Value SonareWrap::NoteSegments(const Napi::CallbackInfo& info) {
     Napi::Object row = Napi::Object::New(env);
     row.Set("frameStart", Napi::Number::New(env, segment.frame_start));
     row.Set("frameEnd", Napi::Number::New(env, segment.frame_end));
-    row.Set("startSeconds", Napi::Number::New(env, segment.start_seconds));
-    row.Set("endSeconds", Napi::Number::New(env, segment.end_seconds));
+    row.Set("startSec", Napi::Number::New(env, segment.start_sec));
+    row.Set("endSec", Napi::Number::New(env, segment.end_sec));
     row.Set("medianCents", Napi::Number::New(env, segment.median_cents));
     segments.Set(static_cast<uint32_t>(i), row);
   }

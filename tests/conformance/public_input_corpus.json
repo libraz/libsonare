@@ -205,7 +205,7 @@
       "n_mels",
       "n_chroma",
       "feature_flags",
-      "timestamps",
+      "timestamps_sec",
       "mel",
       "chroma",
       "onset_strength",
