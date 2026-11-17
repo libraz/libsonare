@@ -100,7 +100,8 @@ export interface VocalAnalysis {
 }
 
 export interface VocalCapabilities {
-  apiVersion: number;
+  /** Vocal-edit ABI version of the loaded library, as {@link vocalEditAbiVersion} reports it. */
+  abiVersion: number;
   profileId: number;
   monophonicOnly: true;
   analysisCancellable: boolean;

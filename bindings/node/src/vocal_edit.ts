@@ -82,7 +82,7 @@ interface NativeJob {
 }
 
 interface NativeVocalAddon {
-  vocalEditApiVersion?(): number;
+  vocalEditAbiVersion?(): number;
   createVocalEditSession(request: VocalCreateRequest): NativeSession;
   restoreVocalEditSession(request: VocalRestoreRequest): NativeSession;
 }
@@ -582,7 +582,7 @@ function resolveVocalOperationTimes(
  * vocal editing; check `capabilities().features` for presence.
  */
 export function vocalEditAbiVersion(): number | undefined {
-  const version = vocalAddon.vocalEditApiVersion?.() ?? 0;
+  const version = vocalAddon.vocalEditAbiVersion?.() ?? 0;
   return version > 0 ? version : undefined;
 }
 

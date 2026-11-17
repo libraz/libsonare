@@ -90,7 +90,7 @@ test = "bindings/node/tests/surface/core-errors.test.ts::derives codeName from c
 kind = "function"
 old = "vocalEditApiVersion"
 new = "vocalEditAbiVersion"
-domain = "project"
+domain = "core"
 rule = "abi-probes"
 
 [[entry]]
@@ -280,3 +280,10 @@ changed = "returns undefined instead of 0 when the feature is compiled out"
 domain = "core"
 rule = "absent-not-sentinel"
 test = "bindings/node/tests/surface/core-teardown.test.ts::declare number | undefined"
+
+[[entry]]
+kind = "field"
+old = "VocalCapabilities.apiVersion"
+new = "VocalCapabilities.abiVersion"
+domain = "project"
+rule = "abi-probes"

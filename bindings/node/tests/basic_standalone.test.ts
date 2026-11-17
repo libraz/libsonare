@@ -104,15 +104,18 @@ describe('standalone functions', () => {
       mastering: expect.any(Boolean),
       mixing: expect.any(Boolean),
       mixingAssistant: expect.any(Boolean),
+      graph: expect.any(Boolean),
       fx: expect.any(Boolean),
       ffmpeg: expect.any(Boolean),
       instrumentParamAutomation: expect.any(Boolean),
       arrangement: expect.any(Boolean),
+      project: expect.any(Boolean),
       acousticSim: expect.any(Boolean),
       playback: expect.any(Boolean),
       pitchEditor: expect.any(Boolean),
       vocalEdit: expect.any(Boolean),
       voiceChanger: expect.any(Boolean),
+      assist: expect.any(Boolean),
     });
     expect(report.decode.builtin).toEqual(['wav', 'mp3']);
     expect(Array.isArray(report.decode.ffmpeg)).toBe(true);
