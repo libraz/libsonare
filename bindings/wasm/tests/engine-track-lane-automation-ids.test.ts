@@ -111,7 +111,7 @@ describe('track lane automation ids (WASM)', () => {
         }),
     });
     const live = new SonareRealtimeEngineWorkletProcessor(
-      { sampleRate: 48000, blockSize: kBlock, channelCount: 1 },
+      { sampleRate: 48000, maxBlockSize: kBlock, numChannels: 1 },
       { postMessage: () => undefined },
     );
     const liveEngine = (live as unknown as { engine: RealtimeEngine }).engine;

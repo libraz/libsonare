@@ -231,13 +231,19 @@ export class SonareEngine {
     options: SonareEngineOptions = {},
   ): Promise<SonareEngine> {
     const sampleRate = resolveContextSampleRate(options.sampleRate, context, 'SonareEngine.create');
-    const blockSize = options.offlineBlockSize ?? options.blockSize ?? 128;
+    const {
+      offlineEngine: offlineEngineOption,
+      offlineBlockSize,
+      offlineNumChannels,
+      ...nodeOptions
+    } = options;
+    const blockSize = offlineBlockSize ?? options.maxBlockSize ?? 128;
     const numChannels = requireChannelCount(
-      options.offlineNumChannels ?? options.numChannels,
+      offlineNumChannels ?? options.numChannels,
       2,
-      options.offlineNumChannels === undefined ? 'numChannels' : 'offlineNumChannels',
+      offlineNumChannels === undefined ? 'numChannels' : 'offlineNumChannels',
     );
-    const realtimeNode = await SonareRealtimeEngineNode.create(context, options);
+    const realtimeNode = await SonareRealtimeEngineNode.create(context, nodeOptions);
     try {
       // Do not expose the facade while the registered processor is still
       // buffering messages. Long clip sync must either begin after the bridge
@@ -248,7 +254,7 @@ export class SonareEngine {
       throw error;
     }
     const offlineEngine =
-      options.offlineEngine ?? new RealtimeEngine({ sampleRate, maxBlockSize: blockSize });
+      offlineEngineOption ?? new RealtimeEngine({ sampleRate, maxBlockSize: blockSize });
     const engine = new SonareEngine(
       context,
       realtimeNode,

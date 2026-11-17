@@ -471,7 +471,7 @@ describe('SonareRealtimeEngineNode', () => {
       const disconnected: boolean[] = [];
       const node = await SonareRealtimeEngineNode.create(fakeContext(), {
         moduleUrl: 'sonare-worklet.js',
-        blockSize: 128,
+        maxBlockSize: 128,
         numChannels: 2,
         commandRingCapacity: 4,
         telemetryRingCapacity: 4,
@@ -496,8 +496,8 @@ describe('SonareRealtimeEngineNode', () => {
       expect(node.capabilities.clipPageRequestsRealtimeSafe).toBe(true);
       expect(capturedOptions?.processorOptions).toMatchObject({
         sampleRate: 48000,
-        blockSize: 128,
-        channelCount: 2,
+        maxBlockSize: 128,
+        numChannels: 2,
       });
       expect(node.play()).toBe(true);
       const commandRing = node.commandRing;
@@ -666,11 +666,11 @@ describe('SonareRealtimeEngineNode', () => {
     it('rejects a block size smaller than the AudioWorklet render quantum', async () => {
       await expect(
         SonareRealtimeEngineNode.create(fakeContext(), {
-          blockSize: 64,
+          maxBlockSize: 64,
           nodeFactory: () =>
             readyWorkletNode({ postMessage: () => undefined, onmessage: undefined }),
         }),
-      ).rejects.toThrow(/blockSize.*128/);
+      ).rejects.toThrow(/maxBlockSize.*128/);
     });
 
     it('surfaces worklet sync rejections after ready', async () => {
@@ -899,7 +899,7 @@ describe('SonareRealtimeEngineNode', () => {
       const makeNode = (scopeIntervalFrames?: number) =>
         SonareRealtimeEngineNode.create(fakeContext(), {
           moduleUrl: 'sonare-worklet.js',
-          blockSize: 128,
+          maxBlockSize: 128,
           numChannels: 2,
           scopeIntervalFrames,
           scopeBands: 32,
@@ -2024,7 +2024,7 @@ describe('SonareRealtimeEngineNode', () => {
           }),
       });
       const live = new SonareRealtimeEngineWorkletProcessor(
-        { sampleRate: 48000, blockSize: 128, channelCount: 2 },
+        { sampleRate: 48000, maxBlockSize: 128, numChannels: 2 },
         { postMessage: (message) => livePosted.push(message) },
       );
       try {
@@ -2117,7 +2117,7 @@ describe('SonareRealtimeEngineNode', () => {
           }),
       });
       const live = new SonareRealtimeEngineWorkletProcessor(
-        { sampleRate: 48000, blockSize, channelCount: 2 },
+        { sampleRate: 48000, maxBlockSize: blockSize, numChannels: 2 },
         { postMessage: () => undefined },
       );
       try {
@@ -2287,7 +2287,7 @@ describe('SonareRealtimeEngineNode', () => {
           }),
       });
       const live = new SonareRealtimeEngineWorkletProcessor(
-        { sampleRate: 48000, blockSize, channelCount: 2 },
+        { sampleRate: 48000, maxBlockSize: blockSize, numChannels: 2 },
         { postMessage: (message) => livePosted.push(message) },
       );
       const replay = (messages: unknown[]): void => {
@@ -2361,8 +2361,8 @@ describe('SonareRealtimeEngineNode', () => {
       });
       const live = new SonareRealtimeEngineWorkletProcessor({
         sampleRate: 48000,
-        blockSize,
-        channelCount: 2,
+        maxBlockSize: blockSize,
+        numChannels: 2,
       });
       const replay = (messages: unknown[]): void => {
         for (const message of messages) {
@@ -2464,7 +2464,7 @@ describe('SonareRealtimeEngineNode', () => {
       });
       const livePosted: unknown[] = [];
       const live = new SonareRealtimeEngineWorkletProcessor(
-        { sampleRate: 48000, blockSize, channelCount: 2 },
+        { sampleRate: 48000, maxBlockSize: blockSize, numChannels: 2 },
         { postMessage: (message) => livePosted.push(message) },
       );
       try {
@@ -3013,7 +3013,7 @@ describe('SonareRealtimeEngineNode', () => {
       });
       const livePosted: unknown[] = [];
       const live = new SonareRealtimeEngineWorkletProcessor(
-        { sampleRate: 48000, blockSize, channelCount: 2 },
+        { sampleRate: 48000, maxBlockSize: blockSize, numChannels: 2 },
         { postMessage: (message) => livePosted.push(message) },
       );
       try {

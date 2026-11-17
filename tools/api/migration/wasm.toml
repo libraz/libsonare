@@ -21142,3 +21142,27 @@ changed = "a WindowType name only: an ordinal is refused (TypeError), an unknown
 domain = "effects"
 rule = "token-case"
 test = "bindings/wasm/tests/surface/effects-notes.test.ts::spectralEdit takes a window by name only"
+
+[[entry]]
+kind = "field"
+old = "SonareRealtimeEngineWorkletProcessorOptions.blockSize"
+new = "SonareRealtimeEngineWorkletProcessorOptions.maxBlockSize"
+domain = "engine"
+rule = "num-channels"
+entry = "./worklet"
+
+[[entry]]
+kind = "field"
+old = "SonareRealtimeEngineWorkletProcessorOptions.channelCount"
+new = "SonareRealtimeEngineWorkletProcessorOptions.numChannels"
+domain = "engine"
+rule = "num-channels"
+entry = "./worklet"
+
+[[entry]]
+kind = "field"
+old = "SonareRealtimeEngineNodeOptions.blockSize"
+new = "SonareRealtimeEngineNodeOptions.maxBlockSize"
+domain = "engine"
+rule = "num-channels"
+entry = "./worklet"

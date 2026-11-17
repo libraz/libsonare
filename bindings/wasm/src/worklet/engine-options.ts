@@ -5,7 +5,7 @@ import type { SonareRealtimeEngineNodeOptions } from './messages.js';
 export interface SonareEngineOptions extends SonareRealtimeEngineNodeOptions {
   /** Offline mirror to use instead of one created at the context rate. */
   offlineEngine?: RealtimeEngine;
-  /** Offline render block size in frames. Default: `blockSize`, else `128`. */
+  /** Offline render block size in frames. Default: `maxBlockSize`, else `128`. */
   offlineBlockSize?: number;
   /** Planes the offline mirror renders and captures. Default: `numChannels`, else `2`. */
   offlineNumChannels?: number;

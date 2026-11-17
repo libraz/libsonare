@@ -4,6 +4,7 @@ import type { WorkletInput, WorkletOutput } from './audio_types.js';
 import { initializeEmbindInWorklet } from './embind-init.js';
 import { SonareRealtimeEngineWorkletProcessor } from './engine-processor.js';
 import {
+  assertKnownProcessorOptions,
   isEngineCaptureRequestMessage,
   isEngineCommandRecord,
   isEngineInsertGainReductionRequestMessage,
@@ -37,6 +38,7 @@ export function registerSonareRealtimeEngineWorkletProcessor(
       super();
       const port = this.port;
       const processorOptions = options?.processorOptions ?? {};
+      assertKnownProcessorOptions(name, 'engineProcessor', processorOptions);
       void this.initializeEmbind(processorOptions, port);
       const onMessage = (event: { data: unknown }) => {
         if (!this.bridge) {

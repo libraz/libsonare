@@ -157,7 +157,7 @@ const cases = [
   {
     name: 'SonareRealtimeEngineWorkletProcessor',
     make: (sampleRate?: number) =>
-      new SonareRealtimeEngineWorkletProcessor({ sampleRate, blockSize: BLOCK, channelCount: 2 }),
+      new SonareRealtimeEngineWorkletProcessor({ sampleRate, maxBlockSize: BLOCK, numChannels: 2 }),
     rate: (p: SonareRealtimeEngineWorkletProcessor) => p.sampleRate,
   },
   {
@@ -247,7 +247,7 @@ describe('worklet processors take their rate from the AudioWorkletGlobalScope', 
         try {
           const expected = reference.sampleAtPpq(3);
           const actual = observe(
-            () => new SonareRealtimeEngineWorkletProcessor({ blockSize: BLOCK, channelCount: 2 }),
+            () => new SonareRealtimeEngineWorkletProcessor({ maxBlockSize: BLOCK, numChannels: 2 }),
             (p) => (p as unknown as { engine: RealtimeEngine }).engine.sampleAtPpq(3),
           );
           expect(actual).toBe(expected);

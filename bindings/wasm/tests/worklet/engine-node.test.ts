@@ -75,7 +75,7 @@ describe('SonareRealtimeEngineNode numChannels', () => {
   it('carries the requested count through to the node and the processor', async () => {
     expect((await capture(2)).outputChannelCount).toEqual([2]);
     expect((await capture(3)).outputChannelCount).toEqual([3]);
-    expect((await capture(3)).processorOptions?.channelCount).toBe(3);
+    expect((await capture(3)).processorOptions?.numChannels).toBe(3);
   });
 
   it.each([2.7, 0, -1, Number.NaN, Number.POSITIVE_INFINITY])(

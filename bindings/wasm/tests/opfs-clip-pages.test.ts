@@ -358,7 +358,7 @@ async function createWiredSabEngine(): Promise<{
   const engine = await SonareEngine.create({ sampleRate: 48000 } as BaseAudioContext, {
     mode: 'sab',
     offlineNumChannels: 1,
-    blockSize: 128,
+    maxBlockSize: 128,
     numChannels: 1,
     nodeFactory: (_context, _name, options) => {
       processor = new SonareRealtimeEngineWorkletProcessor(
@@ -415,7 +415,7 @@ describe('worklet attachOpfsClipStream', () => {
     const engine = await SonareEngine.create(context, {
       mode: 'sab',
       offlineNumChannels: 1,
-      blockSize,
+      maxBlockSize: blockSize,
       numChannels: 1,
       nodeFactory: (_context, _name, options) => {
         processor = new SonareRealtimeEngineWorkletProcessor(

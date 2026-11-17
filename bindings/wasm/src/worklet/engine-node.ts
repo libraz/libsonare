@@ -8,6 +8,7 @@ import { engineCapabilities } from '../realtime_engine.js';
 import { resolveRenderFrame } from '../validation.js';
 import { externalMidiEventFromWire, telemetryFromRecord } from './engine-records.js';
 import {
+  assertKnownProcessorOptions,
   engineCaptureResponseRequestId,
   isClipPageRequestMessage,
   isEngineCaptureResponseForOperation,
@@ -138,11 +139,11 @@ function workletFailure(
 
 const AUDIO_WORKLET_RENDER_QUANTUM = 128;
 
-function workletBlockSize(blockSize: number | undefined): number {
-  const resolved = blockSize ?? AUDIO_WORKLET_RENDER_QUANTUM;
+function workletBlockSize(maxBlockSize: number | undefined): number {
+  const resolved = maxBlockSize ?? AUDIO_WORKLET_RENDER_QUANTUM;
   if (!Number.isSafeInteger(resolved) || resolved < AUDIO_WORKLET_RENDER_QUANTUM) {
     throw new RangeError(
-      `blockSize must be an integer of at least ${AUDIO_WORKLET_RENDER_QUANTUM} frames`,
+      `maxBlockSize must be an integer of at least ${AUDIO_WORKLET_RENDER_QUANTUM} frames`,
     );
   }
   return resolved;
@@ -323,7 +324,8 @@ export class SonareRealtimeEngineNode {
     context: BaseAudioContext,
     options: SonareRealtimeEngineNodeOptions = {},
   ): Promise<SonareRealtimeEngineNode> {
-    const blockSize = workletBlockSize(options.blockSize);
+    assertKnownProcessorOptions('SonareRealtimeEngineNode.create', 'engineNode', options);
+    const maxBlockSize = workletBlockSize(options.maxBlockSize);
     const sampleRate = resolveContextSampleRate(
       options.sampleRate,
       context,
@@ -457,8 +459,8 @@ export class SonareRealtimeEngineNode {
     const cueOutput = options.cueOutput === true;
     const processorOptions: SonareRealtimeEngineWorkletProcessorOptions = {
       sampleRate,
-      blockSize,
-      channelCount,
+      maxBlockSize,
+      numChannels: channelCount,
       meterIntervalFrames,
       cueOutput,
       commandSharedBuffer: commandRing?.sharedBuffer,

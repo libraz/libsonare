@@ -96,7 +96,7 @@ describe('insert gain reduction query', () => {
   it('attaches insertGainReductionDb to postMessage meter snapshots', () => {
     const meters: SonareWorkletMeterSnapshot[] = [];
     const processor = new SonareRealtimeEngineWorkletProcessor(
-      { sampleRate: 48000, blockSize: BLOCK, channelCount: 2, meterIntervalFrames: BLOCK },
+      { sampleRate: 48000, maxBlockSize: BLOCK, numChannels: 2, meterIntervalFrames: BLOCK },
       { onMeter: (meter) => meters.push(meter), postMessage: () => undefined },
     );
     try {
@@ -121,7 +121,7 @@ describe('insert gain reduction query', () => {
   it('attaches the field only to the newest record per target in one drain', () => {
     const meters: SonareWorkletMeterSnapshot[] = [];
     const processor = new SonareRealtimeEngineWorkletProcessor(
-      { sampleRate: 48000, blockSize: BLOCK, channelCount: 2, meterIntervalFrames: 1 },
+      { sampleRate: 48000, maxBlockSize: BLOCK, numChannels: 2, meterIntervalFrames: 1 },
       { onMeter: (meter) => meters.push(meter), postMessage: () => undefined },
     );
     try {
@@ -149,8 +149,8 @@ describe('insert gain reduction query', () => {
     const processor = new SonareRealtimeEngineWorkletProcessor(
       {
         sampleRate: 48000,
-        blockSize: BLOCK,
-        channelCount: 2,
+        maxBlockSize: BLOCK,
+        numChannels: 2,
         meterIntervalFrames: BLOCK,
         meterSharedBuffer: ring.sharedBuffer,
       },
@@ -197,7 +197,7 @@ describe('insert gain reduction query', () => {
   it('keeps a library failure coded across the port on every request path', async () => {
     const posted: unknown[] = [];
     const processor = new SonareRealtimeEngineWorkletProcessor(
-      { sampleRate: 48000, blockSize: BLOCK, channelCount: 2 },
+      { sampleRate: 48000, maxBlockSize: BLOCK, numChannels: 2 },
       { postMessage: (message) => posted.push(message) },
     );
     const port: {

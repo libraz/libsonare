@@ -80,7 +80,7 @@ describe('SonareEngine surround pan at numChannels 6', () => {
     });
 
     const processor = new SonareRealtimeEngineWorkletProcessor(
-      { sampleRate: SR, blockSize: BLOCK, channelCount: PLANES },
+      { sampleRate: SR, maxBlockSize: BLOCK, numChannels: PLANES },
       { postMessage: () => undefined },
     );
     try {

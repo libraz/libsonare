@@ -5,6 +5,7 @@ import { engineNativeHandle } from '../realtime_engine.js';
 import { copyPlanesToOutput, type WorkletInput, type WorkletOutput } from './audio_types.js';
 import { buildCaptureConfig } from './engine-offline.js';
 import {
+  assertKnownProcessorOptions,
   requireChannelCount,
   requireIntegerOption,
   resolveScopeBandCount,
@@ -197,13 +198,14 @@ export class SonareRealtimeEngineWorkletProcessor {
     options: SonareRealtimeEngineWorkletProcessorOptions = {},
     transport?: WorkletTransport,
   ) {
+    assertKnownProcessorOptions('SonareRealtimeEngineWorkletProcessor', 'engineProcessor', options);
     this.sampleRate = resolveScopeSampleRate(
       options.sampleRate,
       'SonareRealtimeEngineWorkletProcessor',
     );
     this.clipPageRepostFrames = Math.max(1, Math.round(this.sampleRate * CLIP_PAGE_REPOST_SECONDS));
-    this.blockSize = options.blockSize ?? 128;
-    this.channelCount = requireChannelCount(options.channelCount, 2);
+    this.blockSize = options.maxBlockSize ?? 128;
+    this.channelCount = requireChannelCount(options.numChannels, 2, 'numChannels');
     this.transport = transport;
     // Zero is the off switch for meter publication, so the floor is 0.
     this.meterIntervalFrames = requireIntegerOption(

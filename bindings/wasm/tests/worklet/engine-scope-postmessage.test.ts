@@ -101,8 +101,8 @@ describe('realtime engine scope postMessage transport', () => {
     const processor = new SonareRealtimeEngineWorkletProcessor(
       {
         sampleRate: 48000,
-        blockSize,
-        channelCount: 2,
+        maxBlockSize: blockSize,
+        numChannels: 2,
         scopeIntervalFrames: blockSize,
         scopeBands: 32,
       },
@@ -112,8 +112,8 @@ describe('realtime engine scope postMessage transport', () => {
     );
     const control = new SonareRealtimeEngineWorkletProcessor({
       sampleRate: 48000,
-      blockSize,
-      channelCount: 2,
+      maxBlockSize: blockSize,
+      numChannels: 2,
       scopeIntervalFrames: 0,
     });
     try {
@@ -186,7 +186,12 @@ describe('realtime engine scope postMessage transport', () => {
     const transport = new ClassTransport();
     const blockSize = 256;
     const processor = new SourceSonareRealtimeEngineWorkletProcessor(
-      { sampleRate: 48000, blockSize, channelCount: 2, scopeIntervalFrames: blockSize },
+      {
+        sampleRate: 48000,
+        maxBlockSize: blockSize,
+        numChannels: 2,
+        scopeIntervalFrames: blockSize,
+      },
       transport as unknown as ConstructorParameters<
         typeof SourceSonareRealtimeEngineWorkletProcessor
       >[1],
@@ -214,7 +219,7 @@ describe('realtime engine scope postMessage transport', () => {
     const posted: unknown[] = [];
     const configureScopeTelemetry = vi.spyOn(RealtimeEngine.prototype, 'configureScopeTelemetry');
     const processor = new SourceSonareRealtimeEngineWorkletProcessor(
-      { sampleRate: 48000, blockSize: 128, channelCount: 2, scopeIntervalFrames: 0 },
+      { sampleRate: 48000, maxBlockSize: 128, numChannels: 2, scopeIntervalFrames: 0 },
       { postMessage: (message) => posted.push(message) },
     );
     const engine = (processor as unknown as { engine: RealtimeEngine }).engine;
@@ -249,8 +254,8 @@ describe('realtime engine scope postMessage transport', () => {
     const configureScopeTelemetry = vi.spyOn(RealtimeEngine.prototype, 'configureScopeTelemetry');
     const processor = new SourceSonareRealtimeEngineWorkletProcessor({
       sampleRate: 48000,
-      blockSize: 128,
-      channelCount: 2,
+      maxBlockSize: 128,
+      numChannels: 2,
       scopeIntervalFrames: 128,
     });
     const engine = (processor as unknown as { engine: RealtimeEngine }).engine;

@@ -4,7 +4,12 @@ import { Mixer } from '../index.js';
 import { failurePayload } from '../internal/failure_payload.js';
 import { leadingSamples, type WorkletInput, type WorkletOutput } from './audio_types.js';
 import { initializeEmbindInWorklet, isEmbindReady } from './embind-init.js';
-import { isWorkletMessage, requireIntegerOption, resolveScopeSampleRate } from './guards.js';
+import {
+  assertKnownProcessorOptions,
+  isWorkletMessage,
+  requireIntegerOption,
+  resolveScopeSampleRate,
+} from './guards.js';
 import type {
   SonareWorkletMessage,
   SonareWorkletProcessorOptions,
@@ -80,6 +85,7 @@ export class SonareWorkletProcessor {
   private spectrumBands: Float32Array;
 
   constructor(options: SonareWorkletProcessorOptions, transport?: WorkletTransport) {
+    assertKnownProcessorOptions('SonareWorkletProcessor', 'mixerProcessor', options);
     if (!options.sceneJson) {
       throw new TypeError('sceneJson is required.');
     }
@@ -466,6 +472,7 @@ export function registerSonareWorkletProcessor(name = 'sonare-worklet-processor'
       super();
       const port = this.port;
       const processorOptions = options?.processorOptions ?? { sceneJson: '' };
+      assertKnownProcessorOptions(name, 'mixerProcessor', processorOptions);
       // A refused message leaves the processor as it was and is reported, not dropped.
       const deliver = (bridge: SonareWorkletProcessor, message: SonareWorkletMessage) => {
         try {
