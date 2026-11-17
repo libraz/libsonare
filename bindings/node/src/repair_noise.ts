@@ -14,6 +14,8 @@ import {
 } from './internal/repair_common.js';
 import { addon } from './native.js';
 import type {
+  DehumResult,
+  DenoiseResult,
   HumDetection,
   MasteringRepairDehumResult,
   MasteringRepairDenoiseClassicalResult,
@@ -55,16 +57,19 @@ export interface MasteringRepairDenoiseClassicalRequest
   extends MasteringRepairSamplesRequest,
     DenoiseClassicalOptions {}
 
-/** Offline STFT-domain classical denoiser (LogMMSE / MMSE-STSA / SpectralSubtraction). */
+/**
+ * Offline STFT-domain classical denoiser (LogMMSE / MMSE-STSA / SpectralSubtraction). Returns the
+ * repaired audio and what the pass did.
+ */
 export function masteringRepairDenoiseClassical(
   request: MasteringRepairDenoiseClassicalRequest,
-): Float32Array;
+): DenoiseResult;
 export function masteringRepairDenoiseClassical(
   samples: Float32Array,
   sampleRate: number,
   options?: DenoiseClassicalOptions,
-): Float32Array;
-export function masteringRepairDenoiseClassical(...args: unknown[]): Float32Array {
+): DenoiseResult;
+export function masteringRepairDenoiseClassical(...args: unknown[]): DenoiseResult {
   const r = sampleOneShot<MasteringRepairDenoiseClassicalRequest>(
     'masteringRepairDenoiseClassical',
     args,
@@ -240,14 +245,14 @@ export interface DehumOptions extends ValidateOptions {
 
 export interface MasteringRepairDehumRequest extends MasteringRepairSamplesRequest, DehumOptions {}
 
-/** Offline mains-hum remover. */
-export function masteringRepairDehum(request: MasteringRepairDehumRequest): Float32Array;
+/** Offline mains-hum remover. Returns the repaired audio and what the pass did. */
+export function masteringRepairDehum(request: MasteringRepairDehumRequest): DehumResult;
 export function masteringRepairDehum(
   samples: Float32Array,
   sampleRate: number,
   options?: DehumOptions,
-): Float32Array;
-export function masteringRepairDehum(...args: unknown[]): Float32Array {
+): DehumResult;
+export function masteringRepairDehum(...args: unknown[]): DehumResult {
   const r = sampleOneShot<MasteringRepairDehumRequest>('masteringRepairDehum', args);
   assertAudioInput('masteringRepairDehum', r.samples, r.sampleRate, r);
   return addon.masteringRepairDehum(

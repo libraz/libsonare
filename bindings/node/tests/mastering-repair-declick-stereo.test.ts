@@ -62,7 +62,7 @@ describe('masteringRepairDeclickStereo', () => {
   it('differs from the mono entry point at the other channels click', () => {
     const { left, right } = fixture();
     const stereo = masteringRepairDeclickStereo({ left, right, sampleRate: SR });
-    const mono = masteringRepairDeclick(left, SR);
+    const mono = masteringRepairDeclick(left, SR).samples;
 
     // The mono pass never sees the right channel's click, so it leaves the left
     // channel alone there. Without this the stereo entry could be the mono one

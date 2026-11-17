@@ -110,7 +110,7 @@ describe('masteringRepairDeclipStereo', () => {
   it('matches the mono facade on a run only one channel ever clips, diverges where linked', () => {
     const { left, right } = fixture();
     const stereo = masteringRepairDeclipStereo({ left, right, sampleRate: SR });
-    const mono = masteringRepairDeclip(left, SR);
+    const mono = masteringRepairDeclip(left, SR).samples;
 
     // The isolated run's union bound equals left's own detected extent
     // exactly (right never clips there), so stereo and mono reconstruct the

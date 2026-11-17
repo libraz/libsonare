@@ -83,8 +83,8 @@ describe('masteringRepairDehumStereo', () => {
     // the sharing rule; see the adaptive test below for the other half.
     const { left, right } = fixedFixture();
     const stereo = masteringRepairDehumStereo({ left, right, sampleRate: SR });
-    const monoLeft = masteringRepairDehum(left, SR);
-    const monoRight = masteringRepairDehum(right, SR);
+    const monoLeft = masteringRepairDehum(left, SR).samples;
+    const monoRight = masteringRepairDehum(right, SR).samples;
 
     expect(Array.from(stereo.channels[0])).toEqual(Array.from(monoLeft));
     expect(Array.from(stereo.channels[1])).toEqual(Array.from(monoRight));

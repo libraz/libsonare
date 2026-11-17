@@ -8,6 +8,9 @@ import type {
   ClickDetection,
   ClipDetection,
   CrackleDetection,
+  DeclickResult,
+  DeclipResult,
+  DecrackleResult,
   MasteringRepairDeclickResult,
   MasteringRepairDeclipResult,
   MasteringRepairDecrackleResult,
@@ -33,14 +36,14 @@ export interface MasteringRepairDeclickRequest
   extends MasteringRepairSamplesRequest,
     DeclickOptions {}
 
-/** Offline LPC-based declicker. */
-export function masteringRepairDeclick(request: MasteringRepairDeclickRequest): Float32Array;
+/** Offline LPC-based declicker. Returns the repaired audio and what the pass did. */
+export function masteringRepairDeclick(request: MasteringRepairDeclickRequest): DeclickResult;
 export function masteringRepairDeclick(
   samples: Float32Array,
   sampleRate: number,
   options?: DeclickOptions,
-): Float32Array;
-export function masteringRepairDeclick(...args: unknown[]): Float32Array {
+): DeclickResult;
+export function masteringRepairDeclick(...args: unknown[]): DeclickResult {
   const r = sampleOneShot<MasteringRepairDeclickRequest>('masteringRepairDeclick', args);
   assertAudioInput('masteringRepairDeclick', r.samples, r.sampleRate, r);
   return addon.masteringRepairDeclick(
@@ -116,7 +119,7 @@ export interface MasteringRepairDecrackleRequest
     DecrackleOptions {}
 
 /**
- * Offline LPC-based declipper.
+ * Offline LPC-based declipper. Returns the repaired audio and what the pass did.
  *
  * Only clipped runs of at most 512 consecutive samples are reconstructed with the LPC solver.
  * The cap is a fixed sample count: it is not derived from `lpcOrder`, from `sampleRate`, or from
@@ -126,13 +129,13 @@ export interface MasteringRepairDecrackleRequest
  * reconstruction method rather than throwing: `lpcOrder`, `iterations` and `lpcBlend` have no
  * effect on the interpolated run.
  */
-export function masteringRepairDeclip(request: MasteringRepairDeclipRequest): Float32Array;
+export function masteringRepairDeclip(request: MasteringRepairDeclipRequest): DeclipResult;
 export function masteringRepairDeclip(
   samples: Float32Array,
   sampleRate: number,
   options?: DeclipOptions,
-): Float32Array;
-export function masteringRepairDeclip(...args: unknown[]): Float32Array {
+): DeclipResult;
+export function masteringRepairDeclip(...args: unknown[]): DeclipResult {
   const r = sampleOneShot<MasteringRepairDeclipRequest>('masteringRepairDeclip', args);
   assertAudioInput('masteringRepairDeclip', r.samples, r.sampleRate, r);
   return addon.masteringRepairDeclip(
@@ -180,14 +183,17 @@ export function masteringRepairDeclipStereo(...args: unknown[]): MasteringRepair
   );
 }
 
-/** Offline crackle suppressor (median or wavelet-shrinkage). */
-export function masteringRepairDecrackle(request: MasteringRepairDecrackleRequest): Float32Array;
+/**
+ * Offline crackle suppressor (median or wavelet-shrinkage). Returns the repaired audio and what the
+ * pass did.
+ */
+export function masteringRepairDecrackle(request: MasteringRepairDecrackleRequest): DecrackleResult;
 export function masteringRepairDecrackle(
   samples: Float32Array,
   sampleRate: number,
   options?: DecrackleOptions,
-): Float32Array;
-export function masteringRepairDecrackle(...args: unknown[]): Float32Array {
+): DecrackleResult;
+export function masteringRepairDecrackle(...args: unknown[]): DecrackleResult {
   const r = sampleOneShot<MasteringRepairDecrackleRequest>('masteringRepairDecrackle', args);
   assertAudioInput('masteringRepairDecrackle', r.samples, r.sampleRate, r);
   return addon.masteringRepairDecrackle(

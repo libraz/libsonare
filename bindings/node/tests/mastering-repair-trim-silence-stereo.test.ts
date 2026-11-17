@@ -235,7 +235,10 @@ describe('masteringRepairTrimSilenceStereo', () => {
   it('agrees with the mono trimmer on a pair whose channels are identical', () => {
     const pair = tieredPair();
     const stereo = trim(pair, { mode: 'peak', thresholdDb: -20 });
-    const mono = masteringRepairTrimSilence(pair.left, SR, { mode: 'peak', thresholdDb: -20 });
+    const mono = masteringRepairTrimSilence(pair.left, SR, {
+      mode: 'peak',
+      thresholdDb: -20,
+    }).samples;
     expect(Array.from(stereo.channels[0])).toEqual(Array.from(mono));
     expect(Array.from(stereo.channels[1])).toEqual(Array.from(mono));
   });

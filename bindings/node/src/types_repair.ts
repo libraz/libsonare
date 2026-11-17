@@ -5,7 +5,7 @@
 
 import type { ValidateOptions } from './validation.js';
 
-/** One channel's click detection, from {@link masteringRepairDeclickStereo}. Counts runs, not samples. */
+/** One channel's click detection, from {@link masteringRepairDeclick} or {@link masteringRepairDeclickStereo}. Counts runs, not samples. */
 export interface ClickDetection {
   /** Runs meeting the repair criteria. A run inside a broadband transient such as a drum hit is not counted; the repair still acts on it. */
   count: number;
@@ -19,7 +19,7 @@ export interface ClickDetection {
 
 /**
  * What one channel's declick pass found and what it did to it, from
- * {@link masteringRepairDeclickStereo}.
+ * {@link masteringRepairDeclick} or {@link masteringRepairDeclickStereo}.
  *
  * A large `detected.rejected` says the configured run length or neighbour
  * ratio is too tight for this material, not that the material is clean.
@@ -41,6 +41,16 @@ export interface DeclickReport {
 }
 
 /**
+ * What `masteringRepairDeclick` returns: the repaired audio and what the pass did.
+ */
+export interface DeclickResult {
+  /** The repaired audio, the input's length. */
+  samples: Float32Array;
+  /** What the pass found and did. */
+  report: DeclickReport;
+}
+
+/**
  * A declicked stereo pair and what each channel's pass did, from
  * {@link masteringRepairDeclickStereo}.
  *
@@ -57,7 +67,8 @@ export interface MasteringRepairDeclickResult {
 }
 
 /**
- * One channel's clip detection, from {@link masteringRepairDeclipStereo}.
+ * One channel's clip detection, from {@link masteringRepairDeclip} or
+ * {@link masteringRepairDeclipStereo}.
  *
  * The first four fields count runs and samples at or past `clipThreshold`, so
  * they count the apex of any waveform that reaches it (a full-scale sine
@@ -95,7 +106,7 @@ export interface ClipDetection {
 
 /**
  * What one channel's declip pass found and what it did to it, from
- * {@link masteringRepairDeclipStereo}.
+ * {@link masteringRepairDeclip} or {@link masteringRepairDeclipStereo}.
  */
 export interface DeclipReport {
   /** This channel's own analysis of the input. */
@@ -117,6 +128,16 @@ export interface DeclipReport {
 }
 
 /**
+ * What `masteringRepairDeclip` returns: the repaired audio and what the pass did.
+ */
+export interface DeclipResult {
+  /** The repaired audio, the input's length. */
+  samples: Float32Array;
+  /** What the pass found and did. */
+  report: DeclipReport;
+}
+
+/**
  * A declipped stereo pair and what each channel's pass did, from
  * {@link masteringRepairDeclipStereo}.
  *
@@ -132,7 +153,8 @@ export interface MasteringRepairDeclipResult {
 }
 
 /**
- * One channel's crackle detection, from {@link masteringRepairDecrackleStereo}.
+ * One channel's crackle detection, from {@link masteringRepairDecrackle} or
+ * {@link masteringRepairDecrackleStereo}.
  *
  * Measured by the median criterion whatever `mode` is configured: wavelet
  * shrinkage removes crackle without ever deciding a sample is crackle, so
@@ -148,7 +170,7 @@ export interface CrackleDetection {
 
 /**
  * What one channel's decrackle pass found and what it did to it, from
- * {@link masteringRepairDecrackleStereo}.
+ * {@link masteringRepairDecrackle} or {@link masteringRepairDecrackleStereo}.
  *
  * The two modes report through different fields: median mode fills
  * `replacedSamples` only, wavelet mode fills `detailCoefficients`,
@@ -170,6 +192,16 @@ export interface DecrackleReport {
 }
 
 /**
+ * What `masteringRepairDecrackle` returns: the repaired audio and what the pass did.
+ */
+export interface DecrackleResult {
+  /** The repaired audio, the input's length. */
+  samples: Float32Array;
+  /** What the pass found and did. */
+  report: DecrackleReport;
+}
+
+/**
  * A decrackled stereo pair and what each channel's pass did, from
  * {@link masteringRepairDecrackleStereo}.
  *
@@ -187,7 +219,7 @@ export interface MasteringRepairDecrackleResult {
 
 /**
  * What a denoise analysis found in the input, from
- * {@link masteringRepairDenoiseClassicalStereo}.
+ * {@link masteringRepairDenoiseClassical} or {@link masteringRepairDenoiseClassicalStereo}.
  *
  * These are absolute levels, which makes them the one part of a stereo
  * denoise report that depends on how many channels were passed: the estimator
@@ -209,7 +241,7 @@ export interface NoiseDetection {
 
 /**
  * What a denoise pass found and what it removed, from
- * {@link masteringRepairDenoiseClassicalStereo}.
+ * {@link masteringRepairDenoiseClassical} or {@link masteringRepairDenoiseClassicalStereo}.
  */
 export interface DenoiseReport {
   /** Analysis of the input, before the mask. */
@@ -233,6 +265,16 @@ export interface DenoiseReport {
 }
 
 /**
+ * What `masteringRepairDenoiseClassical` returns: the repaired audio and what the pass did.
+ */
+export interface DenoiseResult {
+  /** The repaired audio, the input's length. */
+  samples: Float32Array;
+  /** What the pass found and did. */
+  report: DenoiseReport;
+}
+
+/**
  * A denoised stereo pair and the one mask that produced it, from
  * {@link masteringRepairDenoiseClassicalStereo}.
  *
@@ -249,7 +291,8 @@ export interface MasteringRepairDenoiseClassicalResult {
 }
 
 /**
- * What a dehum analysis found, from {@link masteringRepairDehumStereo}.
+ * What a dehum analysis found, from {@link masteringRepairDehum} or
+ * {@link masteringRepairDehumStereo}.
  *
  * Always measured through the estimation path, whatever `adaptive` is
  * configured to: the fixed path notches the configured frequency without
@@ -276,7 +319,7 @@ export interface HumDetection {
 
 /**
  * What one channel's dehum pass found and what it did to it, from
- * {@link masteringRepairDehumStereo}.
+ * {@link masteringRepairDehum} or {@link masteringRepairDehumStereo}.
  */
 export interface DehumReport {
   /** This channel's own analysis, before filtering. */
@@ -291,6 +334,16 @@ export interface DehumReport {
    * field.
    */
   fundamentalDriftHz: number;
+}
+
+/**
+ * What `masteringRepairDehum` returns: the repaired audio and what the pass did.
+ */
+export interface DehumResult {
+  /** The repaired audio, the input's length. */
+  samples: Float32Array;
+  /** What the pass found and did. */
+  report: DehumReport;
 }
 
 /**
@@ -313,7 +366,7 @@ export interface MasteringRepairDehumResult {
 
 /**
  * What a dereverb analysis found in the input, from
- * {@link masteringRepairDereverbClassicalStereo}.
+ * {@link masteringRepairDereverbClassical} or {@link masteringRepairDereverbClassicalStereo}.
  *
  * NOT an ISO 3382 reverberation time: no Schroeder integration, no
  * noise-floor truncation, STFT bins rather than octave bands, and music is not
@@ -338,7 +391,7 @@ export interface ReverbDetection {
 
 /**
  * What a dereverb pass found and what it removed, from
- * {@link masteringRepairDereverbClassicalStereo}.
+ * {@link masteringRepairDereverbClassical} or {@link masteringRepairDereverbClassicalStereo}.
  */
 export interface DereverbReport {
   /** Analysis of the input. */
@@ -360,6 +413,16 @@ export interface DereverbReport {
 }
 
 /**
+ * What `masteringRepairDereverbClassical` returns: the repaired audio and what the pass did.
+ */
+export interface DereverbResult {
+  /** The repaired audio, the input's length. */
+  samples: Float32Array;
+  /** What the pass found and did. */
+  report: DereverbReport;
+}
+
+/**
  * A dereverberated stereo pair and the one mask that produced it, from
  * {@link masteringRepairDereverbClassicalStereo}.
  *
@@ -378,7 +441,7 @@ export interface MasteringRepairDereverbClassicalResult {
 
 /**
  * One half-open sample range, in INPUT-buffer coordinates, from
- * {@link masteringRepairTrimSilenceStereo}.
+ * {@link masteringRepairTrimSilence} or {@link masteringRepairTrimSilenceStereo}.
  *
  * The coordinates are the input's, so `lastExclusive - first` is the number of
  * samples the range covers and the returned channels are that long -- not the
@@ -393,7 +456,7 @@ export interface TrimRange {
 
 /**
  * What a trim pass kept and what it dropped, from
- * {@link masteringRepairTrimSilenceStereo}.
+ * {@link masteringRepairTrimSilence} or {@link masteringRepairTrimSilenceStereo}.
  *
  * A pass that kept nothing reports the range `(length, length)`, which counts
  * the whole buffer as removed head and leaves removed tail at 0. The two still
@@ -407,6 +470,17 @@ export interface TrimReport {
   removedHeadSamples: number;
   /** Samples dropped after `range.lastExclusive`. */
   removedTailSamples: number;
+}
+
+/**
+ * What `masteringRepairTrimSilence` returns: the repaired audio and what the pass did.
+ * A trim that kept nothing gives an empty `samples`, not an error.
+ */
+export interface TrimSilenceResult {
+  /** The kept audio, `report.range.lastExclusive - report.range.first` samples long. */
+  samples: Float32Array;
+  /** What the pass kept and dropped. */
+  report: TrimReport;
 }
 
 /**

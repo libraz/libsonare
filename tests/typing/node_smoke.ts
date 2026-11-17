@@ -382,13 +382,39 @@ nodeFacade.tempogramRatio({
   hopLength: 512,
   factors: new Float32Array([1]),
 });
-nodeFacade.masteringRepairDeclick({ samples, sampleRate: 22050, threshold: 0.5 });
-nodeFacade.masteringRepairDenoiseClassical({ samples, sampleRate: 22050, mode: 'logMmse' });
-nodeFacade.masteringRepairDeclip({ samples, sampleRate: 22050, clipThresholdDb: -0.4455 });
-nodeFacade.masteringRepairDecrackle({ samples, sampleRate: 22050, mode: 'median' });
-nodeFacade.masteringRepairDehum({ samples, sampleRate: 22050, fundamentalHz: 60 });
-nodeFacade.masteringRepairDereverbClassical({ samples, sampleRate: 22050, threshold: 0.1 });
-nodeFacade.masteringRepairTrimSilence({ samples, sampleRate: 22050, mode: 'peak' });
+const declick = nodeFacade.masteringRepairDeclick({ samples, sampleRate: 22050, threshold: 0.5 });
+declick satisfies nodeFacade.DeclickResult;
+declick.samples satisfies Float32Array;
+declick.report satisfies nodeFacade.DeclickReport;
+const denoise = nodeFacade.masteringRepairDenoiseClassical({
+  samples,
+  sampleRate: 22050,
+  mode: 'logMmse',
+});
+denoise satisfies nodeFacade.DenoiseResult;
+const declip = nodeFacade.masteringRepairDeclip({
+  samples,
+  sampleRate: 22050,
+  clipThresholdDb: -0.4455,
+});
+declip satisfies nodeFacade.DeclipResult;
+const decrackle = nodeFacade.masteringRepairDecrackle({
+  samples,
+  sampleRate: 22050,
+  mode: 'median',
+});
+decrackle satisfies nodeFacade.DecrackleResult;
+const dehum = nodeFacade.masteringRepairDehum({ samples, sampleRate: 22050, fundamentalHz: 60 });
+dehum satisfies nodeFacade.DehumResult;
+const dereverb = nodeFacade.masteringRepairDereverbClassical({
+  samples,
+  sampleRate: 22050,
+  threshold: 0.1,
+});
+dereverb satisfies nodeFacade.DereverbResult;
+const trimmed = nodeFacade.masteringRepairTrimSilence({ samples, sampleRate: 22050, mode: 'peak' });
+trimmed satisfies nodeFacade.TrimSilenceResult;
+trimmed.report satisfies nodeFacade.TrimReport;
 nodeFacade.masteringDynamicsCompressor({ samples, sampleRate: 22050, ratio: 2 });
 nodeFacade.masteringDynamicsGate({ samples, sampleRate: 22050, thresholdDb: -40 });
 nodeFacade.masteringDynamicsTransientShaper({ samples, sampleRate: 22050, attackGainDb: 2 });

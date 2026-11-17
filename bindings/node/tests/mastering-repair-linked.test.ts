@@ -73,7 +73,7 @@ const silence = (length = LENGTH) => new Float32Array(length);
 describe('masteringRepairDenoiseClassicalLinked', () => {
   it('reproduces the mono entry from one channel, sample for sample', () => {
     const { left } = pair();
-    const mono = masteringRepairDenoiseClassical({ samples: left, sampleRate: SR });
+    const mono = masteringRepairDenoiseClassical({ samples: left, sampleRate: SR }).samples;
     const linked = masteringRepairDenoiseClassicalLinked({ channels: [left], sampleRate: SR });
 
     expect(linked.channels).toHaveLength(1);
@@ -204,7 +204,7 @@ describe('masteringRepairDenoiseClassicalLinked', () => {
 describe('masteringRepairDereverbClassicalLinked', () => {
   it('reproduces the mono entry from one channel, sample for sample', () => {
     const { left } = pair();
-    const mono = masteringRepairDereverbClassical({ samples: left, sampleRate: SR });
+    const mono = masteringRepairDereverbClassical({ samples: left, sampleRate: SR }).samples;
     const linked = masteringRepairDereverbClassicalLinked({ channels: [left], sampleRate: SR });
 
     expect(linked.channels).toHaveLength(1);

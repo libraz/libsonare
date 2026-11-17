@@ -9,6 +9,7 @@ import {
 } from './internal/repair_common.js';
 import { addon } from './native.js';
 import type {
+  DereverbResult,
   MasteringRepairDereverbClassicalResult,
   MasteringRepairSamplesRequest,
   ReverbDetection,
@@ -53,16 +54,19 @@ export interface MasteringRepairDereverbConfigForRoomRequest
   estimate: RoomEstimateResult;
 }
 
-/** Offline classical dereverberator (spectral subtraction + optional WPE). */
+/**
+ * Offline classical dereverberator (spectral subtraction + optional WPE). Returns the repaired
+ * audio and what the pass did.
+ */
 export function masteringRepairDereverbClassical(
   request: MasteringRepairDereverbClassicalRequest,
-): Float32Array;
+): DereverbResult;
 export function masteringRepairDereverbClassical(
   samples: Float32Array,
   sampleRate: number,
   options?: DereverbClassicalOptions,
-): Float32Array;
-export function masteringRepairDereverbClassical(...args: unknown[]): Float32Array {
+): DereverbResult;
+export function masteringRepairDereverbClassical(...args: unknown[]): DereverbResult {
   const r = sampleOneShot<MasteringRepairDereverbClassicalRequest>(
     'masteringRepairDereverbClassical',
     args,
@@ -247,7 +251,7 @@ export function masteringRepairDereverbClassicalLinked(
  * ```ts
  * const estimate = estimateRoom({ samples, sampleRate });
  * const config = masteringRepairDereverbConfigForRoom({ estimate });
- * const clean = masteringRepairDereverbClassical(samples, sampleRate, config);
+ * const { samples: clean } = masteringRepairDereverbClassical(samples, sampleRate, config);
  * ```
  *
  * When NEITHER mid band converged, `t60Sec` falls back to the average of whatever

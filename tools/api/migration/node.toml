@@ -10906,3 +10906,59 @@ changed = "a WindowType name only: an ordinal is refused (TypeError), an unknown
 domain = "effects"
 rule = "token-case"
 test = "bindings/node/tests/surface/effects-notes.test.ts::spectralEdit takes a window by name only"
+
+[[entry]]
+kind = "function"
+old = "masteringRepairDeclick"
+changed = "returns DeclickResult { samples, report } instead of a bare Float32Array; the report is the one the stereo call gives per channel"
+domain = "effects"
+rule = "typed-results"
+test = "bindings/node/tests/surface/effects-repair.test.ts::declick reports the clicks it repaired, and none on a clean tone"
+
+[[entry]]
+kind = "function"
+old = "masteringRepairDeclip"
+changed = "returns DeclipResult { samples, report } instead of a bare Float32Array; the report is the one the stereo call gives per channel"
+domain = "effects"
+rule = "typed-results"
+test = "bindings/node/tests/surface/effects-repair.test.ts::declip reports the clipped runs it filled, and none on a clean tone"
+
+[[entry]]
+kind = "function"
+old = "masteringRepairDecrackle"
+changed = "returns DecrackleResult { samples, report } instead of a bare Float32Array; the report is the one the stereo call gives per channel"
+domain = "effects"
+rule = "typed-results"
+test = "bindings/node/tests/surface/effects-repair.test.ts::decrackle reports the samples it replaced, and none on a clean tone"
+
+[[entry]]
+kind = "function"
+old = "masteringRepairDehum"
+changed = "returns DehumResult { samples, report } instead of a bare Float32Array; the report is the one the stereo call gives per channel"
+domain = "effects"
+rule = "typed-results"
+test = "bindings/node/tests/surface/effects-repair.test.ts::dehum reports the harmonics it notched, and none found on a clean tone"
+
+[[entry]]
+kind = "function"
+old = "masteringRepairDenoiseClassical"
+changed = "returns DenoiseResult { samples, report } instead of a bare Float32Array; the report is the one the stereo call gives per channel"
+domain = "effects"
+rule = "typed-results"
+test = "bindings/node/tests/surface/effects-repair.test.ts::denoise and dereverb keep the input length and report finite figures"
+
+[[entry]]
+kind = "function"
+old = "masteringRepairDereverbClassical"
+changed = "returns DereverbResult { samples, report } instead of a bare Float32Array; the report is the one the stereo call gives per channel"
+domain = "effects"
+rule = "typed-results"
+test = "bindings/node/tests/surface/effects-repair.test.ts::denoise and dereverb keep the input length and report finite figures"
+
+[[entry]]
+kind = "function"
+old = "masteringRepairTrimSilence"
+changed = "returns TrimSilenceResult { samples, report } instead of a bare Float32Array; the report is the one the stereo call gives per channel; a trim that kept nothing gives empty samples, not an error"
+domain = "effects"
+rule = "typed-results"
+test = "bindings/node/tests/surface/effects-repair.test.ts::trim reports the range it cut to, and gives empty audio for pure silence"

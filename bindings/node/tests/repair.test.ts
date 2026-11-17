@@ -40,7 +40,7 @@ describe('masteringRepairDeclick (Node)', () => {
     for (let i = 0; i < 5; i++) {
       samples[1000 + i * 1200] = 1.0;
     }
-    const out = masteringRepairDeclick(samples, SR);
+    const { samples: out } = masteringRepairDeclick(samples, SR);
     expect(out).toBeInstanceOf(Float32Array);
     expect(out.length).toBe(samples.length);
     expect(Number.isFinite(out[0])).toBe(true);
@@ -48,7 +48,7 @@ describe('masteringRepairDeclick (Node)', () => {
 
   it('accepts explicit options', () => {
     const samples = sine(440, 0.2);
-    const out = masteringRepairDeclick(samples, SR, {
+    const { samples: out } = masteringRepairDeclick(samples, SR, {
       threshold: 0.7,
       neighborRatio: 4.0,
       maxClickSamples: 8,
@@ -64,13 +64,13 @@ describe('masteringRepairDenoiseClassical (Node)', () => {
   const noisy = withNoise(clean, 0.4);
 
   it('runs with default options (LogMMSE)', () => {
-    const out = masteringRepairDenoiseClassical(noisy, SR);
+    const { samples: out } = masteringRepairDenoiseClassical(noisy, SR);
     expect(out).toBeInstanceOf(Float32Array);
     expect(out.length).toBe(noisy.length);
   });
 
   it('accepts string-typed mode and noiseEstimator', () => {
-    const out = masteringRepairDenoiseClassical(noisy, SR, {
+    const { samples: out } = masteringRepairDenoiseClassical(noisy, SR, {
       mode: 'spectralSubtraction',
       noiseEstimator: 'quantile',
       nFft: 1024,
@@ -85,7 +85,7 @@ describe('masteringRepairDenoiseClassical (Node)', () => {
   });
 
   it('accepts mmseStsa mode', () => {
-    const out = masteringRepairDenoiseClassical(noisy, SR, {
+    const { samples: out } = masteringRepairDenoiseClassical(noisy, SR, {
       mode: 'mmseStsa',
       nFft: 512,
       hopLength: 128,

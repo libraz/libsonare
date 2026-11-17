@@ -8,6 +8,7 @@ import type {
   MasteringRepairSamplesRequest,
   MasteringRepairTrimSilenceResult,
   TrimRange,
+  TrimSilenceResult,
 } from './types.js';
 import {
   assertAudioInput,
@@ -60,16 +61,19 @@ function nativeTrimOptions(
   return native;
 }
 
-/** Offline silence trimmer (peak threshold or LUFS-gated). */
+/**
+ * Offline silence trimmer (peak threshold or LUFS-gated). Returns the kept audio and what the pass
+ * did; a trim that kept nothing gives an empty `samples`, not an error.
+ */
 export function masteringRepairTrimSilence(
   request: MasteringRepairTrimSilenceRequest,
-): Float32Array;
+): TrimSilenceResult;
 export function masteringRepairTrimSilence(
   samples: Float32Array,
   sampleRate: number,
   options?: TrimSilenceOptions,
-): Float32Array;
-export function masteringRepairTrimSilence(...args: unknown[]): Float32Array {
+): TrimSilenceResult;
+export function masteringRepairTrimSilence(...args: unknown[]): TrimSilenceResult {
   const r = sampleOneShot<MasteringRepairTrimSilenceRequest>('masteringRepairTrimSilence', args);
   assertAudioInput('masteringRepairTrimSilence', r.samples, r.sampleRate, r);
   return addon.masteringRepairTrimSilence(
