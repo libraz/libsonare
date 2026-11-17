@@ -411,10 +411,15 @@ export interface SidechainCheck {
   reason: SidechainRefusal | null;
 }
 
+/** Layout of the file read by a {@link FileClipPageProvider}. */
 export interface FileClipPageProviderOptions {
+  /** Channel count of the interleaved data; must be positive. */
   numChannels: number;
+  /** Length of the clip in frames; must be positive. */
   numSamples: number;
+  /** Frames per page; must be positive. */
   pageFrames: number;
+  /** Byte offset of the first frame in the file. Default `0`. */
   dataOffsetBytes?: number;
 }
 

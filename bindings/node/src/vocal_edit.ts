@@ -347,6 +347,7 @@ export class VocalEditSession implements Disposable {
     disposedSessions.add(this);
   }
 
+  /** Releases the object through {@link destroy}, so the instance works with `using`. */
   [Symbol.dispose](): void {
     this.destroy();
   }
@@ -440,6 +441,7 @@ export class VocalEditDraft implements Disposable {
     this.disposed = true;
   }
 
+  /** Releases the object through {@link destroy}, so the instance works with `using`. */
   [Symbol.dispose](): void {
     this.destroy();
   }
@@ -525,6 +527,7 @@ export class VocalRenderSnapshot implements Disposable {
     this.disposed = true;
   }
 
+  /** Releases the object through {@link destroy}, so the instance works with `using`. */
   [Symbol.dispose](): void {
     this.destroy();
   }
@@ -596,6 +599,7 @@ export class VocalRenderJob implements Disposable {
     this.disposed = true;
   }
 
+  /** Releases the object through {@link destroy}, so the instance works with `using`. */
   [Symbol.dispose](): void {
     this.destroy();
   }

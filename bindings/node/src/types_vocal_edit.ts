@@ -312,6 +312,7 @@ export interface VocalRestoreRequest {
 
 /** Replaces a note's whole edit. */
 export interface VocalSetEditOperation {
+  /** Operation discriminator: `'setEdit'`. */
   kind: 'setEdit';
   /** Note to edit. */
   noteId: number;
@@ -324,6 +325,7 @@ export interface VocalSetEditOperation {
  * nearest sample at the session's rate), one spelling each.
  */
 export interface VocalSetSourceSpanOperation {
+  /** Operation discriminator: `'setSourceSpan'`. */
   kind: 'setSourceSpan';
   /** Note to change. */
   noteId: number;
@@ -347,6 +349,7 @@ export interface VocalSetSourceSpanOperation {
 
 /** The cut position is `sourceSample` or `sourceSec`, not both. */
 export interface VocalSplitOperation {
+  /** Operation discriminator: `'split'`. */
   kind: 'split';
   /** Note to split. */
   noteId: number;
@@ -358,6 +361,7 @@ export interface VocalSplitOperation {
 
 /** Merges adjacent notes into one. */
 export interface VocalMergeOperation {
+  /** Operation discriminator: `'merge'`. */
   kind: 'merge';
   /** Notes to merge, in order. */
   noteIds: readonly number[];
@@ -367,6 +371,7 @@ export interface VocalMergeOperation {
 
 /** Sets the crossfade between two adjacent notes. */
 export interface VocalSetTransitionOperation {
+  /** Operation discriminator: `'setTransition'`. */
   kind: 'setTransition';
   /** The transition to set. */
   transition: VocalTransition;
@@ -374,6 +379,7 @@ export interface VocalSetTransitionOperation {
 
 /** Removes the crossfade between two adjacent notes. */
 export interface VocalRemoveTransitionOperation {
+  /** Operation discriminator: `'removeTransition'`. */
   kind: 'removeTransition';
   /** Id of the earlier note. */
   leftNoteId: number;
@@ -383,6 +389,7 @@ export interface VocalRemoveTransitionOperation {
 
 /** Restores notes to their analysed state. */
 export interface VocalResetOperation {
+  /** Operation discriminator: `'reset'`. */
   kind: 'reset';
   /** Notes to reset. */
   noteIds: readonly number[];
@@ -451,9 +458,13 @@ export interface VocalPitchEvaluation {
  * is 0 and an omitted end is the end of the output. Negative bounds are refused.
  */
 export interface VocalRangeInput {
+  /** Start of the range in output samples. Default 0. */
   startSample?: number;
+  /** Start of the range in seconds. Default 0. */
   startSec?: number;
+  /** End of the range in output samples. Default the end of the output. */
   endSample?: number;
+  /** End of the range in seconds. Default the end of the output. */
   endSec?: number;
 }
 

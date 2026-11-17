@@ -19,6 +19,7 @@ export class ClipPageProvider {
 
   constructor(
     private readonly engine: RealtimeEngine,
+    /** Provider id on the engine. */
     readonly id: number,
   ) {}
 
@@ -47,6 +48,7 @@ export class ClipPageProvider {
     this.engine.destroyClipPageProvider(this.id);
   }
 
+  /** Releases the provider through {@link destroy}, so the instance works with `using`. */
   [Symbol.dispose](): void {
     this.destroy();
   }

@@ -141,14 +141,19 @@ export interface ProjectMarkerInput {
  * by `projectRate / referenceRate` first.
  */
 export interface ProjectWarpAnchor {
+  /** Position on the warped timeline, in samples at the project sample rate. */
   warpSample: number;
+  /** Position in the clip source, in samples at the project sample rate. */
   sourceSample: number;
 }
 
 /** First-class project warp map referenced by clip `warpRefId`. */
 export interface ProjectWarpMapDesc {
+  /** Warp-map id, referenced by a clip's `warpRefId`. */
   id: number;
+  /** Optional display name. */
   name?: string;
+  /** Anchors of the map, in order. */
   anchors: ProjectWarpAnchor[];
 }
 
@@ -300,12 +305,15 @@ export interface ExternalSeparatedStem {
 export interface ExternalSeparatedStemImportRequest {
   /** Must exactly equal the target project's sample rate; no resampling occurs. */
   sampleRate: number;
+  /** The stems to import, one track and clip each. */
   stems: ExternalSeparatedStem[];
 }
 
 /** Stable ids created by {@link Project.importExternalStems}. */
 export interface ExternalSeparatedStemImportResult {
+  /** Ids of the tracks created, one per stem. */
   trackIds: number[];
+  /** Ids of the clips created, one per stem. */
   clipIds: number[];
 }
 
@@ -320,8 +328,11 @@ export interface ExternalSeparatedStemImportResult {
  * JSON (`toJson()`).
  */
 export interface ProjectLoopRecordingDesc {
+  /** Track the clip is added to. */
   trackId: number;
+  /** Clip start in PPQ. Default `0`. */
   startPpq?: number;
+  /** Length of one loop in PPQ; also the length of the added clip. */
   loopLengthPpq: number;
   /**
    * Interleaved capture (with `audioChannels`), or planar: one `Float32Array`
@@ -329,7 +340,9 @@ export interface ProjectLoopRecordingDesc {
    * makes `audioChannels` irrelevant.
    */
   audio: Float32Array | Float32Array[];
+  /** Channel count of an interleaved `audio`. Default `1`. */
   audioChannels?: number;
+  /** Sample rate of `audio` in Hz. Default `48000`. */
   audioSampleRate?: number;
   /** `'keep'` (default) keeps a partial last take; `'drop'` does not create it. */
   partialTail?: 'keep' | 'drop';
@@ -337,13 +350,17 @@ export interface ProjectLoopRecordingDesc {
 
 /** Result returned by {@link Project.addLoopRecordingTakes}. */
 export interface ProjectLoopRecordingResult {
+  /** Id of the clip added to the track. */
   clipId: number;
+  /** Number of takes created. */
   takeCount: number;
 }
 
 /** `(trackId, clipId)` returned by {@link Project.addMidiClip}. */
 export interface ProjectMidiClipResult {
+  /** Id of the MIDI track created for the clip. */
   trackId: number;
+  /** Id of the clip created. */
   clipId: number;
 }
 
@@ -363,26 +380,37 @@ export interface ProjectMidiClipResult {
  * destroyed by `Project.setMidiEvents`.
  */
 export interface ProjectMidiEvent {
+  /** Event position in PPQ. */
   ppq: number;
+  /** First UMP word of the message. */
   data0: number;
+  /** Second UMP word of the message. Default `0`. */
   data1?: number;
 }
 
 /** Options for {@link midiRouteEvents}. Omitted filter fields mean any group/channel and no remap. */
 export interface ProjectMidiRouteConfig {
+  /** Only events on this UMP group (0-15) pass. Omitted: any group. */
   filterGroup?: number;
+  /** Only events on this MIDI channel (0-15) pass. Omitted: any channel. */
   filterChannel?: number;
+  /** Rewrites a channel-voice message's channel to this value (0-15). Omitted: no remap. */
   remapChannel?: number;
+  /** When `false`, nothing is emitted. Default `true`. */
   thru?: boolean;
 }
 
 /** Result of {@link midiRouteEvents}. */
 export interface ProjectMidiRouteResult {
+  /** The events that passed the filter, remapped as configured. */
   events: ProjectMidiEvent[];
+  /** `true` when the output was too long and events were dropped. */
   overflowed: boolean;
+  /** Number of events dropped. */
   overflowCount: number;
 }
 
+/** Controller shape of a {@link ProjectMidiCcBinding}: 0 = 7-bit CC, 1 = 14-bit CC, 2 = RPN, 3 = NRPN. */
 export type ProjectMidiCcBindingKind = 0 | 1 | 2 | 3;
 
 /** Options for {@link midiCcLearn}. All fields are optional. */
@@ -397,14 +425,19 @@ export interface MidiCcLearnOptions {
 
 /** MIDI CC <-> automation binding descriptor used by CC learn/conversion helpers. */
 export interface ProjectMidiCcBinding {
+  /** Controller number (the MSB controller for a 14-bit CC). */
   ccNumber: number;
   /** MIDI channel 0..15, or 255 for any channel. Omit for the any-channel sentinel `255`. */
   channel?: number;
   /** 0 = 7-bit CC, 1 = 14-bit CC, 2 = RPN, 3 = NRPN. Default `0`. */
   kind?: ProjectMidiCcBindingKind;
+  /** LSB controller number of a 14-bit CC (`ccNumber` + 32). Default `0`. */
   ccLsbNumber?: number;
+  /** Selector MSB of an RPN/NRPN binding. Default `0`. */
   selectorMsb?: number;
+  /** Selector LSB of an RPN/NRPN binding. Default `0`. */
   selectorLsb?: number;
+  /** Automation parameter id the controller drives. */
   paramId: number;
   /** Lower end of the mapped parameter range. Default `0`. */
   minValue?: number;
@@ -734,7 +767,9 @@ export interface ProjectClipTake {
 
 /** One comp segment for {@link Project.setClipCompSegments}. */
 export interface ProjectClipCompSegment {
+  /** Segment start in PPQ. */
   startPpq: number;
+  /** Segment end in PPQ. */
   endPpq: number;
   /** Take id to play in this range; omitted falls back to the active/default take. */
   takeId?: number;
@@ -753,7 +788,9 @@ export interface ProjectClipCompSegment {
  * 2 = Hold, 3 = SCurve).
  */
 export interface ProjectAutomationPoint {
+  /** Breakpoint position in PPQ. */
   ppq: number;
+  /** Parameter value at the breakpoint. */
   value: number;
   /** Curve to the next breakpoint (default `'linear'`). */
   curve?: ProjectAutomationCurve;
@@ -849,11 +886,17 @@ export interface ProjectAssistSidecarInput {
 
 /** A stored assist sidecar returned by {@link Project.assistSidecars}. */
 export interface ProjectAssistSidecar {
+  /** Module id key. */
   moduleId: string;
+  /** Module-defined schema version. */
   schemaVersion: number;
+  /** Target track id (`0` = project scope). */
   targetTrackId: number;
+  /** Region start in PPQ. */
   regionStartPpq: number;
+  /** Region end in PPQ. */
   regionEndPpq: number;
+  /** Opaque module-owned payload bytes. */
   payload: Uint8Array;
 }
 
