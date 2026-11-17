@@ -541,7 +541,7 @@ describe('telemetry scratch readers refuse an index past their record instead of
   it('Mixer meter scratch', () => {
     const mixer = Mixer.fromJson(mixingScenePresetJson('vocalReverbSend'), {
       sampleRate: 48000,
-      blockSize: 128,
+      maxBlockSize: 128,
     });
     try {
       expect(() => mixer.meterScratchValue(6)).not.toThrow();

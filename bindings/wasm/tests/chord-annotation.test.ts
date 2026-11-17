@@ -19,21 +19,33 @@ const QUALITIES = CHORD_QUALITIES;
 const chord = (root: number, quality: ChordQuality, bass: number = root) =>
   ({ root, bass, quality }) as Parameters<typeof chordSymbolFromAnalysis>[0];
 
+/** Annotation chord-quality ordinals as the project document stores them. */
+const ANNOTATION_QUALITY_ORDINALS = {
+  unknown: 0,
+  major: 1,
+  minor: 2,
+  diminished: 3,
+  augmented: 4,
+  dominant: 5,
+  halfDiminished: 6,
+  suspended: 7,
+} as const;
+
 describe('chordSymbolFromAnalysis', () => {
   beforeAll(async () => {
     await init();
   });
 
   it.each([
-    ['Major', 'major', 1, []],
-    ['Minor', 'minor', 2, []],
-    ['Dominant7', 'dominant7', 5, [7]],
-    ['HalfDim7', 'halfDim7', 6, [7]],
-    ['Sus4', 'sus4', 7, [4]],
-    ['Dominant13', 'dominant13', 5, [7, 9, 13]],
-    ['Unknown', 'unknown', 0, []],
+    ['Major', 'major', 'major', []],
+    ['Minor', 'minor', 'minor', []],
+    ['Dominant7', 'dominant7', 'dominant', [7]],
+    ['HalfDim7', 'halfDim7', 'halfDiminished', [7]],
+    ['Sus4', 'sus4', 'suspended', [4]],
+    ['Dominant13', 'dominant13', 'dominant', [7, 9, 13]],
+    ['Unknown', 'unknown', 'unknown', []],
   ] as const)(
-    'maps %s to annotation quality %i with extensions %j',
+    'maps %s to annotation quality %s with extensions %j',
     (_name, quality, mapped, extensions) => {
       const out = chordSymbolFromAnalysis(chord(7, quality));
       expect(out).toEqual({ rootPc: 7, quality: mapped, extensions, slashBassPc: 255 });
@@ -74,7 +86,9 @@ describe('chordSymbolFromAnalysis', () => {
         restored.destroy();
       }
       for (const [i, row] of expected.entries()) {
-        expect(row.quality, `quality ${QUALITIES[i]}`).toBe(symbols[i].quality);
+        expect(row.quality ?? 0, `quality ${QUALITIES[i]}`).toBe(
+          ANNOTATION_QUALITY_ORDINALS[symbols[i].quality],
+        );
         expect(row.extensions ?? [], `quality ${QUALITIES[i]}`).toEqual(symbols[i].extensions);
       }
     } finally {
@@ -113,8 +127,8 @@ describe('keyModeFromAnalysis', () => {
     ['lydian', 5],
     ['mixolydian', 6],
     ['locrian', 7],
-  ] as const)('maps %s to annotation mode %i, which annotateKeys accepts', (mode, mapped) => {
-    expect(keyModeFromAnalysis(mode)).toBe(mapped);
+  ] as const)('maps %s to the same-named annotation mode, stored as %i', (mode, mapped) => {
+    expect(keyModeFromAnalysis(mode)).toBe(mode);
     const project = new Project();
     try {
       project.setSampleRate(48000);

@@ -38,8 +38,12 @@ describe('SonareWorkletProcessor', () => {
     const blockSize = 128;
     const sceneJson = mixingScenePresetJson('vocalReverbSend');
 
-    const offline = Mixer.fromJson(sceneJson, { sampleRate: sampleRate, blockSize: blockSize });
-    const processor = new SonareWorkletProcessor({ sceneJson, sampleRate, blockSize });
+    const offline = Mixer.fromJson(sceneJson, { sampleRate: sampleRate, maxBlockSize: blockSize });
+    const processor = new SonareWorkletProcessor({
+      sceneJson,
+      sampleRate,
+      maxBlockSize: blockSize,
+    });
     try {
       const vocalL = new Float32Array(blockSize);
       const vocalR = new Float32Array(blockSize);
@@ -74,7 +78,7 @@ describe('SonareWorkletProcessor', () => {
     const processor = new SonareWorkletProcessor({
       sceneJson: mixingScenePresetJson('vocalReverbSend'),
       sampleRate,
-      blockSize,
+      maxBlockSize: blockSize,
     });
     try {
       const vocalL = new Float32Array(blockSize);
@@ -98,7 +102,7 @@ describe('SonareWorkletProcessor', () => {
       const processor = new SonareWorkletProcessor({
         sceneJson: mixingScenePresetJson(preset),
         sampleRate,
-        blockSize,
+        maxBlockSize: blockSize,
       });
       try {
         const mixer = (processor as unknown as { mixer: Mixer }).mixer;
@@ -135,7 +139,7 @@ describe('SonareWorkletProcessor', () => {
     const processor = new SonareWorkletProcessor({
       sceneJson: mixingScenePresetJson('vocalReverbSend'),
       sampleRate,
-      blockSize,
+      maxBlockSize: blockSize,
     });
     try {
       const vocalL = new Float32Array(blockSize);
@@ -169,7 +173,7 @@ describe('SonareWorkletProcessor', () => {
       {
         sceneJson: mixingScenePresetJson('vocalReverbSend'),
         sampleRate,
-        blockSize,
+        maxBlockSize: blockSize,
         meterIntervalFrames: blockSize,
       },
       { onMeter: (meter) => meters.push(meter) },
@@ -226,7 +230,7 @@ describe('SonareWorkletProcessor', () => {
       {
         sceneJson: mixingScenePresetJson('vocalReverbSend'),
         sampleRate,
-        blockSize,
+        maxBlockSize: blockSize,
         meterIntervalFrames: blockSize,
         meterSharedBuffer: ring.sharedBuffer,
       },
@@ -281,7 +285,7 @@ describe('SonareWorkletProcessor', () => {
       {
         sceneJson: mixingScenePresetJson('vocalReverbSend'),
         sampleRate,
-        blockSize,
+        maxBlockSize: blockSize,
         meterIntervalFrames: blockSize,
         meterSharedBuffer: ring.sharedBuffer,
       },
@@ -327,7 +331,7 @@ describe('SonareWorkletProcessor', () => {
     const processor = new SonareWorkletProcessor({
       sceneJson: mixingScenePresetJson('vocalReverbSend'),
       sampleRate: 48000,
-      blockSize: 128,
+      maxBlockSize: 128,
       meterSharedBuffer: ring.sharedBuffer,
     });
     try {
@@ -391,7 +395,7 @@ describe('SonareWorkletProcessor', () => {
     const processor = new SonareWorkletProcessor({
       sceneJson: mixingScenePresetJson('vocalReverbSend'),
       sampleRate: 48000,
-      blockSize: 128,
+      maxBlockSize: 128,
       meterSharedBuffer: ring.sharedBuffer,
     });
     try {
@@ -497,7 +501,7 @@ describe('SonareWorkletProcessor', () => {
         {
           sceneJson: mixingScenePresetJson('vocalReverbSend'),
           sampleRate,
-          blockSize,
+          maxBlockSize: blockSize,
           spectrumBands: 8,
           ...options,
         },
@@ -555,7 +559,7 @@ describe('SonareWorkletProcessor', () => {
       {
         sceneJson: mixingScenePresetJson('vocalReverbSend'),
         sampleRate,
-        blockSize,
+        maxBlockSize: blockSize,
         spectrumIntervalFrames: blockSize,
         spectrumBands: 8,
       },
@@ -580,7 +584,7 @@ describe('SonareWorkletProcessor', () => {
     const ringProcessor = new SonareWorkletProcessor({
       sceneJson: mixingScenePresetJson('vocalReverbSend'),
       sampleRate,
-      blockSize,
+      maxBlockSize: blockSize,
       spectrumIntervalFrames: blockSize,
       spectrumSharedBuffer: ring.sharedBuffer,
     });
@@ -606,7 +610,7 @@ describe('SonareWorkletProcessor', () => {
     const processor = new SonareWorkletProcessor({
       sceneJson: mixingScenePresetJson('vocalReverbSend'),
       sampleRate: 48000,
-      blockSize: 128,
+      maxBlockSize: 128,
       spectrumSharedBuffer: ring.sharedBuffer,
       spectrumBands: ring.bands,
     });
@@ -657,7 +661,7 @@ describe('SonareWorkletProcessor', () => {
       {
         sceneJson: mixingScenePresetJson('vocalReverbSend'),
         sampleRate,
-        blockSize,
+        maxBlockSize: blockSize,
         spectrumIntervalFrames: blockSize,
         spectrumBands: 8,
       },
@@ -712,7 +716,7 @@ describe('SonareWorkletProcessor', () => {
         processorOptions: {
           sceneJson: string;
           sampleRate: number;
-          blockSize: number;
+          maxBlockSize: number;
           meterIntervalFrames: number;
         };
       }) => {
@@ -724,7 +728,7 @@ describe('SonareWorkletProcessor', () => {
         processorOptions: {
           sceneJson: mixingScenePresetJson('vocalReverbSend'),
           sampleRate: 48000,
-          blockSize,
+          maxBlockSize: blockSize,
           meterIntervalFrames: blockSize,
         },
       });

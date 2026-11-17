@@ -45,7 +45,7 @@ describe('VocalEditWorkerClient under Node', () => {
     try {
       if (!capabilities().features.vocalEdit) {
         // The message still crosses the thread and comes back as the module's refusal.
-        await expect(client.create({ samples: voice(), sampleRate: SR }).result).rejects.toThrow();
+        await expect(client.create({ samples: voice(), sampleRate: SR })).rejects.toThrow();
         return;
       }
       const session = await client.create({ samples: voice(), sampleRate: SR });

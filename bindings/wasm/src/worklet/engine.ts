@@ -1,7 +1,7 @@
 import type { ChannelLayout } from '../audio.js';
 import {
+  type ClipPagePageRequest,
   ClipPageStreamer,
-  type ClipPageStreamerRequest,
   type OpfsClipStreamOptions,
 } from '../clip_page_streamer.js';
 import { ErrorCode, SonareError } from '../errors.js';
@@ -178,7 +178,7 @@ export class SonareEngine {
   // One latest frontier per clip is sufficient: ClipPageStreamer expands it to
   // the bounded read window. A Map both coalesces repeated page misses and
   // places a hard cap on work queued while OPFS I/O is stalled.
-  private readonly workletClipPageRequests = new Map<number, ClipPageStreamerRequest>();
+  private readonly workletClipPageRequests = new Map<number, ClipPagePageRequest>();
   private readonly workletPageProviderClipIds = new Map<
     number,
     { clipId: number; streamKey: number }
@@ -1462,7 +1462,7 @@ export class SonareEngine {
   }
 
   /**
-   * Bounces the timeline to an interleaved buffer with the options, defaults
+   * Bounces the timeline to planar channels with the options, defaults
    * and result of {@link RealtimeEngine.bounceOffline}; `blockSize` defaults to
    * the offline block size and must not exceed it (`RangeError`). Runs
    * synchronously on the calling thread. The mirror's transport position is
@@ -1600,12 +1600,12 @@ export class SonareEngine {
       });
   }
 
-  private enqueueWorkletClipPageRequest(request: ClipPageStreamerRequest): void {
+  private enqueueWorkletClipPageRequest(request: ClipPagePageRequest): void {
     if (
       !Number.isInteger(request.clipId) ||
       request.clipId < 0 ||
       !Number.isInteger(request.pageIndex) ||
-      (request.pageIndex ?? -1) < 0
+      request.pageIndex < 0
     ) {
       return;
     }
@@ -1620,7 +1620,7 @@ export class SonareEngine {
     this.workletClipPageRequests.set(request.clipId, request);
   }
 
-  private popWorkletClipPageRequest(): ClipPageStreamerRequest | null {
+  private popWorkletClipPageRequest(): ClipPagePageRequest | null {
     const entry = this.workletClipPageRequests.entries().next().value;
     if (!entry) {
       return null;

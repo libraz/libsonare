@@ -1,5 +1,6 @@
 import { ErrorCode, SonareError } from './errors.js';
 import { releasedHandleError } from './internal/handle_guard.js';
+import { attachVocalErrorDetail, vocalReasonFromCode } from './internal/vocal_error_detail.js';
 import { getSonareModule } from './module_state.js';
 import type {
   VocalAnalysis,
@@ -8,8 +9,7 @@ import type {
   VocalCreateRequest,
   VocalEditOperation,
   VocalEditResult,
-  VocalErrorShape,
-  VocalHistoryState,
+  VocalHistory,
   VocalJobProgress,
   VocalNote,
   VocalNotesResult,
@@ -21,10 +21,14 @@ import type {
   VocalRestoreRequest,
   VocalSessionLimits,
   VocalStateToken,
-  VocalUint64,
 } from './public_types_vocal_edit.js';
 import type { SonareModule } from './sonare.js';
-import { assertAudioInput, requestObject, resolveSampleBound } from './validation.js';
+import {
+  assertAudioInput,
+  optionalBoolean,
+  requestObject,
+  resolveSampleBound,
+} from './validation.js';
 
 /** Native symbols registered by the full vocal-edit WASM binding. */
 export interface VocalWasmExports {
@@ -44,19 +48,19 @@ export interface VocalWasmExports {
   vocalEditSessionAnalysis: (handle: number) => VocalAnalysis;
   vocalEditSessionCapabilities: (handle: number) => VocalCapabilities;
   vocalEditSessionOutputLength: (handle: number) => number;
-  vocalEditSessionHistory: (handle: number) => VocalHistoryState;
-  vocalEditSessionBeginEdit: (handle: number, revision: VocalUint64) => number;
+  vocalEditSessionHistory: (handle: number) => VocalHistory;
+  vocalEditSessionBeginEdit: (handle: number, revision: string) => number;
   vocalEditDraftApply: (
     handle: number,
-    generation: VocalUint64,
+    generation: string,
     operations: readonly VocalEditOperation[],
   ) => VocalEditResult;
-  vocalEditDraftCommit: (handle: number, revision: VocalUint64) => VocalEditResult;
+  vocalEditDraftCommit: (handle: number, revision: string) => VocalEditResult;
   vocalEditDraftCancel: (handle: number) => void;
   vocalEditDraftDestroy: (handle: number) => void;
   vocalEditSessionApplyHistory: (
     handle: number,
-    revision: VocalUint64,
+    revision: string,
     redo: boolean,
   ) => VocalEditResult;
   vocalEditEvaluatePitch: (handle: number, noteId: number, draft: boolean) => VocalPitchEvaluation;
@@ -74,54 +78,58 @@ export interface VocalWasmExports {
     handle: number,
     startSample: number,
     endSample: number,
-    requestId: VocalUint64,
+    requestId: string,
   ) => VocalRenderResult;
   vocalEditRenderJobBegin: (
     handle: number,
     startSample: number,
     endSample: number,
-    requestId: VocalUint64,
+    requestId: string,
   ) => number;
   vocalEditRenderJobNext: (handle: number) => boolean;
   vocalEditRenderJobFinalize: (handle: number) => VocalRenderResult;
   vocalEditRenderJobAbort: (handle: number) => void;
   vocalEditRenderJobDestroy: (handle: number) => void;
   vocalEditSessionExportState: (handle: number) => Uint8Array;
-  vocalEditLastErrorDetail: () => VocalErrorShape & { readonly sequence: VocalUint64 };
+  vocalEditLastErrorDetail: () => NativeVocalErrorDetail;
 }
 
 interface VocalWasmModule extends SonareModule, VocalWasmExports {}
 
-type VocalErrorDetail = VocalErrorShape & { readonly sequence: VocalUint64 };
-
-const vocalErrorFields = [
-  'reason',
-  'field',
-  'expected',
-  'actual',
-  'expectedText',
-  'actualText',
-] as const satisfies readonly (keyof VocalErrorShape)[];
+/** The last-error record as the native module returns it. */
+interface NativeVocalErrorDetail {
+  readonly sequence: string;
+  readonly reason: number;
+  readonly field: string;
+  readonly expected: string;
+  readonly actual: string;
+  readonly expectedText: string;
+  readonly actualText: string;
+}
 
 let cachedModuleSource: VocalWasmModule | null = null;
 let cachedVocalModule: VocalWasmModule | null = null;
 
-function addVocalErrorDetail(error: unknown, detail: VocalErrorDetail): void {
+function addVocalErrorDetail(error: unknown, detail: NativeVocalErrorDetail): void {
   if (error === null || typeof error !== 'object') {
     return;
   }
-  const candidate = error as { name?: unknown; code?: unknown } & Record<string, unknown>;
+  const candidate = error as { name?: unknown; code?: unknown };
   if (candidate.name !== 'SonareError' || typeof candidate.code !== 'number') {
     return;
   }
-  for (const field of vocalErrorFields) {
-    Object.defineProperty(candidate, field, {
-      configurable: true,
-      enumerable: true,
-      value: detail[field],
-      writable: false,
-    });
+  const reason = vocalReasonFromCode(detail.reason);
+  if (reason === undefined) {
+    return;
   }
+  attachVocalErrorDetail(candidate, {
+    reason,
+    field: detail.field,
+    expected: detail.expected,
+    actual: detail.actual,
+    expectedText: detail.expectedText,
+    actualText: detail.actualText,
+  });
 }
 
 function module(): VocalWasmModule {
@@ -152,7 +160,7 @@ function module(): VocalWasmModule {
         return cached;
       }
       const wrappedMember = (...args: unknown[]): unknown => {
-        let beforeSequence: VocalUint64 | undefined;
+        let beforeSequence: string | undefined;
         try {
           beforeSequence = detailReader.call(target).sequence;
         } catch {
@@ -213,7 +221,7 @@ function requireUint32(value: number, field: string): number {
   return value;
 }
 
-function requireToken(value: string | undefined, field: string, fallback = '0'): VocalUint64 {
+function requireToken(value: string | undefined, field: string, fallback = '0'): string {
   const token = value ?? fallback;
   if (typeof token !== 'string' || !/^(0|[1-9]\d*)$/.test(token)) {
     throw new RangeError(`${field} must be a canonical decimal uint64 string`);
@@ -224,12 +232,18 @@ function requireToken(value: string | undefined, field: string, fallback = '0'):
   return token;
 }
 
-type RevisionArgument = VocalUint64 | { expectedRevision?: VocalUint64 };
+/** A 64-bit counter the native module reports as decimal text, as a safe-integer count. */
+function requireCount(value: unknown, field: string): number {
+  const count = typeof value === 'string' ? Number(value) : value;
+  if (typeof count !== 'number' || !Number.isSafeInteger(count) || count < 0) {
+    throw new RangeError(`${field} must be a non-negative safe integer`);
+  }
+  return count;
+}
 
-function resolveRevision(
-  argument: RevisionArgument | undefined,
-  fallback: VocalUint64,
-): VocalUint64 {
+type RevisionArgument = string | { expectedRevision?: string };
+
+function resolveRevision(argument: RevisionArgument | undefined, fallback: string): string {
   const value = typeof argument === 'string' ? argument : argument?.expectedRevision;
   return requireToken(value, 'expectedRevision', fallback);
 }
@@ -376,6 +390,8 @@ function copyRange(range: VocalRange): VocalRange {
 function copyNotes(value: VocalNotesResult): VocalNotesResult {
   const notes: VocalNote[] = Array.from(value.notes, (note) => ({
     ...note,
+    analysisFrameStart: requireCount(note.analysisFrameStart, 'analysisFrameStart'),
+    analysisFrameEnd: requireCount(note.analysisFrameEnd, 'analysisFrameEnd'),
     amplitude: new Float32Array(note.amplitude),
     edit: {
       ...note.edit,
@@ -440,25 +456,33 @@ function copyRender(value: VocalRenderResult): VocalRenderResult {
     startSample: value.startSample,
     token: copyToken(value.token),
     processedRanges: Array.from(value.processedRanges, copyRange),
-    cacheHitUnits: requireToken(value.cacheHitUnits, 'cacheHitUnits'),
-    dryPassedFrames: requireToken(value.dryPassedFrames, 'dryPassedFrames'),
-    limitedCorrectionFrames: requireToken(value.limitedCorrectionFrames, 'limitedCorrectionFrames'),
+    cacheHitUnits: requireCount(value.cacheHitUnits, 'cacheHitUnits'),
+    dryPassedFrames: requireCount(value.dryPassedFrames, 'dryPassedFrames'),
+    limitedCorrectionFrames: requireCount(value.limitedCorrectionFrames, 'limitedCorrectionFrames'),
   };
 }
 
-function validateSessionLimits(limits: VocalSessionLimits | null | undefined): void {
+/** Validates `limits` and returns the form the native module reads (byte limits as decimal text). */
+function nativeSessionLimits(
+  limits: VocalSessionLimits | null | undefined,
+): Record<string, unknown> | undefined {
   if (limits === undefined || limits === null) {
-    return;
+    return undefined;
   }
   if (typeof limits !== 'object' || Array.isArray(limits)) {
     throw new TypeError('limits must be an object');
   }
-  if (limits.maxHistoryBytes !== undefined) {
-    requireToken(limits.maxHistoryBytes, 'limits.maxHistoryBytes');
+  const native: Record<string, unknown> = { ...limits };
+  for (const field of ['maxHistoryBytes', 'maxCacheBytes'] as const) {
+    const bytes = limits[field];
+    if (bytes !== undefined) {
+      if (typeof bytes !== 'number') {
+        throw new TypeError(`limits.${field} must be a number`);
+      }
+      native[field] = String(requireSample(bytes, `limits.${field}`));
+    }
   }
-  if (limits.maxCacheBytes !== undefined) {
-    requireToken(limits.maxCacheBytes, 'limits.maxCacheBytes');
-  }
+  return native;
 }
 
 function copyEditResult(value: VocalEditResult): VocalEditResult {
@@ -477,11 +501,11 @@ function validateCreate(request: VocalCreateRequest): void {
   if (!request || typeof request !== 'object') {
     throw new TypeError('request must be an object');
   }
-  assertAudioInput('createVocalEditSession', request.samples, request.sampleRate);
+  optionalBoolean('createVocalEditSession', request.validate, 'validate', true);
+  assertAudioInput('createVocalEditSession', request.samples, request.sampleRate, request);
   if (request.outputLengthSamples !== undefined) {
     requireSample(request.outputLengthSamples, 'outputLengthSamples');
   }
-  validateSessionLimits(request.limits);
   if (request.analysis) {
     const analysis = request.analysis;
     if (analysis.algorithmId !== undefined) {
@@ -516,7 +540,7 @@ function normalizeRequest(
   sampleRate: number,
 ): {
   range: VocalRange;
-  requestId: VocalUint64;
+  requestId: string;
 } {
   const range =
     request.range === undefined
@@ -549,11 +573,13 @@ export function vocalEditAbiVersion(): number | undefined {
 export function createVocalEditSession(request: VocalCreateRequest): VocalEditSession {
   requestObject('createVocalEditSession', request, 'request', true);
   validateCreate(request);
+  const limits = nativeSessionLimits(request.limits);
   if (!vocalEditAvailable()) {
     throw new SonareError(ErrorCode.NotSupported, 'vocal edit is unavailable in this WASM build');
   }
+  const native = limits === undefined ? request : { ...request, limits };
   return new VocalEditSession(
-    module().vocalEditSessionCreate(request.samples, request.sampleRate, request),
+    module().vocalEditSessionCreate(request.samples, request.sampleRate, native),
     request.sampleRate,
   );
 }
@@ -561,16 +587,18 @@ export function createVocalEditSession(request: VocalCreateRequest): VocalEditSe
 /** Open a new session from an exported state blob and the same source PCM. */
 export function restoreVocalEditSession(request: VocalRestoreRequest): VocalEditSession {
   requestObject('restoreVocalEditSession', request, 'request', true);
-  assertAudioInput('restoreVocalEditSession', request.samples, request.sampleRate);
+  optionalBoolean('restoreVocalEditSession', request.validate, 'validate', true);
+  assertAudioInput('restoreVocalEditSession', request.samples, request.sampleRate, request);
   if (!(request.state instanceof Uint8Array)) {
     throw new TypeError('state must be a Uint8Array');
   }
-  validateSessionLimits(request.limits);
+  const limits = nativeSessionLimits(request.limits);
   if (!vocalEditAvailable()) {
     throw new SonareError(ErrorCode.NotSupported, 'vocal edit is unavailable in this WASM build');
   }
+  const native = limits === undefined ? request : { ...request, limits };
   return new VocalEditSession(
-    module().vocalEditSessionRestore(request.samples, request.sampleRate, request.state, request),
+    module().vocalEditSessionRestore(request.samples, request.sampleRate, request.state, native),
     request.sampleRate,
   );
 }
@@ -589,6 +617,7 @@ export class VocalEditSession {
     this.sampleRate = sampleRate;
   }
 
+  /** Releases the session and every draft it began; calling it again does nothing. */
   destroy(): void {
     if (this.disposed) {
       return;
@@ -615,26 +644,32 @@ export class VocalEditSession {
     return this.handle;
   }
 
-  token(): VocalStateToken {
+  /** The current committed state token. */
+  get token(): VocalStateToken {
     return copyToken(module().vocalEditSessionToken(this.native()));
   }
 
-  revision(): VocalUint64 {
-    return this.token().revision;
+  /** The committed revision, a decimal string (64-bit counter). */
+  get revision(): string {
+    return this.token.revision;
   }
 
+  /** The committed notes and transitions. */
   notes(): VocalNotesResult {
     return copyNotes(module().vocalEditSessionNotes(this.native()));
   }
 
+  /** The pitch analysis the session was built from. */
   analysis(): VocalAnalysis {
     return copyAnalysis(module().vocalEditSessionAnalysis(this.native()));
   }
 
+  /** What the loaded engine supports. */
   capabilities(): VocalCapabilities {
     return { ...module().vocalEditSessionCapabilities(this.native()) };
   }
 
+  /** Length of the rendered output in samples. */
   outputLengthSamples(): number {
     return requireSample(
       module().vocalEditSessionOutputLength(this.native()),
@@ -642,14 +677,16 @@ export class VocalEditSession {
     );
   }
 
-  history(): VocalHistoryState {
+  /** Whether undo and redo have anything to act on. */
+  history(): VocalHistory {
     const value = module().vocalEditSessionHistory(this.native());
     return { canUndo: value.canUndo === true, canRedo: value.canRedo === true };
   }
 
+  /** Opens a draft for batching edits. `expectedRevision` defaults to the current revision; a mismatch is refused with a `revisionConflict` detail. */
   beginEdit(options: RevisionArgument = {}): VocalEditDraft {
     const draft = new VocalEditDraft(
-      module().vocalEditSessionBeginEdit(this.native(), resolveRevision(options, this.revision())),
+      module().vocalEditSessionBeginEdit(this.native(), resolveRevision(options, this.revision)),
       this,
       this.sampleRate,
     );
@@ -657,32 +694,36 @@ export class VocalEditSession {
     return draft;
   }
 
+  /** Reverts the last commit. `expectedRevision` defaults to the current revision. */
   undo(options: RevisionArgument = {}): VocalEditResult {
     return copyEditResult(
       module().vocalEditSessionApplyHistory(
         this.native(),
-        resolveRevision(options, this.revision()),
+        resolveRevision(options, this.revision),
         false,
       ),
     );
   }
 
+  /** Re-applies the last undone commit. `expectedRevision` defaults to the current revision. */
   redo(options: RevisionArgument = {}): VocalEditResult {
     return copyEditResult(
       module().vocalEditSessionApplyHistory(
         this.native(),
-        resolveRevision(options, this.revision()),
+        resolveRevision(options, this.revision),
         true,
       ),
     );
   }
 
+  /** Per-frame pitch of one committed note. */
   evaluatePitch(noteId: number): VocalPitchEvaluation {
     return copyPitch(
       module().vocalEditEvaluatePitch(this.native(), requireUint32(noteId, 'noteId'), false),
     );
   }
 
+  /** Maps a source sample of a note to its position in the output. */
   sourceSampleToDestinationSample(noteId: number, sourceSample: number): number {
     requireFinite(sourceSample, 'sourceSample');
     return module().vocalEditMapCoordinate(
@@ -694,6 +735,7 @@ export class VocalEditSession {
     );
   }
 
+  /** Maps an output sample of a note back to its source position. */
   destinationSampleToSourceSample(noteId: number, destinationSample: number): number {
     requireFinite(destinationSample, 'destinationSample');
     return module().vocalEditMapCoordinate(
@@ -705,6 +747,7 @@ export class VocalEditSession {
     );
   }
 
+  /** Freezes the committed state for rendering; the snapshot is unaffected by later edits. */
   captureRenderSnapshot(): VocalRenderSnapshot {
     return new VocalRenderSnapshot(
       module().vocalEditCaptureSnapshot(this.native(), false),
@@ -712,6 +755,7 @@ export class VocalEditSession {
     );
   }
 
+  /** Serialises the edit state; pass it to {@link restoreVocalEditSession} with the same source PCM. */
   exportState(): Uint8Array {
     return new Uint8Array(module().vocalEditSessionExportState(this.native()));
   }
@@ -722,6 +766,7 @@ export class VocalEditSession {
   }
 }
 
+/** An open batch of edits on a {@link VocalEditSession}. Commit it to publish the edits or cancel it to drop them. */
 export class VocalEditDraft {
   private handle: number;
   private disposed = false;
@@ -744,19 +789,28 @@ export class VocalEditDraft {
     return this.handle;
   }
 
-  token(): VocalStateToken {
+  /** The draft's current state token. */
+  get token(): VocalStateToken {
     return copyToken(module().vocalEditDraftToken(this.native()));
   }
 
+  /** The committed revision the draft was begun from, a decimal string (64-bit counter). */
+  get revision(): string {
+    return this.token.revision;
+  }
+
+  /** The draft's notes and transitions, including uncommitted edits. */
   notes(): VocalNotesResult {
     return copyNotes(module().vocalEditDraftNotes(this.native()));
   }
 
+  /** Applies the operations as one batch. Omitting `expectedGeneration` uses the draft's current generation. */
   apply(request: VocalApplyRequest): VocalEditResult {
-    if (request.expectedGeneration === undefined) {
-      throw new TypeError('expectedGeneration is required');
-    }
-    const generation = requireToken(request.expectedGeneration, 'expectedGeneration');
+    requestObject('vocalApply', request, 'request', true);
+    const generation =
+      request.expectedGeneration === undefined
+        ? this.token.generation
+        : requireToken(request.expectedGeneration, 'expectedGeneration');
     if (!Array.isArray(request.operations)) {
       throw new TypeError('operations must be an array');
     }
@@ -769,14 +823,16 @@ export class VocalEditDraft {
     );
   }
 
+  /** Commits the draft and releases it. `expectedRevision` defaults to the revision the draft was begun from. */
   commit(options: RevisionArgument = {}): VocalEditResult {
     const result = copyEditResult(
-      module().vocalEditDraftCommit(this.native(), resolveRevision(options, this.owner.revision())),
+      module().vocalEditDraftCommit(this.native(), resolveRevision(options, this.owner.revision)),
     );
     this.destroy();
     return result;
   }
 
+  /** Discards the draft and releases it. */
   cancel(): void {
     if (this.disposed) {
       return;
@@ -785,12 +841,14 @@ export class VocalEditDraft {
     this.destroy();
   }
 
+  /** Per-frame pitch of one note including uncommitted edits. */
   evaluatePitch(noteId: number): VocalPitchEvaluation {
     return copyPitch(
       module().vocalEditEvaluatePitch(this.native(), requireUint32(noteId, 'noteId'), true),
     );
   }
 
+  /** Maps a source sample of a note to its position in the output, including uncommitted edits. */
   sourceSampleToDestinationSample(noteId: number, sourceSample: number): number {
     requireFinite(sourceSample, 'sourceSample');
     return module().vocalEditMapCoordinate(
@@ -802,6 +860,7 @@ export class VocalEditDraft {
     );
   }
 
+  /** Maps an output sample of a note back to its source position, including uncommitted edits. */
   destinationSampleToSourceSample(noteId: number, destinationSample: number): number {
     requireFinite(destinationSample, 'destinationSample');
     return module().vocalEditMapCoordinate(
@@ -813,6 +872,7 @@ export class VocalEditDraft {
     );
   }
 
+  /** Freezes the draft state for rendering. */
   captureRenderSnapshot(): VocalRenderSnapshot {
     return new VocalRenderSnapshot(
       module().vocalEditCaptureSnapshot(this.native(), true),
@@ -820,6 +880,7 @@ export class VocalEditDraft {
     );
   }
 
+  /** Releases the draft without committing it; calling it again does nothing. */
   destroy(): void {
     if (this.disposed) {
       return;
@@ -836,6 +897,7 @@ export class VocalEditDraft {
   }
 }
 
+/** A frozen copy of session or draft state that can be rendered repeatedly. */
 export class VocalRenderSnapshot {
   private handle: number;
   private disposed = false;
@@ -856,6 +918,7 @@ export class VocalRenderSnapshot {
     return this.handle;
   }
 
+  /** Length of the rendered output in samples. */
   outputLengthSamples(): number {
     return requireSample(
       module().vocalEditSnapshotOutputLength(this.native()),
@@ -863,10 +926,11 @@ export class VocalRenderSnapshot {
     );
   }
 
+  /** Renders the requested range synchronously. */
   render(request: VocalRenderRequest): VocalRenderResult {
     const handle = this.native();
     if (request.signal?.aborted) {
-      throw new DOMException('The render was aborted', 'AbortError');
+      throw new SonareError(ErrorCode.Cancelled, 'The render was cancelled');
     }
     const normalized = normalizeRequest(request, this.outputLengthSamples(), this.sampleRate);
     return copyRender(
@@ -879,10 +943,11 @@ export class VocalRenderSnapshot {
     );
   }
 
+  /** Starts an incremental render that the caller advances with {@link VocalRenderJob.next}. */
   beginRenderJob(request: VocalRenderRequest): VocalRenderJob {
     const handle = this.native();
     if (request.signal?.aborted) {
-      throw new DOMException('The render was aborted', 'AbortError');
+      throw new SonareError(ErrorCode.Cancelled, 'The render was cancelled');
     }
     const normalized = normalizeRequest(request, this.outputLengthSamples(), this.sampleRate);
     return new VocalRenderJob(
@@ -898,15 +963,14 @@ export class VocalRenderSnapshot {
   /**
    * Render one native work unit per macrotask so `request.signal` can stop the
    * job between units. A cancelled job publishes no partial PCM. Every failure rejects:
-   * an already-aborted signal with an `AbortError`, an abort during the render with a
-   * `Cancelled` SonareError.
+   * an aborted signal, before or during the render, with a `Cancelled` SonareError.
    */
   renderAsync(request: VocalRenderRequest): Promise<VocalRenderResult> {
     let job: VocalRenderJob;
     try {
       this.native();
       if (request.signal?.aborted) {
-        throw new DOMException('The render was aborted', 'AbortError');
+        throw new SonareError(ErrorCode.Cancelled, 'The render was cancelled');
       }
       job = this.beginRenderJob(request);
     } catch (error) {
@@ -934,6 +998,7 @@ export class VocalRenderSnapshot {
     })();
   }
 
+  /** Releases the snapshot; calling it again does nothing. */
   destroy(): void {
     if (this.disposed) {
       return;
@@ -949,6 +1014,7 @@ export class VocalRenderSnapshot {
   }
 }
 
+/** An incremental render started with {@link VocalRenderSnapshot.beginRenderJob}. */
 export class VocalRenderJob {
   private handle: number;
   private disposed = false;
@@ -967,22 +1033,26 @@ export class VocalRenderJob {
     return this.handle;
   }
 
+  /** Runs one work unit and reports whether the job is ready to finalise. */
   next(): VocalJobProgress {
     return { complete: module().vocalEditRenderJobNext(this.native()) };
   }
 
+  /** Collects the rendered PCM and releases the job. */
   finalize(): VocalRenderResult {
     const result = copyRender(module().vocalEditRenderJobFinalize(this.native()));
     this.destroy();
     return result;
   }
 
+  /** Stops the job; no partial PCM is published. */
   abort(): void {
     if (!this.disposed) {
       module().vocalEditRenderJobAbort(this.handle);
     }
   }
 
+  /** Releases the job; calling it again does nothing. */
   destroy(): void {
     if (this.disposed) {
       return;

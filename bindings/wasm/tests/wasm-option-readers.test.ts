@@ -114,7 +114,7 @@ describe('wrong-typed option values are refused by name', () => {
     ])('refuses %s = %j', (key, value) => {
       const mixer = Mixer.fromJson(mixingScenePresetJson('vocalReverbSend'), {
         sampleRate: SR,
-        blockSize: BLOCK,
+        maxBlockSize: BLOCK,
       });
       try {
         const vocal = mixer.stripById('vocal');
@@ -130,7 +130,7 @@ describe('wrong-typed option values are refused by name', () => {
     it('refuses a non-object pan and still accepts absent fields', () => {
       const mixer = Mixer.fromJson(mixingScenePresetJson('vocalReverbSend'), {
         sampleRate: SR,
-        blockSize: BLOCK,
+        maxBlockSize: BLOCK,
       });
       try {
         const vocal = mixer.stripById('vocal');
@@ -183,7 +183,7 @@ describe('sample-rate range', () => {
       () =>
         Mixer.fromJson(mixingScenePresetJson('vocalReverbSend'), {
           sampleRate: rate,
-          blockSize: BLOCK,
+          maxBlockSize: BLOCK,
         }),
       /sampleRate/,
     );
@@ -193,7 +193,7 @@ describe('sample-rate range', () => {
     expect(() => mixStereo([leftOnly()], [silence()], 8000)).not.toThrow();
     const mixer = Mixer.fromJson(mixingScenePresetJson('vocalReverbSend'), {
       sampleRate: 384000,
-      blockSize: BLOCK,
+      maxBlockSize: BLOCK,
     });
     mixer.destroy();
   });
@@ -275,14 +275,14 @@ describe('mixStereo and Mixer.fromJson share the supported sample-rate range', (
 
   it.each([7999, 384001, 1e6])('refuses sampleRate %d', (rate) => {
     expect(() => mixStereo([leftOnly()], [silence()], rate)).toThrow(/sampleRate/);
-    expect(() => Mixer.fromJson(plainScene, { sampleRate: rate, blockSize: BLOCK })).toThrow(
+    expect(() => Mixer.fromJson(plainScene, { sampleRate: rate, maxBlockSize: BLOCK })).toThrow(
       /sampleRate/,
     );
   });
 
   it.each([8000, 48000, 384000])('accepts sampleRate %d', (rate) => {
     expect(() => mixStereo([leftOnly()], [silence()], rate)).not.toThrow();
-    const mixer = Mixer.fromJson(plainScene, { sampleRate: rate, blockSize: BLOCK });
+    const mixer = Mixer.fromJson(plainScene, { sampleRate: rate, maxBlockSize: BLOCK });
     mixer.destroy();
   });
 });

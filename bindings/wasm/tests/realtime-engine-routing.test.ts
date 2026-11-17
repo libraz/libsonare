@@ -514,10 +514,11 @@ describe('Sonare WASM Module', () => {
         sourceSampleRate: 48000,
         targetSampleRate: 24000,
       });
-      expect(bounced.frames).toBe(128);
+      expect(bounced.channels).toHaveLength(2);
+      expect(bounced.channels[0]).toHaveLength(128);
+      expect(bounced.channels[1]).toHaveLength(128);
       expect(bounced.numChannels).toBe(2);
       expect(bounced.sampleRate).toBe(24000);
-      expect(bounced.interleaved.length).toBe(256);
       expect(Number.isFinite(bounced.integratedLufs) || !Number.isNaN(bounced.integratedLufs)).toBe(
         true,
       );
@@ -540,7 +541,9 @@ describe('Sonare WASM Module', () => {
         targetSampleRate: 48000,
         normalizeLufs: true,
       });
-      expect(Array.from(normalized.interleaved).every(Number.isFinite)).toBe(true);
+      expect(
+        normalized.channels.every((channel) => Array.from(channel).every(Number.isFinite)),
+      ).toBe(true);
       expect(() =>
         engine.bounceOffline({
           totalFrames: 256,

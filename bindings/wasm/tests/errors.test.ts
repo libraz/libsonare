@@ -34,7 +34,7 @@ describe('SonareError', () => {
   it('carries the C-ABI code of a failed scene load, keeping the detail text', () => {
     const load = (json: string): SonareError => {
       try {
-        Mixer.fromJson(json, { sampleRate: 48000, blockSize: 128 });
+        Mixer.fromJson(json, { sampleRate: 48000, maxBlockSize: 128 });
       } catch (e) {
         return e as SonareError;
       }

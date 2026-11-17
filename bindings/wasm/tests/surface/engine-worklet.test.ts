@@ -326,6 +326,22 @@ describe('SonareEngine shares the RealtimeEngine vocabulary', () => {
     }
   });
 
+  it('bounces the timeline to planar channels', async () => {
+    const { engine } = await newEngine();
+    try {
+      const result = await engine.bounceOffline({ totalFrames: 256, numChannels: 2 });
+      expect(result.numChannels).toBe(2);
+      expect(result.sampleRate).toBe(48000);
+      expect(result.channels).toHaveLength(2);
+      expect(result.channels[0]).toBeInstanceOf(Float32Array);
+      expect(result.channels[0]).toHaveLength(256);
+      expect(typeof result.integratedLufs).toBe('number');
+      expect(result).not.toHaveProperty('interleaved');
+    } finally {
+      engine.destroy();
+    }
+  });
+
   it('adds a clip from one clip object', async () => {
     const { engine } = await newEngine();
     try {

@@ -88,7 +88,7 @@ function mixerProcessorOutput(processor: SonareWorkletProcessor): Float32Array {
 
 /** The same scene rendered by a Mixer built explicitly at `rate`. */
 function mixerReference(rate: number): Float32Array {
-  const mixer = Mixer.fromJson(mixerScene(), { sampleRate: rate, blockSize: BLOCK });
+  const mixer = Mixer.fromJson(mixerScene(), { sampleRate: rate, maxBlockSize: BLOCK });
   try {
     mixer.compile();
     const buffer = mixer.createRealtimeBuffer();
@@ -150,7 +150,7 @@ const cases = [
       new SonareWorkletProcessor({
         sceneJson: mixingScenePresetJson('vocalReverbSend'),
         sampleRate,
-        blockSize: BLOCK,
+        maxBlockSize: BLOCK,
       }),
     rate: (p: SonareWorkletProcessor) => p.sampleRate,
   },
@@ -233,7 +233,7 @@ describe('worklet processors take their rate from the AudioWorkletGlobalScope', 
       SCOPE_RATES.forEach((scopeRate, index) => {
         setScopeRate(scopeRate);
         const rendered = observe(
-          () => new SonareWorkletProcessor({ sceneJson: mixerScene(), blockSize: BLOCK }),
+          () => new SonareWorkletProcessor({ sceneJson: mixerScene(), maxBlockSize: BLOCK }),
           mixerProcessorOutput,
         );
         expectCloseSignals(rendered, references[index]);

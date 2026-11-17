@@ -28,7 +28,7 @@ describe('Mixer realtime topology and heap views (WASM)', () => {
   it('refreshes an existing realtime buffer after adding a strip and processes its audio', () => {
     const mixer = Mixer.fromJson(mixingScenePresetJson('commentaryDucking'), {
       sampleRate: SR,
-      blockSize: BLOCK,
+      maxBlockSize: BLOCK,
     });
     const realtime = mixer.createRealtimeBuffer();
     try {
@@ -68,7 +68,7 @@ describe('Mixer realtime topology and heap views (WASM)', () => {
   it('grows native scratch pointer arrays before processStereoInto uses the new strip count', () => {
     const mixer = Mixer.fromJson(mixingScenePresetJson('commentaryDucking'), {
       sampleRate: SR,
-      blockSize: BLOCK,
+      maxBlockSize: BLOCK,
     });
     try {
       mixer.addStrip('direct-late-arrival', { enabled: false });
@@ -93,7 +93,7 @@ describe('Mixer realtime topology and heap views (WASM)', () => {
   it('reacquires detached views before resolving the implicit prepared block length', () => {
     const mixer = Mixer.fromJson(mixingScenePresetJson('commentaryDucking'), {
       sampleRate: SR,
-      blockSize: BLOCK,
+      maxBlockSize: BLOCK,
     });
     const realtime = mixer.createRealtimeBuffer();
     try {

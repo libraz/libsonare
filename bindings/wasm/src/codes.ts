@@ -1,4 +1,3 @@
-import type { ProjectAutomationCurve } from './project_types.js';
 import type {
   AutomationCurve,
   MeterTap,
@@ -55,9 +54,8 @@ export function resolveEnumOrdinal(
 /**
  * Automation curve spellings and their `SonareAutomationCurve` ordinals.
  *
- * Single source of truth for the vocabulary: {@link AutomationCurve} and
- * {@link ProjectAutomationCurve} are derived from these keys, so a spelling
- * cannot be documented without resolving, or resolve without being documented.
+ * Single source of truth for the vocabulary the mixer, the engine and the
+ * Project automation lanes resolve against.
  */
 export const AUTOMATION_CURVE_VALUES = {
   linear: 0,
@@ -66,16 +64,6 @@ export const AUTOMATION_CURVE_VALUES = {
   's-curve': 3,
 } as const;
 
-/**
- * The Project facade additionally accepts the legacy `'scurve'` spelling for
- * compatibility with project data written before `'s-curve'` was canonical.
- * The Node package declares the same pair of tables, so a breakpoint accepted
- * by one facade resolves to the same ordinal on the other.
- */
-export const PROJECT_AUTOMATION_CURVE_VALUES = {
-  ...AUTOMATION_CURVE_VALUES,
-  scurve: 3,
-} as const;
 const PAN_LAW_VALUES: Readonly<Record<string, number>> = {
   const3db: 0,
   'const-3db': 0,
@@ -105,11 +93,6 @@ const TRACK_MONITOR_MODE_VALUES = { off: 0, pfl: 1, afl: 2 } as const;
 
 export function automationCurveCode(curve: AutomationCurve): number {
   return resolveEnumOrdinal(curve, AUTOMATION_CURVE_VALUES, 'automation curve');
-}
-
-/** Resolve a Project automation breakpoint curve, legacy spellings included. */
-export function projectAutomationCurveCode(curve: ProjectAutomationCurve | undefined): number {
-  return resolveEnumOrdinal(curve ?? 'linear', PROJECT_AUTOMATION_CURVE_VALUES, 'automation curve');
 }
 
 export function panLawCode(panLaw: PanLawInput): number {

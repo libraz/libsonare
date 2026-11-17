@@ -68,7 +68,7 @@ describe('WASM handle teardown names', () => {
       () =>
         Mixer.fromJson(mixingScenePresetJson('vocalReverbSend'), {
           sampleRate: 48000,
-          blockSize: 512,
+          maxBlockSize: 512,
         }),
     ],
     ['PolyphonicAnalysis', () => analyzePolyphonic({ samples: tone(), sampleRate: 22050 })],

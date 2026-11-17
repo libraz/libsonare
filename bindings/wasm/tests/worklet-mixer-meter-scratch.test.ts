@@ -85,7 +85,7 @@ describe('SonareWorkletProcessor meter scratch', () => {
       {
         sceneJson: mixingScenePresetJson('vocalReverbSend'),
         sampleRate,
-        blockSize,
+        maxBlockSize: blockSize,
         meterIntervalFrames: blockSize,
         meterSharedBuffer: ring.sharedBuffer,
       },
@@ -173,7 +173,7 @@ describe('SonareWorkletProcessor meter scratch', () => {
       {
         sceneJson: mixingScenePresetJson('vocalReverbSend'),
         sampleRate,
-        blockSize,
+        maxBlockSize: blockSize,
         meterIntervalFrames: blockSize,
       },
       { onMeter: (meter) => meters.push(meter as { peakDbL: number }) },
@@ -206,7 +206,7 @@ describe('SonareWorkletProcessor meter scratch', () => {
       {
         sceneJson: mixingScenePresetJson('vocalReverbSend'),
         sampleRate,
-        blockSize,
+        maxBlockSize: blockSize,
         meterIntervalFrames: blockSize,
         meterSharedBuffer: ring.sharedBuffer,
       },

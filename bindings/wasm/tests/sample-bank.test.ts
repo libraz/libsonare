@@ -5,7 +5,7 @@
  */
 
 import { beforeAll, describe, expect, it } from 'vitest';
-import type { SampleZoneDesc, SynthPatch } from '../dist/index.js';
+import type { ProjectBounceOptions, SampleZoneDesc, SynthPatch } from '../dist/index.js';
 import {
   ErrorCode,
   init,
@@ -18,6 +18,26 @@ import {
 import { expectRefusalOf } from './_helpers';
 
 const SAMPLE_RATE = 48000;
+
+/** Bounce one instrument at its destination and interleave the planar result for sample-wise checks. */
+function bounceSynth(
+  project: Project,
+  config: SynthPatch,
+  options?: ProjectBounceOptions,
+): Float32Array {
+  const { destinationId, ...instrument } = config as { destinationId?: number };
+  const { channels } = project.bounceWithSynthInstruments(
+    { destinationId, instrument } as never,
+    options,
+  );
+  const out = new Float32Array(channels.length * (channels[0]?.length ?? 0));
+  channels.forEach((channel, c) => {
+    for (let i = 0; i < channel.length; i++) {
+      out[i * channels.length + c] = channel[i];
+    }
+  });
+  return out;
+}
 
 function peak(audio: Float32Array): number {
   let p = 0;
@@ -158,7 +178,8 @@ describe('Sonare WASM sample bank', () => {
         const index = bank.addSample(tone(261.6256, 0.2));
         bank.addZone({ ...bounds, sampleIndex: index });
 
-        const audio = project.bounceWithSynthInstrument(
+        const audio = bounceSynth(
+          project,
           { engineMode: 'sample', sampleBank: bank },
           { totalFrames: 12000 },
         );
@@ -204,8 +225,8 @@ describe('Sonare WASM sample bank', () => {
         sampleKeyTrack: 'on',
         sampleBank: bank,
       };
-      const first = project.bounceWithSynthInstrument(patch, { totalFrames: SAMPLE_RATE });
-      const second = project.bounceWithSynthInstrument(patch, { totalFrames: SAMPLE_RATE });
+      const first = bounceSynth(project, patch, { totalFrames: SAMPLE_RATE });
+      const second = bounceSynth(project, patch, { totalFrames: SAMPLE_RATE });
       expect(peak(first)).toBeGreaterThan(0);
       expect(Array.from(second)).toEqual(Array.from(first));
     } finally {
@@ -217,10 +238,7 @@ describe('Sonare WASM sample bank', () => {
   it('renders silence, not an error, for a sample patch with no bank', () => {
     const project = oneNoteProject(60);
     try {
-      const audio = project.bounceWithSynthInstrument(
-        { engineMode: 'sample' },
-        { totalFrames: 24000 },
-      );
+      const audio = bounceSynth(project, { engineMode: 'sample' }, { totalFrames: 24000 });
       expect(peak(audio)).toBe(0);
     } finally {
       project.destroy();
@@ -237,13 +255,11 @@ describe('Sonare WASM sample bank', () => {
       // The id outlives the handle, so a released bank has to be refused
       // rather than left to a pointer that still looks plausible.
       expect(() =>
-        project.bounceWithSynthInstrument(
-          { engineMode: 'sample', sampleBank: released },
-          { totalFrames: 4800 },
-        ),
+        bounceSynth(project, { engineMode: 'sample', sampleBank: released }, { totalFrames: 4800 }),
       ).toThrow(/sampleBank is destroyed/);
       expect(() =>
-        project.bounceWithSynthInstrument(
+        bounceSynth(
+          project,
           { engineMode: 'sample', sampleBank: {} as unknown as SampleBank },
           { totalFrames: 4800 },
         ),

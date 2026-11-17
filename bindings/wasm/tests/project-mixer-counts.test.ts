@@ -6,7 +6,7 @@
  */
 
 import { beforeAll, describe, expect, it } from 'vitest';
-import { init, MarkerKind, Mixer, mixingScenePresetJson, Project } from '../dist/index.js';
+import { init, Mixer, mixingScenePresetJson, Project } from '../dist/index.js';
 
 function accelerando(sampleRate = 22050, startBpm = 100, endBpm = 160, seconds = 24): Float32Array {
   const audio = new Float32Array(Math.round(sampleRate * seconds));
@@ -29,12 +29,12 @@ describe('Project counts and timeline metadata (WASM)', () => {
   it('round-trips entity counts as tracks/sources are added', () => {
     const project = new Project();
     try {
-      expect(project.trackCount()).toBe(0);
+      expect(project.tracks().length).toBe(0);
       project.addTrack({ kind: 'audio', name: 'lead' });
-      expect(project.trackCount()).toBe(1);
+      expect(project.tracks().length).toBe(1);
       project.addTrack({ kind: 'midi', name: 'keys' });
-      expect(project.trackCount()).toBe(2);
-      expect(typeof project.sourceCount()).toBe('number');
+      expect(project.tracks().length).toBe(2);
+      expect(typeof project.sources().length).toBe('number');
     } finally {
       project.destroy();
     }
@@ -52,34 +52,34 @@ describe('Project counts and timeline metadata (WASM)', () => {
         gain: 0.75,
         sourceUri: 'asset://readback.wav',
       });
-      expect(project.trackByIndex(0)).toMatchObject({
+      expect(project.tracks()[0]).toMatchObject({
         id: trackId,
-        kind: 0,
+        kind: 'audio',
         name: 'readback',
         gain: 1,
         pan: 0,
         mute: false,
         solo: false,
       });
-      expect(project.clipByIndex(0)).toMatchObject({
+      expect(project.clips()[0]).toMatchObject({
         id: clipId,
         trackId,
-        sourceKind: 0,
+        sourceKind: 'audio',
         startPpq: 2,
         lengthPpq: 4,
         sourceOffsetPpq: 1,
         gain: 0.75,
-        loopMode: 0,
+        loopMode: 'off',
         loopLengthPpq: 0,
       });
-      expect(project.sourceByIndex(0)).toMatchObject({
-        id: project.clipByIndex(0).sourceId,
-        kind: 0,
+      expect(project.sources()[0]).toMatchObject({
+        id: project.clips()[0].sourceId,
+        kind: 'audio',
         nameOrUri: 'asset://readback.wav',
       });
-      expect(() => project.trackByIndex(1)).toThrow();
-      expect(() => project.clipByIndex(1)).toThrow();
-      expect(() => project.sourceByIndex(1)).toThrow();
+      expect(project.tracks()[1]).toBeUndefined();
+      expect(project.clips()[1]).toBeUndefined();
+      expect(project.sources()[1]).toBeUndefined();
     } finally {
       project.destroy();
     }
@@ -92,7 +92,7 @@ describe('Project counts and timeline metadata (WASM)', () => {
         { startPpq: 0, bpm: 120 },
         { startPpq: 1920, bpm: 140, endBpm: 160 },
       ]);
-      expect(project.tempoSegmentCount()).toBe(2);
+      expect(project.tempoSegments().length).toBe(2);
     } finally {
       project.destroy();
     }
@@ -110,15 +110,15 @@ describe('Project counts and timeline metadata (WASM)', () => {
         { startPpq: 1920, bpm: 140, endBpm: 160 },
       ];
       source.setTempoSegments(segments);
-      const readBack = [source.tempoSegmentByIndex(0), source.tempoSegmentByIndex(1)];
+      const readBack = [source.tempoSegments()[0], source.tempoSegments()[1]];
       expect(readBack).toEqual(segments);
       // startSample is never returned: the setter ignores it and a project keeps
       // musical positions only.
       expect('startSample' in readBack[0]).toBe(false);
-      expect(() => source.tempoSegmentByIndex(2)).toThrow();
+      expect(source.tempoSegments()[2]).toBeUndefined();
 
       target.setTempoSegments(readBack);
-      expect(target.tempoSegmentByIndex(1)).toEqual(readBack[1]);
+      expect(target.tempoSegments()[1]).toEqual(readBack[1]);
     } finally {
       source.destroy();
       target.destroy();
@@ -132,13 +132,13 @@ describe('Project counts and timeline metadata (WASM)', () => {
         { startPpq: 0, numerator: 4, denominator: 4 },
         { startPpq: 1920, numerator: 6, denominator: 8 },
       ]);
-      expect(project.timeSignatureCount()).toBe(2);
-      expect(project.timeSignatureByIndex(1)).toEqual({
+      expect(project.timeSignatures().length).toBe(2);
+      expect(project.timeSignatures()[1]).toEqual({
         startPpq: 1920,
         numerator: 6,
         denominator: 8,
       });
-      expect(() => project.timeSignatureByIndex(2)).toThrow();
+      expect(project.timeSignatures()[2]).toBeUndefined();
     } finally {
       project.destroy();
     }
@@ -147,7 +147,7 @@ describe('Project counts and timeline metadata (WASM)', () => {
   it('sets a marker and returns its id', () => {
     const project = new Project();
     try {
-      const id = project.setMarker(0, 480, 'intro');
+      const id = project.setMarker({ ppq: 480, name: 'intro' });
       expect(typeof id).toBe('number');
       expect(id).toBeGreaterThan(0);
     } finally {
@@ -155,44 +155,39 @@ describe('Project counts and timeline metadata (WASM)', () => {
     }
   });
 
-  it('round-trips markers through setMarkerEx/markerByIndex and counts them', () => {
+  it('round-trips markers through setMarker/markers and counts them', () => {
     const project = new Project();
     try {
-      expect(project.markerCount()).toBe(0);
-      const keyId = project.setMarkerEx({
-        id: 0,
+      expect(project.markers().length).toBe(0);
+      const keyId = project.setMarker({
         ppq: 960,
         name: 'chorus',
-        kind: MarkerKind.keySignature,
+        kind: 'keySignature',
         keyFifths: -3,
         keyMinor: true,
       });
-      const cueId = project.setMarkerEx({
-        id: 0,
+      const cueId = project.setMarker({
         ppq: 1920,
         name: 'drop',
-        kind: MarkerKind.cuePoint,
+        kind: 'cuePoint',
       });
       expect(keyId).toBeGreaterThan(0);
       expect(cueId).toBeGreaterThan(0);
 
-      const count = project.markerCount();
+      const count = project.markers().length;
       expect(count).toBe(2);
-      const markers = [];
-      for (let i = 0; i < count; i++) {
-        markers.push(project.markerByIndex(i));
-      }
+      const markers = project.markers();
       const key = markers.find((m) => m.id === keyId);
       expect(key?.ppq).toBe(960);
       expect(key?.name).toBe('chorus');
-      expect(key?.kind).toBe(MarkerKind.keySignature);
+      expect(key?.kind).toBe('keySignature');
       expect(key?.keyFifths).toBe(-3);
       expect(key?.keyMinor).toBe(true);
       const cue = markers.find((m) => m.id === cueId);
-      expect(cue?.kind).toBe(MarkerKind.cuePoint);
+      expect(cue?.kind).toBe('cuePoint');
       expect(cue?.keyMinor).toBe(false);
 
-      expect(() => project.markerByIndex(count)).toThrow();
+      expect(markers[count]).toBeUndefined();
     } finally {
       project.destroy();
     }
@@ -203,8 +198,8 @@ describe('Project counts and timeline metadata (WASM)', () => {
     try {
       const name = 'あいうえお'.repeat(7);
       expect(Array.from(name)).toHaveLength(35);
-      project.setMarkerEx({ id: 0, ppq: 960, name });
-      expect(project.markerByIndex(0).name).toBe(name);
+      project.setMarker({ ppq: 960, name });
+      expect(project.markers()[0].name).toBe(name);
       expect(JSON.parse(project.toJson()).markers[0].name).toBe(name);
     } finally {
       project.destroy();
@@ -215,9 +210,9 @@ describe('Project counts and timeline metadata (WASM)', () => {
     const project = new Project();
     try {
       project.setSampleRate(44100);
-      expect(project.getSampleRate()).toBe(44100);
-      project.setOverlapPolicy(1);
-      expect(project.getOverlapPolicy()).toBe(1);
+      expect(project.sampleRate).toBe(44100);
+      project.setOverlapPolicy('allow');
+      expect(project.overlapPolicy).toBe('allow');
     } finally {
       project.destroy();
     }
@@ -238,14 +233,10 @@ describe('Project counts and timeline metadata (WASM)', () => {
     try {
       const result = project.lastBounceCompileResult();
       expect(result).toBeTypeOf('object');
-      expect(result).toHaveProperty('hasTimeline');
-      expect(typeof result.hasTimeline).toBe('boolean');
+      expect(result).not.toHaveProperty('hasTimeline');
+      expect(result).not.toHaveProperty('diagnosticCount');
       // No bounce has run on this project, so the result is empty in full.
-      // A failed bounce is told apart by its diagnostics, never by hasTimeline
-      // alone: losing the timeline always leaves an error diagnostic behind.
-      expect(result.hasTimeline).toBe(false);
       expect(result.diagnostics).toHaveLength(0);
-      expect(result.diagnosticCount).toBe(0);
     } finally {
       project.destroy();
     }
@@ -260,7 +251,7 @@ describe('Mixer tail draining (WASM)', () => {
   it('reports tailSamples as a number', () => {
     const mixer = Mixer.fromJson(mixingScenePresetJson('vocalReverbSend'), {
       sampleRate: 48000,
-      blockSize: 512,
+      maxBlockSize: 512,
     });
     try {
       mixer.compile();
@@ -275,7 +266,7 @@ describe('Mixer tail draining (WASM)', () => {
   it('reports latencySamples as a number', () => {
     const mixer = Mixer.fromJson(mixingScenePresetJson('vocalReverbSend'), {
       sampleRate: 48000,
-      blockSize: 512,
+      maxBlockSize: 512,
     });
     try {
       mixer.compile();
@@ -290,7 +281,7 @@ describe('Mixer tail draining (WASM)', () => {
   it('drainTailStereo returns stereo buffers of the requested length', () => {
     const mixer = Mixer.fromJson(mixingScenePresetJson('vocalReverbSend'), {
       sampleRate: 48000,
-      blockSize: 512,
+      maxBlockSize: 512,
     });
     try {
       mixer.compile();
@@ -312,10 +303,8 @@ describe('Mixer tail draining (WASM)', () => {
     const segmentsFor = (options?: Record<string, unknown>) => {
       const project = new Project();
       try {
-        project.autoTempo(audio, 22050, 0, false, options);
-        return Array.from({ length: project.tempoSegmentCount() }, (_, i) =>
-          project.tempoSegmentByIndex(i),
-        );
+        project.autoTempo(audio, 22050, options);
+        return project.tempoSegments();
       } finally {
         project.destroy();
       }
@@ -341,9 +330,7 @@ describe('Mixer tail draining (WASM)', () => {
     const audio = accelerando();
     const project = new Project();
     try {
-      expect(() =>
-        project.autoTempo(audio, 22050, 0, false, { tempoUpdateIntervalBeats: 0 }),
-      ).toThrow();
+      expect(() => project.autoTempo(audio, 22050, { tempoUpdateIntervalBeats: 0 })).toThrow();
       expect(() => project.analyzeTempo(audio, 22050, { rampThreshold: -1 })).toThrow();
       expect(project.analyzeTempo(audio, 22050, { includeOctaveCandidates: false })).toHaveLength(
         1,

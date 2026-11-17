@@ -1,14 +1,14 @@
 /**
- * Pins the bounceWith*Instrument(s) argument contract shared with the Node
- * binding: the singular form takes one binding or a list, the plural form a
- * list, both resolve through one normalizer, and an element that is not a
- * binding (an array included) is refused by name before any render starts.
+ * Pins the bounceWith*Instruments argument contract shared with the Node
+ * binding: a single { destinationId?, instrument } pair or a list resolves
+ * through one normalizer, and an element that is not a pair (an array or a
+ * bare config included) is refused by name before any render starts.
  */
 
 import { beforeAll, describe, expect, it } from 'vitest';
 import { init, Project, type ProjectBounceOptions } from '../dist/index.js';
 
-const OPTIONS: ProjectBounceOptions = { totalFrames: 4096, numChannels: 2, sampleRate: 48000 };
+const OPTIONS: ProjectBounceOptions = { totalFrames: 4096, numChannels: 2 };
 
 /** One sustained note routed to destination 0. */
 function midiProject(): Project {
@@ -32,49 +32,37 @@ function withProject(body: (project: Project) => void): void {
   }
 }
 
-const peak = (audio: Float32Array): number => audio.reduce((p, v) => Math.max(p, Math.abs(v)), 0);
+const peak = (audio: { channels: Float32Array[] }): number =>
+  audio.channels[0].reduce((p, v) => Math.max(p, Math.abs(v)), 0);
 
-type Bounce = (project: Project, value: unknown) => Float32Array;
+type Bounce = (project: Project, value: unknown) => { channels: Float32Array[] };
 
 interface Family {
-  singular: string;
-  plural: string;
-  one: Bounce;
-  many: Bounce;
-  /** Two bindings that must render differently: the control row. */
-  binding: unknown;
+  method: string;
+  run: Bounce;
+  /** Two instruments that must render differently: the control row. */
+  instrument: unknown;
   other: unknown;
-  /** Whether a bare name is a binding of this family. */
-  takesName: boolean;
 }
 
 const FAMILIES: Family[] = [
   {
-    singular: 'bounceWithBuiltinInstrument',
-    plural: 'bounceWithBuiltinInstruments',
-    one: (p, v) => p.bounceWithBuiltinInstrument(v as never, OPTIONS),
-    many: (p, v) => p.bounceWithBuiltinInstruments(v as never, OPTIONS),
-    binding: { waveform: 'saw', destinationId: 0 },
-    other: 'sine',
-    takesName: true,
+    method: 'bounceWithBuiltinInstruments',
+    run: (p, v) => p.bounceWithBuiltinInstruments(v as never, OPTIONS),
+    instrument: { waveform: 'saw' },
+    other: { waveform: 'sine' },
   },
   {
-    singular: 'bounceWithSynthInstrument',
-    plural: 'bounceWithSynthInstruments',
-    one: (p, v) => p.bounceWithSynthInstrument(v as never, OPTIONS),
-    many: (p, v) => p.bounceWithSynthInstruments(v as never, OPTIONS),
-    binding: { destinationId: 0 },
-    other: 'saw-lead',
-    takesName: true,
+    method: 'bounceWithSynthInstruments',
+    run: (p, v) => p.bounceWithSynthInstruments(v as never, OPTIONS),
+    instrument: {},
+    other: { preset: 'saw-lead' },
   },
   {
-    singular: 'bounceWithSf2Instrument',
-    plural: 'bounceWithSf2Instruments',
-    one: (p, v) => p.bounceWithSf2Instrument(v as never, OPTIONS),
-    many: (p, v) => p.bounceWithSf2Instruments(v as never, OPTIONS),
-    binding: { destinationId: 0, gain: 0.8 },
-    other: { destinationId: 0, gain: 0.2 },
-    takesName: false,
+    method: 'bounceWithSf2Instruments',
+    run: (p, v) => p.bounceWithSf2Instruments(v as never, OPTIONS),
+    instrument: { gain: 0.8 },
+    other: { gain: 0.2 },
   },
 ];
 
@@ -82,48 +70,46 @@ beforeAll(async () => {
   await init();
 });
 
-describe.each(FAMILIES)('$singular / $plural', (family) => {
-  it('renders one binding identically in the singular, list and plural forms', () => {
+describe.each(FAMILIES)('$method', (family) => {
+  it('renders one binding identically as a pair and as a list', () => {
     withProject((project) => {
-      const single = family.one(project, family.binding);
+      const pair = { destinationId: 0, instrument: family.instrument };
+      const single = family.run(project, pair);
       expect(peak(single)).toBeGreaterThan(0);
-      expect(family.one(project, [family.binding])).toEqual(single);
-      expect(family.many(project, [family.binding])).toEqual(single);
-      // The control: a different binding moves the render, so the equalities
-      // above cannot hold because the binding was dropped.
-      expect(family.many(project, [family.other])).not.toEqual(single);
+      expect(family.run(project, [pair])).toEqual(single);
+      // An omitted destination is destination 0.
+      expect(family.run(project, { instrument: family.instrument })).toEqual(single);
+      // The control: a different instrument moves the render, so the equalities
+      // above cannot hold because the instrument was dropped.
+      expect(family.run(project, [{ instrument: family.other }])).not.toEqual(single);
     });
   });
 
-  it('reads null as no bindings in both forms', () => {
+  it('reads no bindings as silence', () => {
     withProject((project) => {
       const silent = project.bounce(OPTIONS);
-      expect(family.one(project, null)).toEqual(silent);
-      expect(family.many(project, null)).toEqual(silent);
-      expect(family.many(project, [])).toEqual(silent);
+      expect(family.run(project, null)).toEqual(silent);
+      expect(family.run(project, [])).toEqual(silent);
     });
   });
 
-  it('refuses a non-binding element by name', () => {
+  it('refuses a non-pair element by name', () => {
     withProject((project) => {
-      const expected = family.takesName ? 'an object or a name' : 'an object';
-      expect(() => family.one(project, [[family.binding]])).toThrow(
-        new TypeError(`${family.singular}: instrument[0] must be ${expected}`),
+      const pair = { instrument: family.instrument };
+      const expected = '{ destinationId?, instrument } pair';
+      expect(() => family.run(project, [pair, [pair]])).toThrow(
+        new TypeError(`${family.method}: instruments[1] must be a ${expected}`),
       );
-      expect(() => family.many(project, [family.binding, [family.binding]])).toThrow(
-        new TypeError(`${family.plural}: instruments[1] must be ${expected}`),
+      expect(() => family.run(project, 42)).toThrow(
+        new TypeError(`${family.method}: instrument must be a ${expected}`),
       );
-      expect(() => family.one(project, 42)).toThrow(
-        new TypeError(`${family.singular}: instrument must be ${expected}`),
+      // A bare config, or a name, must be wrapped as a pair.
+      expect(() => family.run(project, [family.instrument])).toThrow(
+        /instruments\[0\](: unknown request key| needs an 'instrument' key)/,
       );
-      expect(() => family.many(project, family.binding)).toThrow(
-        new TypeError(`${family.plural}: instruments must be an array`),
+      expect(() => family.run(project, ['piano'])).toThrow(
+        new TypeError(`${family.method}: instruments[0] must be a ${expected}`),
       );
-      if (!family.takesName) {
-        expect(() => family.one(project, 'piano')).toThrow(
-          new TypeError(`${family.singular}: instrument must be an object`),
-        );
-      }
     });
   });
 });

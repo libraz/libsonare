@@ -81,8 +81,11 @@ describe('RealtimeEngine offline bounce content', () => {
         sourceSampleRate,
         targetSampleRate,
       });
-      expect(result.frames).toBe(targetSampleRate);
-      expect(result.interleaved.length).toBe(targetSampleRate * 2);
+      expect(result.channels).toHaveLength(2);
+      expect(result.numChannels).toBe(2);
+      for (const channel of result.channels) {
+        expect(channel.length).toBe(targetSampleRate);
+      }
       expect(result.sampleRate).toBe(targetSampleRate);
     } finally {
       engine.destroy();
@@ -94,8 +97,10 @@ describe('RealtimeEngine offline bounce content', () => {
     try {
       const result = engine.bounceOffline({ totalFrames: 441, blockSize: BLOCK_SIZE });
       expect(result.sampleRate).toBe(44100);
-      expect(result.frames).toBe(441);
-      expect(result.interleaved.length).toBe(441 * 2);
+      expect(result.channels).toHaveLength(2);
+      for (const channel of result.channels) {
+        expect(channel.length).toBe(441);
+      }
     } finally {
       engine.destroy();
     }
@@ -110,7 +115,7 @@ describe('RealtimeEngine offline bounce content', () => {
         targetSampleRate: 48000,
       });
       expect(result.sampleRate).toBe(48000);
-      expect(result.frames).toBe(48000);
+      expect(result.channels[0].length).toBe(48000);
     } finally {
       engine.destroy();
     }
@@ -142,7 +147,14 @@ describe('RealtimeEngine offline bounce content', () => {
       ...options,
     });
     engine.destroy();
-    return { samples: result.interleaved, lufs: result.integratedLufs };
+    // Interleave so the content assertions read one buffer across channels.
+    const samples = new Float32Array(result.channels.length * FRAMES);
+    result.channels.forEach((channel, c) => {
+      for (let i = 0; i < FRAMES; i++) {
+        samples[i * result.channels.length + c] = channel[i];
+      }
+    });
+    return { samples, lufs: result.integratedLufs };
   };
 
   const peak = (samples: Float32Array): number =>
@@ -214,7 +226,7 @@ describe('RealtimeEngine offline bounce content', () => {
   it.each(['tpdf', 'noiseShaped'] as const)(
     'keeps dither type %s independent across output channels',
     (dither) => {
-      const renderSilence = (numChannels: number): Float32Array => {
+      const renderSilence = (numChannels: number): Float32Array[] => {
         const engine = new RealtimeEngine({ sampleRate: SAMPLE_RATE, maxBlockSize: BLOCK_SIZE });
         try {
           return engine.bounceOffline({
@@ -226,18 +238,19 @@ describe('RealtimeEngine offline bounce content', () => {
             dither,
             ditherBits: 16,
             ditherSeed: 1234,
-          }).interleaved;
+          }).channels;
         } finally {
           engine.destroy();
         }
       };
       const mono = renderSilence(1);
-      expect(mono.some((sample) => sample !== 0)).toBe(true);
+      expect(mono).toHaveLength(1);
+      expect(mono[0].some((sample) => sample !== 0)).toBe(true);
       for (const width of [2, 6, 8]) {
-        const interleaved = renderSilence(width);
-        const left = Array.from({ length: FRAMES }, (_, frame) => interleaved[frame * width]);
-        const right = Array.from({ length: FRAMES }, (_, frame) => interleaved[frame * width + 1]);
-        expect(left).toEqual(Array.from(mono));
+        const channels = renderSilence(width);
+        expect(channels).toHaveLength(width);
+        const [left, right] = channels.map((channel) => Array.from(channel));
+        expect(left).toEqual(Array.from(mono[0]));
         expect(right).not.toEqual(left);
       }
     },

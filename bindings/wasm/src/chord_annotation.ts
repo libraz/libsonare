@@ -1,5 +1,6 @@
 import { chordQualityOrdinal, keyModeOrdinal, pitchClassOrdinal } from './analysis_helpers.js';
-import { projectModule } from './project_internal.js';
+import { projectChordQualityName, projectKeyModeName, projectModule } from './project_internal.js';
+import type { ProjectChordQuality, ProjectKeyMode } from './project_types.js';
 import type { Chord, KeyMode } from './public_types.js';
 
 /**
@@ -9,8 +10,8 @@ import type { Chord, KeyMode } from './public_types.js';
 export interface ChordSymbolFields {
   /** Root pitch class 0..11 (C=0); kept as given, including for an unknown chord. */
   rootPc: number;
-  /** Annotation chord quality 0..7, not the analysis quality. */
-  quality: number;
+  /** Annotation chord quality, not the analysis quality. */
+  quality: ProjectChordQuality;
   /** Extensions as scale degrees, e.g. `[7, 9, 13]` for a dominant 13th. */
   extensions: number[];
   /** Slash-bass pitch class 0..11, or 255 when the bass is the root. */
@@ -49,21 +50,21 @@ export function chordSymbolFromAnalysis(
   const root = pitchClassOrdinal(chord.root, 'root');
   const bass = pitchClassOrdinal(chord.bass, 'bass');
   const quality = chordQualityOrdinal(chord.quality, 'quality');
-  return projectModule().chordSymbolFromAnalysis(root, quality, bass);
+  const native = projectModule().chordSymbolFromAnalysis(root, quality, bass);
+  return { ...native, quality: projectChordQualityName(native.quality) };
 }
 
 /**
  * Converts a key mode from analysis into the `mode` of a
  * {@link ProjectKeySegment} for {@link Project.annotateKeys}.
  *
- * The annotation numbering reserves 0 for an unknown mode, so every analysis mode
- * lands one ordinal higher.
+ * Every analysis mode has an annotation mode of the same name.
  *
  * @param mode - A mode name (`'major'`, `'minor'`, `'dorian'`, ...)
- * @returns The annotation mode ordinal, 1..7
+ * @returns The annotation mode token
  * @throws {TypeError} when `mode` is not a string
  * @throws {RangeError} naming `mode` for an unrecognised value
  */
-export function keyModeFromAnalysis(mode: KeyMode): number {
-  return projectModule().keyModeFromAnalysis(keyModeOrdinal(mode, 'mode'));
+export function keyModeFromAnalysis(mode: KeyMode): ProjectKeyMode {
+  return projectKeyModeName(projectModule().keyModeFromAnalysis(keyModeOrdinal(mode, 'mode')));
 }

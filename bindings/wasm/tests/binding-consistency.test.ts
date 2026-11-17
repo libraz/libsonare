@@ -62,8 +62,8 @@ describe('WASM cross-binding consistency', () => {
       const project = buildMidiOnlyProject();
       try {
         expect(() =>
-          project.bounceWithBuiltinInstrument(
-            { waveform: 'bogus' as unknown as 'sine' },
+          project.bounceWithBuiltinInstruments(
+            { instrument: { waveform: 'bogus' as unknown as 'sine' } },
             { totalFrames: 4800, numChannels: 1 },
           ),
         ).toThrow();
@@ -84,8 +84,8 @@ describe('WASM cross-binding consistency', () => {
         try {
           expect(
             () =>
-              project.bounceWithBuiltinInstrument(
-                { waveform: waveform as unknown as 'sine' },
+              project.bounceWithBuiltinInstruments(
+                { instrument: { waveform: waveform as unknown as 'sine' } },
                 { totalFrames: 4800, numChannels: 1 },
               ),
             `waveform ${waveform} must be rejected, not resolved to sine`,
@@ -106,8 +106,8 @@ describe('WASM cross-binding consistency', () => {
         try {
           expect(
             () =>
-              project.bounceWithBuiltinInstrument(
-                { waveform: waveform as unknown as 'sine' },
+              project.bounceWithBuiltinInstruments(
+                { instrument: { waveform: waveform as unknown as 'sine' } },
                 { totalFrames: 4800, numChannels: 1 },
               ),
             `waveform ${waveform} must be rejected as out of range`,
@@ -124,10 +124,10 @@ describe('WASM cross-binding consistency', () => {
       const renders = [0, 1, 2, 3].map((waveform) => {
         const project = buildMidiOnlyProject();
         try {
-          const audio = project.bounceWithBuiltinInstrument(
-            { waveform: waveform as unknown as 'sine' },
+          const [audio] = project.bounceWithBuiltinInstruments(
+            { instrument: { waveform: waveform as unknown as 'sine' } },
             { totalFrames: SR, numChannels: 1 },
-          );
+          ).channels;
           return audio.reduce((hash, sample) => (hash * 31 + Math.round(sample * 1e6)) | 0, 0);
         } finally {
           project.destroy();
@@ -139,10 +139,10 @@ describe('WASM cross-binding consistency', () => {
     it('accepts "sawtooth" as an alias of "saw"', () => {
       const project = buildMidiOnlyProject();
       try {
-        const audio = project.bounceWithBuiltinInstrument(
-          { waveform: 'sawtooth', gain: 0.5 },
+        const [audio] = project.bounceWithBuiltinInstruments(
+          { instrument: { waveform: 'sawtooth', gain: 0.5 } },
           { totalFrames: SR, numChannels: 1 },
-        );
+        ).channels;
         expect(audio).toBeInstanceOf(Float32Array);
         expect(maxAbs(audio)).toBeGreaterThan(0.01);
       } finally {
@@ -157,10 +157,10 @@ describe('WASM cross-binding consistency', () => {
         // alias lets portable code share that name (tsc validates the alias
         // accepts the same shape as BuiltinSynthBinding).
         const patch: BuiltinSynthConfig = { waveform: 'square', gain: 0.3 };
-        const audio = project.bounceWithBuiltinInstrument(patch, {
-          totalFrames: SR,
-          numChannels: 1,
-        });
+        const [audio] = project.bounceWithBuiltinInstruments(
+          { instrument: patch },
+          { totalFrames: SR, numChannels: 1 },
+        ).channels;
         expect(audio).toBeInstanceOf(Float32Array);
         expect(maxAbs(audio)).toBeGreaterThan(0.01);
       } finally {
@@ -171,10 +171,10 @@ describe('WASM cross-binding consistency', () => {
     it('bounces an explicitly empty instrument array to silence', () => {
       const project = buildMidiOnlyProject();
       try {
-        const audio = project.bounceWithBuiltinInstrument([], {
+        const [audio] = project.bounceWithBuiltinInstruments([], {
           totalFrames: SR,
           numChannels: 1,
-        });
+        }).channels;
         expect(audio).toBeInstanceOf(Float32Array);
         expect(maxAbs(audio)).toBe(0);
       } finally {
@@ -187,7 +187,7 @@ describe('WASM cross-binding consistency', () => {
     it('keeps the current pan mode when panMode is omitted', () => {
       const mixer = Mixer.fromJson(mixingScenePresetJson('vocalReverbSend'), {
         sampleRate: SR,
-        blockSize: BLOCK,
+        maxBlockSize: BLOCK,
       });
       try {
         const vocal = mixer.stripById('vocal');
@@ -215,7 +215,7 @@ describe('WASM cross-binding consistency', () => {
     it('stripMeter accepts an optional tap argument', () => {
       const mixer = Mixer.fromJson(mixingScenePresetJson('vocalReverbSend'), {
         sampleRate: SR,
-        blockSize: BLOCK,
+        maxBlockSize: BLOCK,
       });
       try {
         const vocal = mixer.stripById('vocal');

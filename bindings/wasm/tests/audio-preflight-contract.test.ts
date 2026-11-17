@@ -490,7 +490,6 @@ const NOT_AUDIO: string[] = [
     'decodeChannelsWithBrowserFallback',
     'attachOpfsClipStream',
     'createOpfsClipPageProvider',
-    'createOpfsClipPageWorker',
     'importOpfsClip',
     'writeOpfsClip',
     'bindMicrophoneInput',
@@ -602,9 +601,9 @@ describe('wrong-typed arguments are TypeErrors that name the argument', () => {
   });
 
   it('a string the native layer reads is refused before embind sees it', () => {
-    expect(() => sonare.Mixer.fromJson(null as never, { sampleRate: SR, blockSize: 512 })).toThrow(
-      TypeError,
-    );
+    expect(() =>
+      sonare.Mixer.fromJson(null as never, { sampleRate: SR, maxBlockSize: 512 }),
+    ).toThrow(TypeError);
     expect(() => sonare.masteringPresetParams(5 as never)).toThrow(
       new TypeError('masteringPresetParams: preset must be a string'),
     );

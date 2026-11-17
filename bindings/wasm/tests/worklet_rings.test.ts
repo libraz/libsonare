@@ -454,14 +454,14 @@ describe('Sonare worklet ring buffers', () => {
         ring.header[0] = seed;
         ring.header[3] = SONARE_METER_RING_PROTOCOL_VERSION;
         const sceneJson = mixingScenePresetJson('vocalReverbSend');
-        const reference = Mixer.fromJson(sceneJson, { sampleRate: 48000, blockSize: 128 });
+        const reference = Mixer.fromJson(sceneJson, { sampleRate: 48000, maxBlockSize: 128 });
         const stripCount = reference.stripCount;
         reference.destroy();
         const processor = new SonareWorkletProcessor(
           {
             sceneJson,
             sampleRate: 48000,
-            blockSize: 128,
+            maxBlockSize: 128,
             meterIntervalFrames: 128,
             meterSharedBuffer: ring.sharedBuffer,
           },
@@ -493,7 +493,7 @@ describe('Sonare worklet ring buffers', () => {
         const processor = new SonareWorkletProcessor({
           sceneJson: mixingScenePresetJson('vocalReverbSend'),
           sampleRate: 48000,
-          blockSize: 128,
+          maxBlockSize: 128,
           spectrumIntervalFrames: 128,
           spectrumSharedBuffer: ring.sharedBuffer,
         });
@@ -554,14 +554,17 @@ describe('Sonare worklet ring buffers', () => {
         {
           sceneJson,
           sampleRate,
-          blockSize,
+          maxBlockSize: blockSize,
           meterIntervalFrames: blockSize,
           meterSharedBuffer: ringSharedBuffer,
         },
         {},
       );
       // One meter record is published per processed block.
-      const reference = Mixer.fromJson(sceneJson, { sampleRate: sampleRate, blockSize: blockSize });
+      const reference = Mixer.fromJson(sceneJson, {
+        sampleRate: sampleRate,
+        maxBlockSize: blockSize,
+      });
       const stripCount = reference.stripCount;
       reference.destroy();
       return { processor, stripCount };

@@ -1,13 +1,14 @@
-import { projectAutomationCurveCode, resolveEnumOrdinal } from './codes.js';
+import { AUTOMATION_CURVE_VALUES } from './codes.js';
 import { ErrorCode, SonareError } from './errors.js';
 import type {
-  BuiltinSynthBinding,
+  BuiltinSynthConfig,
   ExternalInstrument,
   PartRigEntry,
   PartRigInsert,
   PartRigKey,
   PartRigMode,
   PartRigRequest,
+  ProjectInstrumentBinding,
   SampleDesc,
   SampleZoneDesc,
   Sf2InstrumentConfig,
@@ -16,6 +17,7 @@ import type {
   SynthPatch,
 } from './instrument_types.js';
 import { releasedHandleError } from './internal/handle_guard.js';
+import { deinterleavePlanes, interleavePlanes } from './internal/pod_config.js';
 import { assertEventPpq, umpWord0 } from './internal/ump_events.js';
 import { getSonareModule } from './module_state.js';
 import type {
@@ -26,31 +28,34 @@ import type {
   ProjectAutomationLaneDesc,
   ProjectAutomationPoint,
   ProjectAutomationTargetKind,
-  ProjectBounceOptions,
+  ProjectBounceResult,
+  ProjectChordQuality,
   ProjectChordSymbol,
-  ProjectClip,
   ProjectClipCompSegment,
-  ProjectClipDesc,
-  ProjectClipFade,
   ProjectClipTake,
   ProjectCompileResult,
+  ProjectDiagnostic,
+  ProjectDiagnosticCode,
+  ProjectFadeCurve,
+  ProjectKeyMode,
   ProjectKeySegment,
   ProjectLoopMode,
   ProjectLoopRecordingDesc,
   ProjectLoopRecordingResult,
-  ProjectMarker,
+  ProjectMarkerKind,
   ProjectMidiCcBinding,
   ProjectMidiClipResult,
   ProjectMidiEvent,
   ProjectMidiRouteConfig,
   ProjectMidiRouteResult,
   ProjectNotePairValidation,
+  ProjectOverlapPolicy,
   ProjectSource,
+  ProjectSourceKind,
   ProjectTempoCandidate,
   ProjectTempoOptions,
   ProjectTempoSegment,
   ProjectTimeSignatureSegment,
-  ProjectTrack,
   ProjectTrackKind,
   ProjectWarpMapDesc,
   ProjectWarpMode,
@@ -64,7 +69,7 @@ import type {
 // leaves the other working, so the property is pinned by
 // tests/sample-bank-module-cycle.test.ts rather than left to review.
 import { SampleBank } from './sample_bank.js';
-import { assertNibble, assertU7, assertU32 } from './validation.js';
+import { assertAudioChannels, assertNibble, assertU7, assertU32 } from './validation.js';
 
 /**
  * A synth binding as the embind layer takes it: the public `sampleBank` handle
@@ -122,10 +127,91 @@ export function projectTimelineNativeId(owner: unknown): number | undefined {
   return native?.id;
 }
 
+/** One diagnostic as the embind layer returns it: ordinals, with `0` for "no target". */
+export interface NativeProjectDiagnostic {
+  code: number;
+  severity: number;
+  targetId: number;
+  message: string;
+}
+
+/** `compile` as the embind layer returns it, before the facade types it. */
+export interface NativeProjectCompileResult {
+  diagnostics: NativeProjectDiagnostic[];
+}
+
 /** `compileTimeline` as the embind layer returns it, before the facade wraps the handle. */
-export type NativeProjectCompileTimelineResult = ProjectCompileResult & {
+export type NativeProjectCompileTimelineResult = NativeProjectCompileResult & {
   timeline: WasmProjectTimeline | null;
 };
+
+/** A stored track as the embind layer returns it. */
+export interface NativeProjectTrack {
+  id: number;
+  kind: number;
+  midiDestinationId: number;
+  gain: number;
+  pan: number;
+  mute: boolean;
+  solo: boolean;
+  name: string;
+}
+
+/** A stored clip as the embind layer returns it. */
+export interface NativeProjectClip {
+  id: number;
+  trackId: number;
+  sourceId: number;
+  sourceKind: number;
+  startPpq: number;
+  lengthPpq: number;
+  sourceOffsetPpq: number;
+  gain: number;
+  loopMode: number;
+  loopLengthPpq: number;
+}
+
+/** A stored source as the embind layer returns it. */
+export interface NativeProjectSource {
+  id: number;
+  kind: number;
+  channelCount: number;
+  storageHandleId: number;
+  sampleRateHint: number;
+  nameOrUri: string;
+  contentHash: string;
+  externalStemRole: string;
+}
+
+/** A stored marker as the embind layer returns it. */
+export interface NativeProjectMarker {
+  id: number;
+  ppq: number;
+  name: string;
+  kind: number;
+  keyFifths: number;
+  keyMinor: boolean;
+}
+
+/** A tempo candidate as the embind layer returns it. */
+export interface NativeProjectTempoCandidate {
+  bpm: number;
+  confidence: number;
+  label: 'primary' | 'half' | 'double';
+  timeSignatureCount: number;
+  timeSignature: ProjectTimeSignatureSegment;
+}
+
+/** Options as the embind layer reads them: absent means default, `0` is not passed. */
+export interface NativeProjectBounceOptions {
+  totalFrames?: number;
+  blockSize?: number;
+  numChannels?: number;
+  instrumentLatencySamples?: number;
+}
+
+/** A native instrument binding: the instrument's fields with its destination beside them. */
+export type NativeInstrumentBinding<T> = T & { destinationId: number };
 
 /**
  * Swaps a facade {@link SampleBank} in a synth patch descriptor for the id the
@@ -165,40 +251,55 @@ export function normalizeSynthInstrument(patch: unknown): NativeSynthBinding | s
 }
 
 /**
- * Resolve a `bounceWith*Instrument(s)` binding argument to the list the native
- * layer reads, so the singular and plural forms share one shape check. `null`
- * means no bindings; the singular form also takes one binding on its own. Each
- * element must be a plain object, or a name where the family has a string
- * shorthand (`allowName`); anything else — an array included — is refused by
- * name before any render starts.
+ * Resolve the `bounceWith*Instruments` binding argument to the list the native
+ * layer reads. The argument is one `{ destinationId?, instrument }` pair or an
+ * array of them (`null` and an empty array both mean no bindings). A pair
+ * without an `instrument` key (a bare config) is refused by name, and so is a
+ * `destinationId` placed inside the instrument, since it belongs to the pair.
+ * `entry` converts each instrument to the shape the native reader takes; the
+ * destination is merged in beside it, defaulting to `0`.
  */
-export function normalizeInstrumentBindings<E, R>(
+export function normalizeInstrumentBindings<E, R extends object>(
   method: string,
-  plural: boolean,
-  value: E | ReadonlyArray<E> | null,
-  allowName: boolean,
-  entry: (binding: E) => R,
-): R[] {
-  if (value === null) {
+  value:
+    | ProjectInstrumentBinding<E>
+    | ReadonlyArray<ProjectInstrumentBinding<E>>
+    | null
+    | undefined,
+  entry: (instrument: E) => R,
+): NativeInstrumentBinding<R>[] {
+  if (value === null || value === undefined) {
     return [];
   }
-  const isList = Array.isArray(value);
-  if (!isList && plural) {
-    throw new TypeError(`${method}: instruments must be an array`);
-  }
-  const list = (isList ? value : [value]) as ReadonlyArray<E>;
-  const out: R[] = [];
-  for (let index = 0; index < list.length; index += 1) {
-    const binding = list[index];
-    const isObject = typeof binding === 'object' && binding !== null && !Array.isArray(binding);
-    if (!isObject && !(allowName && typeof binding === 'string')) {
-      const label = isList ? `${plural ? 'instruments' : 'instrument'}[${index}]` : 'instrument';
-      const expected = allowName ? 'an object or a name' : 'an object';
-      throw new TypeError(`${method}: ${label} must be ${expected}`);
+  const list = Array.isArray(value) ? value : [value];
+  return list.map((pair: unknown, index: number) => {
+    const label = Array.isArray(value) ? `instruments[${index}]` : 'instrument';
+    if (typeof pair !== 'object' || pair === null || Array.isArray(pair)) {
+      throw new TypeError(`${method}: ${label} must be a { destinationId?, instrument } pair`);
     }
-    out.push(entry(binding));
-  }
-  return out;
+    const record = pair as Record<string, unknown>;
+    for (const key of Object.keys(record)) {
+      if (key !== 'destinationId' && key !== 'instrument') {
+        const hint =
+          'instrument' in record ? '' : ` (a bare config must be wrapped as { instrument })`;
+        throw new TypeError(`${method}: ${label}: unknown request key '${key}'${hint}`);
+      }
+    }
+    if (!('instrument' in record)) {
+      throw new TypeError(`${method}: ${label} needs an 'instrument' key`);
+    }
+    const instrument = record.instrument;
+    if (typeof instrument !== 'object' || instrument === null || Array.isArray(instrument)) {
+      throw new TypeError(`${method}: ${label}.instrument must be an object`);
+    }
+    if ('destinationId' in instrument) {
+      throw new TypeError(
+        `${method}: ${label}.instrument: unknown request key 'destinationId' ('destinationId' belongs on the pair)`,
+      );
+    }
+    const destinationId = optionalId(method, `${label}.destinationId`, record.destinationId, true);
+    return { ...entry(instrument as E), destinationId: destinationId ?? 0 };
+  });
 }
 
 /**
@@ -307,7 +408,18 @@ export interface WasmProject {
   toJson: () => string;
   setSampleRate: (sampleRate: number) => void;
   addTrack: (desc: { kind?: number | string; name?: string }) => number;
-  addClip: (desc: ProjectClipDesc) => number;
+  addClip: (desc: {
+    trackId: number;
+    isMidi?: boolean;
+    startPpq?: number;
+    lengthPpq: number;
+    sourceOffsetPpq?: number;
+    gain?: number;
+    audio?: Float32Array;
+    audioChannels?: number;
+    audioSampleRate?: number;
+    sourceUri?: string;
+  }) => number;
   importExternalStems: (request: unknown) => { trackIds: number[]; clipIds: number[] };
   addLoopRecordingTakes: (desc: ProjectLoopRecordingDesc) => ProjectLoopRecordingResult;
   addMidiClip: (startPpq: number, lengthPpq: number) => ProjectMidiClipResult;
@@ -359,7 +471,6 @@ export interface WasmProject {
   bakeMidiFx: (clipId: number, configJson: string) => void;
   bakeMidiFxWithSourceIndex: (clipId: number, configJson: string) => Int32Array;
   previewMidiFxCount: (clipId: number, configJson: string) => number;
-  setMidiFx: (clipId: number, configJson: string) => void;
   validateMidiNotes: (clipId: number) => ProjectNotePairValidation;
   transcribeToClip: (
     clipId: number,
@@ -371,7 +482,7 @@ export interface WasmProject {
     audio: Float32Array,
     sampleRate: number,
     options: ProjectTempoOptions | undefined,
-  ) => ProjectTempoCandidate[];
+  ) => NativeProjectTempoCandidate[];
   autoTempo: (
     audio: Float32Array,
     sampleRate: number,
@@ -380,34 +491,38 @@ export interface WasmProject {
     options: ProjectTempoOptions | undefined,
   ) => number;
   snapToGrid: (ppq: number, strength: number, division: number) => number;
-  compile: () => ProjectCompileResult;
+  compile: () => NativeProjectCompileResult;
   compileTimeline: () => NativeProjectCompileTimelineResult;
-  bounce: (options: ProjectBounceOptions) => Float32Array;
+  bounce: (options: NativeProjectBounceOptions) => Float32Array;
   bounceWithBuiltinInstrument: (
-    bindings: BuiltinSynthBinding | ReadonlyArray<BuiltinSynthBinding> | undefined,
-    options: ProjectBounceOptions,
+    bindings: ReadonlyArray<NativeInstrumentBinding<BuiltinSynthConfig>>,
+    options: NativeProjectBounceOptions,
   ) => Float32Array;
   bounceWithInstruments: (
-    bindings: ExternalInstrument | ReadonlyArray<ExternalInstrument> | undefined,
-    options: ProjectBounceOptions,
+    bindings: ReadonlyArray<NativeInstrumentBinding<ExternalInstrument>>,
+    options: NativeProjectBounceOptions,
   ) => Float32Array | { instrumentFailure: unknown };
   bounceWithSynthInstrument: (
-    bindings: NativeSynthBinding | string | ReadonlyArray<NativeSynthBinding | string> | undefined,
-    options: ProjectBounceOptions,
+    bindings: ReadonlyArray<NativeInstrumentBinding<NativeSynthBinding>>,
+    options: NativeProjectBounceOptions,
   ) => Float32Array;
   loadSoundFont: (data: Uint8Array) => void;
   clearSoundFont: () => void;
   soundFontPresetCount: () => number;
   soundFontManifest: () => Sf2ProgramStatus[];
   bounceWithSf2Instrument: (
-    bindings: Sf2InstrumentConfig | ReadonlyArray<Sf2InstrumentConfig> | undefined,
-    options: ProjectBounceOptions,
+    bindings: ReadonlyArray<NativeInstrumentBinding<Sf2InstrumentConfig>>,
+    options: NativeProjectBounceOptions,
   ) => Float32Array;
   removeClip: (clipId: number) => void;
   setClipGain: (clipId: number, gain: number) => void;
-  setClipFade: (clipId: number, fadeIn: ProjectClipFade, fadeOut: ProjectClipFade) => void;
+  setClipFade: (
+    clipId: number,
+    fadeIn: { lengthPpq: number; curve: number },
+    fadeOut: { lengthPpq: number; curve: number },
+  ) => void;
   unresolvedAudioSourceIds: () => number[];
-  unresolvedAudioSources: () => ProjectSource[];
+  unresolvedAudioSources: () => NativeProjectSource[];
   setSourceAudio: (
     sourceId: number,
     audio: Float32Array,
@@ -432,15 +547,15 @@ export interface WasmProject {
   removeTrack: (trackId: number) => void;
   renameTrack: (trackId: number, name: string) => void;
   setTrackRoute: (trackId: number, channelStripRef: string, outputTarget: string) => void;
-  addAutomationLane: (trackId: number, desc: ProjectAutomationLaneDesc) => number;
+  addAutomationLane: (trackId: number, desc: NativeAutomationLaneDesc) => number;
   editAutomationLane: (
     trackId: number,
     targetParamId: number,
-    desc: ProjectAutomationLaneDesc,
+    desc: NativeAutomationLaneDesc,
   ) => void;
   removeAutomationLane: (trackId: number, targetParamId: number) => void;
-  annotateKeys: (keys: ReadonlyArray<ProjectKeySegment>) => void;
-  annotateChords: (chords: ReadonlyArray<ProjectChordSymbol>) => void;
+  annotateKeys: (keys: ReadonlyArray<NativeKeySegment>) => void;
+  annotateChords: (chords: ReadonlyArray<NativeChordSymbol>) => void;
   setAssistSidecar: (
     moduleId: string,
     schemaVersion: number,
@@ -455,23 +570,29 @@ export interface WasmProject {
   getOverlapPolicy: () => number;
   getSampleRate: () => number;
   setMixerSceneJson: (sceneJson: string) => string[];
-  setMarker: (markerId: number, ppq: number, name: string) => number;
-  setMarkerEx: (marker: ProjectMarker) => number;
-  markerByIndex: (index: number) => ProjectMarker;
-  trackByIndex: (index: number) => ProjectTrack;
-  clipByIndex: (index: number) => ProjectClip;
-  sourceByIndex: (index: number) => ProjectSource;
+  setMarkerEx: (marker: {
+    id: number;
+    ppq: number;
+    name: string;
+    kind: number;
+    keyFifths: number;
+    keyMinor: boolean;
+  }) => number;
+  markerByIndex: (index: number) => NativeProjectMarker;
+  trackByIndex: (index: number) => NativeProjectTrack;
+  clipByIndex: (index: number) => NativeProjectClip;
+  sourceByIndex: (index: number) => NativeProjectSource;
   markerCount: () => number;
   trackCount: () => number;
   clipCount: () => number;
   sourceCount: () => number;
   tempoSegmentCount: () => number;
-  tempoSegmentByIndex: (index: number) => ProjectTempoSegment;
+  tempoSegmentByIndex: (index: number) => ProjectTempoSegment & { startSample?: number };
   timeSignatureByIndex: (index: number) => ProjectTimeSignatureSegment;
   timeSignatureCount: () => number;
   setTempoSegments: (segments: ReadonlyArray<ProjectTempoSegment>) => void;
   setTimeSignatures: (segments: ReadonlyArray<ProjectTimeSignatureSegment>) => void;
-  lastBounceCompileResult: () => ProjectCompileResult;
+  lastBounceCompileResult: () => NativeProjectCompileResult;
   delete: () => void;
 }
 
@@ -525,7 +646,7 @@ export interface ProjectModule {
   midiCcToBreakpoint: (
     bindings: ReadonlyArray<ProjectMidiCcBinding>,
     event: ProjectMidiEvent,
-  ) => ProjectAutomationPoint | null;
+  ) => { ppq: number; value: number; curveToNext: number } | null;
   midiParamToCc: (
     bindings: ReadonlyArray<ProjectMidiCcBinding>,
     paramId: number,
@@ -624,43 +745,354 @@ export function assertProjectMidiEvents(
   });
 }
 
-export function projectTrackKindValue(kind: ProjectTrackKind | undefined): number {
-  return resolveEnumOrdinal(kind ?? 'audio', { audio: 0, midi: 1, aux: 2 }, 'project track kind');
+const TRACK_KINDS = { audio: 0, midi: 1, aux: 2 } as const;
+const SOURCE_KINDS = { audio: 0, midi: 1 } as const;
+const OVERLAP_POLICIES = { disallow: 0, allow: 1 } as const;
+const FADE_CURVES = { linear: 0, equalPower: 1, exponential: 2, logarithmic: 3 } as const;
+const LOOP_MODES = { off: 0, loop: 1 } as const;
+const WARP_MODES = { off: 0, repitch: 1, tempoSync: 2, timeStretch: 3 } as const;
+const AUTOMATION_TARGET_KINDS = { opaque: 0, trackFaderDb: 1, trackPan: 2 } as const;
+const MARKER_KINDS = { marker: 0, text: 1, lyric: 2, cuePoint: 3, keySignature: 4 } as const;
+const STEM_LAYOUTS = { mono: 1, stereo: 2 } as const;
+const KEY_MODES = {
+  unknown: 0,
+  major: 1,
+  minor: 2,
+  dorian: 3,
+  phrygian: 4,
+  lydian: 5,
+  mixolydian: 6,
+  locrian: 7,
+} as const satisfies Record<ProjectKeyMode, number>;
+const CHORD_QUALITY_CODES = {
+  unknown: 0,
+  major: 1,
+  minor: 2,
+  diminished: 3,
+  augmented: 4,
+  dominant: 5,
+  halfDiminished: 6,
+  suspended: 7,
+} as const satisfies Record<ProjectChordQuality, number>;
+const DIAGNOSTIC_CODES = {
+  ok: 0,
+  danglingSourceRef: 1,
+  clipOverlap: 2,
+  invalidTempo: 3,
+  invalidPpq: 4,
+  unsupportedGraph: 5,
+  unsupportedMixing: 6,
+  emptyAudioSource: 7,
+  invalidSampleRate: 8,
+  sourceKindMismatch: 9,
+  midiClipNoInstrument: 10,
+  raggedAudioSource: 11,
+  loopCrossfadeUnavailable: 12,
+  sharedChannelStrip: 13,
+  automationLaneConflict: 14,
+  invalidAutomationTargetKind: 15,
+  automationLaneCapacity: 16,
+  reservedAutomationRouteConflict: 17,
+  automationTargetUnrouted: 18,
+} as const satisfies Record<ProjectDiagnosticCode, number>;
+
+/**
+ * A closed-set token to its native ordinal. A non-string is a `TypeError` (an
+ * ordinal included) and a string outside the set is a `RangeError`; an absent
+ * value takes `fallback` when one is given.
+ */
+function tokenCode(
+  fnName: string,
+  argName: string,
+  value: unknown,
+  table: Readonly<Record<string, number>>,
+  fallback?: string,
+): number {
+  const token = value === undefined || value === null ? fallback : value;
+  const accepted = Object.keys(table)
+    .map((key) => `'${key}'`)
+    .join(', ');
+  if (typeof token !== 'string') {
+    throw new TypeError(`${fnName}: ${argName} must be one of ${accepted}`);
+  }
+  // biome-ignore lint/suspicious/noPrototypeBuiltins: Object.hasOwn is newer than the ES2020 target.
+  if (!Object.prototype.hasOwnProperty.call(table, token)) {
+    throw new RangeError(`${fnName}: ${argName} must be one of ${accepted} (got '${token}')`);
+  }
+  return table[token];
+}
+
+/** A native ordinal back to its token; an ordinal outside the table is a binding defect. */
+function tokenName<T extends string>(
+  table: Readonly<Record<T, number>>,
+  ordinal: number,
+  what: string,
+): T {
+  const name = (Object.keys(table) as T[]).find((key) => table[key] === ordinal);
+  if (name === undefined) {
+    throw new RangeError(`unknown native ${what} ordinal ${String(ordinal)}`);
+  }
+  return name;
 }
 
 /**
- * Resolve a breakpoint's curve spelling to its ordinal before it crosses into
- * embind, and fold the `curveToNext` alias onto `curve`.
- *
- * Mirrors the Node facade's `projectAutomationPointValue`: resolving here means
- * an unknown spelling is a `RangeError` from the same table both packages
- * declare, rather than a curve one binding renders and the other rejects.
+ * An optional id: absent (`undefined` / `null`) is `undefined`, an explicit `0`
+ * is refused because native reads it as "not given", and anything else must be
+ * a positive 32-bit integer. `allowZero` is for a destination id, where `0` is a
+ * real destination.
  */
-export function projectAutomationPointValue(point: ProjectAutomationPoint): ProjectAutomationPoint {
-  const curve = projectAutomationCurveCode(point.curve ?? point.curveToNext);
+export function optionalId(
+  fnName: string,
+  argName: string,
+  value: unknown,
+  allowZero = false,
+): number | undefined {
+  if (value === undefined || value === null) {
+    return undefined;
+  }
+  if (typeof value !== 'number') {
+    throw new TypeError(`${fnName}: ${argName} must be a number`);
+  }
+  if (value === 0 && !allowZero) {
+    throw new RangeError(`${fnName}: ${argName} must not be 0 (omit it for the default)`);
+  }
+  if (!Number.isInteger(value) || value < 0 || value > 0xffff_ffff) {
+    throw new RangeError(`${fnName}: ${argName} must be an unsigned 32-bit integer`);
+  }
+  return value;
+}
+
+/** An optional strictly positive integer count: absent is `undefined`, an explicit `0` is refused. */
+export function optionalPositiveInt(
+  fnName: string,
+  argName: string,
+  value: unknown,
+): number | undefined {
+  if (value === undefined || value === null) {
+    return undefined;
+  }
+  if (typeof value !== 'number') {
+    throw new TypeError(`${fnName}: ${argName} must be a number`);
+  }
+  if (value === 0) {
+    throw new RangeError(`${fnName}: ${argName} must not be 0 (omit it for the default)`);
+  }
+  if (!Number.isInteger(value) || value < 0) {
+    throw new RangeError(`${fnName}: ${argName} must be a positive integer`);
+  }
+  return value;
+}
+
+export function projectTrackKindValue(kind: ProjectTrackKind, fnName: string): number {
+  return tokenCode(fnName, 'kind', kind, TRACK_KINDS);
+}
+
+export function projectTrackKindName(ordinal: number): ProjectTrackKind {
+  return tokenName(TRACK_KINDS, ordinal, 'track kind');
+}
+
+export function projectSourceKindName(ordinal: number): ProjectSourceKind {
+  return tokenName(SOURCE_KINDS, ordinal, 'source kind');
+}
+
+export function projectOverlapPolicyValue(policy: ProjectOverlapPolicy): number {
+  return tokenCode('setOverlapPolicy', 'policy', policy, OVERLAP_POLICIES);
+}
+
+export function projectOverlapPolicyName(ordinal: number): ProjectOverlapPolicy {
+  return tokenName(OVERLAP_POLICIES, ordinal, 'overlap policy');
+}
+
+/** A {@link ProjectKeySegment} as the native layer reads it. */
+export type NativeKeySegment = Omit<ProjectKeySegment, 'mode'> & { mode?: number };
+
+/** A {@link ProjectChordSymbol} as the native layer reads it. */
+export type NativeChordSymbol = Omit<ProjectChordSymbol, 'quality'> & { quality?: number };
+
+export function projectKeySegmentsToNative(
+  keys: ReadonlyArray<ProjectKeySegment>,
+): NativeKeySegment[] {
+  return keys.map((key) =>
+    key.mode === undefined
+      ? (key as NativeKeySegment)
+      : { ...key, mode: tokenCode('annotateKeys', 'mode', key.mode, KEY_MODES) },
+  );
+}
+
+export function projectChordSymbolsToNative(
+  chords: ReadonlyArray<ProjectChordSymbol>,
+): NativeChordSymbol[] {
+  return chords.map((chord) =>
+    chord.quality === undefined
+      ? (chord as NativeChordSymbol)
+      : {
+          ...chord,
+          quality: tokenCode('annotateChords', 'quality', chord.quality, CHORD_QUALITY_CODES),
+        },
+  );
+}
+
+export function projectKeyModeName(ordinal: number): ProjectKeyMode {
+  return tokenName(KEY_MODES, ordinal, 'key mode');
+}
+
+export function projectChordQualityName(ordinal: number): ProjectChordQuality {
+  return tokenName(CHORD_QUALITY_CODES, ordinal, 'chord quality');
+}
+
+export function projectFadeCurveValue(
+  fnName: string,
+  argName: string,
+  curve: ProjectFadeCurve | undefined,
+): number {
+  return tokenCode(fnName, argName, curve, FADE_CURVES, 'linear');
+}
+
+export function projectMarkerKindValue(
+  fnName: string,
+  kind: ProjectMarkerKind | undefined,
+): number {
+  return tokenCode(fnName, 'kind', kind, MARKER_KINDS, 'marker');
+}
+
+export function projectMarkerKindName(ordinal: number): ProjectMarkerKind {
+  return tokenName(MARKER_KINDS, ordinal, 'marker kind');
+}
+
+export function projectStemLayoutValue(fnName: string, layout: unknown): number {
+  return tokenCode(fnName, 'stems[].layout', layout, STEM_LAYOUTS);
+}
+
+/** One native diagnostic as the typed record: tokens for code and severity, no target when `0`. */
+export function projectDiagnosticFromNative(native: NativeProjectDiagnostic): ProjectDiagnostic {
+  const diagnostic = {
+    code: tokenName(DIAGNOSTIC_CODES, native.code, 'diagnostic code'),
+    severity: native.severity === 0 ? ('error' as const) : ('warning' as const),
+    message: native.message,
+  };
+  return native.targetId === 0 ? diagnostic : { ...diagnostic, targetId: native.targetId };
+}
+
+/** The typed compile result: diagnostics only. */
+export function projectCompileResultFromNative(
+  native: NativeProjectCompileResult,
+): ProjectCompileResult {
+  return { diagnostics: native.diagnostics.map(projectDiagnosticFromNative) };
+}
+
+/**
+ * Planar audio for a native interleaved call: validates the planes and the
+ * sample rate, and returns the interleaved buffer plus the channel count.
+ */
+export function interleaveChannels(
+  fnName: string,
+  channels: unknown,
+  sampleRate: unknown,
+): { audio: Float32Array; numChannels: number } {
+  assertAudioChannels(fnName, channels, sampleRate);
+  const planes = channels as Float32Array[];
+  const frames = planes[0].length;
+  if (planes.some((plane) => plane.length !== frames)) {
+    throw new RangeError(`${fnName}: channels must all have the same length`);
+  }
+  return { audio: interleavePlanes(planes), numChannels: planes.length };
+}
+
+/** Native interleaved bounce output as the planar result. */
+export function projectBounceResult(
+  interleaved: Float32Array,
+  numChannels: number,
+  sampleRate: number,
+): ProjectBounceResult {
+  return { channels: deinterleavePlanes(interleaved, numChannels), sampleRate, numChannels };
+}
+
+/** A native source with its kind as a token and `channelCount` under its public name. */
+export function projectSourceFromNative(native: NativeProjectSource): ProjectSource {
+  const { channelCount, kind, ...rest } = native;
+  return { ...rest, kind: projectSourceKindName(kind), numChannels: channelCount };
+}
+
+/** The native tempo candidate with the meter's first segment under its public name. */
+export function projectTempoCandidateFromNative(
+  native: NativeProjectTempoCandidate,
+): ProjectTempoCandidate {
+  const { timeSignature, ...rest } = native;
+  return { ...rest, firstTimeSignature: timeSignature };
+}
+
+/** One automation breakpoint as embind reads it: the curve as its ordinal. */
+export type NativeAutomationPoint = Omit<ProjectAutomationPoint, 'curve' | 'curveToNext'> & {
+  curve: number;
+  curveToNext: number;
+};
+
+/** An automation lane as embind reads it: target kind and curves as ordinals. */
+export type NativeAutomationLaneDesc = Omit<ProjectAutomationLaneDesc, 'targetKind' | 'points'> & {
+  targetKind?: number;
+  points: NativeAutomationPoint[];
+};
+
+/** A breakpoint the native layer produced, with its curve ordinal named. */
+export function projectAutomationPointFromNative(native: {
+  ppq: number;
+  value: number;
+  curveToNext: number;
+}): ProjectAutomationPoint {
   return {
-    ...point,
-    curve: curve as ProjectAutomationCurve,
-    curveToNext: curve as ProjectAutomationCurve,
+    ...native,
+    curveToNext: tokenName(AUTOMATION_CURVE_VALUES, native.curveToNext, 'automation curve'),
   };
 }
 
-export function projectAutomationTargetKindValue(kind: ProjectAutomationTargetKind): number {
-  return resolveEnumOrdinal(
-    kind,
-    { opaque: 0, 'track-fader-db': 1, 'track-pan': 2 },
-    'project automation target kind',
+/** Resolve a breakpoint's curve token, folding the `curveToNext` alias onto `curve`. */
+export function projectAutomationPointValue(
+  point: ProjectAutomationPoint,
+  fnName: string,
+): NativeAutomationPoint {
+  const curve = tokenCode(
+    fnName,
+    'curve',
+    point.curve ?? point.curveToNext,
+    AUTOMATION_CURVE_VALUES,
+    'linear',
   );
+  return { ...point, curve, curveToNext: curve };
+}
+
+/** Resolve an automation lane's tokens to the ordinals embind reads. */
+export function projectAutomationLaneValue(
+  desc: ProjectAutomationLaneDesc,
+  fnName: string,
+): NativeAutomationLaneDesc {
+  if (desc.targetParamId === 0) {
+    throw new RangeError('project automation lane targetParamId must be non-zero');
+  }
+  const { targetKind, points, ...rest } = desc;
+  return {
+    ...rest,
+    ...(targetKind === undefined
+      ? {}
+      : { targetKind: projectAutomationTargetKindValue(targetKind, fnName) }),
+    points: points.map((point) => projectAutomationPointValue(point, fnName)),
+  };
+}
+
+export function projectAutomationTargetKindValue(
+  kind: ProjectAutomationTargetKind,
+  fnName: string,
+): number {
+  return tokenCode(fnName, 'targetKind', kind, AUTOMATION_TARGET_KINDS);
 }
 
 export function projectWarpModeValue(mode: ProjectWarpMode): number {
-  return resolveEnumOrdinal(
-    mode,
-    { off: 0, repitch: 1, 'tempo-sync': 2, 'time-stretch': 3 },
-    'project warp mode',
-  );
+  return tokenCode('setClipWarpMode', 'mode', mode, WARP_MODES);
 }
 
-export function projectLoopModeValue(mode: ProjectLoopMode | undefined): number {
-  return resolveEnumOrdinal(mode ?? 'off', { off: 0, loop: 1 }, 'project loop mode');
+export function projectLoopModeValue(mode: ProjectLoopMode): number {
+  return tokenCode('setClipLoop', 'loopMode', mode, LOOP_MODES);
+}
+
+export function projectLoopModeName(ordinal: number): ProjectLoopMode {
+  return tokenName(LOOP_MODES, ordinal, 'loop mode');
 }

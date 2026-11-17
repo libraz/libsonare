@@ -1,14 +1,23 @@
+import type { ClipPageSampleRequest } from './clip_page_streamer.js';
 import { ErrorCode, SonareError } from './errors.js';
 import { releasedHandleError } from './internal/handle_guard.js';
-import type { ClipPageProvider, ClipPageRequest, RealtimeEngine } from './realtime_engine.js';
+import type { ClipPageProvider, RealtimeEngine } from './realtime_engine.js';
 
+/** Source file and paging layout of an OPFS-backed clip page provider. */
 export interface OpfsClipPageProviderOptions {
+  /** OPFS path of the headerless interleaved float32 file, `/`-separated. */
   path: string;
+  /** Channel count of the file. */
   numChannels: number;
+  /** Total frames in the file. */
   numSamples: number;
+  /** Frames per page. */
   pageFrames: number;
+  /** Byte offset of the first sample in the file. Default `0`. */
   dataOffsetBytes?: number;
+  /** Worker that reads the file; defaults to a private one the binding owns. */
   worker?: Worker;
+  /** Terminate a supplied `worker` when the binding closes. Default `false`. */
   terminateWorkerOnClose?: boolean;
   /** Internal bridge hook used to mirror a supplied page into an AudioWorklet. */
   onPageSupplied?: (pageIndex: number, channels: Float32Array[]) => void;
@@ -18,12 +27,17 @@ export interface OpfsClipPageProviderOptions {
   onClose?: () => void;
 }
 
+/** A page provider together with the OPFS reads that feed it. */
 export interface OpfsClipPageProviderBinding {
+  /** Provider to schedule through `addClip`. */
   provider: ClipPageProvider;
+  /** Read one page from OPFS and supply it; resolves `false` when the page does not exist. */
   supplyPage(pageIndex: number): Promise<boolean>;
-  supplyRequest(request: ClipPageRequest): Promise<boolean>;
+  /** Supply the page a sample-positioned miss falls in. */
+  supplyRequest(request: ClipPageSampleRequest): Promise<boolean>;
   /** Evict one resident page from every configured consumer. */
   clearPage?(pageIndex: number): void;
+  /** Destroy the provider and release the worker when the binding owns it. Idempotent. */
   close(): void;
 }
 
@@ -38,6 +52,7 @@ interface PageResponse {
   error?: string;
 }
 
+/** Source of the OPFS reader/writer worker script, for hosts that build the worker themselves. */
 export const opfsClipPageWorkerSource = `
 const sonareClipPageReadQueues = new Map();
 
@@ -186,6 +201,7 @@ function opfsClipPathKey(path: string): string {
   return path.split('/').filter(Boolean).join('/');
 }
 
+/** Create the OPFS reader/writer worker from {@link opfsClipPageWorkerSource}. */
 export function createOpfsClipPageWorker(): Worker {
   const blob = new Blob([opfsClipPageWorkerSource], { type: 'text/javascript' });
   const url = URL.createObjectURL(blob);
@@ -199,6 +215,14 @@ export function createOpfsClipPageWorker(): Worker {
   }
 }
 
+/**
+ * Create a page provider on `engine` whose pages are read from an OPFS file.
+ *
+ * @param engine - Engine the provider is created on.
+ * @param options - File location and paging layout.
+ * @returns The binding; `close()` it when the clip is no longer scheduled.
+ * @throws RangeError when `numChannels`, `numSamples` or `pageFrames` is not positive.
+ */
 export function createOpfsClipPageProvider(
   engine: RealtimeEngine,
   options: OpfsClipPageProviderOptions,
@@ -308,7 +332,7 @@ export function createOpfsClipPageProvider(
   return {
     provider,
     supplyPage,
-    supplyRequest(request: ClipPageRequest) {
+    supplyRequest(request: ClipPageSampleRequest) {
       return supplyPage(Math.floor(request.sample / options.pageFrames));
     },
     clearPage(pageIndex: number) {
@@ -345,8 +369,11 @@ export function createOpfsClipPageProvider(
 
 /** Result of {@link writeOpfsClip}. */
 export interface OpfsClipWriteResult {
+  /** OPFS path written. */
   path: string;
+  /** Channel count written. */
   numChannels: number;
+  /** Frames written per channel. */
   numSamples: number;
 }
 

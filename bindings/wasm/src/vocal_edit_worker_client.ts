@@ -1,22 +1,6 @@
-import { ErrorCode, isSonareError } from './errors.js';
+import { ErrorCode, isSonareError, SonareError } from './errors.js';
 import { failureFromPayload } from './internal/failure_payload.js';
 import { releasedHandleError } from './internal/handle_guard.js';
-import type {
-  VocalAnalysis,
-  VocalApplyRequest,
-  VocalCapabilities,
-  VocalCreateRequest,
-  VocalEditResult,
-  VocalHistoryState,
-  VocalNotesResult,
-  VocalPitchEvaluation,
-  VocalRenderRequest,
-  VocalRenderResult,
-  VocalRestoreRequest,
-  VocalStateBytes,
-  VocalStateToken,
-  VocalUint64,
-} from './public_types_vocal_edit.js';
 import {
   compareUint64,
   stateTokenEquals,
@@ -28,7 +12,23 @@ import {
   type VocalWorkerPreviewMessage,
   type VocalWorkerRequestMessage,
   type VocalWorkerResponseMessage,
-} from './vocal_edit_worker_protocol.js';
+} from './internal/vocal_edit_worker_protocol.js';
+import { attachVocalErrorDetail, isVocalErrorDetail } from './internal/vocal_error_detail.js';
+import type {
+  VocalAnalysis,
+  VocalApplyRequest,
+  VocalCapabilities,
+  VocalCreateRequest,
+  VocalEditResult,
+  VocalHistory,
+  VocalNotesResult,
+  VocalPitchEvaluation,
+  VocalRenderRequest,
+  VocalRenderResult,
+  VocalRestoreRequest,
+  VocalStateToken,
+} from './public_types_vocal_edit.js';
+import { requestObject } from './validation.js';
 
 /**
  * A browser Worker or a Node `worker_threads.Worker`. The transfer list is
@@ -36,18 +36,29 @@ import {
  * subsets of each other, so neither Worker type would otherwise be assignable.
  */
 export interface VocalEditWorker {
+  /** Posts a message, optionally transferring ownership of the listed buffers. */
   postMessage(message: unknown, transfer?: readonly unknown[]): void;
+  /** Stops the Worker. */
   terminate(): unknown;
+  /** Browser-style listener registration. */
   addEventListener?(type: string, listener: EventListener): void;
+  /** Browser-style listener removal. */
   removeEventListener?(type: string, listener: EventListener): void;
+  /** Node-style listener registration. */
   on?(type: 'message' | 'error', listener: (...args: unknown[]) => void): unknown;
+  /** Node-style listener removal. */
   off?(type: 'message' | 'error', listener: (...args: unknown[]) => void): unknown;
 }
 
+/** Construction options of {@link VocalEditWorkerClient}. */
 export interface VocalEditWorkerClientOptions {
+  /** An existing Worker to use instead of starting one. */
   worker?: VocalEditWorker;
+  /** Location of the Worker script when the client starts its own Worker. */
   workerUrl?: string | URL;
+  /** Starts the Worker from a resolved URL; required outside a browser unless `worker` is given. */
   workerFactory?: (url: URL) => VocalEditWorker;
+  /** Terminate a Worker passed as `worker` when the client is destroyed; the default is to leave it running. */
   terminateWorkerOnDestroy?: boolean;
 }
 
@@ -62,71 +73,62 @@ export interface VocalEditWorkerTransferOptions {
   copy?: boolean;
 }
 
+/** Options of a call that can be aborted. */
 export interface VocalEditWorkerCallOptions extends VocalEditWorkerTransferOptions {
+  /** Aborts the call; it then rejects with a `Cancelled` `SonareError`. */
   signal?: AbortSignal;
 }
 
-export class VocalEditWorkerStaleResultError extends Error {
-  constructor(message = 'A vocal edit Worker result is stale') {
-    super(message);
-    this.name = 'StaleResultError';
-  }
+/** What the Worker reported when it opened a session. */
+export interface VocalEditWorkerCreated {
+  /** The notes at creation time. */
+  notes: VocalNotesResult;
+  /** The pitch analysis the session was built from. */
+  analysis: VocalAnalysis;
+  /** What the loaded engine supports. */
+  capabilities: VocalCapabilities;
 }
 
-export class VocalEditWorkerTask<T> implements PromiseLike<T> {
-  constructor(
-    readonly result: Promise<T>,
-    private readonly cancelRequest: () => void,
-  ) {}
+type RevisionArgument = string | { expectedRevision?: string };
 
-  cancel(): void {
-    this.cancelRequest();
-  }
-
-  // biome-ignore lint/suspicious/noThenProperty: PromiseLike intentionally exposes then.
-  then<TResult1 = T, TResult2 = never>(
-    onfulfilled?: ((value: T) => TResult1 | PromiseLike<TResult1>) | null,
-    onrejected?: ((reason: unknown) => TResult2 | PromiseLike<TResult2>) | null,
-  ): Promise<TResult1 | TResult2> {
-    return this.result.then(onfulfilled, onrejected);
-  }
-
-  catch<TResult = never>(
-    onrejected?: ((reason: unknown) => TResult | PromiseLike<TResult>) | null,
-  ): Promise<T | TResult> {
-    return this.result.catch(onrejected);
-  }
-
-  finally(onfinally?: (() => void) | null): Promise<T> {
-    return this.result.finally(onfinally);
-  }
-}
-
-type RevisionArgument = VocalUint64 | { expectedRevision?: VocalUint64 };
-
-function resolveRevision(
-  argument: RevisionArgument | undefined,
-  fallback: VocalUint64,
-): VocalUint64 {
+function resolveRevision(argument: RevisionArgument | undefined, fallback: string): string {
   const value = typeof argument === 'string' ? argument : argument?.expectedRevision;
   return value ?? fallback;
+}
+
+interface DraftState {
+  token: VocalStateToken;
+  open: boolean;
+}
+
+interface SessionState {
+  readonly id: string;
+  token: VocalStateToken;
+  draft?: DraftState;
+  disposed: boolean;
 }
 
 interface PendingCall {
   resolve: (value: unknown) => void;
   reject: (reason: unknown) => void;
   sessionId: string;
-  intent: VocalUint64;
+  intent: string;
   baseToken?: VocalStateToken;
   preview: boolean;
   mutation: boolean;
-  session?: VocalEditWorkerSession;
+  session?: SessionState;
   cancelFlag?: Int32Array;
   signal?: AbortSignal;
   abortListener?: () => void;
 }
 
-function incrementDecimal(value: VocalUint64): VocalUint64 {
+interface CallReply<T> {
+  result: T;
+  token?: VocalStateToken;
+  draftToken?: VocalStateToken;
+}
+
+function incrementDecimal(value: string): string {
   if (compareUint64(value, '18446744073709551615') >= 0) {
     throw new RangeError('vocal Worker intent sequence exhausted uint64');
   }
@@ -191,24 +193,10 @@ function cloneRequest<T>(request: T, copy: boolean, transfers: Transferable[]): 
 }
 
 function workerError(message: VocalWorkerErrorMessage): Error {
-  if (message.error.name === 'StaleResultError') {
-    return new VocalEditWorkerStaleResultError(message.error.message);
-  }
   const error = failureFromPayload(message.error);
-  error.name = message.error.name;
-  for (const key of [
-    'code',
-    'reason',
-    'field',
-    'expected',
-    'actual',
-    'expectedText',
-    'actualText',
-  ] as const) {
-    const value = message.error[key];
-    if (value !== undefined) {
-      Object.defineProperty(error, key, { value, enumerable: true, configurable: true });
-    }
+  const detail = message.error.detail;
+  if (isVocalErrorDetail(detail)) {
+    attachVocalErrorDetail(error, detail);
   }
   return error;
 }
@@ -221,23 +209,39 @@ function nextSessionId(counter: number): string {
   return `vocal-${counter.toString(36)}`;
 }
 
-function abortError(): DOMException {
-  return new DOMException('The operation was aborted', 'AbortError');
+function cancelledError(signal?: AbortSignal): SonareError {
+  return new SonareError(ErrorCode.Cancelled, 'The operation was cancelled', {
+    cause: signal?.reason,
+  });
 }
 
-export class VocalEditWorkerClient {
+function staleError(): SonareError {
+  return new SonareError(ErrorCode.StaleResult, 'A vocal edit Worker result is stale');
+}
+
+/** The token a preview is compared against: the open draft's, else the committed one. */
+function viewToken(session: SessionState): VocalStateToken {
+  return session.draft?.open ? session.draft.token : session.token;
+}
+
+/** Module-private marker; the session and draft constructors refuse a call without it. */
+const CONSTRUCT = Symbol('VocalEditWorker.construct');
+
+/** The call plumbing shared by a client and the sessions it opened. Not part of the public surface. */
+class ClientCore {
   private readonly worker: VocalEditWorker;
   private readonly ownsWorker: boolean;
   private readonly pending = new Map<number, PendingCall>();
-  private readonly latestIntent = new Map<string, VocalUint64>();
-  private readonly sessions = new Set<VocalEditWorkerSession>();
+  private readonly disposeWaiters = new Map<number, () => void>();
+  private readonly latestIntent = new Map<string, string>();
+  private readonly sessions = new Set<SessionState>();
   private nextId = 1;
   private nextSession = 1;
   private closed = false;
   private destroying: Promise<void> | undefined;
   private usesEventTarget = false;
 
-  constructor(options: VocalEditWorkerClientOptions = {}) {
+  constructor(options: VocalEditWorkerClientOptions) {
     this.ownsWorker = options.worker === undefined || options.terminateWorkerOnDestroy === true;
     if (options.worker) {
       this.worker = options.worker;
@@ -267,31 +271,41 @@ export class VocalEditWorkerClient {
     }
   }
 
-  create(
-    request: VocalCreateRequest,
-    options: VocalEditWorkerCallOptions = {},
-  ): VocalEditWorkerTask<VocalEditWorkerSession> {
-    return this.openSession({ kind: 'create', request }, options);
-  }
-
-  restore(
-    request: VocalRestoreRequest,
-    options: VocalEditWorkerCallOptions = {},
-  ): VocalEditWorkerTask<VocalEditWorkerSession> {
-    return this.openSession({ kind: 'restore', request }, options);
-  }
-
-  private postDisposeMessage(sessionId: string, clientIntentSequence: VocalUint64): void {
+  open(
+    request: VocalWorkerCreateMessage['request'],
+    options: VocalEditWorkerCallOptions,
+  ): Promise<VocalEditWorkerSession> {
+    const sessionId = nextSessionId(this.nextSession++);
+    let reply: Promise<CallReply<VocalWorkerCreateResult>>;
     try {
-      this.worker.postMessage({
-        type: 'sonare:vocal-dispose',
-        id: this.nextId++,
+      const message: VocalWorkerCreateMessage = {
+        type: 'sonare:vocal-create',
+        id: 0,
         sessionId,
-        clientIntentSequence,
-      });
-    } catch {
-      // Disposal is best effort when a host closes the Worker concurrently.
+        clientIntentSequence: this.intent(sessionId),
+        request,
+      };
+      reply = this.call<VocalWorkerCreateResult>(message, options);
+    } catch (error) {
+      return Promise.reject(error);
     }
+    return reply.then(({ result }) => {
+      const state: SessionState = { id: sessionId, token: result.token, disposed: false };
+      const session = new VocalEditWorkerSession(CONSTRUCT, this, state, {
+        notes: result.notes,
+        analysis: result.analysis,
+        capabilities: result.capabilities,
+      });
+      // The Worker finished before it saw the cancellation; release its session.
+      if (options.signal?.aborted) {
+        if (!this.closed) {
+          session.destroy().catch(() => {});
+        }
+        throw cancelledError(options.signal);
+      }
+      this.sessions.add(state);
+      return session;
+    });
   }
 
   private postCancelMessage(id: number, pending: PendingCall): void {
@@ -306,16 +320,30 @@ export class VocalEditWorkerClient {
         clientIntentSequence: pending.intent,
       });
     } catch {
-      // Disposal still rejects the local task when the Worker is unavailable.
+      // Disposal still rejects the local call when the Worker is unavailable.
     }
   }
 
-  /**
-   * Stop accepting calls, cancel outstanding work (rejected with `InvalidState`),
-   * release every open session, and terminate the Worker when this client owns
-   * it. Resolves once the Worker has been released; a second call returns the
-   * same promise.
-   */
+  /** Posts a dispose for `sessionId`; resolves when the Worker replies or can no longer. */
+  private postDisposeMessage(sessionId: string, clientIntentSequence: string): Promise<void> {
+    const id = this.nextId++;
+    return new Promise<void>((resolve) => {
+      this.disposeWaiters.set(id, resolve);
+      try {
+        this.worker.postMessage({
+          type: 'sonare:vocal-dispose',
+          id,
+          sessionId,
+          clientIntentSequence,
+        });
+      } catch {
+        // The host closed the Worker concurrently; there is no reply to wait for.
+        this.disposeWaiters.delete(id);
+        resolve();
+      }
+    });
+  }
+
   destroy(): Promise<void> {
     if (this.destroying) {
       return this.destroying;
@@ -324,16 +352,11 @@ export class VocalEditWorkerClient {
     return this.destroying;
   }
 
-  /** Same as {@link destroy}, for `await using`. */
-  [Symbol.asyncDispose](): Promise<void> {
-    return this.destroy();
-  }
-
   private async shutdown(): Promise<void> {
     const pendingEntries = [...this.pending.entries()];
-    const sessionIntents = new Map<string, VocalUint64>();
+    const sessionIntents = new Map<string, string>();
     for (const session of this.sessions) {
-      sessionIntents.set(session.sessionId, this.latestIntent.get(session.sessionId) ?? '0');
+      sessionIntents.set(session.id, this.latestIntent.get(session.id) ?? '0');
     }
     for (const [, pending] of pendingEntries) {
       if (!sessionIntents.has(pending.sessionId)) {
@@ -347,9 +370,21 @@ export class VocalEditWorkerClient {
     for (const [id, pending] of pendingEntries) {
       this.postCancelMessage(id, pending);
     }
+    const released: Promise<void>[] = [];
     for (const [sessionId, intent] of sessionIntents) {
-      this.postDisposeMessage(sessionId, intent);
+      released.push(this.postDisposeMessage(sessionId, intent));
     }
+    for (const [, pending] of pendingEntries) {
+      pending.abortListener && pending.signal?.removeEventListener('abort', pending.abortListener);
+      pending.reject(releasedHandleError('VocalEditWorkerClient', 'was disposed'));
+    }
+    this.pending.clear();
+    for (const session of this.sessions) {
+      session.disposed = true;
+    }
+    this.sessions.clear();
+    this.latestIntent.clear();
+    await Promise.all(released);
     if (this.usesEventTarget) {
       this.worker.removeEventListener?.('message', this.onMessage as EventListener);
       this.worker.removeEventListener?.('error', this.onError as EventListener);
@@ -357,132 +392,74 @@ export class VocalEditWorkerClient {
       this.worker.off?.('message', this.onNodeMessage);
       this.worker.off?.('error', this.onNodeError);
     }
-    for (const [, pending] of pendingEntries) {
-      pending.abortListener && pending.signal?.removeEventListener('abort', pending.abortListener);
-      pending.reject(releasedHandleError('VocalEditWorkerClient', 'was disposed'));
-    }
-    this.pending.clear();
-    this.sessions.clear();
-    this.latestIntent.clear();
     if (this.ownsWorker) {
       await this.worker.terminate();
     }
   }
 
-  /** @internal Called by VocalEditWorkerSession. */
-  disposeSession(session: VocalEditWorkerSession): VocalEditWorkerTask<null> {
-    const task = this.call({
+  /** Releases one session in the Worker and resolves once the Worker has acknowledged it. */
+  async disposeSession(session: SessionState): Promise<void> {
+    await this.call({
       type: 'sonare:vocal-dispose',
       id: 0,
-      sessionId: session.sessionId,
-      clientIntentSequence: this.intent(session.sessionId),
+      sessionId: session.id,
+      clientIntentSequence: this.intent(session.id),
     });
-    const result = task.result.then(() => {
-      this.sessions.delete(session);
-      this.latestIntent.delete(session.sessionId);
-      return null;
-    });
-    return new VocalEditWorkerTask(result, () => task.cancel());
+    this.sessions.delete(session);
+    this.latestIntent.delete(session.id);
   }
 
-  /** @internal */
-  callMutation<T>(
-    session: VocalEditWorkerSession,
+  mutate<T>(
+    session: SessionState,
     mutation: VocalWorkerMutation,
     options: VocalEditWorkerTransferOptions = {},
-  ): VocalEditWorkerTask<T> {
+  ): Promise<T> {
     const message: VocalWorkerMutateMessage = {
       type: 'sonare:vocal-mutate',
       id: 0,
-      sessionId: session.sessionId,
-      clientIntentSequence: this.intent(session.sessionId),
-      baseToken: session.currentToken(),
+      sessionId: session.id,
+      clientIntentSequence: this.intent(session.id),
+      baseToken: session.token,
       mutation,
     };
-    // The reply token is adopted in onMessage, before any stale-intent check.
-    const task = this.call<T>(message, { copy: options.copy }, session);
-    const result = task.result.then((response) => response.result);
-    // Mutations are FIFO and never dropped, so a mutation cannot be cancelled.
-    return new VocalEditWorkerTask(result, () => {});
+    // The reply tokens are adopted in onMessage, before any stale-intent check.
+    return this.call<T>(message, { copy: options.copy }, session).then((reply) => reply.result);
   }
 
-  /** @internal */
-  callPreview(
-    session: VocalEditWorkerSession,
+  preview(
+    session: SessionState,
     request: VocalRenderRequest,
     options: VocalEditWorkerTransferOptions = {},
-  ): VocalEditWorkerTask<VocalRenderResult> {
+  ): Promise<VocalRenderResult> {
     const signal = request.signal;
     const { signal: _ignoredSignal, ...portableRequest } = request;
     const message: VocalWorkerPreviewMessage = {
       type: 'sonare:vocal-preview',
       id: 0,
-      sessionId: session.sessionId,
-      clientIntentSequence: this.intent(session.sessionId),
-      baseToken: session.currentToken(),
+      sessionId: session.id,
+      clientIntentSequence: this.intent(session.id),
+      baseToken: session.token,
       request: portableRequest,
     };
-    const task = this.call<VocalRenderResult>(message, { signal, copy: options.copy }, session);
     // A render result carries requestId/profile metadata in its token. It is
     // a snapshot of the state used for rendering, not a new session token, so
-    // it is compared against the session token and never adopted.
-    const result = task.result.then((response) => response.result);
-    return new VocalEditWorkerTask(result, () => task.cancel());
+    // it is compared against the session state and never adopted.
+    return this.call<VocalRenderResult>(message, { signal, copy: options.copy }, session).then(
+      (reply) => reply.result,
+    );
   }
 
-  private intent(sessionId: string): VocalUint64 {
+  private intent(sessionId: string): string {
     const next = incrementDecimal(this.latestIntent.get(sessionId) ?? '0');
     this.latestIntent.set(sessionId, next);
     return next;
   }
 
-  private openSession(
-    request: VocalWorkerCreateMessage['request'],
-    options: VocalEditWorkerCallOptions,
-  ): VocalEditWorkerTask<VocalEditWorkerSession> {
-    const sessionId = nextSessionId(this.nextSession++);
-    let cancelled = false;
-    const task = this.callCreate(sessionId, request, options);
-    const result = task.result.then((value) => {
-      const session = new VocalEditWorkerSession(this, sessionId, value.token, value);
-      // The Worker finished before it saw the cancellation; release its session.
-      if (cancelled || options.signal?.aborted) {
-        if (!this.closed) {
-          session.destroy().catch(() => {});
-        }
-        throw abortError();
-      }
-      this.sessions.add(session);
-      return session;
-    });
-    return new VocalEditWorkerTask(result, () => {
-      cancelled = true;
-      task.cancel();
-    });
-  }
-
-  private callCreate(
-    sessionId: string,
-    request: VocalWorkerCreateMessage['request'],
-    options: VocalEditWorkerCallOptions,
-  ): VocalEditWorkerTask<VocalWorkerCreateResult> {
-    const message: VocalWorkerCreateMessage = {
-      type: 'sonare:vocal-create',
-      id: 0,
-      sessionId,
-      clientIntentSequence: this.intent(sessionId),
-      request,
-    };
-    const task = this.call<unknown>(message, options);
-    const result = task.result.then((response) => response.result as VocalWorkerCreateResult);
-    return new VocalEditWorkerTask(result, () => task.cancel());
-  }
-
   private call<T = unknown>(
     input: VocalWorkerRequestMessage,
     options: VocalEditWorkerCallOptions = {},
-    session?: VocalEditWorkerSession,
-  ): VocalEditWorkerTask<{ result: T; token?: VocalStateToken }> {
+    session?: SessionState,
+  ): Promise<CallReply<T>> {
     if (this.closed) {
       throw releasedHandleError('VocalEditWorkerClient', 'was disposed');
     }
@@ -499,13 +476,13 @@ export class VocalEditWorkerClient {
         message as VocalWorkerCreateMessage | VocalWorkerMutateMessage | VocalWorkerPreviewMessage
       ).cancelBuffer = cancelFlag.buffer as SharedArrayBuffer;
     }
-    const result = new Promise<{ result: T; token?: VocalStateToken }>((resolve, reject) => {
+    const result = new Promise<CallReply<T>>((resolve, reject) => {
       if (options.signal?.aborted) {
-        reject(abortError());
+        reject(cancelledError(options.signal));
         return;
       }
       const pending: PendingCall = {
-        resolve: (value) => resolve(value as { result: T; token?: VocalStateToken }),
+        resolve: (value) => resolve(value as CallReply<T>),
         reject,
         sessionId: message.sessionId,
         intent: message.clientIntentSequence,
@@ -550,26 +527,18 @@ export class VocalEditWorkerClient {
         }
       }
     }
-    return new VocalEditWorkerTask(result, () => {
-      const pending = this.pending.get(id);
-      if (!pending) {
-        return;
-      }
-      if (pending.cancelFlag) {
-        Atomics.store(pending.cancelFlag, 0, 1);
-      }
-      this.worker.postMessage({
-        type: 'sonare:vocal-cancel',
-        id,
-        sessionId: pending.sessionId,
-        clientIntentSequence: pending.intent,
-      });
-    });
+    return result;
   }
 
   private readonly onMessage = (event: MessageEvent<VocalWorkerResponseMessage>): void => {
     const message = event.data;
     if (message.type === 'sonare:vocal-progress') {
+      return;
+    }
+    const waiter = this.disposeWaiters.get(message.id);
+    if (waiter) {
+      this.disposeWaiters.delete(message.id);
+      waiter();
       return;
     }
     const pending = this.pending.get(message.id);
@@ -582,7 +551,7 @@ export class VocalEditWorkerClient {
     }
     // Every mutation reply, result or error, carries the Worker's state after
     // it ran. Adopt it before the intent check so a superseded reply still
-    // advances the token the next pipelined call will be compared against.
+    // advances the tokens the next pipelined call will be compared against.
     if (
       !pending.preview &&
       pending.session &&
@@ -590,51 +559,67 @@ export class VocalEditWorkerClient {
       pending.baseToken &&
       sameSessionToken(message.token, pending.baseToken)
     ) {
-      pending.session.updateToken(message.token);
+      pending.session.token = message.token;
+      if (message.draftToken && pending.session.draft?.open) {
+        pending.session.draft.token = message.draftToken;
+      }
     }
+    const reply = (): CallReply<unknown> => ({
+      result: (message as { result?: unknown }).result,
+      token: message.token,
+      draftToken: message.draftToken,
+    });
     // A mutation already ran in the Worker, so its caller gets the actual
     // outcome; only previews and reads are discarded as superseded.
     if (pending.mutation) {
       if (message.type === 'sonare:vocal-error') {
         pending.reject(workerError(message));
       } else {
-        pending.resolve({ result: message.result, token: message.token });
+        pending.resolve(reply());
       }
       return;
     }
     const latest = this.latestIntent.get(pending.sessionId) ?? pending.intent;
     if (compareUint64(pending.intent, latest) < 0) {
-      pending.reject(new VocalEditWorkerStaleResultError());
+      pending.reject(staleError());
       return;
     }
-    if (message.token && pending.baseToken) {
-      const tokenMatches =
-        pending.preview && pending.session
-          ? stateTokenEquals(message.token, pending.session.latestToken())
-          : sameSessionToken(message.token, pending.baseToken);
-      if (!tokenMatches) {
-        pending.reject(new VocalEditWorkerStaleResultError());
+    if (pending.preview && pending.session) {
+      // A render reports the state it was produced from; an error reports the Worker's current view.
+      const observed =
+        message.type === 'sonare:vocal-result'
+          ? (message.result as VocalRenderResult | null)?.token
+          : (message.draftToken ?? message.token);
+      if (!observed || !stateTokenEquals(observed, viewToken(pending.session))) {
+        pending.reject(staleError());
         return;
       }
-    }
-    if (pending.preview && !message.token) {
-      pending.reject(new VocalEditWorkerStaleResultError());
+    } else if (
+      message.token &&
+      pending.baseToken &&
+      !sameSessionToken(message.token, pending.baseToken)
+    ) {
+      pending.reject(staleError());
       return;
     }
     if (message.type === 'sonare:vocal-error') {
       pending.reject(workerError(message));
       return;
     }
-    pending.resolve({ result: message.result, token: message.token });
+    pending.resolve(reply());
   };
 
   private readonly onError = (event: ErrorEvent): void => {
-    const error = new Error(event.message || 'Vocal edit Worker failed');
+    const error = new SonareError(ErrorCode.Unknown, event.message || 'Vocal edit Worker failed');
     for (const pending of this.pending.values()) {
       pending.abortListener && pending.signal?.removeEventListener('abort', pending.abortListener);
       pending.reject(error);
     }
     this.pending.clear();
+    for (const waiter of this.disposeWaiters.values()) {
+      waiter();
+    }
+    this.disposeWaiters.clear();
   };
 
   private readonly onNodeMessage = (data: unknown): void => {
@@ -646,188 +631,341 @@ export class VocalEditWorkerClient {
   };
 }
 
-/** Selects the open draft instead of the committed session for a read-only call. */
-export interface VocalEditWorkerReadOptions {
-  draft?: boolean;
+/**
+ * Runs vocal-edit sessions in a Worker so analysis and rendering stay off the calling
+ * thread. A session mirrors {@link VocalEditSession}, with every call returning a promise.
+ */
+export class VocalEditWorkerClient {
+  private readonly core: ClientCore;
+
+  /** Starts a Worker, or adopts the one in `options.worker`. */
+  constructor(options: VocalEditWorkerClientOptions = {}) {
+    this.core = new ClientCore(options);
+  }
+
+  /** Analyses mono PCM in the Worker and opens an editing session. */
+  create(
+    request: VocalCreateRequest,
+    options: VocalEditWorkerCallOptions = {},
+  ): Promise<VocalEditWorkerSession> {
+    return this.core.open({ kind: 'create', request }, options);
+  }
+
+  /** Opens a session in the Worker from an exported state blob and the same source PCM. */
+  restore(
+    request: VocalRestoreRequest,
+    options: VocalEditWorkerCallOptions = {},
+  ): Promise<VocalEditWorkerSession> {
+    return this.core.open({ kind: 'restore', request }, options);
+  }
+
+  /**
+   * Stop accepting calls, cancel outstanding work (rejected with `InvalidState`),
+   * release every open session, and terminate the Worker when this client owns
+   * it. Resolves once the Worker has acknowledged the release of every session;
+   * a second call returns the same promise.
+   */
+  destroy(): Promise<void> {
+    return this.core.destroy();
+  }
+
+  /** Same as {@link destroy}, for `await using`. */
+  [Symbol.asyncDispose](): Promise<void> {
+    return this.destroy();
+  }
 }
 
-export class VocalEditWorkerSession {
-  readonly sessionId: string;
-  private tokenValue: VocalStateToken;
-  private disposed = false;
-  private destroying: Promise<void> | undefined;
-  readonly created: VocalWorkerCreateResult;
-  private readonly client: VocalEditWorkerClient;
+/** An open batch of edits on a {@link VocalEditWorkerSession}. */
+export class VocalEditWorkerDraft {
+  private readonly core: ClientCore;
+  private readonly sessionState: SessionState;
+  private readonly draftState: DraftState;
 
-  /** @internal Created by VocalEditWorkerClient.create/restore. */
+  /** @internal Created by {@link VocalEditWorkerSession.beginEdit}. */
   constructor(
-    client: VocalEditWorkerClient,
-    sessionId: string,
-    token: VocalStateToken,
-    created: VocalWorkerCreateResult,
+    guard: typeof CONSTRUCT,
+    core: ClientCore,
+    sessionState: SessionState,
+    draftState: DraftState,
   ) {
-    this.client = client;
-    this.sessionId = sessionId;
-    this.tokenValue = token;
-    this.created = created;
+    if (guard !== CONSTRUCT) {
+      throw new TypeError('VocalEditWorkerDraft is created by VocalEditWorkerSession.beginEdit');
+    }
+    this.core = core;
+    this.sessionState = sessionState;
+    this.draftState = draftState;
   }
 
-  currentToken(): VocalStateToken {
-    this.requireAlive();
-    return this.tokenValue;
+  /** The draft's token as of the last reply the client received. */
+  get token(): VocalStateToken {
+    this.requireOpen();
+    return { ...this.draftState.token };
   }
 
-  updateToken(token: VocalStateToken): void {
-    this.tokenValue = token;
+  /** The revision the draft was begun from, a decimal string (64-bit counter). */
+  get revision(): string {
+    return this.token.revision;
   }
 
-  /** @internal The adopted token, readable after dispose for reply checks. */
-  latestToken(): VocalStateToken {
-    return this.tokenValue;
+  /** The draft's notes and transitions, including uncommitted edits. */
+  async notes(): Promise<VocalNotesResult> {
+    this.requireOpen();
+    return this.core.mutate(this.sessionState, { kind: 'notes', draft: true });
   }
 
-  token(): VocalStateToken {
-    this.requireAlive();
-    return { ...this.tokenValue };
+  /**
+   * Applies the operations as one batch. Omitting `expectedGeneration` uses the
+   * generation the draft last reported.
+   */
+  async apply(
+    request: VocalApplyRequest,
+    options: VocalEditWorkerTransferOptions = {},
+  ): Promise<VocalEditResult> {
+    this.requireOpen();
+    requestObject('vocalApply', request, 'request', true);
+    return this.core.mutate(
+      this.sessionState,
+      {
+        kind: 'apply',
+        request: {
+          expectedGeneration: request.expectedGeneration ?? this.draftState.token.generation,
+          operations: request.operations,
+        },
+      },
+      options,
+    );
   }
 
-  /** The adopted revision; like {@link token}, it follows replies already received. */
-  revision(): VocalUint64 {
-    return this.token().revision;
-  }
-
-  notes(): VocalEditWorkerTask<VocalNotesResult> {
-    this.requireAlive();
-    return this.client.callMutation(this, { kind: 'notes' });
-  }
-
-  analysis(): VocalEditWorkerTask<VocalAnalysis> {
-    this.requireAlive();
-    return this.client.callMutation(this, { kind: 'analysis' });
-  }
-
-  capabilities(): VocalEditWorkerTask<VocalCapabilities> {
-    this.requireAlive();
-    return this.client.callMutation(this, { kind: 'capabilities' });
-  }
-
-  outputLengthSamples(): VocalEditWorkerTask<number> {
-    this.requireAlive();
-    return this.client.callMutation(this, { kind: 'outputLength' });
-  }
-
-  history(): VocalEditWorkerTask<VocalHistoryState> {
-    this.requireAlive();
-    return this.client.callMutation(this, { kind: 'history' });
-  }
-
-  /** Token of the open draft; rejects when no draft is open. */
-  draftToken(): VocalEditWorkerTask<VocalStateToken> {
-    this.requireAlive();
-    return this.client.callMutation(this, { kind: 'draftToken' });
-  }
-
-  evaluatePitch(
-    noteId: number,
-    options: VocalEditWorkerReadOptions = {},
-  ): VocalEditWorkerTask<VocalPitchEvaluation> {
-    this.requireAlive();
-    return this.client.callMutation(this, {
-      kind: 'evaluatePitch',
-      noteId,
-      draft: options.draft === true,
+  /** Commits the draft and releases it. `expectedRevision` defaults to the session's revision. */
+  async commit(options: RevisionArgument = {}): Promise<VocalEditResult> {
+    this.requireOpen();
+    const result = await this.core.mutate<VocalEditResult>(this.sessionState, {
+      kind: 'commit',
+      expectedRevision: resolveRevision(options, this.sessionState.token.revision),
     });
+    this.close();
+    return result;
   }
 
-  sourceSampleToDestinationSample(
-    noteId: number,
-    sourceSample: number,
-    options: VocalEditWorkerReadOptions = {},
-  ): VocalEditWorkerTask<number> {
-    this.requireAlive();
-    return this.client.callMutation(this, {
+  /** Discards the draft and releases it. */
+  async cancel(): Promise<void> {
+    this.requireOpen();
+    await this.core.mutate<null>(this.sessionState, { kind: 'cancel' });
+    this.close();
+  }
+
+  /** Per-frame pitch of one note including uncommitted edits. */
+  async evaluatePitch(noteId: number): Promise<VocalPitchEvaluation> {
+    this.requireOpen();
+    return this.core.mutate(this.sessionState, { kind: 'evaluatePitch', noteId, draft: true });
+  }
+
+  /** Maps a source sample of a note to its position in the output, including uncommitted edits. */
+  async sourceSampleToDestinationSample(noteId: number, sourceSample: number): Promise<number> {
+    this.requireOpen();
+    return this.core.mutate(this.sessionState, {
       kind: 'mapCoordinate',
       noteId,
       sample: sourceSample,
       inverse: false,
-      draft: options.draft === true,
+      draft: true,
     });
   }
 
-  destinationSampleToSourceSample(
+  /** Maps an output sample of a note back to its source position, including uncommitted edits. */
+  async destinationSampleToSourceSample(
     noteId: number,
     destinationSample: number,
-    options: VocalEditWorkerReadOptions = {},
-  ): VocalEditWorkerTask<number> {
-    this.requireAlive();
-    return this.client.callMutation(this, {
+  ): Promise<number> {
+    this.requireOpen();
+    return this.core.mutate(this.sessionState, {
       kind: 'mapCoordinate',
       noteId,
       sample: destinationSample,
       inverse: true,
-      draft: options.draft === true,
+      draft: true,
     });
   }
 
-  beginEdit(options: RevisionArgument = {}): VocalEditWorkerTask<VocalStateToken> {
-    this.requireAlive();
-    return this.client.callMutation(this, {
-      kind: 'beginEdit',
-      expectedRevision: resolveRevision(options, this.tokenValue.revision),
-    });
-  }
-
-  apply(
-    request: VocalApplyRequest,
-    options: VocalEditWorkerTransferOptions = {},
-  ): VocalEditWorkerTask<VocalEditResult> {
-    this.requireAlive();
-    if (request.expectedGeneration === undefined) {
-      throw new TypeError('expectedGeneration is required');
-    }
-    return this.client.callMutation(this, { kind: 'apply', request }, options);
-  }
-
-  commit(options: RevisionArgument = {}): VocalEditWorkerTask<VocalEditResult> {
-    this.requireAlive();
-    return this.client.callMutation(this, {
-      kind: 'commit',
-      expectedRevision: resolveRevision(options, this.tokenValue.revision),
-    });
-  }
-
-  cancel(): VocalEditWorkerTask<null> {
-    this.requireAlive();
-    return this.client.callMutation(this, { kind: 'cancel' });
-  }
-
-  undo(options: RevisionArgument = {}): VocalEditWorkerTask<VocalEditResult> {
-    this.requireAlive();
-    return this.client.callMutation(this, {
-      kind: 'undo',
-      expectedRevision: resolveRevision(options, this.tokenValue.revision),
-    });
-  }
-
-  redo(options: RevisionArgument = {}): VocalEditWorkerTask<VocalEditResult> {
-    this.requireAlive();
-    return this.client.callMutation(this, {
-      kind: 'redo',
-      expectedRevision: resolveRevision(options, this.tokenValue.revision),
-    });
-  }
-
-  exportState(): VocalEditWorkerTask<VocalStateBytes> {
-    this.requireAlive();
-    return this.client.callMutation(this, { kind: 'exportState' });
-  }
-
-  preview(
+  /**
+   * Renders the draft in the Worker. A newer preview supersedes an older one, which then
+   * rejects with a `StaleResult` error; `request.signal` aborts with a `Cancelled` error.
+   */
+  async preview(
     request: VocalRenderRequest,
     options: VocalEditWorkerTransferOptions = {},
-  ): VocalEditWorkerTask<VocalRenderResult> {
+  ): Promise<VocalRenderResult> {
+    this.requireOpen();
+    return this.core.preview(this.sessionState, request, options);
+  }
+
+  private close(): void {
+    this.draftState.open = false;
+    if (this.sessionState.draft === this.draftState) {
+      this.sessionState.draft = undefined;
+    }
+  }
+
+  private requireOpen(): void {
+    if (!this.draftState.open || this.sessionState.disposed) {
+      throw releasedHandleError('vocal Worker draft', 'is no longer open');
+    }
+  }
+}
+
+/** A vocal editing session living in a Worker. */
+export class VocalEditWorkerSession {
+  /** Identifier of the session inside the Worker. */
+  readonly sessionId: string;
+  /** What the Worker reported when it opened the session. */
+  readonly created: VocalEditWorkerCreated;
+  private readonly core: ClientCore;
+  private readonly state: SessionState;
+  private destroying: Promise<void> | undefined;
+
+  /** @internal Created by {@link VocalEditWorkerClient.create} and {@link VocalEditWorkerClient.restore}. */
+  constructor(
+    guard: typeof CONSTRUCT,
+    core: ClientCore,
+    state: SessionState,
+    created: VocalEditWorkerCreated,
+  ) {
+    if (guard !== CONSTRUCT) {
+      throw new TypeError('VocalEditWorkerSession is created by VocalEditWorkerClient');
+    }
+    this.core = core;
+    this.state = state;
+    this.sessionId = state.id;
+    this.created = created;
+  }
+
+  /** The committed token as of the last reply the client received. */
+  get token(): VocalStateToken {
     this.requireAlive();
-    return this.client.callPreview(this, request, options);
+    return { ...this.state.token };
+  }
+
+  /** The committed revision, a decimal string (64-bit counter); follows replies already received. */
+  get revision(): string {
+    return this.token.revision;
+  }
+
+  /** The committed notes and transitions. */
+  async notes(): Promise<VocalNotesResult> {
+    this.requireAlive();
+    return this.core.mutate(this.state, { kind: 'notes' });
+  }
+
+  /** The pitch analysis the session was built from. */
+  async analysis(): Promise<VocalAnalysis> {
+    this.requireAlive();
+    return this.core.mutate(this.state, { kind: 'analysis' });
+  }
+
+  /** What the loaded engine supports. */
+  async capabilities(): Promise<VocalCapabilities> {
+    this.requireAlive();
+    return this.core.mutate(this.state, { kind: 'capabilities' });
+  }
+
+  /** Length of the rendered output in samples; a round trip to the Worker. */
+  async outputLengthSamples(): Promise<number> {
+    this.requireAlive();
+    return this.core.mutate(this.state, { kind: 'outputLength' });
+  }
+
+  /** Whether undo and redo have anything to act on. */
+  async history(): Promise<VocalHistory> {
+    this.requireAlive();
+    return this.core.mutate(this.state, { kind: 'history' });
+  }
+
+  /** Per-frame pitch of one committed note. */
+  async evaluatePitch(noteId: number): Promise<VocalPitchEvaluation> {
+    this.requireAlive();
+    return this.core.mutate(this.state, { kind: 'evaluatePitch', noteId, draft: false });
+  }
+
+  /** Maps a source sample of a note to its position in the output. */
+  async sourceSampleToDestinationSample(noteId: number, sourceSample: number): Promise<number> {
+    this.requireAlive();
+    return this.core.mutate(this.state, {
+      kind: 'mapCoordinate',
+      noteId,
+      sample: sourceSample,
+      inverse: false,
+      draft: false,
+    });
+  }
+
+  /** Maps an output sample of a note back to its source position. */
+  async destinationSampleToSourceSample(
+    noteId: number,
+    destinationSample: number,
+  ): Promise<number> {
+    this.requireAlive();
+    return this.core.mutate(this.state, {
+      kind: 'mapCoordinate',
+      noteId,
+      sample: destinationSample,
+      inverse: true,
+      draft: false,
+    });
+  }
+
+  /**
+   * Opens a draft for batching edits. `expectedRevision` defaults to the revision the
+   * client last saw; a mismatch is refused with a `revisionConflict` detail.
+   */
+  async beginEdit(options: RevisionArgument = {}): Promise<VocalEditWorkerDraft> {
+    this.requireAlive();
+    if (this.state.draft?.open) {
+      throw new SonareError(ErrorCode.InvalidState, 'A vocal edit draft is already open');
+    }
+    const token = await this.core.mutate<VocalStateToken>(this.state, {
+      kind: 'beginEdit',
+      expectedRevision: resolveRevision(options, this.state.token.revision),
+    });
+    const draftState: DraftState = { token, open: true };
+    this.state.draft = draftState;
+    return new VocalEditWorkerDraft(CONSTRUCT, this.core, this.state, draftState);
+  }
+
+  /** Reverts the last commit. `expectedRevision` defaults to the current revision. */
+  async undo(options: RevisionArgument = {}): Promise<VocalEditResult> {
+    this.requireAlive();
+    return this.core.mutate(this.state, {
+      kind: 'undo',
+      expectedRevision: resolveRevision(options, this.state.token.revision),
+    });
+  }
+
+  /** Re-applies the last undone commit. `expectedRevision` defaults to the current revision. */
+  async redo(options: RevisionArgument = {}): Promise<VocalEditResult> {
+    this.requireAlive();
+    return this.core.mutate(this.state, {
+      kind: 'redo',
+      expectedRevision: resolveRevision(options, this.state.token.revision),
+    });
+  }
+
+  /** Serialises the edit state; pass it to {@link VocalEditWorkerClient.restore} with the same source PCM. */
+  async exportState(): Promise<Uint8Array> {
+    this.requireAlive();
+    return this.core.mutate(this.state, { kind: 'exportState' });
+  }
+
+  /**
+   * Renders in the Worker: the open draft when there is one, otherwise the committed state.
+   * A newer preview supersedes an older one, which then rejects with a `StaleResult` error;
+   * `request.signal` aborts with a `Cancelled` error.
+   */
+  async preview(
+    request: VocalRenderRequest,
+    options: VocalEditWorkerTransferOptions = {},
+  ): Promise<VocalRenderResult> {
+    this.requireAlive();
+    return this.core.preview(this.state, request, options);
   }
 
   /**
@@ -839,10 +977,13 @@ export class VocalEditWorkerSession {
     if (this.destroying) {
       return this.destroying;
     }
-    this.disposed = true;
+    this.state.disposed = true;
+    if (this.state.draft) {
+      this.state.draft.open = false;
+    }
     this.destroying = (async () => {
       try {
-        await this.client.disposeSession(this).result;
+        await this.core.disposeSession(this.state);
       } catch (error) {
         // A client destroyed meanwhile has already released the session.
         if (!isSonareError(error) || error.code !== ErrorCode.InvalidState) {
@@ -859,7 +1000,7 @@ export class VocalEditWorkerSession {
   }
 
   private requireAlive(): void {
-    if (this.disposed) {
+    if (this.state.disposed) {
       throw releasedHandleError('vocal Worker session', 'has already been disposed');
     }
   }

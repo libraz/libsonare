@@ -1,3 +1,4 @@
+import type { ClipPagePageRequest } from '../clip_page_streamer.js';
 import {
   loadSonareRingCursor,
   requirePositiveCapacity,
@@ -17,10 +18,7 @@ import {
 export const SONARE_CLIP_PAGE_REQUEST_RING_HEADER_INTS = 5;
 export const SONARE_CLIP_PAGE_REQUEST_RING_RECORD_UINT32S = 2;
 
-export interface SonareClipPageRequest {
-  clipId: number;
-  pageIndex: number;
-}
+export type { ClipPagePageRequest } from '../clip_page_streamer.js';
 
 export interface SonareClipPageRequestRingBuffer {
   sharedBuffer: SharedArrayBuffer;
@@ -36,7 +34,7 @@ export interface SharedClipPageRequestRingWriter {
 }
 
 export interface SonareClipPageRequestRingReadResult {
-  requests: SonareClipPageRequest[];
+  requests: ClipPagePageRequest[];
   /** Cumulative uint32 drop count for native and SAB-ring overflows. */
   dropped: number;
 }
@@ -121,7 +119,7 @@ export function readSonareClipPageRequestRingBuffer(
     ring.capacity,
     sonareRingCursorDistance(readIndex, writeIndex, ring.capacity),
   );
-  const requests: SonareClipPageRequest[] = [];
+  const requests: ClipPagePageRequest[] = [];
   for (let i = 0; i < pending; i++) {
     const cursor = (readIndex + i) % ringCursorSpan(ring.capacity);
     const offset =

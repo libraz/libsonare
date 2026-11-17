@@ -558,7 +558,7 @@ describe('a second batch of array-like `.length` reads refuse a wrapped, negativ
   it('reads addVcaGroup/setVcaGroupMembers members from the real array length', () => {
     const mixer = Mixer.fromJson(mixingScenePresetJson('vocalReverbSend'), {
       sampleRate: SR,
-      blockSize: 512,
+      maxBlockSize: 512,
     });
     try {
       const membersOf = (id: string): string[] =>
@@ -618,16 +618,21 @@ describe('a second batch of array-like `.length` reads refuse a wrapped, negativ
     try {
       project.setSampleRate(48000);
       const keysOf = (): unknown[] => JSON.parse(project.toJson()).annotation.keys;
-      const key = (i: number) => ({ startPpq: i, endPpq: i + 1, tonicPc: 0, mode: 0 });
+      const key = (i: number) => ({
+        startPpq: i,
+        endPpq: i + 1,
+        tonicPc: 0,
+        mode: 'unknown' as const,
+      });
       // The control: two legal key-segment lists reload with that many segments.
       project.annotateKeys([key(0)]);
       expect(keysOf().length).toBe(1);
       project.annotateKeys([key(0), key(1)]);
       expect(keysOf().length).toBe(2);
+      // The facade maps the list, so the array-like reaches the embind reader through the native handle.
+      const native = nativeOf(project) as unknown as Record<string, (list: unknown) => void>;
       for (const length of WRAPPING_LENGTHS) {
-        expectRangeRefusal(() =>
-          project.annotateKeys({ length } as unknown as Parameters<typeof project.annotateKeys>[0]),
-        );
+        expectRangeRefusal(() => native.annotateKeys({ length }));
       }
     } finally {
       project.destroy();
@@ -639,18 +644,21 @@ describe('a second batch of array-like `.length` reads refuse a wrapped, negativ
     try {
       project.setSampleRate(48000);
       const chordsOf = (): unknown[] => JSON.parse(project.toJson()).annotation.chords;
-      const chord = (i: number) => ({ startPpq: i, endPpq: i + 1, rootPc: 0, quality: 0 });
+      const chord = (i: number) => ({
+        startPpq: i,
+        endPpq: i + 1,
+        rootPc: 0,
+        quality: 'unknown' as const,
+      });
       // The control: two legal chord lists reload with that many chords.
       project.annotateChords([chord(0)]);
       expect(chordsOf().length).toBe(1);
       project.annotateChords([chord(0), chord(1)]);
       expect(chordsOf().length).toBe(2);
+      // The facade maps the list, so the array-like reaches the embind reader through the native handle.
+      const native = nativeOf(project) as unknown as Record<string, (list: unknown) => void>;
       for (const length of WRAPPING_LENGTHS) {
-        expectRangeRefusal(() =>
-          project.annotateChords({ length } as unknown as Parameters<
-            typeof project.annotateChords
-          >[0]),
-        );
+        expectRangeRefusal(() => native.annotateChords({ length }));
       }
     } finally {
       project.destroy();
@@ -664,7 +672,7 @@ describe('a second batch of array-like `.length` reads refuse a wrapped, negativ
       const extensionsOf = (): unknown[] =>
         JSON.parse(project.toJson()).annotation.chords[0].extensions;
       const chordWithExtensions = (extensions: unknown) => [
-        { startPpq: 0, endPpq: 1, rootPc: 0, quality: 0, extensions },
+        { startPpq: 0, endPpq: 1, rootPc: 0, quality: 'unknown', extensions },
       ];
       // The control: two legal extension lists reload with that many extensions.
       project.annotateChords(chordWithExtensions([9]) as never);
@@ -685,12 +693,12 @@ describe('a second batch of array-like `.length` reads refuse a wrapped, negativ
       project.setSampleRate(48000);
       // The control: two legal tempo maps reload with that many segments.
       project.setTempoSegments([{ startPpq: 0, bpm: 120 }]);
-      expect(project.tempoSegmentCount()).toBe(1);
+      expect(project.tempoSegments().length).toBe(1);
       project.setTempoSegments([
         { startPpq: 0, bpm: 120 },
         { startPpq: 4, bpm: 90 },
       ]);
-      expect(project.tempoSegmentCount()).toBe(2);
+      expect(project.tempoSegments().length).toBe(2);
       for (const length of WRAPPING_LENGTHS) {
         expectRangeRefusal(() =>
           project.setTempoSegments({ length } as unknown as Parameters<
@@ -709,12 +717,12 @@ describe('a second batch of array-like `.length` reads refuse a wrapped, negativ
       project.setSampleRate(48000);
       // The control: two legal time-signature maps reload with that many entries.
       project.setTimeSignatures([{ startPpq: 0, numerator: 4, denominator: 4 }]);
-      expect(project.timeSignatureCount()).toBe(1);
+      expect(project.timeSignatures().length).toBe(1);
       project.setTimeSignatures([
         { startPpq: 0, numerator: 4, denominator: 4 },
         { startPpq: 4, numerator: 3, denominator: 4 },
       ]);
-      expect(project.timeSignatureCount()).toBe(2);
+      expect(project.timeSignatures().length).toBe(2);
       for (const length of WRAPPING_LENGTHS) {
         expectRangeRefusal(() =>
           project.setTimeSignatures({ length } as unknown as Parameters<
@@ -746,63 +754,75 @@ describe('a second batch of array-like `.length` reads refuse a wrapped, negativ
     return project;
   }
 
-  it('reads bounceWithBuiltinInstrument bindings from the real array length', () => {
+  it('reads bounceWithBuiltinInstruments bindings from the real array length', () => {
     // The control: a lone valid binding renders; a second binding with an
     // unknown waveform trips validation, which only fires if it was read.
     const one = buildMidiProject();
-    expect(() => one.bounceWithBuiltinInstrument([{ destinationId: 0 }], {})).not.toThrow();
+    expect(() =>
+      one.bounceWithBuiltinInstruments([{ destinationId: 0, instrument: {} }], {}),
+    ).not.toThrow();
     one.destroy();
     const two = buildMidiProject();
     expect(() =>
-      two.bounceWithBuiltinInstrument(
-        [{ destinationId: 0 }, { destinationId: 0, waveform: 'bogus' as never }],
+      two.bounceWithBuiltinInstruments(
+        [
+          { destinationId: 0, instrument: {} },
+          { destinationId: 0, instrument: { waveform: 'bogus' as never } },
+        ],
         {},
       ),
     ).toThrow();
     two.destroy();
-    // The facade refuses the hole at index 0 before the count is read, so the
-    // embind reader's own length guard is reached through the native handle.
+    // The facade's `.map` skips the holes, so the embind reader's own length
+    // guard is reached through the facade and through the native handle alike.
     const attack = buildMidiProject();
-    expect(() => attack.bounceWithBuiltinInstrument(hugeArray() as never, {})).toThrow(
-      /instrument\[0\]/,
-    );
+    expectRangeRefusal(() => attack.bounceWithBuiltinInstruments(hugeArray() as never, {}));
     expectRangeRefusal(() => nativeOf(attack).bounceWithBuiltinInstrument(hugeArray(), {}));
     attack.destroy();
   });
 
-  it('reads bounceWithSynthInstrument bindings from the real array length', () => {
+  it('reads bounceWithSynthInstruments bindings from the real array length', () => {
     const one = buildMidiProject();
-    expect(() => one.bounceWithSynthInstrument([{ destinationId: 0 }], {})).not.toThrow();
+    expect(() =>
+      one.bounceWithSynthInstruments([{ destinationId: 0, instrument: {} }], {}),
+    ).not.toThrow();
     one.destroy();
     const two = buildMidiProject();
     expect(() =>
-      two.bounceWithSynthInstrument(
-        [{ destinationId: 0 }, { destinationId: 0, waveform: 'bogus' } as never],
+      two.bounceWithSynthInstruments(
+        [
+          { destinationId: 0, instrument: {} },
+          { destinationId: 0, instrument: { waveform: 'bogus' } as never },
+        ],
         {},
       ),
     ).toThrow();
     two.destroy();
     const attack = buildMidiProject();
-    expect(() => attack.bounceWithSynthInstrument(hugeArray() as never, {})).toThrow(
-      /instrument\[0\]/,
-    );
+    expectRangeRefusal(() => attack.bounceWithSynthInstruments(hugeArray() as never, {}));
     expectRangeRefusal(() => nativeOf(attack).bounceWithSynthInstrument(hugeArray(), {}));
     attack.destroy();
   });
 
-  it('reads bounceWithSf2Instrument bindings from the real array length', () => {
+  it('reads bounceWithSf2Instruments bindings from the real array length', () => {
     const one = buildMidiProject();
-    expect(() => one.bounceWithSf2Instrument([{ destinationId: 0 }], {})).not.toThrow();
+    expect(() =>
+      one.bounceWithSf2Instruments([{ destinationId: 0, instrument: {} }], {}),
+    ).not.toThrow();
     one.destroy();
     const two = buildMidiProject();
     expect(() =>
-      two.bounceWithSf2Instrument([{ destinationId: 0 }, { destinationId: 0, polyphony: 1.5 }], {}),
+      two.bounceWithSf2Instruments(
+        [
+          { destinationId: 0, instrument: {} },
+          { destinationId: 0, instrument: { polyphony: 1.5 } },
+        ],
+        {},
+      ),
     ).toThrow();
     two.destroy();
     const attack = buildMidiProject();
-    expect(() => attack.bounceWithSf2Instrument(hugeArray() as never, {})).toThrow(
-      /instrument\[0\]/,
-    );
+    expectRangeRefusal(() => attack.bounceWithSf2Instruments(hugeArray() as never, {}));
     expectRangeRefusal(() => nativeOf(attack).bounceWithSf2Instrument(hugeArray(), {}));
     attack.destroy();
   });
@@ -815,12 +835,14 @@ describe('a second batch of array-like `.length` reads refuse a wrapped, negativ
       const clipId = project.addClip({ trackId, startPpq: 0, lengthPpq: 4 });
       const takesOf = (): unknown[] => JSON.parse(project.toJson()).clips[0].takes;
       // The control: two legal take lists reload with that many takes.
-      project.setClipTakes(clipId, [{ id: 1 }], 1);
+      project.setClipTakes(clipId, [{ id: 1 }], { activeTakeId: 1 });
       expect(takesOf().length).toBe(1);
-      project.setClipTakes(clipId, [{ id: 1 }, { id: 2 }], 1);
+      project.setClipTakes(clipId, [{ id: 1 }, { id: 2 }], { activeTakeId: 1 });
       expect(takesOf().length).toBe(2);
       // Array.isArray gates this site, so the attack needs a real Array.
-      expectRangeRefusal(() => project.setClipTakes(clipId, hugeArray() as never, 1));
+      expectRangeRefusal(() =>
+        project.setClipTakes(clipId, hugeArray() as never, { activeTakeId: 1 }),
+      );
     } finally {
       project.destroy();
     }
@@ -832,7 +854,7 @@ describe('a second batch of array-like `.length` reads refuse a wrapped, negativ
       project.setSampleRate(48000);
       const trackId = project.addTrack({ kind: 'audio', name: 't' });
       const clipId = project.addClip({ trackId, startPpq: 0, lengthPpq: 4 });
-      project.setClipTakes(clipId, [{ id: 1 }], 1);
+      project.setClipTakes(clipId, [{ id: 1 }], { activeTakeId: 1 });
       const segmentsOf = (): unknown[] => JSON.parse(project.toJson()).clips[0].comp_segments;
       // The control: two legal comp-segment lists reload with that many segments.
       project.setClipCompSegments(clipId, [{ startPpq: 0, endPpq: 1, takeId: 1 }]);
@@ -852,7 +874,7 @@ describe('a second batch of array-like `.length` reads refuse a wrapped, negativ
     const stem = (name: string) => ({
       name,
       layout: 'mono' as const,
-      planarSamples: [new Float32Array(4800)],
+      channels: [new Float32Array(4800)],
     });
     const project1 = new Project();
     project1.setSampleRate(48000);
@@ -972,19 +994,18 @@ describe('element readers refuse a wrong-typed or out-of-domain element instead 
         trackId,
         startPpq: 0,
         lengthPpq: 4,
-        audio: new Float32Array(480).fill(0.25),
-        audioChannels: 1,
-        audioSampleRate: 48000,
+        channels: [new Float32Array(480).fill(0.25)],
+        sampleRate: 48000,
       });
       const off = project.toJson();
-      project.setClipWarpMode(clipId, 'tempo-sync');
+      project.setClipWarpMode(clipId, 'tempoSync');
       const tempoSync = project.toJson();
       expect(tempoSync).not.toBe(off);
       for (const mode of [null, undefined, {}, true, Number.NaN, 1.5]) {
         expect(() => project.setClipWarpMode(clipId, mode as never)).toThrow();
         expect(project.toJson()).toBe(tempoSync);
       }
-      project.setClipWarpMode(clipId, 3 as never);
+      project.setClipWarpMode(clipId, 'timeStretch');
       expect(project.toJson()).not.toBe(tempoSync);
       // The native reader refuses the same values when driven directly.
       const native = (
@@ -1003,7 +1024,7 @@ describe('element readers refuse a wrong-typed or out-of-domain element instead 
     try {
       project.setSampleRate(48000);
       const chord = (extensions: unknown) => [
-        { startPpq: 0, endPpq: 1, rootPc: 0, quality: 0, extensions },
+        { startPpq: 0, endPpq: 1, rootPc: 0, quality: 'unknown', extensions },
       ];
       project.annotateChords(chord([7, 9]) as never);
       const accepted = project.toJson();

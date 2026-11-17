@@ -409,7 +409,14 @@ describe('absent is omission and -1 is refused', () => {
       expect(() => project.setProgram(clipId, 24)).not.toThrow();
       expect(() => project.setProgram(clipId, 24, 0)).not.toThrow();
       expect(() => project.setProgram(clipId, 24, -1)).toThrow(RangeError);
-      expect(() => project.setProgramOnChannel(clipId, 0, 0, 24, -1)).toThrow(RangeError);
+      expect(() =>
+        project.setProgramOnChannel(clipId, {
+          group: 0,
+          channel: 0,
+          program: 24,
+          bank: { msb: -1, lsb: 0 },
+        }),
+      ).toThrow(RangeError);
     } finally {
       project.destroy();
     }

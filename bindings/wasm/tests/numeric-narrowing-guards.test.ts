@@ -41,7 +41,7 @@ describe('int fields refuse a saturating, fractional or non-finite value', () =>
       const project = new Project();
       try {
         project.setTimeSignatures([{ startPpq: 0, numerator, denominator }]);
-        const segment = project.timeSignatureByIndex(0);
+        const segment = project.timeSignatures()[0];
         return [segment.numerator, segment.denominator];
       } finally {
         project.destroy();
@@ -64,7 +64,7 @@ describe('int fields refuse a saturating, fractional or non-finite value', () =>
         project.setSampleRate(48000);
         const result = project.importExternalStems({
           sampleRate,
-          stems: [{ name: 's', layout: 1, planarSamples: [new Float32Array(4800)] }],
+          stems: [{ name: 's', layout: 'mono', channels: [new Float32Array(4800)] }],
         });
         return result.trackIds.length;
       } finally {
@@ -405,7 +405,8 @@ describe('realtime-engine options-bag readers refuse a silently coerced value', 
         engine.setClips([
           { id: 1, startPpq: 0, channels: [new Float32Array(256).fill(0.25)], lengthSamples: 256 },
         ]);
-        return engine.bounceOffline({ totalFrames, blockSize: 128, numChannels: 2 }).frames;
+        return engine.bounceOffline({ totalFrames, blockSize: 128, numChannels: 2 }).channels[0]
+          .length;
       } finally {
         engine.destroy();
       }
@@ -426,7 +427,7 @@ describe('realtime-engine options-bag readers refuse a silently coerced value', 
     const bounceAt = (totalFrames: number): number => {
       const project = new Project();
       try {
-        return project.bounce({ totalFrames, numChannels: 1, sampleRate: 48000 }).length;
+        return project.bounce({ totalFrames, numChannels: 1 }).channels[0].length;
       } finally {
         project.destroy();
       }
@@ -465,10 +466,10 @@ describe('realtime-engine options-bag readers refuse a silently coerced value', 
 });
 
 describe('annotation ordinals refuse a value that clamps or truncates onto a member', () => {
-  const annotate = (entry: Record<string, number>): number => {
+  const annotate = (entry: Record<string, unknown>): number => {
     const project = new Project();
     try {
-      project.annotateKeys([{ startPpq: 0, endPpq: 480, tonicPc: 0, mode: 0, ...entry }]);
+      project.annotateKeys([{ startPpq: 0, endPpq: 480, tonicPc: 0, mode: 'unknown', ...entry }]);
       return JSON.parse(project.toJson()).annotation.keys[0].tonic_pc;
     } finally {
       project.destroy();
@@ -482,10 +483,10 @@ describe('annotation ordinals refuse a value that clamps or truncates onto a mem
   });
 
   it('refuses a negative, fractional or non-finite pitch class', () => {
-    for (const key of ['tonicPc', 'mode']) {
-      for (const value of [-1, -2, 1.5, ...NON_FINITE, 2 ** 32, 2 ** 53 + 1]) {
-        expectRangeRefusal(() => annotate({ [key]: value }));
-      }
+    for (const value of [-1, -2, 1.5, ...NON_FINITE, 2 ** 32, 2 ** 53 + 1]) {
+      expectRangeRefusal(() => annotate({ tonicPc: value }));
+      // The mode is a token: any number is refused as an ordinal, never narrowed.
+      expect(() => annotate({ mode: value })).toThrow(TypeError);
     }
   });
 });
@@ -813,15 +814,15 @@ describe('uint32 ids keep their whole domain on every WASM id path', () => {
     }
   });
 
-  it('Project.setMarkerEx takes an explicit id past 2^31 and refuses negative or fractional ids', () => {
+  it('Project.setMarker takes an explicit id past 2^31 and refuses negative or fractional ids', () => {
     const project = new Project();
     try {
       // UINT32_MAX is the reserved id the C ABI refuses, so the top legal id is one below it.
       for (const id of [2 ** 31 - 1, 2 ** 31, 2 ** 32 - 2]) {
-        expect(project.setMarkerEx({ id, ppq: 0, name: 'm' })).toBe(id);
+        expect(project.setMarker({ id, ppq: 0, name: 'm' })).toBe(id);
       }
       for (const id of REFUSED) {
-        expectRangeRefusal(() => project.setMarkerEx({ id, ppq: 0, name: 'm' }));
+        expectRangeRefusal(() => project.setMarker({ id, ppq: 0, name: 'm' }));
       }
     } finally {
       project.destroy();

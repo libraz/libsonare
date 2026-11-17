@@ -169,7 +169,7 @@ describe('boundary regressions (WASM)', () => {
   it('validates drainTailStereo before allocation at both facade and raw boundaries', () => {
     const mixer = Mixer.fromJson(mixingScenePresetJson('vocalReverbSend'), {
       sampleRate: SR,
-      blockSize: BLOCK,
+      maxBlockSize: BLOCK,
     });
     try {
       for (const invalid of INVALID_DRAIN_COUNTS) {

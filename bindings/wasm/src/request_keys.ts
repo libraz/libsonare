@@ -199,8 +199,21 @@ import type { AnalyzePolyphonicRequest } from './polyphony.js';
 import type {
   AlignTakeToReferenceRequest,
   ExternalSeparatedStemImportRequest,
+  ProjectAnalyzeTempoRequest,
+  ProjectAssistSidecarInput,
+  ProjectAudioSourceMetadataInput,
+  ProjectAutoTempoRequest,
+  ProjectBounceOptions,
+  ProjectClipDesc,
+  ProjectClipFadeInput,
+  ProjectClipLoopInput,
+  ProjectClipTakesOptions,
+  ProjectMarkerInput,
   ProjectMidiFxBakeRequest,
   ProjectMidiFxPreviewRequest,
+  ProjectMoveClipOptions,
+  ProjectProgramInput,
+  ProjectSourceAudioInput,
   ProjectTranscribeRequest,
 } from './project_types.js';
 import type { RoomPlacement, SynthesizeRirRequest } from './public_types_acoustic.js';
@@ -732,6 +745,7 @@ const VocalCreateRequestKeys = keysOf<VocalCreateRequest>()([
   'referenceHz',
   'limits',
   'analysis',
+  'validate',
 ]);
 const VocalSessionLimitsKeys = keysOf<VocalSessionLimits>()([
   'maxHistoryBytes',
@@ -1960,6 +1974,7 @@ const VocalRestoreRequestKeys = keysOf<VocalRestoreRequest>()([
   'sampleRate',
   'state',
   'limits',
+  'validate',
 ]);
 const ZeroCrossingRateRequestKeys = keysOf<ZeroCrossingRateRequest>()([
   'samples',
@@ -2369,8 +2384,8 @@ const SetMetronomeRequestKeys = keysOf<EngineMetronomeConfig>()([
 ]);
 const SetTrackSoloMuteRequestKeys = keysOf<{ solo: boolean; mute: boolean }>()(['solo', 'mute']);
 const MidiBankRequestKeys = keysOf<{ msb: number; lsb: number }>()(['msb', 'lsb']);
-const MixerConfigRequestKeys = keysOf<MixerConfig>()(['scene', 'sampleRate', 'blockSize']);
-const MixerJsonOptionsRequestKeys = keysOf<MixerJsonOptions>()(['sampleRate', 'blockSize']);
+const MixerConfigRequestKeys = keysOf<MixerConfig>()(['scene', 'sampleRate', 'maxBlockSize']);
+const MixerJsonOptionsRequestKeys = keysOf<MixerJsonOptions>()(['sampleRate', 'maxBlockSize']);
 const ConfigureMeterRequestKeys = keysOf<MixerMeterOptions>()(['enabled', 'truePeakOversample']);
 const SetPolarityInvertRequestKeys = keysOf<PolarityInvert>()(['left', 'right']);
 const MixerAddSendRequestKeys = keysOf<MixerSend>()(['id', 'destinationBusId', 'sendDb', 'timing']);
@@ -2410,6 +2425,86 @@ const BakeMidiFxRequestKeys = keysOf<ProjectMidiFxBakeRequest>()([
   'withSourceIndex',
 ]);
 const PreviewMidiFxRequestKeys = keysOf<ProjectMidiFxPreviewRequest>()(['clipId', 'configJson']);
+const ProjectAddClipRequestKeys = keysOf<ProjectClipDesc>()([
+  'trackId',
+  'isMidi',
+  'startPpq',
+  'lengthPpq',
+  'sourceOffsetPpq',
+  'gain',
+  'channels',
+  'sampleRate',
+  'sourceUri',
+]);
+const ProjectSetMarkerRequestKeys = keysOf<ProjectMarkerInput>()([
+  'id',
+  'ppq',
+  'name',
+  'kind',
+  'keyFifths',
+  'keyMinor',
+]);
+const ProjectMoveClipRequestKeys = keysOf<ProjectMoveClipOptions>()(['trackId']);
+const ProjectSetClipTakesRequestKeys = keysOf<ProjectClipTakesOptions>()(['activeTakeId']);
+const ProjectSetClipFadeRequestKeys = keysOf<ProjectClipFadeInput>()([
+  'fadeInPpq',
+  'fadeInCurve',
+  'fadeOutPpq',
+  'fadeOutCurve',
+]);
+const ProjectSetClipLoopRequestKeys = keysOf<ProjectClipLoopInput>()([
+  'loopMode',
+  'loopLengthPpq',
+  'loopCrossfadePpq',
+]);
+const ProjectSetProgramOnChannelRequestKeys = keysOf<ProjectProgramInput>()([
+  'group',
+  'channel',
+  'program',
+  'bank',
+]);
+const ProjectSetSourceAudioRequestKeys = keysOf<ProjectSourceAudioInput>()([
+  'sourceId',
+  'channels',
+  'sampleRate',
+]);
+const ProjectSetAudioSourceMetadataRequestKeys = keysOf<ProjectAudioSourceMetadataInput>()([
+  'sourceId',
+  'contentHash',
+  'externalStemRole',
+]);
+const ProjectSetAssistSidecarRequestKeys = keysOf<ProjectAssistSidecarInput>()([
+  'moduleId',
+  'schemaVersion',
+  'targetTrackId',
+  'regionStartPpq',
+  'regionEndPpq',
+  'payload',
+]);
+const ProjectBounceRequestKeys = keysOf<ProjectBounceOptions>()([
+  'totalFrames',
+  'blockSize',
+  'numChannels',
+  'instrumentLatencySamples',
+]);
+const ProjectAutoTempoRequestKeys = keysOf<ProjectAutoTempoRequest>()([
+  'samples',
+  'sampleRate',
+  'candidateIndex',
+  'applyTimeSignatures',
+  'adaptiveTempo',
+  'tempoUpdateIntervalBeats',
+  'rampThreshold',
+  'includeOctaveCandidates',
+]);
+const ProjectAnalyzeTempoRequestKeys = keysOf<ProjectAnalyzeTempoRequest>()([
+  'samples',
+  'sampleRate',
+  'adaptiveTempo',
+  'tempoUpdateIntervalBeats',
+  'rampThreshold',
+  'includeOctaveCandidates',
+]);
 const TranscribeToClipRequestKeys = keysOf<ProjectTranscribeRequest>()([
   'clipId',
   'samples',
@@ -2442,9 +2537,8 @@ const ApplyProjectVocalEditRequestKeys = keysOf<ProjectVocalEditApplyRequest>()(
   'expectedSourceOffsetPpq',
   'renderedMono',
   'renderedSampleRate',
-  'renderedStartSample',
   'renderToken',
-  'sve1',
+  'vocalState',
 ]);
 const VocalApplyRequestKeys = keysOf<VocalApplyRequest>()(['expectedGeneration', 'operations']);
 const VocalRenderRequestKeys = keysOf<VocalRenderRequest>()(['range', 'requestId', 'signal']);
@@ -2492,6 +2586,22 @@ export const REQUEST_SHAPES = {
   importExternalSeparatedStem: { keys: ImportExternalSeparatedStemRequestKeys },
   bakeMidiFx: { keys: BakeMidiFxRequestKeys },
   previewMidiFx: { keys: PreviewMidiFxRequestKeys },
+  'Project.addClip': { keys: ProjectAddClipRequestKeys },
+  'Project.setMarker': { keys: ProjectSetMarkerRequestKeys },
+  'Project.moveClip': { keys: ProjectMoveClipRequestKeys },
+  'Project.setClipTakes': { keys: ProjectSetClipTakesRequestKeys },
+  'Project.setClipFade': { keys: ProjectSetClipFadeRequestKeys },
+  'Project.setClipLoop': { keys: ProjectSetClipLoopRequestKeys },
+  'Project.setProgramOnChannel': {
+    keys: ProjectSetProgramOnChannelRequestKeys,
+    nested: { bank: ['msb', 'lsb'] },
+  },
+  'Project.setSourceAudio': { keys: ProjectSetSourceAudioRequestKeys },
+  'Project.setAudioSourceMetadata': { keys: ProjectSetAudioSourceMetadataRequestKeys },
+  'Project.setAssistSidecar': { keys: ProjectSetAssistSidecarRequestKeys },
+  'Project.bounce': { keys: ProjectBounceRequestKeys },
+  'Project.autoTempo': { keys: ProjectAutoTempoRequestKeys },
+  'Project.analyzeTempo': { keys: ProjectAnalyzeTempoRequestKeys },
   transcribeToClip: { keys: TranscribeToClipRequestKeys },
   applyProjectVocalEdit: { keys: ApplyProjectVocalEditRequestKeys },
   vocalApply: { keys: VocalApplyRequestKeys },
@@ -2837,7 +2947,7 @@ export const PROCESSOR_OPTION_KEYS = {
     'wasmBinary',
     'sceneJson',
     'sampleRate',
-    'blockSize',
+    'maxBlockSize',
     'stripCount',
     'meterIntervalFrames',
     'meterSharedBuffer',

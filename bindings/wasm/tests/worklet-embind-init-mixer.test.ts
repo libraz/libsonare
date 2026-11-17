@@ -40,7 +40,7 @@ describe('mixer worklet embind initialization', () => {
     registerSonareWorkletProcessor('sonare-test-mixer');
     const sceneJson = (await createModule()).mixingScenePresetJson('vocalReverbSend');
     const instance = new (registered.ctor as Ctor)({
-      processorOptions: { sceneJson, sampleRate: 48000, blockSize: 128, wasmBinary },
+      processorOptions: { sceneJson, sampleRate: 48000, maxBlockSize: 128, wasmBinary },
     });
 
     const input = [new Float32Array(128).fill(0.25), new Float32Array(128).fill(0.25)];

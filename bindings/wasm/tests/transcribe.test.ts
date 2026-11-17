@@ -628,7 +628,7 @@ describe('WASM Project.transcribeToClip', () => {
       Project.midiNoteOn(0, 0, 0, 30, 100),
       Project.midiNoteOff(480, 0, 0, 30, 0),
     ]);
-    return { project, clipId, sourceId: project.clipByIndex(0).sourceId };
+    return { project, clipId, sourceId: project.clips()[0].sourceId };
   }
 
   /** The clip's stored events, read back out of the serialized project. */

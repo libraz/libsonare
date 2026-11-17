@@ -249,11 +249,11 @@ describe('enum-code helpers reject unknown strings instead of silently defaultin
     // biome-ignore lint/suspicious/noExplicitAny: direct JS callers bypass TypeScript unions.
     expect(() => meterTapCode(-1 as any)).toThrow(RangeError);
     // biome-ignore lint/suspicious/noExplicitAny: direct JS callers bypass TypeScript unions.
-    expect(() => projectTrackKindValue('bus' as any)).toThrow(RangeError);
+    expect(() => projectTrackKindValue('bus' as any, 'addTrack')).toThrow(RangeError);
     // biome-ignore lint/suspicious/noExplicitAny: direct JS callers bypass TypeScript unions.
-    expect(() => projectWarpModeValue(8 as any)).toThrow(RangeError);
+    expect(() => projectWarpModeValue(8 as any)).toThrow(TypeError);
     // biome-ignore lint/suspicious/noExplicitAny: direct JS callers bypass TypeScript unions.
-    expect(() => projectLoopModeValue(2 as any)).toThrow(RangeError);
+    expect(() => projectLoopModeValue(2 as any)).toThrow(TypeError);
   });
 });
 

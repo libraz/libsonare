@@ -1,4 +1,10 @@
 import { describe, expect, it } from 'vitest';
+import { ErrorCode } from '../src/errors';
+import type {
+  VocalWorkerMutation,
+  VocalWorkerRequestMessage,
+  VocalWorkerResponseMessage,
+} from '../src/internal/vocal_edit_worker_protocol';
 import type {
   VocalAnalysis,
   VocalCapabilities,
@@ -14,11 +20,6 @@ import {
   type VocalEditWorkerNativeDraft,
   type VocalEditWorkerNativeSession,
 } from '../src/vocal_edit_worker';
-import type {
-  VocalWorkerMutation,
-  VocalWorkerRequestMessage,
-  VocalWorkerResponseMessage,
-} from '../src/vocal_edit_worker_protocol';
 
 function token(revision = '0'): VocalStateToken {
   return {
@@ -143,9 +144,9 @@ function fakeFactory(renderUnits = 1): {
               startSample: 0,
               token: sessionToken(),
               processedRanges: [{ startSample: 0, endSample: 1 }],
-              cacheHitUnits: '0',
-              dryPassedFrames: '0',
-              limitedCorrectionFrames: '0',
+              cacheHitUnits: 0,
+              dryPassedFrames: 0,
+              limitedCorrectionFrames: 0,
             }),
             abort: () => {},
             destroy: () => {},
@@ -154,7 +155,9 @@ function fakeFactory(renderUnits = 1): {
         };
       };
       const draft: VocalEditWorkerNativeDraft = {
-        token: sessionToken,
+        get token() {
+          return sessionToken();
+        },
         notes: () => notes,
         ...readOnlyOps('draft'),
         apply: () => ({ token: sessionToken(), dirtyRanges: [], idChanges: [] }),
@@ -164,7 +167,9 @@ function fakeFactory(renderUnits = 1): {
         destroy: () => {},
       };
       return {
-        token: sessionToken,
+        get token() {
+          return sessionToken();
+        },
         notes: () => notes,
         analysis: () => analysis,
         capabilities: () => capabilities,
@@ -284,7 +289,7 @@ describe('vocal edit Worker protocol', () => {
     const response = endpoint.takeFinal(6);
     expect(response?.type).toBe('sonare:vocal-error');
     if (response?.type === 'sonare:vocal-error') {
-      expect(response.error.name).toBe('AbortError');
+      expect(response.error.code).toBe(ErrorCode.Cancelled);
     }
   });
 
@@ -322,7 +327,7 @@ describe('vocal edit Worker protocol', () => {
     const response = endpoint.takeFinal(8);
     expect(response?.type).toBe('sonare:vocal-error');
     if (response?.type === 'sonare:vocal-error') {
-      expect(response.error.name).toBe('AbortError');
+      expect(response.error.code).toBe(ErrorCode.Cancelled);
     }
     expect(endpoint.takeFinal(7)?.type).toBe('sonare:vocal-result');
     expect(fake.renderNextCalls()).toBe(3);
@@ -405,9 +410,9 @@ function statefulFactory(
               startSample: 0,
               token: { ...captured, requestId: '5' },
               processedRanges: [],
-              cacheHitUnits: '0',
-              dryPassedFrames: '0',
-              limitedCorrectionFrames: '0',
+              cacheHitUnits: 0,
+              dryPassedFrames: 0,
+              limitedCorrectionFrames: 0,
             }),
             abort: () => {},
             destroy: () => {},
@@ -416,7 +421,9 @@ function statefulFactory(
         };
       };
       const draft: VocalEditWorkerNativeDraft = {
-        token: stateToken,
+        get token() {
+          return stateToken();
+        },
         notes: () => notes,
         ...readOnlyOps('draft'),
         apply: (request) => {
@@ -441,7 +448,9 @@ function statefulFactory(
         destroy: () => {},
       };
       return {
-        token: stateToken,
+        get token() {
+          return stateToken();
+        },
         notes: () => notes,
         analysis: () => analysis,
         capabilities: () => capabilities,
@@ -581,7 +590,7 @@ describe('vocal edit Worker mutation semantics', () => {
     expect(fake.commits()).toBe(1);
   });
 
-  it('rejects a cancelled create with AbortError and disposes the native session', async () => {
+  it('rejects a cancelled create with a Cancelled error and disposes the native session', async () => {
     const endpoint = new Endpoint();
     const fake = statefulFactory({ initialize: () => settle() as Promise<void> });
     const raised = new SharedArrayBuffer(Int32Array.BYTES_PER_ELEMENT);
@@ -614,7 +623,7 @@ describe('vocal edit Worker mutation semantics', () => {
     const response = endpoint.takeFinal(1);
     expect(response?.type).toBe('sonare:vocal-error');
     if (response?.type === 'sonare:vocal-error') {
-      expect(response.error.name).toBe('AbortError');
+      expect(response.error.code).toBe(ErrorCode.Cancelled);
     }
 
     expect(fake.disposedSessions()).toBe(0);
@@ -849,12 +858,14 @@ describe('vocal edit Worker mutation semantics', () => {
       name: 'SonareError',
       code: 5,
       codeName: 'InvalidState',
-      reason: 2,
-      field: 'revision',
-      expected: '0',
-      actual: '1',
-      expectedText: 'revision 0',
-      actualText: 'revision 1',
+      detail: {
+        reason: 'revisionConflict',
+        field: 'revision',
+        expected: '0',
+        actual: '1',
+        expectedText: 'revision 0',
+        actualText: 'revision 1',
+      },
     });
     let armed = false;
     installVocalEditWorkerEndpoint(endpoint, {
@@ -893,12 +904,14 @@ describe('vocal edit Worker mutation semantics', () => {
         message: 'revision conflict',
         code: 5,
         codeName: 'InvalidState',
-        reason: 2,
-        field: 'revision',
-        expected: '0',
-        actual: '1',
-        expectedText: 'revision 0',
-        actualText: 'revision 1',
+        detail: {
+          reason: 'revisionConflict',
+          field: 'revision',
+          expected: '0',
+          actual: '1',
+          expectedText: 'revision 0',
+          actualText: 'revision 1',
+        },
       });
     }
   });

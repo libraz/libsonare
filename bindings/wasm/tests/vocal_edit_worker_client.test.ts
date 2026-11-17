@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { isSonareError } from '../src/errors';
+import { ErrorCode, isSonareError } from '../src/errors';
+import type {
+  VocalWorkerCreateResult,
+  VocalWorkerRequestMessage,
+  VocalWorkerResponseMessage,
+} from '../src/internal/vocal_edit_worker_protocol';
 import type {
   VocalAnalysis,
   VocalCapabilities,
@@ -14,12 +19,11 @@ import {
   type VocalEditWorkerNativeDraft,
   type VocalEditWorkerNativeSession,
 } from '../src/vocal_edit_worker';
-import { type VocalEditWorker, VocalEditWorkerClient } from '../src/vocal_edit_worker_client';
-import type {
-  VocalWorkerCreateResult,
-  VocalWorkerRequestMessage,
-  VocalWorkerResponseMessage,
-} from '../src/vocal_edit_worker_protocol';
+import {
+  type VocalEditWorker,
+  VocalEditWorkerClient,
+  VocalEditWorkerDraft,
+} from '../src/vocal_edit_worker_client';
 
 const token: VocalStateToken = {
   sessionEpoch: '7',
@@ -125,9 +129,9 @@ class FakeWorker implements VocalEditWorker {
           startSample: 0,
           token: renderToken,
           processedRanges: [],
-          cacheHitUnits: '0',
-          dryPassedFrames: '0',
-          limitedCorrectionFrames: '0',
+          cacheHitUnits: 0,
+          dryPassedFrames: 0,
+          limitedCorrectionFrames: 0,
         },
       };
     } else if (message.type === 'sonare:vocal-mutate') {
@@ -188,8 +192,8 @@ describe('vocal edit Worker client', () => {
       expect(worker.lastMutation.baseToken?.requestId).toBe('0');
     }
     await session.destroy();
-    expect(() => session.notes()).toThrow(/disposed/);
-    client.destroy();
+    await expect(session.notes()).rejects.toThrow(/disposed/);
+    await client.destroy();
   });
 
   it('rejects a render result whose state token is stale', async () => {
@@ -202,7 +206,7 @@ describe('vocal edit Worker client', () => {
 
     await expect(
       session.preview({ range: { startSample: 0, endSample: 1 }, requestId: '9' }),
-    ).rejects.toMatchObject({ name: 'StaleResultError' });
+    ).rejects.toMatchObject({ code: ErrorCode.StaleResult });
     await session.destroy();
     client.destroy();
   });
@@ -265,9 +269,9 @@ class BridgeWorker implements VocalEditWorker {
             startSample: 0,
             token: { ...captured, requestId: '3' },
             processedRanges: [],
-            cacheHitUnits: '0',
-            dryPassedFrames: '0',
-            limitedCorrectionFrames: '0',
+            cacheHitUnits: 0,
+            dryPassedFrames: 0,
+            limitedCorrectionFrames: 0,
           }),
           abort: () => {},
           destroy: () => {},
@@ -284,7 +288,9 @@ class BridgeWorker implements VocalEditWorker {
       hasTarget: new Uint8Array([1]),
     });
     const draft: VocalEditWorkerNativeDraft = {
-      token: stateToken,
+      get token() {
+        return stateToken();
+      },
       notes: () => notes,
       evaluatePitch: () => pitch(1),
       sourceSampleToDestinationSample: (_noteId, sample) => sample + 100,
@@ -310,7 +316,9 @@ class BridgeWorker implements VocalEditWorker {
       destroy: () => {},
     };
     const session: VocalEditWorkerNativeSession = {
-      token: stateToken,
+      get token() {
+        return stateToken();
+      },
       notes: () => {
         if (this.notesError) {
           throw this.notesError;
@@ -449,16 +457,16 @@ describe('vocal edit Worker client pipelining and failure paths', () => {
     const client = new VocalEditWorkerClient({ worker: new BridgeWorker() });
     try {
       const session = await client.create({ samples: new Float32Array([0]), sampleRate: 16000 });
-      await session.beginEdit();
-      const apply = session.apply({ expectedGeneration: '0', operations: [] });
+      const draft = await session.beginEdit();
+      const apply = draft.apply({ expectedGeneration: '0', operations: [] });
       const preview = session.preview({ requestId: '3' });
       const listed = session.notes();
-      const settled = await Promise.allSettled([apply.result, preview.result, listed.result]);
+      const settled = await Promise.allSettled([apply, preview, listed]);
       expect(settled[2]).toMatchObject({ status: 'fulfilled', value: notes });
-      expect(session.token().generation).toBe('1');
+      expect(draft.token.generation).toBe('1');
 
-      const next = await session.apply({
-        expectedGeneration: session.token().generation,
+      const next = await draft.apply({
+        expectedGeneration: draft.token.generation,
         operations: [],
       });
       expect(next.token.generation).toBe('2');
@@ -473,12 +481,12 @@ describe('vocal edit Worker client pipelining and failure paths', () => {
     const client = new VocalEditWorkerClient({ worker: new BridgeWorker() });
     try {
       const session = await client.create({ samples: new Float32Array([0]), sampleRate: 16000 });
-      await session.beginEdit();
-      const first = session.apply({ expectedGeneration: '0', operations: [] });
-      const second = session.apply({ expectedGeneration: '1', operations: [] });
-      const settled = await Promise.allSettled([first.result, second.result]);
+      const draft = await session.beginEdit();
+      const first = draft.apply({ expectedGeneration: '0', operations: [] });
+      const second = draft.apply({ expectedGeneration: '1', operations: [] });
+      const settled = await Promise.allSettled([first, second]);
       expect(settled.map((outcome) => outcome.status)).toEqual(['fulfilled', 'fulfilled']);
-      expect(session.token().generation).toBe('2');
+      expect(draft.token.generation).toBe('2');
     } finally {
       client.destroy();
     }
@@ -488,9 +496,9 @@ describe('vocal edit Worker client pipelining and failure paths', () => {
     const client = new VocalEditWorkerClient({ worker: new BridgeWorker() });
     try {
       const session = await client.create({ samples: new Float32Array([0]), sampleRate: 16000 });
-      await session.beginEdit();
-      const apply = session.apply({ expectedGeneration: '0', operations: [] });
-      const applyOutcome = apply.result.then(
+      const draft = await session.beginEdit();
+      const apply = draft.apply({ expectedGeneration: '0', operations: [] });
+      const applyOutcome = apply.then(
         (value) => value,
         (error: unknown) => error,
       );
@@ -499,7 +507,7 @@ describe('vocal edit Worker client pipelining and failure paths', () => {
       // The apply ran in the Worker, so its task settles with that outcome
       // even though the preview queued behind it is the newer intent.
       expect(await applyOutcome).toMatchObject({ token: { generation: '1' } });
-      expect(session.token().generation).toBe('1');
+      expect(draft.token.generation).toBe('1');
     } finally {
       client.destroy();
     }
@@ -509,6 +517,7 @@ describe('vocal edit Worker client pipelining and failure paths', () => {
     const worker = new FakeWorker();
     const client = new VocalEditWorkerClient({ worker });
     const session = await client.create({ samples: new Float32Array([0]), sampleRate: 16000 });
+    const draft = await session.beginEdit();
     const failure = new DOMException('could not clone', 'DataCloneError');
     worker.postMessage = () => {
       throw failure;
@@ -523,10 +532,12 @@ describe('vocal edit Worker client pipelining and failure paths', () => {
     }).not.toThrow();
     await expect(task).rejects.toBe(failure);
     expect(() => {
-      task = session.apply({ expectedGeneration: '0', operations: [] });
+      task = draft.apply({ expectedGeneration: '0', operations: [] });
     }).not.toThrow();
     await expect(task).rejects.toBe(failure);
-    expect((client as unknown as { pending: Map<number, unknown> }).pending.size).toBe(0);
+    expect(
+      (client as unknown as { core: { pending: Map<number, unknown> } }).core.pending.size,
+    ).toBe(0);
     // The abort listener is gone: aborting now posts nothing.
     let posted = 0;
     worker.postMessage = () => {
@@ -554,7 +565,7 @@ describe('vocal edit Worker client pipelining and failure paths', () => {
       { signal: controller.signal },
     );
     controller.abort();
-    await expect(task).rejects.toMatchObject({ name: 'AbortError' });
+    await expect(task).rejects.toMatchObject({ code: ErrorCode.Cancelled });
     await new Promise((resolve) => setTimeout(resolve, 0));
     expect(sent.some((message) => message.type === 'sonare:vocal-dispose')).toBe(true);
     client.destroy();
@@ -565,7 +576,7 @@ describe('vocal edit Worker client pipelining and failure paths', () => {
     const client = new VocalEditWorkerClient({ worker });
     try {
       const session = await client.create({ samples: new Float32Array([0]), sampleRate: 16000 });
-      await session.beginEdit();
+      const draft = await session.beginEdit();
       const operation = (envelope: Float32Array) =>
         ({
           kind: 'setEdit',
@@ -573,17 +584,17 @@ describe('vocal edit Worker client pipelining and failure paths', () => {
           edit: { amplitudeEnvelope: envelope },
         }) as unknown as VocalEditOperation;
       const copied = new Float32Array([1, 2]);
-      await session.apply(
+      await draft.apply(
         { expectedGeneration: '0', operations: [operation(copied)] },
         { copy: true },
       );
       expect(copied.length).toBe(2);
       const transferred = new Float32Array([1, 2]);
-      await session.apply({ expectedGeneration: '1', operations: [operation(transferred)] });
+      await draft.apply({ expectedGeneration: '1', operations: [operation(transferred)] });
       expect(transferred.length).toBe(0);
 
       const range = { startSample: 0, endSample: 1, probe: new Float32Array([3]) };
-      await session.preview({ range, requestId: '5' }, { copy: true });
+      await draft.preview({ range, requestId: '5' }, { copy: true });
       expect(range.probe.length).toBe(1);
     } finally {
       client.destroy();
@@ -594,38 +605,72 @@ describe('vocal edit Worker client pipelining and failure paths', () => {
     const client = new VocalEditWorkerClient({ worker: new BridgeWorker() });
     try {
       const session = await client.create({ samples: new Float32Array([0]), sampleRate: 16000 });
-      expect(session.revision()).toBe('0');
+      expect(session.revision).toBe('0');
       expect(await session.outputLengthSamples()).toBe(480);
       expect(await session.history()).toEqual({ canUndo: false, canRedo: true });
       expect((await session.evaluatePitch(1)).sourceSamples[0]).toBe(0);
       expect(await session.sourceSampleToDestinationSample(1, 5)).toBe(15);
       expect(await session.destinationSampleToSourceSample(1, 15)).toBe(5);
-      await expect(session.draftToken()).rejects.toThrow(/No vocal edit draft/);
 
-      await session.beginEdit();
-      expect((await session.draftToken()).draftId).toBe('1');
-      expect((await session.evaluatePitch(1, { draft: true })).sourceSamples[0]).toBe(1);
-      expect(await session.sourceSampleToDestinationSample(1, 5, { draft: true })).toBe(105);
-      expect(await session.destinationSampleToSourceSample(1, 105, { draft: true })).toBe(5);
+      const draft = await session.beginEdit();
+      expect(draft.token.draftId).toBe('1');
+      expect((await draft.evaluatePitch(1)).sourceSamples[0]).toBe(1);
+      expect(await draft.sourceSampleToDestinationSample(1, 5)).toBe(105);
+      expect(await draft.destinationSampleToSourceSample(1, 105)).toBe(5);
     } finally {
       client.destroy();
     }
   });
 
-  it('requires expectedGeneration on apply like the main-thread draft', async () => {
+  it('reads the worker session and draft token and revision as getters and resolves beginEdit to a draft', async () => {
+    const client = new VocalEditWorkerClient({ worker: new BridgeWorker() });
+    try {
+      const session = await client.create({ samples: new Float32Array([0]), sampleRate: 16000 });
+      expect(typeof session.token).toBe('object');
+      expect(session.token.revision).toBe('0');
+      expect(session.revision).toBe('0');
+
+      const draft = await session.beginEdit();
+      expect(draft).toBeInstanceOf(VocalEditWorkerDraft);
+      expect(typeof draft.token).toBe('object');
+      expect(draft.token.draftId).toBe('1');
+      expect(typeof draft.revision).toBe('string');
+      expect(draft.revision).toBe(session.revision);
+    } finally {
+      client.destroy();
+    }
+  });
+
+  it('resolves the worker exportState to a Uint8Array rather than a data wrapper', async () => {
+    const client = new VocalEditWorkerClient({ worker: new BridgeWorker() });
+    try {
+      const session = await client.create({ samples: new Float32Array([0]), sampleRate: 16000 });
+      const state = await session.exportState();
+      expect(state).toBeInstanceOf(Uint8Array);
+      expect(Array.from(state)).toEqual([1]);
+      expect(state).not.toHaveProperty('data');
+    } finally {
+      client.destroy();
+    }
+  });
+
+  it('sends the draft generation when apply omits expectedGeneration', async () => {
     const worker = new BridgeWorker();
     const client = new VocalEditWorkerClient({ worker });
     try {
       const session = await client.create({ samples: new Float32Array([0]), sampleRate: 16000 });
-      await session.beginEdit();
-      const before = worker.posted.length;
-      expect(() =>
-        session.apply({ operations: [] } as unknown as {
-          expectedGeneration: string;
-          operations: [];
-        }),
-      ).toThrow(TypeError);
-      expect(worker.posted.length).toBe(before);
+      const draft = await session.beginEdit();
+      const sentGeneration = () => {
+        const message = worker.posted.at(-1);
+        return message?.type === 'sonare:vocal-mutate' && message.mutation.kind === 'apply'
+          ? message.mutation.request.expectedGeneration
+          : undefined;
+      };
+      await draft.apply({ operations: [] });
+      expect(sentGeneration()).toBe('0');
+      await draft.apply({ operations: [] });
+      expect(sentGeneration()).toBe('1');
+      expect(draft.token.generation).toBe('2');
     } finally {
       client.destroy();
     }
@@ -639,16 +684,16 @@ describe('vocal edit Worker client pipelining and failure paths', () => {
         samples: new Float32Array([0]),
         sampleRate: 16000,
         state: new Uint8Array([1]),
-        limits: { maxUndoDepth: 4, maxHistoryBytes: '1024' },
+        limits: { maxUndoDepth: 4, maxHistoryBytes: 1024 },
       });
       const restoreMessage = worker.posted.find((m) => m.type === 'sonare:vocal-create');
       expect(
         restoreMessage?.type === 'sonare:vocal-create' && restoreMessage.request.kind === 'restore'
           ? restoreMessage.request.request.limits
           : undefined,
-      ).toEqual({ maxUndoDepth: 4, maxHistoryBytes: '1024' });
+      ).toEqual({ maxUndoDepth: 4, maxHistoryBytes: 1024 });
 
-      await restored.beginEdit();
+      const restoredDraft = await restored.beginEdit();
       const transition = {
         leftNoteId: 1,
         rightNoteId: 2,
@@ -657,7 +702,7 @@ describe('vocal edit Worker client pipelining and failure paths', () => {
         strength: 0.5,
         curve: 'smoothstep',
       } as const;
-      await restored.apply({
+      await restoredDraft.apply({
         expectedGeneration: '0',
         operations: [{ kind: 'setTransition', transition }],
       });
@@ -681,14 +726,16 @@ describe('vocal edit Worker client pipelining and failure paths', () => {
         name: 'SonareError',
         code: 7,
         codeName: 'InvalidState',
-        reason: 2,
-        field: 'revision',
-        expected: '0',
-        actual: '1',
-        expectedText: 'revision 0',
-        actualText: 'revision 1',
+        detail: {
+          reason: 'revisionConflict',
+          field: 'revision',
+          expected: '0',
+          actual: '1',
+          expectedText: 'revision 0',
+          actualText: 'revision 1',
+        },
       });
-      const error = await session.notes().result.then(
+      const error = await session.notes().then(
         () => undefined,
         (reason: unknown) => reason,
       );
@@ -698,12 +745,14 @@ describe('vocal edit Worker client pipelining and failure paths', () => {
         message: 'revision conflict',
         code: 7,
         codeName: 'InvalidState',
-        reason: 2,
-        field: 'revision',
-        expected: '0',
-        actual: '1',
-        expectedText: 'revision 0',
-        actualText: 'revision 1',
+        detail: {
+          reason: 'revisionConflict',
+          field: 'revision',
+          expected: '0',
+          actual: '1',
+          expectedText: 'revision 0',
+          actualText: 'revision 1',
+        },
       });
     } finally {
       client.destroy();
@@ -718,12 +767,34 @@ describe('vocal edit Worker client pipelining and failure paths', () => {
       (error: unknown) =>
         isSonareError(error) && error.code === 7 && /disposed/.test(error.message),
     );
-    let refused: unknown;
-    try {
-      client.create({ samples: new Float32Array([0]), sampleRate: 16000 });
-    } catch (error) {
-      refused = error;
-    }
-    expect(isSonareError(refused) && refused.code === 7).toBe(true);
+    await expect(
+      client.create({ samples: new Float32Array([0]), sampleRate: 16000 }),
+    ).rejects.toSatisfy((error: unknown) => isSonareError(error) && error.code === 7);
+  });
+
+  it('resolves destroy only after the Worker acknowledges the session dispose', async () => {
+    const worker = new FakeWorker();
+    const client = new VocalEditWorkerClient({ worker });
+    await client.create({ samples: new Float32Array([0]), sampleRate: 16000 });
+    const deliver = worker.postMessage.bind(worker);
+    const held: VocalWorkerRequestMessage[] = [];
+    worker.postMessage = (message: VocalWorkerRequestMessage) => {
+      if (message.type === 'sonare:vocal-dispose') {
+        held.push(message);
+      } else {
+        deliver(message);
+      }
+    };
+    let settled = false;
+    const destroyed = client.destroy().then(() => {
+      settled = true;
+    });
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(held).toHaveLength(1);
+    expect(settled).toBe(false);
+
+    deliver(held[0]);
+    await destroyed;
+    expect(settled).toBe(true);
   });
 });

@@ -17,7 +17,7 @@ function thrown(fn: () => unknown): unknown {
 function withPreset(fn: (mixer: Mixer) => void): void {
   const mixer = Mixer.fromJson(mixingScenePresetJson('vocalReverbSend'), {
     sampleRate: SR,
-    blockSize: BLOCK,
+    maxBlockSize: BLOCK,
   });
   try {
     fn(mixer);
@@ -40,9 +40,9 @@ describe('mixer construction', () => {
     }
   });
 
-  it('builds from a scene document through new Mixer({ scene, sampleRate, blockSize })', () => {
+  it('builds from a scene document through new Mixer({ scene, sampleRate, maxBlockSize })', () => {
     const scene = JSON.parse(mixingScenePresetJson('vocalReverbSend'));
-    const mixer = new Mixer({ scene, sampleRate: SR, blockSize: BLOCK });
+    const mixer = new Mixer({ scene, sampleRate: SR, maxBlockSize: BLOCK });
     try {
       expect(mixer.stripCount).toBeGreaterThan(0);
     } finally {
@@ -56,7 +56,7 @@ describe('mixer construction', () => {
     expect(unknown).toBeInstanceOf(TypeError);
     expect((unknown as Error).message).toContain('scenes');
     expect(thrown(() => new Mixer({ sampleRate: 100 }))).toBeInstanceOf(RangeError);
-    const zero = thrown(() => new Mixer({ sampleRate: SR, blockSize: 0 }));
+    const zero = thrown(() => new Mixer({ sampleRate: SR, maxBlockSize: 0 }));
     expect(zero).toBeInstanceOf(RangeError);
     expect((zero as Error).message).toContain('omit it');
     expect(thrown(() => new Mixer(null as never))).toBeInstanceOf(TypeError);
@@ -92,7 +92,7 @@ describe('mixer construction', () => {
 
   it('toJson round-trips through fromJson', () => {
     withPreset((mixer) => {
-      const again = Mixer.fromJson(mixer.toJson(), { sampleRate: SR, blockSize: BLOCK });
+      const again = Mixer.fromJson(mixer.toJson(), { sampleRate: SR, maxBlockSize: BLOCK });
       try {
         expect(again.stripCount).toBe(mixer.stripCount);
         expect(again.toJson()).toBe(mixer.toJson());

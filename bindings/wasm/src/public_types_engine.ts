@@ -101,13 +101,6 @@ export interface EngineClip {
   pageProvider?: number | { readonly id: number };
 }
 
-/** A clip page the player missed or is about to need. */
-export interface ClipPageRequest {
-  clipId: number;
-  channel: number;
-  sample: number;
-}
-
 /** A parameter registered with {@link RealtimeEngine.addParameter}. */
 export interface EngineParameterInfo {
   id: number;
@@ -302,12 +295,15 @@ export interface EngineBounceOptions {
   ditherSeed?: number;
 }
 
-/** Interleaved result of {@link RealtimeEngine.bounceOffline}. */
+/** Planar result of {@link RealtimeEngine.bounceOffline}. */
 export interface EngineBounceResult {
-  interleaved: Float32Array;
-  frames: number;
-  numChannels: number;
+  /** One `Float32Array` per output channel, all the same length. */
+  channels: Float32Array[];
+  /** Sample rate of `channels` in Hz. */
   sampleRate: number;
+  /** Output channel count, equal to `channels.length`. */
+  numChannels: number;
+  /** Integrated loudness of the bounce in LUFS. */
   integratedLufs: number;
 }
 

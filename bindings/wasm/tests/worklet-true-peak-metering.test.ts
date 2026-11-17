@@ -98,7 +98,7 @@ function runMixerWorklet(
     {
       sceneJson,
       sampleRate: SR,
-      blockSize: BLOCK,
+      maxBlockSize: BLOCK,
       meterIntervalFrames: BLOCK,
     },
     { onMeter: (meter) => meters.push(meter) },
@@ -252,7 +252,7 @@ describe('mixer worklet true-peak metering', () => {
       {
         sceneJson: mixingScenePresetJson('vocalReverbSend'),
         sampleRate: SR,
-        blockSize: BLOCK,
+        maxBlockSize: BLOCK,
         meterIntervalFrames: 0,
       },
       {},
@@ -276,7 +276,7 @@ describe('mixer worklet true-peak metering', () => {
       {
         sceneJson: mixingScenePresetJson('vocalReverbSend'),
         sampleRate: SR,
-        blockSize: BLOCK,
+        maxBlockSize: BLOCK,
         meterIntervalFrames: 0,
       },
       { onMeter: (meter) => meters.push({ ...meter }) },

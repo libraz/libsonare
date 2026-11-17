@@ -657,7 +657,7 @@ describe('v1.2 feature additions (WASM)', () => {
     it('routes a send through reverb and back to master', () => {
       const mixer = Mixer.fromJson(mixingScenePresetJson('vocalReverbSend'), {
         sampleRate: 48000,
-        blockSize: BLOCK,
+        maxBlockSize: BLOCK,
       });
       mixer.compile();
 
@@ -691,7 +691,7 @@ describe('v1.2 feature additions (WASM)', () => {
     it('schedules insert-parameter automation without throwing', () => {
       const mixer = Mixer.fromJson(mixingScenePresetJson('vocalReverbSend'), {
         sampleRate: 48000,
-        blockSize: BLOCK,
+        maxBlockSize: BLOCK,
       });
       mixer.compile();
 
@@ -737,14 +737,14 @@ describe('v1.2 feature additions (WASM)', () => {
     it('round-trips the scene topology to JSON', () => {
       const mixer = Mixer.fromJson(mixingScenePresetJson('vocalReverbSend'), {
         sampleRate: 48000,
-        blockSize: BLOCK,
+        maxBlockSize: BLOCK,
       });
       const scene = mixer.toJson();
       expect(scene).toContain('"vocal-verb"');
       expect(scene).toContain('"vocal-verb-return"');
       expect(scene).toContain('"destinationBusId":"vocal-verb"');
 
-      const restored = Mixer.fromJson(scene, { sampleRate: 48000, blockSize: BLOCK });
+      const restored = Mixer.fromJson(scene, { sampleRate: 48000, maxBlockSize: BLOCK });
       restored.compile();
       restored.destroy();
       mixer.destroy();
@@ -754,7 +754,7 @@ describe('v1.2 feature additions (WASM)', () => {
       const quantum = 128;
       const mixer = Mixer.fromJson(mixingScenePresetJson('vocalReverbSend'), {
         sampleRate: 48000,
-        blockSize: quantum,
+        maxBlockSize: quantum,
       });
       mixer.compile();
 
@@ -776,8 +776,8 @@ describe('v1.2 feature additions (WASM)', () => {
     it('can render a block into caller-owned output arrays', () => {
       const quantum = 128;
       const scene = mixingScenePresetJson('vocalReverbSend');
-      const offline = Mixer.fromJson(scene, { sampleRate: 48000, blockSize: quantum });
-      const inplace = Mixer.fromJson(scene, { sampleRate: 48000, blockSize: quantum });
+      const offline = Mixer.fromJson(scene, { sampleRate: 48000, maxBlockSize: quantum });
+      const inplace = Mixer.fromJson(scene, { sampleRate: 48000, maxBlockSize: quantum });
       offline.compile();
       inplace.compile();
 
@@ -803,8 +803,8 @@ describe('v1.2 feature additions (WASM)', () => {
     it('bulk-copies processStereoInto with frame-independent boundary calls', () => {
       const quantum = 128;
       const scene = mixingScenePresetJson('vocalReverbSend');
-      const reference = Mixer.fromJson(scene, { sampleRate: 48000, blockSize: quantum });
-      const inplace = Mixer.fromJson(scene, { sampleRate: 48000, blockSize: quantum });
+      const reference = Mixer.fromJson(scene, { sampleRate: 48000, maxBlockSize: quantum });
+      const inplace = Mixer.fromJson(scene, { sampleRate: 48000, maxBlockSize: quantum });
       reference.compile();
       inplace.compile();
 
@@ -865,8 +865,8 @@ describe('v1.2 feature additions (WASM)', () => {
     it('can render through reusable WASM-heap realtime buffers', () => {
       const quantum = 128;
       const scene = mixingScenePresetJson('vocalReverbSend');
-      const offline = Mixer.fromJson(scene, { sampleRate: 48000, blockSize: quantum });
-      const realtime = Mixer.fromJson(scene, { sampleRate: 48000, blockSize: quantum });
+      const offline = Mixer.fromJson(scene, { sampleRate: 48000, maxBlockSize: quantum });
+      const realtime = Mixer.fromJson(scene, { sampleRate: 48000, maxBlockSize: quantum });
       offline.compile();
       realtime.compile();
 
@@ -895,7 +895,7 @@ describe('v1.2 feature additions (WASM)', () => {
     it('exposes live mixer controls and meter readers', () => {
       const mixer = Mixer.fromJson(mixingScenePresetJson('vocalReverbSend'), {
         sampleRate: 48000,
-        blockSize: BLOCK,
+        maxBlockSize: BLOCK,
       });
       const vocalIndex = mixer.stripById('vocal');
       expect(vocalIndex).toBe(0);
@@ -1379,7 +1379,7 @@ describe('v1.2 feature additions (WASM)', () => {
     it('adds/removes buses and VCA groups and reports counts', () => {
       const mixer = Mixer.fromJson(mixingScenePresetJson('vocalReverbSend'), {
         sampleRate: 48000,
-        blockSize: 128,
+        maxBlockSize: 128,
       });
       try {
         const busesBefore = mixer.busCount;

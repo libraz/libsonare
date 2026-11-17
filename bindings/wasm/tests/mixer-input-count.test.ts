@@ -25,7 +25,7 @@ describe('Mixer input count (WASM)', () => {
     await init();
     mixer = Mixer.fromJson(mixingScenePresetJson('commentaryDucking'), {
       sampleRate: SR,
-      blockSize: BLOCK,
+      maxBlockSize: BLOCK,
     });
     strips = mixer.stripCount;
   });
@@ -54,7 +54,7 @@ describe('Mixer input count (WASM)', () => {
     const fresh = () =>
       Mixer.fromJson(mixingScenePresetJson('commentaryDucking'), {
         sampleRate: SR,
-        blockSize: BLOCK,
+        maxBlockSize: BLOCK,
       });
     const silent = () => Array.from({ length: strips - 1 }, () => new Float32Array(BLOCK));
     const a = fresh();

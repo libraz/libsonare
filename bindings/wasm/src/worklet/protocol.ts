@@ -7,8 +7,8 @@ export function engineMixerMasterTarget(paramKind: number): number {
 }
 
 export type {
+  ClipPagePageRequest,
   SharedClipPageRequestRingWriter,
-  SonareClipPageRequest,
   SonareClipPageRequestRingBuffer,
   SonareClipPageRequestRingReadResult,
 } from './clip-page-ring.js';

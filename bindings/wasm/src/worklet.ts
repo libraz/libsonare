@@ -12,6 +12,7 @@ export { attachOpfsClipStream } from './clip_page_streamer.js';
 // module singleton. Re-export the lifecycle so that realm can initialize its
 // own wasm instance, independent of the main-thread `index` module.
 export { init, isInitialized } from './index.js';
+export { opfsClipPageWorkerSource } from './opfs_clip_pages.js';
 // Host-side mastering preview inside the worklet realm. Kept here rather than
 // left main-thread-only so a live preview does not have to round-trip audio to
 // the main thread; see the class doc for the prepare/loudness/latency contract.
@@ -92,6 +93,7 @@ export {
   SonarePlaybackWorkletProcessor,
 } from './worklet/playback-processor.js';
 export {
+  type ClipPagePageRequest,
   createSonareClipPageRequestRingBuffer,
   createSonareEngineCommandRingBuffer,
   createSonareEngineTelemetryRingBuffer,
@@ -132,7 +134,6 @@ export {
   SONARE_SCOPE_RING_PROTOCOL_VERSION,
   SONARE_SPECTRUM_RING_HEADER_INTS,
   SONARE_SPECTRUM_RING_PROTOCOL_VERSION,
-  type SonareClipPageRequest,
   type SonareClipPageRequestRingBuffer,
   type SonareClipPageRequestRingReadResult,
   type SonareEngineCommandRecord,

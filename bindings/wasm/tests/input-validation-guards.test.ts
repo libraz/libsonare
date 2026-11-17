@@ -829,7 +829,7 @@ describe('offline boundary validation is enforced by the native WASM layer', () 
   it('accepts a zero-strip processStereo call and returns an empty master', () => {
     const mixer = Mixer.fromJson(
       '{"version":1,"strips":[],"buses":[{"id":"1","inserts":[]}],"connections":[]}',
-      { sampleRate: 48000, blockSize: 128 },
+      { sampleRate: 48000, maxBlockSize: 128 },
     );
     const result = mixer.processStereo([], []);
     expect(result.left).toHaveLength(0);

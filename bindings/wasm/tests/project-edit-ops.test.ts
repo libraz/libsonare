@@ -17,16 +17,11 @@ import {
   Project,
   RealtimeEngine,
 } from '../dist/index.js';
-import {
-  AUTOMATION_CURVE_VALUES,
-  PROJECT_AUTOMATION_CURVE_VALUES,
-  projectAutomationCurveCode,
-} from '../src/codes';
+import { AUTOMATION_CURVE_VALUES } from '../src/codes';
 import { expectArgumentRefusal } from './_helpers';
 
 interface AutomationCurveCorpus {
   accepted: Array<{ value: string; ordinal: number }>;
-  projectOnly: Array<{ value: string; ordinal: number }>;
   numeric: number[];
   rejected: string[];
 }
@@ -67,9 +62,8 @@ describe('Sonare WASM Project edit ops', () => {
       trackId,
       startPpq: 0,
       lengthPpq: 4,
-      audio,
-      audioChannels: 1,
-      audioSampleRate: 48000,
+      channels: [audio],
+      sampleRate: 48000,
     });
     return { project, trackId, clipId };
   }
@@ -96,18 +90,17 @@ describe('Sonare WASM Project edit ops', () => {
         trackId,
         startPpq: 0,
         lengthPpq: 1,
-        audio,
-        audioChannels: 1,
-        audioSampleRate: 48000,
+        channels: [audio],
+        sampleRate: 48000,
         sourceUri: 'asset://lead.wav',
       });
       const restored = Project.fromJson(project.toJson());
       try {
         const ids = restored.unresolvedAudioSourceIds();
         expect(ids).toHaveLength(1);
-        restored.setSourceAudio(ids[0], audio, 1, 48000);
+        restored.setSourceAudio({ sourceId: ids[0], channels: [audio], sampleRate: 48000 });
         expect(restored.unresolvedAudioSourceIds()).toEqual([]);
-        expect(restored.bounce({ totalFrames: 480, numChannels: 1 })).toHaveLength(480);
+        expect(restored.bounce({ totalFrames: 480, numChannels: 1 }).channels[0]).toHaveLength(480);
       } finally {
         restored.destroy();
       }
@@ -127,16 +120,24 @@ describe('Sonare WASM Project edit ops', () => {
       try {
         const ids = restored.unresolvedAudioSourceIds();
         expect(ids).toHaveLength(2);
-        restored.setAudioSourceMetadata(ids[1], 'sha256:abc', 'vocals');
+        restored.setAudioSourceMetadata({
+          sourceId: ids[1],
+          contentHash: 'sha256:abc',
+          externalStemRole: 'vocals',
+        });
         const sources = restored.unresolvedAudioSources();
         expect(sources.map((source) => source.id)).toEqual(ids);
         expect(sources[0].nameOrUri).toBe(longUri);
-        expect(sources[0].kind).toBe(0);
+        expect(sources[0].kind).toBe('audio');
         expect(sources[1].nameOrUri).toBe('asset://stem.wav');
         expect(sources[1].contentHash).toBe('sha256:abc');
         expect(sources[1].externalStemRole).toBe('vocals');
-        expect(restored.sourceByIndex(0).nameOrUri).toBe(longUri);
-        restored.setSourceAudio(ids[0], new Float32Array(480).fill(0.25), 1, 48000);
+        expect(restored.sources()[0].nameOrUri).toBe(longUri);
+        restored.setSourceAudio({
+          sourceId: ids[0],
+          channels: [new Float32Array(480).fill(0.25)],
+          sampleRate: 48000,
+        });
         expect(restored.unresolvedAudioSources().map((source) => source.id)).toEqual([ids[1]]);
       } finally {
         restored.destroy();
@@ -260,22 +261,31 @@ describe('Sonare WASM Project edit ops', () => {
       expect(() => project.setClipGain(clipId, 0.0)).not.toThrow();
       expect(() => project.setClipGain(clipId, 0.75)).not.toThrow();
       expect(() =>
-        project.setClipFade(
-          clipId,
-          { lengthPpq: 0.5, curve: 'equal-power' },
-          { lengthPpq: 0.5, curve: 'equal_power' },
-        ),
+        project.setClipFade(clipId, {
+          fadeInPpq: 0.5,
+          fadeInCurve: 'equalPower',
+          fadeOutPpq: 0.5,
+          fadeOutCurve: 'equalPower',
+        }),
       ).not.toThrow();
-      expect(() => project.setClipLoop(clipId, 'loop', 2)).not.toThrow();
-      expect(() => project.setClipLoop(clipId, 'off', 0)).not.toThrow();
-      // Optional loop crossfade: accepted when >= 0, rejected when negative.
-      expect(() => project.setClipLoop(clipId, 'loop', 2, 0.5)).not.toThrow();
-      expect(project.toJson()).toContain('loop_crossfade_ppq');
-      expect(() => project.setClipLoop(clipId, 'loop', 2, -1)).toThrow();
       expect(() =>
-        project.setClipFade(clipId, { lengthPpq: 0.5, curve: 'equalpower' }, undefined),
+        project.setClipLoop(clipId, { loopMode: 'loop', loopLengthPpq: 2 }),
       ).not.toThrow();
-      expect(() => project.setClipFade(clipId, { curve: 'LOG' as never }, undefined)).not.toThrow();
+      expect(() => project.setClipLoop(clipId, { loopMode: 'off' })).not.toThrow();
+      // Optional loop crossfade: accepted when >= 0, rejected when negative.
+      expect(() =>
+        project.setClipLoop(clipId, { loopMode: 'loop', loopLengthPpq: 2, loopCrossfadePpq: 0.5 }),
+      ).not.toThrow();
+      expect(project.toJson()).toContain('loop_crossfade_ppq');
+      expect(() =>
+        project.setClipLoop(clipId, { loopMode: 'loop', loopLengthPpq: 2, loopCrossfadePpq: -1 }),
+      ).toThrow();
+      // Curve spellings other than the lowerCamel token are refused.
+      for (const curve of ['equal-power', 'equal_power', 'equalpower', 'LOG']) {
+        expect(() =>
+          project.setClipFade(clipId, { fadeInPpq: 0.5, fadeInCurve: curve as never }),
+        ).toThrow(RangeError);
+      }
     } finally {
       project.destroy();
     }
@@ -292,7 +302,7 @@ describe('Sonare WASM Project edit ops', () => {
             { id: 1, sourceOffsetPpq: 0, name: 'take A' },
             { id: 2, sourceOffsetPpq: 0.5, name: 'take B' },
           ],
-          1,
+          { activeTakeId: 1 },
         ),
       ).not.toThrow();
       const withTakes = project.toJson();
@@ -322,7 +332,7 @@ describe('Sonare WASM Project edit ops', () => {
             { id: 1, name: 'duplicate A' },
             { id: 1, name: 'duplicate B' },
           ],
-          1,
+          { activeTakeId: 1 },
         ),
       ).toThrow();
       expect(() =>
@@ -343,7 +353,7 @@ describe('Sonare WASM Project edit ops', () => {
             { id: 1, sourceOffsetPpq: 0, name: 'take A' },
             { id: 2, sourceOffsetPpq: 0.5, name: 'take B' },
           ],
-          1,
+          { activeTakeId: 1 },
         ),
       ).not.toThrow();
 
@@ -525,11 +535,10 @@ describe('Sonare WASM Project edit ops', () => {
           trackId,
           startPpq: 0,
           lengthPpq: 1,
-          audio: new Float32Array(5),
-          audioChannels: 2,
-          audioSampleRate: 48000,
+          channels: [new Float32Array(5), new Float32Array(4)],
+          sampleRate: 48000,
         }),
-      ).toThrow();
+      ).toThrow(RangeError);
       expect(() =>
         project.addLoopRecordingTakes({
           trackId,
@@ -548,7 +557,7 @@ describe('Sonare WASM Project edit ops', () => {
   it('addLoopRecordingTakes preserves native InvalidState error codes', () => {
     const { project, trackId } = buildAudioProject();
     try {
-      project.setOverlapPolicy(0);
+      project.setOverlapPolicy('disallow');
       const audio = new Float32Array(48000);
       audio.fill(0.25);
       let caught: unknown;
@@ -644,27 +653,37 @@ describe('Sonare WASM Project edit ops', () => {
     expect(AUTOMATION_CURVE_VALUES).toEqual(
       Object.fromEntries(curveCorpus.accepted.map(({ value, ordinal }) => [value, ordinal])),
     );
-    expect(PROJECT_AUTOMATION_CURVE_VALUES).toEqual(
-      Object.fromEntries(
-        [...curveCorpus.accepted, ...curveCorpus.projectOnly].map(({ value, ordinal }) => [
-          value,
-          ordinal,
-        ]),
-      ),
-    );
-    for (const { value, ordinal } of [...curveCorpus.accepted, ...curveCorpus.projectOnly]) {
-      expect(projectAutomationCurveCode(value as ProjectAutomationCurve)).toBe(ordinal);
+    const laneWith = (curve: unknown): number => {
+      const project = new Project();
+      try {
+        project.setSampleRate(48000);
+        const trackId = project.addTrack({ kind: 'audio' });
+        project.addAutomationLane(trackId, {
+          targetParamId: 1,
+          points: [{ ppq: 0, value: 1, curve: curve as ProjectAutomationCurve }],
+        });
+        const doc = JSON.parse(project.toJson()) as {
+          tracks: Array<{ automation_lanes: Array<{ points: Array<{ curve_to_next: number }> }> }>;
+        };
+        return doc.tracks[0].automation_lanes[0].points[0].curve_to_next;
+      } finally {
+        project.destroy();
+      }
+    };
+    for (const { value, ordinal } of curveCorpus.accepted) {
+      expect(laneWith(value)).toBe(ordinal);
+    }
+    // A Project curve is a token on every path, so an ordinal is a type error.
+    for (const value of curveCorpus.numeric) {
+      expect(() => laneWith(value)).toThrow(TypeError);
     }
     for (const value of curveCorpus.rejected) {
-      expect(() => projectAutomationCurveCode(value as ProjectAutomationCurve)).toThrow(RangeError);
+      expect(() => laneWith(value)).toThrow(RangeError);
     }
 
     const spellings: ProjectAutomationPoint[] = [
       { ppq: 0, value: 1, curve: 's-curve' },
-      { ppq: 0, value: 1, curve: 'scurve' },
-      { ppq: 0, value: 1, curve: 3 },
       { ppq: 0, value: 1, curveToNext: 's-curve' },
-      { ppq: 0, value: 1, curveToNext: 'scurve' },
     ];
     const serialized = spellings.map((point) => {
       const project = new Project();
@@ -709,12 +728,12 @@ describe('Sonare WASM Project edit ops', () => {
     try {
       project.addAutomationLane(trackId, {
         targetParamId: 20,
-        targetKind: 'track-fader-db',
+        targetKind: 'trackFaderDb',
         points: [{ ppq: 0, value: -3 }],
       });
       project.addAutomationLane(trackId, {
         targetParamId: 21,
-        targetKind: 2,
+        targetKind: 'trackPan',
         points: [{ ppq: 0, value: 0 }],
       });
       const json = project.toJson();
@@ -746,12 +765,12 @@ describe('Sonare WASM Project edit ops', () => {
     try {
       project.addAutomationLane(trackId, {
         targetParamId: 30,
-        targetKind: 'track-fader-db',
+        targetKind: 'trackFaderDb',
         points: [{ ppq: 0, value: -3 }],
       });
       project.addAutomationLane(trackId, {
         targetParamId: 31,
-        targetKind: 'track-pan',
+        targetKind: 'trackPan',
         points: [{ ppq: 0, value: 0 }],
       });
 
@@ -759,7 +778,7 @@ describe('Sonare WASM Project edit ops', () => {
       expect(() =>
         project.addAutomationLane(trackId, {
           targetParamId: 32,
-          targetKind: 'track-fader-db',
+          targetKind: 'trackFaderDb',
           points: [{ ppq: 0, value: 6 }],
         }),
       ).toThrow();
@@ -768,7 +787,7 @@ describe('Sonare WASM Project edit ops', () => {
       expect(() =>
         project.editAutomationLane(trackId, 30, {
           targetParamId: 30,
-          targetKind: 'track-pan',
+          targetKind: 'trackPan',
           points: [{ ppq: 0, value: 0.5 }],
         }),
       ).toThrow();
@@ -836,13 +855,12 @@ describe('Sonare WASM Project edit ops', () => {
   it('accepts the canonical s-curve spelling and rejects unknown curves', () => {
     const { project, trackId } = buildAudioProject();
     try {
-      // Canonical 's-curve' (matches Node + the mixer) and legacy 'scurve' both work.
       expect(() =>
         project.addAutomationLane(trackId, {
           targetParamId: 1,
           points: [
             { ppq: 0, value: 0.0, curve: 's-curve' },
-            { ppq: 4, value: 1.0, curve: 'scurve' },
+            { ppq: 4, value: 1.0, curve: 'hold' },
           ],
         }),
       ).not.toThrow();
@@ -863,7 +881,7 @@ describe('Sonare WASM Project edit ops', () => {
     const { project } = buildAudioProject();
     try {
       expect(() =>
-        project.annotateKeys([{ startPpq: 0, endPpq: 8, tonicPc: 0, mode: 1 }]),
+        project.annotateKeys([{ startPpq: 0, endPpq: 8, tonicPc: 0, mode: 'major' }]),
       ).not.toThrow();
       expect(() =>
         project.annotateChords([
@@ -871,7 +889,7 @@ describe('Sonare WASM Project edit ops', () => {
             startPpq: 0,
             endPpq: 4,
             rootPc: 0,
-            quality: 1,
+            quality: 'major',
             extensions: [7],
             slashBassPc: 255,
             romanNumeral: 'I',
@@ -890,9 +908,16 @@ describe('Sonare WASM Project edit ops', () => {
     const { project } = buildAudioProject();
     try {
       const payload = new Uint8Array([1, 2, 3, 4, 5]);
-      project.setAssistSidecar('test.module', 1, 0, 0, 8, payload);
-      expect(project.assistSidecarCount()).toBe(1);
-      const sidecar = project.getAssistSidecar(0);
+      project.setAssistSidecar({
+        moduleId: 'test.module',
+        schemaVersion: 1,
+        targetTrackId: 0,
+        regionStartPpq: 0,
+        regionEndPpq: 8,
+        payload,
+      });
+      expect(project.assistSidecars().length).toBe(1);
+      const sidecar = project.assistSidecars()[0];
       expect(sidecar.moduleId).toBe('test.module');
       expect(sidecar.schemaVersion).toBe(1);
       expect(sidecar.regionEndPpq).toBe(8);

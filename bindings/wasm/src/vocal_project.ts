@@ -1,11 +1,13 @@
-import type { VocalStateToken, VocalUint64 } from './public_types_vocal_edit.js';
+import { vocalReasonFromCode } from './internal/vocal_error_detail.js';
+import type { VocalReason, VocalStateToken } from './public_types_vocal_edit.js';
 import type {
   ProjectVocalEditApplyRequest,
   ProjectVocalEditApplyResult,
   ProjectVocalEditDependency,
   ProjectVocalOriginalSource,
-  ProjectVocalReason,
   ProjectVocalRehydrateItem,
+  ProjectVocalRehydrateOptions,
+  ProjectVocalRehydrateStatus,
 } from './public_types_vocal_project.js';
 import { assertSampleRate } from './validation.js';
 
@@ -85,7 +87,7 @@ function finite(value: unknown, field: string): number {
   return value;
 }
 
-function decimalUint64(value: unknown, field: string): VocalUint64 {
+function decimalUint64(value: unknown, field: string): string {
   if (typeof value !== 'string' || !/^(0|[1-9]\d*)$/.test(value)) {
     throw new RangeError(`${field} must be a canonical decimal uint64 string`);
   }
@@ -117,9 +119,9 @@ function finiteMono(value: unknown, field: string): Float32Array {
   return new Float32Array(value);
 }
 
-function sve1(value: unknown): Uint8Array {
+function vocalState(value: unknown): Uint8Array {
   if (!(value instanceof Uint8Array) || value.length === 0) {
-    throw new TypeError('sve1 must be a non-empty Uint8Array');
+    throw new TypeError('vocalState must be a non-empty Uint8Array');
   }
   return new Uint8Array(value);
 }
@@ -136,7 +138,24 @@ function copyToken(value: unknown): VocalStateToken {
   };
 }
 
-function copyApplyRequest(request: ProjectVocalEditApplyRequest): ProjectVocalEditApplyRequest {
+/** Request in the shape the native Project reads: take 0 is the base source and the state key is `sve1`. */
+interface NativeApplyRequest {
+  clipId: number;
+  takeId: number;
+  expectedSourceId: number;
+  expectedSourceSampleRate: number;
+  expectedSourceSampleCount: number;
+  expectedSourceSha256: string;
+  expectedClipLengthPpq: number;
+  expectedSourceOffsetPpq: number;
+  renderedMono: Float32Array;
+  renderedSampleRate: number;
+  renderedStartSample: 0;
+  renderToken: VocalStateToken;
+  sve1: Uint8Array;
+}
+
+function copyApplyRequest(request: ProjectVocalEditApplyRequest): NativeApplyRequest {
   const source = requireObject(request, 'request');
   const renderedMono = finiteMono(source.renderedMono, 'renderedMono');
   const expectedSourceSampleCount = positiveSampleCount(
@@ -158,20 +177,13 @@ function copyApplyRequest(request: ProjectVocalEditApplyRequest): ProjectVocalEd
   if (renderedSampleRate !== expectedSourceSampleRate) {
     throw new RangeError('renderedSampleRate must equal expectedSourceSampleRate');
   }
-  const renderedStartSample = source.renderedStartSample ?? 0;
-  if (typeof renderedStartSample !== 'number') {
-    throw new TypeError('renderedStartSample must be a number');
-  }
-  if (renderedStartSample !== 0) {
-    throw new RangeError('renderedStartSample must be zero for the v1 Project vocal API');
-  }
   const renderToken = copyToken(source.renderToken);
   if (renderToken.draftId !== '0' || renderToken.generation !== '0') {
     throw new RangeError('renderToken must be a committed session token');
   }
   return {
     clipId: requestUint32(source.clipId, 'clipId', false),
-    takeId: requestUint32(source.takeId ?? 0, 'takeId'),
+    takeId: source.takeId === undefined ? 0 : requestUint32(source.takeId, 'takeId', false),
     expectedSourceId: requestUint32(source.expectedSourceId, 'expectedSourceId', false),
     expectedSourceSampleRate,
     expectedSourceSampleCount,
@@ -182,15 +194,28 @@ function copyApplyRequest(request: ProjectVocalEditApplyRequest): ProjectVocalEd
     renderedSampleRate,
     renderedStartSample: 0,
     renderToken,
-    sve1: sve1(source.sve1),
+    sve1: vocalState(source.vocalState),
   };
+}
+
+/** A native take id of 0 means the base source, which the facade reports as no take. */
+function optionalTake(takeId: number): { takeId?: number } {
+  return takeId === 0 ? {} : { takeId };
+}
+
+function reasonToken(code: number, field: string): VocalReason {
+  const reason = vocalReasonFromCode(code);
+  if (reason === undefined) {
+    throw new RangeError(`${field} is not a known vocal reason`);
+  }
+  return reason;
 }
 
 function copyApplyResult(value: unknown): ProjectVocalEditApplyResult {
   const source = requireObject(value, 'applyVocalEdit result');
   return {
     clipId: uint32(source.clipId, 'result.clipId', false),
-    takeId: uint32(source.takeId, 'result.takeId'),
+    ...optionalTake(uint32(source.takeId, 'result.takeId')),
     originalSourceId: uint32(source.originalSourceId, 'result.originalSourceId', false),
     derivedSourceId: uint32(source.derivedSourceId, 'result.derivedSourceId', false),
     committedRevision: decimalUint64(source.committedRevision, 'result.committedRevision'),
@@ -210,7 +235,7 @@ function copyDependency(value: unknown): ProjectVocalEditDependency {
   const reason = nativeUint32(source.reason, 'dependency.reason');
   return {
     clipId: nativeUint32(source.clipId, 'dependency.clipId'),
-    takeId: nativeUint32(source.takeId, 'dependency.takeId'),
+    ...optionalTake(nativeUint32(source.takeId, 'dependency.takeId')),
     originalSourceId: nativeUint32(source.originalSourceId, 'dependency.originalSourceId'),
     derivedSourceId: nativeUint32(source.derivedSourceId, 'dependency.derivedSourceId'),
     sourceSampleRate: nativeUint32(source.sourceSampleRate, 'dependency.sourceSampleRate'),
@@ -221,7 +246,7 @@ function copyDependency(value: unknown): ProjectVocalEditDependency {
     derivedSourceSha256: hexSha256(source.derivedSourceSha256, 'dependency.derivedSourceSha256'),
     originalPcmAvailable: source.originalPcmAvailable === true,
     derivedPcmAvailable: source.derivedPcmAvailable === true,
-    reason: reason as ProjectVocalReason | number,
+    reason: reasonToken(reason, 'dependency.reason'),
     sidecarKey:
       typeof source.sidecarKey === 'string'
         ? source.sidecarKey
@@ -231,19 +256,25 @@ function copyDependency(value: unknown): ProjectVocalEditDependency {
   };
 }
 
+const REHYDRATE_STATUSES: readonly ProjectVocalRehydrateStatus[] = [
+  'rehydrated',
+  'alreadyReady',
+  'unresolved',
+];
+
 function copyRehydrateItem(value: unknown): ProjectVocalRehydrateItem {
   const source = requireObject(value, 'vocal rehydrate item');
-  const status = source.status;
-  if (typeof status !== 'number' || !Number.isSafeInteger(status) || status < 0 || status > 2) {
-    throw new RangeError('rehydrate.status must be one of 0, 1, or 2');
+  const status = REHYDRATE_STATUSES[source.status as number];
+  if (status === undefined) {
+    throw new RangeError('rehydrate.status is not a known rehydrate status');
   }
   const reason = nativeUint32(source.reason, 'rehydrate.reason');
   return {
     clipId: nativeUint32(source.clipId, 'rehydrate.clipId'),
-    takeId: nativeUint32(source.takeId, 'rehydrate.takeId'),
+    ...optionalTake(nativeUint32(source.takeId, 'rehydrate.takeId')),
     derivedSourceId: nativeUint32(source.derivedSourceId, 'rehydrate.derivedSourceId'),
-    status: status as ProjectVocalRehydrateItem['status'],
-    reason: reason as ProjectVocalReason | number,
+    status,
+    reason: reasonToken(reason, 'rehydrate.reason'),
   };
 }
 
@@ -271,7 +302,7 @@ function copyOriginalSources(
   });
 }
 
-/** Apply a complete committed vocal render to a native Project object. */
+/** Applies a complete committed vocal render to a native Project object. */
 export function projectApplyVocalEdit(
   native: VocalProjectNative,
   request: ProjectVocalEditApplyRequest,
@@ -280,7 +311,7 @@ export function projectApplyVocalEdit(
   return copyApplyResult(native.applyVocalEdit(normalized));
 }
 
-/** Return copied vocal sidecar dependencies in native storage order. */
+/** Returns copied vocal sidecar dependencies in native storage order. */
 export function projectGetVocalEditDependencies(
   native: VocalProjectNative,
 ): ProjectVocalEditDependency[] {
@@ -293,13 +324,22 @@ export function projectGetVocalEditDependencies(
 
 /**
  * Rehydrate unresolved vocal PCM without creating a Project history entry.
- * Any truthy return from `cancel` cancels the call.
+ * A `true` return from `options.cancel` cancels the call.
  */
 export function projectRehydrateVocalEdits(
   native: VocalProjectNative,
   originals: readonly ProjectVocalOriginalSource[],
-  cancel?: () => boolean,
+  options: ProjectVocalRehydrateOptions = {},
 ): ProjectVocalRehydrateItem[] {
+  if (options === null || typeof options !== 'object' || Array.isArray(options)) {
+    throw new TypeError('options must be an object');
+  }
+  for (const key of Object.keys(options)) {
+    if (key !== 'cancel') {
+      throw new TypeError(`Project.rehydrateVocalEdits: unknown option '${key}'`);
+    }
+  }
+  const { cancel } = options;
   if (cancel !== undefined && typeof cancel !== 'function') {
     throw new TypeError('cancel must be a function');
   }

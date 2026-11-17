@@ -6,9 +6,6 @@
     { "value": "hold", "ordinal": 2 },
     { "value": "s-curve", "ordinal": 3 }
   ],
-  "projectOnly": [
-    { "value": "scurve", "ordinal": 3 }
-  ],
   "numeric": [0, 1, 2, 3],
-  "rejected": ["", "curve", "bezier", "s curve"]
+  "rejected": ["", "curve", "bezier", "s curve", "scurve"]
 }

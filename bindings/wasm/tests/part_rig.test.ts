@@ -34,30 +34,39 @@ describe('Sonare WASM part rig', () => {
   it('round-trips set, get and clear, per destination and part', () => {
     const project = new Project();
     try {
-      expect(project.getPartRig(3, 0)).toBeNull();
+      expect(project.partRig({ destinationId: 3, part: 0 })).toBeNull();
 
-      project.setPartRig(3, 0, 'chain', [LIMITER]);
-      expect(project.getPartRig(3, 0)).toEqual({
+      project.setPartRig({ destinationId: 3, part: 0, mode: 'chain', inserts: [LIMITER] });
+      expect(project.partRig({ destinationId: 3, part: 0 })).toEqual({
         mode: 'chain',
         inserts: [{ processor: 'dynamics.limiter', params: LIMITER.params }],
       });
 
-      // An already-serialized params string is accepted, and the ordinal stands for the name.
-      project.setPartRig(3, 1, 2, [{ processor: LIMITER.processor, params: '{"thresholdDb":-3}' }]);
-      expect(project.getPartRig(3, 1)?.inserts?.[0].params).toEqual({ thresholdDb: -3 });
+      // An already-serialized params string is accepted.
+      project.setPartRig({
+        destinationId: 3,
+        part: 1,
+        mode: 'chain',
+        inserts: [{ processor: LIMITER.processor, params: '{"thresholdDb":-3}' }],
+      });
+      expect(project.partRig({ destinationId: 3, part: 1 })?.inserts?.[0].params).toEqual({
+        thresholdDb: -3,
+      });
 
       // kBank is an explicit entry, not an absent one, and the default is its own key.
-      project.setPartRig(3, PART_RIG_ALL_PARTS, 'bank');
-      expect(project.getPartRig(3, PART_RIG_ALL_PARTS)).toEqual({ mode: 'bank' });
-      project.setPartRig(3, 2, 'none');
-      expect(project.getPartRig(3, 2)).toEqual({ mode: 'none' });
-      expect(project.getPartRig(4, 0)).toBeNull();
+      project.setPartRig({ destinationId: 3, part: PART_RIG_ALL_PARTS, mode: 'bank' });
+      expect(project.partRig({ destinationId: 3, part: PART_RIG_ALL_PARTS })).toEqual({
+        mode: 'bank',
+      });
+      project.setPartRig({ destinationId: 3, part: 2, mode: 'none' });
+      expect(project.partRig({ destinationId: 3, part: 2 })).toEqual({ mode: 'none' });
+      expect(project.partRig({ destinationId: 4, part: 0 })).toBeNull();
 
-      project.clearPartRig(3, 0);
-      expect(project.getPartRig(3, 0)).toBeNull();
-      expect(project.getPartRig(3, 1)).not.toBeNull();
+      project.clearPartRig({ destinationId: 3, part: 0 });
+      expect(project.partRig({ destinationId: 3, part: 0 })).toBeNull();
+      expect(project.partRig({ destinationId: 3, part: 1 })).not.toBeNull();
       // Clearing what is not stored is not an error.
-      project.clearPartRig(3, 0);
+      project.clearPartRig({ destinationId: 3, part: 0 });
     } finally {
       project.destroy();
     }
@@ -66,25 +75,56 @@ describe('Sonare WASM part rig', () => {
   it('refuses invalid input and leaves the stored rig alone', () => {
     const project = new Project();
     try {
-      project.setPartRig(0, 0, 'none');
-      expect(() => project.setPartRig(0, 16, 'none')).toThrow(/out of range/);
-      expect(() => project.setPartRig(0, 256, 'none')).toThrow(/out of range/);
-      expect(() => project.getPartRig(0, 16)).toThrow(/out of range/);
+      project.setPartRig({ destinationId: 0, part: 0, mode: 'none' });
+      expect(() => project.setPartRig({ destinationId: 0, part: 16, mode: 'none' })).toThrow(
+        /out of range/,
+      );
+      expect(() => project.setPartRig({ destinationId: 0, part: 256, mode: 'none' })).toThrow(
+        /out of range/,
+      );
+      expect(() => project.partRig({ destinationId: 0, part: 16 })).toThrow(/out of range/);
       // @ts-expect-error an unknown mode name is rejected at runtime
-      expect(() => project.setPartRig(0, 0, 'wet')).toThrow(/wet/);
-      expect(() => project.setPartRig(0, 0, 3)).toThrow(/out of range/);
+      expect(() => project.setPartRig({ destinationId: 0, part: 0, mode: 'wet' })).toThrow(/wet/);
+      // The mode is a string token, never an ordinal.
+      expect(() => project.setPartRig({ destinationId: 0, part: 0, mode: 3 as never })).toThrow(
+        TypeError,
+      );
+      expect(() =>
+        project.setPartRig({ destinationId: 0, part: 0, mode: 2 as never, inserts: [LIMITER] }),
+      ).toThrow(/string token/);
       // Inserts belong to the chain mode only, and the chain needs them.
-      expect(() => project.setPartRig(0, 0, 'none', [LIMITER])).toThrow();
-      expect(() => project.setPartRig(0, 0, 'chain')).toThrow();
-      expect(() => project.setPartRig(0, 0, 'chain', [])).toThrow();
       expect(() =>
-        project.setPartRig(0, 0, 'chain', [{ processor: 'no.such.processor' }]),
+        project.setPartRig({ destinationId: 0, part: 0, mode: 'none', inserts: [LIMITER] }),
       ).toThrow();
-      expect(() => project.setPartRig(0, 0, 'chain', Array(9).fill(LIMITER))).toThrow();
+      expect(() => project.setPartRig({ destinationId: 0, part: 0, mode: 'chain' })).toThrow();
       expect(() =>
-        project.setPartRig(0, 0, 'chain', [{ processor: LIMITER.processor, params: '{not json' }]),
+        project.setPartRig({ destinationId: 0, part: 0, mode: 'chain', inserts: [] }),
       ).toThrow();
-      expect(project.getPartRig(0, 0)).toEqual({ mode: 'none' });
+      expect(() =>
+        project.setPartRig({
+          destinationId: 0,
+          part: 0,
+          mode: 'chain',
+          inserts: [{ processor: 'no.such.processor' }],
+        }),
+      ).toThrow();
+      expect(() =>
+        project.setPartRig({
+          destinationId: 0,
+          part: 0,
+          mode: 'chain',
+          inserts: Array(9).fill(LIMITER),
+        }),
+      ).toThrow();
+      expect(() =>
+        project.setPartRig({
+          destinationId: 0,
+          part: 0,
+          mode: 'chain',
+          inserts: [{ processor: LIMITER.processor, params: '{not json' }],
+        }),
+      ).toThrow();
+      expect(project.partRig({ destinationId: 0, part: 0 })).toEqual({ mode: 'none' });
     } finally {
       project.destroy();
     }
@@ -93,19 +133,20 @@ describe('Sonare WASM part rig', () => {
   it('undoes and redoes a set and a clear', () => {
     const project = new Project();
     try {
-      project.setPartRig(1, 0, 'chain', [LIMITER]);
-      project.setPartRig(1, 0, 'none');
+      const key = { destinationId: 1, part: 0 };
+      project.setPartRig({ ...key, mode: 'chain', inserts: [LIMITER] });
+      project.setPartRig({ ...key, mode: 'none' });
       project.undo();
-      expect(project.getPartRig(1, 0)?.mode).toBe('chain');
+      expect(project.partRig(key)?.mode).toBe('chain');
       project.undo();
-      expect(project.getPartRig(1, 0)).toBeNull();
+      expect(project.partRig(key)).toBeNull();
       project.redo();
-      expect(project.getPartRig(1, 0)?.mode).toBe('chain');
+      expect(project.partRig(key)?.mode).toBe('chain');
 
-      project.clearPartRig(1, 0);
-      expect(project.getPartRig(1, 0)).toBeNull();
+      project.clearPartRig(key);
+      expect(project.partRig(key)).toBeNull();
       project.undo();
-      expect(project.getPartRig(1, 0)?.mode).toBe('chain');
+      expect(project.partRig(key)?.mode).toBe('chain');
     } finally {
       project.destroy();
     }
@@ -161,7 +202,7 @@ describe('Sonare WASM part rig', () => {
   });
 });
 
-describe('Sonare WASM part rig request and positional forms', () => {
+describe('Sonare WASM part rig request form', () => {
   beforeAll(async () => {
     await init();
     const createModule = (await import('../dist/sonare.js')).default;
@@ -170,37 +211,21 @@ describe('Sonare WASM part rig request and positional forms', () => {
 
   const LOUDER: PartRigInsert = { processor: 'dynamics.limiter', params: { thresholdDb: -12 } };
 
-  /** `name: message` of what a call throws, or a marker when it does not. */
-  const capture = (call: () => unknown): string => {
+  it('stores, reads and clears entries independently per key', () => {
+    const project = new Project();
     try {
-      call();
-    } catch (error) {
-      return `${(error as Error).name}: ${(error as Error).message}`;
-    }
-    return 'did not throw';
-  };
-
-  it('stores, reads and clears the same entry through either form', () => {
-    const byRequest = new Project();
-    const byPosition = new Project();
-    try {
-      byRequest.setPartRig({ destinationId: 4, part: 2, mode: 'chain', inserts: [LIMITER] });
-      byPosition.setPartRig(4, 2, 'chain', [LIMITER]);
-      const stored = byRequest.getPartRig({ destinationId: 4, part: 2 });
+      project.setPartRig({ destinationId: 4, part: 2, mode: 'chain', inserts: [LIMITER] });
+      const stored = project.partRig({ destinationId: 4, part: 2 });
       expect(stored?.inserts?.[0].params).toEqual(LIMITER.params);
-      expect(byPosition.getPartRig(4, 2)).toEqual(stored);
-      expect(byPosition.getPartRig({ destinationId: 4, part: 2 })).toEqual(stored);
-      // The control: other inserts read back differently, so the equality above
-      // cannot hold because a form dropped the inserts.
-      byPosition.setPartRig(4, 3, 'chain', [LOUDER]);
-      expect(byPosition.getPartRig(4, 3)).not.toEqual(stored);
-      byRequest.clearPartRig({ destinationId: 4, part: 2 });
-      byPosition.clearPartRig(4, 2);
-      expect(byRequest.getPartRig(4, 2)).toBeNull();
-      expect(byPosition.getPartRig({ destinationId: 4, part: 2 })).toBeNull();
+      // The control: other inserts read back differently, so the entry is not
+      // a constant the read returns whatever was stored.
+      project.setPartRig({ destinationId: 4, part: 3, mode: 'chain', inserts: [LOUDER] });
+      expect(project.partRig({ destinationId: 4, part: 3 })).not.toEqual(stored);
+      project.clearPartRig({ destinationId: 4, part: 2 });
+      expect(project.partRig({ destinationId: 4, part: 2 })).toBeNull();
+      expect(project.partRig({ destinationId: 4, part: 3 })).not.toBeNull();
     } finally {
-      byRequest.destroy();
-      byPosition.destroy();
+      project.destroy();
     }
   });
 
@@ -211,36 +236,27 @@ describe('Sonare WASM part rig request and positional forms', () => {
     ['a non-array inserts', { mode: 'chain', inserts: 'nope' }],
     ['an insert without a processor', { mode: 'chain', inserts: [{ params: {} }] }],
     ['an out-of-range part', { part: 16 }],
-  ])('refuses %s identically in both forms', (_, change) => {
+  ])('refuses %s', (_, change) => {
     const project = new Project();
     try {
-      const r = { destinationId: 4, part: 0, mode: 'none', ...change } as Record<string, unknown>;
-      const positional = [r.destinationId, r.part, r.mode, r.inserts] as [
-        never,
-        never,
-        never,
-        never,
-      ];
-      const viaRequest = capture(() => project.setPartRig(r as never));
-      expect(viaRequest).not.toBe('did not throw');
-      expect(capture(() => project.setPartRig(...positional))).toBe(viaRequest);
+      const r = { destinationId: 4, part: 0, mode: 'none', ...change };
+      expect(() => project.setPartRig(r as never)).toThrow();
+      expect(project.partRig({ destinationId: 4, part: 0 })).toBeNull();
     } finally {
       project.destroy();
     }
   });
 
-  it('refuses a request object followed by positional arguments', () => {
+  it('refuses an unknown key field on a read or a clear', () => {
     const project = new Project();
     try {
-      expect(() =>
-        (project.setPartRig as (...args: unknown[]) => void)(
-          { destinationId: 4, part: 0, mode: 'none' },
-          0,
-        ),
-      ).toThrow(new TypeError('setPartRig: a request object takes no further arguments'));
-      expect(() => project.getPartRig({ destinationId: 4, part: 0 } as never, 0 as never)).toThrow(
-        /getPartRig: a request object/,
+      expect(() => project.partRig({ destinationId: 4, part: 0, mode: 'none' } as never)).toThrow(
+        /unknown request key 'mode'/,
       );
+      expect(() =>
+        project.clearPartRig({ destinationId: 4, part: 0, mode: 'none' } as never),
+      ).toThrow(/unknown request key 'mode'/);
+      expect(() => project.partRig(4 as never)).toThrow(TypeError);
     } finally {
       project.destroy();
     }

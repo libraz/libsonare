@@ -1,11 +1,15 @@
 /**
  * NativeSynth WASM binding tests: synthPresetNames / synthPresetPatch,
- * Project.bounceWithSynthInstrument and the realtime engine
+ * Project.bounceWithSynthInstruments and the realtime engine
  * setSynthInstrument entry.
  */
 
 import { beforeAll, describe, expect, it } from 'vitest';
-import type { SynthPatch as DistSynthPatch, SynthEngineMode } from '../dist/index.js';
+import type {
+  SynthPatch as DistSynthPatch,
+  ProjectBounceOptions,
+  SynthEngineMode,
+} from '../dist/index.js';
 import {
   ARTICULATIONS,
   BUILTIN_SYNTH_WAVEFORMS,
@@ -38,6 +42,28 @@ import {
 import type { SynthPatch } from '../src/instrument_types.js';
 import { setSonareModule } from '../src/module_state.js';
 import { synthPatchRoundTripForTest } from '../src/project.js';
+
+/** Bounce one instrument at its destination and interleave the planar result for sample-wise checks. */
+function bounceSynth(
+  project: Project,
+  config: DistSynthPatch | string,
+  options?: ProjectBounceOptions,
+): Float32Array {
+  const { destinationId, ...instrument } = (
+    typeof config === 'string' ? { preset: config } : config
+  ) as { destinationId?: number };
+  const { channels } = project.bounceWithSynthInstruments(
+    { destinationId, instrument } as never,
+    options,
+  );
+  const out = new Float32Array(channels.length * (channels[0]?.length ?? 0));
+  channels.forEach((channel, c) => {
+    for (let i = 0; i < channel.length; i++) {
+      out[i * channels.length + c] = channel[i];
+    }
+  });
+  return out;
+}
 
 function peak(audio: Float32Array): number {
   let p = 0;
@@ -250,7 +276,7 @@ describe('Sonare WASM NativeSynth', () => {
         filterDecayMs: 200,
         filterSustain: 0.3,
       };
-      const reference = project.bounceWithSynthInstrument(base, frames);
+      const reference = bounceSynth(project, base, frames);
       expect(peak(reference)).toBeGreaterThan(0);
       for (const edit of [
         { driftRateHz: 7 },
@@ -262,15 +288,13 @@ describe('Sonare WASM NativeSynth', () => {
         // The lowest rate the field accepts, which the base does not use.
         { driftRateHz: 0.01 },
       ]) {
-        const edited = project.bounceWithSynthInstrument({ ...base, ...edit }, frames);
+        const edited = bounceSynth(project, { ...base, ...edit }, frames);
         expect(edited, JSON.stringify(edit)).not.toEqual(reference);
       }
-      expect(project.bounceWithSynthInstrument({ ...base, oneShot: undefined }, frames)).toEqual(
-        reference,
+      expect(bounceSynth(project, { ...base, oneShot: undefined }, frames)).toEqual(reference);
+      expect(() => bounceSynth(project, { ...base, oneShot: 1 as never }, frames)).toThrow(
+        TypeError,
       );
-      expect(() =>
-        project.bounceWithSynthInstrument({ ...base, oneShot: 1 as never }, frames),
-      ).toThrow(TypeError);
     } finally {
       project.destroy();
     }
@@ -316,16 +340,14 @@ describe('Sonare WASM NativeSynth', () => {
     const project = buildMidiOnlyProject();
     try {
       for (const preset of ['va:saw-lead', 'e-piano', 'harp']) {
-        const audio = project.bounceWithSynthInstrument(preset, { totalFrames: 24000 });
+        const audio = bounceSynth(project, preset, { totalFrames: 24000 });
         expect(audio.length).toBe(48000);
         expect(peak(audio)).toBeGreaterThan(0);
       }
-      const first = project.bounceWithSynthInstrument('saw-lead', { totalFrames: 24000 });
-      const second = project.bounceWithSynthInstrument('saw-lead', { totalFrames: 24000 });
+      const first = bounceSynth(project, 'saw-lead', { totalFrames: 24000 });
+      const second = bounceSynth(project, 'saw-lead', { totalFrames: 24000 });
       expect(first).toEqual(second);
-      expect(() =>
-        project.bounceWithSynthInstrument('no-such-preset', { totalFrames: 128 }),
-      ).toThrow();
+      expect(() => bounceSynth(project, 'no-such-preset', { totalFrames: 128 })).toThrow();
     } finally {
       project.destroy();
     }
@@ -338,30 +360,30 @@ describe('Sonare WASM NativeSynth', () => {
       // either off is a real edit. Before the patch carried presence bits a
       // zero was indistinguishable from an omitted key and the render was
       // unchanged, which made "no spread" impossible to ask for.
-      const reference = project.bounceWithSynthInstrument('warm-pad', { totalFrames: 24000 });
+      const reference = bounceSynth(project, 'warm-pad', { totalFrames: 24000 });
       expect(peak(reference)).toBeGreaterThan(0);
 
-      const noSpread = project.bounceWithSynthInstrument(
+      const noSpread = bounceSynth(
+        project,
         { preset: 'warm-pad', stereoSpread: 0 },
         { totalFrames: 24000 },
       );
       expect(noSpread).not.toEqual(reference);
 
-      const noDrive = project.bounceWithSynthInstrument(
+      const noDrive = bounceSynth(
+        project,
         { preset: 'warm-pad', busDrive: 0 },
         { totalFrames: 24000 },
       );
       expect(noDrive).not.toEqual(reference);
 
       // Omitting the key still keeps the base value.
-      const untouched = project.bounceWithSynthInstrument(
-        { preset: 'warm-pad' },
-        { totalFrames: 24000 },
-      );
+      const untouched = bounceSynth(project, { preset: 'warm-pad' }, { totalFrames: 24000 });
       expect(untouched).toEqual(reference);
 
       // An empty routing array clears the base matrix; omitting it keeps it.
-      const wobble = project.bounceWithSynthInstrument(
+      const wobble = bounceSynth(
+        project,
         {
           preset: 'warm-pad',
           lfoRateHz: 6,
@@ -369,7 +391,8 @@ describe('Sonare WASM NativeSynth', () => {
         },
         { totalFrames: 24000 },
       );
-      const cleared = project.bounceWithSynthInstrument(
+      const cleared = bounceSynth(
+        project,
         { preset: 'warm-pad', lfoRateHz: 6, modRoutings: [] },
         { totalFrames: 24000 },
       );
@@ -382,16 +405,14 @@ describe('Sonare WASM NativeSynth', () => {
   it('takes gain: 0 as silence, not the base level', () => {
     const project = buildMidiOnlyProject();
     try {
-      const reference = project.bounceWithSynthInstrument('warm-pad', { totalFrames: 24000 });
+      const reference = bounceSynth(project, 'warm-pad', { totalFrames: 24000 });
       expect(peak(reference)).toBeGreaterThan(0);
 
-      const silent = project.bounceWithSynthInstrument(
-        { preset: 'warm-pad', gain: 0 },
-        { totalFrames: 24000 },
-      );
+      const silent = bounceSynth(project, { preset: 'warm-pad', gain: 0 }, { totalFrames: 24000 });
       expect(peak(silent)).toBe(0);
 
-      const quiet = project.bounceWithSynthInstrument(
+      const quiet = bounceSynth(
+        project,
         { preset: 'warm-pad', gain: 0.01 },
         { totalFrames: 24000 },
       );
@@ -406,7 +427,7 @@ describe('Sonare WASM NativeSynth', () => {
     try {
       const rejection = (patch: DistSynthPatch): unknown => {
         try {
-          project.bounceWithSynthInstrument(patch, { totalFrames: 128 });
+          bounceSynth(project, patch, { totalFrames: 128 });
         } catch (error) {
           return error;
         }
@@ -427,7 +448,7 @@ describe('Sonare WASM NativeSynth', () => {
       }
       // The published ends are accepted.
       expect(() =>
-        project.bounceWithSynthInstrument({ cutoffHz: cutoff?.max }, { totalFrames: 128 }),
+        bounceSynth(project, { cutoffHz: cutoff?.max }, { totalFrames: 128 }),
       ).not.toThrow();
     } finally {
       project.destroy();
@@ -438,19 +459,22 @@ describe('Sonare WASM NativeSynth', () => {
     const project = buildMidiOnlyProject();
     try {
       expect(() =>
-        project.bounceWithSynthInstrument(
+        bounceSynth(
+          project,
           { modRoutings: [{ source: 'none', destination: 'pitch-cents', depth: 80 }] },
           { totalFrames: 128 },
         ),
       ).toThrow();
       expect(() =>
-        project.bounceWithSynthInstrument(
+        bounceSynth(
+          project,
           { modRoutings: [{ source: 'lfo1', destination: 'none', depth: 80 }] },
           { totalFrames: 128 },
         ),
       ).toThrow();
       // Not vacuous: a real routing on both ends still passes.
-      const audio = project.bounceWithSynthInstrument(
+      const audio = bounceSynth(
+        project,
         { modRoutings: [{ source: 'lfo1', destination: 'pitch-cents', depth: 80 }] },
         { totalFrames: 24000 },
       );
@@ -463,14 +487,12 @@ describe('Sonare WASM NativeSynth', () => {
   it('applies field overrides and the mod matrix', () => {
     const project = buildMidiOnlyProject();
     try {
-      const plain = project.bounceWithSynthInstrument({}, { totalFrames: 24000 });
+      const plain = bounceSynth(project, {}, { totalFrames: 24000 });
       expect(peak(plain)).toBeGreaterThan(0);
-      const dark = project.bounceWithSynthInstrument(
-        { cutoffHz: 300, resonanceQ: 4 },
-        { totalFrames: 24000 },
-      );
+      const dark = bounceSynth(project, { cutoffHz: 300, resonanceQ: 4 }, { totalFrames: 24000 });
       expect(dark).not.toEqual(plain);
-      const wobble = project.bounceWithSynthInstrument(
+      const wobble = bounceSynth(
+        project,
         {
           lfoRateHz: 6,
           modRoutings: [{ source: 'lfo1', destination: 'pitch-cents', depth: 80 }],
@@ -480,7 +502,7 @@ describe('Sonare WASM NativeSynth', () => {
       expect(wobble).not.toEqual(plain);
       expect(() =>
         // @ts-expect-error unknown waveform name is rejected at runtime
-        project.bounceWithSynthInstrument({ waveform: 'sawtooth-ish' }, { totalFrames: 128 }),
+        bounceSynth(project, { waveform: 'sawtooth-ish' }, { totalFrames: 128 }),
       ).toThrow();
     } finally {
       project.destroy();
@@ -491,7 +513,7 @@ describe('Sonare WASM NativeSynth', () => {
     // Note 38 = acoustic snare in the GM drum map.
     const project = buildMidiOnlyProject(38);
     try {
-      const audio = project.bounceWithSynthInstrument('drum-kit', { totalFrames: 24000 });
+      const audio = bounceSynth(project, 'drum-kit', { totalFrames: 24000 });
       expect(peak(audio)).toBeGreaterThan(0);
     } finally {
       project.destroy();
@@ -502,7 +524,7 @@ describe('Sonare WASM NativeSynth', () => {
   function bounce(patch: DistSynthPatch | string): Float32Array {
     const project = buildMidiOnlyProject();
     try {
-      return project.bounceWithSynthInstrument(patch, { totalFrames: 24000 });
+      return bounceSynth(project, patch, { totalFrames: 24000 });
     } finally {
       project.destroy();
     }

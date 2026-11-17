@@ -1,6 +1,6 @@
 /**
  * Pins the callback-instrument bounce: a JS instrument driven synchronously
- * through bounceWithInstruments / bounceWithInstrument, its zero-filled
+ * through bounceWithInstruments, its zero-filled
  * outputs, first-throw propagation, the Promise refusal, and
  * a long bounce whose JS stack depth does not grow from block to block.
  */
@@ -23,7 +23,6 @@ const OPTIONS = {
   totalFrames: 48000,
   blockSize: 128,
   numChannels: 2,
-  sampleRate: 48000,
 } satisfies ProjectBounceOptions;
 
 /** One sustained note routed to destination 0. */
@@ -76,31 +75,44 @@ describe('bounceWithInstruments', () => {
     using project = midiProject();
     const silent = project.bounce(OPTIONS);
     const instrument = new ConstantInstrument(0.25);
-    const audio = project.bounceWithInstruments([instrument], OPTIONS);
-    expect(audio).toHaveLength(silent.length);
+    const audio = project.bounceWithInstruments([{ instrument }], OPTIONS);
+    expect(audio.numChannels).toBe(2);
+    expect(audio.channels).toHaveLength(2);
     // The control: a silent bounce is all zero, so the DC is the instrument's.
-    expect(Math.max(...silent.map(Math.abs))).toBe(0);
-    for (let i = 0; i < audio.length; i += 1) {
-      expect(audio[i]).toBeCloseTo(silent[i] + 0.25, 6);
+    for (const channel of silent.channels) {
+      expect(Math.max(...channel.map(Math.abs))).toBe(0);
+    }
+    for (let c = 0; c < audio.channels.length; c += 1) {
+      expect(audio.channels[c]).toHaveLength(silent.channels[c].length);
+      for (let i = 0; i < audio.channels[c].length; i += 1) {
+        expect(audio.channels[c][i]).toBeCloseTo(silent.channels[c][i] + 0.25, 6);
+      }
     }
     expect(instrument.renderCalls).toBeGreaterThan(0);
   });
 
-  it('matches across the singular, list and plural forms', () => {
+  it('matches across the single-binding and list forms', () => {
     using project = midiProject();
-    const plural = project.bounceWithInstruments([new ConstantInstrument(0.1)], OPTIONS);
-    expect(project.bounceWithInstrument(new ConstantInstrument(0.1), OPTIONS)).toEqual(plural);
-    expect(project.bounceWithInstrument([new ConstantInstrument(0.1)], OPTIONS)).toEqual(plural);
-    expect(project.bounceWithInstruments([new ConstantInstrument(0.3)], OPTIONS)).not.toEqual(
-      plural,
+    const list = project.bounceWithInstruments(
+      [{ destinationId: 0, instrument: new ConstantInstrument(0.1) }],
+      OPTIONS,
     );
+    expect(
+      project.bounceWithInstruments({ instrument: new ConstantInstrument(0.1) }, OPTIONS),
+    ).toEqual(list);
+    expect(
+      project.bounceWithInstruments([{ instrument: new ConstantInstrument(0.1) }], OPTIONS),
+    ).toEqual(list);
+    expect(
+      project.bounceWithInstruments([{ instrument: new ConstantInstrument(0.3) }], OPTIONS),
+    ).not.toEqual(list);
     expect(project.bounceWithInstruments([], OPTIONS)).toEqual(project.bounce(OPTIONS));
   });
 
   it('hands zero-filled outputs sized to the block', () => {
     using project = midiProject();
     const instrument = new ConstantInstrument();
-    project.bounceWithInstruments([instrument], OPTIONS);
+    project.bounceWithInstruments([{ instrument }], OPTIONS);
     expect(instrument.allZeroOnEntry).toBe(true);
     for (const shape of instrument.shapes) {
       const [channels, rest] = shape.split('x');
@@ -116,7 +128,7 @@ describe('bounceWithInstruments', () => {
     // The instrument is stereo whatever the bounce's output width.
     for (const numChannels of [1, 2]) {
       const instrument = new ConstantInstrument();
-      project.bounceWithInstruments([instrument], { ...OPTIONS, numChannels });
+      project.bounceWithInstruments([{ instrument }], { ...OPTIONS, numChannels });
       expect(instrument.prepared?.[0]).toBe(48000);
       expect(instrument.prepared?.[1]).toBeGreaterThan(0);
       expect(instrument.prepared?.[1]).toBeLessThanOrEqual(128);
@@ -128,7 +140,7 @@ describe('bounceWithInstruments', () => {
   it('delivers the note-on and note-off as UMP events in order', () => {
     using project = midiProject();
     const instrument = new ConstantInstrument();
-    project.bounceWithInstruments([instrument], OPTIONS);
+    project.bounceWithInstruments([{ instrument }], OPTIONS);
     const statuses = instrument.events.map((e) => (e.words[0] >>> 20) & 0xf);
     expect(statuses).toContain(0x9);
     expect(statuses).toContain(0x8);
@@ -147,24 +159,29 @@ describe('bounceWithInstruments', () => {
     const audio = project.bounceWithInstruments(
       [
         {
-          render(outputs, frames) {
-            for (const channel of outputs) {
-              channel.fill(0.1, 0, frames);
-            }
+          instrument: {
+            render(outputs, frames) {
+              for (const channel of outputs) {
+                channel.fill(0.1, 0, frames);
+              }
+            },
           },
         },
       ],
       OPTIONS,
     );
-    expect(Math.max(...audio.map(Math.abs))).toBeGreaterThan(0);
+    expect(Math.max(...audio.channels[0].map(Math.abs))).toBeGreaterThan(0);
   });
 
   it('extends an auto-length bounce by tailSamples', () => {
     using project = midiProject();
-    const auto = { ...OPTIONS, totalFrames: 0 };
-    const dry = project.bounceWithInstruments([new ConstantInstrument(0)], auto);
-    const withTail = project.bounceWithInstruments([{ render() {}, tailSamples: 4096 }], auto);
-    expect(withTail.length).toBe(dry.length + 4096 * 2);
+    const { totalFrames: _omitted, ...auto } = OPTIONS;
+    const dry = project.bounceWithInstruments([{ instrument: new ConstantInstrument(0) }], auto);
+    const withTail = project.bounceWithInstruments(
+      [{ instrument: { render() {}, tailSamples: 4096 } }],
+      auto,
+    );
+    expect(withTail.channels[0].length).toBe(dry.channels[0].length + 4096);
   });
 
   describe('a throwing callback', () => {
@@ -176,9 +193,11 @@ describe('bounceWithInstruments', () => {
         project.bounceWithInstruments(
           [
             {
-              render() {
-                calls += 1;
-                throw boom;
+              instrument: {
+                render() {
+                  calls += 1;
+                  throw boom;
+                },
               },
             },
           ],
@@ -195,11 +214,13 @@ describe('bounceWithInstruments', () => {
         project.bounceWithInstruments(
           [
             {
-              onEvent() {
-                events += 1;
-                throw new RangeError('bad event');
+              instrument: {
+                onEvent() {
+                  events += 1;
+                  throw new RangeError('bad event');
+                },
+                render() {},
               },
-              render() {},
             },
           ],
           OPTIONS,
@@ -212,14 +233,16 @@ describe('bounceWithInstruments', () => {
         project.bounceWithInstruments(
           [
             {
-              prepare() {
-                throw new Error('no prepare');
-              },
-              onEvent() {
-                afterPrepare += 1;
-              },
-              render() {
-                afterPrepare += 1;
+              instrument: {
+                prepare() {
+                  throw new Error('no prepare');
+                },
+                onEvent() {
+                  afterPrepare += 1;
+                },
+                render() {
+                  afterPrepare += 1;
+                },
               },
             },
           ],
@@ -235,17 +258,22 @@ describe('bounceWithInstruments', () => {
         project.bounceWithInstruments(
           [
             {
-              render() {
-                throw new Error('once');
+              instrument: {
+                render() {
+                  throw new Error('once');
+                },
               },
             },
           ],
           OPTIONS,
         ),
       ).toThrow('once');
-      expect(project.bounceWithInstruments([new ConstantInstrument()], OPTIONS)).toHaveLength(
-        OPTIONS.totalFrames * 2,
+      const again = project.bounceWithInstruments(
+        [{ instrument: new ConstantInstrument() }],
+        OPTIONS,
       );
+      expect(again.channels).toHaveLength(2);
+      expect(again.channels[0]).toHaveLength(OPTIONS.totalFrames);
     });
   });
 
@@ -262,8 +290,8 @@ describe('bounceWithInstruments', () => {
           return asyncReturn();
         },
       } as unknown as ExternalInstrument;
-      expect(() => project.bounceWithInstruments([instrument], OPTIONS)).toThrow(TypeError);
-      expect(() => project.bounceWithInstruments([instrument], OPTIONS)).toThrow(
+      expect(() => project.bounceWithInstruments([{ instrument }], OPTIONS)).toThrow(TypeError);
+      expect(() => project.bounceWithInstruments([{ instrument }], OPTIONS)).toThrow(
         new RegExp(`${name} must not return a Promise`),
       );
       expect(calls).toBe(2);
@@ -274,31 +302,55 @@ describe('bounceWithInstruments', () => {
       const instrument = {
         render: () => Object.defineProperty({}, 'then', { value: () => undefined }),
       } as unknown as ExternalInstrument;
-      expect(() => project.bounceWithInstruments([instrument], OPTIONS)).toThrow(TypeError);
+      expect(() => project.bounceWithInstruments([{ instrument }], OPTIONS)).toThrow(TypeError);
     });
   });
 
   describe('argument refusals', () => {
     it('names a missing or mistyped callback before any render starts', () => {
       using project = midiProject();
-      expect(() => project.bounceWithInstruments([{} as never], OPTIONS)).toThrow(
-        new TypeError('bounceWithInstruments: instruments[0].render must be a function'),
+      expect(() => project.bounceWithInstruments([{ instrument: {} as never }], OPTIONS)).toThrow(
+        new TypeError('bounceWithInstruments: instruments[0].instrument.render must be a function'),
       );
       expect(() =>
-        project.bounceWithInstruments([{ render() {}, prepare: 5 } as never], OPTIONS),
-      ).toThrow(new TypeError('bounceWithInstruments: instruments[0].prepare must be a function'));
+        project.bounceWithInstruments(
+          [{ instrument: { render() {}, prepare: 5 } as never }],
+          OPTIONS,
+        ),
+      ).toThrow(
+        new TypeError(
+          'bounceWithInstruments: instruments[0].instrument.prepare must be a function',
+        ),
+      );
       expect(() =>
-        project.bounceWithInstruments([{ render() {}, onEvent: 'x' } as never], OPTIONS),
-      ).toThrow(new TypeError('bounceWithInstruments: instruments[0].onEvent must be a function'));
+        project.bounceWithInstruments(
+          [{ instrument: { render() {}, onEvent: 'x' } as never }],
+          OPTIONS,
+        ),
+      ).toThrow(
+        new TypeError(
+          'bounceWithInstruments: instruments[0].instrument.onEvent must be a function',
+        ),
+      );
     });
 
-    it('refuses a non-binding element and a non-array list by name', () => {
+    it('refuses a non-binding element and a bare instrument by name', () => {
       using project = midiProject();
       expect(() => project.bounceWithInstruments(7 as never, OPTIONS)).toThrow(
-        new TypeError('bounceWithInstruments: instruments must be an array'),
+        new TypeError(
+          'bounceWithInstruments: instrument must be a { destinationId?, instrument } pair',
+        ),
       );
-      expect(() => project.bounceWithInstruments([[{ render() {} }]] as never, OPTIONS)).toThrow(
-        new TypeError('bounceWithInstruments: instruments[0] must be an object'),
+      expect(() =>
+        project.bounceWithInstruments([[{ instrument: { render() {} } }]] as never, OPTIONS),
+      ).toThrow(
+        new TypeError(
+          'bounceWithInstruments: instruments[0] must be a { destinationId?, instrument } pair',
+        ),
+      );
+      // A bare instrument must be wrapped as a pair.
+      expect(() => project.bounceWithInstruments([{ render() {} }] as never, OPTIONS)).toThrow(
+        /instruments\[0\]: unknown request key 'render'/,
       );
     });
   });
@@ -316,12 +368,14 @@ describe('bounceWithInstruments', () => {
       project.bounceWithInstruments(
         [
           {
-            render() {
-              try {
-                attempt();
-              } catch (error) {
-                refusal ??= error;
-              }
+            instrument: {
+              render() {
+                try {
+                  attempt();
+                } catch (error) {
+                  refusal ??= error;
+                }
+              },
             },
           },
         ],
@@ -331,26 +385,29 @@ describe('bounceWithInstruments', () => {
       expect(refusal, name).toMatchObject({ code: ErrorCode.InvalidState });
     }
     // The refusals changed nothing: the project still bounces and keeps its rate.
-    expect(project.getSampleRate()).toBe(48000);
-    expect(project.bounce(OPTIONS)).toHaveLength(OPTIONS.totalFrames * 2);
+    expect(project.sampleRate).toBe(48000);
+    expect(project.bounce(OPTIONS).channels[0]).toHaveLength(OPTIONS.totalFrames);
   });
 
   it('reports a native failure ahead of a callback error', () => {
     using project = midiProject();
     let prepared = false;
+    const { totalFrames: _omitted, ...auto } = OPTIONS;
     const bounce = () =>
       project.bounceWithInstruments(
         [
           {
-            tailSamples: 2147483647,
-            prepare() {
-              prepared = true;
-              throw new Error('callback error');
+            instrument: {
+              tailSamples: 2147483647,
+              prepare() {
+                prepared = true;
+                throw new Error('callback error');
+              },
+              render() {},
             },
-            render() {},
           },
         ],
-        { ...OPTIONS, totalFrames: 0 },
+        auto,
       );
     expect(bounce).toThrow(/Invalid parameter/);
     // The control: the callback did run and throw before the native failure.
@@ -359,7 +416,7 @@ describe('bounceWithInstruments', () => {
 
   it('refuses a bad options bag without bouncing', () => {
     using project = midiProject();
-    for (const instruments of [[], [new ConstantInstrument()]]) {
+    for (const instruments of [[], [{ instrument: new ConstantInstrument() }]]) {
       expect(() =>
         project.bounceWithInstruments(instruments, {
           blockSize: 'x',
@@ -373,16 +430,21 @@ describe('bounceWithInstruments', () => {
     const audio = project.bounceWithInstruments(
       [
         {
-          render(outputs, frames) {
-            outputs[0].fill(0.3, 0, frames);
-            structuredClone(outputs[0].buffer, { transfer: [outputs[0].buffer] });
+          instrument: {
+            render(outputs, frames) {
+              outputs[0].fill(0.3, 0, frames);
+              structuredClone(outputs[0].buffer, { transfer: [outputs[0].buffer] });
+            },
           },
         },
       ],
       OPTIONS,
     );
-    expect(audio).toHaveLength(OPTIONS.totalFrames * 2);
-    expect(audio.every(Number.isFinite)).toBe(true);
+    expect(audio.channels).toHaveLength(2);
+    for (const channel of audio.channels) {
+      expect(channel).toHaveLength(OPTIONS.totalFrames);
+      expect(channel.every(Number.isFinite)).toBe(true);
+    }
   });
 
   it('runs a callback with ordinary JS stack headroom, block after block', () => {
@@ -404,21 +466,26 @@ describe('bounceWithInstruments', () => {
     const audio = project.bounceWithInstruments(
       [
         {
-          render(outputs, frames) {
-            blocks += 1;
-            if (descend(budget) !== budget) {
-              throw new Error('recursion did not complete');
-            }
-            for (const channel of outputs) {
-              channel.fill(0.05, 0, frames);
-            }
+          instrument: {
+            render(outputs, frames) {
+              blocks += 1;
+              if (descend(budget) !== budget) {
+                throw new Error('recursion did not complete');
+              }
+              for (const channel of outputs) {
+                channel.fill(0.05, 0, frames);
+              }
+            },
           },
         },
       ],
       { ...OPTIONS, totalFrames: 96000, blockSize: 16 },
     );
     expect(blocks).toBeGreaterThanOrEqual(5000);
-    expect(audio).toHaveLength(96000 * 2);
-    expect(audio.every((v) => Math.abs(v - 0.05) < 1e-6)).toBe(true);
+    expect(audio.channels).toHaveLength(2);
+    for (const channel of audio.channels) {
+      expect(channel).toHaveLength(96000);
+      expect(channel.every((v) => Math.abs(v - 0.05) < 1e-6)).toBe(true);
+    }
   });
 });

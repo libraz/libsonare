@@ -289,7 +289,7 @@ describe('embedded NUL refusal, std::string entry points', () => {
   });
 
   it('a JSON text is refused by name, not reported as trailing data', () => {
-    const json = Project.create().toJson();
+    const json = new Project().toJson();
     expect(() => Project.fromJson(json)).not.toThrow();
     expectNulRefusal(() => Project.fromJson(`${json}${NUL}junk`), 'json');
     expectNulRefusal(() => Project.fromJsonWithDiagnostics(`${json}${NUL}junk`), 'json');

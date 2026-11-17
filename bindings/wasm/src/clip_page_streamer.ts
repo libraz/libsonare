@@ -5,7 +5,7 @@ import {
   type OpfsClipPageProviderOptions,
 } from './opfs_clip_pages.js';
 import { OwnerEpoch } from './owner_epoch.js';
-import type { ClipPageProvider, ClipPageRequest, RealtimeEngine } from './realtime_engine.js';
+import type { ClipPageProvider, RealtimeEngine } from './realtime_engine.js';
 import { assertNonNegativeInteger, assertPositiveInteger } from './validation.js';
 
 /**
@@ -17,19 +17,30 @@ export interface ClipPageStreamerEngine {
   popClipPageRequest(): ClipPageStreamerRequest | null | undefined;
 }
 
-/**
- * A page miss reported by either a direct engine (`sample`) or the worklet
- * bridge (`pageIndex`). Exactly one position form is required.
- */
-export interface ClipPageStreamerRequest {
+/** A page miss reported by the engine's audio thread, positioned by sample. */
+export interface ClipPageSampleRequest {
+  /** Clip schedule id passed to `setClips`. */
   clipId: number;
-  sample?: number;
-  pageIndex?: number;
+  /** Channel the miss happened on. */
+  channel: number;
+  /** Sample position within the clip source that missed. */
+  sample: number;
 }
+
+/** A page miss reported by the AudioWorklet bridge, positioned by page. */
+export interface ClipPagePageRequest {
+  /** Clip schedule id passed to `setClips`. */
+  clipId: number;
+  /** Zero-based index of the missing page. */
+  pageIndex: number;
+}
+
+/** A page miss reported by a direct engine or by the worklet bridge. */
+export type ClipPageStreamerRequest = ClipPageSampleRequest | ClipPagePageRequest;
 
 /** A paged clip the streamer keeps fed from its backing store. */
 export interface ClipPageStreamSource {
-  /** Clip schedule id passed to `setClips` (matches {@link ClipPageRequest.clipId}). */
+  /** Clip schedule id passed to `setClips` (matches {@link ClipPageStreamerRequest.clipId}). */
   clipId: number;
   /** OPFS-backed page provider binding for this clip. */
   binding: OpfsClipPageProviderBinding;
@@ -39,6 +50,7 @@ export interface ClipPageStreamSource {
   numSamples: number;
 }
 
+/** Prefetch and eviction policy of a {@link ClipPageStreamer}. */
 export interface ClipPageStreamerOptions {
   /**
    * Pages to prefetch ahead of the page a miss was reported for. Larger values
@@ -178,9 +190,9 @@ export class ClipPageStreamer {
         continue;
       }
       const page =
-        request.pageIndex !== undefined
+        'pageIndex' in request
           ? request.pageIndex
-          : Math.floor((request.sample ?? Number.NaN) / state.source.pageFrames);
+          : Math.floor(request.sample / state.source.pageFrames);
       if (!Number.isInteger(page) || page < 0 || page > state.lastPage) {
         continue;
       }
@@ -295,6 +307,7 @@ export class ClipPageStreamer {
   }
 }
 
+/** Options of {@link attachOpfsClipStream}: the provider options plus the clip it feeds. */
 export interface OpfsClipStreamOptions extends OpfsClipPageProviderOptions {
   /** Clip schedule id used in `setClips` (matches the page-miss request clipId). */
   clipId: number;
@@ -305,7 +318,9 @@ export interface OpfsClipStreamOptions extends OpfsClipPageProviderOptions {
   primePages?: number;
 }
 
+/** Result of {@link attachOpfsClipStream}. */
 export interface OpfsClipStream {
+  /** Binding that owns the provider; `close()` it to release the stream. */
   binding: OpfsClipPageProviderBinding;
   /** Pass as `addClip`'s buffer argument to schedule the streaming clip. */
   provider: ClipPageProvider;

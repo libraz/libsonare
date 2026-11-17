@@ -1,3 +1,4 @@
+import type { ClipPageSampleRequest } from './clip_page_streamer.js';
 import {
   AUTOMATION_CURVE_VALUES,
   automationCurveCode,
@@ -12,6 +13,7 @@ import { ErrorCode, SonareError } from './errors.js';
 import { CHANNEL_LAYOUT_VALUES } from './internal/channel_layout.js';
 import { eqBandJson } from './internal/eq_band_json.js';
 import { assertHandleLive, releasedHandleError } from './internal/handle_guard.js';
+import { deinterleavePlanes } from './internal/pod_config.js';
 import { getSonareModule } from './module_state.js';
 import type {
   Articulation,
@@ -42,7 +44,6 @@ import type {
 } from './public_types.js';
 import type {
   CaptureOptions,
-  ClipPageRequest,
   EngineAutomationPoint,
   EngineBounceOptions,
   EngineBounceResult,
@@ -96,7 +97,6 @@ import {
 export type {
   CaptureOptions,
   CapturePunch,
-  ClipPageRequest,
   EngineAutomationPoint,
   EngineBounceOptions,
   EngineBounceResult,
@@ -135,6 +135,7 @@ export type {
   EngineTransportState,
   EngineWarpMode,
   ExternalMidiEvent,
+  MarkerKind,
   RealtimeEngineConfig,
   RenderOfflineRequest,
   SidechainSource,
@@ -2344,7 +2345,7 @@ export class RealtimeEngine {
   }
 
   /** Pops the oldest clip-page request, or `undefined` when none is queued. */
-  popClipPageRequest(): ClipPageRequest | undefined {
+  popClipPageRequest(): ClipPageSampleRequest | undefined {
     return this.native.popClipPageRequest() ?? undefined;
   }
 
@@ -2647,7 +2648,7 @@ export class RealtimeEngine {
   }
 
   /**
-   * Bounce the timeline to an interleaved buffer. `numChannels` above the
+   * Bounce the timeline to planar channels. `numChannels` above the
    * prepared channel count throws a `RangeError`. `targetSampleRate`,
    * `sourceSampleRate` and `targetLufs` are omitted for their defaults (the
    * source rate, the engine rate, -14 LUFS); an explicit `0` is a `RangeError`.
@@ -2668,12 +2669,18 @@ export class RealtimeEngine {
       }
     }
     const { dither, ...rest } = options;
-    return this.native.bounceOffline({
+    const result = this.native.bounceOffline({
       ...rest,
       ...(dither === undefined
         ? {}
         : { dither: tokenCode('bounceOffline', 'dither', dither, DITHERS) as 1 | 2 | 3 }),
     });
+    return {
+      channels: deinterleavePlanes(result.interleaved, result.numChannels),
+      sampleRate: result.sampleRate,
+      numChannels: result.numChannels,
+      integratedLufs: result.integratedLufs,
+    };
   }
 
   /**

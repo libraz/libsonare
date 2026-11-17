@@ -1,3 +1,4 @@
+import type { ClipPagePageRequest } from '../clip_page_streamer.js';
 import type {
   EngineAutomationPoint,
   EngineBus,
@@ -43,7 +44,8 @@ export interface SonareWorkletProcessorOptions {
    * refused with a RangeError. Outside a worklet scope it is required.
    */
   sampleRate?: number;
-  blockSize?: number;
+  /** Largest block the mixer is prepared for, in frames. */
+  maxBlockSize?: number;
   stripCount?: number;
   meterIntervalFrames?: number;
   meterSharedBuffer?: SharedArrayBuffer;
@@ -525,7 +527,7 @@ export interface SonareEngineSyncClipPageCommitMessage {
  */
 export interface SonareEngineClipPageRequestMessage {
   type: 'clipPageRequest';
-  requests: Array<{ clipId: number; pageIndex: number }>;
+  requests: ClipPagePageRequest[];
   /** Number of misses dropped because a bounded native or SAB request queue was full. */
   dropped?: number;
 }

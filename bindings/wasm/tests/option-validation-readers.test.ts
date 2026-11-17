@@ -66,12 +66,12 @@ describe('boolean options', () => {
   });
 
   it('are refused on handle setters before any native state changes', () => {
-    const project = Project.create();
+    const project = new Project();
     expect(() => project.setTrackMute(1, 'false' as never)).toThrow(TypeError);
     expect(() => project.setTrackSolo(1, 1 as never)).toThrow(TypeError);
     const mixer = Mixer.fromJson(mixingScenePresetJson('vocalReverbSend'), {
       sampleRate: SR,
-      blockSize: 512,
+      maxBlockSize: 512,
     });
     try {
       expect(() => mixer.setMuted(0, 'false' as never)).toThrow(TypeError);
@@ -197,7 +197,7 @@ describe('surround pan', () => {
   it('refuses an out-of-range field instead of clamping it', () => {
     const mixer = Mixer.fromJson(mixingScenePresetJson('vocalReverbSend'), {
       sampleRate: SR,
-      blockSize: 512,
+      maxBlockSize: 512,
     });
     const engine = new RealtimeEngine({ sampleRate: 48000, maxBlockSize: 128 });
     try {

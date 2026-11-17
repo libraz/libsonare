@@ -13,15 +13,13 @@ export const BUILTIN_SYNTH_WAVEFORMS = ['sine', 'saw', 'sawtooth', 'square', 'tr
 export type BuiltinSynthWaveform = (typeof BUILTIN_SYNTH_WAVEFORMS)[number] | 0 | 1 | 2 | 3;
 
 /**
- * Built-in synth patch + MIDI routing for
- * {@link Project.bounceWithBuiltinInstrument}. Every field is optional; a
+ * Built-in synth patch for {@link Project.bounceWithBuiltinInstruments} and
+ * {@link RealtimeEngine.setBuiltinInstrument}. Every field is optional; a
  * non-positive (or omitted) numeric field falls back to the C-ABI default
  * (gain 0.2, attack 5ms, decay 60ms, sustain 0.7, release 120ms, 16 voices),
  * so `{}` is a usable default sine patch.
  */
-export interface BuiltinSynthBinding {
-  /** MIDI destination id this patch answers to (default 0; see {@link Project.setTrackMidiDestination}). */
-  destinationId?: number;
+export interface BuiltinSynthConfig {
   /**
    * Oscillator waveform (default `'sine'`). The one field with no nearest
    * sensible value — a name or an ordinal outside the set throws rather than
@@ -43,11 +41,17 @@ export interface BuiltinSynthBinding {
 }
 
 /**
- * Cross-binding alias of {@link BuiltinSynthBinding}. The same built-in-synth
- * patch concept is named `BuiltinSynthConfig` in the Python binding; this alias
- * lets portable code use that shared name on the WASM surface too.
+ * One instrument bound to a MIDI destination for an instrument-bound bounce:
+ * {@link Project.bounceWithBuiltinInstruments}, `bounceWithSynthInstruments`,
+ * `bounceWithSf2Instruments` or `bounceWithInstruments`. The destination is part
+ * of the pair, never of the instrument.
  */
-export type BuiltinSynthConfig = BuiltinSynthBinding;
+export interface ProjectInstrumentBinding<T> {
+  /** MIDI destination id the instrument answers to; omit for destination `0` (see {@link Project.setTrackMidiDestination}). */
+  destinationId?: number;
+  /** The instrument to bind. */
+  instrument: T;
+}
 
 /** One dispatched MIDI event delivered to {@link ExternalInstrument.onEvent}. */
 export interface ExternalInstrumentEvent {
@@ -68,8 +72,6 @@ export interface ExternalInstrumentEvent {
  * bounce is blocked and must not return a Promise.
  */
 export interface ExternalInstrument {
-  /** MIDI destination id this instrument renders. Defaults to `0`. */
-  destinationId?: number;
   /**
    * Called once per render pass, before the first block, with the sample rate,
    * the largest block `render` will receive, and the number of arrays `render`
@@ -93,14 +95,11 @@ export interface ExternalInstrument {
 }
 
 /**
- * SoundFont (SF2) player patch + MIDI routing for
- * {@link Project.bounceWithSf2Instrument}. Every field is optional; a
+ * SoundFont (SF2) player patch for {@link Project.bounceWithSf2Instruments}. Every field is optional; a
  * non-positive (or omitted) numeric field falls back to the C-ABI default
  * (gain 0.5, 48 voices), so `{}` is a usable default patch.
  */
 export interface Sf2InstrumentConfig {
-  /** MIDI destination id this player answers to (default 0; see {@link Project.setTrackMidiDestination}). */
-  destinationId?: number;
   /** Master output gain, linear (0 => 0.5). */
   gain?: number;
   /** Max simultaneous voices (0 => 48, clamped to [1, 64]). */
@@ -538,7 +537,7 @@ export interface PartRigRequest extends PartRigKey {
   inserts?: PartRigInsert[];
 }
 
-/** A part rig as stored on a project ({@link Project.getPartRig}). */
+/** A part rig as stored on a project ({@link Project.partRig}). */
 export interface PartRigEntry {
   mode: PartRigMode;
   /** Present for `'chain'` only; `params` is the parsed parameter object. */
@@ -651,7 +650,7 @@ export interface SynthModRouting {
 }
 
 /**
- * Versioned NativeSynth patch for {@link Project.bounceWithSynthInstrument}
+ * Versioned NativeSynth patch for {@link Project.bounceWithSynthInstruments}
  * and {@link RealtimeEngine.setSynthInstrument}.
  *
  * The patch starts from a BASE — the named `preset` (see
@@ -680,12 +679,6 @@ export interface SynthModRouting {
  *   other field is discarded.
  */
 export interface SynthPatch {
-  /**
-   * Optional binding convenience for JS realtime/offline helpers. It is not
-   * part of the NativeSynth patch itself; Python uses explicit
-   * `(destination_id, patch)` bindings instead. Defaults to `0`.
-   */
-  destinationId?: number;
   /** Resolve MIDI channels from incoming GM bank/program changes; defaults to false. */
   useGmPrograms?: boolean;
   /** Base preset name (see {@link synthPresetNames}); omit for the init patch. */
@@ -837,8 +830,7 @@ export interface SynthPatch {
   busDrive?: number;
   /**
    * Bank the sample engine reads its PCM from. Binding convenience for the JS
-   * offline helpers rather than part of the patch itself, like `destinationId`:
-   * it is resolved to a native handle before the patch crosses into WASM.
+   * offline helpers rather than part of the patch itself: it is resolved to a native handle before the patch crosses into WASM.
    * A `'sample'` patch bound without a bank renders silence.
    */
   sampleBank?: SampleBank;

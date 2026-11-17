@@ -4,11 +4,11 @@ import {
   createOpfsClipPageProvider,
   importOpfsClip,
   init,
-  opfsClipPageWorkerSource,
   RealtimeEngine,
   SonareError,
   writeOpfsClip,
 } from '../dist/index.js';
+import { opfsClipPageWorkerSource } from '../dist/worklet.js';
 
 type FileMap = Map<string, Uint8Array>;
 

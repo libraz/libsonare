@@ -84,7 +84,7 @@ describe('Mixer runtime controls (WASM)', () => {
           buses: [{ id: 'master', role: 'master' }],
           connections: [],
         }),
-        { sampleRate: SR, blockSize: BLOCK },
+        { sampleRate: SR, maxBlockSize: BLOCK },
       );
       try {
         const scene = JSON.parse(mixer.toJson()) as {
@@ -112,7 +112,7 @@ describe('Mixer runtime controls (WASM)', () => {
     });
 
     it('reports the longest serial send tail', () => {
-      const mixer = Mixer.fromJson(serialTailScene(), { sampleRate: SR, blockSize: BLOCK });
+      const mixer = Mixer.fromJson(serialTailScene(), { sampleRate: SR, maxBlockSize: BLOCK });
       try {
         expect(mixer.tailSamples).toBeGreaterThan(1440);
       } finally {
@@ -123,7 +123,7 @@ describe('Mixer runtime controls (WASM)', () => {
     it('exposes setters, meter readers, and goniometer with the documented shapes', () => {
       const mixer = Mixer.fromJson(mixingScenePresetJson('vocalReverbSend'), {
         sampleRate: SR,
-        blockSize: BLOCK,
+        maxBlockSize: BLOCK,
       });
       try {
         // stripById resolves a scene id to a numeric index in [0, stripCount()).
@@ -276,7 +276,7 @@ describe('Mixer runtime controls (WASM)', () => {
     it('accepts every pan-law, meter-tap, and send-timing string union value', () => {
       const mixer = Mixer.fromJson(mixingScenePresetJson('vocalReverbSend'), {
         sampleRate: SR,
-        blockSize: BLOCK,
+        maxBlockSize: BLOCK,
       });
       try {
         const vocal = mixer.stripById('vocal');
@@ -312,7 +312,7 @@ describe('Mixer runtime controls (WASM)', () => {
     it('removeSend drops a previously-added send and shifts higher indices down', () => {
       const mixer = Mixer.fromJson(mixingScenePresetJson('vocalReverbSend'), {
         sampleRate: SR,
-        blockSize: BLOCK,
+        maxBlockSize: BLOCK,
       });
       try {
         const vocal = mixer.stripById('vocal');
@@ -385,7 +385,7 @@ describe('Mixer runtime controls (WASM)', () => {
     }
 
     it('reports the EQ and meter discards on the poisoned block and nothing after it', () => {
-      const mixer = Mixer.fromJson(highGainEqScene(), { sampleRate: SR, blockSize: BLOCK });
+      const mixer = Mixer.fromJson(highGainEqScene(), { sampleRate: SR, maxBlockSize: BLOCK });
       try {
         mixer.compile();
 
@@ -426,7 +426,7 @@ describe('Mixer runtime controls (WASM)', () => {
     });
 
     it('rejects an out-of-range strip index', () => {
-      const mixer = Mixer.fromJson(highGainEqScene(), { sampleRate: SR, blockSize: BLOCK });
+      const mixer = Mixer.fromJson(highGainEqScene(), { sampleRate: SR, maxBlockSize: BLOCK });
       try {
         expect(() => mixer.stripNonFiniteDiscardCount(mixer.stripCount)).toThrow();
       } finally {
@@ -438,7 +438,7 @@ describe('Mixer runtime controls (WASM)', () => {
       // 'src' has no explicit connection but auto-routes to 'master' (see the
       // asymmetric-strip fixture above); 'master' itself owns no insert, so
       // only its post-insert meter is in play.
-      const mixer = Mixer.fromJson(highGainEqScene(), { sampleRate: SR, blockSize: BLOCK });
+      const mixer = Mixer.fromJson(highGainEqScene(), { sampleRate: SR, maxBlockSize: BLOCK });
       try {
         mixer.compile();
 
@@ -471,7 +471,7 @@ describe('Mixer runtime controls (WASM)', () => {
     });
 
     it('throws for a bus declared but not yet compiled, rather than reading zero', () => {
-      const mixer = Mixer.fromJson(highGainEqScene(), { sampleRate: SR, blockSize: BLOCK });
+      const mixer = Mixer.fromJson(highGainEqScene(), { sampleRate: SR, maxBlockSize: BLOCK });
       try {
         mixer.compile();
         // 'late' is now in the topology, but the graph has not recompiled
@@ -485,7 +485,7 @@ describe('Mixer runtime controls (WASM)', () => {
     });
 
     it('rejects an unknown bus id', () => {
-      const mixer = Mixer.fromJson(highGainEqScene(), { sampleRate: SR, blockSize: BLOCK });
+      const mixer = Mixer.fromJson(highGainEqScene(), { sampleRate: SR, maxBlockSize: BLOCK });
       try {
         expect(() => mixer.busNonFiniteDiscardCount('does-not-exist')).toThrow();
       } finally {
@@ -498,7 +498,7 @@ describe('Mixer runtime controls (WASM)', () => {
     it('adds a strip to a live mixer', () => {
       const mixer = Mixer.fromJson(mixingScenePresetJson('commentaryDucking'), {
         sampleRate: SR,
-        blockSize: BLOCK,
+        maxBlockSize: BLOCK,
       });
       try {
         const before = mixer.stripCount;
@@ -526,7 +526,7 @@ describe('Mixer runtime controls (WASM)', () => {
     it('refuses a metering argument that is not a plain object', () => {
       const mixer = Mixer.fromJson(mixingScenePresetJson('commentaryDucking'), {
         sampleRate: SR,
-        blockSize: BLOCK,
+        maxBlockSize: BLOCK,
       });
       try {
         const before = mixer.stripCount;
@@ -559,7 +559,7 @@ describe('Mixer runtime controls (WASM)', () => {
     it('round-trips an added strip metering configuration through the scene', () => {
       const mixer = Mixer.fromJson(mixingScenePresetJson('commentaryDucking'), {
         sampleRate: SR,
-        blockSize: BLOCK,
+        maxBlockSize: BLOCK,
       });
       try {
         mixer.addStrip('metered', { lufs: false, truePeakOversample: 8 });
@@ -606,7 +606,7 @@ describe('Mixer runtime controls (WASM)', () => {
     }
 
     it('sends a strip into a submix and the submix on to the master', () => {
-      const mixer = Mixer.fromJson(emptyScene, { sampleRate: SR, blockSize: BLOCK });
+      const mixer = Mixer.fromJson(emptyScene, { sampleRate: SR, maxBlockSize: BLOCK });
       try {
         mixer.addStrip('a');
         mixer.addBus('sub', 'submix');
@@ -629,7 +629,7 @@ describe('Mixer runtime controls (WASM)', () => {
     });
 
     it('refuses an invalid edit with a RangeError naming the ids and changes nothing', () => {
-      const mixer = Mixer.fromJson(emptyScene, { sampleRate: SR, blockSize: BLOCK });
+      const mixer = Mixer.fromJson(emptyScene, { sampleRate: SR, maxBlockSize: BLOCK });
       try {
         mixer.addStrip('a');
         mixer.addBus('sub', 'submix');
@@ -664,7 +664,7 @@ describe('Mixer runtime controls (WASM)', () => {
     function measureWithSoloedKick(feedStripId: string): number {
       const mixer = Mixer.fromJson(mixingScenePresetJson('drumBusSubgroup'), {
         sampleRate: SR,
-        blockSize: BLOCK,
+        maxBlockSize: BLOCK,
       });
       try {
         const kick = mixer.stripById('kick');
@@ -774,7 +774,7 @@ describe('Mixer runtime controls (WASM)', () => {
   it("flushes a streaming mixer's meters on request", () => {
     const mixer = Mixer.fromJson(mixingScenePresetJson('vocalReverbSend'), {
       sampleRate: 48000,
-      blockSize: 256,
+      maxBlockSize: 256,
     });
     try {
       expect(() => mixer.flushMeters()).not.toThrow();
@@ -787,7 +787,7 @@ describe('Mixer runtime controls (WASM)', () => {
     const block = 256;
     const mixer = Mixer.fromJson(JSON.stringify({ version: 1, strips: [{ id: 'a' }] }), {
       sampleRate: 48000,
-      blockSize: block,
+      maxBlockSize: block,
     });
     try {
       mixer.configureMeter({ enabled: true, truePeakOversample: 4 });
@@ -816,7 +816,7 @@ describe('Mixer runtime controls (WASM)', () => {
   it('accepts exactly 4x and 8x for the master-output meter', () => {
     const mixer = Mixer.fromJson(JSON.stringify({ version: 1, strips: [{ id: 'a' }] }), {
       sampleRate: 48000,
-      blockSize: 256,
+      maxBlockSize: 256,
     });
     try {
       expect(() => mixer.configureMeter({ enabled: true, truePeakOversample: 4 })).not.toThrow();

@@ -1,7 +1,11 @@
 import { beforeAll, describe, expect, it } from 'vitest';
-import { ErrorCode, init } from '../src/index';
+import { ErrorCode, init, isSonareError, type SonareError } from '../src/index';
 import { getSonareModule } from '../src/module_state';
-import type { VocalEditOperation } from '../src/public_types_vocal_edit';
+import type {
+  VocalEditOperation,
+  VocalErrorDetail,
+  VocalSessionLimits,
+} from '../src/public_types_vocal_edit';
 import { createVocalEditSession, restoreVocalEditSession } from '../src/vocal_edit';
 
 const SAMPLE_RATE = 16000;
@@ -14,7 +18,7 @@ function tone(length: number, frequency = 220): Float32Array {
   return out;
 }
 
-function suppliedOneFrameRequest(limits?: { maxHistoryBytes?: string; maxCacheBytes?: string }) {
+function suppliedOneFrameRequest<L extends object = VocalSessionLimits>(limits?: L) {
   return {
     samples: tone(256),
     sampleRate: SAMPLE_RATE,
@@ -42,8 +46,8 @@ describe('WASM vocal edit facade', () => {
       sampleRate: SAMPLE_RATE,
     });
     try {
-      expect(session.token().revision).toBe('0');
-      expect(session.token().sessionEpoch).toMatch(/^\d+$/);
+      expect(session.token.revision).toBe('0');
+      expect(session.token.sessionEpoch).toMatch(/^\d+$/);
       expect(session.capabilities().monophonicOnly).toBe(true);
       const notes = session.notes();
       expect(notes.notes.length).toBeGreaterThan(0);
@@ -83,22 +87,16 @@ describe('WASM vocal edit facade', () => {
         session.beginEdit({ expectedRevision: '1' });
         throw new Error('expected beginEdit to reject the stale revision');
       } catch (error) {
-        const detail = error as Error & {
-          code?: number;
-          reason?: number;
-          field?: string;
-          expected?: string;
-          actual?: string;
-          expectedText?: string;
-          actualText?: string;
-        };
-        expect(detail.code).toBe(7);
-        expect(detail.reason).toBe(2);
-        expect(detail.field).toBe('revision');
-        expect(detail.expected).toBe('1');
-        expect(detail.actual).toBe('0');
-        expect(detail.expectedText).toBe('1');
-        expect(detail.actualText).toBe('0');
+        expect(isSonareError(error)).toBe(true);
+        expect((error as SonareError).code).toBe(ErrorCode.InvalidState);
+        expect((error as SonareError & { detail?: VocalErrorDetail }).detail).toEqual({
+          reason: 'revisionConflict',
+          field: 'revision',
+          expected: '1',
+          actual: '0',
+          expectedText: '1',
+          actualText: '0',
+        });
       }
     } finally {
       session.destroy();
@@ -110,7 +108,7 @@ describe('WASM vocal edit facade', () => {
     try {
       const draft = session.beginEdit();
       draft.cancel();
-      expect(() => draft.token()).toThrow();
+      expect(() => draft.token).toThrow();
       expect(() => session.beginEdit()).not.toThrow();
     } finally {
       session.destroy();
@@ -150,7 +148,7 @@ describe('WASM vocal edit facade', () => {
         expect(restored.notes().notes.map((note) => note.id)).toEqual(
           session.notes().notes.map((note) => note.id),
         );
-        expect(restored.token().revision).toBe(session.token().revision);
+        expect(restored.token.revision).toBe(session.token.revision);
       } finally {
         restored.destroy();
       }
@@ -177,7 +175,7 @@ describe('WASM vocal edit facade', () => {
       const aborted = new AbortController();
       aborted.abort();
       await expect(snapshot.renderAsync({ signal: aborted.signal })).rejects.toMatchObject({
-        name: 'AbortError',
+        code: ErrorCode.Cancelled,
       });
 
       const midway = new AbortController();
@@ -203,7 +201,7 @@ describe('WASM vocal edit facade', () => {
     snapshot.destroy();
     expect(() => snapshot.outputLengthSamples()).toThrow(/disposed/);
     session.destroy();
-    expect(() => session.token()).toThrow(/disposed/);
+    expect(() => session.token).toThrow(/disposed/);
     expect(() => session.destroy()).not.toThrow();
   });
 
@@ -265,14 +263,20 @@ describe('WASM vocal edit facade', () => {
     }
   });
 
-  it('requires canonical decimal uint64 session limits on create and restore', () => {
-    const valid = suppliedOneFrameRequest({ maxHistoryBytes: '0', maxCacheBytes: '7' });
+  it('refuses a session limit that is not a non-negative safe integer on create and restore', () => {
+    const valid = suppliedOneFrameRequest({ maxHistoryBytes: 0, maxCacheBytes: 7 });
     const session = createVocalEditSession(valid);
     const state = session.exportState();
     session.destroy();
 
-    for (const limits of [{ maxHistoryBytes: '007' }, { maxCacheBytes: '007' }]) {
-      expect(() => createVocalEditSession(suppliedOneFrameRequest(limits))).toThrow();
+    const refused: Array<[VocalSessionLimits, ErrorConstructor]> = [
+      [{ maxHistoryBytes: -1 }, RangeError],
+      [{ maxCacheBytes: 1.5 }, RangeError],
+      [{ maxCacheBytes: Number.NaN }, RangeError],
+      [{ maxHistoryBytes: '7' as unknown as number }, TypeError],
+    ];
+    for (const [limits, errorClass] of refused) {
+      expect(() => createVocalEditSession(suppliedOneFrameRequest(limits))).toThrow(errorClass);
       expect(() =>
         restoreVocalEditSession({
           samples: valid.samples,
@@ -280,23 +284,23 @@ describe('WASM vocal edit facade', () => {
           state,
           limits,
         }),
-      ).toThrow();
+      ).toThrow(errorClass);
     }
 
-    const accepted = createVocalEditSession(suppliedOneFrameRequest({ maxHistoryBytes: '0' }));
+    const accepted = createVocalEditSession(suppliedOneFrameRequest({ maxHistoryBytes: 0 }));
     accepted.destroy();
     const restored = restoreVocalEditSession({
       samples: valid.samples,
       sampleRate: SAMPLE_RATE,
       state,
-      limits: { maxCacheBytes: '7' },
+      limits: { maxCacheBytes: 7 },
     });
     restored.destroy();
   });
 
   it('enforces canonical limits through the native WASM vocal exports', () => {
     const native = getSonareModule();
-    const valid = suppliedOneFrameRequest({ maxHistoryBytes: '0', maxCacheBytes: '7' });
+    const valid = suppliedOneFrameRequest({ maxHistoryBytes: 0, maxCacheBytes: 7 });
     const session = createVocalEditSession(valid);
     const state = session.exportState();
     session.destroy();
@@ -337,18 +341,20 @@ describe('WASM vocal edit facade', () => {
     const session = createVocalEditSession({ samples: tone(512), sampleRate: SAMPLE_RATE });
     const draft = session.beginEdit();
     session.destroy();
-    expect(() => draft.token()).toThrow(/disposed/);
+    expect(() => draft.token).toThrow(/disposed/);
     expect(() => draft.apply({ expectedGeneration: '0', operations: [] })).toThrow(/disposed/);
     expect(() => draft.cancel()).not.toThrow();
   });
 
-  it('requires expectedGeneration on draft apply', () => {
+  it('applies against the draft generation when expectedGeneration is omitted', () => {
     const session = createVocalEditSession({ samples: tone(512), sampleRate: SAMPLE_RATE });
     try {
       const draft = session.beginEdit();
-      expect(() =>
-        draft.apply({ operations: [] } as unknown as Parameters<typeof draft.apply>[0]),
-      ).toThrow(TypeError);
+      const noteId = session.notes().notes[0]?.id as number;
+      const result = draft.apply({ operations: [{ kind: 'reset', noteIds: [noteId] }] });
+      expect(result.token.generation).toBe(draft.token.generation);
+      expect(() => draft.apply({ operations: [] })).toThrow(RangeError);
+      expect(() => draft.apply({ expectedGeneration: '00', operations: [] })).toThrow(RangeError);
       draft.cancel();
     } finally {
       session.destroy();
@@ -369,7 +375,7 @@ describe('WASM vocal edit facade', () => {
       };
       const apply = (transition: Record<string, unknown>) =>
         draft.apply({
-          expectedGeneration: draft.token().generation,
+          expectedGeneration: draft.token.generation,
           operations: [{ kind: 'setTransition', transition } as unknown as VocalEditOperation],
         });
       expect(() => apply({ ...base, curve: 'linear' })).toThrow(/curve must be smoothstep/);
@@ -390,10 +396,10 @@ describe('WASM vocal edit facade', () => {
     const session = createVocalEditSession({ samples: tone(SAMPLE_RATE), sampleRate: SAMPLE_RATE });
     try {
       const draft = session.beginEdit();
-      const generation = draft.token().generation;
+      const generation = draft.token.generation;
       const apply = (operation: Record<string, unknown>) =>
         draft.apply({
-          expectedGeneration: draft.token().generation,
+          expectedGeneration: draft.token.generation,
           operations: [operation as unknown as VocalEditOperation],
         });
       const span = {
@@ -428,8 +434,92 @@ describe('WASM vocal edit facade', () => {
         expect(run).toThrow(new RegExp(`edit\\.${field}`));
       }
       // The refused operations left the draft generation where it was.
-      expect(draft.token().generation).toBe(generation);
+      expect(draft.token.generation).toBe(generation);
       draft.cancel();
+    } finally {
+      session.destroy();
+    }
+  });
+
+  it('reads the session and draft token and revision as getters', () => {
+    const session = createVocalEditSession({ samples: tone(512), sampleRate: SAMPLE_RATE });
+    try {
+      expect(typeof session.token).toBe('object');
+      expect(session.token.revision).toBe('0');
+      expect(session.revision).toBe('0');
+      const draft = session.beginEdit();
+      expect(typeof draft.token).toBe('object');
+      expect(draft.token.draftId).toMatch(/^[1-9]\d*$/);
+      expect(typeof draft.revision).toBe('string');
+      expect(draft.revision).toBe(session.revision);
+      draft.cancel();
+    } finally {
+      session.destroy();
+    }
+  });
+
+  it('returns the analysisFrameStart and analysisFrameEnd of a note as numbers', () => {
+    const session = createVocalEditSession({ samples: tone(SAMPLE_RATE), sampleRate: SAMPLE_RATE });
+    try {
+      const { notes } = session.notes();
+      expect(notes.length).toBeGreaterThan(0);
+      for (const note of notes) {
+        expect(typeof note.analysisFrameStart).toBe('number');
+        expect(typeof note.analysisFrameEnd).toBe('number');
+        expect(Number.isInteger(note.analysisFrameStart)).toBe(true);
+        expect(note.analysisFrameEnd).toBeGreaterThan(note.analysisFrameStart);
+      }
+    } finally {
+      session.destroy();
+    }
+  });
+
+  it('returns the cacheHitUnits, dryPassedFrames and limitedCorrectionFrames as numbers', () => {
+    const session = createVocalEditSession({ samples: tone(512), sampleRate: SAMPLE_RATE });
+    try {
+      const snapshot = session.captureRenderSnapshot();
+      try {
+        const result = snapshot.render({});
+        for (const value of [
+          result.cacheHitUnits,
+          result.dryPassedFrames,
+          result.limitedCorrectionFrames,
+        ]) {
+          expect(typeof value).toBe('number');
+          expect(Number.isSafeInteger(value)).toBe(true);
+          expect(value).toBeGreaterThanOrEqual(0);
+        }
+      } finally {
+        snapshot.destroy();
+      }
+    } finally {
+      session.destroy();
+    }
+  });
+
+  it('refuses an aborted signal on every render entry point as a Cancelled SonareError', async () => {
+    const session = createVocalEditSession({ samples: tone(512), sampleRate: SAMPLE_RATE });
+    try {
+      const snapshot = session.captureRenderSnapshot();
+      try {
+        const signal = AbortSignal.abort();
+        const cancelled = (error: unknown) =>
+          isSonareError(error) && error.code === ErrorCode.Cancelled;
+        expect(() => snapshot.render({ signal })).toThrow(
+          expect.objectContaining({ code: ErrorCode.Cancelled }),
+        );
+        expect(() => snapshot.beginRenderJob({ signal })).toThrow(
+          expect.objectContaining({ code: ErrorCode.Cancelled }),
+        );
+        const rejection = await snapshot.renderAsync({ signal }).then(
+          () => undefined,
+          (error: unknown) => error,
+        );
+        expect(cancelled(rejection)).toBe(true);
+        expect((rejection as Error).name).not.toBe('AbortError');
+      } finally {
+        snapshot.destroy();
+      }
     } finally {
       session.destroy();
     }

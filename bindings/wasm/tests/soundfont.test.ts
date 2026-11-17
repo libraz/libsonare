@@ -1,6 +1,6 @@
 /**
  * SoundFont (SF2) WASM binding tests: Project.loadSoundFont / soundFontManifest /
- * bounceWithSf2Instrument and the realtime engine SF2 instrument entry. The
+ * bounceWithSf2Instruments and the realtime engine SF2 instrument entry. The
  * host copies the .sf2 bytes into linear memory (the same convention as host
  * PCM); the fixture is the canonical minimal GS test SoundFont.
  */
@@ -9,6 +9,7 @@ import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { beforeAll, describe, expect, it } from 'vitest';
+import type { ProjectBounceOptions, Sf2InstrumentConfig } from '../dist/index.js';
 import { ErrorCode, init, isSonareError, Project, RealtimeEngine } from '../dist/index.js';
 
 const fixturePath = join(
@@ -16,6 +17,26 @@ const fixturePath = join(
   '../../../tests/fixtures/sf2/minimal_gs.sf2',
 );
 const sf2Bytes = new Uint8Array(readFileSync(fixturePath));
+
+/** Bounce one instrument at its destination and interleave the planar result for sample-wise checks. */
+function bounceSf2(
+  project: Project,
+  config: Sf2InstrumentConfig & { destinationId?: number },
+  options?: ProjectBounceOptions,
+): Float32Array {
+  const { destinationId, ...instrument } = config as { destinationId?: number };
+  const { channels } = project.bounceWithSf2Instruments(
+    { destinationId, instrument } as never,
+    options,
+  );
+  const out = new Float32Array(channels.length * (channels[0]?.length ?? 0));
+  channels.forEach((channel, c) => {
+    for (let i = 0; i < channel.length; i++) {
+      out[i * channels.length + c] = channel[i];
+    }
+  });
+  return out;
+}
 
 function peak(audio: Float32Array): number {
   let p = 0;
@@ -104,9 +125,10 @@ describe('Sonare WASM SoundFont (SF2)', () => {
         Project.midiNoteOn(0.05, 0, 0, 52, 110),
         Project.midiNoteOff(1, 0, 0, 52, 0),
       ]);
-      const out = project.bounceWithSf2Instrument(
+      const out = bounceSf2(
+        project,
         { destinationId: 0, gain: 1, clearBankRig },
-        { totalFrames: 48000, numChannels: 2, sampleRate: 48000 },
+        { totalFrames: 48000, numChannels: 2 },
       );
       project.destroy();
       return out;
@@ -122,43 +144,42 @@ describe('Sonare WASM SoundFont (SF2)', () => {
     const project = buildMidiOnlyProject();
     // Without a loaded SoundFont the bounce still sounds: the built-in
     // synthesizer GM fallback is the data-free floor.
-    const fallback = project.bounceWithSf2Instrument(
-      {},
-      { totalFrames: 4096, numChannels: 2, sampleRate: 48000 },
-    );
+    const fallback = bounceSf2(project, {}, { totalFrames: 4096, numChannels: 2 });
     expect(peak(fallback)).toBeGreaterThan(0.01);
 
     project.loadSoundFont(sf2Bytes);
-    const audio = project.bounceWithSf2Instrument(
+    const audio = bounceSf2(
+      project,
       { destinationId: 0, gain: 1 },
-      { totalFrames: 4096, numChannels: 2, sampleRate: 48000 },
+      { totalFrames: 4096, numChannels: 2 },
     );
     expect(audio.length).toBe(4096 * 2);
     expect(peak(audio)).toBeGreaterThan(0.01);
 
     // Deterministic: a second bounce is bit-identical.
-    const again = project.bounceWithSf2Instrument(
+    const again = bounceSf2(
+      project,
       { destinationId: 0, gain: 1 },
-      { totalFrames: 4096, numChannels: 2, sampleRate: 48000 },
+      { totalFrames: 4096, numChannels: 2 },
     );
     expect(again).toEqual(audio);
 
     // Program 0 is a dedicated piano model. The opt-in must bypass the
     // loaded Piano 1 preset, while the default above remains SF2-first.
-    const modeled = project.bounceWithSf2Instrument(
+    const modeled = bounceSf2(
+      project,
       { destinationId: 0, gain: 1, preferModelForModeledFamilies: true },
-      { totalFrames: 4096, numChannels: 2, sampleRate: 48000 },
+      { totalFrames: 4096, numChannels: 2 },
     );
     expect(peak(modeled)).toBeGreaterThan(0.01);
     expect(modeled).not.toEqual(audio);
 
     // An explicitly empty bindings array renders silence.
-    const silent = project.bounceWithSf2Instrument([], {
-      totalFrames: 2048,
-      numChannels: 2,
-      sampleRate: 48000,
-    });
-    expect(peak(silent)).toBe(0);
+    const silent = project.bounceWithSf2Instruments([], { totalFrames: 2048, numChannels: 2 });
+    expect(silent.channels).toHaveLength(2);
+    for (const channel of silent.channels) {
+      expect(peak(channel)).toBe(0);
+    }
     project.destroy();
   });
 
@@ -242,9 +263,10 @@ describe('SF2 instrument gsEfxRealization', () => {
     const project = new Project();
     for (const bad of ['vintage', 1]) {
       expect(() =>
-        project.bounceWithSf2Instrument(
+        bounceSf2(
+          project,
           { gsEfxRealization: bad as never },
-          { totalFrames: 128, numChannels: 2, sampleRate: 48000 },
+          { totalFrames: 128, numChannels: 2 },
         ),
       ).toThrow(/gsEfxRealization/);
     }

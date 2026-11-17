@@ -21237,3 +21237,1246 @@ removed = true
 domain = "core"
 rule = "string-closed-sets"
 entry = "./analysis"
+
+[[entry]]
+kind = "method"
+old = "Project.create"
+removed = true
+domain = "project"
+rule = "construction"
+
+[[entry]]
+kind = "method"
+old = "Project.getSampleRate"
+new = "Project.sampleRate"
+domain = "project"
+rule = "getters"
+
+[[entry]]
+kind = "method"
+old = "Project.getOverlapPolicy"
+new = "Project.overlapPolicy"
+domain = "project"
+rule = "getters"
+
+[[entry]]
+kind = "method"
+old = "Project.getPartRig"
+new = "Project.partRig"
+domain = "project"
+rule = "getters"
+
+[[entry]]
+kind = "method"
+old = "Project.getVocalEditDependencies"
+new = "Project.vocalEditDependencies"
+domain = "project"
+rule = "getters"
+
+[[entry]]
+kind = "method"
+old = "Project.trackCount"
+new = "Project.tracks"
+domain = "project"
+rule = "collections"
+
+[[entry]]
+kind = "method"
+old = "Project.clipCount"
+new = "Project.clips"
+domain = "project"
+rule = "collections"
+
+[[entry]]
+kind = "method"
+old = "Project.markerCount"
+new = "Project.markers"
+domain = "project"
+rule = "collections"
+
+[[entry]]
+kind = "method"
+old = "Project.sourceCount"
+new = "Project.sources"
+domain = "project"
+rule = "collections"
+
+[[entry]]
+kind = "method"
+old = "Project.tempoSegmentCount"
+new = "Project.tempoSegments"
+domain = "project"
+rule = "collections"
+
+[[entry]]
+kind = "method"
+old = "Project.timeSignatureCount"
+new = "Project.timeSignatures"
+domain = "project"
+rule = "collections"
+
+[[entry]]
+kind = "method"
+old = "Project.assistSidecarCount"
+new = "Project.assistSidecars"
+domain = "project"
+rule = "collections"
+
+[[entry]]
+kind = "method"
+old = "Project.trackByIndex"
+removed = true
+domain = "project"
+rule = "collections"
+
+[[entry]]
+kind = "method"
+old = "Project.clipByIndex"
+removed = true
+domain = "project"
+rule = "collections"
+
+[[entry]]
+kind = "method"
+old = "Project.markerByIndex"
+removed = true
+domain = "project"
+rule = "collections"
+
+[[entry]]
+kind = "method"
+old = "Project.sourceByIndex"
+removed = true
+domain = "project"
+rule = "collections"
+
+[[entry]]
+kind = "method"
+old = "Project.tempoSegmentByIndex"
+removed = true
+domain = "project"
+rule = "collections"
+
+[[entry]]
+kind = "method"
+old = "Project.timeSignatureByIndex"
+removed = true
+domain = "project"
+rule = "collections"
+
+[[entry]]
+kind = "method"
+old = "Project.getAssistSidecar"
+removed = true
+domain = "project"
+rule = "collections"
+
+[[entry]]
+kind = "method"
+old = "Project.setMarkerEx"
+removed = true
+domain = "project"
+rule = "one-entry-per-operation"
+
+[[entry]]
+kind = "method"
+old = "Project.setMidiFx"
+removed = true
+domain = "project"
+rule = "one-entry-per-operation"
+
+[[entry]]
+kind = "method"
+old = "Project.bounceWithBuiltinInstrument"
+new = "Project.bounceWithBuiltinInstruments"
+domain = "project"
+rule = "one-entry-per-operation"
+
+[[entry]]
+kind = "method"
+old = "Project.bounceWithSynthInstrument"
+new = "Project.bounceWithSynthInstruments"
+domain = "project"
+rule = "one-entry-per-operation"
+
+[[entry]]
+kind = "method"
+old = "Project.bounceWithSf2Instrument"
+new = "Project.bounceWithSf2Instruments"
+domain = "project"
+rule = "one-entry-per-operation"
+
+[[entry]]
+kind = "method"
+old = "Project.bounceWithInstrument"
+new = "Project.bounceWithInstruments"
+domain = "project"
+rule = "one-entry-per-operation"
+
+[[entry]]
+kind = "method"
+old = "Project.setMarker"
+changed = "setMarker takes one ProjectMarkerInput; an absent id allocates and an explicit 0 is a RangeError"
+domain = "project"
+rule = "absent-not-sentinel"
+test = "bindings/wasm/tests/surface/project.test.ts::sets a marker from one input object and reads every field back"
+
+[[entry]]
+kind = "method"
+old = "Project.moveClip"
+changed = "the optional track is options.trackId; an absent trackId keeps the track and an explicit 0 is a RangeError"
+domain = "project"
+rule = "absent-not-sentinel"
+test = "bindings/wasm/tests/surface/project.test.ts::takes optional ids in an options object and refuses an explicit zero"
+
+[[entry]]
+kind = "method"
+old = "Project.setClipTakes"
+changed = "the active take is options.activeTakeId; absent means the base source and an explicit 0 is a RangeError"
+domain = "project"
+rule = "absent-not-sentinel"
+test = "bindings/wasm/tests/surface/project.test.ts::takes optional ids in an options object and refuses an explicit zero"
+
+[[entry]]
+kind = "method"
+old = "Project.setClipFade"
+changed = "setClipFade takes one { fadeInPpq, fadeInCurve, fadeOutPpq, fadeOutCurve } object instead of two ProjectClipFade objects"
+domain = "project"
+rule = "unit-in-name"
+test = "bindings/wasm/tests/surface/project.test.ts::sets a clip fade from one object whose lengths carry their unit"
+
+[[entry]]
+kind = "method"
+old = "Project.setClipLoop"
+changed = "setClipLoop takes one { loopMode, loopLengthPpq, loopCrossfadePpq } object instead of positional arguments"
+domain = "project"
+rule = "one-positional-form"
+test = "bindings/wasm/tests/surface/project.test.ts::sets clip loop, source audio and source metadata from one request object each"
+
+[[entry]]
+kind = "method"
+old = "Project.setProgramOnChannel"
+changed = "setProgramOnChannel takes one { group, channel, program, bank?: { msb, lsb } } object; bank is no longer a 14-bit number"
+domain = "project"
+rule = "one-positional-form"
+test = "bindings/wasm/tests/surface/project.test.ts::sets a program and a part rig from request objects with no positional form"
+
+[[entry]]
+kind = "method"
+old = "Project.setSourceAudio"
+changed = "setSourceAudio takes { sourceId, channels, sampleRate } with planar channels instead of interleaved audio plus a channel count"
+domain = "project"
+rule = "planar-channels"
+test = "bindings/wasm/tests/surface/project.test.ts::sets clip loop, source audio and source metadata from one request object each"
+
+[[entry]]
+kind = "method"
+old = "Project.setAudioSourceMetadata"
+changed = "setAudioSourceMetadata takes one { sourceId, contentHash, externalStemRole } object"
+domain = "project"
+rule = "one-positional-form"
+test = "bindings/wasm/tests/surface/project.test.ts::sets clip loop, source audio and source metadata from one request object each"
+
+[[entry]]
+kind = "method"
+old = "Project.setAssistSidecar"
+changed = "the six-argument positional form is gone; pass one ProjectAssistSidecarInput"
+domain = "project"
+rule = "one-positional-form"
+test = "bindings/wasm/tests/surface/project.test.ts::sets a program and a part rig from request objects with no positional form"
+
+[[entry]]
+kind = "method"
+old = "Project.setPartRig"
+changed = "the positional (destinationId, part, mode, inserts) form is gone; pass one PartRigRequest"
+domain = "project"
+rule = "one-positional-form"
+test = "bindings/wasm/tests/surface/project.test.ts::sets a program and a part rig from request objects with no positional form"
+
+[[entry]]
+kind = "method"
+old = "Project.clearPartRig"
+changed = "clearPartRig takes one PartRigKey object instead of (destinationId, part)"
+domain = "project"
+rule = "one-positional-form"
+test = "bindings/wasm/tests/surface/project.test.ts::sets a program and a part rig from request objects with no positional form"
+
+[[entry]]
+kind = "method"
+old = "Project.bakeMidiFx"
+changed = "the positional (clipId, configJson) form is gone; pass one ProjectMidiFxBakeRequest, which always returns a ProjectMidiFxBakeResult"
+domain = "project"
+rule = "one-positional-form"
+test = "bindings/wasm/tests/surface/project.test.ts::sets a program and a part rig from request objects with no positional form"
+
+[[entry]]
+kind = "method"
+old = "Project.autoTempo"
+changed = "autoTempo takes (samples, sampleRate, options?) or one request; candidateIndex and applyTimeSignatures are option fields, not positional arguments"
+domain = "project"
+rule = "one-positional-form"
+test = "bindings/wasm/tests/surface/project.test.ts::installs a tempo from options with no positional boolean"
+
+[[entry]]
+kind = "method"
+old = "Project.analyzeTempo"
+changed = "analyzeTempo also takes one request object { samples, sampleRate, ...options }"
+domain = "project"
+rule = "one-positional-form"
+test = "bindings/wasm/tests/surface/project.test.ts::installs a tempo from options with no positional boolean"
+
+[[entry]]
+kind = "method"
+old = "Project.setOverlapPolicy"
+changed = "setOverlapPolicy takes 'disallow' | 'allow'; an ordinal is a TypeError"
+domain = "project"
+rule = "string-closed-sets"
+test = "bindings/wasm/tests/surface/project.test.ts::refuses an ordinal with TypeError and an unknown name with RangeError"
+
+[[entry]]
+kind = "method"
+old = "Project.setClipWarpMode"
+changed = "setClipWarpMode takes 'off' | 'repitch' | 'tempoSync' | 'timeStretch'; an ordinal is a TypeError"
+domain = "project"
+rule = "string-closed-sets"
+test = "bindings/wasm/tests/surface/project.test.ts::spells fade curves, warp modes and automation targets in lowerCamel"
+
+[[entry]]
+kind = "method"
+old = "Project.addTrack"
+changed = "ProjectTrackDesc.kind is 'audio' | 'midi' | 'aux'; an ordinal is a TypeError"
+domain = "project"
+rule = "string-closed-sets"
+test = "bindings/wasm/tests/surface/project.test.ts::refuses an ordinal with TypeError and an unknown name with RangeError"
+
+[[entry]]
+kind = "method"
+old = "Project.setTrackKind"
+changed = "setTrackKind takes 'audio' | 'midi' | 'aux'; an ordinal is a TypeError"
+domain = "project"
+rule = "string-closed-sets"
+test = "bindings/wasm/tests/surface/project.test.ts::refuses an ordinal with TypeError and an unknown name with RangeError"
+
+[[entry]]
+kind = "method"
+old = "Project.addClip"
+changed = "addClip takes planar channels plus sampleRate instead of audio, audioChannels and audioSampleRate"
+domain = "project"
+rule = "planar-channels"
+test = "bindings/wasm/tests/surface/project.test.ts::adds an audio clip from planar channels"
+
+[[entry]]
+kind = "method"
+old = "Project.importExternalStems"
+changed = "each stem takes channels instead of planarSamples and layout is 'mono' | 'stereo'"
+domain = "project"
+rule = "planar-channels"
+test = "bindings/wasm/tests/surface/project.test.ts::adds an audio clip from planar channels"
+
+[[entry]]
+kind = "method"
+old = "Project.compile"
+changed = "compile returns { diagnostics } only; each diagnostic has a code token, an error / warning severity and an optional targetId"
+domain = "project"
+rule = "typed-results"
+test = "bindings/wasm/tests/surface/project.test.ts::returns compile diagnostics as typed records only"
+
+[[entry]]
+kind = "method"
+old = "Project.compileTimeline"
+changed = "compileTimeline returns { diagnostics, timeline } only"
+domain = "project"
+rule = "typed-results"
+test = "bindings/wasm/tests/surface/project.test.ts::returns compile diagnostics as typed records only"
+
+[[entry]]
+kind = "method"
+old = "Project.lastBounceCompileResult"
+changed = "lastBounceCompileResult returns the same { diagnostics } shape as compile"
+domain = "project"
+rule = "typed-results"
+test = "bindings/wasm/tests/surface/project.test.ts::returns compile diagnostics as typed records only"
+
+[[entry]]
+kind = "method"
+old = "Project.bounce"
+changed = "bounce returns { channels, sampleRate, numChannels } instead of an interleaved Float32Array; sampleRate is no longer an option"
+domain = "project"
+rule = "planar-channels"
+test = "bindings/wasm/tests/surface/project.test.ts::bounces to planar channels"
+
+[[entry]]
+kind = "method"
+old = "Project.addAutomationLane"
+changed = "targetKind is 'opaque' | 'trackFaderDb' | 'trackPan'"
+domain = "project"
+rule = "string-closed-sets"
+test = "bindings/wasm/tests/surface/project.test.ts::spells fade curves, warp modes and automation targets in lowerCamel"
+
+[[entry]]
+kind = "method"
+old = "Project.editAutomationLane"
+changed = "targetKind is 'opaque' | 'trackFaderDb' | 'trackPan'"
+domain = "project"
+rule = "string-closed-sets"
+test = "bindings/wasm/tests/surface/project.test.ts::spells fade curves, warp modes and automation targets in lowerCamel"
+
+[[entry]]
+kind = "method"
+old = "Project.rehydrateVocalEdits"
+changed = "the cancel predicate moves into an options object: rehydrateVocalEdits(originals, { cancel })"
+domain = "project"
+rule = "one-positional-form"
+test = "bindings/wasm/tests/surface/project.test.ts::sets a program and a part rig from request objects with no positional form"
+
+[[entry]]
+kind = "method"
+old = "ProjectTimeline.nativeId"
+removed = true
+domain = "project"
+rule = "no-internal-types"
+
+[[entry]]
+kind = "method"
+old = "ProjectTimeline.constructor"
+changed = "the constructor is module-private and throws TypeError; obtain a timeline from Project.compileTimeline()"
+domain = "project"
+rule = "no-internal-types"
+test = "bindings/wasm/tests/surface/project.test.ts::compiles a timeline that callers cannot construct"
+
+[[entry]]
+kind = "field"
+old = "ProjectSource.channelCount"
+new = "ProjectSource.numChannels"
+domain = "project"
+rule = "num-channels"
+
+[[entry]]
+kind = "field"
+old = "ProjectTempoCandidate.timeSignature"
+new = "ProjectTempoCandidate.firstTimeSignature"
+domain = "project"
+rule = "typed-results"
+
+[[entry]]
+kind = "field"
+old = "ExternalSeparatedStem.planarSamples"
+new = "ExternalSeparatedStem.channels"
+domain = "project"
+rule = "planar-channels"
+
+[[entry]]
+kind = "field"
+old = "ProjectClipDesc.audioSampleRate"
+new = "ProjectClipDesc.sampleRate"
+domain = "project"
+rule = "planar-channels"
+
+[[entry]]
+kind = "field"
+old = "ProjectClipDesc.audio"
+new = "ProjectClipDesc.channels"
+domain = "project"
+rule = "planar-channels"
+
+[[entry]]
+kind = "field"
+old = "ProjectClipDesc.audioChannels"
+removed = true
+domain = "project"
+rule = "planar-channels"
+
+[[entry]]
+kind = "field"
+old = "ProjectCompileResult.messages"
+removed = true
+domain = "project"
+rule = "typed-results"
+
+[[entry]]
+kind = "field"
+old = "ProjectCompileResult.diagnosticCount"
+removed = true
+domain = "project"
+rule = "typed-results"
+
+[[entry]]
+kind = "field"
+old = "ProjectCompileResult.hasTimeline"
+removed = true
+domain = "project"
+rule = "typed-results"
+
+[[entry]]
+kind = "field"
+old = "ProjectTempoSegment.startSample"
+removed = true
+domain = "project"
+rule = "absent-not-sentinel"
+
+[[entry]]
+kind = "field"
+old = "ProjectBounceOptions.sampleRate"
+removed = true
+domain = "project"
+rule = "absent-not-sentinel"
+
+[[entry]]
+kind = "field"
+old = "BuiltinSynthConfig.destinationId"
+removed = true
+domain = "project"
+rule = "one-entry-per-operation"
+
+[[entry]]
+kind = "field"
+old = "Sf2InstrumentConfig.destinationId"
+removed = true
+domain = "project"
+rule = "one-entry-per-operation"
+
+[[entry]]
+kind = "field"
+old = "SynthPatch.destinationId"
+removed = true
+domain = "engine"
+rule = "one-entry-per-operation"
+
+[[entry]]
+kind = "field"
+old = "ExternalInstrument.destinationId"
+removed = true
+domain = "engine"
+rule = "one-entry-per-operation"
+
+[[entry]]
+kind = "type"
+old = "BuiltinSynthBinding"
+new = "BuiltinSynthConfig"
+domain = "engine"
+rule = "one-entry-per-operation"
+
+[[entry]]
+kind = "type"
+old = "ProjectClipFade"
+removed = true
+domain = "project"
+rule = "unit-in-name"
+
+[[entry]]
+kind = "field"
+old = "ProjectClipFade.lengthPpq"
+removed = true
+domain = "project"
+rule = "unit-in-name"
+
+[[entry]]
+kind = "field"
+old = "ProjectClipFade.curve"
+removed = true
+domain = "project"
+rule = "unit-in-name"
+
+[[entry]]
+kind = "value"
+old = "ProjectWarpMode='tempo-sync'"
+new = "ProjectWarpMode='tempoSync'"
+domain = "project"
+rule = "token-case"
+
+[[entry]]
+kind = "value"
+old = "ProjectWarpMode='time-stretch'"
+new = "ProjectWarpMode='timeStretch'"
+domain = "project"
+rule = "token-case"
+
+[[entry]]
+kind = "value"
+old = "ProjectAutomationTargetKind='track-fader-db'"
+new = "ProjectAutomationTargetKind='trackFaderDb'"
+domain = "project"
+rule = "token-case"
+
+[[entry]]
+kind = "value"
+old = "ProjectAutomationTargetKind='track-pan'"
+new = "ProjectAutomationTargetKind='trackPan'"
+domain = "project"
+rule = "token-case"
+
+[[entry]]
+kind = "value"
+old = "ProjectFadeCurve='equal-power'"
+removed = true
+domain = "project"
+rule = "token-case"
+
+[[entry]]
+kind = "value"
+old = "ProjectFadeCurve='equal_power'"
+removed = true
+domain = "project"
+rule = "token-case"
+
+[[entry]]
+kind = "value"
+old = "ProjectFadeCurve='equalpower'"
+removed = true
+domain = "project"
+rule = "token-case"
+
+[[entry]]
+kind = "value"
+old = "ProjectFadeCurve='exp'"
+removed = true
+domain = "project"
+rule = "token-case"
+
+[[entry]]
+kind = "value"
+old = "ProjectFadeCurve='log'"
+removed = true
+domain = "project"
+rule = "token-case"
+
+[[entry]]
+kind = "export"
+old = "AutomationTargetKind"
+removed = true
+domain = "project"
+rule = "string-closed-sets"
+
+[[entry]]
+kind = "export"
+old = "PROJECT_AUTOMATION_TARGET_OPAQUE"
+removed = true
+domain = "project"
+rule = "string-closed-sets"
+
+[[entry]]
+kind = "export"
+old = "PROJECT_AUTOMATION_TARGET_TRACK_FADER_DB"
+removed = true
+domain = "project"
+rule = "string-closed-sets"
+
+[[entry]]
+kind = "export"
+old = "PROJECT_AUTOMATION_TARGET_TRACK_PAN"
+removed = true
+domain = "project"
+rule = "string-closed-sets"
+
+[[entry]]
+kind = "field"
+old = "EngineBounceResult.interleaved"
+new = "EngineBounceResult.channels"
+domain = "engine"
+rule = "planar-channels"
+
+[[entry]]
+kind = "field"
+old = "EngineBounceResult.frames"
+removed = true
+domain = "engine"
+rule = "planar-channels"
+
+[[entry]]
+kind = "method"
+old = "RealtimeEngine.bounceOffline"
+changed = "bounceOffline returns { channels, sampleRate, numChannels, integratedLufs } with planar channels instead of an interleaved buffer"
+domain = "engine"
+rule = "planar-channels"
+test = "bindings/wasm/tests/surface/engine.test.ts::bounces the timeline to planar channels"
+
+[[entry]]
+kind = "method"
+old = "SonareEngine.bounceOffline"
+changed = "bounceOffline resolves to { channels, sampleRate, numChannels, integratedLufs } with planar channels instead of an interleaved buffer"
+domain = "engine"
+rule = "planar-channels"
+entry = "./worklet"
+test = "bindings/wasm/tests/surface/engine-worklet.test.ts::bounces the timeline to planar channels"
+
+[[entry]]
+kind = "type"
+old = "VocalUint64"
+removed = true
+domain = "project"
+rule = "no-internal-types"
+
+[[entry]]
+kind = "type"
+old = "VocalHistoryState"
+new = "VocalHistory"
+domain = "project"
+rule = "type-names"
+
+[[entry]]
+kind = "type"
+old = "VocalErrorShape"
+new = "VocalErrorDetail"
+domain = "project"
+rule = "typed-results"
+
+[[entry]]
+kind = "type"
+old = "VocalStateBytes"
+removed = true
+domain = "project"
+rule = "no-internal-types"
+
+[[entry]]
+kind = "class"
+old = "VocalEditWorkerStaleResultError"
+removed = true
+domain = "project"
+rule = "error-class-by-cause"
+
+[[entry]]
+kind = "class"
+old = "VocalEditWorkerTask"
+removed = true
+domain = "project"
+rule = "cancellation"
+
+[[entry]]
+kind = "method"
+old = "VocalEditWorkerTask.cancel"
+removed = true
+domain = "project"
+rule = "cancellation"
+
+[[entry]]
+kind = "type"
+old = "VocalEditWorkerReadOptions"
+removed = true
+domain = "project"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "type"
+old = "ProjectVocalReason"
+new = "VocalReason"
+domain = "project"
+rule = "string-closed-sets"
+
+[[entry]]
+kind = "field"
+old = "ProjectVocalEditApplyRequest.renderedStartSample"
+removed = true
+domain = "project"
+rule = "absent-not-sentinel"
+
+[[entry]]
+kind = "field"
+old = "ProjectVocalEditApplyRequest.sve1"
+new = "ProjectVocalEditApplyRequest.vocalState"
+domain = "project"
+rule = "vocal-edit-model"
+
+[[entry]]
+kind = "method"
+old = "VocalEditWorkerSession.currentToken"
+removed = true
+domain = "project"
+rule = "no-internal-types"
+
+[[entry]]
+kind = "method"
+old = "VocalEditWorkerSession.updateToken"
+removed = true
+domain = "project"
+rule = "no-internal-types"
+
+[[entry]]
+kind = "method"
+old = "VocalEditWorkerSession.latestToken"
+removed = true
+domain = "project"
+rule = "no-internal-types"
+
+[[entry]]
+kind = "method"
+old = "VocalEditWorkerSession.draftToken"
+removed = true
+domain = "project"
+rule = "no-internal-types"
+
+[[entry]]
+kind = "method"
+old = "VocalEditWorkerClient.callMutation"
+removed = true
+domain = "project"
+rule = "no-internal-types"
+
+[[entry]]
+kind = "method"
+old = "VocalEditWorkerClient.callPreview"
+removed = true
+domain = "project"
+rule = "no-internal-types"
+
+[[entry]]
+kind = "method"
+old = "VocalEditWorkerClient.disposeSession"
+removed = true
+domain = "project"
+rule = "no-internal-types"
+
+[[entry]]
+kind = "method"
+old = "VocalEditSession.token"
+changed = "now a readonly getter, read it without parentheses"
+domain = "project"
+rule = "getters"
+test = "bindings/wasm/tests/vocal_edit.test.ts::reads the session and draft token and revision as getters"
+
+[[entry]]
+kind = "method"
+old = "VocalEditDraft.token"
+changed = "now a readonly getter, read it without parentheses"
+domain = "project"
+rule = "getters"
+test = "bindings/wasm/tests/vocal_edit.test.ts::reads the session and draft token and revision as getters"
+
+[[entry]]
+kind = "method"
+old = "VocalEditWorkerSession.token"
+changed = "now a readonly getter, read it without parentheses"
+domain = "project"
+rule = "getters"
+test = "bindings/wasm/tests/vocal_edit_worker_client.test.ts::reads the worker session and draft token and revision as getters"
+
+[[entry]]
+kind = "method"
+old = "VocalEditSession.revision"
+changed = "now a readonly getter, read it without parentheses"
+domain = "project"
+rule = "getters"
+test = "bindings/wasm/tests/vocal_edit.test.ts::reads the session and draft token and revision as getters"
+
+[[entry]]
+kind = "method"
+old = "VocalEditWorkerSession.revision"
+changed = "now a readonly getter, read it without parentheses"
+domain = "project"
+rule = "getters"
+test = "bindings/wasm/tests/vocal_edit_worker_client.test.ts::reads the worker session and draft token and revision as getters"
+
+[[entry]]
+kind = "method"
+old = "VocalEditWorkerSession.apply"
+new = "VocalEditWorkerDraft.apply"
+domain = "project"
+rule = "vocal-edit-model"
+
+[[entry]]
+kind = "method"
+old = "VocalEditWorkerSession.commit"
+new = "VocalEditWorkerDraft.commit"
+domain = "project"
+rule = "vocal-edit-model"
+
+[[entry]]
+kind = "method"
+old = "VocalEditWorkerSession.cancel"
+new = "VocalEditWorkerDraft.cancel"
+domain = "project"
+rule = "vocal-edit-model"
+
+[[entry]]
+kind = "method"
+old = "VocalEditWorkerSession.beginEdit"
+changed = "resolves to a VocalEditWorkerDraft instead of a state token"
+domain = "project"
+rule = "vocal-edit-model"
+test = "bindings/wasm/tests/vocal_edit_worker_client.test.ts::resolves beginEdit to a draft"
+
+[[entry]]
+kind = "option"
+old = "VocalEditWorkerSession.evaluatePitch(options)"
+removed = true
+domain = "project"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "VocalEditWorkerSession.sourceSampleToDestinationSample(options)"
+removed = true
+domain = "project"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "option"
+old = "VocalEditWorkerSession.destinationSampleToSourceSample(options)"
+removed = true
+domain = "project"
+rule = "one-positional-form"
+
+[[entry]]
+kind = "field"
+old = "VocalApplyRequest.expectedGeneration"
+changed = "now optional; omitted means the draft's current generation"
+domain = "project"
+rule = "absent-not-sentinel"
+test = "bindings/wasm/tests/vocal_edit.test.ts::expectedGeneration is omitted"
+
+[[entry]]
+kind = "field"
+old = "VocalSessionLimits.maxHistoryBytes"
+changed = "number instead of a decimal string"
+domain = "project"
+rule = "typed-results"
+test = "bindings/wasm/tests/vocal_edit.test.ts::refuses a session limit that is not a non-negative safe integer"
+
+[[entry]]
+kind = "field"
+old = "VocalSessionLimits.maxCacheBytes"
+changed = "number instead of a decimal string"
+domain = "project"
+rule = "typed-results"
+test = "bindings/wasm/tests/vocal_edit.test.ts::refuses a session limit that is not a non-negative safe integer"
+
+[[entry]]
+kind = "field"
+old = "VocalNote.analysisFrameStart"
+changed = "number instead of a decimal string"
+domain = "project"
+rule = "typed-results"
+test = "bindings/wasm/tests/vocal_edit.test.ts::analysisFrameStart and analysisFrameEnd"
+
+[[entry]]
+kind = "field"
+old = "VocalNote.analysisFrameEnd"
+changed = "number instead of a decimal string"
+domain = "project"
+rule = "typed-results"
+test = "bindings/wasm/tests/vocal_edit.test.ts::analysisFrameStart and analysisFrameEnd"
+
+[[entry]]
+kind = "field"
+old = "VocalRenderResult.cacheHitUnits"
+changed = "number instead of a decimal string"
+domain = "project"
+rule = "typed-results"
+test = "bindings/wasm/tests/vocal_edit.test.ts::cacheHitUnits, dryPassedFrames and limitedCorrectionFrames"
+
+[[entry]]
+kind = "field"
+old = "VocalRenderResult.dryPassedFrames"
+changed = "number instead of a decimal string"
+domain = "project"
+rule = "typed-results"
+test = "bindings/wasm/tests/vocal_edit.test.ts::cacheHitUnits, dryPassedFrames and limitedCorrectionFrames"
+
+[[entry]]
+kind = "field"
+old = "VocalRenderResult.limitedCorrectionFrames"
+changed = "number instead of a decimal string"
+domain = "project"
+rule = "typed-results"
+test = "bindings/wasm/tests/vocal_edit.test.ts::cacheHitUnits, dryPassedFrames and limitedCorrectionFrames"
+
+[[entry]]
+kind = "method"
+old = "VocalEditWorkerSession.exportState"
+changed = "resolves to a Uint8Array instead of { data }"
+domain = "project"
+rule = "typed-results"
+test = "bindings/wasm/tests/vocal_edit_worker_client.test.ts::exportState to a Uint8Array"
+
+[[entry]]
+kind = "field"
+old = "ProjectVocalEditApplyRequest.takeId"
+changed = "absent selects the base source; an explicit 0 is a RangeError"
+domain = "project"
+rule = "absent-not-sentinel"
+test = "bindings/wasm/tests/vocal_project.test.ts::keeps takeId absent from the apply result"
+
+[[entry]]
+kind = "field"
+old = "ProjectVocalEditApplyResult.takeId"
+changed = "absent when the base source was edited (was 0)"
+domain = "project"
+rule = "absent-not-sentinel"
+test = "bindings/wasm/tests/vocal_project.test.ts::keeps takeId absent from the apply result"
+
+[[entry]]
+kind = "field"
+old = "ProjectVocalEditDependency.takeId"
+changed = "absent when the base source was edited (was 0)"
+domain = "project"
+rule = "absent-not-sentinel"
+test = "bindings/wasm/tests/vocal_project.test.ts::dependency and rehydrate takeId as absent for the base source"
+
+[[entry]]
+kind = "field"
+old = "ProjectVocalRehydrateItem.takeId"
+changed = "absent when the base source was edited (was 0)"
+domain = "project"
+rule = "absent-not-sentinel"
+test = "bindings/wasm/tests/vocal_project.test.ts::dependency and rehydrate takeId as absent for the base source"
+
+[[entry]]
+kind = "field"
+old = "ProjectVocalEditDependency.reason"
+changed = "VocalReason token instead of a number"
+domain = "project"
+rule = "string-closed-sets"
+test = "bindings/wasm/tests/vocal_project.test.ts::dependency and rehydrate takeId as absent for the base source"
+
+[[entry]]
+kind = "field"
+old = "ProjectVocalRehydrateItem.reason"
+changed = "VocalReason token instead of a number"
+domain = "project"
+rule = "string-closed-sets"
+test = "bindings/wasm/tests/vocal_project.test.ts::dependency and rehydrate takeId as absent for the base source"
+
+[[entry]]
+kind = "field"
+old = "ProjectVocalRehydrateItem.status"
+changed = "'rehydrated' | 'alreadyReady' | 'unresolved' instead of 0 | 1 | 2"
+domain = "project"
+rule = "string-closed-sets"
+test = "bindings/wasm/tests/vocal_project.test.ts::dependency and rehydrate takeId as absent for the base source"
+
+[[entry]]
+kind = "method"
+old = "VocalEditDraft.revision"
+changed = "now a readonly getter, read it without parentheses"
+domain = "project"
+rule = "getters"
+test = "bindings/wasm/tests/vocal_edit.test.ts::reads the session and draft token and revision as getters"
+
+[[entry]]
+kind = "method"
+old = "VocalRenderSnapshot.render"
+changed = "an aborted signal rejects or throws a Cancelled SonareError instead of a DOMException AbortError"
+domain = "project"
+rule = "cancellation"
+test = "bindings/wasm/tests/vocal_edit.test.ts::refuses an aborted signal on every render entry point"
+
+[[entry]]
+kind = "method"
+old = "VocalRenderSnapshot.beginRenderJob"
+changed = "an aborted signal throws a Cancelled SonareError instead of a DOMException AbortError"
+domain = "project"
+rule = "cancellation"
+test = "bindings/wasm/tests/vocal_edit.test.ts::refuses an aborted signal on every render entry point"
+
+[[entry]]
+kind = "method"
+old = "VocalRenderSnapshot.renderAsync"
+changed = "an already-aborted signal rejects with a Cancelled SonareError instead of a DOMException AbortError"
+domain = "project"
+rule = "cancellation"
+test = "bindings/wasm/tests/vocal_edit.test.ts::refuses an aborted signal on every render entry point"
+
+[[entry]]
+kind = "field"
+old = "SonareWorkletProcessorOptions.blockSize"
+new = "SonareWorkletProcessorOptions.maxBlockSize"
+domain = "engine"
+rule = "num-channels"
+entry = "./worklet"
+
+[[entry]]
+kind = "field"
+old = "MixerConfig.blockSize"
+new = "MixerConfig.maxBlockSize"
+domain = "engine"
+rule = "num-channels"
+
+
+[[entry]]
+kind = "field"
+old = "MixerJsonOptions.blockSize"
+new = "MixerJsonOptions.maxBlockSize"
+domain = "engine"
+rule = "num-channels"
+
+
+[[entry]]
+kind = "type"
+old = "ClipPageRequest"
+new = "ClipPageSampleRequest"
+domain = "engine"
+rule = "individual"
+
+[[entry]]
+kind = "type"
+old = "SonareClipPageRequest"
+new = "ClipPagePageRequest"
+domain = "engine"
+rule = "individual"
+entry = "./worklet"
+
+[[entry]]
+kind = "function"
+old = "chordSymbolFromAnalysis"
+changed = "quality is a ProjectChordQuality token ('major', 'halfDiminished', ...) instead of an ordinal"
+domain = "project"
+rule = "string-closed-sets"
+test = "bindings/wasm/tests/chord-annotation.test.ts::to annotation quality"
+
+[[entry]]
+kind = "function"
+old = "keyModeFromAnalysis"
+changed = "returns a ProjectKeyMode token ('major', 'dorian', ...) instead of an ordinal"
+domain = "project"
+rule = "string-closed-sets"
+test = "bindings/wasm/tests/chord-annotation.test.ts::annotation mode"
+
+[[entry]]
+kind = "field"
+old = "ProjectKeySegment.mode"
+changed = "a ProjectKeyMode token instead of an ordinal; a number is refused with TypeError"
+domain = "project"
+rule = "string-closed-sets"
+test = "bindings/wasm/tests/chord-annotation.test.ts::annotation mode"
+
+[[entry]]
+kind = "field"
+old = "ProjectChordSymbol.quality"
+changed = "a ProjectChordQuality token instead of an ordinal; a number is refused with TypeError"
+domain = "project"
+rule = "string-closed-sets"
+test = "bindings/wasm/tests/chord-annotation.test.ts::the project accepts and keeps"
+
+[[entry]]
+kind = "function"
+old = "createOpfsClipPageWorker"
+removed = true
+domain = "project"
+rule = "no-internal-types"
+
+[[entry]]
+kind = "function"
+old = "opfsClipPageWorkerSource"
+removed = true
+domain = "project"
+rule = "worklet-scope"
+
+[[entry]]
+kind = "type"
+old = "VocalWorkerMutation"
+removed = true
+domain = "project"
+rule = "no-internal-types"
+
+[[entry]]
+kind = "type"
+old = "VocalWorkerCreateRequest"
+removed = true
+domain = "project"
+rule = "no-internal-types"
+
+[[entry]]
+kind = "type"
+old = "VocalWorkerCreateMessage"
+removed = true
+domain = "project"
+rule = "no-internal-types"
+
+[[entry]]
+kind = "type"
+old = "VocalWorkerMutateMessage"
+removed = true
+domain = "project"
+rule = "no-internal-types"
+
+[[entry]]
+kind = "type"
+old = "VocalWorkerPreviewMessage"
+removed = true
+domain = "project"
+rule = "no-internal-types"
+
+[[entry]]
+kind = "type"
+old = "VocalWorkerDisposeMessage"
+removed = true
+domain = "project"
+rule = "no-internal-types"
+
+[[entry]]
+kind = "type"
+old = "VocalWorkerCancelMessage"
+removed = true
+domain = "project"
+rule = "no-internal-types"
+
+[[entry]]
+kind = "type"
+old = "VocalWorkerRequestMessage"
+removed = true
+domain = "project"
+rule = "no-internal-types"
+
+[[entry]]
+kind = "type"
+old = "VocalWorkerCreateResult"
+removed = true
+domain = "project"
+rule = "no-internal-types"
+
+[[entry]]
+kind = "type"
+old = "VocalWorkerResponseBase"
+removed = true
+domain = "project"
+rule = "no-internal-types"
+
+[[entry]]
+kind = "type"
+old = "VocalWorkerResult"
+removed = true
+domain = "project"
+rule = "no-internal-types"
+
+[[entry]]
+kind = "type"
+old = "VocalWorkerResultMessage"
+removed = true
+domain = "project"
+rule = "no-internal-types"
+
+[[entry]]
+kind = "type"
+old = "VocalWorkerProgressMessage"
+removed = true
+domain = "project"
+rule = "no-internal-types"
+
+[[entry]]
+kind = "type"
+old = "VocalWorkerErrorMessage"
+removed = true
+domain = "project"
+rule = "no-internal-types"
+
+[[entry]]
+kind = "type"
+old = "VocalWorkerResponseMessage"
+removed = true
+domain = "project"
+rule = "no-internal-types"
+
+[[entry]]
+kind = "type"
+old = "ProjectAutomationCurve"
+changed = "the same tokens as AutomationCurve; an ordinal is a TypeError and the 'scurve' spelling is refused"
+domain = "project"
+rule = "string-closed-sets"
+test = "bindings/wasm/tests/project-edit-ops.test.ts::resolves every documented curve spelling"
+
+[[entry]]
+kind = "method"
+old = "Project.midiCcToBreakpoint"
+changed = "the breakpoint's curveToNext is an AutomationCurve token instead of an ordinal"
+domain = "project"
+rule = "string-closed-sets"
+test = "bindings/wasm/tests/project.test.ts::CcMap"

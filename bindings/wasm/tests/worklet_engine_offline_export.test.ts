@@ -126,10 +126,13 @@ describe('SonareEngine offline export', () => {
       engine.transport.seekSec(12000 / SR);
       const bounced = await engine.bounceOffline({ totalFrames: frames, numChannels: 2 });
       // Non-vacuity: a silent pair would compare equal to anything silent.
-      expect(rms(expected.interleaved)).toBeGreaterThan(0);
-      expect(bounced.frames).toBe(frames);
+      expect(rms(expected.channels[0])).toBeGreaterThan(0);
+      expect(bounced.channels[0]).toHaveLength(frames);
       expect(bounced.numChannels).toBe(2);
-      expect(maxAbsDiff(bounced.interleaved, expected.interleaved)).toBeLessThan(1e-6);
+      expect(bounced.channels).toHaveLength(2);
+      for (let c = 0; c < 2; c++) {
+        expect(maxAbsDiff(bounced.channels[c], expected.channels[c])).toBeLessThan(1e-6);
+      }
       expect(mirror.transportState().samplePosition).toBe(12000);
     } finally {
       engine.destroy();
@@ -228,7 +231,7 @@ describe('SonareEngine offline export', () => {
       // The store follows: removing the old id is now a no-op delta and the
       // frozen clip bounces as the whole timeline.
       const bounced = await engine.bounceOffline({ totalFrames: 1024, numChannels: 2 });
-      expect(rms(bounced.interleaved)).toBeGreaterThan(0);
+      expect(rms(bounced.channels[0])).toBeGreaterThan(0);
     } finally {
       engine.destroy();
     }
@@ -384,7 +387,7 @@ describe('SonareEngine offline export of OPFS-streamed clips', () => {
       expect(worker.pages).toEqual([0, 1, 2, 3]);
       // Every page of the span rendered as audio rather than as silence.
       for (let page = 0; page < 4; page++) {
-        const slice = bounced.interleaved.slice(page * pageFrames * 2, (page + 1) * pageFrames * 2);
+        const slice = bounced.channels[0].slice(page * pageFrames, (page + 1) * pageFrames);
         expect(rms(slice)).toBeGreaterThan(0);
       }
       const cleared = posted

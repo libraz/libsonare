@@ -44,7 +44,7 @@ import {
  */
 export class SonareWorkletProcessor {
   readonly sampleRate: number;
-  readonly blockSize: number;
+  readonly maxBlockSize: number;
   private mixer: Mixer;
   private realtime: MixerRealtimeBuffer;
   private closed = false;
@@ -90,7 +90,7 @@ export class SonareWorkletProcessor {
       throw new TypeError('sceneJson is required.');
     }
     this.sampleRate = resolveScopeSampleRate(options.sampleRate, 'SonareWorkletProcessor');
-    this.blockSize = options.blockSize ?? 128;
+    this.maxBlockSize = options.maxBlockSize ?? 128;
     // Zero is the off switch for both publications, so the floor is 0.
     this.meterIntervalFrames = requireIntegerOption(
       options.meterIntervalFrames,
@@ -119,7 +119,7 @@ export class SonareWorkletProcessor {
     this.spectrumBands = new Float32Array(spectrumBandCount);
     this.mixer = Mixer.fromJson(options.sceneJson, {
       sampleRate: this.sampleRate,
-      blockSize: this.blockSize,
+      maxBlockSize: this.maxBlockSize,
     });
     this.mixer.compile();
     const sceneStripCount = this.mixer.stripCount;
@@ -148,13 +148,13 @@ export class SonareWorkletProcessor {
       return true;
     }
     const frames = leftOut.length;
-    // The mixer's realtime heap buffers are sized to blockSize. A render quantum
-    // that differs from blockSize (e.g. a future browser using a quantum other
-    // than 128, or a misconfigured blockSize) must NOT return false here:
+    // The mixer's realtime heap buffers are sized to maxBlockSize. A render quantum
+    // that differs from maxBlockSize (e.g. a future browser using a quantum other
+    // than 128, or a misconfigured maxBlockSize) must NOT return false here:
     // returning false permanently terminates the AudioWorkletProcessor and
     // silently kills the node mid-stream. Instead degrade gracefully by
-    // processing min(frames, blockSize) and zero-filling any remainder.
-    const usable = Math.min(frames, this.blockSize);
+    // processing min(frames, maxBlockSize) and zero-filling any remainder.
+    const usable = Math.min(frames, this.maxBlockSize);
 
     // Each getter re-checks the native topology and heap, and nothing can change
     // either within one callback, so the views are read once into locals.
@@ -183,7 +183,7 @@ export class SonareWorkletProcessor {
     const mixedLeft = leadingSamples(this.realtime.outLeft, usable);
     const mixedRight = leadingSamples(this.realtime.outRight, usable);
     if (usable !== frames) {
-      // frames > blockSize: zero the tail the mixer did not produce.
+      // frames > maxBlockSize: zero the tail the mixer did not produce.
       leftOut.fill(0, usable);
       rightOut?.fill(0, usable);
     }

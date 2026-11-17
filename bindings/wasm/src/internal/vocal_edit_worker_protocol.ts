@@ -1,28 +1,34 @@
+import type { SonareFailurePayload } from './failure_payload.js';
 import type {
   VocalAnalysis,
-  VocalApplyRequest,
   VocalCapabilities,
   VocalCreateRequest,
+  VocalEditOperation,
   VocalEditResult,
-  VocalHistoryState,
+  VocalErrorDetail,
+  VocalHistory,
   VocalNotesResult,
   VocalPitchEvaluation,
   VocalRenderRequest,
   VocalRenderResult,
   VocalRestoreRequest,
-  VocalStateBytes,
   VocalStateToken,
-  VocalUint64,
-} from './public_types_vocal_edit.js';
+} from '../public_types_vocal_edit.js';
+
+/** An apply request with the generation resolved by the client. */
+export interface VocalWorkerApplyRequest {
+  expectedGeneration: string;
+  operations: readonly VocalEditOperation[];
+}
 
 export type VocalWorkerMutation =
-  | { kind: 'beginEdit'; expectedRevision?: VocalUint64 }
-  | { kind: 'apply'; request: VocalApplyRequest }
-  | { kind: 'commit'; expectedRevision: VocalUint64 }
+  | { kind: 'beginEdit'; expectedRevision?: string }
+  | { kind: 'apply'; request: VocalWorkerApplyRequest }
+  | { kind: 'commit'; expectedRevision: string }
   | { kind: 'cancel' }
-  | { kind: 'undo'; expectedRevision?: VocalUint64 }
-  | { kind: 'redo'; expectedRevision?: VocalUint64 }
-  | { kind: 'notes' }
+  | { kind: 'undo'; expectedRevision?: string }
+  | { kind: 'redo'; expectedRevision?: string }
+  | { kind: 'notes'; draft?: boolean }
   | { kind: 'analysis' }
   | { kind: 'capabilities' }
   | { kind: 'exportState' }
@@ -47,7 +53,7 @@ export interface VocalWorkerCreateMessage {
   type: 'sonare:vocal-create';
   id: number;
   sessionId: string;
-  clientIntentSequence: VocalUint64;
+  clientIntentSequence: string;
   request: VocalWorkerCreateRequest;
   cancelBuffer?: SharedArrayBuffer;
 }
@@ -56,7 +62,7 @@ export interface VocalWorkerMutateMessage {
   type: 'sonare:vocal-mutate';
   id: number;
   sessionId: string;
-  clientIntentSequence: VocalUint64;
+  clientIntentSequence: string;
   baseToken?: VocalStateToken;
   mutation: VocalWorkerMutation;
   cancelBuffer?: SharedArrayBuffer;
@@ -66,7 +72,7 @@ export interface VocalWorkerPreviewMessage {
   type: 'sonare:vocal-preview';
   id: number;
   sessionId: string;
-  clientIntentSequence: VocalUint64;
+  clientIntentSequence: string;
   baseToken?: VocalStateToken;
   request: VocalRenderRequest;
   cancelBuffer?: SharedArrayBuffer;
@@ -76,14 +82,14 @@ export interface VocalWorkerDisposeMessage {
   type: 'sonare:vocal-dispose';
   id: number;
   sessionId: string;
-  clientIntentSequence: VocalUint64;
+  clientIntentSequence: string;
 }
 
 export interface VocalWorkerCancelMessage {
   type: 'sonare:vocal-cancel';
   id: number;
   sessionId: string;
-  clientIntentSequence: VocalUint64;
+  clientIntentSequence: string;
 }
 
 export type VocalWorkerRequestMessage =
@@ -104,8 +110,11 @@ export interface VocalWorkerCreateResult {
 export interface VocalWorkerResponseBase {
   id: number;
   sessionId: string;
-  clientIntentSequence: VocalUint64;
+  clientIntentSequence: string;
+  /** Committed session token after the call. */
   token?: VocalStateToken;
+  /** Open draft token after the call; absent when no draft is open. */
+  draftToken?: VocalStateToken;
 }
 
 export type VocalWorkerResult =
@@ -114,10 +123,10 @@ export type VocalWorkerResult =
   | VocalNotesResult
   | VocalAnalysis
   | VocalCapabilities
-  | VocalStateBytes
+  | Uint8Array
   | VocalRenderResult
   | VocalStateToken
-  | VocalHistoryState
+  | VocalHistory
   | VocalPitchEvaluation
   | number
   | null;
@@ -134,18 +143,7 @@ export interface VocalWorkerProgressMessage extends VocalWorkerResponseBase {
 
 export interface VocalWorkerErrorMessage extends VocalWorkerResponseBase {
   type: 'sonare:vocal-error';
-  error: {
-    name: string;
-    message: string;
-    code?: number;
-    codeName?: string;
-    reason?: number;
-    field?: string;
-    expected?: VocalUint64;
-    actual?: VocalUint64;
-    expectedText?: string;
-    actualText?: string;
-  };
+  error: SonareFailurePayload & { detail?: VocalErrorDetail };
 }
 
 export type VocalWorkerResponseMessage =
@@ -193,7 +191,7 @@ export function stateTokenEquals(
 }
 
 /** Decimal sequence comparison without converting a uint64 to Number. */
-export function compareUint64(a: VocalUint64, b: VocalUint64): number {
+export function compareUint64(a: string, b: string): number {
   const left = a.replace(/^0+(?=\d)/, '');
   const right = b.replace(/^0+(?=\d)/, '');
   if (left.length !== right.length) {

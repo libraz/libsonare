@@ -6,6 +6,7 @@
  */
 
 import { beforeAll, describe, expect, it } from 'vitest';
+import type { ProjectBounceResult } from '../dist/index.js';
 import {
   ErrorCode,
   init,
@@ -24,6 +25,18 @@ describe('Sonare WASM Project', () => {
     await init();
   });
 
+  /** Interleave planar bounce channels so frame-order comparisons read as one buffer. */
+  function interleaved(result: ProjectBounceResult): Float32Array {
+    const frames = result.channels[0]?.length ?? 0;
+    const out = new Float32Array(frames * result.channels.length);
+    result.channels.forEach((plane, c) => {
+      for (let i = 0; i < frames; i++) {
+        out[i * result.channels.length + c] = plane[i];
+      }
+    });
+    return out;
+  }
+
   function buildProject(): Project {
     const project = new Project();
     project.setSampleRate(48000);
@@ -36,9 +49,8 @@ describe('Sonare WASM Project', () => {
       trackId: track,
       startPpq: 0,
       lengthPpq: 4,
-      audio,
-      audioChannels: 1,
-      audioSampleRate: 48000,
+      channels: [audio],
+      sampleRate: 48000,
     });
     const { clipId } = project.addMidiClip(0, 4);
     project.setMidiEvents(clipId, [
@@ -58,43 +70,51 @@ describe('Sonare WASM Project', () => {
         lengthPpq: 1,
         sourceUri: 'asset://metadata.wav',
       });
-      const sourceId = project.clipByIndex(0).sourceId;
+      const sourceId = project.clips()[0].sourceId;
 
-      expect(project.sourceByIndex(0)).toMatchObject({
+      expect(project.sources()[0]).toMatchObject({
         id: sourceId,
         contentHash: '',
         externalStemRole: '',
       });
 
-      project.setAudioSourceMetadata(sourceId, 'sha256:deadbeef', 'lead');
-      expect(project.sourceByIndex(0)).toMatchObject({
+      project.setAudioSourceMetadata({
+        sourceId,
+        contentHash: 'sha256:deadbeef',
+        externalStemRole: 'lead',
+      });
+      expect(project.sources()[0]).toMatchObject({
         id: sourceId,
         nameOrUri: 'asset://metadata.wav',
         contentHash: 'sha256:deadbeef',
         externalStemRole: 'lead',
       });
 
-      project.setAudioSourceMetadata(sourceId, '', '');
-      expect(project.sourceByIndex(0)).toMatchObject({
+      project.setAudioSourceMetadata({ sourceId });
+      expect(project.sources()[0]).toMatchObject({
         contentHash: '',
         externalStemRole: '',
       });
 
       project.undo();
-      expect(project.sourceByIndex(0)).toMatchObject({
+      expect(project.sources()[0]).toMatchObject({
         contentHash: 'sha256:deadbeef',
         externalStemRole: 'lead',
       });
       project.redo();
-      expect(project.sourceByIndex(0)).toMatchObject({
+      expect(project.sources()[0]).toMatchObject({
         contentHash: '',
         externalStemRole: '',
       });
 
-      project.setAudioSourceMetadata(sourceId, 'sha256:roundtrip', 'vocals');
+      project.setAudioSourceMetadata({
+        sourceId,
+        contentHash: 'sha256:roundtrip',
+        externalStemRole: 'vocals',
+      });
       const restored = Project.fromJson(project.toJson());
       try {
-        expect(restored.sourceByIndex(0)).toMatchObject({
+        expect(restored.sources()[0]).toMatchObject({
           id: sourceId,
           contentHash: 'sha256:roundtrip',
           externalStemRole: 'vocals',
@@ -118,9 +138,13 @@ describe('Sonare WASM Project', () => {
         sourceUri: 'asset://audio.wav',
       });
       project.addMidiClip(0, 1);
-      const audioSourceId = project.clipByIndex(0).sourceId;
-      const midiSourceId = project.clipByIndex(1).sourceId;
-      project.setAudioSourceMetadata(audioSourceId, 'sha256:valid', 'lead');
+      const audioSourceId = project.clips()[0].sourceId;
+      const midiSourceId = project.clips()[1].sourceId;
+      project.setAudioSourceMetadata({
+        sourceId: audioSourceId,
+        contentHash: 'sha256:valid',
+        externalStemRole: 'lead',
+      });
 
       const expectInvalidParameter = (action: () => void) => {
         let caught: unknown;
@@ -133,14 +157,24 @@ describe('Sonare WASM Project', () => {
       };
 
       expectInvalidParameter(() =>
-        project.setAudioSourceMetadata(midiSourceId, 'sha256:bad', 'lead'),
+        project.setAudioSourceMetadata({
+          sourceId: midiSourceId,
+          contentHash: 'sha256:bad',
+          externalStemRole: 'lead',
+        }),
       );
-      expectInvalidParameter(() => project.setAudioSourceMetadata(999999, 'sha256:bad', 'lead'));
-      expect(project.sourceByIndex(0)).toMatchObject({
+      expectInvalidParameter(() =>
+        project.setAudioSourceMetadata({
+          sourceId: 999999,
+          contentHash: 'sha256:bad',
+          externalStemRole: 'lead',
+        }),
+      );
+      expect(project.sources()[0]).toMatchObject({
         contentHash: 'sha256:valid',
         externalStemRole: 'lead',
       });
-      expect(project.sourceByIndex(1)).toMatchObject({
+      expect(project.sources()[1]).toMatchObject({
         contentHash: '',
         externalStemRole: '',
       });
@@ -150,7 +184,7 @@ describe('Sonare WASM Project', () => {
   });
 
   it('creates projects and reads canonical assist sidecars in stable order', () => {
-    const project = Project.create();
+    const project = new Project();
     const constructed = new Project();
     try {
       expect(project.toJson()).toBe(constructed.toJson());
@@ -168,10 +202,10 @@ describe('Sonare WASM Project', () => {
         payload: new Uint8Array([3, 4]),
       });
 
-      expect(project.assistSidecarCount()).toBe(2);
+      expect(project.assistSidecars().length).toBe(2);
       expect(project.assistSidecars()).toEqual([
-        project.getAssistSidecar(0),
-        project.getAssistSidecar(1),
+        project.assistSidecars()[0],
+        project.assistSidecars()[1],
       ]);
       expect(project.assistSidecars()[0]).toMatchObject({
         moduleId: 'project.module',
@@ -198,7 +232,7 @@ describe('Sonare WASM Project', () => {
   it('validates assist sidecar descriptors before calling embind', () => {
     const project = new Project();
     try {
-      expect(() => project.setAssistSidecar(null as never)).toThrow(/sidecar descriptor object/);
+      expect(() => project.setAssistSidecar(null as never)).toThrow(/request must be an object/);
       expect(() => project.setAssistSidecar({ moduleId: '' })).toThrow(/moduleId/);
       expect(() => project.setAssistSidecar({ moduleId: 'bad', schemaVersion: -1 })).toThrow(
         /schemaVersion/,
@@ -210,9 +244,14 @@ describe('Sonare WASM Project', () => {
         /payload/,
       );
       expect(() =>
-        // @ts-expect-error the five-argument legacy form is rejected at runtime
-        project.setAssistSidecar('legacy', 0, 0, 0, 0),
-      ).toThrow(/requires six arguments/);
+        (project as unknown as { setAssistSidecar: (...args: unknown[]) => void }).setAssistSidecar(
+          'legacy',
+          0,
+          0,
+          0,
+          0,
+        ),
+      ).toThrow(/request must be an object/);
     } finally {
       project.destroy();
     }
@@ -221,11 +260,10 @@ describe('Sonare WASM Project', () => {
   it('rejects unknown track kinds at both the facade and embind boundaries', () => {
     const project = new Project();
     try {
-      expect(() => project.addTrack({ kind: 'bus' as never })).toThrow(
-        /Invalid project track kind/,
-      );
-      expect(() => project.addTrack({ kind: 3 as never })).toThrow(/Invalid project track kind/);
-      expect(() => project.addTrack({ kind: 1.5 as never })).toThrow(/Invalid project track kind/);
+      expect(() => project.addTrack({ kind: 'bus' as never })).toThrow(RangeError);
+      expect(() => project.addTrack({ kind: 'bus' as never })).toThrow(/kind must be one of/);
+      expect(() => project.addTrack({ kind: 3 as never })).toThrow(TypeError);
+      expect(() => project.addTrack({ kind: 1.5 as never })).toThrow(TypeError);
 
       const native = (project as unknown as { native: { addTrack: (desc: object) => number } })
         .native;
@@ -306,31 +344,31 @@ describe('Sonare WASM Project', () => {
           name: 'vocals',
           role: 'lead',
           layout: 'stereo',
-          planarSamples: [new Float32Array([1, 0, 0]), new Float32Array([-0.5, 0, 0])],
+          channels: [new Float32Array([1, 0, 0]), new Float32Array([-0.5, 0, 0])],
           startFrame: 113,
         },
         {
           name: 'drums',
           layout: 'mono',
-          planarSamples: [new Float32Array([0.25, 0, 0])],
+          channels: [new Float32Array([0.25, 0, 0])],
         },
       ],
     });
     expect(result.trackIds).toHaveLength(2);
     expect(result.clipIds).toHaveLength(2);
-    expect(project.trackCount()).toBe(2);
-    expect(project.clipCount()).toBe(2);
+    expect(project.tracks().length).toBe(2);
+    expect(project.clips().length).toBe(2);
     expect(() =>
       project.importExternalStems({
         sampleRate: 48000,
         stems: [
-          { name: 'duplicate', layout: 'mono', planarSamples: [new Float32Array([0])] },
-          { name: 'duplicate', layout: 'mono', planarSamples: [new Float32Array([0])] },
+          { name: 'duplicate', layout: 'mono', channels: [new Float32Array([0])] },
+          { name: 'duplicate', layout: 'mono', channels: [new Float32Array([0])] },
         ],
       }),
     ).toThrow();
-    expect(project.trackCount()).toBe(2);
-    expect(project.clipCount()).toBe(2);
+    expect(project.tracks().length).toBe(2);
+    expect(project.clips().length).toBe(2);
     project.destroy();
   });
 
@@ -380,21 +418,21 @@ describe('Sonare WASM Project', () => {
       const before = project.toJson();
       project.addMidiClip(2, 4);
       const added = project.toJson();
-      expect(project.trackCount()).toBe(1);
-      expect(project.sourceCount()).toBe(1);
-      expect(project.clipCount()).toBe(1);
+      expect(project.tracks().length).toBe(1);
+      expect(project.sources().length).toBe(1);
+      expect(project.clips().length).toBe(1);
 
       project.undo();
       expect(project.toJson()).toBe(before);
-      expect(project.trackCount()).toBe(0);
-      expect(project.sourceCount()).toBe(0);
-      expect(project.clipCount()).toBe(0);
+      expect(project.tracks().length).toBe(0);
+      expect(project.sources().length).toBe(0);
+      expect(project.clips().length).toBe(0);
 
       project.redo();
       expect(project.toJson()).toBe(added);
-      expect(project.trackCount()).toBe(1);
-      expect(project.sourceCount()).toBe(1);
-      expect(project.clipCount()).toBe(1);
+      expect(project.tracks().length).toBe(1);
+      expect(project.sources().length).toBe(1);
+      expect(project.clips().length).toBe(1);
     } finally {
       project.destroy();
     }
@@ -420,7 +458,7 @@ describe('Sonare WASM Project', () => {
     const project = new Project();
     try {
       const trackId = project.addTrack({ kind: 'audio', name: 'audio' });
-      const clipId = project.addClip({ trackId, startPpq: 0, lengthPpq: 4, audioChannels: 0 });
+      const clipId = project.addClip({ trackId, startPpq: 0, lengthPpq: 4 });
       const before = project.toJson();
 
       // A warp ref must name a registered warp map.
@@ -448,10 +486,10 @@ describe('Sonare WASM Project', () => {
       expect(project.toJson()).toContain('"warp_ref_id":0');
       project.undo();
       expect(project.toJson()).toBe(before);
-      project.setClipWarpMode(clipId, 'tempo-sync');
+      project.setClipWarpMode(clipId, 'tempoSync');
       expect(project.toJson()).toContain('"warp_mode":2');
       expect(() => project.setClipWarpMode(clipId, 'typo' as 'repitch')).toThrow();
-      expect(() => project.setClipWarpMode(clipId, 99 as 1)).toThrow();
+      expect(() => project.setClipWarpMode(clipId, 99 as never)).toThrow();
     } finally {
       project.destroy();
     }
@@ -461,7 +499,7 @@ describe('Sonare WASM Project', () => {
     const project = new Project();
     try {
       const trackId = project.addTrack({ kind: 'audio', name: 'audio' });
-      const clipId = project.addClip({ trackId, startPpq: 0, lengthPpq: 4, audioChannels: 0 });
+      const clipId = project.addClip({ trackId, startPpq: 0, lengthPpq: 4 });
       project.setWarpMap({
         id: 123,
         anchors: [
@@ -489,11 +527,17 @@ describe('Sonare WASM Project', () => {
     try {
       project.setSampleRate(48000);
       const result = project.compile();
-      expect(result.hasTimeline).toBe(true);
-      expect(typeof result.diagnosticCount).toBe('number');
-      expect(typeof result.messages).toBe('string');
+      expect(result).not.toHaveProperty('hasTimeline');
+      expect(result).not.toHaveProperty('diagnosticCount');
+      expect(result).not.toHaveProperty('messages');
       expect(Array.isArray(result.diagnostics)).toBe(true);
-      expect(result.diagnostics.length).toBe(result.diagnosticCount);
+      expect(result.diagnostics).toHaveLength(0);
+      const { timeline } = project.compileTimeline();
+      try {
+        expect(timeline).not.toBeNull();
+      } finally {
+        timeline?.destroy();
+      }
     } finally {
       project.destroy();
     }
@@ -503,11 +547,10 @@ describe('Sonare WASM Project', () => {
     const project = buildProject();
     try {
       const result = project.compile();
-      expect(result.hasTimeline).toBe(true);
       expect(result.diagnostics.length).toBe(1);
-      expect(result.diagnostics[0].code).toBe(10);
+      expect(result.diagnostics[0].code).toBe('midiClipNoInstrument');
+      expect(result.diagnostics[0].severity).toBe('warning');
       expect(result.diagnostics[0].message).toContain('project contains MIDI clips');
-      expect(result.messages.split('\n')[0]).toBe(result.diagnostics[0].message);
     } finally {
       project.destroy();
     }
@@ -521,12 +564,11 @@ describe('Sonare WASM Project', () => {
       // silence here (MIDI tracks have no instrument bound), which is enough to
       // assert same-build repeatability. We compare within a small tolerance
       // rather than requiring cross-platform bit-exactness.
-      const options = { totalFrames: 256, blockSize: 128, numChannels: 2, sampleRate: 48000 };
+      const options = { totalFrames: 256, blockSize: 128, numChannels: 2 };
 
-      const first = project.bounce(options);
-      const second = project.bounce(options);
+      const first = interleaved(project.bounce(options));
+      const second = interleaved(project.bounce(options));
 
-      expect(first).toBeInstanceOf(Float32Array);
       expect(first.length).toBe(256 * 2);
       expect(second.length).toBe(first.length);
       for (let i = 0; i < first.length; i++) {
@@ -550,11 +592,17 @@ describe('Sonare WASM Project', () => {
     };
 
     try {
-      const invalidOptions = { totalFrames: 128, sampleRate: 1 };
+      const invalidOptions = { totalFrames: 128, blockSize: -1 };
       expectInvalidParameter(() => project.bounce(invalidOptions));
-      expectInvalidParameter(() => project.bounceWithBuiltinInstrument({}, invalidOptions));
-      expectInvalidParameter(() => project.bounceWithSynthInstrument({}, invalidOptions));
-      expectInvalidParameter(() => project.bounceWithSf2Instrument({}, invalidOptions));
+      expectInvalidParameter(() =>
+        project.bounceWithBuiltinInstruments({ instrument: {} }, invalidOptions),
+      );
+      expectInvalidParameter(() =>
+        project.bounceWithSynthInstruments({ instrument: {} }, invalidOptions),
+      );
+      expectInvalidParameter(() =>
+        project.bounceWithSf2Instruments({ instrument: {} }, invalidOptions),
+      );
     } finally {
       project.destroy();
     }
@@ -600,16 +648,16 @@ describe('Sonare WASM Project', () => {
     const project = buildMidiOnlyProject();
     try {
       // Without an instrument the same MIDI project bounces to silence.
-      const silent = project.bounce({ totalFrames: 48000, numChannels: 2, sampleRate: 48000 });
-      expect(silent).toBeInstanceOf(Float32Array);
+      const silent = interleaved(project.bounce({ totalFrames: 48000, numChannels: 2 }));
       expect(maxAbs(silent)).toBe(0);
 
       // Routing the built-in synth makes it audible.
-      const audible = project.bounceWithBuiltinInstrument(
-        { waveform: 'saw', gain: 0.5 },
-        { totalFrames: 48000, numChannels: 2, sampleRate: 48000 },
+      const audible = interleaved(
+        project.bounceWithBuiltinInstruments(
+          { instrument: { waveform: 'saw', gain: 0.5 } },
+          { totalFrames: 48000, numChannels: 2 },
+        ),
       );
-      expect(audible).toBeInstanceOf(Float32Array);
       expect(audible.length).toBe(48000 * 2);
       expect(maxAbs(audible)).toBeGreaterThan(0.01);
     } finally {
@@ -619,21 +667,35 @@ describe('Sonare WASM Project', () => {
 
   it('defines omitted, undefined, empty, and null instrument binding semantics', () => {
     const project = buildMidiOnlyProject();
-    const options = { totalFrames: 4096, numChannels: 1, sampleRate: 48000 };
+    const options = { totalFrames: 4096, numChannels: 1 };
+    const pair = { instrument: {} };
     try {
-      const omitted = project.bounceWithBuiltinInstrument();
-      const explicitUndefined = project.bounceWithBuiltinInstrument(undefined, options);
-      const empty = project.bounceWithBuiltinInstrument([], options);
-      const runtimeNull = project.bounceWithBuiltinInstrument(null as never, options);
-      expect(maxAbs(omitted)).toBeGreaterThan(0.01);
-      expect(maxAbs(explicitUndefined)).toBeGreaterThan(0.01);
+      // No binding, undefined, an empty list and null all bind nothing: silence.
+      const omitted = interleaved(project.bounceWithBuiltinInstruments());
+      const explicitUndefined = interleaved(
+        project.bounceWithBuiltinInstruments(undefined, options),
+      );
+      const empty = interleaved(project.bounceWithBuiltinInstruments([], options));
+      const runtimeNull = interleaved(project.bounceWithBuiltinInstruments(null as never, options));
+      expect(maxAbs(omitted)).toBe(0);
+      expect(maxAbs(explicitUndefined)).toBe(0);
       expect(maxAbs(empty)).toBe(0);
       expect(maxAbs(runtimeNull)).toBe(0);
+      // An empty-config pair binds the default instrument.
+      expect(
+        maxAbs(interleaved(project.bounceWithBuiltinInstruments(pair, options))),
+      ).toBeGreaterThan(0.01);
 
-      expect(maxAbs(project.bounceWithSynthInstrument(undefined, options))).toBeGreaterThan(0.01);
-      expect(maxAbs(project.bounceWithSynthInstrument([], options))).toBe(0);
-      expect(maxAbs(project.bounceWithSf2Instrument(undefined, options))).toBeGreaterThan(0.01);
-      expect(maxAbs(project.bounceWithSf2Instrument([], options))).toBe(0);
+      expect(maxAbs(interleaved(project.bounceWithSynthInstruments(undefined, options)))).toBe(0);
+      expect(maxAbs(interleaved(project.bounceWithSynthInstruments([], options)))).toBe(0);
+      expect(
+        maxAbs(interleaved(project.bounceWithSynthInstruments(pair, options))),
+      ).toBeGreaterThan(0.01);
+      expect(maxAbs(interleaved(project.bounceWithSf2Instruments(undefined, options)))).toBe(0);
+      expect(maxAbs(interleaved(project.bounceWithSf2Instruments([], options)))).toBe(0);
+      expect(maxAbs(interleaved(project.bounceWithSf2Instruments(pair, options)))).toBeGreaterThan(
+        0.01,
+      );
     } finally {
       project.destroy();
     }
@@ -648,7 +710,7 @@ describe('Sonare WASM Project', () => {
       // enough for the note to reach its sustain stage; a few thousand frames
       // is still inside attack/decay, where no sustain value can matter and
       // any comparison would agree for the wrong reason.
-      const options = { totalFrames: 48000, numChannels: 2, sampleRate: 48000 };
+      const options = { totalFrames: 48000, numChannels: 2 };
       const tailEnergy = (audio: Float32Array): number => {
         let sum = 0;
         for (let i = Math.floor(audio.length * 0.75); i < audio.length; i++) {
@@ -660,14 +722,17 @@ describe('Sonare WASM Project', () => {
       // A short envelope pinned in all three renders keeps the tail window past the
       // decay stage however the preset's own envelope is voiced.
       const envelope = { preset: 'warm-pad', ampAttackMs: 20, ampDecayMs: 150 };
-      const base = project.bounceWithSynthInstrument(envelope, options);
-      const explicitZero = project.bounceWithSynthInstrument(
-        { ...envelope, ampSustain: 0 },
-        options,
+      const base = interleaved(
+        project.bounceWithSynthInstruments({ instrument: envelope }, options),
       );
-      const explicitLow = project.bounceWithSynthInstrument(
-        { ...envelope, ampSustain: 0.2 },
-        options,
+      const explicitZero = interleaved(
+        project.bounceWithSynthInstruments({ instrument: { ...envelope, ampSustain: 0 } }, options),
+      );
+      const explicitLow = interleaved(
+        project.bounceWithSynthInstruments(
+          { instrument: { ...envelope, ampSustain: 0.2 } },
+          options,
+        ),
       );
 
       expect(maxAbs(base)).toBeGreaterThan(0.01);
@@ -687,13 +752,14 @@ describe('Sonare WASM Project', () => {
     }
   });
 
-  it('bounceWithBuiltinInstrument auto-derives length when totalFrames is omitted', () => {
+  it('bounceWithBuiltinInstruments auto-derives length when totalFrames is omitted', () => {
     const project = buildMidiOnlyProject();
     try {
       // No totalFrames: the C ABI auto-derives the render length from the
       // arrangement (musical end + synth release tail).
-      const audio = project.bounceWithBuiltinInstrument({}, { numChannels: 2, sampleRate: 48000 });
-      expect(audio).toBeInstanceOf(Float32Array);
+      const audio = interleaved(
+        project.bounceWithBuiltinInstruments({ instrument: {} }, { numChannels: 2 }),
+      );
       expect(audio.length).toBeGreaterThan(0);
       expect(maxAbs(audio)).toBeGreaterThan(0.01);
     } finally {
@@ -706,27 +772,36 @@ describe('Sonare WASM Project', () => {
     try {
       // The README WASM quick-start shape: bounce({ numChannels }) with no
       // totalFrames must now produce a buffer (auto-derived length), not error.
-      const audio = project.bounce({ numChannels: 2, sampleRate: 48000 });
-      expect(audio).toBeInstanceOf(Float32Array);
+      const audio = interleaved(project.bounce({ numChannels: 2 }));
       expect(audio.length).toBeGreaterThan(0);
     } finally {
       project.destroy();
     }
   });
 
-  it('bounceWithBuiltinInstrument accepts a default patch and per-destination array', () => {
+  it('bounceWithBuiltinInstruments accepts a default patch and per-destination array', () => {
     const project = buildMidiOnlyProject();
     try {
       // Default ({}) sine patch.
-      const def = project.bounceWithBuiltinInstrument({}, { totalFrames: 24000, numChannels: 1 });
+      const def = interleaved(
+        project.bounceWithBuiltinInstruments(
+          { instrument: {} },
+          { totalFrames: 24000, numChannels: 1 },
+        ),
+      );
       expect(def.length).toBe(24000);
       expect(maxAbs(def)).toBeGreaterThan(0.01);
 
       // Array of bindings (single destination 0 here).
-      const arr = project.bounceWithBuiltinInstrument([{ destinationId: 0, waveform: 'square' }], {
-        totalFrames: 24000,
-        numChannels: 1,
-      });
+      const arr = interleaved(
+        project.bounceWithBuiltinInstruments(
+          [{ destinationId: 0, instrument: { waveform: 'square' } }],
+          {
+            totalFrames: 24000,
+            numChannels: 1,
+          },
+        ),
+      );
       expect(arr.length).toBe(24000);
       expect(maxAbs(arr)).toBeGreaterThan(0.01);
     } finally {
@@ -743,16 +818,22 @@ describe('Sonare WASM Project', () => {
       Project.midiNoteOn(0, 0, 0, 60, 100),
       Project.midiNoteOff(2, 0, 0, 60, 0),
     ]);
-    const options = { totalFrames: 24000, numChannels: 1, sampleRate: 48000 };
+    const options = { totalFrames: 24000, numChannels: 1 };
     try {
-      const omitted = project.bounceWithSynthInstrument({ preset: 'sine' }, options);
-      const fixed = project.bounceWithSynthInstrument(
-        { preset: 'sine', useGmPrograms: false },
-        options,
+      const omitted = interleaved(
+        project.bounceWithSynthInstruments({ instrument: { preset: 'sine' } }, options),
       );
-      const gm = project.bounceWithSynthInstrument(
-        { preset: 'sine', useGmPrograms: true },
-        options,
+      const fixed = interleaved(
+        project.bounceWithSynthInstruments(
+          { instrument: { preset: 'sine', useGmPrograms: false } },
+          options,
+        ),
+      );
+      const gm = interleaved(
+        project.bounceWithSynthInstruments(
+          { instrument: { preset: 'sine', useGmPrograms: true } },
+          options,
+        ),
       );
 
       expect(fixed).toEqual(omitted);
@@ -762,8 +843,8 @@ describe('Sonare WASM Project', () => {
       for (const invalid of [1, 'true']) {
         let caught: unknown;
         try {
-          project.bounceWithSynthInstrument(
-            { preset: 'sine', useGmPrograms: invalid as never },
+          project.bounceWithSynthInstruments(
+            { instrument: { preset: 'sine', useGmPrograms: invalid as never } },
             options,
           );
         } catch (error) {
@@ -780,9 +861,11 @@ describe('Sonare WASM Project', () => {
     const render = (program: number, useGmPrograms: boolean): Float32Array => {
       const project = buildGmProgramProject(program);
       try {
-        const audio = project.bounceWithSynthInstrument(
-          { preset: 'sine', useGmPrograms },
-          { totalFrames: 12000, blockSize: 128, numChannels: 1, sampleRate: 48000 },
+        const audio = interleaved(
+          project.bounceWithSynthInstruments(
+            { instrument: { preset: 'sine', useGmPrograms } },
+            { totalFrames: 12000, blockSize: 128, numChannels: 1 },
+          ),
         );
         expect(audio.length).toBe(12000);
         for (const sample of audio) {
@@ -821,12 +904,17 @@ describe('Sonare WASM Project', () => {
         Project.midiPitchBend(0.4, 0, 0, 8192),
         Project.midiNoteOff(1.1, 0, 0, 60, 0),
       ]);
-      project.bakeMidiFx(
+      project.bakeMidiFx({
         clipId,
-        '{"transpose_semitones":12,"quantize_ppq":0.25,"quantize_strength":1.0}',
-      );
+        configJson: '{"transpose_semitones":12,"quantize_ppq":0.25,"quantize_strength":1.0}',
+      });
       project.setProgram(clipId, 42);
-      project.setProgramOnChannel(clipId, 0, 3, 24, 0x0123);
+      project.setProgramOnChannel(clipId, {
+        group: 0,
+        channel: 3,
+        program: 24,
+        bank: { msb: 2, lsb: 0x23 },
+      });
       const smf = project.exportSmf();
       expect(smf[0]).toBe(0x4d);
       // The export goes straight into a Blob, which is how a browser consumer
@@ -866,7 +954,7 @@ describe('Sonare WASM Project', () => {
     }
   });
 
-  it('reports MIDI-FX provenance and matches the positional bake', () => {
+  it('reports MIDI-FX provenance and matches the plain bake', () => {
     const seed = (project: Project, clip: number) => {
       project.setMidiEvents(clip, [
         Project.midiNoteOn(0, 0, 0, 60, 100),
@@ -899,11 +987,17 @@ describe('Sonare WASM Project', () => {
       }
       expect(perInput).toEqual([3, 3, 3, 3]);
 
-      // The positional form must land on identical bytes, and the request form
-      // without the flag must behave like it.
+      // The bake with provenance must land on the same bytes as the plain
+      // bake, and the positional form is refused.
       const { clipId: positionalClip } = positional.addMidiClip(0, 4);
       seed(positional, positionalClip);
-      positional.bakeMidiFx(positionalClip, config);
+      positional.bakeMidiFx({ clipId: positionalClip, configJson: config });
+      expect(() =>
+        (positional as never as Record<string, (...a: unknown[]) => unknown>).bakeMidiFx(
+          positionalClip,
+          config,
+        ),
+      ).toThrow(TypeError);
       expect(Array.from(request.exportSmf())).toEqual(Array.from(positional.exportSmf()));
 
       const { clipId: bareClip } = bare.addMidiClip(0, 4);
@@ -912,7 +1006,9 @@ describe('Sonare WASM Project', () => {
       expect(Array.from(bare.exportSmf())).toEqual(Array.from(positional.exportSmf()));
 
       // Errors travel the same path in both forms.
-      expect(() => positional.bakeMidiFx(positionalClip, '{bad json')).toThrow();
+      expect(() =>
+        positional.bakeMidiFx({ clipId: positionalClip, configJson: '{bad json' }),
+      ).toThrow();
       expect(() =>
         request.bakeMidiFx({ clipId: requestClip, configJson: '{bad json', withSourceIndex: true }),
       ).toThrow();
@@ -934,7 +1030,7 @@ describe('Sonare WASM Project', () => {
         Project.midiCc(i / 80, 0, 0, i % 128, (i * 3) % 128),
       );
       project.setMidiEvents(clipId, events);
-      project.bakeMidiFx(clipId, '{}');
+      project.bakeMidiFx({ clipId, configJson: '{}' });
 
       const payload = JSON.parse(project.toJson()) as {
         midi_content: Record<string, Array<{ ppq: number; data0: number; data1: number }>>;
@@ -944,7 +1040,7 @@ describe('Sonare WASM Project', () => {
       const roundtrip = new Project();
       try {
         const roundClip = roundtrip.importSmf(project.exportSmf());
-        roundtrip.bakeMidiFx(roundClip, '{}');
+        roundtrip.bakeMidiFx({ clipId: roundClip, configJson: '{}' });
         const roundPayload = JSON.parse(roundtrip.toJson()) as {
           midi_content: Record<string, Array<{ ppq: number; data0: number; data1: number }>>;
         };
@@ -971,7 +1067,7 @@ describe('Sonare WASM Project', () => {
     try {
       const { clipId } = project.addMidiClip(0, 4);
       project.setMidiEvents(clipId, [Project.midiNoteOn(0, 0, 0, 60, 100)]);
-      project.setClipLoop(clipId, 'loop', 1e-9);
+      project.setClipLoop(clipId, { loopMode: 'loop', loopLengthPpq: 1e-9 });
       expect(() => project.exportSmf()).toThrow();
       expect(() => project.exportClipFile()).toThrow();
     } finally {
@@ -1080,7 +1176,7 @@ describe('Sonare WASM Project', () => {
     const project = new Project();
     try {
       const trackId = project.addTrack({ kind: 'audio', name: 'audio' });
-      const clipId = project.addClip({ trackId, startPpq: 0, lengthPpq: 4, audioChannels: 0 });
+      const clipId = project.addClip({ trackId, startPpq: 0, lengthPpq: 4 });
       expect(() => project.validateMidiNotes(clipId)).toThrow();
     } finally {
       project.destroy();
@@ -1124,18 +1220,18 @@ describe('Sonare WASM Project', () => {
   it('reports clip count after add, import, and remove', () => {
     const project = new Project();
     try {
-      expect(project.clipCount()).toBe(0);
+      expect(project.clips().length).toBe(0);
       const trackId = project.addTrack({ kind: 'audio', name: 'audio' });
-      const clipId = project.addClip({ trackId, startPpq: 0, lengthPpq: 4, audioChannels: 0 });
-      expect(project.clipCount()).toBe(1);
+      const clipId = project.addClip({ trackId, startPpq: 0, lengthPpq: 4 });
+      expect(project.clips().length).toBe(1);
       const restored = Project.fromJson(project.toJson());
       try {
-        expect(restored.clipCount()).toBe(1);
+        expect(restored.clips().length).toBe(1);
       } finally {
         restored.destroy();
       }
       project.removeClip(clipId);
-      expect(project.clipCount()).toBe(0);
+      expect(project.clips().length).toBe(0);
     } finally {
       project.destroy();
     }
@@ -1145,7 +1241,7 @@ describe('Sonare WASM Project', () => {
     const { project, diagnostics } = Project.fromJsonWithDiagnostics(danglingSourceJson());
     try {
       expect(diagnostics).toContain('dangling_clip_source');
-      expect(project.trackCount()).toBe(1);
+      expect(project.tracks().length).toBe(1);
     } finally {
       project.destroy();
     }
@@ -1251,7 +1347,7 @@ describe('Sonare WASM Project', () => {
         maxValue: 0,
       };
       const point = Project.midiCcToBreakpoint([binding], Project.midiCc(2, 0, 4, 74, 127));
-      expect(point).toEqual({ ppq: 2, value: 0, curveToNext: 0 });
+      expect(point).toEqual({ ppq: 2, value: 0, curveToNext: 'linear' });
 
       const event = Project.midiParamToCc([binding], 88, -60, 0, 3);
       expect(event?.ppq).toBe(3);

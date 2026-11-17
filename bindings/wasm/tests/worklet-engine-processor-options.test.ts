@@ -109,9 +109,15 @@ describe('engine and mixer processorOptions refuse undeclared keys', () => {
       );
     });
 
-    it('accepts blockSize', () => {
-      const processor = new SonareWorkletProcessor({ ...base(), blockSize: 128 });
+    it('accepts maxBlockSize', () => {
+      const processor = new SonareWorkletProcessor({ ...base(), maxBlockSize: 128 });
       processor.destroy();
+    });
+
+    it('refuses the retired blockSize key by name', () => {
+      expect(() => new SonareWorkletProcessor({ ...base(), blockSize: 128 } as never)).toThrow(
+        new TypeError("SonareWorkletProcessor: unknown option 'blockSize'"),
+      );
     });
   });
 });

@@ -72,7 +72,7 @@ function renderBlock(mixer: Mixer): { left: Float32Array; right: Float32Array } 
  * itself is what keeps the settled assertions from comparing settle to itself.
  */
 function convergedOutput(): { left: number; right: number } {
-  const mixer = Mixer.fromJson(oneStripScene(), { sampleRate: SR, blockSize: BLOCK });
+  const mixer = Mixer.fromJson(oneStripScene(), { sampleRate: SR, maxBlockSize: BLOCK });
   try {
     mixer.compile();
     let last = renderBlock(mixer);
@@ -102,7 +102,7 @@ describe('Mixer.settle (WASM)', () => {
 
   it('leaves a head ramp on the first block when the strip is not settled', () => {
     const converged = convergedOutput();
-    const mixer = Mixer.fromJson(oneStripScene(), { sampleRate: SR, blockSize: BLOCK });
+    const mixer = Mixer.fromJson(oneStripScene(), { sampleRate: SR, maxBlockSize: BLOCK });
     try {
       mixer.compile();
       const out = renderBlock(mixer);
@@ -128,7 +128,7 @@ describe('Mixer.settle (WASM)', () => {
 
   it('opens the first sample at the converged level and image once settled', () => {
     const converged = convergedOutput();
-    const mixer = Mixer.fromJson(oneStripScene(), { sampleRate: SR, blockSize: BLOCK });
+    const mixer = Mixer.fromJson(oneStripScene(), { sampleRate: SR, maxBlockSize: BLOCK });
     try {
       mixer.compile();
       mixer.settle(0);
@@ -151,7 +151,7 @@ describe('Mixer.settle (WASM)', () => {
   });
 
   it('changes no scene state', () => {
-    const mixer = Mixer.fromJson(oneStripScene(), { sampleRate: SR, blockSize: BLOCK });
+    const mixer = Mixer.fromJson(oneStripScene(), { sampleRate: SR, maxBlockSize: BLOCK });
     try {
       mixer.compile();
       const before = mixer.toJson();
@@ -163,7 +163,7 @@ describe('Mixer.settle (WASM)', () => {
   });
 
   it('rejects an out-of-range strip index', () => {
-    const mixer = Mixer.fromJson(oneStripScene(), { sampleRate: SR, blockSize: BLOCK });
+    const mixer = Mixer.fromJson(oneStripScene(), { sampleRate: SR, maxBlockSize: BLOCK });
     try {
       expect(() => mixer.settle(mixer.stripCount)).toThrow();
     } finally {

@@ -1,26 +1,6 @@
+import { ErrorCode, SonareError } from './errors.js';
+import { failurePayload } from './internal/failure_payload.js';
 import { releasedHandleError } from './internal/handle_guard.js';
-import './lifetime.js';
-import { init } from './index.js';
-import type {
-  VocalAnalysis,
-  VocalCapabilities,
-  VocalCreateRequest,
-  VocalEditOperation,
-  VocalEditResult,
-  VocalHistoryState,
-  VocalNotesResult,
-  VocalPitchEvaluation,
-  VocalRenderResult,
-  VocalRestoreRequest,
-  VocalStateBytes,
-  VocalStateToken,
-} from './public_types_vocal_edit.js';
-import {
-  createVocalEditSession,
-  restoreVocalEditSession,
-  type VocalRenderJob,
-  type VocalRenderSnapshot,
-} from './vocal_edit.js';
 import {
   compareUint64,
   type VocalWorkerCreateMessage,
@@ -31,8 +11,31 @@ import {
   type VocalWorkerRequestMessage,
   type VocalWorkerResponseMessage,
   type VocalWorkerResult,
-} from './vocal_edit_worker_protocol.js';
+} from './internal/vocal_edit_worker_protocol.js';
+import { isVocalErrorDetail } from './internal/vocal_error_detail.js';
+import './lifetime.js';
+import { init } from './index.js';
+import type {
+  VocalAnalysis,
+  VocalCapabilities,
+  VocalCreateRequest,
+  VocalEditOperation,
+  VocalEditResult,
+  VocalHistory,
+  VocalNotesResult,
+  VocalPitchEvaluation,
+  VocalRenderResult,
+  VocalRestoreRequest,
+  VocalStateToken,
+} from './public_types_vocal_edit.js';
+import {
+  createVocalEditSession,
+  restoreVocalEditSession,
+  type VocalRenderJob,
+  type VocalRenderSnapshot,
+} from './vocal_edit.js';
 
+/** The message channel a vocal-edit Worker listens and replies on. */
 export interface VocalEditWorkerEndpoint {
   postMessage(message: VocalWorkerResponseMessage, transfer?: Transferable[]): void;
   addEventListener(
@@ -41,8 +44,9 @@ export interface VocalEditWorkerEndpoint {
   ): void;
 }
 
+/** The draft operations the Worker drives; {@link VocalEditDraft} satisfies it. */
 export interface VocalEditWorkerNativeDraft {
-  token(): VocalStateToken;
+  readonly token: VocalStateToken;
   notes(): VocalNotesResult;
   apply(request: {
     expectedGeneration: string;
@@ -54,12 +58,12 @@ export interface VocalEditWorkerNativeDraft {
   sourceSampleToDestinationSample(noteId: number, sourceSample: number): number;
   destinationSampleToSourceSample(noteId: number, destinationSample: number): number;
   captureRenderSnapshot(): VocalRenderSnapshot;
-  exportState?(): VocalStateBytes;
   destroy(): void;
 }
 
+/** The session operations the Worker drives; {@link VocalEditSession} satisfies it. */
 export interface VocalEditWorkerNativeSession {
-  token(): VocalStateToken;
+  readonly token: VocalStateToken;
   notes(): VocalNotesResult;
   analysis(): VocalAnalysis;
   capabilities(): VocalCapabilities;
@@ -67,7 +71,7 @@ export interface VocalEditWorkerNativeSession {
   undo(expectedRevision?: string): VocalEditResult;
   redo(expectedRevision?: string): VocalEditResult;
   outputLengthSamples(): number;
-  history(): VocalHistoryState;
+  history(): VocalHistory;
   evaluatePitch(noteId: number): VocalPitchEvaluation;
   sourceSampleToDestinationSample(noteId: number, sourceSample: number): number;
   destinationSampleToSourceSample(noteId: number, destinationSample: number): number;
@@ -76,6 +80,7 @@ export interface VocalEditWorkerNativeSession {
   destroy(): void;
 }
 
+/** Creates the native sessions a Worker serves; replaceable for tests. */
 export interface VocalEditWorkerFactory {
   create(request: VocalCreateRequest): VocalEditWorkerNativeSession;
   restore(request: VocalRestoreRequest): VocalEditWorkerNativeSession;
@@ -112,27 +117,10 @@ interface WorkerSession {
 }
 
 function errorPayload(error: unknown): VocalWorkerErrorMessage['error'] {
-  const candidate = error as Partial<Error> & {
-    code?: number;
-    codeName?: string;
-    reason?: number;
-    field?: string;
-    expected?: string;
-    actual?: string;
-    expectedText?: string;
-    actualText?: string;
-  };
+  const detail = (error as { detail?: unknown } | null)?.detail;
   return {
-    name: candidate.name ?? 'Error',
-    message: candidate.message ?? String(error),
-    ...(candidate.code === undefined ? {} : { code: candidate.code }),
-    ...(candidate.codeName === undefined ? {} : { codeName: candidate.codeName }),
-    ...(candidate.reason === undefined ? {} : { reason: candidate.reason }),
-    ...(candidate.field === undefined ? {} : { field: candidate.field }),
-    ...(candidate.expected === undefined ? {} : { expected: candidate.expected }),
-    ...(candidate.actual === undefined ? {} : { actual: candidate.actual }),
-    ...(candidate.expectedText === undefined ? {} : { expectedText: candidate.expectedText }),
-    ...(candidate.actualText === undefined ? {} : { actualText: candidate.actualText }),
+    ...failurePayload(error),
+    ...(isVocalErrorDetail(detail) ? { detail } : {}),
   };
 }
 
@@ -168,10 +156,12 @@ function transferables(value: unknown): Transferable[] {
   return result;
 }
 
-function cancelledError(): Error {
-  const error = new Error('Vocal render cancelled');
-  error.name = 'AbortError';
-  return error;
+function cancelledError(): SonareError {
+  return new SonareError(ErrorCode.Cancelled, 'Vocal render cancelled');
+}
+
+function staleError(message: string): SonareError {
+  return new SonareError(ErrorCode.StaleResult, message);
 }
 
 function isCancelled(active: ActiveCommand): boolean {
@@ -186,13 +176,21 @@ function nextMacrotask(): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, 0));
 }
 
-function resultToken(value: unknown, session: WorkerSession): VocalStateToken {
-  const candidate = value as { token?: VocalStateToken } | null;
-  return candidate?.token ?? currentToken(session);
+interface ReplyTokens {
+  token: VocalStateToken;
+  draftToken?: VocalStateToken;
+}
+
+/** The committed token, plus the draft token while a draft is open. */
+function replyTokens(session: WorkerSession): ReplyTokens {
+  return {
+    token: session.value.token,
+    ...(session.draft ? { draftToken: session.draft.token } : {}),
+  };
 }
 
 function currentToken(session: WorkerSession): VocalStateToken {
-  return session.draft?.token() ?? session.value.token();
+  return session.draft?.token ?? session.value.token;
 }
 
 function postResult(
@@ -201,7 +199,7 @@ function postResult(
   sessionId: string,
   clientIntentSequence: string,
   result: VocalWorkerResult,
-  token?: VocalStateToken,
+  tokens?: ReplyTokens,
 ): void {
   endpoint.postMessage(
     {
@@ -210,7 +208,7 @@ function postResult(
       sessionId,
       clientIntentSequence,
       result,
-      ...(token ? { token } : {}),
+      ...tokens,
     },
     transferables(result),
   );
@@ -222,7 +220,7 @@ function postError(
   sessionId: string,
   clientIntentSequence: string,
   error: unknown,
-  token?: VocalStateToken,
+  tokens?: ReplyTokens,
 ): void {
   endpoint.postMessage({
     type: 'sonare:vocal-error',
@@ -230,7 +228,7 @@ function postError(
     sessionId,
     clientIntentSequence,
     error: errorPayload(error),
-    ...(token ? { token } : {}),
+    ...tokens,
   });
 }
 
@@ -246,7 +244,7 @@ function rejectQueuedCommands(
       queued.message.sessionId,
       queued.message.clientIntentSequence,
       error,
-      currentToken(session),
+      replyTokens(session),
     );
   }
   session.queue = [];
@@ -261,9 +259,7 @@ function ensureSameEpoch(
   session: WorkerSession,
 ): void {
   if (message.baseToken && message.baseToken.sessionEpoch !== currentToken(session).sessionEpoch) {
-    const error = new Error('The vocal edit request targets another session epoch');
-    error.name = 'StaleResultError';
-    throw error;
+    throw staleError('The vocal edit request targets another session epoch');
   }
 }
 
@@ -306,7 +302,7 @@ async function runPreview(
         sessionId: message.sessionId,
         clientIntentSequence: message.clientIntentSequence,
         complete: progress.complete,
-        token: currentToken(session),
+        ...replyTokens(session),
       });
       if (progress.complete) {
         return job.finalize();
@@ -343,7 +339,7 @@ async function execute(
             throw new Error('A vocal edit draft is already open');
           }
           session.draft = session.value.beginEdit(mutation.expectedRevision);
-          result = session.draft.token();
+          result = session.draft.token;
           break;
         case 'apply':
           result = draftRequired(session).apply(mutation.request);
@@ -372,7 +368,7 @@ async function execute(
           result = session.value.redo(mutation.expectedRevision);
           break;
         case 'notes':
-          result = session.draft ? session.draft.notes() : session.value.notes();
+          result = readTarget(session, mutation.draft).notes();
           break;
         case 'analysis':
           result = session.value.analysis();
@@ -384,7 +380,7 @@ async function execute(
           if (session.draft) {
             throw new Error('Commit or cancel the vocal draft before export');
           }
-          result = { data: session.value.exportState() };
+          result = session.value.exportState();
           break;
         case 'outputLength':
           result = session.value.outputLengthSamples();
@@ -393,7 +389,7 @@ async function execute(
           result = session.value.history();
           break;
         case 'draftToken':
-          result = draftRequired(session).token();
+          result = draftRequired(session).token;
           break;
         case 'evaluatePitch':
           result = readTarget(session, mutation.draft).evaluatePitch(mutation.noteId);
@@ -417,7 +413,7 @@ async function execute(
       message.sessionId,
       message.clientIntentSequence,
       result,
-      resultToken(result, session),
+      replyTokens(session),
     );
   } catch (error) {
     postError(
@@ -426,7 +422,7 @@ async function execute(
       message.sessionId,
       message.clientIntentSequence,
       error,
-      currentToken(session),
+      replyTokens(session),
     );
   } finally {
     session.running = undefined;
@@ -465,15 +461,13 @@ function queueCommand(
     return;
   }
   if (compareUint64(message.clientIntentSequence, session.latestIntent) <= 0) {
-    const error = new Error('A stale vocal client intent was rejected');
-    error.name = 'StaleResultError';
     postError(
       endpoint,
       message.id,
       message.sessionId,
       message.clientIntentSequence,
-      error,
-      currentToken(session),
+      staleError('A stale vocal client intent was rejected'),
+      replyTokens(session),
     );
     return;
   }
@@ -493,8 +487,8 @@ function queueCommand(
         command.message.id,
         command.message.sessionId,
         command.message.clientIntentSequence,
-        Object.assign(new Error('Preview superseded'), { name: 'StaleResultError' }),
-        currentToken(session),
+        staleError('Preview superseded'),
+        replyTokens(session),
       );
     }
   }
@@ -510,6 +504,7 @@ function queueCommand(
   void drain(session, endpoint);
 }
 
+/** Seams a Worker entry point can replace: the native session factory and the module initialiser. */
 export interface VocalEditWorkerDependencies {
   factory?: VocalEditWorkerFactory;
   initialize?: () => Promise<void>;
@@ -678,7 +673,7 @@ export function installVocalEditWorkerEndpoint(
         queued.message.sessionId,
         queued.message.clientIntentSequence,
         cancelledError(),
-        currentToken(session),
+        replyTokens(session),
       );
     }
   };
@@ -709,7 +704,7 @@ export function installVocalEditWorkerEndpoint(
       }
       const result: VocalWorkerCreateResult = {
         sessionId: message.sessionId,
-        token: value.token(),
+        token: value.token,
         notes: value.notes(),
         analysis: value.analysis(),
         capabilities: value.capabilities(),
@@ -723,14 +718,9 @@ export function installVocalEditWorkerEndpoint(
         disposing: false,
       });
       value = undefined;
-      postResult(
-        endpoint,
-        message.id,
-        message.sessionId,
-        message.clientIntentSequence,
-        result,
-        result.token,
-      );
+      postResult(endpoint, message.id, message.sessionId, message.clientIntentSequence, result, {
+        token: result.token,
+      });
     } catch (error) {
       value?.destroy();
       postError(endpoint, message.id, message.sessionId, message.clientIntentSequence, error);

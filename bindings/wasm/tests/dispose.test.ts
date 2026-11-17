@@ -61,7 +61,7 @@ describe('Symbol.dispose / using', () => {
   it('Mixer, SampleBank and StreamAnalyzer release through Symbol.dispose', () => {
     const mixer = Mixer.fromJson(mixingScenePresetJson('vocalReverbSend'), {
       sampleRate: SR,
-      blockSize: BLOCK,
+      maxBlockSize: BLOCK,
     });
     const bank = new SampleBank();
     const analyzer = new StreamAnalyzer({ sampleRate: SR });
@@ -144,7 +144,7 @@ describe('Symbol.dispose / using', () => {
       make: () =>
         Mixer.fromJson(mixingScenePresetJson('vocalReverbSend'), {
           sampleRate: SR,
-          blockSize: BLOCK,
+          maxBlockSize: BLOCK,
         }),
       call: (h: Mixer) => h.drainTailStereo(BLOCK),
     },
