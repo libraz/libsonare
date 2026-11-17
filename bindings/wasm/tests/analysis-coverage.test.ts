@@ -96,9 +96,9 @@ describe('WASM analyzer coverage parity', () => {
       expect(Number.isFinite(result.crestFactor)).toBe(true);
       expect(Number.isFinite(result.dynamicRangeDb)).toBe(true);
       expect(typeof result.isCompressed).toBe('boolean');
-      expect(result.loudnessTimes).toBeInstanceOf(Float32Array);
+      expect(result.loudnessTimesSec).toBeInstanceOf(Float32Array);
       expect(result.loudnessRmsDb).toBeInstanceOf(Float32Array);
-      expect(result.loudnessTimes.length).toBe(result.loudnessRmsDb.length);
+      expect(result.loudnessTimesSec.length).toBe(result.loudnessRmsDb.length);
     });
 
     it('flags a heavily limited signal as compressed', () => {

@@ -56,7 +56,7 @@ const dynamicsResult = {
   crestFactor: 0,
   loudnessRangeLu: 0,
   isCompressed: false,
-  loudnessTimes: new Float32Array(0),
+  loudnessTimesSec: new Float32Array(0),
   loudnessRmsDb: new Float32Array(0),
 } satisfies DynamicsResult;
 

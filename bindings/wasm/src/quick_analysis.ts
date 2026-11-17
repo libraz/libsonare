@@ -1124,7 +1124,7 @@ export function analyzeDynamics(...args: unknown[]): DynamicsResult {
     crestFactor: result.crestFactor,
     loudnessRangeLu: result.loudnessRangeDb,
     isCompressed: result.isCompressed,
-    loudnessTimes: result.loudnessTimes,
+    loudnessTimesSec: result.loudnessTimes,
     loudnessRmsDb: result.loudnessRmsDb,
   };
 }

@@ -316,8 +316,8 @@ describe('analyzeDynamics consumes windowSec and compressionThresholdDb it accep
     // (8000-4000)/1000+1 = 5.
     const short = analyzeDynamics(spikyBuffer, DYNAMICS_SR, { windowSec: 0.125, hopLength: 1000 });
     const long = analyzeDynamics(spikyBuffer, DYNAMICS_SR, { windowSec: 0.5, hopLength: 1000 });
-    expect(short.loudnessTimes.length).toBe(8);
-    expect(long.loudnessTimes.length).toBe(5);
+    expect(short.loudnessTimesSec.length).toBe(8);
+    expect(long.loudnessTimesSec.length).toBe(5);
   });
 });
 

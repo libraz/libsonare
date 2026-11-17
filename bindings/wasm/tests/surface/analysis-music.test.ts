@@ -312,6 +312,14 @@ describe('analysis records', () => {
     expect(result).not.toHaveProperty('loudnessRangeDb');
   });
 
+  it('analyzeDynamics reports the loudness curve timestamps in seconds', () => {
+    const result = analyzeDynamics(triad(), sampleRate);
+    expect(result.loudnessTimesSec).toBeInstanceOf(Float32Array);
+    expect(result.loudnessTimesSec.length).toBe(result.loudnessRmsDb.length);
+    expect(result).not.toHaveProperty('loudnessTimes');
+    expectTypeOf<sonare.DynamicsResult>().toHaveProperty('loudnessTimesSec');
+  });
+
   it('analyzeMelody reports seconds and Hz, and leaves an unvoiced frequency absent', () => {
     const result = analyzeMelody(new Float32Array(sampleRate / 2), sampleRate);
     expect(result).toHaveProperty('meanFrequencyHz');

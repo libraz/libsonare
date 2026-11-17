@@ -776,9 +776,9 @@ export interface DynamicsResult {
   /** Loudness range in LU (EBU R128). */
   loudnessRangeLu: number;
   isCompressed: boolean;
-  /** Loudness curve timestamps (seconds), parallel to {@link loudnessRmsDb}. */
-  loudnessTimes: Float32Array;
-  /** Loudness curve RMS values (dB), parallel to {@link loudnessTimes}. */
+  /** Loudness curve timestamps in seconds, parallel to {@link loudnessRmsDb}. */
+  loudnessTimesSec: Float32Array;
+  /** Loudness curve RMS values (dB), parallel to {@link loudnessTimesSec}. */
   loudnessRmsDb: Float32Array;
 }
 
