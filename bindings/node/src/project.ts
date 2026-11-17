@@ -1,4 +1,5 @@
 import { ErrorCode, SonareError } from './errors.js';
+import { nativeTranscribeRequest } from './internal/transcribe_request.js';
 import {
   midi2Byte,
   midi2Event,
@@ -8,7 +9,6 @@ import {
   programArg,
 } from './internal/ump_events.js';
 import { addon } from './native.js';
-import { nativeTranscribeRequest } from './transcribe.js';
 import type {
   BuiltinInstrumentConfig,
   ExternalInstrument,
