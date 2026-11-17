@@ -382,7 +382,7 @@ describe('effects separation: room requests', () => {
     },
   );
 
-  it.each(['mixingTimeMs', 'crossfadeMs', 'maxSec'])(
+  it.each(['mixingTimeMs', 'maxSec'])(
     'synthesizeRir refuses an explicit 0 for %s and accepts omission',
     (field) => {
       expect(caught(() => synthesizeRir({ sampleRate: sr, ...room, [field]: 0 }))).toBeInstanceOf(
@@ -392,14 +392,11 @@ describe('effects separation: room requests', () => {
     },
   );
 
-  it.each(['mixingTimeMs', 'crossfadeMs', 'maxSec'])(
-    'roomMorph refuses an explicit 0 for %s',
-    (field) => {
-      expect(caught(() => roomMorph(decayNoise(0.25), sr, { ...room, [field]: 0 }))).toBeInstanceOf(
-        RangeError,
-      );
-    },
-  );
+  it.each(['mixingTimeMs', 'maxSec'])('roomMorph refuses an explicit 0 for %s', (field) => {
+    expect(caught(() => roomMorph(decayNoise(0.25), sr, { ...room, [field]: 0 }))).toBeInstanceOf(
+      RangeError,
+    );
+  });
 
   it.each([
     'aspectHintLw',
@@ -412,26 +409,21 @@ describe('effects separation: room requests', () => {
     expect(caught(() => estimateRoom(noise, sr, { [field]: 0 }))).toBeInstanceOf(RangeError);
   });
 
-  it('refuses airTemperatureC = 0 until the native room config can carry an absent temperature', () => {
-    expect(
-      caught(() => synthesizeRir({ sampleRate: sr, ...room, airTemperatureC: 0 })),
-    ).toBeInstanceOf(RangeError);
-    expect(() => synthesizeRir({ sampleRate: sr, ...room, airTemperatureC: 20 })).not.toThrow();
-  });
-
-  it('refuses airHumidityPercent = 0 until the native room config can carry an absent humidity', () => {
-    expect(
-      caught(() => synthesizeRir({ sampleRate: sr, ...room, airHumidityPercent: 0 })),
-    ).toBeInstanceOf(RangeError);
-    expect(() => synthesizeRir({ sampleRate: sr, ...room, airHumidityPercent: 40 })).not.toThrow();
-  });
-
-  it('refuses seed = 0 until the native room config can carry an absent seed', () => {
-    expect(caught(() => synthesizeRir({ sampleRate: sr, ...room, seed: 0 }))).toBeInstanceOf(
-      RangeError,
-    );
-    expect(() => synthesizeRir({ sampleRate: sr, ...room, seed: 7 })).not.toThrow();
-  });
+  it.each([
+    ['seed', 1],
+    ['crossfadeMs', 5],
+    ['airTemperatureC', 20],
+    ['airHumidityPercent', 50],
+  ])(
+    'synthesizeRir reads an explicit 0 for %s literally, apart from the omitted default',
+    (field, dflt) => {
+      const rirOf = (extra: object): number[] =>
+        Array.from(synthesizeRir({ sampleRate: sr, ...room, maxSec: 0.3, ...extra }).rir);
+      const omitted = rirOf({});
+      expect(rirOf({ [field]: dflt })).toEqual(omitted);
+      expect(rirOf({ [field]: 0 })).not.toEqual(omitted);
+    },
+  );
 
   it('estimateRoom names the impulse-response mode impulseResponse', () => {
     expect(() => estimateRoom(noise, sr, { mode: 'impulseResponse' })).not.toThrow();

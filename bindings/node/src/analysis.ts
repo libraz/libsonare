@@ -77,7 +77,6 @@ import {
 /** Fields whose 0 the core reads as "use the library default": absent is the default, 0 is refused. */
 const ZERO_IS_DEFAULT_FIELDS = [
   'mixingTimeMs',
-  'crossfadeMs',
   'maxSec',
   'aspectHintLw',
   'aspectHintLh',
@@ -86,9 +85,6 @@ const ZERO_IS_DEFAULT_FIELDS = [
   'minDecayDb',
   'noiseFloorMarginDb',
 ] as const;
-
-/** Fields where 0 is a real quantity the native config cannot yet tell from absent. */
-const ZERO_UNSUPPORTED_FIELDS = ['airTemperatureC', 'airHumidityPercent', 'seed'] as const;
 
 const ACOUSTIC_MODES = ['auto', 'blind', 'impulseResponse'] as const;
 
@@ -139,11 +135,6 @@ function nativeRoomOptions(fnName: string, options: object): Record<string, unkn
   for (const field of ZERO_IS_DEFAULT_FIELDS) {
     if (read(field) === 0) {
       throw new RangeError(`${fnName}: ${field} must not be 0; omit it for the default`);
-    }
-  }
-  for (const field of ZERO_UNSUPPORTED_FIELDS) {
-    if (read(field) === 0) {
-      throw new RangeError(`${fnName}: ${field} = 0 is not supported yet; omit it for the default`);
     }
   }
   const seed = read('seed');

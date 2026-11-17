@@ -108,7 +108,6 @@ function publicAcousticMode(nativeName: string): string {
 /** Fields whose 0 the core reads as "use the library default": absent is the default, 0 is refused. */
 const ZERO_IS_DEFAULT_FIELDS = [
   'mixingTimeMs',
-  'crossfadeMs',
   'maxSec',
   'aspectHintLw',
   'aspectHintLh',
@@ -117,9 +116,6 @@ const ZERO_IS_DEFAULT_FIELDS = [
   'minDecayDb',
   'noiseFloorMarginDb',
 ] as const;
-
-/** Fields where 0 is a real quantity the native config cannot yet tell from absent. */
-const ZERO_UNSUPPORTED_FIELDS = ['airTemperatureC', 'airHumidityPercent', 'seed'] as const;
 
 /** Reads the room fields of one call: `undefined` and `null` are absent, a non-number is a `TypeError`. */
 function optionalRoomNumber(fnName: string, options: object, field: string): number | undefined {
@@ -165,11 +161,6 @@ function nativeRoomOptions<T extends object>(fnName: string, options: T): NamedS
     const value = optionalRoomNumber(fnName, options, field);
     if (value === 0) {
       throw new RangeError(`${fnName}: ${field} must not be 0; omit it for the default`);
-    }
-  }
-  for (const field of ZERO_UNSUPPORTED_FIELDS) {
-    if (optionalRoomNumber(fnName, options, field) === 0) {
-      throw new RangeError(`${fnName}: ${field} = 0 is not supported yet; omit it for the default`);
     }
   }
   const seed = optionalRoomNumber(fnName, options, 'seed');

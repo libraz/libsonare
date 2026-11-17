@@ -655,11 +655,11 @@ export interface RoomGeometryOptions {
   /** Image-source reflection order; clamped to the safe maximum. */
   ismOrder?: number;
   /**
-   * Seed of the diffuse tail, an integer. Omit to derive one; an explicit 0 is
-   * refused until the native room config can carry an absent seed.
+   * Seed of the diffuse tail, an integer. Omit for the default seed 1; 0 is a seed
+   * like any other.
    */
   seed?: number;
-  /** Maximum RIR length in seconds. Omit for the library default; an explicit 0 is refused. */
+  /** Maximum RIR length in seconds. Omit for the natural length (no cap); an explicit 0 is refused. */
   maxSec?: number;
   /**
    * Add the ISO 9613-1 atmospheric-absorption term to the late tail's per-band
@@ -669,14 +669,12 @@ export interface RoomGeometryOptions {
   airAbsorptionEnabled?: boolean;
   /**
    * Air temperature in degrees Celsius. Omit for the ISO reference climate's
-   * 20 degC; an explicit 0 is refused until the native room config can carry an
-   * absent temperature (use 0.01 for a freezing room).
+   * 20 degC; 0 is 0 degC.
    */
   airTemperatureC?: number;
   /**
-   * Relative humidity in percent. Omit for the ISO reference climate's 50 %; an
-   * explicit 0 is refused until the native room config can carry an absent
-   * humidity. Both climate values are read only while `airAbsorptionEnabled` is set.
+   * Relative humidity in percent. Omit for the ISO reference climate's 50 %; 0 is
+   * dry air. Both climate values are read only while `airAbsorptionEnabled` is set.
    */
   airHumidityPercent?: number;
 }
@@ -689,7 +687,7 @@ export interface SynthesizeRirRequest extends RoomGeometryOptions {
   preferEyring?: boolean;
   /** Early/late crossover in ms. Omit for auto (~sqrt(V) ms); an explicit 0 is refused. */
   mixingTimeMs?: number;
-  /** Equal-power crossfade width around the mixing time in ms. Omit for the default; an explicit 0 is refused. */
+  /** Equal-power crossfade width around the mixing time in ms. Omit for 5 ms; 0 is a hard switch. */
   crossfadeMs?: number;
 }
 
@@ -787,7 +785,7 @@ export interface RoomMorphOptions extends RoomGeometryOptions, ValidateOptions {
   preferEyring?: boolean;
   /** Early/late crossover in ms. Omit for auto (~sqrt(V) ms); an explicit 0 is refused. */
   mixingTimeMs?: number;
-  /** Equal-power crossfade width around the mixing time in ms. Omit for the default; an explicit 0 is refused. */
+  /** Equal-power crossfade width around the mixing time in ms. Omit for 5 ms; 0 is a hard switch. */
   crossfadeMs?: number;
 }
 

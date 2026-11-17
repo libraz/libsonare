@@ -54,7 +54,7 @@ describe('geometric room acoustics', () => {
     expect(Number.isFinite(est.drrDb)).toBe(true);
   });
 
-  it('refuses an explicit seed 0 and takes an omitted seed as the default', () => {
+  it('reads seed 0 as a seed of its own and takes an omitted seed as seed 1', () => {
     const base = {
       sampleRate: 48000,
       lengthM: 7,
@@ -63,12 +63,14 @@ describe('geometric room acoustics', () => {
       absorption: 0.2,
       maxSec: 0.3,
     };
-    expect(() => synthesizeRir({ ...base, seed: 0 })).toThrow(RangeError);
     const omitted = synthesizeRir(base);
+    const zero = synthesizeRir({ ...base, seed: 0 });
     const one = synthesizeRir({ ...base, seed: 1 });
     const two = synthesizeRir({ ...base, seed: 2 });
     expect(Array.from(omitted.rir)).toEqual(Array.from(one.rir));
     expect(Array.from(omitted.rir)).not.toEqual(Array.from(two.rir));
+    expect(Array.from(zero.rir)).not.toEqual(Array.from(omitted.rir));
+    expect(Array.from(zero.rir)).toEqual(Array.from(synthesizeRir({ ...base, seed: 0 }).rir));
   });
 
   it('reaches the whole uint32 seed space the C ABI accepts', () => {
@@ -103,7 +105,7 @@ describe('geometric room acoustics', () => {
     expect(() => synthesizeRir({ ...base, seed: 2 ** 40 })).toThrow();
   });
 
-  it('refuses crossfadeMs 0 for the RIR splice and for room morph', () => {
+  it('reads crossfadeMs 0 as a hard switch for the RIR splice and for room morph', () => {
     const base = {
       sampleRate: 48000,
       lengthM: 7,
@@ -112,16 +114,20 @@ describe('geometric room acoustics', () => {
       absorption: 0.2,
       maxSec: 0.3,
     };
-    expect(() => synthesizeRir({ ...base, crossfadeMs: 0 })).toThrow(RangeError);
     const omitted = synthesizeRir(base);
+    expect(Array.from(synthesizeRir({ ...base, crossfadeMs: 0 }).rir)).not.toEqual(
+      Array.from(omitted.rir),
+    );
     const wide = synthesizeRir({ ...base, crossfadeMs: 40 });
     expect(Array.from(omitted.rir)).not.toEqual(Array.from(wide.rir));
 
     const samples = new Float32Array(4000);
     samples[0] = 1.0;
     const morph = { lengthM: 12, widthM: 9, heightM: 5, absorption: 0.08, wet: 0.7 };
-    expect(() => roomMorph(samples, 48000, { ...morph, crossfadeMs: 0 })).toThrow(RangeError);
     const morphOmitted = roomMorph(samples, 48000, morph);
+    expect(Array.from(roomMorph(samples, 48000, { ...morph, crossfadeMs: 0 }).audio)).not.toEqual(
+      Array.from(morphOmitted.audio),
+    );
     const morphWide = roomMorph(samples, 48000, { ...morph, crossfadeMs: 40 });
     expect(Array.from(morphOmitted.audio)).not.toEqual(Array.from(morphWide.audio));
   });
@@ -476,8 +482,7 @@ describe('geometric room acoustics', () => {
     // Air absorption can only take energy out of the tail.
     expect(tailEnergy(iso.rir)).toBeLessThan(tailEnergy(off.rir));
 
-    // A zeroed/omitted climate resolves to the ISO reference, matching the
-    // seed and crossfadeMs convention these options already follow.
+    // An omitted climate resolves to the ISO reference.
     const implicitIso = synthesizeRir({
       sampleRate: 48000,
       ...airHall,
