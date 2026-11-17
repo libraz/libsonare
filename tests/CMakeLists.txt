@@ -184,6 +184,12 @@ add_executable(sonare_tests
   api/quick_test.cpp
   api/core_common_fill_test.cpp
   api/sonare_c_core_test.cpp
+  api/surface_core_test.cpp
+  api/surface_analysis_test.cpp
+  api/surface_effects_test.cpp
+  api/surface_mastering_test.cpp
+  api/surface_engine_test.cpp
+  api/surface_project_test.cpp
   api/sonare_c_music_test.cpp
   api/sonare_c_mastering_test.cpp
   api/sonare_c_mastering_streaming_test.cpp

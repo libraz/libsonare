@@ -1,0 +1,415 @@
+{
+  "description": "Pairwise model of the sample-rate argument across the binding surfaces. Each row is one test case; a surface's tests select their own rows and look up the input value and the expected outcome in the tables below. Positional calls that omit the rate on the TS surfaces are a type error and belong in the type tests, so the model excludes them.",
+  "parameters": {
+    "surface": [
+      "wasm",
+      "node",
+      "python"
+    ],
+    "value_class": [
+      "omitted",
+      "zero",
+      "negative",
+      "nan",
+      "inf",
+      "fractional",
+      "integralFloat",
+      "bool",
+      "string",
+      "pow31",
+      "valid"
+    ],
+    "call_form": [
+      "request",
+      "positional",
+      "keyword"
+    ],
+    "family": [
+      "analysis",
+      "effects",
+      "mastering",
+      "mixing"
+    ]
+  },
+  "constraints": [
+    "IF surface = python THEN call_form IN {keyword, positional}",
+    "IF surface IN {wasm, node} THEN call_form IN {request, positional}",
+    "IF surface IN {wasm, node} AND call_form = positional THEN value_class != omitted"
+  ],
+  "strength": 2,
+  "seed": 20261117,
+  "values": {
+    "omitted": null,
+    "zero": 0,
+    "negative": -44100,
+    "nan": "NaN",
+    "inf": "Infinity",
+    "fractional": 44100.5,
+    "integralFloat": 48000.0,
+    "bool": true,
+    "string": "48000",
+    "pow31": 2147483648,
+    "valid": 44100
+  },
+  "values_note": "\"NaN\" and \"Infinity\" are the IEEE values, spelled as strings because JSON has no literal for them; omitted means the argument or field is not given at all.",
+  "expected": {
+    "wasm": {
+      "omitted": "TypeError",
+      "zero": "RangeError",
+      "negative": "RangeError",
+      "nan": "RangeError",
+      "inf": "RangeError",
+      "fractional": "RangeError",
+      "integralFloat": null,
+      "bool": "TypeError",
+      "string": "TypeError",
+      "pow31": "RangeError",
+      "valid": null
+    },
+    "node": {
+      "omitted": "TypeError",
+      "zero": "RangeError",
+      "negative": "RangeError",
+      "nan": "RangeError",
+      "inf": "RangeError",
+      "fractional": "RangeError",
+      "integralFloat": null,
+      "bool": "TypeError",
+      "string": "TypeError",
+      "pow31": "RangeError",
+      "valid": null
+    },
+    "python": {
+      "omitted": "TypeError",
+      "zero": "SonareValueError",
+      "negative": "SonareValueError",
+      "nan": "SonareValueError",
+      "inf": "SonareValueError",
+      "fractional": "SonareValueError",
+      "integralFloat": "SonareValueError",
+      "bool": "TypeError",
+      "string": "TypeError",
+      "pow31": "SonareValueError",
+      "valid": null
+    }
+  },
+  "expected_note": "null means the call succeeds. A JS integral float (48000.0) is the number 48000 and is accepted. A Python float is refused as a value even when integral, since sample rates are int.",
+  "functions": {
+    "analysis": {
+      "wasm": "detectKey",
+      "node": "detectKey",
+      "python": "detect_key"
+    },
+    "effects": {
+      "wasm": "pitchShift",
+      "node": "pitchShift",
+      "python": "pitch_shift"
+    },
+    "mastering": {
+      "wasm": "masterAudio",
+      "node": "masterAudio",
+      "python": "master_audio"
+    },
+    "mixing": {
+      "wasm": "mixStereo",
+      "node": "mixStereo",
+      "python": "mix_stereo"
+    }
+  },
+  "columns": [
+    "surface",
+    "value_class",
+    "call_form",
+    "family"
+  ],
+  "rows": [
+    {
+      "surface": "wasm",
+      "value_class": "fractional",
+      "call_form": "positional",
+      "family": "analysis"
+    },
+    {
+      "surface": "wasm",
+      "value_class": "bool",
+      "call_form": "request",
+      "family": "effects"
+    },
+    {
+      "surface": "python",
+      "value_class": "bool",
+      "call_form": "positional",
+      "family": "mixing"
+    },
+    {
+      "surface": "python",
+      "value_class": "integralFloat",
+      "call_form": "keyword",
+      "family": "mixing"
+    },
+    {
+      "surface": "node",
+      "value_class": "string",
+      "call_form": "positional",
+      "family": "mastering"
+    },
+    {
+      "surface": "node",
+      "value_class": "integralFloat",
+      "call_form": "request",
+      "family": "analysis"
+    },
+    {
+      "surface": "wasm",
+      "value_class": "nan",
+      "call_form": "request",
+      "family": "mastering"
+    },
+    {
+      "surface": "wasm",
+      "value_class": "zero",
+      "call_form": "request",
+      "family": "mixing"
+    },
+    {
+      "surface": "python",
+      "value_class": "nan",
+      "call_form": "keyword",
+      "family": "analysis"
+    },
+    {
+      "surface": "node",
+      "value_class": "inf",
+      "call_form": "positional",
+      "family": "mixing"
+    },
+    {
+      "surface": "node",
+      "value_class": "negative",
+      "call_form": "positional",
+      "family": "effects"
+    },
+    {
+      "surface": "python",
+      "value_class": "string",
+      "call_form": "keyword",
+      "family": "effects"
+    },
+    {
+      "surface": "python",
+      "value_class": "fractional",
+      "call_form": "keyword",
+      "family": "mastering"
+    },
+    {
+      "surface": "node",
+      "value_class": "nan",
+      "call_form": "positional",
+      "family": "mixing"
+    },
+    {
+      "surface": "python",
+      "value_class": "inf",
+      "call_form": "keyword",
+      "family": "analysis"
+    },
+    {
+      "surface": "wasm",
+      "value_class": "string",
+      "call_form": "request",
+      "family": "analysis"
+    },
+    {
+      "surface": "python",
+      "value_class": "omitted",
+      "call_form": "keyword",
+      "family": "effects"
+    },
+    {
+      "surface": "wasm",
+      "value_class": "inf",
+      "call_form": "request",
+      "family": "mastering"
+    },
+    {
+      "surface": "python",
+      "value_class": "pow31",
+      "call_form": "keyword",
+      "family": "mixing"
+    },
+    {
+      "surface": "node",
+      "value_class": "valid",
+      "call_form": "request",
+      "family": "mixing"
+    },
+    {
+      "surface": "wasm",
+      "value_class": "negative",
+      "call_form": "request",
+      "family": "mixing"
+    },
+    {
+      "surface": "wasm",
+      "value_class": "pow31",
+      "call_form": "positional",
+      "family": "effects"
+    },
+    {
+      "surface": "python",
+      "value_class": "omitted",
+      "call_form": "positional",
+      "family": "mixing"
+    },
+    {
+      "surface": "node",
+      "value_class": "pow31",
+      "call_form": "request",
+      "family": "mastering"
+    },
+    {
+      "surface": "python",
+      "value_class": "valid",
+      "call_form": "keyword",
+      "family": "analysis"
+    },
+    {
+      "surface": "node",
+      "value_class": "fractional",
+      "call_form": "request",
+      "family": "effects"
+    },
+    {
+      "surface": "python",
+      "value_class": "pow31",
+      "call_form": "keyword",
+      "family": "analysis"
+    },
+    {
+      "surface": "wasm",
+      "value_class": "integralFloat",
+      "call_form": "request",
+      "family": "effects"
+    },
+    {
+      "surface": "node",
+      "value_class": "string",
+      "call_form": "positional",
+      "family": "mixing"
+    },
+    {
+      "surface": "node",
+      "value_class": "fractional",
+      "call_form": "positional",
+      "family": "mixing"
+    },
+    {
+      "surface": "node",
+      "value_class": "zero",
+      "call_form": "positional",
+      "family": "analysis"
+    },
+    {
+      "surface": "node",
+      "value_class": "inf",
+      "call_form": "request",
+      "family": "effects"
+    },
+    {
+      "surface": "python",
+      "value_class": "negative",
+      "call_form": "keyword",
+      "family": "mixing"
+    },
+    {
+      "surface": "wasm",
+      "value_class": "omitted",
+      "call_form": "request",
+      "family": "mastering"
+    },
+    {
+      "surface": "python",
+      "value_class": "zero",
+      "call_form": "keyword",
+      "family": "mastering"
+    },
+    {
+      "surface": "wasm",
+      "value_class": "valid",
+      "call_form": "positional",
+      "family": "effects"
+    },
+    {
+      "surface": "wasm",
+      "value_class": "integralFloat",
+      "call_form": "positional",
+      "family": "effects"
+    },
+    {
+      "surface": "node",
+      "value_class": "omitted",
+      "call_form": "request",
+      "family": "mixing"
+    },
+    {
+      "surface": "wasm",
+      "value_class": "negative",
+      "call_form": "positional",
+      "family": "mastering"
+    },
+    {
+      "surface": "wasm",
+      "value_class": "zero",
+      "call_form": "positional",
+      "family": "effects"
+    },
+    {
+      "surface": "python",
+      "value_class": "omitted",
+      "call_form": "positional",
+      "family": "analysis"
+    },
+    {
+      "surface": "wasm",
+      "value_class": "valid",
+      "call_form": "request",
+      "family": "mastering"
+    },
+    {
+      "surface": "python",
+      "value_class": "negative",
+      "call_form": "positional",
+      "family": "analysis"
+    },
+    {
+      "surface": "node",
+      "value_class": "bool",
+      "call_form": "request",
+      "family": "mixing"
+    },
+    {
+      "surface": "node",
+      "value_class": "nan",
+      "call_form": "positional",
+      "family": "effects"
+    },
+    {
+      "surface": "python",
+      "value_class": "bool",
+      "call_form": "keyword",
+      "family": "mastering"
+    },
+    {
+      "surface": "wasm",
+      "value_class": "bool",
+      "call_form": "positional",
+      "family": "analysis"
+    },
+    {
+      "surface": "python",
+      "value_class": "integralFloat",
+      "call_form": "positional",
+      "family": "mastering"
+    }
+  ]
+}
