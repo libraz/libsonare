@@ -104,7 +104,12 @@ def configure_core_signatures(lib: ctypes.CDLL) -> None:
     lib.sonare_audio_duration_sec.argtypes = [ctypes.c_void_p]
 
     lib.sonare_audio_detect_bpm.restype = ctypes.c_int32
-    lib.sonare_audio_detect_bpm.argtypes = [ctypes.c_void_p, ctypes.POINTER(ctypes.c_float)]
+    lib.sonare_audio_detect_bpm.argtypes = [
+        ctypes.c_void_p,
+        ctypes.c_float,
+        ctypes.c_float,
+        ctypes.POINTER(ctypes.c_float),
+    ]
 
     lib.sonare_audio_detect_key.restype = ctypes.c_int32
     lib.sonare_audio_detect_key.argtypes = [ctypes.c_void_p, ctypes.POINTER(SonareKey)]
@@ -112,6 +117,8 @@ def configure_core_signatures(lib: ctypes.CDLL) -> None:
     lib.sonare_audio_detect_beats.restype = ctypes.c_int32
     lib.sonare_audio_detect_beats.argtypes = [
         ctypes.c_void_p,
+        ctypes.c_float,
+        ctypes.c_float,
         ctypes.POINTER(ctypes.POINTER(ctypes.c_float)),
         ctypes.POINTER(ctypes.c_size_t),
     ]

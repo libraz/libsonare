@@ -1004,8 +1004,7 @@ Napi::Value SonareWrap::DetectBpmInstance(const Napi::CallbackInfo& info) {
   if (!RequiredFloatArg(env, info, 1, "bpmMax", &bpm_max)) return env.Undefined();
 
   float bpm = 0.0f;
-  SonareError err = sonare_detect_bpm(sonare_audio_data(audio_), sonare_audio_length(audio_),
-                                      sonare_audio_sample_rate(audio_), bpm_min, bpm_max, &bpm);
+  SonareError err = sonare_audio_detect_bpm(audio_, bpm_min, bpm_max, &bpm);
   if (err != SONARE_OK) {
     sonare_node::ThrowSonareError(env, err);
     return env.Undefined();
@@ -1140,9 +1139,7 @@ Napi::Value SonareWrap::DetectBeatsInstance(const Napi::CallbackInfo& info) {
 
   float* times = nullptr;
   size_t count = 0;
-  SonareError err =
-      sonare_detect_beats(sonare_audio_data(audio_), sonare_audio_length(audio_),
-                          sonare_audio_sample_rate(audio_), bpm_min, bpm_max, &times, &count);
+  SonareError err = sonare_audio_detect_beats(audio_, bpm_min, bpm_max, &times, &count);
   if (err != SONARE_OK) {
     sonare_node::ThrowSonareError(env, err);
     return env.Undefined();

@@ -409,6 +409,22 @@ rule = "tempo-range"
 test = "tests/api/sonare_c_core_test.cpp::sonare_detect_beats"
 
 [[entry]]
+kind = "function"
+old = "sonare_audio_detect_bpm"
+changed = "takes bpm_min and bpm_max before out_bpm, as sonare_detect_bpm does"
+domain = "analysis"
+rule = "tempo-range"
+test = "tests/api/sonare_c_core_test.cpp::sonare_audio_detect_bpm and sonare_audio_detect_beats take the search range"
+
+[[entry]]
+kind = "function"
+old = "sonare_audio_detect_beats"
+changed = "takes bpm_min and bpm_max before out_times, as sonare_detect_beats does"
+domain = "analysis"
+rule = "tempo-range"
+test = "tests/api/sonare_c_core_test.cpp::sonare_audio_detect_bpm and sonare_audio_detect_beats take the search range"
+
+[[entry]]
 kind = "field"
 old = "SonareTranscribeConfig.fmin"
 new = "SonareTranscribeConfig.f0_min_hz"

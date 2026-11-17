@@ -206,13 +206,21 @@ float sonare_audio_duration_sec(const SonareAudio* audio) {
   return audio->audio.duration();
 }
 
-SonareError sonare_audio_detect_bpm(const SonareAudio* audio, float* out_bpm) {
+SonareError sonare_audio_detect_bpm(const SonareAudio* audio, float bpm_min, float bpm_max,
+                                    float* out_bpm) {
   SONARE_C_API_ENTRY;
   if (audio == nullptr || out_bpm == nullptr) return SONARE_ERROR_INVALID_PARAMETER;
+  BpmConfig config;
+  config.bpm_min = bpm_min;
+  config.bpm_max = bpm_max;
+  if (const SonareError err = run_validation([&] { validate_bpm_config(config); });
+      err != SONARE_OK) {
+    return err;
+  }
 
   SONARE_C_TRY
-  *out_bpm =
-      quick::detect_bpm(audio->audio.data(), audio->audio.size(), audio->audio.sample_rate());
+  *out_bpm = quick::detect_bpm(audio->audio.data(), audio->audio.size(), audio->audio.sample_rate(),
+                               config);
   return SONARE_OK;
   SONARE_C_CATCH
 }
@@ -230,17 +238,27 @@ SonareError sonare_audio_detect_key(const SonareAudio* audio, SonareKey* out_key
   SONARE_C_CATCH
 }
 
-SonareError sonare_audio_detect_beats(const SonareAudio* audio, float** out_times,
-                                      size_t* out_count) {
+SonareError sonare_audio_detect_beats(const SonareAudio* audio, float bpm_min, float bpm_max,
+                                      float** out_times, size_t* out_count) {
   SONARE_C_API_ENTRY;
   if (out_times == nullptr || out_count == nullptr) return SONARE_ERROR_INVALID_PARAMETER;
   *out_times = nullptr;
   *out_count = 0;
   if (audio == nullptr) return SONARE_ERROR_INVALID_PARAMETER;
+  BpmConfig tempo;
+  tempo.bpm_min = bpm_min;
+  tempo.bpm_max = bpm_max;
+  if (const SonareError err = run_validation([&] { validate_bpm_config(tempo); });
+      err != SONARE_OK) {
+    return err;
+  }
+  BeatConfig config;
+  config.bpm_min = bpm_min;
+  config.bpm_max = bpm_max;
 
   SONARE_C_TRY
-  std::vector<float> beats =
-      quick::detect_beats(audio->audio.data(), audio->audio.size(), audio->audio.sample_rate());
+  std::vector<float> beats = quick::detect_beats(audio->audio.data(), audio->audio.size(),
+                                                 audio->audio.sample_rate(), config);
   return copy_vector(beats, out_times, out_count);
   SONARE_C_CATCH
 }

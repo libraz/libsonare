@@ -129,11 +129,15 @@ size_t sonare_audio_length(const SonareAudio* audio);
 int sonare_audio_sample_rate(const SonareAudio* audio);
 /// @brief Duration of @p audio in seconds, or 0 for a NULL @p audio.
 float sonare_audio_duration_sec(const SonareAudio* audio);
-SonareError sonare_audio_detect_bpm(const SonareAudio* audio, float* out_bpm);
+/// @brief Detects the tempo of @p audio within a search range.
+/// @details @p bpm_min and @p bpm_max follow @ref sonare_detect_bpm.
+SonareError sonare_audio_detect_bpm(const SonareAudio* audio, float bpm_min, float bpm_max,
+                                    float* out_bpm);
 SonareError sonare_audio_detect_key(const SonareAudio* audio, SonareKey* out_key);
+/// @details @p bpm_min and @p bpm_max follow @ref sonare_detect_bpm.
 /// @note Free @p out_times with @ref sonare_free_floats.
-SonareError sonare_audio_detect_beats(const SonareAudio* audio, float** out_times,
-                                      size_t* out_count);
+SonareError sonare_audio_detect_beats(const SonareAudio* audio, float bpm_min, float bpm_max,
+                                      float** out_times, size_t* out_count);
 /// @note Free @p out_times with @ref sonare_free_floats.
 SonareError sonare_audio_detect_downbeats(const SonareAudio* audio, float** out_times,
                                           size_t* out_count);

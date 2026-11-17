@@ -2,6 +2,7 @@
 /// @brief Core C API tests.
 
 #include <algorithm>
+#include <array>
 #include <cmath>
 #include <cstdint>
 #include <cstdio>
@@ -1252,6 +1253,74 @@ TEST_CASE("sonare_detect_beats", "[c_api]") {
     CHECK(times == nullptr);
     CHECK(count == 0);
   }
+}
+
+TEST_CASE("sonare_audio_detect_bpm and sonare_audio_detect_beats take the search range",
+          "[c_api]") {
+  auto samples = generate_clicks(120.0f, 22050, 8.0f);
+  SonareAudio* audio = nullptr;
+  REQUIRE(sonare_audio_from_buffer(samples.data(), samples.size(), 22050, &audio) == SONARE_OK);
+
+  SECTION("the handle agrees with the sample entry for the same range") {
+    float from_handle = 0.0f;
+    float from_samples = 0.0f;
+    REQUIRE(sonare_audio_detect_bpm(audio, 60.0f, 100.0f, &from_handle) == SONARE_OK);
+    REQUIRE(sonare_detect_bpm(samples.data(), samples.size(), 22050, 60.0f, 100.0f,
+                              &from_samples) == SONARE_OK);
+    CHECK(from_handle == Catch::Approx(from_samples).margin(1e-3f));
+    CHECK(from_handle >= 60.0f);
+    CHECK(from_handle <= 100.0f);
+
+    float wide = 0.0f;
+    REQUIRE(sonare_audio_detect_bpm(audio, 30.0f, 300.0f, &wide) == SONARE_OK);
+    CHECK(wide == Catch::Approx(120.0f).margin(3.0f));
+
+    float* times = nullptr;
+    size_t count = 0;
+    REQUIRE(sonare_audio_detect_beats(audio, 60.0f, 100.0f, &times, &count) == SONARE_OK);
+    float* sample_times = nullptr;
+    size_t sample_count = 0;
+    REQUIRE(sonare_detect_beats(samples.data(), samples.size(), 22050, 60.0f, 100.0f, &sample_times,
+                                &sample_count) == SONARE_OK);
+    REQUIRE(count == sample_count);
+    for (size_t i = 0; i < count; ++i) {
+      CHECK(times[i] == Catch::Approx(sample_times[i]).margin(1e-4f));
+    }
+    if (count > 1) {
+      const float mean_spacing = (times[count - 1] - times[0]) / static_cast<float>(count - 1);
+      CHECK(mean_spacing >= 0.55f);
+    }
+    sonare_free_floats(times);
+    sonare_free_floats(sample_times);
+  }
+
+  SECTION("an inverted, non-positive or non-finite range is refused") {
+    const float nan = std::numeric_limits<float>::quiet_NaN();
+    const std::array<std::array<float, 2>, 3> ranges = {
+        {{200.0f, 60.0f}, {0.0f, 200.0f}, {60.0f, nan}}};
+    for (const auto& range : ranges) {
+      float bpm = -1.0f;
+      CHECK(sonare_audio_detect_bpm(audio, range[0], range[1], &bpm) ==
+            SONARE_ERROR_INVALID_PARAMETER);
+      float* times = nullptr;
+      size_t count = 7;
+      CHECK(sonare_audio_detect_beats(audio, range[0], range[1], &times, &count) ==
+            SONARE_ERROR_INVALID_PARAMETER);
+      CHECK(times == nullptr);
+      CHECK(count == 0);
+    }
+  }
+
+  SECTION("a null handle is refused") {
+    float bpm = 0.0f;
+    CHECK(sonare_audio_detect_bpm(nullptr, 60.0f, 200.0f, &bpm) == SONARE_ERROR_INVALID_PARAMETER);
+    float* times = nullptr;
+    size_t count = 0;
+    CHECK(sonare_audio_detect_beats(nullptr, 60.0f, 200.0f, &times, &count) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+  }
+
+  sonare_audio_destroy(audio);
 }
 
 TEST_CASE("sonare_detect_downbeats", "[c_api]") {
