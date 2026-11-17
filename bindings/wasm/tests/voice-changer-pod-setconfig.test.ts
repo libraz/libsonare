@@ -62,7 +62,7 @@ describe('RealtimeVoiceChanger flat POD setConfig', () => {
       pitchCorrectionAmount: 0.65,
       pitchCorrectionSpeedMs: 35,
       pitchCorrectionKeyRoot: 7,
-      pitchCorrectionScale: 'natural_minor',
+      pitchCorrectionScale: 'naturalMinor',
       pitchCorrectionRobotOctave: -1,
       harmonyVoices: 2,
       harmonyStep1: 3,
@@ -157,7 +157,8 @@ describe('RealtimeVoiceChanger flat POD setConfig', () => {
           amount: f32(pod.pitchCorrectionAmount),
           speedMs: f32(pod.pitchCorrectionSpeedMs),
           keyRoot: pod.pitchCorrectionKeyRoot,
-          scale: pod.pitchCorrectionScale,
+          // The serialised document keeps the native scale spelling.
+          scale: 'natural_minor',
           robotOctave: pod.pitchCorrectionRobotOctave,
         },
         harmony: {
