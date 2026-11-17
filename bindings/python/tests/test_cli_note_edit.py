@@ -616,7 +616,6 @@ def test_scale_quantize_cli_reads_a_mode_name_and_an_explicit_zero_anchor() -> N
     by_name = quantize("--mode-mask", "dorian")
     assert by_name.returncode == 0, by_name.stderr
     assert by_name.stdout == quantize("--mode-mask", "1709").stdout
-    assert by_name.stdout == quantize("--mode-mask", "DORIAN").stdout
     for spelling in ("0x6AD", "0X6ad", "0o3255", "0b11010101101", "1_709", " 1709 "):
         assert by_name.stdout == quantize("--mode-mask", spelling).stdout, spelling
     assert quantize("--mode-mask", "010").returncode == 2

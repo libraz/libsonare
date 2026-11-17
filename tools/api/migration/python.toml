@@ -4982,7 +4982,7 @@ test = "bindings/python/tests/test_pitch_parameter_names.py::test_auto_tune_take
 [[entry]]
 kind = "option"
 old = "scale_quantize_midi(reference_midi)"
-changed = "renamed to scale_reference_midi; None is A4 and an explicit 0 is refused"
+changed = "renamed to scale_reference_midi; None is A4 and an explicit 0 is refused until the core reads it as MIDI note 0"
 domain = "effects"
 rule = "individual"
 test = "bindings/python/tests/test_pitch_parameter_names.py::test_the_scale_helpers_take_scale_reference_midi"
@@ -4990,7 +4990,7 @@ test = "bindings/python/tests/test_pitch_parameter_names.py::test_the_scale_help
 [[entry]]
 kind = "option"
 old = "scale_correction_semitones(reference_midi)"
-changed = "renamed to scale_reference_midi; None is A4 and an explicit 0 is refused"
+changed = "renamed to scale_reference_midi; None is A4 and an explicit 0 is refused until the core reads it as MIDI note 0"
 domain = "effects"
 rule = "individual"
 test = "bindings/python/tests/test_pitch_parameter_names.py::test_the_scale_helpers_take_scale_reference_midi"

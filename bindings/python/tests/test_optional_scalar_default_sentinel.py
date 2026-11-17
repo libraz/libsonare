@@ -131,9 +131,31 @@ class TestScaleQuantizerReference:
         )
 
     @pytest.mark.parametrize("fn", [scale_quantize_midi, scale_correction_semitones])
-    def test_an_explicit_zero_reference_is_refused(self, fn: Callable[..., float]) -> None:
-        with pytest.raises(SonareValueError, match="scale_reference_midi"):
+    def test_an_explicit_zero_reference_is_refused_for_now(self, fn: Callable[..., float]) -> None:
+        with pytest.raises(SonareValueError, match="temporarily unsupported"):
             fn(0, C_MAJOR_MASK, 60.4, scale_reference_midi=0.0)
+
+    def test_the_c_abi_still_reads_a_zero_reference_as_a4(self) -> None:
+        # The refusal above stands in for a core that reads 0 as A4. When this
+        # fails the core takes 0 literally: drop the refusal and this case, and
+        # let an explicit 0 through as MIDI note 0.
+        from libsonare._runtime import _get_lib
+
+        def quantize(reference: float) -> float:
+            out = ctypes.c_float(0.0)
+            rc = _get_lib().sonare_scale_quantize_midi(
+                ctypes.c_int(0),
+                ctypes.c_uint16(C_MAJOR_MASK),
+                ctypes.c_float(reference),
+                ctypes.c_float(60.4),
+                ctypes.byref(out),
+            )
+            assert rc == 0
+            return float(out.value)
+
+        # A fractional query separates the A4 grid from the grid anchored on 0.5.
+        assert quantize(0.0) == quantize(DEFAULT_REFERENCE_MIDI)
+        assert quantize(0.5) != quantize(DEFAULT_REFERENCE_MIDI)
 
     def test_a_detuned_reference_moves_the_grid(self) -> None:
         # The anchor only shifts the grid by its fractional part, so the control
